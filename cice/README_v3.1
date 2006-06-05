@@ -1,0 +1,148 @@
+
+CICE version 3.1
+  February, 2004
+
+This directory contains files needed to run version 3.1 of CICE, the
+LANL sea ice model, in standalone mode on a ~3 degree grid.  As
+currently configured, the model runs on 8 processors.  MPI is used for
+message passing between processors, with 4 processors allocated to
+each hemisphere.  The grid provided here is too small for the code to
+scale well beyond about 8 processors.  If you want to run on a single
+processor without using MPI, edit comp_ice.
+
+For additional information, please consult the online documentation at
+http://climate.lanl.gov/Models/CICE/index.htm.  The PostScript
+documentation contains more detailed information, and can be
+downloaded from the website; it is also available in the code
+distribution, in the directory doc/.  This README file contains
+introductory material only.
+
+--- To compile and run the model ---
+
+ In the source directory:
+1. Alter directories in the script comp_ice 
+2. Run comp_ice to set up the run directory and make the executable 'cice'
+3. To clean the compile directory and start fresh, alter the script 
+   clean_ice and execute it.
+ In the run directory:
+4. Alter atm_data_dir in the namelist file ice_in 
+5. Alter the script run_ice for your system
+6. Execute run_ice (see forcing data information below)
+
+Output files (in the run directory):
+ice.log*  diagnostic output normally written to the screen, if using
+          the run_ice script or one like it
+iced*     restart files written at the "dump" frequency in ice_in
+iceh*     output of numerous model variables as instructed by ice_in
+
+When restart files are written, the filename is written into the file
+          ice.restart_file
+
+--- Forcing data information ---
+
+The code is currently configured to run in standalone mode using
+atmospheric data from 1997, available from
+http://climate.lanl.gov/Models/CICE/index.htm.  These data files are
+designed only for testing the code and are not necessarily the best
+observational data.  Please do not publish results based on these data
+sets.  Module ice_flux_in.F can be modified to change the forcing
+data.  Ocean SST and SSS data may be used for initializing and/or
+restoring the mixed layer properties; these subroutines currently are
+commented out in ice_flux_in.F.
+
+--- initial directory structure and contents ---
+
+cice/
+
+README_v3.1             this file
+clean_ice               script that cleans out compile directory
+comp_ice                script that sets up and compiles the code
+ice.log.<OS>            sample diagnostic output files
+
+cice/bld
+
+Macros.<OS>             macro definitions for the given operating system
+Makefile.<OS>           makefile for the given operating system
+makdep.c                script that determines module dependencies
+
+cice/doc/               documentation
+
+cicedoc.pdf             Documentation and Software User's Manual
+cice/doc/PDF/           PDF documents of numerous publications related to CICE
+
+cice/ice.log.<OS>       sample diagnostic output files
+
+cice/input_templates
+
+global_100x116.grid     3.6 x 1.85 deg displaced pole grid, 'gx3'  
+global_100x116.kmt      3.6 x 1.85 deg land mask (N pole is in Greenland)
+ice.restart_file        pointer with restart filename
+ice_in.<OS>             namelist input parameters for the given OS
+iced_gx3_v3.1           restart file used for initial condition
+run_ice.<OS>            batch script for the given operating system
+
+cice/source/
+
+CICE.F                  main driver routine
+CICE.F_debug            CICE.F with debugging calls
+ice_albedo.F            albedo parameterization
+ice_atmo.F              transfer coefficients and atmo fluxes
+ice_calendar.F          keeps track of what day it is
+ice_constants.F         physical and other constants
+ice_coupling.F          routines for coupling with NCAR flux coupler
+ice_diagnostics.F       miscellaneous diagnostic and debugging routines
+ice_domain.F            sets up MPI subdomains
+ice_dyn_evp.F           EVP ice dynamics component
+ice_exit.F              aborts the model run, printing an error message 
+ice_fileunits.F         unit numbers for I/O 
+ice_flux.F              fluxes needed/produced by the model
+ice_flux_in.F           routines to read input data for stand-alone runs
+ice_grid.F              grid and land masks
+ice_history.F           writes output to history files; restart read/write
+ice_init.F              initializations
+ice_itd.F               routines for managing ice thickness distribution
+ice_itd_linear.F        linear remapping for transport in thickness space
+ice_kinds_mod.F         basic definitions of reals, integers, etc
+ice_mechred_cice.F      mechanical redistribution (ridging) routines
+ice_model_size.F        sizes and shapes
+ice_mpi_internal.F      utilities for internal MPI parallelization
+ice_ocean.F             mixed layer routines
+ice_read_write.F        basic routines for reading and writing files
+ice_scaling.F           ice-area scaling of variables for the coupler
+ice_state.F             essential arrays to describe the state of the ice
+ice_therm_itd.F         thermodynamics related to ice thickness distribution
+ice_therm_vertical.F    vertical growth rates and fluxes
+ice_timers.F            timing routines
+ice_transport_mpdata.F  horizontal advection via MPDATA
+ice_transport_remap.F   horizontal advection via incremental remapping
+ice_work.F              globally accessible work arrays
+
+--- directories and files created when the code is compiled ---
+
+rundir/                 execution or "run" directory
+
+cice*                   code executable
+grid                    horizontal grid file from cice/input_templates/
+ice.log.<OS>            sample diagnostic output files
+ice_in                  namelist input file from cice/input_templates/
+iceh.[timeID].incond.nc output history file containing the initial condition
+iceh_mavg.[timeID].nc   monthly average output history file
+kmt                     land mask file from cice/input_templates/
+run_ice                 batch run script from cice/input_templates/
+
+rundir/compile/         directory containing object files, etc.
+
+rundir/restart/         restart directory 
+
+iced_gx3_v3.1           initial condition from cice/input_templates/
+ice.restart_file        restart pointer from cice/input_templates/
+
+
+--- Authors ---
+
+Please report any bugs to the authors:
+Elizabeth Hunke (eclare@lanl.gov)
+Bill Lipscomb (lipscomb@lanl.gov)
+ 
+Good luck!
+
