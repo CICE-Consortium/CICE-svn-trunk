@@ -38,10 +38,7 @@
      &   oceanmixed_ice           ! if true, use ocean mixed layer
 
       real (kind=dbl_kind), parameter ::
-     &   hmix         = 20._dbl_kind ! ocean mixed layer depth (m)
-     &,  deep_ocn_flx =  0._dbl_kind ! heat flx, deep ocn to mixed lyr (W/m^2) 
-                                     ! (deep_ocn_flx <= 0; positive down)
-     &,  cphm = cp_ocn*rhow*hmix
+     &   cprho = cp_ocn*rhow
 
 !=======================================================================
 
@@ -105,23 +102,26 @@
      &   this_block           ! block information for current block
 
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
 
       !-----------------------------------------------------------------
-      ! Identify ocean cells
+      ! Identify ocean cells.
+      ! Set fluxes to zero in land cells.
       !-----------------------------------------------------------------
 
          icells = 0
-         do j = jlo, jhi
-         do i = ilo, ihi
+         do j = 1, ny_block
+         do i = 1, nx_block
             if (tmask(i,j,iblk)) then
                icells = icells + 1
                indxi(icells) = i
                indxj(icells) = j
+            else
+               sst       (i,j,iblk) = c0
+               frzmlt    (i,j,iblk) = c0
+               flwout_ocn(i,j,iblk) = c0
+               fsens_ocn (i,j,iblk) = c0
+               flat_ocn  (i,j,iblk) = c0
+               evap_ocn  (i,j,iblk) = c0
             endif
          enddo                  ! i
          enddo                  ! j
@@ -163,6 +163,7 @@
       ! Compute ocean fluxes and update SST
       !-----------------------------------------------------------------
 
+
          call ocean_energy_budget (nx_block, ny_block,
      &                             dt,       icells,
      &                             indxi,    indxj,
@@ -181,6 +182,8 @@
      &                             alvdf_ocn (:,:,iblk),
      &                             alidf_ocn (:,:,iblk),
      &                             flw       (:,:,iblk),
+     &                             qdp       (:,:,iblk),
+     &                             hmix      (:,:,iblk),
      &                             flwout_ocn(:,:,iblk),
      &                             fsens_ocn (:,:,iblk),
      &                             flat_ocn  (:,:,iblk),
@@ -201,20 +204,21 @@
 !
 ! !INTERFACE:
 !
-      subroutine ocean_energy_budget (nx_block,  ny_block,
-     &                                dt,        icells,
-     &                                indxi,     indxj,
-     &                                delt,      delq,
-     &                                lhcoef,    shcoef,
-     &                                aice,      Tf,
-     &                                swvdr,     swidr,
-     &                                swvdf,     swidf,
-     &                                alvdr_ocn, alidr_ocn,
-     &                                alvdf_ocn, alidf_ocn,
-     &                                flw,       flwout_ocn,
-     &                                fsens_ocn, flat_ocn,
-     &                                evap_ocn,
-     &                                sst,       frzmlt)
+      subroutine ocean_energy_budget (nx_block,   ny_block,
+     &                                dt,         icells,
+     &                                indxi,      indxj,
+     &                                delt,       delq,
+     &                                lhcoef,     shcoef,
+     &                                aice,       Tf,
+     &                                swvdr,      swidr,
+     &                                swvdf,      swidf,
+     &                                alvdr_ocn,  alidr_ocn,
+     &                                alvdf_ocn,  alidf_ocn,
+     &                                flw,
+     &                                qdp,        hmix,
+     &                                flwout_ocn, fsens_ocn,
+     &                                flat_ocn,   evap_ocn,
+     &                                sst,        frzmlt)
 
 ! !DESCRIPTION:
 !
@@ -255,25 +259,23 @@
      &,  alvdf_ocn       ! visible albedo, diffuse  (fraction)
      &,  alidf_ocn       ! near-ir albedo, diffuse  (fraction)
      &,  flw             ! incoming longwave (W/m^2)
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block),
-     &   intent(out) ::
-     &   fsens_ocn       ! sensible heat flux (W/m^2)
-     &,  flat_ocn        ! latent heat flux   (W/m^2)
-     &,  flwout_ocn      ! outgoing longwave  (W/m^2)
-     &,  frzmlt          ! freeze-melt potential (W/m^2)
-     &,  evap_ocn        ! evaporative vapor flux (kg/m^2/s)
+     &,  hmix            ! ocean mixed layer depth (m)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block),
      &   intent(inout) ::
      &   sst             ! sea surface temperature (C)
+     &,  qdp             ! deep ocean heat flux (W/m^2)
+     &,  frzmlt          ! freeze-melt potential (W/m^2)
+     &,  fsens_ocn       ! sensible heat flux (W/m^2)
+     &,  flat_ocn        ! latent heat flux   (W/m^2)
+     &,  flwout_ocn      ! outgoing longwave  (W/m^2)
+     &,  evap_ocn        ! evaporative vapor flux (kg/m^2/s)
 !
 !EOP
 !
       real (kind=dbl_kind) ::
      &   TsfK     ! surface temperature (K)
      &,  swabs    ! surface absorbed shortwave heat flux (W/m^2)
-     &,  qdp      ! deep ocean heat flux
 
       real (kind=dbl_kind), parameter ::
      &   frzmlt_max = c1000   ! max magnitude of frzmlt (W/m^2)
@@ -286,9 +288,6 @@
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
-
-         ! specify deep ocean heat flux as constant for now
-         qdp = deep_ocn_flx     ! negative upward
 
          ! shortwave radiative flux
          swabs = (c1-alvdr_ocn(i,j)) * swvdr(i,j)
@@ -307,16 +306,21 @@
          flat_ocn (i,j) =  lhcoef(i,j) * delq(i,j)
          evap_ocn (i,j) = -flat_ocn(i,j) / Lvap
 
-         ! first, compute sst change due to exchange with atm/ice above
+         ! Compute sst change due to exchange with atm/ice above
+         ! Note: fhnet, fswthru are added in ice_therm_vertical.F
          sst(i,j) = sst(i,j) +
      &        (fsens_ocn(i,j) + flat_ocn(i,j) + flwout_ocn(i,j) 
-     &       + flw(i,j) + swabs) * (c1-aice(i,j)) * dt / cphm
+     &       + flw(i,j) + swabs) * (c1-aice(i,j)) * dt 
+     &       / (cprho*hmix(i,j))
+
+         ! adjust qdp if cooling of mixed layer would occur when sst <= Tf
+         if (sst(i,j) <= Tf(i,j) .and. qdp(i,j) > c0) qdp(i,j) = c0
 
          ! computed T change due to exchange with deep layers:
-         sst(i,j) = sst(i,j) - qdp*dt/cphm
+         sst(i,j) = sst(i,j) - qdp(i,j)*dt/(cprho*hmix(i,j))
 
          ! compute potential to freeze or melt ice
-         frzmlt(i,j) = (Tf(i,j)-sst(i,j))*cphm/dt
+         frzmlt(i,j) = (Tf(i,j)-sst(i,j))*cprho*hmix(i,j)/dt
          frzmlt(i,j) = min(max(frzmlt(i,j),-frzmlt_max),frzmlt_max)
 
          ! if sst is below freezing, reset sst to Tf

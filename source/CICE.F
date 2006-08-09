@@ -1,28 +1,28 @@
-c $Id: CICE.F,v 1.1 2004/02/09 18:04:11 lipscomb Exp $
 !=======================================================================
-! Copyright, 2004.  The Regents of the University of California.
-! This software was produced under a U.S. Government contract
-! (W-7405-ENG-36) by Los Alamos National Laboratory, which is operated
-! by the University of California for the U.S. Department of Energy.
-! The U.S. Government is licensed to use, reproduce, and distribute this
-! software.  Permission is granted to the public to copy and use this
-! software without charge, provided that this Notice and any statement
-! of authorship are reproduced on all copies.  Neither the Government
-! nor the University makes any warranty, express or implied, or assumes
-! any liability or responsibility for the use of this software.
+! Copyright 2006, LANSLLC. All rights reserved.
+! Unless otherwise indicated, this information has been authored by an 
+! employee or employees of the Los Alamos National Security, LLC (LANS), 
+! operator of the Los Alamos National Laboratory under Contract No. 
+! DE-AC52-06NA25396 with the U.S. Department of Energy. The U.S. Government 
+! has rights to use, reproduce, and distribute this information. The public 
+! may copy and use this information without charge, provided that this 
+! Notice and any statement of authorship are reproduced on all copies. 
+! Neither the Government nor LANS makes any warranty, express or implied, 
+! or assumes any liability or responsibility for the use of this 
+! information.
 !
 ! CICE is developed and maintained by Elizabeth C. Hunke (eclare@lanl.gov)
-! and William H. Lipscomb (lipscomb@lanl.gov) of Group T-3 (Fluid
-! Dynamics), Los Alamos National Laboratory, with support from the
-! Climate Change Prediction Program (CCPP) and the Scientific
-! Discovery through Advanced Computing (SciDAC) program of the U.S.
-! Department of Energy.  We thank John Dukowicz (T-3), Phil Jones (T-3),
-! and Robert Malone (CCS-2) for their support of the sea ice modeling
+! and William H. Lipscomb (lipscomb@lanl.gov) of Group T-3 (Fluid 
+! Dynamics), Los Alamos National Laboratory, with support from the 
+! Climate Change Prediction Program (CCPP) and the Scientific 
+! Discovery through Advanced Computing (SciDAC) program of the U.S. 
+! Department of Energy.  We thank John Dukowicz (T-3), Phil Jones (T-3), 
+! and Robert Malone (CCS-2) for their support of the sea ice modeling 
 ! effort at LANL.
-!
+!   
 ! CICE has been developed in close collaboration with the NCAR CCSM
-! climate modeling project and includes ideas and efforts from
-! members the CCSM Polar Climate Working Group (PCWG).  We especially
+! climate modeling project and includes ideas and efforts from 
+! members the CCSM Polar Climate Working Group (PCWG).  We especially 
 ! thank the following members of the PCWG code development team:
 !
 ! Cecilia Bitz, UW
@@ -30,8 +30,9 @@ c $Id: CICE.F,v 1.1 2004/02/09 18:04:11 lipscomb Exp $
 ! Tony Craig, NCAR
 ! Marika Holland, NCAR
 ! Julie Schramm, NCAR
+! David Bailey, NCAR
 !
-! Numerous others have contributed to this effort--thanks to all!
+! Numerous others have contributed to this effort--thanks to all! 
 !=======================================================================
 !
 !BOP

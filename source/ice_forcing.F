@@ -31,6 +31,7 @@
       use ice_calendar, only: istep, istep1, time, time_forc, year_init,
      &                        sec, mday, month, nyr, yday, daycal
       use ice_fileunits
+      use ice_exit
 !
 !EOP
 !
@@ -85,14 +86,30 @@
 
       character(char_len) :: 
      &   atm_data_type    ! 'default', 'ncar', 'ecmwf', or 'LYq'
-     &,  sss_data_type    ! 'default', 'clim'
-     &,  sst_data_type    ! 'default', 'clim'
+     &,  sss_data_type    ! 'default', 'clim', or 'ncar'
+     &,  sst_data_type    ! 'default', 'clim', or 'ncar'
      &,  precip_units     ! 'mm_per_month', 'mm_per_sec', 'mks'
  
       character(char_len_long) :: 
      &   atm_data_dir     ! top directory for atmospheric data
      &,  ocn_data_dir     ! top directory for ocean data
- 
+     &,  oceanmixed_file  ! netCDF file name for ocean forcing data
+
+      integer (kind=int_kind), parameter :: 
+     &   nfld = 8    ! number of fields to search for in netCDF file
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nfld,12) :: 
+     &   ocn_frc_m   ! ocn data for 12 months
+
+      logical (kind=log_kind) ::
+     &   restore_sst                 ! restore sst if true
+
+      integer (kind=int_kind) ::
+     &   trestore                    ! restoring time scale (days)
+
+      real (kind=dbl_kind) :: 
+     &   trest                       ! restoring time scale (sec)
+
       logical (kind=log_kind) ::
      &   dbug             ! prints debugging output if true
 
@@ -128,15 +145,12 @@
       fyear       = fyear_init + mod(nyr-1,ycycle) ! current year
       fyear_final = fyear_init + ycycle - 1 ! last year in forcing cycle
 
-      if (trim(atm_data_type).ne.'default' .and.
-     &                    my_task.eq.master_task) then
+      if (trim(atm_data_type) /= 'default' .and.
+     &                    my_task == master_task) then
          write (nu_diag,*) ' Initial forcing data year = ',fyear_init
-         write (nu_diag,*) ' Current forcing data year = ',fyear_init
          write (nu_diag,*) ' Final   forcing data year = ',fyear_final
       endif
 
-!ech-later      call Tair_limit
- 
     !-------------------------------------------------------------------
     ! Get filenames for input forcing data     
     !-------------------------------------------------------------------
@@ -145,12 +159,160 @@
       if (trim(atm_data_type) == 'ncar') then
          call NCAR_files(fyear)
       elseif (trim(atm_data_type) == 'ecmwf') then
-         call ecmwf_files(fyear)
+         call ecmwf_files(fyear)    
       elseif (trim(atm_data_type) == 'LYq') then
          call LY_files(fyear)
       endif
 
       end subroutine init_forcing_atmo
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: init_forcing_ocn - initialize sss and sst
+!
+! !INTERFACE:
+!
+      subroutine init_forcing_ocn(dt)
+!
+! !DESCRIPTION:
+!
+! Set sea surface salinity to annual mean value using a 12-month
+!  climatology.
+! Read sst data for current month, and adjust sst based on freezing
+! temperature.  No interpolation in time.
+
+! Note: SST is subsequently prognosed if CICE is run with a mixed layer
+! ocean (oceanmixed\_ice = T).  SSS is not prognosed by CICE. 
+!
+! !REVISION HISTORY:
+!
+! authors: same as module
+!
+! !USES:
+!
+      use ice_domain, only: nblocks
+      use ice_flux, only: sss, sst, Tf
+      use ice_work, only:  work1
+      use ice_read_write
+      use ice_therm_vertical, only: ustar_scale
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      real (kind=dbl_kind), intent(in) ::
+     &     dt                   ! time step
+!
+!EOP
+!
+      integer (kind=int_kind) ::
+     &     i, j, iblk           ! horizontal indices
+     &,    k                    ! month index
+     &,    nbits
+
+      nbits = 64                ! double precision data
+
+      if (restore_sst) then
+         if (trestore == 0) then
+            trest = dt          ! use data instantaneously
+         else
+            trest = real(trestore,kind=dbl_kind) * secday ! seconds
+         endif
+      endif
+
+      if (trim(sss_data_type) == 'clim') then
+
+         sss_file = trim(ocn_data_dir)//'sss_Lev.mm'
+!!!         sss_file = trim(ocn_data_dir)//'sss_12.r'
+
+         if (my_task == master_task) then
+            write (nu_diag,*) ''
+            write (nu_diag,*) 'SSS climatology computed from:'
+            write (nu_diag,*) trim(sss_file)
+         endif
+
+         if (my_task == master_task)
+     &        call ice_open (nu_forcing, sss_file, nbits)
+
+    !-------------------------------------------------------------------
+    ! create surface salinity climatology from monthly data
+    !-------------------------------------------------------------------
+
+         sss(:,:,:) = c0
+
+         do k = 1,12            ! loop over 12 months
+            call ice_read (nu_forcing, k, work1, 'rda8', dbug)
+            do iblk = 1, nblocks
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  sss(i,j,iblk) = sss(i,j,iblk) + work1(i,j,iblk)
+               enddo
+               enddo
+            enddo
+         enddo                  ! k
+
+         do iblk = 1, nblocks
+            do j = 1, ny_block
+            do i = 1, nx_block
+               sss(i,j,iblk) = sss(i,j,iblk) / c12   ! annual average
+               sss(i,j,iblk) = max(sss(i,j,iblk),c0)
+            enddo
+            enddo
+         enddo
+
+         ! close file
+         if (my_task == master_task) close(nu_forcing)
+
+      endif                     ! sss_data_type
+
+      if (trim(sst_data_type) == 'clim') then
+
+         if (nx_global == 320) then ! gx1
+            sst_file = trim(ocn_data_dir)//'sst_clim_hurrell.dat'
+         else                   ! gx3
+            sst_file = trim(ocn_data_dir)//'sst_Lev.mm'
+!!!            sst_file = trim(ocn_data_dir)//'sst_12.r'
+         endif
+
+         if (my_task == master_task) then
+            write (nu_diag,*) ' '
+            write (nu_diag,*) 'Initial SST file:', trim(sst_file)
+         endif
+
+         if (my_task == master_task)
+     &        call ice_open (nu_forcing, sst_file, nbits)
+
+         call ice_read (nu_forcing, month, sst, 'rda8', dbug)
+
+         if (my_task == master_task) close(nu_forcing)
+
+         ! Make sure sst is not less than freezing temperature Tf
+         do iblk = 1, nblocks
+            do j = 1, ny_block
+            do i = 1, nx_block
+               Tf (i,j,iblk) = -depressT*sss(i,j,iblk) ! deg C
+               sst(i,j,iblk) = max(sst(i,j,iblk),Tf(i,j,iblk))
+            enddo
+            enddo
+         enddo
+
+      endif                     ! init_sst_data
+
+      if (trim(sst_data_type) == 'ncar' .or. 
+     &    trim(sss_data_type) == 'ncar') then
+!lipscomb - not implemented yet
+!!!         call getforcing_ocn_ncar_init
+         call abort_ice ('ncar ocean forcing not implemented yet')
+      endif
+
+      ! set ustar_scale for case of zero currents
+      ! default value of c1 (for nonzero currents) set in init_thermo_vertical
+
+      if (trim(sst_data_type) /= 'ncar' .or. 
+     &    trim(sss_data_type) /= 'ncar') then
+         ustar_scale = c10            ! for zero currents
+      endif
+
+      end subroutine init_forcing_ocn
 
 !=======================================================================
 !BOP
@@ -183,6 +345,10 @@
      &   iblk                 ! block index
 
       fyear = fyear_init + mod(nyr-1,ycycle)  ! current year
+      if (trim(atm_data_type) /= 'default' .and. istep <= 1
+     &             .and. my_task == master_task) then
+         write (nu_diag,*) ' Current forcing data year = ',fyear
+      endif
 
       ftime = time         ! forcing time
       time_forc = ftime    ! for restarting
@@ -238,114 +404,6 @@
 !=======================================================================
 !BOP
 !
-! !IROUTINE: init_forcing_ocn - initialize sss and sst
-!
-! !INTERFACE:
-!
-      subroutine init_forcing_ocn
-!
-! !DESCRIPTION:
-!
-! Set sea surface salinity to annual mean value using a 12-month
-!  climatology.
-! Read sst data for current month, and adjust sst based on freezing
-! temperature.  No interpolation in time.
-
-! Note: SST is subsequently prognosed if CICE is run with a mixed layer
-! ocean (oceanmixed\_ice = T).  SSS is not prognosed by CICE. 
-!
-! !REVISION HISTORY:
-!
-! authors: same as module
-!
-! !USES:
-!
-      use ice_domain, only: nblocks
-      use ice_flux, only: sss, sst, Tf
-      use ice_work, only:  work1
-      use ice_read_write
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      integer (kind=int_kind) ::
-     &     i, j, iblk           ! horizontal indices
-     &,    k                    ! month index
-     &,    nbits
-
-      nbits = 64                ! double precision data
-
-      if (trim(sss_data_type) == 'clim') then
-
-         sss_file = trim(ocn_data_dir)//'sss_12.r'
-
-         if (my_task == master_task) then
-            write (nu_diag,*) ' '
-            write (nu_diag,*) 'Initial SSS file:', trim(sss_file)
-            call ice_open (nu_forcing, sss_file, nbits)
-         endif
-
-    !-------------------------------------------------------------------
-    ! create surface salinity climatology from monthly data
-    !-------------------------------------------------------------------
-
-         do k = 1,12            ! loop over 12 months
-            call ice_read (nu_forcing, k, work1, 'rda8', dbug)
-            do iblk = 1, nblocks
-               do j = 1, ny_block
-               do i = 1, nx_block
-                  sss(i,j,iblk) = work1(i,j,iblk) + sss(i,j,iblk)
-               enddo
-               enddo
-            enddo
-         enddo                  ! k
-
-         do iblk = 1, nblocks
-            do j = 1, ny_block
-            do i = 1, nx_block
-               sss(i,j,iblk) = sss(i,j,iblk) / c12   ! annual average
-               sss(i,j,iblk) = max(sss(i,j,iblk),c0)
-            enddo
-            enddo
-         enddo
-
-         ! close file
-         if (my_task == master_task) close(nu_forcing)
-
-      endif                     ! sss_data_type
-
-      if (trim(sst_data_type) == 'clim') then
-!!!         sst_file = trim(ocn_data_dir)//'sst_12.r'
-         sst_file = trim(ocn_data_dir)//'sst_clim_hurrell.dat'
-
-         if (my_task == master_task) then
-            write (nu_diag,*) ' '
-            write (nu_diag,*) 'Initial SST file:', trim(sst_file)
-            call ice_open (nu_forcing, sst_file, nbits)
-         endif
-
-         call ice_read (nu_forcing, month, sst, 'rda8', dbug)
-
-         if (my_task == master_task) close(nu_forcing)
-
-         ! Make sure sst is not less than freezing temperature Tf
-         do iblk = 1, nblocks
-            do j = 1, ny_block
-            do i = 1, nx_block
-               Tf (i,j,iblk) = -depressT*sss(i,j,iblk) ! deg C
-               sst(i,j,iblk) = max(sst(i,j,iblk),Tf(i,j,iblk))
-            enddo
-            enddo
-         enddo
-
-      endif                     ! init_sst_data
-
-      end subroutine init_forcing_ocn
-
-!=======================================================================
-!BOP
-!
 ! !IROUTINE: get_forcing_ocn - interpolate sss, sst; restore sst
 !
 ! !INTERFACE:
@@ -386,12 +444,6 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) ::
      &    sstdat              ! data value toward which SST is restored
 
-      real (kind=dbl_kind), parameter ::
-!     &    Trestore = dt          ! STRONG restoring
-!     &    Trestore = 1.296e6_dbl_kind  ! 15 days
-!     &    Trestore = 2.592e6_dbl_kind  ! 30 days
-     &    Trestore = 7.776e6_dbl_kind  ! 90 days
-
       logical (kind=log_kind) :: readm
 
       if (my_task == master_task .and. istep == 1) then
@@ -405,7 +457,12 @@
             write (nu_diag,*) 'SST restored to data:'
             write (nu_diag,*) trim(sst_file)
             write (nu_diag,*)
-     &        'SST restoring timescale = ',Trestore/secday,' days'
+     &        'SST restoring timescale (days) =', trestore
+         endif
+!lipscomb - not implemented yet
+         if (trim(sss_data_type)=='ncar' .or.
+     &       trim(sst_data_type)=='ncar') then
+            call abort_ice('ncar ocean forcing not implemented yet')
          endif
       endif                     ! my_task, istep
 
@@ -472,7 +529,7 @@
             do j = 1, ny_block
             do i = 1, nx_block
                sst(i,j,iblk) = sst(i,j,iblk) 
-     &                   + (sstdat(i,j,iblk)-sst(i,j,iblk))*dt/Trestore
+     &                   + (sstdat(i,j,iblk)-sst(i,j,iblk))*dt/trest
                Tf (i,j,iblk) = -depressT*sss(i,j,iblk) ! deg C
                sst(i,j,iblk) =  max (sst(i,j,iblk), Tf(i,j,iblk))
             enddo
@@ -833,22 +890,24 @@
       real (kind=dbl_kind) ::
      &    tt               ! seconds elapsed in current year
      &,   t1, t2           ! seconds elapsed at data points
+     &,   rcnum            ! recnum => dbl_kind
 
       tt = mod(ftime,secyr)
 
       ! Find neighboring times
+      rcnum = real(recnum,kind=dbl_kind)
       if (recslot==2) then           ! current record goes in slot 2
          if (dataloc==1) then        ! data located at middle of interval
-            t2 = (real(recnum)-p5)*secint
+            t2 = (rcnum-p5)*secint
          else                        !  data located at end of interval
-            t2 = real(recnum)*secint
+            t2 = rcnum*secint
          endif
          t1 = t2 - secint            !  - 1 interval
       else                           ! recslot = 1
          if (dataloc==1) then        ! data located at middle of interval
-            t1 = (real(recnum)-p5)*secint
+            t1 = (rcnum-p5)*secint
          else                        
-            t1 = real(recnum)*secint ! data located at end of interval
+            t1 = rcnum*secint       ! data located at end of interval
          endif
          t2 = t1 + secint            !  + 1 interval
       endif

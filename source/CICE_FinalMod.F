@@ -30,8 +30,8 @@
       use ice_fileunits
       use ice_kinds_mod
       use ice_timers
-#ifdef coupled
-      use shr_msg_mod          ! for NCAR non-ESMF coupled runs only
+#ifdef CCSMcoupled
+      use shr_msg_mod          ! only for CCSM coupled runs without ESMF
 #endif
 
       implicit none

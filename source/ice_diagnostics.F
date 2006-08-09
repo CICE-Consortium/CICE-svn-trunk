@@ -32,7 +32,7 @@
       implicit none
       save
 	
-      ! dignostic output file
+      ! diagnostic output file
       character (len=char_len) :: diag_file
 
       ! point print data
@@ -58,13 +58,13 @@
      &,  bindx                ! block index for points
 
       ! for water and heat budgets
-      real (kind=dbl_kind), dimension(npnt), save ::
+      real (kind=dbl_kind), dimension(npnt) ::
      &   pdhi                 ! change in mean ice thickness (m)
      &,  pdhs                 ! change in mean snow thickness (m)
      &,  pde                  ! change in ice and snow energy (J m-2)
      &,  plat, plon           ! latitude, longitude of points
 
-      integer (kind=int_kind), dimension(npnt), save ::
+      integer (kind=int_kind), dimension(npnt) ::
      &   piloc, pjloc, pbloc, pmloc  ! location of diagnostic points
 
       ! for hemispheric water and heat budgets
@@ -209,8 +209,19 @@
       ketots = global_sum(work1, distrb_info, field_loc_center, tareas)
 
       ! rms ice speed
-      urmsn = sqrt (c2*ketotn/(rhoi*shmaxn + rhos*snwmxn) + puny)
-      urmss = sqrt (c2*ketots/(rhoi*shmaxs + rhos*snwmxs) + puny)
+      urmsn = c2*ketotn/(rhoi*shmaxn + rhos*snwmxn + puny)
+      if (urmsn > puny) then
+         urmsn = sqrt(urmsn)
+      else
+         urmsn = c0
+      endif
+
+      urmss = c2*ketots/(rhoi*shmaxs + rhos*snwmxs + puny)
+      if (urmss > puny) then
+         urmss = sqrt(urmss)
+      else
+         urmss = c0
+      endif
 
       ! average ice albedo
       ! mask out cells where sun is below horizon (for delta-Eddington)
@@ -334,17 +345,21 @@
       pmaxn = pmaxn / c1000   ! convert to kN/m
       pmaxs = pmaxs / c1000 
 
-      ! total ice/snow internal energy
-      do iblk = 1, nblocks
-         do j = 1, ny_block
-         do i = 1, nx_block
-            work1(i,j,iblk) = esno(i,j,iblk) + eice(i,j,iblk)
-         enddo
-         enddo
-      enddo
+      if (print_global) then
 
-      etotn = global_sum(work1, distrb_info, field_loc_center, tarean)
-      etots = global_sum(work1, distrb_info, field_loc_center, tareas)
+         ! total ice/snow internal energy
+         do iblk = 1, nblocks
+            do j = 1, ny_block
+            do i = 1, nx_block
+               work1(i,j,iblk) = esno(i,j,iblk) + eice(i,j,iblk)
+            enddo
+            enddo
+         enddo
+
+         etotn = global_sum(work1, distrb_info, 
+     &                      field_loc_center, tarean)
+         etots = global_sum(work1, distrb_info,
+     &                      field_loc_center, tareas)
 
       !-----------------------------------------------------------------
       ! various fluxes
@@ -354,157 +369,161 @@
       ! regrettably they have been divided by aice for the coupler
       !-----------------------------------------------------------------
 
-      ! evaporation
+         ! evaporation
 
-      evpn = global_sum_prod(evap, aice_init, distrb_info, 
+         evpn = global_sum_prod(evap, aice_init, distrb_info, 
+     &                          field_loc_center, tarean)
+         evps = global_sum_prod(evap, aice_init, distrb_info, 
+     &                          field_loc_center, tareas)
+         evpn = evpn*dt
+         evps = evps*dt
+
+         ! salt flux
+         sfsaltn = global_sum_prod(fsalt_hist, aice_init, distrb_info, 
+     &                             field_loc_center, tarean)
+         sfsalts = global_sum_prod(fsalt_hist, aice_init, distrb_info, 
+     &                             field_loc_center, tareas)
+         sfsaltn = sfsaltn*dt
+         sfsalts = sfsalts*dt
+
+         ! fresh water flux
+         sfreshn = global_sum_prod(fresh_hist, aice_init, distrb_info, 
+     &                             field_loc_center, tarean)
+         sfreshs = global_sum_prod(fresh_hist, aice_init, distrb_info, 
+     &                             field_loc_center, tareas)
+         sfreshn = sfreshn*dt
+         sfreshs = sfreshs*dt
+
+         ! ocean heat
+         ! Note: fswthru not included because it does not heat ice
+         fhocnn = global_sum_prod(fhocn_hist, aice_init, distrb_info, 
+     &                            field_loc_center, tarean)
+         fhocns = global_sum_prod(fhocn_hist, aice_init, distrb_info, 
+     &                            field_loc_center, tareas)
+
+         ! latent heat
+         ! You may be wondering, where is the latent heat flux?
+         ! It is not included here because it cancels with
+         ! the evaporative flux times the enthalpy of the
+         ! ice/snow that evaporated.
+
+         ! atmo heat flux
+         ! Note: flwout includes the reflected longwave down, needed by the
+         !  atmosphere as an upwards radiative boundary condition.
+         ! Also note: fswabs includes solar radiation absorbed in ocean,
+         !  which must be subtracted here.
+
+         do iblk = 1, nblocks
+            do j = 1, ny_block
+            do i = 1, nx_block
+               work1(i,j,iblk) =
+     &                      (fswabs(i,j,iblk) - fswthru_hist(i,j,iblk) 
+     &                     + flw   (i,j,iblk) + flwout      (i,j,iblk) 
+     &                     + fsens (i,j,iblk)) * aice_init(i,j,iblk)
+            enddo
+            enddo
+         enddo
+         fhatmn = global_sum(work1, distrb_info,
      &                       field_loc_center, tarean)
-      evps = global_sum_prod(evap, aice_init, distrb_info, 
+         fhatms = global_sum(work1, distrb_info,
      &                       field_loc_center, tareas)
-      evpn = evpn*dt
-      evps = evps*dt
+  
+         ! freezing potential
+         do iblk = 1, nblocks
+            do j = 1, ny_block
+            do i = 1, nx_block
+               work1(i,j,iblk) = max(c0,frzmlt(i,j,iblk))
+            enddo
+            enddo
+         enddo
+         fhfrzn = global_sum(work1, distrb_info,
+     &                       field_loc_center, tarean)
+         fhfrzs = global_sum(work1, distrb_info,
+     &                       field_loc_center, tareas)
 
-      ! salt flux
-      sfsaltn = global_sum_prod(fsalt_hist, aice_init, distrb_info, 
-     &                          field_loc_center, tarean)
-      sfsalts = global_sum_prod(fsalt_hist, aice_init, distrb_info, 
-     &                          field_loc_center, tareas)
-      sfsaltn = sfsaltn*dt
-      sfsalts = sfsalts*dt
-
-      ! fresh water flux
-      sfreshn = global_sum_prod(fresh_hist, aice_init, distrb_info, 
-     &                          field_loc_center, tarean)
-      sfreshs = global_sum_prod(fresh_hist, aice_init, distrb_info, 
-     &                          field_loc_center, tareas)
-      sfreshn = sfreshn*dt
-      sfreshs = sfreshs*dt
-
-      ! ocean heat
-      ! Note: fswthru not included because it does not heat ice
-      fhocnn = global_sum_prod(fhocn_hist, aice_init, distrb_info, 
+         ! rain
+         rnn = global_sum_prod(frain, aice_init, distrb_info, 
      &                         field_loc_center, tarean)
-      fhocns = global_sum_prod(fhocn_hist, aice_init, distrb_info, 
+         rns = global_sum_prod(frain, aice_init, distrb_info, 
      &                         field_loc_center, tareas)
+         rnn = rnn*dt
+         rns = rns*dt
 
-      ! latent heat
-      ! You may be wondering, where is the latent heat flux?
-      ! It is not included here because it cancels with
-      ! the evaporative flux times the enthalpy of the
-      ! ice/snow that evaporated.
+         ! snow
+         snn = global_sum_prod(fsnow, aice_init, distrb_info, 
+     &                         field_loc_center, tarean)
+         sns = global_sum_prod(fsnow, aice_init, distrb_info, 
+     &                         field_loc_center, tareas)
+         snn = snn*dt
+         sns = sns*dt
 
-      ! atmo heat flux
-      ! Note: flwout includes the reflected longwave down, needed by the
-      !  atmosphere as an upwards radiative boundary condition.
-      ! Also note: fswabs includes solar radiation absorbed in ocean,
-      !  which must be subtracted here.
+         ! frazil ice growth !! should not be multiplied by aice
+         ! m/step->kg/m^2/s
+         work1(:,:,:) = frazil(:,:,:)*rhoi/dt
+         frzn = global_sum(work1, distrb_info,
+     &                     field_loc_center, tarean)
+         frzs = global_sum(work1, distrb_info, field_loc_center, 
+     &                     tareas)
+         frzn = frzn*dt
+         frzs = frzs*dt
 
-      do iblk = 1, nblocks
-         do j = 1, ny_block
-         do i = 1, nx_block
-            work1(i,j,iblk) =(fswabs(i,j,iblk) - fswthru_hist(i,j,iblk) 
-     &                      + flw   (i,j,iblk) + flwout      (i,j,iblk) 
-     &                      + fsens (i,j,iblk)) * aice_init(i,j,iblk)
-         enddo
-         enddo
-      enddo
-      fhatmn = global_sum(work1, distrb_info, field_loc_center,
-     &                    tarean)
-      fhatms = global_sum(work1, distrb_info, field_loc_center,
-     &                    tareas)
+         ! ice and snow mass
+         micen = rhoi*shmaxn
+         msnwn = rhos*snwmxn
+         mices = rhoi*shmaxs
+         msnws = rhos*snwmxs
 
-      ! freezing potential
-      do iblk = 1, nblocks
-         do j = 1, ny_block
-         do i = 1, nx_block
-            work1(i,j,iblk) = max(c0,frzmlt(i,j,iblk))
-         enddo
-         enddo
-      enddo
-      fhfrzn = global_sum(work1, distrb_info, field_loc_center,
-     &                    tarean)
-      fhfrzs = global_sum(work1, distrb_info, field_loc_center,
-     &                    tareas)
+         mtotn = micen + msnwn
+         mtots = mices + msnws
+  
+         ! mass change since beginning of time step
+         delmin = mtotn - totmn
+         delmis = mtots - totms
 
-      ! rain
-      rnn = global_sum_prod(frain, aice_init, distrb_info, 
-     &                      field_loc_center, tarean)
-      rns = global_sum_prod(frain, aice_init, distrb_info, 
-     &                      field_loc_center, tareas)
-      rnn = rnn*dt
-      rns = rns*dt
+         ! ice mass change excluding frazil ice formation
+         delmxn = micen - totmin - frzn
+         delmxs = mices - totmis - frzs
 
-      ! snow
-      snn = global_sum_prod(fsnow, aice_init, distrb_info, 
-     &                      field_loc_center, tarean)
-      sns = global_sum_prod(fsnow, aice_init, distrb_info, 
-     &                      field_loc_center, tareas)
-      snn = snn*dt
-      sns = sns*dt
+         ! total water flux
+         fluxn  = c0
+         fluxs  = c0
+         if( arean > c0) then
+            fluxn = rnn + snn + evpn - sfreshn + frzn
+         endif
+         if( areas > c0) then
+            fluxs = rns + sns + evps - sfreshs + frzs
+         endif
 
-      ! frazil ice growth !! should not be multiplied by aice
-      ! m/step->kg/m^2/s
-      work1(:,:,:) = frazil(:,:,:)*rhoi/dt
-      frzn = global_sum(work1, distrb_info, field_loc_center, 
-     &                  tarean)
-      frzs = global_sum(work1, distrb_info, field_loc_center, 
-     &                  tareas)
-      frzn = frzn*dt
-      frzs = frzs*dt
+         werrn = (fluxn-delmin)/(mtotn+c1)
+         werrs = (fluxs-delmis)/(mtots+c1)
 
-      ! ice and snow mass
-      micen = rhoi*shmaxn
-      msnwn = rhos*snwmxn
-      mices = rhoi*shmaxs
-      msnws = rhos*snwmxs
+         ! energy change
+         delein = etotn - toten
+         deleis = etots - totes
 
-      mtotn = micen + msnwn
-      mtots = mices + msnws
+         fhatmn = fhatmn + ( - snn * Lfresh + evpn * Lvap ) / dt
+         fhatms = fhatms + ( - sns * Lfresh + evps * Lvap ) / dt
 
-      ! mass change since beginning of time step
-      delmin = mtotn - totmn
-      delmis = mtots - totms
+         hnetn = (fhatmn - fhocnn - fhfrzn) * dt
+         hnets = (fhatms - fhocns - fhfrzs) * dt
 
-      ! ice mass change excluding frazil ice formation
-      delmxn = micen - totmin - frzn
-      delmxs = mices - totmis - frzs
+         herrn = (hnetn - delein) / (etotn - c1)
+         herrs = (hnets - deleis) / (etots - c1)
 
-      ! total water flux
-      fluxn  = c0
-      fluxs  = c0
-      if( arean > c0) then
-         fluxn = rnn + snn + evpn - sfreshn + frzn
-      endif
-      if( areas > c0) then
-         fluxs = rns + sns + evps - sfreshs + frzs
-      endif
+         ! salt mass
+         msltn = micen*ice_ref_salinity*p001
+         mslts = mices*ice_ref_salinity*p001
 
-      werrn = (fluxn-delmin)/(mtotn+c1)
-      werrs = (fluxs-delmis)/(mtots+c1)
+         ! change in salt mass, excluding frazil
+         delmsltn = delmxn*ice_ref_salinity*p001
+         delmslts = delmxs*ice_ref_salinity*p001
 
-      ! energy change
-      delein = etotn - toten
-      deleis = etots - totes
+         ! salt error
+         serrn = (sfsaltn + delmsltn) / (msltn + c1)
+         serrs = (sfsalts + delmslts) / (mslts + c1)
 
-      fhatmn = fhatmn + ( - snn * Lfresh + evpn * Lvap ) / dt
-      fhatms = fhatms + ( - sns * Lfresh + evps * Lvap ) / dt
+      endif                     ! print_global
 
-      hnetn = (fhatmn - fhocnn - fhfrzn) * dt
-      hnets = (fhatms - fhocns - fhfrzs) * dt
-
-      herrn = (hnetn - delein) / (etotn - c1)
-      herrs = (hnets - deleis) / (etots - c1)
-
-      ! salt mass
-      msltn = micen*ice_ref_salinity*p001
-      mslts = mices*ice_ref_salinity*p001
-
-      ! change in salt mass, excluding frazil
-      delmsltn = delmxn*ice_ref_salinity*p001
-      delmslts = delmxs*ice_ref_salinity*p001
-
-      ! salt error
-      serrn = (sfsaltn + delmsltn) / (msltn + c1)
-      serrs = (sfsalts + delmslts) / (mslts + c1)
 
       if (print_points) then
 
@@ -912,8 +931,8 @@
          pjloc(:) = 0
          pbloc(:) = 0
          pmloc(:) = -999
-         plat(:)  = -999.
-         plon(:)  = -999.
+         plat(:)  = -999._dbl_kind
+         plon(:)  = -999._dbl_kind
 
          ! find minimum distance to diagnostic points on this processor 
          do n = 1, npnt

@@ -438,7 +438,7 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
          allocate(work_g1(nx_global,ny_global))
          do j=1,ny_global
          do i=1,nx_global
-            work_g1(i,j) = float((j-1)*nx_global + i)
+            work_g1(i,j) = real((j-1)*nx_global + i,kind=dbl_kind)
          enddo
          enddo
       else
@@ -774,11 +774,6 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
-
-!!!         HTN  (i,j,iblk) = 3.1e4_dbl_kind  ! constant longitude spacing =
-                                              ! POP <4/3> min, m
-!!!         HTE  (i,j,iblk) = 3.1e4_dbl_kind  ! constant latitude  spacing =
-                                              ! POP <4/3> min, m
             HTN  (i,j,iblk) = 1.6e4_dbl_kind  ! constant longitude spacing =
                                               ! POP <2/3> min, m
             HTE  (i,j,iblk) = 1.6e4_dbl_kind  ! constant latitude  spacing =
@@ -1032,10 +1027,10 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 
       if (my_task==master_task) then
          write(nu_diag,*) ' '
-         write(nu_diag,*) 'min/max ULON:', y1, y2
-         write(nu_diag,*) 'min/max TLON:', x1, x2
-         write(nu_diag,*) 'min/max ULAT:', y3, y4
-         write(nu_diag,*) 'min/max TLAT:', x3, x4
+         write(nu_diag,*) 'min/max ULON:', y1*rad_to_deg, y2*rad_to_deg
+         write(nu_diag,*) 'min/max TLON:', x1*rad_to_deg, x2*rad_to_deg
+         write(nu_diag,*) 'min/max ULAT:', y3*rad_to_deg, y4*rad_to_deg
+         write(nu_diag,*) 'min/max TLAT:', x3*rad_to_deg, x4*rad_to_deg
       endif                     ! my_task
 
       end subroutine Tlatlon

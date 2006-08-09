@@ -342,6 +342,7 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       use ice_calendar, only: yday
       use ice_flux, only: mlt_onset, frz_onset
       use ice_restart, only: restart
+      use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -561,9 +562,6 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vunit(n_aice      ) = ' '
       vunit(n_uvel      ) = 'm/s'
       vunit(n_vvel      ) = 'm/s'
-!csim      vunit(n_aice      ) = '%'
-!csim      vunit(n_uvel      ) = 'cm/s'
-!csim      vunit(n_vvel      ) = 'cm/s'
       vunit(n_fswdn     ) = 'W/m^2'
       vunit(n_flwdn     ) = 'W/m^2'
       vunit(n_snow      ) = 'cm/day'
@@ -574,8 +572,6 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vunit(n_sss       ) = 'psu'
       vunit(n_uocn      ) = 'm/s'
       vunit(n_vocn      ) = 'm/s'
-!csim      vunit(n_uocn      ) = 'cm/s'
-!csim      vunit(n_vocn      ) = 'cm/s'
       vunit(n_frzmlt    ) = 'W/m^2'
       vunit(n_fswabs    ) = 'W/m^2'
       vunit(n_fswabs_ai ) = 'W/m^2'
@@ -603,8 +599,6 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vunit(n_fresh_ai  ) = 'cm/day'
       vunit(n_fsalt     ) = 'kg/m^2 s'
       vunit(n_fsalt_ai  ) = 'kg/m^2 s'
-!csim      vunit(n_fsalt     ) = 'kg/m^2/day'
-!csim      vunit(n_fsalt_ai  ) = 'kg/m^2/day'
       vunit(n_fhocn     ) = 'W/m^2'
       vunit(n_fhocn_ai  ) = 'W/m^2'
       vunit(n_fswthru   ) = 'W/m^2'
@@ -646,16 +640,6 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vunit(n_aice8     ) = ' '
       vunit(n_aice9     ) = ' '
       vunit(n_aice10    ) = ' '
-!csim      vunit(n_aice1     ) = '%'
-!csim      vunit(n_aice2     ) = '%'
-!csim      vunit(n_aice3     ) = '%'
-!csim      vunit(n_aice4     ) = '%'
-!csim      vunit(n_aice5     ) = '%'
-!csim      vunit(n_aice6     ) = '%'
-!csim      vunit(n_aice7     ) = '%'
-!csim      vunit(n_aice8     ) = '%'
-!csim      vunit(n_aice9     ) = '%'
-!csim      vunit(n_aice10    ) = '%'
       vunit(n_vice1     ) = 'm'
       vunit(n_vice2     ) = 'm'
       vunit(n_vice3     ) = 'm'
@@ -666,6 +650,27 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vunit(n_vice8     ) = 'm'
       vunit(n_vice9     ) = 'm'
       vunit(n_vice10    ) = 'm'
+
+#ifdef CCSM
+      ! redefine for CCSM conventions
+      vunit(n_aice      ) = '%'
+      vunit(n_uvel      ) = 'cm/s'
+      vunit(n_vvel      ) = 'cm/s'
+      vunit(n_uocn      ) = 'cm/s'
+      vunit(n_vocn      ) = 'cm/s'
+      vunit(n_fsalt     ) = 'kg/m^2/day'
+      vunit(n_fsalt_ai  ) = 'kg/m^2/day'
+      vunit(n_aice1     ) = '%'
+      vunit(n_aice2     ) = '%'
+      vunit(n_aice3     ) = '%'
+      vunit(n_aice4     ) = '%'
+      vunit(n_aice5     ) = '%'
+      vunit(n_aice6     ) = '%'
+      vunit(n_aice7     ) = '%'
+      vunit(n_aice8     ) = '%'
+      vunit(n_aice9     ) = '%'
+      vunit(n_aice10    ) = '%'
+#endif
 
       !---------------------------------------------------------------
       ! field comments
@@ -769,13 +774,27 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       !-----------------------------------------------------------------
       ! read namelist
       !-----------------------------------------------------------------
-      nml_error = -1
-      open (nu_nml, file=nml_filename, status='old')
-   10 continue       !*** keep reading until right namelist is found
-      read(nu_nml, nml=icefields_nml,err=10,end=20)
-      close(nu_nml)
-      nml_error = 0
-   20 continue
+
+      if (my_task == master_task) then
+         open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
+         if (nml_error /= 0) then
+            nml_error = -1
+         else
+            nml_error =  1
+         endif
+         do while (nml_error > 0)
+            read(nu_nml, nml=icefields_nml,iostat=nml_error)
+            if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
+         end do
+         if (nml_error == 0) close(nu_nml)
+      endif
+
+      call broadcast_scalar(nml_error, master_task)
+      if (nml_error /= 0) then
+         print*, 'could not find icefields_nml'
+         close (nu_nml)
+         call abort_ice('ERROR reading icefields_nml')
+      endif
 
       call broadcast_scalar (f_hi, master_task)
       call broadcast_scalar (f_hs, master_task)
@@ -1012,21 +1031,6 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       ! set conversion factors
       !---------------------------------------------------------------
 
-!csim      cona(n_aice  ) = c100                   ! aice  fraction to %
-!csim      cona(n_aice1 ) = c100                   ! aice1 fraction to %
-!csim      cona(n_aice2 ) = c100                   ! aice2 fraction to %
-!csim      cona(n_aice3 ) = c100                   ! aice3 fraction to %
-!csim      cona(n_aice4 ) = c100                   ! aice4 fraction to %
-!csim      cona(n_aice5 ) = c100                   ! aice5 fraction to %
-!csim      cona(n_aice6 ) = c100                   ! aice6 fraction to %
-!csim      cona(n_aice7 ) = c100                   ! aice7 fraction to %
-!csim      cona(n_aice8 ) = c100                   ! aice8 fraction to %
-!csim      cona(n_aice9 ) = c100                   ! aice9 fraction to %
-!csim      cona(n_aice10) = c100                   ! aice10 fraction to %
-!csim      cona(n_aisnap) = c100                   ! aisnap fraction to %
-!csim      cona(n_uvel  ) = m_to_cm                ! u m/s to cm/s
-!csim      cona(n_vvel  ) = m_to_cm                ! v m/s to cm/s
-
       cona(n_snow   ) = mps_to_cmpdy/rhofresh  ! snow kg/m2/s to cm/day
       cona(n_snow_ai) = mps_to_cmpdy/rhofresh  ! snow kg/m2/s to cm/day
       cona(n_rain   ) = mps_to_cmpdy/rhofresh  ! rain kg/m2/s to cm/day
@@ -1066,6 +1070,28 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       cona(n_dardg1dt) = secday*c100    ! dardg1dt frac/s to %/day
       cona(n_dardg2dt) = secday*c100    ! dardg2dt frac/s to %/day
       cona(n_dvirdgdt) = mps_to_cmpdy   ! dvirdgdt m/s to cm/day
+
+#ifdef CCSM
+      ! CCSM conventions
+      cona(n_aice  ) = c100             ! aice  fraction to %
+      cona(n_aice1 ) = c100             ! aice1 fraction to %
+      cona(n_aice2 ) = c100             ! aice2 fraction to %
+      cona(n_aice3 ) = c100             ! aice3 fraction to %
+      cona(n_aice4 ) = c100             ! aice4 fraction to %
+      cona(n_aice5 ) = c100             ! aice5 fraction to %
+      cona(n_aice6 ) = c100             ! aice6 fraction to %
+      cona(n_aice7 ) = c100             ! aice7 fraction to %
+      cona(n_aice8 ) = c100             ! aice8 fraction to %
+      cona(n_aice9 ) = c100             ! aice9 fraction to %
+      cona(n_aice10) = c100             ! aice10 fraction to %
+      cona(n_aisnap) = c100             ! aisnap fraction to %
+      cona(n_uvel  ) = m_to_cm          ! u m/s to cm/s
+      cona(n_vvel  ) = m_to_cm          ! v m/s to cm/s
+      cona(n_uocn    ) = m_to_cm        ! uocn m/s to cm/s
+      cona(n_vocn    ) = m_to_cm        ! vocn m/s to cm/s
+      cona(n_fsalt)    = secday         ! salt flux kg/m2/s to kg/m2/day 
+      cona(n_fsalt_ai) = secday         ! salt flux kg/m2/s to kg/m2/day 
+#endif
 
 !-------------------------------------------------------------------
 ! Change coordinates of variables printed out on u grid
@@ -1477,7 +1503,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       use ice_calendar, only: time, sec, idate, nyr, month, daymo, 
      &                        mday, write_ic, histfreq, year_init,
      &                        new_year, new_month, new_day
-      use ice_work, only: work_g1, work_gr
+      use ice_work, only: work_g1, work_gr, work_gr3
       use ice_restart, only: lenstr
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1667,16 +1693,16 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       !-----------------------------------------------------------------
       ! ... the user should change these to something useful ...
       !-----------------------------------------------------------------
-        title  = 'sea ice model output for cice'
+        title  = 'sea ice model output for CICE'
         length = lenstr(title)
         status = nf_put_att_text(ncid,nf_global,'title',length,title)
-        title  = 'sea ice model: LANL sea ice model (cice)'
+        title  = 'sea ice model: Community Ice Code (CICE)'
         length = lenstr(title)
         status = nf_put_att_text(ncid,nf_global,'source',length,title)
         title  = 'log file ice.log.'                      ! for now
         length = lenstr(title)
         status = nf_put_att_text(ncid,nf_global,'history',length,title)
-        title  = 'of LANL cice'
+        title  = 'of CICE'
         length = lenstr(title)
         status =
      &       nf_put_att_text(ncid,nf_global,'conventions',length,title)
@@ -1739,6 +1765,14 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         status  = nf_put_var_real(ncid,varid,work_gr)
       endif
 
+      deallocate(work_gr)
+
+      if (my_task==master_task) then
+         allocate(work_gr3(nx_global,ny_global,1))
+      else
+         allocate(work_gr3(1,1,1))   ! to save memory
+      endif
+
       !-----------------------------------------------------------------
       ! write variable data
       !-----------------------------------------------------------------
@@ -1752,13 +1786,15 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           call gather_global(work_g1, aa(:,:,n,:),
      &                       master_task, distrb_info)
           if (my_task == master_task) then
-            work_gr = work_g1
+            work_gr3(:,:,1) = work_g1
             status  = nf_inq_varid(ncid,vname(n),varid)
-            status  = nf_put_vara_real(ncid,varid,start,count,work_gr)
-
+            status  = nf_put_vara_real(ncid,varid,start,count,work_gr3)
           endif
         endif
       enddo
+
+      deallocate(work_gr3)
+      deallocate(work_g1)
 
       !-----------------------------------------------------------------
       ! close output dataset
@@ -1770,9 +1806,6 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
          write(nu_diag,*) 'Finished writing ',ncfile(1:lenstr(ncfile))
          write(nu_diag,*) ' '
       endif
-
-      deallocate(work_gr)
-      deallocate(work_g1)
 
       end subroutine icecdf
 

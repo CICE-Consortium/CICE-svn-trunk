@@ -51,7 +51,7 @@
        maxblocks_ns_snd   ,&! max num blocks involved in north-south sends
        maxblocks_ns_rcv   ,&! max num blocks involved in north-south recvs
        nlocal_ew          ,&! num local copies for east-west bndy update
-       nlocal_ns            ! num local copies for east-west bndy update
+       nlocal_ns            ! num local copies for north-south bndy update
 
      integer (int_kind), dimension(:), pointer :: &
        nblocks_ew_snd     ,&! num blocks in each east-west send msg
@@ -1355,12 +1355,29 @@ contains
       ib_dst = in_bndy%local_ew_dst_add(1,n)
       ie_dst = ib_dst + nghost - 1
 
+!lipscomb - boundary update changes
+! In the original code, ghost cells along closed boundaries and in
+!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
+! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
+! That is, the ghost cells are filled with the values in the neighboring
+!  physical cell.
+ 
       if (src_block /= 0) then
          ARRAY(ib_dst:ie_dst,:,dst_block) = &
          ARRAY(ib_src:ie_src,:,src_block)
       else
-         ARRAY(ib_dst:ie_dst,:,dst_block) = c0
+!!!         ARRAY(ib_dst:ie_dst,:,dst_block) = c0
+         if (ib_dst == 1) then                       ! west boundary
+            do i = ib_dst, ie_dst
+               ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
+            enddo
+         elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
+            do i = ib_dst, ie_dst
+               ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
+            enddo
+         endif
       endif
+
    end do
    !call timer_stop(bndy_2d_local)
 
@@ -1492,11 +1509,27 @@ contains
          jb_dst = in_bndy%local_ns_dst_add(2,n)
          je_dst = jb_dst + nghost - 1
 
+!lipscomb - boundary update changes
+! In the original code, ghost cells along closed boundaries and in
+!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
+! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
+! That is, the ghost cells are filled with the values in the neighboring
+!  physical cell.
+ 
          if (src_block /= 0) then
             ARRAY(:,jb_dst:je_dst,dst_block) = &
             ARRAY(:,jb_src:je_src,src_block)
          else
-            ARRAY(:,jb_dst:je_dst,dst_block) = c0
+!!!            ARRAY(:,jb_dst:je_dst,dst_block) = c0
+            if (jb_dst == 1) then                       ! south boundary
+               do j = jb_dst, je_dst
+                  ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
+               enddo
+            elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
+               do j = jb_dst, je_dst
+                  ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
+               enddo
+            endif
          endif
 
       else  !north boundary tripole grid - copy into global north buffer
@@ -1937,12 +1970,29 @@ contains
       ib_dst = in_bndy%local_ew_dst_add(1,n)
       ie_dst = ib_dst + nghost - 1
 
+!lipscomb - boundary update changes
+! In the original code, ghost cells along closed boundaries and in
+!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
+! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
+! That is, the ghost cells are filled with the values in the neighboring
+!  physical cell.
+ 
       if (src_block /= 0) then
          ARRAY(ib_dst:ie_dst,:,dst_block) = &
          ARRAY(ib_src:ie_src,:,src_block)
       else
-         ARRAY(ib_dst:ie_dst,:,dst_block) = c0
+!!!         ARRAY(ib_dst:ie_dst,:,dst_block) = c0
+         if (ib_dst == 1) then                       ! west boundary
+            do i = ib_dst, ie_dst
+               ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
+            enddo
+         elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
+            do i = ib_dst, ie_dst
+               ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
+            enddo
+         endif
       endif
+
    end do
 
 !-----------------------------------------------------------------------
@@ -2050,11 +2100,27 @@ contains
          jb_dst = in_bndy%local_ns_dst_add(2,n)
          je_dst = jb_dst + nghost - 1
 
+!lipscomb - boundary update changes
+! In the original code, ghost cells along closed boundaries and in
+!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
+! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
+! That is, the ghost cells are filled with the values in the neighboring
+!  physical cell.
+ 
          if (src_block /= 0) then
             ARRAY(:,jb_dst:je_dst,dst_block) = &
             ARRAY(:,jb_src:je_src,src_block)
          else
-            ARRAY(:,jb_dst:je_dst,dst_block) = c0
+!!!            ARRAY(:,jb_dst:je_dst,dst_block) = c0
+            if (jb_dst == 1) then                       ! south boundary
+               do j = jb_dst, je_dst
+                  ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
+               enddo
+            elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
+               do j = jb_dst, je_dst
+                  ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
+               enddo
+            endif
          endif
 
       else  !north boundary tripole grid - copy into global north buffer
@@ -2482,12 +2548,29 @@ end subroutine boundary_2d_real
       ib_dst = in_bndy%local_ew_dst_add(1,n)
       ie_dst = ib_dst + nghost - 1
 
+!lipscomb - boundary update changes
+! In the original code, ghost cells along closed boundaries and in
+!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
+! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
+! That is, the ghost cells are filled with the values in the neighboring
+!  physical cell.
+ 
       if (src_block /= 0) then
          ARRAY(ib_dst:ie_dst,:,dst_block) = &
          ARRAY(ib_src:ie_src,:,src_block)
       else
-         ARRAY(ib_dst:ie_dst,:,dst_block) = 0
+!!!         ARRAY(ib_dst:ie_dst,:,dst_block) = 0
+         if (ib_dst == 1) then                       ! west boundary
+            do i = ib_dst, ie_dst
+               ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
+            enddo
+         elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
+            do i = ib_dst, ie_dst
+               ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
+            enddo
+         endif
       endif
+
    end do
 
 !-----------------------------------------------------------------------
@@ -2595,11 +2678,27 @@ end subroutine boundary_2d_real
          jb_dst = in_bndy%local_ns_dst_add(2,n)
          je_dst = jb_dst + nghost - 1
 
+!lipscomb - boundary update changes
+! In the original code, ghost cells along closed boundaries and in
+!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
+! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
+! That is, the ghost cells are filled with the values in the neighboring
+!  physical cell.
+ 
          if (src_block /= 0) then
             ARRAY(:,jb_dst:je_dst,dst_block) = &
             ARRAY(:,jb_src:je_src,src_block)
          else
-            ARRAY(:,jb_dst:je_dst,dst_block) = 0
+!!!            ARRAY(:,jb_dst:je_dst,dst_block) = c0
+            if (jb_dst == 1) then                       ! south boundary
+               do j = jb_dst, je_dst
+                  ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
+               enddo
+            elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
+               do j = jb_dst, je_dst
+                  ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
+               enddo
+            endif
          endif
 
       else  !north boundary tripole grid - copy into global north buffer
@@ -3119,12 +3218,29 @@ end subroutine boundary_2d_int
       ib_dst = in_bndy%local_ew_dst_add(1,n)
       ie_dst = ib_dst + nghost - 1
 
+!lipscomb - boundary update changes
+! In the original code, ghost cells along closed boundaries and in
+!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
+! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
+! That is, the ghost cells are filled with the values in the neighboring
+!  physical cell.
+ 
       if (src_block /= 0) then
          ARRAY(ib_dst:ie_dst,:,:,dst_block) = &
          ARRAY(ib_src:ie_src,:,:,src_block)
       else
-         ARRAY(ib_dst:ie_dst,:,:,dst_block) = c0
+!!!         ARRAY(ib_dst:ie_dst,:,:,dst_block) = c0
+         if (ib_dst == 1) then                       ! west boundary
+            do i = ib_dst, ie_dst
+               ARRAY(i,:,:,dst_block) = ARRAY(ie_dst+1,:,:,dst_block)
+            enddo
+         elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
+            do i = ib_dst, ie_dst
+               ARRAY(i,:,:,dst_block) = ARRAY(ib_dst-1,:,:,dst_block)
+            enddo
+         endif
       endif
+
    end do
    !call timer_stop(bndy_3d_local)
 
@@ -3255,11 +3371,27 @@ end subroutine boundary_2d_int
          jb_dst = in_bndy%local_ns_dst_add(2,n)
          je_dst = jb_dst + nghost - 1
 
+!lipscomb - boundary update changes
+! In the original code, ghost cells along closed boundaries and in
+!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
+! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
+! That is, the ghost cells are filled with the values in the neighboring
+!  physical cell.
+ 
          if (src_block /= 0) then
             ARRAY(:,jb_dst:je_dst,:,dst_block) = &
             ARRAY(:,jb_src:je_src,:,src_block)
          else
-            ARRAY(:,jb_dst:je_dst,:,dst_block) = c0
+!!!            ARRAY(:,jb_dst:je_dst,:,dst_block) = c0
+            if (jb_dst == 1) then                       ! south boundary
+               do j = jb_dst, je_dst
+                  ARRAY(:,j,:,dst_block) = ARRAY(:,je_dst+1,:,dst_block)
+               enddo
+            elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
+               do j = jb_dst, je_dst
+                  ARRAY(:,j,:,dst_block) = ARRAY(:,jb_dst-1,:,dst_block)
+               enddo
+            endif
          endif
 
       else  !north boundary tripole grid - copy into global north buffer

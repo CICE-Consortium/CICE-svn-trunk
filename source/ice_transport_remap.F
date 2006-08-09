@@ -68,7 +68,7 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
 
 !=======================================================================
 !
-! The following comments are intended for  users who want to 
+! The following comments are intended for users who want to 
 ! transport additional variables in CICE, or who want to apply 
 ! incremental remapping in another model.  For further details, 
 ! see Lipscomb and Hunke (2004). 
@@ -4410,11 +4410,7 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
                      trm(i,j,nt) = (atold(i,j,nt) - w1*tarear(i,j))
      &                        / (aim(i,j) * trm(i,j,nt2) * trm(i,j,nt1))
                   endif
-
                enddo            ! ij
-
-
-
 
             endif               ! tracer_type
          enddo                  ! nt

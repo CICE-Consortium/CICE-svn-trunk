@@ -36,6 +36,12 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
                      ! 'upwind' => 1st order donor cell scheme
                      ! 'remap' => remapping scheme
 
+      character(len=char_len) :: 
+     &   ice_ic      ! method of ice cover initialization
+                     ! 'default'  => latitude and sst dependent
+                     ! 'none'     => no ice 
+                     ! note:  restart = .true. overwrites
+
 !=======================================================================
 
       contains
@@ -64,7 +70,7 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
       use ice_diagnostics
       use ice_fileunits
       use ice_calendar, only: year_init, istep0, histfreq, diagfreq,
-     &                        dumpfreq, dumpfreq_n, npt, dt
+     &                        dumpfreq, dumpfreq_n, npt, dt, ndyn_dt
       use ice_restart, only: restart, restart_dir, restart_file,
      &     pointer_file
       use ice_history, only: hist_avg, history_dir, history_file,
@@ -73,14 +79,15 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
       use ice_itd, only: kitd, kcatbound
       use ice_ocean, only: oceanmixed_ice
       use ice_forcing, only:
-     &    ycycle, fyear_init,  atm_data_type, atm_data_dir, dbug,
-     &    precip_units, sss_data_type, sst_data_type, ocn_data_dir
+     &    ycycle,          fyear_init,    dbug,
+     &    atm_data_type,   atm_data_dir,  precip_units, 
+     &    sss_data_type,   sst_data_type, ocn_data_dir,
+     &    oceanmixed_file, restore_sst,   trestore 
       use ice_grid, only: grid_file, kmt_file, grid_type 
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi,
      &                         shortwave
-      use ice_coupling, only: l_CCSMcoupled, runtype
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -90,147 +97,141 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
 
       character (len=6) :: chartmp
 
+#ifdef CCSM
       !-----------------------------------------------------------------
-      ! namelist variables used in CSIM and not defined elsewhere in CICE
+      ! Declare namelist variables used for CCSM coupled runs and not
+      ! declared elsewhere in CICE
       !-----------------------------------------------------------------
-      integer (kind=int_kind) ::
-     &   kcolumn              ! 1 for column model
 
-      logical (kind=log_kind) ::
-     &   snow_into_ocn  ! if true, throw snow into ocean
-     &,  prescribed_ice ! if true, use prescribed ice
-     &,  prescribed_ice_climatology ! if true, use climate-prescribed ice
-     &,  oceanmixed_ice_sst_init    ! if true, use ocn frc sst for init
-     &,  prntdiag_oceanmixed        ! if true, print out some diagnostics
-     &,  no_ice_ic  ! if true, initialize model with no ice
+      integer (kind=int_kind) :: kcolumn  ! 1 for column model
 
-      character(len=char_len_long) ::
+      character(len=char_len_long) :: 
      &   runid                 ! identifier for coupled run
-     &,  prescribed_ice_file   ! netCDF file name for prescribed ice
-     &,  oceanmixed_ice_file   ! netCDF file name for ocean forcing data
+
+#endif
 
       !-----------------------------------------------------------------
       ! Namelist variables.
-      ! NOTE: This list includes all the namelist variables in CSIM.
-      !       Not all of these are used by standalone CICE.
+      ! NOTE: Not all of these are used by both models.
       !-----------------------------------------------------------------
 
       namelist /ice_nml/
-     & year_init,    istep0,       dt,           ndte,       npt,
-     & diagfreq,     histfreq,     dumpfreq,     dumpfreq_n,
-     & hist_avg,     restart,      print_points, kitd,
-     & kdyn,         kstrength,    evp_damping,
-     & advection,    grid_type,    grid_file,    kmt_file,
-     & restart_dir,  restart_file, pointer_file,
-     & history_dir,  history_file, oceanmixed_ice,
-     & albicev,      albicei,      albsnowv,     albsnowi,
-! These variables are used in CICE, but not CSIM
-     & shortwave,
-     & print_global,    diag_type,      diag_file,
-     & ycycle,          fyear_init,
-     & latpnt,          lonpnt,         yield_curve,
-     & kcatbound,       krdg_partic,    krdg_redist,
-     & precip_units,    atm_data_type,  atm_data_dir,
-     & sss_data_type,   sst_data_type,  ocn_data_dir,  dbug, 
-! These variables are used in CSIM, but not CICE
-     & runid,           runtype,             kcolumn,
-     & snow_into_ocn,   incond_dir,          incond_file,
-     & prescribed_ice,  prescribed_ice_file, prescribed_ice_climatology,
-     & oceanmixed_ice_file, oceanmixed_ice_sst_init,
-     & prntdiag_oceanmixed, no_ice_ic
+     &  year_init,      istep0,          dt,            npt
+     &, diagfreq       
+     &, print_points,   print_global,    diag_type,     diag_file
+     &, histfreq,       hist_avg,        history_dir,   history_file
+     &, dumpfreq,       dumpfreq_n,      restart_file
+     &, restart,        restart_dir,     pointer_file,  ice_ic
+     &, grid_type,      grid_file,       kmt_file
+     &, kitd,           kcatbound
+     &, kdyn,           ndyn_dt,         ndte,          evp_damping
+     &, yield_curve,    advection
+     &, kstrength,      krdg_partic,     krdg_redist,   shortwave
+     &, albicev,        albicei,         albsnowv,      albsnowi
+     &, fyear_init,     ycycle 
+     &, atm_data_type,  atm_data_dir,    precip_units
+     &, oceanmixed_ice, sss_data_type,   sst_data_type 
+     &, ocn_data_dir,   oceanmixed_file, restore_sst,   trestore
+     &, latpnt,         lonpnt,          dbug
+#ifdef CCSM
+! These variables are used in CCSM, but not CICE
+     &, runid,           runtype,             kcolumn
+#endif
 
       !-----------------------------------------------------------------
       ! default values
       !-----------------------------------------------------------------
 
-      year_init = 1      ! initial year
-      istep0 = 0         ! number of steps taken in previous integrations,
-                         ! real (dumped) or imagined (use to set calendar)
-      dt = 3600.0_dbl_kind  ! time step, s 
-      ndte = 120         ! subcycles per dynamics timestep:  ndte=dyn_dt/dte
-      npt = 99999        ! total number of time steps (dt) 
-      diagfreq = 24      ! how often diag output is written
-      histfreq='m'       ! output frequency
-      dumpfreq='y'       ! restart frequency option
-      dumpfreq_n= 1      ! restart frequency
-      hist_avg = .true.  ! if true, write time-averages rather than snapshots
-      restart = .false.  ! if true, read restart files for initialization
+      year_init = 1          ! initial year
+      istep0 = 0             ! no. of steps taken in previous integrations,
+                             ! real (dumped) or imagined (to set calendar)
+      dt = 3600.0_dbl_kind   ! time step, s 
+      npt = 99999            ! total number of time steps (dt) 
+      diagfreq = 24          ! how often diag output is written
       print_points = .false. ! if true, print point data
-      kitd = 1           ! type of itd conversions (0 = delta, 1 = linear)
-      kdyn = 1           ! type of dynamics (1 = evp)
-      kstrength = 1      ! 1 = Rothrock 75 strength, 0 = Hibler 79 strength
-      evp_damping = .false.  ! if true, use damping procedure in evp dynamics
-      advection  = 'remap'   ! incremental remapping transport scheme
-      grid_type    = 'rectangular'  ! define rectangular grid internally
+      print_global = .true.  ! if true, print global diagnostic data
+      diag_type = 'stdout'
+      diag_file = 'ice_diag.d'
+      histfreq='m'           ! output frequency
+      hist_avg = .true.      ! if true, write time-averages (not snapshots)
+      history_dir  = ' '     ! Write to executable dir for default
+      history_file = 'iceh'  ! history file name prefix
+      dumpfreq='y'           ! restart frequency option
+      dumpfreq_n= 1          ! restart frequency
+      restart = .false.      ! if true, read restart files for initialization
+      restart_dir  = ' '     ! Write to executable dir for default
+      restart_file = 'iced'  ! restart file name prefix
+      pointer_file = 'ice.restart_file'
+      ice_ic       = 'default'       ! latitude and sst-dependent
+      grid_type    = 'rectangular'   ! define rectangular grid internally
       grid_file    = 'unknown_grid_file'
       kmt_file     = 'unknown_kmt_file'
-      restart_dir  = ' '             ! Write to executable dir for default
-      restart_file = 'iced'          ! restart file name prefix
-      pointer_file = 'ice.restart_file'
-      history_dir  = ' '             ! Write to executable dir for default
-      history_file = 'iceh'          ! history file name prefix
-      oceanmixed_ice = .false.    ! if true, use internal ocean mixed layer
+
+      kitd = 1           ! type of itd conversions (0 = delta, 1 = linear)
+      kcatbound = 1      ! category boundary formula (0 = old, 1 = new)
+      kdyn = 1           ! type of dynamics (1 = evp)
+      ndyn_dt = 1        ! dynamic time steps per thermodynamic time step
+      ndte = 120         ! subcycles per dynamics timestep:  ndte=dyn_dt/dte
+      evp_damping = .false.  ! if true, use damping procedure in evp dynamics
+      yield_curve = 'ellipse'
+      kstrength = 1          ! 1 = Rothrock 75 strength, 0 = Hibler 79
+      krdg_partic = 1        ! 1 = new participation, 0 = Thorndike et al 75
+      krdg_redist = 1        ! 1 = new redistribution, 0 = Hibler 80
+      advection  = 'remap'   ! incremental remapping transport scheme
+      shortwave = 'ccsm3'
       albicev   = 0.78_dbl_kind   ! visible ice albedo for h > ahmax
       albicei   = 0.36_dbl_kind   ! near-ir ice albedo for h > ahmax
       albsnowv  = 0.98_dbl_kind   ! cold snow albedo, visible
       albsnowi  = 0.70_dbl_kind   ! cold snow albedo, near IR
-      
-      ! The following are in CICE but not CSIM.
-      ! Note: CSIM acts as if print_global = .true., kcatbound = 0
-      shortwave = 'ccsm3'
-      print_global = .true. ! if true, print global diagnostic data
-      kcatbound   = 0    ! category boundary formula (0 = old, 1 = new)
-      krdg_partic = 1    ! 1 = 2005 participation, 0 = Thorndike et al 75
-      krdg_redist = 1    ! 1 = 2005 redistribution, 0 = Hibler 80
-      yield_curve = 'ellipse'
-      diag_type = 'stdout'
-      diag_file = 'ice_diag.d'
-      ycycle = 1                   ! number of years in forcing cycle
-      fyear_init = 1900            ! first year of forcing cycle
-      latpnt(1) =  90._dbl_kind    ! latitude of diagnostic point 1 (deg)
-      lonpnt(1) =   0._dbl_kind    ! longitude of point 1 (deg)
-      latpnt(2) = -65._dbl_kind    ! latitude of diagnostic point 2 (deg)
-      lonpnt(2) = -45._dbl_kind    ! longitude of point 2 (deg)
-      atm_data_type = 'ncar'
-      atm_data_dir  = ' '
-      sss_data_type = 'default'
-      sst_data_type = 'default'
-      ocn_data_dir  = ' '
-      dbug = .false.
 
-      ! The following are in CSIM but not CICE.
-      ! Note: CICE acts as if snow_into_ocn = .true.
+      fyear_init = 1900           ! first year of forcing cycle
+      ycycle = 1                  ! number of years in forcing cycle
+      atm_data_type   = 'default'
+      atm_data_dir    = ' '
+      precip_units    = 'mks'     ! 'mm_per_month' or
+                                  ! 'mm_per_sec' = 'mks' = kg/m^2 s
+      oceanmixed_ice  = .false.   ! if true, use internal ocean mixed layer
+      sss_data_type   = 'default'
+      sst_data_type   = 'default'
+      ocn_data_dir    = ' '
+      oceanmixed_file = 'unknown_oceanmixed_file' ! ocean forcing data
+      restore_sst     = .false.   ! restore sst if true
+      trestore        = 90        ! restoring timescale, days (0 instantaneous)
+      dbug      = .false.         ! true writes diagnostics for input forcing
+
+      latpnt(1) =  90._dbl_kind   ! latitude of diagnostic point 1 (deg)
+      lonpnt(1) =   0._dbl_kind   ! longitude of point 1 (deg)
+      latpnt(2) = -65._dbl_kind   ! latitude of diagnostic point 2 (deg)
+      lonpnt(2) = -45._dbl_kind   ! longitude of point 2 (deg)
+
+#ifdef CCSM
+      ! The following are in CCSM but not CICE.
       runid   = 'unknown'   ! default run ID
       runtype = 'unknown'   ! default runtype
-      kcolumn = 0        ! 1 = column model
-      snow_into_ocn = .true.!  if true, throw snow into ocn during ridging
-      incond_dir   = ' '             ! Write to executable dir for default
-      incond_file  = 'incond'
-      prescribed_ice      = .false.             ! if true, prescribe ice
-      prescribed_ice_file = 'prescribed_ice.nc' ! local prescribed ice file name
-      prescribed_ice_climatology = .true.       ! if true, use climatology
-      oceanmixed_ice_file = 'oceanmixed_ice.nc' ! local ocean forcing file name
-      oceanmixed_ice_sst_init = .false. ! if true, initialize sst from ocn frc data
-      prntdiag_oceanmixed = .false.     ! if true, print out some diagnostics
-      no_ice_ic = .false.         ! if true, initialize model with no ice
+      kcolumn = 0           ! 1 = column model
+#endif
 
       !-----------------------------------------------------------------
       ! read from input file
       !-----------------------------------------------------------------
-      nml_error = 0
-      if (my_task == master_task) then
-         open (nu_nml, file=nml_filename, status='old')
-   10    continue               !*** keep reading until right namelist is found
-         read(nu_nml, nml=ice_nml, iostat=nml_error)
-         if (nml_error > 0) goto 10 ! An error occurred
-         if (nml_error < 0) goto 20 ! End of file condition
-         close(nu_nml)
-   20    continue
-      endif
-      call broadcast_scalar(nml_error,master_task)
 
+      if (my_task == master_task) then
+         open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
+         if (nml_error /= 0) then
+            nml_error = -1
+         else
+            nml_error =  1
+         endif
+         do while (nml_error > 0)
+            read(nu_nml, nml=ice_nml,iostat=nml_error)
+            if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
+         end do
+         if (nml_error == 0) close(nu_nml)
+      endif
+
+      call broadcast_scalar(nml_error, master_task)
       if (nml_error /= 0) then
-!!!         call abort_ice ('ice: Namelist read error in ice_init.F')
+         call abort_ice('ERROR reading ice_nml')
       endif
 
       if (trim(diag_type) == 'file') then
@@ -240,82 +241,75 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
       endif
 
       if (histfreq == '1') hist_avg = .false. ! potential conflict
-      if (kcolumn == 1)   grid_type = 'column'
+#ifdef CCSM
+      if (kcolumn == 1) grid_type    = 'column'
+#endif
       chartmp = advection(1:6)
       if (chartmp /= 'upwind') advection = 'remap'
 
       call broadcast_scalar(year_init,          master_task)
       call broadcast_scalar(istep0,             master_task)
       call broadcast_scalar(dt,                 master_task)
-      call broadcast_scalar(ndte,               master_task)
       call broadcast_scalar(npt,                master_task)
       call broadcast_scalar(diagfreq,           master_task)
+      call broadcast_scalar(print_points,       master_task)
+      call broadcast_scalar(print_global,       master_task)
+      call broadcast_scalar(diag_type,          master_task)
+      call broadcast_scalar(diag_file,          master_task)
       call broadcast_scalar(histfreq,           master_task)
+      call broadcast_scalar(hist_avg,           master_task)
+      call broadcast_scalar(history_dir,        master_task)
+      call broadcast_scalar(history_file,       master_task)
       call broadcast_scalar(dumpfreq,           master_task)
       call broadcast_scalar(dumpfreq_n,         master_task)
-      call broadcast_scalar(hist_avg,           master_task)
-      call broadcast_scalar(print_points,       master_task)
-      call broadcast_scalar(kitd,               master_task)
-      call broadcast_scalar(kdyn,               master_task)
+      call broadcast_scalar(restart_file,       master_task)
       call broadcast_scalar(restart,            master_task)
-      call broadcast_scalar(kstrength,          master_task)
-      call broadcast_scalar(evp_damping,        master_task)
-      call broadcast_scalar(advection,          master_task)
+      call broadcast_scalar(restart_dir,        master_task)
+      call broadcast_scalar(pointer_file,       master_task)
+      call broadcast_scalar(ice_ic,             master_task)
       call broadcast_scalar(grid_type,          master_task)
       call broadcast_scalar(grid_file,          master_task)
       call broadcast_scalar(kmt_file,           master_task)
-      call broadcast_scalar(restart_dir,        master_task)
-      call broadcast_scalar(restart_file,       master_task)
-      call broadcast_scalar(pointer_file,       master_task)
-      call broadcast_scalar(history_dir,        master_task)
-      call broadcast_scalar(history_file,       master_task)
-      call broadcast_scalar(oceanmixed_ice,     master_task)
+      call broadcast_scalar(kitd,               master_task)
+      call broadcast_scalar(kcatbound,          master_task)
+      call broadcast_scalar(kdyn,               master_task)
+      call broadcast_scalar(ndyn_dt,            master_task)
+      call broadcast_scalar(ndte,               master_task)
+      call broadcast_scalar(evp_damping,        master_task)
+      call broadcast_scalar(yield_curve,        master_task)
+      call broadcast_scalar(kstrength,          master_task)
+      call broadcast_scalar(krdg_partic,        master_task)
+      call broadcast_scalar(krdg_redist,        master_task)
+      call broadcast_scalar(advection,          master_task)
+      call broadcast_scalar(shortwave,          master_task)
       call broadcast_scalar(albicev,            master_task)
       call broadcast_scalar(albicei,            master_task)
       call broadcast_scalar(albsnowv,           master_task)
       call broadcast_scalar(albsnowi,           master_task)
 
-      ! The following are in CICE but not CSIM.
-      call broadcast_scalar(shortwave,          master_task)
       call broadcast_scalar(fyear_init,         master_task)
       call broadcast_scalar(ycycle,             master_task)
-      call broadcast_scalar(print_global,       master_task)
-      call broadcast_scalar(diag_type,          master_task)
-      call broadcast_scalar(diag_file,          master_task)
-      call broadcast_array (latpnt(1:2),        master_task)
-      call broadcast_array (lonpnt(1:2),        master_task)
-      call broadcast_scalar(kcatbound,          master_task)
-      call broadcast_scalar(krdg_partic,        master_task)
-      call broadcast_scalar(krdg_redist,        master_task)
-      call broadcast_scalar(yield_curve,        master_task)
+      call broadcast_scalar(atm_data_type,      master_task)
+      call broadcast_scalar(atm_data_dir,       master_task)
       call broadcast_scalar(precip_units,       master_task)
-      call broadcast_scalar(atm_data_dir,       master_task)
-      call broadcast_scalar(atm_data_dir,       master_task)
+      call broadcast_scalar(oceanmixed_ice,     master_task)
       call broadcast_scalar(sss_data_type,      master_task)
       call broadcast_scalar(sst_data_type,      master_task)
       call broadcast_scalar(ocn_data_dir,       master_task)
+      call broadcast_scalar(oceanmixed_file,    master_task)
+      call broadcast_scalar(restore_sst,        master_task)
+      call broadcast_scalar(trestore,           master_task)
       call broadcast_scalar(dbug,               master_task)
+      call broadcast_array (latpnt(1:2),        master_task)
+      call broadcast_array (lonpnt(1:2),        master_task)
 ! only master_task writes to file
 !      call broadcast_scalar(nu_diag),           master_task)
 
-      ! The following are in CSIM but not CICE.
-      call broadcast_scalar(kcolumn,                   master_task)
-      call broadcast_scalar(snow_into_ocn,             master_task)
-      call broadcast_scalar(runid,                     master_task)
-      call broadcast_scalar(runtype,                   master_task)
-      call broadcast_scalar(incond_dir,                master_task)
-      call broadcast_scalar(incond_file,               master_task)
-      call broadcast_scalar(prescribed_ice,            master_task)
-      call broadcast_scalar(prescribed_ice_file,       master_task)
-      call broadcast_scalar(prescribed_ice_climatology,master_task)
-      call broadcast_scalar(prntdiag_oceanmixed,master_task)
-      call broadcast_scalar(oceanmixed_ice_sst_init,   master_task)
-      call broadcast_scalar(no_ice_ic,                 master_task)
-
-#ifdef CCSMcoupled
-      l_CCSMcoupled = .true.
-#else
-      l_CCSMcoupled = .false.
+#ifdef CCSM
+      ! The following are in CCSM but not CICE.
+      call broadcast_scalar (runid,             master_task)
+      call broadcast_scalar (runtype,           master_task)
+      call broadcast_scalar (kcolumn,           master_task)
 #endif
 
       !-----------------------------------------------------------------
@@ -336,38 +330,47 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
          write(nu_diag,*) ' Document ice_in namelist parameters:'
          write(nu_diag,*) ' ==================================== '
          write(nu_diag,*) ' '
+#ifdef CCSM
          if (trim(runid) /= 'unknown')
-     &    write(nu_diag,*)   ' runid                     = ',
+     &    write(nu_diag,*)    ' runid                     = ',
      &                         trim(runid)
          if (trim(runtype) /= 'unknown')
      &    write(nu_diag,1030) ' runtype                   = ',
      &                         trim(runtype)
+#endif
          write(nu_diag,1020) ' year_init                 = ', year_init
          write(nu_diag,1020) ' istep0                    = ', istep0
          write(nu_diag,1000) ' dt                        = ', dt
-         write(nu_diag,1020) ' ndte                      = ', ndte
          write(nu_diag,1020) ' npt                       = ', npt
          write(nu_diag,1020) ' diagfreq                  = ', diagfreq
-         write(nu_diag,1030) ' histfreq                  = ',
-     &                         trim(histfreq)
-         write(nu_diag,1030) ' dumpfreq                  = ',
-     &                         trim(dumpfreq)
-         write(nu_diag,1020) ' dumpfreq_n                = ', dumpfreq_n
-         write(nu_diag,1010) ' hist_avg                  = ', hist_avg
-         write(nu_diag,1010) ' restart                   = ', restart
          write(nu_diag,1010) ' print_global              = ',
      &                         print_global
          write(nu_diag,1010) ' print_points              = ',
      &                         print_points
-         write(nu_diag,1020) ' kitd                      = ', kitd
-         write(nu_diag,1020) ' kdyn                      = ', kdyn
-         write(nu_diag,1020) ' kstrength                 = ', kstrength
-         write(nu_diag,1010) ' evp_damping               = ',
-     &                         evp_damping
-         write(nu_diag,*)    ' yield_curve               = ',
-     &                         trim(yield_curve)
-         write(nu_diag,1030) ' advection                 = ',
-     &                         trim(advection)
+         write(nu_diag,1030) ' histfreq                  = ',
+     &                         trim(histfreq)
+         write(nu_diag,1010) ' hist_avg                  = ', hist_avg
+         if (hist_avg) then
+            write (nu_diag,*) 'History data will be averaged over 1 ',
+     &                         histfreq
+         else
+            write (nu_diag,*) 'History data will be snapshots'
+         endif
+         write(nu_diag,*)    ' history_dir               = ',
+     &                         trim(history_dir)
+         write(nu_diag,*)    ' history_file              = ',
+     &                         trim(history_file)
+         write(nu_diag,1030) ' dumpfreq                  = ',
+     &                         trim(dumpfreq)
+         write(nu_diag,1020) ' dumpfreq_n                = ', dumpfreq_n
+         write(nu_diag,1010) ' restart                   = ', restart
+         write(nu_diag,*)    ' restart_dir               = ',
+     &                         trim(restart_dir)
+         write(nu_diag,*)    ' restart_file              = ',
+     &                         trim(restart_file)
+         write(nu_diag,*)    ' pointer_file              = ',
+     &                         trim(pointer_file)
+         write(nu_diag,1030) ' ice_ic                    = ', ice_ic
          write(nu_diag,*)    ' grid_type                 = ',
      &                         trim(grid_type)
          if (trim(grid_type) /= 'rectangular' .or.
@@ -377,85 +380,74 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
             write(nu_diag,*) ' kmt_file                  = ',
      &                         trim(kmt_file)
          endif
-         write(nu_diag,*)    ' restart_dir               = ',
-     &                         trim(restart_dir)
-         write(nu_diag,*)    ' restart_file              = ',
-     &                         trim(restart_file)
-         write(nu_diag,*)    ' pointer_file              = ',
-     &                         trim(pointer_file)
-         write(nu_diag,*)    ' history_dir               = ',
-     &                         trim(history_dir)
-         write(nu_diag,*)    ' history_file              = ',
-     &                         trim(history_file)
+
+         write(nu_diag,1020) ' kitd                      = ', kitd
+         write(nu_diag,1020) ' kcatbound                 = ',
+     &                         kcatbound
+         write(nu_diag,1020) ' kdyn                      = ', kdyn
+         write(nu_diag,1020) ' ndyn_dt                   = ', ndyn_dt
+         write(nu_diag,1020) ' ndte                      = ', ndte
+         write(nu_diag,1010) ' evp_damping               = ',
+     &                         evp_damping
+         write(nu_diag,*)    ' yield_curve               = ',
+     &                         trim(yield_curve)
+         write(nu_diag,1020) ' kstrength                 = ', kstrength
+         write(nu_diag,1020) ' krdg_partic               = ',
+     &                         krdg_partic
+         write(nu_diag,1020) ' krdg_redist               = ',
+     &                         krdg_redist
+         write(nu_diag,1030) ' advection                 = ',
+     &                         trim(advection)
+         write(nu_diag,1030) ' shortwave                 = ',
+     &                         trim(shortwave)
          write(nu_diag,1000) ' albicev                   = ', albicev
          write(nu_diag,1000) ' albicei                   = ', albicei
          write(nu_diag,1000) ' albsnowv                  = ', albsnowv
          write(nu_diag,1000) ' albsnowi                  = ', albsnowi
+
+         write(nu_diag,1020) ' fyear_init                = ',
+     &                         fyear_init
+         write(nu_diag,1020) ' ycycle                    = ', ycycle
+         write(nu_diag,*)    ' atm_data_type             = ',
+     &                         trim(atm_data_type)
+         if (trim(atm_data_type) /= 'default') then
+            write(nu_diag,*) ' atm_data_dir              = ',
+     &                         trim(atm_data_dir)
+            write(nu_diag,*) ' precip_units              = ',
+     &                         trim(precip_units)
+         endif 
+
          write(nu_diag,1010) ' oceanmixed_ice            = ',
      &                         oceanmixed_ice
+         write(nu_diag,*)    ' sss_data_type             = ',
+     &                         trim(sss_data_type)
+         write(nu_diag,*)    ' sst_data_type             = ',
+     &                         trim(sst_data_type)
+         if (trim(sss_data_type) /= 'default' .or.
+     &       trim(sst_data_type) /= 'default') then
+            write(nu_diag,*) ' ocn_data_dir              = ',
+     &                         trim(ocn_data_dir)
+         endif 
+         if (trim(sss_data_type) == 'ncar' .or.
+     &       trim(sst_data_type) == 'ncar') then
+            write(nu_diag,*) ' oceanmixed_file           = ',
+     &                         trim(oceanmixed_file)
+         endif
 
-         if (l_CCSMcoupled) then   ! CSIM, not CICE
-            write(nu_diag,1010) ' kcolumn                   = ', kcolumn
-            write(nu_diag,1010) ' snow_into_ocn             = ',
-     &                            snow_into_ocn
-            write(nu_diag,1010) ' prescribed_ice            = ',
-     &                            prescribed_ice
-            write(nu_diag,*)    ' prescribed_ice_file       = ',
-     &                            trim(prescribed_ice_file)
-            write(nu_diag,1010) ' prescribed_ice_climatology= ',
-     &                            prescribed_ice_climatology
-            write(nu_diag,*)    ' oceanmixed_ice_file       = ',
-     &                            trim(oceanmixed_ice_file)
-            write(nu_diag,1010) ' oceanmixed_ice_sst_init   = ',
-     &                            oceanmixed_ice_sst_init
-            write(nu_diag,1010) ' prntdiag_oceanmixed       = ',
-     &                            prntdiag_oceanmixed
-            write(nu_diag,1010) ' no_ice_ic                 = ',
-     &                            no_ice_ic
-            if( oceanmixed_ice ) then
-               write (nu_diag,*) 'WARNING WARNING WARNING WARNING '
-               write (nu_diag,*) '*Coupled and oceanmixed flags are  *'
-               write (nu_diag,*) '*BOTH ON.  Ocean data received from*'
-               write (nu_diag,*) '*coupler will be altered by mixed  *'
-               write (nu_diag,*) '*layer routine!                    *'
-               write (nu_diag,*) ' '
-            endif
+#ifdef coupled
+         if( oceanmixed_ice ) then
+            write (nu_diag,*) 'WARNING WARNING WARNING WARNING '
+            write (nu_diag,*) '*Coupled and oceanmixed flags are  *'
+            write (nu_diag,*) '*BOTH ON.  Ocean data received from*'
+            write (nu_diag,*) '*coupler will be altered by mixed  *'
+            write (nu_diag,*) '*layer routine!                    *'
+            write (nu_diag,*) ' '
+         endif
+#endif
 
-         else   ! CICE, not CSIM
-            write(nu_diag,1030) ' shortwave                 = ',
-     &                            trim(shortwave)
-            write(nu_diag,1020) ' ycycle                    = ', ycycle
-            write(nu_diag,1020) ' fyear_init                = ',
-     &                            fyear_init
-            write(nu_diag,1020) ' kcatbound                 = ',
-     &                            kcatbound
-            write(nu_diag,1020) ' krdg_partic               = ',
-     &                            krdg_partic
-            write(nu_diag,1020) ' krdg_redist               = ',
-     &                            krdg_redist
-            write(nu_diag,*)    ' atm_data_type             = ',
-     &                            trim(atm_data_type)
-            if (trim(atm_data_type) /= 'default') then
-               write(nu_diag,*) ' atm_data_dir              = ',
-     &                            trim(atm_data_dir)
-               write(nu_diag,*) ' precip_units              = ',
-     &                            trim(precip_units)
-            endif 
-            write(nu_diag,*)    ' sss_data_type             = ',
-     &                            trim(sss_data_type)
-            write(nu_diag,*)    ' sst_data_type             = ',
-     &                            trim(sst_data_type)
-            if (trim(sss_data_type) /= 'default' .or.
-     &          trim(sst_data_type) /= 'default') then
-               write(nu_diag,*) ' ocn_data_dir              = ',
-     &                            trim(ocn_data_dir)
-            endif 
-         endif                  ! l_CCSMcoupled
-
- 1000    format (a30,2x,f12.5) ! a30 to align formatted, unformatted statements
- 1010    format (a30,2x,l6)    ! logical
- 1020    format (a30,2x,i6)    ! integer
- 1030    format (a30,   a8)    ! character
+#ifdef CCSM
+         write(nu_diag,1010) ' kcolumn                   = ', kcolumn
+#endif
 
          write (nu_diag,*) ' '
          write (nu_diag,'(a30,2f8.2)') 'Diagnostic point 1: lat, lon =',
@@ -463,39 +455,18 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
          write (nu_diag,'(a30,2f8.2)') 'Diagnostic point 2: lat, lon =',
      &                      latpnt(2), lonpnt(2)
 
+ 1000    format (a30,2x,f9.2)  ! a30 to align formatted, unformatted statements
+ 1010    format (a30,2x,l6)    ! logical
+ 1020    format (a30,2x,i6)    ! integer
+ 1030    format (a30,   a8)    ! character
+
          write (nu_diag,*) ' '
-         if (trim(grid_type) == 'displaced_pole') then
-            write (nu_diag,*) 'Displaced pole grid'
-            write (nu_diag,*) 'The grid file is ', trim(grid_file)
-            write (nu_diag,*) 'The land mask file is ', trim(kmt_file)
-         elseif (trim(grid_type) == 'tripole') then
-            write (nu_diag,*) 'Tripole grid'
-         elseif (trim(grid_type) == 'panarctic') then
-            write (nu_diag,*) 'Pan-Arctic grid'
-         elseif (trim(grid_type) == 'column') then
-            write (nu_diag,*) 'Column model grid'
-         elseif (trim(grid_type) == 'rectangular') then
-            write (nu_diag,*) 'Rectangular grid'
-         else
+         if (grid_type  /=  'displaced_pole' .and.
+     &       grid_type  /=  'column'         .and.
+     &       grid_type  /=  'rectangular'    .and.
+     &       grid_type  /=  'panarctic' ) then
             call abort_ice('ice_init: unknown grid_type')
          endif
-         write (nu_diag,*) ' '
-
-        if (restart) then
-           write (nu_diag,*) 'Starting from restart file'
-        else
-           write (nu_diag,*) 'Starting from default initialization '
-           write (nu_diag,*) 'rather than restart file'
-        endif
-        write (nu_diag,*) ' '
-
-        if (hist_avg) then
-           write (nu_diag,*) 'History data will be averaged over 1 ',
-     &                        histfreq
-        else
-           write (nu_diag,*) 'History data will be snapshots'
-        endif
-        write (nu_diag,*) ' '
 
       endif                     ! my_task = master_task
 
@@ -555,6 +526,15 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
       endif
 
       do iblk = 1, nblocks
+
+      !-----------------------------------------------------------------
+      ! Set tracer types
+!lipscomb - Do this later based on tracer indices, e.g. it_age
+      !-----------------------------------------------------------------
+
+      trcr_depend(1) = 0   ! ice/snow surface temperature
+!!      trcr_depend(2) = 1   ! volume-weighted ice age
+
 
       !-----------------------------------------------------------------
       ! Set state variables
@@ -702,9 +682,9 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
      &,  edge_init_nh =  70._dbl_kind ! initial ice edge, N.Hem. (deg) 
      &,  edge_init_sh = -60._dbl_kind ! initial ice edge, S.Hem. (deg)
 
-      !-----------------------------------------------------------------
-      ! Initialize grid with no ice.
-      !-----------------------------------------------------------------
+
+      ! Initialize state variables.
+      ! If restarting, these values are overwritten.
 
       aicen(:,:,:) = c0
       vicen(:,:,:) = c0
@@ -718,14 +698,8 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
          enddo
       endif
 
-      !-----------------------------------------------------------------
-      ! Set tracer types
-!lipscomb - Do this later based on tracer indices, e.g. it_age
-      !-----------------------------------------------------------------
+      if (trim(ice_ic) == 'default') then
 
-      trcr_depend(1) = 0   ! ice/snow surface temperature
-!!      trcr_depend(2) = 1   ! volume-weighted ice age
-      
       !-----------------------------------------------------------------
       ! Place ice where ocean surface is cold.
       ! Note: If SST is not read from a file, then the ocean is assumed
@@ -733,93 +707,98 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
       !       extend to the prescribed edges.
       !-----------------------------------------------------------------
 
-      ! initial category areas in cells with ice
+         ! initial category areas in cells with ice
 
-      if (ncat == 1) then
-         ainit(1) = .8_dbl_kind
-      else
+         if (ncat == 1) then
+            ainit(1) = 0.8_dbl_kind
+         else
+            do n = 1, ncat
+               ainit(n) = c1 / real(ncat,kind=dbl_kind)
+            enddo
+         endif
+
+         icells = 0
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (tmask(i,j)) then
+               ! place ice in high latitudes where ocean sfc is cold
+               if ( (sst (i,j) <= Tocnfrz+p2) .and.
+     &              (ULAT(i,j) < edge_init_sh/rad_to_deg .or. 
+     &               ULAT(i,j) > edge_init_nh/rad_to_deg) ) then
+                  icells = icells + 1
+                  indxi(icells) = i
+                  indxj(icells) = j
+               endif            ! cold surface
+            endif               ! tmask
+         enddo                  ! i
+         enddo                  ! j
+
+
+         ! ice volume, snow volume, surface temperature, other tracers
+
          do n = 1, ncat
-            ainit(n) = c1 / real(ncat)
-         enddo
-      endif
-
-      icells = 0
-      do j = 1, ny_block
-      do i = 1, nx_block
-         if (tmask(i,j)) then
-            ! place ice in high latitudes where ocean sfc is cold
-            if ( (sst (i,j) <= Tocnfrz+p2) .and.
-     &           (ULAT(i,j) < edge_init_sh/rad_to_deg .or. 
-     &            ULAT(i,j) > edge_init_nh/rad_to_deg) ) then
-               icells = icells + 1
-               indxi(icells) = i
-               indxj(icells) = j
-            endif               ! cold surface
-         endif                  ! tmask
-      enddo                     ! i
-      enddo                     ! j
-
-
-      ! ice volume, snow volume, surface temperature, other tracers
-
-      do n = 1, ncat
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
-            aicen(i,j,n) = ainit(n)
-            if (n < ncat) then
-               vicen(i,j,n) = p5*(hin_max(n-1) + hin_max(n))
-     &                      * aicen(i,j,n) ! m
-            else                ! n=ncat
-               vicen(i,j,n) = (hin_max(n-1) + c1)*aicen(i,j,n) ! m
-            endif
-            vsnon(i,j,n) = min(aicen(i,j,n)*hsno_init, p2*vicen(i,j,n))
-
-            ! surface temperature
-            trcrn(i,j,1,n) = min(Tsmelt, Tair(i,j) - Tffresh) ! deg C
-
-            !lipscomb - volume-weighted test tracer
-!!            trcrn(i,j,2,n) = c1
-
-         enddo                  ! ij
-
-         ! ice energy
-
-         do k = 1, nilyr
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)
 
-               ! assume linear temp profile and compute enthalpy
-               slope = Tocnfrz - trcrn(i,j,1,n)
-               Ti = trcrn(i,j,1,n) + slope*(real(k)-p5)/real(nilyr)
+               aicen(i,j,n) = ainit(n)
+               if (n < ncat) then
+                  vicen(i,j,n) = p5*(hin_max(n-1) + hin_max(n))
+     &                         * aicen(i,j,n) ! m
+               else             ! n=ncat
+                  vicen(i,j,n) = (hin_max(n-1) + c1)*aicen(i,j,n) ! m
+               endif
+               vsnon(i,j,n) = min(hsno_init*aicen(i,j,n),
+     &                                   p2*vicen(i,j,n))
 
-               eicen(i,j,ilyr1(n)+k-1) =
-     &              -(rhoi * (cp_ice*(Tmlt(k)-Ti)
-     &              + Lfresh*(c1-Tmlt(k)/Ti) - cp_ocn*Tmlt(k)))
-     &              * vicen(i,j,n)/real(nilyr)
+               ! surface temperature
+               trcrn(i,j,1,n) = min(Tsmelt, Tair(i,j) - Tffresh) ! deg C
+
+               !lipscomb - volume-weighted test tracer
+!               trcrn(i,j,2,n) = c1
 
             enddo               ! ij
-         enddo                  ! nilyr
 
-         ! snow energy
+            ! ice energy
 
-         do k = 1, nslyr
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+            do k = 1, nilyr
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
 
-               Ti = min(c0, trcrn(i,j,1,n))
-               esnon(i,j,slyr1(n)+k-1) = -rhos*(Lfresh - cp_ice*Ti)
-     &                                   *vsnon(i,j,n)/real(nslyr)
-            enddo               ! ij
-         enddo                  ! nslyr
+                  ! assume linear temp profile and compute enthalpy
+                  slope = Tocnfrz - trcrn(i,j,1,n)
+                  Ti = trcrn(i,j,1,n) + slope*(real(k,kind=dbl_kind)-p5)
+     &                                        /real(nilyr,kind=dbl_kind)
 
-      enddo                     ! ncat
+                  eicen(i,j,ilyr1(n)+k-1) =
+     &                 -(rhoi * (cp_ice*(Tmlt(k)-Ti)
+     &                 + Lfresh*(c1-Tmlt(k)/Ti) - cp_ocn*Tmlt(k)))
+     &                 * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+
+               enddo            ! ij
+            enddo               ! nilyr
+
+            ! snow energy
+
+            do k = 1, nslyr
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+
+                  Ti = min(c0, trcrn(i,j,1,n))
+                  esnon(i,j,slyr1(n)+k-1) = -rhos*(Lfresh - cp_ice*Ti)
+     &                                      *vsnon(i,j,n)
+     &                                      /real(nslyr,kind=dbl_kind)
+               enddo            ! ij
+            enddo               ! nslyr
+            
+         enddo                  ! ncat
+
+      endif                     ! ice_ic
 
       end subroutine set_state_var
 

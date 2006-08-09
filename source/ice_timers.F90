@@ -155,7 +155,7 @@
    call system_clock(count_rate=cycles, count_max=cycles_max)
 
    if (cycles /= 0) then
-      clock_rate = c1/real(cycles,kind=r8)
+      clock_rate = c1/real(cycles,kind=dbl_kind)
    else
       clock_rate = c0
       write(nu_diag,delim_fmt)
