@@ -39,6 +39,9 @@ c $Id: $
       real (kind=real_kind), dimension(:,:), allocatable ::
      &   work_gr
 
+      real (kind=real_kind), dimension(:,:,:), allocatable ::
+     &   work_gr3
+
       integer(kind=int_kind), dimension(:,:), allocatable ::
      &   work_gi4
 

@@ -565,7 +565,7 @@
      &,  ilo,ihi,jlo,jhi     ! beginning and end of physical domain
 
       logical (kind=log_kind), dimension(nx_block,ny_block) ::
-     &   tmphm             ! temporary mask
+     &   tmphm               ! temporary mask
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
@@ -2129,8 +2129,8 @@
      &                - sqrt(stressm_1(i,j)**2+c4*stress12_1(i,j)**2)))
      &                / prs_sig(i,j)
          else
-            sig1(i,j) = c1000
-            sig2(i,j) = c1000
+            sig1(i,j) = spval
+            sig2(i,j) = spval
          endif
       enddo
       enddo

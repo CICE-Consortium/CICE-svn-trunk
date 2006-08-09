@@ -83,8 +83,6 @@
       use ice_dyn_evp
       use ice_work, only: work1
       use ice_ocean, only: oceanmixed_ice
-      use ice_coupling, only: l_CCSMcoupled
-
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -98,33 +96,16 @@
 
       logical (kind=log_kind) :: diag
 
-      if (l_CCSMcoupled) then   ! CCSM name convenion 
-                            ! (pointer file contains full path)
-         iyear = nyr + year_init - 1
-         imonth = month
-         iday = mday
-         write(filename,'(a,i4.4,a,i2.2,a,i2.2,a,i5.5)') 
-     &        restart_file(1:lenstr(restart_file)), iyear,'-',
-     &        imonth,'-', iday,'-', sec
-         filename = trim(restart_dir)//filename
-
-      else                  ! CICE name convention (just filename)
-         write(filename,'(a,a,i8.8)') 
-     &        restart_file(1:lenstr(restart_file)),'.',idate
-      endif
-      write (nu_diag,*) 'dump filename =', trim(filename)
-
       if (my_task == master_task) then
         open(nu_rst_pointer,file=pointer_file)
         write(nu_rst_pointer,'(a80)') filename
         close(nu_rst_pointer)
+        write (nu_diag,*) 'dump filename =', trim(filename)
       endif
 
-      ! write dump (dir/filename)
-      if (.not. l_CCSMcoupled)   ! CICE name convention
-     &     write(filename,'(a,a,a,i8.8)') 
-     &        restart_dir(1:lenstr(restart_dir)),
-     &        restart_file(1:lenstr(restart_file)),'.',idate
+      write(filename,'(a,a,a,i8.8)') 
+     &     restart_dir(1:lenstr(restart_dir)),
+     &     restart_file(1:lenstr(restart_file)),'.',idate
 
       call ice_open(nu_dump,filename,0)
 
@@ -248,7 +229,6 @@
       use ice_grid, only: tmask
       use ice_itd
       use ice_ocean, only: oceanmixed_ice
-      use ice_coupling, only: l_CCSMcoupled
       use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -266,19 +246,10 @@
 
       if (my_task == master_task) then
          open(nu_rst_pointer,file=pointer_file)
-
-      ! NOTE: In standalone CICE, the pointer file contains the filename.
-      !       In CCSM, the pointer file contains the full path.
-
-         if (l_CCSMcoupled) then
-            read(nu_rst_pointer,'(a)') filename
-         else
-            read(nu_rst_pointer,'(a)') filename0
-            write(filename,'(a,a)')
-     &           restart_dir(1:lenstr(restart_dir)),
-     &           filename0(1:lenstr(filename0))
-         endif
-
+         read(nu_rst_pointer,'(a)') filename0
+         write(filename,'(a,a)')
+     &        restart_dir(1:lenstr(restart_dir)),
+     &        filename0(1:lenstr(filename0))
          close(nu_rst_pointer)
       endif
 

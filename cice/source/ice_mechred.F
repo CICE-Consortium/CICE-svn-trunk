@@ -72,20 +72,20 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
      &,  Cs = p25            ! fraction of shear energy contrbtng to ridging 
      &,  Cp = p5*gravit*(rhow-rhoi)*rhoi/rhow  ! proport const for PE 
      &,  fsnowrdg = p5           ! snow fraction that survives in ridging 
-     &,  Gstar = 0.15_dbl_kind   ! max value of G(h) that participates 
+     &,  Gstar  = p15            ! max value of G(h) that participates 
                                  ! (krdg_partic = 0) 
-     &,  astar = 0.05_dbl_kind   ! e-folding scale for G(h) participation 
+     &,  astar  = p05            ! e-folding scale for G(h) participation 
                                  ! (krdg_partic = 1) 
-     &,  maxraft = 1.0_dbl_kind  ! max value of hrmin - hi = max thickness 
+     &,  maxraft= c1             ! max value of hrmin - hi = max thickness 
                                  ! of ice that rafts (m) 
-     &,  Hstar = 25._dbl_kind    ! determines mean thickness of ridged ice (m) 
+     &,  Hstar  = c25            ! determines mean thickness of ridged ice (m) 
                                  ! (krdg_redist = 0) 
                                  ! Flato & Hibler (1995) have Hstar = 100 
-     &,  mu_rdg = 4.0_dbl_kind   ! gives e-folding scale of ridged ice (m^.5) 
+     &,  mu_rdg = c4             ! gives e-folding scale of ridged ice (m^.5) 
                                  ! (krdg_redist = 1) 
      &,  Pstar = 2.75e4_dbl_kind ! constant in Hibler strength formula 
                                  ! (kstrength = 0) 
-     &,  Cstar = 20._dbl_kind    ! constant in Hibler strength formula 
+     &,  Cstar = c20             ! constant in Hibler strength formula 
                                  ! (kstrength = 0) 
 
       logical (kind=log_kind), parameter ::
@@ -242,6 +242,11 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
+
+      ilo = 1 + nghost
+      ihi = nx_block - nghost
+      jlo = 1 + nghost
+      jhi = ny_block - nghost
 
       msnow_mlt(:,:) = c0
       esnow_mlt(:,:) = c0
@@ -451,11 +456,6 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
       !-----------------------------------------------------------------
 
       asum_error = .false.
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
 
       do j = jlo, jhi
       do i = ilo, ihi
@@ -770,8 +770,15 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
       ! Initialize
       !-----------------------------------------------------------------
 
-      aksum(:,:) = c0
+      ilo = 1 + nghost
+      ihi = nx_block - nghost
+      jlo = 1 + nghost
+      jhi = ny_block - nghost
 
+      Gsum(:,:,-1) = c0        ! by definition
+      Gsum(:,:,0:ncat) = c1    ! to avoid divzero below
+
+      aksum(:,:) = c1
       do n = 0, ncat
          apartic(:,:,n) = c0
       enddo
@@ -783,11 +790,6 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
          krdg  (:,:,n) = c1
       enddo
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
       !-----------------------------------------------------------------
       ! Compute the thickness distribution of ice participating in ridging.
       !-----------------------------------------------------------------
@@ -797,8 +799,6 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
       !  where Gsum(n) is the fractional area in categories 0 to n.
       ! Ignore categories with very small areas.
       !-----------------------------------------------------------------
-
-      Gsum(:,:,-1) = c0
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -985,6 +985,7 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
             do i = ilo, ihi
                if (aicen(i,j,n) > puny) then
                   hi = vicen(i,j,n) / aicen(i,j,n)
+                  hi = max(hi,puny)
                   hrmin(i,j,n) = min(c2*hi, hi + maxraft)
                   hrexp(i,j,n) = mu_rdg * sqrt(hi)
                   krdg(i,j,n) = (hrmin(i,j,n) + hrexp(i,j,n)) / hi
@@ -1002,11 +1003,7 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
       !  aksum = 1 - 1/3 = 2/3.
       !---------------------------------------------------------------- 
 
-      do j = jlo, jhi
-      do i = ilo, ihi
-         aksum(i,j) = apartic(i,j,0)   ! area participating = area removed
-      enddo
-      enddo
+      aksum(:,:) = apartic(:,:,0) ! area participating = area removed
 
       do n = 1, ncat
 !DIR$ CONCURRENT !Cray

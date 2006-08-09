@@ -19,7 +19,6 @@
 !
 
       module CICE_RunMod
-      
 !
 ! !USES:
 !
@@ -143,6 +142,8 @@
       real (dbl_kind) ::
      &     coupledInterval      ! time (seconds) for each coupling interval
 
+      integer (kind=int_kind) :: k
+
    !--------------------------------------------------------------------
    !  initialize error code and step timer
    !--------------------------------------------------------------------
@@ -205,8 +206,8 @@
          time = time + dt       ! determine the time and date
          call calendar(time)    ! at the end of the timestep
 
-#ifdef coupled
-         call from_coupler      ! get updated info from flux coupler
+#ifdef CCSMcoupled
+         call from_coupler      ! get updated info from CCSM coupler
          if (stop_now == 1) exit timeLoop ! coupler called it quits
 #else
          call get_forcing_atmo     ! atmospheric forcing from data
@@ -221,8 +222,8 @@
 
          call step_therm1 (dt)  ! pre-coupler thermodynamics
 
-#ifdef coupled
-         call to_coupler        ! collect/send data to flux coupler
+#ifdef CCSMcoupled
+         call to_coupler        ! collect/send data to CCSM coupler
 #endif
 
          call step_therm2 (dt)  ! post-coupler thermodynamics
@@ -231,7 +232,11 @@
       ! dynamics, transport, ridging
       !-----------------------------------------------------------------
 
-         call step_dynamics (dt)
+!lipscomb
+         ndyn_dt = 1
+         do k = 1, ndyn_dt
+            call step_dynamics (dt)
+         enddo
 
       !-----------------------------------------------------------------
       ! write data
@@ -589,9 +594,17 @@
       ! Update mixed layer with heat and radiation from ice.
       !-----------------------------------------------------------------
 
-         if (oceanmixed_ice)
-     &      sst(:,:,iblk) = sst(:,:,iblk)
-     &                   + (fhocn(:,:,iblk) + fswthru(:,:,iblk))*dt/cphm
+         if (oceanmixed_ice) then
+            do j = jlo, jhi
+            do i = ilo, ihi
+               if (hmix(i,j,iblk) > puny) then
+                  sst(i,j,iblk) = sst(i,j,iblk)
+     &                 + (fhocn(i,j,iblk) + fswthru(i,j,iblk))*dt
+     &                 / (cprho*hmix(i,j,iblk))
+               endif
+            enddo
+            enddo
+         endif
 
       !-----------------------------------------------------------------
       ! Divide fluxes by ice area for the coupler, which assumes fluxes

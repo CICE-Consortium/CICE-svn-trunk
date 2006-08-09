@@ -52,7 +52,7 @@
       use ice_transport_remap
       use ice_work
 
-#ifdef coupled
+#ifdef CCSMcoupled
       use shr_msg_mod           ! for CCSM coupled runs only
 #endif
 
@@ -146,7 +146,7 @@
 
       errorCode = ESMF_SUCCESS
 
-#ifdef coupled
+#ifdef CCSMcoupled
    !--------------------------------------------------------------------
    ! CCSM-specific stuff to redirect stdin,stdout
    !--------------------------------------------------------------------
@@ -165,10 +165,10 @@
    ! coupler communication or forcing data initialization
    !--------------------------------------------------------------------
 
-#ifdef coupled
-      call init_cpl             ! initialize message passing
+#ifdef CCSMcoupled
+      call init_cpl             ! initialize message passing (CCSM only)
 #else
-      call init_forcing_atmo    ! initialize atmospheric forcing info
+      call init_forcing_atmo    ! initialize atmospheric forcing (standalone)
 #endif
 
 #ifdef USE_ESMF
@@ -235,16 +235,12 @@
       call init_itd             ! initialize ice thickness distribution
       call calendar(time)       ! determine the initial date
 
-      call init_forcing_ocn     ! initialize sss and sst from data
+      call init_forcing_ocn(dt) ! initialize sss and sst from data
       call init_state           ! initialize the ice state
       if (restart) call restartfile      ! start from restart file
       call init_diags           ! initialize diagnostic output points
       call init_history_therm   ! initialize thermo history variables
       call init_history_dyn     ! initialize dynamic history variables
-
-      write_ic = .true.         ! write initial conditions
-      call ice_write_hist (dt)
-      write_ic = .false.
 
       end subroutine cice_init
 

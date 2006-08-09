@@ -55,11 +55,10 @@
 ! !DESCRIPTION:
 !
 ! Compute coefficients for atm/ice fluxes, stress, and reference
-! temperature and humidity. NOTE:
-! (1) all fluxes are positive downward,
-! (2) net heat flux = fswabs + flwup + (1-emissivity)flwdn + fsh + flh,
-! (3) here, tstar = (WT)/U*, and qstar = (WQ)/U*,
-! (4) wind speeds should all be above a minimum speed (eg. 1.0 m/s).
+! temperature and humidity. NOTE: \\
+! (1) all fluxes are positive downward,  \\
+! (2) here, tstar = (WT)/U*, and qstar = (WQ)/U*,  \\
+! (3) wind speeds should all be above a minimum speed (eg. 1.0 m/s). \\
 !
 ! ASSUME:
 !  The saturation humidity of air at T(K): qsat(T)  (kg/m**3)
@@ -254,7 +253,6 @@
       ! iterate to converge on Z/L, ustar, tstar and qstar
       !------------------------------------------------------------
 
-c         do k=1,2             !!! ech thinks this should be at least 5
       do k=1,5
 
          do ij = 1, icells
@@ -270,14 +268,11 @@ c         do k=1,2             !!! ech thinks this should be at least 5
             stable(ij) = p5 + sign(p5 , hol(ij))
             xqq    = max(sqrt(abs(c1 - c16*hol(ij))) , c1)
             xqq    = sqrt(xqq)
-!ccsm       psimh  = -c5*hol(ij)*stable(ij) + (c1-stable(ij))*psimhu(xqq)
-!ccsm       psixh(ij)  = -c5*hol(ij)*stable(ij) + (c1-stable(ij))*psixhu(xqq)
 
+            ! Jordan et al 1999
             psimhs = -(0.7_dbl_kind*hol(ij)
      &             + 0.75_dbl_kind*(hol(ij)-14.3_dbl_kind)
      &             * exp(-0.35_dbl_kind*hol(ij)) + 10.7_dbl_kind)
-                   ! Jordan et al 1999
-
             psimh  = psimhs*stable(ij)
      &              + (c1 - stable(ij))*psimhu(xqq)
             psixh(ij)  = psimhs*stable(ij)
@@ -335,7 +330,7 @@ c         do k=1,2             !!! ech thinks this should be at least 5
          fac      = (rh(ij)/vonkar) 
      &            * (alz(ij) + al2 - psixh(ij) + psix2)
          Tref(i,j)= potT(i,j) - delt(i,j)*fac
-         Tref(i,j)= Tref(i,j) - 0.01*zTrf ! pot temp to temp correction
+         Tref(i,j)= Tref(i,j) - p01*zTrf ! pot temp to temp correction
          fac      = (re(ij)/vonkar)
      &            * (alz(ij) + al2 - psixh(ij) + psix2)
          Qref(i,j)= Qa(i,j) - delq(i,j)*fac

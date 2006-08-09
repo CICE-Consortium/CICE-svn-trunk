@@ -78,8 +78,11 @@ c    &,  rho_air   = SHR_CONST_RHODAIR  ! ambient air density (kg/m^3)
      &,  cp_wv     = 1.81e3_dbl_kind   ! specific heat of water vapor (J/kg/K)
      &,  stefan_boltzmann = 567.0e-10_dbl_kind !  W/m^2/K^4
      &,  Tffresh   = 273.15_dbl_kind   ! freezing temp of fresh ice (K)
-ccsm     &,  cp_ice = 2054._dbl_kind       ! specific heat of fresh ice (J/kg/K)
+#ifdef CCSM
+     &,  cp_ice = 2054._dbl_kind       ! specific heat of fresh ice (J/kg/K)
+#else
      &,  cp_ice = 2106._dbl_kind       ! specific heat of fresh ice (J/kg/K)
+#endif
      &,  cp_ocn    = 4218._dbl_kind    ! specific heat of ocn    (J/kg/K)
      &,  Lsub      = 2.835e6_dbl_kind  ! latent heat, sublimation freshwater (J/kg)
      &,  Lvap      = 2.501e6_dbl_kind  ! latent heat, vaporization freshwater (J/kg)
@@ -87,10 +90,12 @@ ccsm     &,  cp_ice = 2054._dbl_kind       ! specific heat of fresh ice (J/kg/K)
      &,  Timelt    = 0.0_dbl_kind      ! melting temperature, ice top surface  (C)
      &,  Tsmelt    = 0.0_dbl_kind      ! melting temperature, snow top surface (C)
      &,  ice_ref_salinity = 4._dbl_kind  ! (psu)
-     &,  spval     = -1.0e34_dbl_kind  ! special value for netCDF output
                                        ! interpreted by ferret as NaN
 c    &,  ocn_ref_salinity   = 34.7_dbl_kind  ! (psu)
 c    &,  rho_air   = 1.2_dbl_kind      ! ambient air density (kg/m^3)
+
+      real (kind=real_kind), parameter ::
+     &   spval     = 1.0e30_real_kind  ! special value for netCDF output
 #endif
 
       real (kind=dbl_kind), parameter ::
@@ -165,6 +170,8 @@ c    &,  rho_air   = 1.2_dbl_kind      ! ambient air density (kg/m^3)
      &  p4   = 0.4_dbl_kind,
      &  p5   = 0.5_dbl_kind,
      &  p6   = 0.6_dbl_kind,
+     &  p05  = 0.05_dbl_kind,
+     &  p15  = 0.15_dbl_kind,
      &  p25  = 0.25_dbl_kind,
      &  p75  = 0.75_dbl_kind,
      &  p166 = c1/c6,
@@ -250,38 +257,6 @@ c    &,  rho_air   = 1.2_dbl_kind      ! ambient air density (kg/m^3)
       integer (kind=int_kind), parameter ::
      &   mtest = -999, itest = 1, jtest = 1, ntest = 1, btest = 1
 !     &   mtest = 2, itest = 50, jtest = 53, ntest = 1, btest = 1
-
-!=======================================================================
-
-      contains
-
-!=======================================================================
-!BOP
-!
-! !IROUTINE: init_constants - initialize constants defined at run time
-!
-! !INTERFACE:
-!
-      subroutine init_constants
-!
-! !DESCRIPTION:
-!
-! Initializes constants that are best defined at run time (e.g. pi)
-!
-! !REVISION HISTORY:
-!
-! author Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      integer (kind=int_kind) :: n, i, j
-
-
-      end subroutine init_constants
 
 !=======================================================================
 

@@ -51,7 +51,7 @@ c $Id: ice_albedo.F,v 1.8 2004/02/09 17:58:46 lipscomb Exp $
       character (len=char_len) ::
      &   shortwave     ! shortwave method, 'ccsm3' or 'dEdd'
 
-      ! baseline albedos for thick cases, set in namelist
+      ! baseline albedos, set in namelist
       real (kind=dbl_kind) ::
      &   albicev   ! visible ice albedo for h > ahmax
      &,  albicei   ! near-ir ice albedo for h > ahmax
@@ -62,7 +62,7 @@ c $Id: ice_albedo.F,v 1.8 2004/02/09 17:58:46 lipscomb Exp $
       integer (kind=int_kind), parameter :: 
      &   nmbexp = 1000000  ! number of exponential values in lookup table
 
-      real (kind=int_kind), parameter :: 
+      real (kind=dbl_kind), parameter :: 
      &   argmax = c10      ! maximum argument of exponential
 
       real (kind=dbl_kind) ::
@@ -257,15 +257,15 @@ c $Id: ice_albedo.F,v 1.8 2004/02/09 17:58:46 lipscomb Exp $
 !EOP
 !
       real (kind=dbl_kind), parameter ::
-     &   ahmax     = 0.5_dbl_kind    ! thickness above which ice albedo 
+     &   ahmax     = p5              ! thickness above which ice albedo 
                                      ! is constant (m)
-     &,  dT_mlt    = 1._dbl_kind     ! change in temp to give dalb_mlt 
+     &,  dT_mlt    = c1              ! change in temp to give dalb_mlt 
                                      ! albedo change
      &,  dalb_mlt  = -0.075_dbl_kind ! albedo change per dT_mlt change
                                      ! in temp for ice
-     &,  dalb_mltv = -0.100_dbl_kind ! albedo vis change per dT_mlt change
+     &,  dalb_mltv = -p1             ! albedo vis change per dT_mlt change
                                      ! in temp for snow
-     &,  dalb_mlti = -0.150_dbl_kind ! albedo nir change per dT_mlt change
+     &,  dalb_mlti = -p15            ! albedo nir change per dT_mlt change
                                      ! in temp for snow
 
       integer (kind=int_kind) ::
@@ -542,7 +542,7 @@ c $Id: ice_albedo.F,v 1.8 2004/02/09 17:58:46 lipscomb Exp $
             i = indxi(ij)
             j = indxj(ij)
 
-            tranbot(i,j) = exp (-kappav * hilyr * real(k))
+            tranbot(i,j) = exp (-kappav * hilyr * real(k,kind=dbl_kind))
             Iswabs(i,j,k) = fswpen(i,j) * (trantop(i,j)-tranbot(i,j))
 
             ! bottom of layer k = top of layer k+1

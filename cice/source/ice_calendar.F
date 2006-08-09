@@ -46,12 +46,16 @@ c $Id: ice_calendar.F,v 1.5 2003/11/19 16:42:54 lipscomb Exp $
      &,  idate     ! date (yyyymmdd)
      &,  sec       ! elapsed seconds into date
      &,  npt       ! total number of time steps (dt)
+     &,  ndyn_dt   ! reduced timestep for dynamics: ndyn_dt=dt/dyn_dt
      &,  stop_now           ! if 1, end program execution
      &,  write_restart      ! if 1, write restart now
      &,  cpl_write_history  ! if 1, write history on command from cpl
+     &,  diagfreq           ! diagnostic output frequency (10 = once per 10 dt)
+     &,  dumpfreq_n         ! restart output frequency (10 = once per 10 d,m,y)
 
       real (kind=dbl_kind) ::
-     &   dt                 ! thermo/transport timestep (s)
+     &   dt                 ! thermodynamics timestep (s)
+     &,  dyn_dt             ! dynamics/transport/ridging timestep (s)
      &,  time               ! total elapsed time (s)
      &,  time_forc          ! time of last forcing update (s)
      &,  yday               ! day of the year
@@ -67,10 +71,6 @@ c $Id: ice_calendar.F,v 1.5 2003/11/19 16:42:54 lipscomb Exp $
       character (len=1) ::
      &   histfreq           ! history output frequency, 'y','m','d','1'
      &,  dumpfreq           ! restart frequency, 'y','m','d'
-
-      integer (kind=int_kind) ::
-     &   diagfreq           ! diagnostic output frequency (10 = once per 10 dt)
-     &,  dumpfreq_n         ! restart output frequency (10 = once per 10 d,m,y)
 
 !=======================================================================
 
@@ -111,6 +111,7 @@ c $Id: ice_calendar.F,v 1.5 2003/11/19 16:42:54 lipscomb Exp $
       idate=00000101    ! date
       sec=0             ! seconds into date
       stop_now = 0      ! end program execution if stop_now=1
+      dyn_dt = dt/real(ndyn_dt,kind=dbl_kind) ! dynamics et al timestep
 
       end subroutine init_calendar
 
@@ -172,7 +173,7 @@ c $Id: ice_calendar.F,v 1.5 2003/11/19 16:42:54 lipscomb Exp $
       yday = mod(tday-c1,dayyr) + c1    ! day of the year
       week = int(yday/c7) + c1          ! week of the year
       do k = 1, 12
-        if (yday > float(daycal(k))) month = k ! month
+        if (yday > real(daycal(k),kind=dbl_kind)) month = k
       enddo
       mday = int(yday) - daycal(month)  ! day of the month
       nyr = int((tday-c1)/dayyr) + 1    ! year number
@@ -194,7 +195,7 @@ c $Id: ice_calendar.F,v 1.5 2003/11/19 16:42:54 lipscomb Exp $
       if (week  /= weekp)  new_week = .true.
       if (mday  /= mdayp)  new_day = .true.
 
-      if (histfreq.eq.'1') write_history=.true.
+      if (histfreq == '1') write_history=.true.
       if (istep > 1) then
         if (((histfreq == 'y'.or.histfreq == 'Y').and. new_year)  .or.
      &      ((histfreq == 'm'.or.histfreq == 'M').and. new_month) .or.

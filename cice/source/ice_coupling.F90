@@ -13,6 +13,7 @@
 ! (2) ESMF import/export state routines
 ! These are mutually exclusive.
 !   
+!lipscomb - This module has not been tested yet in CCSM coupled mode!
 !
 ! !REVISION HISTORY:
 !
@@ -20,9 +21,8 @@
 !         Tony Craig, NCAR, Dec-30-2002, modified for cpl6
 !         Philip W Jones, LANL, modified for ESMF import/export
 !
-! 2005: Added ESMF import/export state routines
 ! 2004: Block structure added by William Lipscomb
-!lipscomb - Block changes not tested yet
+! 2005: Added ESMF import/export state routines
 !
 ! !INTERFACE:
 !

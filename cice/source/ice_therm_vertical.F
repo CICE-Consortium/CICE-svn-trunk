@@ -38,9 +38,13 @@
       implicit none
       save
 
+      real (kind=dbl_kind), dimension(nilyr+1) ::
+     &   salin           ! salinity (ppt)   
+     &,  Tmlt            ! melting temp, -depressT * salinity
+                         ! nilyr + 1 index is for bottom surface
+
       real (kind=dbl_kind) ::
-     &   salin(nilyr+1)  ! salinity (ppt)
-     &,  Tmlt(nilyr+1)   ! melting temp, -mu * salinity
+     &   ustar_scale     ! scaling for ice-ocean heat flux
 
       real (kind=dbl_kind), parameter, private ::
      &   ferrmax = 1.0e-3_dbl_kind  ! max allowed energy flux error (W m-2)
@@ -459,9 +463,10 @@
 
       if (l_brine) then
          do k = 1, nilyr
-            zn = (real(k)-p5) / real(nilyr)
+            zn = (real(k,kind=dbl_kind)-p5) / 
+     &            real(nilyr,kind=dbl_kind)
             salin(k)=(saltmax/c2)*(c1-cos(pi*zn**(nsal/(msal+zn))))
-c            salin(k)=saltmax ! for isosaline ice
+!            salin(k)=saltmax ! for isosaline ice
          enddo
          salin(nilyr+1) = saltmax
          do k = 1, nilyr+1
@@ -473,6 +478,8 @@ c            salin(k)=saltmax ! for isosaline ice
             Tmlt(k) = c0
          enddo
       endif
+
+      ustar_scale = c1           ! for nonzero currents
 
       end subroutine init_thermo_vertical
 
@@ -569,17 +576,8 @@ c            salin(k)=saltmax ! for isosaline ice
 
       real (kind=dbl_kind), parameter ::
      &   cpchr = -cp_ocn*rhow*0.006_dbl_kind
+     &,  ustar_min = 5.e-3_dbl_kind
 
-#ifdef coupled
-      real (kind=dbl_kind), parameter ::
-     &   ustar_min = 5.e-3_dbl_kind
-#endif
-
-
-#ifndef coupled
-      real (kind=dbl_kind), parameter ::
-     &   ustar_min = 5.e-2_dbl_kind   ! for zero currents
-#endif
 
       ! Parameters for lateral melting
 
@@ -628,7 +626,7 @@ c            salin(k)=saltmax ! for isosaline ice
 
          ! strocnx has units N/m^2 so strocnx/rho has units m^2/s^2
          ustar = sqrt (sqrt(strocnxT(i,j)**2+strocnyT(i,j)**2)/rhow)
-         ustar = max (ustar,ustar_min)
+         ustar = max (ustar,ustar_min*ustar_scale)
 
          fbot(i,j) = cpchr * deltaT * ustar ! < 0
          fbot(i,j) = max (fbot(i,j), frzmlt(i,j)) ! frzmlt < fbot < 0
@@ -707,8 +705,8 @@ c            salin(k)=saltmax ! for isosaline ice
          i = indxi(ij)
          j = indxj(ij)
 
-         xtmp = (fbot(i,j) + fside(i,j)) / (frzmlt(i,j)-puny)
-         xtmp = c1/ max(xtmp, c1)
+         xtmp = frzmlt(i,j)/(fbot(i,j) + fside(i,j) + puny) 
+         xtmp = min(xtmp, c1)
          fbot(i,j)  = fbot(i,j)  * xtmp
          rside(i,j) = rside(i,j) * xtmp
       enddo                     ! ij
@@ -864,8 +862,8 @@ c            salin(k)=saltmax ! for isosaline ice
          Tsf(i,j)    = Tsfcn(i,j)
          hin(i,j)    = vicen(i,j) / aicen(i,j)
          hsn(i,j)    = vsnon(i,j) / aicen(i,j)
-         hilyr(i,j)    = hin(i,j) / real(nilyr)
-         hslyr(i,j)    = hsn(i,j) / real(nslyr)
+         hilyr(i,j)    = hin(i,j) / real(nilyr,kind=dbl_kind)
+         hslyr(i,j)    = hsn(i,j) / real(nslyr,kind=dbl_kind)
 
       enddo                     ! ij
 
@@ -888,7 +886,8 @@ c            salin(k)=saltmax ! for isosaline ice
 
             if (hslyr(i,j) > hsnomin) then
                ! qsn, esnon < 0              
-               qsn  (i,j,k) = esnon(i,j,k)*real(nslyr)/vsnon(i,j) 
+               qsn  (i,j,k) = esnon(i,j,k)*real(nslyr,kind=dbl_kind)
+     &                       /vsnon(i,j) 
                Tmax = -qsn(i,j,k)*puny /
      &                 (rhos*cp_ice*vsnon(i,j))
             else
@@ -1005,7 +1004,8 @@ c            salin(k)=saltmax ! for isosaline ice
       ! Compute ice enthalpy
       !-----------------------------------------------------------------
             ! qin, eicen < 0
-            qin(i,j,k) = eicen(i,j,k)*real(nilyr)/vicen(i,j)  
+            qin(i,j,k) = eicen(i,j,k)*real(nilyr,kind=dbl_kind)
+     &                  /vicen(i,j)  
 
       !-----------------------------------------------------------------
       ! Compute ice temperatures from enthalpies using quadratic formula
@@ -1015,8 +1015,8 @@ c            salin(k)=saltmax ! for isosaline ice
                aa1 = cp_ice
                bb1 = (cp_ocn-cp_ice)*Tmlt(k) - qin(i,j,k)/rhoi - Lfresh 
                cc1 = Lfresh * Tmlt(k)
-               Tin(i,j,k) =  (-bb1 - sqrt(bb1*bb1 - 4.*aa1*cc1)) / 
-     &                       (2.*aa1)
+               Tin(i,j,k) =  (-bb1 - sqrt(bb1*bb1 - c4*aa1*cc1)) / 
+     &                       (c2*aa1)
                Tmax = Tmlt(k)
 
             else                ! fresh ice
@@ -1314,9 +1314,9 @@ c            salin(k)=saltmax ! for isosaline ice
       avg_Tsi   (:,:) = c0 
       dt_rhoi_hlyr(:,:) = c0
       dfsurf_dT (:,:) = c0
-      dfsens_dt (:,:) = c0
-      dflat_dt  (:,:) = c0
-      dflwout_dt(:,:) = c0
+      dfsens_dT (:,:) = c0
+      dflat_dT  (:,:) = c0
+      dflwout_dT(:,:) = c0
 
       do ij = 1, icells
          i = indxi(ij)
@@ -1714,7 +1714,7 @@ c            salin(k)=saltmax ! for isosaline ice
      &           - (fcondtop(i,j) - fcondbot(i,j) + fswint(i,j)) )
 
             ! factor of 0.9 allows for roundoff errors later
-            if (ferr > 0.9*ferrmax) then               ! condition (5)
+            if (ferr > 0.9_dbl_kind*ferrmax) then         ! condition (5)
                converged(i,j) = .false.
                all_converged = .false.
             endif
@@ -2007,7 +2007,7 @@ c            salin(k)=saltmax ! for isosaline ice
       real (kind=dbl_kind) ::
      &   TsfK            ! ice/snow surface temperature (K)
      &,  Qsfc            ! saturated surface specific humidity (kg/kg)
-     &,  dqsatdt         ! derivative of qsat wrt surface temperature
+     &,  dQsfcdT         ! derivative of Qsfc wrt surface temperature
      &,  qsat            ! the saturation humidity of air (kg/m^3)
      &,  flwdabs         ! downward longwave absorbed heat flx (W/m^2)
      &,  tmpvar          ! 1/TsfK
@@ -2026,7 +2026,7 @@ c            salin(k)=saltmax ! for isosaline ice
          ! saturation humidity
          qsat    = qqqice * exp(-TTTice*tmpvar)
          Qsfc    = qsat / rhoa(i,j)
-         dqsatdt = TTTice * tmpvar*tmpvar * qsat
+         dQsfcdT = TTTice * tmpvar*tmpvar * Qsfc
 
          ! longwave radiative flux
          flwdabs =  emissivity * flw(i,j)
@@ -2039,7 +2039,7 @@ c            salin(k)=saltmax ! for isosaline ice
          ! derivatives wrt surface temp
          dflwout_dT(i,j) = - emissivity*stefan_boltzmann * c4*TsfK**3
          dfsens_dT(i,j)  = - shcoef(i,j)
-         dflat_dT(i,j)   = - lhcoef(i,j) * dqsatdt
+         dflat_dT(i,j)   = - lhcoef(i,j) * dQsfcdT
 
          fsurf(i,j) = fswsfc(i,j) + flwdabs + flwoutn(i,j)
      &              + fsensn(i,j) + flatn(i,j)
@@ -2950,14 +2950,14 @@ c            salin(k)=saltmax ! for isosaline ice
          j = indxj(ij)
 
          if (hin(i,j) > c0) then
-            hilyr(i,j) = hin(i,j) / real(nilyr)
+            hilyr(i,j) = hin(i,j) / real(nilyr,kind=dbl_kind)
          else
             hin(i,j) = c0
             hilyr(i,j) = c0
          endif
 
          if (hsn(i,j) > c0) then
-            hslyr(i,j) = hsn(i,j) / real(nslyr)
+            hslyr(i,j) = hsn(i,j) / real(nslyr,kind=dbl_kind)
          else
             hsn(i,j) = c0
             hslyr(i,j) = c0
@@ -3616,7 +3616,8 @@ c            salin(k)=saltmax ! for isosaline ice
             j = indxj(ij)
 
             if (hin(i,j) > c0) then
-               eicen(i,j,k) = qin(i,j,k) * vicen(i,j)/real(nilyr)
+               eicen(i,j,k) = qin(i,j,k) * vicen(i,j)
+     &                                     /real(nilyr,kind=dbl_kind)
             else
                eicen(i,j,k) = c0
             endif
@@ -3630,7 +3631,8 @@ c            salin(k)=saltmax ! for isosaline ice
             j = indxj(ij)
 
             if (hin(i,j) > c0) then
-               esnon(i,j,k) = qsn(i,j,k) * vsnon(i,j)/real(nslyr)
+               esnon(i,j,k) = qsn(i,j,k) * vsnon(i,j)
+     &                                     /real(nslyr,kind=dbl_kind)
             else
                esnon(i,j,k) = c0
             endif

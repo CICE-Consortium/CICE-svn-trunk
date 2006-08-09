@@ -90,6 +90,7 @@
 !
       use ice_itd, only: hin_max, hi_min, aggregate_area, shift_ice,
      &                   column_sum, column_conservation_check 
+      use ice_work, only: worka
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -155,11 +156,7 @@
      &,  wk1, wk2         ! temporary variables
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,0:ncat) ::
-     &   Hbnew            ! new boundary locations
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block) ::
-     &   Hb0              ! hin_max(0)
-     &,  Hb1              ! hin_max(1)
+     &   hbnew            ! new boundary locations
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,ncat) ::
      &   hicen            ! ice thickness for each cat     (m)
@@ -207,7 +204,16 @@
      &   flag_changed      ! true if remapping is disabled somewhere
 
 
+      !-----------------------------------------------------------------
+      ! Initialize
+      !-----------------------------------------------------------------
+
       abort_flag = .false.
+
+      hin_max(ncat) = 999.9_dbl_kind ! arbitrary big number
+      do n = 0, ncat
+         hbnew(:,:,n) = hin_max(n)
+      enddo
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
@@ -251,22 +257,12 @@
 
             if (aicen(i,j,n) > puny) then
                hicen (i,j,n) = vicen(i,j,n) / aicen(i,j,n) 
-            else
-               hicen(i,j,n) = c0
-            endif               ! aicen > puny
-
-         enddo                  ! i
-         enddo                  ! j
-      enddo                     ! n
-
-      do n = 1, ncat
-         do j = jlo,jhi
-         do i = ilo,ihi
-            if (aicen(i,j,n) > puny) then
                dhicen(i,j,n) = hicen(i,j,n) - hicen_init(i,j,n)
             else
+               hicen (i,j,n) = c0
                dhicen(i,j,n) = c0
             endif               ! aicen > puny
+
          enddo                  ! i
          enddo                  ! j
       enddo                     ! n
@@ -302,11 +298,9 @@
       enddo
 
       !-----------------------------------------------------------------
-      ! Compute new category boundaries, Hbnew, based on changes in
+      ! Compute new category boundaries, hbnew, based on changes in
       ! ice thickness from vertical thermodynamics.
       !-----------------------------------------------------------------
-
-      hin_max(ncat) = 999.9_dbl_kind ! arbitrary big number
 
       do n = 1, ncat-1
 
@@ -322,14 +316,14 @@
                  ! interpolate between adjacent category growth rates
                slope = (dhicen(i,j,n+1) - dhicen(i,j,n)) /
      &                 (hicen_init(i,j,n+1) - hicen_init(i,j,n))
-               Hbnew(i,j,n) = hin_max(n) + dhicen(i,j,n)
+               hbnew(i,j,n) = hin_max(n) + dhicen(i,j,n)
      &                      + slope * (hin_max(n) - hicen_init(i,j,n))
             elseif (hicen_init(i,j,n) > puny) then ! hicen_init(n+1)=0
-               Hbnew(i,j,n) = hin_max(n) + dhicen(i,j,n)
+               hbnew(i,j,n) = hin_max(n) + dhicen(i,j,n)
             elseif (hicen_init(i,j,n+1) > puny) then ! hicen_init(n)=0
-               Hbnew(i,j,n) = hin_max(n) + dhicen(i,j,n+1)
+               hbnew(i,j,n) = hin_max(n) + dhicen(i,j,n+1)
             else
-               Hbnew(i,j,n) = hin_max(n)
+               hbnew(i,j,n) = hin_max(n)
             endif
          enddo                  ! ij
 
@@ -344,28 +338,28 @@
             j = indxj(ij)
 
             if (aicen(i,j,n) > puny .and.
-     &          hicen(i,j,n) >= Hbnew(i,j,n)) then
+     &          hicen(i,j,n) >= hbnew(i,j,n)) then
                remap_flag(i,j) = .false.
                flag_changed = .true.
             elseif (aicen(i,j,n+1) > puny .and.
-     &              hicen(i,j,n+1) <= Hbnew(i,j,n)) then
+     &              hicen(i,j,n+1) <= hbnew(i,j,n)) then
                remap_flag(i,j) = .false.
                flag_changed = .true.
             endif
 
       !-----------------------------------------------------------------
-      ! Check that Hbnew(n) lies between hin_max(n-1) and hin_max(n+1).
+      ! Check that hbnew(n) lies between hin_max(n-1) and hin_max(n+1).
       ! If not, set remap_flag = .false.
       ! (In principle we could allow this, but it would make the code
       ! more complicated.)
       !-----------------------------------------------------------------
 
-            if (Hbnew(i,j,n) > hin_max(n+1)) then
+            if (hbnew(i,j,n) > hin_max(n+1)) then
                remap_flag(i,j) = .false.
                flag_changed = .true.
             endif
 
-            if (Hbnew(i,j,n) < hin_max(n-1)) then
+            if (hbnew(i,j,n) < hin_max(n-1)) then
                remap_flag(i,j) = .false.
                flag_changed = .true.
             endif
@@ -383,45 +377,45 @@
                j = indxj(ij)
 
                if (aicen(i,j,n) > puny .and.
-     &             hicen(i,j,n) >= Hbnew(i,j,n)) then
+     &             hicen(i,j,n) >= hbnew(i,j,n)) then
                   if (present(istep1)) write(nu_diag,*)'istep1 =',istep1
                   write(nu_diag,*) my_task,':',i,j,
-     &                 'ITD: hicen(n) > Hbnew(n)'
+     &                 'ITD: hicen(n) > hbnew(n)'
                   write(nu_diag,*) 'cat ',n
                   write(nu_diag,*) my_task,':',i,j,
      &                 'hicen(n) =', hicen(i,j,n)
                   write(nu_diag,*) my_task,':',i,j,
-     &                 'Hbnew(n) =', Hbnew(i,j,n)
+     &                 'hbnew(n) =', hbnew(i,j,n)
                elseif (aicen(i,j,n+1) > puny .and.
-     &                 hicen(i,j,n+1) <= Hbnew(i,j,n)) then
+     &                 hicen(i,j,n+1) <= hbnew(i,j,n)) then
                   if (present(istep1)) write(nu_diag,*)'istep1 =',istep1
                   write(nu_diag,*) my_task,':',i,j,
-     &                 'ITD: hicen(n+1) < Hbnew(n)'
+     &                 'ITD: hicen(n+1) < hbnew(n)'
                   write(nu_diag,*) 'cat ',n
                   write(nu_diag,*) my_task,':',i,j,
      &                 'hicen(n+1) =', hicen(i,j,n+1)
                   write(nu_diag,*) my_task,':',i,j,
-     &                 'Hbnew(n) =', Hbnew(i,j,n)
+     &                 'hbnew(n) =', hbnew(i,j,n)
                endif
 
-               if (Hbnew(i,j,n) > hin_max(n+1)) then
+               if (hbnew(i,j,n) > hin_max(n+1)) then
                   if (present(istep1)) write(nu_diag,*)'istep1 =',istep1
                   write(nu_diag,*) my_task,':',i,j,
-     &                 'ITD Hbnew(n) > hin_max(n+1)'
+     &                 'ITD hbnew(n) > hin_max(n+1)'
                   write(nu_diag,*) 'cat ',n
                   write(nu_diag,*) my_task,':',i,j,
-     &                 'Hbnew(n) =', Hbnew(i,j,n)
+     &                 'hbnew(n) =', hbnew(i,j,n)
                   write(nu_diag,*) my_task,':',i,j,
      &                 'hin_max(n+1) =', hin_max(n+1)
                endif
 
-               if (Hbnew(i,j,n) < hin_max(n-1)) then
+               if (hbnew(i,j,n) < hin_max(n-1)) then
                   if (present(istep1)) write(nu_diag,*)'istep1 =',istep1
                   write(nu_diag,*) my_task,':',i,j,
-     &                 'ITD: Hbnew(n) < hin_max(n-1)'
+     &                 'ITD: hbnew(n) < hin_max(n-1)'
                   write(nu_diag,*) 'cat ',n
                   write(nu_diag,*) my_task,':',i,j,
-     &                 'Hbnew(n) =', Hbnew(i,j,n)
+     &                 'hbnew(n) =', hbnew(i,j,n)
                   write(nu_diag,*) my_task,':',i,j,
      &                 'hin_max(n-1) =', hin_max(n-1)
                endif
@@ -430,6 +424,26 @@
          endif                  ! flag_changed
 
       enddo                     ! boundaries, 1 to ncat-1
+
+      !-----------------------------------------------------------------
+      ! Compute hbnew(ncat)
+      !-----------------------------------------------------------------
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      do ij = 1, icells         ! aice(i,j) > puny
+         i = indxi(ij)
+         j = indxj(ij)
+         if (aicen(i,j,ncat) > puny) then
+            hbnew(i,j,ncat) = c3*hicen(i,j,ncat) - c2*hbnew(i,j,ncat-1)
+         else
+            hbnew(i,j,ncat) = hin_max(ncat)
+         endif
+         
+         if (hbnew(i,j,ncat) < hin_max(ncat-1))
+     &        hbnew(i,j,ncat) = hin_max(ncat-1)
+      enddo
 
       !-----------------------------------------------------------------
       ! Identify cells where the ITD is to be remapped
@@ -446,38 +460,18 @@
       enddo
       enddo
 
-      !-----------------------------------------------------------------
-      ! Fill arrays with initial boundaries of category 1
-      ! Prescribe Hbnew(0) and Hbnew(ncat)
-      !-----------------------------------------------------------------
-
-      do j = jlo,jhi
-      do i = ilo,ihi
-         Hb0(i,j) = hin_max(0)
-         Hb1(i,j) = hin_max(1)
-
-         Hbnew(i,j,0) = c0
-
-         if (aicen(i,j,ncat) > puny) then
-            Hbnew(i,j,ncat) = c3*hicen(i,j,ncat) - c2*Hbnew(i,j,ncat-1)
-         else
-            Hbnew(i,j,ncat) = hin_max(ncat)
-         endif
-
-         if (Hbnew(i,j,ncat) < hin_max(ncat-1))
-     &        Hbnew(i,j,ncat) = hin_max(ncat-1)
-      enddo
-      enddo
 
       !-----------------------------------------------------------------
       ! Compute g(h) for category 1 at start of time step
       ! (hicen = hicen_init)
       !-----------------------------------------------------------------
 
+      worka(:,:) = hin_max(1)
+
       call fit_line(nx_block,       ny_block,
      &              nghost,
      &              aicen(:,:,1),   hicen_init(:,:,1),
-     &              Hb0  (:,:),     Hb1       (:,:),
+     &              hbnew(:,:,0),   worka     (:,:),
      &              g0   (:,:,1),   g1        (:,:,1),
      &              hL   (:,:,1),   hR        (:,:,1),
      &              remap_flag)
@@ -524,7 +518,7 @@
                endif            ! etamax > 0
 
             else                ! dh0 >= 0
-               Hbnew(i,j,0) = min(dh0,hin_max(1))  ! shift Hbnew(0) to right
+               hbnew(i,j,0) = min(dh0,hin_max(1))  ! shift hbnew(0) to right
             endif
 
          endif                  ! aicen(i,j,1) > puny
@@ -538,7 +532,7 @@
          call fit_line(nx_block,       ny_block,
      &                 nghost,
      &                 aicen(:,:,n),   hicen(:,:,n),
-     &                 Hbnew(:,:,n-1), Hbnew(:,:,n),
+     &                 hbnew(:,:,n-1), hbnew(:,:,n),
      &                 g0   (:,:,n),   g1   (:,:,n),
      &                 hL   (:,:,n),   hR   (:,:,n),
      &                 remap_flag)
@@ -562,21 +556,21 @@
             i = indxi(ij)
             j = indxj(ij)
 
-            if (Hbnew(i,j,n) > hin_max(n)) then ! transfer from n to n+1
+            if (hbnew(i,j,n) > hin_max(n)) then ! transfer from n to n+1
 
                ! left and right integration limits in eta space
                etamin = max(hin_max(n), hL(i,j,n)) - hL(i,j,n)
-               etamax = min(Hbnew(i,j,n), hR(i,j,n)) - hL(i,j,n)
+               etamax = min(hbnew(i,j,n), hR(i,j,n)) - hL(i,j,n)
                donor(i,j,n) = n
 
-            else             ! Hbnew(n) <= hin_max(n); transfer from n+1 to n
+            else             ! hbnew(n) <= hin_max(n); transfer from n+1 to n
 
                ! left and right integration limits in eta space
                etamin = c0
                etamax = min(hin_max(n), hR(i,j,n+1)) - hL(i,j,n+1)
                donor(i,j,n) = n+1
 
-            endif            ! Hbnew(n) > hin_max(n)
+            endif            ! hbnew(n) > hin_max(n)
 
             if (etamax > etamin) then
                x1  = etamax - etamin
@@ -767,15 +761,28 @@
      &,  ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
       real  (kind=dbl_kind) ::
-     &   h13             ! HbL + 1/3 * (HbR - HbL)
-     &,  h23             ! HbL + 2/3 * (HbR - HbL)
+     &   h13             ! hbL + 1/3 * (hbR - hbL)
+     &,  h23             ! hbL + 2/3 * (hbR - hbL)
      &,  dhr             ! 1 / (hR - hL)
      &,  wk1, wk2        ! temporary variables
+
+      !-----------------------------------------------------------------
+      ! Initialize
+      !-----------------------------------------------------------------
+
+      g0(:,:) = c0
+      g1(:,:) = c0
+      hL(:,:) = c0
+      hR(:,:) = c0
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
       jlo = 1 + nghost
       jhi = ny_block - nghost
+
+      !-----------------------------------------------------------------
+      ! Compute g0, g1, hL, and hR for each category to be remapped.
+      !-----------------------------------------------------------------
 
       do j = jlo,jhi
       do i = ilo,ihi
@@ -805,13 +812,6 @@
             wk2 = (hice(i,j) - hL(i,j)) * dhr
             g0(i,j) = wk1 * (p666 - wk2)
             g1(i,j) = c2*dhr * wk1 * (wk2 - p5)
-
-         else                   ! remap_flag = .false. or aicen < puny
-                                ! or hbR <= hbL
-            hL(i,j) = c0
-            hR(i,j) = c0
-            g0(i,j) = c0
-            g1(i,j) = c0
 
          endif                  ! aicen > puny
 

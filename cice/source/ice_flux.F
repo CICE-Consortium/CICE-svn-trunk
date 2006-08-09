@@ -121,6 +121,9 @@ c $Id: ice_flux.F,v 1.14 2004/02/10 23:17:12 lipscomb Exp $
      &   sss         ! sea surface salinity (ppt)
      &,  sst         ! sea surface temperature (C)
      &,  frzmlt      ! freezing/melting potential (W/m^2)
+     &,  Tf          ! freezing temperature (C)
+     &,  qdp         ! deep ocean heat flux (W/m^2), negative upward
+     &,  hmix        ! mixed layer depth (m)
 
        ! out to atmosphere
        ! note Tsfc is in ice_state.F
@@ -201,7 +204,6 @@ c $Id: ice_flux.F,v 1.14 2004/02/10 23:17:12 lipscomb Exp $
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) ::
      &   wind        ! wind speed (m/s)
-     &,  Tf          ! freezing temperature (C)
      &,  rside       ! fraction of ice that melts laterally
      &,  fsw         ! incoming shortwave radiation (W/m^2)
      &,  coszen      ! cosine solar zenith angle, < 0 for sun below horizon 
@@ -285,7 +287,9 @@ c      use ice_domain, only: nblocks
       sss   (:,:,:) = 34.0_dbl_kind   ! sea surface salinity (o/oo)
       Tf    (:,:,:) = -depressT*sss(:,:,:)  ! freezing temp (C)
                                             ! (derived field)  
-      sst   (:,:,:) = Tf(:,:,:)    ! sea surface temp (C)
+      sst   (:,:,:) = Tf(:,:,:)       ! sea surface temp (C)
+      qdp   (:,:,:) = c0              ! deep ocean heat flux (W/m^2)
+      hmix  (:,:,:) = c20             ! ocean mixed layer depth
 
       !-----------------------------------------------------------------
       ! fluxes sent to atmosphere
@@ -296,7 +300,8 @@ c      use ice_domain, only: nblocks
       fsens   (:,:,:) = c0
       flat    (:,:,:) = c0
       fswabs  (:,:,:) = c0
-      flwout  (:,:,:) = c0
+      flwout  (:,:,:) = -stefan_boltzmann*Tf**4   
+                        ! in case atm model diagnoses Tsfc from flwout
       evap    (:,:,:) = c0
       Tref    (:,:,:) = c0
       Qref    (:,:,:) = c0

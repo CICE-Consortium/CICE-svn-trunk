@@ -428,7 +428,7 @@
          if (diag) then
             amin = minval(work_g1)
             amax = maxval(work_g1)
-            write(nu_diag,*) ' writ_global ', nu, nrec, amin, amax
+            write(nu_diag,*) ' write_global ', nu, nrec, amin, amax
          endif
 
       endif                     ! my_task = master_task
