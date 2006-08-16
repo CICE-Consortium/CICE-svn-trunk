@@ -231,7 +231,7 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
 
       call broadcast_scalar(nml_error, master_task)
       if (nml_error /= 0) then
-         call abort_ice('ERROR reading ice_nml')
+         call abort_ice('ice: error reading ice_nml')
       endif
 
       if (trim(diag_type) == 'file') then
@@ -516,13 +516,13 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
       if (nilyr < 2) then
          write (nu_diag,*) 'nilyr =', nilyr
          write (nu_diag,*) 'Must have at least two ice layers'
-         call abort_ice('Not enough ice layers')
+         call abort_ice('ice_init: Not enough ice layers')
       endif
 
       if (nslyr < 1) then
          write (nu_diag,*) 'nslyr =', nslyr
          write (nu_diag,*) 'Must have at least one snow layer'
-         call abort_ice('Not enough snow layers')
+         call abort_ice('ice_init: Not enough snow layers')
       endif
 
       do iblk = 1, nblocks

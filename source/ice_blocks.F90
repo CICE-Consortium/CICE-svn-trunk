@@ -152,7 +152,7 @@ contains
       js = (jblock-1)*block_size_y + 1
       je = js + block_size_y - 1
       if (js > ny_global) call abort_ice(&
-               'create_blocks: Bad block decomp: ny_block too large?')
+            'ice: create_blocks: Bad block decomp: ny_block too large?')
       if (je > ny_global) je = ny_global ! pad array
 
       do iblock=1,nblocks_x
@@ -161,7 +161,7 @@ contains
          is = (iblock-1)*block_size_x + 1
          ie = is + block_size_x - 1
          if (is > nx_global) call abort_ice(&
-               'create_blocks: Bad block decomp: nx_block too large?')
+            'ice: create_blocks: Bad block decomp: nx_block too large?')
          if (ie > nx_global) ie = nx_global
 
          all_blocks(n)%block_id = n
@@ -188,7 +188,7 @@ contains
                   j_global(j,n) = 0
                case default
                   call abort_ice(&
-                                'create_blocks: unknown n-s bndy type')
+                           'ice: create_blocks: unknown n-s bndy type')
                end select
             endif
 
@@ -209,7 +209,7 @@ contains
                   j_global(j,n) = -j_global(j,n)
                case default
                   call abort_ice(&
-                                'create_blocks: unknown n-s bndy type')
+                           'ice: create_blocks: unknown n-s bndy type')
                end select
 
             !*** set last physical point if padded domain
@@ -235,7 +235,7 @@ contains
                   i_global(i,n) = 0
                case default
                   call abort_ice(&
-                                'create_blocks: unknown e-w bndy type')
+                           'ice: create_blocks: unknown e-w bndy type')
                end select
             endif
 
@@ -254,7 +254,7 @@ contains
                   i_global(i,n) = 0
                case default
                   call abort_ice(&
-                                'create_blocks: unknown e-w bndy type')
+                           'ice: create_blocks: unknown e-w bndy type')
                end select
 
             !*** last physical point in padded domain
@@ -309,7 +309,7 @@ end subroutine create_blocks
 !----------------------------------------------------------------------
 
    if (block_id < 1 .or. block_id > nblocks_tot) then
-      call abort_ice('get_block: invalid block_id')
+      call abort_ice('ice: get_block: invalid block_id')
    endif
 
    get_block = all_blocks(block_id)
@@ -362,7 +362,7 @@ end subroutine create_blocks
 !----------------------------------------------------------------------
 
    if (block_id < 1 .or. block_id > nblocks_tot) then
-      call abort_ice('get_block_parameter: invalid block_id')
+      call abort_ice('ice: get_block_parameter: invalid block_id')
    endif
 
    if (present(local_id)) local_id = all_blocks(block_id)%local_id

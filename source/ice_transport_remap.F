@@ -305,7 +305,8 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
             if (nt1 > nt) then
                write(nu_diag,*)
      &              'Tracer nt2 =',nt,' depends on tracer nt1 =',nt1
-               call abort_ice('remap transport: Must have nt2 > nt1')
+               call abort_ice
+     &                 ('ice: remap transport: Must have nt2 > nt1')
             endif
          endif
       enddo
@@ -443,19 +444,15 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
       jhi = ny_block - nghost
 
       ! Initialize
-      do j = jlo, jhi
-      do i = ilo, ihi
-         xav  (i,j) = c0
-         yav  (i,j) = c0
-         xxav (i,j) = c0
-         xyav (i,j) = c0
-         yyav (i,j) = c0
-         xxxav(i,j) = c0
-         xxyav(i,j) = c0
-         xyyav(i,j) = c0
-         yyyav(i,j) = c0
-      enddo
-      enddo
+      xav  (:,:) = c0
+      yav  (:,:) = c0
+      xxav (:,:) = c0
+      xyav (:,:) = c0
+      yyav (:,:) = c0
+      xxxav(:,:) = c0
+      xxyav(:,:) = c0
+      xyyav(:,:) = c0
+      yyyav(:,:) = c0
 
       ! Compute vertices and area of each triangle.
 
@@ -770,6 +767,9 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &,  n                ! ice category index
      &,  nt, nt1, nt2     ! tracer indices
 
+      type (block) ::
+     &   this_block       ! block information for current block
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) ::
      &   dpx              ! x coordinates of departure points at cell corners
      &,  dpy              ! y coordinates of departure points at cell corners
@@ -806,7 +806,11 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &   iflux            ! i index of cell contributing transport
      &,  jflux            ! j index of cell contributing transport
 
-      logical (kind=log_kind) :: abort_flag
+      logical (kind=log_kind) ::
+     &   l_stop           ! if true, abort the model
+
+      integer (kind=int_kind) ::
+     &   istop, jstop     ! indices of grid cell where model aborts 
 
       ! variables used for optional bug checks
 
@@ -830,6 +834,10 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
 !---! Prepare for remapping.
 !---! Initialize, update ghost cells, fill tracer arrays.
 !---!-------------------------------------------------------------------
+
+      l_stop = .false.
+      istop = 0
+      jstop = 0
 
     !-------------------------------------------------------------------
     ! Compute open water area in each grid cell.
@@ -955,7 +963,8 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &            tmax(nx_block,ny_block,ntrace,ncat,max_blocks),
      &            STAT=alloc_error)
 
-         if (alloc_error /= 0) call abort_ice ('allocation error')
+         if (alloc_error /= 0)
+     &        call abort_ice ('ice: allocation error')
 
          tmin(:,:,:,:,:) = c0
          tmax(:,:,:,:,:) = c0
@@ -1070,6 +1079,7 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
     !-------------------------------------------------------------------
 
       do iblk = 1, nblocks
+         this_block = get_block(blocks(iblk),iblk)         
 
          call departure_points(nx_block,          ny_block,
      &                         nghost,            dt,
@@ -1080,13 +1090,18 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &                         dxhy   (:,:,iblk), dyhx   (:,:,iblk),
      &                         mne(:,:,:,:,iblk), mnw(:,:,:,:,iblk),
      &                         mse(:,:,:,:,iblk), msw(:,:,:,:,iblk),
-     &                         l_dp_midpt,        abort_flag)
+     &                         l_dp_midpt,        l_stop,
+     &                         istop,             jstop)
 
-         if (abort_flag) then
+         if (l_stop) then
             write(nu_diag,*) 'istep1, my_task, iblk =',
      &                        istep1, my_task, iblk
-              ! instead of aborting, just print a warning
-!!            call abort_ice('remap transport: bad departure points')
+            write (nu_diag,*) 'Global block:', this_block%block_id
+            if (istop > 0 .and. jstop > 0)
+     &           write(nu_diag,*) 'Global i and j:',
+     &                            this_block%i_glob(istop),
+     &                            this_block%j_glob(jstop) 
+            call abort_ice('remap transport: bad departure points')
          endif
 
       enddo                     ! iblk
@@ -1099,6 +1114,7 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
       call ice_timer_stop(timer_bound)
 
       do iblk = 1, nblocks
+         this_block = get_block(blocks(iblk),iblk)         
 
     !-------------------------------------------------------------------
     ! Transports for east cell edges.
@@ -1229,9 +1245,21 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
 
          call update_fields (nx_block,           ny_block,
      &                       nghost,             tarear(:,:,iblk),      
+     &                       l_stop,
+     &                       istop,              jstop,
      &                       aiflxe(:,:,0),      aiflxn(:,:,0),
-     &                       aim   (:,:,0,iblk), 
-     &                       abort_flag = abort_flag)
+     &                       aim   (:,:,0,iblk)) 
+
+         if (l_stop) then
+            write (nu_diag,*) 'istep1, my_task, iblk, cat =',
+     &                         istep1, my_task, iblk, n
+            write (nu_diag,*) 'Global block:', this_block%block_id
+            if (istop > 0 .and. jstop > 0)
+     &           write(nu_diag,*) 'Global i and j:',
+     &                            this_block%i_glob(istop),
+     &                            this_block%j_glob(jstop) 
+            call abort_ice ('ice remap_transport: negative area')
+         endif
 
     !-------------------------------------------------------------------
     ! Update the ice area and tracers.
@@ -1240,16 +1268,22 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
          do n = 1, ncat
             call update_fields(nx_block,             ny_block,
      &                         nghost,               tarear(:,:,iblk),
+     &                         l_stop,
+     &                         istop,                jstop,
      &                         aiflxe(:,:,  n),      aiflxn(:,:,  n),
      &                         aim   (:,:,  n,iblk), 
      &                         atflxe(:,:,:,n),      atflxn(:,:,:,n), 
-     &                         trm   (:,:,:,n,iblk),
-     &                         abort_flag)
+     &                         trm   (:,:,:,n,iblk))
 
-            if (abort_flag) then
-               write (nu_diag,*) 'my_task, iblk, n =', my_task, iblk, n
-               write (nu_diag,*) 'istep1 =', istep1
-               call abort_ice ('remap transport: negative area')
+            if (l_stop) then
+               write (nu_diag,*) 'istep1, my_task, iblk, cat =',
+     &                            istep1, my_task, iblk, n
+               write (nu_diag,*) 'Global block:', this_block%block_id
+               if (istop > 0 .and. jstop > 0)
+     &              write(nu_diag,*) 'Global i and j:',
+     &                               this_block%i_glob(istop),
+     &                               this_block%j_glob(jstop) 
+               call abort_ice ('ice remap_transport: negative area')
             endif
          enddo                  ! n
 
@@ -1300,23 +1334,26 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
 
 
          if (my_task == master_task) then
-            call global_conservation (asum_init(0), asum_final(0),
-     &                                abort_flag = abort_flag)
+            call global_conservation (l_stop,
+     &                                asum_init(0), asum_final(0))
 
-            if (abort_flag) then
-               write (nu_diag,*) 'istep1, cat =', istep1, 0
-               call abort_ice ('remap transport: conservation error')
+            if (l_stop) then
+               write (nu_diag,*) 'istep1, my_task, iblk =',
+     &                            istep1, my_task, iblk
+               call abort_ice('ice remap transport: conservation error')
             endif
 
             do n = 1, ncat               
                call global_conservation
-     &                               (asum_init(n),    asum_final(n),
-     &                                atsum_init(:,n), atsum_final(:,n),
-     &                                abort_flag)
+     &                               (l_stop,
+     &                                asum_init(n),    asum_final(n),
+     &                                atsum_init(:,n), atsum_final(:,n))
 
-               if (abort_flag) then
-                  write (nu_diag,*) 'istep1, cat =', istep1, n
-                  call abort_ice ('remap transport: conservation error')
+               if (l_stop) then
+                  write (nu_diag,*) 'istep1, my_task, iblk, cat =',
+     &                               istep1, my_task, iblk, n
+                  call abort_ice
+     &                 ('ice remap transport: conservation error')
                endif
             enddo               ! n
 
@@ -1337,13 +1374,14 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &                          iblk,
      &                          tmin(:,:,:,n,iblk), tmax(:,:,:,n,iblk),
      &                          aim (:,:,  n,iblk), trm (:,:,:,n,iblk),
-     &                          abort_flag)
+     &                          l_stop,
+     &                          istop,              jstop)
             enddo               ! n
 
-            if (abort_flag) then
+            if (l_stop) then
                write (nu_diag,*) 'istep1, my_task, iblk, cat =',
      &                            istep1, my_task, iblk, n
-               call abort_ice('remap transport: monotonicity error')
+               call abort_ice('ice remap transport: monotonicity error')
             endif
 
          enddo                  ! iblk
@@ -1389,7 +1427,8 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &                             dxhy,       dyhx,
      &                             mne,        mnw,  
      &                             mse,        msw,
-     &                             l_dp_midpt, abort_flag)
+     &                             l_dp_midpt, l_stop,
+     &                             istop,      jstop)
 !
 ! !DESCRIPTION:
 !
@@ -1435,9 +1474,12 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &   l_dp_midpt          ! if true, find departure points using
                              ! corrected midpoint velocity
 
-      logical (kind=log_kind), intent(out), optional ::
-     &  abort_flag        ! flag for departure point out of bounds
-                          ! of neighboring cells
+      logical (kind=int_kind), intent(inout) ::
+     &   l_stop       ! if true, abort on return
+
+      integer (kind=int_kind), intent(inout) ::
+     &   istop, jstop     ! indices of grid cell where model aborts 
+
 !
 !EOP
 !
@@ -1467,6 +1509,10 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
       integer (kind=int_kind), dimension (nx_block,ny_block) ::
      &   hindi, hindj     ! horizontal indices array
 
+    !-------------------------------------------------------------------
+    ! Initialize
+    !-------------------------------------------------------------------
+
       ilo = 1 + nghost
       ihi = nx_block - nghost
       jlo = 1 + nghost
@@ -1492,40 +1538,31 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
     ! Check for values out of bounds (more than one grid cell away).
     !-------------------------------------------------------------------
 
-      if (present(abort_flag)) then
 
-         abort_flag = .false.
+      do j = jlo, jhi
+      do i = ilo, ihi
 
-         do j = jlo, jhi
-         do i = ilo, ihi
+         if ((dpx(i,j) < -HTN(i,j)) .or. 
+     &       (dpx(i,j) >  HTN(i+1,j)) .or.
+     &       (dpy(i,j) < -HTE(i,j)) .or.
+     &       (dpy(i,j) >  HTE(i,j+1))) then
+            l_stop = .true.
+            istop = i
+            jstop = j
+         endif
+      enddo
+      enddo
 
-            if ((dpx(i,j) < -HTN(i,j)) .or. 
-     &          (dpx(i,j) >  HTN(i+1,j)) .or.
-     &          (dpy(i,j) < -HTE(i,j)) .or.
-     &          (dpy(i,j) >  HTE(i,j+1))) then
-               abort_flag = .true.
-            endif
-         enddo
-         enddo
-
-         if (abort_flag) then
-            do j = jlo, jhi
-            do i = ilo, ihi
-               if ((dpx(i,j) < -HTN(i,j)) .or. 
-     &             (dpx(i,j) >  HTN(i+1,j)) .or.
-     &             (dpy(i,j) < -HTE(i,j)) .or.
-     &             (dpy(i,j) >  HTE(i,j+1))) then
-                  write (nu_diag,*) ' '
-                  write (nu_diag,*)
-     &                'Warning: Departure points out of bounds in remap'
-                  write (nu_diag,*) 'i, j =', i, j
-                  write (nu_diag,*) 'dpx, dpy =', dpx(i,j), dpy(i,j)
-               endif
-            enddo
-            enddo
-         endif                  !  abort_flag
-
-      endif                     ! present(abort_flag)
+      if (l_stop) then
+         i = istop
+         j = jstop
+         write (nu_diag,*) ' '
+         write (nu_diag,*)
+     &              'Warning: Departure points out of bounds in remap'
+         write (nu_diag,*) 'i, j =', i, j
+         write (nu_diag,*) 'dpx, dpy =', dpx(i,j), dpy(i,j)
+         return
+      endif
 
       if (l_dp_midpt) then ! find dep pts using corrected midpt velocity 
 
@@ -4202,9 +4239,9 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
 !
       subroutine update_fields (nx_block, ny_block,
      &                          nghost,   tarear,
+     &                          l_stop,   istop,    jstop,
      &                          aiflxe,   aiflxn,   aim,
-     &                          atflxe,   atflxn,   trm,
-     &                          abort_flag)
+     &                          atflxe,   atflxn,   trm)
 !
 ! !DESCRIPTION:
 !
@@ -4239,8 +4276,12 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &   intent(inout), optional ::
      &   trm              ! mean tracers
 
-      logical (kind=log_kind), intent(out), optional ::
-     &   abort_flag       ! if true, abort on return
+      logical (kind=int_kind), intent(inout) ::
+     &   l_stop       ! if true, abort on return
+
+      integer (kind=int_kind), intent(inout) ::
+     &   istop, jstop     ! indices of grid cell where model aborts 
+
 !
 !EOP
 !
@@ -4262,6 +4303,10 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
       integer (kind=int_kind) ::
      &   icells           ! number of cells with aim > 0.
      &,  ij               ! combined i/j horizontal index
+
+    !-------------------------------------------------------------------
+    ! Initialize
+    !-------------------------------------------------------------------
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
@@ -4306,8 +4351,6 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
     ! Update ice area
     !-------------------------------------------------------------------
 
-      if (present(abort_flag)) abort_flag = .false.
-
       do j = jlo, jhi
       do i = ilo, ihi
 
@@ -4316,7 +4359,9 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
          aim(i,j) = aim(i,j) - w1*tarear(i,j)
 
          if (aim(i,j) < -puny) then    ! abort with negative value
-            if (present(abort_flag)) abort_flag = .true.
+            l_stop = .true.
+            istop = i
+            jstop = j
          elseif (aim(i,j) < c0) then   ! set to zero
             aim(i,j) = c0
          endif
@@ -4324,21 +4369,18 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
       enddo
       enddo
 
-      if (abort_flag) then
-         do j = jlo, jhi
-         do i = ilo, ihi
-            if (aim(i,j) < -puny) then
-               w1 = aiflxe(i,j) - aiflxe(i-1,j)
-     &            + aiflxn(i,j) - aiflxn(i,j-1)
-               write (nu_diag,*) ' '
-               write (nu_diag,*) 'New area < 0, i, j =', i, j
-               write (nu_diag,*) 'Old area =', aim(i,j) + w1*tarear(i,j)
-               write (nu_diag,*) 'New area =', aim(i,j)
-               write (nu_diag,*) 'Net transport =', -w1*tarear(i,j)
-            endif
-         enddo                  ! i
-         enddo                  ! j
-      endif                     ! aim_negative
+      if (l_stop) then
+         i = istop
+         j = jstop
+         w1 = aiflxe(i,j) - aiflxe(i-1,j)
+     &      + aiflxn(i,j) - aiflxn(i,j-1)
+         write (nu_diag,*) ' '
+         write (nu_diag,*) 'New area < 0, i, j =', i, j
+         write (nu_diag,*) 'Old area =', aim(i,j) + w1*tarear(i,j)
+         write (nu_diag,*) 'New area =', aim(i,j)
+         write (nu_diag,*) 'Net transport =', -w1*tarear(i,j)
+         return
+      endif
 
     !-------------------------------------------------------------------
     ! Update tracers
@@ -4603,9 +4645,9 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
 !
 ! !INTERFACE:
 !
-      subroutine global_conservation (asum_init,  asum_final,
-     &                                atsum_init, atsum_final,
-     &                                abort_flag)
+      subroutine global_conservation (l_stop,
+     &                                asum_init,  asum_final,
+     &                                atsum_init, atsum_final)
 !
 ! !DESCRIPTION:
 !
@@ -4628,8 +4670,8 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &   atsum_init    ! initial global ice area*tracer
      &,  atsum_final   ! final global ice area*tracer
 
-      logical (kind=log_kind), intent(out), optional ::
-     &   abort_flag    ! if true, abort on return
+      logical (kind=log_kind), intent(inout) ::
+     &   l_stop    ! if true, abort on return
 !
 !EOP
 !
@@ -4639,19 +4681,17 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
       real (kind=dbl_kind) ::
      &     diff          ! difference between initial and final values
 
-
-      if (present(abort_flag)) abort_flag = .false.
-
       if (asum_init > puny) then
          diff = asum_final - asum_init
          if (abs(diff/asum_init) > puny) then
-            if (present(abort_flag)) abort_flag = .true.
+            l_stop = .true.
             write (nu_diag,*)
             write (nu_diag,*) 'Ice area conserv error'
             write (nu_diag,*) 'Initial global area =', asum_init
             write (nu_diag,*) 'Final global area =', asum_final
             write (nu_diag,*) 'Fractional error =', abs(diff)/asum_init
             write (nu_diag,*) 'asum_final-asum_init =', diff
+            return
          endif
       endif
 
@@ -4660,7 +4700,7 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
          if (abs(atsum_init(nt)) > puny) then
             diff = atsum_final(nt) - atsum_init(nt)
             if (abs(diff/atsum_init(nt)) > puny) then
-               if (present(abort_flag)) abort_flag = .true.
+               l_stop = .true.
                write (nu_diag,*)
                write (nu_diag,*) 'area*tracer conserv error'
                write (nu_diag,*) 'tracer index =', nt
@@ -4671,6 +4711,7 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
                write (nu_diag,*) 'Fractional error =',
      &                            abs(diff)/atsum_init(nt)
                write (nu_diag,*) 'atsum_final-atsum_init =', diff
+               return
             endif
          endif
        enddo
@@ -4890,7 +4931,8 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &                               iblk,
      &                               tmin,     tmax,
      &                               aim,      trm,
-     &                               abort_flag)
+     &                               l_stop,
+     &                               istop,    jstop)
 !
 ! !DESCRIPTION:
 !
@@ -4923,8 +4965,11 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &     tmin           ! local min tracer
      &,    tmax           ! local max tracer
 
-      logical (kind=log_kind), intent(out), optional ::
-     &   abort_flag    ! if true, abort on return
+      logical (kind=log_kind), intent(inout) ::
+     &   l_stop    ! if true, abort on return
+
+      integer (kind=int_kind), intent(inout) ::
+     &   istop, jstop     ! indices of grid cell where model aborts 
 !
 !EOP
 !
@@ -4939,12 +4984,14 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
       logical (kind=log_kind), dimension (nx_block, ny_block) ::
      &     l_check        ! if true, check monotonicity
 
+    !-------------------------------------------------------------------
+    ! Initialize
+    !-------------------------------------------------------------------
+
       ilo = 1 + nghost
       ihi = nx_block - nghost
       jlo = 1 + nghost
       jhi = ny_block - nghost
-
-      if (present(abort_flag)) abort_flag = .false.
 
       do nt = 1, ntrace
 
@@ -5005,21 +5052,27 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
                w1 = max(c1, abs(tmin(i,j,nt)))
                w2 = max(c1, abs(tmax(i,j,nt)))
                if (trm(i,j,nt) < tmin(i,j,nt)-w1*puny) then
-                  if (present(abort_flag)) abort_flag = .true.
+                  l_stop = .true.
+                  istop = i
+                  jstop = j
                   write (nu_diag,*) ' '
                   write (nu_diag,*) 'new tracer < tmin'
                   write (nu_diag,*) 'i, j, nt =', i, j, nt
                   write (nu_diag,*) 'new tracer =', trm (i,j,nt)
                   write (nu_diag,*) 'tmin ='      , tmin(i,j,nt)
                   write (nu_diag,*) 'ice area ='  , aim(i,j)
+                  return
                elseif (trm(i,j,nt) > tmax(i,j,nt)+w2*puny) then
-                  if (present(abort_flag)) abort_flag = .true.
+                  l_stop = .true.
+                  istop = i
+                  jstop = j
                   write (nu_diag,*) ' '
                   write (nu_diag,*) 'new tracer > tmax'
                   write (nu_diag,*) 'i, j, nt =', i, j, nt
                   write (nu_diag,*) 'new tracer =', trm (i,j,nt)
                   write (nu_diag,*) 'tmax ='      , tmax(i,j,nt)
                   write (nu_diag,*) 'ice area ='  , aim(i,j)
+                  return
                endif
             endif
 

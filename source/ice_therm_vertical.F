@@ -99,7 +99,8 @@
      &                            meltt,       meltb,
      &                            congel,      snoice,
      &                            mlt_onset,   frz_onset,
-     &                            yday,        abort_flag)
+     &                            yday,        l_stop,
+     &                            istop,       jstop)
 
 ! 
 ! !USES:
@@ -179,7 +180,8 @@
      &,  fhocnn      ! net heat flux to ocean (W/m^2) 
 
       ! diagnostic fields
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out)::
+      real (kind=dbl_kind), dimension (nx_block,ny_block),
+     &   intent(inout) ::
      &   meltt     ! top ice melt             (m/step-->cm/day) 
      &,  meltb     ! basal ice melt           (m/step-->cm/day) 
      &,  congel    ! basal ice growth         (m/step-->cm/day) 
@@ -191,9 +193,10 @@
      &   yday      ! day of year
 
       logical (kind=log_kind), intent(out) ::
-     &   abort_flag  ! if true, abort on return
+     &   l_stop          ! if true, print diagnostics and abort on return
 
-
+      integer (kind=int_kind), intent(out) ::
+     &   istop, jstop    ! indices of grid cell where code aborts
 !
 !EOP
 !
@@ -237,18 +240,14 @@
      &,  einit           ! initial energy of melting (J m-2)
      &,  efinal          ! final energy of melting (J m-2)
 
-      logical (kind=log_kind) ::
-     &   l_stop          ! if true, print diagnostics and abort model
-
-      integer (kind=int_kind) ::
-     &   istop, jstop    ! i and j indices of cell where model fails
-
 
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
 
       l_stop = .false.
+      istop = 0
+      jstop = 0
             
       fsensn (:,:) = c0
       flatn  (:,:) = c0
@@ -264,29 +263,23 @@
       ! Compute variables needed for vertical thermo calculation
       !-----------------------------------------------------------------
 
-      call init_vertical_profile (nx_block,  ny_block,
-     &                            my_task,   istep1,
+      call init_vertical_profile (nx_block,     ny_block,
+     &                            my_task,      istep1,
      &                            icells, 
-     &                            indxi,     indxj,
-     &                            aicen,
-     &                            vicen,     vsnon,
-     &                            Tsfcn,
-     &                            eicen,     esnon,
-     &                            hin,       hilyr,
-     &                            hsn,       hslyr,
-     &                            qin,       Tin,
-     &                            qsn,       Tsn,
-     &                            Tsf,       einit,
+     &                            indxi,        indxj,
+     &                            aicen(:,:),
+     &                            vicen(:,:),   vsnon(:,:),
+     &                            Tsfcn(:,:),
+     &                            eicen(:,:,:), esnon(:,:,:),
+     &                            hin,          hilyr,
+     &                            hsn,          hslyr,
+     &                            qin,          Tin,
+     &                            qsn,          Tsn,
+     &                            Tsf,          einit,
      &                            l_stop,
-     &                            istop,     jstop)
+     &                            istop,        jstop)
 
-      if (l_stop) then
-         i = istop
-         j = jstop
-!!            stoplabel = 'ice state at stop'
-!!            call print_state (stoplabel,i,j)
-         call abort_ice('ice thermo: bad temperature')
-      endif
+      if (l_stop) return
 
       ! Save initial ice and snow thickness (for fresh and fsalt)
       worka(:,:) = hin(:,:)
@@ -304,8 +297,8 @@
      &                          rhoa,          flw,
      &                          potT,          Qa,
      &                          shcoef,        lhcoef,
-     &                          fswsfc,      fswint,
-     &                          fswthrun,    Iswabs,
+     &                          fswsfc,        fswint,
+     &                          fswthrun,      Iswabs,
      &                          hilyr,         hslyr,
      &                          qin,           Tin,
      &                          qsn,           Tsn,
@@ -317,13 +310,8 @@
      &                          einit,         l_stop,
      &                          istop,         jstop)
 
-      if (l_stop) then
-         i = istop
-         j = jstop
-!!            stoplabel = 'ice state at stop'
-!!            call print_state (stoplabel,i,j)
-         call abort_ice('ice thermo: convergence error')
-      endif
+      if (l_stop) return
+
 
       !-----------------------------------------------------------------
       ! Compute growth and/or melting at the top and bottom surfaces.
@@ -364,14 +352,7 @@
      &                                l_stop,
      &                                istop,    jstop)
 
-      if (l_stop) then
-         i = istop
-         j = jstop
-!            stoplabel = 'ice state at stop'
-!            call print_state (stoplabel,i,j)
-         call abort_ice('ice thermo: energy conservation error')
-      endif
-
+      if (l_stop) return
 
       !-----------------------------------------------------------------
       ! Compute fluxes of water and salt from ice to ocean.
@@ -398,16 +379,16 @@
       !   Tsfcn, eicen, esnon).
       !-----------------------------------------------------------------
 
-      call update_state_vthermo(nx_block, ny_block,
-     &                             icells, 
-     &                             indxi,     indxj,
-     &                             Tbot,      Tsf,         
-     &                             hin,       hsn,
-     &                             qin,       qsn,
-     &                             aicen,  
-     &                             vicen,     vsnon, 
-     &                             Tsfcn,
-     &                             eicen,     esnon)
+      call update_state_vthermo(nx_block,     ny_block,
+     &                          icells, 
+     &                          indxi,        indxj,
+     &                          Tbot,         Tsf,         
+     &                          hin,          hsn,
+     &                          qin,          qsn,
+     &                          aicen(:,:),  
+     &                          vicen(:,:),   vsnon(:,:), 
+     &                          Tsfcn(:,:),
+     &                          eicen(:,:,:), esnon(:,:,:))
 
 
       end subroutine thermo_vertical
@@ -742,8 +723,8 @@
      &                                 hsn,      hslyr,
      &                                 qin,      Tin,
      &                                 qsn,      Tsn,
-     &                                 Tsf,
-     &                                 einit,    l_stop,
+     &                                 Tsf,      einit,
+     &                                 l_stop,
      &                                 istop,    jstop)
 !
 ! !USES:
@@ -795,7 +776,7 @@
       logical (kind=log_kind), intent(inout) ::
      &   l_stop          ! if true, print diagnostics and abort model
 
-      integer (kind=int_kind), intent(out) ::
+      integer (kind=int_kind), intent(inout) ::
      &   istop, jstop    ! i and j indices of cell where model fails
 !
 !EOP
@@ -1219,7 +1200,7 @@
       logical (kind=log_kind), intent(inout) ::
      &   l_stop          ! if true, print diagnostics and abort model
 
-      integer (kind=int_kind), intent(out) ::
+      integer (kind=int_kind), intent(inout) ::
      &   istop, jstop    ! i and j indices of cell where model fails
 !
 !EOP
@@ -1905,20 +1886,22 @@
       enddo                     ! ij
 
       ! interior snow interfaces
-      do k = 2, nslyr
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
+      if (nslyr > 1) then
+         do k = 2, nslyr
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
 
-            if (l_snow(i,j)) then
-               kh(i,j,k) = c2 * kslyr(i,j,k-1) * kslyr(i,j,k) /
+               if (l_snow(i,j)) then
+                  kh(i,j,k) = c2 * kslyr(i,j,k-1) * kslyr(i,j,k) /
      &                      ((kslyr(i,j,k-1) + kslyr(i,j,k))*hslyr(i,j))
-            else
-               kh(i,j,k) = c0
-            endif
-         enddo                  ! ij
-      enddo                     ! nilyr
-
+               else
+                  kh(i,j,k) = c0
+               endif
+            enddo               ! ij
+         enddo                  ! nilyr
+      endif                     ! endif
+         
       ! interior ice interfaces
       do k = 2, nilyr
          do ij = 1, icells
@@ -3441,7 +3424,7 @@
       logical (kind=log_kind), intent(inout) ::
      &   l_stop          ! if true, print diagnostics and abort model
 
-      integer (kind=int_kind), intent(out) ::
+      integer (kind=int_kind), intent(inout) ::
      &   istop, jstop    ! i and j indices of cell where model fails
 !
 !EOP
@@ -3457,28 +3440,28 @@
       logical (kind=log_kind) ::   ! for vector-friendly error checks
      &   ferr_flag       ! flag for energy error, ferr > ferrmax
 
-      ferr_flag = .false.     ! ferr <= ferrmax, initialization
-
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
-
          einp = (fsurf(i,j) - flatn(i,j) + fswint(i,j) - fhocnn(i,j)
      &         - fsnow(i,j)*Lfresh) * dt
          ferr = abs(efinal(i,j)-einit(i,j)-einp) / dt
-         if (ferr > ferrmax) ferr_flag = .true.
+         if (ferr > ferrmax) then
+            l_stop = .true.
+            istop = i
+            jstop = j
+         endif
       enddo
 
       !----------------------------------------------------------------
       ! If energy is not conserved, print diagnostics and exit.
       !----------------------------------------------------------------
-      if (ferr_flag) then
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
+      if (l_stop) then
+         i = istop
+         j = jstop
 
       !-----------------------------------------------------------------
       ! Note that fsurf - flat = fsw + flw + fsens; i.e., the latent
@@ -3487,27 +3470,21 @@
       ! heat lost by the ice is equal to that gained by the vapor.
       !-----------------------------------------------------------------
 
-            einp = (fsurf(i,j) - flatn(i,j) + fswint(i,j) - fhocnn(i,j)
-     &             -fsnow(i,j)*Lfresh) * dt
-            ferr = abs(efinal(i,j)-einit(i,j)-einp) / dt
+         einp = (fsurf(i,j) - flatn(i,j) + fswint(i,j) - fhocnn(i,j)
+     &          -fsnow(i,j)*Lfresh) * dt
+         ferr = abs(efinal(i,j)-einit(i,j)-einp) / dt
 
-            if (ferr > ferrmax) then
-               write(nu_diag,*) 'Thermo energy conservation error'
-               write(nu_diag,*) 'istep1, my_task, i, j:',
-     &                           istep1, my_task, i, j
-               write(nu_diag,*) 'Flux error (W/m^2) =', ferr
-               write(nu_diag,*) 'Energy error (J) =', ferr*dt
-               write(nu_diag,*) 'Initial energy =', einit(i,j)
-               write(nu_diag,*) 'Final energy =', efinal(i,j)
-               write(nu_diag,*) 'efinal - einit =',
-     &                           efinal(i,j)-einit(i,j)
-               write(nu_diag,*) 'Input energy =', einp
-               l_stop = .true.
-               istop = i
-               jstop = j
-               return
-            endif
-         enddo
+         write(nu_diag,*) 'Thermo energy conservation error'
+         write(nu_diag,*) 'istep1, my_task, i, j:',
+     &                     istep1, my_task, i, j
+         write(nu_diag,*) 'Flux error (W/m^2) =', ferr
+         write(nu_diag,*) 'Energy error (J) =', ferr*dt
+         write(nu_diag,*) 'Initial energy =', einit(i,j)
+         write(nu_diag,*) 'Final energy =', efinal(i,j)
+         write(nu_diag,*) 'efinal - einit =',
+     &                     efinal(i,j)-einit(i,j)
+         write(nu_diag,*) 'Input energy =', einp
+         return
       endif
 
       end subroutine conservation_check_vthermo
@@ -3641,8 +3618,6 @@
       enddo                     ! nslyr
 
       end subroutine update_state_vthermo
-
-
 
 !=======================================================================
 
