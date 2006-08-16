@@ -148,7 +148,7 @@
 
    call broadcast_scalar(nml_error, master_task)
    if (nml_error /= 0) then
-      call abort_ice('ERROR reading domain_nml')
+      call abort_ice('ice: error reading domain_nml')
    endif
 
    call broadcast_scalar(nprocs,            master_task)
@@ -172,17 +172,17 @@
       !***
       !*** domain size zero or negative
       !***
-      call abort_ice('Invalid domain: size < 1') ! no domain
+      call abort_ice('ice: Invalid domain: size < 1') ! no domain
    else if (nprocs /= get_num_procs()) then
       !***
       !*** input nprocs does not match system (eg MPI) request
       !***
-      call abort_ice('Input nprocs not same as system request')
+      call abort_ice('ice: Input nprocs not same as system request')
    else if (nghost < 1) then
       !***
       !*** must have at least 1 layer of ghost cells
       !***
-      call abort_ice('Not enough ghost cells allocated')
+      call abort_ice('ice: Not enough ghost cells allocated')
    endif
 
 !----------------------------------------------------------------------
@@ -371,11 +371,11 @@
    end do
 
    if (nblocks_max > max_blocks) then
-     write(outstring,*) 'no. blocks exceed max: increase max to',&
-                         nblocks_max
+     write(outstring,*) &
+         'ice: no. blocks exceeds max; increase max to', nblocks_max
      call abort_ice(trim(outstring))
    else if (nblocks_max < max_blocks) then
-     write(outstring,*) 'no. blocks too large: decrease max to',&
+     write(outstring,*) 'ice: no. blocks too large; decrease max to',&
                          nblocks_max
      if (my_task == master_task) write(nu_diag,*) trim(outstring)
    endif

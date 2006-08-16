@@ -897,7 +897,7 @@
      &,  stress12_1,stress12_2,stress12_3,stress12_4  ! sigma12
 
       real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(out) ::
+     &   intent(inout) ::
      &   prs_sig      ! replacement pressure, for stress calc
      &,  shear        ! strain rate II component (1/s)
      &,  divu         ! strain rate I component, velocity divergence (1/s)
@@ -941,15 +941,26 @@
      &, ilo,ihi,jlo,jhi     ! beginning and end of physical domain
 
       !-----------------------------------------------------------------
-      ! Identify cells where icetmask = 1
-      ! Note: The icellt mask includes north and east ghost cells
-      !       where stresses are needed.
+      ! Initialize
       !-----------------------------------------------------------------
+
+      rdg_conv (:,:) = c0 
+      rdg_shear(:,:) = c0 
+      divu (:,:) = c0 
+      Delt (:,:) = c0 
+      shear(:,:) = c0 
+      prs_sig(:,:) = c0 
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
       jlo = 1 + nghost
       jhi = ny_block - nghost
+
+      !-----------------------------------------------------------------
+      ! Identify cells where icetmask = 1
+      ! Note: The icellt mask includes north and east ghost cells
+      !       where stresses are needed.
+      !-----------------------------------------------------------------
 
       icellt = 0
       do j = jlo, jhi+1

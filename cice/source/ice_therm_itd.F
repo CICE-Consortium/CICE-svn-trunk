@@ -54,14 +54,14 @@
 ! !INTERFACE:
 !
       subroutine linear_itd (nx_block,    ny_block,
-     &                       nghost,      iblk,
-     &                       trcr_depend,
+     &                       nghost,      trcr_depend,
      &                       aicen_init,  vicen_init,
      &                       aicen,       trcrn,
      &                       vicen,       vsnon,
      &                       eicen,       esnon,
      &                       aice,        aice0,
-     &                       abort_flag,  istep1)
+     &                       l_stop,
+     &                       istop,       jstop)
 
 ! See Lipscomb, W. H.  Remapping the thickness distribution in sea
 !     ice models. 2001, J. Geophys. Res., Vol 106, 13989--14000.
@@ -97,7 +97,6 @@
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
      &,  nghost              ! number of ghost cells
-     &,  iblk                ! block index (diagnostic only)
 
       integer (kind=int_kind), dimension (ntrcr), intent(in) ::
      &   trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
@@ -131,10 +130,10 @@
      &,  aice0     ! concentration of open water
 
       logical (kind=log_kind), intent(out) ::
-     &   abort_flag  ! if true, abort on return
+     &   l_stop    ! if true, abort on return
 
-      integer (kind=int_kind), intent(in), optional ::
-     &   istep1    ! step number (diagnostic only)
+      integer (kind=int_kind), intent(out) ::
+     &   istop, jstop    ! indices of grid cell where model aborts 
 !
 !EOP
 !
@@ -208,7 +207,9 @@
       ! Initialize
       !-----------------------------------------------------------------
 
-      abort_flag = .false.
+      l_stop = .false.
+      istop = 0
+      jstop = 0
 
       hin_max(ncat) = 999.9_dbl_kind ! arbitrary big number
       do n = 0, ncat
@@ -271,8 +272,12 @@
       ! Compute fractional ice area in each grid cell.
       !-----------------------------------------------------------------
       call aggregate_area (nx_block, ny_block,
-     &                     iblk,     aicen,
-     &                     aice,     aice0)
+     &                     aicen,
+     &                     aice,     aice0,
+     &                     l_stop,
+     &                     istop,    jstop)
+
+      if (l_stop) return
 
       !-----------------------------------------------------------------
       ! Identify grid cells with ice and initialize remapping flag.
@@ -378,7 +383,6 @@
 
                if (aicen(i,j,n) > puny .and.
      &             hicen(i,j,n) >= hbnew(i,j,n)) then
-                  if (present(istep1)) write(nu_diag,*)'istep1 =',istep1
                   write(nu_diag,*) my_task,':',i,j,
      &                 'ITD: hicen(n) > hbnew(n)'
                   write(nu_diag,*) 'cat ',n
@@ -388,7 +392,6 @@
      &                 'hbnew(n) =', hbnew(i,j,n)
                elseif (aicen(i,j,n+1) > puny .and.
      &                 hicen(i,j,n+1) <= hbnew(i,j,n)) then
-                  if (present(istep1)) write(nu_diag,*)'istep1 =',istep1
                   write(nu_diag,*) my_task,':',i,j,
      &                 'ITD: hicen(n+1) < hbnew(n)'
                   write(nu_diag,*) 'cat ',n
@@ -399,7 +402,6 @@
                endif
 
                if (hbnew(i,j,n) > hin_max(n+1)) then
-                  if (present(istep1)) write(nu_diag,*)'istep1 =',istep1
                   write(nu_diag,*) my_task,':',i,j,
      &                 'ITD hbnew(n) > hin_max(n+1)'
                   write(nu_diag,*) 'cat ',n
@@ -410,7 +412,6 @@
                endif
 
                if (hbnew(i,j,n) < hin_max(n-1)) then
-                  if (present(istep1)) write(nu_diag,*)'istep1 =',istep1
                   write(nu_diag,*) my_task,':',i,j,
      &                 'ITD: hbnew(n) < hin_max(n-1)'
                   write(nu_diag,*) 'cat ',n
@@ -628,7 +629,11 @@
      &                vicen,    vsnon,
      &                eicen,    esnon,
      &                hicen,    donor,
-     &                daice,    dvice)
+     &                daice,    dvice,
+     &                l_stop,
+     &                istop,    jstop)
+
+      if (l_stop) return
 
       !-----------------------------------------------------------------
       ! Make sure hice(i,j,1) >= minimum ice thickness hi_min.
@@ -651,8 +656,12 @@
       ! Update fractional ice area in each grid cell.
       !-----------------------------------------------------------------
       call aggregate_area (nx_block, ny_block,
-     &                     iblk,     aicen,
-     &                     aice,     aice0)
+     &                     aicen,
+     &                     aice,     aice0,
+     &                     l_stop,
+     &                     istop,    jstop)
+
+      if (l_stop) return
 
       !-----------------------------------------------------------------
       ! Check volume and energy conservation.
@@ -667,7 +676,10 @@
          call column_conservation_check (nx_block,  ny_block,
      &                                   nghost,    fieldid,
      &                                   vice_init, vice_final,
-     &                                   puny,      abort_flag)
+     &                                   puny,      l_stop,
+     &                                   istop,     jstop)
+         if (l_stop) return
+         
 
          call column_sum (nx_block, ny_block,
      &                    nghost,   ncat,
@@ -676,7 +688,9 @@
          call column_conservation_check (nx_block,  ny_block,
      &                                   nghost,    fieldid,
      &                                   vsno_init, vsno_final,
-     &                                   puny,      abort_flag)
+     &                                   puny,      l_stop,
+     &                                   istop,     jstop)
+         if (l_stop) return
 
          call column_sum (nx_block, ny_block,
      &                    nghost,   ntilyr,
@@ -686,7 +700,9 @@
      &                                   nghost,     fieldid,
      &                                   eice_init,  eice_final,
      &                                   puny*Lfresh*rhoi,
-     &                                   abort_flag)
+     &                                   l_stop,
+     &                                   istop,     jstop)
+         if (l_stop) return
 
          call column_sum (nx_block, ny_block,
      &                    nghost,   ntslyr,
@@ -696,7 +712,9 @@
      &                                   nghost,     fieldid,
      &                                   esno_init,  esno_final,
      &                                   puny*Lfresh*rhos,
-     &                                   abort_flag)
+     &                                   l_stop,
+     &                                   istop,     jstop)
+         if (l_stop) return
 
       endif                     ! conservation check
 
@@ -844,14 +862,15 @@
 ! !INTERFACE:
 !
       subroutine add_new_ice (nx_block,  ny_block,
-     &                        nghost,    iblk,
+     &                        nghost,
      &                        tmask,     dt,
      &                        aicen,     trcrn,
      &                        vicen,     eicen,
      &                        aice0,     aice,
      &                        frzmlt,    frazil,
-     &                        abort_flag,
-     &                        frz_onset, yday)
+     &                        frz_onset, yday,
+     &                        l_stop,
+     &                        istop,     jstop)
 !
 ! !USES:
 !
@@ -863,7 +882,6 @@
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
      &,  nghost              ! number of ghost cells
-     &,  iblk             ! block index (diagnostic only)
 
       logical (kind=log_kind), dimension (nx_block,ny_block),
      &    intent(in) ::
@@ -895,15 +913,18 @@
      &   aice0     ! concentration of open water
      &,  frazil    ! frazil ice growth        (m/step-->cm/day)
 
-      logical (kind=log_kind), intent(out) ::
-     &   abort_flag  ! if true, abort on return
-
       real (kind=dbl_kind), dimension (nx_block,ny_block),
      &   intent(inout), optional ::
      &   frz_onset ! day of year that freezing begins (congel or frazil)
 
       real (kind=dbl_kind), intent(in), optional ::
      &   yday      ! day of year
+
+      logical (kind=log_kind), intent(out) ::
+     &   l_stop    ! if true, abort on return
+
+      integer (kind=int_kind), intent(out) ::
+     &   istop, jstop    ! indices of grid cell where model aborts
 !
 !EOP
 !
@@ -946,7 +967,9 @@
       character (len=char_len) ::
      &   fieldid           ! field identifier
 
-      abort_flag = .false.
+      l_stop = .false.
+      istop = 0
+      jstop = 0
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
@@ -1174,7 +1197,9 @@
       call column_conservation_check (nx_block,  ny_block,
      &                                nghost,    fieldid,
      &                                vice_init, vice_final,
-     &                                puny,      abort_flag)
+     &                                puny,      l_stop,
+     &                                istop,     jstop)
+      if (l_stop) return
 
       end subroutine add_new_ice
 

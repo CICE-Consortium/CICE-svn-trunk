@@ -39,7 +39,6 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       use ice_domain_size
       use ice_constants
       use ice_fileunits
-      use ice_exit
 !
 !EOP
 !
@@ -107,6 +106,8 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !USES:
 !
+      use ice_exit
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
@@ -125,7 +126,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       if (ncat == 1 .and. kitd == 1) then
          write (nu_diag,*) 'Remapping the ITD is not allowed for ncat=1'
          write (nu_diag,*) 'Use the delta function ITD option instead'
-         call abort_ice ('(init_itd) Linear remapping not allowed')
+         call abort_ice ('ice: init_itd: Linear remapping not allowed')
       endif
 
       rncat = real(ncat, kind=dbl_kind)
@@ -428,8 +429,10 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 ! !INTERFACE:
 !
       subroutine aggregate_area (nx_block, ny_block,
-     &                           iblk,     aicen, 
-     &                           aice,     aice0)
+     &                           aicen, 
+     &                           aice,     aice0,
+     &                           l_stop,
+     &                           istop,    jstop)
 !
 ! !DESCRIPTION:
 !
@@ -447,7 +450,6 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
-     &,  iblk                ! block index (diagnostic only)
 
       real (kind=dbl_kind), dimension (:,:,:), intent(in) ::
      &   aicen     ! concentration of ice
@@ -455,17 +457,25 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       real (kind=dbl_kind), dimension (:,:), intent(inout) ::
      &   aice      ! concentration of ice
      &,  aice0     ! concentration of open water
+
+      logical (kind=log_kind), intent(out) ::
+     &   l_stop    ! if true, abort on return
+
+      integer (kind=int_kind), intent(out) ::
+     &   istop, jstop    ! indices of grid cell where model aborts 
 !
 !EOP
 !
       integer (kind=int_kind) :: i, j, n
 
-      logical (kind=log_kind) ::
-     &   outbound          ! = .true. if aggregate ice area out of bounds
-
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
+
+      l_stop = .false.
+      istop = 0
+      jstop = 0
+
       aice(:,:) = c0
 
       !-----------------------------------------------------------------
@@ -479,14 +489,14 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
          enddo                  ! j
       enddo                     ! n
 
-      outbound = .false.
-
       do j = 1, ny_block
       do i = 1, nx_block
 
          ! Bug check
          if (aice(i,j) > c1+puny .or. aice(i,j) < -puny) then
-            outbound = .true.
+            l_stop = .true.
+            istop = i
+            jstop = j
          endif
 
          ! open water fraction
@@ -495,23 +505,17 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       enddo                     ! i
       enddo                     ! j
 
-      if ( outbound ) then      ! area out of bounds
-        do j = 1, ny_block
-        do i = 1, nx_block
-
-         if (aice(i,j) > c1+puny .or.
-     &       aice(i,j) < -puny) then
-            write(nu_diag,*) ' '
-            write(nu_diag,*) 'aggregate ice area out of bounds'
-            write(nu_diag,*) 'my_task, i, j, iblk, aice:',
-     &                        my_task, i, j, iblk, aice(i,j)
-!!            write(nu_diag,*) 'aicen =', aicen(i,j,:)
-            call abort_ice('ice_itd: aggregate_area')
-         endif
-
-        enddo                   ! i
-        enddo                   ! j
-      endif                     ! outbound
+      if (l_stop) then      ! area out of bounds
+         i = istop
+         j = jstop
+         write(nu_diag,*) ' '
+         write(nu_diag,*) 'aggregate ice area out of bounds'
+         write(nu_diag,*) 'my_task, i, j, aice:',
+     &                     my_task, i, j, aice(i,j)
+         do n = 1, ncat
+            write(nu_diag,*) 'n, aicen:', n, aicen(i,j,n)
+         enddo
+      endif                     ! l_stop
 
       end subroutine aggregate_area
 
@@ -527,7 +531,8 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &                  aicen,    trcrn,
      &                  vicen,    vsnon,
      &                  eicen,    esnon,
-     &                  hicen)
+     &                  hicen,    l_stop,
+     &                  istop,    jstop)
 !
 ! !DESCRIPTION:
 !
@@ -566,6 +571,12 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr),
      &   intent(inout) ::
      &   esnon     ! energy of melting for each snow layer (J/m^2)
+
+      logical (kind=log_kind), intent(out) ::
+     &   l_stop    ! if true, abort on return
+
+      integer (kind=int_kind), intent(out) ::
+     &   istop, jstop    ! indices of grid cell where model aborts
 !
 !EOP
 !
@@ -584,10 +595,19 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &   daice              ! ice area transferred
      &,  dvice              ! ice volume transferred
 
+      !-----------------------------------------------------------------
+      ! Initialize
+      !-----------------------------------------------------------------
+
+      l_stop = .false.
+      istop = 0
+      jstop = 0
+
       ilo = 1 + nghost
       ihi = nx_block - nghost
       jlo = 1 + nghost
       jhi = ny_block - nghost
+
 
       !-----------------------------------------------------------------
       ! make sure thickness of cat 1 is at least hin_max(0)
@@ -649,7 +669,11 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &                      vicen,    vsnon,
      &                      eicen,    esnon,
      &                      hicen,    donor,
-     &                      daice,    dvice)
+     &                      daice,    dvice,
+     &                      l_stop,
+     &                      istop,    jstop)
+
+            if (l_stop) return
 
       !-----------------------------------------------------------------
       ! reset shift parameters
@@ -696,7 +720,11 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &                      vicen,    vsnon,
      &                      eicen,    esnon,
      &                      hicen,    donor,
-     &                      daice,    dvice)
+     &                      daice,    dvice,
+     &                      l_stop,
+     &                      istop,    jstop)
+
+            if (l_stop) return
 
       !-----------------------------------------------------------------
       ! reset shift parameters
@@ -709,7 +737,6 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
          endif                  ! shiftflag
 
       enddo                     ! n
-
 
       end subroutine rebin
 
@@ -822,7 +849,9 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &                      vicen,    vsnon,
      &                      eicen,    esnon,
      &                      hicen,    donor,
-     &                      daice,    dvice)
+     &                      daice,    dvice,
+     &                      l_stop,
+     &                      istop,    jstop)
 !
 ! !DESCRIPTION:
 !
@@ -875,6 +904,12 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &     intent(inout) ::
      &   daice             ! ice area transferred across boundary
      &,  dvice             ! ice volume transferred across boundary
+
+      logical (kind=log_kind), intent(out) ::
+     &   l_stop    ! if true, abort on return
+
+      integer (kind=int_kind), intent(out) ::
+     &   istop, jstop    ! indices of grid cell where model aborts
 !
 !EOP
 !
@@ -909,6 +944,14 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &, dvice_negative       ! true if dvice < -puny
      &, daice_greater_aicen  ! true if daice > aicen
      &, dvice_greater_vicen  ! true if dvice > vicen
+
+      !-----------------------------------------------------------------
+      ! Initialize
+      !-----------------------------------------------------------------
+
+      l_stop = .false.
+      istop = 0
+      jstop = 0
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
@@ -998,16 +1041,19 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
                if (donor(i,j,n) > 0 .and. 
      &             daice(i,j,n) <= -puny*aicen(i,j,nd)) then
                   write(nu_diag,*) ' '
-                  write(nu_diag,*) 'ITD negative daice'
+                  write(nu_diag,*) 'shift_ice: negative daice'
                   write(nu_diag,*) 'i, j:', i, j
                   write(nu_diag,*) 'boundary, donor cat:', n, nd
                   write(nu_diag,*) 'daice =', daice(i,j,n)
                   write(nu_diag,*) 'dvice =', dvice(i,j,n)
-                  call abort_ice ('ITD negative daice')
+                  l_stop = .true.
+                  istop = i
+                  jstop = j
                endif
             enddo
             enddo
          endif
+         if (l_stop) return
 
          if (dvice_negative) then
             do j = jlo,jhi
@@ -1015,16 +1061,19 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
                if (donor(i,j,n) > 0 .and. 
      &             dvice(i,j,n) <= -puny*vicen(i,j,nd)) then
                   write(nu_diag,*) ' '
-                  write(nu_diag,*) 'ITD negative dvice'
+                  write(nu_diag,*) 'shift_ice: negative dvice'
                   write(nu_diag,*) 'i, j:', i, j
                   write(nu_diag,*) 'boundary, donor cat:', n, nd
                   write(nu_diag,*) 'daice =', daice(i,j,n)
                   write(nu_diag,*) 'dvice =', dvice(i,j,n)
-                  call abort_ice ('ITD negative dvice')
+                  l_stop = .true.
+                  istop = i
+                  jstop = j
                endif
             enddo
             enddo
          endif
+         if (l_stop) return
 
          if (daice_greater_aicen) then
             do j = jlo,jhi
@@ -1033,17 +1082,20 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
                   nd = donor(i,j,n)
                   if (daice(i,j,n) >= aicen(i,j,nd)*(c1+puny)) then
                      write(nu_diag,*) ' '
-                     write(nu_diag,*) 'ITD daice > aicen'
+                     write(nu_diag,*) 'shift_ice: daice > aicen'
                      write(nu_diag,*) 'i, j:', i, j
                      write(nu_diag,*) 'boundary, donor cat:', n, nd
                      write(nu_diag,*) 'daice =', daice(i,j,n)
                      write(nu_diag,*) 'aicen =', aicen(i,j,nd)
-                     call abort_ice ('ITD daice > aicen')
+                     l_stop = .true.
+                     istop = i
+                     jstop = j
                   endif
                endif
             enddo
             enddo
          endif
+         if (l_stop) return
 
          if (dvice_greater_vicen) then
             do j = jlo,jhi
@@ -1052,18 +1104,20 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
                   nd = donor(i,j,n)
                   if (dvice(i,j,n) >= vicen(i,j,nd)*(c1+puny)) then
                      write(nu_diag,*) ' '
-                     write(nu_diag,*) 'ITD dvice > vicen'
+                     write(nu_diag,*) 'shift_ice: dvice > vicen'
                      write(nu_diag,*) 'i, j:', i, j
                      write(nu_diag,*) 'boundary, donor cat:', n, nd
                      write(nu_diag,*) 'dvice =', dvice(i,j,n)
                      write(nu_diag,*) 'vicen =', vicen(i,j,nd)
-                     call abort_ice ('ITD dvice > vicen')
+                     l_stop = .true.
+                     istop = i
+                     jstop = j
                   endif
                endif
             enddo
             enddo
          endif
-
+         if (l_stop) return
 
       !-----------------------------------------------------------------
       ! transfer volume and energy between categories
@@ -1274,7 +1328,8 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       subroutine column_conservation_check (nx_block, ny_block,
      &                                      nghost,   fieldid,
      &                                      x1,       x2, 
-     &                                      max_err,  error_flag)
+     &                                      max_err,  l_stop,
+     &                                      istop,    jstop)
 !
 ! !DESCRIPTION:
 !
@@ -1303,37 +1358,36 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       character (len=char_len), intent(in) ::
      &     fieldid           ! field identifier
 
-      logical (kind=log_kind), intent(out) ::
-     &     error_flag        ! true if conservation is violated
+      logical (kind=log_kind), intent(inout) ::
+     &   l_stop    ! if true, abort on return
+
+      integer (kind=int_kind), intent(inout) ::
+     &   istop, jstop    ! indices of grid cell where model aborts
 !
 !EOP
 !
       integer (kind=int_kind) ::
      &     i, j                        ! horizontal indices
 
-      error_flag = .false.
-
       do j = nghost+1, ny_block-nghost
       do i = nghost+1, nx_block-nghost
          if (abs (x2(i,j)-x1(i,j)) > max_err) then
-            error_flag = .true.
+            l_stop = .true.
+            istop = i
+            jstop = j
          endif
       enddo
       enddo
 
-      if (error_flag) then
-         do j = nghost+1, ny_block-nghost
-         do i = nghost+1, nx_block-nghost
-            if (abs (x2(i,j)-x1(i,j)) > max_err) then
-               write (nu_diag,*) ' '
-               write (nu_diag,*) 'Conservation error: ', fieldid
-               write (nu_diag,*) 'i, j =', i, j
-               write (nu_diag,*) 'Initial value =', x1(i,j)
-               write (nu_diag,*) 'Final value =',   x2(i,j)
-               write (nu_diag,*) 'Difference =', x2(i,j) - x1(i,j)
-            endif
-         enddo
-         enddo
+      if (l_stop) then
+         i = istop
+         j = jstop
+         write (nu_diag,*) ' '
+         write (nu_diag,*) 'Conservation error: ', trim(fieldid)
+         write (nu_diag,*) 'i, j =', i, j
+         write (nu_diag,*) 'Initial value =', x1(i,j)
+         write (nu_diag,*) 'Final value =',   x2(i,j)
+         write (nu_diag,*) 'Difference =', x2(i,j) - x1(i,j)
       endif
 
       end subroutine column_conservation_check
@@ -1457,10 +1511,12 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &                        vicen,       vsnon, 
      &                        eicen,       esnon,
      &                        aice0,
-     &                        trcr_depend, abort_flag,
+     &                        trcr_depend,
      &                        fresh,       fresh_hist,
      &                        fsalt,       fsalt_hist,
-     &                        fhocn,       fhocn_hist)
+     &                        fhocn,       fhocn_hist,
+     &                        l_stop,
+     &                        istop,       jstop)
 !
 ! !DESCRIPTION:
 !
@@ -1512,7 +1568,10 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &   trcr_depend  ! tracer dependency information
 
       logical (kind=log_kind), intent(out) ::
-     &   abort_flag   ! if true, abort on return
+     &   l_stop   ! if true, abort on return
+
+      integer (kind=int_kind), intent(out) ::
+     &   istop, jstop ! indices of grid cell where model aborts
 
       ! ice-ocean fluxes (required for strict conservation)
       real (kind=dbl_kind), dimension (nx_block,ny_block),
@@ -1538,10 +1597,9 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &,  dfsalt       ! zapped salt flux   (kg/m^2/s)
      &,  dfhocn       ! zapped energy flux ( W/m^2)
 
-      logical (kind=log_kind) ::
-     &   zap_err      ! error flag for zap subroutine
-
-      abort_flag = .false.
+      l_stop = .false.
+      istop = 0
+      jstop = 0
 
       !-----------------------------------------------------------------
       ! Compute ice thickness.
@@ -1570,7 +1628,10 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &            aicen,      trcrn,
      &            vicen,      vsnon,
      &            eicen,      esnon,
-     &            hicen)
+     &            hicen,      l_stop,
+     &            istop,      jstop)
+
+      if (l_stop) return
 
       !-----------------------------------------------------------------
       ! Zero out ice categories with very small areas.
@@ -1583,9 +1644,11 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &                      vicen,    vsnon,
      &                      eicen,    esnon,
      &                      dfresh,   dfsalt,
-     &                      dfhocn,   zap_err)
+     &                      dfhocn,
+     &                      l_stop,
+     &                      istop,    jstop)
 
-      if (zap_err) abort_flag = .true.
+      if (l_stop) return
 
       if (present(fresh))
      &     fresh     (:,:) = fresh(:,:)      + dfresh(:,:) 
@@ -1616,7 +1679,9 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &                            vicen,    vsnon,
      &                            eicen,    esnon,
      &                            dfresh,   dfsalt,
-     &                            dfhocn,   error_flag)
+     &                            dfhocn,
+     &                            l_stop,
+     &                            istop,    jstop)
 !
 ! !DESCRIPTION:
 !
@@ -1667,7 +1732,10 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &,  dfhocn       ! zapped energy flux ( W/m^2)
 
       logical (kind=log_kind), intent(out) ::
-     &   error_flag
+     &   l_stop   ! if true, abort on return
+
+      integer (kind=int_kind), intent(out) ::
+     &   istop, jstop ! indices of grid cell where model aborts
 !
 !EOP
 !
@@ -1688,7 +1756,9 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       ! Initialize
       !-----------------------------------------------------------------
 
-      error_flag = .false.
+      l_stop = .false.
+      istop = 0
+      jstop = 0
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
@@ -1712,7 +1782,10 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
                write (nu_diag,*) 'Zap ice: negative ice area'
                write (nu_diag,*) 'i, j, n, aicen =',
      &                            i, j, n, aicen(i,j,n)
-               error_flag = .true.
+               l_stop = .true.
+               istop = i
+               jstop = j
+               return
             elseif ((aicen(i,j,n) >= -puny .and. aicen(i,j,n) < c0)
      &                                   .or.
      &              (aicen(i,j,n) > c0 .and. aicen(i,j,n) <= puny)) then

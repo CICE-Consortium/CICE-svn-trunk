@@ -231,8 +231,8 @@ c    &,  rho_air   = 1.2_dbl_kind      ! ambient air density (kg/m^3)
       character (5), parameter ::
      &  blank_fmt = "(' ')"
 
-      character (char_len), public ::
-     &  char_blank           ! empty character string
+      character (char_len), parameter ::
+     &  char_blank = ''         ! empty character string
 
       !-----------------------------------------------------------------
       ! conversion factors

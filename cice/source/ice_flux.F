@@ -300,7 +300,7 @@ c      use ice_domain, only: nblocks
       fsens   (:,:,:) = c0
       flat    (:,:,:) = c0
       fswabs  (:,:,:) = c0
-      flwout  (:,:,:) = -stefan_boltzmann*Tf**4   
+      flwout  (:,:,:) = -stefan_boltzmann*Tffresh**4   
                         ! in case atm model diagnoses Tsfc from flwout
       evap    (:,:,:) = c0
       Tref    (:,:,:) = c0

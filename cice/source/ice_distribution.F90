@@ -106,7 +106,7 @@
 
    case default
 
-      call abort_ice('distribution: unknown distribution type')
+      call abort_ice('ice distribution: unknown distribution type')
 
    end select
 
@@ -495,7 +495,7 @@
    end do
 
    if (minval(proc_tmp) < 1) then
-      call abort_ice('Load-balanced distribution failed')
+      call abort_ice('ice: Load-balanced distribution failed')
    endif
 
    deallocate(proc_tmp)
@@ -622,7 +622,7 @@
    end do proc_loop
 
    if (nprocs_x == 0) then
-      call abort_ice('Unable to find 2d processor config')
+      call abort_ice('ice: Unable to find 2d processor config')
    endif
 
 !----------------------------------------------------------------------

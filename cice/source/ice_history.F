@@ -28,6 +28,7 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       use ice_blocks
       use ice_read_write
       use ice_fileunits
+
 !
 !EOP
 !
@@ -343,6 +344,10 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       use ice_flux, only: mlt_onset, frz_onset
       use ice_restart, only: restart
       use ice_exit
+#ifdef CCSMcoupled
+      use shr_sys_mod, only : shr_sys_flush
+#endif
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -793,7 +798,7 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       if (nml_error /= 0) then
          print*, 'could not find icefields_nml'
          close (nu_nml)
-         call abort_ice('ERROR reading icefields_nml')
+         call abort_ice('ice: error reading icefields_nml')
       endif
 
       call broadcast_scalar (f_hi, master_task)

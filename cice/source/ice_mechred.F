@@ -121,7 +121,8 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
      &                      vicen,       vsnon,
      &                      eicen,       esnon,
      &                      aice0,
-     &                      trcr_depend, abort_flag,
+     &                      trcr_depend, l_stop,
+     &                      istop,       jstop,
      &                      dardg1dt,    dardg2dt,
      &                      dvirdgdt,    opening,
      &                      fresh,       fresh_hist,
@@ -169,9 +170,11 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
       integer (kind=int_kind), dimension(ntrcr), intent(in) ::
      &   trcr_depend
 
-      !  error flag
       logical (kind=log_kind), intent(out) ::
-     &   abort_flag  ! if true, abort on return
+     &   l_stop   ! if true, abort on return
+
+      integer (kind=int_kind), intent(out) ::
+     &   istop, jstop ! indices of grid cell where model aborts
 
       ! optional history fields
       real (kind=dbl_kind), dimension(nx_block,ny_block),
@@ -234,7 +237,6 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
       logical (kind=log_kind) ::
      &   iterate_ridging  ! if true, repeat the ridging
      &,  asum_error       ! flag for asum .ne. 1
-     &,  conserv_err      ! flag for conservation error
 
       character (len=char_len) ::
      &   fieldid           ! field identifier
@@ -242,6 +244,10 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
+
+      l_stop = .false.
+      istop = 0
+      jstop = 0
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
@@ -254,7 +260,6 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
       ardg2    (:,:) = c0
       virdg    (:,:) = c0
       aopen    (:,:) = c0
-      abort_flag = .false.
 
       !-----------------------------------------------------------------
       ! Compute area of ice plus open water before ridging.
@@ -330,7 +335,10 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
      &                     ardg1,     ardg2,
      &                     virdg,     aopen,
      &                     msnow_mlt, esnow_mlt,
-     &                     abort_flag)
+     &                     l_stop,
+     &                     istop,     jstop)
+
+         if (l_stop) return
 
       !-----------------------------------------------------------------
       ! Make sure the new area = 1.  If not (because the closing
@@ -362,7 +370,8 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
             write(nu_diag,*) ' '
             write(nu_diag,*) 'Exceeded max number of ridging iterations'
             write(nu_diag,*) 'max =',nitermax
-            abort_flag = .true.
+            l_stop = .true.
+            return
          endif
             
       enddo                     ! niter
@@ -397,29 +406,35 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
          call column_conservation_check (nx_block,  ny_block,
      &                                   nghost,    fieldid,
      &                                   vice_init, vice_final,
-     &                                   puny,      conserv_err)
+     &                                   puny,      l_stop,
+     &                                   istop,     jstop)
+         if (l_stop) return
 
          fieldid = 'vsno, ridging'
          call column_conservation_check (nx_block,  ny_block,
      &                                   nghost,    fieldid,
      &                                   vsno_init, vsno_final,
-     &                                   puny,      conserv_err)
+     &                                   puny,      l_stop,
+     &                                   istop,     jstop)
+         if (l_stop) return
 
          fieldid = 'eice, ridging'
          call column_conservation_check (nx_block,  ny_block,
      &                                   nghost,    fieldid,
      &                                   eice_init, eice_final,
      &                                   puny*Lfresh*rhoi, 
-     &                                   conserv_err)
+     &                                   l_stop,
+     &                                   istop,     jstop)
+         if (l_stop) return
 
          fieldid = 'esno, ridging'
          call column_conservation_check (nx_block,  ny_block,
      &                                   nghost,    fieldid,
      &                                   esno_init, esno_final,
      &                                   puny*Lfresh*rhos, 
-     &                                   conserv_err)
-         
-         if (conserv_err) abort_flag = .true.
+     &                                   l_stop,
+     &                                   istop,     jstop)
+         if (l_stop) return
 
       endif                     ! l_conservation_check            
 
@@ -455,30 +470,28 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
       ! Check for fractional ice area > 1.
       !-----------------------------------------------------------------
 
-      asum_error = .false.
-
       do j = jlo, jhi
       do i = ilo, ihi
-         if (abs(asum(i,j) - c1) > puny) asum_error = .true.
+         if (abs(asum(i,j) - c1) > puny) then
+            l_stop = .true.
+            istop = i
+            jstop = j
+         endif
       enddo
       enddo
 
-      if (asum_error) then
-        do j = jlo, jhi
-        do i = ilo, ihi
-          if (abs(asum(i,j) - c1) > puny) then ! insufficient ridging
-            write(nu_diag,*) ' '
-            write(nu_diag,*) 'Ridging error: total area > 1'
-            write(nu_diag,*) 'i, j, area:', i, j, asum(i,j)
-            write(nu_diag,*) 'n, aicen:'
-            write(nu_diag,*)  0, aice0(i,j)
-            do n = 1, ncat
-               write(nu_diag,*) n, aicen(i,j,n)
-            enddo
-            abort_flag = .true.
-          endif
-        enddo
-        enddo
+      if (l_stop) then
+         i = istop
+         j = jstop
+         write(nu_diag,*) ' '
+         write(nu_diag,*) 'Ridging error: total area > 1'
+         write(nu_diag,*) 'i, j, area:', i, j, asum(i,j)
+         write(nu_diag,*) 'n, aicen:'
+         write(nu_diag,*)  0, aice0(i,j)
+         do n = 1, ncat
+            write(nu_diag,*) n, aicen(i,j,n)
+         enddo
+         return
       endif
 
       end subroutine ridge_ice
@@ -1050,7 +1063,8 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
      &                        ardg1,       ardg2, 
      &                        virdg,       aopen,
      &                        msnow_mlt,   esnow_mlt,
-     &                        abort_flag)
+     &                        l_stop,
+     &                        istop,       jstop)
 !
 ! !USES:
 !
@@ -1119,7 +1133,11 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
      &,  esnow_mlt   ! energy needed to melt snow in ocean (J m-2)
 
       logical (kind=log_kind), intent(inout) ::
-     &   abort_flag  ! if true, abort on return
+     &   l_stop   ! if true, abort on return
+
+      integer (kind=int_kind), intent(inout) ::
+     &   istop, jstop ! indices of grid cell where model aborts
+
 !
 !EOP
 !
@@ -1176,9 +1194,6 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
      &,  tmpfac            ! factor by which opening/closing rates are cut
      &,  wk1               ! work variable
 
-      logical (kind=log_kind) ::
-     &   neg_aice0         ! flag for aice0(i,j) < -puny
-     &,  large_ardg        ! flag for afrac > 1
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -1264,8 +1279,6 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
       ! Compute change in open water area due to closing and opening.
       !-----------------------------------------------------------------
 
-      neg_aice0 = .false.
-
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -1275,7 +1288,9 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
      &              - apartic(i,j,0)*closing_gross(i,j)*dt
      &              + opning(i,j)*dt
          if (aice0(i,j) < -puny) then
-            neg_aice0 = .true.
+            l_stop = .true.
+            istop = i
+            jstop = j
          elseif (aice0(i,j) < c0) then    ! roundoff error
             aice0(i,j) = c0
          endif
@@ -1285,17 +1300,13 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
       enddo
       enddo
 
-      if (neg_aice0) then       ! there is a bug
-         do j = jlo, jhi
-         do i = ilo, ihi
-            if (aice0(i,j) < -puny) then
-               write (nu_diag,*) ' '
-               write (nu_diag,*) 'Ridging error: aice0 < 0'
-               write (nu_diag,*) 'i, j, aice0:', i, j, aice0(i,j)
-            endif               ! aice0 < -puny
-         enddo                  ! i
-         enddo                  ! j
-         abort_flag = .true.
+      if (l_stop) then
+         i = istop
+         j = jstop
+         write (nu_diag,*) ' '
+         write (nu_diag,*) 'Ridging error: aice0 < 0'
+         write (nu_diag,*) 'i, j, aice0:', i, j, aice0(i,j)
+         return
       endif                     ! neg_aice0
 
       !-----------------------------------------------------------------
@@ -1331,8 +1342,6 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
          enddo                  ! i
          enddo                  ! j
 
-         large_ardg = .false.
-
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -1349,7 +1358,9 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
             ardg1n(i,j) = apartic(i,j,n)*closing_gross(i,j)*dt
 
             if (ardg1n(i,j) > aicen_init(i,j,n) + puny) then
-               large_ardg = .true.
+               l_stop = .true.
+               istop = i
+               jstop = j
             else
                ardg1n(i,j) = min(aicen_init(i,j,n), ardg1n(i,j))
             endif
@@ -1395,20 +1406,16 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
 
          enddo                  ! ij
 
-         if (large_ardg) then  ! there is a bug
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-               if (ardg1(i,j) > aicen_init(i,j,n) + puny) then 
-                  write (nu_diag,*) ' '
-                  write (nu_diag,*) 'Ridging error: ardg > aicen'
-                  write (nu_diag,*) 'i, j, n:', i, j, n
-                  write (nu_diag,*) 'ardg, aicen:',
-     &                               ardg1n(i,j), aicen_init(i,j,n)
-                  abort_flag = .true.
-               endif            ! afrac > 1 + puny
-            enddo               ! ij
-         endif                  ! large_ardg
+         if (l_stop) then
+            i = istop
+            j = jstop
+            write (nu_diag,*) ' '
+            write (nu_diag,*) 'Ridging error: ardg > aicen'
+            write (nu_diag,*) 'i, j, n:', i, j, n
+            write (nu_diag,*) 'ardg, aicen:',
+     &           ardg1n(i,j), aicen_init(i,j,n)
+            return
+         endif
 
       !-----------------------------------------------------------------
       ! Subtract ice energy from ridging category n.

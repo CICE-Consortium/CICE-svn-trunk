@@ -375,9 +375,10 @@
      &   this_block      ! block information for current block
 
       logical (kind=log_kind) ::
-     &   abort_flag  ! if true, abort on return
+     &   l_stop          ! if true, abort the model
 
-
+      integer (kind=int_kind) ::
+     &   istop, jstop    ! indices of grid cell where model aborts 
 
       call ice_timer_start(timer_column)  ! column physics
       call ice_timer_start(timer_thermo)  ! thermodynamics
@@ -556,7 +557,19 @@
      &                       meltt   (:,:,iblk),  meltb   (:,:,iblk), 
      &                       congel  (:,:,iblk),  snoice  (:,:,iblk), 
      &                       mlt_onset(:,:,iblk), frz_onset(:,:,iblk),
-     &                       yday,                abort_flag) 
+     &                       yday,                l_stop,
+     &                       istop,               jstop) 
+
+         if (l_stop) then
+            write (nu_diag,*) 'istep1, my_task, iblk =',
+     &                         istep1, my_task, iblk
+            write (nu_diag,*) 'Global block:', this_block%block_id
+            if (istop > 0 .and. jstop > 0)
+     &           write(nu_diag,*) 'Global i and j:',
+     &                            this_block%i_glob(istop),
+     &                            this_block%j_glob(jstop) 
+            call abort_ice ('ice: Vertical thermo error')
+         endif
 
       !-----------------------------------------------------------------
       ! Increment area-weighted fluxes.
@@ -662,7 +675,7 @@
 !
 !EOP
 !
-!lipscomb - delete later
+!lipscomb - delete hicen later?
       real (kind=dbl_kind),
      &   dimension (nx_block,ny_block,ncat,max_blocks) ::
      &   hicen           ! ice thickness (m)
@@ -671,9 +684,14 @@
      &   iblk     ! block index
      &,  i, j, n
 
-      logical (kind=int_kind) ::
-     &   abort_flag   ! if true, abort model
+      type (block) ::
+     &   this_block      ! block information for current block
 
+      logical (kind=int_kind) ::
+     &   l_stop          ! if true, abort model
+
+      integer (kind=int_kind) ::
+     &   istop, jstop    ! indices of grid cell where model aborts 
 
       call ice_timer_start(timer_column)  ! column physics
       call ice_timer_start(timer_thermo)  ! thermodynamics
@@ -681,6 +699,7 @@
       call init_flux_ocn        ! initialize ocean fluxes sent to coupler
       
       do iblk = 1, nblocks
+         this_block = get_block(blocks(iblk), iblk)
 
       !-----------------------------------------------------------------
       ! Let rain drain through to the ocean.
@@ -701,8 +720,7 @@
 
          if (kitd == 1) then
             call linear_itd (nx_block, ny_block,
-     &                       nghost,   iblk,
-     &                       trcr_depend,
+     &                       nghost,   trcr_depend,
      &                       aicen_init(:,:,:,iblk),
      &                       vicen_init(:,:,:,iblk),
      &                       aicen     (:,:,:,iblk),
@@ -713,8 +731,21 @@
      &                       esnon     (:,:,:,iblk),
      &                       aice      (:,:,  iblk),
      &                       aice0     (:,:,  iblk), 
-     &                       abort_flag, istep1)    
+     &                       l_stop,
+     &                       istop,    jstop)
          endif
+
+         if (l_stop) then
+            write (nu_diag,*) 'istep1, my_task, iblk =',
+     &                         istep1, my_task, iblk
+            write (nu_diag,*) 'Global block:', this_block%block_id
+            if (istop > 0 .and. jstop > 0)
+     &           write(nu_diag,*) 'Global i and j:',
+     &                            this_block%i_glob(istop),
+     &                            this_block%j_glob(jstop) 
+            call abort_ice ('ice: Linear ITD error')
+         endif
+
 
          call ice_timer_stop(timer_catconv)    ! category conversions
 
@@ -723,7 +754,7 @@
       !-----------------------------------------------------------------
 
          call add_new_ice (nx_block,                ny_block,
-     &                     nghost,                  iblk,
+     &                     nghost,
      &                     tmask    (:,:,  iblk),   dt,
      &                     aicen    (:,:,:,iblk),
      &                     trcrn    (:,:,:,:,iblk),
@@ -733,10 +764,20 @@
      &                     aice     (:,:,  iblk),
      &                     frzmlt   (:,:,  iblk),
      &                     frazil   (:,:,  iblk),
-     &                     abort_flag,
-     &                     frz_onset(:,:,  iblk),
-     &                     yday)
+     &                     frz_onset(:,:,  iblk),   yday,
+     &                     l_stop,
+     &                     istop, jstop)
 
+         if (l_stop) then
+            write (nu_diag,*) 'istep1, my_task, iblk =',
+     &                         istep1, my_task, iblk
+            write (nu_diag,*) 'Global block:', this_block%block_id
+            if (istop > 0 .and. jstop > 0)
+     &           write(nu_diag,*) 'Global i and j:',
+     &                            this_block%i_glob(istop),
+     &                            this_block%j_glob(jstop) 
+            call abort_ice ('ice: add_new_ice error')
+         endif
 
       !-----------------------------------------------------------------
       ! Melt ice laterally.
@@ -779,11 +820,11 @@
       ! Compute thermodynamic area and volume tendencies.
       !-----------------------------------------------------------------
 
-         call aggregate_area (nx_block, ny_block,
-     &                        iblk,
+         call aggregate_area (nx_block,          ny_block,
      &                        aicen(:,:,:,iblk),
-     &                        aice (:,:,  iblk),
-     &                        aice0(:,:,  iblk) )
+     &                        aice (:,:,  iblk), aice0(:,:,iblk),
+     &                        l_stop,
+     &                        istop,             jstop)
 
          daidtt(:,:,iblk) = (aice(:,:,iblk) - daidtt(:,:,iblk)) / dt
          dvidtt(:,:,iblk) = (vice(:,:,iblk) - dvidtt(:,:,iblk)) / dt
@@ -799,14 +840,21 @@
      &                     vicen   (:,:,:,iblk), vsnon   (:,:,  :,iblk),
      &                     eicen   (:,:,:,iblk), esnon   (:,:,  :,iblk),
      &                     aice0   (:,:,  iblk),
-     &                     trcr_depend,          abort_flag,
+     &                     trcr_depend,
      &                     fresh   (:,:,  iblk), fresh_hist(:,:,iblk),
      &                     fsalt   (:,:,  iblk), fsalt_hist(:,:,iblk),
-     &                     fhocn   (:,:,  iblk), fhocn_hist(:,:,iblk))
+     &                     fhocn   (:,:,  iblk), fhocn_hist(:,:,iblk),
+     &                     l_stop,
+     &                     istop,                jstop)
 
-         if (abort_flag) then
+         if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =',
      &                         istep1, my_task, iblk
+            write (nu_diag,*) 'Global block:', this_block%block_id
+            if (istop > 0 .and. jstop > 0)
+     &           write(nu_diag,*) 'Global i and j:',
+     &                            this_block%i_glob(istop),
+     &                            this_block%j_glob(jstop) 
             call abort_ice ('ice: ITD cleanup error')
          endif
 
@@ -861,11 +909,17 @@
 !
 !EOP
 !
+      type (block) ::
+     &   this_block      ! block information for current block
+
       integer (kind=int_kind) :: 
      &   iblk    ! block index 
 
       logical (kind=int_kind) ::
-     &   abort_flag   ! if true, abort model
+     &   l_stop          ! if true, abort model
+
+      integer (kind=int_kind) ::
+     &   istop, jstop    ! indices of grid cell where model aborts 
 
       call init_history_dyn     ! initialize dynamic history variables
 
@@ -893,6 +947,7 @@
       call ice_timer_start(timer_ridge)
 
       do iblk = 1, nblocks
+         this_block = get_block(blocks(iblk), iblk)
 
          call ridge_ice (nx_block,             ny_block,
      &                   nghost,               dt,
@@ -902,15 +957,21 @@
      &                   vicen   (:,:,:,iblk), vsnon     (:,:,:,iblk),
      &                   eicen   (:,:,:,iblk), esnon     (:,:,:,iblk),
      &                   aice0   (:,:,  iblk), 
-     &                   trcr_depend,          abort_flag,
+     &                   trcr_depend,          l_stop,
+     &                   istop,                jstop,      
      &                   dardg1dt(:,:,iblk),   dardg2dt  (:,:,iblk),
      &                   dvirdgdt(:,:,iblk),   opening   (:,:,iblk),
      &                   fresh   (:,:,iblk),   fresh_hist(:,:,iblk),
-     &                   fhocn   (:,:,iblk),   fhocn_hist(:,:,iblk))      
+     &                   fhocn   (:,:,iblk),   fhocn_hist(:,:,iblk))
 
-         if (abort_flag) then
+         if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =',
      &                         istep1, my_task, iblk
+            write (nu_diag,*) 'Global block:', this_block%block_id
+            if (istop > 0 .and. jstop > 0)
+     &           write(nu_diag,*) 'Global i and j:',
+     &                            this_block%i_glob(istop),
+     &                            this_block%j_glob(jstop) 
             call abort_ice ('ice: Ridging error')
          endif
 
@@ -921,6 +982,7 @@
 
 
       do iblk = 1, nblocks
+         this_block = get_block(blocks(iblk), iblk)
 
       !-----------------------------------------------------------------
       ! ITD cleanup: Rebin thickness categories if necessary, and remove
@@ -933,14 +995,21 @@
      &                     vicen   (:,:,:,iblk), vsnon   (:,:,  :,iblk),
      &                     eicen   (:,:,:,iblk), esnon   (:,:,  :,iblk),
      &                     aice0   (:,:,  iblk), 
-     &                     trcr_depend,          abort_flag,
+     &                     trcr_depend,
      &                     fresh   (:,:,  iblk), fresh_hist(:,:,iblk),
      &                     fsalt   (:,:,  iblk), fsalt_hist(:,:,iblk),
-     &                     fhocn   (:,:,  iblk), fhocn_hist(:,:,iblk))
+     &                     fhocn   (:,:,  iblk), fhocn_hist(:,:,iblk),
+     &                     l_stop,
+     &                     istop,                jstop)
 
-         if (abort_flag) then
+         if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =',
      &                         istep1, my_task, iblk
+            write (nu_diag,*) 'Global block:', this_block%block_id
+            if (istop > 0 .and. jstop > 0)
+     &           write(nu_diag,*) 'Global i and j:',
+     &                            this_block%i_glob(istop),
+     &                            this_block%j_glob(jstop) 
             call abort_ice ('ice: ITD cleanup error')
          endif
 

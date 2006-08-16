@@ -41,7 +41,8 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
       character (len=char_len) ::
      &   grid_file  !  input file for POP grid info
      &,  kmt_file   !  input file for POP grid info
-     &,  grid_type  !  rectangular (default) or displaced_pole
+     &,  grid_type  !  current options are rectangular (default),
+                    !  displaced_pole, tripole, panarctic, and column
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
      &   dxt        ! width of T-cell through the middle (m)
@@ -384,7 +385,7 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
       out_of_range = .false.
       where (ANGLE < -pi .or. ANGLE > pi) out_of_range = .true.
       if (count(out_of_range) > 0) then
-         call abort_ice ('init_grid: ANGLE out of expected range')
+         call abort_ice ('ice: init_grid: ANGLE out of expected range')
       endif
 
 
@@ -708,7 +709,7 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
      &        'Because you have selected the column model flag'
          write(nu_diag,*) 'Please set nx_global=ny_global=1 in file'
          write(nu_diag,*) 'ice_domain_size.F and recompile'
-         call abort_ice ('columngrid: check nx_global and ny_global')
+         call abort_ice ('ice: columngrid: check nx_global, ny_global')
       endif
 
       !-----------------------------------------------------------------
