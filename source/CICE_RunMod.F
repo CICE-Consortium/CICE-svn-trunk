@@ -53,8 +53,8 @@
       use ice_transport_upwind
       use ice_transport_remap
       use ice_work
-#ifdef coupled
-      use shr_msg_mod           ! for CCSM flux coupler runs only
+#ifdef CCSM
+      use ice_prescribed_mod
 #endif
 
       implicit none
@@ -206,7 +206,7 @@
          time = time + dt       ! determine the time and date
          call calendar(time)    ! at the end of the timestep
 
-#ifdef CCSMcoupled
+#ifdef CCSM
          call from_coupler      ! get updated info from CCSM coupler
          if (stop_now == 1) exit timeLoop ! coupler called it quits
 #else
@@ -216,14 +216,22 @@
 
          call init_mass_diags   ! diagnostics per timestep
 
+#ifdef CCSM
+         if(prescribed_ice) then  ! read prescribed ice
+            call ice_prescribed_run(idate, sec)
+         endif
+
+#endif
       !-----------------------------------------------------------------
       ! thermodynamics
       !-----------------------------------------------------------------
 
          call step_therm1 (dt)  ! pre-coupler thermodynamics
 
-#ifdef CCSMcoupled
+#ifdef CCSM
          call to_coupler        ! collect/send data to CCSM coupler
+
+         if (.not.prescribed_ice) then
 #endif
 
          call step_therm2 (dt)  ! post-coupler thermodynamics
@@ -235,8 +243,13 @@
 !lipscomb
          ndyn_dt = 1
          do k = 1, ndyn_dt
-            call step_dynamics (dt)
+            call step_dynamics (dyn_dt)
          enddo
+
+#ifdef CCSM
+         endif ! not prescribed_ice
+#endif
+
 
       !-----------------------------------------------------------------
       ! write data
@@ -558,7 +571,7 @@
      &                       congel  (:,:,iblk),  snoice  (:,:,iblk), 
      &                       mlt_onset(:,:,iblk), frz_onset(:,:,iblk),
      &                       yday,                l_stop,
-     &                       istop,               jstop) 
+     &                       istop,               jstop)
 
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =',
@@ -691,7 +704,7 @@
      &   l_stop          ! if true, abort model
 
       integer (kind=int_kind) ::
-     &   istop, jstop    ! indices of grid cell where model aborts 
+     &   istop, jstop    ! indices of grid cell where model aborts
 
       call ice_timer_start(timer_column)  ! column physics
       call ice_timer_start(timer_thermo)  ! thermodynamics
@@ -745,7 +758,6 @@
      &                            this_block%j_glob(jstop) 
             call abort_ice ('ice: Linear ITD error')
          endif
-
 
          call ice_timer_stop(timer_catconv)    ! category conversions
 
@@ -919,7 +931,7 @@
      &   l_stop          ! if true, abort model
 
       integer (kind=int_kind) ::
-     &   istop, jstop    ! indices of grid cell where model aborts 
+     &   istop, jstop    ! indices of grid cell where model aborts
 
       call init_history_dyn     ! initialize dynamic history variables
 
@@ -962,7 +974,7 @@
      &                   dardg1dt(:,:,iblk),   dardg2dt  (:,:,iblk),
      &                   dvirdgdt(:,:,iblk),   opening   (:,:,iblk),
      &                   fresh   (:,:,iblk),   fresh_hist(:,:,iblk),
-     &                   fhocn   (:,:,iblk),   fhocn_hist(:,:,iblk))
+     &                   fhocn   (:,:,iblk),   fhocn_hist(:,:,iblk))      
 
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =',

@@ -39,6 +39,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       use ice_domain_size
       use ice_constants
       use ice_fileunits
+      use ice_exit
 !
 !EOP
 !
@@ -61,6 +62,10 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 
       real (kind=dbl_kind) ::
      &   hin_max(0:ncat)    ! category limits                (m)
+
+#ifdef CCSM
+      character (len=35) :: c_hi_range(ncat)
+#endif
 
 !-------------------------------------------------------------------
 ! a note regarding hi_min and hin_max(0):
@@ -106,8 +111,6 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !USES:
 !
-      use ice_exit
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
@@ -122,6 +125,11 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &,    rncat     ! real(ncat)
      &,    d1                          ! parameters for kcatbound = 1 (m)
      &,    d2
+
+#ifdef CCSM
+      character(len=8) :: c_hinmax1,c_hinmax2
+      character(len=2) :: c_nc
+#endif
 
       if (ncat == 1 .and. kitd == 1) then
          write (nu_diag,*) 'Remapping the ITD is not allowed for ncat=1'
@@ -192,6 +200,18 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
          write (nu_diag,*) 'hin_max(n-1) < Cat n < hin_max(n)'
          do n = 1, ncat
             write (nu_diag,*) hin_max(n-1),' < Cat ',n, ' < ',hin_max(n)
+#ifdef CCSM
+            ! Write integer n to character string
+            write (c_nc, '(i2)') n    
+
+            ! Write hin_max to character string
+            write (c_hinmax1, '(f5.3)') hin_max(n-1)
+            write (c_hinmax2, '(f5.3)') hin_max(n)
+
+            ! Save character string to write to history file
+            c_hi_range(n)=c_hinmax1//'m < hi Cat '//c_nc//' < '//
+     &                    c_hinmax2//'m'
+#endif
          enddo
          write (nu_diag,*) ' '
       endif
@@ -608,7 +628,6 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       jlo = 1 + nghost
       jhi = ny_block - nghost
 
-
       !-----------------------------------------------------------------
       ! make sure thickness of cat 1 is at least hin_max(0)
       !-----------------------------------------------------------------
@@ -737,6 +756,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
          endif                  ! shiftflag
 
       enddo                     ! n
+
 
       end subroutine rebin
 

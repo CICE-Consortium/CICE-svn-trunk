@@ -397,7 +397,7 @@
       all_timers(timer_id)%block_accum_time(:) = c0
    else
       call abort_ice &
-      	        ('ice_timer_clear: attempt to reset undefined timer')
+                 ('ice_timer_clear: attempt to reset undefined timer')
                     
    endif
 
@@ -500,8 +500,8 @@
 
       endif
    else
-      call abort_ice  &
-                ('ice_timer_start: attempt to start undefined timer')
+      call abort_ice &
+                 ('ice_timer_start: attempt to start undefined timer')
                     
    endif
 
@@ -640,7 +640,8 @@
 
       endif
    else
-      call abort_ice('ice_timer_stop: attempt to stop undefined timer')
+      call abort_ice &
+                 ('ice_timer_start: attempt to start undefined timer')
                     
    endif
 
@@ -791,8 +792,8 @@
 
       if (lrestart_timer) call ice_timer_start(timer_id)
    else
-      call abort_ice  &
-                ('ice_timer_print: attempt to print undefined timer')
+      call abort_ice &
+                 ('ice_timer_print: attempt to print undefined timer')
                     
    endif
 

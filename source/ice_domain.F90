@@ -309,9 +309,13 @@
                if (this_block%i_glob(i) > 0) then
 	          ig = this_block%i_glob(i)
                   jg = this_block%j_glob(j)
+#ifdef CCSM
+                  if (KMTG(ig,jg) > puny)                           &
+#else
                   if (KMTG(ig,jg) > puny .and.                      &
                      (ULATG(ig,jg) < shlat/rad_to_deg .or.          &
                       ULATG(ig,jg) > nhlat/rad_to_deg) )            & 
+#endif
 	              nocn(n) = nocn(n) + 1
                endif
             end do
@@ -372,11 +376,11 @@
 
    if (nblocks_max > max_blocks) then
      write(outstring,*) &
-         'ice: no. blocks exceeds max; increase max to', nblocks_max
+         'ice: no. blocks exceed max: increase max to', nblocks_max
      call abort_ice(trim(outstring))
    else if (nblocks_max < max_blocks) then
-     write(outstring,*) 'ice: no. blocks too large; decrease max to',&
-                         nblocks_max
+     write(outstring,*) &
+         'ice: no. blocks too large: decrease max to', nblocks_max
      if (my_task == master_task) write(nu_diag,*) trim(outstring)
    endif
 

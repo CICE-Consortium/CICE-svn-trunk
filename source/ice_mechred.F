@@ -435,7 +435,7 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
      &                                   l_stop,
      &                                   istop,     jstop)
          if (l_stop) return
-
+         
       endif                     ! l_conservation_check            
 
       !-----------------------------------------------------------------
@@ -1137,7 +1137,6 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
 
       integer (kind=int_kind), intent(inout) ::
      &   istop, jstop ! indices of grid cell where model aborts
-
 !
 !EOP
 !
@@ -1193,7 +1192,6 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
      &,  expL, expR        ! exponentials involving hL, hR
      &,  tmpfac            ! factor by which opening/closing rates are cut
      &,  wk1               ! work variable
-
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -1307,7 +1305,7 @@ c $Id: ice_mechred_cice.F,v 1.14 2004/02/09 17:58:46 lipscomb Exp $
          write (nu_diag,*) 'Ridging error: aice0 < 0'
          write (nu_diag,*) 'i, j, aice0:', i, j, aice0(i,j)
          return
-      endif                     ! neg_aice0
+      endif                     ! l_stop
 
       !-----------------------------------------------------------------
       ! Save initial state variables

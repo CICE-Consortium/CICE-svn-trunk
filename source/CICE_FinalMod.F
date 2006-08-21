@@ -30,8 +30,8 @@
       use ice_fileunits
       use ice_kinds_mod
       use ice_timers
-#ifdef CCSMcoupled
-      use shr_msg_mod          ! only for CCSM coupled runs without ESMF
+#ifdef CCSM
+      use ice_coupling
 #endif
 
       implicit none
@@ -117,7 +117,7 @@
 
       if (nu_diag /= 6) close (nu_diag) ! diagnostic output
 
-#ifdef CCSMcoupled
+#ifdef CCSM
       call exit_coupler  ! disconnect cice from the CCSM coupled system
 #else
       call end_run       ! quit MPI

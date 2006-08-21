@@ -39,9 +39,15 @@
 
       character (len=char_len) ::
      &   restart_file      ! output file for restart dump
+#ifdef CCSM
+     &,  runtype           ! initial, continue, hybrid or branch
+#endif
 
       character (len=char_len_long) ::
      &   restart_dir       ! directory name for restart dump
+#ifdef CCSM
+     &,  runid             ! identifier for coupled run
+#endif
 
       character (len=char_len_long) ::
      &   pointer_file      ! input pointer file for restarts
@@ -128,6 +134,7 @@
          do it = 1, ntrcr
             call ice_write(nu_dump,0,trcrn(:,:,it,n,:),'ruf8',diag)
          enddo
+         call ice_write(nu_dump,0,esnon(:,:,k,:),'ruf8',diag)
       enddo
 
       do k=1,ntilyr
@@ -242,7 +249,7 @@
      &   filename, filename0
 
       logical (kind=log_kind) ::
-     &   diag
+     &   diag, hit_eof
 
       if (my_task == master_task) then
          open(nu_rst_pointer,file=pointer_file)
@@ -258,7 +265,7 @@
       if (my_task == master_task) then
          read (nu_restart) istep0,time,time_forc
          write(nu_diag,*) 'read ',pointer_file(1:lenstr(pointer_file))
-         write(nu_diag,*) 'dump read at istep=',istep0,time,time_forc
+         write(nu_diag,*) 'restart read at istep=',istep0,time,time_forc
       endif
 
       call broadcast_scalar(istep0,master_task)
@@ -284,6 +291,13 @@
          do it = 1, ntrcr
             call ice_read(nu_restart,0,trcrn(:,:,it,n,:),'ruf8',diag)
          enddo
+#ifdef CCSM
+         if (.not.(trim(runtype) == "continue")) then
+            esnon(:,:,n,:) = -rhos*Lfresh*vsnon(:,:,n,:)
+         endif
+#else
+         call ice_read(nu_restart,0,esnon(:,:,n,:),'ruf8',diag)
+#endif
       enddo
 
       if (my_task == master_task)
@@ -292,11 +306,19 @@
          call ice_read(nu_restart,0,eicen(:,:,k,:),'ruf8',diag)
       enddo
 
+#ifdef CCSM
+      if (trim(runtype) == "continue") then
+
+#endif
       if (my_task == master_task)
      &     write(nu_diag,*) 'min/max esnon for each layer'
       do k=1,ntslyr
          call ice_read(nu_restart,0,esnon(:,:,k,:),'ruf8',diag)
       enddo
+#ifdef CCSM
+
+      endif
+#endif
 
       !-----------------------------------------------------------------
       ! velocity
@@ -314,8 +336,25 @@
      &   write(nu_diag,*) 'min/max fresh water and heat flux components'
 
       call ice_read(nu_restart,0,fresh,'ruf8',diag)
+#ifdef CCSM
+      if (trim(runtype) == "continue") then
+         call ice_read(nu_restart,0,fsalt,'ruf8',diag)
+      endif
+#else
       call ice_read(nu_restart,0,fsalt,'ruf8',diag)
+#endif
       call ice_read(nu_restart,0,fhocn,'ruf8',diag)
+
+#ifdef CCSM
+      if (.not.(trim(runtype) == "continue")) then
+
+      if (my_task == master_task)
+     &     write(nu_diag,*) 'min/max ice strength'
+
+      call ice_read(nu_restart,0,strength,'ruf8',diag)
+
+      endif
+#endif
 
       !-----------------------------------------------------------------
       ! ocean stress
@@ -374,6 +413,32 @@
          call ice_read(nu_restart,0,sst,'ruf8',diag)
          call ice_read(nu_restart,0,frzmlt,'ruf8',diag)
       endif
+
+#ifdef CCSM
+      if (.not.(trim(runtype) == "continue")) then
+
+      !-----------------------------------------------------------------
+      ! salt flux read in from end of file for bkwds compatibility       
+      ! check for salt flux in restart file, if not there, set to 0.
+      !-----------------------------------------------------------------
+
+      call ice_read(nu_restart, 0, work1, 'ruf8', diag,
+     &              ignore_eof=.true., hit_eof=hit_eof)
+
+      if (hit_eof) then
+        if (my_task.eq.master_task) then
+          write (nu_diag,*) ' '
+          write (nu_diag,*) 'SALT FLUX NOT FOUND in restart file, SET TO 0'
+        endif
+        fsalt(:,:,:)=c0
+      else
+        if (my_task.eq.master_task) 
+     &     write (nu_diag,*) 'min/max salt flux component'
+        fsalt(:,:,:)=work1(:,:,:)
+      endif
+
+      endif
+#endif
 
       if (my_task == master_task) close(nu_restart)
 

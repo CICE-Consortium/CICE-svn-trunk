@@ -180,8 +180,8 @@
      &,  fhocnn      ! net heat flux to ocean (W/m^2) 
 
       ! diagnostic fields
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(inout) ::
+      real (kind=dbl_kind), dimension(nx_block,ny_block),
+     &   intent(inout)::
      &   meltt     ! top ice melt             (m/step-->cm/day) 
      &,  meltb     ! basal ice melt           (m/step-->cm/day) 
      &,  congel    ! basal ice growth         (m/step-->cm/day) 
@@ -240,7 +240,6 @@
      &,  einit           ! initial energy of melting (J m-2)
      &,  efinal          ! final energy of melting (J m-2)
 
-
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
@@ -248,6 +247,7 @@
       l_stop = .false.
       istop = 0
       jstop = 0
+
             
       fsensn (:,:) = c0
       flatn  (:,:) = c0
@@ -311,7 +311,6 @@
      &                          istop,         jstop)
 
       if (l_stop) return
-
 
       !-----------------------------------------------------------------
       ! Compute growth and/or melting at the top and bottom surfaces.
@@ -1886,6 +1885,7 @@
       enddo                     ! ij
 
       ! interior snow interfaces
+
       if (nslyr > 1) then
          do k = 2, nslyr
             do ij = 1, icells
@@ -1898,10 +1898,10 @@
                else
                   kh(i,j,k) = c0
                endif
-            enddo               ! ij
-         enddo                  ! nilyr
-      endif                     ! endif
-         
+            enddo                  ! ij
+         enddo                     ! nilyr
+      endif ! nslyr > 1
+
       ! interior ice interfaces
       do k = 2, nilyr
          do ij = 1, icells
@@ -2186,6 +2186,7 @@
       !-----------------------------------------------------------------
 
       if (nslyr > 1) then
+
          do k = 2, nslyr
             kr = k + 1
 
@@ -2202,6 +2203,7 @@
                endif
             enddo               ! ij
          enddo                  ! nslyr
+
       endif                     ! nslyr > 1
 
       !-----------------------------------------------------------------
@@ -3437,15 +3439,13 @@
      &   einp            ! energy input during timestep (J m-2)
      &,  ferr            ! energy conservation error (W m-2)
 
-      logical (kind=log_kind) ::   ! for vector-friendly error checks
-     &   ferr_flag       ! flag for energy error, ferr > ferrmax
-
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
+
          einp = (fsurf(i,j) - flatn(i,j) + fswint(i,j) - fhocnn(i,j)
      &         - fsnow(i,j)*Lfresh) * dt
          ferr = abs(efinal(i,j)-einit(i,j)-einp) / dt
@@ -3618,6 +3618,8 @@
       enddo                     ! nslyr
 
       end subroutine update_state_vthermo
+
+
 
 !=======================================================================
 

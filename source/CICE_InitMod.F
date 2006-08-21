@@ -52,8 +52,9 @@
       use ice_transport_remap
       use ice_work
 
-#ifdef CCSMcoupled
+#ifdef CCSM
       use shr_msg_mod           ! for CCSM coupled runs only
+      use ice_prescribed_mod
 #endif
 
       implicit none
@@ -146,12 +147,15 @@
 
       errorCode = ESMF_SUCCESS
 
-#ifdef CCSMcoupled
+#ifdef CCSM
    !--------------------------------------------------------------------
    ! CCSM-specific stuff to redirect stdin,stdout
    !--------------------------------------------------------------------
 
-      call shr_msg_stdio('ice') ! change cwd, redirect stdin/stdout
+      call shr_msg_chdir('ice')! change cwd
+
+      if (my_task == master_task) call shr_msg_dirio('ice')    ! redirect stdin/ stdout
+
 #endif
 
 
@@ -165,7 +169,7 @@
    ! coupler communication or forcing data initialization
    !--------------------------------------------------------------------
 
-#ifdef CCSMcoupled
+#ifdef CCSM
       call init_cpl             ! initialize message passing (CCSM only)
 #else
       call init_forcing_atmo    ! initialize atmospheric forcing (standalone)
@@ -237,6 +241,11 @@
 
       call init_forcing_ocn(dt) ! initialize sss and sst from data
       call init_state           ! initialize the ice state
+#ifdef CCSM
+      if(prescribed_ice) then  ! initialize prescribed ice
+         call ice_prescribed_init
+      endif
+#endif
       if (restart) call restartfile      ! start from restart file
       call init_diags           ! initialize diagnostic output points
       call init_history_therm   ! initialize thermo history variables

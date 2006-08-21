@@ -679,7 +679,6 @@
      &                                   puny,      l_stop,
      &                                   istop,     jstop)
          if (l_stop) return
-         
 
          call column_sum (nx_block, ny_block,
      &                    nghost,   ncat,

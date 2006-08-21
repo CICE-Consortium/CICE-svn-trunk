@@ -16,6 +16,10 @@
 ! !USES:
 
    use ice_kinds_mod
+#ifdef CCSM
+   use cpl_interface_mod, only : cpl_interface_init
+   use cpl_fields_mod, only : cpl_fields_icename
+#endif
 
    implicit none
    private
@@ -83,8 +87,12 @@
 !
 !-----------------------------------------------------------------------
 
+#ifdef CCSM
+   call cpl_interface_init(cpl_fields_icename, MPI_COMM_ICE)
+#else
    call MPI_INIT(ierr)
    call create_ice_communicator
+#endif
 
    master_task = 0
    call MPI_COMM_RANK  (MPI_COMM_ICE, my_task, ierr)
