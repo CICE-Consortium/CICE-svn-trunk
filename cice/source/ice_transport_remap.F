@@ -963,7 +963,7 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &            tmax(nx_block,ny_block,ntrace,ncat,max_blocks),
      &            STAT=alloc_error)
 
-         if (alloc_error /= 0)
+         if (alloc_error /= 0) 
      &        call abort_ice ('ice: allocation error')
 
          tmin(:,:,:,:,:) = c0
@@ -1248,7 +1248,7 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
      &                       l_stop,
      &                       istop,              jstop,
      &                       aiflxe(:,:,0),      aiflxn(:,:,0),
-     &                       aim   (:,:,0,iblk)) 
+     &                       aim   (:,:,0,iblk))
 
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk, cat =',
@@ -4681,6 +4681,7 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
       real (kind=dbl_kind) ::
      &     diff          ! difference between initial and final values
 
+
       if (asum_init > puny) then
          diff = asum_final - asum_init
          if (abs(diff/asum_init) > puny) then
@@ -4691,7 +4692,6 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
             write (nu_diag,*) 'Final global area =', asum_final
             write (nu_diag,*) 'Fractional error =', abs(diff)/asum_init
             write (nu_diag,*) 'asum_final-asum_init =', diff
-            return
          endif
       endif
 
@@ -4711,7 +4711,6 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
                write (nu_diag,*) 'Fractional error =',
      &                            abs(diff)/atsum_init(nt)
                write (nu_diag,*) 'atsum_final-atsum_init =', diff
-               return
             endif
          endif
        enddo
@@ -5061,7 +5060,6 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
                   write (nu_diag,*) 'new tracer =', trm (i,j,nt)
                   write (nu_diag,*) 'tmin ='      , tmin(i,j,nt)
                   write (nu_diag,*) 'ice area ='  , aim(i,j)
-                  return
                elseif (trm(i,j,nt) > tmax(i,j,nt)+w2*puny) then
                   l_stop = .true.
                   istop = i
@@ -5072,7 +5070,6 @@ c $Id: ice_transport_remap.F,v 1.16 2004/02/10 23:17:12 lipscomb Exp $
                   write (nu_diag,*) 'new tracer =', trm (i,j,nt)
                   write (nu_diag,*) 'tmax ='      , tmax(i,j,nt)
                   write (nu_diag,*) 'ice area ='  , aim(i,j)
-                  return
                endif
             endif
 

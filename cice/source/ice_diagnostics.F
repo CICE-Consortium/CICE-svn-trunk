@@ -120,7 +120,8 @@
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
       use ice_work, only: work1, work2
 
-#ifdef CCSMcoupled
+#ifdef CCSM
+      use ice_prescribed_mod, only : prescribed_ice
       use shr_sys_mod, only : shr_sys_flush
 #endif
 !
@@ -625,21 +626,29 @@
 
         if (print_global) then  ! global diags for conservations checks
 
-         write (nu_diag,*) '----------------------------'
-         write (nu_diag,801) 'arwt rain h2o kg in dt = ',rnn
-         write (nu_diag,801) 'arwt snow h2o kg in dt = ',snn
-         write (nu_diag,801) 'arwt evap h2o kg in dt = ',evpn
-         write (nu_diag,801) 'arwt frzl h2o kg in dt = ',frzn
-         write (nu_diag,801) 'arwt frsh h2o kg in dt = ',sfreshn
-         
-         write (nu_diag,801) 'arwt ice mass (kg)     = ',micen
-         write (nu_diag,801) 'arwt snw mass (kg)     = ',msnwn
+        if (prescribed_ice) then
+          write (nu_diag,*) '----------------------------'
+          write (nu_diag,*)   'This is the prescribed ice option.'
+          write (nu_diag,*)   'Heat and water will not be conserved.'   
+        else
 
-         write (nu_diag,801) 'arwt tot mass (kg)     = ',mtotn
-         write (nu_diag,801) 'arwt tot mass chng(kg) = ',delmin
-         write (nu_diag,801) 'arwt water flux        = ',fluxn
-         write (nu_diag,*) '(=rain+snow+evap+frzl-fresh)  '
-         write (nu_diag,801) 'water flux error       = ',werrn
+          write (nu_diag,*) '----------------------------'
+          write (nu_diag,801) 'arwt rain h2o kg in dt = ',rnn
+          write (nu_diag,801) 'arwt snow h2o kg in dt = ',snn
+          write (nu_diag,801) 'arwt evap h2o kg in dt = ',evpn
+          write (nu_diag,801) 'arwt frzl h2o kg in dt = ',frzn
+          write (nu_diag,801) 'arwt frsh h2o kg in dt = ',sfreshn
+         
+          write (nu_diag,801) 'arwt ice mass (kg)     = ',micen
+          write (nu_diag,801) 'arwt snw mass (kg)     = ',msnwn
+
+          write (nu_diag,801) 'arwt tot mass (kg)     = ',mtotn
+          write (nu_diag,801) 'arwt tot mass chng(kg) = ',delmin
+          write (nu_diag,801) 'arwt water flux        = ',fluxn
+          write (nu_diag,*) '(=rain+snow+evap+frzl-fresh)  '
+          write (nu_diag,801) 'water flux error       = ',werrn
+
+         endif                    ! prescribed_ice
        
          write (nu_diag,*) '----------------------------'
          write (nu_diag,801) 'arwt atm heat flux (W) = ',fhatmn
@@ -713,7 +722,7 @@
         endif                    ! print_global
        endif                     ! grid_type
 
-#ifdef CCSMcoupled
+#ifdef CCSM
        call shr_sys_flush(nu_diag)
 #endif
 

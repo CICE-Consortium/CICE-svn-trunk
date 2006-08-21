@@ -72,9 +72,9 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
       use ice_calendar, only: year_init, istep0, histfreq, diagfreq,
      &                        dumpfreq, dumpfreq_n, npt, dt, ndyn_dt
       use ice_restart, only: restart, restart_dir, restart_file,
-     &     pointer_file
+     &     pointer_file, runid, runtype
       use ice_history, only: hist_avg, history_dir, history_file,
-     &     incond_dir, incond_file 
+     &     incond_dir, incond_file
       use ice_exit
       use ice_itd, only: kitd, kcatbound
       use ice_ocean, only: oceanmixed_ice
@@ -104,10 +104,6 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
       !-----------------------------------------------------------------
 
       integer (kind=int_kind) :: kcolumn  ! 1 for column model
-
-      character(len=char_len_long) :: 
-     &   runid                 ! identifier for coupled run
-
 #endif
 
       !-----------------------------------------------------------------
@@ -136,6 +132,7 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
 #ifdef CCSM
 ! These variables are used in CCSM, but not CICE
      &, runid,           runtype,             kcolumn
+     &, incond_dir,      incond_file
 #endif
 
       !-----------------------------------------------------------------

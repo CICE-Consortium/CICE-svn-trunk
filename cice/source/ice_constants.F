@@ -21,7 +21,7 @@ c $Id: ice_constants.F,v 1.6 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !USES:
 !
-#ifdef CCSMcoupled
+#ifdef CCSM
       use shr_const_mod
 #endif
       use ice_kinds_mod
@@ -35,7 +35,7 @@ c $Id: ice_constants.F,v 1.6 2004/02/09 17:58:46 lipscomb Exp $
       ! physical constants
       !-----------------------------------------------------------------
 
-#ifdef CCSMcoupled
+#ifdef CCSM
       real (kind=dbl_kind), parameter ::
      &   pi        = SHR_CONST_PI     ! pi
      &,  gravit    = SHR_CONST_G      ! gravitational acceleration (m/s^2)
@@ -78,11 +78,7 @@ c    &,  rho_air   = SHR_CONST_RHODAIR  ! ambient air density (kg/m^3)
      &,  cp_wv     = 1.81e3_dbl_kind   ! specific heat of water vapor (J/kg/K)
      &,  stefan_boltzmann = 567.0e-10_dbl_kind !  W/m^2/K^4
      &,  Tffresh   = 273.15_dbl_kind   ! freezing temp of fresh ice (K)
-#ifdef CCSM
-     &,  cp_ice = 2054._dbl_kind       ! specific heat of fresh ice (J/kg/K)
-#else
      &,  cp_ice = 2106._dbl_kind       ! specific heat of fresh ice (J/kg/K)
-#endif
      &,  cp_ocn    = 4218._dbl_kind    ! specific heat of ocn    (J/kg/K)
      &,  Lsub      = 2.835e6_dbl_kind  ! latent heat, sublimation freshwater (J/kg)
      &,  Lvap      = 2.501e6_dbl_kind  ! latent heat, vaporization freshwater (J/kg)

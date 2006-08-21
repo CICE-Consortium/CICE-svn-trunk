@@ -24,11 +24,14 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
 ! !USES:
 !
       use ice_kinds_mod
+      use ice_broadcast
       use ice_communicate, only: my_task, master_task
       use ice_blocks
       use ice_read_write
       use ice_fileunits
-
+#ifdef CCSM
+      use shr_sys_mod, only : shr_sys_flush
+#endif
 !
 !EOP
 !
@@ -75,6 +78,13 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
 
       integer (kind=int_kind), parameter ::
      &   avgsiz = 94       ! number of fields that can be written
+
+#ifdef CCSM
+      real (kind=real_kind) :: time_beg, time_end ! bounds for averaging
+
+      real (kind=dbl_kind) ::
+     &   ice_present(nx_block,ny_block,max_blocks)
+#endif
 
       real (kind=dbl_kind), 
      &   dimension (nx_block,ny_block,avgsiz,max_blocks) ::
@@ -344,10 +354,6 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       use ice_flux, only: mlt_onset, frz_onset
       use ice_restart, only: restart
       use ice_exit
-#ifdef CCSMcoupled
-      use shr_sys_mod, only : shr_sys_flush
-#endif
-
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1007,7 +1013,7 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
             if (iout(n)) write(nu_diag,100) vdesc(n), vunit(n), vname(n)
          enddo
          write(nu_diag,*) ' '
-#ifdef CCSMcoupled
+#ifdef CCSM
         call shr_sys_flush(nu_diag)
 #endif
       endif
@@ -1018,6 +1024,9 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       !-----------------------------------------------------------------
       aa(:,:,:,:) = c0
       avgct = c0
+#ifdef CCSM
+      ice_present(:,:,:) = 0.
+#endif
 
       do k=1,avgsiz
          cona(k) = c1   ! multiply by 1.
@@ -1025,8 +1034,9 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       enddo
 
       if (restart .and. yday >= c2) then
-         mlt_onset = 999. ! restarting midyear gives erroneous onset dates
-         frz_onset = 999. ! restarting midyear gives erroneous onset dates
+! restarting midyear gives erroneous onset dates
+         mlt_onset = 999._dbl_kind 
+         frz_onset = 999._dbl_kind 
       else
          mlt_onset = c0
          frz_onset = c0
@@ -1150,7 +1160,7 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       use ice_domain
       use ice_grid, only: tmask, lmask_n, lmask_s
       use ice_calendar, only: new_year, secday, yday, write_history,
-     &                        write_ic
+     &                        write_ic, time
       use ice_state
       use ice_constants
       use ice_flux
@@ -1200,6 +1210,9 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
         avgct = c1
       else                      ! write averages over time histfreq
         avgct = avgct + c1
+#ifdef CCSM
+        if (avgct == c1) time_beg = time/int(secday)
+#endif
       endif
 
       !---------------------------------------------------------------
@@ -1217,7 +1230,10 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
        do i = ilo, ihi
        if (tmask(i,j,iblk)) then
         ai = aice_init(i,j,iblk)
-
+#ifdef CCSM
+        if (aice(i,j,iblk).gt.puny) 
+     &     ice_present(i,j,iblk) = ice_present(i,j,iblk) + c1
+#endif
         aa(i,j,n_hi,    iblk)= aa(i,j,n_hi,    iblk) + vice (i,j,iblk) 
         aa(i,j,n_hs,    iblk)= aa(i,j,n_hs,    iblk) + vsno (i,j,iblk) 
         aa(i,j,n_Tsfc,  iblk)= aa(i,j,n_Tsfc,  iblk) +trcr(i,j,1,iblk)
@@ -1423,10 +1439,17 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
                  aa(i,j,n_hisnap,iblk)    = vice(i,j,iblk)
                  aa(i,j,n_aisnap,iblk)    = aice(i,j,iblk)
               endif
+#ifdef CCSM
+              ice_present(i,j,iblk) = ice_present(i,j,iblk)*ravgct
+#endif
            enddo                ! i
            enddo                ! j
 
         enddo                   ! iblk
+
+#ifdef CCSM
+        time_end = time/int(secday)
+#endif
 
       !---------------------------------------------------------------
       ! write netCDF file
@@ -1439,6 +1462,9 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       !------------------------------------------------------------
         aa(:,:,:,:) = c0
         avgct = c0
+#ifdef CCSM
+        ice_present(:,:,:) = c0
+#endif
 
       endif  ! write_history or write_ic
 
@@ -1509,7 +1535,11 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
      &                        mday, write_ic, histfreq, year_init,
      &                        new_year, new_month, new_day
       use ice_work, only: work_g1, work_gr, work_gr3
-      use ice_restart, only: lenstr
+      use ice_restart, only: lenstr, runid
+#ifdef CCSM
+      use ice_domain, only: distrb_info
+      use ice_itd, only: c_hi_range
+#endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1526,16 +1556,92 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
       integer (kind=int_kind) :: iyear, imonth, iday
 
+#ifdef CCSM
+      integer (kind=int_kind) :: icategory,ind,i_aice,boundid
+
+      real (kind=real_kind),parameter :: spval_real=spval
+      character (char_len) :: start_time,current_date,current_time
+      character (char_len_long) :: dir_ncfile  !Local dir+fname
+      character (len=16) :: c_aice
+
+! Info for lat, lon and time invariant variables
+
+      INTEGER (kind=int_kind), PARAMETER :: ncoord = 4, nvar = 10
+      TYPE coord_attributes         ! netcdf coordinate attributes
+        character (len=10)   :: short_name
+        character (len=45)   :: long_name
+        character (len=20)   :: units
+      END TYPE coord_attributes
+
+      TYPE req_attributes         ! req'd CSM/netcdf attributes
+        type (coord_attributes) :: req
+        character (len=20)   :: coordinates
+      END TYPE req_attributes
+
+      TYPE(req_attributes), dimension(nvar) :: var
+      TYPE(coord_attributes), dimension(ncoord) :: coord_var
+
+#endif
+
       if (my_task == master_task) then
 
         ltime=time/int(secday)
 
         ! construct filename
         if (write_ic) then
+#ifdef CCSM
+           write(ncfile,'(a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
+     &        incond_file(1:lenstr(incond_file)),iyear,'-',
+     &        imonth,'-',iday,'-',sec,'.nc'
+#else
            write(ncfile,'(a,a,i8.8,a)')
      &      history_file(1:lenstr(history_file)),'.',idate,'.incond.nc'
+#endif
         else
 
+#ifdef CCSM
+         if (hist_avg) then    ! write averaged data
+
+          if (new_year) then  ! This doesn't work so well with instantaneous
+            iyear = nyr - 1   ! files .
+            imonth = 12
+            iday = 31
+          elseif (new_month) then
+            imonth = month - 1
+            iday = daymo(imonth)
+          elseif (new_day) then
+            iday = iday - 1
+          endif
+
+          if (histfreq.eq.'d'.or.histfreq.eq.'D') then     ! daily
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)') 
+     &      history_file(1:lenstr(history_file)),'.',iyear,'-',
+     &       imonth,'-',iday,'.nc'
+          elseif (histfreq.eq.'w'.or.histfreq.eq.'W') then ! weekly
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)') 
+     &      history_file(1:lenstr(history_file)),'w.',iyear,'-',
+     &       imonth,'-',iday,'.nc'
+          elseif (histfreq.eq.'m'.or.histfreq.eq.'M') then ! monthly
+           write(ncfile,'(a,a,i4.4,a,i2.2,a)') 
+     &      history_file(1:lenstr(history_file)),'.',iyear,'-',
+     &       imonth,'.nc'
+          elseif (histfreq.eq.'y'.or.histfreq.eq.'Y') then ! yearly
+           write(ncfile,'(a,a,i4.4,a)')
+     &      history_file(1:lenstr(history_file)),'.', iyear,'.nc'
+          endif
+
+         else                      ! instantaneous
+          if (histfreq.eq.'w'.or.histfreq.eq.'W') then ! weekly
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
+     &      history_file(1:lenstr(history_file)),'w.',iyear,'-',
+     &       imonth,'-',iday,'-',sec,'.nc'
+          else
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
+     &      history_file(1:lenstr(history_file)),'.',iyear,'-',
+     &       imonth,'-',iday,'-',sec,'.nc'
+          endif
+         endif
+#else
          iyear = nyr + year_init - 1
          imonth = month
          iday = mday
@@ -1578,23 +1684,234 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
            write(ncfile,'(a,a,i8.8,a)')
      &      history_file(1:lenstr(history_file)),'.',idate,'.nc'
          endif
+#endif
+        endif
+
+#ifdef CCSM
+        ! create file, add local directory path name to ncfile
+        if (write_ic) then
+          dir_ncfile = trim(incond_dir)//ncfile
+        else
+          dir_ncfile = trim(history_dir)//ncfile
         endif
 
         ! create file
+        status = nf_create(dir_ncfile, nf_clobber, ncid)
+#else
+        ! create file
         status = nf_create(ncfile, nf_clobber, ncid)
+#endif
 
       !-----------------------------------------------------------------
       ! define dimensions
       !-----------------------------------------------------------------
 
+#ifdef CCSM
+        status = nf_def_dim(ncid,'nlon',nx_global,imtid)
+        call nf_stat_check (status,'Error defining dimension nlon')
+
+        status = nf_def_dim(ncid,'nlat',ny_global,jmtid)
+        call nf_stat_check (status,'Error defining dimension nlat')
+
+        status = nf_def_dim(ncid,'time',NF_UNLIMITED,timid)
+        call nf_stat_check (status,'Error defining dimension time')
+#else
         status = nf_def_dim(ncid,'lon',nx_global,imtid)
         status = nf_def_dim(ncid,'lat',ny_global,jmtid)
         status = nf_def_dim(ncid,'time',nf_unlimited,timid)
+#endif
 
       !-----------------------------------------------------------------
       ! define coordinate variables
       !-----------------------------------------------------------------
 
+#ifdef CCSM
+        if (hist_avg) then
+          status = nf_def_dim(ncid,'d2',2,boundid)
+          call nf_stat_check (status,'Error defining dimension d2')
+        endif
+
+        dimid(1) = timid
+        status = nf_def_var(ncid,'time',nf_float,1,dimid,varid)
+        call nf_stat_check (status,'Error defining variable time')
+
+        status = nf_put_att_text(ncid,varid,'long_name',10,'model time')
+        call nf_stat_check (status,'Error assigning long_name for time')
+
+        status = nf_put_att_text(ncid,varid,'units',
+     $                  30,'days since 0001-01-01 00:00:00')  ! for now
+        call nf_stat_check (status,'Error assigning units for time')
+
+        status = nf_put_att_text(ncid,varid,'calendar', 6,'noleap')
+        call nf_stat_check (status,'Error assigning calendar for time')
+
+        if (hist_avg) then
+          status = nf_put_att_text(ncid,varid,'bounds', 11,'time_bounds')
+          call nf_stat_check (status,'Error assigning bounds for time')
+        endif
+
+      !-----------------------------------------------------------------
+      ! Define attributes for time bounds if hist_avg is true
+      !-----------------------------------------------------------------
+        if (hist_avg) then
+          dimid(1) = boundid
+          dimid(2) = timid
+          status = nf_def_var(ncid,'time_bounds',nf_float,2,dimid,varid)
+          call nf_stat_check (status,'Error defining variable time_bounds')
+          status = nf_put_att_text(ncid,varid,'long_name',
+     $             38,'boundaries for time-averaging interval')
+          call nf_stat_check (status,'Error with long_name to time_bounds')
+          status = nf_put_att_text(ncid,varid,'units',
+     $                  30,'days since 0001-01-01 00:00:00')  ! for now
+          call nf_stat_check (status,'Error assigning units to time_bounds')
+        endif
+
+      !-----------------------------------------------------------------
+      ! define information for the creation of time-invariant variables
+      !-----------------------------------------------------------------
+      ind = 0
+      ind = ind + 1
+      coord_var(ind) = coord_attributes('TLON',
+     &                 'T grid center longitude', 'degrees_east')
+      ind = ind + 1
+      coord_var(ind) = coord_attributes('TLAT', 
+     &                 'T grid center latitude',  'degrees_north')
+      ind = ind + 1
+      coord_var(ind) = coord_attributes('ULON',
+     &                 'U grid center longitude', 'degrees_east')
+      ind = ind + 1
+      coord_var(ind) = coord_attributes('ULAT', 
+     &                 'U grid center latitude',  'degrees_north')
+
+      ind = 0
+      ind = ind + 1
+      var(ind)%req = coord_attributes('tarea', 'area of T grid cells',
+     &                          'm^2')
+      var(ind)%coordinates = 'TLON TLAT'
+      ind = ind + 1
+
+      var(ind)%req = coord_attributes('uarea', 'area of U grid cells',
+     &                          'm^2')
+      var(ind)%coordinates = 'ULON ULAT'
+      ind = ind + 1
+      var(ind)%req = coord_attributes('dxt',
+     &               'T cell width through middle', 'm')
+      var(ind)%coordinates = 'TLON TLAT'
+      ind = ind + 1
+      var(ind)%req = coord_attributes('dyt',
+     &               'T cell height through middle', 'm')
+      var(ind)%coordinates = 'TLON TLAT'
+      ind = ind + 1
+      var(ind)%req = coord_attributes('dxu',
+     &               'U cell width through middle', 'm')
+      var(ind)%coordinates = 'ULON ULAT'
+      ind = ind + 1
+      var(ind)%req = coord_attributes('dyu',
+     &               'U cell height through middle', 'm')
+      var(ind)%coordinates = 'ULON ULAT'
+      ind = ind + 1
+      var(ind)%req = coord_attributes('HTN',
+     &               'T cell width on North side','m')
+      var(ind)%coordinates = 'TLON TLAT'
+
+      ind = ind + 1
+      var(ind)%req = coord_attributes('HTE',
+     &               'T cell width on East side', 'm')
+      var(ind)%coordinates = 'TLON TLAT'
+      ind = ind + 1
+      var(ind)%req = coord_attributes('ANGLET',
+     &               'angle grid makes with latitude line on T grid',
+     &               'radians')
+      var(ind)%coordinates = 'TLON TLAT'
+      ind = ind + 1
+      var(ind)%req = coord_attributes('ANGLE',
+     &               'angle grid makes with latitude line on U grid',
+     &               'radians')
+      var(ind)%coordinates = 'ULON ULAT'
+
+      !-----------------------------------------------------------------
+      ! define attributes for time-invariant variables
+      !-----------------------------------------------------------------
+
+        dimid(1) = imtid
+        dimid(2) = jmtid
+        dimid(3) = timid
+
+        do i = 1, ncoord
+          status = nf_def_var(ncid, coord_var(i)%short_name, nf_float,
+     &                       2, dimid, varid)
+          call nf_stat_check (status,
+     &            'Error defining short_name for'//coord_var(i)%short_name)
+          length = lenstr(coord_var(i)%long_name)
+          status = nf_put_att_text(ncid,varid, 'long_name', length,
+     &                       coord_var(i)%long_name)
+          call nf_stat_check (status,
+     &            'Error defining long_name for'//coord_var(i)%short_name)
+          length = lenstr(coord_var(i)%units)
+          status = nf_put_att_text(ncid, varid, 'units', length,
+     &                       coord_var(i)%units)
+          call nf_stat_check (status,
+     &            'Error defining units for'//coord_var(i)%short_name)
+          if (coord_var(i)%short_name == 'ULAT') then
+            status = nf_put_att_text(ncid,varid,'comment', 36,
+     $            'Latitude of NE corner of T grid cell')
+            call nf_stat_check (status,
+     &            'Error defining comment for'//coord_var(i)%short_name)
+          endif
+        enddo
+
+! Attributes for tmask defined separately, since it has no units
+        status = nf_def_var(ncid, 'tmask', nf_float, 2, dimid, varid)
+        call nf_stat_check (status,'Error defining variable tmask')
+        status = nf_put_att_text(ncid,varid, 'long_name', 15,
+     &                      'ocean grid mask') 
+        call nf_stat_check (status,'Error defining long_name for tmask')
+        status = nf_put_att_text(ncid, varid, 'coordinates', 9,
+     &              'TLON TLAT')
+        call nf_stat_check (status,'Error defining coordinates for tmask')
+        status = nf_put_att_text(ncid,varid,'comment', 19,
+     $            '0 = land, 1 = ocean')
+        call nf_stat_check (status,'Error defining comment for tmask')
+
+        do i = 1, nvar
+          status = nf_def_var(ncid, var(i)%req%short_name, nf_float,
+     &                        2, dimid, varid)
+          call nf_stat_check (status,
+     &             'Error defining variable'//var(i)%req%short_name)
+          length = lenstr(var(i)%req%long_name)
+          status = nf_put_att_text(ncid,varid, 'long_name', length,
+     &              var(i)%req%long_name)
+          call nf_stat_check (status,
+     &             'Error defining long_name for'//var(i)%req%short_name)
+          length = lenstr(var(i)%req%units)
+          status = nf_put_att_text(ncid, varid, 'units', length,
+     &              var(i)%req%units)
+          call nf_stat_check (status,
+     &             'Error defining units for'//var(i)%req%short_name)
+          length = lenstr(var(i)%coordinates)
+          status = nf_put_att_text(ncid, varid, 'coordinates', length,
+     &              var(i)%coordinates)
+          call nf_stat_check (status,
+     &             'Error defining coordinates for'//var(i)%req%short_name)
+         enddo
+
+      !-----------------------------------------------------------------
+      ! define attributes for ice_present
+      !-----------------------------------------------------------------
+         status  = nf_def_var(ncid, 'ice_present', nf_float, 3, dimid, varid)
+         call nf_stat_check (status,'Error defining variable ice_present')
+         status = nf_put_att_text(ncid,varid, 'units',1,'1')
+         call nf_stat_check (status,'Error defining units for ice_present')
+         status = nf_put_att_text(ncid,varid, 'long_name',59,
+     &     'fraction of time-averaging interval that any ice is present')
+         call nf_stat_check (status,
+     &                    'Error defining long_name for ice_present')
+         status = nf_put_att_text(ncid,varid,'coordinates',
+     &                          14,'TLON TLAT time')
+         call nf_stat_check (status,
+     &                    'Error defining coordinates for ice_present')
+
+#else
         dimid(1) = imtid
         dimid(2) = jmtid
 
@@ -1661,23 +1978,73 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         status = nf_put_att_text(ncid,varid,'coordinates',
      $                             5,'tlon tlat')
 
+#endif
         do n=1,avgsiz
           if (iout(n)) then
             status  = nf_def_var(ncid, vname(n), nf_float,
      $                         3, dimid, varid)
+#ifdef CCSM
+            call nf_stat_check (status,'Error defining variable'//vname(n))
+#endif
             length = lenstr(vunit(n))
             status = nf_put_att_text(ncid,varid,
      $             'units',length,vunit(n))
+#ifdef CCSM
+            call nf_stat_check (status,'Error defining units for'//vname(n))
+#endif
             length = lenstr(vdesc(n))
             status = nf_put_att_text(ncid,varid,
      $             'long_name',length,vdesc(n))
+#ifdef CCSM
+            call nf_stat_check (status,
+     $                       'Error defining long_name for'//vname(n))
+#endif
             status = nf_put_att_text(ncid,varid,'coordinates',
      $                             8,'i j time')
+#ifdef CCSM
+            call nf_stat_check (status,
+     $                       'Error defining coordinates for'//vname(n))
+#endif
             status = nf_put_att_real(ncid,varid,'missing_value',
-     $                             nf_float,1,spval)
-
-            status = nf_put_att_real(ncid,varid,'_fillvalue',
-     $                             nf_float,1,spval)
+     $                             nf_float,1,spval_real)
+#ifdef CCSM
+            call nf_stat_check (status,
+     $                       'Error defining mising_value for'//vname(n))
+#endif
+            status = nf_put_att_real(ncid,varid,'_FillValue',
+     $                             nf_float,1,spval_real)
+#ifdef CCSM
+            call nf_stat_check (status,
+     $                       'Error defining _FillValue for'//vname(n))
+      !-----------------------------------------------------------------
+      ! Append ice thickness range to aice# comments
+      !-----------------------------------------------------------------
+            c_aice = TRIM(vname(n))
+            i_aice = lenstr(c_aice)
+            if (c_aice(1:4) == 'aice' .and. i_aice > 4 ) then
+              if (i_aice == 5) then         ! categories 1-9
+                read(c_aice(i_aice:i_aice), '(i1)') icategory
+              else                          ! categories > 9
+                read(c_aice(i_aice-1:i_aice), '(i2)') icategory
+              endif
+              vcomment(n) = 'Ice range: '//c_hi_range(icategory)
+            endif
+            length = lenstr(vcomment(n))
+            status = nf_put_att_text(ncid,varid,'comment', length, vcomment(n))
+            call nf_stat_check (status,
+     &                     'Error defining comment for'//vname(n))
+      !-----------------------------------------------------------------
+      ! Add cell_methods attribute to variables if averaged
+      !-----------------------------------------------------------------
+            if (hist_avg) then
+              if (TRIM(vname(n))/='sig1'.or.TRIM(vname(n))/='sig2') then
+                status = nf_put_att_text(ncid,varid,'cell_methods',
+     $                               9,'time:mean')
+                call nf_stat_check (status,
+     &                         'Error defining cell methods for'//vname(n))
+              endif
+            endif
+#else
             if (histfreq == '1' .or. .not.hist_avg
      &          .or. n==n_divu .or. n==n_shear     ! snapshots
      &          .or. n==n_sig1 .or. n==n_sig2
@@ -1689,7 +2056,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
             status = nf_put_att_text(ncid,varid,'time_rep',
      $                               8,'averaged')
             endif
-
+#endif
           endif
         enddo
 
@@ -1698,6 +2065,48 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       !-----------------------------------------------------------------
       ! ... the user should change these to something useful ...
       !-----------------------------------------------------------------
+#ifdef CCSM
+        length = lenstr(runid)
+        status = nf_put_att_text(ncid,nf_global,'title',length,runid)
+        call nf_stat_check (status,'Error in global attribute title')
+
+        title = 'Diagnostic and Prognostic Variables'
+        length = lenstr(title)
+        status = nf_put_att_text(ncid,nf_global,'contents',length,title)
+        call nf_stat_check (status,'Error in global attribute contents')
+
+        title = 'CSIM4, the NCAR/CCSM2 Sea Ice Component'
+        length = lenstr(title)
+        status = nf_put_att_text(ncid,nf_global,'source',length,title)
+        call nf_stat_check (status,'Error in global attribute source')
+
+        title = 'CVS Tag: $Name$'
+        length = lenstr(title)
+        status = nf_put_att_text(ncid,nf_global,'revision',length,title)
+        call nf_stat_check (status,'Error in global attribute revision')
+
+        title = 'All years have exactly 365 days'
+        length = lenstr(title)
+        status = nf_put_att_text(ncid,nf_global,'comment',length,title)
+        call nf_stat_check (status,'Error in global attribute comment')
+
+        title = 'CF-1.0'
+        length = lenstr(title)
+        status = 
+     &       nf_put_att_text(ncid,nf_global,'conventions',length,title)
+        call nf_stat_check (status,'Error in global attribute conventions')
+
+        call date_and_time(date=current_date, time=current_time)
+        write(start_time,1000) current_date(1:4), current_date(5:6)
+     &,                        current_date(7:8), current_time(1:2)
+     &,                        current_time(3:4), current_time(5:8)
+1000    format('This dataset was created on '
+     &,         a,'-',a,'-',a,' at ',a,':',a,':',a)
+
+        length = lenstr(start_time)
+        status = nf_put_att_text(ncid,nf_global,'history',length,start_time)
+        call nf_stat_check (status,'Error in global attribute history')
+#else
         title  = 'sea ice model output for CICE'
         length = lenstr(title)
         status = nf_put_att_text(ncid,nf_global,'title',length,title)
@@ -1711,15 +2120,47 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         length = lenstr(title)
         status =
      &       nf_put_att_text(ncid,nf_global,'conventions',length,title)
+#endif
 
       !-----------------------------------------------------------------
       ! end define mode
       !-----------------------------------------------------------------
 
         status = nf_enddef(ncid)
+#ifdef CCSM
+        call nf_stat_check (status,'Error in nf_enddef')
 
+      !-----------------------------------------------------------------
+      ! write time variable
+      !-----------------------------------------------------------------
+
+        status = nf_inq_varid(ncid,'time',varid)
+        call nf_stat_check (status,'Error getting time varid')
+        status = nf_put_vara_real(ncid,varid,1,1,ltime)
+        call nf_stat_check (status,'Error writing time variable')
+
+      !-----------------------------------------------------------------
+      ! write time_bounds info
+      !-----------------------------------------------------------------
+
+        if (hist_avg) then
+          start(1) = 1
+          start(2) = 1
+          count(1)=1
+          count(2)=1
+          status = nf_inq_varid(ncid,'time_bounds',varid)
+          call nf_stat_check (status,'Error getting time_bounds id')
+          status = nf_put_vara_real(ncid,varid,start,count,time_beg)
+          call nf_stat_check (status,'Error writing time_beg')
+          start(1) = 2
+          status = nf_put_vara_real(ncid,varid,start,count,time_end)
+          call nf_stat_check (status,'Error writing time_end')
+        endif
+
+#else
         status  = nf_inq_varid(ncid,'time',varid)
         status  = nf_put_vara_real(ncid,varid,1,1,ltime)
+#endif
 
       endif                     ! master_task
 
@@ -1731,6 +2172,99 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
          allocate(work_g1(1,1))
       endif
 
+#ifdef CCSM
+      !-----------------------------------------------------------------
+      ! write coordinate variables
+      !-----------------------------------------------------------------
+
+        do i = 1,ncoord
+          SELECT CASE (coord_var(i)%short_name)
+            CASE ('TLON')
+              call gather_global(work_g1, TLON, master_task, distrb_info)
+! Convert T grid longitude from -180 -> 180 to 0 to 360
+              work_gr = work_g1*rad_to_deg + c360    ! single precision
+              where (work_gr > c360) work_gr = work_gr - c360
+              where (work_gr < c0 )  work_gr = work_gr + c360
+            CASE ('TLAT')
+              call gather_global(work_g1, TLAT, master_task, distrb_info)
+              work_gr = work_g1*rad_to_deg
+            CASE ('ULON')
+              call gather_global(work_g1, ULON, master_task, distrb_info)
+              work_gr = work_g1*rad_to_deg
+            CASE ('ULAT')
+              call gather_global(work_g1, ULAT, master_task, distrb_info)
+              work_gr = work_g1*rad_to_deg
+          END SELECT
+          status = nf_inq_varid(ncid, coord_var(i)%short_name, varid)
+          call nf_stat_check (status,'Error getting varid for'
+     &                                //coord_var(i)%short_name)
+          status = nf_put_var_real(ncid,varid,work_gr)
+          call nf_stat_check (status,'Error writing'
+     &                                //coord_var(i)%short_name)
+        enddo
+
+      !-----------------------------------------------------------------
+      ! write grid mask, area and rotation angle
+      !-----------------------------------------------------------------
+
+      call gather_global(work_g1, hm, master_task, distrb_info)
+      if (my_task == master_task) then
+        work_gr=work_g1
+        status = nf_inq_varid(ncid, 'tmask', varid)
+        call nf_stat_check (status,'Error getting varid for tmask')
+        status = nf_put_var_real(ncid,varid,work_gr)
+        call nf_stat_check (status,'Error writing variable tmask')
+      endif
+
+      do i = 1,nvar
+        call broadcast_scalar(var(i)%req%short_name,master_task)
+        SELECT CASE (var(i)%req%short_name)
+          CASE ('tarea')
+            call gather_global(work_g1, tarea, master_task, distrb_info)
+          CASE ('uarea')
+            call gather_global(work_g1, uarea, master_task, distrb_info)
+          CASE ('dxu')
+            call gather_global(work_g1,   dxu, master_task, distrb_info)
+          CASE ('dyu')
+            call gather_global(work_g1,   dyu, master_task, distrb_info)
+          CASE ('dxt')
+            call gather_global(work_g1,   dxt, master_task, distrb_info)
+          CASE ('dyt')
+            call gather_global(work_g1,   dyt, master_task, distrb_info)
+          CASE ('HTN')
+            call gather_global(work_g1,   HTN, master_task, distrb_info)
+          CASE ('HTE')
+            call gather_global(work_g1,   HTE, master_task, distrb_info)
+          CASE ('ANGLE')
+            call gather_global(work_g1, ANGLE, master_task, distrb_info)
+          CASE ('ANGLET')
+            call gather_global(work_g1, ANGLET, master_task, distrb_info)
+        END SELECT
+
+        if (my_task == master_task) then
+          work_gr=work_g1
+          status = nf_inq_varid(ncid, var(i)%req%short_name, varid)
+          call nf_stat_check (status,'Error getting varid for'
+     &                          //var(i)%req%short_name)
+          status = nf_put_var_real(ncid,varid,work_gr)
+          call nf_stat_check (status,'Error writing variable'
+     &                          //var(i)%req%short_name)
+        endif
+      enddo
+
+      !-----------------------------------------------------------------
+      ! write ice_present
+      !-----------------------------------------------------------------
+      call gather_global(work_g1, ice_present, master_task, distrb_info)
+      if (my_task == master_task) then
+        work_gr=work_g1
+        status = nf_inq_varid(ncid, 'ice_present', varid)
+        call nf_stat_check (status,'Error getting varid for ice_present')
+        status = nf_put_var_real(ncid,varid,work_gr)
+        call nf_stat_check (status,'Error writing variable ice_present')
+      endif
+
+#else
       !-----------------------------------------------------------------
       ! write latitude and longitude
       !-----------------------------------------------------------------
@@ -1769,6 +2303,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         status  = nf_inq_varid(ncid,'rotang',varid)
         status  = nf_put_var_real(ncid,varid,work_gr)
       endif
+#endif
 
       deallocate(work_gr)
 
@@ -1793,7 +2328,15 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           if (my_task == master_task) then
             work_gr3(:,:,1) = work_g1
             status  = nf_inq_varid(ncid,vname(n),varid)
+#ifdef CCSM
+            call nf_stat_check (status,'Error getting varid for'
+     &                          //vname(n))
+#endif
             status  = nf_put_vara_real(ncid,varid,start,count,work_gr3)
+#ifdef CCSM
+            call nf_stat_check (status,'Error writing variable'
+     &                          //vname(n))
+#endif
           endif
         endif
       enddo
@@ -1807,12 +2350,58 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
       if (my_task == master_task) then
          status = nf_close(ncid)
+#ifdef CCSM
+         call nf_stat_check (status,'Error closing netCDF history file')
+         write(nu_diag,*) ' '
+         write(nu_diag,*) 'Finished writing ',trim(dir_ncfile)
+#else
          write(nu_diag,*) ' '
          write(nu_diag,*) 'Finished writing ',ncfile(1:lenstr(ncfile))
+#endif
          write(nu_diag,*) ' '
       endif
 
       end subroutine icecdf
+#ifdef CCSM
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: nf_stat_check - check error code returned from netCDF call
+!
+! !INTERFACE:
+!
+      subroutine nf_stat_check (status,msg)
+
+!
+! !DESCRIPTION:
+!
+! Check error code returned from netCDF calls \\
+! If bad, abort
+!
+! !REVISION HISTORY:
+!
+! author:   ?
+! 
+! !USES:
+!
+      use ice_exit
+      include "netcdf.inc"
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: status
+      character (len = *), intent(in) :: msg
+!
+!EOP
+!
+      if (status /= NF_NOERR) then
+        write (nu_diag,*) msg//nf_strerror(status)
+        call abort_ice ('ice: writing netCDF file in ice_history.F')
+      endif
+
+      end subroutine nf_stat_check
+#endif
 
 !=======================================================================
 
