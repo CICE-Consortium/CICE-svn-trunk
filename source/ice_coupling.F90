@@ -63,7 +63,7 @@
              CICE_CoupledExtractImport, &
              CICE_CoupledFillExport,    &
              CICE_CoupledAccumulateExport
-#else
+#elif CCSM
    public :: ice_coupling_setup, &
              init_cpl,           &
              to_coupler,         &
@@ -1719,27 +1719,27 @@
    ! initialize export state with special values
    !
 
-   exportPtrIfrac   = spval
-   exportPtrTsrf    = spval
-   exportPtrAlbvdr  = spval
-   exportPtrAlbidr  = spval
-   exportPtrAlbvdf  = spval
-   exportPtrAlbidf  = spval
-   exportPtrTauxa   = spval
-   exportPtrTauya   = spval
-   exportPtrFlat    = spval
-   exportPtrFsens   = spval
-   exportPtrFLWout  = spval
-   exportPtrEvap    = spval
-   exportPtrTref    = spval
-   exportPtrQref    = spval
-   exportPtrFSWabs  = spval
-   exportPtrFSWthru = spval
-   exportPtrFmelt   = spval
-   exportPtrFresh   = spval
-   exportPtrFsalt   = spval
-   exportPtrTauxo   = spval
-   exportPtrTauyo   = spval
+   exportPtrIfrac   = spval_dbl
+   exportPtrTsrf    = spval_dbl
+   exportPtrAlbvdr  = spval_dbl
+   exportPtrAlbidr  = spval_dbl
+   exportPtrAlbvdf  = spval_dbl
+   exportPtrAlbidf  = spval_dbl
+   exportPtrTauxa   = spval_dbl
+   exportPtrTauya   = spval_dbl
+   exportPtrFlat    = spval_dbl
+   exportPtrFsens   = spval_dbl
+   exportPtrFLWout  = spval_dbl
+   exportPtrEvap    = spval_dbl
+   exportPtrTref    = spval_dbl
+   exportPtrQref    = spval_dbl
+   exportPtrFSWabs  = spval_dbl
+   exportPtrFSWthru = spval_dbl
+   exportPtrFmelt   = spval_dbl
+   exportPtrFresh   = spval_dbl
+   exportPtrFsalt   = spval_dbl
+   exportPtrTauxo   = spval_dbl
+   exportPtrTauyo   = spval_dbl
 
    do iblk = 1, nblocks
    do j = 1, ny_block
@@ -2506,7 +2506,7 @@
          end do
       endif
 
-      buffs(:,:)=spval
+      buffs(:,:)=spval_dbl
       n=0
       do iblk = 1, nblocks
        do j = 1, ny_block

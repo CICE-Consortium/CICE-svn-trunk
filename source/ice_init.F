@@ -71,10 +71,13 @@ c $Id: ice_init.F,v 1.9 2004/02/09 17:58:46 lipscomb Exp $
       use ice_fileunits
       use ice_calendar, only: year_init, istep0, histfreq, diagfreq,
      &                        dumpfreq, dumpfreq_n, npt, dt, ndyn_dt
-      use ice_restart, only: restart, restart_dir, restart_file,
-     &     pointer_file, runid, runtype
+      use ice_restart, only: 
+     &    restart, restart_dir, restart_file, pointer_file
+#ifdef CCSM
+     &,   runid, runtype
+#endif
       use ice_history, only: hist_avg, history_dir, history_file,
-     &     incond_dir, incond_file
+     &                       incond_dir, incond_file
       use ice_exit
       use ice_itd, only: kitd, kcatbound
       use ice_ocean, only: oceanmixed_ice

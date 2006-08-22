@@ -1529,10 +1529,12 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
      &                        mday, write_ic, histfreq, year_init,
      &                        new_year, new_month, new_day
       use ice_work, only: work_g1, work_gr, work_gr3
-      use ice_restart, only: lenstr, runid
 #ifdef CCSM
+      use ice_restart, only: lenstr, runid
       use ice_domain, only: distrb_info
       use ice_itd, only: c_hi_range
+#else
+      use ice_restart, only: lenstr
 #endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1553,7 +1555,6 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 #ifdef CCSM
       integer (kind=int_kind) :: icategory,ind,i_aice,boundid
 
-      real (kind=real_kind),parameter :: spval_real=spval
       character (char_len) :: start_time,current_date,current_time
       character (char_len_long) :: dir_ncfile  !Local dir+fname
       character (len=16) :: c_aice
@@ -1999,12 +2000,12 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
             call nf_stat_check (status,
      $                       'Error defining coordinates for'//vname(n))
             status = nf_put_att_real(ncid,varid,'missing_value',
-     $                             nf_float,1,spval_real)
+     $                             nf_float,1,spval)
             call nf_stat_check (status,
      $                       'Error defining mising_value for'//vname(n))
 
             status = nf_put_att_real(ncid,varid,'_FillValue',
-     $                             nf_float,1,spval_real)
+     $                             nf_float,1,spval)
             call nf_stat_check (status,
      $                       'Error defining _FillValue for'//vname(n))
       !-----------------------------------------------------------------
@@ -2047,9 +2048,9 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
             status = nf_put_att_text(ncid,varid,'coordinates',
      $                             8,'i j time')
             status = nf_put_att_real(ncid,varid,'missing_value',
-     $                             nf_float,1,spval_real)
+     $                             nf_float,1,spval)
             status = nf_put_att_real(ncid,varid,'_FillValue',
-     $                             nf_float,1,spval_real)
+     $                             nf_float,1,spval)
 
 #endif
 
