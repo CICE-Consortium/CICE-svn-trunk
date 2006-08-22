@@ -29,9 +29,6 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       use ice_blocks
       use ice_read_write
       use ice_fileunits
-#ifdef CCSM
-      use shr_sys_mod, only : shr_sys_flush
-#endif
 !
 !EOP
 !
@@ -1013,9 +1010,6 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
             if (iout(n)) write(nu_diag,100) vdesc(n), vunit(n), vname(n)
          enddo
          write(nu_diag,*) ' '
-#ifdef CCSM
-        call shr_sys_flush(nu_diag)
-#endif
       endif
   100 format (1x,a40,2x,a10,2x,a10)
 
@@ -1587,6 +1581,14 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
         ltime=time/int(secday)
 
+#ifdef CCSM
+        iyear = nyr
+#else
+        iyear = nyr + year_init - 1
+#endif
+        imonth = month
+        iday = mday
+
         ! construct filename
         if (write_ic) then
 #ifdef CCSM
@@ -1642,9 +1644,6 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           endif
          endif
 #else
-         iyear = nyr + year_init - 1
-         imonth = month
-         iday = mday
          if (new_year) then
            iyear = iyear - 1
            imonth = 12
@@ -1981,39 +1980,31 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 #endif
         do n=1,avgsiz
           if (iout(n)) then
-            status  = nf_def_var(ncid, vname(n), nf_float,
-     $                         3, dimid, varid)
 #ifdef CCSM
+            status  = nf_def_var(ncid, vname(n), nf_float, 
+     $                         3, dimid, varid)
             call nf_stat_check (status,'Error defining variable'//vname(n))
-#endif
             length = lenstr(vunit(n))
             status = nf_put_att_text(ncid,varid,
      $             'units',length,vunit(n))
-#ifdef CCSM
             call nf_stat_check (status,'Error defining units for'//vname(n))
-#endif
             length = lenstr(vdesc(n))
             status = nf_put_att_text(ncid,varid,
      $             'long_name',length,vdesc(n))
-#ifdef CCSM
             call nf_stat_check (status,
      $                       'Error defining long_name for'//vname(n))
-#endif
+            length = lenstr(vcoord(n))
             status = nf_put_att_text(ncid,varid,'coordinates',
-     $                             8,'i j time')
-#ifdef CCSM
+     $                             length,vcoord(n))
             call nf_stat_check (status,
      $                       'Error defining coordinates for'//vname(n))
-#endif
             status = nf_put_att_real(ncid,varid,'missing_value',
      $                             nf_float,1,spval_real)
-#ifdef CCSM
             call nf_stat_check (status,
      $                       'Error defining mising_value for'//vname(n))
-#endif
+
             status = nf_put_att_real(ncid,varid,'_FillValue',
      $                             nf_float,1,spval_real)
-#ifdef CCSM
             call nf_stat_check (status,
      $                       'Error defining _FillValue for'//vname(n))
       !-----------------------------------------------------------------
@@ -2045,6 +2036,23 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
               endif
             endif
 #else
+            status  = nf_def_var(ncid, vname(n), nf_float,
+     $                         3, dimid, varid)
+            length = lenstr(vunit(n))
+            status = nf_put_att_text(ncid,varid,
+     $             'units',length,vunit(n))
+            length = lenstr(vdesc(n))
+            status = nf_put_att_text(ncid,varid,
+     $             'long_name',length,vdesc(n))
+            status = nf_put_att_text(ncid,varid,'coordinates',
+     $                             8,'i j time')
+            status = nf_put_att_real(ncid,varid,'missing_value',
+     $                             nf_float,1,spval_real)
+            status = nf_put_att_real(ncid,varid,'_FillValue',
+     $                             nf_float,1,spval_real)
+
+#endif
+
             if (histfreq == '1' .or. .not.hist_avg
      &          .or. n==n_divu .or. n==n_shear     ! snapshots
      &          .or. n==n_sig1 .or. n==n_sig2
@@ -2056,7 +2064,6 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
             status = nf_put_att_text(ncid,varid,'time_rep',
      $                               8,'averaged')
             endif
-#endif
           endif
         enddo
 
@@ -2075,15 +2082,15 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         status = nf_put_att_text(ncid,nf_global,'contents',length,title)
         call nf_stat_check (status,'Error in global attribute contents')
 
-        title = 'CSIM4, the NCAR/CCSM2 Sea Ice Component'
+        title  = 'sea ice model: Community Ice Code (CICE)'
         length = lenstr(title)
         status = nf_put_att_text(ncid,nf_global,'source',length,title)
         call nf_stat_check (status,'Error in global attribute source')
 
-        title = 'CVS Tag: $Name$'
-        length = lenstr(title)
-        status = nf_put_att_text(ncid,nf_global,'revision',length,title)
-        call nf_stat_check (status,'Error in global attribute revision')
+!       title = 'CVS Tag: $Name$'
+!       length = lenstr(title)
+!       status = nf_put_att_text(ncid,nf_global,'revision',length,title)
+!       call nf_stat_check (status,'Error in global attribute revision')
 
         title = 'All years have exactly 365 days'
         length = lenstr(title)
@@ -2165,8 +2172,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       endif                     ! master_task
 
       if (my_task==master_task) then
-         allocate(work_gr(nx_global,ny_global))
          allocate(work_g1(nx_global,ny_global))
+         allocate(work_gr(nx_global,ny_global))
       else
          allocate(work_gr(1,1))   ! to save memory
          allocate(work_g1(1,1))
@@ -2178,29 +2185,35 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       !-----------------------------------------------------------------
 
         do i = 1,ncoord
+          call broadcast_scalar(coord_var(i)%short_name,master_task)
           SELECT CASE (coord_var(i)%short_name)
             CASE ('TLON')
               call gather_global(work_g1, TLON, master_task, distrb_info)
+              if (my_task == master_task) then
 ! Convert T grid longitude from -180 -> 180 to 0 to 360
-              work_gr = work_g1*rad_to_deg + c360    ! single precision
-              where (work_gr > c360) work_gr = work_gr - c360
-              where (work_gr < c0 )  work_gr = work_gr + c360
+                 work_gr = work_g1*rad_to_deg + c360    ! single precision
+                 where (work_gr > c360) work_gr = work_gr - c360
+                 where (work_gr < c0 )  work_gr = work_gr + c360
+              endif
             CASE ('TLAT')
               call gather_global(work_g1, TLAT, master_task, distrb_info)
-              work_gr = work_g1*rad_to_deg
+              if (my_task == master_task) work_gr = work_g1*rad_to_deg
             CASE ('ULON')
               call gather_global(work_g1, ULON, master_task, distrb_info)
-              work_gr = work_g1*rad_to_deg
+              if (my_task == master_task) work_gr = work_g1*rad_to_deg
             CASE ('ULAT')
               call gather_global(work_g1, ULAT, master_task, distrb_info)
-              work_gr = work_g1*rad_to_deg
+              if (my_task == master_task) work_gr = work_g1*rad_to_deg
           END SELECT
-          status = nf_inq_varid(ncid, coord_var(i)%short_name, varid)
-          call nf_stat_check (status,'Error getting varid for'
-     &                                //coord_var(i)%short_name)
-          status = nf_put_var_real(ncid,varid,work_gr)
-          call nf_stat_check (status,'Error writing'
-     &                                //coord_var(i)%short_name)
+          
+          if (my_task == master_task) then
+             status = nf_inq_varid(ncid, coord_var(i)%short_name, varid)
+             call nf_stat_check (status,'Error getting varid for'
+     &                                   //coord_var(i)%short_name)
+             status = nf_put_var_real(ncid,varid,work_gr)
+             call nf_stat_check (status,'Error writing'
+     &                                   //coord_var(i)%short_name)
+          endif
         enddo
 
       !-----------------------------------------------------------------
@@ -2304,7 +2317,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         status  = nf_put_var_real(ncid,varid,work_gr)
       endif
 #endif
-
+    
       deallocate(work_gr)
 
       if (my_task==master_task) then
@@ -2326,7 +2339,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           call gather_global(work_g1, aa(:,:,n,:),
      &                       master_task, distrb_info)
           if (my_task == master_task) then
-            work_gr3(:,:,1) = work_g1
+            work_gr3(:,:,1) = work_g1(:,:)
             status  = nf_inq_varid(ncid,vname(n),varid)
 #ifdef CCSM
             call nf_stat_check (status,'Error getting varid for'

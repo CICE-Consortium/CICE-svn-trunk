@@ -197,8 +197,12 @@
 
       if (present(hit_eof)) then
          call broadcast_scalar(hit_eof,master_task)
-         if (hit_eof) return
+         if (hit_eof) then
+            deallocate(work_g1)
+            return
+         endif
       endif
+
 
     !-------------------------------------------------------------------
     ! optional diagnostics
