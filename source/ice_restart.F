@@ -102,16 +102,16 @@
 
       logical (kind=log_kind) :: diag
 
+      write(filename,'(a,a,a,i8.8)') 
+     &     restart_dir(1:lenstr(restart_dir)),
+     &     restart_file(1:lenstr(restart_file)),'.',idate
+
       if (my_task == master_task) then
         open(nu_rst_pointer,file=pointer_file)
         write(nu_rst_pointer,'(a80)') filename
         close(nu_rst_pointer)
         write (nu_diag,*) 'dump filename =', trim(filename)
       endif
-
-      write(filename,'(a,a,a,i8.8)') 
-     &     restart_dir(1:lenstr(restart_dir)),
-     &     restart_file(1:lenstr(restart_file)),'.',idate
 
       call ice_open(nu_dump,filename,0)
 
