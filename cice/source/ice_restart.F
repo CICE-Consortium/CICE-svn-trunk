@@ -102,8 +102,7 @@
 
       logical (kind=log_kind) :: diag
 
-      write(filename,'(a,a,a,i8.8)') 
-     &     restart_dir(1:lenstr(restart_dir)),
+      write(filename,'(a,a,i8.8)') 
      &     restart_file(1:lenstr(restart_file)),'.',idate
 
       if (my_task == master_task) then
@@ -113,10 +112,14 @@
         write (nu_diag,*) 'dump filename =', trim(filename)
       endif
 
+      write(filename,'(a,a,a,i8.8)') 
+     &     restart_dir(1:lenstr(restart_dir)),
+     &     restart_file(1:lenstr(restart_file)),'.',idate
+
       call ice_open(nu_dump,filename,0)
 
       if (my_task == master_task) then
-        write (nu_dump) istep1,time,time_forc
+        write(nu_dump) istep1,time,time_forc
         write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
         write(nu_diag,*) 'Restart written ',istep1,time,time_forc
       endif
@@ -295,8 +298,6 @@
          if (.not.(trim(runtype) == "continue")) then
             esnon(:,:,n,:) = -rhos*Lfresh*vsnon(:,:,n,:)
          endif
-#else
-         call ice_read(nu_restart,0,esnon(:,:,n,:),'ruf8',diag)
 #endif
       enddo
 
@@ -308,15 +309,15 @@
 
 #ifdef CCSM
       if (trim(runtype) == "continue") then
-
 #endif
+
       if (my_task == master_task)
      &     write(nu_diag,*) 'min/max esnon for each layer'
       do k=1,ntslyr
          call ice_read(nu_restart,0,esnon(:,:,k,:),'ruf8',diag)
       enddo
-#ifdef CCSM
 
+#ifdef CCSM
       endif
 #endif
 

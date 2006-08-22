@@ -240,8 +240,6 @@
       ! dynamics, transport, ridging
       !-----------------------------------------------------------------
 
-!lipscomb
-         ndyn_dt = 1
          do k = 1, ndyn_dt
             call step_dynamics (dyn_dt)
          enddo

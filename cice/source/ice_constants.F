@@ -59,9 +59,9 @@ c $Id: ice_constants.F,v 1.6 2004/02/09 17:58:46 lipscomb Exp $
      &,  Timelt    = SHR_CONST_TKFRZ-SHR_CONST_TKFRZ ! melting temp. ice top surface  (C)
      &,  Tsmelt    = SHR_CONST_TKFRZ-SHR_CONST_TKFRZ ! melting temp. snow top surface (C)
      &,  ice_ref_salinity = SHR_CONST_ICE_REF_SAL  ! (psu)
-     &,  spval     = SHR_CONST_SPVAL  ! special value
-c    &,  ocn_ref_salinity = SHR_CONST_OCN_REF_SAL  ! (psu)
-c    &,  rho_air   = SHR_CONST_RHODAIR  ! ambient air density (kg/m^3)
+     &,  spval_dbl = SHR_CONST_SPVAL  ! special value
+!    &,  ocn_ref_salinity = SHR_CONST_OCN_REF_SAL  ! (psu)
+!    &,  rho_air   = SHR_CONST_RHODAIR  ! ambient air density (kg/m^3)
 #else
       real (kind=dbl_kind), parameter ::
      &   pi = 3.14159265358979323846_dbl_kind ! pi
@@ -87,12 +87,13 @@ c    &,  rho_air   = SHR_CONST_RHODAIR  ! ambient air density (kg/m^3)
      &,  Tsmelt    = 0.0_dbl_kind      ! melting temperature, snow top surface (C)
      &,  ice_ref_salinity = 4._dbl_kind  ! (psu)
                                        ! interpreted by ferret as NaN
-c    &,  ocn_ref_salinity   = 34.7_dbl_kind  ! (psu)
-c    &,  rho_air   = 1.2_dbl_kind      ! ambient air density (kg/m^3)
+!    &,  ocn_ref_salinity   = 34.7_dbl_kind  ! (psu)
+!    &,  rho_air   = 1.2_dbl_kind      ! ambient air density (kg/m^3)
+     &,  spval_dbl = 1.0e30_dbl_kind   ! special value (double precision)
+#endif
 
       real (kind=real_kind), parameter ::
      &   spval     = 1.0e30_real_kind  ! special value for netCDF output
-#endif
 
       real (kind=dbl_kind), parameter ::
      &   rhos     = 330.0_dbl_kind     ! density of snow (kg/m^3)

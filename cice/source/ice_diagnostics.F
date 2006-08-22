@@ -626,11 +626,13 @@
 
         if (print_global) then  ! global diags for conservations checks
 
+#ifdef CCSM
         if (prescribed_ice) then
           write (nu_diag,*) '----------------------------'
           write (nu_diag,*)   'This is the prescribed ice option.'
           write (nu_diag,*)   'Heat and water will not be conserved.'   
         else
+#endif
 
           write (nu_diag,*) '----------------------------'
           write (nu_diag,801) 'arwt rain h2o kg in dt = ',rnn
@@ -647,9 +649,9 @@
           write (nu_diag,801) 'arwt water flux        = ',fluxn
           write (nu_diag,*) '(=rain+snow+evap+frzl-fresh)  '
           write (nu_diag,801) 'water flux error       = ',werrn
-
+#ifdef CCSM
          endif                    ! prescribed_ice
-       
+#endif       
          write (nu_diag,*) '----------------------------'
          write (nu_diag,801) 'arwt atm heat flux (W) = ',fhatmn
          write (nu_diag,801) 'arwt ocn heat flux (W) = ',fhocnn
