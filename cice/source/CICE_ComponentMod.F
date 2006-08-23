@@ -11,6 +11,7 @@
 !  finalize and run methods for CICE.
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors:  Philip W. Jones, LANL
 !

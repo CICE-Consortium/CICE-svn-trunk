@@ -8,6 +8,7 @@
 ! Calendar routines for managing time
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors: Elizabeth C. Hunke, LANL
 !          Tony Craig, NCAR

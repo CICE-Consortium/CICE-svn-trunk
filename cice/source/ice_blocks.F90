@@ -12,6 +12,7 @@
 !  querying the block decomposition for a global domain.
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! author: Phil Jones, LANL
 ! Oct. 2004: Adapted from POP by William H. Lipscomb, LANL

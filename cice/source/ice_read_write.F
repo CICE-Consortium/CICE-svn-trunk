@@ -8,6 +8,7 @@
 ! Routines for opening, reading and writing external files
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! author: Tony Craig, NCAR
 !

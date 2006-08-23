@@ -9,6 +9,7 @@
 ! Read and write ice model restart files
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors Elizabeth C. Hunke, LANL
 !         William H. Lipscomb LANL

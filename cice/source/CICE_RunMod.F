@@ -9,6 +9,7 @@
 !  Contains main driver routine for time stepping of CICE.
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 !  authors Elizabeth C. Hunke, LANL
 !          Philip W. Jones, LANL

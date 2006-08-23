@@ -8,6 +8,7 @@
 ! Spatial grids, masks, and boundary conditions
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors: Elizabeth C. Hunke and William H. Lipscomb, LANL
 !          Tony Craig, NCAR

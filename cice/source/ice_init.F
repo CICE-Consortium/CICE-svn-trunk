@@ -8,6 +8,7 @@
 ! parameter and variable initializations
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors Elizabeth C. Hunke and William H. Lipscomb, LANL
 !         C. M. Bitz, UW

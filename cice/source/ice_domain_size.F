@@ -9,6 +9,7 @@
 ! Code originally based on domain_size.F in POP
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! author Elizabeth C. Hunke, LANL
 ! 2004: Block structure and snow parameters added by William Lipscomb

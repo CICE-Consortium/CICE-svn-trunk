@@ -8,6 +8,7 @@
 ! Diagnostic information output during run
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors: Elizabeth C. Hunke, LANL
 !          Bruce P. Briegleb, NCAR

@@ -36,6 +36,7 @@
 !     but in individual modules (e.g., ice_therm_vertical).
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors C. M. Bitz, UW
 !         Elizabeth C. Hunke and William H. Lipscomb, LANL

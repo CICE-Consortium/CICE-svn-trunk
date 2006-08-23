@@ -23,6 +23,7 @@
 ! [Still in draft form as of May 2006 - WHL]
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! name: originally ice_albedo
 !

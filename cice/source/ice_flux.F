@@ -11,6 +11,7 @@
 ! ("diagnostic"), and used internally ("internal").
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! author Elizabeth C. Hunke, LANL
 !

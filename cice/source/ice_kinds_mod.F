@@ -9,6 +9,7 @@
 ! Code originally based on kinds_mod.F in POP
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! author: Elizabeth C. Hunke and William H. Lipscomb, LANL
 !
