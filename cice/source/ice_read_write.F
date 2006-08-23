@@ -1,6 +1,3 @@
-! CVS: $Id: ice_read_write.F,v 1.4 2003/11/06 01:23:04 lipscomb Exp $
-! CVS: $Source: /home/climate/CVS-COSIM/cice/source/ice_read_write.F,v $
-! CVS: $Name:  $
 !=======================================================================
 !BOP
 !
