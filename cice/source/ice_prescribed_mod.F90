@@ -22,12 +22,12 @@ module ice_prescribed_mod
 
 ! !USES:
 
+#ifdef CCSM
    use shr_stream_mod
    use shr_map_mod
    use shr_ncread_mod
    use shr_sys_mod
 
-#ifdef CCSM
    use ice_broadcast
    use ice_communicate, only : my_task, master_task
    use ice_kinds_mod
