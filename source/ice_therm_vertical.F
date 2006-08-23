@@ -14,6 +14,7 @@
 !       needed for coupling.
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors: William H. Lipscomb, LANL
 !          C. M. Bitz, UW

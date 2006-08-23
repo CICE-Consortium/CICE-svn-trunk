@@ -8,6 +8,7 @@
 ! Calculates horizontal advection using an upwind algorithm
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors: Elizabeth C. Hunke and William H. Lipscomb, LANL 
 !

@@ -18,6 +18,7 @@
 ! J. Geophys. Res., 106, 2441--2464.
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors: C. M. Bitz, UW
 !          William H. Lipscomb and Elizabeth C. Hunke, LANL

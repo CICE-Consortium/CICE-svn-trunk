@@ -10,6 +10,7 @@
 !  parameters and initializes the grid and CICE state variables.
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 !  authors Elizabeth C. Hunke, LANL
 !          William H. Lipscomb, LANL

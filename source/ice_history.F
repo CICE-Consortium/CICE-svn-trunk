@@ -9,6 +9,7 @@
 ! Output files: netCDF data, Fortran unformatted dumps
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors Tony Craig and Bruce Briegleb, NCAR
 !         Elizabeth C. Hunke and William H. Lipscomb, LANL

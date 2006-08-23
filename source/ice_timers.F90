@@ -10,6 +10,7 @@
 !  and accumulates time for each individual block and node (task).
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! 2005: Adapted from POP by William Lipscomb
 !       Replaced 'stdout' by 'nu_diag'

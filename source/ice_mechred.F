@@ -28,6 +28,7 @@
 !  80, 4501-4513. 
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors: William H. Lipscomb, LANL
 !          Elizabeth C. Hunke, LANL

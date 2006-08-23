@@ -11,6 +11,7 @@
 ! Code originally based on constants.F in POP
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! author Elizabeth C. Hunke, LANL
 !

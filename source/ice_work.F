@@ -10,6 +10,7 @@
 ! These arrays should be used only within a single subroutine!
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
 !
 ! authors Elizabeth C. Hunke and William H. Lipscomb, LANL
 !
