@@ -1,4 +1,3 @@
-! $Id:  $
 !=======================================================================
 !
 !BOP
@@ -447,8 +446,8 @@
 
             ! identify ice-ocean cells
             icells = 0
-            do j = 1, nx_block
-            do i = 1, ny_block
+            do j = 1, ny_block
+            do i = 1, nx_block
                if (tmask(i,j,iblk)) then
                   icells = icells + 1
                   indxi(icells) = i
