@@ -102,8 +102,19 @@
 
       logical (kind=log_kind) :: diag
 
+#ifdef CCSM
+      ! write pointer (dir/filename)
+      iyear = nyr
+      imonth = month
+      iday = mday
+
+      write(filename,'(a,i4.4,a,i2.2,a,i2.2,a,i5.5)') 
+     &   restart_file(1:lenstr(restart_file)),
+     &   iyear,'-',imonth,'-',iday,'-',sec
+#else
       write(filename,'(a,a,i8.8)') 
      &     restart_file(1:lenstr(restart_file)),'.',idate
+#endif
 
       if (my_task == master_task) then
         open(nu_rst_pointer,file=pointer_file)
@@ -112,9 +123,16 @@
         write (nu_diag,*) 'dump filename =', trim(filename)
       endif
 
+#ifdef CCSM
+      write(filename,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') 
+     &   restart_dir(1:lenstr(restart_dir)),
+     &   restart_file(1:lenstr(restart_file)),
+     &   iyear,'-',imonth,'-',iday,'-',sec
+#else
       write(filename,'(a,a,a,i8.8)') 
      &     restart_dir(1:lenstr(restart_dir)),
      &     restart_file(1:lenstr(restart_file)),'.',idate
+#endif
 
       call ice_open(nu_dump,filename,0)
 
