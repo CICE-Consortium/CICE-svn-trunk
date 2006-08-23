@@ -137,7 +137,6 @@
          do it = 1, ntrcr
             call ice_write(nu_dump,0,trcrn(:,:,it,n,:),'ruf8',diag)
          enddo
-         call ice_write(nu_dump,0,esnon(:,:,k,:),'ruf8',diag)
       enddo
 
       do k=1,ntilyr

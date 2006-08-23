@@ -10,8 +10,6 @@
 !  and accumulates time for each individual block and node (task).
 !
 ! !REVISION HISTORY:
-!  CVS:$Id: timers.F90,v 1.11 2003/12/23 22:11:40 pwjones Exp $
-!  CVS:$Name:  $
 !
 ! 2005: Adapted from POP by William Lipscomb
 !       Replaced 'stdout' by 'nu_diag'
