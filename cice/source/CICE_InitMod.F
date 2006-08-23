@@ -153,8 +153,6 @@
 
       call shr_msg_chdir('ice')! change cwd
 
-      if (my_task == master_task) call shr_msg_dirio('ice')    ! redirect stdin/ stdout
-
 #endif
 
 

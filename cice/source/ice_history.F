@@ -2087,11 +2087,6 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         status = nf_put_att_text(ncid,nf_global,'source',length,title)
         call nf_stat_check (status,'Error in global attribute source')
 
-!       title = 'CVS Tag: $Name$'
-!       length = lenstr(title)
-!       status = nf_put_att_text(ncid,nf_global,'revision',length,title)
-!       call nf_stat_check (status,'Error in global attribute revision')
-
         title = 'All years have exactly 365 days'
         length = lenstr(title)
         status = nf_put_att_text(ncid,nf_global,'comment',length,title)
