@@ -214,6 +214,9 @@
 !EOP
 !
       call init_communicate     ! initial setup for message passing
+#ifdef CCSM
+      if (my_task == master_task) call shr_msg_dirio('ice')    ! redirect stdin/stdout
+#endif
       call input_data           ! namelist variables
       call init_work            ! work arrays
 
