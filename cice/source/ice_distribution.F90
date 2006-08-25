@@ -554,7 +554,7 @@
 !
 !----------------------------------------------------------------------
 
-   square = sqrt(real(nprocs))
+   square = sqrt(real(nprocs,kind=real_kind))
    nprocs_x = 0
    nprocs_y = 0
 

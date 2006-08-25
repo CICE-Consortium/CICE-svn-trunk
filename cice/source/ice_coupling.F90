@@ -10,7 +10,6 @@
 ! These are mutually exclusive.
 !
 ! !REVISION HISTORY:
-!  SVN:$Id$
 !
 ! author: Elizabeth C. Hunke, LANL
 !         Tony Craig, NCAR, Dec-30-2002, modified for cpl6
@@ -32,7 +31,7 @@
       use ice_blocks
       use ice_boundary
       use ice_domain_size
-      use ice_domain, only: nblocks
+      use ice_domain
       use ice_constants
       use ice_calendar
       use ice_grid
@@ -315,6 +314,7 @@
       integer(kind=int_kind), save :: index_c2i_Faxc_rain   ! rain
       integer(kind=int_kind), save :: index_c2i_Faxc_snow   ! snow
 
+      type (block) :: this_block
 #endif
 ! endif CCSM
 !
@@ -1979,7 +1979,8 @@
 !
 !EOP
 !
-      integer(kind=int_kind) :: i,j,n,iblk     ! local loop indices
+      integer(kind=int_kind) :: i,j,n,iblk      ! local loop indices
+      integer(kind=int_kind) :: ilo,ihi,jlo,jhi ! local loop indices
       integer(kind=int_kind) :: iyear     ! yyyy
 
       write(nu_diag,*) &
@@ -1994,21 +1995,30 @@
       isbuf(cpl_fields_ibuf_stopnow) = stop_now  ! stop now flag
       isbuf(cpl_fields_ibuf_userest) = 0         ! use model restart data initally
       isbuf(cpl_fields_ibuf_ncpl   ) = nadv_i    ! number of comms per day
-      isbuf(cpl_fields_ibuf_lsize  ) = nx_block*ny_block*max_blocks
-      isbuf(cpl_fields_ibuf_lisize ) = nx_block ! local size wrt i-index
-      isbuf(cpl_fields_ibuf_ljsize ) = ny_block ! local size wrt j-index
+      isbuf(cpl_fields_ibuf_lsize  ) &
+         = (nx_block-2*nghost)*(ny_block-2*nghost)*max_blocks
+      isbuf(cpl_fields_ibuf_lisize ) = nx_block-2*nghost ! local size wrt i-index
+      isbuf(cpl_fields_ibuf_ljsize ) = ny_block-2*nghost ! local size wrt j-index
       isbuf(cpl_fields_ibuf_gsize  ) = nx_global*ny_global ! size of global grid
       isbuf(cpl_fields_ibuf_gisize ) = nx_global  ! global size wrt i-index
       isbuf(cpl_fields_ibuf_gjsize ) = ny_global  ! global size wrt j-index
       isbuf(cpl_fields_ibuf_nfields) = cpl_fields_grid_total
       isbuf(cpl_fields_ibuf_dead   ) = 0           ! not a dead model
 
-      allocate(sbuf(nx_block*ny_block,cpl_fields_grid_total))
+      allocate(sbuf((nx_block-2*nghost)*(ny_block-2*nghost), &
+         cpl_fields_grid_total))
       sbuf = -888.0_dbl_kind
       n=0
       do iblk = 1, nblocks
-         do j = 1, ny_block
-         do i = 1, nx_block
+
+         this_block = get_block(blocks(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do j = jlo,jhi
+         do i = ilo,ihi
             n=n+1
             sbuf(n,cpl_fields_grid_lon  ) = TLON(i,j,iblk)*rad_to_deg
             sbuf(n,cpl_fields_grid_lat  ) = TLAT(i,j,iblk)*rad_to_deg
@@ -2035,10 +2045,12 @@
       !-----------------------------------------------------------------
 
       nsend = cpl_interface_contractNumatt(contractS)
-      allocate(buffs(nx_block*ny_block*max_blocks,nsend))
+      allocate(buffs((nx_block-2*nghost)*(ny_block-2*nghost)*max_blocks, &
+         nsend))
 
       nrecv = cpl_interface_contractNumatt(contractR)
-      allocate(buffr(nx_block*ny_block*max_blocks,nrecv))
+      allocate(buffr((nx_block-2*nghost)*(ny_block-2*nghost)*max_blocks, &
+         nrecv))
 
       !-----------------------------------------------------------------
       ! Determine send indices
@@ -2162,6 +2174,7 @@
 !EOP
 !
       integer (kind=int_kind) :: i,j,n,n2,iblk   ! local loop indices
+      integer(kind=int_kind)  :: ilo,ihi,jlo,jhi ! local loop indices
       integer (kind=int_kind) :: index           ! attribute vector property
 
       real (kind=dbl_kind) :: &
@@ -2210,8 +2223,15 @@
       !--- unpack message
       n=0
       do iblk = 1, nblocks
-       do j = 1, ny_block
-       do i = 1, nx_block
+
+       this_block = get_block(blocks(iblk),iblk)         
+       ilo = this_block%ilo
+       ihi = this_block%ihi
+       jlo = this_block%jlo
+       jhi = this_block%jhi
+ 
+       do j = jlo,jhi
+       do i = ilo,ihi
 
           n=n+1
 
@@ -2251,6 +2271,49 @@
        end do
        end do
       end do
+
+      call update_ghost_cells(sst    , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(sss    , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(uocn   , bndy_info, field_loc_center, &
+                                                  field_type_vector)
+      call update_ghost_cells(vocn   , bndy_info, field_loc_center, &
+                                                  field_type_vector)
+      call update_ghost_cells(zlvl   , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(uatm   , bndy_info, field_loc_center, &
+                                                  field_type_vector)
+      call update_ghost_cells(vatm   , bndy_info, field_loc_center, &
+                                                  field_type_vector)
+      call update_ghost_cells(potT   , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(Tair   , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(Qa     , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(rhoa   , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(ss_tltx, bndy_info, field_loc_center, &
+                                                  field_type_vector)
+      call update_ghost_cells(ss_tlty, bndy_info, field_loc_center, &
+                                                  field_type_vector)
+      call update_ghost_cells(frzmlt , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(swvdr  , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(swidr  , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(swvdf  , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(swidf  , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(flw    , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(frain  , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
+      call update_ghost_cells(fsnow  , bndy_info, field_loc_center, &
+                                                  field_type_scalar)
 
 !     call ice_timer_stop(17)  ! time spent cr-unpacking
 
@@ -2296,8 +2359,15 @@
            work1 = c0
            n2   = 0
            do iblk = 1, nblocks
-              do j = 1, ny_block
-              do i = 1, nx_block
+
+              this_block = get_block(blocks(iblk),iblk)         
+              ilo = this_block%ilo
+              ihi = this_block%ihi
+              jlo = this_block%jlo
+              jhi = this_block%jhi
+
+              do j = jlo,jhi
+              do i = ilo,ihi
                  n2 = n2 + 1 
                  if (hm(i,j,iblk) > p5) work1(i,j,iblk) = buffr(n2,n)
               enddo
@@ -2329,8 +2399,9 @@
       ! use ANGLET which is on the T grid !
 
       do iblk = 1, nblocks
-       do j = 1, ny_block
-       do i = 1, nx_block
+
+       do j = 1,ny_block
+       do i = 1,nx_block
 
           ! ocean
           workx      = uocn  (i,j,iblk) ! currents, m/s 
@@ -2417,6 +2488,7 @@
 !EOP
 
       integer(kind=int_kind) :: i,j,n,n2,iblk    ! local loop indices
+      integer(kind=int_kind) :: ilo,ihi,jlo,jhi ! local loop indices
       integer(kind=int_kind) :: index        ! attribute vector property
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
@@ -2470,10 +2542,11 @@
       isbuf(cpl_fields_ibuf_stopnow) = 0       ! stop flag: 0 <=> able to continue
       isbuf(cpl_fields_ibuf_cdate)   = idate   ! model date, coded: yyyymmdd
       isbuf(cpl_fields_ibuf_sec)     = sec     ! elapsed seconds on model date
-      isbuf(cpl_fields_ibuf_lisize)  = nx_block  ! local size wrt i-index
-      isbuf(cpl_fields_ibuf_ljsize)  = ny_block  ! local size wrt j-index
+      isbuf(cpl_fields_ibuf_lisize)  = nx_block-2*nghost  ! local size wrt i-index
+      isbuf(cpl_fields_ibuf_ljsize)  = ny_block-2*nghost  ! local size wrt j-index
       isbuf(cpl_fields_ibuf_ncpl)    = nadv_i  ! number of msg-pairs per day
-      isbuf(cpl_fields_ibuf_lsize)   = nx_block*ny_block*max_blocks 
+      isbuf(cpl_fields_ibuf_lsize) &
+         = (nx_block-2*nghost)*(ny_block-2*nghost)*max_blocks 
       isbuf(cpl_fields_ibuf_dead)    = 0       ! not a dead model
 
 !     call ice_timer_start(18)      ! Time spent packing
@@ -2506,8 +2579,15 @@
       buffs(:,:)=spval_dbl
       n=0
       do iblk = 1, nblocks
-       do j = 1, ny_block
-       do i = 1, nx_block
+
+       this_block = get_block(blocks(iblk),iblk)         
+       ilo = this_block%ilo
+       ihi = this_block%ihi
+       jlo = this_block%jlo
+       jhi = this_block%jhi
+
+       do j = jlo,jhi
+       do i = ilo,ihi
 
          n=n+1
 
@@ -2563,8 +2643,15 @@
             work1 = c0
             n2 = 0
             do iblk = 1, nblocks
-               do j = 1, ny_block
-               do i = 1, nx_block
+
+               this_block = get_block(blocks(iblk),iblk)         
+               ilo = this_block%ilo
+               ihi = this_block%ihi
+               jlo = this_block%jlo
+               jhi = this_block%jhi
+
+               do j = jlo,jhi
+               do i = ilo,ihi
                   n2 = n2 + 1
                   if (ailohi(i,j,iblk) > c0 .and. &
                       ailohi(i,j,iblk) <= c1) then

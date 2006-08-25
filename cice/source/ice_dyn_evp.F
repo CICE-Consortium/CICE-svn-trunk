@@ -405,7 +405,7 @@
 
       if (my_task == master_task) then
          write(nu_diag,*) 'dt  = ',dt
-         write(nu_diag,*) 'dte = ',dt/real(ndte)
+         write(nu_diag,*) 'dte = ',dt/real(ndte,kind=dbl_kind)
          write(nu_diag,*) 'tdamp =', eyc*dt
       endif
 
@@ -481,7 +481,7 @@
      &,  tdamp2          ! 2*(wave damping time scale T)
 
       ! elastic time step
-      dte = dt/real(ndte)        ! s
+      dte = dt/real(ndte,kind=dbl_kind)        ! s
       dtei = c1/dte              ! 1/s
 
       ! major/minor axis length ratio, squared
@@ -1350,7 +1350,7 @@
      &  atd = c0         ! tensile stress paramater 'a' in ZR05 
      &, adenom = c1/((c1+atd)*(c1+atd))
      &, m827 = -c8/27._dbl_kind         ! in formula for gamma 
-     &, p707 = 0.707106781186547        ! 1/sqrt(2) 
+     &, p707 = 0.707106781186547_dbl_kind        ! 1/sqrt(2) 
 
       integer (kind=int_kind) ::
      &  ij      ! loop index, combination of i and j loops

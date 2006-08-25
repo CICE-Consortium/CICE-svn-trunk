@@ -1019,7 +1019,7 @@
       aa(:,:,:,:) = c0
       avgct = c0
 #ifdef CCSM
-      ice_present(:,:,:) = 0.
+      ice_present(:,:,:) = c0
 #endif
 
       do k=1,avgsiz
@@ -2175,6 +2175,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
          allocate(work_g1(1,1))
       endif
 
+      work_g1 = c0
+
 #ifdef CCSM
       !-----------------------------------------------------------------
       ! write coordinate variables
@@ -2279,14 +2281,18 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       !-----------------------------------------------------------------
 
       call gather_global(work_g1, TLON, master_task, distrb_info)
-      work_gr = work_g1*rad_to_deg   ! single precision
-      status  = nf_inq_varid(ncid,'tlon',varid)
-      status  = nf_put_var_real(ncid,varid,work_gr)
+      if (my_task == master_task) then
+         work_gr = work_g1*rad_to_deg   ! single precision
+         status  = nf_inq_varid(ncid,'tlon',varid)
+         status  = nf_put_var_real(ncid,varid,work_gr)
+      endif
 
       call gather_global(work_g1, TLAT, master_task, distrb_info)
-      work_gr = work_g1*rad_to_deg
-      status  = nf_inq_varid(ncid,'tlat',varid)
-      status  = nf_put_var_real(ncid,varid,work_gr)
+      if (my_task == master_task) then
+         work_gr = work_g1*rad_to_deg
+         status  = nf_inq_varid(ncid,'tlat',varid)
+         status  = nf_put_var_real(ncid,varid,work_gr)
+      endif
 
       !-----------------------------------------------------------------
       ! write grid mask, area and rotation angle

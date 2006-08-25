@@ -1337,7 +1337,7 @@ c=======================================================================
       maxrec = 1460             ! 365*4
 
       ! current record number
-      recnum = 4*int(yday) - 3 + int(real(sec)/sec6hr)
+      recnum = 4*int(yday) - 3 + int(real(sec,kind=dbl_kind)/sec6hr)
 
       ! Compute record numbers for surrounding data
 
@@ -1489,7 +1489,7 @@ c=======================================================================
       !  in the second slot
       ! recslot = 1 means we use values 2:3, with the current value (2)
       !  in the first slot
-      if (real(sec) < p5*secday-puny) then  ! first half of day
+      if (real(sec,kind=dbl_kind) < p5*secday-puny) then  ! first half of day
          recslot = 2
          ixp = 99
       else                             ! second half of day
@@ -1629,7 +1629,7 @@ c=======================================================================
       maxrec = 1460             ! 365*4
 
       ! current record number
-      recnum = 4*int(yday) - 3 + int(real(sec)/sec6hr)
+      recnum = 4*int(yday) - 3 + int(real(sec,kind=dbl_kind)/sec6hr)
 
       ! Compute record numbers for surrounding data (2 on each side)
 
