@@ -740,7 +740,7 @@
 
          min_time = global_minval(local_time)
          mean_time = global_sum(local_time,distrb_info)/ &
-                     real(all_timers(timer_id)%num_nodes)
+                     real(all_timers(timer_id)%num_nodes,kind=dbl_kind)
          if (my_task == master_task) then
             write (nu_diag,stats_fmt1) min_time
             write (nu_diag,stats_fmt2) max_time
@@ -778,7 +778,7 @@
          icount = global_sum(all_timers(timer_id)%num_blocks, &
                              distrb_info)
          if (icount > 0) mean_time=global_sum(local_time,distrb_info)&
-                                   /real(icount)
+                                   /real(icount,kind=dbl_kind)
 
          if (my_task == master_task) then
             write (nu_diag,stats_fmt4) min_time

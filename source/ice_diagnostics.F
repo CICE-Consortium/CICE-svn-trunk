@@ -1092,7 +1092,7 @@
      &           eicen(i,j,ilyr1(n)+k-1,iblk)
             eidebug = eidebug + eicen(i,j,ilyr1(n)+k-1,iblk)
             qi = eicen(i,j,ilyr1(n)+k-1,iblk) / ! qi, eicen < 0
-     &          (vicen(i,j,n,iblk)/real(nilyr))
+     &          (vicen(i,j,n,iblk)/real(nilyr,kind=dbl_kind))
             write(nu_diag,*)  'qi/rhoi', qi/rhoi
          enddo
          write(nu_diag,*) ' '
@@ -1108,7 +1108,7 @@
      &            esnon(i,j,slyr1(n)+k-1,iblk)
                esdebug = esdebug + esnon(i,j,slyr1(n)+k-1,iblk)
                qs = esnon(i,j,slyr1(n)+k-1,iblk) /    ! qs, esnon < 0
-     &             (vsnon(i,j,n,iblk)/real(nslyr))
+     &             (vsnon(i,j,n,iblk)/real(nslyr,kind=dbl_kind))
                Tsnow = (Lfresh + qs/rhos) / cp_ice
                write(nu_diag,*) 'qs/rhos', qs/rhos
                write(nu_diag,*) 'Tsnow', Tsnow

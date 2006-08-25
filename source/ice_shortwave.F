@@ -484,7 +484,7 @@
 
          hi  = vicen(i,j) / aicen(i,j)
          hs  = vsnon(i,j) / aicen(i,j)
-         hilyr = hi / real(nilyr)
+         hilyr = hi / real(nilyr,kind=dbl_kind)
 
       !-----------------------------------------------------------------
       ! Fractional snow cover
@@ -599,7 +599,7 @@
      &   x  ! abscissa for exp evaluation
 
       ! evaluate approximate exponential table
-      dx_exp = argmax / real(nmbexp)
+      dx_exp = argmax / real(nmbexp,kind=dbl_kind)
       x          = c0
       app_exp(0) = c1
       do indx_exp=1,nmbexp
@@ -1302,7 +1302,7 @@ cdir$ ivdep      !Cray
           ! bare or snow-covered sea ice layers
           if( srftyp(i,j) <= 1 ) then
             dzs    = h1_4
-            dz     = hin(i,j)/real(nilyr)
+            dz     = hin(i,j)/real(nilyr,kind=dbl_kind)
             if( dzs > dz/c2 ) dzs = dz/c2
             dz1    = dz - dzs
             do k=1,klev
@@ -1318,7 +1318,7 @@ cdir$ ivdep      !Cray
             enddo  
           ! sea ice layers under ponds
           else if( srftyp(i,j) == 2 ) then
-            dz     = hin(i,j)/real(nilyr)
+            dz     = hin(i,j)/real(nilyr,kind=dbl_kind)
             dzs = dz/c2
             do k=1,klev
               if( k <= 2 ) then

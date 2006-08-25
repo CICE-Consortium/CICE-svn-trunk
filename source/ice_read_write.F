@@ -160,12 +160,12 @@
          if (atype == 'ida4') then
             allocate(work_gi4(nx_global,ny_global))
             read(nu,rec=nrec) work_gi4
-            work_g1 = real(work_gi4)
+            work_g1 = real(work_gi4,kind=dbl_kind)
             deallocate(work_gi4)
          elseif (atype == 'ida8') then
             allocate(work_gi8(nx_global,ny_global))
             read(nu,rec=nrec) work_gi8
-            work_g1 = real(work_gi8)
+            work_g1 = real(work_gi8,kind=dbl_kind)
             deallocate(work_gi8)
          elseif (atype == 'rda4') then
             allocate(work_gr(nx_global,ny_global))
@@ -287,12 +287,12 @@
          if (atype == 'ida4') then
             allocate(work_gi4(nx_global,ny_global))
             read(nu,rec=nrec) work_gi4
-            work_g = real(work_gi4)
+            work_g = real(work_gi4,kind=dbl_kind)
             deallocate(work_gi4)
          elseif (atype == 'ida8') then
             allocate(work_gi8(nx_global,ny_global))
             read(nu,rec=nrec) work_gi8
-            work_g = real(work_gi8)
+            work_g = real(work_gi8,kind=dbl_kind)
             deallocate(work_gi8)
          elseif (atype == 'rda4') then
             allocate(work_gr(nx_global,ny_global))
