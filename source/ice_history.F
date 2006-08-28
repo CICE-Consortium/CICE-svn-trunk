@@ -10,6 +10,7 @@
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
+!  SVN:$LastChangedBy$
 !
 ! authors Tony Craig and Bruce Briegleb, NCAR
 !         Elizabeth C. Hunke and William H. Lipscomb, LANL

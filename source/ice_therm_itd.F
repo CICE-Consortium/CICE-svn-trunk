@@ -15,6 +15,7 @@
 !       
 ! !REVISION HISTORY:
 !  SVN:$Id$
+!  SVN:$LastChangedBy$
 !
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
