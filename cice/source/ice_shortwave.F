@@ -24,6 +24,7 @@
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
+!  SVN:$LastChangedBy$
 !
 ! name: originally ice_albedo
 !

@@ -10,6 +10,7 @@
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
+!  SVN:$LastChangedBy$
 !
 ! authors:   John Weatherly, CRREL
 !            C.M. Bitz, UW

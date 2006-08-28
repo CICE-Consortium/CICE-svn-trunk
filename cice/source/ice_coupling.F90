@@ -10,6 +10,8 @@
 ! These are mutually exclusive.
 !
 ! !REVISION HISTORY:
+!  SVN:$Id$
+!  SVN:$LastChangedBy$
 !
 ! author: Elizabeth C. Hunke, LANL
 !         Tony Craig, NCAR, Dec-30-2002, modified for cpl6
@@ -17,6 +19,7 @@
 !
 ! 2004: Block structure added by William Lipscomb
 ! 2005: Added ESMF import/export state routines
+! 2006: Updated the code for newest CCSM cpl6 - D. Bailey
 !
 ! !INTERFACE:
 !
