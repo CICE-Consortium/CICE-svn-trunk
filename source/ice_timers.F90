@@ -11,7 +11,6 @@
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
-!  SVN:$LastChangedBy$
 !
 ! 2005: Adapted from POP by William Lipscomb
 !       Replaced 'stdout' by 'nu_diag'

@@ -13,7 +13,6 @@
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
-!  SVN:$LastChangedBy$
 !
 ! 2006-Aug-22 - D. Bailey, E. Hunke, modified to fit with CICE
 ! 2005-May-19 - J. Schramm - first version

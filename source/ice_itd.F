@@ -19,7 +19,6 @@
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
-!  SVN:$LastChangedBy$
 !
 ! authors: C. M. Bitz, UW
 !          William H. Lipscomb and Elizabeth C. Hunke, LANL

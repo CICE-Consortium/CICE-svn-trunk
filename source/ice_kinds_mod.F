@@ -10,7 +10,6 @@
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
-!  SVN:$LastChangedBy$
 !
 ! author: Elizabeth C. Hunke and William H. Lipscomb, LANL
 !

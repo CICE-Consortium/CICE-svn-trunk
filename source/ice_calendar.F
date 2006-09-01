@@ -9,7 +9,6 @@
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
-!  SVN:$LastChangedBy$
 !
 ! authors: Elizabeth C. Hunke, LANL
 !          Tony Craig, NCAR
@@ -184,7 +183,7 @@
       idate = (nyr+year_init-1)*10000 + month*100 + mday ! date (yyyymmdd) 
 
       if (my_task == master_task .and. mod(istep,diagfreq) == 0
-     &                           .and. stop_now /= 1) then
+     &  .and. istep > 0 .and. stop_now /= 1) then
         write(nu_diag,*) ' '
         write(nu_diag,'(a7,i10,4x,a6,i10,4x,a4,i10)')
      &       'istep1:', istep1, 'idate:', idate, 'sec:', sec
