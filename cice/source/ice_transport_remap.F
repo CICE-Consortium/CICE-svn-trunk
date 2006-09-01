@@ -21,7 +21,6 @@
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
-!  SVN:$LastChangedBy$
 !
 ! authors William H. Lipscomb, LANL
 !         John Baumgardner, LANL

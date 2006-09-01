@@ -10,7 +10,6 @@
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
-!  SVN:$LastChangedBy$
 !
 ! authors Elizabeth C. Hunke, LANL
 !         William H. Lipscomb LANL
@@ -475,6 +474,30 @@
       call update_ghost_cells (uvel,               bndy_info,
      &                         field_loc_NEcorner, field_type_vector)
       call update_ghost_cells (vvel,               bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressp_1,               bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressm_1,               bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stress12_1,              bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressp_2,               bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressm_2,               bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stress12_2,              bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressp_3,               bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressm_3,               bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stress12_3,              bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressp_4,               bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressm_4,               bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stress12_4,              bndy_info,
      &                         field_loc_NEcorner, field_type_vector)
 
       call ice_timer_stop(timer_bound)

@@ -11,7 +11,6 @@
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
-!  SVN:$LastChangedBy$
 !
 ! author: Elizabeth C. Hunke, LANL
 !         Tony Craig, NCAR, Dec-30-2002, modified for cpl6

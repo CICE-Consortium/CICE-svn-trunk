@@ -10,7 +10,6 @@
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
-!  SVN:$LastChangedBy$
 !
 ! author Elizabeth C. Hunke, LANL
 ! 2004: Block structure and snow parameters added by William Lipscomb
