@@ -34,6 +34,8 @@
 !
 ! Numerous others have contributed to this effort--thanks to all! 
 !=======================================================================
+! Remove the following code if CICE is coupled to CAM.
+#ifndef COUP_CAM
 !
 !BOP
 !
@@ -42,6 +44,8 @@
 ! !DESCRIPTION:
 !
 ! Main driver routine for CICE.  Initializes and steps through the model.
+! This program should be compiled if CICE is run as a separate executable,
+!  but not if CICE subroutines are called from another program (e.g., CAM).
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
@@ -190,6 +194,7 @@
 
       end program icemodel
 
+#endif  !ndef COUP_CAM
 !=======================================================================
 !BOP
 !

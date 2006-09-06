@@ -4,7 +4,7 @@
 setenv SYSTEM_USERDIR /scratch/lipscomb
 
 #setenv SRCDIR $HOME/cice.v4.0/cice
-setenv SRCDIR /net/bob4/lipscomb/cice.v4.0/cice
+setenv SRCDIR /net/bob4/lipscomb/cice40_svn/cice
 
 setenv CBLD   $SRCDIR/bld
 setenv EXEDIR $SYSTEM_USERDIR/rundir.v4.0

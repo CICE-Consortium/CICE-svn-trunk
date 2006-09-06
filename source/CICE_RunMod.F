@@ -63,7 +63,7 @@
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-      public :: CICE_Run
+      public :: CICE_Run, step_therm1, step_therm2, step_dynamics
 !
 !EOP
 !
@@ -82,8 +82,10 @@
 !  Accepts forcing fields at beginning of time step and returns the
 !  model state at the end of the time step.
 !
-!  At some later time, this module could be divided into thermodynamic
-!  and dynamic components.
+!  The module is divided into three parts that are called independently:
+!  step_therm1, step_therm2, and step_dynamics.  The thermodynamics is
+!  split up such that the fields needed for coupling are computed in
+!  step_therm1, and the rest of the work is done in step_therm2.
 !
 ! !REVISION HISTORY:
 !

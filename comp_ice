@@ -23,7 +23,7 @@ setenv SHRDIR csm_share
 
 # Set SRCDIR and EXEDIR to your own paths!
 #setenv SRCDIR $HOME/cice.v4.0/cice
-setenv SRCDIR /net/bob4/lipscomb/cice_svn/cice
+setenv SRCDIR /net/bob4/lipscomb/cice40_svn/cice
 setenv EXEDIR $SYSTEM_USERDIR/rundir.v4.0 ; if !(-d $EXEDIR) mkdir -p $EXEDIR
 
 setenv CBLD   $SRCDIR/bld

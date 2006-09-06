@@ -2175,7 +2175,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
          allocate(work_g1(1,1))
       endif
 
-      work_g1 = c0
+      work_g1(:,:) = c0
 
 #ifdef CCSM
       !-----------------------------------------------------------------
@@ -2281,6 +2281,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       !-----------------------------------------------------------------
 
       call gather_global(work_g1, TLON, master_task, distrb_info)
+!jsewall - Do the following on all tasks, not just master_task
+!lipscomb - Just master_task for now, pending word from Jake
       if (my_task == master_task) then
          work_gr = work_g1*rad_to_deg   ! single precision
          status  = nf_inq_varid(ncid,'tlon',varid)

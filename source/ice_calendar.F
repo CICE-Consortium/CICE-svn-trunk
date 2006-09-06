@@ -1,3 +1,4 @@
+c $Id$
 !=======================================================================
 !BOP
 !
@@ -8,7 +9,6 @@
 ! Calendar routines for managing time
 !
 ! !REVISION HISTORY:
-!  SVN:$Id$
 !
 ! authors: Elizabeth C. Hunke, LANL
 !          Tony Craig, NCAR
@@ -20,6 +20,22 @@
 ! !USES:
 !
       use ice_constants
+
+!jsewall
+!time_manager.F90, which is currently (05.05.2006) used
+!by the other components of the sequential CCSM (including
+!the sequential driver) lives in /models/atm/cam/src/utils/
+!If CICE has trouble sourcing this, appropriate pieces may
+!need to be copied into the CICE source/ directory and
+!compiled #ifdef COUP_CAM
+#ifdef COUP_CAM
+      use time_manager, only: get_nstep, get_curr_calday, get_step_size,
+     &                        start_ymd, start_tod, nelapse
+!      use ice_restart, only: restart
+#endif
+!jsewall
+
+
 !
 !EOP
 !
@@ -59,6 +75,9 @@
      &,  time               ! total elapsed time (s)
      &,  time_forc          ! time of last forcing update (s)
      &,  yday               ! day of the year
+     &,  tday               ! absolute day number
+     &,  dayyr              ! number of days per year
+
 
       logical (kind=log_kind) ::
      &   new_year           ! new year = .true.
@@ -100,8 +119,50 @@
 !
 !EOP
 !
-      istep1 = istep0   ! number of steps at current timestep
-                        ! real (dumped) or imagined (use to set calendar)
+!jsewall
+      integer (kind=int_kind) ::
+     &   k
+
+!jsewall
+#ifdef COUP_CAM
+
+      dayyr = 365.0_dbl_kind
+
+      ! reset some namelist parameters
+
+      dt = get_step_size()
+      if (nelapse.lt.0) then
+         npt = (abs(nelapse)*secday)/dt
+      else
+         npt = nelapse
+      endif
+
+      yday = get_curr_calday() !day of the year
+
+!jsewall - Because CAM can start with an idate that is not
+!jsewall   Jan 1, istep0 must be based on yday, not nstep
+
+      istep0 = ((yday-1)*secday )/dt
+
+      ! end reset namelist parameters
+
+      ! other variables to set so that CICE and CAM
+      ! agree in time.
+
+      istep=get_nstep() !local timestep number
+
+      time = istep0*dt
+      sec  = mod(time,secday)         ! seconds into date
+      tday = (time-sec)/secday + c1   ! absolute day number
+      do k = 1, 12
+         if (yday > float(daycal(k))) month = k      ! month
+      enddo
+      mday = int(yday) - daycal(month)               ! day of the month
+      nyr  = year_init + int((tday-c1)/dayyr)+1      ! year number
+      idate = (nyr+year_init-1)*10000 + month*100 + mday ! date (yyyymmdd)
+
+#else
+
       istep = 0         ! local timestep number
       time=istep0*dt    ! s
       yday=c0           ! absolute day number
@@ -110,6 +171,10 @@
       nyr=0             ! year
       idate=00000101    ! date
       sec=0             ! seconds into date
+#endif
+
+      istep1 = istep0   ! number of steps at current timestep
+                        ! real (dumped) or imagined (use to set calendar)
       stop_now = 0      ! end program execution if stop_now=1
       dyn_dt = dt/real(ndyn_dt,kind=dbl_kind) ! dynamics et al timestep
 
@@ -150,10 +215,6 @@
      &,  elapsed_days                   ! since beginning this run
      &,  elapsed_months                 ! since beginning this run
 
-      real (kind=dbl_kind) ::
-     &   tday                           ! absolute day number
-     &,  dayyr                          ! number of days per year
-
       dayyr = 365.0_dbl_kind
 
       nyrp=nyr
@@ -166,6 +227,7 @@
       new_day=.false.
       write_history=.false.
       write_restart=0
+
 
       sec = mod(ttime,secday)           ! elapsed seconds into date at
                                         ! end of dt
@@ -183,7 +245,7 @@
       idate = (nyr+year_init-1)*10000 + month*100 + mday ! date (yyyymmdd) 
 
       if (my_task == master_task .and. mod(istep,diagfreq) == 0
-     &  .and. istep > 0 .and. stop_now /= 1) then
+     &                           .and. stop_now /= 1) then
         write(nu_diag,*) ' '
         write(nu_diag,'(a7,i10,4x,a6,i10,4x,a4,i10)')
      &       'istep1:', istep1, 'idate:', idate, 'sec:', sec
@@ -195,12 +257,20 @@
       if (week  /= weekp)  new_week = .true.
       if (mday  /= mdayp)  new_day = .true.
 
-      if (histfreq == '1') write_history=.true.
-      if (istep > 1) then
+!jsewall
+#ifdef COUP_CAM then
+      if (histfreq == '1') then
+         write_history=.true.
+      elseif (istep >= 1) then
+#else
+      if (istep >= 1 .and. histfreq == '1') then
+         write_history=.true.
+      elseif (istep > 1) then
+#endif
         if (((histfreq == 'y'.or.histfreq == 'Y').and. new_year)  .or.
      &      ((histfreq == 'm'.or.histfreq == 'M').and. new_month) .or.
      &      ((histfreq == 'w'.or.histfreq == 'W').and. new_week)  .or.
-     &      ((histfreq == 'd'.or.histfreq == 'D').and. new_day))
+     &      ((histfreq == 'd'.or.histfreq == 'D').and. new_day)) 
      &      write_history=.true.
         select case (dumpfreq)
         case ("y", "Y")
