@@ -90,9 +90,15 @@
 
 #ifdef CCSM
    call cpl_interface_init(cpl_fields_icename, MPI_COMM_ICE)
+
 #else
+
+#ifndef  COUP_CAM
    call MPI_INIT(ierr)
+#endif
+
    call create_ice_communicator
+
 #endif
 
    master_task = 0

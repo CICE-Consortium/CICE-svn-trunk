@@ -39,10 +39,11 @@
       save
 
       character (len=char_len) ::
-     &   grid_file  !  input file for POP grid info
-     &,  kmt_file   !  input file for POP grid info
-     &,  grid_type  !  current options are rectangular (default),
-                    !  displaced_pole, tripole, panarctic, and column
+     &   grid_file     !  input file for POP grid info
+     &,  kmt_file      !  input file for POP grid info
+     &,  landfrac_file !  input file for landfrac from CAM if COUP_CAM
+     &,  grid_type     !  current options are rectangular (default),
+                       !  displaced_pole, tripole, panarctic, latlon, column
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
      &   dxt        ! width of T-cell through the middle (m)
@@ -64,6 +65,14 @@
      &,  TLAT       ! latitude of temp pts (radians)
      &,  ANGLE      ! for conversions between POP grid and lat/lon
      &,  ANGLET     ! ANGLE converted to T-cells
+
+#ifdef COUP_CAM
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
+     &  CAMFRAC     ! Land fraction from CAM for COUP_CAM NOTE: This
+                    ! is in CAM format so 1 = LAND and 0 = OCEAN.  It
+                    ! is used for weighting output variables when
+                    ! CICE is coupled to standalone CAM
+#endif
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
      &   cyp        ! 1.5*HTE - 0.5*HTE
@@ -172,14 +181,19 @@
 
          if (my_task == master_task) close (nu_grid)
 
+      elseif (trim(grid_type) == 'latlon') then
+
+         work_g1(:,:) = 75._dbl_kind/rad_to_deg  ! arbitrary polar latitude
+         work_g2(:,:) = c1
+
       elseif (trim(grid_type) == 'column') then
 
-         work_g1(:,:) = 75./rad_to_deg  ! arbitrary polar latitude
+         work_g1(:,:) = 75._dbl_kind/rad_to_deg  ! arbitrary polar latitude
          work_g2(:,:) = c1
 
       else   ! rectangular grid
 
-         work_g1(:,:) = 75./rad_to_deg  ! arbitrary polar latitude
+         work_g1(:,:) = 75._dbl_kind/rad_to_deg  ! arbitrary polar latitude
          work_g2(:,:) = c1
 
       endif
@@ -256,6 +270,8 @@
          call popgrid           ! read POP grid lengths directly
       elseif (trim(grid_type) == 'panarctic') then
          call panarctic_grid    ! pan-Arctic grid
+      elseif (trim(grid_type) == 'latlon') then
+         call latlongrid        ! lat lon grid for standalone CAM
       elseif (trim(grid_type) == 'column') then
          call columngrid        ! column model grid
       else
@@ -649,6 +665,227 @@
 !=======================================================================
 !BOP
 !
+! !IROUTINE: latlongrid- lat and lon grid for coupling to standalone CAM
+!
+! !INTERFACE:
+!
+      subroutine latlongrid
+!
+! !DESCRIPTION:
+!
+! Routine to take nx_global and ny_global and calculate a grid that matches
+! that in CAM for coupling to standalone CAM.
+!
+! !REVISION HISTORY:
+!
+! author: Jacob Sewall
+!
+! !USES:
+!
+!     use ice_boundary
+      use ice_domain_size
+      use ice_gather_scatter
+      use ice_work, only: work1
+!
+! !ARGUMENTS
+
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      logical (kind=log_kind) :: diag  !print diagnostic info
+
+      integer (kind=int_kind) ::
+     &   i, j, iblk
+     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain        
+     &,  irow             ! latitude pair counter ny_global/2 
+     &,  lat              ! latitude counter             
+      
+      type (block) ::
+     &   this_block       ! block information for current block
+
+      real (kind=dbl_kind), dimension (nx_global, ny_global)::
+     &   clon       ! longitude (radians)
+     &,  HTE_in     ! length of E edge of grid cell in latxlon space
+     &,  HTN_in     ! length of N edge of grid cell in latxlon space
+     &,  latin      ! latitude (radians) in global grid to scatter to TLAT
+
+      real (kind=dbl_kind), dimension (ny_global)::
+     &   zsi        ! sin of latitudes
+     &,  clat       ! latitude (radians)
+     &,  rearth     ! radius of the earth along a line of latitude
+
+      real (kind=dbl_kind)::
+     &   xlat       ! latitude (radians)
+     &,  slat       ! sin of latitudes
+     &,  dx         ! cell width: E-W
+     &,  dy         ! cell width: N-S
+
+      !-----------------------------------------------------------------
+      ! First need to calculate latitude and longitude values in
+      ! radians from nx_global and ny_global.  Code is based on
+      ! initcom.F90 in CAM's dynamics/eul directory.  This *may* pose
+      ! problems if CICE is coupled to CAM and the user wants to use the
+      ! fv dynamical core.  BUT, eul is the default so we will do our
+      ! best to match that.
+      !-----------------------------------------------------------------
+
+      !
+      ! Latitude array
+      !
+      call sinlat(zsi ,ny_global)
+      do irow=1,ny_global/2
+         slat = zsi(irow)
+         xlat = asin(slat)
+         clat(irow) = -xlat
+         clat(ny_global - irow + 1) = xlat
+      end do
+
+      !
+      ! Longitude array
+      !
+      do lat=1,ny_global
+         do i=1,nx_global
+            clon(i,lat)   = (i-1)*2.0_r8*pi/nx_global
+         end do
+      end do
+
+      !----------------------------------------------------------------
+      ! Now calculate the lengths of cell edges (HTE and HTN) based on
+      ! values (in radians) for latitude and longitude
+      !----------------------------------------------------------------
+
+      do j = 1, ny_global
+         rearth(j) = 6378140. * cos(clat(j))
+      end do
+
+      do j = 1, ny_global
+         do i = 1, nx_global
+            if (i == nx_global) then
+            dx = clon(i,j) - clon(i-1,j)
+            else
+            dx = clon(i+1,j) - clon(i,j)
+            end if
+            if (j == ny_global) then
+            dy = sin(clat(j)) - sin(clat(j-1))  !s->n latitudes
+            else
+            dy = sin(clat(j+1)) - sin(clat(j))  !s->n latitudes
+            end if
+            HTN_in(i,j) = dx*rearth(j)
+            HTE_in(i,j) = dy*rearth(j)
+         end do
+      end do
+
+      !----------------------------------------------------------------
+      ! Scatter HTE_in and HTN_in to blocks
+      !----------------------------------------------------------------
+
+      call scatter_global(HTE, HTE_in, master_task, distrb_info,
+     &                    field_loc_Eface, field_type_scalar)
+
+      call scatter_global(HTN, HTN_in, master_task, distrb_info,
+     &                    field_loc_Nface, field_type_scalar)
+
+      !-----------------------------------------------------------------
+      ! Translate clat and clon into TLAT and TLON
+      !-----------------------------------------------------------------
+
+      ! First fill latin so that there is a 2-D array of latitudes
+      do lat=1,ny_global
+         do i=1,nx_global
+            latin(i,lat)   = clat(lat)
+         end do
+      end do
+
+      call scatter_global(TLON, clon, master_task, distrb_info,
+     &                    field_loc_center, field_type_scalar)
+
+      call scatter_global(TLAT, latin, master_task, distrb_info,
+     &                    field_loc_center, field_type_scalar)
+
+      !-----------------------------------------------------------------
+      ! Calculate various geometric 2d arrays
+      !-----------------------------------------------------------------
+
+      do iblk = 1, nblocks
+         do j = 1, ny_block
+         do i = 1, nx_block
+            ULAT (i,j,iblk) = c0              ! remember to set Coriolis !
+            ULON (i,j,iblk) = c0
+            ANGLE(i,j,iblk) = c0              ! "square with the world"
+         enddo
+         enddo
+      enddo
+
+      !-----------------------------------------------------------------
+      ! The U grid (velocity) is not used when run with sequential CAM
+      ! because we only use thermodynamic sea ice.  However, ULAT is used
+      ! in the defualt initialization of CICE so we calculate it here as 
+      ! a "dummy" so that CICE will initialize with ice.  If a no ice
+      ! initialization is OK (or desired) this can be commented out and
+      ! ULAT will remain 0 as specified above.  ULAT is located at the
+      ! NE corner of the grid cell, TLAT at the center, so here ULAT is
+      ! hacked by adding half the latitudinal spacing (in radians) to
+      ! TLAT.
+      !-----------------------------------------------------------------
+
+      do iblk = 1, nblocks
+         do j = 1, ny_block
+         do i = 1, nx_block
+            ULAT (i,j,iblk) = TLAT(i,j,iblk)+(pi/ny_global)
+         enddo
+         enddo
+      enddo
+
+      !-----------------------------------------------------------------
+      ! Read in land mask from "kmt" file which is actually just 0's and
+      ! 1's and matches the CAM landmask.  NOTE: CAM's landmask includes
+      ! partial values (0-1).  In the translation to CICE *all* cells with
+      ! *any* ocean are set to 1 (ocean) so that CICE calculations are done
+      ! there.  The output from those values must be scaled by ocean
+      ! fraction of the cell when reported to CAM.  This is from the
+      ! land fraction in CAM which is also read in here.
+      !-----------------------------------------------------------------
+
+      call ice_open(nu_kmt,kmt_file,32)
+
+      diag = .true.       ! write diagnostic info
+
+      ! land mask
+      call ice_read(nu_kmt,1,work1,'ida4',diag)
+
+      if (my_task == master_task) then
+         close (nu_kmt)
+      endif
+
+      hm(:,:,:) = c0
+      do iblk = 1, nblocks
+         this_block = get_block(blocks(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do j = jlo, jhi
+         do i = ilo, ihi
+            hm(i,j,iblk) = work1(i,j,iblk)
+            if (hm(i,j,iblk) >= c1) hm(i,j,iblk) = c1
+         enddo
+         enddo
+      enddo
+
+#ifdef COUP_CAM
+      call ice_open(nu_grid,landfrac_file,64)
+      call ice_read(nu_grid,1,CAMFRAC,'rda8',diag)
+#endif
+
+      if (my_task == master_task) close (nu_grid)
+
+      end subroutine latlongrid
+
+!=======================================================================
+!BOP
+!
 ! !IROUTINE: columngrid - column grid and mask
 !
 ! !INTERFACE:
@@ -957,6 +1194,7 @@
       type (block) ::
      &     this_block           ! block information for current block
 
+#ifndef COUP_CAM then
       TLAT(:,:,:) = c0
       TLON(:,:,:) = c0
 
@@ -1008,6 +1246,7 @@
          enddo                  ! i
          enddo                  ! j         
       enddo                     ! iblk
+#endif !ndef COUP_CAM
 
       call ice_timer_start(timer_bound)
       call update_ghost_cells (TLON,             bndy_info,
@@ -1238,6 +1477,209 @@
       enddo
 
       end subroutine to_tgrid
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: sinlat - calculates sin of latitudes
+!
+! !INTERFACE:
+!
+      subroutine sinlat(a, k)
+!
+! !DESCRIPTION:
+!
+! Calculates the sin of latitudes on the grid based on ny_global and
+! using code from CAM (/control/gauaw_mod.F90)  In CAM, gauaw_mod.F90 is
+! only used to calculate the sin of latitudes (and thence latitude) if
+! the dynamical core is set to eul.  If using one of the other dynamical
+! cores and coupling to stand alone CAM the latitudes calculated in this
+! way may not match the grid from CAM.
+!
+! !REVISION HISTORY:
+!
+! author: Jacob Sewall
+!
+! !USES:
+      use ice_exit
+
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+
+      real (kind=dbl_kind), dimension(ny_global), intent(out) :: 
+     &     a            ! sin of latitudes
+
+      integer (kind=int_kind), intent(in) ::
+     &     k            ! number of latitudes (ny_global)
+!
+!EOP
+!
+      real (kind=dbl_kind), dimension(k) ::
+     &     sinlats      ! sine of latitudes
+
+      real (kind=dbl_kind) ::
+     &     eps          ! convergence criterion
+     &,    c            ! constant combination
+     &,    fk           ! real k
+     &,    xz           ! abscissa estimate
+     &,    pkm1         ! |
+     &,    pkm2         ! |-polynomials
+     &,    pkmrk        ! |
+     &,    pk           ! |
+     &,    sp           ! current iteration latitude increment
+     &,    avsp         ! |sp|
+     &,    fn           ! real n
+     &,    avsp_prev
+     &,    testdiff
+
+      real (kind=dbl_kind), parameter ::
+     &     eps27 = 1.e-27_dbl_kind
+
+      integer (kind=int_kind) ::
+     &     n, l
+     &,    iter         ! iteration counter
+     &,    is           ! latitude index
+     &,    kk           ! k/2 (number of latitudes in a hemisphere)
+
+!
+!----------------------------------------------------------------------
+!
+
+      c = (c1-(c2/pi)**2)*p25
+      fk = k
+      kk = k/2
+      call bsslzr(sinlats,kk)
+      do is=1,kk
+        xz = cos(sinlats(is)/sqrt((fk+p5)**2+c))
+!
+! This is the first approximation to xz
+!
+        iter = 0
+        avsp = c100     !initialize avsp to a very large number
+10      continue
+        avsp_prev = avsp
+        pkm2 = c1
+        pkm1 = xz
+        iter = iter + 1
+        if (iter > 100) then  ! Error exit
+           call abort_ice('SINLAT: no convergence in 100 iterations')
+        end if
+!
+! Computation of the legendre polynomial
+!
+        do n=2,k
+          fn = n
+          pk = ((c2*fn-1._r8)*xz*pkm1-(fn-c1)*pkm2)/fn
+          pkm2 = pkm1
+          pkm1 = pk
+        enddo
+        pkm1 = pkm2
+        pkmrk = (fk*(pkm1-xz*pk))/(c1-xz**2)
+        sp = pk/pkmrk
+        xz = xz - sp
+        avsp = abs(sp)
+        testdiff = avsp_prev - avsp
+        if (testdiff > eps27) go to 10
+        sinlats(is) = xz
+      end do
+!
+! Complete the sets of abscissas and weights, using the symmetry.
+! Also note truncation from real(r8) to real*8
+!
+      do n=1,kk
+        l = k + 1 - n
+        a(n) = sinlats(n)
+        a(l) = -sinlats(n)
+      end do
+ 
+      end subroutine sinlat
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: bsslzr - Return n zeros (if n<50) of the Bessel function
+!
+! !INTERFACE:
+!
+      subroutine bsslzr(bes, n)
+!
+! !DESCRIPTION:
+!
+!
+! Return n zeros (or if n>50, approximate zeros), of the Bessel function
+! j0,in the array bes. The first 50 zeros will be given exactly, and the
+! remaining zeros are computed by extrapolation,and therefore not exact.
+!
+! Modified 1/23/97 by Jim Rosinski to use real*16 arithmetic
+! placed in ice_grid.F 4/26/2006 by Jacob Sewall
+
+! !REVISION HISTORY:
+!
+! Original version:  CCM1
+! Standardized:      J. Rosinski, June 1992
+! Reviewed:          J. Hack, D. Williamson, August 1992
+! Reviewed:          J. Hack, D. Williamson, April 1996
+!
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+
+      integer (kind=int_kind), intent(in) ::
+     &     n          ! number of latitudes in hemisphere (ny_global/2)
+
+      real (kind=dbl_kind), dimension(n), intent(inout) :: 
+     &     bes        ! sin of latitudes
+!
+!EOP
+!
+
+!----------------------------------------
+! Local Variables
+!----------------------------------------
+
+      integer (kind=int_kind) ::
+     &   nn, j
+     
+      real (kind=dbl_kind), dimension(50) :: bz
+      
+      save bz
+!
+!-----------------------------------------
+! Local Workspace
+!-----------------------------------------
+
+      data bz/ 2.4048255577_r8, 5.5200781103_r8, 8.6537279129_r8
+     &,  11.7915344391_r8, 14.9309177086_r8, 18.0710639679_r8
+     &,  21.2116366299_r8, 24.3524715308_r8, 27.4934791320_r8
+     &,  30.6346064684_r8, 33.7758202136_r8, 36.9170983537_r8
+     &,  40.0584257646_r8, 43.1997917132_r8, 46.3411883717_r8
+     &,  49.4826098974_r8, 52.6240518411_r8, 55.7655107550_r8
+     &,  58.9069839261_r8, 62.0484691902_r8, 65.1899648002_r8
+     &,  68.3314693299_r8, 71.4729816036_r8, 74.6145006437_r8
+     &,  77.7560256304_r8, 80.8975558711_r8, 84.0390907769_r8
+     &,  87.1806298436_r8, 90.3221726372_r8, 93.4637187819_r8
+     &,  96.6052679510_r8, 99.7468198587_r8, 102.8883742542_r8
+     &,  106.0299309165_r8, 109.1714896498_r8, 112.3130502805_r8
+     &,  115.4546126537_r8, 118.5961766309_r8, 121.7377420880_r8
+     &,  124.8793089132_r8, 128.0208770059_r8, 131.1624462752_r8
+     &,  134.3040166383_r8, 137.4455880203_r8, 140.5871603528_r8
+     &,  143.7287335737_r8, 146.8703076258_r8, 150.0118824570_r8
+     &,  153.1534580192_r8, 156.2950342685_r8/  
+!
+      nn = n 
+      if (n > 50) then 
+         bes(50) = bz(50) 
+         do j = 51, n 
+            bes(j) = bes(j-1) + pi 
+         end do 
+         nn = 49 
+      endif 
+      bes(:nn) = bz(:nn) 
+
+      end subroutine bsslzr 
 
 !=======================================================================
 

@@ -63,7 +63,7 @@
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-      public :: CICE_Initialize
+      public :: CICE_Initialize, cice_init
 
 !
 !EOP

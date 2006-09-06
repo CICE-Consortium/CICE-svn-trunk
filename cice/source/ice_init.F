@@ -25,6 +25,10 @@
       use ice_communicate, only: my_task, master_task
       use ice_domain_size
       use ice_constants
+#ifdef COUP_CAM
+      use time_manager, only: get_nstep, get_step_size,
+     &                        start_ymd, nelapse
+#endif
 !
 !EOP
 !
@@ -86,7 +90,7 @@
      &    atm_data_type,   atm_data_dir,  precip_units, 
      &    sss_data_type,   sst_data_type, ocn_data_dir,
      &    oceanmixed_file, restore_sst,   trestore 
-      use ice_grid, only: grid_file, kmt_file, grid_type 
+      use ice_grid, only: grid_file, kmt_file, landfrac_file, grid_type 
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi,
@@ -99,6 +103,21 @@
       integer (kind=int_kind) :: nml_error ! namelist i/o error flag
 
       character (len=6) :: chartmp
+
+!jsewall
+      !-------------------------------------------
+      ! Logical flags needed to turn off CICE for
+      ! special CAM configurations.  The settings
+      ! of these variables must match those in the
+      ! CAM namelist and if ANY of them are .true.
+      ! then the ice model is not run.  Defaults
+      ! are specified as .false. in ice_init.F
+      !-------------------------------------------
+
+      logical (kind=log_kind) ::
+     &   ideal_phys
+     &,  adiabatic
+     &,  aqua_planet
 
 #ifdef CCSM
       !-----------------------------------------------------------------
@@ -121,7 +140,7 @@
      &, histfreq,       hist_avg,        history_dir,   history_file
      &, dumpfreq,       dumpfreq_n,      restart_file
      &, restart,        restart_dir,     pointer_file,  ice_ic
-     &, grid_type,      grid_file,       kmt_file
+     &, grid_type,      grid_file,       kmt_file,      landfrac_file
      &, kitd,           kcatbound
      &, kdyn,           ndyn_dt,         ndte,          evp_damping
      &, yield_curve,    advection
@@ -132,11 +151,13 @@
      &, oceanmixed_ice, sss_data_type,   sst_data_type 
      &, ocn_data_dir,   oceanmixed_file, restore_sst,   trestore
      &, latpnt,         lonpnt,          dbug
+     &, ideal_phys,     adiabatic,       aqua_planet
 #ifdef CCSM
 ! These variables are used in CCSM, but not CICE
      &, runid,           runtype,             kcolumn
      &, incond_dir,      incond_file
 #endif
+
 
       !-----------------------------------------------------------------
       ! default values
@@ -166,6 +187,7 @@
       grid_type    = 'rectangular'   ! define rectangular grid internally
       grid_file    = 'unknown_grid_file'
       kmt_file     = 'unknown_kmt_file'
+      landfrac_file= 'lndfrac.seq.cam.da'
 
       kitd = 1           ! type of itd conversions (0 = delta, 1 = linear)
       kcatbound = 1      ! category boundary formula (0 = old, 1 = new)
@@ -203,6 +225,11 @@
       lonpnt(1) =   0._dbl_kind   ! longitude of point 1 (deg)
       latpnt(2) = -65._dbl_kind   ! latitude of diagnostic point 2 (deg)
       lonpnt(2) = -45._dbl_kind   ! longitude of point 2 (deg)
+
+      ! The following are options for coupled CICE-CAM
+      ideal_phys = .false.  ! if true CAM with idealized physics and no ice
+      adiabatic  = .false.  ! if true CAM with no physics and no ice
+      aqua_planet= .false.  ! if true aqua planet and no ice
 
 #ifdef CCSM
       ! The following are in CCSM but not CICE.
@@ -270,6 +297,7 @@
       call broadcast_scalar(grid_type,          master_task)
       call broadcast_scalar(grid_file,          master_task)
       call broadcast_scalar(kmt_file,           master_task)
+      call broadcast_scalar(landfrac_file,      master_task)
       call broadcast_scalar(kitd,               master_task)
       call broadcast_scalar(kcatbound,          master_task)
       call broadcast_scalar(kdyn,               master_task)
@@ -286,6 +314,9 @@
       call broadcast_scalar(albicei,            master_task)
       call broadcast_scalar(albsnowv,           master_task)
       call broadcast_scalar(albsnowi,           master_task)
+      call broadcast_scalar(ideal_phys,         master_task)
+      call broadcast_scalar(adiabatic,          master_task)
+      call broadcast_scalar(aqua_planet,        master_task)
 
       call broadcast_scalar(fyear_init,         master_task)
       call broadcast_scalar(ycycle,             master_task)
