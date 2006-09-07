@@ -495,7 +495,8 @@
          if (grid_type  /=  'displaced_pole' .and.
      &       grid_type  /=  'column'         .and.
      &       grid_type  /=  'rectangular'    .and.
-     &       grid_type  /=  'panarctic' ) then
+     &       grid_type  /=  'panarctic'      .and.
+     &       grid_type  /=  'latlon' ) then
             call abort_ice('ice_init: unknown grid_type')
          endif
 
