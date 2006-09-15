@@ -1530,7 +1530,7 @@
      &                        aicen,       trcrn,
      &                        vicen,       vsnon, 
      &                        eicen,       esnon,
-     &                        aice0,
+     &                        aice0,       aice,
      &                        trcr_depend,
      &                        fresh,       fresh_hist,
      &                        fsalt,       fsalt_hist,
@@ -1582,8 +1582,9 @@
  
       real (kind=dbl_kind), dimension (nx_block,ny_block), 
      &   intent(inout) :: 
-     &   aice0     ! concentration of open water 
- 
+     &   aice      ! total ice concentration
+     &,  aice0     ! concentration of open water 
+     
       integer (kind=int_kind), dimension(ntrcr), intent(in) :: 
      &   trcr_depend  ! tracer dependency information
 
@@ -1622,6 +1623,18 @@
       jstop = 0
 
       !-----------------------------------------------------------------
+      ! Compute total ice area.
+      !-----------------------------------------------------------------
+      aice(:,:) = c0
+      do n = 1, ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            aice(i,j) = aice(i,j) + aicen(i,j,n)
+         enddo                  ! i
+         enddo                  ! j
+      enddo                     ! n
+
+      !-----------------------------------------------------------------
       ! Compute ice thickness.
       !-----------------------------------------------------------------
       do n = 1, ncat
@@ -1658,8 +1671,8 @@
       !-----------------------------------------------------------------
 
       call zap_small_areas (nx_block, ny_block,
-     &                      nghost,
-     &                      dt,       aice0,
+     &                      nghost,   dt,
+     &                      aice,     aice0,
      &                      aicen,    trcrn,
      &                      vicen,    vsnon,
      &                      eicen,    esnon,
@@ -1693,8 +1706,8 @@
 ! !INTERFACE:
 !
       subroutine zap_small_areas (nx_block, ny_block,
-     &                            nghost,
-     &                            dt,       aice0,
+     &                            nghost,   dt,
+     &                            aice,     aice0,
      &                            aicen,    trcrn,
      &                            vicen,    vsnon,
      &                            eicen,    esnon,
@@ -1725,7 +1738,8 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block),
      &   intent(inout) ::
-     &   aice0        ! concentration of open water
+     &   aice         ! total ice concentration
+     &,  aice0        ! concentration of open water
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,ncat),
      &   intent(inout) ::
@@ -1788,6 +1802,10 @@
       dfresh(:,:) = c0
       dfsalt(:,:) = c0
       dfhocn(:,:) = c0
+
+      !-----------------------------------------------------------------
+      ! Zap categories with very small areas.
+      !-----------------------------------------------------------------
 
       do n = 1, ncat
 
@@ -1894,6 +1912,117 @@
          endif
 
       enddo                     ! n
+
+      !-----------------------------------------------------------------
+      ! Count cells with excess ice (aice > c1) due to roundoff errors.
+      ! Zap a little ice in each category so that aice = c1.
+      !-----------------------------------------------------------------
+
+      icells = 0
+      do j = jlo, jhi
+      do i = ilo, ihi
+         if (aice(i,j) > (c1+puny)) then
+            write (nu_diag,*) 'Zap ice: excess ice area'
+            write (nu_diag,*) 'i, j, aice =',
+     &                         i, j, aice(i,j)
+            l_stop = .true.
+            istop = i
+            jstop = j
+            return
+         elseif (aice(i,j) > c1 .and. aice(i,j) < (c1+puny)) then
+            icells = icells + 1
+            indxi(icells) = i
+            indxj(icells) = j
+         endif
+      enddo
+      enddo
+
+      do n = 1, ncat
+
+      !----------------------------------------------------------------- 
+      ! Zap ice energy and use ocean heat to melt ice 
+      !----------------------------------------------------------------- 
+       
+         do k = 1, nilyr 
+!DIR$ CONCURRENT !Cray 
+!cdir nodep      !NEC 
+!ocl novrec      !Fujitsu 
+            do ij = 1, icells 
+               i = indxi(ij) 
+               j = indxj(ij) 
+ 
+               xtmp = eicen(i,j,ilyr1(n)+k-1) 
+     &              * (aice(i,j)-c1)/aice(i,j) / dt ! < 0 
+               dfhocn(i,j) = dfhocn(i,j) + xtmp 
+               eicen(i,j,ilyr1(n)+k-1) = eicen(i,j,ilyr1(n)+k-1)
+     &                                  * (c1/aice(i,j))
+ 
+            enddo               ! ij 
+         enddo                  ! k 
+ 
+      !----------------------------------------------------------------- 
+      ! Zap snow energy and use ocean heat to melt snow 
+      !----------------------------------------------------------------- 
+
+         do k = 1, nslyr 
+!DIR$ CONCURRENT !Cray 
+!cdir nodep      !NEC 
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               i = indxi(ij) 
+               j = indxj(ij) 
+ 
+               xtmp = esnon(i,j,slyr1(n)+k-1) 
+     &              * (aice(i,j)-c1)/aice(i,j) / dt ! < 0 
+               dfhocn(i,j) = dfhocn(i,j) + xtmp 
+               esnon(i,j,slyr1(n)+k-1) = esnon(i,j,slyr1(n)+k-1)
+     &                                  *(c1/aice(i,j))
+ 
+            enddo               ! ij
+         enddo                  ! k
+ 
+      !-----------------------------------------------------------------
+      ! Zap ice and snow volume, add water and salt to ocean
+      !-----------------------------------------------------------------
+
+!DIR$ CONCURRENT !Cray 
+!cdir nodep      !NEC 
+!ocl novrec      !Fujitsu 
+         do ij = 1, icells 
+            i = indxi(ij) 
+            j = indxj(ij) 
+ 
+            xtmp = (rhoi*vicen(i,j,n) + rhos*vsnon(i,j,n)) 
+     &           * (aice(i,j)-c1)/aice(i,j) / dt 
+            dfresh(i,j) = dfresh(i,j) + xtmp 
+ 
+            xtmp = rhoi*vicen(i,j,n)*ice_ref_salinity*p001
+     &           * (aice(i,j)-c1)/aice(i,j) / dt
+            dfsalt(i,j) = dfsalt(i,j) + xtmp 
+ 
+            aicen(i,j,n) = aicen(i,j,n) * (c1/aice(i,j)) 
+            vicen(i,j,n) = vicen(i,j,n) * (c1/aice(i,j)) 
+            vsnon(i,j,n) = vsnon(i,j,n) * (c1/aice(i,j))
+ 
+         enddo                  ! ij
+
+      ! Note: Tracers are unchanged.
+
+      enddo                     ! n
+
+      !-----------------------------------------------------------------
+      ! Correct aice
+      !-----------------------------------------------------------------
+
+!DIR$ CONCURRENT !Cray 
+!cdir nodep      !NEC 
+!ocl novrec      !Fujitsu 
+      do ij = 1, icells 
+         i = indxi(ij) 
+         j = indxj(ij) 
+         aice(i,j) = c1
+         aice0(i,j) = c0
+      enddo
 
       end subroutine zap_small_areas
 
