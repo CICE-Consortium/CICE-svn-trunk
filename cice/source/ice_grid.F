@@ -1246,7 +1246,7 @@
          enddo                  ! i
          enddo                  ! j         
       enddo                     ! iblk
-#endif !ndef COUP_CAM
+#endif
 
       call ice_timer_start(timer_bound)
       call update_ghost_cells (TLON,             bndy_info,

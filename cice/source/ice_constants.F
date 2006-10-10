@@ -157,8 +157,10 @@
      &  c25  = 25.0_dbl_kind,
      &  c90  = 90.0_dbl_kind,
      &  c100 = 100.0_dbl_kind,
+     &  c180 = 180.0_dbl_kind,
      &  c360 = 360.0_dbl_kind,
      &  c365 = 365.0_dbl_kind,
+     &  c3600= 3600.0_dbl_kind,
      &  c1000= 1000.0_dbl_kind,
      &  p001 = 0.001_dbl_kind,
      &  p01  = 0.01_dbl_kind,
@@ -229,7 +231,7 @@
      &  blank_fmt = "(' ')"
 
       character (char_len), parameter ::
-     &  char_blank = ''         ! empty character string
+     &  char_blank = ' '         ! empty character string
 
       !-----------------------------------------------------------------
       ! conversion factors

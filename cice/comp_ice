@@ -1,8 +1,22 @@
 #! /bin/csh -f
 
 #Change these to your own site and user directory! 
-setenv SITE LANL
-setenv SYSTEM_USERDIR /scratch/lipscomb
+setenv SITE LANL.mauve
+#setenv SITE LANL.epiphany
+#setenv SITE ORNL.jaguar
+#setenv SITE ORNL.phoenix
+#setenv SITE NAVO.kraken
+#setenv SITE NCAR.bluesky32
+
+# SYSTEM_USERDIR is predefined on ORNL machines
+setenv SYSTEM_USERDIR /scratch/eclare
+#setenv SYSTEM_USERDIR /scratch1/eclare  # epiphany
+#setenv SYSTEM_USERDIR /scr/eclare       # kraken
+#setenv SYSTEM_USERDIR /ptmp/eclare      # bluesky32
+
+# set grid resolution
+setenv RES gx3 # 100x116
+#setenv RES gx1 # 320x384
 
 # MPI runs
 setenv COMMDIR mpi 
@@ -23,33 +37,39 @@ setenv SHRDIR csm_share
 
 # Set SRCDIR and EXEDIR to your own paths!
 #setenv SRCDIR $HOME/cice.v4.0/cice
-setenv SRCDIR /net/bob4/lipscomb/cice40_svn/cice
-setenv EXEDIR $SYSTEM_USERDIR/rundir.v4.0 ; if !(-d $EXEDIR) mkdir -p $EXEDIR
+setenv SRCDIR /net/bob4/eclare/CODE/CICE_release/CICE.v4.0/cice
+#setenv SRCDIR /net/bob4/lipscomb/cice40_svn/cice
+setenv EXEDIR $SYSTEM_USERDIR/rundir4 ; if !(-d $EXEDIR) mkdir -p $EXEDIR
 
 setenv CBLD   $SRCDIR/bld
 setenv OBJDIR $EXEDIR/compile           ; if !(-d $OBJDIR) mkdir -p $OBJDIR
 setenv RSTDIR $EXEDIR/restart           ; if !(-d $RSTDIR) mkdir -p $RSTDIR
+setenv HSTDIR $EXEDIR/history           ; if !(-d $HSTDIR) mkdir -p $HSTDIR
 
 setenv ARCH `uname -s`
-#if ( $SITE == 'LANL') setenv ARCH $ARCH.LANL
 if ( $ARCH == 'UNICOS/mp') setenv ARCH UNICOS
 if ( $ARCH == 'UNICOS') then
    cp -f $CBLD/Makefile.$ARCH $CBLD/Makefile
 else
    cp -f $CBLD/Makefile.std $CBLD/Makefile
 endif
+setenv ARCH $ARCH.$SITE
+
+cd $SRCDIR/source
+
+cp -fp ice_domain_size.F.$RES ice_domain_size.F
 
 cd $EXEDIR
 
-if !(-e grid)             cp $SRCDIR/input_templates/global_100x116.grid grid
-if !(-e kmt)              cp $SRCDIR/input_templates/global_100x116.kmt kmt
-if !(-e ice_in)           cp $SRCDIR/input_templates/ice_in.$ARCH ice_in
-if !(-e run_ice)          cp $SRCDIR/input_templates/run_ice.$ARCH run_ice
+if !(-e grid)    cp $SRCDIR/input_templates/$RES/global_$RES.grid grid
+if !(-e kmt)     cp $SRCDIR/input_templates/$RES/global_$RES.kmt kmt
+if !(-e ice_in)  cp $SRCDIR/input_templates/$RES/ice_in .
+if !(-e run_ice) cp $SRCDIR/input_templates/run_ice.$ARCH run_ice
 
 cd $RSTDIR
 
-if !(-e iced_gx3_v3.1)    cp $SRCDIR/input_templates/iced_gx3_v3.1 .
-if !(-e ice.restart_file) cp $SRCDIR/input_templates/ice.restart_file .
+#cp $SRCDIR/input_templates/$RES/iced_$RES* .
+if !(-e ice.restart_file) cp $SRCDIR/input_templates/$RES/ice.restart_file .
 
 cd $OBJDIR
 
@@ -60,8 +80,17 @@ $SRCDIR/$COMMDIR
 $SRCDIR/$SHRDIR
 EOF
 
-cc -o makdep $CBLD/makdep.c                              || exit 2
-gmake VPFILE=Filepath EXEC=$EXEDIR/cice  \
+if ( $ARCH == 'UNICOS.ORNL.phoenix' ) then
+   ### use -h command for phoenix
+   cc -o makdep -h command $CBLD/makdep.c           || exit 2
+else if ( $ARCH == 'Linux.ORNL.jaguar' ) then
+   gcc -g -o makdep $CBLD/makdep.c                  || exit 2
+else
+   cc -o makdep $CBLD/makdep.c                      || exit 2
+endif
+gmake VPFILE=Filepath EXEC=$EXEDIR/cice \
       -f  $CBLD/Makefile MACFILE=$CBLD/Macros.$ARCH || exit 2
 
+cd ..
+pwd 
 cd $SRCDIR

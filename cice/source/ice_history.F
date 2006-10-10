@@ -15,7 +15,10 @@
 !         Elizabeth C. Hunke and William H. Lipscomb, LANL
 !         C. M. Bitz, UW
 !
-! 2004: Block structure added by William Lipscomb
+! 2004 WHL: Block structure added 
+! 2006 ECH: Accepted some CCSM code into mainstream CICE
+!           Added ice_present, aicen, vicen; removed aice1...10, vice1...1.
+!           Added histfreq_n and histfreq='h' options, removed histfreq='w'
 !
 ! !INTERFACE:
 !
@@ -67,6 +70,7 @@
       ! (12) Increment the field in ice_write_hist
       !
       ! Note: Ice area and volume fields defined for ncat <= 10
+      ! To change this behavior, alter ncat_hist below.
       !---------------------------------------------------------------
 
       !---------------------------------------------------------------
@@ -74,14 +78,10 @@
       !---------------------------------------------------------------
 
       integer (kind=int_kind), parameter ::
-     &   avgsiz = 94       ! number of fields that can be written
+     &   ncat_hist = ncat           ! number of ice categories written <= ncat
+     &,  avgsiz = 76 + 2*ncat_hist  ! number of fields that can be written
 
-#ifdef CCSM
       real (kind=real_kind) :: time_beg, time_end ! bounds for averaging
-
-      real (kind=dbl_kind) ::
-     &   ice_present(nx_block,ny_block,max_blocks)
-#endif
 
       real (kind=dbl_kind), 
      &   dimension (nx_block,ny_block,avgsiz,max_blocks) ::
@@ -102,7 +102,7 @@
 
       character (len=16), parameter ::
      &   tstr = 'TLON TLAT time'   ! vcoord for T cell quantities
-     &,  ustr = 'ULAT ULON time'   ! vcoord for U cell quantities
+     &,  ustr = 'ULON ULAT time'   ! vcoord for U cell quantities
 
       character (len=55) :: 
      &   vdesc(avgsiz)     ! variable descriptions
@@ -152,16 +152,8 @@
      &,    f_dardg1dt  = .true., f_dardg2dt   = .true.
      &,    f_dvirdgdt  = .true. 
      &,    f_hisnap    = .true., f_aisnap     = .true.
-     &,    f_aice1     = .true., f_aice2      = .true.
-     &,    f_aice3     = .true., f_aice4      = .true.
-     &,    f_aice5     = .true., f_aice6      = .true.
-     &,    f_aice7     = .true., f_aice8      = .true.
-     &,    f_aice9     = .true., f_aice10     = .true.
-     &,    f_vice1     = .true., f_vice2      = .true.
-     &,    f_vice3     = .true., f_vice4      = .true.
-     &,    f_vice5     = .true., f_vice6      = .true.
-     &,    f_vice7     = .true., f_vice8      = .true.
-     &,    f_vice9     = .true., f_vice10     = .true.
+     &,    f_aicen     = .true., f_vicen      = .true.
+     &,    f_trsig     = .true., f_icepresent = .true.
 
       !---------------------------------------------------------------
       ! namelist variables (same as logical flags)
@@ -207,16 +199,8 @@
      &,    f_dardg1dt,  f_dardg2dt
      &,    f_dvirdgdt
      &,    f_hisnap,    f_aisnap
-     &,    f_aice1,     f_aice2
-     &,    f_aice3,     f_aice4
-     &,    f_aice5,     f_aice6
-     &,    f_aice7,     f_aice8
-     &,    f_aice9,     f_aice10
-     &,    f_vice1,     f_vice2
-     &,    f_vice3,     f_vice4
-     &,    f_vice5,     f_vice6
-     &,    f_vice7,     f_vice8
-     &,    f_vice9,     f_vice10
+     &,    f_aicen,     f_vicen
+     &,    f_trsig,     f_icepresent
 
       !---------------------------------------------------------------
       ! field indices
@@ -289,34 +273,18 @@
      &,    n_mlt_onset  = 64
      &,    n_frz_onset  = 65
      &,    n_opening    = 66
-     &,    n_aice1      = 67
-     &,    n_aice2      = 68
-     &,    n_aice3      = 69
-     &,    n_aice4      = 70
-     &,    n_aice5      = 71
-     &,    n_aice6      = 72
-     &,    n_aice7      = 73
-     &,    n_aice8      = 74
-     &,    n_aice9      = 75
-     &,    n_aice10     = 76
-     &,    n_vice1      = 77
-     &,    n_vice2      = 78
-     &,    n_vice3      = 79
-     &,    n_vice4      = 80
-     &,    n_vice5      = 81
-     &,    n_vice6      = 82
-     &,    n_vice7      = 83
-     &,    n_vice8      = 84
-     &,    n_vice9      = 85
-     &,    n_vice10     = 86
-     &,    n_alvdr      = 87
-     &,    n_alidr      = 88
-     &,    n_dardg1dt   = 89
-     &,    n_dardg2dt   = 90
-     &,    n_dvirdgdt   = 91
-     &,    n_hisnap     = 92
-     &,    n_aisnap     = 93
-     &,    n_Tair       = 94
+     &,    n_alvdr      = 67
+     &,    n_alidr      = 68
+     &,    n_dardg1dt   = 69
+     &,    n_dardg2dt   = 70
+     &,    n_dvirdgdt   = 71
+     &,    n_hisnap     = 72
+     &,    n_aisnap     = 73
+     &,    n_Tair       = 74
+     &,    n_trsig      = 75
+     &,    n_icepresent = 76
+     &,    n_aicen      = 77 ! n_aicen, n_vicen must be last in this list
+     &,    n_vicen      = 78 + ncat_hist - 1
 
 !=======================================================================
 
@@ -361,6 +329,9 @@
 !
       integer (kind=int_kind) :: n, k
       integer (kind=int_kind) :: nml_error ! namelist i/o error flag
+
+      character (len=3) :: nchar
+      character (len=30) :: tmp
 
       !---------------------------------------------------------------
       ! field names
@@ -440,26 +411,15 @@
       vname(n_dvirdgdt  ) = 'dvirdgdt'
       vname(n_hisnap    ) = 'hisnap'
       vname(n_aisnap    ) = 'aisnap'
-      vname(n_aice1     ) = 'aice1'
-      vname(n_aice2     ) = 'aice2'
-      vname(n_aice3     ) = 'aice3'
-      vname(n_aice4     ) = 'aice4'
-      vname(n_aice5     ) = 'aice5'
-      vname(n_aice6     ) = 'aice6'
-      vname(n_aice7     ) = 'aice7'
-      vname(n_aice8     ) = 'aice8'
-      vname(n_aice9     ) = 'aice9'
-      vname(n_aice10    ) = 'aice10'
-      vname(n_vice1     ) = 'vice1'
-      vname(n_vice2     ) = 'vice2'
-      vname(n_vice3     ) = 'vice3'
-      vname(n_vice4     ) = 'vice4'
-      vname(n_vice5     ) = 'vice5'
-      vname(n_vice6     ) = 'vice6'
-      vname(n_vice7     ) = 'vice7'
-      vname(n_vice8     ) = 'vice8'
-      vname(n_vice9     ) = 'vice9'
-      vname(n_vice10    ) = 'vice10'
+      vname(n_trsig     ) = 'trsig'
+      vname(n_icepresent) = 'ice_present'
+      do n = 1, ncat_hist
+        write(nchar,'(i3.3)') n
+        write(vname(n_aicen+n-1),'(a,a)') 'aice', trim(nchar) ! aicen
+        write(vname(n_vicen+n-1),'(a,a)') 'vice', trim(nchar) ! aicen
+        vname(n_aicen+n-1) = trim(vname(n_aicen+n-1))
+        vname(n_vicen+n-1) = trim(vname(n_vicen+n-1))
+      enddo
 
       !---------------------------------------------------------------
       ! field descriptions
@@ -539,26 +499,20 @@
       vdesc(n_dvirdgdt  ) = 'ice volume ridging rate'     
       vdesc(n_hisnap    ) = 'ice volume snapshot'         
       vdesc(n_aisnap    ) = 'ice area snapshot' 
-      vdesc(n_aice1     ) = 'ice area (category 1)'
-      vdesc(n_aice2     ) = 'ice area (category 2)'
-      vdesc(n_aice3     ) = 'ice area (category 3)'
-      vdesc(n_aice4     ) = 'ice area (category 4)'
-      vdesc(n_aice5     ) = 'ice area (category 5)'
-      vdesc(n_aice6     ) = 'ice area (category 6)'
-      vdesc(n_aice7     ) = 'ice area (category 7)'
-      vdesc(n_aice8     ) = 'ice area (category 8)'
-      vdesc(n_aice9     ) = 'ice area (category 9)'
-      vdesc(n_aice10    ) = 'ice area (category 10)'
-      vdesc(n_vice1     ) = 'ice volume (category 1)'
-      vdesc(n_vice2     ) = 'ice volume (category 2)'
-      vdesc(n_vice3     ) = 'ice volume (category 3)'
-      vdesc(n_vice4     ) = 'ice volume (category 4)'
-      vdesc(n_vice5     ) = 'ice volume (category 5)'
-      vdesc(n_vice6     ) = 'ice volume (category 6)'
-      vdesc(n_vice7     ) = 'ice volume (category 7)'
-      vdesc(n_vice8     ) = 'ice volume (category 8)'
-      vdesc(n_vice9     ) = 'ice volume (category 9)'
-      vdesc(n_vice10    ) = 'ice volume (category 10)'
+      vdesc(n_trsig     ) = 'internal stress tensor trace'
+      vdesc(n_icepresent) = 
+     &  'fraction of time-avg interval that any ice is present'
+      do n = 1, ncat_hist
+        write(nchar,'(i3)') n
+
+        tmp = 'ice area, category '   ! aicen
+        write(vdesc(n_aicen+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
+        vdesc(n_aicen+n-1) = trim(vdesc(n_aicen+n-1))
+
+        tmp = 'ice volume, category ' ! vicen
+        write(vdesc(n_vicen+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
+        vdesc(n_vicen+n-1) = trim(vdesc(n_vicen+n-1))
+      enddo
 
       !---------------------------------------------------------------
       ! field units
@@ -638,26 +592,12 @@
       vunit(n_dvirdgdt  ) = 'cm/day'
       vunit(n_hisnap    ) = 'm'
       vunit(n_aisnap    ) = ' ' 
-      vunit(n_aice1     ) = ' '
-      vunit(n_aice2     ) = ' '
-      vunit(n_aice3     ) = ' '
-      vunit(n_aice4     ) = ' '
-      vunit(n_aice5     ) = ' '
-      vunit(n_aice6     ) = ' '
-      vunit(n_aice7     ) = ' '
-      vunit(n_aice8     ) = ' '
-      vunit(n_aice9     ) = ' '
-      vunit(n_aice10    ) = ' '
-      vunit(n_vice1     ) = 'm'
-      vunit(n_vice2     ) = 'm'
-      vunit(n_vice3     ) = 'm'
-      vunit(n_vice4     ) = 'm'
-      vunit(n_vice5     ) = 'm'
-      vunit(n_vice6     ) = 'm'
-      vunit(n_vice7     ) = 'm'
-      vunit(n_vice8     ) = 'm'
-      vunit(n_vice9     ) = 'm'
-      vunit(n_vice10    ) = 'm'
+      vunit(n_trsig     ) = 'N/m^2'
+      vunit(n_icepresent) = '1'
+      do n = 1, ncat_hist
+        vunit(n_aicen+n-1) = ' ' ! aicen
+        vunit(n_vicen+n-1) = 'm' ! vicen
+      enddo
 
 #ifdef CCSM
       ! redefine for CCSM conventions
@@ -668,16 +608,9 @@
       vunit(n_vocn      ) = 'cm/s'
       vunit(n_fsalt     ) = 'kg/m^2/day'
       vunit(n_fsalt_ai  ) = 'kg/m^2/day'
-      vunit(n_aice1     ) = '%'
-      vunit(n_aice2     ) = '%'
-      vunit(n_aice3     ) = '%'
-      vunit(n_aice4     ) = '%'
-      vunit(n_aice5     ) = '%'
-      vunit(n_aice6     ) = '%'
-      vunit(n_aice7     ) = '%'
-      vunit(n_aice8     ) = '%'
-      vunit(n_aice9     ) = '%'
-      vunit(n_aice10    ) = '%'
+      do n = 1, ncat_hist
+        vunit(n_aicen+n-1) = '%' ! aicen
+      enddo
 #endif
 
       !---------------------------------------------------------------
@@ -758,26 +691,12 @@
       vcomment(n_dvirdgdt  ) = 'none'
       vcomment(n_hisnap    ) = 'none'
       vcomment(n_aisnap    ) = 'none' 
-      vcomment(n_aice1     ) = 'Ice range:'  ! These comments are generated
-      vcomment(n_aice2     ) = 'Ice range:'  ! below where the limits of the
-      vcomment(n_aice3     ) = 'Ice range:'  ! thickness category are appended.
-      vcomment(n_aice4     ) = 'Ice range:'
-      vcomment(n_aice5     ) = 'Ice range:'
-      vcomment(n_aice6     ) = 'Ice range:'
-      vcomment(n_aice7     ) = 'Ice range:'
-      vcomment(n_aice8     ) = 'Ice range:'
-      vcomment(n_aice9     ) = 'Ice range:'
-      vcomment(n_aice10    ) = 'Ice range:'
-      vcomment(n_vice1     ) = 'none'
-      vcomment(n_vice2     ) = 'none'
-      vcomment(n_vice3     ) = 'none'
-      vcomment(n_vice4     ) = 'none'
-      vcomment(n_vice5     ) = 'none'
-      vcomment(n_vice6     ) = 'none'
-      vcomment(n_vice7     ) = 'none'
-      vcomment(n_vice8     ) = 'none'
-      vcomment(n_vice9     ) = 'none'
-      vcomment(n_vice10    ) = 'none'
+      vcomment(n_trsig     ) = 'ice strength approximation' 
+      vcomment(n_icepresent) = 'ice extent flag'
+      do n = 1, ncat_hist
+        vcomment(n_aicen+n-1) = 'Ice range:' ! aicen
+        vcomment(n_vicen+n-1) = 'none' ! vicen
+      enddo
 
       !-----------------------------------------------------------------
       ! read namelist
@@ -878,26 +797,10 @@
       call broadcast_scalar (f_dvirdgdt, master_task)
       call broadcast_scalar (f_aisnap, master_task)
       call broadcast_scalar (f_hisnap, master_task)
-      call broadcast_scalar (f_aice1, master_task)
-      call broadcast_scalar (f_aice2, master_task)
-      call broadcast_scalar (f_aice3, master_task)
-      call broadcast_scalar (f_aice4, master_task)
-      call broadcast_scalar (f_aice5, master_task)
-      call broadcast_scalar (f_aice6, master_task)
-      call broadcast_scalar (f_aice7, master_task)
-      call broadcast_scalar (f_aice8, master_task)
-      call broadcast_scalar (f_aice9, master_task)
-      call broadcast_scalar (f_aice10, master_task)
-      call broadcast_scalar (f_vice1, master_task)
-      call broadcast_scalar (f_vice2, master_task)
-      call broadcast_scalar (f_vice3, master_task)
-      call broadcast_scalar (f_vice4, master_task)
-      call broadcast_scalar (f_vice5, master_task)
-      call broadcast_scalar (f_vice6, master_task)
-      call broadcast_scalar (f_vice7, master_task)
-      call broadcast_scalar (f_vice8, master_task)
-      call broadcast_scalar (f_vice9, master_task)
-      call broadcast_scalar (f_vice10, master_task)
+      call broadcast_scalar (f_aicen, master_task)
+      call broadcast_scalar (f_vicen, master_task)
+      call broadcast_scalar (f_trsig, master_task)
+      call broadcast_scalar (f_icepresent, master_task)
 
       !-----------------------------------------------------------------
       ! fill iout array with namelist values
@@ -979,26 +882,12 @@
       iout(n_dvirdgdt  ) = f_dvirdgdt 
       iout(n_hisnap    ) = f_hisnap
       iout(n_aisnap    ) = f_aisnap
-      iout(n_aice1     ) = f_aice1  
-      iout(n_aice2     ) = f_aice2  
-      iout(n_aice3     ) = f_aice3  
-      iout(n_aice4     ) = f_aice4  
-      iout(n_aice5     ) = f_aice5  
-      iout(n_aice6     ) = f_aice6  
-      iout(n_aice7     ) = f_aice7  
-      iout(n_aice8     ) = f_aice8  
-      iout(n_aice9     ) = f_aice9  
-      iout(n_aice10    ) = f_aice10  
-      iout(n_vice1     ) = f_vice1  
-      iout(n_vice2     ) = f_vice2  
-      iout(n_vice3     ) = f_vice3  
-      iout(n_vice4     ) = f_vice4  
-      iout(n_vice5     ) = f_vice5  
-      iout(n_vice6     ) = f_vice6  
-      iout(n_vice7     ) = f_vice7  
-      iout(n_vice8     ) = f_vice8  
-      iout(n_vice9     ) = f_vice9  
-      iout(n_vice10    ) = f_vice10
+      iout(n_trsig     ) = f_trsig
+      iout(n_icepresent) = f_icepresent
+      do n = 1, ncat_hist
+        iout(n_aicen+n-1) = f_aicen
+        iout(n_vicen+n-1) = f_vicen
+      enddo
 
       if (my_task == master_task) then
         write(nu_diag,*) ' '
@@ -1018,9 +907,6 @@
       !-----------------------------------------------------------------
       aa(:,:,:,:) = c0
       avgct = c0
-#ifdef CCSM
-      ice_present(:,:,:) = c0
-#endif
 
       do k=1,avgsiz
          cona(k) = c1   ! multiply by 1.
@@ -1044,10 +930,6 @@
       cona(n_snow_ai) = mps_to_cmpdy/rhofresh  ! snow kg/m2/s to cm/day
       cona(n_rain   ) = mps_to_cmpdy/rhofresh  ! rain kg/m2/s to cm/day
       cona(n_rain_ai) = mps_to_cmpdy/rhofresh  ! rain kg/m2/s to cm/day
-
-!csim      cona(n_uocn    ) = m_to_cm                ! uocn m/s to cm/s
-!csim      cona(n_vocn    ) = m_to_cm                ! vocn m/s to cm/s
-
       cona(n_albsni ) = c100              ! avg of spectral albedos to %
       cona(n_alvdr  ) = c100              ! avg of visible albedo to %
       cona(n_alidr  ) = c100              ! avg of near IR albedo to %
@@ -1064,8 +946,6 @@
       cona(n_meltl  ) = mps_to_cmpdy/dt  ! meltl  m per step to cm/day
       cona(n_fresh  ) = mps_to_cmpdy/rhofresh ! frshwtr flx kg/m2/s to cm/day
       cona(n_fresh_ai)= mps_to_cmpdy/rhofresh ! frshwtr flx kg/m2/s to cm/day
-!csim      cona(n_fsalt)    = secday         ! salt flux kg/m2/s to kg/m2/day 
-!csim      cona(n_fsalt_ai) = secday         ! salt flux kg/m2/s to kg/m2/day 
 
       cona(n_divu  ) = secday*c100      ! divu from 1/s to %/day
       cona(n_shear ) = secday*c100      ! shear from 1/s to %/day
@@ -1083,21 +963,14 @@
 #ifdef CCSM
       ! CCSM conventions
       cona(n_aice  ) = c100             ! aice  fraction to %
-      cona(n_aice1 ) = c100             ! aice1 fraction to %
-      cona(n_aice2 ) = c100             ! aice2 fraction to %
-      cona(n_aice3 ) = c100             ! aice3 fraction to %
-      cona(n_aice4 ) = c100             ! aice4 fraction to %
-      cona(n_aice5 ) = c100             ! aice5 fraction to %
-      cona(n_aice6 ) = c100             ! aice6 fraction to %
-      cona(n_aice7 ) = c100             ! aice7 fraction to %
-      cona(n_aice8 ) = c100             ! aice8 fraction to %
-      cona(n_aice9 ) = c100             ! aice9 fraction to %
-      cona(n_aice10) = c100             ! aice10 fraction to %
+      do n = 1, ncat_hist
+        cona(n_aicen+n-1) = c100 ! aicen fraction to %
+      enddo
       cona(n_aisnap) = c100             ! aisnap fraction to %
       cona(n_uvel  ) = m_to_cm          ! u m/s to cm/s
       cona(n_vvel  ) = m_to_cm          ! v m/s to cm/s
-      cona(n_uocn    ) = m_to_cm        ! uocn m/s to cm/s
-      cona(n_vocn    ) = m_to_cm        ! vocn m/s to cm/s
+      cona(n_uocn  ) = m_to_cm          ! uocn m/s to cm/s
+      cona(n_vocn  ) = m_to_cm          ! vocn m/s to cm/s
       cona(n_fsalt)    = secday         ! salt flux kg/m2/s to kg/m2/day 
       cona(n_fsalt_ai) = secday         ! salt flux kg/m2/s to kg/m2/day 
 #endif
@@ -1167,7 +1040,7 @@
 !EOP
 !
       integer (kind=int_kind) ::
-     &     i,j,k,n
+     &     i,j,k,n,nct
      &,    iblk                 ! block index
      &,    ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
@@ -1204,9 +1077,7 @@
         avgct = c1
       else                      ! write averages over time histfreq
         avgct = avgct + c1
-#ifdef CCSM
-        if (avgct == c1) time_beg = time/int(secday)
-#endif
+        if (avgct == c1) time_beg = (time-dt)/int(secday)
       endif
 
       !---------------------------------------------------------------
@@ -1224,10 +1095,6 @@
        do i = ilo, ihi
        if (tmask(i,j,iblk)) then
         ai = aice_init(i,j,iblk)
-#ifdef CCSM
-        if (aice(i,j,iblk).gt.puny) 
-     &     ice_present(i,j,iblk) = ice_present(i,j,iblk) + c1
-#endif
         aa(i,j,n_hi,    iblk)= aa(i,j,n_hi,    iblk) + vice (i,j,iblk) 
         aa(i,j,n_hs,    iblk)= aa(i,j,n_hs,    iblk) + vsno (i,j,iblk) 
         aa(i,j,n_Tsfc,  iblk)= aa(i,j,n_Tsfc,  iblk) +trcr(i,j,1,iblk)
@@ -1346,19 +1213,21 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
      &                                           + dardg2dt(i,j,iblk)
         aa(i,j,n_dvirdgdt,iblk)= aa(i,j,n_dvirdgdt,iblk) 
      &                                           + dvirdgdt(i,j,iblk)
-               
+        if (aice(i,j,iblk).gt.puny) 
+     &  aa(i,j,n_icepresent,iblk) = aa(i,j,n_icepresent,iblk) + c1
        endif                    ! tmask
        enddo                    ! i
        enddo                    ! j
 
-       do n=1,ncat
+       nct = min(ncat, ncat_hist)
+       do n=1,nct
           do j=jlo,jhi
           do i=ilo,ihi
              if (tmask(i,j,iblk)) then
                 ! assume consecutive indices
-                aa(i,j,n_aice1+n-1,iblk) = aa(i,j,n_aice1+n-1,iblk) 
+                aa(i,j,n_aicen+n-1,iblk) = aa(i,j,n_aicen+n-1,iblk) 
      &                                          + aicen(i,j,n,iblk)
-                aa(i,j,n_vice1+n-1,iblk) = aa(i,j,n_vice1+n-1,iblk) 
+                aa(i,j,n_vicen+n-1,iblk) = aa(i,j,n_vicen+n-1,iblk) 
      &                                          + vicen(i,j,n,iblk)
              endif              ! tmask
           enddo                 ! i
@@ -1423,6 +1292,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
                  aa(i,j,n_frz_onset,iblk) = spval
                  aa(i,j,n_hisnap,iblk)    = spval
                  aa(i,j,n_aisnap,iblk)    = spval
+                 aa(i,j,n_trsig,iblk )    = spval
               else
                  aa(i,j,n_divu,iblk)  = divu (i,j,iblk)*cona(n_divu)
                  aa(i,j,n_shear,iblk) = shear(i,j,iblk)*cona(n_shear)
@@ -1432,18 +1302,17 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
                  aa(i,j,n_frz_onset,iblk) = frz_onset(i,j,iblk)
                  aa(i,j,n_hisnap,iblk)    = vice(i,j,iblk)
                  aa(i,j,n_aisnap,iblk)    = aice(i,j,iblk)
-              endif
-#ifdef CCSM
-              ice_present(i,j,iblk) = ice_present(i,j,iblk)*ravgct
-#endif
+                 aa(i,j,n_trsig,iblk )    = p25*(stressp_1(i,j,iblk)
+     &                                    + stressp_2(i,j,iblk)
+     &                                    + stressp_3(i,j,iblk)
+     &                                    + stressp_4(i,j,iblk))
+            endif
            enddo                ! i
            enddo                ! j
 
         enddo                   ! iblk
 
-#ifdef CCSM
         time_end = time/int(secday)
-#endif
 
       !---------------------------------------------------------------
       ! write netCDF file
@@ -1456,9 +1325,6 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       !------------------------------------------------------------
         aa(:,:,:,:) = c0
         avgct = c0
-#ifdef CCSM
-        ice_present(:,:,:) = c0
-#endif
 
       endif  ! write_history or write_ic
 
@@ -1526,16 +1392,16 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       use ice_constants
       use ice_grid
       use ice_calendar, only: time, sec, idate, nyr, month, daymo, 
-     &                        mday, write_ic, histfreq, year_init,
-     &                        new_year, new_month, new_day
+     &                        mday, write_ic, histfreq, histfreq_n,
+     &                        year_init, new_year, new_month, new_day
       use ice_work, only: work_g1, work_gr, work_gr3
 #ifdef CCSM
       use ice_restart, only: lenstr, runid
-      use ice_domain, only: distrb_info
-      use ice_itd, only: c_hi_range
 #else
       use ice_restart, only: lenstr
 #endif
+      use ice_domain, only: distrb_info
+      use ice_itd, only: c_hi_range
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1548,27 +1414,28 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
      &,  length
       integer (kind=int_kind), dimension(3) :: dimid,start,count
       real (kind=real_kind) :: ltime
-      character (char_len) :: ncfile,title
+      character (char_len) :: title
+      character (char_len_long) :: ncfile
 
       integer (kind=int_kind) :: iyear, imonth, iday
-
-#ifdef CCSM
       integer (kind=int_kind) :: icategory,ind,i_aice,boundid
 
       character (char_len) :: start_time,current_date,current_time
-      character (char_len_long) :: dir_ncfile  !Local dir+fname
       character (len=16) :: c_aice
 
 ! Info for lat, lon and time invariant variables
-
+#ifdef CCSM
       INTEGER (kind=int_kind), PARAMETER :: ncoord = 4, nvar = 10
+#else
+      INTEGER (kind=int_kind), PARAMETER :: ncoord = 4, nvar = 4
+#endif
       TYPE coord_attributes         ! netcdf coordinate attributes
         character (len=10)   :: short_name
         character (len=45)   :: long_name
         character (len=20)   :: units
       END TYPE coord_attributes
 
-      TYPE req_attributes         ! req'd CSM/netcdf attributes
+      TYPE req_attributes         ! req'd netcdf attributes
         type (coord_attributes) :: req
         character (len=20)   :: coordinates
       END TYPE req_attributes
@@ -1576,160 +1443,99 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       TYPE(req_attributes), dimension(nvar) :: var
       TYPE(coord_attributes), dimension(ncoord) :: coord_var
 
-#endif
-
       if (my_task == master_task) then
 
         ltime=time/int(secday)
 
-#ifdef CCSM
-        iyear = nyr
-#else
-        iyear = nyr + year_init - 1
-#endif
+        iyear = nyr + year_init - 1 ! set year_init=1 in ice_in to get iyear=nyr
         imonth = month
         iday = mday
 
         ! construct filename
         if (write_ic) then
-#ifdef CCSM
            write(ncfile,'(a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
      &        incond_file(1:lenstr(incond_file)),iyear,'-',
      &        imonth,'-',iday,'-',sec,'.nc'
-#else
-           write(ncfile,'(a,a,i8.8,a)')
-     &      history_file(1:lenstr(history_file)),'.',idate,'.incond.nc'
-#endif
         else
 
-#ifdef CCSM
-         if (hist_avg) then    ! write averaged data
-
-          if (new_year) then  ! This doesn't work so well with instantaneous
-            iyear = nyr - 1   ! files .
-            imonth = 12
-            iday = 31
+         if (hist_avg) then
+          if (histfreq.eq.'h'.or.histfreq.eq.'H') then
+           ! do nothing
+          elseif (new_year) then
+           iyear = iyear - 1
+           imonth = 12
+           iday = 31
           elseif (new_month) then
-            imonth = month - 1
-            iday = daymo(imonth)
+           imonth = month - 1
+           iday = daymo(imonth)
           elseif (new_day) then
-            iday = iday - 1
+           iday = iday - 1
           endif
+         endif
+
+         if (histfreq == '1') then ! instantaneous, write every dt
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
+     &      history_file(1:lenstr(history_file)),'_inst.',
+     &       iyear,'-',imonth,'-',iday,'-',sec,'.nc'
+
+         elseif (hist_avg) then    ! write averaged data
 
           if (histfreq.eq.'d'.or.histfreq.eq.'D') then     ! daily
            write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)') 
-     &      history_file(1:lenstr(history_file)),'.',iyear,'-',
-     &       imonth,'-',iday,'.nc'
-          elseif (histfreq.eq.'w'.or.histfreq.eq.'W') then ! weekly
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)') 
-     &      history_file(1:lenstr(history_file)),'w.',iyear,'-',
-     &       imonth,'-',iday,'.nc'
+     &      history_file(1:lenstr(history_file)),
+     &       '.',iyear,'-',imonth,'-',iday,'.nc'
+          elseif (histfreq.eq.'h'.or.histfreq.eq.'H') then ! hourly
+           write(ncfile,'(a,a,i2.2,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
+     &      history_file(1:lenstr(history_file)),
+     &       '_',histfreq_n,'h.',
+     &       iyear,'-',imonth,'-',iday,'-',sec,'.nc'
           elseif (histfreq.eq.'m'.or.histfreq.eq.'M') then ! monthly
            write(ncfile,'(a,a,i4.4,a,i2.2,a)') 
-     &      history_file(1:lenstr(history_file)),'.',iyear,'-',
-     &       imonth,'.nc'
+     &      history_file(1:lenstr(history_file)),'.',
+     &       iyear,'-',imonth,'.nc'
           elseif (histfreq.eq.'y'.or.histfreq.eq.'Y') then ! yearly
            write(ncfile,'(a,a,i4.4,a)')
      &      history_file(1:lenstr(history_file)),'.', iyear,'.nc'
           endif
 
-         else                      ! instantaneous
-          if (histfreq.eq.'w'.or.histfreq.eq.'W') then ! weekly
+         else                     ! instantaneous with histfreq > dt
            write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
-     &      history_file(1:lenstr(history_file)),'w.',iyear,'-',
-     &       imonth,'-',iday,'-',sec,'.nc'
-          else
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
-     &      history_file(1:lenstr(history_file)),'.',iyear,'-',
-     &       imonth,'-',iday,'-',sec,'.nc'
-          endif
+     &      history_file(1:lenstr(history_file)),'_inst.',
+     &       iyear,'-',imonth,'-',iday,'-',sec,'.nc'
          endif
-#else
-         if (new_year) then
-           iyear = iyear - 1
-           imonth = 12
-           iday = 31
-         elseif (new_month) then
-           imonth = month - 1
-           iday = daymo(imonth)
-         elseif (new_day) then
-           iday = iday - 1
-         endif
-
-         if (histfreq == '1') then ! instantaneous, write every dt
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)')
-     &      history_file(1:lenstr(history_file)),'.',iyear,'-',
-     &       imonth,'-',iday,'-',sec,'.nc'
-
-         elseif (hist_avg) then    ! write averaged data
-
-          if (histfreq == 'd'.or.histfreq == 'D') then     ! daily
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)')
-     &      history_file(1:lenstr(history_file)),'_davg.',iyear,'-',
-     &       imonth,'-',iday,'.nc'
-          elseif (histfreq == 'm'.or.histfreq == 'M') then ! monthly
-           write(ncfile,'(a,a,i4.4,a,i2.2,a)')
-     &      history_file(1:lenstr(history_file)),'_mavg.',iyear,'-',
-     &       imonth,'.nc'
-          elseif (histfreq == 'w'.or.histfreq == 'W') then ! weekly
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)')
-     &      history_file(1:lenstr(history_file)),'_wavg.',iyear,'-',
-     &       imonth,'-',iday,'.nc'
-          elseif (histfreq == 'y'.or.histfreq == 'Y') then ! yearly
-           write(ncfile,'(a,a,i4.4,a)')
-     &     history_file(1:lenstr(history_file)),'_yavg',iyear,'.nc'
-          endif
-
-         else                      ! instantaneous, histfreq > dt
-           write(ncfile,'(a,a,i8.8,a)')
-     &      history_file(1:lenstr(history_file)),'.',idate,'.nc'
-         endif
-#endif
         endif
 
-#ifdef CCSM
-        ! create file, add local directory path name to ncfile
+        ! add local directory path name to ncfile
         if (write_ic) then
-          dir_ncfile = trim(incond_dir)//ncfile
+          ncfile = trim(incond_dir)//ncfile
         else
-          dir_ncfile = trim(history_dir)//ncfile
+          ncfile = trim(history_dir)//ncfile
         endif
 
-        ! create file
-        status = nf_create(dir_ncfile, nf_clobber, ncid)
-#else
         ! create file
         status = nf_create(ncfile, nf_clobber, ncid)
-#endif
 
       !-----------------------------------------------------------------
       ! define dimensions
       !-----------------------------------------------------------------
 
-#ifdef CCSM
-        status = nf_def_dim(ncid,'nlon',nx_global,imtid)
-        call nf_stat_check (status,'Error defining dimension nlon')
-
-        status = nf_def_dim(ncid,'nlat',ny_global,jmtid)
-        call nf_stat_check (status,'Error defining dimension nlat')
-
-        status = nf_def_dim(ncid,'time',NF_UNLIMITED,timid)
-        call nf_stat_check (status,'Error defining dimension time')
-#else
-        status = nf_def_dim(ncid,'lon',nx_global,imtid)
-        status = nf_def_dim(ncid,'lat',ny_global,jmtid)
-        status = nf_def_dim(ncid,'time',nf_unlimited,timid)
-#endif
-
-      !-----------------------------------------------------------------
-      ! define coordinate variables
-      !-----------------------------------------------------------------
-
-#ifdef CCSM
         if (hist_avg) then
           status = nf_def_dim(ncid,'d2',2,boundid)
           call nf_stat_check (status,'Error defining dimension d2')
         endif
+
+        status = nf_def_dim(ncid,'ni',nx_global,imtid)
+        call nf_stat_check (status,'Error defining dimension ni')
+
+        status = nf_def_dim(ncid,'nj',ny_global,jmtid)
+        call nf_stat_check (status,'Error defining dimension nj')
+
+        status = nf_def_dim(ncid,'time',NF_UNLIMITED,timid)
+        call nf_stat_check (status,'Error defining dimension time')
+
+      !-----------------------------------------------------------------
+      ! define coordinate variables
+      !-----------------------------------------------------------------
 
         dimid(1) = timid
         status = nf_def_var(ncid,'time',nf_float,1,dimid,varid)
@@ -1753,6 +1559,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       !-----------------------------------------------------------------
       ! Define attributes for time bounds if hist_avg is true
       !-----------------------------------------------------------------
+
         if (hist_avg) then
           dimid(1) = boundid
           dimid(2) = timid
@@ -1769,6 +1576,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       !-----------------------------------------------------------------
       ! define information for the creation of time-invariant variables
       !-----------------------------------------------------------------
+
       ind = 0
       ind = ind + 1
       coord_var(ind) = coord_attributes('TLON',
@@ -1789,10 +1597,10 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
      &                          'm^2')
       var(ind)%coordinates = 'TLON TLAT'
       ind = ind + 1
-
       var(ind)%req = coord_attributes('uarea', 'area of U grid cells',
      &                          'm^2')
       var(ind)%coordinates = 'ULON ULAT'
+#ifdef CCSM
       ind = ind + 1
       var(ind)%req = coord_attributes('dxt',
      &               'T cell width through middle', 'm')
@@ -1818,6 +1626,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       var(ind)%req = coord_attributes('HTE',
      &               'T cell width on East side', 'm')
       var(ind)%coordinates = 'TLON TLAT'
+#endif
       ind = ind + 1
       var(ind)%req = coord_attributes('ANGLET',
      &               'angle grid makes with latitude line on T grid',
@@ -1895,93 +1704,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
      &             'Error defining coordinates for'//var(i)%req%short_name)
          enddo
 
-      !-----------------------------------------------------------------
-      ! define attributes for ice_present
-      !-----------------------------------------------------------------
-         status  = nf_def_var(ncid, 'ice_present', nf_float, 3, dimid, varid)
-         call nf_stat_check (status,'Error defining variable ice_present')
-         status = nf_put_att_text(ncid,varid, 'units',1,'1')
-         call nf_stat_check (status,'Error defining units for ice_present')
-         status = nf_put_att_text(ncid,varid, 'long_name',59,
-     &     'fraction of time-averaging interval that any ice is present')
-         call nf_stat_check (status,
-     &                    'Error defining long_name for ice_present')
-         status = nf_put_att_text(ncid,varid,'coordinates',
-     &                          14,'TLON TLAT time')
-         call nf_stat_check (status,
-     &                    'Error defining coordinates for ice_present')
-
-#else
-        dimid(1) = imtid
-        dimid(2) = jmtid
-
-        status = nf_def_var(ncid,'tlon',nf_float,2,dimid,varid)
-        status = nf_put_att_text(ncid,varid,'long_name',
-     $                           21,'grid center longitude')
-        status = nf_put_att_text(ncid,varid,'units',
-     $                           12,'degrees_east')
-
-        status = nf_def_var(ncid,'tlat',nf_float,2,dimid,varid)
-        status = nf_put_att_text(ncid,varid,'long_name',
-     $                           20,'grid center latitude')
-        status = nf_put_att_text(ncid,varid,'units',
-     $                           13,'degrees_north')
-
-        dimid(1) = timid
-        status = nf_def_var(ncid,'time',nf_float,1,dimid,varid)
-        status = nf_put_att_text(ncid,varid,'long_name',
-     $                           10,'model time')
-        status = nf_put_att_text(ncid,varid,'units',
-     $                  30,'days since 0000-00-00 00:00:00')  ! for now
-        status = nf_put_att_text(ncid,varid,'calendar',
-     $                           6,'noleap')
-        if (histfreq  ==  '1' .or. .not.hist_avg) then
-        status = nf_put_att_text(ncid,varid,'time_rep',
-     $                          13,'instantaneous')
-        else
-        status = nf_put_att_text(ncid,varid,'time_rep',
-     $                           8,'averaged')
-        endif
-
-      !-----------------------------------------------------------------
-      ! define variables and variable attributes
-      !-----------------------------------------------------------------
-
-        dimid(1) = imtid
-        dimid(2) = jmtid
-        dimid(3) = timid
-
-        status = nf_def_var(ncid, 'hmask', nf_float,
-     $                       2, dimid, varid)
-        status = nf_put_att_text(ncid,varid,
-     $             'units',4,'flag')
-        status = nf_put_att_text(ncid,varid,
-     $             'long_name',15,'ocean grid mask')
-        status = nf_put_att_text(ncid,varid,'coordinates',
-     $                             5,'tlon tlat')
-
-        status = nf_def_var(ncid, 'tarea', nf_float,
-     $                       2, dimid, varid)
-        status = nf_put_att_text(ncid,varid,
-     $             'units',3,'m^2')
-        status = nf_put_att_text(ncid,varid,
-     $             'long_name',11,'t grid area')
-        status = nf_put_att_text(ncid,varid,'coordinates',
-     $                             5,'tlon tlat')
-
-        status = nf_def_var(ncid, 'rotang', nf_float,
-     $                       2, dimid, varid)
-        status = nf_put_att_text(ncid,varid,
-     $             'units',7,'radians')
-        status = nf_put_att_text(ncid,varid,
-     $             'long_name',19,'grid rotation angle')
-        status = nf_put_att_text(ncid,varid,'coordinates',
-     $                             5,'tlon tlat')
-
-#endif
         do n=1,avgsiz
           if (iout(n)) then
-#ifdef CCSM
             status  = nf_def_var(ncid, vname(n), nf_float, 
      $                         3, dimid, varid)
             call nf_stat_check (status,'Error defining variable'//vname(n))
@@ -2009,7 +1733,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
             call nf_stat_check (status,
      $                       'Error defining _FillValue for'//vname(n))
       !-----------------------------------------------------------------
-      ! Append ice thickness range to aice# comments
+      ! Append ice thickness range to aicen comments
       !-----------------------------------------------------------------
             c_aice = TRIM(vname(n))
             i_aice = lenstr(c_aice)
@@ -2036,27 +1760,10 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
      &                         'Error defining cell methods for'//vname(n))
               endif
             endif
-#else
-            status  = nf_def_var(ncid, vname(n), nf_float,
-     $                         3, dimid, varid)
-            length = lenstr(vunit(n))
-            status = nf_put_att_text(ncid,varid,
-     $             'units',length,vunit(n))
-            length = lenstr(vdesc(n))
-            status = nf_put_att_text(ncid,varid,
-     $             'long_name',length,vdesc(n))
-            status = nf_put_att_text(ncid,varid,'coordinates',
-     $                             8,'i j time')
-            status = nf_put_att_real(ncid,varid,'missing_value',
-     $                             nf_float,1,spval)
-            status = nf_put_att_real(ncid,varid,'_FillValue',
-     $                             nf_float,1,spval)
-
-#endif
 
             if (histfreq == '1' .or. .not.hist_avg
      &          .or. n==n_divu .or. n==n_shear     ! snapshots
-     &          .or. n==n_sig1 .or. n==n_sig2
+     &          .or. n==n_sig1 .or. n==n_sig2 .or. n==n_trsig
      &          .or. n==n_mlt_onset .or. n==n_frz_onset
      &          .or. n==n_hisnap .or. n==n_aisnap) then
             status = nf_put_att_text(ncid,varid,'time_rep',
@@ -2077,7 +1784,12 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         length = lenstr(runid)
         status = nf_put_att_text(ncid,nf_global,'title',length,runid)
         call nf_stat_check (status,'Error in global attribute title')
-
+#else
+        title  = 'sea ice model output for CICE'
+        length = lenstr(title)
+        status = nf_put_att_text(ncid,nf_global,'title',length,title)
+        call nf_stat_check (status,'Error in global attribute title')
+#endif
         title = 'Diagnostic and Prognostic Variables'
         length = lenstr(title)
         status = nf_put_att_text(ncid,nf_global,'contents',length,title)
@@ -2109,28 +1821,12 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         length = lenstr(start_time)
         status = nf_put_att_text(ncid,nf_global,'history',length,start_time)
         call nf_stat_check (status,'Error in global attribute history')
-#else
-        title  = 'sea ice model output for CICE'
-        length = lenstr(title)
-        status = nf_put_att_text(ncid,nf_global,'title',length,title)
-        title  = 'sea ice model: Community Ice Code (CICE)'
-        length = lenstr(title)
-        status = nf_put_att_text(ncid,nf_global,'source',length,title)
-        title  = 'log file ice.log.'                      ! for now
-        length = lenstr(title)
-        status = nf_put_att_text(ncid,nf_global,'history',length,title)
-        title  = 'of CICE'
-        length = lenstr(title)
-        status =
-     &       nf_put_att_text(ncid,nf_global,'conventions',length,title)
-#endif
 
       !-----------------------------------------------------------------
       ! end define mode
       !-----------------------------------------------------------------
 
         status = nf_enddef(ncid)
-#ifdef CCSM
         call nf_stat_check (status,'Error in nf_enddef')
 
       !-----------------------------------------------------------------
@@ -2160,11 +1856,6 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           call nf_stat_check (status,'Error writing time_end')
         endif
 
-#else
-        status  = nf_inq_varid(ncid,'time',varid)
-        status  = nf_put_vara_real(ncid,varid,1,1,ltime)
-#endif
-
       endif                     ! master_task
 
       if (my_task==master_task) then
@@ -2177,7 +1868,6 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
       work_g1(:,:) = c0
 
-#ifdef CCSM
       !-----------------------------------------------------------------
       ! write coordinate variables
       !-----------------------------------------------------------------
@@ -2188,7 +1878,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
             CASE ('TLON')
               call gather_global(work_g1, TLON, master_task, distrb_info)
               if (my_task == master_task) then
-! Convert T grid longitude from -180 -> 180 to 0 to 360
+              ! Convert T grid longitude from -180 -> 180 to 0 to 360
                  work_gr = work_g1*rad_to_deg + c360    ! single precision
                  where (work_gr > c360) work_gr = work_gr - c360
                  where (work_gr < c0 )  work_gr = work_gr + c360
@@ -2263,65 +1953,6 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         endif
       enddo
 
-      !-----------------------------------------------------------------
-      ! write ice_present
-      !-----------------------------------------------------------------
-      call gather_global(work_g1, ice_present, master_task, distrb_info)
-      if (my_task == master_task) then
-        work_gr=work_g1
-        status = nf_inq_varid(ncid, 'ice_present', varid)
-        call nf_stat_check (status,'Error getting varid for ice_present')
-        status = nf_put_var_real(ncid,varid,work_gr)
-        call nf_stat_check (status,'Error writing variable ice_present')
-      endif
-
-#else
-      !-----------------------------------------------------------------
-      ! write latitude and longitude
-      !-----------------------------------------------------------------
-
-      call gather_global(work_g1, TLON, master_task, distrb_info)
-!jsewall - Do the following on all tasks, not just master_task
-!lipscomb - Just master_task for now, pending word from Jake
-      if (my_task == master_task) then
-         work_gr = work_g1*rad_to_deg   ! single precision
-         status  = nf_inq_varid(ncid,'tlon',varid)
-         status  = nf_put_var_real(ncid,varid,work_gr)
-      endif
-
-      call gather_global(work_g1, TLAT, master_task, distrb_info)
-      if (my_task == master_task) then
-         work_gr = work_g1*rad_to_deg
-         status  = nf_inq_varid(ncid,'tlat',varid)
-         status  = nf_put_var_real(ncid,varid,work_gr)
-      endif
-
-      !-----------------------------------------------------------------
-      ! write grid mask, area and rotation angle
-      !-----------------------------------------------------------------
-
-      call gather_global(work_g1, hm, master_task, distrb_info)
-      if (my_task == master_task) then
-        work_gr = work_g1
-        status  = nf_inq_varid(ncid,'hmask',varid)
-        status  = nf_put_var_real(ncid,varid,work_gr)
-      endif
-
-      call gather_global(work_g1, tarea, master_task, distrb_info)
-      if (my_task == master_task) then
-        work_gr = work_g1
-        status  = nf_inq_varid(ncid,'tarea',varid)
-        status  = nf_put_var_real(ncid,varid,work_gr)
-      endif
-
-      call gather_global(work_g1, angle, master_task, distrb_info)
-      if (my_task == master_task) then
-        work_gr = work_g1
-        status  = nf_inq_varid(ncid,'rotang',varid)
-        status  = nf_put_var_real(ncid,varid,work_gr)
-      endif
-#endif
-    
       deallocate(work_gr)
 
       if (my_task==master_task) then
@@ -2345,15 +1976,11 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           if (my_task == master_task) then
             work_gr3(:,:,1) = work_g1(:,:)
             status  = nf_inq_varid(ncid,vname(n),varid)
-#ifdef CCSM
             call nf_stat_check (status,'Error getting varid for'
      &                          //vname(n))
-#endif
             status  = nf_put_vara_real(ncid,varid,start,count,work_gr3)
-#ifdef CCSM
             call nf_stat_check (status,'Error writing variable'
      &                          //vname(n))
-#endif
           endif
         endif
       enddo
@@ -2367,19 +1994,13 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
       if (my_task == master_task) then
          status = nf_close(ncid)
-#ifdef CCSM
          call nf_stat_check (status,'Error closing netCDF history file')
          write(nu_diag,*) ' '
-         write(nu_diag,*) 'Finished writing ',trim(dir_ncfile)
-#else
-         write(nu_diag,*) ' '
-         write(nu_diag,*) 'Finished writing ',ncfile(1:lenstr(ncfile))
-#endif
-         write(nu_diag,*) ' '
+         write(nu_diag,*) 'Finished writing ',trim(ncfile)
       endif
 
       end subroutine icecdf
-#ifdef CCSM
+
 !=======================================================================
 !
 !BOP
@@ -2413,12 +2034,12 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 !EOP
 !
       if (status /= NF_NOERR) then
-        write (nu_diag,*) msg//nf_strerror(status)
+        write (nu_diag,*) msg/
+     &                   /nf_strerror(status)
         call abort_ice ('ice: writing netCDF file in ice_history.F')
       endif
 
       end subroutine nf_stat_check
-#endif
 
 !=======================================================================
 

@@ -15,6 +15,8 @@
 !          Philip W. Jones, LANL
 !          William H. Lipscomb, LANL
 !
+! 2006 ECH: moved exit timeLoop to prevent execution of unnecessary timestep
+!
 ! !INTERFACE:
 !
 
@@ -201,8 +203,6 @@
 
       timeLoop: do
 
-         if (stop_now >= 1) exit timeLoop
-
          istep  = istep  + 1    ! update time step counters
          istep1 = istep1 + 1
          time = time + dt       ! determine the time and date
@@ -210,11 +210,12 @@
 
 #ifdef CCSM
          call from_coupler      ! get updated info from CCSM coupler
-         if (stop_now == 1) exit timeLoop ! coupler called it quits
 #else
          call get_forcing_atmo     ! atmospheric forcing from data
          call get_forcing_ocn(dt)  ! ocean forcing from data
 #endif
+
+         if (stop_now >= 1) exit timeLoop
 
          call init_mass_diags   ! diagnostics per timestep
 

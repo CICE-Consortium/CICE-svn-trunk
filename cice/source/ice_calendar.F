@@ -13,6 +13,8 @@ c $Id$
 ! authors: Elizabeth C. Hunke, LANL
 !          Tony Craig, NCAR
 !
+! 2006 ECH: Removed 'w' option for history; added 'h' and histfreq_n.
+!
 ! !INTERFACE:
 !
       module ice_calendar
@@ -54,7 +56,7 @@ c $Id$
      &,  istep0    ! step counter, number of steps taken in previous run
      &,  istep1    ! step counter, number of steps at current timestep
      &,  mday      ! day of the month
-     &,  week      ! week of the year
+     &,  hour      ! hour of the year
      &,  month     ! month number, 1 to 12
      &,  monthp    ! last month
      &,  year_init ! initial year
@@ -68,6 +70,7 @@ c $Id$
      &,  cpl_write_history  ! if 1, write history on command from cpl
      &,  diagfreq           ! diagnostic output frequency (10 = once per 10 dt)
      &,  dumpfreq_n         ! restart output frequency (10 = once per 10 d,m,y)
+     &,  histfreq_n         ! history output frequency (10 = once per 10 h,d,m,y)
 
       real (kind=dbl_kind) ::
      &   dt                 ! thermodynamics timestep (s)
@@ -78,17 +81,16 @@ c $Id$
      &,  tday               ! absolute day number
      &,  dayyr              ! number of days per year
 
-
       logical (kind=log_kind) ::
      &   new_year           ! new year = .true.
      &,  new_month          ! new month = .true.
-     &,  new_week           ! new week = .true.
      &,  new_day            ! new day = .true.
+     &,  new_hour           ! new hour = .true.
      &,  write_ic           ! write initial condition now
      &,  write_history      ! write history now
 
       character (len=1) ::
-     &   histfreq           ! history output frequency, 'y','m','d','1'
+     &   histfreq           ! history output frequency, 'y','m','d','h','1'
      &,  dumpfreq           ! restart frequency, 'y','m','d'
 
 !=======================================================================
@@ -158,7 +160,8 @@ c $Id$
          if (yday > float(daycal(k))) month = k      ! month
       enddo
       mday = int(yday) - daycal(month)               ! day of the month
-      nyr  = year_init + int((tday-c1)/dayyr)+1      ! year number
+!echmod      nyr  = year_init + int((tday-c1)/dayyr)+1      ! year number
+      nyr  = int((tday-c1)/dayyr)+1      ! year number
       idate = (nyr+year_init-1)*10000 + month*100 + mday ! date (yyyymmdd)
 
 #else
@@ -211,20 +214,21 @@ c $Id$
 !
       integer (kind=int_kind) ::
      &   k
-     &,  nyrp,mdayp,weekp               ! previous year, day, week
+     &,  nyrp,mdayp,hourp               ! previous year, day, hour
      &,  elapsed_days                   ! since beginning this run
      &,  elapsed_months                 ! since beginning this run
+     &,  elapsed_hours                  ! since beginning this run
 
       dayyr = 365.0_dbl_kind
 
       nyrp=nyr
       monthp=month
-      weekp=week
       mdayp=mday
+      hourp=hour
       new_year=.false.
       new_month=.false.
-      new_week=.false.
       new_day=.false.
+      new_hour=.false.
       write_history=.false.
       write_restart=0
 
@@ -233,7 +237,7 @@ c $Id$
                                         ! end of dt
       tday = (ttime-sec)/secday + c1    ! absolute day number
       yday = mod(tday-c1,dayyr) + c1    ! day of the year
-      week = int(yday/c7) + c1          ! week of the year
+      hour = int((ttime-dt)/c3600) + c1    ! hour
       do k = 1, 12
         if (yday > real(daycal(k),kind=dbl_kind)) month = k
       enddo
@@ -241,37 +245,38 @@ c $Id$
       nyr = int((tday-c1)/dayyr) + 1    ! year number
       elapsed_months = (nyr - 1)*12 + month - 1
       elapsed_days = int(tday) - 1 
+      elapsed_hours = int(ttime/3600)
 
       idate = (nyr+year_init-1)*10000 + month*100 + mday ! date (yyyymmdd) 
-
-      if (my_task == master_task .and. mod(istep,diagfreq) == 0
-     &                           .and. stop_now /= 1) then
-        write(nu_diag,*) ' '
-        write(nu_diag,'(a7,i10,4x,a6,i10,4x,a4,i10)')
-     &       'istep1:', istep1, 'idate:', idate, 'sec:', sec
-      endif
 
       if (istep >= npt+1)  stop_now = 1
       if (nyr   /= nyrp)   new_year = .true.
       if (month /= monthp) new_month = .true.
-      if (week  /= weekp)  new_week = .true.
       if (mday  /= mdayp)  new_day = .true.
+      if (hour  /= hourp)  new_hour = .true.
 
+      if (histfreq == '1') write_history=.true.
 !jsewall
-#ifdef COUP_CAM then
-      if (histfreq == '1') then
-         write_history=.true.
-      elseif (istep >= 1) then
+#ifdef COUP_CAM 
+      if (istep >= 1) then
 #else
-      if (istep >= 1 .and. histfreq == '1') then
-         write_history=.true.
-      elseif (istep > 1) then
+      if (istep > 1) then
 #endif
-        if (((histfreq == 'y'.or.histfreq == 'Y').and. new_year)  .or.
-     &      ((histfreq == 'm'.or.histfreq == 'M').and. new_month) .or.
-     &      ((histfreq == 'w'.or.histfreq == 'W').and. new_week)  .or.
-     &      ((histfreq == 'd'.or.histfreq == 'D').and. new_day)) 
-     &      write_history=.true.
+        select case (histfreq)
+        case ("y", "Y")
+          if (new_year  .and. mod(nyr, histfreq_n)==0)
+     &          write_history = .true.
+        case ("m", "M")
+          if (new_month .and. mod(elapsed_months,histfreq_n)==0)
+     &          write_history = .true.
+        case ("d", "D")
+          if (new_day .and. mod(elapsed_days,histfreq_n)==0)
+     &          write_history = .true.
+        case ("h", "H")
+          if (new_hour .and. mod(elapsed_hours,histfreq_n)==0)
+     &          write_history = .true.
+        end select
+
         select case (dumpfreq)
         case ("y", "Y")
           if (new_year  .and. mod(nyr, dumpfreq_n)==0)
@@ -283,6 +288,13 @@ c $Id$
           if (new_day   .and. mod(elapsed_days, dumpfreq_n)==0)
      &          write_restart = 1
         end select
+      endif
+
+      if (my_task == master_task .and. mod(istep,diagfreq) == 0
+     &                           .and. stop_now /= 1) then
+        write(nu_diag,*) ' '
+        write(nu_diag,'(a7,i10,4x,a6,i10,4x,a4,i10)')
+     &       'istep1:', istep1, 'idate:', idate, 'sec:', sec
       endif
 
       end subroutine calendar

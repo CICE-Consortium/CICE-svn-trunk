@@ -16,6 +16,7 @@
 !
 ! 2004-05: Block structure added by William Lipscomb
 !          Restart module separated from history module
+! 2006 ECH: Accepted some CCSM code into mainstream CICE
 ! 
 ! !INTERFACE:
 !
@@ -40,15 +41,11 @@
 
       character (len=char_len) ::
      &   restart_file      ! output file for restart dump
-#ifdef CCSM
      &,  runtype           ! initial, continue, hybrid or branch
-#endif
 
       character (len=char_len_long) ::
      &   restart_dir       ! directory name for restart dump
-#ifdef CCSM
-     &,  runid             ! identifier for coupled run
-#endif
+     &,  runid             ! identifier for CCSM coupled run
 
       character (len=char_len_long) ::
      &   pointer_file      ! input pointer file for restarts
@@ -103,38 +100,24 @@
 
       logical (kind=log_kind) :: diag
 
-#ifdef CCSM
-      ! write pointer (dir/filename)
-      iyear = nyr
+      ! construct path/file
+      iyear = nyr + year_init - 1
       imonth = month
       iday = mday
 
-      write(filename,'(a,i4.4,a,i2.2,a,i2.2,a,i5.5)') 
-     &   restart_file(1:lenstr(restart_file)),
-     &   iyear,'-',imonth,'-',iday,'-',sec
-#else
-      write(filename,'(a,a,i8.8)') 
-     &     restart_file(1:lenstr(restart_file)),'.',idate
-#endif
+      write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') 
+     &   restart_dir(1:lenstr(restart_dir)),
+     &   restart_file(1:lenstr(restart_file)),'.',
+     &   iyear,'-',month,'-',mday,'-',sec
 
+      ! write pointer (path/file)
       if (my_task == master_task) then
         open(nu_rst_pointer,file=pointer_file)
         write(nu_rst_pointer,'(a80)') filename
         close(nu_rst_pointer)
-        write (nu_diag,*) 'dump filename =', trim(filename)
       endif
 
-#ifdef CCSM
-      write(filename,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') 
-     &   restart_dir(1:lenstr(restart_dir)),
-     &   restart_file(1:lenstr(restart_file)),
-     &   iyear,'-',imonth,'-',iday,'-',sec
-#else
-      write(filename,'(a,a,a,i8.8)') 
-     &     restart_dir(1:lenstr(restart_dir)),
-     &     restart_file(1:lenstr(restart_file)),'.',idate
-#endif
-
+      ! begin writing restart data
       call ice_open(nu_dump,filename,0)
 
       if (my_task == master_task) then
@@ -275,10 +258,7 @@
       if (my_task == master_task) then
          open(nu_rst_pointer,file=pointer_file)
          read(nu_rst_pointer,'(a)') filename0
-         write(filename,'(a,a)')
-     &        restart_dir(1:lenstr(restart_dir)),
-     &        filename0(1:lenstr(filename0))
-         close(nu_rst_pointer)
+         filename = trim(filename0)
       endif
 
       call ice_open(nu_restart,filename,0)

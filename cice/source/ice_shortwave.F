@@ -32,6 +32,8 @@
 ! 2005, WHL: Moved absorbed_solar from ice_therm_vertical to this 
 !            module and changed name from ice_albedo
 ! 2006, WHL: Added delta Eddington routines from Bruce Briegleb
+! 2006, ECH: Changed data statements in delta Eddington routines (no 
+!            longer hardwired)
 !
 ! !INTERFACE:
 !
@@ -49,7 +51,7 @@
       save
 
       character (len=char_len) ::
-     &   shortwave     ! shortwave method, 'ccsm3' or 'dEdd'
+     &   shortwave     ! shortwave method, 'ccsm3' (default) or 'dEdd'
 
       ! baseline albedos, set in namelist
       real (kind=dbl_kind) ::
@@ -654,6 +656,12 @@
 !   thickness value. Ideally, these quantities should be made prognostic in the
 !   future.
 !
+!   NOTE regarding albedo diagnostics:  This method yields zero albedo values
+!   if there is no incoming solar and thus the albedo diagnostics are masked
+!   out when the sun is below the horizon.  To estimate albedo from the history 
+!   output (post-processing), compute ice albedo using
+!   (1 - albedo)*swdn = swabs - swthru. -ECH
+!
 ! !REVISION HISTORY:
 !
 ! author:  Bruce P. Briegleb, NCAR 
@@ -788,7 +796,7 @@
       ! compute shortwave radiation accounting for snow/ice (both snow over 
       ! ice and bare ice) and ponded ice (if any):
  
-cdir$ ivdep      !Cray
+!DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
       ! southern hemisphere pond day (6 month phase difference with northern)
@@ -849,7 +857,7 @@ cdir$ ivdep      !Cray
      &       fsfc,    fint,   fthru,  Iabs)
 
       ! accumulate fluxes over snow/ice
-cdir$ ivdep      !Cray
+!DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
       do ij = 1, icells2
@@ -865,7 +873,7 @@ cdir$ ivdep      !Cray
       enddo                     ! ij
 
       do k = 1, nilyr
-cdir$ ivdep      !Cray
+!DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells2
@@ -919,7 +927,7 @@ cdir$ ivdep      !Cray
      &       fsfc,    fint,   fthru,  Iabs)
 
       ! accumulate fluxes over ponded ice
-cdir$ ivdep      !Cray
+!DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
       do ij = 1, icells2
@@ -935,7 +943,7 @@ cdir$ ivdep      !Cray
       enddo                     ! ij
 
       do k = 1, nilyr
-cdir$ ivdep      !Cray
+!DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells2
@@ -1170,6 +1178,12 @@ cdir$ ivdep      !Cray
      &   ki_f    ! first year ice extinction coefficient m^{-1}
      &,  wi_f    ! first year ice single scattering albedo
      &,  gi_f    ! first year ice asymmetry parameter
+
+!echmod
+      real (kind=dbl_kind), dimension (nspint,2) ::
+     &   ki_f0    ! first year ice extinction coefficient m^{-1}
+     &,  wi_f0    ! first year ice single scattering albedo
+!echmod
  
       real (kind=dbl_kind), dimension (nspint) ::
      &   ki_p    ! first year ice under pond extinction coefficient m^{-1}
@@ -1189,7 +1203,7 @@ cdir$ ivdep      !Cray
      &, dz1      ! sea ice layer thickness below surface layer
  
       real (kind=dbl_kind), parameter ::
-     &  h1_4 = 0.50_dbl_kind   ! surface layer thickness (m)
+     &  h1_4 = 0.050_dbl_kind   ! surface layer thickness (m)
  
       ! Extinction data for snow is taken from: Wiscombe and Warren, 1980
       ! and Warren and Wiscombe, 1980. Extinction for fresh snow is that 50
@@ -1212,22 +1226,22 @@ cdir$ ivdep      !Cray
       data gs_l /    0.89_dbl_kind,   0.90_dbl_kind,   0.93_dbl_kind /
  
       ! Following data from Bonnie Light, February 2005
- 
-      data ki_f /   1000._dbl_kind,  1005._dbl_kind,  2224._dbl_kind,
-     &                75._dbl_kind,    82._dbl_kind,  1969._dbl_kind,
-     &                60._dbl_kind,    67._dbl_kind,  1954._dbl_kind,
-     &                60._dbl_kind,    67._dbl_kind,  1954._dbl_kind,
-     &                60._dbl_kind,    67._dbl_kind,  1954._dbl_kind /
-      data wi_f /   .9999_dbl_kind,  .9954_dbl_kind,  .4495_dbl_kind,
-     &              .9972_dbl_kind,  .9125_dbl_kind,  .0381_dbl_kind,
-     &              .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind,
-     &              .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind,
-     &              .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind /
-      data gi_f /     .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind,
-     &                .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind,
-     &                .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind,
-     &                .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind,
-     &                .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind /
+
+!echmod      data ki_f /   1000._dbl_kind,  1005._dbl_kind,  2224._dbl_kind,
+!echmod     &                75._dbl_kind,    82._dbl_kind,  1969._dbl_kind,
+!echmod     &                60._dbl_kind,    67._dbl_kind,  1954._dbl_kind,
+!echmod     &                60._dbl_kind,    67._dbl_kind,  1954._dbl_kind,
+!echmod     &                60._dbl_kind,    67._dbl_kind,  1954._dbl_kind /
+!echmod      data wi_f /   .9999_dbl_kind,  .9954_dbl_kind,  .4495_dbl_kind,
+!echmod     &              .9972_dbl_kind,  .9125_dbl_kind,  .0381_dbl_kind,
+!echmod     &              .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind,
+!echmod     &              .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind,
+!echmod     &              .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind /
+!echmod      data gi_f /     .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind,
+!echmod     &                .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind,
+!echmod     &                .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind,
+!echmod     &                .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind,
+!echmod     &                .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind /
  
       data ki_p /     15._dbl_kind,    22._dbl_kind,  1900._dbl_kind /
       data wi_p /    .986_dbl_kind,   .676_dbl_kind,   .008_dbl_kind /
@@ -1238,6 +1252,47 @@ cdir$ ivdep      !Cray
       data gw   /    0.01_dbl_kind,   0.01_dbl_kind,   0.01_dbl_kind /
  
 !-----------------------------------------------------------------------
+
+!echmod begin
+      ! data from Bruce Briegleb email to ECH 10/03/2006
+      ! first year data values in top layers
+      data ki_f0 /  1060._dbl_kind,  1064._dbl_kind,  7042._dbl_kind,
+     &                40._dbl_kind,    47._dbl_kind,  1309._dbl_kind /
+      data wi_f0 /  .9999_dbl_kind,  .9965_dbl_kind,  .9088_dbl_kind,
+     &              .9951_dbl_kind,  .8441_dbl_kind,  .0305_dbl_kind /
+
+      if (nilyr == 4) then
+        ! initialize with background values in all layers
+        ki_f(1,:) =   40._dbl_kind
+        ki_f(2,:) =   48._dbl_kind
+        ki_f(3,:) = 1445._dbl_kind
+        wi_f(1,:) = .9946_dbl_kind
+        wi_f(2,:) = .8299_dbl_kind
+        wi_f(3,:) = .0277_dbl_kind
+        gi_f(:,:) =   .94_dbl_kind
+        ! reset values in top two layers
+        do k = 1,2
+          do ns = 1, nspint
+            ki_f(ns,k) = ki_f0(ns,k)
+            wi_f(ns,k) = wi_f0(ns,k)
+          enddo
+        enddo
+      else
+        ! initialize with background values in all layers
+        ki_f(1,:) =   40._dbl_kind
+        ki_f(2,:) =   48._dbl_kind
+        ki_f(3,:) = 1400._dbl_kind
+        wi_f(1,:) =  .995_dbl_kind
+        wi_f(2,:) =  .840_dbl_kind
+        wi_f(3,:) =  .030_dbl_kind
+        gi_f(:,:) =   .94_dbl_kind
+        ! reset values in top layer
+        do ns = 1, nspint
+          ki_f(ns,1) = ki_f0(ns,1)
+          wi_f(ns,1) = wi_f0(ns,1)
+        enddo
+      endif
+!echmod end
  
       ! initialize albedos and fluxes to 0
       avdr(:,:)   = c0
@@ -1303,6 +1358,7 @@ cdir$ ivdep      !Cray
           if( srftyp(i,j) <= 1 ) then
             dzs    = h1_4
             dz     = hin(i,j)/real(nilyr,kind=dbl_kind)
+            if( hin(i,j) < 1.5_dbl_kind ) dzs = hin(i,j)/30._dbl_kind
             if( dzs > dz/c2 ) dzs = dz/c2
             dz1    = dz - dzs
             do k=1,klev

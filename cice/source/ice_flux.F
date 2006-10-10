@@ -271,7 +271,7 @@ c      use ice_domain, only: nblocks
       swvdf (:,:,:) = c0              ! shortwave radiation (W/m^2)
       swidr (:,:,:) = c0              ! shortwave radiation (W/m^2)
       swidf (:,:,:) = c0              ! shortwave radiation (W/m^2)
-      flw   (:,:,:) = 180.0_dbl_kind  ! incoming longwave rad (W/m^2)
+      flw   (:,:,:) = c180            ! incoming longwave rad (W/m^2)
       frain (:,:,:) = c0              ! rainfall rate (kg/m2/s)
       fsnow (:,:,:) = 4.0e-6_dbl_kind ! snowfall rate (kg/m2/s)
 

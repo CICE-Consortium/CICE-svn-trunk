@@ -74,15 +74,7 @@
             open(nu,file=filename,form='unformatted')
 
          else                   ! direct access
-! tcmod
-!#ifdef OSF1
-!           open(nu,file=filename,recl=nx_global*ny_global*nbits/32,
-!     &          form='unformatted',access='direct')
-!#else
-!           open(nu,file=filename,recl=nx_global*ny_global*nbits/8,
-!     &          form='unformatted',access='direct')
-!#endif
-             open(nu,file=filename,recl=nx_global*ny_global*nbits/8,
+            open(nu,file=filename,recl=nx_global*ny_global*nbits/8,
      &            form='unformatted',access='direct')
          endif                   ! nbits = 0
 
