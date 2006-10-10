@@ -1,0 +1,36 @@
+#==============================================================================
+# Makefile macros for "jaguar," an ORNL Cray XT3 running Linux
+#==============================================================================
+
+#INCLDIR    := -I. -I/scratch/levesque/BM/ORNL/pop/netcdf-xt3-3.5.1/include 
+INCLDIR    := -I. -I/apps/netcdf/prod/jaguar/include 
+#SLIBS      := -L/scratch/levesque/BM/ORNL/pop/netcdf-xt3-3.5.1/lib -lnetcdf 
+SLIBS      := -L/apps/netcdf/prod/jaguar/lib -lnetcdf 
+ULIBS      := 
+CPP        := /usr/bin/cpp
+CPPFLAGS   := -P -traditional-cpp -DPOSIX
+CPPDEFS    := -DLINUX 
+CFLAGS     := -c -fastsse -tp k8-64
+FIXEDFLAGS := -Mfixed
+FREEFLAGS  := -Mfree
+FC         := ftn
+#FFLAGS     := $(INCLDIR) -O3 -byteswapio
+FFLAGS     := $(INCLDIR) -g -O3 -byteswapio -fastsse -tp k8-64 -Knoieee -Mextend -Mdaz 
+#FFLAGS     := $(INCLDIR) -O3 -byteswapio -Ktrap=inv,divz,ovf,unf
+#FFLAGS     := $(INCLDIR) -O3 -byteswapio -Mflushz
+MOD_SUFFIX := mod
+LD         := ftn
+LDFLAGS    := 
+
+#   CPPDEFS :=  $(CPPDEFS)  -Dfcd_coupled -Dcoupled
+
+ifeq ($(COMMDIR), mpi)
+#   SLIBS   :=  $(SLIBS) -lmpich
+endif
+
+ifeq ($(USE_ESMF), yes)
+   CPPDEFS :=  $(CPPDEFS) -Duse_esmf
+   INCLDIR :=  $(INCLDIR) -I /net/bob1/ESMF/esmf/mod/modO/Linux.intel.64.mauve
+   SLIBS   :=  $(SLIBS) -L /net/bob1/ESMF/esmf/lib/libO/Linux.intel.64.mauve -lesmf -lcprts -lrt -ldl
+endif
+

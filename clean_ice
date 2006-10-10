@@ -1,13 +1,13 @@
 #! /bin/csh -f
 
 #Change to your own paths!
-setenv SYSTEM_USERDIR /scratch/lipscomb
+setenv SYSTEM_USERDIR /scratch/eclare
 
 #setenv SRCDIR $HOME/cice.v4.0/cice
-setenv SRCDIR /net/bob4/lipscomb/cice40_svn/cice
+setenv SRCDIR /net/bob4/eclare/CODE/CICE_release/CICE.v4.0/cice
 
 setenv CBLD   $SRCDIR/bld
-setenv EXEDIR $SYSTEM_USERDIR/rundir.v4.0
+setenv EXEDIR $SYSTEM_USERDIR/rundir4
 setenv OBJDIR $EXEDIR/compile
 
 cd $OBJDIR

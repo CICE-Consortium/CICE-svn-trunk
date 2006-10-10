@@ -1474,19 +1474,19 @@
 !lipscomb - debug
          if (my_task==mtest .and. i==itest .and. j==jtest
      &                      .and. ksub==ndte) then 
-            print*, '' 
+            print*, ' ' 
             print*, 'Strain rates, ksub =', ksub 
-            print*, '' 
+            print*, ' ' 
             print*, 'divu:' 
             print*, divunw, divune 
             print*, divusw, divuse 
  
-            print*, '' 
+            print*, ' ' 
             print*, 'tension:' 
             print*, tensionnw, tensionne 
             print*, tensionsw, tensionse 
  
-            print*, '' 
+            print*, ' ' 
             print*, 'shear:' 
             print*, shearnw, shearne
             print*, shearsw, shearse
@@ -1588,13 +1588,13 @@
 !lipscomb - debug
          if (my_task==999 .and. i==itest .and. j==jtest
      &                      .and. ksub==ndte) then 
-            print*, '' 
+            print*, ' ' 
             print*,'i, j', i, j 
             print*, 'kne =', kne 
-            print*, '' 
+            print*, ' ' 
             print*, 'gamma*DD =', gammaDD_ne 
             print*, '-4x - 6x^2 =', -c4*xne - c6*xne**2 
-            print*, '' 
+            print*, ' ' 
             print*, 'xstar =', xstar 
             print*, 'x1_ne =', xne 
          endif 
@@ -1674,7 +1674,7 @@
  
          if (my_task==999 .and. i==itest .and. j==jtest 
      &                      .and. ksub==ndte) then 
-            print*, '' 
+            print*, ' ' 
             print*, 'gamma*DT/4 =', gammaDT_ne/c4 
             print*, 'x2_ne =', xne 
          endif 
@@ -1705,10 +1705,10 @@
 
          if (my_task==999 .and. i==itest .and. j==jtest 
      &                      .and. ksub==ndte) then 
-            print*, '' 
+            print*, ' ' 
             print*, 'gamma*DS/8 =', gammaDS_ne/c8 
             print*, 'x12_ne =', xne 
-            print*, '' 
+            print*, ' ' 
             print*, 'gamma*eII/4 =', gammaDD_ne / (c4*kne) 
             yne = sqrt(stressm_1(i,j)**2 +c4* stress12_1(i,j)**2) 
      &          / (c2*strength(i,j)) 
@@ -1717,16 +1717,16 @@
  
          if (my_task==mtest .and. i==itest .and. j==jtest 
      &                      .and. ksub==ndte) then 
-            print*, '' 
+            print*, ' ' 
             print*, 'New stresses:' 
             print*, 'stressp:' 
             print*, stressp_2(i,j), stressp_1(i,j) 
             print*, stressp_3(i,j), stressp_4(i,j) 
-            print*, '' 
+            print*, ' ' 
             print*, 'stressm:' 
             print*, stressm_2(i,j), stressm_1(i,j) 
             print*, stressm_3(i,j), stressm_4(i,j) 
-            print*, '' 
+            print*, ' ' 
             print*, 'stress12:' 
             print*, stress12_2(i,j), stress12_1(i,j) 
             print*, stress12_3(i,j), stress12_4(i,j) 
@@ -1839,7 +1839,7 @@
  
             if (my_task==mtest .and. i==itest .and. j==jtest 
      &                      .and. ksub==ndte) then 
-               print*, '' 
+               print*, ' ' 
                print*, 'divu =', divu(i,j)
                print*, 'shear =', shear(i,j)
                print*, 'rdg_conv =', rdg_conv(i,j) 

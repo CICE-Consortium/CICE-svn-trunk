@@ -13,7 +13,9 @@
 ! authors Elizabeth C. Hunke and William H. Lipscomb, LANL
 !         C. M. Bitz, UW
 !
-! 2004: Block structure added by William Lipscomb
+! 2004 WHL: Block structure added 
+! 2006 ECH: Added namelist variables, warnings.
+!           Replaced old default initial ice conditions with 3.14 version.
 !
 ! !INTERFACE:
 !
@@ -73,8 +75,9 @@
       use ice_broadcast
       use ice_diagnostics
       use ice_fileunits
-      use ice_calendar, only: year_init, istep0, histfreq, diagfreq,
-     &                        dumpfreq, dumpfreq_n, npt, dt, ndyn_dt
+      use ice_calendar, only: year_init, istep0, histfreq, histfreq_n, 
+     &                        dumpfreq, dumpfreq_n, diagfreq, 
+     &                        npt, dt, ndyn_dt
       use ice_restart, only: 
      &    restart, restart_dir, restart_file, pointer_file
 #ifdef CCSM
@@ -138,7 +141,7 @@
      &, diagfreq       
      &, print_points,   print_global,    diag_type,     diag_file
      &, histfreq,       hist_avg,        history_dir,   history_file
-     &, dumpfreq,       dumpfreq_n,      restart_file
+     &, histfreq_n,     dumpfreq,        dumpfreq_n,    restart_file
      &, restart,        restart_dir,     pointer_file,  ice_ic
      &, grid_type,      grid_file,       kmt_file,      landfrac_file
      &, kitd,           kcatbound
@@ -173,12 +176,13 @@
       print_global = .true.  ! if true, print global diagnostic data
       diag_type = 'stdout'
       diag_file = 'ice_diag.d'
-      histfreq='m'           ! output frequency
+      histfreq='m'           ! output frequency option
+      histfreq_n = 1         ! output frequency
       hist_avg = .true.      ! if true, write time-averages (not snapshots)
       history_dir  = ' '     ! Write to executable dir for default
       history_file = 'iceh'  ! history file name prefix
       dumpfreq='y'           ! restart frequency option
-      dumpfreq_n= 1          ! restart frequency
+      dumpfreq_n = 1         ! restart frequency
       restart = .false.      ! if true, read restart files for initialization
       restart_dir  = ' '     ! Write to executable dir for default
       restart_file = 'iced'  ! restart file name prefix
@@ -272,7 +276,12 @@
       if (kcolumn == 1) grid_type    = 'column'
 #endif
       chartmp = advection(1:6)
-      if (chartmp /= 'upwind') advection = 'remap'
+      if (chartmp /= 'upwind' .and. chartmp /= 'remap ') then
+         if (my_task == master_task) 
+     &   write (nu_diag,*) 
+     &   'WARNING: ',chartmp,' advection unavailable, using remap'
+         advection = 'remap'
+      endif
 
       call broadcast_scalar(year_init,          master_task)
       call broadcast_scalar(istep0,             master_task)
@@ -284,6 +293,7 @@
       call broadcast_scalar(diag_type,          master_task)
       call broadcast_scalar(diag_file,          master_task)
       call broadcast_scalar(histfreq,           master_task)
+      call broadcast_scalar(histfreq_n,         master_task)
       call broadcast_scalar(hist_avg,           master_task)
       call broadcast_scalar(history_dir,        master_task)
       call broadcast_scalar(history_file,       master_task)
@@ -380,10 +390,11 @@
      &                         print_points
          write(nu_diag,1030) ' histfreq                  = ',
      &                         trim(histfreq)
+         write(nu_diag,1020) ' histfreq_n                = ', histfreq_n
          write(nu_diag,1010) ' hist_avg                  = ', hist_avg
          if (hist_avg) then
-            write (nu_diag,*) 'History data will be averaged over 1 ',
-     &                         histfreq
+            write (nu_diag,*) 'History data will be averaged over ',
+     &                         histfreq_n,' ',histfreq
          else
             write (nu_diag,*) 'History data will be snapshots'
          endif
@@ -706,8 +717,9 @@
      &   indxi, indxj    ! compressed indices for cells with aicen > puny
 
       real (kind=dbl_kind) ::
-     &   slope, Ti
+     &   slope, Ti, sum, hbar
      &,  ainit(ncat)
+     &,  hinit(ncat)
 
       real (kind=dbl_kind), parameter ::
      &   hsno_init = 0.20_dbl_kind    ! initial snow thickness (m)
@@ -739,16 +751,27 @@
       !       extend to the prescribed edges.
       !-----------------------------------------------------------------
 
-         ! initial category areas in cells with ice
+      ! initial category areas in cells with ice
+         hbar = c3  ! initial ice thickness with greatest area
+                    ! Note: the resulting average ice thickness 
+                    ! tends to be less than hbar due to the
+                    ! nonlinear distribution of ice thicknesses 
+         sum = c0
+         do n = 1, ncat
+            if (n < ncat) then
+               hinit(n) = p5*(hin_max(n-1) + hin_max(n)) ! m
+            else                ! n=ncat
+               hinit(n) = (hin_max(n-1) + c1) ! m
+            endif
+            ! parabola, max at h=hbar, zero at h=0, 2*hbar
+            ainit(n) = max(c0, (c2*hbar*hinit(n) - hinit(n)**2))
+            sum = sum + ainit(n)
+         enddo
+         do n = 1, ncat
+            ainit(n) = ainit(n) / (sum + puny/ncat) ! normalize
+         enddo
 
-         if (ncat == 1) then
-            ainit(1) = 0.8_dbl_kind
-         else
-            do n = 1, ncat
-               ainit(n) = c1 / real(ncat,kind=dbl_kind)
-            enddo
-         endif
-
+         ! place ice at high latitudes where ocean sfc is cold
          icells = 0
          do j = 1, ny_block
          do i = 1, nx_block
@@ -777,14 +800,8 @@
                j = indxj(ij)
 
                aicen(i,j,n) = ainit(n)
-               if (n < ncat) then
-                  vicen(i,j,n) = p5*(hin_max(n-1) + hin_max(n))
-     &                         * aicen(i,j,n) ! m
-               else             ! n=ncat
-                  vicen(i,j,n) = (hin_max(n-1) + c1)*aicen(i,j,n) ! m
-               endif
-               vsnon(i,j,n) = min(hsno_init*aicen(i,j,n),
-     &                                   p2*vicen(i,j,n))
+               vicen(i,j,n) = hinit(n) * ainit(n) ! m
+               vsnon(i,j,n) = min(aicen(i,j,n)*hsno_init, p2*vicen(i,j,n))
 
                ! surface temperature
                trcrn(i,j,1,n) = min(Tsmelt, Tair(i,j) - Tffresh) ! deg C

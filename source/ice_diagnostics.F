@@ -14,6 +14,7 @@
 !          Bruce P. Briegleb, NCAR
 !
 ! 2004: Block structure added by William Lipscomb
+! 2006 ECH: bug fixes
 !
 ! !INTERFACE:
 !
@@ -295,7 +296,7 @@
          do j = 1, ny_block
          do i = 1, nx_block
             work1(i,j,iblk) = sqrt(uvel(i,j,iblk)**2 
-     &                           + vvel(i,j,iblk)**2 + puny)
+     &                           + vvel(i,j,iblk)**2)
          enddo
          enddo
       enddo
@@ -524,7 +525,6 @@
          serrs = (sfsalts + delmslts) / (mslts + c1)
 
       endif                     ! print_global
-
 
       if (print_points) then
 
@@ -947,6 +947,8 @@
 
          ! find minimum distance to diagnostic points on this processor 
          do n = 1, npnt
+            if (lonpnt(n) > c180) lonpnt(n) = lonpnt(n) - c360
+
             iindx = 0
             jindx = 0
             bindx = 0

@@ -1776,7 +1776,7 @@ subroutine boundary_3d_dbl(ARRAY, in_bndy, grid_loc, field_type)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   type (bndy), intent(inout) :: &
+   type (bndy), intent(in) :: &
       in_bndy                 ! boundary update structure for the array
 
    integer (int_kind), intent(in) :: &
@@ -1834,7 +1834,7 @@ subroutine boundary_3d_real(ARRAY, in_bndy, grid_loc, field_type)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   type (bndy), intent(inout) :: &
+   type (bndy), intent(in) :: &
       in_bndy                 ! boundary update structure for the array
 
    integer (int_kind), intent(in) :: &
@@ -1887,7 +1887,7 @@ subroutine boundary_3d_int(ARRAY, in_bndy, grid_loc, field_type)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   type (bndy), intent(inout) :: &
+   type (bndy), intent(in) :: &
       in_bndy                 ! boundary update structure for the array
 
    integer (int_kind), intent(in) :: &
@@ -1940,7 +1940,7 @@ subroutine boundary_4d_dbl(ARRAY, in_bndy, grid_loc, field_type)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   type (bndy), intent(inout) :: &
+   type (bndy), intent(in) :: &
       in_bndy                 ! boundary update structure for the array
 
    integer (int_kind), intent(in) :: &
@@ -1996,7 +1996,7 @@ subroutine boundary_4d_real(ARRAY, in_bndy, grid_loc, field_type)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   type (bndy), intent(inout) :: &
+   type (bndy), intent(in) :: &
       in_bndy                 ! boundary update structure for the array
 
    integer (int_kind), intent(in) :: &
@@ -2052,7 +2052,7 @@ subroutine boundary_4d_int(ARRAY, in_bndy, grid_loc, field_type)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   type (bndy), intent(inout) :: &
+   type (bndy), intent(in) :: &
       in_bndy                 ! boundary update structure for the array
 
    integer (int_kind), intent(in) :: &

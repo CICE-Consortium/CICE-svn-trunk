@@ -118,8 +118,8 @@
      &,  psix2    ! stability function at zTrf   (heat and water)
      &,  psimhs   ! stable profile
      &,  ssq      ! sat surface humidity     (kg/kg)
-     &,  qqq      ! for qsat, dqsatdt
-     &,  TTT      ! for qsat, dqsatdt
+     &,  qqq      ! for qsat, dqsfcdt
+     &,  TTT      ! for qsat, dqsfcdt
      &,  qsat     ! the saturation humidity of air (kg/m^3)
      &,  Lheat    ! Lvap or Lsub, depending on surface type
 
@@ -301,10 +301,10 @@
       !------------------------------------------------------------
       ! coefficients for turbulent flux calculation
       !------------------------------------------------------------
-
-!ccsm      shcoef(i,j) = rhoa(i,j) * ustar(ij) * cp(ij) * rh(ij)
       ! add windless coefficient for sensible heat flux
       ! as in Jordan et al (JGR, 1999)
+      !------------------------------------------------------------
+
          shcoef(i,j) = rhoa(i,j) * ustar(ij) * cp(ij) * rh(ij) + c1
          lhcoef(i,j) = rhoa(i,j) * ustar(ij) * Lheat  * re(ij)
 

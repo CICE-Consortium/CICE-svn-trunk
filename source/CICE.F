@@ -194,7 +194,7 @@
 
       end program icemodel
 
-#endif  !ndef COUP_CAM
+#endif
 !=======================================================================
 !BOP
 !

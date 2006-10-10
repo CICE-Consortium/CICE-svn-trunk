@@ -25,8 +25,8 @@
 !
 ! 2003: Vectorized by Clifford Chen (Fujitsu) and William Lipscomb
 !
-! Revised 2004 by William Lipscomb: 
-!   Added multiple snow layers, block structure, cleanup_itd
+! 2004 WHL: Added multiple snow layers, block structure, cleanup_itd
+! 2006 ECH: Added WMO standard ice thickness categories as kcatbound=2
 !
 ! !INTERFACE:
 !
@@ -52,6 +52,7 @@
                        !   1 = linear remap
      &,  kcatbound     !   0 = old category boundary formula
                        !   1 = new formula giving round numbers
+                       !   2 = WMO standard
      &,  ilyr1 (ncat)  ! array position of top ice layer in each cat
      &,  ilyrn (ncat)  ! array position of bottom ice layer in each cat
      &,  slyr1 (ncat)  ! array position of top snow layer in each cat
@@ -63,9 +64,7 @@
       real (kind=dbl_kind) ::
      &   hin_max(0:ncat)    ! category limits                (m)
 
-#ifdef CCSM
       character (len=35) :: c_hi_range(ncat)
-#endif
 
 !-------------------------------------------------------------------
 ! a note regarding hi_min and hin_max(0):
@@ -126,10 +125,12 @@
      &,    d1                          ! parameters for kcatbound = 1 (m)
      &,    d2
 
-#ifdef CCSM
+      real (kind=dbl_kind), dimension(5) :: wmo5 ! data for wmo itd
+      real (kind=dbl_kind), dimension(6) :: wmo6 ! data for wmo itd
+      real (kind=dbl_kind), dimension(7) :: wmo7 ! data for wmo itd
+
       character(len=8) :: c_hinmax1,c_hinmax2
       character(len=2) :: c_nc
-#endif
 
       if (ncat == 1 .and. kitd == 1) then
          write (nu_diag,*) 'Remapping the ITD is not allowed for ncat=1'
@@ -142,7 +143,7 @@
       d2 = 0.5_dbl_kind / rncat
 
       !-----------------------------------------------------------------
-      ! Choose category boundaries based on one of two formulas.
+      ! Choose category boundaries based on one of three options.
       !
       ! The first formula (kcatbound = 0) was used in Lipscomb (2001) 
       !  and in CICE versions 3.0 and 3.1.
@@ -157,6 +158,14 @@
       !  close to the standard values given by the first formula.
       ! For ncat = 10, boundaries in cm are 30, 70, 120, 180, 250, 330,
       !  420, 520, 630.    
+      !
+      ! The third option provides support for World Meteorological
+      !  Organization classification based on thickness.  The full
+      !  WMO thickness distribution is used if ncat = 7;  if ncat=5 
+      !  or ncat = 6, some of the thinner categories are combined.
+      ! For ncat = 5,  boundaries are         30, 70, 120, 200, >200 cm.
+      ! For ncat = 6,  boundaries are     15, 30, 70, 120, 200, >200 cm.
+      ! For ncat = 7,  boundaries are 10, 15, 30, 70, 120, 200, >200 cm.
       !-----------------------------------------------------------------
 
       if (kcatbound == 0) then   ! original scheme
@@ -193,14 +202,49 @@
             hin_max(n) = rn * (d1 + (rn-c1)*d2)
          enddo
 
-      endif
+      elseif (kcatbound == 2) then  ! WMO standard
+
+        if (ncat == 5) then
+         ! thinnest 3 categories combined
+         data wmo5 / 0.30_dbl_kind, 0.70_dbl_kind, 
+     &              1.20_dbl_kind, 2.00_dbl_kind, 
+     &              999._dbl_kind  /
+         hin_max(0) = c0
+         do n = 1, ncat
+            hin_max(n) = wmo5(n)
+         enddo
+       elseif (ncat == 6) then
+         ! thinnest 2 categories combined
+         data wmo6 / 0.15_dbl_kind,
+     &              0.30_dbl_kind, 0.70_dbl_kind, 
+     &              1.20_dbl_kind, 2.00_dbl_kind, 
+     &              999._dbl_kind /
+         hin_max(0) = c0
+         do n = 1, ncat
+            hin_max(n) = wmo6(n)
+         enddo
+       elseif (ncat == 7) then
+         ! all thickness categories 
+         data wmo7 / 0.10_dbl_kind, 0.15_dbl_kind,
+     &              0.30_dbl_kind, 0.70_dbl_kind, 
+     &              1.20_dbl_kind, 2.00_dbl_kind, 
+     &              999._dbl_kind  /
+         hin_max(0) = c0
+         do n = 1, ncat
+            hin_max(n) = wmo7(n)
+         enddo
+       else
+         write (nu_diag,*) 'kcatbound=3 (WMO) must have ncat=5, 6 or 7'
+         stop
+       endif
+
+      endif ! kcatbound
 
       if (my_task == master_task) then
          write (nu_diag,*) ' '
          write (nu_diag,*) 'hin_max(n-1) < Cat n < hin_max(n)'
          do n = 1, ncat
             write (nu_diag,*) hin_max(n-1),' < Cat ',n, ' < ',hin_max(n)
-#ifdef CCSM
             ! Write integer n to character string
             write (c_nc, '(i2)') n    
 
@@ -211,7 +255,6 @@
             ! Save character string to write to history file
             c_hi_range(n)=c_hinmax1//'m < hi Cat '//c_nc//' < '//
      &                    c_hinmax2//'m'
-#endif
          enddo
          write (nu_diag,*) ' '
       endif

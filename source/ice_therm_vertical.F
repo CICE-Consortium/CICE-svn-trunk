@@ -549,7 +549,7 @@
      &,  ustar       ! skin friction velocity for fbot (m/s)
      &,  fhocn_init  ! initial value of fhocn (W/m^2)
      &,  wlat        ! lateral melt rate (m/s)
-     &,  xtmp        ! temporarty variable
+     &,  xtmp        ! temporary variable
 
       ! Parameters for bottom melting
 

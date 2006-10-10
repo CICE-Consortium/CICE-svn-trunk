@@ -1,0 +1,14 @@
+#PBS -N cice4.0
+#PBS -l mppe=4,mem=5G,walltime=0:30:00
+#PBS -j oe
+#PBS -m e
+#PBS -A CLI017ocn
+#PBS -q debug
+
+set  stamp   = `date -u '+%y%m%d%H%M%S'`
+setenv ICE_LOG_FILE ice.log.${stamp}
+
+cd $SYSTEM_USERDIR/rundir4
+aprun -n4 -c core=0 ./cice >&! $ICE_LOG_FILE
+#aprun -n4 -c core=unlimited ./cice >&! $ICE_LOG_FILE
+
