@@ -2332,9 +2332,6 @@ c=======================================================================
      &,   recslot             ! spline slot for current record
      &,   midmonth            ! middle day of month
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: 
-     &    sstdat              ! data value toward which SST is restored
-
       real (kind=dbl_kind) ::
      &    vmin, vmax
 
@@ -2414,7 +2411,7 @@ c=======================================================================
       if (restore_sst) then
         do j = 1, ny_block 
          do i = 1, nx_block 
-           sst(i,j,:) = sst(i,j,:) + (sstdat(i,j,:)-work1(i,j,:))*dt/trest 
+           sst(i,j,:) = sst(i,j,:) + (work1(i,j,:)-sst(i,j,:))*dt/trest 
          enddo 
         enddo 
 !     else sst is only updated in ice_ocean.F
