@@ -1194,7 +1194,7 @@
       type (block) ::
      &     this_block           ! block information for current block
 
-#ifndef COUP_CAM then
+#ifndef COUP_CAM 
       TLAT(:,:,:) = c0
       TLON(:,:,:) = c0
 
