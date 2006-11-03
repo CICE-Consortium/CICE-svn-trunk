@@ -504,6 +504,7 @@
 
          write (nu_diag,*) ' '
          if (grid_type  /=  'displaced_pole' .and.
+     &       grid_type  /=  'tripole'        .and.
      &       grid_type  /=  'column'         .and.
      &       grid_type  /=  'rectangular'    .and.
      &       grid_type  /=  'panarctic'      .and.
