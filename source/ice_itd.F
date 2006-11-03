@@ -27,6 +27,7 @@
 !
 ! 2004 WHL: Added multiple snow layers, block structure, cleanup_itd
 ! 2006 ECH: Added WMO standard ice thickness categories as kcatbound=2
+! 2006 ECH: Streamlined for efficiency 
 !
 ! !INTERFACE:
 !
@@ -362,23 +363,14 @@
      &  i, j, k, n, it
      &, ij                    ! combined i/j horizontal index
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr) ::
+      real (kind=dbl_kind), dimension (nx_block*ny_block,ntrcr) ::
      &  atrcr      ! sum of aicen*trcrn or vicen*trcrn or vsnon*trcrn
 
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
-      aice0(:,:) = c1
-      aice (:,:) = c0
-      vice (:,:) = c0
-      vsno (:,:) = c0
-      eice (:,:) = c0
-      esno (:,:) = c0
-      atrcr(:,:,:) = c0
 
-      !-----------------------------------------------------------------
-      ! Aggregate
-      !-----------------------------------------------------------------
+      atrcr(:,:) = c0
 
       icells = 0
       do j = 1, ny_block
@@ -388,8 +380,19 @@
             indxi(icells) = i
             indxj(icells) = j
          endif                  ! tmask
+
+         aice0(i,j) = c1
+         aice (i,j) = c0
+         vice (i,j) = c0
+         vsno (i,j) = c0
+         eice (i,j) = c0
+         esno (i,j) = c0
       enddo
       enddo
+
+      !-----------------------------------------------------------------
+      ! Aggregate
+      !-----------------------------------------------------------------
 
       do n = 1, ncat
 
@@ -412,7 +415,7 @@
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)
-                  atrcr(i,j,it) = atrcr(i,j,it) 
+                  atrcr(ij,it) = atrcr(ij,it) 
      &                          + trcrn(i,j,it,n)*aicen(i,j,n)
                enddo            ! ij
 
@@ -423,7 +426,7 @@
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)
-                  atrcr(i,j,it) = atrcr(i,j,it) 
+                  atrcr(ij,it) = atrcr(ij,it) 
      &                          + trcrn(i,j,it,n)*vicen(i,j,n)
                enddo            ! ij
 
@@ -435,7 +438,7 @@
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)
-                  atrcr(i,j,it) = atrcr(i,j,it) 
+                  atrcr(ij,it) = atrcr(ij,it) 
      &                          + trcrn(i,j,it,n)*vsnon(i,j,n)
                enddo            ! ij
 
@@ -477,8 +480,9 @@
       ! Tracers
 
       call compute_tracers (nx_block,     ny_block,
+     &                      icells,   indxi,   indxj,
      &                      trcr_depend,
-     &                      atrcr(:,:,:), aice(:,:),
+     &                      atrcr(:,:), aice(:,:),
      &                      vice (:,:),   vsno(:,:),
      &                      trcr(:,:,:))
 
@@ -590,11 +594,12 @@
 ! !INTERFACE:
 !
       subroutine rebin (nx_block, ny_block,
-     &                  nghost,   trcr_depend,
+     &                  icells,   indxi,    indxj,
+     &                  trcr_depend,
      &                  aicen,    trcrn,
      &                  vicen,    vsnon,
      &                  eicen,    esnon,
-     &                  hicen,    l_stop,
+     &                  l_stop,
      &                  istop,    jstop)
 !
 ! !DESCRIPTION:
@@ -611,7 +616,11 @@
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
+     &,  icells            ! number of grid cells with ice
+
+       integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi, indxj      ! compressed i/j indices
 
       integer (kind=int_kind), dimension (ntrcr), intent(in) ::
      &   trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
@@ -621,7 +630,6 @@
      &   aicen     ! concentration of ice
      &,  vicen     ! volume per unit area of ice           (m)
      &,  vsnon     ! volume per unit area of snow          (m)
-     &,  hicen     ! ice thickness for each cat            (m)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat),
      &   intent(inout) ::
@@ -646,17 +654,18 @@
       integer (kind=int_kind) ::
      &   i,j              ! horizontal indices
      &,  n                ! category index
-     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
+     &,  ij                ! combined horizontal index
 
       logical (kind=log_kind) ::
      &   shiftflag          ! = .true. if ice must be shifted
 
-      integer (kind=int_kind), dimension (nx_block,ny_block,ncat) ::
+      integer (kind=int_kind), dimension (icells,ncat) ::
      &   donor              ! donor category index
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) ::
+      real (kind=dbl_kind), dimension (icells,ncat) ::
      &   daice              ! ice area transferred
      &,  dvice              ! ice volume transferred
+     &,  hicen     ! ice thickness for each cat            (m)
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -666,37 +675,45 @@
       istop = 0
       jstop = 0
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
+      do n = 1, ncat
+         do ij = 1, icells       ! aice(i,j) > puny
+            i = indxi(ij)
+            j = indxj(ij)
+
+            donor(ij,n) = 0
+            daice(ij,n) = c0
+            dvice(ij,n) = c0
+
+      !-----------------------------------------------------------------
+      ! Compute ice thickness.
+      !-----------------------------------------------------------------
+            if (aicen(i,j,n) > puny) then
+               hicen(ij,n) = vicen(i,j,n) / aicen(i,j,n)
+            else
+               hicen(ij,n) = c0
+            endif
+         enddo                  ! ij
+      enddo                     ! n
 
       !-----------------------------------------------------------------
       ! make sure thickness of cat 1 is at least hin_max(0)
       !-----------------------------------------------------------------
-      do j = jlo, jhi
-      do i = ilo, ihi
+      do ij = 1, icells       ! aice(i,j) > puny
+         i = indxi(ij)
+         j = indxj(ij)
+
          if (aicen(i,j,1) > puny) then
-            if (hicen(i,j,1) <= hin_max(0) .and. hin_max(0) > c0 ) then
+            if (hicen(ij,1) <= hin_max(0) .and. hin_max(0) > c0 ) then
                aicen(i,j,1) = vicen(i,j,1) / hin_max(0)
-               hicen(i,j,1) = hin_max(0)
+               hicen(ij,1) = hin_max(0)
             endif
          endif
-      enddo                     ! i
-      enddo                     ! j
+      enddo                     ! ij
 
       !-----------------------------------------------------------------
       ! If a category thickness is not in bounds, shift the
       ! entire area, volume, and energy to the neighboring category
       !-----------------------------------------------------------------
-
-      !-----------------------------------------------------------------
-      ! Initialize shift arrays
-      !-----------------------------------------------------------------
-
-      donor(:,:,:) = 0
-      daice(:,:,:) = c0
-      dvice(:,:,:) = c0
 
       !-----------------------------------------------------------------
       ! Move thin categories up
@@ -708,17 +725,18 @@
       ! identify thicknesses that are too big
       !-----------------------------------------------------------------
          shiftflag = .false.
-         do j = jlo, jhi
-         do i = ilo, ihi
+         do ij = 1, icells       ! aice(i,j) > puny
+            i = indxi(ij)
+            j = indxj(ij)
+
             if (aicen(i,j,n) > puny .and.
-     &          hicen(i,j,n) > hin_max(n)) then
+     &          hicen(ij,n) > hin_max(n)) then
                shiftflag = .true.
-               donor(i,j,n) = n
-               daice(i,j,n) = aicen(i,j,n)
-               dvice(i,j,n) = vicen(i,j,n)
+               donor(ij,n) = n
+               daice(ij,n) = aicen(i,j,n)
+               dvice(ij,n) = vicen(i,j,n)
             endif
-         enddo                  ! i
-         enddo                  ! j
+         enddo                  ! ij
 
          if (shiftflag) then
 
@@ -726,7 +744,8 @@
       ! shift ice between categories
       !-----------------------------------------------------------------
             call shift_ice (nx_block, ny_block,
-     &                      nghost,   trcr_depend,
+     &                      indxi,    indxj,
+     &                      icells,   trcr_depend,
      &                      aicen,    trcrn,
      &                      vicen,    vsnon,
      &                      eicen,    esnon,
@@ -741,9 +760,11 @@
       ! reset shift parameters
       !-----------------------------------------------------------------
 
-            donor(:,:,n) = 0
-            daice(:,:,n) = c0
-            dvice(:,:,n) = c0
+         do ij = 1, icells       ! aice(i,j) > puny
+            donor(ij,n) = 0
+            daice(ij,n) = c0
+            dvice(ij,n) = c0
+         enddo
 
          endif                  ! shiftflag
 
@@ -759,17 +780,18 @@
       ! identify thicknesses that are too small
       !-----------------------------------------------------------------
          shiftflag = .false.
-         do j = jlo, jhi
-         do i = ilo, ihi
+         do ij = 1, icells       ! aice(i,j) > puny
+            i = indxi(ij)
+            j = indxj(ij)
+
             if (aicen(i,j,n+1) > puny .and.
-     &          hicen(i,j,n+1) <= hin_max(n)) then
+     &          hicen(ij,n+1) <= hin_max(n)) then
                shiftflag = .true.
-               donor(i,j,n) = n+1
-               daice(i,j,n) = aicen(i,j,n+1)
-               dvice(i,j,n) = vicen(i,j,n+1)
+               donor(ij,n) = n+1
+               daice(ij,n) = aicen(i,j,n+1)
+               dvice(ij,n) = vicen(i,j,n+1)
             endif
-         enddo                  ! i
-         enddo                  ! j
+         enddo                  ! ij
 
          if (shiftflag) then
 
@@ -777,7 +799,8 @@
       ! shift ice between categories
       !-----------------------------------------------------------------
             call shift_ice (nx_block, ny_block,
-     &                      nghost,   trcr_depend,
+     &                      indxi,    indxj,
+     &                      icells,   trcr_depend,
      &                      aicen,    trcrn,
      &                      vicen,    vsnon,
      &                      eicen,    esnon,
@@ -792,9 +815,11 @@
       ! reset shift parameters
       !-----------------------------------------------------------------
 
-            donor(:,:,n) = 0
-            daice(:,:,n) = c0
-            dvice(:,:,n) = c0
+         do ij = 1, icells       ! aice(i,j) > puny
+            donor(ij,n) = 0
+            daice(ij,n) = c0
+            dvice(ij,n) = c0
+         enddo
 
          endif                  ! shiftflag
 
@@ -907,7 +932,8 @@
 ! !INTERFACE:
 !
       subroutine shift_ice (nx_block, ny_block,
-     &                      nghost,   trcr_depend,  
+     &                      indxi,    indxj,
+     &                      icells,   trcr_depend,
      &                      aicen,    trcrn,
      &                      vicen,    vsnon,
      &                      eicen,    esnon,
@@ -933,7 +959,12 @@
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
+     &,  icells                ! number of ocean/ice cells
+
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &  intent(in) ::
+     &  indxi                 ! compressed indices in i/j directions
+     &, indxj
 
       integer (kind=int_kind), dimension (ntrcr), intent(in) ::
      &   trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
@@ -943,7 +974,6 @@
      &   aicen     ! concentration of ice
      &,  vicen     ! volume per unit area of ice          (m)
      &,  vsnon     ! volume per unit area of snow         (m)
-     &,  hicen     ! ice thickness for each cat        (m)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat),
      &   intent(inout) ::
@@ -959,14 +989,15 @@
 
       ! NOTE: Third index of donor, daice, dvice should be ncat-1,
       !       except that compilers would have trouble when ncat = 1 
-      integer (kind=int_kind), dimension(nx_block,ny_block,ncat),
+      integer (kind=int_kind), dimension(icells,ncat),
      &   intent(in) ::
      &   donor             ! donor category index
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat),
+      real (kind=dbl_kind), dimension(icells,ncat),
      &     intent(inout) ::
      &   daice             ! ice area transferred across boundary
      &,  dvice             ! ice volume transferred across boundary
+     &,  hicen     ! ice thickness for each cat        (m)
 
       logical (kind=log_kind), intent(out) ::
      &   l_stop    ! if true, abort on return
@@ -977,7 +1008,7 @@
 !EOP
 !
       integer (kind=int_kind) ::
-     &   i, j              ! horizontal indices
+     &   i, j, m           ! horizontal indices
      &,  n                 ! thickness category index
      &,  nr                ! receiver category
      &,  nd                ! donor category
@@ -985,7 +1016,7 @@
      &,  it                ! tracer index
      &,  ilo,ihi,jlo,jhi   ! beginning and end of physical domain
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr,ncat) ::
+      real (kind=dbl_kind), dimension(icells,ntrcr,ncat) ::
      &   atrcrn            ! aicen*trcrn
 
       real (kind=dbl_kind) ::
@@ -994,12 +1025,13 @@
      &,  deice             ! ice energy transferred
      &,  datrcr            ! aicen*train transferred
 
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
-     &  indxi           ! compressed indices for i/j directions
-     &, indxj
+      integer (kind=int_kind), dimension (icells) ::
+     &  indxii           ! compressed indices for i/j directions
+     &, indxjj
+     &, indxij
 
       integer (kind=int_kind) ::
-     &  icells          ! number of cells with ice to transfer
+     &  ishift          ! number of cells with ice to transfer
      &, ij              ! combined i/j horizontal index
 
       logical (kind=log_kind) ::
@@ -1016,11 +1048,6 @@
       istop = 0
       jstop = 0
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
       !-----------------------------------------------------------------
       ! Define variables equal to aicen*trcrn, vicen*trcrn, vsnon*trcrn
       !-----------------------------------------------------------------
@@ -1028,11 +1055,23 @@
       do n = 1, ncat
          do it = 1, ntrcr
             if (trcr_depend(it) == 0) then ! ice area tracer
-               atrcrn(:,:,it,n) = aicen(:,:,n)*trcrn(:,:,it,n)
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  atrcrn(ij,it,n) = aicen(i,j,n)*trcrn(i,j,it,n)
+               enddo
             elseif (trcr_depend(it) ==1) then  ! ice volume tracer
-               atrcrn(:,:,it,n) = vicen(:,:,n)*trcrn(:,:,it,n)
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  atrcrn(ij,it,n) = vicen(i,j,n)*trcrn(i,j,it,n)
+               enddo
             elseif (trcr_depend(it) ==2) then  ! snow volume tracer
-               atrcrn(:,:,it,n) = vsnon(:,:,n)*trcrn(:,:,it,n)
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  atrcrn(ij,it,n) = vsnon(i,j,n)*trcrn(i,j,it,n)
+               enddo
             endif
          enddo
       enddo
@@ -1048,107 +1087,112 @@
          daice_greater_aicen = .false.
          dvice_greater_vicen = .false.
 
-         do j = jlo, jhi
-         do i = ilo, ihi
 
-            if (donor(i,j,n) > 0) then
-               nd = donor(i,j,n)
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
 
-               if (daice(i,j,n) < c0) then
-                  if (daice(i,j,n) > -puny*aicen(i,j,nd)) then
-                     daice(i,j,n) = c0 ! shift no ice
-                     dvice(i,j,n) = c0
+            if (donor(ij,n) > 0) then
+               nd = donor(ij,n)
+
+               if (daice(ij,n) < c0) then
+                  if (daice(ij,n) > -puny*aicen(i,j,nd)) then
+                     daice(ij,n) = c0 ! shift no ice
+                     dvice(ij,n) = c0
                   else
                      daice_negative = .true.
                   endif
                endif
          
-               if (dvice(i,j,n) < c0) then
-                  if (dvice(i,j,n) > -puny*vicen(i,j,nd)) then   
-                     daice(i,j,n) = c0 ! shift no ice
-                     dvice(i,j,n) = c0
+               if (dvice(ij,n) < c0) then
+                  if (dvice(ij,n) > -puny*vicen(i,j,nd)) then   
+                     daice(ij,n) = c0 ! shift no ice
+                     dvice(ij,n) = c0
                   else
                      dvice_negative = .true.
                   endif
                endif
 
-               if (daice(i,j,n) > aicen(i,j,nd)*(c1-puny)) then
-                  if (daice(i,j,n) < aicen(i,j,nd)*(c1+puny)) then
-                     daice(i,j,n) = aicen(i,j,nd)
-                     dvice(i,j,n) = vicen(i,j,nd)
+               if (daice(ij,n) > aicen(i,j,nd)*(c1-puny)) then
+                  if (daice(ij,n) < aicen(i,j,nd)*(c1+puny)) then
+                     daice(ij,n) = aicen(i,j,nd)
+                     dvice(ij,n) = vicen(i,j,nd)
                   else
                      daice_greater_aicen = .true.
                   endif
                endif    
 
-               if (dvice(i,j,n) > vicen(i,j,nd)*(c1-puny)) then
-                  if (dvice(i,j,n) < vicen(i,j,nd)*(c1+puny)) then
-                     daice(i,j,n) = aicen(i,j,nd)
-                     dvice(i,j,n) = vicen(i,j,nd)
+               if (dvice(ij,n) > vicen(i,j,nd)*(c1-puny)) then
+                  if (dvice(ij,n) < vicen(i,j,nd)*(c1+puny)) then
+                     daice(ij,n) = aicen(i,j,nd)
+                     dvice(ij,n) = vicen(i,j,nd)
                   else
                      dvice_greater_vicen = .true.
                   endif
                endif
 
             endif               ! donor > 0
-         enddo                  ! i
-         enddo                  ! j
+         enddo                  ! ij
 
       !-----------------------------------------------------------------
       ! error messages
       !-----------------------------------------------------------------
 
          if (daice_negative) then
-            do j = jlo,jhi
-            do i = ilo,ihi
-               if (donor(i,j,n) > 0 .and. 
-     &             daice(i,j,n) <= -puny*aicen(i,j,nd)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+               if (donor(ij,n) > 0 .and. 
+     &             daice(ij,n) <= -puny*aicen(i,j,nd)) then
                   write(nu_diag,*) ' '
                   write(nu_diag,*) 'shift_ice: negative daice'
                   write(nu_diag,*) 'i, j:', i, j
                   write(nu_diag,*) 'boundary, donor cat:', n, nd
-                  write(nu_diag,*) 'daice =', daice(i,j,n)
-                  write(nu_diag,*) 'dvice =', dvice(i,j,n)
+                  write(nu_diag,*) 'daice =', daice(ij,n)
+                  write(nu_diag,*) 'dvice =', dvice(ij,n)
                   l_stop = .true.
                   istop = i
                   jstop = j
                endif
-            enddo
             enddo
          endif
          if (l_stop) return
 
          if (dvice_negative) then
-            do j = jlo,jhi
-            do i = ilo,ihi
-               if (donor(i,j,n) > 0 .and. 
-     &             dvice(i,j,n) <= -puny*vicen(i,j,nd)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+               if (donor(ij,n) > 0 .and. 
+     &             dvice(ij,n) <= -puny*vicen(i,j,nd)) then
                   write(nu_diag,*) ' '
                   write(nu_diag,*) 'shift_ice: negative dvice'
                   write(nu_diag,*) 'i, j:', i, j
                   write(nu_diag,*) 'boundary, donor cat:', n, nd
-                  write(nu_diag,*) 'daice =', daice(i,j,n)
-                  write(nu_diag,*) 'dvice =', dvice(i,j,n)
+                  write(nu_diag,*) 'daice =', daice(ij,n)
+                  write(nu_diag,*) 'dvice =', dvice(ij,n)
                   l_stop = .true.
                   istop = i
                   jstop = j
                endif
             enddo
-            enddo
          endif
          if (l_stop) return
 
          if (daice_greater_aicen) then
-            do j = jlo,jhi
-            do i = ilo,ihi
-               if (donor(i,j,n) > 0) then
-                  nd = donor(i,j,n)
-                  if (daice(i,j,n) >= aicen(i,j,nd)*(c1+puny)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+               if (donor(ij,n) > 0) then
+                  nd = donor(ij,n)
+                  if (daice(ij,n) >= aicen(i,j,nd)*(c1+puny)) then
                      write(nu_diag,*) ' '
                      write(nu_diag,*) 'shift_ice: daice > aicen'
                      write(nu_diag,*) 'i, j:', i, j
                      write(nu_diag,*) 'boundary, donor cat:', n, nd
-                     write(nu_diag,*) 'daice =', daice(i,j,n)
+                     write(nu_diag,*) 'daice =', daice(ij,n)
                      write(nu_diag,*) 'aicen =', aicen(i,j,nd)
                      l_stop = .true.
                      istop = i
@@ -1156,28 +1200,28 @@
                   endif
                endif
             enddo
-            enddo
          endif
          if (l_stop) return
 
          if (dvice_greater_vicen) then
-            do j = jlo,jhi
-            do i = ilo,ihi
-               if (donor(i,j,n) > 0) then
-                  nd = donor(i,j,n)
-                  if (dvice(i,j,n) >= vicen(i,j,nd)*(c1+puny)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+               if (donor(ij,n) > 0) then
+                  nd = donor(ij,n)
+                  if (dvice(ij,n) >= vicen(i,j,nd)*(c1+puny)) then
                      write(nu_diag,*) ' '
                      write(nu_diag,*) 'shift_ice: dvice > vicen'
                      write(nu_diag,*) 'i, j:', i, j
                      write(nu_diag,*) 'boundary, donor cat:', n, nd
-                     write(nu_diag,*) 'dvice =', dvice(i,j,n)
+                     write(nu_diag,*) 'dvice =', dvice(ij,n)
                      write(nu_diag,*) 'vicen =', vicen(i,j,nd)
                      l_stop = .true.
                      istop = i
                      jstop = j
                   endif
                endif
-            enddo
             enddo
          endif
          if (l_stop) return
@@ -1186,37 +1230,40 @@
       ! transfer volume and energy between categories
       !-----------------------------------------------------------------
 
-         icells = 0
-         do j = jlo, jhi
-         do i = ilo, ihi
-           if (daice(i,j,n) > c0) then ! daice(n) can be < puny
-             icells = icells + 1
-             indxi(icells) = i
-             indxj(icells) = j
+         ishift = 0
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+           if (daice(ij,n) > c0) then ! daice(n) can be < puny
+             ishift = ishift + 1
+             indxii(ishift) = i
+             indxjj(ishift) = j
+             indxij(ishift) = ij
            endif   ! tmask
-         enddo
          enddo
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
+         do ij = 1, ishift
+            i = indxii(ij)
+            j = indxjj(ij)
+            m = indxij(ij)
 
-            nd = donor(i,j,n)
-            worka(i,j) = dvice(i,j,n) / vicen(i,j,nd)
+            nd = donor(m,n)
+            worka(i,j) = dvice(m,n) / vicen(i,j,nd)
             if (nd  ==  n) then
                nr = nd+1
             else                ! nd = n+1
                nr = n
             endif
 
-            aicen(i,j,nd) = aicen(i,j,nd) - daice(i,j,n)
-            aicen(i,j,nr) = aicen(i,j,nr) + daice(i,j,n)
+            aicen(i,j,nd) = aicen(i,j,nd) - daice(m,n)
+            aicen(i,j,nr) = aicen(i,j,nr) + daice(m,n)
 
-            vicen(i,j,nd) = vicen(i,j,nd) - dvice(i,j,n)
-            vicen(i,j,nr) = vicen(i,j,nr) + dvice(i,j,n)
+            vicen(i,j,nd) = vicen(i,j,nd) - dvice(m,n)
+            vicen(i,j,nr) = vicen(i,j,nr) + dvice(m,n)
 
             dvsnow = vsnon(i,j,nd) * worka(i,j)
             vsnon(i,j,nd) = vsnon(i,j,nd) - dvsnow
@@ -1229,11 +1276,12 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+            do ij = 1, ishift
+               i = indxii(ij)
+               j = indxjj(ij)
+               m = indxij(ij)
 
-               nd = donor(i,j,n)
+               nd = donor(m,n)
                if (nd == n) then
                   nr = nd+1
                else             ! nd = n+1
@@ -1241,15 +1289,15 @@
                endif
 
                if (trcr_depend(it) == 0) then
-                  datrcr = daice(i,j,n)*trcrn(i,j,it,nd)
+                  datrcr = daice(m,n)*trcrn(i,j,it,nd)
                elseif (trcr_depend(it) == 1) then
-                  datrcr = dvice(i,j,n)*trcrn(i,j,it,nd)
+                  datrcr = dvice(m,n)*trcrn(i,j,it,nd)
                elseif (trcr_depend(it) == 2) then
                   datrcr = workb(i,j)  *trcrn(i,j,it,nd)
                endif
 
-               atrcrn(i,j,it,nd) = atrcrn(i,j,it,nd) - datrcr
-               atrcrn(i,j,it,nr) = atrcrn(i,j,it,nr) + datrcr
+               atrcrn(m,it,nd) = atrcrn(m,it,nd) - datrcr
+               atrcrn(m,it,nr) = atrcrn(m,it,nr) + datrcr
             enddo               ! ij
          enddo                  ! ntrcr
 
@@ -1257,11 +1305,12 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+            do ij = 1, ishift
+               i = indxii(ij)
+               j = indxjj(ij)
+               m = indxij(ij)
 
-               nd = donor(i,j,n)
+               nd = donor(m,n)
                if (nd == n) then
                   nr = nd+1
                else             ! nd = n+1
@@ -1280,11 +1329,12 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+            do ij = 1, ishift
+               i = indxii(ij)
+               j = indxjj(ij)
+               m = indxij(ij)
 
-               nd = donor(i,j,n)
+               nd = donor(m,n)
                if (nd == n) then
                   nr = nd+1
                else             ! nd = n+1
@@ -1307,19 +1357,21 @@
 
       do n = 1, ncat
 
-         do j = jlo, jhi
-         do i = ilo, ihi
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
             if (aicen(i,j,n) > puny) then
-               hicen(i,j,n)   = vicen (i,j,n)   / aicen(i,j,n)
+               hicen(ij,n)   = vicen (i,j,n)   / aicen(i,j,n)
             else
-               hicen(i,j,n)   = c0
+               hicen(ij,n)   = c0
             endif
          enddo
-         enddo
 
-         call compute_tracers (nx_block,       ny_block,
+         call compute_tracers (nx_block,     ny_block,
+     &                         icells,   indxi,   indxj,
      &                         trcr_depend,
-     &                         atrcrn(:,:,:,n), aicen(:,:,  n),
+     &                         atrcrn(:,:,n), aicen(:,:,  n),
      &                         vicen (:,:,  n), vsnon(:,:,  n),
      &                         trcrn(:,:,:,n))
 
@@ -1335,7 +1387,8 @@
 ! !INTERFACE:
 !
       subroutine column_sum (nx_block, ny_block,
-     &                       nghost,   nsum,
+     &                       icells,   indxi,   indxj,
+     &                       nsum,
      &                       xin,      xout)
 !
 ! !DESCRIPTION:
@@ -1352,31 +1405,37 @@
 !
       integer (kind=int_kind), intent(in) ::
      &     nx_block, ny_block  ! block dimensions
-     &,    nghost              ! number of ghost cells
      &,    nsum                ! number of categories/layers
+     &,  icells              ! number of ice/ocean grid cells
+
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi,  indxj          ! compressed i/j indices
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nsum),
      &     intent(in) ::
      &     xin              ! input field
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
+      real (kind=dbl_kind), dimension (icells),
      &     intent(out) ::
      &     xout             ! output field
 !
 !EOP
 !
       integer (kind=int_kind) ::
-     &     i, j             ! horizontal indices
+     &     i, j, ij         ! horizontal indices
      &,    n                ! category/layer index
 
-      xout(:,:) = c0
+      do ij = 1, icells
+         xout(ij) = c0
+      enddo
 
       do n = 1, nsum
-         do j = 1, ny_block
-         do i = 1, nx_block
-            xout(i,j) = xout(i,j) + xin(i,j,n)
-         enddo                  ! i
-         enddo                  ! j
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            xout(ij) = xout(ij) + xin(i,j,n)
+         enddo                  ! ij
       enddo                     ! n
 
       end subroutine column_sum
@@ -1389,7 +1448,8 @@
 ! !INTERFACE:
 !
       subroutine column_conservation_check (nx_block, ny_block,
-     &                                      nghost,   fieldid,
+     &                                      icells,   indxi,   indxj,
+     &                                      fieldid,
      &                                      x1,       x2, 
      &                                      max_err,  l_stop,
      &                                      istop,    jstop)
@@ -1408,18 +1468,22 @@
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) ::
-     &     nx_block, ny_block  ! block dimensions
-     &,    nghost              ! number of ghost cells
+     &   nx_block, ny_block  ! block dimensions
+     &,  icells              ! number of ice/ocean grid cells
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
-     &     x1                ! initial field
-     &,    x2                ! final field
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi,  indxj       ! compressed i/j indices
+
+      real (kind=dbl_kind), dimension(icells), intent(in) ::
+     &   x1                ! initial field
+     &,  x2                ! final field
 
       real (kind=dbl_kind), intent(in) ::
-     &     max_err           ! max allowed error
+     &   max_err           ! max allowed error
 
       character (len=char_len), intent(in) ::
-     &     fieldid           ! field identifier
+     &   fieldid           ! field identifier
 
       logical (kind=log_kind), intent(inout) ::
      &   l_stop    ! if true, abort on return
@@ -1430,28 +1494,22 @@
 !EOP
 !
       integer (kind=int_kind) ::
-     &     i, j                        ! horizontal indices
+     &   ij                    ! horizontal indices
 
-      do j = nghost+1, ny_block-nghost
-      do i = nghost+1, nx_block-nghost
-         if (abs (x2(i,j)-x1(i,j)) > max_err) then
+      do ij = 1, icells
+         if (abs (x2(ij)-x1(ij)) > max_err) then
             l_stop = .true.
-            istop = i
-            jstop = j
+            istop = indxi(ij)
+            jstop = indxj(ij)
+
+            write (nu_diag,*) ' '
+            write (nu_diag,*) 'Conservation error: ', trim(fieldid)
+            write (nu_diag,*) 'i, j =', istop, jstop
+            write (nu_diag,*) 'Initial value =', x1(ij)
+            write (nu_diag,*) 'Final value =',   x2(ij)
+            write (nu_diag,*) 'Difference =', x2(ij) - x1(ij)
          endif
       enddo
-      enddo
-
-      if (l_stop) then
-         i = istop
-         j = jstop
-         write (nu_diag,*) ' '
-         write (nu_diag,*) 'Conservation error: ', trim(fieldid)
-         write (nu_diag,*) 'i, j =', i, j
-         write (nu_diag,*) 'Initial value =', x1(i,j)
-         write (nu_diag,*) 'Final value =',   x2(i,j)
-         write (nu_diag,*) 'Difference =', x2(i,j) - x1(i,j)
-      endif
 
       end subroutine column_conservation_check
 
@@ -1463,6 +1521,7 @@
 ! !INTERFACE:
 !
       subroutine compute_tracers (nx_block, ny_block,
+     &                            icells,   indxi,   indxj,
      &                            trcr_depend,
      &                            atrcrn,   aicen,
      &                            vicen,    vsnon,
@@ -1483,11 +1542,16 @@
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
+     &,  icells              ! number of ice/ocean grid cells
+
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi,  indxj       ! compressed i/j indices
 
       integer (kind=int_kind), dimension (ntrcr), intent(in) ::
      &   trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr),
+      real (kind=dbl_kind), dimension (icells,ntrcr),
      &   intent(in) ::
      &   atrcrn    ! aicen*trcrn or vicen*trcrn or vsnon*trcrn
 
@@ -1504,7 +1568,7 @@
 !EOP
 !
       integer (kind=int_kind) ::
-     &   i, j, it       ! counting indices
+     &   i, j, it, ij       ! counting indices
 
       !-----------------------------------------------------------------
       ! Compute new tracers
@@ -1512,47 +1576,47 @@
 
       do it = 1, ntrcr
          if (it == 1) then      ! surface temperature
-            do j = 1, ny_block
-            do i = 1, nx_block
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
                if (aicen(i,j) > puny) then
-                  trcrn(i,j,it) = atrcrn(i,j,it) / aicen(i,j)
+                  trcrn(i,j,it) = atrcrn(ij,it) / aicen(i,j)
                else
                   trcrn(i,j,it) = Tocnfrz
                endif
             enddo
-            enddo
 
          elseif (trcr_depend(it) == 0) then ! ice area tracers
-            do j = 1, ny_block
-            do i = 1, nx_block
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
                if (aicen(i,j) > puny) then
-                  trcrn(i,j,it) = atrcrn(i,j,it) / aicen(i,j)
+                  trcrn(i,j,it) = atrcrn(ij,it) / aicen(i,j)
                else
                   trcrn(i,j,it) = c0
                endif
-            enddo
             enddo
 
          elseif (trcr_depend(it) == 1) then ! ice volume tracers
-            do j = 1, ny_block
-            do i = 1, nx_block
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
                if (vicen(i,j) > puny) then
-                  trcrn(i,j,it) = atrcrn(i,j,it) / vicen(i,j)
+                  trcrn(i,j,it) = atrcrn(ij,it) / vicen(i,j)
                else
                   trcrn(i,j,it) = c0
                endif
-            enddo
             enddo
 
          elseif (trcr_depend(it) == 2) then ! snow volume tracers
-            do j = 1, ny_block
-            do i = 1, nx_block
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
                if (vsnon(i,j) > puny) then
-                  trcrn(i,j,it) = atrcrn(i,j,it) / vsnon(i,j)
+                  trcrn(i,j,it) = atrcrn(ij,it) / vsnon(i,j)
                else
                   trcrn(i,j,it) = c0
                endif
-            enddo
             enddo
 
          endif                  ! trcr_depend
@@ -1652,45 +1716,56 @@
       integer (kind=int_kind) ::
      &   i, j                 ! horizontal indices
      &,  n                    ! category index
+     &,  icells            ! number of grid cells with ice
+     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) ::
-     &   hicen                ! ice thickness (m)
+       integer (kind=int_kind), dimension (nx_block*ny_block) ::
+     &   indxi, indxj      ! compressed i/j indices
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) ::
      &   dfresh       ! zapped fresh water flux (kg/m^2/s)
      &,  dfsalt       ! zapped salt flux   (kg/m^2/s)
      &,  dfhocn       ! zapped energy flux ( W/m^2)
 
+      !-----------------------------------------------------------------
+      ! Initialize
+      !-----------------------------------------------------------------
+
       l_stop = .false.
       istop = 0
       jstop = 0
 
+      ilo = 1 + nghost
+      ihi = nx_block - nghost
+      jlo = 1 + nghost
+      jhi = ny_block - nghost
+
       !-----------------------------------------------------------------
       ! Compute total ice area.
       !-----------------------------------------------------------------
-      aice(:,:) = c0
-      do n = 1, ncat
-         do j = 1, ny_block
-         do i = 1, nx_block
-            aice(i,j) = aice(i,j) + aicen(i,j,n)
-         enddo                  ! i
-         enddo                  ! j
-      enddo                     ! n
+
+      call aggregate_area (nx_block, ny_block,
+     &                     aicen,
+     &                     aice,     aice0,
+     &                     l_stop,
+     &                     istop,    jstop)
 
       !-----------------------------------------------------------------
-      ! Compute ice thickness.
+      ! Identify grid cells with ice.
       !-----------------------------------------------------------------
-      do n = 1, ncat
-         do j = 1, ny_block
-            do i = 1, nx_block
-               if (aicen(i,j,n) > puny) then
-                  hicen(i,j,n) = vicen(i,j,n) / aicen(i,j,n)
-               else
-                  hicen(i,j,n) = c0
-               endif
-            enddo               ! i
-         enddo                  ! j
-      enddo                     ! n
+
+      icells = 0
+!      do j = 1, ny_block
+!      do i = 1, nx_block
+      do j = jlo,jhi
+      do i = ilo,ihi
+         if (aice(i,j) > puny) then
+            icells = icells + 1
+            indxi(icells) = i
+            indxj(icells) = j
+         endif
+      enddo
+      enddo
 
       !-----------------------------------------------------------------
       ! Make sure ice in each category is within its thickness bounds.
@@ -1700,11 +1775,12 @@
       !-----------------------------------------------------------------
 
       call rebin (nx_block,   ny_block,
-     &            nghost,     trcr_depend,
+     &            icells,   indxi,    indxj,
+     &            trcr_depend,
      &            aicen,      trcrn,
      &            vicen,      vsnon,
      &            eicen,      esnon,
-     &            hicen,      l_stop,
+     &            l_stop,
      &            istop,      jstop)
 
       if (l_stop) return

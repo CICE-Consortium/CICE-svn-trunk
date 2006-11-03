@@ -22,6 +22,7 @@
 !
 ! 2003: Vectorized by Clifford Chen (Fujitsu) and William Lipscomb
 ! 2004: Block structure added by William Lipscomb.  
+! 2006: Streamlined for efficiency by Elizabeth Hunke
 !
 ! !INTERFACE:
 !
@@ -55,6 +56,7 @@
 ! !INTERFACE:
 !
       subroutine linear_itd (nx_block,    ny_block,
+     &                       icells, indxi, indxj,
      &                       nghost,      trcr_depend,
      &                       aicen_init,  vicen_init,
      &                       aicen,       trcrn,
@@ -91,13 +93,17 @@
 !
       use ice_itd, only: hin_max, hi_min, aggregate_area, shift_ice,
      &                   column_sum, column_conservation_check 
-      use ice_work, only: worka
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
      &,  nghost              ! number of ghost cells
+     &,  icells            ! number of grid cells with ice
+
+       integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi, indxj      ! compressed i/j indices
 
       integer (kind=int_kind), dimension (ntrcr), intent(in) ::
      &   trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
@@ -142,7 +148,6 @@
      &   i, j             ! horizontal indices
      &,  n, nd            ! category indices
      &,  k                ! ice layer index
-     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
 
       real (kind=dbl_kind) ::
      &   slope            ! rate of change of dhice with hice
@@ -155,19 +160,31 @@
      &,  x3               ! (etamax^3 - etamin^3) / 3
      &,  wk1, wk2         ! temporary variables
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,0:ncat) ::
+      real (kind=dbl_kind), dimension(icells,0:ncat) ::
      &   hbnew            ! new boundary locations
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat) ::
-     &   hicen            ! ice thickness for each cat     (m)
-     &,  hicen_init       ! initial ice thickness for each cat (pre-thermo)
-     &,  dhicen           ! thickness change for remapping (m)
-     &,  g0               ! constant coefficient in g(h)
+      real (kind=dbl_kind), dimension(icells) ::
+     &   work             ! temporary work array (for hbnew)
+
+      integer (kind=int_kind), dimension(icells) ::
+     &   indxii, indxjj   ! compressed i/j indices
+     &,  indxij           ! compressed 1D i/j indices
+
+      real (kind=dbl_kind), dimension(:,:), allocatable ::
+     &   g0               ! constant coefficient in g(h)
      &,  g1               ! linear coefficient in g(h)
      &,  hL               ! left end of range over which g(h) > 0
      &,  hR               ! right end of range over which g(h) > 0
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension(icells,ncat) ::
+     &   hicen            ! ice thickness for each cat     (m)
+     &,  hicen_init       ! initial ice thickness for each cat (pre-thermo)
+     &,  dhicen           ! thickness change for remapping (m)
+     &,  daice            ! ice area transferred across boundary
+     &,  dvice            ! ice volume transferred across boundary
+
+!      real (kind=dbl_kind), dimension(nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension(icells) ::
      &   vice_init, vice_final  ! ice volume summed over categories
      &,  vsno_init, vsno_final  ! snow volume summed over categories
      &,  eice_init, eice_final  ! ice energy summed over categories
@@ -175,34 +192,23 @@
 
       ! NOTE: Third index of donor, daice, dvice should be ncat-1,
       !       except that compilers would have trouble when ncat = 1 
-      integer (kind=int_kind), dimension(nx_block,ny_block,ncat) ::
+      integer (kind=int_kind), dimension(icells,ncat) ::
      &   donor            ! donor category index
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat) ::
-     &   daice            ! ice area transferred across boundary
-     &,  dvice            ! ice volume transferred across boundary
-
-      logical (kind=log_kind), dimension(nx_block,ny_block) ::
-     &   remap_flag       ! remap ITD if remap_flag(i,j) is true
+      logical (kind=log_kind), dimension(icells) ::
+     &   remap_flag       ! remap ITD if remap_flag(ij) is true
 
       character (len=char_len) ::
      &   fieldid           ! field identifier
 
       logical (kind=log_kind), parameter ::
      &   l_conservation_check = .true.   ! if true, check conservation
+!     &   l_conservation_check = .false.   ! if true, check conservation
                                          ! (useful for debugging)
 
        integer (kind=int_kind) ::
-     &   icells            ! number of grid cells with ice
-     &,  ij                ! combined horizontal index
-
-       integer (kind=int_kind), dimension (nx_block*ny_block) ::
-     &   indxi             ! compressed i/j indices
-     &,  indxj
-
-      logical (kind=log_kind) ::
-     &   flag_changed      ! true if remapping is disabled somewhere
-
+     &   iflag             ! number of grid cells with remap_flag = .true.
+     &,  ij, m             ! combined horizontal indices
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -213,14 +219,8 @@
       jstop = 0
 
       hin_max(ncat) = 999.9_dbl_kind ! arbitrary big number
-      do n = 0, ncat
-         hbnew(:,:,n) = hin_max(n)
-      enddo
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
+      if (l_stop) return
 
       !-----------------------------------------------------------------
       ! Compute volume and energy sums that linear remapping should
@@ -229,59 +229,25 @@
 
       if (l_conservation_check) then
          call column_sum (nx_block, ny_block,
-     &                    nghost,   ncat,
+     &                    icells,   indxi,   indxj,
+     &                    ncat,
      &                    vicen,    vice_init)
          call column_sum (nx_block, ny_block,
-     &                    nghost,   ncat,
+     &                    icells,   indxi,   indxj,
+     &                    ncat,
      &                    vsnon,    vsno_init)
          call column_sum (nx_block, ny_block,
-     &                    nghost,   ntilyr,
+     &                    icells,   indxi,   indxj,
+     &                    ntilyr,
      &                    eicen,    eice_init)
          call column_sum (nx_block, ny_block,
-     &                    nghost,   ntslyr,
+     &                    icells,   indxi,   indxj,
+     &                    ntslyr,
      &                    esnon,    esno_init)
       endif
 
       !-----------------------------------------------------------------
-      ! Compute thickness change in each category.
-      !-----------------------------------------------------------------
-
-      do n = 1, ncat
-         do j = 1, ny_block
-         do i = 1, nx_block
-
-            if (aicen_init(i,j,n) > puny) then
-               hicen_init (i,j,n) = vicen_init(i,j,n) / 
-     &                              aicen_init(i,j,n) 
-            else
-               hicen_init(i,j,n) = c0
-            endif               ! aicen_init > puny
-
-            if (aicen(i,j,n) > puny) then
-               hicen (i,j,n) = vicen(i,j,n) / aicen(i,j,n) 
-               dhicen(i,j,n) = hicen(i,j,n) - hicen_init(i,j,n)
-            else
-               hicen (i,j,n) = c0
-               dhicen(i,j,n) = c0
-            endif               ! aicen > puny
-
-         enddo                  ! i
-         enddo                  ! j
-      enddo                     ! n
-
-      !-----------------------------------------------------------------
-      ! Compute fractional ice area in each grid cell.
-      !-----------------------------------------------------------------
-      call aggregate_area (nx_block, ny_block,
-     &                     aicen,
-     &                     aice,     aice0,
-     &                     l_stop,
-     &                     istop,    jstop)
-
-      if (l_stop) return
-
-      !-----------------------------------------------------------------
-      ! Identify grid cells with ice and initialize remapping flag.
+      ! Initialize remapping flag.
       ! Remapping is done wherever remap_flag = .true.
       ! In rare cases the category boundaries may shift too far for the
       !  remapping algorithm to work, and remap_flag is set to .false.
@@ -289,24 +255,45 @@
       !  between categories if needed.
       !-----------------------------------------------------------------
 
-      icells = 0
-      do j = jlo,jhi
-      do i = ilo,ihi
-         if (aice(i,j) > puny) then
-            remap_flag(i,j) = .true.
-            icells = icells + 1
-            indxi(icells) = i
-            indxj(icells) = j
-         else
-            remap_flag(i,j) = .false.
-         endif
+      do ij = 1, icells
+         remap_flag(ij) = .true.
       enddo
-      enddo
+
+      !-----------------------------------------------------------------
+      ! Compute thickness change in each category.
+      !-----------------------------------------------------------------
+
+      do n = 1, ncat
+         do ij = 1, icells       ! aice(i,j) > puny
+            i = indxi(ij)
+            j = indxj(ij)
+
+            if (aicen_init(i,j,n) > puny) then
+               hicen_init (ij,n) = vicen_init(i,j,n) / 
+     &                              aicen_init(i,j,n) 
+            else
+               hicen_init(ij,n) = c0
+            endif               ! aicen_init > puny
+
+            if (aicen(i,j,n) > puny) then
+               hicen (ij,n) = vicen(i,j,n) / aicen(i,j,n) 
+               dhicen(ij,n) = hicen(ij,n) - hicen_init(ij,n)
+            else
+               hicen (ij,n) = c0
+               dhicen(ij,n) = c0
+            endif               ! aicen > puny
+
+         enddo                  ! ij
+      enddo                     ! n
 
       !-----------------------------------------------------------------
       ! Compute new category boundaries, hbnew, based on changes in
       ! ice thickness from vertical thermodynamics.
       !-----------------------------------------------------------------
+
+      do ij = 1, icells       ! aice(i,j) > puny
+         hbnew(ij,0) = hin_max(0)
+      enddo
 
       do n = 1, ncat-1
 
@@ -317,40 +304,50 @@
             i = indxi(ij)
             j = indxj(ij)
 
-            if (hicen_init(i,j,n)   > puny .and.
-     &          hicen_init(i,j,n+1) > puny) then
+            if (hicen_init(ij,n)   > puny .and.
+     &          hicen_init(ij,n+1) > puny) then
                  ! interpolate between adjacent category growth rates
-               slope = (dhicen(i,j,n+1) - dhicen(i,j,n)) /
-     &                 (hicen_init(i,j,n+1) - hicen_init(i,j,n))
-               hbnew(i,j,n) = hin_max(n) + dhicen(i,j,n)
-     &                      + slope * (hin_max(n) - hicen_init(i,j,n))
-            elseif (hicen_init(i,j,n) > puny) then ! hicen_init(n+1)=0
-               hbnew(i,j,n) = hin_max(n) + dhicen(i,j,n)
-            elseif (hicen_init(i,j,n+1) > puny) then ! hicen_init(n)=0
-               hbnew(i,j,n) = hin_max(n) + dhicen(i,j,n+1)
+               slope = (dhicen(ij,n+1) - dhicen(ij,n)) /
+     &                 (hicen_init(ij,n+1) - hicen_init(ij,n))
+               hbnew(ij,n) = hin_max(n) + dhicen(ij,n)
+     &                      + slope * (hin_max(n) - hicen_init(ij,n))
+            elseif (hicen_init(ij,n) > puny) then ! hicen_init(n+1)=0
+               hbnew(ij,n) = hin_max(n) + dhicen(ij,n)
+            elseif (hicen_init(ij,n+1) > puny) then ! hicen_init(n)=0
+               hbnew(ij,n) = hin_max(n) + dhicen(ij,n+1)
             else
-               hbnew(i,j,n) = hin_max(n)
+               hbnew(ij,n) = hin_max(n)
             endif
-         enddo                  ! ij
 
       !-----------------------------------------------------------------
       ! Check that each boundary lies between adjacent values of hicen.
       ! If not, set remap_flag = .false.
+      ! Write diagnosis outputs if remap_flag was changed to false
       !-----------------------------------------------------------------
 
-         flag_changed = .false.
-         do ij = 1, icells       ! aice(i,j) > puny
-            i = indxi(ij)
-            j = indxj(ij)
-
             if (aicen(i,j,n) > puny .and.
-     &          hicen(i,j,n) >= hbnew(i,j,n)) then
-               remap_flag(i,j) = .false.
-               flag_changed = .true.
+     &          hicen(ij,n) >= hbnew(ij,n)) then
+               remap_flag(ij) = .false.
+
+                  write(nu_diag,*) my_task,':',i,j,
+     &                 'ITD: hicen(n) > hbnew(n)'
+                  write(nu_diag,*) 'cat ',n
+                  write(nu_diag,*) my_task,':',i,j,
+     &                 'hicen(n) =', hicen(ij,n)
+                  write(nu_diag,*) my_task,':',i,j,
+     &                 'hbnew(n) =', hbnew(ij,n)
+
             elseif (aicen(i,j,n+1) > puny .and.
-     &              hicen(i,j,n+1) <= hbnew(i,j,n)) then
-               remap_flag(i,j) = .false.
-               flag_changed = .true.
+     &              hicen(ij,n+1) <= hbnew(ij,n)) then
+               remap_flag(ij) = .false.
+
+                  write(nu_diag,*) my_task,':',i,j,
+     &                 'ITD: hicen(n+1) < hbnew(n)'
+                  write(nu_diag,*) 'cat ',n
+                  write(nu_diag,*) my_task,':',i,j,
+     &                 'hicen(n+1) =', hicen(ij,n+1)
+                  write(nu_diag,*) my_task,':',i,j,
+     &                 'hbnew(n) =', hbnew(ij,n)
             endif
 
       !-----------------------------------------------------------------
@@ -358,72 +355,34 @@
       ! If not, set remap_flag = .false.
       ! (In principle we could allow this, but it would make the code
       ! more complicated.)
-      !-----------------------------------------------------------------
-
-            if (hbnew(i,j,n) > hin_max(n+1)) then
-               remap_flag(i,j) = .false.
-               flag_changed = .true.
-            endif
-
-            if (hbnew(i,j,n) < hin_max(n-1)) then
-               remap_flag(i,j) = .false.
-               flag_changed = .true.
-            endif
-
-         enddo                  ! ij
-
-      !-----------------------------------------------------------------
       ! Write diagnosis outputs if remap_flag was changed to false
       !-----------------------------------------------------------------
 
-         if (flag_changed) then
-            do ij = 1, icells   ! aice(i,j) > puny
+            if (hbnew(ij,n) > hin_max(n+1)) then
+               remap_flag(ij) = .false.
 
-               i = indxi(ij)
-               j = indxj(ij)
-
-               if (aicen(i,j,n) > puny .and.
-     &             hicen(i,j,n) >= hbnew(i,j,n)) then
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'ITD: hicen(n) > hbnew(n)'
-                  write(nu_diag,*) 'cat ',n
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'hicen(n) =', hicen(i,j,n)
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'hbnew(n) =', hbnew(i,j,n)
-               elseif (aicen(i,j,n+1) > puny .and.
-     &                 hicen(i,j,n+1) <= hbnew(i,j,n)) then
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'ITD: hicen(n+1) < hbnew(n)'
-                  write(nu_diag,*) 'cat ',n
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'hicen(n+1) =', hicen(i,j,n+1)
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'hbnew(n) =', hbnew(i,j,n)
-               endif
-
-               if (hbnew(i,j,n) > hin_max(n+1)) then
                   write(nu_diag,*) my_task,':',i,j,
      &                 'ITD hbnew(n) > hin_max(n+1)'
                   write(nu_diag,*) 'cat ',n
                   write(nu_diag,*) my_task,':',i,j,
-     &                 'hbnew(n) =', hbnew(i,j,n)
+     &                 'hbnew(n) =', hbnew(ij,n)
                   write(nu_diag,*) my_task,':',i,j,
      &                 'hin_max(n+1) =', hin_max(n+1)
-               endif
+            endif
 
-               if (hbnew(i,j,n) < hin_max(n-1)) then
+            if (hbnew(ij,n) < hin_max(n-1)) then
+               remap_flag(ij) = .false.
+
                   write(nu_diag,*) my_task,':',i,j,
      &                 'ITD: hbnew(n) < hin_max(n-1)'
                   write(nu_diag,*) 'cat ',n
                   write(nu_diag,*) my_task,':',i,j,
-     &                 'hbnew(n) =', hbnew(i,j,n)
+     &                 'hbnew(n) =', hbnew(ij,n)
                   write(nu_diag,*) my_task,':',i,j,
      &                 'hin_max(n-1) =', hin_max(n-1)
-               endif
+            endif
 
-            enddo               ! ij
-         endif                  ! flag_changed
+         enddo                  ! ij
 
       enddo                     ! boundaries, 1 to ncat-1
 
@@ -438,45 +397,50 @@
          i = indxi(ij)
          j = indxj(ij)
          if (aicen(i,j,ncat) > puny) then
-            hbnew(i,j,ncat) = c3*hicen(i,j,ncat) - c2*hbnew(i,j,ncat-1)
+            hbnew(ij,ncat) = c3*hicen(ij,ncat) - c2*hbnew(ij,ncat-1)
          else
-            hbnew(i,j,ncat) = hin_max(ncat)
+            hbnew(ij,ncat) = hin_max(ncat)
          endif
-         
-         if (hbnew(i,j,ncat) < hin_max(ncat-1))
-     &        hbnew(i,j,ncat) = hin_max(ncat-1)
+         hbnew(ij,ncat) = max(hbnew(ij,ncat),hin_max(ncat-1))
       enddo
 
       !-----------------------------------------------------------------
       ! Identify cells where the ITD is to be remapped
       !-----------------------------------------------------------------
 
-      icells = 0
-      do j = jlo,jhi
-      do i = ilo,ihi
-         if (remap_flag(i,j)) then
-            icells = icells + 1
-            indxi(icells) = i
-            indxj(icells) = j
+      iflag = 0
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+         if (remap_flag(ij)) then
+            iflag = iflag + 1
+            indxii(iflag) = i
+            indxjj(iflag) = j
+            indxij(iflag) = iflag
          endif
       enddo
-      enddo
 
+      allocate(g0(iflag,ncat))
+      allocate(g1(iflag,ncat))
+      allocate(hL(iflag,ncat))
+      allocate(hR(iflag,ncat))
 
       !-----------------------------------------------------------------
       ! Compute g(h) for category 1 at start of time step
       ! (hicen = hicen_init)
       !-----------------------------------------------------------------
 
-      worka(:,:) = hin_max(1)
+      do ij = 1, icells       ! aice(i,j) > puny
+         work(ij) = hin_max(1)
+      enddo
 
       call fit_line(nx_block,       ny_block,
-     &              nghost,
-     &              aicen(:,:,1),   hicen_init(:,:,1),
-     &              hbnew(:,:,0),   worka     (:,:),
-     &              g0   (:,:,1),   g1        (:,:,1),
-     &              hL   (:,:,1),   hR        (:,:,1),
-     &              remap_flag)
+     &              iflag,          icells,
+     &              indxii,         indxjj,    indxij,
+     &              aicen(:,:,1),   hicen_init(:,1),
+     &              hbnew(:,0),   work     (:),
+     &              g0   (:,1),   g1        (:,1),
+     &              hL   (:,1),   hR        (:,1))
 
       !-----------------------------------------------------------------
       ! Find area lost due to melting of thin (category 1) ice
@@ -485,13 +449,14 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-      do ij = 1, icells    ! remap_flag = .true.
-         i = indxi(ij)
-         j = indxj(ij)
+      do ij = 1, iflag    ! remap_flag = .true.
+         i = indxii(ij)
+         j = indxjj(ij)
+         m = indxij(ij)
 
          if (aicen(i,j,1) > puny) then
 
-            dh0 = dhicen(i,j,1)
+            dh0 = dhicen(m,1)
 
             if (dh0 < c0) then   ! remove area from category 1
                dh0 = min(-dh0,hin_max(1))   ! dh0 --> |dh0|
@@ -501,26 +466,26 @@
       !-----------------------------------------------------------------
 
                ! right integration limit (left limit = 0)
-               etamax = min(dh0,hR(i,j,1)) - hL(i,j,1)
+               etamax = min(dh0,hR(ij,1)) - hL(ij,1)
 
                if (etamax > c0) then
                   x1 = etamax
                   x2 = p5 * etamax*etamax
-                  da0 = g1(i,j,1)*x2 + g0(i,j,1)*x1 ! ice area removed
+                  da0 = g1(ij,1)*x2 + g0(ij,1)*x1 ! ice area removed
 
                ! constrain new thickness <= hicen_init
                   damax = aicen(i,j,1)
-     &                  * (c1-hicen(i,j,1)/hicen_init(i,j,1)) ! damax > 0
+     &                  * (c1-hicen(m,1)/hicen_init(m,1)) ! damax > 0
                   da0 = min (da0, damax)
 
                ! remove area, conserving volume
-                  hicen(i,j,1) = hicen(i,j,1)
+                  hicen(m,1) = hicen(m,1)
      &                         * aicen(i,j,1) / (aicen(i,j,1)-da0)
                   aicen(i,j,1) = aicen(i,j,1) - da0
                endif            ! etamax > 0
 
             else                ! dh0 >= 0
-               hbnew(i,j,0) = min(dh0,hin_max(1))  ! shift hbnew(0) to right
+               hbnew(m,0) = min(dh0,hin_max(1))  ! shift hbnew(0) to right
             endif
 
          endif                  ! aicen(i,j,1) > puny
@@ -532,12 +497,12 @@
 
       do n = 1, ncat
          call fit_line(nx_block,       ny_block,
-     &                 nghost,
-     &                 aicen(:,:,n),   hicen(:,:,n),
-     &                 hbnew(:,:,n-1), hbnew(:,:,n),
-     &                 g0   (:,:,n),   g1   (:,:,n),
-     &                 hL   (:,:,n),   hR   (:,:,n),
-     &                 remap_flag)
+     &                 iflag,          icells,
+     &                 indxii,         indxjj,    indxij,
+     &                 aicen(:,:,n),   hicen(:,n),
+     &                 hbnew(:,n-1), hbnew(:,n),
+     &                 g0   (:,n),   g1   (:,n),
+     &                 hL   (:,n),   hR   (:,n))
 
       enddo
 
@@ -545,32 +510,37 @@
       ! Compute area and volume to be shifted across each boundary.
       !-----------------------------------------------------------------
 
-      donor(:,:,:) = 0
-      daice(:,:,:) = c0
-      dvice(:,:,:) = c0
+      do n = 1, ncat
+         do ij = 1, iflag   ! remap_flag = .true.
+            donor(ij,n) = 0
+            daice(ij,n) = c0
+            dvice(ij,n) = c0
+         enddo
+      enddo
 
       do n = 1, ncat-1
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do ij = 1, icells   ! remap_flag = .true.
-            i = indxi(ij)
-            j = indxj(ij)
+         do ij = 1, iflag   ! remap_flag = .true.
+            i = indxii(ij)
+            j = indxjj(ij)
+            m = indxij(ij)
 
-            if (hbnew(i,j,n) > hin_max(n)) then ! transfer from n to n+1
+            if (hbnew(m,n) > hin_max(n)) then ! transfer from n to n+1
 
                ! left and right integration limits in eta space
-               etamin = max(hin_max(n), hL(i,j,n)) - hL(i,j,n)
-               etamax = min(hbnew(i,j,n), hR(i,j,n)) - hL(i,j,n)
-               donor(i,j,n) = n
+               etamin = max(hin_max(n), hL(ij,n)) - hL(ij,n)
+               etamax = min(hbnew(m,n), hR(ij,n)) - hL(ij,n)
+               donor(m,n) = n
 
             else             ! hbnew(n) <= hin_max(n); transfer from n+1 to n
 
                ! left and right integration limits in eta space
                etamin = c0
-               etamax = min(hin_max(n), hR(i,j,n+1)) - hL(i,j,n+1)
-               donor(i,j,n) = n+1
+               etamax = min(hin_max(n), hR(ij,n+1)) - hL(ij,n+1)
+               donor(m,n) = n+1
 
             endif            ! hbnew(n) > hin_max(n)
 
@@ -582,50 +552,56 @@
                wk1 = wk1*etamin
                wk2 = wk2*etamax
                x3  = p333 * (wk2 - wk1)
-               nd  = donor(i,j,n)
-               daice(i,j,n) = g1(i,j,nd)*x2 + g0(i,j,nd)*x1
-               dvice(i,j,n) = g1(i,j,nd)*x3 + g0(i,j,nd)*x2
-     &                      + daice(i,j,n)*hL(i,j,nd)
+               nd  = donor(m,n)
+               daice(m,n) = g1(ij,nd)*x2 + g0(ij,nd)*x1
+               dvice(m,n) = g1(ij,nd)*x3 + g0(ij,nd)*x2
+     &                      + daice(m,n)*hL(ij,nd)
             endif               ! etamax > etamin
 
             ! If daice or dvice is very small, shift no ice.
 
-            nd = donor(i,j,n)
+            nd = donor(m,n)
 
-            if (daice(i,j,n) < aicen(i,j,nd)*puny) then
-               daice(i,j,n) = c0
-               dvice(i,j,n) = c0
-               donor(i,j,n) = 0
+            if (daice(m,n) < aicen(i,j,nd)*puny) then
+               daice(m,n) = c0
+               dvice(m,n) = c0
+               donor(m,n) = 0
             endif 
 
-            if (dvice(i,j,n) < vicen(i,j,nd)*puny) then
-               daice(i,j,n) = c0
-               dvice(i,j,n) = c0
-               donor(i,j,n) = 0
+            if (dvice(m,n) < vicen(i,j,nd)*puny) then
+               daice(m,n) = c0
+               dvice(m,n) = c0
+               donor(m,n) = 0
             endif
 
             ! If daice is close to aicen or dvice is close to vicen,
             ! shift entire category
 
-            if (daice(i,j,n) > aicen(i,j,nd)*(c1-puny)) then
-               daice(i,j,n) = aicen(i,j,nd)
-               dvice(i,j,n) = vicen(i,j,nd)
+            if (daice(m,n) > aicen(i,j,nd)*(c1-puny)) then
+               daice(m,n) = aicen(i,j,nd)
+               dvice(m,n) = vicen(i,j,nd)
             endif
 
-            if (dvice(i,j,n) > vicen(i,j,nd)*(c1-puny)) then
-               daice(i,j,n) = aicen(i,j,nd)
-               dvice(i,j,n) = vicen(i,j,nd)
+            if (dvice(m,n) > vicen(i,j,nd)*(c1-puny)) then
+               daice(m,n) = aicen(i,j,nd)
+               dvice(m,n) = vicen(i,j,nd)
             endif
 
          enddo                  ! ij
       enddo                     ! boundaries, 1 to ncat-1
+
+      deallocate(g0)
+      deallocate(g1)
+      deallocate(hL)
+      deallocate(hR)
 
       !-----------------------------------------------------------------
       ! Shift ice between categories as necessary
       !-----------------------------------------------------------------
 
       call shift_ice (nx_block, ny_block,
-     &                nghost,   trcr_depend,
+     &                indxi,    indxj,
+     &                icells,   trcr_depend,
      &                aicen,    trcrn,
      &                vicen,    vsnon,
      &                eicen,    esnon,
@@ -643,13 +619,14 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-      do ij = 1, icells          ! remap_flag = .true.
-         i = indxi(ij)
-         j = indxj(ij)
+      do ij = 1, iflag          ! remap_flag = .true.
+         i = indxii(ij)
+         j = indxjj(ij)
+         m = indxij(ij)
          if (hi_min > c0 .and.
-     &        aicen(i,j,1) > puny .and. hicen(i,j,1) < hi_min) then
-            aicen(i,j,1) = aicen(i,j,1) * hicen(i,j,1)/hi_min
-            hicen(i,j,1) = hi_min
+     &        aicen(i,j,1) > puny .and. hicen(m,1) < hi_min) then
+            aicen(i,j,1) = aicen(i,j,1) * hicen(m,1)/hi_min
+            hicen(m,1) = hi_min
          endif
       enddo                     ! ij
 
@@ -671,33 +648,39 @@
       if (l_conservation_check) then
 
          call column_sum (nx_block, ny_block,
-     &                    nghost,   ncat,
+     &                    icells,   indxi,   indxj,
+     &                    ncat,
      &                    vicen,    vice_final)
          fieldid = 'vice, ITD remap'
          call column_conservation_check (nx_block,  ny_block,
-     &                                   nghost,    fieldid,
+     &                                   icells,   indxi,   indxj,
+     &                                   fieldid,
      &                                   vice_init, vice_final,
      &                                   puny,      l_stop,
      &                                   istop,     jstop)
          if (l_stop) return
 
          call column_sum (nx_block, ny_block,
-     &                    nghost,   ncat,
+     &                    icells,   indxi,   indxj,
+     &                    ncat,
      &                    vsnon,    vsno_final)
          fieldid = 'vsno, ITD remap'
          call column_conservation_check (nx_block,  ny_block,
-     &                                   nghost,    fieldid,
+     &                                   icells,   indxi,   indxj,
+     &                                   fieldid,
      &                                   vsno_init, vsno_final,
      &                                   puny,      l_stop,
      &                                   istop,     jstop)
          if (l_stop) return
 
          call column_sum (nx_block, ny_block,
-     &                    nghost,   ntilyr,
+     &                    icells,   indxi,   indxj,
+     &                    ntilyr,
      &                    eicen,    eice_final)
          fieldid = 'eice, ITD remap'
          call column_conservation_check (nx_block,   ny_block,
-     &                                   nghost,     fieldid,
+     &                                   icells,   indxi,   indxj,
+     &                                   fieldid,
      &                                   eice_init,  eice_final,
      &                                   puny*Lfresh*rhoi,
      &                                   l_stop,
@@ -705,11 +688,13 @@
          if (l_stop) return
 
          call column_sum (nx_block, ny_block,
-     &                    nghost,   ntslyr,
+     &                    icells,   indxi,   indxj,
+     &                    ntslyr,
      &                    esnon,    esno_final)
          fieldid = 'esno, ITD remap'
          call column_conservation_check (nx_block,   ny_block,
-     &                                   nghost,     fieldid,
+     &                                   icells,   indxi,   indxj,
+     &                                   fieldid,
      &                                   esno_init,  esno_final,
      &                                   puny*Lfresh*rhos,
      &                                   l_stop,
@@ -729,12 +714,12 @@
 !
 
       subroutine fit_line (nx_block, ny_block,
-     &                     nghost,
+     &                     iflag,   icells,  
+     &                     indxii,   indxjj,  indxij,
      &                     aicen,    hice,
      &                     hbL,      hbR,   
      &                     g0,       g1,
-     &                     hL,       hR,
-     &                     remap_flag)
+     &                     hL,       hR)
 !
 ! !DESCRIPTION:
 !
@@ -754,29 +739,32 @@
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
+     &,  icells              ! number of grid cells with ice
+     &,  iflag               ! number of grid cells with remap_flag = .true.
+
+       integer (kind=int_kind), dimension (icells),
+     &   intent(in) ::
+     &   indxii, indxjj      ! compressed i/j indices (from iflag)
+     &,  indxij        ! compressed i/j indices (from icells)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
      &   aicen           ! concentration of ice
+!     &,  hice            ! ice thickness
+
+      real (kind=dbl_kind), dimension (icells), intent(in) ::
+     &   hbL, hbR        ! left and right category boundaries
      &,  hice            ! ice thickness
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
-     &   hbL, hbR        ! left and right category boundaries
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out)::
+      real (kind=dbl_kind), dimension (iflag), intent(out)::
      &   g0, g1          ! coefficients in linear equation for g(eta)
      &,  hL              ! min value of range over which g(h) > 0
      &,  hR              ! max value of range over which g(h) > 0
-
-      logical (kind=log_kind), dimension (nx_block,ny_block),
-     &   intent(in) ::
-     &   remap_flag
 !
 !EOP
 !
       integer (kind=int_kind) ::
      &   i,j             ! horizontal indices
-     &,  ilo,ihi,jlo,jhi ! beginning and end of physical domain
+     &,  ij, m           ! combined horizontal indices
 
       real  (kind=dbl_kind) ::
      &   h13             ! hbL + 1/3 * (hbR - hbL)
@@ -785,56 +773,49 @@
      &,  wk1, wk2        ! temporary variables
 
       !-----------------------------------------------------------------
-      ! Initialize
-      !-----------------------------------------------------------------
-
-      g0(:,:) = c0
-      g1(:,:) = c0
-      hL(:,:) = c0
-      hR(:,:) = c0
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
-      !-----------------------------------------------------------------
       ! Compute g0, g1, hL, and hR for each category to be remapped.
       !-----------------------------------------------------------------
 
-      do j = jlo,jhi
-      do i = ilo,ihi
+       do ij = 1, iflag
+         i = indxii(ij)
+         j = indxjj(ij)
+         m = indxij(ij)
 
-         if (remap_flag(i,j) .and. aicen(i,j) > puny
-     &              .and. hbR(i,j) - hbL(i,j) > puny) then
+         if (aicen(i,j) > puny .and. hbR(m) - hbL(m) > puny) then
 
          ! Initialize hL and hR
 
-            hL(i,j) = hbL(i,j)
-            hR(i,j) = hbR(i,j)
+            hL(ij) = hbL(m)
+            hR(ij) = hbR(m)
 
          ! Change hL or hR if hicen(n) falls outside central third of range
 
-            h13 = p333 * (c2*hL(i,j) + hR(i,j))
-            h23 = p333 * (hL(i,j) + c2*hR(i,j))
-            if (hice(i,j) < h13) then
-               hR(i,j) = c3*hice(i,j) - c2*hL(i,j)
-            elseif (hice(i,j) > h23) then
-               hL(i,j) = c3*hice(i,j) - c2*hR(i,j)
+            h13 = p333 * (c2*hL(ij) + hR(ij))
+            h23 = p333 * (hL(ij) + c2*hR(ij))
+            if (hice(m) < h13) then
+               hR(ij) = c3*hice(m) - c2*hL(ij)
+            elseif (hice(m) > h23) then
+               hL(ij) = c3*hice(m) - c2*hR(ij)
             endif
 
          ! Compute coefficients of g(eta) = g0 + g1*eta
 
-            dhr = c1 / (hR(i,j) - hL(i,j))
+            dhr = c1 / (hR(ij) - hL(ij))
             wk1 = c6 * aicen(i,j) * dhr
-            wk2 = (hice(i,j) - hL(i,j)) * dhr
-            g0(i,j) = wk1 * (p666 - wk2)
-            g1(i,j) = c2*dhr * wk1 * (wk2 - p5)
+            wk2 = (hice(m) - hL(ij)) * dhr
+            g0(ij) = wk1 * (p666 - wk2)
+            g1(ij) = c2*dhr * wk1 * (wk2 - p5)
+
+         else
+
+            g0(ij) = c0
+            g1(ij) = c0
+            hL(ij) = c0
+            hR(ij) = c0
 
          endif                  ! aicen > puny
 
-      enddo                     ! i
-      enddo                     ! j
+      enddo                     ! ij
 
       end subroutine fit_line
 
@@ -862,7 +843,8 @@
 ! !INTERFACE:
 !
       subroutine add_new_ice (nx_block,  ny_block,
-     &                        nghost,
+     &                        icells,
+     &                        indxi,     indxj,
      &                        tmask,     dt,
      &                        aicen,     trcrn,
      &                        vicen,     eicen,
@@ -881,7 +863,11 @@
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
+     &,  icells              ! number of ice/ocean grid cells
+
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi,  indxj          ! compressed i/j indices
 
       logical (kind=log_kind), dimension (nx_block,ny_block),
      &    intent(in) ::
@@ -932,15 +918,14 @@
      &   i, j             ! horizontal indices
      &,  n                ! ice category index
      &,  k                ! ice layer index
-     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (icells) ::
      &   ai0new           ! area of new ice added to cat 1
      &,  vi0new           ! volume of new ice added to cat 1
      &,  hsurp            ! thickness of new ice added to each cat
      &,  vlyr             ! ice layer volume
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (icells) ::
      &   vice_init, vice_final  ! ice volume summed over categories
 
       real (kind=dbl_kind) ::
@@ -956,11 +941,11 @@
      &,  dfsalt           ! change in fsalt
 
       integer (kind=int_kind) ::
-     &   icells, jcells, kcells ! grid cell counters
-     &,  ij                     ! combined i/j horizontal index
+     &   jcells, kcells         ! grid cell counters
+     &,  ij, m                  ! combined i/j horizontal indices
 
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
-     &   indxi,  indxj          ! compressed i/j indices
+      integer (kind=int_kind), dimension (icells) ::
+     &   indxij2,  indxij3      ! compressed i/j indices
      &,  indxi2, indxj2
      &,  indxi3, indxj3
 
@@ -971,10 +956,8 @@
       istop = 0
       jstop = 0
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
+      jcells = 0
+      kcells = 0
 
       if (ncat > 1) then
          hi0max = hin_max(1)*0.9_dbl_kind  ! not too close to boundary
@@ -984,7 +967,8 @@
 
       ! initial ice volume in each grid cell
       call column_sum (nx_block, ny_block,
-     &                 nghost,   ncat,
+     &                 icells,   indxi,   indxj,
+     &                 ncat,
      &                 vicen,    vice_init)
 
       !-----------------------------------------------------------------
@@ -1005,20 +989,6 @@
       qi0av = qi0av/rnilyr
 
       !-----------------------------------------------------------------
-      ! Identify ice/ocean grid points.
-      !-----------------------------------------------------------------
-      icells = 0
-      do j = jlo, jhi
-      do i = ilo, ihi
-         if (tmask(i,j)) then
-            icells = icells + 1
-            indxi(icells) = i
-            indxj(icells) = j
-         endif
-      enddo       ! i
-      enddo       ! j
-
-      !-----------------------------------------------------------------
       ! Compute the volume, area, and thickness of new ice.
       !-----------------------------------------------------------------
 
@@ -1030,13 +1000,13 @@
          j = indxj(ij)
 
          fnew = max (frzmlt(i,j), c0)   ! fnew > 0 iff frzmlt > 0
-         vi0new(i,j) = -fnew*dt / qi0av ! note sign convention, qi < 0
+         vi0new(ij) = -fnew*dt / qi0av ! note sign convention, qi < 0
 
          ! increment ice volume
-         vice_init(i,j) = vice_init(i,j) + vi0new(i,j)
+         vice_init(ij) = vice_init(ij) + vi0new(ij)
 
          ! history diagnostics
-         frazil(i,j) = vi0new(i,j)
+         frazil(i,j) = vi0new(ij)
 
          if (present(frz_onset) .and. present(yday)) then
             if (frazil(i,j) > puny .and. frz_onset(i,j) < puny)
@@ -1050,7 +1020,7 @@
       !       is NOT included in fluxes fresh and fsalt.
       !-----------------------------------------------------------------
 
-!!!         dfresh = -rhoi*vi0new(i,j)/dt  ! if POP had not already adjusted
+!!!         dfresh = -rhoi*vi0new(ij)/dt  ! if POP had not already adjusted
                                            ! itself based on frzmlt
 !!!         dfsalt = ice_ref_salinity*p001*dfresh
 
@@ -1063,57 +1033,54 @@
       ! Decide how to distribute the new ice.
       !-----------------------------------------------------------------
 
-         hsurp(i,j)  = c0
-         ai0new(i,j) = c0
+         hsurp(ij)  = c0
+         ai0new(ij) = c0
 
-         if (vi0new(i,j) > c0) then
+         if (vi0new(ij) > c0) then
 
             ! new ice area and thickness
             ! hin_max(0) < new ice thickness < hin_max(1)
             if (aice0(i,j) > puny) then
-               hi0new = max(vi0new(i,j)/aice0(i,j), hfrazilmin)
+               hi0new = max(vi0new(ij)/aice0(i,j), hfrazilmin)
                if (hi0new > hi0max .and. aice0(i,j)+puny < c1) then
                   ! distribute excess volume over all categories (below)
                   hi0new = hi0max
-                  ai0new(i,j) = aice0(i,j)
-                  vsurp       = vi0new(i,j) - ai0new(i,j)*hi0new
-                  hsurp(i,j)  = vsurp / aice(i,j)
-                  vi0new(i,j) = ai0new(i,j)*hi0new
+                  ai0new(ij) = aice0(i,j)
+                  vsurp       = vi0new(ij) - ai0new(ij)*hi0new
+                  hsurp(ij)  = vsurp / aice(i,j)
+                  vi0new(ij) = ai0new(ij)*hi0new
                else
                   ! put ice in a single category, with hsurp = 0
-                  ai0new(i,j) = vi0new(i,j)/hi0new
+                  ai0new(ij) = vi0new(ij)/hi0new
                endif
             else                ! aice0 < puny
-               hsurp(i,j) = vi0new(i,j)/aice(i,j) ! new thickness in each cat
-               vi0new(i,j) = c0
+               hsurp(ij) = vi0new(ij)/aice(i,j) ! new thickness in each cat
+               vi0new(ij) = c0
             endif               ! aice0 > puny
          endif                  ! vi0new > puny
-
-      enddo                     ! ij
 
       !-----------------------------------------------------------------
       ! Identify grid cells receiving new ice.
       !-----------------------------------------------------------------
-      jcells = 0
-      kcells = 0
 
-      do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
 
-         if (vi0new(i,j) > c0) then  ! add ice to category 1
+         if (vi0new(ij) > c0) then  ! add ice to category 1
             jcells = jcells + 1
             indxi2(jcells) = i
             indxj2(jcells) = j
+            indxij2(jcells) = ij
          endif
 
-         if (hsurp(i,j) > c0) then   ! add ice to all categories
+         if (hsurp(ij) > c0) then   ! add ice to all categories
             kcells = kcells + 1
             indxi3(kcells) = i
             indxj3(kcells) = j
+            indxij3(kcells) = ij
          endif
 
-      enddo
+      enddo                     ! ij
 
       !-----------------------------------------------------------------
       ! Distribute excess ice volume among ice categories by increasing
@@ -1131,9 +1098,10 @@
          do ij = 1, kcells
             i = indxi3(ij)
             j = indxj3(ij)
+            m = indxij3(ij)
 
-            vicen(i,j,n) = vicen(i,j,n) + aicen(i,j,n)*hsurp(i,j)
-            vlyr(i,j) = hsurp(i,j)/rnilyr * aicen(i,j,n)
+            vicen(i,j,n) = vicen(i,j,n) + aicen(i,j,n)*hsurp(m)
+            vlyr(m) = hsurp(m)/rnilyr * aicen(i,j,n)
          enddo                  ! ij
 
          do k = 1, nilyr
@@ -1143,9 +1111,10 @@
             do ij = 1, kcells
                i = indxi3(ij)
                j = indxj3(ij)
+               m = indxij3(ij)
 
                eicen(i,j,ilyr1(n)+k-1) =
-     &              eicen(i,j,ilyr1(n)+k-1) + qi0(k)*vlyr(i,j)
+     &              eicen(i,j,ilyr1(n)+k-1) + qi0(k)*vlyr(m)
             enddo               ! ij
          enddo                  ! k
 
@@ -1162,20 +1131,21 @@
       do ij = 1, jcells
          i = indxi2(ij)
          j = indxj2(ij)
+         m = indxij2(ij)
 
          area1 = aicen(i,j,1)   ! save
-         aicen(i,j,1) = aicen(i,j,1) + ai0new(i,j)
-         aice0(i,j)   = aice0(i,j)   - ai0new(i,j)
-         vicen(i,j,1) = vicen(i,j,1) + vi0new(i,j)
-         trcrn(i,j,1,1) = (Tocnfrz*ai0new(i,j) + trcrn(i,j,1,1)*area1)
+         aicen(i,j,1) = aicen(i,j,1) + ai0new(m)
+         aice0(i,j)   = aice0(i,j)   - ai0new(m)
+         vicen(i,j,1) = vicen(i,j,1) + vi0new(m)
+         trcrn(i,j,1,1) = (Tocnfrz*ai0new(m) + trcrn(i,j,1,1)*area1)
      &                / aicen(i,j,1)
          trcrn(i,j,1,1) = min (trcrn(i,j,1,1), c0)
 
       ! For other tracers, do something like this:
-!         trcrn(i,j,99,1) = (tnew(i,j)*ai0new(i,j) + trcrn(i,j,99,1)*area1)
+!         trcrn(i,j,99,1) = (tnew(i,j)*ai0new(m) + trcrn(i,j,99,1)*area1)
 !     &                   / aicen(i,j,1)
 
-         vlyr(i,j)    = vi0new(i,j) / rnilyr
+         vlyr(m)    = vi0new(m) / rnilyr
       enddo                     ! ij
 
       do k = 1, nilyr
@@ -1185,17 +1155,20 @@
          do ij = 1, jcells
             i = indxi2(ij)
             j = indxj2(ij)
-            eicen(i,j,k) = eicen(i,j,k) + qi0(k)*vlyr(i,j)
+            m = indxij2(ij)
+            eicen(i,j,k) = eicen(i,j,k) + qi0(k)*vlyr(m)
          enddo
       enddo
 
       call column_sum (nx_block, ny_block,
-     &                 nghost,   ncat,
+     &                 icells,   indxi,   indxj,
+     &                 ncat,
      &                 vicen,    vice_final)
 
       fieldid = 'vice, add_new_ice'
       call column_conservation_check (nx_block,  ny_block,
-     &                                nghost,    fieldid,
+     &                                icells,   indxi,   indxj,
+     &                                fieldid,
      &                                vice_init, vice_final,
      &                                puny,      l_stop,
      &                                istop,     jstop)

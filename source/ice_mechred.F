@@ -36,6 +36,7 @@
 ! 2003: Vectorized by Clifford Chen (Fujitsu) and William Lipscomb
 ! 2004: Block structure added by William Lipscomb
 ! 2006: New options for participation and redistribution (WHL)
+! 2006: Streamlined for efficiency by Elizabeth Hunke
 !
 ! !INTERFACE:
 !
@@ -90,6 +91,7 @@
 
       logical (kind=log_kind), parameter ::
      &   l_conservation_check = .true.  ! if true, check conservation
+!     &   l_conservation_check = .false.  ! if true, check conservation
                                         ! (useful for debugging)
 
 !=======================================================================
@@ -114,7 +116,8 @@
 ! !INTERFACE:
 !
       subroutine ridge_ice (nx_block,    ny_block,
-     &                      nghost,      dt,
+     &                      dt,          icells,
+     &                      indxi,       indxj,
 !!     &                      Delt,        divu,
      &                      rdg_conv,    rdg_shear,
      &                      aicen,       trcrn,
@@ -134,7 +137,11 @@
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
+     &,  icells           ! number of cells with ice present
+
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi, indxj     ! compressed indices for cells with ice
 
       real (kind=dbl_kind), intent(in) ::
      &   dt      ! time step
@@ -190,7 +197,7 @@
 !
 !EOP
 !
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (icells) ::
      &   asum        ! sum of ice and open water area
      &,  aksum       ! ratio of area removed to area ridged
      &,  msnow_mlt   ! mass of snow added to ocean (kg m-2)
@@ -206,17 +213,18 @@
      &,  virdg       ! ice volume ridged
      &,  aopen       ! area opening due to divergence/shear
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,0:ncat) ::
+
+      real (kind=dbl_kind), dimension (icells,0:ncat) ::
      &   apartic          ! participation function; fraction of ridging
                           ! and closing associated w/ category n
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) ::
+      real (kind=dbl_kind), dimension (icells,ncat) ::
      &   hrmin            ! minimum ridge thickness
      &,  hrmax            ! maximum ridge thickness (krdg_redist = 0)
      &,  hrexp            ! ridge e-folding thickness (krdg_redist = 1) 
      &,  krdg             ! mean ridge thickness/thickness of ridging ice
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (icells) ::
      &   vice_init, vice_final  ! ice volume summed over categories
      &,  vsno_init, vsno_final  ! snow volume summed over categories
      &,  eice_init, eice_final  ! ice energy summed over layers
@@ -229,7 +237,7 @@
      &   i,j              ! horizontal indices
      &,  n                ! thickness category index
      &,  niter            ! iteration counter
-     &,  ilo,ihi,jlo,jhi  ! beg and end of physical domain
+     &,  ij               ! horizontal index, combines i and j loops
 
       real (kind=dbl_kind) ::
      &   dti              ! 1 / dt
@@ -249,30 +257,29 @@
       istop = 0
       jstop = 0
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
-      msnow_mlt(:,:) = c0
-      esnow_mlt(:,:) = c0
-      ardg1    (:,:) = c0
-      ardg2    (:,:) = c0
-      virdg    (:,:) = c0
-      aopen    (:,:) = c0
+      do ij = 1, icells
+         msnow_mlt(ij) = c0
+         esnow_mlt(ij) = c0
+         ardg1    (ij) = c0
+         ardg2    (ij) = c0
+         virdg    (ij) = c0
+!         aopen    (ij) = c0
+      enddo
 
       !-----------------------------------------------------------------
       ! Compute area of ice plus open water before ridging.
       !-----------------------------------------------------------------
-      call asum_ridging (nx_block,  ny_block,
-     &                   nghost,    aicen,
-     &                   aice0,     asum)
+      call asum_ridging (nx_block, ny_block,
+     &                   icells,   indxi,    indxj,
+     &                   aicen,    aice0,
+     &                   asum)
 
       !-----------------------------------------------------------------
       ! Compute the area opening and closing.
       !-----------------------------------------------------------------
-      call ridge_prep (nx_block,  ny_block,
-     &                 nghost,    dt,
+      call ridge_prep (nx_block, ny_block,
+     &                 icells,   indxi,  indxj,
+     &                 dt,
 !!     &                 Delt,      divu,
      &                 rdg_conv,  rdg_shear,
      &                 asum,      closing_net,
@@ -285,19 +292,23 @@
       if (l_conservation_check) then
 
          call column_sum (nx_block,   ny_block,
-     &                    nghost,     ncat,
+     &                    icells,   indxi,   indxj,
+     &                    ncat,
      &                    vicen,      vice_init)
 
          call column_sum (nx_block,   ny_block,
-     &                    nghost,     ncat,
+     &                    icells,   indxi,   indxj,
+     &                    ncat,
      &                    vsnon,      vsno_init)
 
          call column_sum (nx_block,   ny_block,
-     &                    nghost,     ntilyr,
+     &                    icells,   indxi,   indxj,
+     &                    ntilyr,
      &                    eicen,      eice_init)
 
          call column_sum (nx_block,   ny_block,
-     &                    nghost,     ntslyr,
+     &                    icells,   indxi,   indxj,
+     &                    ntslyr,
      &                    esnon,      esno_init)
 
       endif            
@@ -310,9 +321,9 @@
       !-----------------------------------------------------------------
 
          call ridge_itd (nx_block,  ny_block,
-     &                   nghost,     
+     &                   icells,    indxi,    indxj,
      &                   aicen,     vicen,
-     &                   aice0,     asum,
+     &                   aice0,     
      &                   aksum,     apartic,
      &                   hrmin,     hrmax,
      &                   hrexp,     krdg)
@@ -322,7 +333,8 @@
       !-----------------------------------------------------------------
 
          call ridge_shift (nx_block,  ny_block,
-     &                     nghost,    dt,
+     &                     icells,    indxi,    indxj,
+     &                     dt,
      &                     aicen,     trcrn,
      &                     vicen,     vsnon,
      &                     eicen,     esnon,
@@ -330,8 +342,7 @@
      &                     aksum,     apartic,
      &                     hrmin,     hrmax,
      &                     hrexp,     krdg,
-     &                     closing_net, 
-     &                     divu_adv,  opning,
+     &                     closing_net, opning,
      &                     ardg1,     ardg2,
      &                     virdg,     aopen,
      &                     msnow_mlt, esnow_mlt,
@@ -347,11 +358,13 @@
       !-----------------------------------------------------------------
 
          call asum_ridging (nx_block,  ny_block,
-     &                      nghost,    aicen,
-     &                      aice0,     asum)
+     &                      icells,    indxi,  indxj,
+     &                      aicen,     aice0,
+     &                      asum)
 
          call ridge_check (nx_block,   ny_block,
-     &                     nghost,     dt,
+     &                     icells,     indxi,    indxj,
+     &                     dt,
      &                     asum,       closing_net,
      &                     divu_adv,   opning,
      &                     iterate_ridging)
@@ -384,27 +397,34 @@
       if (l_conservation_check) then
 
          call column_sum (nx_block,   ny_block,
-     &                    nghost,     ncat,
+     &                    icells,   indxi,   indxj,
+     &                    ncat,
      &                    vicen,      vice_final)
 
          call column_sum (nx_block,   ny_block,
-     &                    nghost,     ncat,
+     &                    icells,   indxi,   indxj,
+     &                    ncat,
      &                    vsnon,      vsno_final)
 
          call column_sum (nx_block,   ny_block,
-     &                    nghost,     ntilyr,
+     &                    icells,   indxi,   indxj,
+     &                    ntilyr,
      &                    eicen,      eice_final)
 
          call column_sum (nx_block,   ny_block,
-     &                    nghost,     ntslyr,
+     &                    icells,   indxi,   indxj,
+     &                    ntslyr,
      &                    esnon,      esno_final)
 
-         vsno_final(:,:) = vsno_final(:,:) + msnow_mlt(:,:)/rhos
-         esno_final(:,:) = esno_final(:,:) + esnow_mlt(:,:)
+         do ij = 1, icells
+            vsno_final(ij) = vsno_final(ij) + msnow_mlt(ij)/rhos
+            esno_final(ij) = esno_final(ij) + esnow_mlt(ij)
+         enddo
 
          fieldid = 'vice, ridging'
          call column_conservation_check (nx_block,  ny_block,
-     &                                   nghost,    fieldid,
+     &                                   icells,   indxi,   indxj,
+     &                                   fieldid,
      &                                   vice_init, vice_final,
      &                                   puny,      l_stop,
      &                                   istop,     jstop)
@@ -412,7 +432,8 @@
 
          fieldid = 'vsno, ridging'
          call column_conservation_check (nx_block,  ny_block,
-     &                                   nghost,    fieldid,
+     &                                   icells,   indxi,   indxj,
+     &                                   fieldid,
      &                                   vsno_init, vsno_final,
      &                                   puny,      l_stop,
      &                                   istop,     jstop)
@@ -420,7 +441,8 @@
 
          fieldid = 'eice, ridging'
          call column_conservation_check (nx_block,  ny_block,
-     &                                   nghost,    fieldid,
+     &                                   icells,   indxi,   indxj,
+     &                                   fieldid,
      &                                   eice_init, eice_final,
      &                                   puny*Lfresh*rhoi, 
      &                                   l_stop,
@@ -429,7 +451,8 @@
 
          fieldid = 'esno, ridging'
          call column_conservation_check (nx_block,  ny_block,
-     &                                   nghost,    fieldid,
+     &                                   icells,   indxi,   indxj,
+     &                                   fieldid,
      &                                   esno_init, esno_final,
      &                                   puny*Lfresh*rhos, 
      &                                   l_stop,
@@ -444,55 +467,91 @@
 
       dti = c1/dt
 
-      if (present(dardg1dt))
-     &     dardg1dt(:,:) = ardg1(:,:)*dti
-      if (present(dardg2dt))
-     &     dardg2dt(:,:) = ardg2(:,:)*dti
-      if (present(dvirdgdt))
-     &     dvirdgdt(:,:) = virdg(:,:)*dti
-      if (present(opening))
-     &     opening(:,:) = aopen(:,:)*dti
+      if (present(dardg1dt)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            dardg1dt(i,j) = ardg1(ij)*dti
+         enddo
+      endif
+      if (present(dardg2dt)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            dardg2dt(i,j) = ardg2(ij)*dti
+         enddo
+      endif
+      if (present(dvirdgdt)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            dvirdgdt(i,j) = virdg(ij)*dti
+         enddo
+      endif
+      if (present(opening)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            opening(i,j) = aopen(ij)*dti
+         enddo
+      endif
 
       !-----------------------------------------------------------------
       ! Update fresh water and heat fluxes due to snow melt.
       !-----------------------------------------------------------------
 
-      if (present(fresh))
-     &     fresh(:,:) = fresh(:,:) + msnow_mlt(:,:)*dti
-      if (present(fresh_hist))
-     &     fresh_hist(:,:) = fresh_hist(:,:) + msnow_mlt(:,:)*dti
-      if (present(fhocn))
-     &     fhocn(:,:) = fhocn(:,:) + esnow_mlt(:,:)*dti
-      if (present(fhocn_hist))
-     &     fhocn_hist(:,:) = fhocn_hist(:,:) + esnow_mlt(:,:)*dti
+      if (present(fresh)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            fresh(i,j) = fresh(i,j) + msnow_mlt(ij)*dti
+         enddo
+      endif
+      if (present(fresh_hist)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            fresh_hist(i,j) = fresh_hist(i,j) + msnow_mlt(ij)*dti
+         enddo
+      endif
+      if (present(fhocn)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            fhocn(i,j) = fhocn(i,j) + esnow_mlt(ij)*dti
+         enddo
+      endif
+      if (present(fhocn_hist)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            fhocn_hist(i,j) = fhocn_hist(i,j) + esnow_mlt(ij)*dti
+         enddo
+      endif
 
       !-----------------------------------------------------------------
       ! Check for fractional ice area > 1.
       !-----------------------------------------------------------------
 
-      do j = jlo, jhi
-      do i = ilo, ihi
-         if (abs(asum(i,j) - c1) > puny) then
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+         if (abs(asum(ij) - c1) > puny) then
             l_stop = .true.
             istop = i
             jstop = j
+
+            write(nu_diag,*) ' '
+            write(nu_diag,*) 'Ridging error: total area > 1'
+            write(nu_diag,*) 'i, j, area:', i, j, asum(ij)
+            write(nu_diag,*) 'n, aicen:'
+            write(nu_diag,*)  0, aice0(i,j)
+            do n = 1, ncat
+               write(nu_diag,*) n, aicen(i,j,n)
+            enddo
+            return
          endif
       enddo
-      enddo
-
-      if (l_stop) then
-         i = istop
-         j = jstop
-         write(nu_diag,*) ' '
-         write(nu_diag,*) 'Ridging error: total area > 1'
-         write(nu_diag,*) 'i, j, area:', i, j, asum(i,j)
-         write(nu_diag,*) 'n, aicen:'
-         write(nu_diag,*)  0, aice0(i,j)
-         do n = 1, ncat
-            write(nu_diag,*) n, aicen(i,j,n)
-         enddo
-         return
-      endif
 
       end subroutine ridge_ice
 
@@ -516,7 +575,7 @@
 ! !INTERFACE:
 !
       subroutine asum_ridging (nx_block, ny_block,
-     &                         nghost,
+     &                         icells,   indxi,    indxj,
      &                         aicen,    aice0,
      &                         asum)
 !
@@ -526,7 +585,12 @@
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
+     &,  icells           ! number of cells with ice present
+
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi, indxj     ! compressed indices for cells with ice
+
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),
      &   intent(in) ::
@@ -535,18 +599,23 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
      &   aice0          ! concentration of open water
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out)::
+      real (kind=dbl_kind), dimension (icells), intent(out)::
      &   asum           ! sum of ice and open water area
 !
 !EOP
 !
       integer (kind=int_kind) ::
      &   i, j, n
+     &,  ij               ! horizontal index, combines i and j loops
 
       !-----------------------------------------------------------------
       ! open water
       !-----------------------------------------------------------------
-      asum(:,:) = aice0(:,:)
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+         asum(ij) = aice0(i,j)
+      enddo
 
       !-----------------------------------------------------------------
       ! ice categories
@@ -556,10 +625,10 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do j = 1, ny_block
-         do i = 1, nx_block
-            asum(i,j) = asum(i,j) + aicen(i,j,n)
-         enddo
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            asum(ij) = asum(ij) + aicen(i,j,n)
          enddo
       enddo
 
@@ -580,7 +649,8 @@
 ! !INTERFACE:
 !
       subroutine ridge_prep (nx_block,   ny_block,
-     &                       nghost,     dt,
+     &                       icells,     indxi,    indxj,
+     &                       dt,
 !!     &                       Delt,       divu,
      &                       rdg_conv,   rdg_shear,
      &                       asum,       closing_net,
@@ -592,7 +662,12 @@
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
+     &,  icells           ! number of cells with ice present
+
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi, indxj     ! compressed indices for cells with ice
+
 
       real (kind=dbl_kind), intent(in) ::
      &   dt                  ! time step (s)
@@ -602,9 +677,12 @@
 !!     &,  divu      ! strain rate I component, velocity divergence (1/s)
      &   rdg_conv  ! normalized energy dissipation due to convergence (1/s)
      &,  rdg_shear ! normalized energy dissipation due to shear (1/s)
-     &,  asum      ! sum of ice and open water area
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block),
+      real (kind=dbl_kind), dimension(icells),
+     &   intent(inout)::
+     &   asum      ! sum of ice and open water area
+
+      real (kind=dbl_kind), dimension(icells),
      &   intent(out)::
      &   closing_net ! net rate at which area is removed    (1/s)
      &,  divu_adv  ! divu as implied by transport scheme  (1/s)
@@ -617,27 +695,15 @@
 
       integer (kind=int_kind) ::
      &   i,j               ! horizontal indices
-     &,  ilo,ihi,jlo,jhi   ! beginning and end of physical domain
-
-      !-----------------------------------------------------------------
-      ! Initialize
-      !-----------------------------------------------------------------
-
-      closing_net(:,:) = c0
-      divu_adv   (:,:) = c0
-      opning     (:,:) = c0
+     &,  ij               ! horizontal index, combines i and j loops
 
       ! Set hin_max(ncat) to a big value to ensure that all ridged ice
       ! is thinner than hin_max(ncat).
       hin_max(ncat) = big
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
-      do j = jlo, jhi
-      do i = ilo, ihi
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
 
       !-----------------------------------------------------------------
       ! Compute the net rate of closing due to convergence
@@ -659,7 +725,7 @@
       !  (thick, newly ridged ice).
       !-----------------------------------------------------------------
 
-         closing_net(i,j) =
+         closing_net(ij) =
 !!     &        Cs*p5*(Delt(i,j)-abs(divu(i,j))) - min(divu(i,j),c0)
      &        Cs*rdg_shear(i,j) + rdg_conv(i,j)
 
@@ -672,18 +738,17 @@
       ! to give asum = 1.0 after ridging.
       !-----------------------------------------------------------------
 
-         divu_adv(i,j) = (c1-asum(i,j)) / dt
+         divu_adv(ij) = (c1-asum(ij)) / dt
 
-         if (divu_adv(i,j) < c0)
-     &        closing_net(i,j) = max(closing_net(i,j), -divu_adv(i,j))
+         if (divu_adv(ij) < c0)
+     &        closing_net(ij) = max(closing_net(ij), -divu_adv(ij))
 
       !-----------------------------------------------------------------
       ! Compute the (non-negative) opening rate that will give
       ! asum = 1.0 after ridging.
       !-----------------------------------------------------------------
-         opning(i,j) = closing_net(i,j) + divu_adv(i,j)
+         opning(ij) = closing_net(ij) + divu_adv(ij)
 
-      enddo
       enddo
 
       end subroutine ridge_prep
@@ -715,22 +780,25 @@
 ! !INTERFACE:
 !
       subroutine ridge_itd (nx_block,    ny_block,
-     &                      nghost,   
+     &                      icells,      indxi,    indxj,
      &                      aicen,       vicen,
-     &                      aice0,       asum,
+     &                      aice0,       
      &                      aksum,       apartic,
      &                      hrmin,       hrmax,
      &                      hrexp,       krdg)
 !
 ! !USES:
 !
-      use ice_work, only:  worka
-
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
+     &,  icells           ! number of cells with ice present
+
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi, indxj     ! compressed indices for cells with ice
+
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),
      &   intent(in) ::
@@ -739,17 +807,16 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
      &   aice0     ! concentration of open water
-     &,  asum      ! sum of ice and open water area
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out)::
+      real (kind=dbl_kind), dimension (icells), intent(out)::
      &   aksum            ! ratio of area removed to area ridged
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,0:ncat),
+      real (kind=dbl_kind), dimension (icells,0:ncat),
      &   intent(out) ::
      &   apartic          ! participation function; fraction of ridging
                           ! and closing associated w/ category n
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),
+      real (kind=dbl_kind), dimension (icells,ncat),
      &   intent(out) ::
      &   hrmin            ! minimum ridge thickness
      &,  hrmax            ! maximum ridge thickness (krdg_redist = 0)
@@ -761,17 +828,17 @@
       integer (kind=int_kind) ::
      &   i,j              ! horizontal indices
      &,  n                ! thickness category index
-     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
+     &,  ij               ! horizontal index, combines i and j loops
 
       real (kind=dbl_kind), parameter ::
      &   Gstari   = c1/Gstar
      &,  astari   = c1/astar
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,-1:ncat) ::
+      real (kind=dbl_kind), dimension(icells,-1:ncat) ::
      &   Gsum             ! Gsum(n) = sum of areas in categories 0 to n
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block) ::
-     &   expa0            ! exp(-aice0/asum)
+      real (kind=dbl_kind), dimension(icells) ::
+     &   work             ! temporary work array
 
       real (kind=dbl_kind) ::
      &   hi               ! ice thickness for each cat (m)
@@ -783,24 +850,21 @@
       ! Initialize
       !-----------------------------------------------------------------
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
-      Gsum(:,:,-1) = c0        ! by definition
-      Gsum(:,:,0:ncat) = c1    ! to avoid divzero below
-
-      aksum(:,:) = c1
-      do n = 0, ncat
-         apartic(:,:,n) = c0
+      do ij = 1, icells
+         Gsum   (ij,-1) = c0        ! by definition
+         Gsum   (ij,0)  = c1         ! to avoid divzero below
+         apartic(ij,0)  = c0
       enddo
 
       do n = 1, ncat
-         hrmin (:,:,n) = c0
-         hrmax (:,:,n) = c0
-         hrexp (:,:,n) = c0
-         krdg  (:,:,n) = c1
+         do ij = 1, icells
+            Gsum   (ij,n) = c1    ! to avoid divzero below
+            apartic(ij,n) = c0
+            hrmin  (ij,n) = c0
+            hrmax  (ij,n) = c0
+            hrexp  (ij,n) = c0
+            krdg   (ij,n) = c1
+         enddo
       enddo
 
       !-----------------------------------------------------------------
@@ -816,42 +880,42 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-      do j = jlo, jhi
-      do i = ilo, ihi
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
          if (aice0(i,j) > puny) then
-            Gsum(i,j,0) = aice0(i,j)
+            Gsum(ij,0) = aice0(i,j)
          else
-            Gsum(i,j,0) = Gsum(i,j,-1)
+            Gsum(ij,0) = Gsum(ij,-1)
          endif
-      enddo  
       enddo
 
       do n = 1, ncat
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do j = jlo, jhi
-         do i = ilo, ihi
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
             if (aicen(i,j,n) > puny) then
-               Gsum(i,j,n) = Gsum(i,j,n-1) + aicen(i,j,n)
+               Gsum(ij,n) = Gsum(ij,n-1) + aicen(i,j,n)
             else
-               Gsum(i,j,n) = Gsum(i,j,n-1)
+               Gsum(ij,n) = Gsum(ij,n-1)
             endif
-         enddo
          enddo
       enddo
 
       ! normalize
 
-      worka(:,:) = c1 / Gsum(:,:,ncat)
+      do ij = 1, icells
+         work(ij) = c1 / Gsum(ij,ncat)
+      enddo
       do n = 0, ncat
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do j = jlo, jhi
-         do i = ilo, ihi
-            Gsum(i,j,n) = Gsum(i,j,n) * worka(i,j)
-         enddo
+         do ij = 1, icells
+            Gsum(ij,n) = Gsum(ij,n) * work(ij)
          enddo
       enddo
 
@@ -859,8 +923,8 @@
       ! Compute the participation function apartic; this is analogous to
       ! a(h) = b(h)g(h) as defined in Thorndike et al. (1975).
       !
-      !              area lost from category n due to ridging/closing
-      !  apartic(n) = ---------------------------------------------------
+      !                area lost from category n due to ridging/closing
+      !  apartic(n) = --------------------------------------------------
       !                  total area lost due to ridging/closing
       !
       !-----------------------------------------------------------------
@@ -874,19 +938,15 @@
       !-----------------------------------------------------------------
 
          do n = 0, ncat
-            do j = jlo, jhi
-            do i = ilo, ihi
-
-               if (Gsum(i,j,n) < Gstar) then
-                  apartic(i,j,n) = Gstari*(Gsum(i,j,n)-Gsum(i,j,n-1)) *
-     &                 (c2 - (Gsum(i,j,n-1)+Gsum(i,j,n))*Gstari)
-               elseif (Gsum(i,j,n-1) < Gstar) then
-                  apartic(i,j,n) = Gstari * (Gstar-Gsum(i,j,n-1)) *
-     &                 (c2 - (Gsum(i,j,n-1)+Gstar)*Gstari)
+            do ij = 1, icells
+               if (Gsum(ij,n) < Gstar) then
+                  apartic(ij,n) = Gstari*(Gsum(ij,n)-Gsum(ij,n-1)) *
+     &                 (c2 - (Gsum(ij,n-1)+Gsum(ij,n))*Gstari)
+               elseif (Gsum(ij,n-1) < Gstar) then
+                  apartic(ij,n) = Gstari * (Gstar-Gsum(ij,n-1)) *
+     &                 (c2 - (Gsum(ij,n-1)+Gstar)*Gstari)
                endif
-
-            enddo               ! i
-            enddo               ! j
+            enddo               ! ij
          enddo                  ! n
 
       elseif (krdg_partic==1) then   ! exponential dependence on G(h)
@@ -906,19 +966,15 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do j = jlo, jhi
-            do i = ilo, ihi
-               Gsum(i,j,n) = exp(-Gsum(i,j,n)*astari) * xtmp
-            enddo               ! i
-            enddo               ! j
+            do ij = 1, icells
+               Gsum(ij,n) = exp(-Gsum(ij,n)*astari) * xtmp
+            enddo               ! ij
          enddo                  ! n
 
          do n = 0, ncat
-            do j = jlo, jhi
-            do i = ilo, ihi
-               apartic(i,j,n) = Gsum(i,j,n-1) - Gsum(i,j,n)
-            enddo               ! i
-            enddo               ! j
+            do ij = 1, icells
+               apartic(ij,n) = Gsum(ij,n-1) - Gsum(ij,n)
+            enddo               ! ij
          enddo                  ! n
 
       endif                     ! krdg_partic
@@ -947,20 +1003,20 @@
       !-----------------------------------------------------------------
 
          do n = 1, ncat
-            do j = jlo, jhi
-            do i = ilo, ihi
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
 
                if (aicen(i,j,n) > puny) then 
                   hi = vicen(i,j,n) / aicen(i,j,n) 
-                  hrmin(i,j,n) = min(c2*hi, hi + maxraft) 
-                  hrmax(i,j,n) = c2*sqrt(Hstar*hi) 
-                  hrmax(i,j,n) = max(hrmax(i,j,n), hrmin(i,j,n)+puny) 
-                  hrmean = p5 * (hrmin(i,j,n) + hrmax(i,j,n)) 
-                  krdg(i,j,n) = hrmean / hi 
+                  hrmin(ij,n) = min(c2*hi, hi + maxraft) 
+                  hrmax(ij,n) = c2*sqrt(Hstar*hi) 
+                  hrmax(ij,n) = max(hrmax(ij,n), hrmin(ij,n)+puny) 
+                  hrmean = p5 * (hrmin(ij,n) + hrmax(ij,n)) 
+                  krdg(ij,n) = hrmean / hi 
                endif 
 
-            enddo               ! i
-            enddo               ! j
+            enddo               ! ij
          enddo                  ! n
 
       else               ! krdg_redist = 1; exponential redistribution
@@ -994,16 +1050,16 @@
       !----------------------------------------------------------------- 
 
          do n = 1, ncat
-            do j = jlo, jhi
-            do i = ilo, ihi
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
                if (aicen(i,j,n) > puny) then
                   hi = vicen(i,j,n) / aicen(i,j,n)
                   hi = max(hi,puny)
-                  hrmin(i,j,n) = min(c2*hi, hi + maxraft)
-                  hrexp(i,j,n) = mu_rdg * sqrt(hi)
-                  krdg(i,j,n) = (hrmin(i,j,n) + hrexp(i,j,n)) / hi
+                  hrmin(ij,n) = min(c2*hi, hi + maxraft)
+                  hrexp(ij,n) = mu_rdg * sqrt(hi)
+                  krdg(ij,n) = (hrmin(ij,n) + hrexp(ij,n)) / hi
                endif
-            enddo
             enddo
          enddo
 
@@ -1016,18 +1072,18 @@
       !  aksum = 1 - 1/3 = 2/3.
       !---------------------------------------------------------------- 
 
-      aksum(:,:) = apartic(:,:,0) ! area participating = area removed
+      do ij = 1, icells
+         aksum(ij) = apartic(ij,0) ! area participating = area removed
+      enddo
 
       do n = 1, ncat
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do j = jlo, jhi
-         do i = ilo, ihi
+         do ij = 1, icells
             ! area participating > area removed
-            aksum(i,j) = aksum(i,j) 
-     &                 + apartic(i,j,n) * (c1 - c1/krdg(i,j,n)) 
-         enddo
+            aksum(ij) = aksum(ij) 
+     &                 + apartic(ij,n) * (c1 - c1/krdg(ij,n)) 
          enddo
       enddo
 
@@ -1050,7 +1106,8 @@
 ! !INTERFACE:
 !
       subroutine ridge_shift (nx_block,    ny_block,
-     &                        nghost,      dt,
+     &                        icells,      indxi,    indxj,
+     &                        dt,
      &                        aicen,       trcrn,
      &                        vicen,       vsnon,
      &                        eicen,       esnon,
@@ -1058,8 +1115,7 @@
      &                        aksum,       apartic,
      &                        hrmin,       hrmax, 
      &                        hrexp,       krdg,
-     &                        closing_net,
-     &                        divu_adv,    opning,
+     &                        closing_net, opning,
      &                        ardg1,       ardg2, 
      &                        virdg,       aopen,
      &                        msnow_mlt,   esnow_mlt,
@@ -1072,7 +1128,11 @@
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
+     &,  icells           ! number of cells with ice present
+
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi, indxj     ! compressed indices for cells with ice
 
       real (kind=dbl_kind), intent(in) ::
      &   dt                  ! time step (s)
@@ -1102,32 +1162,31 @@
      &   intent(inout) ::
      &   esnon     ! energy of melting for each snow layer (J/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
+      real (kind=dbl_kind), dimension (icells), intent(in) ::
      &   aksum             ! ratio of area removed to area ridged
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,0:ncat),
+      real (kind=dbl_kind), dimension (icells,0:ncat),
      &   intent(in) ::
      &   apartic          ! participation function; fraction of ridging
                           ! and closing associated w/ category n
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),
+      real (kind=dbl_kind), dimension (icells,ncat),
      &   intent(in) ::
      &   hrmin            ! minimum ridge thickness
      &,  hrmax            ! maximum ridge thickness (krdg_redist = 0)
      &,  hrexp            ! ridge e-folding thickness (krdg_redist = 1) 
      &,  krdg             ! mean ridge thickness/thickness of ridging ice
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block),
+      real (kind=dbl_kind), dimension(icells),
      &   intent(inout) ::
-     &   ardg1       ! fractional area loss by ridging ice
+     &   closing_net ! net rate at which area is removed    (1/s)
+     &,  opning      ! rate of opening due to divergence/shear (1/s)
+     &,  ardg1       ! fractional area loss by ridging ice
      &,  ardg2       ! fractional area gain by new ridges
      &,  virdg       ! ice volume ridged (m)
      &,  aopen       ! area opened due to divergence/shear
-     &,  closing_net ! net rate at which area is removed    (1/s)
-     &,  divu_adv    ! divu as implied by transport scheme  (1/s)
-     &,  opning      ! rate of opening due to divergence/shear (1/s)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block),
+      real (kind=dbl_kind), dimension(icells),
      &   intent(inout) ::
      &   msnow_mlt   ! mass of snow added to ocean (kg m-2)
      &,  esnow_mlt   ! energy needed to melt snow in ocean (J m-2)
@@ -1145,31 +1204,34 @@
      &,  n, nr             ! thickness category indices
      &,  k                 ! ice layer index
      &,  it                ! tracer index
-     &,  ij                ! horizontal index, combines i and j loops
-     &,  icells            ! number of cells with aicen > puny
-     &,  ilo,ihi,jlo,jhi   ! beginning and end of physical domain
+     &,  ij, m             ! horizontal indices, combine i and j loops
+     &,  iridge            ! number of cells with nonzero ridging
 
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
-     &   indxi, indxj      ! compressed indices
+      integer (kind=int_kind), dimension (icells) ::
+     &   indxii, indxjj      ! compressed indices
+     &,  indxij              ! compressed indices
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) ::
+      real (kind=dbl_kind), dimension (icells,ncat) ::
      &   aicen_init        ! ice area before ridging
      &,  vicen_init        ! ice volume before ridging
      &,  vsnon_init        ! snow volume before ridging
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr) ::
+      real (kind=dbl_kind), dimension (icells,ntilyr) ::
      &   eicen_init        ! ice energy before ridging
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr) ::
+      real (kind=dbl_kind), dimension (icells,ntslyr) ::
      &   esnon_init        ! snow energy before ridging
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr,ncat) ::
+      real (kind=dbl_kind), dimension(icells,ntrcr,ncat) ::
      &   atrcrn            ! aicen*trcrn
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (icells) ::
      &   closing_gross     ! rate at which area removed, not counting
                            ! area of new ridges
-     &,  afrac             ! fraction of category area ridged
+
+! ECH note:  the following arrays only need be defined on iridge cells
+      real (kind=dbl_kind), dimension (icells) ::
+     &  afrac             ! fraction of category area ridged
      &,  ardg1n            ! area of ice ridged
      &,  ardg2n            ! area of new ridges
      &,  virdgn            ! ridging ice volume
@@ -1179,10 +1241,10 @@
      &,  farea             ! fraction of new ridge area going to nr
      &,  fvol              ! fraction of new ridge volume going to nr
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr) ::
+      real (kind=dbl_kind), dimension (icells,nilyr) ::
      &   eirdgn            ! ridging ice energy
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr) ::
+      real (kind=dbl_kind), dimension (icells,nslyr) ::
      &   esrdgn            ! ridging snow energy
 
       real (kind=dbl_kind) ::
@@ -1194,26 +1256,29 @@
      &,  wk1               ! work variable
 
       !-----------------------------------------------------------------
-      ! Initialize
-      !-----------------------------------------------------------------
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
-      !-----------------------------------------------------------------
       ! Define variables equal to aicen*trcrn, vicen*trcrn, vsnon*trcrn
       !-----------------------------------------------------------------
 
       do n = 1, ncat
          do it = 1, ntrcr
             if (trcr_depend(it) == 0) then ! ice area tracer
-               atrcrn(:,:,it,n) = aicen(:,:,n)*trcrn(:,:,it,n)
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  atrcrn(ij,it,n) = aicen(i,j,n)*trcrn(i,j,it,n)
+               enddo
             elseif (trcr_depend(it) == 1) then  ! ice volume tracer
-               atrcrn(:,:,it,n) = vicen(:,:,n)*trcrn(:,:,it,n)
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  atrcrn(ij,it,n) = vicen(i,j,n)*trcrn(i,j,it,n)
+               enddo
             elseif (trcr_depend(it) == 2) then  ! snow volume tracer
-               atrcrn(:,:,it,n) = vsnon(:,:,n)*trcrn(:,:,it,n)
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  atrcrn(ij,it,n) = vsnon(i,j,n)*trcrn(i,j,it,n)
+               enddo 
             endif
          enddo
       enddo
@@ -1227,27 +1292,27 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-      do j = jlo, jhi
-      do i = ilo, ihi
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
 
-         closing_gross(i,j) = closing_net(i,j) / aksum(i,j)
+         closing_gross(ij) = closing_net(ij) / aksum(ij)
 
       !-----------------------------------------------------------------
       ! Reduce the closing rate if more than 100% of the open water
       ! would be removed.  Reduce the opening rate proportionately.
       !-----------------------------------------------------------------
 
-         if (apartic(i,j,0) > c0) then
-            wk1 = apartic(i,j,0) * closing_gross(i,j) * dt
+         if (apartic(ij,0) > c0) then
+            wk1 = apartic(ij,0) * closing_gross(ij) * dt
             if (wk1 > aice0(i,j)) then
                tmpfac = aice0(i,j) / wk1
-               closing_gross(i,j) = closing_gross(i,j) * tmpfac
-               opning(i,j) = opning(i,j) * tmpfac
+               closing_gross(ij) = closing_gross(ij) * tmpfac
+               opning(ij) = opning(ij) * tmpfac
             endif
          endif
 
-      enddo                     ! i
-      enddo                     ! j
+      enddo                     ! ij
 
       !-----------------------------------------------------------------
       ! Reduce the closing rate if more than 100% of any ice category
@@ -1257,20 +1322,20 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do j = jlo, jhi
-         do i = ilo, ihi
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
 
-            if (aicen(i,j,n) > puny .and. apartic(i,j,n) > c0) then
-               wk1 = apartic(i,j,n) * closing_gross(i,j) * dt
+            if (aicen(i,j,n) > puny .and. apartic(ij,n) > c0) then
+               wk1 = apartic(ij,n) * closing_gross(ij) * dt
                if (wk1 > aicen(i,j,n)) then
                   tmpfac = aicen(i,j,n) / wk1
-                  closing_gross(i,j) = closing_gross(i,j) * tmpfac
-                  opning(i,j) = opning(i,j) * tmpfac
+                  closing_gross(ij) = closing_gross(ij) * tmpfac
+                  opning(ij) = opning(ij) * tmpfac
                endif
             endif
 
-         enddo                  ! i
-         enddo                  ! j
+         enddo                  ! ij
       enddo                     ! n
 
       !-----------------------------------------------------------------
@@ -1280,42 +1345,59 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-      do j = jlo, jhi
-      do i = ilo, ihi
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
          aice0(i,j) = aice0(i,j)
-     &              - apartic(i,j,0)*closing_gross(i,j)*dt
-     &              + opning(i,j)*dt
+     &              - apartic(ij,0)*closing_gross(ij)*dt
+     &              + opning(ij)*dt
          if (aice0(i,j) < -puny) then
             l_stop = .true.
             istop = i
             jstop = j
+
+            write (nu_diag,*) ' '
+            write (nu_diag,*) 'Ridging error: aice0 < 0'
+            write (nu_diag,*) 'i, j, aice0:', i, j, aice0(i,j)
+            return
+
          elseif (aice0(i,j) < c0) then    ! roundoff error
             aice0(i,j) = c0
          endif
 
-         aopen(i,j) = aopen(i,j) + opning(i,j)*dt  ! optional diagnostic
+         aopen(ij) = opning(ij)*dt  ! optional diagnostic
 
       enddo
-      enddo
-
-      if (l_stop) then
-         i = istop
-         j = jstop
-         write (nu_diag,*) ' '
-         write (nu_diag,*) 'Ridging error: aice0 < 0'
-         write (nu_diag,*) 'i, j, aice0:', i, j, aice0(i,j)
-         return
-      endif                     ! l_stop
 
       !-----------------------------------------------------------------
       ! Save initial state variables
       !-----------------------------------------------------------------
 
-      aicen_init(:,:,:) = aicen(:,:,:)
-      vicen_init(:,:,:) = vicen(:,:,:)
-      vsnon_init(:,:,:) = vsnon(:,:,:)
-      eicen_init(:,:,:) = eicen(:,:,:)
-      esnon_init(:,:,:) = esnon(:,:,:)
+      do n = 1, ncat
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            aicen_init(ij,n) = aicen(i,j,n)
+            vicen_init(ij,n) = vicen(i,j,n)
+            vsnon_init(ij,n) = vsnon(i,j,n)
+         enddo
+      enddo
+
+      do n = 1, ntilyr
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            eicen_init(ij,n) = eicen(i,j,n)
+         enddo
+      enddo
+
+      do n = 1, ntslyr
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            esnon_init(ij,n) = esnon(i,j,n)
+         enddo
+      enddo
 
       !-----------------------------------------------------------------
       ! Compute the area, volume, and energy of ice ridging in each
@@ -1328,24 +1410,26 @@
       ! Identify grid cells with nonzero ridging
       !-----------------------------------------------------------------
 
-         icells = 0
-         do j = jlo, jhi
-         do i = ilo, ihi
-            if (aicen_init(i,j,n) > puny .and. apartic(i,j,n) > c0
-     &           .and. closing_gross(i,j) > c0) then
-               icells = icells + 1
-               indxi(icells) = i
-               indxj(icells) = j
+         iridge = 0
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            if (aicen_init(ij,n) > puny .and. apartic(ij,n) > c0
+     &           .and. closing_gross(ij) > c0) then
+               iridge = iridge + 1
+               indxii(iridge) = i
+               indxjj(iridge) = j
+               indxij(iridge) = ij
             endif
-         enddo                  ! i
-         enddo                  ! j
+         enddo                  ! ij
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
+         do ij = 1, iridge
+            i = indxii(ij)
+            j = indxjj(ij)
+            m = indxij(ij)
 
       !-----------------------------------------------------------------
       ! Compute area of ridging ice (ardg1n) and of new ridge (ardg2n).
@@ -1353,67 +1437,63 @@
       !  ardg1 slightly greater than aicen.) 
       !-----------------------------------------------------------------
 
-            ardg1n(i,j) = apartic(i,j,n)*closing_gross(i,j)*dt
+            ardg1n(ij) = apartic(m,n)*closing_gross(m)*dt
 
-            if (ardg1n(i,j) > aicen_init(i,j,n) + puny) then
+            if (ardg1n(ij) > aicen_init(m,n) + puny) then
                l_stop = .true.
                istop = i
                jstop = j
+
+               write (nu_diag,*) ' '
+               write (nu_diag,*) 'Ridging error: ardg > aicen'
+               write (nu_diag,*) 'i, j, n:', i, j, n
+               write (nu_diag,*) 'ardg, aicen:',
+     &              ardg1n(ij), aicen_init(m,n)
+               return
             else
-               ardg1n(i,j) = min(aicen_init(i,j,n), ardg1n(i,j))
+               ardg1n(ij) = min(aicen_init(m,n), ardg1n(ij))
             endif
 
-            ardg2n(i,j) = ardg1n(i,j) / krdg(i,j,n)
-            afrac(i,j) = ardg1n(i,j) / aicen_init(i,j,n)
+            ardg2n(ij) = ardg1n(ij) / krdg(m,n)
+            afrac(ij) = ardg1n(ij) / aicen_init(m,n)
 
       !-----------------------------------------------------------------
       ! Subtract area, volume, and energy from ridging category n.
       ! Note: Tracer values are unchanged.
       !-----------------------------------------------------------------
 
-            virdgn(i,j) = vicen_init(i,j,n) * afrac(i,j)
-            vsrdgn(i,j) = vsnon_init(i,j,n) * afrac(i,j)
+            virdgn(ij) = vicen_init(m,n) * afrac(ij)
+            vsrdgn(ij) = vsnon_init(m,n) * afrac(ij)
 
-            aicen(i,j,n) = aicen(i,j,n) - ardg1n(i,j)
-            vicen(i,j,n) = vicen(i,j,n) - virdgn(i,j)
-            vsnon(i,j,n) = vsnon(i,j,n) - vsrdgn(i,j)
+            aicen(i,j,n) = aicen(i,j,n) - ardg1n(ij)
+            vicen(i,j,n) = vicen(i,j,n) - virdgn(ij)
+            vsnon(i,j,n) = vsnon(i,j,n) - vsrdgn(ij)
 
       !-----------------------------------------------------------------
       ! Increment ridging diagnostics
       !-----------------------------------------------------------------
 
-            ardg1(i,j) = ardg1(i,j) + ardg1n(i,j)
-            ardg2(i,j) = ardg2(i,j) + ardg2n(i,j)
-            virdg(i,j) = virdg(i,j) + virdgn(i,j)
+            ardg1(m) = ardg1(m) + ardg1n(ij)
+            ardg2(m) = ardg2(m) + ardg2n(ij)
+            virdg(m) = virdg(m) + virdgn(ij)
 
       !-----------------------------------------------------------------
       !  Place part of the snow lost by ridging into the ocean.
       !-----------------------------------------------------------------
 
-            msnow_mlt(i,j) = msnow_mlt(i,j)
-     &                     + rhos*vsrdgn(i,j)*(c1-fsnowrdg)
+            msnow_mlt(m) = msnow_mlt(m)
+     &                     + rhos*vsrdgn(ij)*(c1-fsnowrdg)
 
       !-----------------------------------------------------------------
       ! Compute quantities used to apportion ice among categories
       ! in the nr loop below
       !-----------------------------------------------------------------
 
-            dhr(i,j)  = hrmax(i,j,n) - hrmin(i,j,n)
-            dhr2(i,j) = hrmax(i,j,n) * hrmax(i,j,n)
-     &                - hrmin(i,j,n) * hrmin(i,j,n)
+            dhr(ij)  = hrmax(ij,n) - hrmin(m,n)
+            dhr2(ij) = hrmax(ij,n) * hrmax(ij,n)
+     &                - hrmin(m,n) * hrmin(m,n)
 
          enddo                  ! ij
-
-         if (l_stop) then
-            i = istop
-            j = jstop
-            write (nu_diag,*) ' '
-            write (nu_diag,*) 'Ridging error: ardg > aicen'
-            write (nu_diag,*) 'i, j, n:', i, j, n
-            write (nu_diag,*) 'ardg, aicen:',
-     &           ardg1n(i,j), aicen_init(i,j,n)
-            return
-         endif
 
       !-----------------------------------------------------------------
       ! Subtract ice energy from ridging category n.
@@ -1423,13 +1503,14 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+            do ij = 1, iridge
+               i = indxii(ij)
+               j = indxjj(ij)
+               m = indxij(ij)
 
-               eirdgn(i,j,k) = eicen_init(i,j,ilyr1(n)+k-1) * afrac(i,j)
+               eirdgn(ij,k) = eicen_init(m,ilyr1(n)+k-1) * afrac(ij)
                eicen(i,j,ilyr1(n)+k-1) = eicen (i,j,ilyr1(n)+k-1)
-     &                                 - eirdgn(i,j,k)
+     &                                 - eirdgn(ij,k)
             enddo
          enddo
 
@@ -1443,15 +1524,16 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+            do ij = 1, iridge
+               i = indxii(ij)
+               j = indxjj(ij)
+               m = indxij(ij)
 
-               esrdgn(i,j,k) = esnon_init(i,j,slyr1(n)+k-1) * afrac(i,j)
+               esrdgn(ij,k) = esnon_init(m,slyr1(n)+k-1) * afrac(ij)
                esnon(i,j,slyr1(n)+k-1) = esnon (i,j,slyr1(n)+k-1)
-     &                                 - esrdgn(i,j,k)
-               esnow_mlt(i,j) = esnow_mlt(i,j)
-     &                        + esrdgn(i,j,k)*(c1-fsnowrdg)
+     &                                 - esrdgn(ij,k)
+               esnow_mlt(m) = esnow_mlt(m)
+     &                        + esrdgn(ij,k)*(c1-fsnowrdg)
            enddo
          enddo
 
@@ -1464,33 +1546,36 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  atrcrn(i,j,it,n) = atrcrn(i,j,it,n)
-     &                             - ardg1n(i,j)*trcrn(i,j,it,n)
+               do ij = 1, iridge
+                  i = indxii(ij)
+                  j = indxjj(ij)
+                  m = indxij(ij)
+                  atrcrn(m,it,n) = atrcrn(m,it,n)
+     &                             - ardg1n(ij)*trcrn(i,j,it,n)
                enddo
 
             elseif (trcr_depend(it) == 1) then ! ice volume tracer
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  atrcrn(i,j,it,n) = atrcrn(i,j,it,n)
-     &                             - virdgn(i,j)*trcrn(i,j,it,n)
+               do ij = 1, iridge
+                  i = indxii(ij)
+                  j = indxjj(ij)
+                  m = indxij(ij)
+                  atrcrn(m,it,n) = atrcrn(m,it,n)
+     &                             - virdgn(ij)*trcrn(i,j,it,n)
                enddo
 
-               elseif (trcr_depend(it) == 2) then ! snow volume tracer
+            elseif (trcr_depend(it) == 2) then ! snow volume tracer
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  atrcrn(i,j,it,n) = atrcrn(i,j,it,n)
-     &                             - vsrdgn(i,j)*trcrn(i,j,it,n)
+               do ij = 1, iridge
+                  i = indxii(ij)
+                  j = indxjj(ij)
+                  m = indxij(ij)
+                  atrcrn(m,it,n) = atrcrn(m,it,n)
+     &                             - vsrdgn(ij)*trcrn(i,j,it,n)
                enddo
             endif               ! trcr_depend
          enddo                  ! ntrcr
@@ -1504,26 +1589,25 @@
 
             if (krdg_redist == 0) then ! Hibler 1980 formulation
 
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
+               do ij = 1, iridge
+                  m = indxij(ij)
 
       !-----------------------------------------------------------------
       ! Compute the fraction of ridged ice area and volume going to
       !  thickness category nr.
       !-----------------------------------------------------------------
 
-                  if (hrmin(i,j,n) >= hin_max(nr) .or.
-     &                hrmax(i,j,n) <= hin_max(nr-1)) then
+                  if (hrmin(m,n) >= hin_max(nr) .or.
+     &                hrmax(ij,n) <= hin_max(nr-1)) then
                      hL = c0
                      hR = c0
                   else
-                     hL = max (hrmin(i,j,n), hin_max(nr-1))
-                     hR = min (hrmax(i,j,n), hin_max(nr))
+                     hL = max (hrmin(m,n), hin_max(nr-1))
+                     hR = min (hrmax(ij,n), hin_max(nr))
                   endif
 
-                  farea(i,j) = (hR-hL) / dhr(i,j)
-                  fvol (i,j) = (hR*hR - hL*hL) / dhr2(i,j)
+                  farea(ij) = (hR-hL) / dhr(ij)
+                  fvol (ij) = (hR*hR - hL*hL) / dhr2(ij)
 
                enddo            ! ij
 
@@ -1536,40 +1620,38 @@
 
                if (nr < ncat) then
 
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
+                  do ij = 1, iridge
+                     m = indxij(ij)
 
-                     hi1  = hrmin(i,j,n)
-                     hexp = hrexp(i,j,n)
+                     hi1  = hrmin(m,n)
+                     hexp = hrexp(m,n)
 
                      if (hi1 >= hin_max(nr)) then
-                        farea(i,j) = c0
-                        fvol (i,j) = c0
+                        farea(ij) = c0
+                        fvol (ij) = c0
                      else
                         hL = max (hi1, hin_max(nr-1))
                         hR = hin_max(nr)
                         expL = exp(-(hL-hi1)/hexp)
                         expR = exp(-(hR-hi1)/hexp)
-                        farea(i,j) = expL - expR
-                        fvol (i,j) = ((hL + hexp)*expL 
+                        farea(ij) = expL - expR
+                        fvol (ij) = ((hL + hexp)*expL 
      &                              - (hR + hexp)*expR) / (hi1 + hexp)
                      endif
                   enddo         ! ij
 
                else             ! nr = ncat
 
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
+                  do ij = 1, iridge
+                     m = indxij(ij)
 
-                     hi1  = hrmin(i,j,n)
-                     hexp = hrexp(i,j,n)
+                     hi1  = hrmin(m,n)
+                     hexp = hrexp(m,n)
 
                      hL = max (hi1, hin_max(nr-1))
                      expL = exp(-(hL-hi1)/hexp)
-                     farea(i,j) = expL
-                     fvol (i,j) = (hL + hexp)*expL / (hi1 + hexp)
+                     farea(ij) = expL
+                     fvol (ij) = (hL + hexp)*expL / (hi1 + hexp)
 
                   enddo
 
@@ -1584,13 +1666,13 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-               aicen(i,j,nr) = aicen(i,j,nr) + farea(i,j)*ardg2n(i,j)
-               vicen(i,j,nr) = vicen(i,j,nr) + fvol(i,j) *virdgn(i,j)
+            do ij = 1, iridge
+               i = indxii(ij)
+               j = indxjj(ij)
+               aicen(i,j,nr) = aicen(i,j,nr) + farea(ij)*ardg2n(ij)
+               vicen(i,j,nr) = vicen(i,j,nr) + fvol(ij) *virdgn(ij)
                vsnon(i,j,nr) = vsnon(i,j,nr)
-     &                       + fvol(i,j)*vsrdgn(i,j)*fsnowrdg
+     &                       + fvol(ij)*vsrdgn(ij)*fsnowrdg
             enddo
 
       !-----------------------------------------------------------------
@@ -1600,11 +1682,11 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
+               do ij = 1, iridge
+                  i = indxii(ij)
+                  j = indxjj(ij)
                   eicen(i,j,ilyr1(nr)+k-1) = eicen(i,j,ilyr1(nr)+k-1)
-     &                                     + fvol(i,j)*eirdgn(i,j,k)
+     &                                     + fvol(ij)*eirdgn(ij,k)
                enddo            ! ij
             enddo               ! k
 
@@ -1615,11 +1697,11 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
+               do ij = 1, iridge
+                  i = indxii(ij)
+                  j = indxjj(ij)
                   esnon(i,j,slyr1(nr)+k-1) = esnon(i,j,slyr1(nr)+k-1)
-     &                              + fvol(i,j)*esrdgn(i,j,k)*fsnowrdg
+     &                              + fvol(ij)*esrdgn(ij,k)*fsnowrdg
                enddo            ! ij
             enddo               ! k
 
@@ -1636,33 +1718,36 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
-                     atrcrn(i,j,it,nr) = atrcrn(i,j,it,nr)
-     &                          + farea(i,j)*ardg2n(i,j)*trcrn(i,j,it,n)
+                  do ij = 1, iridge
+                     i = indxii(ij)
+                     j = indxjj(ij)
+                     m = indxij(ij)
+                     atrcrn(m,it,nr) = atrcrn(m,it,nr)
+     &                          + farea(ij)*ardg2n(ij)*trcrn(i,j,it,n)
 
                   enddo
                elseif (trcr_depend(it) == 1) then ! ice volume tracer
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
-                     atrcrn(i,j,it,nr) = atrcrn(i,j,it,nr)
-     &                           + fvol(i,j)*virdgn(i,j)*trcrn(i,j,it,n)
+                  do ij = 1, iridge
+                     i = indxii(ij)
+                     j = indxjj(ij)
+                     m = indxij(ij)
+                     atrcrn(m,it,nr) = atrcrn(m,it,nr)
+     &                           + fvol(ij)*virdgn(ij)*trcrn(i,j,it,n)
 
                   enddo
                elseif (trcr_depend(it) == 2) then ! snow volume tracer
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
-                     atrcrn(i,j,it,nr) = atrcrn(i,j,it,nr)
-     &                  + fvol(i,j)*vsrdgn(i,j)*fsnowrdg*trcrn(i,j,it,n)
+                  do ij = 1, iridge
+                     i = indxii(ij)
+                     j = indxjj(ij)
+                     m = indxij(ij)
+                     atrcrn(m,it,nr) = atrcrn(m,it,nr)
+     &                  + fvol(ij)*vsrdgn(ij)*fsnowrdg*trcrn(i,j,it,n)
 
                   enddo
                endif            ! trcr_depend
@@ -1678,8 +1763,9 @@
 
       do n = 1, ncat
          call compute_tracers (nx_block,       ny_block,
+     &                         icells,          indxi,   indxj,
      &                         trcr_depend,
-     &                         atrcrn(:,:,:,n), aicen(:,:,  n),
+     &                         atrcrn(:,:,n),   aicen(:,:,  n),
      &                         vicen (:,:,  n), vsnon(:,:,  n),
      &                         trcrn(:,:,:,n))
       enddo
@@ -1700,7 +1786,8 @@
 ! !INTERFACE:
 !
       subroutine ridge_check (nx_block,  ny_block,
-     &                        nghost,    dt,
+     &                        icells,    indxi,    indxj,
+     &                        dt,
      &                        asum,      closing_net,
      &                        divu_adv,  opning,
      &                        iterate_ridging)
@@ -1711,15 +1798,20 @@
 !
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
+     &,  icells           ! number of cells with ice present
+
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi, indxj     ! compressed indices for cells with ice
+
 
       real (kind=dbl_kind), intent(in) ::
      &   dt                  ! time step (s)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
+      real (kind=dbl_kind), dimension (icells), intent(in) ::
      &   asum             ! sum of ice and open water area
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
+      real (kind=dbl_kind), dimension (icells),
      &   intent(inout) ::
      &   closing_net ! net rate at which area is removed    (1/s)
      &,  divu_adv    ! divu as implied by transport scheme  (1/s)
@@ -1731,28 +1823,20 @@
 !EOP
 !
       integer (kind=int_kind) ::
-     &   i,j              ! horizontal indices
-     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
+     &   ij               ! horizontal index, combines i and j loops
 
       iterate_ridging = .false.
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
-      do j = jlo, jhi
-      do i = ilo, ihi
-         if (abs(asum(i,j) - c1) < puny) then
-            closing_net(i,j) = c0
-            opning     (i,j) = c0
+      do ij = 1, icells
+         if (abs(asum(ij) - c1) < puny) then
+            closing_net(ij) = c0
+            opning     (ij) = c0
          else
             iterate_ridging = .true.
-            divu_adv(i,j) = (c1 - asum(i,j)) / dt
-            closing_net(i,j) = max(c0, -divu_adv(i,j))
-            opning(i,j) = max(c0, divu_adv(i,j))
+            divu_adv(ij) = (c1 - asum(ij)) / dt
+            closing_net(ij) = max(c0, -divu_adv(ij))
+            opning(ij) = max(c0, divu_adv(ij))
          endif
-      enddo
       enddo
 
       end subroutine ridge_check
@@ -1784,6 +1868,7 @@
 !
       subroutine ice_strength (nx_block, ny_block,
      &                         nghost,
+!     &                         icetmask,
      &                         aice,     vice, 
      &                         aice0,    aicen, 
      &                         vicen,    strength)
@@ -1795,6 +1880,10 @@
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
      &,  nghost              ! number of ghost cells
+
+!      integer (kind=int_kind), 
+!     &   dimension (nx_block,ny_block), intent(in) ::
+!     &   icetmask   ! ice extent mask (T-cell)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
      &   aice       ! concentration of ice
@@ -1814,15 +1903,15 @@
 !
 ! LOCAL VARIABLES
 !
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (:), allocatable ::
      &   asum             ! sum of ice and open water area
      &,  aksum            ! ratio of area removed to area ridged
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,0:ncat) ::
+      real (kind=dbl_kind), dimension (:,:), allocatable ::
      &   apartic          ! participation function; fraction of ridging
                           ! and closing associated w/ category n
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) ::
+      real (kind=dbl_kind), dimension (:,:), allocatable ::
      &   hrmin            ! minimum ridge thickness
      &,  hrmax            ! maximum ridge thickness (krdg_redist = 0)
      &,  hrexp            ! ridge e-folding thickness (krdg_redist = 1) 
@@ -1832,16 +1921,21 @@
      &   i,j                 ! horizontal indices
      &,  n                   ! thickness category index
      &,  ilo,ihi,jlo,jhi     ! beg and end of physical domain
+     &,  icells           ! number of cells with ice present
+     &,  ij               ! horizontal index, combines i and j loops
 
       real (kind=dbl_kind) ::
      &   hi                  ! ice thickness (m)
      &,  h2rdg               ! mean value of h^2 for new ridge
      &,  dh2rdg              ! change in mean value of h^2 per unit area
                              ! consumed by ridging 
+      integer (kind=int_kind), dimension (nx_block*ny_block) ::
+     &   indxi, indxj     ! compressed indices for cells with ice
 
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
+
       ilo = 1 + nghost
       ihi = nx_block - nghost
       jlo = 1 + nghost
@@ -1849,21 +1943,45 @@
 
       strength(:,:) = c0
 
+      !-----------------------------------------------------------------
+      ! Identify cells with nonzero ice area
+! ECH - all cells for now
+      !-----------------------------------------------------------------
+           
+            icells = 0
+            do j = jlo, jhi
+            do i = ilo, ihi
+!               if (icetmask(i,j) == 1) then
+                  icells = icells + 1
+                  indxi(icells) = i
+                  indxj(icells) = j
+!               endif
+            enddo               ! i
+            enddo               ! j
+
       if (kstrength == 1) then  ! Rothrock '75 formulation
+
+         allocate(hrmin(icells,ncat))
+         allocate(hrmax(icells,ncat))
+         allocate(hrexp(icells,ncat))
+         allocate(krdg(icells,ncat))
+         allocate(apartic(icells,0:ncat))
+         allocate(asum(icells))
+         allocate(aksum(icells))
 
       !-----------------------------------------------------------------
       ! Compute thickness distribution of ridging and ridged ice.
       !-----------------------------------------------------------------
 
          call asum_ridging (nx_block, ny_block,
-     &                      nghost,
+     &                      icells,  indxi,  indxj,
      &                      aicen,    aice0,
      &                      asum)
 
          call ridge_itd (nx_block,    ny_block,
-     &                   nghost,   
+     &                      icells,  indxi,  indxj,
      &                   aicen,       vicen,
-     &                   aice0,       asum,
+     &                   aice0,       
      &                   aksum,       apartic, 
      &                   hrmin,       hrmax,
      &                   hrexp,       krdg)
@@ -1879,18 +1997,18 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (aicen(i,j,n) > puny .and. apartic(i,j,n) > c0)then
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  if (aicen(i,j,n) > puny .and. apartic(ij,n) > c0)then
                      hi = vicen(i,j,n) / aicen(i,j,n)
-                     h2rdg = p333 * (hrmax(i,j,n)**3 - hrmin(i,j,n)**3) 
-     &                            / (hrmax(i,j,n) - hrmin(i,j,n)) 
-                     dh2rdg = -hi*hi + h2rdg/krdg(i,j,n)
+                     h2rdg = p333 * (hrmax(ij,n)**3 - hrmin(ij,n)**3) 
+     &                            / (hrmax(ij,n) - hrmin(ij,n)) 
+                     dh2rdg = -hi*hi + h2rdg/krdg(ij,n)
                      strength(i,j) = strength(i,j)
-     &                             + apartic(i,j,n) * dh2rdg
+     &                             + apartic(ij,n) * dh2rdg
                   endif         ! aicen > puny
-               enddo            ! i
-               enddo            ! j
+               enddo            ! ij
             enddo               ! n
 
          elseif (krdg_redist==1) then ! exponential formulation
@@ -1899,19 +2017,19 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (aicen(i,j,n) > puny .and. apartic(i,j,n) > c0)then
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  if (aicen(i,j,n) > puny .and. apartic(ij,n) > c0)then
                      hi = vicen(i,j,n) / aicen(i,j,n)
-                     h2rdg =    hrmin(i,j,n)*hrmin(i,j,n) 
-     &                     + c2*hrmin(i,j,n)*hrexp(i,j,n)
-     &                     + c2*hrexp(i,j,n)*hrexp(i,j,n)
-                     dh2rdg = -hi*hi + h2rdg/krdg(i,j,n)
+                     h2rdg =    hrmin(ij,n)*hrmin(ij,n) 
+     &                     + c2*hrmin(ij,n)*hrexp(ij,n)
+     &                     + c2*hrexp(ij,n)*hrexp(ij,n)
+                     dh2rdg = -hi*hi + h2rdg/krdg(ij,n)
                      strength(i,j) = strength(i,j)
-     &                             + apartic(i,j,n) * dh2rdg
+     &                             + apartic(ij,n) * dh2rdg
                   endif
-               enddo            ! i
-               enddo            ! j
+               enddo            ! ij
             enddo               ! n
 
          endif                  ! krdg_redist
@@ -1919,13 +2037,21 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do j = jlo, jhi
-         do i = ilo, ihi
-            strength(i,j) = Cf * Cp * strength(i,j) / aksum(i,j)
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            strength(i,j) = Cf * Cp * strength(i,j) / aksum(ij)
                           ! Cp = (g/2)*(rhow-rhoi)*(rhoi/rhow)
                           ! Cf accounts for frictional dissipation
-         enddo                  ! j
-         enddo                  ! i
+         enddo            ! ij
+
+         deallocate(hrmin)
+         deallocate(hrmax)
+         deallocate(hrexp)
+         deallocate(krdg)
+         deallocate(apartic)
+         deallocate(asum)
+         deallocate(aksum)
 
       else                      ! kstrength /= 1:  Hibler (1979) form
 
