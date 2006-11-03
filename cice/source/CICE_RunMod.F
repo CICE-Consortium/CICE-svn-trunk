@@ -16,6 +16,7 @@
 !          William H. Lipscomb, LANL
 !
 ! 2006 ECH: moved exit timeLoop to prevent execution of unnecessary timestep
+! 2006 ECH: Streamlined for efficiency 
 !
 ! !INTERFACE:
 !
@@ -402,6 +403,8 @@
       if (oceanmixed_ice)
      &     call ocean_mixed_layer (dt)   ! ocean surface fluxes and sst
 
+!      call ice_timer_start(timer_tmp)  ! temporary timer
+
       call init_flux_atm         ! initialize atmosphere fluxes sent to coupler
 
       do iblk = 1, nblocks
@@ -414,13 +417,23 @@
       !-----------------------------------------------------------------
       ! Save the ice area passed to the coupler (so that history fields
       !  can be made consistent with coupler fields).
-      ! Save the initial ice area and volume in each category (passed to
-      !  linear_itd below)
+      ! Save the initial ice area and volume in each category.
       !-----------------------------------------------------------------
 
-         aice_init (:,:,  iblk) = aice (:,:,  iblk)
-         aicen_init(:,:,:,iblk) = aicen(:,:,:,iblk)
-         vicen_init(:,:,:,iblk) = vicen(:,:,:,iblk)
+         do j = 1, ny_block
+         do i = 1, nx_block
+            aice_init (i,j,  iblk) = aice (i,j,  iblk)
+         enddo
+         enddo
+
+         do n = 1, ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            aicen_init(i,j,n,iblk) = aicen(i,j,n,iblk)
+            vicen_init(i,j,n,iblk) = vicen(i,j,n,iblk)
+         enddo
+         enddo
+         enddo
 
       !-----------------------------------------------------------------
       ! Adjust frzmlt to account for ice-ocean heat fluxes since last
@@ -633,6 +646,8 @@
             enddo
          endif
 
+!      call ice_timer_stop(timer_tmp)  ! temporary timer
+
       !-----------------------------------------------------------------
       ! Divide fluxes by ice area for the coupler, which assumes fluxes
       ! are per unit ice area.
@@ -690,13 +705,20 @@
 !EOP
 !
 !lipscomb - delete hicen later?
-      real (kind=dbl_kind),
-     &   dimension (nx_block,ny_block,ncat,max_blocks) ::
-     &   hicen           ! ice thickness (m)
+!      real (kind=dbl_kind),
+!     &   dimension (nx_block,ny_block,ncat,max_blocks) ::
+!     &   hicen           ! ice thickness (m)
 
       integer (kind=int_kind) ::
-     &   iblk     ! block index
+     &   iblk            ! block index
+     &,  ilo,ihi,jlo,jhi ! beginning and end of physical domain
      &,  i, j, n
+
+      integer (kind=int_kind), save ::
+     &   icells          ! number of ice/ocean cells 
+
+      integer (kind=int_kind), dimension(nx_block*ny_block), save ::
+     &   indxi, indxj    ! indirect indices for ice/ocean cells
 
       type (block) ::
      &   this_block      ! block information for current block
@@ -709,20 +731,29 @@
 
       call ice_timer_start(timer_column)  ! column physics
       call ice_timer_start(timer_thermo)  ! thermodynamics
+!      call ice_timer_start(timer_tmp)  ! temporary timer
 
       call init_flux_ocn        ! initialize ocean fluxes sent to coupler
       
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk), iblk)
+         this_block = get_block(blocks(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
 
       !-----------------------------------------------------------------
       ! Let rain drain through to the ocean.
       !-----------------------------------------------------------------
 
-         fresh     (:,:,iblk) = fresh(:,:,iblk)      
-     &                        + frain(:,:,iblk)*aice(:,:,iblk)
-         fresh_hist(:,:,iblk) = fresh_hist(:,:,iblk) 
-     &                        + frain(:,:,iblk)*aice(:,:,iblk)
+         do j = 1, ny_block
+         do i = 1, nx_block
+            fresh     (i,j,iblk) = fresh(i,j,iblk)      
+     &                           + frain(i,j,iblk)*aice(i,j,iblk)
+            fresh_hist(i,j,iblk) = fresh_hist(i,j,iblk) 
+     &                           + frain(i,j,iblk)*aice(i,j,iblk)
+         enddo
+         enddo
 
       !-----------------------------------------------------------------
       ! Given thermodynamic growth rates, transport ice between
@@ -733,7 +764,32 @@
 
 
          if (kitd == 1) then
+      !-----------------------------------------------------------------
+      ! Compute fractional ice area in each grid cell.
+      !-----------------------------------------------------------------
+            call aggregate_area (nx_block, ny_block,
+     &                     aicen(:,:,:,iblk),
+     &                     aice(:,:,iblk),     aice0(:,:,iblk), 
+     &                     l_stop,
+     &                     istop,    jstop)
+
+      !-----------------------------------------------------------------
+      ! Identify grid cells with ice.
+      !-----------------------------------------------------------------
+
+            icells = 0
+            do j = jlo,jhi
+            do i = ilo,ihi
+               if (aice(i,j,iblk) > puny) then
+                  icells = icells + 1
+                  indxi(icells) = i
+                  indxj(icells) = j
+               endif
+            enddo
+            enddo
+
             call linear_itd (nx_block, ny_block,
+     &                       icells, indxi, indxj,
      &                       nghost,   trcr_depend,
      &                       aicen_init(:,:,:,iblk),
      &                       vicen_init(:,:,:,iblk),
@@ -766,8 +822,21 @@
       ! Add frazil ice growing in leads.
       !-----------------------------------------------------------------
 
+         ! identify ice-ocean cells
+         icells = 0
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (tmask(i,j,iblk)) then
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
+            endif
+         enddo               ! i
+         enddo               ! j
+
          call add_new_ice (nx_block,                ny_block,
-     &                     nghost,
+     &                     icells,
+     &                     indxi,                   indxj,
      &                     tmask    (:,:,  iblk),   dt,
      &                     aicen    (:,:,:,iblk),
      &                     trcrn    (:,:,:,:,iblk),
@@ -819,28 +888,16 @@
       ! thickness, and the other half decreases the area).  
       !-----------------------------------------------------------------
 
+!NOTE - this does not work - hicen_init is not defined - ECH
+
 !         if (ncat==1)
 !     &        call reduce_area (nx_block, ny_block,
 !     &                          nghost,
 !     &                          tmask     (:,:,  iblk), 
 !     &                          aicen     (:,:,:,iblk),
-!     &                          vicen     (:,:,:,iblk), 
+!     &                          vicen     (:,:,:,iblk),
 !     &                          hicen_init(:,:,1,iblk), 
 !     &                          hicen     (:,:,1,iblk))
-
-
-      !-----------------------------------------------------------------
-      ! Compute thermodynamic area and volume tendencies.
-      !-----------------------------------------------------------------
-
-         call aggregate_area (nx_block,          ny_block,
-     &                        aicen(:,:,:,iblk),
-     &                        aice (:,:,  iblk), aice0(:,:,iblk),
-     &                        l_stop,
-     &                        istop,             jstop)
-
-         daidtt(:,:,iblk) = (aice(:,:,iblk) - daidtt(:,:,iblk)) / dt
-         dvidtt(:,:,iblk) = (vice(:,:,iblk) - dvidtt(:,:,iblk)) / dt
 
       !-----------------------------------------------------------------
       ! ITD cleanup: Rebin thickness categories if necessary, and remove
@@ -885,8 +942,21 @@
      &                   aice0(:,:,  iblk), tmask(:,:,    iblk), 
      &                   trcr_depend) 
 
+
+      !-----------------------------------------------------------------
+      ! Compute thermodynamic area and volume tendencies.
+      !-----------------------------------------------------------------
+
+         do j = 1, ny_block
+         do i = 1, nx_block
+            daidtt(i,j,iblk) = (aice(i,j,iblk) - daidtt(i,j,iblk)) / dt
+            dvidtt(i,j,iblk) = (vice(i,j,iblk) - dvidtt(i,j,iblk)) / dt
+         enddo
+         enddo
+
       enddo                     ! iblk
 
+!      call ice_timer_stop(timer_tmp)  ! temporary timer
       call ice_timer_stop(timer_column)  ! column physics
 
       end subroutine step_therm2
@@ -927,6 +997,14 @@
 
       integer (kind=int_kind) :: 
      &   iblk    ! block index 
+     &,  i,j              ! horizontal indices
+     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
+
+      integer (kind=int_kind), save ::
+     &   icells          ! number of cells with aicen > puny
+
+      integer (kind=int_kind), dimension(nx_block*ny_block), save ::
+     &   indxi, indxj    ! indirect indices for cells with aicen > puny
 
       logical (kind=int_kind) ::
      &   l_stop          ! if true, abort model
@@ -961,9 +1039,32 @@
 
       do iblk = 1, nblocks
          this_block = get_block(blocks(iblk), iblk)
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+      !-----------------------------------------------------------------
+      ! Identify ice-ocean cells.
+      ! Note:  We can not define icells here using aice>puny because
+      !        aice has not yet been updated since the transport (and
+      !        it may be out of whack, which the ridging helps fix).-ECH
+      !-----------------------------------------------------------------
+           
+         icells = 0
+         do j = jlo, jhi
+         do i = ilo, ihi
+            if (tmask(i,j,iblk)) then
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
+            endif
+         enddo               ! i
+         enddo               ! j
 
          call ridge_ice (nx_block,             ny_block,
-     &                   nghost,               dt,
+     &                   dt,                   icells,
+     &                   indxi,                indxj,
 !!     &                   Delt    (:,:,  iblk), divu      (:,:,  iblk),
      &                   rdg_conv(:,:,  iblk), rdg_shear (:,:,  iblk),
      &                   aicen   (:,:,:,iblk), trcrn     (:,:,:,:,iblk),
@@ -992,7 +1093,6 @@
 
       call ice_timer_stop(timer_column)
       call ice_timer_stop(timer_ridge)
-
 
       do iblk = 1, nblocks
          this_block = get_block(blocks(iblk), iblk)

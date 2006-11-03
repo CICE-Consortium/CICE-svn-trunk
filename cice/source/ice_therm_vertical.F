@@ -22,6 +22,7 @@
 !
 ! 2003: Vectorized by Clifford Chen (Fujitsu) and William Lipscomb
 ! 2004: Block structure added by William Lipscomb
+! 2006: Streamlined for efficiency by Elizabeth Hunke
 !
 ! !INTERFACE:
 !
@@ -112,7 +113,6 @@
       use ice_exit
       use ice_ocean
       use ice_itd, only: ilyr1, slyr1, ilyrn, slyrn
-      use ice_work, only: worka, workb
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -216,25 +216,27 @@
 
 ! 2D state variables (thickness, temperature, enthalpy)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
-     &   hin             ! ice thickness (m)
-     &,  hsn             ! snow thickness (m)
-     &,  hilyr           ! ice layer thickness
+      real (kind=dbl_kind), dimension (icells) ::
+     &   hilyr           ! ice layer thickness
      &,  hslyr           ! snow layer thickness
-     &,  hsn_new         ! thickness of new snow (m)
      &,  Tsf             ! ice/snow top surface temp, same as Tsfcn (deg C)
+     &,  hin             ! ice thickness (m)
+     &,  hsn             ! snow thickness (m)
+     &,  hsn_new         ! thickness of new snow (m)
+     &,  worki           ! local work array
+     &,  works           ! local work array
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr) ::
+      real (kind=dbl_kind), dimension (icells,nilyr) ::
      &   qin             ! ice layer enthalpy, qin < 0 (J m-3)
      &,  Tin             ! internal ice layer temperatures
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr) ::
+      real (kind=dbl_kind), dimension (icells,nslyr) ::
      &   qsn             ! snow layer enthalpy, qsn < 0 (J m-3)
      &,  Tsn             ! internal snow layer temperatures
 
 ! other 2D flux and energy variables
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (icells) ::
      &   fsurf           ! net flux to top surface, not including fcondtop
      &,  fcondtop        ! downward cond flux at top surface (W m-2)
      &,  fcondbot        ! downward cond flux at bottom surface (W m-2)
@@ -249,16 +251,19 @@
       istop = 0
       jstop = 0
 
-            
-      fsensn (:,:) = c0
-      flatn  (:,:) = c0
-      fswabsn(:,:) = c0
-      flwoutn(:,:) = c0
-      evapn  (:,:) = c0
+      do j=1, ny_block
+      do i=1, nx_block
+         fsensn (i,j) = c0
+         flatn  (i,j) = c0
+         fswabsn(i,j) = c0
+         flwoutn(i,j) = c0
+         evapn  (i,j) = c0
 
-      freshn (:,:) = c0
-      fsaltn (:,:) = c0
-      fhocnn (:,:) = c0
+         freshn (i,j) = c0
+         fsaltn (i,j) = c0
+         fhocnn (i,j) = c0
+      enddo
+      enddo
 
       !-----------------------------------------------------------------
       ! Compute variables needed for vertical thermo calculation
@@ -282,9 +287,12 @@
 
       if (l_stop) return
 
-      ! Save initial ice and snow thickness (for fresh and fsalt)
-      worka(:,:) = hin(:,:)
-      workb(:,:) = hsn(:,:)
+      do ij = 1, icells
+         ! Save initial ice and snow thickness (for fresh and fsalt)
+         worki(ij) = hin(ij)
+         works(ij) = hsn(ij)
+      enddo
+   
             
       !-----------------------------------------------------------------
       ! Compute new surface temperature and internal ice and snow
@@ -363,11 +371,11 @@
          i = indxi(ij)
          j = indxj(ij)
             
-         dhi = hin(i,j) - worka(i,j)
-         dhs = hsn(i,j) - workb(i,j)
+         dhi = hin(ij) - worki(ij)
+         dhs = hsn(ij) - works(ij)
                
          freshn(i,j) = evapn(i,j) -
-     &                 (rhoi*dhi + rhos*(dhs-hsn_new(i,j))) / dt
+     &                 (rhoi*dhi + rhos*(dhs-hsn_new(ij))) / dt
          fsaltn(i,j) = -rhoi*dhi*ice_ref_salinity*p001/dt
 
       enddo                     ! ij
@@ -448,11 +456,10 @@
      &            real(nilyr,kind=dbl_kind)
             salin(k)=(saltmax/c2)*(c1-cos(pi*zn**(nsal/(msal+zn))))
 !            salin(k)=saltmax ! for isosaline ice
-         enddo
-         salin(nilyr+1) = saltmax
-         do k = 1, nilyr+1
             Tmlt(k) = -salin(k)*depressT
          enddo
+         salin(nilyr+1) = saltmax
+         Tmlt(nilyr+1) = -salin(nilyr+1)*depressT
       else
          do k = 1, nilyr+1
             salin(k) = c0
@@ -535,12 +542,12 @@
      &,  k                ! layer index
      &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
      &,  ij               ! horizontal index, combines i and j loops
-     &,  icells           ! number of cells with ice melting
+     &,  imelt            ! number of cells with ice melting
 
       integer (kind=int_kind), dimension (nx_block*ny_block) ::
      &   indxi, indxj     ! compressed indices for cells with ice melting
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (:), allocatable ::
      &   etot        ! total energy in column
      &,  fside       ! lateral heat flux (W/m^2)
 
@@ -570,9 +577,13 @@
      &,  m2 = 1.36_dbl_kind           ! constant from Maykut & Perovich
                                       ! (unitless)
 
-      rside(:,:) = c0
-      Tbot (:,:) = Tf(:,:)
-      fbot (:,:) = c0
+      do j = 1, ny_block
+      do i = 1, nx_block
+         rside(i,j) = c0
+         Tbot (i,j) = Tf(i,j)
+         fbot (i,j) = c0
+      enddo
+      enddo
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
@@ -583,20 +594,25 @@
       ! Identify grid cells where ice can melt.
       !-----------------------------------------------------------------
 
-      icells = 0
+      imelt = 0
       do j = jlo, jhi
       do i = ilo, ihi
          if (aice(i,j) > puny .and. frzmlt(i,j) < c0) then ! ice can melt
-            icells = icells + 1
-            indxi(icells) = i
-            indxj(icells) = j
+            imelt = imelt + 1
+            indxi(imelt) = i
+            indxj(imelt) = j
          endif
       enddo                     ! i
       enddo                     ! j
 
-      do ij = 1, icells  ! cells where ice can melt
+      allocate(etot (imelt))
+      allocate(fside(imelt))
+
+      do ij = 1, imelt  ! cells where ice can melt
          i = indxi(ij)
          j = indxj(ij)
+
+         fside(ij) = c0
 
       !-----------------------------------------------------------------
       ! Use boundary layer theory for fbot.
@@ -631,11 +647,11 @@
       ! Compute heat flux associated with this value of rside.
       !-----------------------------------------------------------------
 
-      fside(:,:) = c0
-
       do n = 1, ncat
 
-         etot(:,:) = c0
+         do ij = 1, imelt
+            etot(ij) = c0
+         enddo
 
          ! melting energy/unit area in each column, etot < 0
 
@@ -643,10 +659,10 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do ij = 1, icells
+            do ij = 1, imelt
                i = indxi(ij)
                j = indxj(ij)
-               etot(i,j) = etot(i,j) + esnon(i,j,slyr1(n)+k-1)
+               etot(ij) = etot(ij) + esnon(i,j,slyr1(n)+k-1)
             enddo               ! ij
          enddo
 
@@ -654,21 +670,21 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do ij = 1, icells
+            do ij = 1, imelt
                i = indxi(ij)
                j = indxj(ij)
-               etot(i,j) = etot(i,j) + eicen(i,j,ilyr1(n)+k-1)
+               etot(ij) = etot(ij) + eicen(i,j,ilyr1(n)+k-1)
             enddo               ! ij
          enddo                  ! nilyr
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do ij = 1, icells
+         do ij = 1, imelt
             i = indxi(ij)
             j = indxj(ij)
             ! lateral heat flux
-            fside(i,j) = fside(i,j) + rside(i,j)*etot(i,j)/dt ! fside < 0
+            fside(ij) = fside(ij) + rside(i,j)*etot(ij)/dt ! fside < 0
          enddo                  ! ij
 
       enddo                     ! n
@@ -682,15 +698,18 @@
 !ocl novrec      !Fujitsu
 
 
-      do ij = 1, icells
+      do ij = 1, imelt
          i = indxi(ij)
          j = indxj(ij)
 
-         xtmp = frzmlt(i,j)/(fbot(i,j) + fside(i,j) + puny) 
+         xtmp = frzmlt(i,j)/(fbot(i,j) + fside(ij) + puny) 
          xtmp = min(xtmp, c1)
          fbot(i,j)  = fbot(i,j)  * xtmp
          rside(i,j) = rside(i,j) * xtmp
       enddo                     ! ij
+
+      deallocate(etot)
+      deallocate(fside)
 
       end subroutine frzmlt_bottom_lateral
 
@@ -755,20 +774,22 @@
      &   intent(in) ::
      &   esnon     ! energy of melting for each snow layer (J/m^2)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out)::
-     &   hin             ! ice thickness (m)
-     &,  hsn             ! snow thickness (m)
-     &,  hilyr           ! ice layer thickness
+      real (kind=dbl_kind), dimension(icells), intent(out)::
+     &   hilyr           ! ice layer thickness
      &,  hslyr           ! snow layer thickness
      &,  Tsf             ! ice/snow surface temperature, Tsfcn
      &,  einit           ! initial energy of melting (J m-2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr),
+      real (kind=dbl_kind), dimension(icells), intent(out)::
+     &   hin             ! ice thickness (m)
+     &,  hsn             ! snow thickness (m)
+
+      real (kind=dbl_kind), dimension (icells,nilyr),
      &   intent(out) ::
      &   qin             ! ice layer enthalpy (J m-3)
      &,  Tin             ! internal ice layer temperatures
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr),
+      real (kind=dbl_kind), dimension (icells,nslyr),
      &   intent(out) ::
      &   qsn             ! snow enthalpy
      &,  Tsn             ! snow temperature
@@ -803,21 +824,8 @@
       ! Initialize
       !-----------------------------------------------------------------
 
-      hin     (:,:) = c0
-      hsn     (:,:) = c0
-      hilyr   (:,:) = c0
-      hslyr   (:,:) = c0
-      Tsf     (:,:) = c0
-      einit   (:,:) = c0
-
-      do k = 1, nslyr
-         qsn(:,:,k) = c0
-         Tsn(:,:,k) = c0
-      enddo
-      
-      do k = 1, nilyr
-         qin(:,:,k) = c0
-         Tin(:,:,k) = c0
+      do ij = 1, icells
+         einit(ij) = c0
       enddo
 
       tsno_high = .false.
@@ -840,11 +848,11 @@
       ! Initialize internal energy
       !-----------------------------------------------------------------
 
-         Tsf(i,j)    = Tsfcn(i,j)
-         hin(i,j)    = vicen(i,j) / aicen(i,j)
-         hsn(i,j)    = vsnon(i,j) / aicen(i,j)
-         hilyr(i,j)    = hin(i,j) / real(nilyr,kind=dbl_kind)
-         hslyr(i,j)    = hsn(i,j) / real(nslyr,kind=dbl_kind)
+         Tsf(ij)    = Tsfcn(i,j)
+         hin(ij)    = vicen(i,j) / aicen(i,j)
+         hsn(ij)    = vsnon(i,j) / aicen(i,j)
+         hilyr(ij)    = hin(ij) / real(nilyr,kind=dbl_kind)
+         hslyr(ij)    = hsn(ij) / real(nslyr,kind=dbl_kind)
 
       enddo                     ! ij
 
@@ -865,14 +873,14 @@
       ! where 'd' denotes an error due to roundoff.
       !-----------------------------------------------------------------
 
-            if (hslyr(i,j) > hsnomin) then
+            if (hslyr(ij) > hsnomin) then
                ! qsn, esnon < 0              
-               qsn  (i,j,k) = esnon(i,j,k)*real(nslyr,kind=dbl_kind)
+               qsn  (ij,k) = esnon(i,j,k)*real(nslyr,kind=dbl_kind)
      &                       /vsnon(i,j) 
-               Tmax = -qsn(i,j,k)*puny /
+               Tmax = -qsn(ij,k)*puny /
      &                 (rhos*cp_ice*vsnon(i,j))
             else
-               qsn  (i,j,k) = -rhos * Lfresh
+               qsn  (ij,k) = -rhos * Lfresh
                Tmax = puny
             endif
 
@@ -880,14 +888,14 @@
       ! Compute snow temperatures from enthalpies.
       ! Note: qsn <= -rhos*Lfresh, so Tsn <= 0.
       !-----------------------------------------------------------------
-            Tsn(i,j,k) = (Lfresh + qsn(i,j,k)/rhos)/cp_ice
+            Tsn(ij,k) = (Lfresh + qsn(ij,k)/rhos)/cp_ice
   
       !-----------------------------------------------------------------
       ! Check for Tsn > Tmax (allowing for roundoff error) and Tsn < Tmin.
       !-----------------------------------------------------------------
-            if (Tsn(i,j,k) > Tmax) then
+            if (Tsn(ij,k) > Tmax) then
                tsno_high = .true.
-            elseif (Tsn(i,j,k) < Tmin) then
+            elseif (Tsn(ij,k) < Tmin) then
                tsno_low  = .true.
             endif
 
@@ -903,21 +911,21 @@
                i = indxi(ij)
                j = indxj(ij)
 
-               if (hslyr(i,j) > hsnomin) then
-                  Tmax = -qsn(i,j,k)*puny /
+               if (hslyr(ij) > hsnomin) then
+                  Tmax = -qsn(ij,k)*puny /
      &                     (rhos*cp_ice*vsnon(i,j))
                else
                   Tmax = puny
                endif
 
-               if (Tsn(i,j,k) > Tmax) then
+               if (Tsn(ij,k) > Tmax) then
                   write(nu_diag,*) ' '
                   write(nu_diag,*) 'Starting thermo, Tsn > Tmax'
-                  write(nu_diag,*) 'Tsn=',Tsn(i,j,k)
+                  write(nu_diag,*) 'Tsn=',Tsn(ij,k)
                   write(nu_diag,*) 'Tmax=',Tmax
                   write(nu_diag,*) 'istep1, my_task, i, j:',
      &                              istep1, my_task, i, j
-                  write(nu_diag,*) 'qsn',qsn(i,j,k)
+                  write(nu_diag,*) 'qsn',qsn(ij,k)
                   l_stop = .true.
                   istop = i
                   jstop = j
@@ -934,14 +942,14 @@
                i = indxi(ij)
                j = indxj(ij)
 
-               if (Tsn(i,j,k) < Tmin) then ! allowing for roundoff error
+               if (Tsn(ij,k) < Tmin) then ! allowing for roundoff error
                   write(nu_diag,*) ' '
                   write(nu_diag,*) 'Starting thermo, Tsn < Tmin'
-                  write(nu_diag,*) 'Tsn=', Tsn(i,j,k)
+                  write(nu_diag,*) 'Tsn=', Tsn(ij,k)
                   write(nu_diag,*) 'Tmin=', Tmin
                   write(nu_diag,*) 'istep1, my_task, i, j:',
      &                              istep1, my_task, i, j
-                  write(nu_diag,*) 'qsn', qsn(i,j,k)
+                  write(nu_diag,*) 'qsn', qsn(ij,k)
                   l_stop = .true.
                   istop = i
                   jstop = j
@@ -957,18 +965,16 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
 
-            if (Tsn(i,j,k) > c0) then   ! correct roundoff error
-               Tsn(i,j,k) = c0
-               qsn(i,j,k) = -rhos*Lfresh
+            if (Tsn(ij,k) > c0) then   ! correct roundoff error
+               Tsn(ij,k) = c0
+               qsn(ij,k) = -rhos*Lfresh
             endif
 
       !-----------------------------------------------------------------
       ! initial energy per unit area of ice/snow, relative to 0 C
       !-----------------------------------------------------------------
-            einit(i,j) = einit(i,j) + hslyr(i,j)*qsn(i,j,k)
+            einit(ij) = einit(ij) + hslyr(ij)*qsn(ij,k)
 
          enddo                  ! ij
       enddo                     ! nslyr
@@ -985,7 +991,7 @@
       ! Compute ice enthalpy
       !-----------------------------------------------------------------
             ! qin, eicen < 0
-            qin(i,j,k) = eicen(i,j,k)*real(nilyr,kind=dbl_kind)
+            qin(ij,k) = eicen(i,j,k)*real(nilyr,kind=dbl_kind)
      &                  /vicen(i,j)  
 
       !-----------------------------------------------------------------
@@ -994,24 +1000,24 @@
 
             if (l_brine) then
                aa1 = cp_ice
-               bb1 = (cp_ocn-cp_ice)*Tmlt(k) - qin(i,j,k)/rhoi - Lfresh 
+               bb1 = (cp_ocn-cp_ice)*Tmlt(k) - qin(ij,k)/rhoi - Lfresh 
                cc1 = Lfresh * Tmlt(k)
-               Tin(i,j,k) =  (-bb1 - sqrt(bb1*bb1 - c4*aa1*cc1)) / 
+               Tin(ij,k) =  (-bb1 - sqrt(bb1*bb1 - c4*aa1*cc1)) / 
      &                       (c2*aa1)
                Tmax = Tmlt(k)
 
             else                ! fresh ice
-               Tin(i,j,k) = (Lfresh + qin(i,j,k)/rhoi) / cp_ice
-               Tmax = -qin(i,j,k)*puny/(rhos*cp_ice*vicen(i,j))
+               Tin(ij,k) = (Lfresh + qin(ij,k)/rhoi) / cp_ice
+               Tmax = -qin(ij,k)*puny/(rhos*cp_ice*vicen(i,j))
                          ! as above for snow
             endif
 
       !-----------------------------------------------------------------
       ! Check for Tin > Tmax and Tin < Tmin
       !-----------------------------------------------------------------
-            if (Tin(i,j,k) > Tmax) then
+            if (Tin(ij,k) > Tmax) then
                tice_high = .true.
-            elseif (Tin(i,j,k) < Tmin) then
+            elseif (Tin(ij,k) < Tmin) then
                tice_low  = .true.
             endif
 
@@ -1029,16 +1035,16 @@
                if (l_brine) then
                   Tmax = Tmlt(k)
                else             ! fresh ice
-                  Tmax = -qin(i,j,k)*puny/(rhos*cp_ice*vicen(i,j))
+                  Tmax = -qin(ij,k)*puny/(rhos*cp_ice*vicen(i,j))
                endif
 
-               if (Tin(i,j,k) > Tmax) then
+               if (Tin(ij,k) > Tmax) then
                   write(nu_diag,*) ' '
                   write(nu_diag,*) 'Starting thermo, T > Tmax, layer', k
-                  write(nu_diag,*) 'Tin=',Tin(i,j,k),', Tmax=',Tmax
+                  write(nu_diag,*) 'Tin=',Tin(ij,k),', Tmax=',Tmax
                   write(nu_diag,*) 'istep1, my_task, i, j:',
      &                              istep1, my_task, i, j
-                  write(nu_diag,*) 'qin',qin(i,j,k)
+                  write(nu_diag,*) 'qin',qin(ij,k)
                   l_stop = .true.
                   istop = i
                   jstop = j
@@ -1052,10 +1058,10 @@
                i = indxi(ij)
                j = indxj(ij)
 
-               if (Tin(i,j,k) < Tmin) then
+               if (Tin(ij,k) < Tmin) then
                   write(nu_diag,*) ' '
                   write(nu_diag,*) 'Starting thermo T < Tmin, layer', k
-                  write(nu_diag,*) 'Tin =', Tin(i,j,k)
+                  write(nu_diag,*) 'Tin =', Tin(ij,k)
                   write(nu_diag,*) 'Tmin =', Tmin
                   write(nu_diag,*) 'istep1, my_task, i, j:',
      &                              istep1, my_task, i, j
@@ -1075,15 +1081,13 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
 
-            if (Tin(i,j,k) > c0) then ! correct roundoff error
-               Tin(i,j,k) = c0
-               qin(i,j,k) = -rhoi*Lfresh
+            if (Tin(ij,k) > c0) then ! correct roundoff error
+               Tin(ij,k) = c0
+               qin(ij,k) = -rhoi*Lfresh
             endif
             
-            einit(i,j) = einit(i,j) + hilyr(i,j)*qin(i,j,k) 
+            einit(ij) = einit(ij) + hilyr(ij)*qin(ij,k) 
             
          enddo                  ! ij
 
@@ -1162,13 +1166,15 @@
      &,  Qa              ! specific humidity (kg/kg)
      &,  shcoef          ! transfer coefficient for sensible heat
      &,  lhcoef          ! transfer coefficient for latent heat
-     &,  hilyr           ! ice layer thickness (m)
-     &,  hslyr           ! snow layer thickness (m)
      &,  Tbot            ! ice bottom surface temperature (deg C)
-     &,  einit           ! initial energy of melting (J m-2)
      &,  fswsfc          ! SW absorbed at ice/snow surface (W m-2)
      &,  fswint          ! SW absorbed in ice interior below surface (W m-2)
      &,  fswthrun        ! SW through ice to ocean         (W m-2)
+
+      real (kind=dbl_kind), dimension (icells), intent(in) ::
+     &   hilyr           ! ice layer thickness (m)
+     &,  hslyr           ! snow layer thickness (m)
+     &,  einit           ! initial energy of melting (J m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr),
      &   intent(in) ::
@@ -1179,20 +1185,22 @@
      &,  flatn           ! surface downward latent heat (W m-2)
      &,  fswabsn         ! shortwave absorbed by ice (W m-2)
      &,  flwoutn         ! upward LW at surface (W m-2)
-     &,  fsurf           ! net flux to top surface, not including fcondtop
+
+      real (kind=dbl_kind), dimension (icells), intent(out)::
+     &   fsurf           ! net flux to top surface, not including fcondtop
      &,  fcondtop        ! downward cond flux at top surface (W m-2)
      &,  fcondbot        ! downward cond flux at bottom surface (W m-2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
+      real (kind=dbl_kind), dimension (icells),
      &   intent(inout)::
      &   Tsf             ! ice/snow surface temperature, Tsfcn
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr),
+      real (kind=dbl_kind), dimension (icells,nilyr),
      &   intent(inout) ::
      &   qin             ! ice layer enthalpy (J m-3)
      &,  Tin             ! internal ice layer temperatures
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr),
+      real (kind=dbl_kind), dimension (icells,nslyr),
      &   intent(inout) ::
      &   qsn             ! snow layer enthalpy (J m-3)
      &,  Tsn             ! internal snow layer temperatures
@@ -1215,56 +1223,63 @@
 
       integer (kind=int_kind) ::
      &   i, j            ! horizontal indices
-     &,  ij              ! horizontal index, combines i and j loops
+     &,  ij, m           ! horizontal indices, combine i and j loops
      &,  k               ! ice layer index
      &,  niter           ! iteration counter in temperature solver
 
       integer (kind=int_kind) ::
      &   isolve          ! number of cells with temps not converged
 
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
+      integer (kind=int_kind), dimension (icells) ::
      &   indxii, indxjj  ! compressed indices for cells not converged
 
-      logical (kind=log_kind), dimension (nx_block,ny_block) ::
+      integer (kind=int_kind), dimension (icells) ::
+     &   indxij          ! compressed 1D index for cells not converged
+
+      logical (kind=log_kind), dimension (icells) ::
      &   l_snow          ! true if snow temperatures are computed
      &,  l_cold          ! true if surface temperature is computed
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (:), allocatable ::
      &   Tsf_start       ! Tsf at start of iteration
      &,  dTsf            ! Tsf - Tsf_start
-     &,  dTsf_prev       ! dTsf from previous iteration
      &,  dfsurf_dT       ! derivative of fsurf wrt Tsf
+     &,  avg_Tsi         ! = 1. if new snow/ice temps avg'd w/starting temps
+     &,  enew            ! new energy of melting after temp change (J m-2)
+
+      real (kind=dbl_kind), dimension (icells) ::
+     &   dTsf_prev       ! dTsf from previous iteration
      &,  dfsens_dT       ! deriv of fsens wrt Tsf (W m-2 deg-1)
      &,  dflat_dT        ! deriv of flat wrt Tsf (W m-2 deg-1)
      &,  dflwout_dT      ! deriv of flwout wrt Tsf (W m-2 deg-1)
      &,  dt_rhoi_hlyr    ! dt/(rhoi*hilyr)
-     &,  avg_Tsi         ! = 1. if new snow/ice temps avg'd w/starting temps
-     &,  enew            ! new energy of melting after temp change (J m-2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr) ::
+      real (kind=dbl_kind), dimension (icells,nilyr) ::
      &   Tin_init        ! Tin at beginning of time step
      &,  Tin_start       ! Tin at start of iteration
-     &,  etai            ! dt / (rho * cp * h) for ice layers
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr) ::
+      real (kind=dbl_kind), dimension (icells,nslyr) ::
      &   Tsn_init        ! Tsn at beginning of time step
      &,  Tsn_start       ! Tsn at start of iteration
      &,  etas            ! dt / (rho * cp * h) for snow layers
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nilyr+nslyr+1)::
-     &   kh              ! effective conductivity at interfaces (W m-2 deg-1)
-     &,  diag            ! diagonal matrix elements
+      real (kind=dbl_kind), dimension (:,:), allocatable ::
+     &   etai            ! dt / (rho * cp * h) for ice layers
      &,  sbdiag          ! sub-diagonal matrix elements
+     &,  diag            ! diagonal matrix elements
      &,  spdiag          ! super-diagonal matrix elements
      &,  rhs             ! rhs of tri-diagonal matrix equation
      &,  Tmat            ! matrix output temperatures
+
+      real (kind=dbl_kind), dimension(icells,nilyr+nslyr+1)::
+     &   kh              ! effective conductivity at interfaces (W m-2 deg-1)
 
       real (kind=dbl_kind) ::
      &   ci              ! specific heat of sea ice (J kg-1 deg-1)
      &,  avg_Tsf         ! = 1. if Tsf averaged w/Tsf_start, else = 0.
      &,  ferr            ! energy conservation error (W m-2)
 
-      logical (kind=log_kind), dimension (nx_block,ny_block) ::
+      logical (kind=log_kind), dimension (icells) ::
      &   converged      ! = true when local solution has converged
 
       logical (kind=log_kind) ::
@@ -1274,70 +1289,37 @@
       ! Initialize
       !-----------------------------------------------------------------
 
-      fsensn  (:,:) = c0
-      flatn   (:,:) = c0
-      fswabsn (:,:) = c0
-      flwoutn (:,:) = c0
-      fsurf   (:,:) = c0
-      fcondtop(:,:) = c0
-      fcondbot(:,:) = c0
-
       all_converged   = .false.
 
-      converged (:,:) = .false.
-      l_snow    (:,:) = .false.
-      l_cold    (:,:) = .true.
-
-      dTsf      (:,:) = c0
-      dTsf_prev (:,:) = c0
-      Tsf_start (:,:) = c0
-      enew      (:,:) = c0
-      avg_Tsi   (:,:) = c0 
-      dt_rhoi_hlyr(:,:) = c0
-      dfsurf_dT (:,:) = c0
-      dfsens_dT (:,:) = c0
-      dflat_dT  (:,:) = c0
-      dflwout_dT(:,:) = c0
-
       do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
+         fsurf   (ij) = c0
+         fcondtop(ij) = c0
+         fcondbot(ij) = c0
 
-         dt_rhoi_hlyr(i,j) = dt / (rhoi*hilyr(i,j))  ! hilyr > 0
-         if (hslyr(i,j) > hsnomin) l_snow(i,j) = .true.
+         converged (ij) = .false.
+         l_snow    (ij) = .false.
+         l_cold    (ij) = .true.
+
+         dTsf_prev (ij) = c0
+
+         dt_rhoi_hlyr(ij) = dt / (rhoi*hilyr(ij))  ! hilyr > 0
+         if (hslyr(ij) > hsnomin) l_snow(ij) = .true.
       enddo                     ! ij
 
       do k = 1, nslyr
-
-         etas     (:,:,k) = c0
-         Tsn_init (:,:,k) = Tsn(:,:,k) ! beginning of time step
-         Tsn_start(:,:,k) = Tsn(:,:,k) ! beginning of iteration
-
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            if (l_snow(i,j)) etas(i,j,k) = dt/(rhos*cp_ice*hslyr(i,j))
+            Tsn_init (ij,k) = Tsn(ij,k) ! beginning of time step
+            Tsn_start(ij,k) = Tsn(ij,k) ! beginning of iteration
+            etas     (ij,k) = c0
+            if (l_snow(ij)) etas(ij,k) = dt/(rhos*cp_ice*hslyr(ij))
          enddo                  ! ij
       enddo                     ! k
 
       do k = 1, nilyr
-         etai     (:,:,k) = c0
-         Tin_init (:,:,k) = Tin(:,:,k)   ! beginning of time step
-         Tin_start(:,:,k) = Tin(:,:,k)   ! beginning of iteration
-      enddo
-
-      !-----------------------------------------------------------------
-      ! Initialize matrix elements.
-      ! Note: When we do not need to solve for the surface or snow
-      !       temperature, we solve dummy equations with solution T = 0.
-      !-----------------------------------------------------------------
-
-      do k = 1, nilyr+nslyr+1
-         sbdiag(:,:,k) = c0
-         diag  (:,:,k) = c1
-         spdiag(:,:,k) = c0
-         rhs   (:,:,k) = c0
-         Tmat  (:,:,k) = c0
+         do ij = 1, icells
+            Tin_init (ij,k) = Tin(ij,k)   ! beginning of time step
+            Tin_start(ij,k) = Tin(ij,k)   ! beginning of iteration
+         enddo
       enddo
 
       !-----------------------------------------------------------------
@@ -1349,7 +1331,7 @@
 
       call conductivity (nx_block, ny_block,
      &                   l_snow,   icells, 
-     &                   indxi,    indxj,
+     &                   indxi,    indxj,    indxij,
      &                   hilyr,    hslyr,
      &                   Tin,      kh )
 
@@ -1368,13 +1350,26 @@
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)
-               if (.not.converged(i,j)) then
+               if (.not.converged(ij)) then
                   isolve = isolve + 1
                   indxii(isolve) = i
                   indxjj(isolve) = j
+                  indxij(isolve) = ij
                endif
             enddo               ! ij
          endif
+
+         allocate(   sbdiag(isolve,nilyr+nslyr+1))
+         allocate(     diag(isolve,nilyr+nslyr+1))
+         allocate(   spdiag(isolve,nilyr+nslyr+1))
+         allocate(      rhs(isolve,nilyr+nslyr+1))
+         allocate(     Tmat(isolve,nilyr+nslyr+1))
+         allocate(     etai(isolve,nilyr))
+         allocate(Tsf_start(isolve))
+         allocate(     dTsf(isolve))
+         allocate(dfsurf_dT(isolve))
+         allocate(  avg_Tsi(isolve))
+         allocate(     enew(isolve))
 
       !-----------------------------------------------------------------
       ! Update radiative and turbulent fluxes and their derivatives
@@ -1382,8 +1377,8 @@
       !-----------------------------------------------------------------
 
          call surface_fluxes (nx_block,    ny_block,
-     &                        isolve,     
-     &                        indxii,      indxjj,
+     &                        isolve,      icells,
+     &                        indxii,      indxjj,    indxij,
      &                        Tsf,         fswsfc,
      &                        rhoa,        flw,
      &                        potT,        Qa,
@@ -1397,8 +1392,7 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, isolve
-            i = indxii(ij)   ! NOTE: not indxi and indxj
-            j = indxjj(ij)
+            m = indxij(ij)
 
       !-----------------------------------------------------------------
       ! Compute conductive flux at top surface, fcondtop.
@@ -1406,25 +1400,25 @@
       !  than zero (but not less than -puny).
       !-----------------------------------------------------------------
 
-            if (l_snow(i,j)) then
-               fcondtop(i,j) = kh(i,j,1) * (Tsf(i,j) - Tsn(i,j,1))
+            if (l_snow(m)) then
+               fcondtop(m) = kh(m,1) * (Tsf(m) - Tsn(m,1))
             else
-               fcondtop(i,j) = kh(i,j,1+nslyr) * (Tsf(i,j) - Tin(i,j,1))
+               fcondtop(m) = kh(m,1+nslyr) * (Tsf(m) - Tin(m,1))
             endif
 
-            if (fsurf(i,j) < fcondtop(i,j))
-     &           Tsf(i,j) = min (Tsf(i,j), -puny)
+            if (fsurf(m) < fcondtop(m))
+     &           Tsf(m) = min (Tsf(m), -puny)
 
       !-----------------------------------------------------------------
       ! Save surface temperature at start of iteration
       !-----------------------------------------------------------------
 
-            Tsf_start(i,j) = Tsf(i,j)
+            Tsf_start(ij) = Tsf(m)
 
-            if (Tsf(i,j) <= -puny) then
-               l_cold(i,j) = .true.
+            if (Tsf(m) <= -puny) then
+               l_cold(m) = .true.
             else
-               l_cold(i,j) = .false.
+               l_cold(m) = .false.
             endif
          enddo                  ! ij
 
@@ -1437,23 +1431,22 @@
 
          do k = 1, nilyr
             do ij = 1, isolve
-               i = indxii(ij)
-               j = indxjj(ij)
+               m = indxij(ij)
 
                if (l_brine) then
                   ci = cp_ice - Lfresh*Tmlt(k) / 
-     &                          (Tin(i,j,k)*Tin_init(i,j,k))
+     &                          (Tin(m,k)*Tin_init(m,k))
                else
                   ci = cp_ice
                endif
-               etai(i,j,k) = dt_rhoi_hlyr(i,j) / ci
+               etai(ij,k) = dt_rhoi_hlyr(m) / ci
 
             enddo
          enddo
 
          call get_matrix_elements (nx_block, ny_block,
-     &                             isolve,     
-     &                             indxii,   indxjj,   
+     &                             isolve,   icells,
+     &                             indxii,   indxjj,   indxij,
      &                             l_snow,   l_cold,
      &                             Tsf,      Tbot,
      &                             fsurf,    dfsurf_dT,
@@ -1468,7 +1461,7 @@
       !-----------------------------------------------------------------
 
          call tridiag_solver (nx_block, ny_block,
-     &                        isolve,     
+     &                        isolve,   icells,
      &                        indxii,   indxjj,
      &                        nmat,     sbdiag,
      &                        diag,     spdiag, 
@@ -1508,21 +1501,20 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, isolve
-            i = indxii(ij)
-            j = indxjj(ij)
+            m = indxij(ij)
 
       !-----------------------------------------------------------------
       ! Reload Tsf from matrix solution
       !-----------------------------------------------------------------
 
-            if (l_cold(i,j)) then
-               if (l_snow(i,j)) then
-                  Tsf(i,j) = Tmat(i,j,1)
+            if (l_cold(m)) then
+               if (l_snow(m)) then
+                  Tsf(m) = Tmat(ij,1)
                else
-                  Tsf(i,j) = Tmat(i,j,1+nslyr)
+                  Tsf(m) = Tmat(ij,1+nslyr)
                endif
             else                ! melting surface
-               Tsf(i,j) = c0
+               Tsf(m) = c0
             endif
 
       !-----------------------------------------------------------------
@@ -1532,11 +1524,11 @@
       ! Initialize energy.
       !-----------------------------------------------------------------
 
-            converged(i,j) = .true.
-            dTsf(i,j) = Tsf(i,j) - Tsf_start(i,j)
+            converged(m) = .true.
+            dTsf(ij) = Tsf(m) - Tsf_start(ij)
             avg_Tsf      = c0
-            avg_Tsi(i,j) = c0
-            enew(i,j) = c0
+            avg_Tsi(ij) = c0
+            enew(ij) = c0
 
       !-----------------------------------------------------------------
       ! Condition 1: check for Tsf > 0
@@ -1544,11 +1536,11 @@
       ! internal temps below their melting temps.
       !-----------------------------------------------------------------
 
-            if (Tsf(i,j) > puny) then
-               Tsf(i,j) = c0
-               dTsf(i,j) = -Tsf_start(i,j)
-               if (l_brine) avg_Tsi(i,j) = c1   ! avg with starting temp
-               converged(i,j) = .false.
+            if (Tsf(m) > puny) then
+               Tsf(m) = c0
+               dTsf(ij) = -Tsf_start(ij)
+               if (l_brine) avg_Tsi(ij) = c1   ! avg with starting temp
+               converged(m) = .false.
                all_converged = .false.
 
       !-----------------------------------------------------------------
@@ -1557,17 +1549,17 @@
       !-----------------------------------------------------------------
 
             elseif (niter > 1                  ! condition (2)
-     &        .and. Tsf_start(i,j) <= -puny
-     &        .and. abs(dTsf(i,j)) > puny
-     &        .and. abs(dTsf_prev(i,j)) > puny
-     &        .and. -dTsf(i,j)/(dTsf_prev(i,j)+puny*puny) > p5) then
+     &        .and. Tsf_start(ij) <= -puny
+     &        .and. abs(dTsf(ij)) > puny
+     &        .and. abs(dTsf_prev(m)) > puny
+     &        .and. -dTsf(ij)/(dTsf_prev(m)+puny*puny) > p5) then
 
                if (l_brine) then ! average with starting temp
                   avg_Tsf  = c1    
-                  avg_Tsi(i,j) = c1
+                  avg_Tsi(ij) = c1
                endif
-               dTsf(i,j) = p5 * dTsf(i,j)
-               converged(i,j) = .false.
+               dTsf(ij) = p5 * dTsf(ij)
+               converged(m) = .false.
                all_converged = .false.
             endif
 
@@ -1575,8 +1567,8 @@
       ! If condition 2 failed, average new surface temperature with
       !  starting value.
       !-----------------------------------------------------------------
-            Tsf(i,j)  = Tsf(i,j)
-     &                + avg_Tsf * p5 * (Tsf_start(i,j) - Tsf(i,j))
+            Tsf(m)  = Tsf(m)
+     &                + avg_Tsf * p5 * (Tsf_start(ij) - Tsf(m))
 
          enddo  ! ij
 
@@ -1585,34 +1577,33 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             do ij = 1, isolve
-               i = indxii(ij)
-               j = indxjj(ij)
+               m = indxij(ij)
 
       !-----------------------------------------------------------------
       ! Reload Tsn from matrix solution
       !-----------------------------------------------------------------
 
-               if (l_snow(i,j)) then
-                  Tsn(i,j,k) = Tmat(i,j,k+1)
+               if (l_snow(m)) then
+                  Tsn(m,k) = Tmat(ij,k+1)
                else
-                  Tsn(i,j,k) = c0
+                  Tsn(m,k) = c0
                endif
-               if (l_brine) Tsn(i,j,k) = min(Tsn(i,j,k), c0)
+               if (l_brine) Tsn(m,k) = min(Tsn(m,k), c0)
 
       !-----------------------------------------------------------------
       ! If condition 1 or 2 failed, average new snow layer
       !  temperatures with their starting values.
       !-----------------------------------------------------------------
-               Tsn(i,j,k) = Tsn(i,j,k)
-     &                   + avg_Tsi(i,j)*p5*(Tsn_start(i,j,k)-Tsn(i,j,k))
+               Tsn(m,k) = Tsn(m,k)
+     &                   + avg_Tsi(ij)*p5*(Tsn_start(m,k)-Tsn(m,k))
 
       !-----------------------------------------------------------------
       ! Compute qsn and increment new energy.
       !-----------------------------------------------------------------
-               qsn(i,j,k) = -rhos * (Lfresh - cp_ice*Tsn(i,j,k))
-               enew(i,j) = enew(i,j) + hslyr(i,j) * qsn(i,j,k)
+               qsn(m,k) = -rhos * (Lfresh - cp_ice*Tsn(m,k))
+               enew(ij) = enew(ij) + hslyr(m) * qsn(m,k)
 
-               Tsn_start(i,j,k) = Tsn(i,j,k) ! for next iteration
+               Tsn_start(m,k) = Tsn(m,k) ! for next iteration
 
             enddo               ! ij
          enddo                  ! nslyr
@@ -1622,31 +1613,30 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             do ij = 1, isolve
-               i = indxii(ij)
-               j = indxjj(ij)
+               m = indxij(ij)
 
       !-----------------------------------------------------------------
       ! Reload Tin from matrix solution
       !-----------------------------------------------------------------
-               Tin(i,j,k) = Tmat(i,j,k+1+nslyr)
-               if (l_brine) Tin(i,j,k) = min(Tin(i,j,k), Tmlt(k))
+               Tin(m,k) = Tmat(ij,k+1+nslyr)
+               if (l_brine) Tin(m,k) = min(Tin(m,k), Tmlt(k))
 
       !-----------------------------------------------------------------
       ! If condition 1 or 2 failed, average new ice layer
       !  temperatures with their starting values.
       !-----------------------------------------------------------------
-               Tin(i,j,k) = Tin(i,j,k)
-     &                   + avg_Tsi(i,j)*p5*(Tin_start(i,j,k)-Tin(i,j,k))
+               Tin(m,k) = Tin(m,k)
+     &                   + avg_Tsi(ij)*p5*(Tin_start(m,k)-Tin(m,k))
 
       !-----------------------------------------------------------------
       ! Compute qin and increment new energy.
       !-----------------------------------------------------------------
-               qin(i,j,k) = -rhoi * (cp_ice*(Tmlt(k)-Tin(i,j,k))
-     &                             + Lfresh*(c1-Tmlt(k)/Tin(i,j,k))
+               qin(m,k) = -rhoi * (cp_ice*(Tmlt(k)-Tin(m,k))
+     &                             + Lfresh*(c1-Tmlt(k)/Tin(m,k))
      &                             - cp_ocn*Tmlt(k))
-               enew(i,j) = enew(i,j) + hilyr(i,j) * qin(i,j,k)
+               enew(ij) = enew(ij) + hilyr(m) * qin(m,k)
 
-               Tin_start(i,j,k) = Tin(i,j,k) ! for next iteration
+               Tin_start(m,k) = Tin(m,k) ! for next iteration
 
             enddo               ! ij
          enddo                  ! nilyr
@@ -1657,13 +1647,14 @@
          do ij = 1, isolve
             i = indxii(ij)
             j = indxjj(ij)
+            m = indxij(ij)
 
       !-----------------------------------------------------------------
       ! Condition 3: check for large change in Tsf
       !-----------------------------------------------------------------
 
-            if (abs(dTsf(i,j)) > Tsf_errmax) then
-               converged(i,j) = .false.
+            if (abs(dTsf(ij)) > Tsf_errmax) then
+               converged(m) = .false.
                all_converged = .false.
             endif
 
@@ -1671,15 +1662,15 @@
       ! Condition 4: check for fsurf < fcondtop with Tsf > 0
       !-----------------------------------------------------------------
 
-            fsurf(i,j) = fsurf(i,j) + dTsf(i,j)*dfsurf_dT(i,j)
-            if (l_snow(i,j)) then
-               fcondtop(i,j) = kh(i,j,1) * (Tsf(i,j)-Tsn(i,j,1))
+            fsurf(m) = fsurf(m) + dTsf(ij)*dfsurf_dT(ij)
+            if (l_snow(m)) then
+               fcondtop(m) = kh(m,1) * (Tsf(m)-Tsn(m,1))
             else
-               fcondtop(i,j) = kh(i,j,1+nslyr) * (Tsf(i,j)-Tin(i,j,1))
+               fcondtop(m) = kh(m,1+nslyr) * (Tsf(m)-Tin(m,1))
             endif
 
-            if (Tsf(i,j) > -puny .and. fsurf(i,j) < fcondtop(i,j)) then
-               converged(i,j) = .false.
+            if (Tsf(m) > -puny .and. fsurf(m) < fcondtop(m)) then
+               converged(m) = .false.
                all_converged = .false.
             endif
 
@@ -1688,23 +1679,35 @@
       ! Change in internal ice energy should equal net energy input.
       !-----------------------------------------------------------------
 
-            fcondbot(i,j) = kh(i,j,1+nslyr+nilyr) *
-     &                     (Tin(i,j,nilyr)   - Tbot(i,j))
+            fcondbot(m) = kh(m,1+nslyr+nilyr) *
+     &                     (Tin(m,nilyr)   - Tbot(i,j))
 
-            ferr = abs( (enew(i,j)-einit(i,j))/dt
-     &           - (fcondtop(i,j) - fcondbot(i,j) + fswint(i,j)) )
+            ferr = abs( (enew(ij)-einit(m))/dt
+     &           - (fcondtop(m) - fcondbot(m) + fswint(i,j)) )
 
             ! factor of 0.9 allows for roundoff errors later
             if (ferr > 0.9_dbl_kind*ferrmax) then         ! condition (5)
-               converged(i,j) = .false.
+               converged(m) = .false.
                all_converged = .false.
             endif
 
-            dTsf_prev(i,j) = dTsf(i,j)
+            dTsf_prev(m) = dTsf(ij)
 
          enddo                  ! ij
 
-      enddo                     ! temperature iteration
+         deallocate(sbdiag)
+         deallocate(diag)
+         deallocate(spdiag)
+         deallocate(rhs)
+         deallocate(Tmat)
+         deallocate(etai)
+         deallocate(Tsf_start)
+         deallocate(dTsf)
+         deallocate(dfsurf_dT)
+         deallocate(avg_Tsi)
+         deallocate(enew)
+
+      enddo                     ! temperature iteration niter
 
       if (.not.all_converged) then
 
@@ -1715,26 +1718,26 @@
       !-----------------------------------------------------------------
       ! Check for convergence failures.
       !-----------------------------------------------------------------
-            if (.not.converged(i,j)) then
+            if (.not.converged(ij)) then
                write(nu_diag,*) 'Thermo iteration does not converge,',
      &                          'istep1, my_task, i, j:',
      &                           istep1, my_task, i, j
-               write(nu_diag,*) 'Ice thickness:',  hilyr(i,j)*nilyr
-               write(nu_diag,*) 'Snow thickness:', hslyr(i,j)*nslyr
-               write(nu_diag,*) 'dTsf, Tsf_errmax:',dTsf(i,j),Tsf_errmax
-               write(nu_diag,*) 'Tsf:', Tsf(i,j)
-               write(nu_diag,*) 'fsurf:', fsurf(i,j)
+               write(nu_diag,*) 'Ice thickness:',  hilyr(ij)*nilyr
+               write(nu_diag,*) 'Snow thickness:', hslyr(ij)*nslyr
+               write(nu_diag,*) 'dTsf, Tsf_errmax:',dTsf_prev(ij),Tsf_errmax
+               write(nu_diag,*) 'Tsf:', Tsf(ij)
+               write(nu_diag,*) 'fsurf:', fsurf(ij)
                write(nu_diag,*) 'fcondtop, fcondbot, fswint',
-     &                         fcondtop(i,j), fcondbot(i,j), fswint(i,j)
+     &                         fcondtop(ij), fcondbot(ij), fswint(i,j)
                write(nu_diag,*) 'Flux conservation error =', ferr
                write(nu_diag,*) 'Initial snow temperatures:'
-               write(nu_diag,*) (Tsn_init(i,j,k),k=1,nslyr)
+               write(nu_diag,*) (Tsn_init(ij,k),k=1,nslyr)
                write(nu_diag,*) 'Initial ice temperatures:'
-               write(nu_diag,*) (Tin_init(i,j,k),k=1,nilyr)
+               write(nu_diag,*) (Tin_init(ij,k),k=1,nilyr)
                write(nu_diag,*) 'Final snow temperatures:'
-               write(nu_diag,*) (Tsn(i,j,k),k=1,nslyr)
+               write(nu_diag,*) (Tsn(ij,k),k=1,nslyr)
                write(nu_diag,*) 'Final ice temperatures:'
-               write(nu_diag,*) (Tin(i,j,k),k=1,nilyr)
+               write(nu_diag,*) (Tin(ij,k),k=1,nilyr)
                l_stop = .true.
                istop = i
                jstop = j
@@ -1751,9 +1754,9 @@
          j = indxj(ij)
 
          ! update fluxes that depend on Tsf
-         flwoutn(i,j) = flwoutn(i,j) + dTsf(i,j) * dflwout_dT(i,j)
-         fsensn(i,j)  = fsensn(i,j)  + dTsf(i,j) * dfsens_dT(i,j)
-         flatn(i,j)   = flatn(i,j)   + dTsf(i,j) * dflat_dT(i,j)
+         flwoutn(i,j) = flwoutn(i,j) + dTsf_prev(ij) * dflwout_dT(ij)
+         fsensn(i,j)  = fsensn(i,j)  + dTsf_prev(ij) * dfsens_dT(ij)
+         flatn(i,j)   = flatn(i,j)   + dTsf_prev(ij) * dflat_dT(ij)
 
          ! absorbed shortwave flux for coupler
          fswabsn(i,j) = fswsfc(i,j) + fswint(i,j) + fswthrun(i,j)
@@ -1783,7 +1786,7 @@
 !
       subroutine conductivity (nx_block, ny_block,
      &                         l_snow,   icells, 
-     &                         indxi,    indxj,
+     &                         indxi,    indxj,    indxij,
      &                         hilyr,    hslyr, 
      &                         Tin,      kh)
 !
@@ -1795,7 +1798,7 @@
      &   nx_block, ny_block  ! block dimensions
      &,  icells          ! number of cells with aicen > puny
 
-      logical (kind=log_kind), dimension(nx_block,ny_block),
+      logical (kind=log_kind), dimension(icells),
      &   intent(in) ::
      &   l_snow          ! true if snow temperatures are computed
 
@@ -1803,15 +1806,19 @@
      &   intent(in) ::
      &   indxi, indxj    ! compressed indices for cells with aicen > puny
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
+      integer (kind=int_kind), dimension (icells),
+     &   intent(in) ::
+     &   indxij          ! compressed 1D index for cells not converged
+
+      real (kind=dbl_kind), dimension (icells), intent(in) ::
      &   hilyr           ! ice layer thickness (same for all ice layers)
      &,  hslyr           ! snow layer thickness (same for all snow layers)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr),
+      real (kind=dbl_kind), dimension (icells,nilyr),
      &   intent(in) ::
      &   Tin             ! internal ice layer temperatures
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+nslyr+1),
+      real (kind=dbl_kind), dimension (icells,nilyr+nslyr+1),
      &   intent(out) ::
      &   kh              ! effective conductivity at interfaces (W m-2 deg-1)
 !
@@ -1823,65 +1830,48 @@
 
       integer (kind=int_kind) ::
      &   i, j            ! horizontal indices
-     &,  ij              ! horizontal index, combines i and j loops
+     &,  ij, m           ! horizontal indices, combine i and j loops
      &,  k               ! vertical index
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr) ::
+      real (kind=dbl_kind), dimension (icells,nilyr) ::
      &   kilyr           ! thermal cond at ice layer midpoints (W m-1 deg-1)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr) ::
+      real (kind=dbl_kind), dimension (icells,nslyr) ::
      &   kslyr           ! thermal cond at snow layer midpoints (W m-1 deg-1)
-
-      ! initialize
-      do k = 1, nilyr+nslyr+1
-         kh(:,:,k) = c0
-      enddo
 
       ! interior snow layers (simple for now, but may be fancier later)
       do k = 1, nslyr
-         kslyr(:,:,k) = c0
-
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            kslyr(i,j,k) = ksno
+            kslyr(ij,k) = ksno
          enddo
       enddo                     ! nslyr
 
       ! interior ice layers
       do k = 1, nilyr
-         kilyr(:,:,k) = c0
-
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
-            kilyr(i,j,k) = kice + betak*salin(k)/min(-puny,Tin(i,j,k))
-            kilyr(i,j,k) = max (kilyr(i,j,k), kimin)
+            kilyr(ij,k) = kice + betak*salin(k)/min(-puny,Tin(ij,k))
+            kilyr(ij,k) = max (kilyr(ij,k), kimin)
          enddo
       enddo                     ! nilyr
 
       ! top snow interface, top and bottom ice interfaces
       do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-
          ! top of snow layer; top surface of top ice layer
-         if (l_snow(i,j)) then
-            kh(i,j,1)       = c2 * kslyr(i,j,1) / hslyr(i,j)
-            kh(i,j,1+nslyr) = c2 * kslyr(i,j,nslyr) * kilyr(i,j,1) /
-     &                       ( kslyr(i,j,nslyr)*hilyr(i,j) + 
-     &                         kilyr(i,j,1    )*hslyr(i,j) )
+         if (l_snow(ij)) then
+            kh(ij,1)       = c2 * kslyr(ij,1) / hslyr(ij)
+            kh(ij,1+nslyr) = c2 * kslyr(ij,nslyr) * kilyr(ij,1) /
+     &                       ( kslyr(ij,nslyr)*hilyr(ij) + 
+     &                         kilyr(ij,1    )*hslyr(ij) )
          else
-            kh(i,j,1)       = c0
-            kh(i,j,1+nslyr) = c2 * kilyr(i,j,1) / hilyr(i,j)
+            kh(ij,1)       = c0
+            kh(ij,1+nslyr) = c2 * kilyr(ij,1) / hilyr(ij)
          endif
 
          ! bottom surface of bottom ice layer
-         kh(i,j,1+nslyr+nilyr) = c2 * kilyr(i,j,nilyr) / hilyr(i,j)
+         kh(ij,1+nslyr+nilyr) = c2 * kilyr(ij,nilyr) / hilyr(ij)
 
       enddo                     ! ij
 
@@ -1890,14 +1880,11 @@
       if (nslyr > 1) then
          do k = 2, nslyr
             do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-
-               if (l_snow(i,j)) then
-                  kh(i,j,k) = c2 * kslyr(i,j,k-1) * kslyr(i,j,k) /
-     &                      ((kslyr(i,j,k-1) + kslyr(i,j,k))*hslyr(i,j))
+               if (l_snow(ij)) then
+                  kh(ij,k) = c2 * kslyr(ij,k-1) * kslyr(ij,k) /
+     &                      ((kslyr(ij,k-1) + kslyr(ij,k))*hslyr(ij))
                else
-                  kh(i,j,k) = c0
+                  kh(ij,k) = c0
                endif
             enddo                  ! ij
          enddo                     ! nilyr
@@ -1906,11 +1893,8 @@
       ! interior ice interfaces
       do k = 2, nilyr
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
-            kh(i,j,k+nslyr) = c2 * kilyr(i,j,k-1) * kilyr(i,j,k) /
-     &                      ((kilyr(i,j,k-1) + kilyr(i,j,k))*hilyr(i,j))
+            kh(ij,k+nslyr) = c2 * kilyr(ij,k-1) * kilyr(ij,k) /
+     &                      ((kilyr(ij,k-1) + kilyr(ij,k))*hilyr(ij))
          enddo                  ! ij
       enddo                     ! nilyr
 
@@ -1934,8 +1918,8 @@
 ! !INTERFACE:
 !
       subroutine surface_fluxes (nx_block,   ny_block,
-     &                           isolve,     
-     &                           indxii,     indxjj,
+     &                           isolve,     icells,
+     &                           indxii,     indxjj,    indxij,
      &                           Tsf,        fswsfc,
      &                           rhoa,       flw,
      &                           potT,       Qa,
@@ -1952,14 +1936,20 @@
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
      &,  isolve              ! number of cells with temps not converged
+     &,  icells              ! number of cells with ice present
 
-      integer (kind=int_kind), dimension(nx_block*ny_block),
+      integer (kind=int_kind), dimension(icells),
      &   intent(in) ::
      &   indxii, indxjj  ! compressed indices for cells not converged
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
+      integer (kind=int_kind), dimension (icells) ::
+     &   indxij          ! compressed 1D index for cells not converged
+
+      real (kind=dbl_kind), dimension (icells), intent(in) ::
      &   Tsf             ! ice/snow surface temperature, Tsfcn
-     &,  fswsfc          ! SW absorbed at ice/snow surface (W m-2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
+     &   fswsfc          ! SW absorbed at ice/snow surface (W m-2)
      &,  rhoa            ! air density (kg/m^3)
      &,  flw             ! incoming longwave radiation (W/m^2)
      &,  potT            ! air potential temperature  (K)
@@ -1972,20 +1962,23 @@
      &   fsensn          ! surface downward sensible heat (W m-2)
      &,  flatn           ! surface downward latent heat (W m-2)
      &,  flwoutn         ! upward LW at surface (W m-2)
-     &,  fsurf           ! net flux to top surface, not including fcondtop
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
+      real (kind=dbl_kind), dimension (icells),
      &   intent(inout) ::
      &   dfsens_dT       ! deriv of fsens wrt Tsf (W m-2 deg-1)
      &,  dflat_dT        ! deriv of flat wrt Tsf (W m-2 deg-1)
      &,  dflwout_dT      ! deriv of flwout wrt Tsf (W m-2 deg-1)
-     &,  dfsurf_dT       ! derivative of fsurf wrt Tsf
+     &,  fsurf           ! net flux to top surface, not including fcondtop
+
+      real (kind=dbl_kind), dimension (isolve),
+     &   intent(inout) ::
+     &   dfsurf_dT       ! derivative of fsurf wrt Tsf
 !
 !EOP
 !
       integer (kind=int_kind) ::
      &   i, j            ! horizontal indices
-     &,  ij              ! horizontal index, combines i and j loops
+     &,  ij, m           ! horizontal indices, combine i and j loops
      &,  k               ! ice layer index
 
       real (kind=dbl_kind) ::
@@ -2002,9 +1995,10 @@
       do ij = 1, isolve
          i = indxii(ij)         ! NOTE: not indxi and indxj
          j = indxjj(ij)
+         m = indxij(ij)
 
          ! ice surface temperature in Kelvin
-         TsfK = Tsf(i,j) + Tffresh
+         TsfK = Tsf(m) + Tffresh
          tmpvar = c1/TsfK
 
          ! saturation humidity
@@ -2021,14 +2015,14 @@
          flatn(i,j)  = lhcoef(i,j) * (Qa(i,j) - Qsfc)
 
          ! derivatives wrt surface temp
-         dflwout_dT(i,j) = - emissivity*stefan_boltzmann * c4*TsfK**3
-         dfsens_dT(i,j)  = - shcoef(i,j)
-         dflat_dT(i,j)   = - lhcoef(i,j) * dQsfcdT
+         dflwout_dT(m) = - emissivity*stefan_boltzmann * c4*TsfK**3
+         dfsens_dT(m)  = - shcoef(i,j)
+         dflat_dT(m)   = - lhcoef(i,j) * dQsfcdT
 
-         fsurf(i,j) = fswsfc(i,j) + flwdabs + flwoutn(i,j)
+         fsurf(m) = fswsfc(i,j) + flwdabs + flwoutn(i,j)
      &              + fsensn(i,j) + flatn(i,j)
-         dfsurf_dT(i,j) = dflwout_dT(i,j)
-     &                   + dfsens_dT(i,j) + dflat_dT(i,j)
+         dfsurf_dT(ij) = dflwout_dT(m)
+     &                   + dfsens_dT(m) + dflat_dT(m)
 
       enddo                     ! ij
 
@@ -2055,8 +2049,8 @@
 ! !INTERFACE:
 !
       subroutine get_matrix_elements (nx_block, ny_block,
-     &                                isolve,     
-     &                                indxii,   indxjj,   
+     &                                isolve,   icells,
+     &                                indxii,   indxjj,   indxij,
      &                                l_snow,   l_cold,
      &                                Tsf,      Tbot,
      &                                fsurf,    dfsurf_dT,
@@ -2073,41 +2067,54 @@
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
      &,  isolve          ! number of cells with temps not converged
+     &,  icells          ! number of cells with aicen > puny
 
-      integer (kind=int_kind), dimension(nx_block*ny_block),
+      integer (kind=int_kind), dimension(icells),
      &   intent(in) ::
      &   indxii, indxjj  ! compressed indices for cells not converged
 
-      logical (kind=log_kind), dimension (nx_block,ny_block),
+      integer (kind=int_kind), dimension (icells),
+     &   intent(in) ::
+     &   indxij          ! compressed 1D index for cells not converged
+
+      logical (kind=log_kind), dimension (icells),
      &   intent(in) ::
      &   l_snow          ! true if snow temperatures are computed
      &,  l_cold          ! true if surface temperature is computed
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
+      real (kind=dbl_kind), dimension (icells), intent(in) ::
      &   Tsf             ! ice/snow top surface temp (deg C)
-     &,  Tbot            ! ice bottom surface temperature (deg C)
      &,  fsurf           ! net flux to top surface, not including fcondtop
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
+     &   Tbot            ! ice bottom surface temperature (deg C)
+
+      real (kind=dbl_kind), dimension (isolve), intent(in) ::
      &   dfsurf_dT       ! derivative of fsurf wrt Tsf
+
+      real (kind=dbl_kind), dimension (isolve,nilyr),
+     &   intent(in) ::
+     &   etai            ! dt / (rho*cp*h) for ice layers
+
+      real (kind=dbl_kind), dimension (icells,nilyr),
+     &   intent(in) ::
+     &   Tin_init        ! ice temp at beginning of time step
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr),
      &   intent(in) ::
-     &   etai            ! dt / (rho*cp*h) for ice layers
-     &,  Tin_init        ! ice temp at beginning of time step
-     &,  Iswabs          ! absorbed SW flux in ice layers
+     &   Iswabs          ! absorbed SW flux in ice layers
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr),
+      real (kind=dbl_kind), dimension (icells,nslyr),
      &   intent(in) ::
      &   etas            ! dt / (rho*cp*h) for snow layers
      &,  Tsn_init        ! snow temp at beginning of time step
                          ! Note: no absorbed SW in snow layers
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr+nilyr+1),
+      real (kind=dbl_kind), dimension (icells,nslyr+nilyr+1),
      &   intent(in) ::
      &   kh              ! effective conductivity at layer interfaces
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr+nilyr+1),
+      real (kind=dbl_kind), dimension (isolve,nslyr+nilyr+1),
      &   intent(inout) ::
      &   sbdiag          ! sub-diagonal matrix elements
      &,  diag            ! diagonal matrix elements
@@ -2118,9 +2125,25 @@
 !
       integer (kind=int_kind) ::
      &   i, j            ! horizontal indices
-     &,  ij              ! horizontal index, combines i and j loops
+     &,  ij, m           ! horizontal indices, combine i and j loops
      &,  k, ks, ki, kr   ! vertical indices and row counters
 
+      !-----------------------------------------------------------------
+      ! Initialize matrix elements.
+      ! Note: When we do not need to solve for the surface or snow
+      !       temperature, we solve dummy equations with solution T = 0.
+      !       Ice layers are fully initialized below.
+      !-----------------------------------------------------------------
+
+      do k = 1, nslyr+1
+         do ij = 1, isolve
+            sbdiag(ij,k) = c0
+            diag  (ij,k) = c1
+            spdiag(ij,k) = c0
+            rhs   (ij,k) = c0
+         enddo
+      enddo
+            
       !-----------------------------------------------------------------
       ! Compute matrix elements
       !
@@ -2134,52 +2157,89 @@
       do ij = 1, isolve
          i = indxii(ij)
          j = indxjj(ij)
+         m = indxij(ij)
 
       !-----------------------------------------------------------------
       ! Tsf equation for case of cold surface (with or without snow)
       !-----------------------------------------------------------------
-         if (l_cold(i,j)) then
-            if (l_snow(i,j)) then
+         if (l_cold(m)) then
+            if (l_snow(m)) then
                k = 1
             else                ! no snow
                k = 1 + nslyr
             endif
             kr = k
             
-            sbdiag(i,j,kr) = c0
-            diag  (i,j,kr) = dfsurf_dT(i,j) - kh(i,j,k)
-            spdiag(i,j,kr) = kh(i,j,k)
-            rhs   (i,j,kr) = dfsurf_dT(i,j)*Tsf(i,j) - fsurf(i,j)
-            
+            sbdiag(ij,kr) = c0
+            diag  (ij,kr) = dfsurf_dT(ij) - kh(m,k)
+            spdiag(ij,kr) = kh(m,k)
+            rhs   (ij,kr) = dfsurf_dT(ij)*Tsf(m) - fsurf(m)
+
          endif                  ! l_cold
-      enddo                     ! ij
 
       !-----------------------------------------------------------------
       ! top snow layer
       !-----------------------------------------------------------------
-      k = 1
-      kr = 2
+!        k = 1
+!        kr = 2
 
-      do ij = 1, isolve
-         i = indxii(ij)
-         j = indxjj(ij)
-
-         if (l_snow(i,j)) then
-            if (l_cold(i,j)) then
-               sbdiag(i,j,kr) = -etas(i,j,k) * kh(i,j,k)
-               spdiag(i,j,kr) = -etas(i,j,k) * kh(i,j,k+1)
-               diag  (i,j,kr) = c1
-     &                        + etas(i,j,k) * (kh(i,j,k) + kh(i,j,k+1))
-               rhs   (i,j,kr) = Tsn_init(i,j,k)
+         if (l_snow(m)) then
+            if (l_cold(m)) then
+               sbdiag(ij,2) = -etas(m,1) * kh(m,1)
+               spdiag(ij,2) = -etas(m,1) * kh(m,2)
+               diag  (ij,2) = c1
+     &                        + etas(m,1) * (kh(m,1) + kh(m,2))
+               rhs   (ij,2) = Tsn_init(m,1)
             else                ! melting surface
-               sbdiag(i,j,kr) = c0
-               spdiag(i,j,kr) = -etas(i,j,k) * kh(i,j,k+1)
-               diag  (i,j,kr) = c1
-     &                        + etas(i,j,k) * (kh(i,j,k) + kh(i,j,k+1))
-               rhs   (i,j,kr) = Tsn_init(i,j,k)
-     &                        + etas(i,j,k)*kh(i,j,k)*Tsf(i,j)
+               sbdiag(ij,2) = c0
+               spdiag(ij,2) = -etas(m,1) * kh(m,2)
+               diag  (ij,2) = c1
+     &                        + etas(m,1) * (kh(m,1) + kh(m,2))
+               rhs   (ij,2) = Tsn_init(m,1)
+     &                        + etas(m,1)*kh(m,1)*Tsf(m)
             endif               ! l_cold
          endif                  ! l_snow
+
+      !-----------------------------------------------------------------
+      ! top ice layer
+      !-----------------------------------------------------------------
+
+         ki = 1
+         k  = ki + nslyr
+         kr = k + 1
+
+         if (.not.l_snow(m) .and. .not.l_cold(m)) then
+            sbdiag(ij,kr) = c0
+            spdiag(ij,kr) = -etai(ij,ki) * kh(m,k+1)
+            diag  (ij,kr) = c1
+     &                     + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+            rhs   (ij,kr) = Tin_init(m,ki)
+     &                     + etai(ij,ki)*Iswabs(i,j,ki)
+     &                     + etai(ij,ki)*kh(m,k)*Tsf(m)
+         else
+            sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
+            spdiag(ij,kr) = -etai(ij,ki) * kh(m,k+1)
+            diag  (ij,kr) = c1
+     &                     + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+            rhs   (ij,kr) = Tin_init(m,ki)
+     &                     + etai(ij,ki)*Iswabs(i,j,ki)
+         endif
+
+      !-----------------------------------------------------------------
+      ! bottom ice layer
+      !-----------------------------------------------------------------
+
+         ki = nilyr
+         k  = ki + nslyr
+         kr = k + 1
+      
+         sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
+         spdiag(ij,kr) = c0
+         diag  (ij,kr) = c1 
+     &                  + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+         rhs   (ij,kr) = Tin_init(m,ki)
+     &                  + etai(ij,ki)*Iswabs(i,j,ki)
+     &                  + etai(ij,ki)*kh(m,k+1)*Tbot(i,j)
       enddo                     ! ij
       
       !-----------------------------------------------------------------
@@ -2192,51 +2252,19 @@
             kr = k + 1
 
             do ij = 1, isolve
-               i = indxii(ij)
-               j = indxjj(ij)
+               m = indxij(ij)
 
-               if (l_snow(i,j)) then
-                  sbdiag(i,j,kr) = -etas(i,j,k) * kh(i,j,k)
-                  spdiag(i,j,kr) = -etas(i,j,k) * kh(i,j,k+1)
-                  diag  (i,j,kr) = c1
-     &                         + etas(i,j,k) * (kh(i,j,k) + kh(i,j,k+1))
-                  rhs   (i,j,kr) = Tsn_init(i,j,k)
+               if (l_snow(m)) then
+                  sbdiag(ij,kr) = -etas(m,k) * kh(m,k)
+                  spdiag(ij,kr) = -etas(m,k) * kh(m,k+1)
+                  diag  (ij,kr) = c1
+     &                         + etas(m,k) * (kh(m,k) + kh(m,k+1))
+                  rhs   (ij,kr) = Tsn_init(m,k)
                endif
             enddo               ! ij
          enddo                  ! nslyr
 
       endif                     ! nslyr > 1
-
-      !-----------------------------------------------------------------
-      ! top ice layer
-      !-----------------------------------------------------------------
-
-      ki = 1
-      k  = ki + nslyr
-      kr = k + 1
-
-      do ij = 1, isolve
-         i = indxii(ij)
-         j = indxjj(ij)
-
-         if (.not.l_snow(i,j) .and. .not.l_cold(i,j)) then
-            sbdiag(i,j,kr) = c0
-            spdiag(i,j,kr) = -etai(i,j,ki) * kh(i,j,k+1)
-            diag  (i,j,kr) = c1
-     &                     + etai(i,j,ki) * (kh(i,j,k) + kh(i,j,k+1))
-            rhs   (i,j,kr) = Tin_init(i,j,ki)
-     &                     + etai(i,j,ki)*Iswabs(i,j,ki)
-     &                     + etai(i,j,ki)*kh(i,j,k)*Tsf(i,j)
-         else
-            sbdiag(i,j,kr) = -etai(i,j,ki) * kh(i,j,k)
-            spdiag(i,j,kr) = -etai(i,j,ki) * kh(i,j,k+1)
-            diag  (i,j,kr) = c1
-     &                     + etai(i,j,ki) * (kh(i,j,k) + kh(i,j,k+1))
-            rhs   (i,j,kr) = Tin_init(i,j,ki)
-     &                     + etai(i,j,ki)*Iswabs(i,j,ki)
-         endif
-
-      enddo                     ! ij
 
       !-----------------------------------------------------------------
       ! interior ice layers
@@ -2248,38 +2276,17 @@
          do ij = 1, isolve
             i = indxii(ij)
             j = indxjj(ij)
+            m = indxij(ij)
 
-            sbdiag(i,j,kr) = -etai(i,j,ki) * kh(i,j,k)
-            spdiag(i,j,kr) = -etai(i,j,ki) * kh(i,j,k+1)
-            diag  (i,j,kr) = c1
-     &                     + etai(i,j,ki) * (kh(i,j,k) + kh(i,j,k+1))
-            rhs   (i,j,kr) = Tin_init(i,j,ki)
-     &                     + etai(i,j,ki)*Iswabs(i,j,ki)
+            sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
+            spdiag(ij,kr) = -etai(ij,ki) * kh(m,k+1)
+            diag  (ij,kr) = c1
+     &                     + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+            rhs   (ij,kr) = Tin_init(m,ki)
+     &                     + etai(ij,ki)*Iswabs(i,j,ki)
 
          enddo                  ! ij
       enddo                     ! nilyr
-
-      !-----------------------------------------------------------------
-      ! bottom ice layer
-      !-----------------------------------------------------------------
-
-      ki = nilyr
-      k  = ki + nslyr
-      kr = k + 1
-      
-      do ij = 1, isolve
-         i = indxii(ij)
-         j = indxjj(ij)
-         
-         sbdiag(i,j,kr) = -etai(i,j,ki) * kh(i,j,k)
-         spdiag(i,j,kr) = c0
-         diag  (i,j,kr) = c1 
-     &                  + etai(i,j,ki) * (kh(i,j,k) + kh(i,j,k+1))
-         rhs   (i,j,kr) = Tin_init(i,j,ki)
-     &                  + etai(i,j,ki)*Iswabs(i,j,ki)
-     &                  + etai(i,j,ki)*kh(i,j,k+1)*Tbot(i,j)
-           
-      enddo                     ! ij
 
       end subroutine get_matrix_elements
 
@@ -2301,7 +2308,7 @@
 ! !INTERFACE:
 !
       subroutine tridiag_solver (nx_block, ny_block,
-     &                           isolve,     
+     &                           isolve,   icells,  
      &                           indxii,   indxjj,
      &                           nmat,     sbdiag,
      &                           diag,     spdiag, 
@@ -2314,22 +2321,23 @@
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
      &,  isolve          ! number of cells with temps not converged
+     &,  icells          ! number of cells with aicen > puny
 
-      integer (kind=int_kind), dimension(nx_block*ny_block),
+      integer (kind=int_kind), dimension(icells),
      &   intent(in) ::
      &   indxii, indxjj  ! compressed indices for cells not converged
 
       integer (kind=int_kind), intent(in) ::
      &   nmat            ! matrix dimension
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nmat),
+      real (kind=dbl_kind), dimension (isolve,nmat),
      &     intent(in) ::
      &   sbdiag          ! sub-diagonal matrix elements
      &,  diag            ! diagonal matrix elements
      &,  spdiag          ! super-diagonal matrix elements
      &,  rhs             ! rhs of tri-diagonal matrix eqn.
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nmat),
+      real (kind=dbl_kind), dimension (isolve,nmat),
      &     intent(inout) ::
      &   xout            ! solution vector
 !
@@ -2340,22 +2348,18 @@
      &,  ij              ! horizontal index, combines i and j loops
      &,  k               ! row counter
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (isolve) ::
      &   wbeta           ! temporary matrix variable
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nilyr+nslyr+1)::
+      real (kind=dbl_kind), dimension(isolve,nilyr+nslyr+1)::
      &   wgamma          ! temporary matrix variable
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
       do ij = 1, isolve
-         i = indxii(ij)
-         j = indxjj(ij)
-
-         wbeta(i,j) = diag(i,j,1)
-         xout(i,j,1) = rhs(i,j,1) / wbeta(i,j)
-
+         wbeta(ij) = diag(ij,1)
+         xout(ij,1) = rhs(ij,1) / wbeta(ij)
       enddo                     ! ij
 
       do k = 2, nmat
@@ -2363,14 +2367,10 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, isolve
-            i = indxii(ij)
-            j = indxjj(ij)
-
-            wgamma(i,j,k) = spdiag(i,j,k-1) / wbeta(i,j)
-            wbeta(i,j) = diag(i,j,k) - sbdiag(i,j,k)*wgamma(i,j,k)
-            xout(i,j,k) = (rhs(i,j,k) - sbdiag(i,j,k)*xout(i,j,k-1))
-     &                   / wbeta(i,j)
-
+            wgamma(ij,k) = spdiag(ij,k-1) / wbeta(ij)
+            wbeta(ij) = diag(ij,k) - sbdiag(ij,k)*wgamma(ij,k)
+            xout(ij,k) = (rhs(ij,k) - sbdiag(ij,k)*xout(ij,k-1))
+     &                   / wbeta(ij)
          enddo                  ! ij
       enddo                     ! k
 
@@ -2379,11 +2379,7 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, isolve
-            i = indxii(ij)
-            j = indxjj(ij)
-
-            xout(i,j,k) = xout(i,j,k) - wgamma(i,j,k+1)*xout(i,j,k+1)
-
+            xout(ij,k) = xout(ij,k) - wgamma(ij,k+1)*xout(ij,k+1)
          enddo                  ! ij
       enddo                     ! k
 
@@ -2445,36 +2441,48 @@
      &,  Tbot            ! ice bottom surface temperature (deg C)
      &,  fsnow           ! snowfall rate (kg m-2 s-1)
      &,  flatn           ! surface downward latent heat (W m-2)
-     &,  fsurf           ! net flux to top surface, not including fcondtop
+
+      real (kind=dbl_kind), dimension (icells), intent(in) ::
+     &   fsurf           ! net flux to top surface, not including fcondtop
      &,  fcondtop        ! downward cond flux at top surface (W m-2)
      &,  fcondbot        ! downward cond flux at bottom surface (W m-2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr),
+      real (kind=dbl_kind), dimension (icells,nilyr),
      &   intent(inout) ::
      &   qin             ! ice layer enthalpy (J m-3)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr),
+      real (kind=dbl_kind), dimension (icells,nslyr),
      &   intent(inout) ::
      &   qsn             ! snow layer enthalpy (J m-3)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
+      real (kind=dbl_kind), dimension (icells),
      &   intent(inout) ::
      &   hilyr           ! ice layer thickness (m)
      &,  hslyr           ! snow layer thickness (m)
-     &,  hin             ! total ice thickness (m)
-     &,  hsn             ! total snow thickness (m)
-     &,  meltt           ! top ice melt             (m/step-->cm/day)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block),
+     &   intent(inout) ::
+     &   meltt           ! top ice melt             (m/step-->cm/day)
      &,  meltb           ! basal ice melt           (m/step-->cm/day)
      &,  congel          ! basal ice growth         (m/step-->cm/day)
      &,  snoice          ! snow-ice formation       (m/step-->cm/day)
      &,  mlt_onset       ! day of year that sfc melting begins
      &,  frz_onset       ! day of year that freezing begins (congel or frazil)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out)::
+      real (kind=dbl_kind), dimension (icells),
+     &   intent(inout) ::
+     &   hin             ! total ice thickness (m)
+     &,  hsn             ! total snow thickness (m)
+
+      real (kind=dbl_kind), dimension (icells), intent(out)::
      &   efinal          ! final energy of melting (J m-2)
-     &,  hsn_new         ! thickness of new snow (m)
-     &,  fhocnn          ! fbot, corrected for any surplus energy (W m-2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out)::
+     &   fhocnn          ! fbot, corrected for any surplus energy (W m-2)
      &,  evapn           ! ice/snow mass sublimated/condensed (kg m-2 s-1)
+
+      real (kind=dbl_kind), dimension (icells), intent(out)::
+     &   hsn_new         ! thickness of new snow (m)
 !
 !EOP
 !
@@ -2486,7 +2494,7 @@
      &,  ij              ! horizontal index, combines i and j loops
      &,  k               ! vertical index
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (icells) ::
      &   esub            ! energy for sublimation, > 0    (J m-2)
      &,  econ            ! energy for condensation, < 0   (J m-2)
      &,  etop_mlt        ! energy for top melting, > 0    (J m-2)
@@ -2505,60 +2513,35 @@
      &,  qsnew           ! enthalpy of new snow (J m-3)
      &,  hstot           ! snow thickness including new snow (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1) ::
+      real (kind=dbl_kind), dimension (icells,nilyr+1) ::
      &   zi1             ! depth of ice layer boundaries (m)
      &,  zi2             ! adjusted depths, with equal hilyr (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr+1) ::
+      real (kind=dbl_kind), dimension (icells,nslyr+1) ::
      &   zs1             ! depth of snow layer boundaries (m)
      &,  zs2             ! adjusted depths, with equal hslyr (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr) ::
+      real (kind=dbl_kind), dimension (icells,nilyr) ::
      &   dzi             ! ice layer thickness after growth/melting
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr) ::
+      real (kind=dbl_kind), dimension (icells,nslyr) ::
      &   dzs             ! snow layer thickness after growth/melting
 
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
 
-      efinal  (:,:) = c0
-      hsn_new (:,:) = c0
-      fhocnn  (:,:) = c0
-      evapn   (:,:) = c0
-
-      esub    (:,:) = c0
-      econ    (:,:) = c0
-      etop_mlt(:,:) = c0
-      ebot_mlt(:,:) = c0
-      ebot_gro(:,:) = c0
-
-      do k = 1, nilyr+1
-         zi1(:,:,k) = c0
-         zi2(:,:,k) = c0
-      enddo
-
-      do k = 1, nslyr+1
-         zs1(:,:,k) = c0
-         zs2(:,:,k) = c0
-      enddo
+      hsn_new (:) = c0
 
       do k = 1, nilyr
-         dzi(:,:,k) = c0
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            dzi(i,j,k) = hilyr(i,j)
+            dzi(ij,k) = hilyr(ij)
          enddo
       enddo
 
       do k = 1, nslyr
-         dzs(:,:,k) = c0
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            dzs(i,j,k) = hslyr(i,j)
+            dzs(ij,k) = hslyr(ij)
          enddo
       enddo
 
@@ -2575,14 +2558,12 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
 
-               Ts = (Lfresh + qsn(i,j,k)/rhos) / cp_ice
+               Ts = (Lfresh + qsn(ij,k)/rhos) / cp_ice
                if (Ts > c0) then
-                  dhs = cp_ice*Ts*dzs(i,j,k) / Lfresh
-                  dzs(i,j,k) = dzs(i,j,k) - dhs
-                  qsn(i,j,k) = -rhos*Lfresh
+                  dhs = cp_ice*Ts*dzs(ij,k) / Lfresh
+                  dzs(ij,k) = dzs(ij,k) - dhs
+                  qsn(ij,k) = -rhos*Lfresh
                endif
             enddo
          enddo
@@ -2592,14 +2573,12 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
 
-               Ti = (Lfresh + qin(i,j,k)/rhoi) / cp_ice
+               Ti = (Lfresh + qin(ij,k)/rhoi) / cp_ice
                if (Ti > c0) then
-                  dhi = cp_ice*Ti*dzi(i,j,k) / Lfresh
-                  dzi(i,j,k) = dzi(i,j,k) - dhi
-                  qin(i,j,k) = -rhoi*Lfresh
+                  dhi = cp_ice*Ti*dzi(ij,k) / Lfresh
+                  dzi(ij,k) = dzi(ij,k) - dhi
+                  qin(ij,k) = -rhoi*Lfresh
                endif
             enddo               ! ij
          enddo                  ! k
@@ -2616,155 +2595,35 @@
          j = indxj(ij)
 
          wk1 = -flatn(i,j) * dt
-         esub(i,j) = max(wk1, c0)     ! energy for sublimation, > 0
-         econ(i,j) = min(wk1, c0)     ! energy for condensation, < 0
+         esub(ij) = max(wk1, c0)     ! energy for sublimation, > 0
+         econ(ij) = min(wk1, c0)     ! energy for condensation, < 0
 
-         wk1 = (fsurf(i,j) - fcondtop(i,j)) * dt
-         etop_mlt(i,j) = max(wk1, c0)           ! etop_mlt > 0
+         wk1 = (fsurf(ij) - fcondtop(ij)) * dt
+         etop_mlt(ij) = max(wk1, c0)           ! etop_mlt > 0
 
-         wk1 = (fcondbot(i,j) - fbot(i,j)) * dt
-         ebot_mlt(i,j) = max(wk1, c0)           ! ebot_mlt > 0
-         ebot_gro(i,j) = min(wk1, c0)           ! ebot_gro < 0
-
-      enddo                     ! ij
-
-      !-----------------------------------------------------------------
-      ! Sublimation/condensation of ice/snow
-      !-----------------------------------------------------------------
-
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
+         wk1 = (fcondbot(ij) - fbot(i,j)) * dt
+         ebot_mlt(ij) = max(wk1, c0)           ! ebot_mlt > 0
+         ebot_gro(ij) = min(wk1, c0)           ! ebot_gro < 0
 
          !--------------------------------------------------------------
          ! Condensation (evapn > 0)
          ! Note: evapn here has unit of kg/m^2.  Divide by dt later.
          !--------------------------------------------------------------
 
-         if (hsn(i,j) > puny) then   ! add snow with enthalpy qsn(i,j,1)
-            dhs = econ(i,j) / (qsn(i,j,1) - rhos*Lvap) ! econ < 0, dhs > 0
-            dzs(i,j,1) = dzs(i,j,1) + dhs
+         evapn   (i,j) = c0          ! initialize
+
+         if (hsn(ij) > puny) then    ! add snow with enthalpy qsn(ij,1)
+            dhs = econ(ij) / (qsn(ij,1) - rhos*Lvap) ! econ < 0, dhs > 0
+            dzs(ij,1) = dzs(ij,1) + dhs
             evapn(i,j) = evapn(i,j) + dhs*rhos
-         else                         ! add ice with enthalpy qin(i,j,1)
-            dhi = econ(i,j) / (qin(i,j,1) - rhoi*Lvap) ! econ < 0, dhi > 0
-            dzi(i,j,1) = dzi(i,j,1) + dhi
+         else                        ! add ice with enthalpy qin(ij,1)
+            dhi = econ(ij) / (qin(ij,1) - rhoi*Lvap) ! econ < 0, dhi > 0
+            dzi(ij,1) = dzi(ij,1) + dhi
             evapn(i,j) = evapn(i,j) + dhi*rhoi
          endif
-      enddo                     ! ij
 
          !--------------------------------------------------------------
-         ! Sublimation of snow (evapn < 0)
-         !--------------------------------------------------------------
-
-      do k = 1, nslyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
-            qsub = qsn(i,j,k) - rhos*Lvap ! qsub < 0
-            dhs  = max (-dzs(i,j,k), esub(i,j)/qsub)  ! esub > 0, dhs < 0
-            dzs(i,j,k) = dzs(i,j,k) + dhs
-            esub(i,j) = esub(i,j) - dhs*qsub
-            esub(i,j) = max(esub(i,j), c0)   ! in case of roundoff error
-            evapn(i,j) = evapn(i,j) + dhs*rhos
-         enddo                  ! ij
-      enddo                     ! nslyr
-
-         !--------------------------------------------------------------
-         ! Sublimation of ice (evapn < 0)
-         !--------------------------------------------------------------
-
-      do k = 1, nilyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
-            qsub = qin(i,j,k) - rhoi*Lvap              ! qsub < 0
-            dhi  = max (-dzi(i,j,k), esub(i,j)/qsub) ! esub < 0, dhi < 0
-            dzi(i,j,k) = dzi(i,j,k) + dhi
-            esub(i,j) = esub(i,j) - dhi*qsub
-            esub(i,j) = max(esub(i,j), c0)
-            evapn(i,j) = evapn(i,j) + dhi*rhoi
-         enddo                  ! ij
-      enddo                     ! nilyr
-
-      !-----------------------------------------------------------------
-      ! Top melt
-      ! (There is no top growth because there is no liquid water to
-      !  freeze at the top.)
-      !-----------------------------------------------------------------
-
-         !--------------------------------------------------------------
-         ! Melt snow
-         !--------------------------------------------------------------
-
-      do k = 1, nslyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
-            dhs = max(-dzs(i,j,k), etop_mlt(i,j)/qsn(i,j,k))
-            dzs(i,j,k) = dzs(i,j,k) + dhs         ! qsn < 0, dhs < 0
-            etop_mlt(i,j) = etop_mlt(i,j) - dhs*qsn(i,j,k)
-            etop_mlt(i,j) = max(etop_mlt(i,j), c0) ! in case of roundoff error
-
-            ! history diagnostics
-            if (dhs < -puny .and. mlt_onset(i,j) < puny)
-     &         mlt_onset(i,j) = yday
-
-         enddo                  ! ij
-      enddo                     ! nslyr
-
-         !--------------------------------------------------------------
-         ! Melt ice
-         !--------------------------------------------------------------
-
-      do k = 1, nilyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
-            dhi = max(-dzi(i,j,k), etop_mlt(i,j)/qin(i,j,k))
-            dzi(i,j,k) = dzi(i,j,k) + dhi         ! qin < 0, dhi < 0
-            etop_mlt(i,j) = etop_mlt(i,j) - dhi*qin(i,j,k)
-            etop_mlt(i,j) = max(etop_mlt(i,j), c0)
-
-            ! history diagnostics
-            if (dhi < -puny .and. mlt_onset(i,j) < puny)
-     &           mlt_onset(i,j) = yday
-            meltt(i,j) = meltt(i,j) - dhi*aicen(i,j)
-
-         enddo                  ! ij
-      enddo                     ! k
-
-       !----------------------------------------------------------------
-       ! Bottom growth and melt
-       !----------------------------------------------------------------
-
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-
-         !--------------------------------------------------------------
-         ! Grow ice
+         ! Grow ice (bottom)
          !--------------------------------------------------------------
 
          ! enthalpy of new ice growing at bottom surface
@@ -2772,13 +2631,13 @@
      &                 + Lfresh * (c1-Tmlt(nilyr+1)/Tbot(i,j))
      &                 - cp_ocn * Tmlt(nilyr+1))
          qbot = min (qbot, qbotmax)      ! in case Tbot is close to Tmlt
-         dhi  = ebot_gro(i,j) / qbot     ! dhi > 0
+         dhi  = ebot_gro(ij) / qbot     ! dhi > 0
 
-         hqtot = dzi(i,j,nilyr)*qin(i,j,nilyr) + dhi*qbot
-         dzi(i,j,nilyr) = dzi(i,j,nilyr) + dhi
+         hqtot = dzi(ij,nilyr)*qin(ij,nilyr) + dhi*qbot
+         dzi(ij,nilyr) = dzi(ij,nilyr) + dhi
 
-         if (dzi(i,j,nilyr) > puny)
-     &        qin(i,j,nilyr) = hqtot / dzi(i,j,nilyr)
+         if (dzi(ij,nilyr) > puny)
+     &        qin(ij,nilyr) = hqtot / dzi(ij,nilyr)
 
          ! history diagnostics
          congel(i,j) = congel(i,j) + dhi*aicen(i,j)
@@ -2787,9 +2646,76 @@
 
       enddo                     ! ij
 
+      do k = 1, nslyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
          !--------------------------------------------------------------
-         ! Melt ice
+         ! Sublimation of snow (evapn < 0)
          !--------------------------------------------------------------
+
+            qsub = qsn(ij,k) - rhos*Lvap ! qsub < 0
+            dhs  = max (-dzs(ij,k), esub(ij)/qsub)  ! esub > 0, dhs < 0
+            dzs(ij,k) = dzs(ij,k) + dhs
+            esub(ij) = esub(ij) - dhs*qsub
+            esub(ij) = max(esub(ij), c0)   ! in case of roundoff error
+            evapn(i,j) = evapn(i,j) + dhs*rhos
+
+         !--------------------------------------------------------------
+         ! Melt snow (top)
+         !--------------------------------------------------------------
+
+            dhs = max(-dzs(ij,k), etop_mlt(ij)/qsn(ij,k))
+            dzs(ij,k) = dzs(ij,k) + dhs         ! qsn < 0, dhs < 0
+            etop_mlt(ij) = etop_mlt(ij) - dhs*qsn(ij,k)
+            etop_mlt(ij) = max(etop_mlt(ij), c0) ! in case of roundoff error
+
+            ! history diagnostics
+            if (dhs < -puny .and. mlt_onset(i,j) < puny)
+     &         mlt_onset(i,j) = yday
+
+         enddo                  ! ij
+      enddo                     ! nslyr
+
+      do k = 1, nilyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+         !--------------------------------------------------------------
+         ! Sublimation of ice (evapn < 0)
+         !--------------------------------------------------------------
+
+            qsub = qin(ij,k) - rhoi*Lvap              ! qsub < 0
+            dhi  = max (-dzi(ij,k), esub(ij)/qsub) ! esub < 0, dhi < 0
+            dzi(ij,k) = dzi(ij,k) + dhi
+            esub(ij) = esub(ij) - dhi*qsub
+            esub(ij) = max(esub(ij), c0)
+            evapn(i,j) = evapn(i,j) + dhi*rhoi
+
+         !--------------------------------------------------------------
+         ! Melt ice (top)
+         !--------------------------------------------------------------
+
+            dhi = max(-dzi(ij,k), etop_mlt(ij)/qin(ij,k))
+            dzi(ij,k) = dzi(ij,k) + dhi         ! qin < 0, dhi < 0
+            etop_mlt(ij) = etop_mlt(ij) - dhi*qin(ij,k)
+            etop_mlt(ij) = max(etop_mlt(ij), c0)
+
+            ! history diagnostics
+            if (dhi < -puny .and. mlt_onset(i,j) < puny)
+     &           mlt_onset(i,j) = yday
+            meltt(i,j) = meltt(i,j) - dhi*aicen(i,j)
+
+         enddo                  ! ij
+      enddo                     ! nilyr
 
       do k = nilyr, 1, -1
 !DIR$ CONCURRENT !Cray
@@ -2799,10 +2725,14 @@
             i = indxi(ij)
             j = indxj(ij)
 
-            dhi = max(-dzi(i,j,k), ebot_mlt(i,j)/qin(i,j,k))
-            dzi(i,j,k) = dzi(i,j,k) + dhi         ! qin < 0, dhi < 0
-            ebot_mlt(i,j) = ebot_mlt(i,j) - dhi*qin(i,j,k)
-            ebot_mlt(i,j) = max(ebot_mlt(i,j), c0)
+         !--------------------------------------------------------------
+         ! Melt ice (bottom)
+         !--------------------------------------------------------------
+
+            dhi = max(-dzi(ij,k), ebot_mlt(ij)/qin(ij,k))
+            dzi(ij,k) = dzi(ij,k) + dhi         ! qin < 0, dhi < 0
+            ebot_mlt(ij) = ebot_mlt(ij) - dhi*qin(ij,k)
+            ebot_mlt(ij) = max(ebot_mlt(ij), c0)
 
             ! history diagnostics
             meltb(i,j) = meltb(i,j) - dhi*aicen(i,j)
@@ -2810,22 +2740,20 @@
          enddo                  ! ij
       enddo                     ! nilyr
 
-         !--------------------------------------------------------------
-         ! Melt snow (only if all the ice has melted)
-         !--------------------------------------------------------------
-
       do k = nslyr, 1, -1
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
 
-            dhs = max(-dzs(i,j,k), ebot_mlt(i,j)/qsn(i,j,k))
-            dzs(i,j,k) = dzs(i,j,k) + dhs         ! qsn < 0, dhs < 0
-            ebot_mlt(i,j) = ebot_mlt(i,j) - dhs*qsn(i,j,k)
-            ebot_mlt(i,j) = max(ebot_mlt(i,j), c0)
+         !--------------------------------------------------------------
+         ! Melt snow (only if all the ice has melted)
+         !--------------------------------------------------------------
+
+            dhs = max(-dzs(ij,k), ebot_mlt(ij)/qsn(ij,k))
+            dzs(ij,k) = dzs(ij,k) + dhs         ! qsn < 0, dhs < 0
+            ebot_mlt(ij) = ebot_mlt(ij) - dhs*qsn(ij,k)
+            ebot_mlt(ij) = max(ebot_mlt(ij), c0)
 
          enddo                  ! ij
       enddo                     ! nslyr
@@ -2839,7 +2767,7 @@
          i = indxi(ij)
          j = indxj(ij)
          fhocnn(i,j) = fbot(i,j)
-     &               + (esub(i,j) + etop_mlt(i,j) + ebot_mlt(i,j))/dt
+     &               + (esub(ij) + etop_mlt(ij) + ebot_mlt(ij))/dt
       enddo
 
 !---!-----------------------------------------------------------------
@@ -2861,31 +2789,26 @@
 
          if (fsnow(i,j) > c0) then
 
-            hsn_new(i,j) = fsnow(i,j)/rhos * dt
+            hsn_new(ij) = fsnow(i,j)/rhos * dt
             qsnew = -rhos*Lfresh
-            hstot = dzs(i,j,1) + hsn_new(i,j)
+            hstot = dzs(ij,1) + hsn_new(ij)
 
             if (hstot > c0) then
-               qsn(i,j,1) =  (dzs(i,j,1) * qsn(i,j,1)
-     &                    + hsn_new(i,j) * qsnew) / hstot
+               qsn(ij,1) =  (dzs(ij,1) * qsn(ij,1)
+     &                    + hsn_new(ij) * qsnew) / hstot
                ! avoid roundoff errors
-               qsn(i,j,1) = min(qsn(i,j,1), -rhos*Lfresh)
+               qsn(ij,1) = min(qsn(ij,1), -rhos*Lfresh)
 
-               dzs(i,j,1) = hstot
+               dzs(ij,1) = hstot
             endif
          endif
-
-      enddo                     ! ij
 
     !-----------------------------------------------------------------
     ! Find the new ice and snow thicknesses.
     !-----------------------------------------------------------------
 
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-         hin(i,j) = c0
-         hsn(i,j) = c0
+         hin(ij) = c0
+         hsn(ij) = c0
       enddo
 
       do k = 1, nilyr
@@ -2893,9 +2816,7 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            hin(i,j) = hin(i,j) + dzi(i,j,k)
+            hin(ij) = hin(ij) + dzi(ij,k)
          enddo                  ! ij
       enddo                     ! k
 
@@ -2904,9 +2825,7 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            hsn(i,j) = hsn(i,j) + dzs(i,j,k)
+            hsn(ij) = hsn(ij) + dzs(ij,k)
          enddo                  ! ij
       enddo                     ! k
 
@@ -2932,65 +2851,41 @@
       !-----------------------------------------------------------------
 
       do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
 
-         if (hin(i,j) > c0) then
-            hilyr(i,j) = hin(i,j) / real(nilyr,kind=dbl_kind)
+         if (hin(ij) > c0) then
+            hilyr(ij) = hin(ij) / real(nilyr,kind=dbl_kind)
          else
-            hin(i,j) = c0
-            hilyr(i,j) = c0
+            hin(ij) = c0
+            hilyr(ij) = c0
          endif
 
-         if (hsn(i,j) > c0) then
-            hslyr(i,j) = hsn(i,j) / real(nslyr,kind=dbl_kind)
+         if (hsn(ij) > c0) then
+            hslyr(ij) = hsn(ij) / real(nslyr,kind=dbl_kind)
          else
-            hsn(i,j) = c0
-            hslyr(i,j) = c0
+            hsn(ij) = c0
+            hslyr(ij) = c0
          endif
-      enddo                     ! ij
 
       !-----------------------------------------------------------------
       ! Compute depths zi1 of old layers (unequal thickness).
-      !-----------------------------------------------------------------
-
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-         zi1(i,j,1) = c0
-         zi1(i,j,1+nilyr) = hin(i,j)
-      enddo
-
-      do k = 1, nilyr-1
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            zi1(i,j,k+1) = zi1(i,j,k) + dzi(i,j,k)
-         end do
-      enddo
-
-      !-----------------------------------------------------------------
       ! Compute depths zi2 of new layers (equal thickness).
       !-----------------------------------------------------------------
 
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-         zi2(i,j,1) = c0
-         zi2(i,j,1+nilyr) = hin(i,j)
-      enddo
+         zi1(ij,1) = c0
+         zi1(ij,1+nilyr) = hin(ij)
+
+         zi2(ij,1) = c0
+         zi2(ij,1+nilyr) = hin(ij)
+
+      enddo   ! ij
 
       do k = 1, nilyr-1
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            zi2(i,j,k+1) = zi2(i,j,k) + hilyr(i,j)
+            zi1(ij,k+1) = zi1(ij,k) + dzi(ij,k)
+            zi2(ij,k+1) = zi2(ij,k) + hilyr(ij)
          end do
       enddo
 
@@ -3009,35 +2904,15 @@
 
       !-----------------------------------------------------------------
       ! Compute depths zs1 of old layers (unequal thickness).
-      !-----------------------------------------------------------------
-
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            zs1(i,j,1) = c0
-            zs1(i,j,1+nslyr) = hsn(i,j)
-         enddo
-
-         do k = 1, nslyr-1
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-               zs1(i,j,k+1) = zs1(i,j,k) + dzs(i,j,k)
-            end do
-         enddo
-
-      !-----------------------------------------------------------------
       ! Compute depths zs2 of new layers (equal thickness).
       !-----------------------------------------------------------------
 
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            zs2(i,j,1) = c0
-            zs2(i,j,1+nslyr) = hsn(i,j)
+            zs1(ij,1) = c0
+            zs1(ij,1+nslyr) = hsn(ij)
+
+            zs2(ij,1) = c0
+            zs2(ij,1+nslyr) = hsn(ij)
          enddo
 
          do k = 1, nslyr-1
@@ -3045,9 +2920,8 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-               zs2(i,j,k+1) = zs2(i,j,k) + hslyr(i,j)
+               zs1(ij,k+1) = zs1(ij,k) + dzs(ij,k)
+               zs2(ij,k+1) = zs2(ij,k) + hslyr(ij)
             end do
          enddo
 
@@ -3072,8 +2946,8 @@
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
-         efinal(i,j) = -evapn(i,j)*Lvap
-         evapn(i,j)  =  evapn(i,j)/dt
+         efinal(ij) = -evapn(i,j)*Lvap
+         evapn(i,j) =  evapn(i,j)/dt
       enddo
 
       do k = 1, nslyr
@@ -3081,9 +2955,7 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            efinal(i,j) = efinal(i,j) + hslyr(i,j)*qsn(i,j,k)
+            efinal(ij) = efinal(ij) + hslyr(ij)*qsn(ij,k)
          enddo                  ! ij
       enddo
 
@@ -3092,9 +2964,7 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            efinal(i,j) = efinal(i,j) + hilyr(i,j)*qin(i,j,k)
+            efinal(ij) = efinal(ij) + hilyr(ij)*qin(ij,k)
          enddo                  ! ij
       enddo                     ! k
 
@@ -3144,19 +3014,25 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block),
      &   intent(inout) ::
      &   snoice      ! snow-ice formation       (m/step-->cm/day)
-     &,  hin         ! ice thickness (m)
+
+      real (kind=dbl_kind), dimension (icells),
+     &   intent(inout) ::
+     &   hin         ! ice thickness (m)
      &,  hsn         ! snow thickness (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr),
+      real (kind=dbl_kind), dimension (icells,nilyr),
      &   intent(inout) ::
      &   qin         ! ice layer enthalpy (J m-3)
-     &,  dzi         ! ice layer thicknesses (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr),
+      real (kind=dbl_kind), dimension (icells,nilyr),
+     &   intent(inout) ::
+     &  dzi         ! ice layer thicknesses (m)
+
+      real (kind=dbl_kind), dimension (icells,nslyr),
      &   intent(in) ::
      &   qsn         ! snow layer enthalpy (J m-3)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr),
+      real (kind=dbl_kind), dimension (icells,nslyr),
      &   intent(inout) ::
      &   dzs         ! snow layer thicknesses (m)
 !
@@ -3167,7 +3043,7 @@
      &,  ij              ! horizontal index, combines i and j loops
      &,  k               ! vertical index
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (icells) ::
      &   dhin            ! change in ice thickness (m)
      &,  dhsn            ! change in snow thickness (m)
      &,  hqs             ! sum of h*q for snow (J m-2)
@@ -3180,19 +3056,17 @@
       ! Determine whether snow lies below freeboard.
       !-----------------------------------------------------------------
 
-      dhin(:,:) = c0
-      dhsn(:,:) = c0
-      hqs (:,:) = c0
-
       do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
 
-         wk1 = hsn(i,j) - hin(i,j)*(rhow-rhoi)/rhos
+         dhin(ij) = c0
+         dhsn(ij) = c0
+         hqs (ij) = c0
 
-         if (wk1 > puny .and. hsn(i,j) > puny) then  ! snow below freeboard
-            dhsn(i,j) = min(wk1*rhoi/rhow, hsn(i,j)) ! snow to remove
-            dhin(i,j) = dhsn(i,j) * rhos/rhoi        ! ice to add
+         wk1 = hsn(ij) - hin(ij)*(rhow-rhoi)/rhos
+
+         if (wk1 > puny .and. hsn(ij) > puny) then  ! snow below freeboard
+            dhsn(ij) = min(wk1*rhoi/rhow, hsn(ij)) ! snow to remove
+            dhin(ij) = dhsn(ij) * rhos/rhoi        ! ice to add
          endif
       enddo
 
@@ -3206,16 +3080,13 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
-            if (dhin(i,j) > puny) then
-               dhs = min(dhsn(i,j), dzs(i,j,k)) ! snow to remove from layer
-               hsn(i,j) = hsn(i,j) - dhs
-               dzs(i,j,k) = dzs(i,j,k) - dhs
-               dhsn(i,j) = dhsn(i,j) - dhs
-               dhsn(i,j) = max(dhsn(i,j),c0)
-               hqs(i,j) = hqs(i,j) + dhs * qsn(i,j,k)
+            if (dhin(ij) > puny) then
+               dhs = min(dhsn(ij), dzs(ij,k)) ! snow to remove from layer
+               hsn(ij) = hsn(ij) - dhs
+               dzs(ij,k) = dzs(ij,k) - dhs
+               dhsn(ij) = dhsn(ij) - dhs
+               dhsn(ij) = max(dhsn(ij),c0)
+               hqs(ij) = hqs(ij) + dhs * qsn(ij,k)
             endif               ! dhin > puny
          enddo
       enddo
@@ -3231,14 +3102,14 @@
          i = indxi(ij)
          j = indxj(ij)
 
-         if (dhin(i,j) > puny) then
-            wk1 = dzi(i,j,1) + dhin(i,j)
-            hin(i,j) = hin(i,j) + dhin(i,j)
-            qin(i,j,1) = (dzi(i,j,1)*qin(i,j,1) + hqs(i,j)) / wk1
-            dzi(i,j,1) = wk1
+         if (dhin(ij) > puny) then
+            wk1 = dzi(ij,1) + dhin(ij)
+            hin(ij) = hin(ij) + dhin(ij)
+            qin(ij,1) = (dzi(ij,1)*qin(ij,1) + hqs(ij)) / wk1
+            dzi(ij,1) = wk1
 
             ! history diagnostic
-            snoice(i,j) = snoice(i,j) + dhin(i,j)*aicen(i,j)
+            snoice(i,j) = snoice(i,j) + dhin(ij)*aicen(i,j)
          endif               ! dhin > puny
 
       enddo                  ! ij
@@ -3282,16 +3153,18 @@
      &   intent(in) ::
      &   indxi, indxj    ! compressed indices for cells with aicen > puny
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nlyr+1),
+      real (kind=dbl_kind), dimension (icells,nlyr+1),
      &   intent(in) ::
      &   z1              ! interface depth for old, unequal layers (m)
      &,  z2              ! interface depth for new, equal layers (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
+      real (kind=dbl_kind), dimension (icells), intent(in) ::
      &   hlyr            ! new layer thickness (m)
-     &,  hn              ! total thickness (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nlyr),
+      real (kind=dbl_kind), dimension (icells), intent(in) ::
+     &   hn              ! total thickness (m)
+
+      real (kind=dbl_kind), dimension (icells,nlyr),
      &   intent(inout) ::
      &   qn              ! layer enthalpy (J m-3)
 !
@@ -3305,26 +3178,19 @@
       real (kind=dbl_kind) ::
      &   hovlp           ! overlap between old and new layers (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (icells) ::
      &   rhlyr           ! 1./hlyr
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nlyr) ::
+      real (kind=dbl_kind), dimension (icells,nlyr) ::
      &   hq              ! h * q for a layer
-
-      rhlyr(:,:) = c0
-      do k = 1, nlyr
-         hq(:,:,k) = c0
-      enddo
 
       !-----------------------------------------------------------------
       ! Compute reciprocal layer thickness.
       !-----------------------------------------------------------------
 
       do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-
-         if (hn(i,j) > puny) rhlyr(i,j) = c1 / hlyr(i,j)
+         rhlyr(ij) = c0
+         if (hn(ij) > puny) rhlyr(ij) = c1 / hlyr(ij)
       enddo                     ! ij
 
       !-----------------------------------------------------------------
@@ -3334,9 +3200,7 @@
       do k2 = 1, nlyr
 
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            hq(i,j,k2) = c0
+            hq(ij,k2) = c0
          enddo
 
          do k1 = 1, nlyr
@@ -3344,14 +3208,11 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-
-               hovlp = min (z1(i,j,k1+1), z2(i,j,k2+1))
-     &               - max (z1(i,j,k1),   z2(i,j,k2))
+               hovlp = min (z1(ij,k1+1), z2(ij,k2+1))
+     &               - max (z1(ij,k1),   z2(ij,k2))
                hovlp = max (hovlp, c0)
 
-               hq(i,j,k2) = hq(i,j,k2) + hovlp*qn(i,j,k1)
+               hq(ij,k2) = hq(ij,k2) + hovlp*qn(ij,k1)
             enddo               ! ij
          enddo                  ! kold
       enddo                     ! k
@@ -3364,7 +3225,7 @@
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
-            qn(i,j,k) = hq(i,j,k) * rhlyr(i,j)
+            qn(ij,k) = hq(ij,k) * rhlyr(ij)
          enddo                  ! ij
       enddo                     ! k
 
@@ -3416,11 +3277,13 @@
      &   dt              ! time step
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
-     &   fsurf           ! net flux to top surface, not including fcondtop
-     &,  flatn           ! surface downward latent heat (W m-2)
+     &   flatn           ! surface downward latent heat (W m-2)
      &,  fhocnn          ! fbot, corrected for any surplus energy
      &,  fswint          ! SW absorbed in ice interior, below surface (W m-2)
      &,  fsnow           ! snowfall rate (kg m-2 s-1)
+
+      real (kind=dbl_kind), dimension (icells), intent(in) ::
+     &   fsurf           ! net flux to top surface, not including fcondtop
      &,  einit           ! initial energy of melting (J m-2)
      &,  efinal          ! final energy of melting (J m-2)
 
@@ -3440,6 +3303,9 @@
      &   einp            ! energy input during timestep (J m-2)
      &,  ferr            ! energy conservation error (W m-2)
 
+      !----------------------------------------------------------------
+      ! If energy is not conserved, print diagnostics and exit.
+      !----------------------------------------------------------------
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -3447,22 +3313,13 @@
          i = indxi(ij)
          j = indxj(ij)
 
-         einp = (fsurf(i,j) - flatn(i,j) + fswint(i,j) - fhocnn(i,j)
+         einp = (fsurf(ij) - flatn(i,j) + fswint(i,j) - fhocnn(i,j)
      &         - fsnow(i,j)*Lfresh) * dt
-         ferr = abs(efinal(i,j)-einit(i,j)-einp) / dt
+         ferr = abs(efinal(ij)-einit(ij)-einp) / dt
          if (ferr > ferrmax) then
             l_stop = .true.
             istop = i
             jstop = j
-         endif
-      enddo
-
-      !----------------------------------------------------------------
-      ! If energy is not conserved, print diagnostics and exit.
-      !----------------------------------------------------------------
-      if (l_stop) then
-         i = istop
-         j = jstop
 
       !-----------------------------------------------------------------
       ! Note that fsurf - flat = fsw + flw + fsens; i.e., the latent
@@ -3471,22 +3328,23 @@
       ! heat lost by the ice is equal to that gained by the vapor.
       !-----------------------------------------------------------------
 
-         einp = (fsurf(i,j) - flatn(i,j) + fswint(i,j) - fhocnn(i,j)
+         einp = (fsurf(ij) - flatn(i,j) + fswint(i,j) - fhocnn(i,j)
      &          -fsnow(i,j)*Lfresh) * dt
-         ferr = abs(efinal(i,j)-einit(i,j)-einp) / dt
+         ferr = abs(efinal(ij)-einit(ij)-einp) / dt
 
          write(nu_diag,*) 'Thermo energy conservation error'
          write(nu_diag,*) 'istep1, my_task, i, j:',
      &                     istep1, my_task, i, j
          write(nu_diag,*) 'Flux error (W/m^2) =', ferr
          write(nu_diag,*) 'Energy error (J) =', ferr*dt
-         write(nu_diag,*) 'Initial energy =', einit(i,j)
-         write(nu_diag,*) 'Final energy =', efinal(i,j)
+         write(nu_diag,*) 'Initial energy =', einit(ij)
+         write(nu_diag,*) 'Final energy =', efinal(ij)
          write(nu_diag,*) 'efinal - einit =',
-     &                     efinal(i,j)-einit(i,j)
+     &                     efinal(ij)-einit(ij)
          write(nu_diag,*) 'Input energy =', einp
          return
-      endif
+         endif
+      enddo
 
       end subroutine conservation_check_vthermo
 
@@ -3533,15 +3391,19 @@
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
      &   Tf              ! freezing temperature (C)
-     &,  Tsf             ! ice/snow surface temperature, Tsfcn
-     &,  hin             ! ice thickness (m)
+
+      real (kind=dbl_kind), dimension(icells), intent(in) ::
+     &   Tsf             ! ice/snow surface temperature, Tsfcn
+
+      real (kind=dbl_kind), dimension(icells), intent(in) ::
+     &   hin             ! ice thickness (m)
      &,  hsn             ! snow thickness (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr),
+      real (kind=dbl_kind), dimension (icells,nilyr),
      &   intent(in) ::
      &   qin             ! ice layer enthalpy (J m-3)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr),
+      real (kind=dbl_kind), dimension (icells,nslyr),
      &   intent(in) ::
      &   qsn             ! snow layer enthalpy (J m-3)
 
@@ -3574,12 +3436,12 @@
          i = indxi(ij)
          j = indxj(ij)
 
-         if (hin(i,j) > c0) then
+         if (hin(ij) > c0) then
             ! aicen is already up to date
-            vicen(i,j) = aicen(i,j) * hin(i,j)
-            vsnon(i,j) = aicen(i,j) * hsn(i,j)
-            Tsfcn(i,j) = Tsf(i,j)
-         else  ! (hin(i,j) == c0)
+            vicen(i,j) = aicen(i,j) * hin(ij)
+            vsnon(i,j) = aicen(i,j) * hsn(ij)
+            Tsfcn(i,j) = Tsf(ij)
+         else  ! (hin(ij) == c0)
             aicen(i,j) = c0
             vicen(i,j) = c0
             vsnon(i,j) = c0
@@ -3593,9 +3455,9 @@
             i = indxi(ij)
             j = indxj(ij)
 
-            if (hin(i,j) > c0) then
-               eicen(i,j,k) = qin(i,j,k) * vicen(i,j)
-     &                                     /real(nilyr,kind=dbl_kind)
+            if (hin(ij) > c0) then
+               eicen(i,j,k) = qin(ij,k) * vicen(i,j)
+     &                                    /real(nilyr,kind=dbl_kind)
             else
                eicen(i,j,k) = c0
             endif
@@ -3608,9 +3470,9 @@
             i = indxi(ij)
             j = indxj(ij)
 
-            if (hin(i,j) > c0) then
-               esnon(i,j,k) = qsn(i,j,k) * vsnon(i,j)
-     &                                     /real(nslyr,kind=dbl_kind)
+            if (hin(ij) > c0) then
+               esnon(i,j,k) = qsn(ij,k) * vsnon(i,j)
+     &                                    /real(nslyr,kind=dbl_kind)
             else
                esnon(i,j,k) = c0
             endif

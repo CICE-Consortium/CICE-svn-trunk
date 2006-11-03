@@ -348,6 +348,24 @@
       integer (kind=int_kind) :: 
      &   i, j, k, n , it  ! counting indices
      &,  narrays          ! counter for number of state variable arrays
+     &,  icells           ! number of ocean/ice cells
+
+      integer (kind=int_kind), dimension (nx_block*ny_block) ::
+     &  indxi, indxj
+
+      real (kind=dbl_kind), dimension (nx_block*ny_block,narr) :: 
+     &   work 
+
+      ! for call to compute_tracers
+      icells = 0
+      do j = 1, ny_block
+      do i = 1, nx_block
+         icells = icells + 1
+         indxi(icells) = i
+         indxj(icells) = j
+         work (icells,:) = works(i,j,:)
+      enddo
+      enddo
 
       do j=1,ny_block
       do i=1,nx_block
@@ -368,8 +386,9 @@
          narrays = narrays + 3
 
          call compute_tracers (nx_block,     ny_block,
+     &                         icells,       indxi,   indxj,
      &                         trcr_depend,
-     &                         works(:,:,narrays+1:narrays+ntrcr),
+     &                         work (:,narrays+1:narrays+ntrcr),
      &                         aicen(:,:,n),
      &                         vicen(:,:,n), vsnon(:,:,n),
      &                         trcrn(:,:,:,n))
