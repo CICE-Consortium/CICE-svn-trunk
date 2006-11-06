@@ -29,8 +29,6 @@
 ! !PUBLIC MEMBER FUNCTIONS:
 
    public  :: init_communicate,          &
-              exit_message_environment,  &
-              abort_message_environment, &
               get_num_procs,             &
               create_communicator
 
@@ -155,74 +153,6 @@
 !EOC
 
  end function get_num_procs
-
-!***********************************************************************
-!BOP
-! !IROUTINE: exit_message_environment
-! !INTERFACE:
-
- subroutine exit_message_environment(ierr)
-
-! !DESCRIPTION:
-!  This routine exits the message environment properly when model
-!  stops.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INCLUDES:
-
-   include 'mpif.h'   ! MPI Fortran include file
-
-! !OUTPUT PARAMETERS:
-
-   integer (int_kind), intent(out) :: ierr   ! MPI error flag
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-
-   call MPI_FINALIZE(ierr)
-
-!-----------------------------------------------------------------------
-!EOC
-
- end subroutine exit_message_environment
-
-!***********************************************************************
-!BOP
-! !IROUTINE: abort_message_environment
-! !INTERFACE:
-
- subroutine abort_message_environment(ierr)
-
-! !DESCRIPTION:
-!  This routine aborts the message environment when model stops.
-!  It will attempt to abort the entire MPI COMM WORLD.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INCLUDES:
-
-   include 'mpif.h'   ! MPI Fortran include file
-
-! !OUTPUT PARAMETERS:
-
-   integer (int_kind), intent(out) :: ierr   ! MPI error flag
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-
-   call MPI_BARRIER(MPI_COMM_ICE, ierr)
-   call MPI_ABORT(MPI_COMM_WORLD, ierr)
-   call MPI_FINALIZE(ierr)
-
-!-----------------------------------------------------------------------
-!EOC
-
- end subroutine abort_message_environment
 
 !***********************************************************************
 !BOP
