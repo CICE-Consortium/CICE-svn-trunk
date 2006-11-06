@@ -60,6 +60,8 @@
 #ifdef CCSM
       use shr_sys_mod
 #endif
+
+      include 'mpif.h'   ! MPI Fortran include file
 !
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -74,7 +76,7 @@
       call shr_sys_abort(error_message)
 #else
       write (nu_diag,*) error_message
-      call abort_message_environment(ierr)
+      call MPI_ABORT(MPI_COMM_WORLD, ierr)
       stop
 #endif
 
