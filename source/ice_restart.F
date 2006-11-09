@@ -259,6 +259,7 @@
          open(nu_rst_pointer,file=pointer_file)
          read(nu_rst_pointer,'(a)') filename0
          filename = trim(filename0)
+         close(nu_rst_pointer)
       endif
 
       call ice_open(nu_restart,filename,0)
