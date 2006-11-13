@@ -114,7 +114,6 @@
      &,  vvel         ! y-component of velocity (m/s)
      &,  divu         ! strain rate I component, velocity divergence (1/s)
      &,  shear        ! strain rate II component (1/s)
-     &,  Delt         ! function of strain rates (1/s)
      &,  strength     ! ice strength (N/m)
 
       !-----------------------------------------------------------------

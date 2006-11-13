@@ -118,7 +118,6 @@
       subroutine ridge_ice (nx_block,    ny_block,
      &                      dt,          icells,
      &                      indxi,       indxj,
-!!     &                      Delt,        divu,
      &                      rdg_conv,    rdg_shear,
      &                      aicen,       trcrn,
      &                      vicen,       vsnon,
@@ -147,8 +146,6 @@
      &   dt      ! time step
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
-!!!     &   Delt      ! (in the denominator of zeta, eta)            (1/s)
-!!!     &,  divu      ! strain rate I component, velocity divergence (1/s)
      &   rdg_conv  ! normalized energy dissipation due to convergence (1/s)
      &,  rdg_shear ! normalized energy dissipation due to shear (1/s)
  
@@ -280,7 +277,6 @@
       call ridge_prep (nx_block, ny_block,
      &                 icells,   indxi,  indxj,
      &                 dt,
-!!     &                 Delt,      divu,
      &                 rdg_conv,  rdg_shear,
      &                 asum,      closing_net,
      &                 divu_adv,  opning)
@@ -651,7 +647,6 @@
       subroutine ridge_prep (nx_block,   ny_block,
      &                       icells,     indxi,    indxj,
      &                       dt,
-!!     &                       Delt,       divu,
      &                       rdg_conv,   rdg_shear,
      &                       asum,       closing_net,
      &                       divu_adv,   opning)
@@ -673,8 +668,6 @@
      &   dt                  ! time step (s)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
-!!     &   Delt      ! (in the denominator of zeta, eta)            (1/s)
-!!     &,  divu      ! strain rate I component, velocity divergence (1/s)
      &   rdg_conv  ! normalized energy dissipation due to convergence (1/s)
      &,  rdg_shear ! normalized energy dissipation due to shear (1/s)
 
@@ -726,7 +719,6 @@
       !-----------------------------------------------------------------
 
          closing_net(ij) =
-!!     &        Cs*p5*(Delt(i,j)-abs(divu(i,j))) - min(divu(i,j),c0)
      &        Cs*rdg_shear(i,j) + rdg_conv(i,j)
 
       !-----------------------------------------------------------------
@@ -1867,8 +1859,8 @@
 ! !INTERFACE:
 !
       subroutine ice_strength (nx_block, ny_block,
-     &                         nghost,
-!     &                         icetmask,
+     &                         nghost,   icells,
+     &                         indxi,    indxj,
      &                         aice,     vice, 
      &                         aice0,    aicen, 
      &                         vicen,    strength)
@@ -1881,9 +1873,13 @@
      &   nx_block, ny_block  ! block dimensions
      &,  nghost              ! number of ghost cells
 
-!      integer (kind=int_kind), 
-!     &   dimension (nx_block,ny_block), intent(in) ::
-!     &   icetmask   ! ice extent mask (T-cell)
+      integer (kind=int_kind), intent(in) ::
+     &   icells       ! no. of cells where icetmask = 1
+
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi       ! compressed index in i-direction
+     &,  indxj       ! compressed index in j-direction
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
      &   aice       ! concentration of ice
@@ -1903,15 +1899,15 @@
 !
 ! LOCAL VARIABLES
 !
-      real (kind=dbl_kind), dimension (:), allocatable ::
+      real (kind=dbl_kind), dimension (icells) ::
      &   asum             ! sum of ice and open water area
      &,  aksum            ! ratio of area removed to area ridged
 
-      real (kind=dbl_kind), dimension (:,:), allocatable ::
+      real (kind=dbl_kind), dimension (icells,0:ncat) ::
      &   apartic          ! participation function; fraction of ridging
                           ! and closing associated w/ category n
 
-      real (kind=dbl_kind), dimension (:,:), allocatable ::
+      real (kind=dbl_kind), dimension (icells,ncat) ::
      &   hrmin            ! minimum ridge thickness
      &,  hrmax            ! maximum ridge thickness (krdg_redist = 0)
      &,  hrexp            ! ridge e-folding thickness (krdg_redist = 1) 
@@ -1921,7 +1917,6 @@
      &   i,j                 ! horizontal indices
      &,  n                   ! thickness category index
      &,  ilo,ihi,jlo,jhi     ! beg and end of physical domain
-     &,  icells           ! number of cells with ice present
      &,  ij               ! horizontal index, combines i and j loops
 
       real (kind=dbl_kind) ::
@@ -1929,45 +1924,14 @@
      &,  h2rdg               ! mean value of h^2 for new ridge
      &,  dh2rdg              ! change in mean value of h^2 per unit area
                              ! consumed by ridging 
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
-     &   indxi, indxj     ! compressed indices for cells with ice
 
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
       strength(:,:) = c0
 
-      !-----------------------------------------------------------------
-      ! Identify cells with nonzero ice area
-! ECH - all cells for now
-      !-----------------------------------------------------------------
-           
-            icells = 0
-            do j = jlo, jhi
-            do i = ilo, ihi
-!               if (icetmask(i,j) == 1) then
-                  icells = icells + 1
-                  indxi(icells) = i
-                  indxj(icells) = j
-!               endif
-            enddo               ! i
-            enddo               ! j
-
       if (kstrength == 1) then  ! Rothrock '75 formulation
-
-         allocate(hrmin(icells,ncat))
-         allocate(hrmax(icells,ncat))
-         allocate(hrexp(icells,ncat))
-         allocate(krdg(icells,ncat))
-         allocate(apartic(icells,0:ncat))
-         allocate(asum(icells))
-         allocate(aksum(icells))
 
       !-----------------------------------------------------------------
       ! Compute thickness distribution of ridging and ridged ice.
@@ -2045,19 +2009,17 @@
                           ! Cf accounts for frictional dissipation
          enddo            ! ij
 
-         deallocate(hrmin)
-         deallocate(hrmax)
-         deallocate(hrexp)
-         deallocate(krdg)
-         deallocate(apartic)
-         deallocate(asum)
-         deallocate(aksum)
-
       else                      ! kstrength /= 1:  Hibler (1979) form
 
       !-----------------------------------------------------------------
       ! Compute ice strength as in Hibler (1979)
       !-----------------------------------------------------------------
+
+         ilo = 1 + nghost
+         ihi = nx_block - nghost
+         jlo = 1 + nghost
+         jhi = ny_block - nghost
+
          do j = jlo, jhi
          do i = ilo, ihi
             strength(i,j) = Pstar*vice(i,j)*exp(-Cstar*(c1-aice(i,j)))
