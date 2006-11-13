@@ -444,15 +444,19 @@
       jhi = ny_block - nghost
 
       ! Initialize
-      xav  (:,:) = c0
-      yav  (:,:) = c0
-      xxav (:,:) = c0
-      xyav (:,:) = c0
-      yyav (:,:) = c0
-      xxxav(:,:) = c0
-      xxyav(:,:) = c0
-      xyyav(:,:) = c0
-      yyyav(:,:) = c0
+      do j = 1, ny_block
+      do i = 1, nx_block
+         xav  (i,j) = c0
+         yav  (i,j) = c0
+         xxav (i,j) = c0
+         xyav (i,j) = c0
+         yyav (i,j) = c0
+         xxxav(i,j) = c0
+         xxyav(i,j) = c0
+         xyyav(i,j) = c0
+         yyyav(i,j) = c0
+      enddo
+      enddo
 
       ! Compute vertices and area of each triangle.
 
@@ -635,13 +639,13 @@
       ! in a complicated way for which there is no update routine.
       !-----------------------------------------------------------------
 
-      worka(:,:) = c0           ! theta1, NE corner
-      workb(:,:) = c0           ! theta2, NW corner
-      workc(:,:) = c0           ! theta3, SW corner
-      workd(:,:) = c0           ! theta4, SW corner
-
       do j = 1, ny_block
       do i = 1, nx_block
+         worka(i,j) = c0           ! theta1, NE corner
+         workb(i,j) = c0           ! theta2, NW corner
+         workc(i,j) = c0           ! theta3, SW corner
+         workd(i,j) = c0           ! theta4, SW corner
+
          if (HTN(i,j) > puny) worka(i,j) = atan( dxhy(i,j)/HTN(i,j))
          if (HTE(i,j) > puny) workd(i,j) = atan(-dyhx(i,j)/HTE(i,j)) 
       enddo
@@ -733,7 +737,7 @@
      &                    xav, yav, xxav, xyav, yyav,
      &                    xxxav, xxyav, xyyav, yyyav
       use ice_exit
-      use ice_work, only: work1
+      use ice_work, only: work1, worka
       use ice_calendar, only: istep1
       use ice_itd, only: ilyr1, ilyrn, slyr1, slyrn
       use ice_timers
@@ -762,7 +766,6 @@
       integer (kind=int_kind) ::
      &   i, j             ! horizontal indices
      &,  iblk             ! block indices
-     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
      &,  k,i1,i2,s1,s2    ! layer indices
      &,  n                ! ice category index
      &,  nt, nt1, nt2     ! tracer indices
@@ -773,6 +776,7 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) ::
      &   dpx              ! x coordinates of departure points at cell corners
      &,  dpy              ! y coordinates of departure points at cell corners
+     &,  extmask          ! extended ice mask
 
       real (kind=dbl_kind), 
      &   dimension (nx_block,ny_block,0:ncat,max_blocks) ::
@@ -811,6 +815,23 @@
 
       integer (kind=int_kind) ::
      &   istop, jstop     ! indices of grid cell where model aborts 
+
+      integer (kind=int_kind), dimension(0:ncat,max_blocks) ::
+     &   icellsnc         ! number of cells with ice
+
+      integer (kind=int_kind), 
+     &   dimension(nx_block*ny_block,0:ncat,max_blocks) ::
+     &   indxinc, indxjnc   ! compressed i/j indices
+
+      integer (kind=int_kind), dimension(ngroups,max_blocks) ::
+     &   icellsng         ! number of cells with ice
+
+      integer (kind=int_kind), 
+     &   dimension(nx_block*ny_block,ngroups,max_blocks) ::
+     &   indxing, indxjng ! compressed i/j indices
+
+      integer (kind=int_kind) ::
+     &   ij
 
       ! variables used for optional bug checks
 
@@ -889,6 +910,8 @@
     !-------------------------------------------------------------------
 
          call state_to_tracers(nx_block,          ny_block,
+     &                         icellsnc(:,iblk),
+     &                         indxinc(:,:,iblk), indxjnc(:,:,iblk),
      &                         aice0(:,:,  iblk),
      &                         aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk), 
      &                         vicen(:,:,:,iblk), vsnon(:,:,  :,iblk), 
@@ -902,14 +925,12 @@
     ! (e.g., ice area for land cells).
     !------------------------------------------------------------------- 
 
-         call make_masks (nx_block,        ny_block,
-     &                    aim(:,:,0,iblk), aimask(:,:,0,iblk))
-
-         do n = 1, ncat
-            call make_masks (nx_block,          ny_block,
-     &                       aim(:,:,  n,iblk), aimask(:,:,  n,iblk), 
-     &                       trm(:,:,:,n,iblk), trmask(:,:,:,n,iblk))
-         enddo                  ! n
+         call make_masks (nx_block,          ny_block,
+     &                    nghost,
+     &                    icellsnc(:,iblk),
+     &                    indxinc(:,:,iblk), indxjnc(:,:,iblk),
+     &                    aim(:,:,:,iblk),   aimask(:,:,:,iblk),
+     &                    trm(:,:,:,:,iblk), trmask(:,:,:,:,iblk))
 
       enddo                     ! iblk
 
@@ -1016,7 +1037,8 @@
          ! open water
 
          call construct_fields(nx_block,            ny_block,
-     &                         nghost,
+     &                         nghost,              icellsnc (0,iblk),
+     &                         indxinc  (:,0,iblk), indxjnc(:,0,iblk),
      &                         HTN      (:,:,iblk), HTE  (:,:,iblk), 
      &                         hm       (:,:,iblk), xav  (:,:,iblk), 
      &                         yav      (:,:,iblk), xxav (:,:,iblk), 
@@ -1034,7 +1056,8 @@
 
             call construct_fields
      &                          (nx_block,            ny_block,
-     &                           nghost,
+     &                           nghost,              icellsnc (n,iblk),
+     &                           indxinc  (:,n,iblk), indxjnc(:,n,iblk),
      &                           HTN      (:,:,iblk), HTE    (:,:,iblk), 
      &                           hm       (:,:,iblk), xav    (:,:,iblk), 
      &                           yav      (:,:,iblk), xxav   (:,:,iblk), 
@@ -1051,35 +1074,10 @@
 
          enddo                  ! n
 
-      enddo                     ! iblk
-
-    !-------------------------------------------------------------------
-    ! Ghost cell updates for centroid values and gradients
-    !-------------------------------------------------------------------
-
-      call ice_timer_start(timer_bound)
-      call update_ghost_cells (aic,              bndy_info,
-     &                         field_loc_center, field_type_scalar)
-      call update_ghost_cells (aix,              bndy_info,
-     &                         field_loc_center, field_type_vector)
-      call update_ghost_cells (aiy,              bndy_info,
-     &                         field_loc_center, field_type_vector)
-
-      call update_ghost_cells (trc,              bndy_info,
-     &                         field_loc_center, field_type_scalar)
-      call update_ghost_cells (trx,              bndy_info,
-     &                         field_loc_center, field_type_vector)
-      call update_ghost_cells (try,              bndy_info,
-     &                         field_loc_center, field_type_vector)
-      call ice_timer_stop(timer_bound)
-
     !-------------------------------------------------------------------
     ! Given velocity field at cell corners, compute departure points
     ! of trajectories.
     !-------------------------------------------------------------------
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
 
          call departure_points(nx_block,          ny_block,
      &                         nghost,            dt,
@@ -1094,6 +1092,7 @@
      &                         istop,             jstop)
 
          if (l_stop) then
+            this_block = get_block(blocks(iblk),iblk)         
             write(nu_diag,*) 'istep1, my_task, iblk =',
      &                        istep1, my_task, iblk
             write (nu_diag,*) 'Global block:', this_block%block_id
@@ -1113,8 +1112,59 @@
      &                         field_loc_NEcorner, field_type_vector)
       call ice_timer_stop(timer_bound)
 
+    !-------------------------------------------------------------------
+    ! define extended ice mask
+    !-------------------------------------------------------------------
+
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (dpx(i,j,iblk)/=c0 .or. dpy(i,j,iblk)/=c0) then
+               worka(i,j) = c1
+            else
+               worka(i,j) = c0
+            endif
+         enddo
+         enddo
+
+         do j = 1+nghost, ny_block-nghost
+         do i = 1+nghost, nx_block-nghost
+         if (worka(i-1,j+1)==c1 .or. worka(i,j+1)==c1 .or. 
+     &       worka(i+1,j+1)==c1 .or.
+     &       worka(i-1,j)  ==c1 .or. worka(i,j)  ==c1 .or. 
+     &       worka(i+1,j)  ==c1 .or.
+     &       worka(i-1,j-1)==c1 .or. worka(i,j-1)==c1 .or. 
+     &       worka(i+1,j-1)==c1 ) then
+             extmask(i,j,iblk) = c1
+         endif
+         enddo
+         enddo
+      enddo
+
+      call ice_timer_start(timer_bound)
+      call update_ghost_cells (extmask,            bndy_info,
+     &                         field_loc_NEcorner, field_type_vector)
+
+    !-------------------------------------------------------------------
+    ! Ghost cell updates for centroid values and gradients
+    !-------------------------------------------------------------------
+
+      call update_ghost_cells (aic,              bndy_info,
+     &                         field_loc_center, field_type_scalar)
+      call update_ghost_cells (aix,              bndy_info,
+     &                         field_loc_center, field_type_vector)
+      call update_ghost_cells (aiy,              bndy_info,
+     &                         field_loc_center, field_type_vector)
+
+      call update_ghost_cells (trc,              bndy_info,
+     &                         field_loc_center, field_type_scalar)
+      call update_ghost_cells (trx,              bndy_info,
+     &                         field_loc_center, field_type_vector)
+      call update_ghost_cells (try,              bndy_info,
+     &                         field_loc_center, field_type_vector)
+      call ice_timer_stop(timer_bound)
+
+      do iblk = 1, nblocks
 
     !-------------------------------------------------------------------
     ! Transports for east cell edges.
@@ -1127,6 +1177,8 @@
          call locate_triangles_east
      &                           (nx_block,           ny_block,
      &                            nghost,
+     &                            extmask(:,:,iblk),  icellsng (:,iblk),
+     &                            indxing(:,:,iblk),  indxjng(:,:,iblk),
      &                            dpx    (:,:,iblk),  dpy    (:,:,iblk),
      &                            HTN    (:,:,iblk),  HTE    (:,:,iblk),
      &                            mne(:,:,:,:,iblk),  mnw(:,:,:,:,iblk),
@@ -1144,7 +1196,10 @@
     !-------------------------------------------------------------------
 
          call triangle_coordinates (nx_block, ny_block,
-     &                              triarea,  integral_order,
+     &                              integral_order,
+     &                              icellsng (:,iblk),
+     &                              indxing(:,:,iblk),  
+     &                              indxjng(:,:,iblk),
      &                              xp0,      xp1,
      &                              xp2,      xp3,
      &                              yp0,      yp1,
@@ -1157,8 +1212,9 @@
 
          ! open water
          call transport_integrals(nx_block,        ny_block,
-     &                            nghost,          integral_order,
-     &                            triarea,
+     &                            integral_order,
+     &                            triarea,         icellsng (:,iblk),
+     &                            indxing(:,:,iblk),indxjng(:,:,iblk),
      &                            iflux,           jflux,
      &                            xp0,             xp1,
      &                            xp2,             xp3,
@@ -1171,8 +1227,9 @@
          do n = 1, ncat
             call transport_integrals
      &                         (nx_block,          ny_block,
-     &                          nghost,            integral_order,
-     &                          triarea,
+     &                          integral_order,
+     &                          triarea,           icellsng (:,iblk),
+     &                          indxing(:,:,iblk), indxjng(:,:,iblk),
      &                          iflux,             jflux,
      &                          xp0,               xp1,
      &                          xp2,               xp3,
@@ -1191,6 +1248,8 @@
          call locate_triangles_north
      &                           (nx_block,           ny_block,
      &                            nghost,
+     &                            extmask(:,:,iblk),  icellsng (:,iblk),
+     &                            indxing(:,:,iblk),  indxjng(:,:,iblk),
      &                            dpx    (:,:,iblk),  dpy    (:,:,iblk),
      &                            HTN    (:,:,iblk),  HTE    (:,:,iblk),
      &                            mne(:,:,:,:,iblk),  mnw(:,:,:,:,iblk),
@@ -1203,7 +1262,10 @@
      &                            triarea)
 
          call triangle_coordinates (nx_block, ny_block,
-     &                              triarea,  integral_order,
+     &                              integral_order,
+     &                              icellsng (:,iblk),
+     &                              indxing(:,:,iblk),
+     &                              indxjng(:,:,iblk),
      &                              xp0,      xp1,
      &                              xp2,      xp3,
      &                              yp0,      yp1,
@@ -1211,8 +1273,9 @@
 
          ! open water
          call transport_integrals(nx_block,         ny_block,
-     &                            nghost,           integral_order,
-     &                            triarea,
+     &                            integral_order,
+     &                            triarea,          icellsng (:,iblk),
+     &                            indxing(:,:,iblk),indxjng(:,:,iblk),
      &                            iflux,            jflux,
      &                            xp0,              xp1,
      &                            xp2,              xp3,
@@ -1220,28 +1283,6 @@
      &                            yp2,              yp3,
      &                            aic(:,:,0,iblk),  aix(:,:,0,iblk),
      &                            aiy(:,:,0,iblk),  aiflxn(:,:,0))
-
-         ! ice categories
-         do n = 1, ncat
-            call transport_integrals
-     &                         (nx_block,           ny_block,
-     &                          nghost,             integral_order,
-     &                          triarea,
-     &                          iflux,              jflux,
-     &                          xp0,                xp1,
-     &                          xp2,                xp3,
-     &                          yp0,                yp1,
-     &                          yp2,                yp3,
-     &                          aic  (:,:,n,iblk),  aix  (:,:,n,iblk),
-     &                          aiy  (:,:,n,iblk),  aiflxn(:,:,n),
-     &                          trc(:,:,:,n,iblk),  trx(:,:,:,n,iblk),
-     &                          try(:,:,:,n,iblk),  atflxn(:,:,:,n))
-
-         enddo                  ! n
-
-    !-------------------------------------------------------------------
-    ! Update the open water area.
-    !-------------------------------------------------------------------
 
          call update_fields (nx_block,           ny_block,
      &                       nghost,             tarear(:,:,iblk),      
@@ -1251,6 +1292,7 @@
      &                       aim   (:,:,0,iblk))
 
          if (l_stop) then
+            this_block = get_block(blocks(iblk),iblk)         
             write (nu_diag,*) 'istep1, my_task, iblk, cat =',
      &                         istep1, my_task, iblk, n
             write (nu_diag,*) 'Global block:', this_block%block_id
@@ -1261,11 +1303,23 @@
             call abort_ice ('ice remap_transport: negative area')
          endif
 
-    !-------------------------------------------------------------------
-    ! Update the ice area and tracers.
-    !-------------------------------------------------------------------
-
+         ! ice categories
          do n = 1, ncat
+            call transport_integrals
+     &                         (nx_block,           ny_block,
+     &                          integral_order,
+     &                          triarea,            icellsng (:,iblk),
+     &                          indxing(:,:,iblk),  indxjng(:,:,iblk),
+     &                          iflux,              jflux,
+     &                          xp0,                xp1,
+     &                          xp2,                xp3,
+     &                          yp0,                yp1,
+     &                          yp2,                yp3,
+     &                          aic  (:,:,n,iblk),  aix  (:,:,n,iblk),
+     &                          aiy  (:,:,n,iblk),  aiflxn(:,:,n),
+     &                          trc(:,:,:,n,iblk),  trx(:,:,:,n,iblk),
+     &                          try(:,:,:,n,iblk),  atflxn(:,:,:,n))
+
             call update_fields(nx_block,             ny_block,
      &                         nghost,               tarear(:,:,iblk),
      &                         l_stop,
@@ -1276,6 +1330,7 @@
      &                         trm   (:,:,:,n,iblk))
 
             if (l_stop) then
+               this_block = get_block(blocks(iblk),iblk)         
                write (nu_diag,*) 'istep1, my_task, iblk, cat =',
      &                            istep1, my_task, iblk, n
                write (nu_diag,*) 'Global block:', this_block%block_id
@@ -1286,6 +1341,17 @@
                call abort_ice ('ice remap_transport: negative area')
             endif
          enddo                  ! n
+
+    !-------------------------------------------------------------------
+    ! Given new fields, recompute state variables.
+    !-------------------------------------------------------------------
+
+         call tracers_to_state (nx_block,          ny_block,
+     &                          aim  (:,:,:,iblk), trm  (:,:,:,:,iblk),
+     &                          aice0(:,:,  iblk),
+     &                          aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk),
+     &                          vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),
+     &                          eicen(:,:,:,iblk), esnon(:,:,  :,iblk)) 
 
       enddo                     ! iblk
 
@@ -1390,22 +1456,6 @@
          if (alloc_error /= 0) call abort_ice ('deallocation error')
 
       endif                     ! l_monotonicity_check
-
-    !-------------------------------------------------------------------
-    ! Given new fields, recompute state variables.
-    !-------------------------------------------------------------------
-
-      do iblk = 1, nblocks
-
-         call tracers_to_state (nx_block,          ny_block,
-     &                          nghost,
-     &                          aim  (:,:,:,iblk), trm  (:,:,:,:,iblk),
-     &                          aice0(:,:,  iblk),
-     &                          aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk),
-     &                          vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),
-     &                          eicen(:,:,:,iblk), esnon(:,:,  :,iblk)) 
-
-      enddo                     ! iblk
 
       call ice_timer_stop(timer_advect)  ! advection 
 
@@ -1524,11 +1574,8 @@
     !  using midpoint approximation below.
     !-------------------------------------------------------------------
 
-      dpx(:,:) = c0
-      dpy(:,:) = c0
-
-      do j = jlo, jhi
-      do i = ilo, ihi
+      do j = 1, ny_block
+      do i = 1, nx_block
          dpx(i,j) = -dt*uvel(i,j)
          dpy(i,j) = -dt*vvel(i,j)
       enddo
@@ -1541,7 +1588,6 @@
 
       do j = jlo, jhi
       do i = ilo, ihi
-
          if ((dpx(i,j) < -HTN(i,j)) .or. 
      &       (dpx(i,j) >  HTN(i+1,j)) .or.
      &       (dpy(i,j) < -HTE(i,j)) .or.
@@ -1650,9 +1696,6 @@
             mpxt(i,j) = cxt(i,j) + mat11(i,j)*mpx + mat12(i,j)*mpy
             mpyt(i,j) = cyt(i,j) + mat21(i,j)*mpx + mat22(i,j)*mpy
 
-         enddo                  ! i
-         enddo                  ! j
-
     !-------------------------------------------------------------------
     ! Transform (mpxt,mpyt) to a stretched coordinate system in which
     ! the coordinates of the four corners relative to the center are
@@ -1662,27 +1705,37 @@
     ! (Occasionally abs(mpxs) or abs(mpys) > 1 after first iteration.)
     !-------------------------------------------------------------------
 
-         do niter = 1, 3
-            do j = jlo, jhi
-            do i = ilo, ihi
                i2 = hindi(i,j)
                j2 = hindj(i,j)
                w1 = c2*mpxt(i,j) * dyt(i2,j2)
+               w3 = c2*mpyt(i,j) * dxt(i2,j2)
+               ! 1st iteration
                w2 =   dxt(i2,j2) * dyt(i2,j2)
      &             + dyhx(i2,j2) * (c2*mpyt(i,j)
      &                         - mpxs(i,j)*mpys(i,j)*dxhy(i2,j2))
-               w3 = c2*mpyt(i,j) * dxt(i2,j2)
                w4 =   dxt(i2,j2) * dyt(i2,j2)
      &             + dxhy(i2,j2) * (c2*mpxt(i,j)
      &                         - mpxs(i,j)*mpys(i,j)*dyhx(i2,j2))
                mpxs(i,j) = w1/w2
                mpys(i,j) = w3/w4
-            enddo               ! i
-            enddo               ! j
-         enddo                  ! niter
-
-         do j = jlo, jhi
-         do i = ilo, ihi
+               ! 2nd iteration
+               w2 =   dxt(i2,j2) * dyt(i2,j2)
+     &             + dyhx(i2,j2) * (c2*mpyt(i,j)
+     &                         - mpxs(i,j)*mpys(i,j)*dxhy(i2,j2))
+               w4 =   dxt(i2,j2) * dyt(i2,j2)
+     &             + dxhy(i2,j2) * (c2*mpxt(i,j)
+     &                         - mpxs(i,j)*mpys(i,j)*dyhx(i2,j2))
+               mpxs(i,j) = w1/w2
+               mpys(i,j) = w3/w4
+               ! 3rd iteration
+               w2 =   dxt(i2,j2) * dyt(i2,j2)
+     &             + dyhx(i2,j2) * (c2*mpyt(i,j)
+     &                         - mpxs(i,j)*mpys(i,j)*dxhy(i2,j2))
+               w4 =   dxt(i2,j2) * dyt(i2,j2)
+     &             + dxhy(i2,j2) * (c2*mpxt(i,j)
+     &                         - mpxs(i,j)*mpys(i,j)*dyhx(i2,j2))
+               mpxs(i,j) = w1/w2
+               mpys(i,j) = w3/w4
 
     !-------------------------------------------------------------------
     ! Transform the four corner velocities to the (i2,j2) reference frame.
@@ -1742,7 +1795,7 @@
 
             dpx(i,j) = -dt * ump
             dpy(i,j) = -dt * vmp
-            
+
          enddo                  ! i
          enddo                  ! j
 
@@ -1759,6 +1812,8 @@
 !
       subroutine locate_triangles_east (nx_block,  ny_block,
      &                                  nghost,
+     &                            extmask,  icells,
+     &                            indxi,  indxj,
      &                                  dpx,       dpy,   
      &                                  HTN,       HTE,   
      &                                  mne,       mnw,   
@@ -1788,6 +1843,10 @@
      &,  nghost              ! number of ghost cells
 
       real (kind=dbl_kind), dimension (nx_block,ny_block),
+     &   intent(in) ::
+     &   extmask          ! extended ice extent mask
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block),
      &     intent(in) ::
      &   dpx              ! x coordinates of departure points at cell corners
      &,  dpy              ! y coordinates of departure points at cell corners
@@ -1811,6 +1870,14 @@
      &     dimension (nx_block, ny_block, ngroups) ::
      &   iflux            ! i index of cell contributing east transport
      &,  jflux            ! j index of cell contributing east transport
+
+      integer (kind=int_kind), dimension (ngroups), intent(out) ::
+     &   icells              ! number of cells where triarea > puny
+
+      integer (kind=int_kind), dimension (nx_block*ny_block,ngroups),
+     &   intent(out) ::
+     &   indxi   ! compressed index in i-direction
+     &,  indxj   ! compressed index in j-direction
 !
 !EOP
 !
@@ -1819,6 +1886,7 @@
      &,  i2, j2           ! horizontal indices of cell contributing transport
      &,  ng               ! triangle group index
      &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
+     &,  ij               ! compressed horizontal index
 
       real (kind=dbl_kind) ::
      &   x1, y1, x2, y2   ! x,y coordinates of departure points, as in DB
@@ -1878,17 +1946,21 @@
       jhi = ny_block - nghost
 
       do ng = 1, ngroups
-         fluxsign(:,:,ng) = 0
-         iflux   (:,:,ng) = 0
-         jflux   (:,:,ng) = 0
-         xp0     (:,:,ng) = c0
-         xp1     (:,:,ng) = c0
-         xp2     (:,:,ng) = c0
-         xp3     (:,:,ng) = c0
-         yp0     (:,:,ng) = c0
-         yp1     (:,:,ng) = c0
-         yp2     (:,:,ng) = c0
-         yp3     (:,:,ng) = c0
+      do j = 1, ny_block
+      do i = 1, nx_block
+         fluxsign(i,j,ng) = 0
+         iflux   (i,j,ng) = 0
+         jflux   (i,j,ng) = 0
+         xp0     (i,j,ng) = c0
+         xp1     (i,j,ng) = c0
+         xp2     (i,j,ng) = c0
+         xp3     (i,j,ng) = c0
+         yp0     (i,j,ng) = c0
+         yp1     (i,j,ng) = c0
+         yp2     (i,j,ng) = c0
+         yp3     (i,j,ng) = c0
+      enddo
+      enddo
       enddo
 
     !-------------------------------------------------------------------
@@ -1897,6 +1969,8 @@
 
       do j = jlo, jhi
       do i = ilo-1, ihi      ! includes W edge of cells with index ilo
+
+         if (extmask(i,j) > puny) then
 
     !-------------------------------------------------------------------
     ! coordinates of departure points
@@ -2372,6 +2446,8 @@
             fluxsign(i,j,ng) = -1
          endif
 
+         endif                  ! extmask
+
       enddo                     ! i
       enddo                     ! j
 
@@ -2380,6 +2456,8 @@
     !-------------------------------------------------------------------
 
       do ng = 1, ngroups
+
+         icells(ng) = 0
          do j = 1, ny_block
          do i = 1, nx_block
 
@@ -2390,7 +2468,14 @@
 
             triarea(i,j,ng) = fluxsign(i,j,ng) * w1
 
-            if (abs(triarea(i,j,ng)) <= puny) triarea(i,j,ng) = c0 
+            if (abs(triarea(i,j,ng)) <= puny) then
+               triarea(i,j,ng) = c0 
+            else
+               icells(ng) = icells(ng) + 1 
+               ij = icells(ng)
+               indxi(ij,ng) = i
+               indxj(ij,ng) = j
+            endif
 
          enddo                  ! i
          enddo                  ! j
@@ -2408,6 +2493,8 @@
 !
       subroutine locate_triangles_north(nx_block,  ny_block,
      &                                  nghost,
+     &                            extmask,  icells,
+     &                            indxi,  indxj,
      &                                  dpx,       dpy,   
      &                                  HTN,       HTE,   
      &                                  mne,       mnw,   
@@ -2440,6 +2527,10 @@
      &,  nghost              ! number of ghost cells
 
       real (kind=dbl_kind), dimension (nx_block,ny_block),
+     &   intent(in) ::
+     &   extmask          ! extended ice extent mask
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block),
      &     intent(in) ::
      &   dpx              ! x coordinates of departure points at cell corners
      &,  dpy              ! y coordinates of departure points at cell corners
@@ -2463,6 +2554,14 @@
      &     dimension (nx_block, ny_block, ngroups) ::
      &   iflux            ! i index of cell contributing north transport
      &,  jflux            ! j index of cell contributing north transport
+
+      integer (kind=int_kind), dimension (ngroups), intent(out) ::
+     &   icells              ! number of cells where triarea > puny
+
+      integer (kind=int_kind), dimension (nx_block*ny_block,ngroups),
+     &   intent(out) ::
+     &   indxi   ! compressed index in i-direction
+     &,  indxj   ! compressed index in j-direction
 !
 !EOP
 !
@@ -2471,6 +2570,7 @@
      &,  i2, j2           ! horizontal indices of cell contributing transport
      &,  ng               ! triangle group index
      &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
+     &,  ij               ! compressed horizontal index
 
       real (kind=dbl_kind) ::
      &   x1, y1, x2, y2   ! x,y coordinates of departure points, as in DB
@@ -2530,17 +2630,21 @@
       jhi = ny_block - nghost
 
       do ng = 1, ngroups
-         fluxsign(:,:,ng) = 0
-         iflux   (:,:,ng) = 0
-         jflux   (:,:,ng) = 0
-         xp0     (:,:,ng) = c0
-         xp1     (:,:,ng) = c0
-         xp2     (:,:,ng) = c0
-         xp3     (:,:,ng) = c0
-         yp0     (:,:,ng) = c0
-         yp1     (:,:,ng) = c0
-         yp2     (:,:,ng) = c0
-         yp3     (:,:,ng) = c0
+      do j = 1, ny_block
+      do i = 1, nx_block
+         fluxsign(i,j,ng) = 0
+         iflux   (i,j,ng) = 0
+         jflux   (i,j,ng) = 0
+         xp0     (i,j,ng) = c0
+         xp1     (i,j,ng) = c0
+         xp2     (i,j,ng) = c0
+         xp3     (i,j,ng) = c0
+         yp0     (i,j,ng) = c0
+         yp1     (i,j,ng) = c0
+         yp2     (i,j,ng) = c0
+         yp3     (i,j,ng) = c0
+      enddo
+      enddo
       enddo
 
     !-------------------------------------------------------------------
@@ -2549,6 +2653,8 @@
 
       do j = jlo-1, jhi  ! includes S edge of cells with index jlo
       do i = ilo, ihi
+
+         if (extmask(i,j) > puny) then
 
     !-------------------------------------------------------------------
     ! coordinates of departure points
@@ -3011,6 +3117,8 @@
             fluxsign(i,j,ng) = -1
          endif
 
+         endif                  ! extmask
+
       enddo                     ! i loop
       enddo                     ! j loop
 
@@ -3019,6 +3127,8 @@
     !-------------------------------------------------------------------
 
       do ng = 1, ngroups
+
+         icells(ng) = 0
          do j = 1, ny_block
          do i = 1, nx_block
 
@@ -3029,7 +3139,14 @@
 
             triarea(i,j,ng) = fluxsign(i,j,ng) * w1
 
-            if (abs(triarea(i,j,ng)) <= puny) triarea(i,j,ng) = c0 
+            if (abs(triarea(i,j,ng)) <= puny) then
+               triarea(i,j,ng) = c0 
+            else
+               icells(ng) = icells(ng) + 1 
+               ij = icells(ng)
+               indxi(ij,ng) = i
+               indxj(ij,ng) = j
+            endif
 
          enddo                  ! i
          enddo                  ! j
@@ -3046,7 +3163,9 @@
 ! !INTERFACE:
 !
       subroutine triangle_coordinates (nx_block, ny_block,
-     &                                 triarea,  integral_order,
+     &                                 integral_order,
+     &                              icells,
+     &                            indxi,  indxj,
      &                                 xp0,      xp1,
      &                                 xp2,      xp3,
      &                                 yp0,      yp1,
@@ -3091,9 +3210,13 @@
      &     nx_block, ny_block  ! block dimensions
      &,    integral_order      ! polynomial order for quadrature integrals 
 
-      real (kind=dbl_kind), intent(in),
-     &     dimension (nx_block, ny_block, ngroups) ::
-     &     triarea             ! areas of departure triangles
+      integer (kind=int_kind), dimension (ngroups), intent(in) ::
+     &     icells              ! number of cells where triarea > puny
+
+      integer (kind=int_kind), dimension (nx_block*ny_block,ngroups),
+     &     intent(in) ::
+     &     indxi   ! compressed index in i-direction
+     &,    indxj   ! compressed index in j-direction
 
       real (kind=dbl_kind), intent(inout),
      &     dimension (nx_block, ny_block, ngroups) ::
@@ -3107,15 +3230,15 @@
       integer (kind=int_kind) ::
      &     i, j                ! horizontal indices
      &,    ng                  ! triangle index
+     &,    ij                  ! compressed horizontal index
 
 
       if (integral_order == 1) then ! linear (1-point formula)
 
          do ng = 1, ngroups
-         do j = 1, ny_block
-         do i = 1, nx_block
-
-            if (abs(triarea(i,j,ng)) > puny) then
+         do ij = 1, icells(ng)
+            i = indxi(ij,ng)
+            j = indxj(ij,ng)
 
             ! coordinates of midpoint
                xp0(i,j,ng) = p333
@@ -3123,10 +3246,7 @@
                yp0(i,j,ng) = p333
      &                     * (yp1(i,j,ng) + yp2(i,j,ng) + yp3(i,j,ng))
 
-            endif               ! triarea > puny
-
-         enddo                  ! i
-         enddo                  ! j
+         enddo                  ! ij
          enddo                  ! ng
 
       elseif (integral_order == 2) then ! quadratic (3-point formula)
@@ -3135,10 +3255,9 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ng = 1, ngroups
-         do j = 1, ny_block
-         do i = 1, nx_block
-
-            if (abs(triarea(i,j,ng)) > puny) then
+         do ij = 1, icells(ng)
+            i = indxi(ij,ng)
+            j = indxj(ij,ng)
 
             ! coordinates of midpoint
                xp0(i,j,ng) = p333
@@ -3157,10 +3276,7 @@
                xp3(i,j,ng) = p5*xp3(i,j,ng) + p5*xp0(i,j,ng)
                yp3(i,j,ng) = p5*yp3(i,j,ng) + p5*yp0(i,j,ng)
 
-            endif               ! triarea > puny
-
-         enddo                  ! i
-         enddo                  ! j
+         enddo                  ! ij
          enddo                  ! ng
 
       else                      ! cubic (4-point formula)
@@ -3169,10 +3285,9 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ng = 1, ngroups
-         do j = 1, ny_block
-         do i = 1, nx_block
-
-            if (abs(triarea(i,j,ng)) > puny) then
+         do ij = 1, icells(ng)
+            i = indxi(ij,ng)
+            j = indxj(ij,ng)
 
             ! coordinates of midpoint
                xp0(i,j,ng) = p333
@@ -3191,10 +3306,7 @@
                xp3(i,j,ng) = p4*xp3(i,j,ng) + p6*xp0(i,j,ng)
                yp3(i,j,ng) = p4*yp3(i,j,ng) + p6*yp0(i,j,ng)
 
-            endif               ! triarea > puny
-
-         enddo                  ! i
-         enddo                  ! j
+         enddo                  ! ij
          enddo                  ! ng
 
       endif
@@ -3210,6 +3322,8 @@
 ! !INTERFACE:
 !
       subroutine make_masks (nx_block, ny_block,
+     &                       nghost,
+     &                       icells,   indxi,    indxj,
      &                       aim,      aimask, 
      &                       trm,      trmask)
 !
@@ -3237,41 +3351,78 @@
 !
       integer (kind=int_kind), intent(in) ::
      &     nx_block, ny_block  ! block dimensions
+     &,    nghost              ! number of ghost cells
 
-      real (kind=dbl_kind), dimension (nx_block, ny_block),
+      integer (kind=int_kind), dimension(nx_block*ny_block,0:ncat),
      &     intent(inout) ::
+     &     indxi          ! compressed i/j indices
+     &,    indxj
+
+      integer (kind=int_kind), dimension(0:ncat),
+     &     intent(inout) ::
+     &     icells         ! number of cells with ice
+
+      real (kind=dbl_kind), dimension (nx_block, ny_block,0:ncat),
+     &     intent(in) ::
      &     aim            ! mean ice area in each grid cell
 
-      real (kind=dbl_kind), dimension (nx_block, ny_block),
+      real (kind=dbl_kind), dimension (nx_block, ny_block,0:ncat),
      &     intent(out) ::
      &     aimask         ! = 1. if ice is present, else = 0.
 
-      real (kind=dbl_kind), dimension (nx_block, ny_block, ntrace),
+      real (kind=dbl_kind), 
+     &     dimension (nx_block, ny_block, ntrace, ncat),
      &     intent(inout), optional ::
      &     trm            ! mean tracer values in each grid cell
 
-      real (kind=dbl_kind), dimension (nx_block, ny_block, ntrace),
+      real (kind=dbl_kind), 
+     &     dimension (nx_block, ny_block, ntrace, ncat),
      &     intent(out), optional ::
      &     trmask         ! = 1. if tracer is present, else = 0.
 !
 !EOP
 !
       integer (kind=int_kind) ::
-     &     i, j           ! horizontal indices
+     &     i, j, ij       ! horizontal indices
+     &,    n              ! ice category index
      &,    nt             ! tracer index
+     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
+
+      ilo = 1 + nghost
+      ihi = nx_block - nghost
+      jlo = 1 + nghost
+      jhi = ny_block - nghost
+
+    !-------------------------------------------------------------------
+    ! open water mask
+    !-------------------------------------------------------------------
+
+      icells(0) = 0
+      do j = jlo, jhi
+      do i = ilo, ihi
+         if (aim(i,j,0) > puny) then
+            aimask(i,j,0) = c1
+            icells(0) = icells(0) + 1
+            ij = icells(0)
+            indxi(ij,0) = i
+            indxj(ij,0) = j
+         else
+            aimask(i,j,0) = c0
+         endif
+      enddo
+      enddo
+
+      do n = 1, ncat
 
     !-------------------------------------------------------------------
     ! ice area mask
     !-------------------------------------------------------------------
 
-      do j = 1, ny_block
-      do i = 1, nx_block
-         if (aim(i,j) > puny) then
-            aimask(i,j) = c1
-         else
-            aimask(i,j) = c0
-         endif
-      enddo
+      aimask(:,:,n) = c0
+      do ij = 1, icells(n)
+          i = indxi(ij,n)
+          j = indxj(ij,n)
+          aimask(i,j,n) = c1
       enddo
 
     !-------------------------------------------------------------------
@@ -3280,21 +3431,38 @@
 
       if (present(trm)) then
 
+         trmask(:,:,:,n) = c0
          do nt = 1, ntrace
             if (has_dependents(nt)) then
-               do j = 1, ny_block
-               do i = 1, nx_block
-                  if (abs(trm(i,j,nt)) > puny) then
-                     trmask(i,j,nt) = c1
-                  else
-                     trmask(i,j,nt) = c0
+               do ij = 1, icells(n)
+                  i = indxi(ij,n)
+                  j = indxj(ij,n)
+                  if (abs(trm(i,j,nt,n)) > puny) then
+                     trmask(i,j,nt,n) = c1
                   endif
-               enddo
                enddo
             endif
          enddo
 
       endif                     ! present(trm)
+
+    !-------------------------------------------------------------------
+    ! Redefine icells (without ghost cells)
+    !-------------------------------------------------------------------
+
+      icells(n) = 0
+      do j = jlo, jhi
+      do i = ilo, ihi
+         if (aim(i,j,n) > puny) then
+            icells(n) = icells(n) + 1
+            ij = icells(n)
+            indxi(ij,n) = i
+            indxj(ij,n) = j
+         endif               ! aim > puny
+      enddo
+      enddo
+      
+      enddo ! n
 
       end subroutine make_masks
 
@@ -3307,6 +3475,8 @@
 ! !INTERFACE:
 !
       subroutine state_to_tracers (nx_block, ny_block,
+     &                             icells,
+     &                             indxi,    indxj,
      &                             aice0,
      &                             aicen,    trcrn,
      &                             vicen,    vsnon, 
@@ -3366,47 +3536,45 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrace,ncat),
      &     intent(out) ::
      &     trm       ! mean tracer values in each grid cell
+
+      integer (kind=int_kind), dimension(nx_block*ny_block,0:ncat),
+     &     intent(out) ::
+     &     indxi          ! compressed i/j indices
+     &,    indxj
+
+      integer (kind=int_kind), dimension(0:ncat),
+     &     intent(out) ::
+     &     icells         ! number of cells with ice
 !
 !EOP
 !
       integer (kind=int_kind) ::
      &     i, j, k, n     ! standard indices
      &,    it, kt         ! tracer indices
+     &,    ij             ! combined i/j index
 
       real (kind=dbl_kind) ::
      &     w1             ! work variable
-
-      integer (kind=int_kind), dimension(nx_block*ny_block) ::
-     &     indxi          ! compressed i/j indices
-     &,    indxj
-
-      integer (kind=int_kind) ::
-     &     icells         ! number of cells with ice
-     &,    ij             ! combined i/j index
-
 
       aim(:,:,0) = aice0(:,:)
 
       do n = 1, ncat
 
-    !-------------------------------------------------------------------
-    ! Fill ice area array and initialize tracers.
-    !-------------------------------------------------------------------
-
-         aim(:,:,n) = aicen(:,:,n)
          trm(:,:,:,n) = c0
 
     !-------------------------------------------------------------------
-    ! Find grid cells where ice is present
+    ! Find grid cells where ice is present.
     !-------------------------------------------------------------------
 
-         icells = 0
+         icells(n) = 0
          do j = 1, ny_block
          do i = 1, nx_block
+            aim(i,j,n) = aicen(i,j,n)
             if (aim(i,j,n) > puny) then
-               icells = icells + 1
-               indxi(icells) = i
-               indxj(icells) = j
+               icells(n) = icells(n) + 1
+               ij = icells(n)
+               indxi(ij,n) = i
+               indxj(ij,n) = j
             endif               ! aim > puny
          enddo
          enddo
@@ -3418,10 +3586,9 @@
     !  avoid extra operations here and in tracers_to_state.
     !-------------------------------------------------------------------
 
-
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
+         do ij = 1, icells(n)
+            i = indxi(ij,n)
+            j = indxj(ij,n)
             w1 = c1 / aim(i,j,n)
             worka(i,j) = c1 / vicen(i,j,n)
             trm(i,j,1,n) = vicen(i,j,n) * w1 ! hice
@@ -3435,27 +3602,27 @@
          kt = 2
 
          do it = 1, ntrcr
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+            do ij = 1, icells(n)
+               i = indxi(ij,n)
+               j = indxj(ij,n)
                trm(i,j,kt+it,n) = trcrn(i,j,it,n) ! ice area tracers
             enddo
          enddo
          kt = kt + ntrcr
 
          do k =1, nilyr
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+            do ij = 1, icells(n)
+               i = indxi(ij,n)
+               j = indxj(ij,n)
                trm(i,j,kt+k,n) = eicen(i,j,ilyr1(n)+k-1)*worka(i,j) ! qice
             enddo               ! ij
          enddo                  ! ilyr
          kt = kt + nilyr
 
          do k = 1, nslyr
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+            do ij = 1, icells(n)
+               i = indxi(ij,n)
+               j = indxj(ij,n)
                if (trm(i,j,2,n) > puny) ! hsno > puny
      &           trm(i,j,kt+k,n) = esnon(i,j,slyr1(n)+k-1)*workb(i,j) ! qsno
             enddo               ! ij
@@ -3473,7 +3640,6 @@
 ! !INTERFACE:
 !
       subroutine tracers_to_state (nx_block, ny_block,
-     &                             nghost,   
      &                             aim,      trm,
      &                             aice0,
      &                             aicen,    trcrn,
@@ -3496,7 +3662,6 @@
 !
       integer (kind=int_kind), intent(in) ::
      &     nx_block, ny_block  ! block dimensions
-     &,    nghost              ! number of ghost cells
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,0:ncat),
      &     intent(in) ::
@@ -3533,48 +3698,64 @@
       integer (kind=int_kind) ::
      &     i, j, k, n        ! standard indices
      &,    it, kt            ! tracer indices
+     &,    icells            ! number of cells with ice
+     &,    ij
+
+      integer (kind=int_kind), dimension (nx_block*ny_block) ::
+     &     indxi, indxj      ! compressed indices
 
       aice0(:,:) = aim(:,:,0)
 
       do n = 1, ncat
 
+      icells = 0
+      do j = 1, ny_block
+      do i = 1, nx_block
+         if (aim(i,j,n) > c0) then
+            icells = icells + 1
+            indxi(icells) = i
+            indxj(icells) = j
+         endif
+      enddo
+      enddo
+
     !-------------------------------------------------------------------
     ! Compute state variables.
     !-------------------------------------------------------------------
 
-         do j = 1, ny_block
-         do i = 1, nx_block
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
             aicen(i,j,n) = aim(i,j,n)
             vicen(i,j,n) = aim(i,j,n)*trm(i,j,1,n) ! aice*hice
             vsnon(i,j,n) = aim(i,j,n)*trm(i,j,2,n) ! aice*hsno
-         enddo                  ! i
-         enddo                  ! j
+         enddo                  ! ij
          kt = 2
 
          do it = 1, ntrcr
-            do j = 1, ny_block
-            do i = 1, nx_block
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
                trcrn(i,j,it,n) = trm(i,j,kt+it,n)  ! ice tracers
-            enddo               ! i
-            enddo               ! j
+            enddo               ! ij
          enddo                  ! ntrcr
          kt = kt + ntrcr
 
          do k = 1, nilyr
-            do j = 1, ny_block                         ! vice*qice
-            do i = 1, nx_block                               
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
                eicen(i,j,ilyr1(n)+k-1) = vicen(i,j,n)*trm(i,j,kt+k,n) 
-            enddo               ! i
-            enddo               ! j
+            enddo               ! ij
          enddo                  ! nilyr
          kt = kt + nilyr
 
          do k = 1, nslyr
-            do j = 1, ny_block                         ! vsno*qsno
-            do i = 1, nx_block                               
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
                esnon(i,j,slyr1(n)+k-1) = vsnon(i,j,n)*trm(i,j,kt+k,n)
-            enddo               ! i
-            enddo               ! j
+            enddo               ! ij
          enddo                  ! nslyr
 
       enddo                     ! ncat
@@ -3591,6 +3772,8 @@
 !
       subroutine construct_fields (nx_block, ny_block,
      &                             nghost,
+     &                             icells,
+     &                             indxi,   indxj,
      &                             HTN,      HTE,    
      &                             hm,       xav,
      &                             yav,      xxav,
@@ -3621,6 +3804,14 @@
       integer (kind=int_kind), intent(in) ::
      &   nx_block, ny_block  ! block dimensions
      &,  nghost              ! number of ghost cells
+
+      integer (kind=int_kind), dimension(nx_block*ny_block),
+     &   intent(in) ::
+     &   indxi          ! compressed i/j indices
+     &,  indxj
+
+      integer (kind=int_kind), intent(in) ::
+     &   icells         ! number of cells with ice
 
       real (kind=dbl_kind), dimension (nx_block,ny_block),
      &   intent(in) ::
@@ -3659,18 +3850,21 @@
      &   i, j             ! horizontal indices
      &,  nt, nt1          ! tracer indices
      &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
-     &,  icells           ! number of cells with ice present
-     &,  ij               ! combined i/j horizontal index
+     &,  ij, m            ! combined i/j horizontal indices
+     &,  ilim
 
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
-     &   indxi            ! compressed indices in i/j directions
-     &,  indxj
+      integer (kind=int_kind), dimension(nx_block*ny_block) ::
+     &   indxii, indxjj   ! combined i/j horizontal indices
+     &,  indxij
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
+      real (kind=dbl_kind), dimension (icells) ::
      &   axav, ayav       ! x,y coordinates of center of ice area
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrace) ::
+      real (kind=dbl_kind), dimension (icells,ntrace) ::
      &   atxav, atyav     ! x,y coordinates of center of area*tracer
+
+      real (kind=dbl_kind), dimension(nx_block*ny_block) ::
+     &   work1, work2     ! work arrays
 
       real (kind=dbl_kind) ::
      &   w1, w2, w3, w4, w5, w6, w7   ! work variables
@@ -3725,30 +3919,33 @@
       jlo = 1 + nghost
       jhi = ny_block - nghost
 
+      ilim = 0
+!      do j = 1, ny_block
+!      do i = 1, nx_block
+      do j = jlo, jhi
+      do i = ilo, ihi
+         ilim = ilim + 1
+         indxii(ilim) = i
+         indxjj(ilim) = j
+         indxij(ilim) = ilim
+
+         work1(ilim) = xav(i,j)
+         work2(ilim) = yav(i,j)
+
+         aic(i,j) = c0
+      enddo
+      enddo
+
       call limited_gradient (nx_block, ny_block,
-     &                       nghost,
+     &                       ilim,     ilim,
+     &                       indxii,   indxjj,   indxij,
      &                       aim,      hm,   
-     &                       xav,      yav,
+     &                       work1,    work2,
      &                       HTN,      HTE,  
      &                       dxt,      dyt,
      &                       aix,      aiy)
 
       ! ice area
-
-      icells = 0
-      do j = jlo,jhi
-      do i = ilo,ihi
-         if (aimask(i,j) > puny) then ! ice is present
-            icells = icells + 1
-            indxi(icells) = i
-            indxj(icells) = j
-        endif      ! aimask > puny
-      enddo
-      enddo
-
-      aic (:,:) = c0
-      axav(:,:) = c0
-      ayav(:,:) = c0
 
       do ij = 1,icells   ! ice is present
          i = indxi(ij)
@@ -3758,10 +3955,10 @@
          aic(i,j) = aim(i,j) - xav(i,j)*aix(i,j)
      &                       - yav(i,j)*aiy(i,j)
          ! center of ice area (axav,ayav) for each cell
-         axav(i,j) = (aix(i,j)*xxav(i,j) 
+         axav(ij) = (aix(i,j)*xxav(i,j) 
      &              + aiy(i,j)*xyav(i,j)
      &              + aic(i,j)*xav (i,j)) / aim(i,j)
-         ayav(i,j) = (aix(i,j)*xyav(i,j) 
+         ayav(ij) = (aix(i,j)*xyav(i,j) 
      &              + aiy(i,j)*yyav(i,j)
      &              + aic(i,j)*yav(i,j)) / aim(i,j)
       enddo                     ! ij
@@ -3772,15 +3969,18 @@
 
        do nt = 1, ntrace
 
-          trc  (:,:,nt) = c0
-          atxav(:,:,nt) = c0
-          atyav(:,:,nt) = c0
+         trc  (:,:,nt) = c0
 
          if (tracer_type(nt)==1) then ! independent of other tracers
                                  ! (surface temp, ice and snow thickness)
 
+            do ij = 1, icells
+               indxij(ij) = ij
+            enddo
+
             call limited_gradient(nx_block,     ny_block,
-     &                            nghost,
+     &                            icells,       icells,
+     &                            indxi, indxj, indxij,
      &                            trm(:,:,nt),  aimask,  
      &                            axav,         ayav,
      &                            HTN,          HTE, 
@@ -3798,8 +3998,8 @@
                   j = indxj(ij)
 
                   ! tracer value at geometric center
-                  trc(i,j,nt) = trm(i,j,nt) - trx(i,j,nt)*axav(i,j)
-     &                                      - try(i,j,nt)*ayav(i,j)
+                  trc(i,j,nt) = trm(i,j,nt) - trx(i,j,nt)*axav(ij)
+     &                                      - try(i,j,nt)*ayav(ij)
 
                   if (trmask(i,j,nt) > puny) then
 
@@ -3814,14 +4014,17 @@
      &                  + aiy(i,j)*trx(i,j,nt)
                      w6 = aiy(i,j)*try(i,j,nt)
                      w7 = c1 / (aim(i,j)*trm(i,j,nt))
-                     atxav(i,j,nt) = (w1*xav (i,j)  + w2*xxav (i,j)
+                     atxav(ij,nt) = (w1*xav (i,j)  + w2*xxav (i,j)
      &                              + w3*xyav (i,j) + w4*xxxav(i,j)
      &                              + w5*xxyav(i,j) + w6*xyyav(i,j))
      &                              * w7
-                     atyav(i,j,nt) = (w1*yav(i,j)   + w2*xyav (i,j)
+                     atyav(ij,nt) = (w1*yav(i,j)   + w2*xyav (i,j)
      &                              + w3*yyav(i,j)  + w4*xxyav(i,j)
      &                              + w5*xyyav(i,j) + w6*yyyav(i,j))
      &                              * w7
+                  else
+                     atxav(ij,nt) = c0
+                     atyav(ij,nt) = c0
                   endif         ! trmask
 
                enddo            ! ij
@@ -3833,8 +4036,8 @@
                   j = indxj(ij)
 
                   ! tracer value at geometric center
-                  trc(i,j,nt) = trm(i,j,nt) - trx(i,j,nt)*axav(i,j)
-     &                                      - try(i,j,nt)*ayav(i,j)
+                  trc(i,j,nt) = trm(i,j,nt) - trx(i,j,nt)*axav(ij)
+     &                                      - try(i,j,nt)*ayav(ij)
                enddo            ! ij
 
             endif               ! has_dependents
@@ -3843,25 +4046,36 @@
                                              ! (ice and snow enthalpy)
             nt1 = depend(nt)
 
-            call limited_gradient(nx_block, ny_block,
-     &                            nghost,
-     &                            trm(:,:,nt),    trmask(:,:,nt1),
-     &                            atxav(:,:,nt1), atyav(:,:,nt1),
-     &                            HTN,            HTE,
-     &                            dxt,            dyt,
-     &                            trx(:,:,nt),    try(:,:,nt))    
-
-            do j = jlo, jhi
-            do i = ilo, ihi
-
+            ilim = 0
+            do ij = 1, icells
+               i =  indxi(ij)
+               j =  indxj(ij)
                if (trmask(i,j,nt1) > puny) then
-                  trc(i,j,nt) = trm(i,j,nt)
-     &                        - trx(i,j,nt) * atxav(i,j,nt1)
-     &                        - try(i,j,nt) * atyav(i,j,nt1)
-               endif            ! trmask(nt1)
+                  ilim = ilim + 1
+                  indxii(ilim) = i
+                  indxjj(ilim) = j
+                  indxij(ilim) = ij
+               endif                  ! phimask > puny
+            enddo
 
-            enddo               ! i
-            enddo               ! j
+            call limited_gradient(nx_block,     ny_block,
+     &                            icells,       ilim,
+     &                            indxii, indxjj, indxij,
+     &                            trm(:,:,nt),  trmask(:,:,nt1),
+     &                            atxav(:,nt1), atyav(:,nt1),
+     &                            HTN,          HTE,
+     &                            dxt,          dyt,
+     &                            trx(:,:,nt),  try(:,:,nt))    
+
+               trc(:,:,nt) = c0
+               do ij = 1, ilim      ! ice is present
+                  i = indxii(ij)
+                  j = indxjj(ij)
+                  m = indxij(ij)
+                  trc(i,j,nt) = trm(i,j,nt)
+     &                        - trx(i,j,nt) * atxav(m,nt1)
+     &                        - try(i,j,nt) * atyav(m,nt1)
+            enddo               ! ij
 
          elseif (tracer_type(nt) ==3) then  ! upwind approx; gradient = 0
 
@@ -3889,8 +4103,9 @@
 ! !INTERFACE:
 !
       subroutine transport_integrals (nx_block, ny_block,
-     &                                nghost,   integral_order,
-     &                                triarea,
+     &                                integral_order,
+     &                                triarea,  icells,
+     &                                indxi,    indxj,
      &                                iflux,    jflux,
      &                                xp0,      xp1,
      &                                xp2,      xp3,
@@ -3919,8 +4134,15 @@
 !
       integer (kind=int_kind), intent(in) ::
      &     nx_block, ny_block  ! block dimensions
-     &,    nghost           ! number of ghost cells
      &,    integral_order   ! polynomial order for quadrature integrals 
+
+      integer (kind=int_kind), dimension (ngroups), intent(in) ::
+     &     icells              ! number of cells where triarea > puny
+
+      integer (kind=int_kind), dimension (nx_block*ny_block,ngroups),
+     &     intent(in) ::
+     &     indxi   ! compressed index in i-direction
+     &,    indxj   ! compressed index in j-direction
 
       real (kind=dbl_kind), intent(in),
      &     dimension (nx_block, ny_block, ngroups) ::
@@ -3958,7 +4180,7 @@
      &,    i2, j2          ! horizontal indices of cell contributing transport
      &,    ng              ! triangle index
      &,    nt, nt1         ! tracer indices
-     &,    ilo,ihi,jlo,jhi ! beginning and end of physical domain
+     &,    ij              ! combined i/j index
 
       real (kind=dbl_kind) ::
      &     a0, a1, a2, a3           ! ice area at internal points
@@ -3973,22 +4195,9 @@
      &,    atxsum             ! sum of area*tracer*x
      &,    atysum             ! sum of area*tracer*y
 
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
-     &   indxi   ! compressed index in i-direction
-     &,  indxj   ! compressed index in j-direction
-
-      integer (kind=int_kind) ::
-     &   icells  ! number of cells where triarea > puny
-     &,  ij      ! combined i/j index
-
     !-------------------------------------------------------------------
     ! Initialize
     !-------------------------------------------------------------------
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
 
       aiflx(:,:) = c0
       if (present(atflx)) then
@@ -4003,25 +4212,14 @@
 
       do ng = 1, ngroups
 
-         icells = 0
-         do j = jlo-1, jhi
-         do i = ilo-1, ihi
-            if (abs(triarea(i,j,ng)) > puny) then
-               icells = icells+1
-               indxi(icells) = i
-               indxj(icells) = j
-            endif
-         enddo                  ! i
-         enddo                  ! j
-
          if (integral_order == 1) then  ! linear (1-point formula)
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+            do ij = 1, icells(ng)
+               i = indxi(ij,ng)
+               j = indxj(ij,ng)
 
                i2 = iflux(i,j,ng)
                j2 = jflux(i,j,ng)
@@ -4047,9 +4245,9 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+            do ij = 1, icells(ng)
+               i = indxi(ij,ng)
+               j = indxj(ij,ng)
 
                i2 = iflux(i,j,ng)
                j2 = jflux(i,j,ng)
@@ -4094,9 +4292,9 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
+            do ij = 1, icells(ng)
+               i = indxi(ij,ng)
+               j = indxj(ij,ng)
 
                i2 = iflux(i,j,ng)
                j2 = jflux(i,j,ng)
@@ -4155,9 +4353,9 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
+                  do ij = 1, icells(ng)
+                     i = indxi(ij,ng)
+                     j = indxj(ij,ng)
 
                      i2 = iflux(i,j,ng)
                      j2 = jflux(i,j,ng)
@@ -4186,9 +4384,9 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
+                  do ij = 1, icells(ng)
+                     i = indxi(ij,ng)
+                     j = indxj(ij,ng)
 
                      i2 = iflux(i,j,ng)
                      j2 = jflux(i,j,ng)
@@ -4208,9 +4406,9 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
+                  do ij = 1, icells(ng)
+                     i = indxi(ij,ng)
+                     j = indxj(ij,ng)
 
                      i2 = iflux(i,j,ng)
                      j2 = jflux(i,j,ng)
@@ -4469,7 +4667,8 @@
 ! !INTERFACE:
 !
       subroutine limited_gradient (nx_block, ny_block,
-     &                             nghost,
+     &                             icells,   ilim,
+     &                             indxii, indxjj, indxij,
      &                             phi,      phimask, 
      &                             cnx,      cny,
      &                             HTN,      HTE,
@@ -4495,13 +4694,22 @@
 !
       integer (kind=int_kind), intent(in) ::
      &    nx_block, ny_block  ! block dimensions
-     &,   nghost              ! number of ghost cells
+     &,   ilim
+     &,   icells
+
+      integer (kind=int_kind), dimension (nx_block*ny_block),
+     &    intent(in) ::
+     &    indxii, indxjj   ! combined i/j horizontal indices
+     &,   indxij
+
+      real (kind=dbl_kind), dimension (icells),
+     &    intent (in) ::
+     &    cnx      ! x-coordinate of phi relative to geometric center of cell
+     &,   cny      ! y-coordinate of phi relative to geometric center of cell
 
       real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &     intent (in) ::
+     &    intent (in) ::
      &    phi      ! input tracer field (mean values in each grid cell)
-     &,   cnx      ! x-coordinate of phi relative to geometric center of cell
-     &,   cny      ! y-coordinate of phi relative to geometric center of cell
      &,   dxt      ! grid cell width (m)
      &,   dyt      ! grid cell height (m)
      &,   phimask
@@ -4520,7 +4728,6 @@
 !
       integer (kind=int_kind) ::
      &    i, j
-     &,   ilo,ihi,jlo,jhi     ! beginning and end of physical domain
 
       real (kind=dbl_kind) ::
      &    phi_nw, phi_n, phi_ne   ! values of phi in 8 neighbor cells
@@ -4530,39 +4737,23 @@
      &,   pmn, pmx       ! min and max value of phi among neighbor cells
      &,   w1, w2, w3, w4 ! work variables
 
-      integer (kind=int_kind), dimension(nx_block*ny_block) ::
-     &    indxi          ! compressed indices for i/j direction
-     &,   indxj
-
       integer (kind=int_kind) ::
-     &    icells         ! number of unmasked grid cells
-     &,   ij             ! combined i/j horizontal index
+     &    ij, m          ! combined i/j horizontal indices
 
       real (kind=dbl_kind) ::
      &    gxtmp, gytmp   ! temporary term for x- and y- limited gradient
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
-      gx(:,:) = c0
-      gy(:,:) = c0
-
-      icells = 0
-      do j = jlo, jhi
-      do i = ilo, ihi
-         if (phimask(i,j) > puny) then
-            icells = icells + 1
-            indxi(icells) = i
-            indxj(icells) = j
-         endif                  ! phimask > puny
+      do j = 1, ny_block
+      do i = 1, nx_block
+         gx(i,j) = c0
+         gy(i,j) = c0
       enddo
       enddo
 
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
+      do ij = 1, ilim
+         i = indxii(ij)
+         j = indxjj(ij)
+         m = indxij(ij)
 
          ! Store values of phi in the 8 neighbor cells.
          ! Note: phimask = 1. or 0.  If phimask = 1., use the true value;
@@ -4602,14 +4793,14 @@
          pmx = pmx - phi(i,j)
 
          ! minimum and maximum deviation of phi within the cell
-         w1  =  (p5*HTN(i,j)   - cnx(i,j)) * gxtmp
-     &        + (p5*HTE(i,j)   - cny(i,j)) * gytmp
-         w2  =  (p5*HTN(i,j-1) - cnx(i,j)) * gxtmp
-     &        - (p5*HTE(i,j)   + cny(i,j)) * gytmp
-         w3  = -(p5*HTN(i,j-1) + cnx(i,j)) * gxtmp
-     &        - (p5*HTE(i-1,j) + cny(i,j)) * gytmp
-         w4  =  (p5*HTE(i-1,j) - cny(i,j)) * gytmp
-     &        - (p5*HTN(i,j)   + cnx(i,j)) * gxtmp
+         w1  =  (p5*HTN(i,j)   - cnx(m)) * gxtmp
+     &        + (p5*HTE(i,j)   - cny(m)) * gytmp
+         w2  =  (p5*HTN(i,j-1) - cnx(m)) * gxtmp
+     &        - (p5*HTE(i,j)   + cny(m)) * gytmp
+         w3  = -(p5*HTN(i,j-1) + cnx(m)) * gxtmp
+     &        - (p5*HTE(i-1,j) + cny(m)) * gytmp
+         w4  =  (p5*HTE(i-1,j) - cny(m)) * gytmp
+     &        - (p5*HTN(i,j)   + cnx(m)) * gxtmp
 
          qmn = min (w1, w2, w3, w4)
          qmx = max (w1, w2, w3, w4)
