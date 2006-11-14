@@ -34,6 +34,7 @@
 ! 2003: Vectorized by Clifford Chen (Fujitsu) and William Lipscomb (LANL)
 ! 2004: Block structure added by William Lipscomb
 ! 2005: Removed boundary calls for stress arrays (WHL)
+! 2006: Streamlined for efficiency by Elizabeth Hunke
 ! 
 ! !INTERFACE:
 !
@@ -976,9 +977,6 @@
       integer (kind=int_kind) ::
      &   i, j, ij
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
-     &   Delt1         ! function of strain rates (1/s)      debugging
-
       real (kind=dbl_kind) ::
      &  divune, divunw, divuse, divusw             ! divergence
      &, tensionne, tensionnw, tensionse, tensionsw ! tension
@@ -1064,11 +1062,6 @@
      &           (tensionne + tensionnw + tensionse + tensionsw)**2
      &          +  (shearne +   shearnw +   shearse +   shearsw)**2)
 
-! MEMORY BUG?  Changing this array in any way changes the answers 
-! on mauve/gx1/gx3 (but not on phoenix/gx3 or jaguar/gx3)
-            Delt1(i,j) = p25*(Deltane + Deltanw + Deltase + Deltasw)
-     &                * tarear(i,j)
-
          endif
 
       !-----------------------------------------------------------------
@@ -1076,7 +1069,7 @@
       ! save replacement pressure for principal stress calculation
       !-----------------------------------------------------------------
          if (evp_damping) then
-        ! enforce damping criterion
+            ! enforce damping criterion
             c0ne = min(strength(i,j)/max(Deltane,c4*tinyarea(i,j)),rcon)
             c0nw = min(strength(i,j)/max(Deltanw,c4*tinyarea(i,j)),rcon)
             c0sw = min(strength(i,j)/max(Deltasw,c4*tinyarea(i,j)),rcon)
@@ -1121,7 +1114,16 @@
          stress12_3(i,j) = (stress12_3(i,j) + c1sw*shearsw*p5) * denom2
          stress12_4(i,j) = (stress12_4(i,j) + c1se*shearse*p5) * denom2
 
-      ! eliminate underflows
+      !-----------------------------------------------------------------
+      ! Eliminate underflows.
+      ! The following code is commented out because it is relatively 
+      ! expensive and most compilers include a flag that accomplishes
+      ! the same thing more efficiently.  This code is cheaper than
+      ! handling underflows if the compiler lacks a flag; uncomment
+      ! it in that case.  The compiler flag is often described with the 
+      ! phrase "flush to zero".
+      !-----------------------------------------------------------------
+
 !      stressp_1(i,j) = sign(max(abs(stressp_1(i,j)),puny),stressp_1(i,j))
 !      stressp_2(i,j) = sign(max(abs(stressp_2(i,j)),puny),stressp_2(i,j))
 !      stressp_3(i,j) = sign(max(abs(stressp_3(i,j)),puny),stressp_3(i,j))
