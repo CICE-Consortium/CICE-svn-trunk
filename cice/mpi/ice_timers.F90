@@ -64,6 +64,7 @@
       timer_couple,           &! coupling
       timer_readwrite,        &! read/write
       timer_bound              ! boundary updates
+!      timer_tmp                ! for temporary timings
 
 !-----------------------------------------------------------------------
 !
@@ -109,9 +110,6 @@
 
    type (timer_data), dimension(max_timers) :: &
       all_timers               ! timer data for all timers
-
-   integer (int_kind) ::      & 
-      cycles_max               ! max clock cycles allowed by system
 
    real (r8) ::               &
       clock_rate               ! clock rate in seconds for each cycle
@@ -189,6 +187,7 @@
    call get_ice_timer(timer_couple,   'Coupling', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_readwrite,'ReadWrite',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_bound,    'Bound',    nblocks,distrb_info%nprocs)
+!   call get_ice_timer(timer_tmp,      '         ',nblocks,distrb_info%nprocs)
 
 !-----------------------------------------------------------------------
 !EOC
@@ -420,7 +419,8 @@
                                ! (if timer called outside of block
                                ! region, no block info required)
 
-   include "mpif.h"            ! MPI library definitions
+   double precision MPI_WTIME
+   external MPI_WTIME
 
 !EOP
 !BOC
@@ -521,7 +521,8 @@
                                ! (if timer called outside of block
                                ! region, no block info required)
 
-   include "mpif.h"            ! MPI library definitions
+   double precision MPI_WTIME
+   external MPI_WTIME
 
 !EOP
 !BOC
@@ -558,18 +559,10 @@
 
          all_timers(timer_id)%block_started(block_id) = .false.
 
-         !*** correct for cycle wraparound and accumulate time
-
          cycles1 = all_timers(timer_id)%block_cycles1(block_id)
-         if (cycles2 >= cycles1) then
-            all_timers(timer_id)%block_accum_time(block_id) = &
-            all_timers(timer_id)%block_accum_time(block_id) + &
-               clock_rate*(cycles2 - cycles1)
-         else
-            all_timers(timer_id)%block_accum_time(block_id) = &
-            all_timers(timer_id)%block_accum_time(block_id) + &
-               clock_rate*(cycles_max + cycles2 - cycles1)
-         endif
+         all_timers(timer_id)%block_accum_time(block_id) = &
+         all_timers(timer_id)%block_accum_time(block_id) + &
+            clock_rate*(cycles2 - cycles1)
 
          !*** stop node timer if number of requested stops
          !*** matches the number of starts (to avoid stopping
@@ -586,15 +579,9 @@
              all_timers(timer_id)%num_stops) then
 
             all_timers(timer_id)%node_started = .false.
-            if (cycles2 >= cycles1) then
-               all_timers(timer_id)%node_accum_time = &
-               all_timers(timer_id)%node_accum_time + &
-                  clock_rate*(cycles2 - cycles1)
-            else
-               all_timers(timer_id)%node_accum_time = &
-               all_timers(timer_id)%node_accum_time + &
-                  clock_rate*(cycles_max + cycles2 - cycles1)
-            endif
+            all_timers(timer_id)%node_accum_time = &
+            all_timers(timer_id)%node_accum_time + &
+               clock_rate*(cycles2 - cycles1)
 
             all_timers(timer_id)%num_starts   = 0
             all_timers(timer_id)%num_stops    = 0
@@ -609,20 +596,12 @@
 
       else
 
-         !*** correct for wraparound and accumulate time
-
          all_timers(timer_id)%node_started = .false.
          cycles1 = all_timers(timer_id)%node_cycles1
 
-         if (cycles2 >= cycles1) then
-            all_timers(timer_id)%node_accum_time = &
-            all_timers(timer_id)%node_accum_time + &
-               clock_rate*(cycles2 - cycles1)
-         else
-            all_timers(timer_id)%node_accum_time = &
-            all_timers(timer_id)%node_accum_time + &
-               clock_rate*(cycles_max + cycles2 - cycles1)
-         endif
+         all_timers(timer_id)%node_accum_time = &
+         all_timers(timer_id)%node_accum_time + &
+            clock_rate*(cycles2 - cycles1)
 
       endif
    else
@@ -682,7 +661,7 @@
       mean_time          ! mean    accumulated time
 
    character (41), parameter :: &
-      timer_format = "('Timer number',i3,' =',f11.2,' seconds')"
+      timer_format = "('Timer ',i3,': ',a9,f11.2,' seconds')"
 
    character (49), parameter :: &
       stats_fmt1 = "('  Timer stats (node): min = ',f11.2,' seconds')",&
@@ -716,8 +695,8 @@
       max_time = global_maxval(local_time)
       
       if (my_task == master_task) then
-        write (nu_diag,*) 'Time in timer: ',trim(all_timers(timer_id)%name)
-        write (nu_diag,timer_format) timer_id,max_time
+        write (nu_diag,timer_format) timer_id, &
+              trim(all_timers(timer_id)%name),max_time
       endif
 
       if (present(stats)) then

@@ -62,6 +62,7 @@
       timer_couple,           &! coupling
       timer_readwrite,        &! read/write
       timer_bound              ! boundary updates
+!      timer_tmp                ! for temporary timings
 
 !-----------------------------------------------------------------------
 !
@@ -207,6 +208,7 @@
    call get_ice_timer(timer_couple,   'Coupling', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_readwrite,'ReadWrite',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_bound,    'Bound',    nblocks,distrb_info%nprocs)
+!   call get_ice_timer(timer_tmp,      '         ',nblocks,distrb_info%nprocs)
 
 !-----------------------------------------------------------------------
 !EOC
@@ -706,7 +708,7 @@
       mean_time          ! mean    accumulated time
 
    character (41), parameter :: &
-      timer_format = "('Timer number',i3,' =',f11.2,' seconds')"
+      timer_format = "('Timer ',i3,': ',a9,f11.2,' seconds')"
 
    character (49), parameter :: &
       stats_fmt1 = "('  Timer stats (node): min = ',f11.2,' seconds')",&
@@ -740,8 +742,8 @@
       max_time = global_maxval(local_time)
       
       if (my_task == master_task) then
-        write (nu_diag,*) 'Time in timer: ',trim(all_timers(timer_id)%name)
-        write (nu_diag,timer_format) timer_id,max_time
+        write (nu_diag,timer_format) timer_id, &
+              trim(all_timers(timer_id)%name),max_time
       endif
 
       if (present(stats)) then
