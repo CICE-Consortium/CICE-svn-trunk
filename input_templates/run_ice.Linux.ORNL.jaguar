@@ -14,5 +14,5 @@ set  stamp   = `date -u '+%y%m%d%H%M%S'`
 setenv ICE_LOG_FILE ice.log.${stamp}
 
 cd $SYSTEM_USERDIR/rundir4
-yod -sz 4 ./cice >&! $ICE_LOG_FILE
+yod -small_pages -sz 4 ./cice >&! $ICE_LOG_FILE
 
