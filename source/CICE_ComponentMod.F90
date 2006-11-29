@@ -16,6 +16,7 @@
 ! authors:  Philip W. Jones, LANL
 !
 ! 2005: Introduced module for ESMF compliance
+! 2006: Converted to free source form (F90) by Elizabeth Hunke
 !
 ! !INTERFACE:
 !
@@ -75,12 +76,12 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 
-      type (ESMF_GridComp) ::
-     &    griddedComp            ! ESMF gridded component to which
+      type (ESMF_GridComp) :: &
+          griddedComp            ! ESMF gridded component to which
                                  !  services are assigned
 
-      integer (int_kind) ::
-     &    errorCode              ! Returns an error code if any init fails
+      integer (int_kind) :: &
+          errorCode              ! Returns an error code if any init fails
 
 !
 !EOP
@@ -97,8 +98,8 @@
    !  register init method
    !--------------------------------------------------------------------
 
-      call ESMF_GridCompSetEntryPoint(griddedComp, ESMF_SETINIT,
-     &                                CICE_Initialize, 0, errorCode)
+      call ESMF_GridCompSetEntryPoint(griddedComp, ESMF_SETINIT, &
+                                      CICE_Initialize, 0, errorCode)
 
       if (errorCode /= ESMF_Success) then
          ! add error message here or use ESMF error and logging facilities
@@ -109,8 +110,8 @@
    !  register run method
    !--------------------------------------------------------------------
 
-      call ESMF_GridCompSetEntryPoint(griddedComp, ESMF_SETRUN,
-     &                                CICE_Run, 0, errorCode)
+      call ESMF_GridCompSetEntryPoint(griddedComp, ESMF_SETRUN, &
+                                      CICE_Run, 0, errorCode)
 
       if (errorCode /= ESMF_Success) then
          ! add error message here or use ESMF error and logging facilities
@@ -121,8 +122,8 @@
    !  register finalize method
    !--------------------------------------------------------------------
 
-      call ESMF_GridCompSetEntryPoint(griddedComp, ESMF_SETFINAL,
-     &                                CICE_Finalize, 0, errorCode)
+      call ESMF_GridCompSetEntryPoint(griddedComp, ESMF_SETFINAL, &
+                                      CICE_Finalize, 0, errorCode)
 
       if (errorCode /= ESMF_Success) then
          ! add error message here or use ESMF error and logging facilities

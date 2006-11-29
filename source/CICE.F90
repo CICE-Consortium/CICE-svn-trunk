@@ -52,6 +52,8 @@
 !
 ! authors Elizabeth C. Hunke and William H. Lipscomb, LANL
 !
+! 2006: Converted to free form source (F90) by Elizabeth Hunke
+!
 ! !INTERFACE:
 !
       program icemodel
@@ -78,33 +80,33 @@
       !-----------------------------------------------------------------
 
 #ifdef USE_ESMF
-      type (ESMF_GridComp) ::
-     &   CICE_Comp          ! CICE as an ESMF component
+      type (ESMF_GridComp) :: &
+         CICE_Comp          ! CICE as an ESMF component
 
-      type (ESMF_VM) ::
-     &   worldVM            ! ESMF VM describing processor world
+      type (ESMF_VM) :: &
+         worldVM            ! ESMF VM describing processor world
 
-      type (ESMF_Clock) ::
-     &   synchClock         ! clock used to synchronize model in coupled
+      type (ESMF_Clock) :: &
+         synchClock         ! clock used to synchronize model in coupled
                             ! mode - used as arguments to init,run,final
 
-      type (ESMF_State) ::
-     &   ciceImportState,   ! CICE import state
-     &   ciceExportState    ! CICE export state
+      type (ESMF_State) :: &
+         ciceImportState,   ! CICE import state
+         ciceExportState    ! CICE export state
 
-      integer (int_kind) ::
-     &   errorCode          ! error code from method calls
+      integer (int_kind) :: &
+         errorCode          ! error code from method calls
 
 #else  
 ! declare as integer dummy arguments
 
-      integer (int_kind) ::
-     &     CICE_Comp            ! dummy argument
-     &,    worldVM              ! dummy argument
-     &,    synchClock           ! dummy argument
-     &,    ciceimportState      ! dummy argument
-     &,    ciceexportState      ! dummy argument
-     &,    errorCode            ! dummy argument
+      integer (int_kind) :: &
+           CICE_Comp        , & ! dummy argument
+           worldVM          , & ! dummy argument
+           synchClock       , & ! dummy argument
+           ciceimportState  , & ! dummy argument
+           ciceexportState  , & ! dummy argument
+           errorCode            ! dummy argument
 
 #endif
 
@@ -116,8 +118,8 @@
       errorCode = ESMF_Success
 
       call ESMF_Initialize(rc=errorCode)
-      if (errorCode /= ESMF_SUCCESS) 
-     &    stop 'CICE: Error initializing ESMF'
+      if (errorCode /= ESMF_SUCCESS) &
+          stop 'CICE: Error initializing ESMF'
 
       call ESMF_VMGetGlobal(worldVM, rc=errorCode)
       if (errorCode /= ESMF_SUCCESS) stop 'CICE: Error getting ESMF VM'
@@ -127,19 +129,19 @@
       !  clock and grid info will be added during initialize
       !--------------------------------------------------------------------
 
-      CICE_Comp = ESMF_GridCompCreate(worldVM,
-     &                                name = 'CICE Sea Ice Component',
-     &                                gridcomptype = ESMF_SEAICE,
-     &                                rc=errorCode)
+      CICE_Comp = ESMF_GridCompCreate(worldVM, &
+                                      name = 'CICE Sea Ice Component', &
+                                      gridcomptype = ESMF_SEAICE, &
+                                      rc=errorCode)
 
-      if (errorCode /= ESMF_SUCCESS) 
-     &   stop 'CICE: Error creating CICE comp'
+      if (errorCode /= ESMF_SUCCESS) &
+         stop 'CICE: Error creating CICE comp'
 
-      call ESMF_GridCompSetServices(CICE_Comp, CICE_SetServices, 
-     &                              errorCode)
+      call ESMF_GridCompSetServices(CICE_Comp, CICE_SetServices, &
+                                    errorCode)
 
-      if (errorCode /= ESMF_SUCCESS) 
-     &    stop 'CICE: Error registering CICE methods'
+      if (errorCode /= ESMF_SUCCESS) &
+          stop 'CICE: Error registering CICE methods'
 #endif
 
       !-----------------------------------------------------------------
@@ -147,13 +149,13 @@
       !-----------------------------------------------------------------
 
 #ifdef USE_ESMF
-      call ESMF_GridCompInitialize(CICE_Comp, ciceImportState,
-     &                          ciceExportState, synchClock, errorCode)
+      call ESMF_GridCompInitialize(CICE_Comp, ciceImportState, &
+                                ciceExportState, synchClock, errorCode)
 
-      if (errorCode /= ESMF_Success) stop 'CICE: Error in init method'
+      if (errorCode /= ESMF_Success) stop 'CICE: Error in init method' &
 #else
-      call CICE_Initialize(CICE_Comp, ciceImportState,
-     &                     ciceExportState, synchClock, errorCode)
+      call CICE_Initialize(CICE_Comp, ciceImportState, &
+                           ciceExportState, synchClock, errorCode)
 #endif
 
       !-----------------------------------------------------------------
@@ -161,13 +163,13 @@
       !-----------------------------------------------------------------
 
 #ifdef USE_ESMF
-      call ESMF_GridCompRun(CICE_Comp, ciceImportState, ciceExportState,
-     &                      synchClock, errorCode)
+      call ESMF_GridCompRun(CICE_Comp, ciceImportState, ciceExportState, &
+                            synchClock, errorCode)
 
-      if (errorCode /= ESMF_Success) stop 'CICE: Error in run method'
+      if (errorCode /= ESMF_Success) stop 'CICE: Error in run method' 
 #else
-      call CICE_Run(CICE_Comp,  ciceImportState, ciceExportState,
-     &              synchClock, errorCode)
+      call CICE_Run(CICE_Comp,  ciceImportState, ciceExportState, &
+                    synchClock, errorCode)
 #endif
 
       !-----------------------------------------------------------------
@@ -175,16 +177,16 @@
       !-----------------------------------------------------------------
 
 #ifdef USE_ESMF
-      call ESMF_GridCompFinalize(CICE_Comp, ciceImportState,
-     &                                      ciceExportState,
-     &                                      synchClock, errorCode)
+      call ESMF_GridCompFinalize(CICE_Comp, ciceImportState, &
+                                            ciceExportState, &
+                                            synchClock, errorCode)
       
-       if (errorCode /= ESMF_Success) 
-     &   stop 'CICE: Error in finalize method'
+       if (errorCode /= ESMF_Success) &
+         stop 'CICE: Error in finalize method'
 
 #else
-      call CICE_Finalize(CICE_Comp,  ciceImportState, ciceExportState,
-     &                   synchClock, errorCode)
+      call CICE_Finalize(CICE_Comp,  ciceImportState, ciceExportState, &
+                         synchClock, errorCode)
 #endif
 
 
@@ -232,8 +234,8 @@
       do iblk = 1, nblocks
       do j = 1, ny_block
       do i = 1, nx_block
-         if (iblk==iblkp .and. i==ip .and. j==jp .and. my_task==mtask)
-     &        call print_state(plabeld,i,j,iblk)
+         if (iblk==iblkp .and. i==ip .and. j==jp .and. my_task==mtask) &
+              call print_state(plabeld,i,j,iblk)
       enddo
       enddo
       enddo

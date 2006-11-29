@@ -57,7 +57,7 @@ setenv ARCH $ARCH.$SITE
 
 cd $SRCDIR/source
 
-cp -fp ice_domain_size.F.$RES ice_domain_size.F
+cp -fp ice_domain_size.F90.$RES ice_domain_size.F90
 
 cd $EXEDIR
 

@@ -16,6 +16,8 @@
 !          William H. Lipscomb, LANL
 !          Philip W. Jones, LANL
 !
+! 2006: Converted to free form source (F90) by Elizabeth Hunke
+!
 ! !INTERFACE:
 !
       module CICE_InitMod
@@ -93,8 +95,8 @@
 ! !INTERFACE:
 !
 
-      subroutine CICE_Initialize(CICE_Comp,  importState, exportState,
-     &                           synchClock, errorCode)
+      subroutine CICE_Initialize(CICE_Comp,  importState, exportState, &
+                                 synchClock, errorCode)
 !
 ! !USES:
 !
@@ -108,28 +110,28 @@
 
 #ifdef USE_ESMF
 
-      type (ESMF_GridComp), intent(inout) ::
-     &     CICE_Comp            ! defined ESMF component for CICE
+      type (ESMF_GridComp), intent(inout) :: &
+           CICE_Comp            ! defined ESMF component for CICE
 
-      type (ESMF_State), intent(inout) ::
-     &     importState          ! CICE import state
-     &,    exportState          ! CICE export state
+      type (ESMF_State), intent(inout) :: &
+           importState, &       ! CICE import state
+           exportState          ! CICE export state
 
-      type (ESMF_Clock), intent(inout) ::
-     &     synchClock           ! ESMF clock to check init time
+      type (ESMF_Clock), intent(inout) :: &
+           synchClock           ! ESMF clock to check init time
 
-      integer (int_kind), intent(inout) ::
-     &     errorCode            ! returns an error code if any init fails
+      integer (int_kind), intent(inout) :: &
+           errorCode            ! returns an error code if any init fails
 
 #else
 ! declare as integer dummy arguments
 
-      integer (int_kind) , intent(inout) ::
-     &     CICE_Comp            ! dummy argument
-     &,    importState          ! dummy argument
-     &,    exportState          ! dummy argument
-     &,    synchClock           ! dummy argument
-     &,    errorCode            ! dummy argument
+      integer (int_kind) , intent(inout) :: &
+           CICE_Comp  , &       ! dummy argument
+           importState, &       ! dummy argument
+           exportState, &       ! dummy argument
+           synchClock , &       ! dummy argument
+           errorCode            ! dummy argument
 
 #endif
 !
@@ -181,8 +183,8 @@
       call CICE_CoupledInit(importState, exportState, errorCode)
 
       if (errorCode /= ESMF_Success) then
-         write(nu_diag,*)
-     &        '(ice) CICE_Initialize: error filling export state'
+         write(nu_diag,*) &
+              '(ice) CICE_Initialize: error filling export state'
          return
       endif
 #endif
@@ -226,8 +228,8 @@
       call ice_timer_start(timer_total)   ! start timing entire run
       call init_grid2           ! grid variables
 
-      if (advection == 'remap')
-     &     call init_remap      ! grid variables for remapping transport
+      if (advection == 'remap') &
+         call init_remap        ! grid variables for remapping transport
       call init_calendar        ! initialize some calendar stuff
       call init_hist (dt)       ! initialize output history file
       call init_evp (dt)        ! define evp dynamics parameters, variables

@@ -14,6 +14,7 @@
 !  SVN:$Id$
 !
 !  authors: Philip W. Jones, LANL
+!  2006: Converted to free source form (F90) by Elizabeth Hunke
 !
 ! !INTERFACE:
 !
@@ -45,7 +46,6 @@
 !
 !EOP
 !
-
 !=======================================================================
 
       contains
@@ -66,8 +66,8 @@
 ! !INTERFACE:
 !
 
-      subroutine CICE_Finalize(CICE_Comp,  importState, exportState,
-     &                         synchClock, errorCode)
+      subroutine CICE_Finalize(CICE_Comp,  importState, exportState, &
+                               synchClock, errorCode)
 
 !
 ! !USES:
@@ -76,31 +76,31 @@
 
 #ifdef USE_ESMF
 
-      type (ESMF_GridComp), intent(inout) ::
-     &     CICE_Comp            ! defined ESMF component for CICE
+      type (ESMF_GridComp), intent(inout) :: &
+           CICE_Comp            ! defined ESMF component for CICE
 
-      type (ESMF_State), intent(in) ::
-     &     importState          ! CICE final import state - currently ignored
+      type (ESMF_State), intent(in) :: &
+           importState          ! CICE final import state - currently ignored
 
-      type (ESMF_State), intent(out) ::
-     &     exportState          ! CICE final export state - currently ignored
+      type (ESMF_State), intent(out) :: &
+           exportState          ! CICE final export state - currently ignored
 
-      type (ESMF_Clock), intent(inout) ::
-     &     synchClock           ! ESMF clock to check init time
+      type (ESMF_Clock), intent(inout) :: &
+           synchClock           ! ESMF clock to check init time
 
-      integer (int_kind), intent(inout) ::
-     &     errorCode            ! On input, error code from Init,Run method
+      integer (int_kind), intent(inout) :: &
+           errorCode            ! On input, error code from Init,Run method
                                 ! On output, status of this routine
 
 #else
 ! declare as integer dummy arguments
 
-      integer (int_kind) , intent(inout) ::
-     &     CICE_Comp            ! dummy argument
-     &,    importState          ! dummy argument
-     &,    exportState          ! dummy argument
-     &,    synchClock           ! dummy argument
-     &,    errorCode            ! dummy argument
+      integer (int_kind) , intent(inout) :: &
+           CICE_Comp  , &       ! dummy argument
+           importState, &       ! dummy argument
+           exportState, &       ! dummy argument
+           synchClock , &       ! dummy argument
+           errorCode            ! dummy argument
 
 #endif
 

@@ -12,6 +12,8 @@
 !
 ! author:  Bruce P. Briegleb, NCAR 
 !
+! 2006: Converted to free source form (F90) by Elizabeth Hunke
+!
 ! !INTERFACE:
 !
       module ice_orbital
@@ -75,8 +77,8 @@
       iyear_AD  = 1950
       log_print = .false.   ! if true, write out orbital parameters
 !
-      call shr_orb_params( iyear_AD , eccen  , obliq , mvelp     ,
-     &                     obliqr   , lambm0 , mvelpp, log_print )
+      call shr_orb_params( iyear_AD , eccen  , obliq , mvelp     , &
+                           obliqr   , lambm0 , mvelpp, log_print )
  
       end subroutine init_orbit
  
@@ -87,11 +89,11 @@
 !
 ! !INTERFACE:
 !
-      subroutine compute_coszen (nx_block, ny_block,
-     &                           icells,
-     &                           indxi,    indxj,
-     &                           tlat,     tlon,
-     &                           coszen)
+      subroutine compute_coszen (nx_block, ny_block, &
+                                 icells,             &
+                                 indxi,    indxj,    &
+                                 tlat,     tlon,     &
+                                 coszen)
 !
 ! !DESCRIPTION:
 !
@@ -106,53 +108,52 @@
 ! 
 ! !INPUT/OUTPUT PARAMETERS: 
 ! 
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  icells              ! number of ice-covered grid cells
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells                ! number of ice-covered grid cells
 
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
-     &   indxi               ! indices for ice-covered cells
-     &,  indxj
+      integer (kind=int_kind), dimension (nx_block*ny_block) :: &
+         indxi, indxj          ! indices for ice-covered cells
  
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
-     &   tlat, tlon          ! latitude and longitude (radians)
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
+         tlat, tlon          ! latitude and longitude (radians)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out) ::
-     &   coszen              ! cosine solar zenith angle 
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out) :: &
+         coszen              ! cosine solar zenith angle 
                              ! negative for sun below horizon
 !
 !EOP
 !
       real (kind=dbl_kind) :: ydayp1 ! day of year plus one time step
  
-      integer (kind=int_kind) ::
-     &   i       ! domain longitude index
-     &,  j       ! domain latitude index
-     &,  ij      ! horizontal index, combines i and j loops
+      integer (kind=int_kind) :: &
+         i   , & ! domain longitude index
+         j   , & ! domain latitude index
+         ij      ! horizontal index, combines i and j loops
  
  
 ! Solar declination for next time step
  
       ydayp1 = yday + sec/secday
  
-      call shr_orb_decl(ydayp1, eccen, mvelpp, lambm0, 
-     &                  obliqr, delta, eccf)
+      call shr_orb_decl(ydayp1, eccen, mvelpp, lambm0, &
+                        obliqr, delta, eccf)
 
       coszen(:,:) = c0  ! sun at horizon
 
-cdir$ ivdep      !Cray
+!DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
 !lipscomb - function inlined to improve vector efficiency
-!         coszen(i,j) = shr_orb_cosz(ydayp1,
-!     &                              tlat(i,j),tlon(i,j),delta)
+!         coszen(i,j) = shr_orb_cosz(ydayp1, &
+!                                    tlat(i,j),tlon(i,j),delta)
 
-         coszen(i,j) = sin(tlat(i,j))*sin(delta) -
-     &                 cos(tlat(i,j))*cos(delta)
-     &                *cos(ydayp1*c2*pi + tlon(i,j))
+         coszen(i,j) = sin(tlat(i,j))*sin(delta) - &
+                       cos(tlat(i,j))*cos(delta)   &
+                      *cos(ydayp1*c2*pi + tlon(i,j))
 
       enddo
  

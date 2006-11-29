@@ -15,6 +15,7 @@
 ! authors Elizabeth C. Hunke and William H. Lipscomb, LANL
 !
 ! 2004: Block structure added by William Lipscomb
+! 2006: Converted to free source form (F90) by Elizabeth Hunke
 !
 ! !INTERFACE:
 !
@@ -32,33 +33,33 @@
 
       ! global
 
-      real (kind=dbl_kind), dimension(:,:), allocatable ::
-     &   work_g1
-     &,  work_g2
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1, &
+         work_g2
 
-      real (kind=real_kind), dimension(:,:), allocatable ::
-     &   work_gr
+      real (kind=real_kind), dimension(:,:), allocatable :: &
+         work_gr
 
-      real (kind=real_kind), dimension(:,:,:), allocatable ::
-     &   work_gr3
+      real (kind=real_kind), dimension(:,:,:), allocatable :: &
+         work_gr3
 
-      integer(kind=int_kind), dimension(:,:), allocatable ::
-     &   work_gi4
+      integer(kind=int_kind), dimension(:,:), allocatable :: &
+         work_gi4
 
-      integer(selected_int_kind(13)), dimension(:,:), allocatable ::
-     &   work_gi8
+      integer(selected_int_kind(13)), dimension(:,:), allocatable :: &
+         work_gi8
 
       ! all blocks
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) ::
-     &   work1
-     &,  work2
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1, &
+         work2
 
       ! local (single block)
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
-     &   worka
-     &,  workb
-     &,  workc
-     &,  workd
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         worka, &
+         workb, &
+         workc, &
+         workd
 
 !=======================================================================
 

@@ -209,11 +209,7 @@
 !----------------------------------------------------------------------
 
    if (my_task == master_task) then
-     write(nu_diag,delim_fmt)
-     write(nu_diag,blank_fmt)
-     write(nu_diag,'(a18)') 'Domain Information'
-     write(nu_diag,blank_fmt)
-     write(nu_diag,delim_fmt)
+     write(nu_diag,'(/,a18,/)')'Domain Information'
      write(nu_diag,'(a26,i6)') '  Horizontal domain: nx = ',nx_global
      write(nu_diag,'(a26,i6)') '                     ny = ',ny_global
      write(nu_diag,'(a26,i6)') '  No. of categories: nc = ',ncat
@@ -224,7 +220,7 @@
      write(nu_diag,'(a29,i6)') '  Processors: ', nprocs
      write(nu_diag,'(a31,a9)') '  Distribution: ', &
                                   trim(distribution_type)
-     write(nu_diag,'(a25,i2)') '  Number of ghost cells: ', nghost
+     write(nu_diag,'(a25,i2,/)')'  Number of ghost cells: ', nghost
    endif
 
 !----------------------------------------------------------------------

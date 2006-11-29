@@ -1,4 +1,4 @@
-c $Id$
+! $Id$
 !=======================================================================
 !BOP
 !
@@ -14,6 +14,7 @@ c $Id$
 !          Tony Craig, NCAR
 !
 ! 2006 ECH: Removed 'w' option for history; added 'h' and histfreq_n.
+!           Converted to free form source (F90).
 !
 ! !INTERFACE:
 !
@@ -31,8 +32,8 @@ c $Id$
 !need to be copied into the CICE source/ directory and
 !compiled #ifdef COUP_CAM
 #ifdef COUP_CAM
-      use time_manager, only: get_nstep, get_curr_calday, get_step_size,
-     &                        start_ymd, start_tod, nelapse
+      use time_manager, only: get_nstep, get_curr_calday, get_step_size, &
+                              start_ymd, start_tod, nelapse
 !      use ice_restart, only: restart
 #endif
 !jsewall
@@ -44,54 +45,54 @@ c $Id$
       implicit none
       save
 
-      integer (kind=int_kind) ::
-     &   daymo(12)                ! number of days in each month
-     &,  daycal(13)               ! day number at end of month
+      integer (kind=int_kind) :: &
+         daymo(12)            , & ! number of days in each month
+         daycal(13)               ! day number at end of month
 
       data daymo /   31,28,31, 30, 31, 30, 31, 31, 30, 31, 30, 31/
       data daycal/ 0,31,59,90,120,151,181,212,243,273,304,334,365/
 
-      integer (kind=int_kind) ::
-     &   istep     ! local step counter for time loop
-     &,  istep0    ! step counter, number of steps taken in previous run
-     &,  istep1    ! step counter, number of steps at current timestep
-     &,  mday      ! day of the month
-     &,  hour      ! hour of the year
-     &,  month     ! month number, 1 to 12
-     &,  monthp    ! last month
-     &,  year_init ! initial year
-     &,  nyr       ! year number
-     &,  idate     ! date (yyyymmdd)
-     &,  sec       ! elapsed seconds into date
-     &,  npt       ! total number of time steps (dt)
-     &,  ndyn_dt   ! reduced timestep for dynamics: ndyn_dt=dt/dyn_dt
-     &,  stop_now           ! if 1, end program execution
-     &,  write_restart      ! if 1, write restart now
-     &,  cpl_write_history  ! if 1, write history on command from cpl
-     &,  diagfreq           ! diagnostic output frequency (10 = once per 10 dt)
-     &,  dumpfreq_n         ! restart output frequency (10 = once per 10 d,m,y)
-     &,  histfreq_n         ! history output frequency (10 = once per 10 h,d,m,y)
+      integer (kind=int_kind) :: &
+         istep    , & ! local step counter for time loop
+         istep0   , & ! counter, number of steps taken in previous run
+         istep1   , & ! counter, number of steps at current timestep
+         mday     , & ! day of the month
+         hour     , & ! hour of the year
+         month    , & ! month number, 1 to 12
+         monthp   , & ! last month
+         year_init, & ! initial year
+         nyr      , & ! year number
+         idate    , & ! date (yyyymmdd)
+         sec      , & ! elapsed seconds into date
+         npt      , & ! total number of time steps (dt)
+         ndyn_dt  , & ! reduced timestep for dynamics: ndyn_dt=dt/dyn_dt
+         stop_now     , & ! if 1, end program execution
+         write_restart, & ! if 1, write restart now
+         cpl_write_history, &  ! if 1, write history on command from cpl
+         diagfreq     , & ! diagnostic output frequency (10 = once per 10 dt)
+         dumpfreq_n   , & ! restart output frequency (10 = once per 10 d,m,y)
+         histfreq_n       ! history output frequency (10 = once per 10 h,d,m,y)
 
-      real (kind=dbl_kind) ::
-     &   dt                 ! thermodynamics timestep (s)
-     &,  dyn_dt             ! dynamics/transport/ridging timestep (s)
-     &,  time               ! total elapsed time (s)
-     &,  time_forc          ! time of last forcing update (s)
-     &,  yday               ! day of the year
-     &,  tday               ! absolute day number
-     &,  dayyr              ! number of days per year
+      real (kind=dbl_kind) :: &
+         dt             , & ! thermodynamics timestep (s)
+         dyn_dt         , & ! dynamics/transport/ridging timestep (s)
+         time           , & ! total elapsed time (s)
+         time_forc      , & ! time of last forcing update (s)
+         yday           , & ! day of the year
+         tday           , & ! absolute day number
+         dayyr              ! number of days per year
 
-      logical (kind=log_kind) ::
-     &   new_year           ! new year = .true.
-     &,  new_month          ! new month = .true.
-     &,  new_day            ! new day = .true.
-     &,  new_hour           ! new hour = .true.
-     &,  write_ic           ! write initial condition now
-     &,  write_history      ! write history now
+      logical (kind=log_kind) :: &
+         new_year       , & ! new year = .true.
+         new_month      , & ! new month = .true.
+         new_day        , & ! new day = .true.
+         new_hour       , & ! new hour = .true.
+         write_ic       , & ! write initial condition now
+         write_history      ! write history now
 
-      character (len=1) ::
-     &   histfreq           ! history output frequency, 'y','m','d','h','1'
-     &,  dumpfreq           ! restart frequency, 'y','m','d'
+      character (len=1) :: &
+         histfreq       , & ! history output frequency, 'y','m','d','h','1'
+         dumpfreq           ! restart frequency, 'y','m','d'
 
 !=======================================================================
 
@@ -122,10 +123,8 @@ c $Id$
 !EOP
 !
 !jsewall
-      integer (kind=int_kind) ::
-     &   k
+      integer (kind=int_kind) :: k
 
-!jsewall
 #ifdef COUP_CAM
 
       dayyr = 365.0_dbl_kind
@@ -207,17 +206,17 @@ c $Id$
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), intent(in) ::
-     &   ttime                          ! time variable
+      real (kind=dbl_kind), intent(in) :: &
+         ttime                          ! time variable
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   k
-     &,  nyrp,mdayp,hourp               ! previous year, day, hour
-     &,  elapsed_days                   ! since beginning this run
-     &,  elapsed_months                 ! since beginning this run
-     &,  elapsed_hours                  ! since beginning this run
+      integer (kind=int_kind) :: &
+         k                          , &
+         nyrp,mdayp,hourp           , & ! previous year, day, hour
+         elapsed_days               , & ! since beginning this run
+         elapsed_months             , & ! since beginning this run
+         elapsed_hours                  ! since beginning this run
 
       dayyr = 365.0_dbl_kind
 
@@ -237,7 +236,7 @@ c $Id$
                                         ! end of dt
       tday = (ttime-sec)/secday + c1    ! absolute day number
       yday = mod(tday-c1,dayyr) + c1    ! day of the year
-      hour = int((ttime-dt)/c3600) + c1    ! hour
+      hour = int((ttime-dt)/c3600) + c1 ! hour
       do k = 1, 12
         if (yday > real(daycal(k),kind=dbl_kind)) month = k
       enddo
@@ -264,37 +263,37 @@ c $Id$
 #endif
         select case (histfreq)
         case ("y", "Y")
-          if (new_year  .and. mod(nyr, histfreq_n)==0)
-     &          write_history = .true.
+          if (new_year  .and. mod(nyr, histfreq_n)==0) &
+                write_history = .true.
         case ("m", "M")
-          if (new_month .and. mod(elapsed_months,histfreq_n)==0)
-     &          write_history = .true.
+          if (new_month .and. mod(elapsed_months,histfreq_n)==0) &
+                write_history = .true.
         case ("d", "D")
-          if (new_day .and. mod(elapsed_days,histfreq_n)==0)
-     &          write_history = .true.
+          if (new_day .and. mod(elapsed_days,histfreq_n)==0) &
+                write_history = .true.
         case ("h", "H")
-          if (new_hour .and. mod(elapsed_hours,histfreq_n)==0)
-     &          write_history = .true.
+          if (new_hour .and. mod(elapsed_hours,histfreq_n)==0) &
+                write_history = .true.
         end select
 
         select case (dumpfreq)
         case ("y", "Y")
-          if (new_year  .and. mod(nyr, dumpfreq_n)==0)
-     &          write_restart = 1
+          if (new_year  .and. mod(nyr, dumpfreq_n)==0) &
+                write_restart = 1
         case ("m", "M")
-          if (new_month .and. mod(elapsed_months,dumpfreq_n)==0)
-     &          write_restart=1
+          if (new_month .and. mod(elapsed_months,dumpfreq_n)==0) &
+                write_restart=1
         case ("d", "D")
-          if (new_day   .and. mod(elapsed_days, dumpfreq_n)==0)
-     &          write_restart = 1
+          if (new_day   .and. mod(elapsed_days, dumpfreq_n)==0) &
+                write_restart = 1
         end select
       endif
 
-      if (my_task == master_task .and. mod(istep,diagfreq) == 0
-     &                           .and. stop_now /= 1) then
+      if (my_task == master_task .and. mod(istep,diagfreq) == 0 &
+                                 .and. stop_now /= 1) then
         write(nu_diag,*) ' '
-        write(nu_diag,'(a7,i10,4x,a6,i10,4x,a4,i10)')
-     &       'istep1:', istep1, 'idate:', idate, 'sec:', sec
+        write(nu_diag,'(a7,i10,4x,a6,i10,4x,a4,i10)') &
+             'istep1:', istep1, 'idate:', idate, 'sec:', sec
       endif
 
       end subroutine calendar

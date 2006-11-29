@@ -27,6 +27,7 @@
 !
 ! 2003: Vectorized by Clifford Chen (Fujitsu) and William Lipscomb
 ! 2004-05: Block structure added by William Lipscomb
+! 2006: Streamlined for efficiency by Elizabeth Hunke
 !
 ! !INTERFACE:
 !
