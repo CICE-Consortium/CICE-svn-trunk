@@ -249,7 +249,7 @@
          srch_error = 0
          timer_id = n
 
-         all_timers(n)%name       = char_blank
+         all_timers(n)%name       = ' '
          all_timers(n)%name       = name_choice
          all_timers(n)%in_use     = .true.
          all_timers(n)%num_blocks = num_blocks
@@ -805,9 +805,7 @@
 !-----------------------------------------------------------------------
 
    if (my_task == master_task) then
-      write(nu_diag,blank_fmt)
-      write(nu_diag,'(a19)') 'Timing information:'
-      write(nu_diag,blank_fmt)
+      write(nu_diag,'(/,a19,/)') 'Timing information:'
    endif
 
    do n=1,max_timers

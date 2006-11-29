@@ -14,6 +14,7 @@
 ! author Elizabeth C. Hunke, LANL
 ! 2004: Block structure and snow parameters added by William Lipscomb
 !       Renamed (used to be ice_model_size)
+! 2006: Converted to free source form (F90) by Elizabeth Hunke
 !
 ! !INTERFACE:
 !
@@ -29,20 +30,20 @@
       implicit none
       save
 
-      integer (kind=int_kind), parameter ::
-     &  nx_global = 100         ! i-axis size
-     &, ny_global = 116         ! j-axis size
-     &, ncat      =   5         ! number of categories
-     &, nilyr     =   4         ! number of ice layers per category
-     &, ntilyr    = ncat*nilyr  ! number of ice layers in all categories
-     &, nslyr     =   1         ! number of snow layers per category
-     &, ntslyr    = ncat*nslyr  ! number of snow layers in all categories
-     &, ntrcr     =   1         ! number of tracers
-                                ! 1 = surface temperature
+      integer (kind=int_kind), parameter :: &
+        nx_global = 100       , & ! i-axis size
+        ny_global = 116       , & ! j-axis size
+        ncat      =   5       , & ! number of categories
+        nilyr     =   4       , & ! number of ice layers per category
+        ntilyr    = ncat*nilyr, & ! number of ice layers in all categories
+        nslyr     =   1       , & ! number of snow layers per category
+        ntslyr    = ncat*nslyr, & ! number of snow layers in all categories
+        ntrcr     =   1           ! number of tracers
+                                  ! 1 = surface temperature
 
-      integer (kind=int_kind), parameter ::
-     &  block_size_x = 50       ! size of block in first horiz dimension
-     &, block_size_y = 58       ! size of block in second horiz dimension
+      integer (kind=int_kind), parameter :: &
+        block_size_x = 50     , & ! size of block in first horiz dimension
+        block_size_y = 58         ! size of block in second horiz dimension
 
    !*** The model will inform the user of the correct
    !*** values for the parameter below.  A value higher than
@@ -53,8 +54,8 @@
    !*** max_blocks = (nx_global/block_size_x)*(ny_global/block_size_y)/
    !***               num_procs
  
-      integer (kind=int_kind), parameter ::
-     &  max_blocks = 1          ! max number of blocks per processor
+      integer (kind=int_kind), parameter :: &
+        max_blocks = 1            ! max number of blocks per processor
 
 !=======================================================================
 
