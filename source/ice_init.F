@@ -37,11 +37,6 @@
       implicit none
       save
 
-      character (len=char_len) ::
-     &   advection   ! type of advection scheme used
-                     ! 'upwind' => 1st order donor cell scheme
-                     ! 'remap' => remapping scheme
-
       character(len=char_len) :: 
      &   ice_ic      ! method of ice cover initialization
                      ! 'default'  => latitude and sst dependent
@@ -98,6 +93,7 @@
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi,
      &                         shortwave
+      use ice_transport_driver, only: advection
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
