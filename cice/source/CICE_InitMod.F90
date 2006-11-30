@@ -50,7 +50,7 @@
       use ice_therm_itd
       use ice_therm_vertical
       use ice_timers
-      use ice_transport_upwind
+      use ice_transport_driver
       use ice_transport_remap
       use ice_work
 
