@@ -1969,7 +1969,7 @@ c=======================================================================
       worka = (c10**worka)      ! saturated 
       worka = max(worka,puny)   ! puny over land to prevent division by zero
       ! specific humidity
-      worka = 0.622_dbl_kind*worka/(1.e5_dbl_kind - 0.378_dbl_kind*worka)
+      worka = 0.622_dbl_kind*worka/(1.e5_dbl_kind-0.378_dbl_kind*worka)
 
       Qa = min(Qa, worka)
 
@@ -2312,7 +2312,8 @@ c=======================================================================
       use ice_gather_scatter
       use ice_exit
       use ice_work, only: work_g1, work1
-      use ice_flux, only: sss, sst, Tf, uocn, vocn, ss_tltx, ss_tlty, qdp, hmix
+      use ice_flux, only: sss, sst, Tf, uocn, vocn, ss_tltx, ss_tlty,
+     &      qdp, hmix
 !      use ice_ocean
       use ice_restart, only: restart
       use ice_grid, only: hm, tmask, umask

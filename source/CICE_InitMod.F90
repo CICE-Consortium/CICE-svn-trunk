@@ -56,6 +56,8 @@
 
 #ifdef CCSM
       use shr_msg_mod           ! for CCSM coupled runs only
+#endif
+#if (defined CCSM) || (defined COUP_CAM)
       use ice_prescribed_mod
 #endif
 

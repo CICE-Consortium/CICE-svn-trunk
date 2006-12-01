@@ -1724,7 +1724,8 @@
      &                           istep1, my_task, i, j
                write(nu_diag,*) 'Ice thickness:',  hilyr(ij)*nilyr
                write(nu_diag,*) 'Snow thickness:', hslyr(ij)*nslyr
-               write(nu_diag,*) 'dTsf, Tsf_errmax:',dTsf_prev(ij),Tsf_errmax
+               write(nu_diag,*) 'dTsf, Tsf_errmax:',dTsf_prev(ij),
+     &                           Tsf_errmax
                write(nu_diag,*) 'Tsf:', Tsf(ij)
                write(nu_diag,*) 'fsurf:', fsurf(ij)
                write(nu_diag,*) 'fcondtop, fcondbot, fswint',

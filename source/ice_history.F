@@ -4,7 +4,7 @@
 !
 ! !MODULE: ice_history - ice model history files
 !
-! !DESCRIPTION:
+
 !
 ! Output files: netCDF data, Fortran unformatted dumps
 !
@@ -1395,11 +1395,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
      &                        mday, write_ic, histfreq, histfreq_n,
      &                        year_init, new_year, new_month, new_day
       use ice_work, only: work_g1, work_gr, work_gr3
-#ifdef CCSM
       use ice_restart, only: lenstr, runid
-#else
-      use ice_restart, only: lenstr
-#endif
       use ice_domain, only: distrb_info
       use ice_itd, only: c_hi_range
 !
@@ -1552,7 +1548,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         call nf_stat_check (status,'Error assigning calendar for time')
 
         if (hist_avg) then
-          status = nf_put_att_text(ncid,varid,'bounds', 11,'time_bounds')
+          status = nf_put_att_text(ncid,varid,'bounds',11,'time_bounds')
           call nf_stat_check (status,'Error assigning bounds for time')
         endif
 
@@ -1564,13 +1560,16 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           dimid(1) = boundid
           dimid(2) = timid
           status = nf_def_var(ncid,'time_bounds',nf_float,2,dimid,varid)
-          call nf_stat_check (status,'Error defining variable time_bounds')
+          call nf_stat_check (status,
+     $         'Error defining variable time_bounds')
           status = nf_put_att_text(ncid,varid,'long_name',
      $             38,'boundaries for time-averaging interval')
-          call nf_stat_check (status,'Error with long_name to time_bounds')
+          call nf_stat_check (status,
+     $         'Error with long_name to time_bounds')
           status = nf_put_att_text(ncid,varid,'units',
      $                  30,'days since 0001-01-01 00:00:00')  ! for now
-          call nf_stat_check (status,'Error assigning units to time_bounds')
+          call nf_stat_check (status,
+     $         'Error assigning units to time_bounds')
         endif
 
       !-----------------------------------------------------------------
@@ -1650,12 +1649,12 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           status = nf_def_var(ncid, coord_var(i)%short_name, nf_float,
      &                       2, dimid, varid)
           call nf_stat_check (status,
-     &            'Error defining short_name for'//coord_var(i)%short_name)
+     &         'Error defining short_name for'//coord_var(i)%short_name)
           length = lenstr(coord_var(i)%long_name)
           status = nf_put_att_text(ncid,varid, 'long_name', length,
      &                       coord_var(i)%long_name)
           call nf_stat_check (status,
-     &            'Error defining long_name for'//coord_var(i)%short_name)
+     &         'Error defining long_name for'//coord_var(i)%short_name)
           length = lenstr(coord_var(i)%units)
           status = nf_put_att_text(ncid, varid, 'units', length,
      &                       coord_var(i)%units)
@@ -1677,7 +1676,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         call nf_stat_check (status,'Error defining long_name for tmask')
         status = nf_put_att_text(ncid, varid, 'coordinates', 9,
      &              'TLON TLAT')
-        call nf_stat_check (status,'Error defining coordinates for tmask')
+        call nf_stat_check (status,
+     &       'Error defining coordinates for tmask')
         status = nf_put_att_text(ncid,varid,'comment', 19,
      $            '0 = land, 1 = ocean')
         call nf_stat_check (status,'Error defining comment for tmask')
@@ -1686,52 +1686,54 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           status = nf_def_var(ncid, var(i)%req%short_name, nf_float,
      &                        2, dimid, varid)
           call nf_stat_check (status,
-     &             'Error defining variable'//var(i)%req%short_name)
+     &         'Error defining variable'//var(i)%req%short_name)
           length = lenstr(var(i)%req%long_name)
           status = nf_put_att_text(ncid,varid, 'long_name', length,
      &              var(i)%req%long_name)
           call nf_stat_check (status,
-     &             'Error defining long_name for'//var(i)%req%short_name)
+     &         'Error defining long_name for'//var(i)%req%short_name)
           length = lenstr(var(i)%req%units)
           status = nf_put_att_text(ncid, varid, 'units', length,
      &              var(i)%req%units)
           call nf_stat_check (status,
-     &             'Error defining units for'//var(i)%req%short_name)
+     &         'Error defining units for'//var(i)%req%short_name)
           length = lenstr(var(i)%coordinates)
           status = nf_put_att_text(ncid, varid, 'coordinates', length,
      &              var(i)%coordinates)
           call nf_stat_check (status,
-     &             'Error defining coordinates for'//var(i)%req%short_name)
+     &         'Error defining coordinates for'//var(i)%req%short_name)
          enddo
 
         do n=1,avgsiz
           if (iout(n)) then
             status  = nf_def_var(ncid, vname(n), nf_float, 
      $                         3, dimid, varid)
-            call nf_stat_check (status,'Error defining variable'//vname(n))
+            call nf_stat_check (status,
+     $           'Error defining variable'//vname(n))
             length = lenstr(vunit(n))
             status = nf_put_att_text(ncid,varid,
      $             'units',length,vunit(n))
-            call nf_stat_check (status,'Error defining units for'//vname(n))
+            call nf_stat_check (status,
+     $           'Error defining units for'//vname(n))
             length = lenstr(vdesc(n))
             status = nf_put_att_text(ncid,varid,
      $             'long_name',length,vdesc(n))
             call nf_stat_check (status,
-     $                       'Error defining long_name for'//vname(n))
+     $           'Error defining long_name for'//vname(n))
             length = lenstr(vcoord(n))
             status = nf_put_att_text(ncid,varid,'coordinates',
      $                             length,vcoord(n))
             call nf_stat_check (status,
-     $                       'Error defining coordinates for'//vname(n))
+     $           'Error defining coordinates for'//vname(n))
             status = nf_put_att_real(ncid,varid,'missing_value',
      $                             nf_float,1,spval)
             call nf_stat_check (status,
-     $                       'Error defining mising_value for'//vname(n))
+     $           'Error defining mising_value for'//vname(n))
 
             status = nf_put_att_real(ncid,varid,'_FillValue',
      $                             nf_float,1,spval)
             call nf_stat_check (status,
-     $                       'Error defining _FillValue for'//vname(n))
+     $           'Error defining _FillValue for'//vname(n))
       !-----------------------------------------------------------------
       ! Append ice thickness range to aicen comments
       !-----------------------------------------------------------------
@@ -1746,7 +1748,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
               vcomment(n) = 'Ice range: '//c_hi_range(icategory)
             endif
             length = lenstr(vcomment(n))
-            status = nf_put_att_text(ncid,varid,'comment', length, vcomment(n))
+            status = nf_put_att_text(ncid,varid,'comment', 
+     &               length, vcomment(n))
             call nf_stat_check (status,
      &                     'Error defining comment for'//vname(n))
       !-----------------------------------------------------------------
@@ -1757,7 +1760,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
                 status = nf_put_att_text(ncid,varid,'cell_methods',
      $                               9,'time:mean')
                 call nf_stat_check (status,
-     &                         'Error defining cell methods for'//vname(n))
+     &               'Error defining cell methods for'//vname(n))
               endif
             endif
 
@@ -1809,7 +1812,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         length = lenstr(title)
         status = 
      &       nf_put_att_text(ncid,nf_global,'conventions',length,title)
-        call nf_stat_check (status,'Error in global attribute conventions')
+        call nf_stat_check (status,
+     &       'Error in global attribute conventions')
 
         call date_and_time(date=current_date, time=current_time)
         write(start_time,1000) current_date(1:4), current_date(5:6)
@@ -1819,7 +1823,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
      &,         a,'-',a,'-',a,' at ',a,':',a,':',a)
 
         length = lenstr(start_time)
-        status = nf_put_att_text(ncid,nf_global,'history',length,start_time)
+        status = nf_put_att_text(ncid,nf_global,'history',
+     &                           length,start_time)
         call nf_stat_check (status,'Error in global attribute history')
 
       !-----------------------------------------------------------------
@@ -1876,7 +1881,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           call broadcast_scalar(coord_var(i)%short_name,master_task)
           SELECT CASE (coord_var(i)%short_name)
             CASE ('TLON')
-              call gather_global(work_g1, TLON, master_task, distrb_info)
+              call gather_global(work_g1,TLON,master_task,distrb_info)
               if (my_task == master_task) then
               ! Convert T grid longitude from -180 -> 180 to 0 to 360
                  work_gr = work_g1*rad_to_deg + c360    ! single precision
@@ -1884,13 +1889,13 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
                  where (work_gr < c0 )  work_gr = work_gr + c360
               endif
             CASE ('TLAT')
-              call gather_global(work_g1, TLAT, master_task, distrb_info)
+              call gather_global(work_g1,TLAT,master_task,distrb_info)
               if (my_task == master_task) work_gr = work_g1*rad_to_deg
             CASE ('ULON')
-              call gather_global(work_g1, ULON, master_task, distrb_info)
+              call gather_global(work_g1,ULON,master_task,distrb_info)
               if (my_task == master_task) work_gr = work_g1*rad_to_deg
             CASE ('ULAT')
-              call gather_global(work_g1, ULAT, master_task, distrb_info)
+              call gather_global(work_g1,ULAT,master_task,distrb_info)
               if (my_task == master_task) work_gr = work_g1*rad_to_deg
           END SELECT
           
@@ -1939,7 +1944,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           CASE ('ANGLE')
             call gather_global(work_g1, ANGLE, master_task, distrb_info)
           CASE ('ANGLET')
-            call gather_global(work_g1, ANGLET, master_task, distrb_info)
+            call gather_global(work_g1, ANGLET,master_task, distrb_info)
         END SELECT
 
         if (my_task == master_task) then

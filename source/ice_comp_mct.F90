@@ -31,13 +31,8 @@ module ice_comp_mct
   use ice_init
   use ice_boundary
 
-!jsewall below is a CAM use
-!jsewall but is currently needed
-!jsewall take it out later with
-!jsewall a subsequent version of CAM.
-#if (defined SPMD)
-  use mpishorthand,   only : mpicom
-#endif
+  use eshr_timemgr_mod
+  use shr_inputInfo_mod
 !
 ! !PUBLIC MEMBER FUNCTIONS:
   implicit none
@@ -51,8 +46,7 @@ module ice_comp_mct
 ! ! PUBLIC DATA:
 !
 ! !REVISION HISTORY:
-! Author: Mariana Vertenstein, NCAR
-! Modified for CICE by Jacob Sewall
+! Author: Jacob Sewall
 !
 !EOP
 ! !PRIVATE MEMBER FUNCTIONS:
@@ -79,7 +73,8 @@ contains
 ! !IROUTINE: ice_init_mct
 !
 ! !INTERFACE:
-  subroutine ice_init_mct( gsMap_ice, dom_i, x2i_i, i2x_i, ice_present )
+  subroutine ice_init_mct( ICEID, mpicom_ice, gsMap_ice, dom_i, x2i_i, i2x_i, &
+                           CCSMInit, SyncClock, NLFilename )
 !
 ! !DESCRIPTION:
 ! Initialize thermodynamic ice model and obtain relevant atmospheric model
@@ -88,47 +83,50 @@ contains
 ! !USES:
 
     use CICE_InitMod
-
+    use ice_restart, only: runid, runtype, restart_dir
+    use ice_history, only: history_dir, history_file
 !
 ! !ARGUMENTS:
+    integer        , intent(in)    :: ICEID     
+    integer        , intent(in)    :: mpicom_ice
     type(mct_gsMap), intent(inout) :: GSMap_ice
     type(mct_gGrid), intent(inout) :: dom_i
     type(mct_aVect), intent(inout) :: x2i_i, i2x_i
-    logical        , intent(inout) :: ice_present
+
+    type(shr_inputInfo_initType), intent(IN) :: CCSMInit   ! Input init object
+    type(eshr_timemgr_clockType), intent(IN) :: SyncClock  ! Synchronization clock
+    character(len=*), optional  , intent(in) :: NLFilename ! Namelist filename
+
 !
 ! !LOCAL VARIABLES:
 !
+    character(len=256) :: drvarchdir! driver archive directory
+    integer            :: start_ymd          ! Start date (YYYYMMDD)
+    integer            :: start_tod          ! start time of day (s)
+    integer            :: ref_ymd            ! Reference date (YYYYMMDD)
+    integer            :: ref_tod            ! reference time of day (s)
+    integer            :: iyear              ! yyyy
+
 ! !REVISION HISTORY:
-! Author: Mariana Vertenstein, NCAR
-! Revised for CICE by Jacob Sewall
+! Author: Jacob Sewall
 !EOP
 !-----------------------------------------------------------------------
 
     !=============================================================
-    ! Determine if must return now
+    ! use CCSMInit to set namelist parameters needed when linking
+    ! with CAM.
     !=============================================================
 
-#if ( defined SCAM )
-    if ( isrestart ) then
-       return
-    end if
-    if(switch(CRM_SW+1)) then
-       ice_present = .false.
-       return
-    end if
-#endif
+    call shr_inputInfo_initGetData( CCSMInit, case_name=runid )    
 
-    !----------------------------------------------
-    ! The following are logical namelist variables
-    ! from CAM that are currently set in a common
-    ! block.  They probably need to be in here at 
-    ! some point.
-    !---------------------------------------------- 
-    !jsewall    if ( ideal_phys .or. adiabatic .or. aqua_planet ) then
-    !jsewall       ice_present = .false.
-    !jsewall       return
-    !jsewall    end if
-    
+    if (      shr_inputInfo_initIsStartup(  CCSMInit ) )then
+       runtype = "initial"
+    else if ( shr_inputInfo_initIsContinue( CCSMInit ) )then
+       runtype = "continue"
+    else if ( shr_inputInfo_initIsBranch(   CCSMInit ) )then
+       runtype = "branch"
+    end if
+
     !=============================================================
     ! Initialize cice because grid information is needed for
     ! creation of GSMap_ice.  cice_init also sets time manager info
@@ -143,17 +141,59 @@ contains
     !=============================================================
 
     call t_startf ('cice_mct_init')
-    call ice_SetGSMap_mct( GSMap_ice ) 	
+    call ice_SetGSMap_mct( mpicom_ice, ICEID, GSMap_ice ) 	
 
-    call ice_domain_mct( GSMap_ice, dom_i )
+    call ice_domain_mct( mpicom_ice, GSMap_ice, dom_i )
 
     call mct_aVect_init(x2i_i, rList=seq_flds_x2i_fields,    &
-         lsize=MCT_GSMap_lsize(GSMap_ice, mpicom))
+         lsize=MCT_GSMap_lsize(GSMap_ice, mpicom_ice))
     call mct_aVect_zero(x2i_i)
 
     call mct_aVect_init(i2x_i, rList=seq_flds_i2x_fields,    &
-         lsize=MCT_GSMap_lsize(GSMap_ice, mpicom))
+         lsize=MCT_GSMap_lsize(GSMap_ice, mpicom_ice))
     call mct_aVect_zero(i2x_i)
+
+    !=============================================================
+    ! use SyncClock to reset calendar information when linking
+    ! with CAM on initial start.
+    !=============================================================
+    if (runtype == "initial") then
+!jsewall Should this use ref_ymd and ref tod to reset calendar instead?
+       call eshr_timemgr_clockGet(                                          &
+            SyncClock, start_ymd=start_ymd, start_tod=start_tod,            &
+            ref_ymd=ref_ymd, ref_tod=ref_tod)
+
+       write(nu_diag,*) '(ice_init_mct) idate from sync clock = ',start_ymd
+       write(nu_diag,*) '(ice_init_mct) resetting idate to match sync clock'
+       idate = start_ymd
+       iyear = (idate/10000)                     ! integer year of basedate
+       month = (idate-iyear*10000)/100           ! integer month of basedate
+       mday  =  idate-iyear*10000-month*100-1    ! day of month of basedate
+       !jsewall CAM starts with year "0" not year "1"
+       time  = (((iyear)*daycal(13)+daycal(month)+mday)*secday) + start_tod
+
+!jsewall
+    else
+     istep  = istep  + 1    ! update time step counters on restart
+     istep1 = istep1 + 1
+     time = time + dt       ! determine the time and date for first step
+                            ! of a continuation run.
+    endif
+
+    call calendar(time)                                       ! update calendar info
+    time_forc = time
+!jsewall
+    write_restart = 0  !set write_restart to 0 as the update of the timestep
+                       !from the value read in on the restart file causes CICE
+                       !to write a restart file on the first timestep of a restart
+                       !run.
+
+    call broadcast_scalar(idate,        master_task)
+    call broadcast_scalar(time,         master_task)
+    call broadcast_scalar(time_forc,    master_task)
+    call broadcast_scalar(write_restart,master_task)
+    call broadcast_scalar(year_init,    master_task) !for restart file names
+                                                     !calendar is already set
 
     !============================================================= 
     ! send intial state to driver
@@ -170,7 +210,7 @@ contains
 ! !IROUTINE: ice_run_mct
 !
 ! !INTERFACE:
-  subroutine ice_run_mct( x2i_i, i2x_i, rstwr )
+  subroutine ice_run_mct( x2i_i, i2x_i, SyncClock )
 !
 ! !DESCRIPTION:
 ! Run thermodynamic CICE
@@ -180,23 +220,40 @@ contains
     use ice_history
     use ice_restart
     use ice_diagnostics
+
+    use eshr_timemgr_mod, only: eshr_timemgr_clockIsOnLastStep,  &
+                                eshr_timemgr_clockAlarmIsOnRes,  &
+                                eshr_timemgr_clockDateInSync
+
 !
 ! !ARGUMENTS:
     type(mct_aVect), intent(inout) :: x2i_i
     type(mct_aVect), intent(inout) :: i2x_i
-    logical        , intent(in)    :: rstwr    ! true => write restart file this step
+    type(eshr_timemgr_clockType), intent(IN) :: SyncClock  ! Synchronization clock
+
+! !LOCAL VARIABLES:
+    character(len=*), parameter :: SubName = "ice_run_mct"
+    logical :: rstwr ! .true. ==> write a restart file
+    integer :: ymd   ! Current date (YYYYMMDD)
+    integer :: tod   ! Current time of day (sec)
+
 !
 ! !REVISION HISTORY:
-! Author: Mariana Vertenstein, NCAR
-!         Modified for CICE by Jacob Sewall
+! Author: Jacob Sewall
 !
 !EOP
 !---------------------------------------------------------------------------
 
     !--------------------------------------------------------------------
-    ! timestep loop
+    ! Check that internal clock is in sync with master clock
     !--------------------------------------------------------------------
-    
+    tod = sec
+    ymd = idate
+    if ( .not. eshr_timemgr_clockDateInSync( SyncClock, ymd, tod ) )then
+       call shr_sys_abort( SubName//":: Internal sea-ice clock not in sync with "// &
+                           "Master Synchronization clock" )
+    end if
+   
     !-------------------------------------------------------------------
     ! run thermodynamic sea ice
     !-------------------------------------------------------------------
@@ -206,7 +263,10 @@ contains
     call t_startf ('cice_import')
     call ice_import_mct( x2i_i )
     call t_stopf ('cice_import')
-    
+ 
+    !set restart flag
+    rstwr = eshr_timemgr_clockAlarmIsOnRes( SyncClock )
+
     ! Step through the first part of the thermodynamics
     call t_startf ('cice_therm1')
     call step_therm1(dt)
@@ -237,12 +297,18 @@ contains
     call t_startf ('cice_hist')
     call ice_write_hist (dt)    ! history file
     call t_stopf ('cice_hist')
+!jsewall        
+    !----------------------------------------------------------------
+    ! If rstwr is true write a restart.  Restart files are written for
+    ! the last timestep that CICE completed.  istep is then incremented
+    ! on restart.  This matches the other components of sequential CAM.
+    !----------------------------------------------------------------
     
+    if (rstwr) write_restart=1  !rstwr is the restart flag from the sequential driver
+
+    if (write_restart == 1) call dumpfile ! dumps for restarting
+
     call ice_timer_stop(timer_readwrite)  ! reading/writing
-    
-    !--------------------------------------------------------------------
-    ! end of timestep loop
-    !--------------------------------------------------------------------
     
     !----------------------------------------------------------------
     ! Update time and step information at the *end* of the step
@@ -254,17 +320,7 @@ contains
     istep1 = istep1 + 1
     time = time + dt       ! determine the time and date
     call calendar(time)    ! at the end of the timestep
-    
-    !----------------------------------------------------------------
-    ! If rstwr is true write a restart.  Restart files must be 
-    ! written at this point (after the timestep information is
-    ! updated) else CICE will re-run its last timestep and be out of
-    ! sync with the other models.
-    !----------------------------------------------------------------
-    
-    if (rstwr) write_restart=1  !rstwr is the restart flag from the sequential driver
-    
-    if (write_restart == 1) call dumpfile ! dumps for restarting
+
     
   end subroutine ice_run_mct
 
@@ -305,18 +361,22 @@ contains
 
       if (nu_diag /= 6) close (nu_diag) ! diagnostic output
 
-      call end_run              ! quit MPI
-
+!jsewall do *NOT* call end_run from this subroutine.  For a serial
+!jsewall run it is a moot point as end_run does nothing.  But for an
+!jsewall MPI run end_run will kill MPI before the sequential driver is
+!jsewall ready for that to happen.
 
   end subroutine ice_final_mct
 
 !=================================================================================
 
-  subroutine ice_SetGSMap_mct( gsMap_ice )
+  subroutine ice_SetGSMap_mct( mpicom_ice, ICEID, gsMap_ice )
 
     !-------------------------------------------------------------------
 
     implicit none
+    integer        , intent(in)  :: mpicom_ice
+    integer        , intent(in)  :: ICEID
     type(mct_gsMap), intent(inout) :: gsMap_ice
 
     integer,allocatable :: gindex(:)
@@ -384,7 +444,7 @@ contains
 
     call mct_permute(gindex,perm,lsize)
 
-    call seq_init_SetgsMap_mct( lsize, gsize, gindex, mpicom, ICEID, gsMap_ice )
+    call mct_gsMap_init( gsMap_ice, gindex, mpicom_ice, ICEID, lsize, gsize )
 
     deallocate(gindex)
 
@@ -398,38 +458,65 @@ contains
     !-----------------------------------------------------
     type(mct_aVect)   , intent(inout) :: i2x_i
 
-    integer :: i, j, iblk, n 
+    integer :: i, j, iblk, n, ij 
     integer :: ilo, ihi, jlo, jhi !beginning and end of physical domain
+!jsewall
+    integer (kind=int_kind) :: icells ! number of ocean/ice cells
+    integer (kind=int_kind), dimension (nx_block*ny_block) :: indxi ! compressed indices in i
+    integer (kind=int_kind), dimension (nx_block*ny_block) :: indxj ! compressed indices in i
+
     real(dbl_kind):: sicthk(nx_block,ny_block,max_blocks) !aggregate ice thickness(m)
     real(dbl_kind):: ifrac(nx_block,ny_block,max_blocks)  !ice fraction wrt gridcell
     real(dbl_kind):: Tsrf(nx_block,ny_block,max_blocks)   !surface temp K
     type(block) :: this_block      ! block information for current block
     !-----------------------------------------------------
 
-    !first calculate ice thickness from aice and vice
-    !and derive the fractional ice cover wrt the gridcell
-    !by weighting aice by the landfrac from CAM.  Also
+    !calculate ice thickness from aice and vice. Also
     !create Tsrf from the first tracer (trcr) in ice_state.F
 
      do iblk = 1, nblocks
+!jsewall
+         icells = 0
          do j = 1, ny_block
          do i = 1, nx_block
 
          !----ice thickness-----
          sicthk(i,j,iblk) = vice(i,j,iblk)/(aice(i,j,iblk)+puny)
 
-         !---weight aice by CAMFRAC---
-         ifrac(i,j,iblk) = aice(i,j,iblk)*(1-CAMFRAC(i,j,iblk))
+         if(aice(i,j,iblk).gt.c1) then
+         write(6,*) 'JSEWALL aice = ', aice(i,j,iblk), 'i=', i, 'j=', j
+         endif
+!jsewall
+         !---------Initialize Tsrf to Tffresh to fill array----
+         Tsrf(i,j,iblk) = Tffresh 
 
-         !-----surface temperature----
-         Tsrf(i,j,iblk) = Tffresh + trcr(i,j,1,iblk) !Kelvin
+         !-----set icells to update Tsrf over ice cells--------
+         if (tmask(i,j,iblk)) then
+            icells = icells + 1
+            indxi(icells) = i
+            indxj(icells) = j
+         endif                  ! tmask
 
          enddo    !i
          enddo    !j
+
+         !--- loop over only ice cells to match ice_itd.F changes---
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            !-----surface temperature----
+!jsewall
+             Tsrf(i,j,iblk) = Tffresh + trcr(i,j,1,iblk) !Kelvin
+          enddo   !icells
      enddo        !iblk
 
     !fill export state i2x_i
-    !jsewall - Note minus signs on fluxes below.  
+    !jsewall - leave all fluxes as positive down.  CAM
+    !jsewall still expects varied signs but the driver
+    !jsewall uses positive down convention so CAM makes
+    !jsewall the change in atm_comp_mct.F90.  The comment
+    !jsewall "minus" below indicates those that will need
+    !jsewall to be changed if CAM/the driver changes again.  
 
      n=0
      do iblk = 1, nblocks
@@ -451,17 +538,16 @@ contains
          i2x_i%rAttr(index_i2x_Si_anidr ,n)    = alidr(i,j,iblk)
          i2x_i%rAttr(index_i2x_Si_avsdf ,n)    = alvdf(i,j,iblk)
          i2x_i%rAttr(index_i2x_Si_anidf ,n)    = alidf(i,j,iblk)
-         i2x_i%rAttr(index_i2x_Si_ifrac ,n)    = ifrac(i,j,iblk)
-         i2x_i%rAttr(index_i2x_Si_aice  ,n)    = aice(i,j,iblk)
+         i2x_i%rAttr(index_i2x_Si_ifrac ,n)    = aice(i,j,iblk)
          i2x_i%rAttr(index_i2x_Si_sicthk,n)    = sicthk(i,j,iblk)
 
          !-------fluxes-------------------
-         i2x_i%rAttr(index_i2x_Faii_taux ,n)    = -strairxT(i,j,iblk)
-         i2x_i%rAttr(index_i2x_Faii_tauy ,n)    = -strairyT(i,j,iblk)
-         i2x_i%rAttr(index_i2x_Faii_lat  ,n)    = -flat(i,j,iblk)
-         i2x_i%rAttr(index_i2x_Faii_sen  ,n)    = -fsens(i,j,iblk)
-         i2x_i%rAttr(index_i2x_Faii_lwup ,n)    = -flwout(i,j,iblk)
-         i2x_i%rAttr(index_i2x_Faii_evap ,n)    = -evap(i,j,iblk)
+         i2x_i%rAttr(index_i2x_Faii_taux ,n)    = strairxT(i,j,iblk) !minus
+         i2x_i%rAttr(index_i2x_Faii_tauy ,n)    = strairyT(i,j,iblk) !minus
+         i2x_i%rAttr(index_i2x_Faii_lat  ,n)    = flat(i,j,iblk)     !minus
+         i2x_i%rAttr(index_i2x_Faii_sen  ,n)    = fsens(i,j,iblk)    !minus
+         i2x_i%rAttr(index_i2x_Faii_lwup ,n)    = flwout(i,j,iblk)   !minus
+         i2x_i%rAttr(index_i2x_Faii_evap ,n)    = evap(i,j,iblk)     !minus
          i2x_i%rAttr(index_i2x_Faii_swnet,n)    = fswabs(i,j,iblk)
          i2x_i%rAttr(index_i2x_Fioi_melth,n)    = fhocn(i,j,iblk)
 
@@ -565,10 +651,8 @@ contains
          swvdf(i,j,iblk) =  x2i_i%rAttr(index_x2i_Faxa_swvdf,n)
          swidf(i,j,iblk) =  x2i_i%rAttr(index_x2i_Faxa_swndf,n)
          flw  (i,j,iblk) =  x2i_i%rAttr(index_x2i_Faxa_lwdn ,n)
-         frain(i,j,iblk) =  x2i_i%rAttr(index_x2i_Faxa_rainc,n) &
-                          + x2i_i%rAttr(index_x2i_Faxa_rainl,n)
-         fsnow(i,j,iblk) =  x2i_i%rAttr(index_x2i_Faxa_snowc,n) &
-                          + x2i_i%rAttr(index_x2i_Faxa_snowl,n)
+         frain(i,j,iblk) =  x2i_i%rAttr(index_x2i_Faxa_rain ,n)
+         fsnow(i,j,iblk) =  x2i_i%rAttr(index_x2i_Faxa_snow ,n)
 
          enddo    !i
          enddo    !j
@@ -636,10 +720,11 @@ contains
 
 !=======================================================================
 
-  subroutine ice_domain_mct( gsMap_ice, dom_i )
+  subroutine ice_domain_mct( mpicom_ice, gsMap_ice, dom_i )
 
 
     implicit none
+    integer        , intent(in)    :: mpicom_ice
     type(mct_gsMap), intent(inout) :: gsMap_ice
     type(mct_ggrid), intent(out)   :: dom_i 
 
@@ -659,7 +744,7 @@ contains
     !
     call mct_gGrid_init( GGrid=dom_i, CoordChars="lat:lon",  &
                          OtherChars="area:mask:maxfrac",     &
-                         lsize=mct_gsMap_lsize(gsMap_ice, mpicom) )
+                         lsize=mct_gsMap_lsize(gsMap_ice, mpicom_ice) )
 
     !
     ! Allocate memory
@@ -777,6 +862,7 @@ contains
 
     call mct_gGrid_importRattr(dom_i,"mask",data,lsize) 
 
+
      n=0
      do iblk = 1, nblocks
          this_block = get_block(blocks(iblk),iblk)         
@@ -788,6 +874,7 @@ contains
          do j = jlo, jhi
             do i = ilo, ihi
                n = n+1
+
                work_dom(n) = CAMFRAC(i,j,iblk) !From CAM so 1 = land
                                                !0 = ocean. To match
                                                !maxfrac in ocn model

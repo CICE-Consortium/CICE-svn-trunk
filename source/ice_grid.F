@@ -66,6 +66,10 @@
      &,  ANGLE      ! for conversions between POP grid and lat/lon
      &,  ANGLET     ! ANGLE converted to T-cells
 
+      real (kind=dbl_kind)::
+     &  column_lat  !latitude of single column
+     &, column_lon  !longitude of single column
+
 #ifdef COUP_CAM
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
      &  CAMFRAC     ! Land fraction from CAM for COUP_CAM NOTE: This
@@ -908,6 +912,10 @@
       use ice_gather_scatter
       use ice_work, only: work_g1
       use ice_exit      
+!jsewall Need to get rid of this cross model use but...
+#ifdef SCAM
+      use scamMod, only: columnLat, columnLon
+#endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -927,10 +935,19 @@
             HTN  (i,j,iblk) = 1.6e4_dbl_kind
             HTE  (i,j,iblk) = 1.6e4_dbl_kind
 
-            ! used to find hemisphere and init_state, need not be exact
-            ULAT (i,j,iblk) = 75.0_dbl_kind/rad_to_deg  
-            ULON (i,j,iblk) = 170.0_dbl_kind/rad_to_deg 
+!jsewall New (better?) initialization based on new
+!jsewall namelist parameters column_lat and column_lon.
+#ifdef SCAM
+            column_lat = columnLat
+            column_lon = columnLon
+            write(nu_diag,*) '(columngrid) lat = ', column_lat
+            write(nu_diag,*) '(columngrid) lon = ', column_lon
+            CAMFRAC (i,j,iblk) = c0
+#endif
 
+            ! used to find hemisphere and init_state, need not be exact
+            ULAT (i,j,iblk) = column_lat/rad_to_deg  
+            ULON (i,j,iblk) = column_lon/rad_to_deg 
             ANGLE(i,j,iblk) = c0               ! "square with the world"
 
          enddo                  ! i

@@ -24,7 +24,7 @@ module ice_prescribed_mod
 
 ! !USES:
 
-#ifdef CCSM
+#if (defined CCSM) || (defined COUP_CAM)
    use shr_stream_mod
    use shr_map_mod
    use shr_ncread_mod
@@ -50,7 +50,7 @@ module ice_prescribed_mod
 
    private ! except
 
-#ifdef CCSM
+#if (defined CCSM) || (defined COUP_CAM)
 
 ! !PUBLIC TYPES:
 
@@ -813,7 +813,7 @@ end subroutine ice_prescribed_phys
 !==============================================================================
 
 #endif
-! endif CCSM
+! endif CCSM/COUP_CAM
 
 end module ice_prescribed_mod
 
