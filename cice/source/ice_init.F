@@ -75,9 +75,7 @@
      &                        npt, dt, ndyn_dt
       use ice_restart, only: 
      &    restart, restart_dir, restart_file, pointer_file
-#ifdef CCSM
      &,   runid, runtype
-#endif
       use ice_history, only: hist_avg, history_dir, history_file,
      &                       incond_dir, incond_file
       use ice_exit
@@ -88,7 +86,8 @@
      &    atm_data_type,   atm_data_dir,  precip_units, 
      &    sss_data_type,   sst_data_type, ocn_data_dir,
      &    oceanmixed_file, restore_sst,   trestore 
-      use ice_grid, only: grid_file, kmt_file, landfrac_file, grid_type 
+      use ice_grid, only: grid_file, kmt_file, landfrac_file, grid_type,
+     &    column_lat, column_lon
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi,
@@ -103,30 +102,6 @@
 
       character (len=6) :: chartmp
 
-!jsewall
-      !-------------------------------------------
-      ! Logical flags needed to turn off CICE for
-      ! special CAM configurations.  The settings
-      ! of these variables must match those in the
-      ! CAM namelist and if ANY of them are .true.
-      ! then the ice model is not run.  Defaults
-      ! are specified as .false. in ice_init.F
-      !-------------------------------------------
-
-      logical (kind=log_kind) ::
-     &   ideal_phys
-     &,  adiabatic
-     &,  aqua_planet
-
-#ifdef CCSM
-      !-----------------------------------------------------------------
-      ! Declare namelist variables used for CCSM coupled runs and not
-      ! declared elsewhere in CICE
-      !-----------------------------------------------------------------
-
-      integer (kind=int_kind) :: kcolumn  ! 1 for column model
-#endif
-
       !-----------------------------------------------------------------
       ! Namelist variables.
       ! NOTE: Not all of these are used by both models.
@@ -140,7 +115,7 @@
      &, histfreq_n,     dumpfreq,        dumpfreq_n,    restart_file
      &, restart,        restart_dir,     pointer_file,  ice_ic
      &, grid_type,      grid_file,       kmt_file,      landfrac_file
-     &, kitd,           kcatbound
+     &, column_lat,     column_lon,      kitd,           kcatbound
      &, kdyn,           ndyn_dt,         ndte,          evp_damping
      &, yield_curve,    advection
      &, kstrength,      krdg_partic,     krdg_redist,   shortwave
@@ -150,10 +125,8 @@
      &, oceanmixed_ice, sss_data_type,   sst_data_type 
      &, ocn_data_dir,   oceanmixed_file, restore_sst,   trestore
      &, latpnt,         lonpnt,          dbug
-     &, ideal_phys,     adiabatic,       aqua_planet
+     &, runid,          runtype        
 #ifdef CCSM
-! These variables are used in CCSM, but not CICE
-     &, runid,           runtype,             kcolumn
      &, incond_dir,      incond_file
 #endif
 
@@ -162,7 +135,7 @@
       ! default values
       !-----------------------------------------------------------------
 
-      year_init = 1          ! initial year
+      year_init = 0          ! initial year
       istep0 = 0             ! no. of steps taken in previous integrations,
                              ! real (dumped) or imagined (to set calendar)
       dt = 3600.0_dbl_kind   ! time step, s 
@@ -188,6 +161,8 @@
       grid_file    = 'unknown_grid_file'
       kmt_file     = 'unknown_kmt_file'
       landfrac_file= 'lndfrac.seq.cam.da'
+      column_lat   = 75.0_dbl_kind  !arbitrary polar latitude
+      column_lon   = 170.0_dbl_kind !arbitrary polar longitude
 
       kitd = 1           ! type of itd conversions (0 = delta, 1 = linear)
       kcatbound = 1      ! category boundary formula (0 = old, 1 = new)
@@ -200,7 +175,7 @@
       krdg_partic = 1        ! 1 = new participation, 0 = Thorndike et al 75
       krdg_redist = 1        ! 1 = new redistribution, 0 = Hibler 80
       advection  = 'remap'   ! incremental remapping transport scheme
-      shortwave = 'ccsm3'
+      shortwave = 'default'
       albicev   = 0.78_dbl_kind   ! visible ice albedo for h > ahmax
       albicei   = 0.36_dbl_kind   ! near-ir ice albedo for h > ahmax
       albsnowv  = 0.98_dbl_kind   ! cold snow albedo, visible
@@ -226,17 +201,8 @@
       latpnt(2) = -65._dbl_kind   ! latitude of diagnostic point 2 (deg)
       lonpnt(2) = -45._dbl_kind   ! longitude of point 2 (deg)
 
-      ! The following are options for coupled CICE-CAM
-      ideal_phys = .false.  ! if true CAM with idealized physics and no ice
-      adiabatic  = .false.  ! if true CAM with no physics and no ice
-      aqua_planet= .false.  ! if true aqua planet and no ice
-
-#ifdef CCSM
-      ! The following are in CCSM but not CICE.
-      runid   = 'unknown'   ! default run ID
-      runtype = 'unknown'   ! default runtype
-      kcolumn = 0           ! 1 = column model
-#endif
+      runid   = 'unknown'   ! run ID, only used in CCSM
+      runtype = 'unknown'   ! run type, only used in CCSM
 
       !-----------------------------------------------------------------
       ! read from input file
@@ -261,16 +227,6 @@
          call abort_ice('ice: error reading ice_nml')
       endif
 
-      if (trim(diag_type) == 'file') then
-         nu_diag = 48
-      else
-         nu_diag = 6
-      endif
-
-      if (histfreq == '1') hist_avg = .false. ! potential conflict
-#ifdef CCSM
-      if (kcolumn == 1) grid_type    = 'column'
-#endif
       chartmp = advection(1:6)
       if (chartmp /= 'upwind' .and. chartmp /= 'remap ') then
          if (my_task == master_task) 
@@ -278,6 +234,26 @@
      &   'WARNING: ',chartmp,' advection unavailable, using remap'
          advection = 'remap'
       endif
+
+      if (trim(diag_type) == 'file') then
+         nu_diag = 48
+      else
+         nu_diag = 6
+      endif
+
+      if (histfreq == '1') hist_avg = .false. ! potential conflict
+
+      if (runtype == "continue") then
+         restart = .true.
+      else
+         restart = .false.
+      endif
+#if (defined CCSM) || (defined COUP_CAM)
+      year_init = 0                           ! potential conflict
+#endif
+#ifdef COUP_CAM
+      history_file = trim(runid)//"_iceh"
+#endif
 
       call broadcast_scalar(year_init,          master_task)
       call broadcast_scalar(istep0,             master_task)
@@ -320,10 +296,6 @@
       call broadcast_scalar(albicei,            master_task)
       call broadcast_scalar(albsnowv,           master_task)
       call broadcast_scalar(albsnowi,           master_task)
-      call broadcast_scalar(ideal_phys,         master_task)
-      call broadcast_scalar(adiabatic,          master_task)
-      call broadcast_scalar(aqua_planet,        master_task)
-
       call broadcast_scalar(fyear_init,         master_task)
       call broadcast_scalar(ycycle,             master_task)
       call broadcast_scalar(atm_data_type,      master_task)
@@ -339,15 +311,15 @@
       call broadcast_scalar(dbug,               master_task)
       call broadcast_array (latpnt(1:2),        master_task)
       call broadcast_array (lonpnt(1:2),        master_task)
+      call broadcast_scalar (runid,             master_task)
+      call broadcast_scalar (runtype,           master_task)
 ! only master_task writes to file
 !      call broadcast_scalar(nu_diag),           master_task)
 
-#ifdef CCSM
-      ! The following are in CCSM but not CICE.
-      call broadcast_scalar (runid,             master_task)
-      call broadcast_scalar (runtype,           master_task)
-      call broadcast_scalar (kcolumn,           master_task)
-#endif
+      if (trim(grid_type) == 'column') then
+         call broadcast_scalar(column_lat,         master_task)
+         call broadcast_scalar(column_lon,         master_task)
+      endif
 
       !-----------------------------------------------------------------
       ! spew
@@ -418,6 +390,12 @@
             write(nu_diag,*) ' kmt_file                  = ',
      &                         trim(kmt_file)
          endif
+         if (trim(grid_type) == 'column') then
+            write(nu_diag,1000) ' column_lat                = ',
+     &                         column_lat
+            write(nu_diag,1000) ' column_lon                = ',
+     &                         column_lon
+         endif
 
          write(nu_diag,1020) ' kitd                      = ', kitd
          write(nu_diag,1020) ' kcatbound                 = ',
@@ -481,10 +459,6 @@
             write (nu_diag,*) '*layer routine!                    *'
             write (nu_diag,*) ' '
          endif
-#endif
-
-#ifdef CCSM
-         write(nu_diag,1010) ' kcolumn                   = ', kcolumn
 #endif
 
          write (nu_diag,*) ' '
@@ -798,7 +772,7 @@
 
                aicen(i,j,n) = ainit(n)
                vicen(i,j,n) = hinit(n) * ainit(n) ! m
-               vsnon(i,j,n) = min(aicen(i,j,n)*hsno_init, p2*vicen(i,j,n))
+               vsnon(i,j,n) =min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
 
                ! surface temperature
                trcrn(i,j,1,n) = min(Tsmelt, Tair(i,j) - Tffresh) ! deg C

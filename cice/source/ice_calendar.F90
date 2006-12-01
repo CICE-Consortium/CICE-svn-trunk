@@ -23,22 +23,6 @@
 ! !USES:
 !
       use ice_constants
-
-!jsewall
-!time_manager.F90, which is currently (05.05.2006) used
-!by the other components of the sequential CCSM (including
-!the sequential driver) lives in /models/atm/cam/src/utils/
-!If CICE has trouble sourcing this, appropriate pieces may
-!need to be copied into the CICE source/ directory and
-!compiled #ifdef COUP_CAM
-#ifdef COUP_CAM
-      use time_manager, only: get_nstep, get_curr_calday, get_step_size, &
-                              start_ymd, start_tod, nelapse
-!      use ice_restart, only: restart
-#endif
-!jsewall
-
-
 !
 !EOP
 !
@@ -122,49 +106,6 @@
 !
 !EOP
 !
-!jsewall
-      integer (kind=int_kind) :: k
-
-#ifdef COUP_CAM
-
-      dayyr = 365.0_dbl_kind
-
-      ! reset some namelist parameters
-
-      dt = get_step_size()
-      if (nelapse.lt.0) then
-         npt = (abs(nelapse)*secday)/dt
-      else
-         npt = nelapse
-      endif
-
-      yday = get_curr_calday() !day of the year
-
-!jsewall - Because CAM can start with an idate that is not
-!jsewall   Jan 1, istep0 must be based on yday, not nstep
-
-      istep0 = ((yday-1)*secday )/dt
-
-      ! end reset namelist parameters
-
-      ! other variables to set so that CICE and CAM
-      ! agree in time.
-
-      istep=get_nstep() !local timestep number
-
-      time = istep0*dt
-      sec  = mod(time,secday)         ! seconds into date
-      tday = (time-sec)/secday + c1   ! absolute day number
-      do k = 1, 12
-         if (yday > float(daycal(k))) month = k      ! month
-      enddo
-      mday = int(yday) - daycal(month)               ! day of the month
-!echmod      nyr  = year_init + int((tday-c1)/dayyr)+1      ! year number
-      nyr  = int((tday-c1)/dayyr)+1      ! year number
-      idate = (nyr+year_init-1)*10000 + month*100 + mday ! date (yyyymmdd)
-
-#else
-
       istep = 0         ! local timestep number
       time=istep0*dt    ! s
       yday=c0           ! absolute day number
@@ -173,8 +114,6 @@
       nyr=0             ! year
       idate=00000101    ! date
       sec=0             ! seconds into date
-#endif
-
       istep1 = istep0   ! number of steps at current timestep
                         ! real (dumped) or imagined (use to set calendar)
       stop_now = 0      ! end program execution if stop_now=1
@@ -255,7 +194,7 @@
       if (hour  /= hourp)  new_hour = .true.
 
       if (histfreq == '1') write_history=.true.
-!jsewall
+
 #ifdef COUP_CAM 
       if (istep >= 1) then
 #else
