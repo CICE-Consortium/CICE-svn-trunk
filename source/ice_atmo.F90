@@ -14,6 +14,7 @@
 !
 ! 2003: Vectorized by Clifford Chen (Fujitsu) and William Lipscomb
 ! 2004: Block structure added by William Lipscomb
+! 2006: Converted to free source form (F90) by Elizabeth Hunke
 !
 ! !INTERFACE:
 !
@@ -40,17 +41,17 @@
 !
 ! !INTERFACE:
 !
-      subroutine atmo_boundary_layer (nx_block, ny_block,
-     &                                sfctype,  icells,
-     &                                indxi,    indxj, 
-     &                                Tsf,      potT,
-     &                                uatm,     vatm,  
-     &                                wind,     zlvl,  
-     &                                Qa,       rhoa,
-     &                                strx,     stry,   
-     &                                Tref,     Qref,
-     &                                delt,     delq,
-     &                                lhcoef,   shcoef)
+      subroutine atmo_boundary_layer (nx_block, ny_block, &
+                                      sfctype,  icells,   &
+                                      indxi,    indxj,    & 
+                                      Tsf,      potT,     &
+                                      uatm,     vatm,     &  
+                                      wind,     zlvl,     &  
+                                      Qa,       rhoa,     &
+                                      strx,     stry,     &   
+                                      Tref,     Qref,     &
+                                      delt,     delq,     &
+                                      lhcoef,   shcoef)
 
 ! !DESCRIPTION:
 !
@@ -71,97 +72,97 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  icells              ! number of cells that require atmo fluxes
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells                ! number of cells that require atmo fluxes
 
-      integer (kind=int_kind), dimension(nx_block*ny_block),
-     &   intent(in) ::
-     &   indxi, indxj    ! compressed i and j indices
+      integer (kind=int_kind), dimension(nx_block*ny_block), &
+         intent(in) :: &
+         indxi, indxj    ! compressed i and j indices
 
-      character (len=3), intent(in) ::
-     &   sfctype     ! ice or ocean
+      character (len=3), intent(in) :: &
+         sfctype      ! ice or ocean
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
-     &   Tsf         ! surface temperature of ice or ocean
-     &,  potT        ! air potential temperature  (K)
-     &,  uatm        ! x-direction wind speed (m/s)
-     &,  vatm        ! y-direction wind speed (m/s)
-     &,  wind        ! wind speed (m/s)
-     &,  zlvl        ! atm level height (m)
-     &,  Qa          ! specific humidity (kg/kg)
-     &,  rhoa        ! air density (kg/m^3)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         Tsf      , & ! surface temperature of ice or ocean
+         potT     , & ! air potential temperature  (K)
+         uatm     , & ! x-direction wind speed (m/s)
+         vatm     , & ! y-direction wind speed (m/s)
+         wind     , & ! wind speed (m/s)
+         zlvl     , & ! atm level height (m)
+         Qa       , & ! specific humidity (kg/kg)
+         rhoa         ! air density (kg/m^3)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out)::
-     &   strx        ! x surface stress (N)
-     &,  stry        ! y surface stress (N)
-     &,  Tref        ! reference height temperature  (K)
-     &,  Qref        ! reference height specific humidity (kg/kg)
-     &,  delt        ! potential T difference   (K)
-     &,  delq        ! humidity difference      (kg/kg)
-     &,  shcoef      ! transfer coefficient for sensible heat
-     &,  lhcoef      ! transfer coefficient for latent heat
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
+         strx     , & ! x surface stress (N)
+         stry     , & ! y surface stress (N)
+         Tref     , & ! reference height temperature  (K)
+         Qref     , & ! reference height specific humidity (kg/kg)
+         delt     , & ! potential T difference   (K)
+         delq     , & ! humidity difference      (kg/kg)
+         shcoef   , & ! transfer coefficient for sensible heat
+         lhcoef       ! transfer coefficient for latent heat
 !
 !EOP
 !
-       integer (kind=int_kind) ::
-     &   k        ! iteration index
-     &,  i, j     ! horizontal indices
+       integer (kind=int_kind) :: &
+         k     , & ! iteration index
+         i, j      ! horizontal indices
 
-      real (kind=dbl_kind) ::
-     &   TsfK     ! surface temperature in Kelvin (K)
-     &,  xqq      ! temporary variable
-     &,  psimh    ! stability function at zlvl   (momentum)
-     &,  tau      ! stress at zlvl
-     &,  fac      ! interpolation factor
-     &,  al2      ! ln(z10   /zTrf)
-     &,  psix2    ! stability function at zTrf   (heat and water)
-     &,  psimhs   ! stable profile
-     &,  ssq      ! sat surface humidity     (kg/kg)
-     &,  qqq      ! for qsat, dqsfcdt
-     &,  TTT      ! for qsat, dqsfcdt
-     &,  qsat     ! the saturation humidity of air (kg/m^3)
-     &,  Lheat    ! Lvap or Lsub, depending on surface type
+      real (kind=dbl_kind) :: &
+         TsfK  , & ! surface temperature in Kelvin (K)
+         xqq   , & ! temporary variable
+         psimh , & ! stability function at zlvl   (momentum)
+         tau   , & ! stress at zlvl
+         fac   , & ! interpolation factor
+         al2   , & ! ln(z10   /zTrf)
+         psix2 , & ! stability function at zTrf   (heat and water)
+         psimhs, & ! stable profile
+         ssq   , & ! sat surface humidity     (kg/kg)
+         qqq   , & ! for qsat, dqsfcdt
+         TTT   , & ! for qsat, dqsfcdt
+         qsat  , & ! the saturation humidity of air (kg/m^3)
+         Lheat     ! Lvap or Lsub, depending on surface type
 
-      real (kind=dbl_kind), dimension (icells) ::
-     &   ustar    ! ustar (m/s)
-     &,  tstar    ! tstar
-     &,  qstar    ! qstar
-     &,  rdn      ! sqrt of neutral exchange coefficient (momentum)
-     &,  rhn      ! sqrt of neutral exchange coefficient (heat)
-     &,  ren      ! sqrt of neutral exchange coefficient (water)
-     &,  rd       ! sqrt of exchange coefficient (momentum)
-     &,  re       ! sqrt of exchange coefficient (water)
-     &,  rh       ! sqrt of exchange coefficient (heat)
-     &,  vmag     ! surface wind magnitude   (m/s)
-     &,  alz      ! ln(zlvl  /z10)
-     &,  thva     ! virtual temperature      (K)
-     &,  cp       ! specific heat of moist air
-     &,  hol      ! H (at zlvl  ) over L
-     &,  stable   ! stability factor
-     &,  psixh    ! stability function at zlvl   (heat and water)
+      real (kind=dbl_kind), dimension (icells) :: &
+         ustar , & ! ustar (m/s)
+         tstar , & ! tstar
+         qstar , & ! qstar
+         rdn   , & ! sqrt of neutral exchange coefficient (momentum)
+         rhn   , & ! sqrt of neutral exchange coefficient (heat)
+         ren   , & ! sqrt of neutral exchange coefficient (water)
+         rd    , & ! sqrt of exchange coefficient (momentum)
+         re    , & ! sqrt of exchange coefficient (water)
+         rh    , & ! sqrt of exchange coefficient (heat)
+         vmag  , & ! surface wind magnitude   (m/s)
+         alz   , & ! ln(zlvl  /z10)
+         thva  , & ! virtual temperature      (K)
+         cp    , & ! specific heat of moist air
+         hol   , & ! H (at zlvl  ) over L
+         stable, & ! stability factor
+         psixh     ! stability function at zlvl   (heat and water)
 
-      integer (kind=int_kind) ::
-     &   ij       ! combined ij index
+      integer (kind=int_kind) :: &
+         ij        ! combined ij index
 
-      real (kind=dbl_kind), parameter ::
-     &   cpvir = cp_wv/cp_air - c1 ! defined as cp_wv/cp_air - 1.
-     &,  zTrf  = c2                ! reference height for air temp (m)
-     &,  umin  = c1                ! minimum wind speed (m/s)
+      real (kind=dbl_kind), parameter :: &
+         cpvir = cp_wv/cp_air-c1, & ! defined as cp_wv/cp_air - 1.
+         zTrf  = c2             , & ! reference height for air temp (m)
+         umin  = c1                 ! minimum wind speed (m/s)
 
       ! local functions
-      real (kind=dbl_kind) ::
-     &   xd       ! dummy argument
-     &,  psimhu   ! unstable part of psimh
-     &,  psixhu   ! unstable part of psimx
+      real (kind=dbl_kind) :: &
+         xd    , & ! dummy argument
+         psimhu, & ! unstable part of psimh
+         psixhu    ! unstable part of psimx
 
       !------------------------------------------------------------
       ! Define functions
       !------------------------------------------------------------
 
-      psimhu(xd)  = log((c1+xd*(c2+xd))*(c1+xd*xd)/c8)
-     &            - c2*atan(xd) + pi*p5
-!ech     &            - c2*atan(xd) + 1.571_dbl_kind
+      psimhu(xd)  = log((c1+xd*(c2+xd))*(c1+xd*xd)/c8) &
+                  - c2*atan(xd) + pi*p5 
+!ech                  - c2*atan(xd) + 1.571_dbl_kind
 
       psixhu(xd)  =  c2 * log((c1 + xd*xd)/c2)
 
@@ -210,8 +211,8 @@
             i = indxi(ij)
             j = indxj(ij)
             vmag(ij) = max(umin, wind(i,j))
-            rdn(ij)  = sqrt(0.0027_dbl_kind/vmag(ij)
-     &              + .000142_dbl_kind + .0000764_dbl_kind*vmag(ij))
+            rdn(ij)  = sqrt(0.0027_dbl_kind/vmag(ij) &
+                    + .000142_dbl_kind + .0000764_dbl_kind*vmag(ij))
          enddo   ! ij
 
       endif   ! sfctype
@@ -260,23 +261,23 @@
             j = indxj(ij)
 
         ! compute stability & evaluate all stability functions
-            hol(ij) = vonkar * gravit * zlvl(i,j)
-     &             * (tstar(ij)/thva(ij)
-     &              + qstar(ij)/(c1/zvir+Qa(i,j)))
-     &             / ustar(ij)**2
+            hol(ij) = vonkar * gravit * zlvl(i,j) &
+                   * (tstar(ij)/thva(ij) &
+                    + qstar(ij)/(c1/zvir+Qa(i,j))) &
+                   / ustar(ij)**2
             hol(ij)    = sign( min(abs(hol(ij)),c10), hol(ij) )
             stable(ij) = p5 + sign(p5 , hol(ij))
             xqq    = max(sqrt(abs(c1 - c16*hol(ij))) , c1)
             xqq    = sqrt(xqq)
 
             ! Jordan et al 1999
-            psimhs = -(0.7_dbl_kind*hol(ij)
-     &             + 0.75_dbl_kind*(hol(ij)-14.3_dbl_kind)
-     &             * exp(-0.35_dbl_kind*hol(ij)) + 10.7_dbl_kind)
-            psimh  = psimhs*stable(ij)
-     &              + (c1 - stable(ij))*psimhu(xqq)
-            psixh(ij)  = psimhs*stable(ij)
-     &              + (c1 - stable(ij))*psixhu(xqq)
+            psimhs = -(0.7_dbl_kind*hol(ij) &
+                   + 0.75_dbl_kind*(hol(ij)-14.3_dbl_kind) &
+                   * exp(-0.35_dbl_kind*hol(ij)) + 10.7_dbl_kind)
+            psimh  = psimhs*stable(ij) &
+                    + (c1 - stable(ij))*psimhu(xqq)
+            psixh(ij)  = psimhs*stable(ij) &
+                    + (c1 - stable(ij))*psixhu(xqq)
 
         ! shift all coeffs to measurement height and stability
             rd(ij) = rdn(ij) / (c1+rdn(ij)/vonkar*(alz(ij)-psimh))
@@ -327,12 +328,12 @@
          xqq      = max( c1, sqrt(abs(c1-c16*hol(ij))) )
          xqq      = sqrt(xqq)
          psix2    = -c5*hol(ij)*stable(ij) + (c1-stable(ij))*psixhu(xqq)
-         fac      = (rh(ij)/vonkar) 
-     &            * (alz(ij) + al2 - psixh(ij) + psix2)
+         fac      = (rh(ij)/vonkar) &
+                  * (alz(ij) + al2 - psixh(ij) + psix2)
          Tref(i,j)= potT(i,j) - delt(i,j)*fac
          Tref(i,j)= Tref(i,j) - p01*zTrf ! pot temp to temp correction
-         fac      = (re(ij)/vonkar)
-     &            * (alz(ij) + al2 - psixh(ij) + psix2)
+         fac      = (re(ij)/vonkar) &
+                  * (alz(ij) + al2 - psixh(ij) + psix2)
          Qref(i,j)= Qa(i,j) - delq(i,j)*fac
 
       enddo                     ! ij

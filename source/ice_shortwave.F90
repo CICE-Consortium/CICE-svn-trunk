@@ -34,6 +34,7 @@
 ! 2006, WHL: Added delta Eddington routines from Bruce Briegleb
 ! 2006, ECH: Changed data statements in delta Eddington routines (no 
 !            longer hardwired)
+!            Converted to free source form (F90)
 !
 ! !INTERFACE:
 !
@@ -50,30 +51,30 @@
       implicit none
       save
 
-      character (len=char_len) ::
-     &   shortwave     ! shortwave method, 'ccsm3' (default) or 'dEdd'
+      character (len=char_len) :: &
+         shortwave     ! shortwave method, 'ccsm3' (default) or 'dEdd'
 
       ! baseline albedos, set in namelist
-      real (kind=dbl_kind) ::
-     &   albicev   ! visible ice albedo for h > ahmax
-     &,  albicei   ! near-ir ice albedo for h > ahmax
-     &,  albsnowv  ! cold snow albedo, visible
-     &,  albsnowi  ! cold snow albedo, near IR
+      real (kind=dbl_kind) :: &
+         albicev , & ! visible ice albedo for h > ahmax
+         albicei , & ! near-ir ice albedo for h > ahmax
+         albsnowv, & ! cold snow albedo, visible
+         albsnowi    ! cold snow albedo, near IR
 
       ! storage for approximate exponential for delta-Eddington
-      integer (kind=int_kind), parameter :: 
-     &   nmbexp = 1000000  ! number of exponential values in lookup table
+      integer (kind=int_kind), parameter :: & 
+         nmbexp = 1000000  ! number of exponential values in lookup table
 
-      real (kind=dbl_kind), parameter :: 
-     &   argmax = c10      ! maximum argument of exponential
+      real (kind=dbl_kind), parameter :: & 
+         argmax = c10      ! maximum argument of exponential
 
-      real (kind=dbl_kind) ::
-     &   app_exp(0:nmbexp) ! table for exponentials
-     &,  dx_exp            ! change in argument between table values
-     &,  exp_min           ! minimum exponential value
+      real (kind=dbl_kind) :: &
+         app_exp(0:nmbexp), & ! table for exponentials
+         dx_exp           , & ! change in argument between table values
+         exp_min              ! minimum exponential value
 
-      integer (kind=int_kind) ::
-     &   indx_exp          ! index for exponential lookup table
+      integer (kind=int_kind) :: &
+         indx_exp          ! index for exponential lookup table
 
 !=======================================================================
 
@@ -86,17 +87,17 @@
 !
 ! !INTERFACE:
 !
-      subroutine shortwave_ccsm3 (nx_block, ny_block,
-     &                            icells,
-     &                            indxi,    indxj,
-     &                            aicen,    vicen,
-     &                            vsnon,    Tsfcn,
-     &                            swvdr,    swvdf,
-     &                            swidr,    swidf,
-     &                            alvdrn,   alidrn,
-     &                            alvdfn,   alidfn,
-     &                            fswsfc,   fswint,
-     &                            fswthru,  Iswabs)
+      subroutine shortwave_ccsm3 (nx_block, ny_block, &
+                                  icells,             &
+                                  indxi,    indxj,    &
+                                  aicen,    vicen,    &
+                                  vsnon,    Tsfcn,    &
+                                  swvdr,    swvdf,    &
+                                  swidr,    swidf,    &
+                                  alvdrn,   alidrn,   &
+                                  alvdfn,   alidfn,   &
+                                  fswsfc,   fswint,   &
+                                  fswthru,  Iswabs)
 !
 ! !DESCRIPTION:
 !
@@ -110,87 +111,87 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  icells              ! number of ice-covered grid cells
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells              ! number of ice-covered grid cells
 
-      integer (kind=int_kind), dimension (nx_block*ny_block),
-     &   intent(in) ::
-     &   indxi        ! indices for ice-covered cells
-     &,  indxj
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi    , & ! indices for ice-covered cells
+         indxj
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(in) ::
-     &   aicen        ! concentration of ice per category
-     &,  vicen        ! volume of ice per category
-     &,  vsnon        ! volume of ice per category
-     &,  Tsfcn        ! surface temperature
-     &,  swvdr        ! sw down, visible, direct  (W/m^2)
-     &,  swvdf        ! sw down, visible, diffuse (W/m^2)
-     &,  swidr        ! sw down, near IR, direct  (W/m^2)
-     &,  swidf        ! sw down, near IR, diffuse (W/m^2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         aicen    , & ! concentration of ice per category
+         vicen    , & ! volume of ice per category
+         vsnon    , & ! volume of ice per category
+         Tsfcn    , & ! surface temperature
+         swvdr    , & ! sw down, visible, direct  (W/m^2)
+         swvdf    , & ! sw down, visible, diffuse (W/m^2)
+         swidr    , & ! sw down, near IR, direct  (W/m^2)
+         swidf        ! sw down, near IR, diffuse (W/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(out) ::
-     &   alvdrn       ! visible, direct, avg   (fraction)
-     &,  alidrn       ! near-ir, direct, avg   (fraction)
-     &,  alvdfn       ! visible, diffuse, avg  (fraction)
-     &,  alidfn       ! near-ir, diffuse, avg  (fraction)
-     &,  fswsfc       ! SW absorbed at ice/snow surface (W m-2)
-     &,  fswint       ! SW absorbed in ice interior, below surface (W m-2)
-     &,  fswthru      ! SW through ice to ocean (W m-2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(out) :: &
+         alvdrn   , & ! visible, direct, avg   (fraction)
+         alidrn   , & ! near-ir, direct, avg   (fraction)
+         alvdfn   , & ! visible, diffuse, avg  (fraction)
+         alidfn   , & ! near-ir, diffuse, avg  (fraction)
+         fswsfc   , & ! SW absorbed at ice/snow surface (W m-2)
+         fswint   , & ! SW absorbed in ice interior, below surface (W m-2)
+         fswthru      ! SW through ice to ocean (W m-2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr),
-     &     intent(out) ::
-     &   Iswabs       ! SW absorbed in particular layer (W m-2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
+           intent(out) :: &
+         Iswabs       ! SW absorbed in particular layer (W m-2)
 !
 !EOP
 !
       ! ice and snow albedo for each category
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block)::
-     &   alvdrni    ! visible, direct, ice    (fraction)
-     &,  alidrni    ! near-ir, direct, ice    (fraction)
-     &,  alvdfni    ! visible, diffuse, ice   (fraction)
-     &,  alidfni    ! near-ir, diffuse, ice   (fraction)
-     &,  alvdrns    ! visible, direct, snow   (fraction)
-     &,  alidrns    ! near-ir, direct, snow   (fraction)
-     &,  alvdfns    ! visible, diffuse, snow  (fraction)
-     &,  alidfns    ! near-ir, diffuse, snow  (fraction)
+      real (kind=dbl_kind), dimension (nx_block,ny_block):: &
+         alvdrni, & ! visible, direct, ice    (fraction)
+         alidrni, & ! near-ir, direct, ice    (fraction)
+         alvdfni, & ! visible, diffuse, ice   (fraction)
+         alidfni, & ! near-ir, diffuse, ice   (fraction)
+         alvdrns, & ! visible, direct, snow   (fraction)
+         alidrns, & ! near-ir, direct, snow   (fraction)
+         alvdfns, & ! visible, diffuse, snow  (fraction)
+         alidfns    ! near-ir, diffuse, snow  (fraction)
 
       !-----------------------------------------------------------------
       ! Compute albedos for ice and snow.
       !-----------------------------------------------------------------
 
-      call compute_albedos (nx_block,   ny_block,
-     &                      icells,
-     &                      indxi,      indxj,
-     &                      aicen,      vicen,
-     &                      vsnon,      Tsfcn,
-     &                      alvdrni,    alidrni,
-     &                      alvdfni,    alidfni,
-     &                      alvdrns,    alidrns,
-     &                      alvdfns,    alidfns,
-     &                      alvdrn,     alidrn,
-     &                      alvdfn,     alidfn)
+      call compute_albedos (nx_block,   ny_block, &
+                            icells,               &
+                            indxi,      indxj,    &
+                            aicen,      vicen,    &
+                            vsnon,      Tsfcn,    &
+                            alvdrni,    alidrni,  &
+                            alvdfni,    alidfni,  &
+                            alvdrns,    alidrns,  &
+                            alvdfns,    alidfns,  &
+                            alvdrn,     alidrn,   &
+                            alvdfn,     alidfn)
 
       !-----------------------------------------------------------------
       ! Compute solar radiation absorbed in ice and penetrating to ocean.
       !-----------------------------------------------------------------
 
-      call absorbed_solar  (nx_block,   ny_block,
-     &                      icells, 
-     &                      indxi,      indxj,
-     &                      aicen,
-     &                      vicen,      vsnon,
-     &                      swvdr,      swvdf,
-     &                      swidr,      swidf,
-     &                      alvdrni,    alvdfni,
-     &                      alidrni,    alidfni,
-     &                      alvdrns,    alvdfns,
-     &                      alidrns,    alidfns,
-     &                      fswsfc,     fswint,
-     &                      fswthru,    Iswabs)
+      call absorbed_solar  (nx_block,   ny_block, &
+                            icells,               &
+                            indxi,      indxj,    &
+                            aicen,                &
+                            vicen,      vsnon,    &
+                            swvdr,      swvdf,    &
+                            swidr,      swidf,    &
+                            alvdrni,    alvdfni,  &
+                            alidrni,    alidfni,  &
+                            alvdrns,    alvdfns,  &
+                            alidrns,    alidfns,  &
+                            fswsfc,     fswint,   &
+                            fswthru,    Iswabs)
 
       end subroutine shortwave_ccsm3
 
@@ -201,17 +202,17 @@
 !
 ! !INTERFACE:
 !
-      subroutine compute_albedos (nx_block, ny_block,
-     &                            icells,
-     &                            indxi,    indxj,
-     &                            aicen,    vicen,
-     &                            vsnon,    Tsfcn,
-     &                            alvdrni,  alidrni,
-     &                            alvdfni,  alidfni,
-     &                            alvdrns,  alidrns,
-     &                            alvdfns,  alidfns,
-     &                            alvdrn,   alidrn,
-     &                            alvdfn,   alidfn)
+      subroutine compute_albedos (nx_block, ny_block, &
+                                  icells,             &
+                                  indxi,    indxj,    &
+                                  aicen,    vicen,    &
+                                  vsnon,    Tsfcn,    &
+                                  alvdrni,  alidrni,  &
+                                  alvdfni,  alidfni,  &
+                                  alvdrns,  alidrns,  &
+                                  alvdfns,  alidfns,  &
+                                  alvdrn,   alidrn,   &
+                                  alvdfn,   alidfn)
 !
 ! !DESCRIPTION:
 !
@@ -225,66 +226,66 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  icells              ! number of ice-covered grid cells
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells              ! number of ice-covered grid cells
 
-      integer (kind=int_kind), dimension (nx_block*ny_block),
-     &   intent(in) ::
-     &   indxi   ! compressed indices for ice-covered cells
-     &,  indxj
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi   , & ! compressed indices for ice-covered cells
+         indxj
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(in) ::
-     &   aicen       ! concentration of ice per category
-     &,  vicen       ! volume of ice per category
-     &,  vsnon       ! volume of ice per category
-     &,  Tsfcn       ! surface temperature
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         aicen   , & ! concentration of ice per category
+         vicen   , & ! volume of ice per category
+         vsnon   , & ! volume of ice per category
+         Tsfcn       ! surface temperature
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(out) ::
-     &   alvdrni      ! visible, direct, ice   (fraction)
-     &,  alidrni      ! near-ir, direct, ice   (fraction)
-     &,  alvdfni      ! visible, diffuse, ice  (fraction)
-     &,  alidfni      ! near-ir, diffuse, ice  (fraction)
-     &,  alvdrns      ! visible, direct, snow  (fraction)
-     &,  alidrns      ! near-ir, direct, snow  (fraction)
-     &,  alvdfns      ! visible, diffuse, snow (fraction)
-     &,  alidfns      ! near-ir, diffuse, snow (fraction)
-     &,  alvdrn       ! visible, direct, avg   (fraction)
-     &,  alidrn       ! near-ir, direct, avg   (fraction)
-     &,  alvdfn       ! visible, diffuse, avg  (fraction)
-     &,  alidfn       ! near-ir, diffuse, avg  (fraction)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(out) :: &
+         alvdrni  , & ! visible, direct, ice   (fraction)
+         alidrni  , & ! near-ir, direct, ice   (fraction)
+         alvdfni  , & ! visible, diffuse, ice  (fraction)
+         alidfni  , & ! near-ir, diffuse, ice  (fraction)
+         alvdrns  , & ! visible, direct, snow  (fraction)
+         alidrns  , & ! near-ir, direct, snow  (fraction)
+         alvdfns  , & ! visible, diffuse, snow (fraction)
+         alidfns  , & ! near-ir, diffuse, snow (fraction)
+         alvdrn   , & ! visible, direct, avg   (fraction)
+         alidrn   , & ! near-ir, direct, avg   (fraction)
+         alvdfn   , & ! visible, diffuse, avg  (fraction)
+         alidfn       ! near-ir, diffuse, avg  (fraction)
 !
 !EOP
 !
-      real (kind=dbl_kind), parameter ::
-     &   ahmax     = p5              ! thickness above which ice albedo 
+      real (kind=dbl_kind), parameter :: &
+         ahmax     = p5          , & ! thickness above which ice albedo 
                                      ! is constant (m)
-     &,  dT_mlt    = c1              ! change in temp to give dalb_mlt 
+         dT_mlt    = c1          , & ! change in temp to give dalb_mlt 
                                      ! albedo change
-     &,  dalb_mlt  = -0.075_dbl_kind ! albedo change per dT_mlt change
+         dalb_mlt  = -0.075_dbl_kind, & ! albedo change per dT_mlt change
                                      ! in temp for ice
-     &,  dalb_mltv = -p1             ! albedo vis change per dT_mlt change
+         dalb_mltv = -p1         , & ! albedo vis change per dT_mlt change
                                      ! in temp for snow
-     &,  dalb_mlti = -p15            ! albedo nir change per dT_mlt change
+         dalb_mlti = -p15            ! albedo nir change per dT_mlt change
                                      ! in temp for snow
 
-      integer (kind=int_kind) ::
-     &   i, j, n
+      integer (kind=int_kind) :: &
+         i, j, n
 
-      real (kind=dbl_kind) ::
-     &   hi      ! ice thickness  (m)
-     &,  hs      ! snow thickness  (m)
-     &,  albo    ! effective ocean albedo, function of ice thickness
-     &,  fh      ! piecewise linear function of thickness
-     &,  fT      ! piecewise linear function of surface temperature
-     &,  dTs     ! difference of Tsfc and Timelt
-     &,  fhtan   ! factor used in albedo dependence on ice thickness
-     &,  asnow   ! fractional area of snow cover
+      real (kind=dbl_kind) :: &
+         hi  , & ! ice thickness  (m)
+         hs  , & ! snow thickness  (m)
+         albo, & ! effective ocean albedo, function of ice thickness
+         fh  , & ! piecewise linear function of thickness
+         fT  , & ! piecewise linear function of surface temperature
+         dTs , & ! difference of Tsfc and Timelt
+         fhtan,& ! factor used in albedo dependence on ice thickness
+         asnow   ! fractional area of snow cover
 
-      integer (kind=int_kind) ::
-     &   ij      ! horizontal index, combines i and j loops
+      integer (kind=int_kind) :: &
+         ij      ! horizontal index, combines i and j loops
 
 
       fhtan = atan(ahmax*c4)
@@ -360,14 +361,14 @@
          endif
 
          ! combine ice and snow albedos (for coupler)
-         alvdfn(i,j) = alvdfni(i,j)*(c1-asnow) +
-     &                 alvdfns(i,j)*asnow
-         alidfn(i,j) = alidfni(i,j)*(c1-asnow) +
-     &                 alidfns(i,j)*asnow
-         alvdrn(i,j) = alvdrni(i,j)*(c1-asnow) +
-     &                 alvdrns(i,j)*asnow
-         alidrn(i,j) = alidrni(i,j)*(c1-asnow) +
-     &                 alidrns(i,j)*asnow
+         alvdfn(i,j) = alvdfni(i,j)*(c1-asnow) + &
+                       alvdfns(i,j)*asnow
+         alidfn(i,j) = alidfni(i,j)*(c1-asnow) + &
+                       alidfns(i,j)*asnow
+         alvdrn(i,j) = alvdrni(i,j)*(c1-asnow) + &
+                       alvdrns(i,j)*asnow
+         alidrn(i,j) = alidrni(i,j)*(c1-asnow) + &
+                       alidrns(i,j)*asnow
 
       enddo                     ! ij
 
@@ -389,84 +390,84 @@
 !
 ! !INTERFACE:
 !
-      subroutine absorbed_solar (nx_block, ny_block,
-     &                           icells, 
-     &                           indxi,    indxj,
-     &                           aicen,
-     &                           vicen,    vsnon,
-     &                           swvdr,    swvdf,
-     &                           swidr,    swidf,
-     &                           alvdrni,  alvdfni,
-     &                           alidrni,  alidfni,
-     &                           alvdrns,  alvdfns,
-     &                           alidrns,  alidfns,
-     &                           fswsfc,   fswint,
-     &                           fswthru,  Iswabs)
+      subroutine absorbed_solar (nx_block, ny_block, &
+                                 icells,             &
+                                 indxi,    indxj,    &
+                                 aicen,              &
+                                 vicen,    vsnon,    &
+                                 swvdr,    swvdf,    &
+                                 swidr,    swidf,    &
+                                 alvdrni,  alvdfni,  &
+                                 alidrni,  alidfni,  &
+                                 alvdrns,  alvdfns,  &
+                                 alidrns,  alidfns,  &
+                                 fswsfc,   fswint,   &
+                                 fswthru,  Iswabs)
 !
 ! !USES:
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  icells          ! number of cells with aicen > puny
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells          ! number of cells with aicen > puny
 
-      integer (kind=int_kind), dimension(nx_block*ny_block),
-     &   intent(in) ::
-     &   indxi, indxj    ! compressed indices for cells with aicen > puny
+      integer (kind=int_kind), dimension(nx_block*ny_block), &
+         intent(in) :: &
+         indxi, indxj    ! compressed indices for cells with aicen > puny
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
-     &   aicen           ! fractional ice area
-     &,  vicen           ! ice volume
-     &,  vsnon           ! snow volume
-     &,  swvdr           ! sw down, visible, direct  (W/m^2)
-     &,  swvdf           ! sw down, visible, diffuse (W/m^2)
-     &,  swidr           ! sw down, near IR, direct  (W/m^2)
-     &,  swidf           ! sw down, near IR, diffuse (W/m^2)
-     &,  alvdrni         ! visible, direct albedo,ice
-     &,  alidrni         ! near-ir, direct albedo,ice
-     &,  alvdfni         ! visible, diffuse albedo,ice
-     &,  alidfni         ! near-ir, diffuse albedo,ice
-     &,  alvdrns         ! visible, direct albedo, snow
-     &,  alidrns         ! near-ir, direct albedo, snow
-     &,  alvdfns         ! visible, diffuse albedo, snow
-     &,  alidfns         ! near-ir, diffuse albedo, snow
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         aicen       , & ! fractional ice area
+         vicen       , & ! ice volume
+         vsnon       , & ! snow volume
+         swvdr       , & ! sw down, visible, direct  (W/m^2)
+         swvdf       , & ! sw down, visible, diffuse (W/m^2)
+         swidr       , & ! sw down, near IR, direct  (W/m^2)
+         swidf       , & ! sw down, near IR, diffuse (W/m^2)
+         alvdrni     , & ! visible, direct albedo,ice
+         alidrni     , & ! near-ir, direct albedo,ice
+         alvdfni     , & ! visible, diffuse albedo,ice
+         alidfni     , & ! near-ir, diffuse albedo,ice
+         alvdrns     , & ! visible, direct albedo, snow
+         alidrns     , & ! near-ir, direct albedo, snow
+         alvdfns     , & ! visible, diffuse albedo, snow
+         alidfns         ! near-ir, diffuse albedo, snow
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(out)::
-     &   fswsfc          ! SW absorbed at ice/snow surface (W m-2)
-     &,  fswint          ! SW absorbed in ice interior, below surface (W m-2)
-     &,  fswthru         ! SW through ice to ocean (W m-2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(out):: &
+         fswsfc      , & ! SW absorbed at ice/snow surface (W m-2)
+         fswint      , & ! SW absorbed in ice interior, below surface (W m-2)
+         fswthru         ! SW through ice to ocean (W m-2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr),
-     &   intent(out) ::
-     &   Iswabs          ! SW absorbed in particular layer (W m-2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
+         intent(out) :: &
+         Iswabs          ! SW absorbed in particular layer (W m-2)
 !
 !EOP
 !
-      real (kind=dbl_kind), parameter ::
-     &   i0vis = 0.70_dbl_kind  ! fraction of penetrating solar rad (visible)
+      real (kind=dbl_kind), parameter :: &
+         i0vis = 0.70_dbl_kind  ! fraction of penetrating solar rad (visible)
 
-      integer (kind=int_kind) ::
-     &   i, j            ! horizontal indices
-     &,  ij              ! horizontal index, combines i and j loops
-     &,  k               ! ice layer index
+      integer (kind=int_kind) :: &
+         i, j        , & ! horizontal indices
+         ij          , & ! horizontal index, combines i and j loops
+         k               ! ice layer index
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
-     &   fswpen          ! SW penetrating beneath surface (W m-2)
-     &,  trantop         ! transmitted frac of penetrating SW at layer top
-     &,  tranbot         ! transmitted frac of penetrating SW at layer bot
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         fswpen      , & ! SW penetrating beneath surface (W m-2)
+         trantop     , & ! transmitted frac of penetrating SW at layer top
+         tranbot         ! transmitted frac of penetrating SW at layer bot
 
-      real (kind=dbl_kind) ::
-     &   swabs           ! net SW down at surface (W m-2)
-     &,  swabsv          ! swabs in vis (wvlngth < 700nm)  (W/m^2)
-     &,  swabsi          ! swabs in nir (wvlngth > 700nm)  (W/m^2)
-     &,  fswpenvdr       ! penetrating SW, vis direct
-     &,  fswpenvdf       ! penetrating SW, vis diffuse
-     &,  hi              ! ice thickness (m)
-     &,  hs              ! snow thickness (m)
-     &,  hilyr           ! ice layer thickness
-     &,  asnow           ! fractional area of snow cover
+      real (kind=dbl_kind) :: &
+         swabs       , & ! net SW down at surface (W m-2)
+         swabsv      , & ! swabs in vis (wvlngth < 700nm)  (W/m^2)
+         swabsi      , & ! swabs in nir (wvlngth > 700nm)  (W/m^2)
+         fswpenvdr   , & ! penetrating SW, vis direct
+         fswpenvdf   , & ! penetrating SW, vis diffuse
+         hi          , & ! ice thickness (m)
+         hs          , & ! snow thickness (m)
+         hilyr       , & ! ice layer thickness
+         asnow           ! fractional area of snow cover
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -505,15 +506,15 @@
       !  transmitted to the ocean.
       !-----------------------------------------------------------------
 
-         swabsv  = swvdr(i,j) * ( (c1-alvdrni(i,j))*(c1-asnow)
-     &                          + (c1-alvdrns(i,j))*asnow )
-     &           + swvdf(i,j) * ( (c1-alvdfni(i,j))*(c1-asnow)
-     &                          + (c1-alvdfns(i,j))*asnow )
+         swabsv  = swvdr(i,j) * ( (c1-alvdrni(i,j))*(c1-asnow) &
+                                + (c1-alvdrns(i,j))*asnow ) &
+                 + swvdf(i,j) * ( (c1-alvdfni(i,j))*(c1-asnow) &
+                                + (c1-alvdfns(i,j))*asnow )
 
-         swabsi  = swidr(i,j) * ( (c1-alidrni(i,j))*(c1-asnow)
-     &                          + (c1-alidrns(i,j))*asnow )
-     &           + swidf(i,j) * ( (c1-alidfni(i,j))*(c1-asnow)
-     &                          + (c1-alidfns(i,j))*asnow )
+         swabsi  = swidr(i,j) * ( (c1-alidrni(i,j))*(c1-asnow) &
+                                + (c1-alidrns(i,j))*asnow ) &
+                 + swidf(i,j) * ( (c1-alidfni(i,j))*(c1-asnow) &
+                                + (c1-alidfns(i,j))*asnow )
 
          swabs   = swabsv + swabsi
 
@@ -597,8 +598,8 @@
 !
 !EOP
 !     
-      real (kind=dbl_kind) ::
-     &   x  ! abscissa for exp evaluation
+      real (kind=dbl_kind) :: &
+         x  ! abscissa for exp evaluation
 
       ! evaluate approximate exponential table
       dx_exp = argmax / real(nmbexp,kind=dbl_kind)
@@ -619,18 +620,18 @@
 !
 ! !INTERFACE:
 !
-      subroutine shortwave_dEdd  (nx_block, ny_block,
-     &                            icells,
-     &                            indxi,    indxj,
-     &                            tlat,     coszen,
-     &                            aicen,    vicen,
-     &                            vsnon,    Tsfcn,
-     &                            swvdr,    swvdf,
-     &                            swidr,    swidf,
-     &                            alvdrn,   alidrn,
-     &                            alvdfn,   alidfn,
-     &                            fswsfc,   fswint,
-     &                            fswthru,  Iswabs)
+      subroutine shortwave_dEdd  (nx_block, ny_block, &
+                                  icells,             &
+                                  indxi,    indxj,    &
+                                  tlat,     coszen,   &
+                                  aicen,    vicen,    &
+                                  vsnon,    Tsfcn,    &
+                                  swvdr,    swvdf,    &
+                                  swidr,    swidf,    &
+                                  alvdrn,   alidrn,   &
+                                  alvdfn,   alidfn,   &
+                                  fswsfc,   fswint,   &
+                                  fswthru,  Iswabs)
 !
 !
 ! !DESCRIPTION:
@@ -672,98 +673,98 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  icells              ! number of ice-covered grid cells
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells              ! number of ice-covered grid cells
 
-      integer (kind=int_kind), dimension (nx_block*ny_block),
-     &   intent(in) ::
-     &   indxi   ! compressed indices for ice-covered cells
-     &,  indxj
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi    , & ! compressed indices for ice-covered cells
+         indxj
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(in) ::
-     &   tlat         ! latitude (radians)
-     &,  coszen       ! cosine of solar zenith angle 
-     &,  aicen        ! concentration of ice per category
-     &,  vicen        ! volume of ice per category
-     &,  vsnon        ! volume of ice per category
-     &,  Tsfcn        ! surface temperature
-     &,  swvdr        ! sw down, visible, direct  (W/m^2)
-     &,  swvdf        ! sw down, visible, diffuse (W/m^2)
-     &,  swidr        ! sw down, near IR, direct  (W/m^2)
-     &,  swidf        ! sw down, near IR, diffuse (W/m^2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         tlat     , & ! latitude (radians)
+         coszen   , & ! cosine of solar zenith angle 
+         aicen    , & ! concentration of ice per category
+         vicen    , & ! volume of ice per category
+         vsnon    , & ! volume of ice per category
+         Tsfcn    , & ! surface temperature
+         swvdr    , & ! sw down, visible, direct  (W/m^2)
+         swvdf    , & ! sw down, visible, diffuse (W/m^2)
+         swidr    , & ! sw down, near IR, direct  (W/m^2)
+         swidf        ! sw down, near IR, diffuse (W/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(out) ::
-     &   alvdrn       ! visible, direct, avg   (fraction)
-     &,  alidrn       ! near-ir, direct, avg   (fraction)
-     &,  alvdfn       ! visible, diffuse, avg  (fraction)
-     &,  alidfn       ! near-ir, diffuse, avg  (fraction)
-     &,  fswsfc       ! SW absorbed at ice/snow surface (W m-2)
-     &,  fswint       ! SW absorbed in ice interior, below surface (W m-2)
-     &,  fswthru      ! SW through ice to ocean (W m-2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(out) :: &
+         alvdrn   , & ! visible, direct, avg   (fraction)
+         alidrn   , & ! near-ir, direct, avg   (fraction)
+         alvdfn   , & ! visible, diffuse, avg  (fraction)
+         alidfn   , & ! near-ir, diffuse, avg  (fraction)
+         fswsfc   , & ! SW absorbed at ice/snow surface (W m-2)
+         fswint   , & ! SW absorbed in ice interior, below surface (W m-2)
+         fswthru      ! SW through ice to ocean (W m-2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr),
-     &     intent(out) ::
-     &   Iswabs         ! SW absorbed in particular layer (W m-2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
+           intent(out) :: &
+         Iswabs         ! SW absorbed in particular layer (W m-2)
 !      
 !EOP
 ! 
 ! !LOCAL PARAMETERS:
 !
-      real (kind=dbl_kind),dimension (nx_block,ny_block) ::
-     &   fnidr         ! fraction of direct to total down surface flux in nir
+      real (kind=dbl_kind),dimension (nx_block,ny_block) :: &
+         fnidr         ! fraction of direct to total down surface flux in nir
 
       ! albedos and fluxes for a given surface type
-      real (kind=dbl_kind),dimension (nx_block,ny_block) ::
-     &   avdr          ! vis direct albedo
-     &,  avdf          ! vis diffuse albedo
-     &,  aidr          ! nir direct albedo
-     &,  aidf          ! nir direct albedo
-     &,  fsfc          ! SW absorbed at ice/snow surface (W m-2)
-     &,  fint          ! SW absorbed in ice interior, below surface (W m-2)
-     &,  fthru         ! SW through ice to ocean (W m-2)
+      real (kind=dbl_kind),dimension (nx_block,ny_block) :: &
+         avdr      , & ! vis direct albedo
+         avdf      , & ! vis diffuse albedo
+         aidr      , & ! nir direct albedo
+         aidf      , & ! nir direct albedo
+         fsfc      , & ! SW absorbed at ice/snow surface (W m-2)
+         fint      , & ! SW absorbed in ice interior, below surface (W m-2)
+         fthru         ! SW through ice to ocean (W m-2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr) ::
-     &   Iabs          ! SW absorbed in particular layer (W m-2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr) :: &
+         Iabs          ! SW absorbed in particular layer (W m-2)
  
-      real (kind=dbl_kind), dimension(nx_block,ny_block) ::
-     &   hsn           ! snow thickness (m)
-     &,  sage          ! snow age (-1 to +1)
-     &,  hin           ! ice thickness (m)
-     &,  hpn           ! pond depth (m)
-     &,  fi            ! snow/bare ice fractional coverage (0 to 1)
-     &,  fs            ! snow fractional coverage (0 to 1)
-     &,  fp            ! pond fractional coverage (0 to 1)
+      real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
+         hsn       , & ! snow thickness (m)
+         sage      , & ! snow age (-1 to +1)
+         hin       , & ! ice thickness (m)
+         hpn       , & ! pond depth (m)
+         fi        , & ! snow/bare ice fractional coverage (0 to 1)
+         fs        , & ! snow fractional coverage (0 to 1)
+         fp            ! pond fractional coverage (0 to 1)
 
-      integer (kind=int_kind), dimension(nx_block,ny_block) ::
-     &   srftyp        ! surface type over ice: (0=air, 1=snow, 2=pond)
+      integer (kind=int_kind), dimension(nx_block,ny_block) :: &
+         srftyp        ! surface type over ice: (0=air, 1=snow, 2=pond)
  
-      real (kind=dbl_kind), parameter ::
-     &   hspond = 0.025_dbl_kind  ! snow depth (m) below which ponded ice exists
-     &,  cp40   = 0.400_dbl_kind  ! snow age numerical parameter
-     &,  cp50   = 0.500_dbl_kind  ! snow age numerical parameter
-     &,  fpmin  = 0.100_dbl_kind  ! ponded ice minimum fractional coverage
-     &,  fpmax  = 0.450_dbl_kind  ! ponded ice maximum fractional coverage
-     &,  c165   = 165.0_dbl_kind  ! day offset for ponded ice fraction
-     &,  c167   = 167.0_dbl_kind  ! normalization day for ponded ice fraction
+      real (kind=dbl_kind), parameter :: &
+         hspond = 0.025_dbl_kind, &  ! snow depth (m) below which ponded ice exists
+         cp40   = 0.400_dbl_kind, &  ! snow age numerical parameter
+         cp50   = 0.500_dbl_kind, &  ! snow age numerical parameter
+         fpmin  = 0.100_dbl_kind, &  ! ponded ice minimum fractional coverage
+         fpmax  = 0.450_dbl_kind, &  ! ponded ice maximum fractional coverage
+         c165   = 165.0_dbl_kind, &  ! day offset for ponded ice fraction
+         c167   = 167.0_dbl_kind     ! normalization day for ponded ice fraction
  
-      real (kind=dbl_kind) ::      
-     &   dTs     ! temperature difference for snow age
-     &,  fT      ! temperature weight for snow age
-     &,  ydaysh  ! southern hemisphere day of year for pond fraction
+      real (kind=dbl_kind) :: &      
+         dTs , & ! temperature difference for snow age
+         fT  , & ! temperature weight for snow age
+         ydaysh  ! southern hemisphere day of year for pond fraction
  
-      integer (kind=int_kind) ::
-     &   i       ! longitude index
-     &,  j       ! latitude index
-     &,  ij      ! horizontal index, combines i and j loops
-     &,  k       ! level index
-     &,  icells2 ! number of cells in delta-Eddington calculation
+      integer (kind=int_kind) :: &
+         i   , & ! longitude index
+         j   , & ! latitude index
+         ij  , & ! horizontal index, combines i and j loops
+         k   , & ! level index
+         icells2 ! number of cells in delta-Eddington calculation
  
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
-     &   indxi2  ! compressed indices for delta-Eddington cells
-     &,  indxj2  
+      integer (kind=int_kind), dimension (nx_block*ny_block) :: &
+         indxi2, & ! compressed indices for delta-Eddington cells
+         indxj2  
 
 !-----------------------------------------------------------------------
  
@@ -831,12 +832,12 @@
                fs(i,j) = hsn(i,j)/hspond
                ! northern hemisphere 
                if(tlat(i,j) > c0) then
-                fp(i,j)= min(max(fpmin+(yday-c165)/c167,c0),fpmax)
-     &                   *(c1-fs(i,j))
+                fp(i,j)= min(max(fpmin+(yday-c165)/c167,c0),fpmax) &
+                         *(c1-fs(i,j))
                ! southern hemisphere 
                else 
-                fp(i,j)= min(max(fpmin+(ydaysh-c165/c167),c0),fpmax)
-     &                   *(c1-fs(i,j))
+                fp(i,j)= min(max(fpmin+(ydaysh-c165/c167),c0),fpmax) &
+                         *(c1-fs(i,j))
                endif
                fi(i,j) = c1-fp(i,j)
             endif
@@ -848,13 +849,13 @@
       enddo                     ! ij
 
       ! calculate snow/ice
-      call compute_dEdd
-     &      (nx_block,ny_block,
-     &       icells2, indxi2, indxj2, fnidr, coszen,
-     &       swvdr,   swvdf,  swidr,  swidf,
-     &       srftyp,  hsn,    sage,   hin,   hpn,
-     &       avdr,    avdf,   aidr,   aidf,
-     &       fsfc,    fint,   fthru,  Iabs)
+      call compute_dEdd                              &
+            (nx_block,ny_block,                      &
+             icells2, indxi2, indxj2, fnidr, coszen, &
+             swvdr,   swvdf,  swidr,  swidf,         &
+             srftyp,  hsn,    sage,   hin,   hpn,    &
+             avdr,    avdf,   aidr,   aidf,          &
+             fsfc,    fint,   fthru,  Iabs)
 
       ! accumulate fluxes over snow/ice
 !DIR$ CONCURRENT !Cray
@@ -903,12 +904,12 @@
                fs(i,j) = hsn(i,j)/hspond
                ! northern hemisphere
                if(tlat(i,j) > c0) then
-                fp(i,j)= min(max(fpmin+(yday-c165)/c167,c0),fpmax)
-     &                  *(c1-fs(i,j))
+                fp(i,j)= min(max(fpmin+(yday-c165)/c167,c0),fpmax) &
+                        *(c1-fs(i,j))
                ! southern hemisphere
                else 
-                fp(i,j)= min(max(fpmin+(ydaysh-c165/c167),c0),fpmax)
-     &                   *(c1-fs(i,j))
+                fp(i,j)= min(max(fpmin+(ydaysh-c165/c167),c0),fpmax) &
+                         *(c1-fs(i,j))
                endif              
                hpn(i,j)= fp(i,j)
                ! limit pond depth to less than 1/2 ice thickness
@@ -918,13 +919,13 @@
       enddo                     ! ij
 
       ! calculate ponded ice
-      call compute_dEdd
-     &      (nx_block,ny_block,
-     &       icells2, indxi2, indxj2, fnidr, coszen,
-     &       swvdr,   swvdf,  swidr,  swidf,
-     &       srftyp,  hsn,    sage,   hin,   hpn,
-     &       avdr,    avdf,   aidr,   aidf,
-     &       fsfc,    fint,   fthru,  Iabs)
+      call compute_dEdd                              &
+            (nx_block,ny_block,                      &
+             icells2, indxi2, indxj2, fnidr, coszen, &
+             swvdr,   swvdf,  swidr,  swidf,         &
+             srftyp,  hsn,    sage,   hin,   hpn,    &
+             avdr,    avdf,   aidr,   aidf,          &
+             fsfc,    fint,   fthru,  Iabs)
 
       ! accumulate fluxes over ponded ice
 !DIR$ CONCURRENT !Cray
@@ -962,13 +963,13 @@
 !
 ! !INTERFACE:
 !
-      subroutine compute_dEdd
-     &      (nx_block,ny_block,
-     &       icells,  indxi,  indxj,  fnidr, coszen,
-     &       swvdr,   swvdf,  swidr,  swidf,
-     &       srftyp,  hsn,    sage,   hin,   hpn,
-     &       avdr ,   avdf,   aidr,   aidf,
-     &       fsfc,    fint,   fthru,  Iabs)
+      subroutine compute_dEdd                        &
+            (nx_block,ny_block,                      &
+             icells,  indxi,  indxj,  fnidr, coszen, &
+             swvdr,   swvdf,  swidr,  swidf,         &
+             srftyp,  hsn,    sage,   hin,   hpn,    &
+             avdr ,   avdf,   aidr,   aidf,          &
+             fsfc,    fint,   fthru,  Iabs)
 !
 ! !DESCRIPTION:
 !
@@ -983,49 +984,49 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  icells  ! number of ice/ocean grid cells for surface type
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells   ! number of ice/ocean grid cells for surface type
  
-      integer (kind=int_kind), dimension(nx_block*ny_block), 
-     &   intent(in)::
-     &   indxi   ! compressed indices for ice/ocean cells for surface type
-     &,  indxj
+      integer (kind=int_kind), dimension(nx_block*ny_block),  &
+         intent(in):: &
+         indxi , & ! compressed indices for ice/ocean cells for surface type
+         indxj
  
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
-     &   fnidr   ! fraction of direct to total down flux in nir
-     &,  coszen  ! cosine solar zenith angle
-     &,  swvdr   ! sw down, visible, direct  (W/m^2)
-     &,  swvdf   ! sw down, visible, diffuse (W/m^2)
-     &,  swidr   ! sw down, near IR, direct  (W/m^2)
-     &,  swidf   ! sw down, near IR, diffuse (W/m^2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         fnidr , & ! fraction of direct to total down flux in nir
+         coszen, & ! cosine solar zenith angle
+         swvdr , & ! sw down, visible, direct  (W/m^2)
+         swvdf , & ! sw down, visible, diffuse (W/m^2)
+         swidr , & ! sw down, near IR, direct  (W/m^2)
+         swidf     ! sw down, near IR, diffuse (W/m^2)
  
-      integer (kind=int_kind), dimension(nx_block,ny_block),
-     &   intent(in)::
-     &   srftyp  ! surface type over ice: (0=air, 1=snow, 2=pond)
+      integer (kind=int_kind), dimension(nx_block,ny_block), &
+         intent(in):: &
+         srftyp  ! surface type over ice: (0=air, 1=snow, 2=pond)
  
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
-     &   hsn     ! snow thickness (m)
-     &,  sage    ! snow age (-1 to +1)
-     &,  hin     ! ice thickness (m)
-     &,  hpn     ! ponded depth (m)
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
+         hsn , & ! snow thickness (m)
+         sage, & ! snow age (-1 to +1)
+         hin , & ! ice thickness (m)
+         hpn     ! ponded depth (m)
  
       ! albedos 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out) ::
-     &   avdr    ! visible, direct   (fraction)
-     &,  avdf    ! visible, diffuse  (fraction)
-     &,  aidr    ! near-ir, direct   (fraction)
-     &,  aidf    ! near-ir, diffuse  (fraction)
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out) :: &
+         avdr, & ! visible, direct   (fraction)
+         avdf, & ! visible, diffuse  (fraction)
+         aidr, & ! near-ir, direct   (fraction)
+         aidf    ! near-ir, diffuse  (fraction)
  
       ! fluxes absorbed in snow/sea ice and through to ocean
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out) ::
-     &   fsfc        ! SW absorbed at ice/snow surface (W m-2)
-     &,  fint        ! SW absorbed in ice interior, below surface (W m-2)
-     &,  fthru       ! SW through ice to ocean            (W/m^2)
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out) :: &
+         fsfc    , & ! SW absorbed at ice/snow surface (W m-2)
+         fint    , & ! SW absorbed in ice interior, below surface (W m-2)
+         fthru       ! SW through ice to ocean            (W/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr),
-     &   intent(out) ::
-     &   Iabs        ! SW absorbed in particular layer (W m-2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
+         intent(out) :: &
+         Iabs        ! SW absorbed in particular layer (W m-2)
 ! 
 !EOP
 !-----------------------------------------------------------------------
@@ -1114,96 +1115,96 @@
 !
 ! !LOCAL PARAMETERS
 !
-      integer (kind=int_kind) ::
-     &   i       ! longitude index
-     &,  j       ! latitude index
-     &,  k       ! level index
-     &,  ij      ! horizontal index, combines i and j loops
-     &,  ns      ! spectral index
+      integer (kind=int_kind) :: &
+         i   , & ! longitude index
+         j   , & ! latitude index
+         k   , & ! level index
+         ij  , & ! horizontal index, combines i and j loops
+         ns      ! spectral index
  
-      integer (kind=int_kind), parameter :: 
-     &   klev    = nilyr + 1   ! number of radiation layers
-     &,  klevp   = klev  + 1   ! number of radiation layers + 1
+      integer (kind=int_kind), parameter :: & 
+         klev    = nilyr + 1, & ! number of radiation layers
+         klevp   = klev  + 1    ! number of radiation layers + 1
  
-      integer (kind=int_kind), parameter :: 
-     &   nspint  = 3     ! number of solar spectral intervals
+      integer (kind=int_kind), parameter :: & 
+         nspint  = 3     ! number of solar spectral intervals
  
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nspint) ::
-     &   wghtns          ! spectral weights
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nspint) :: &
+         wghtns          ! spectral weights
  
-      real (kind=dbl_kind), parameter :: 
-     &   cp67    = 0.67_dbl_kind   ! nir band weight parameter
-     &,  cp33    = 0.33_dbl_kind   ! nir band weight parameter
-     &,  cp78    = 0.78_dbl_kind   ! nir band weight parameter
-     &,  cp22    = 0.22_dbl_kind   ! nir band weight parameter
-     &,  cp01    = 0.01_dbl_kind   ! for ocean albedo
+      real (kind=dbl_kind), parameter :: & 
+         cp67    = 0.67_dbl_kind, & ! nir band weight parameter
+         cp33    = 0.33_dbl_kind, & ! nir band weight parameter
+         cp78    = 0.78_dbl_kind, & ! nir band weight parameter
+         cp22    = 0.22_dbl_kind, & ! nir band weight parameter
+         cp01    = 0.01_dbl_kind    ! for ocean albedo
  
-      real (kind=dbl_kind), dimension (nx_block,ny_block,0:klev) ::
-     &   tau     ! layer extinction optical depth
-     &,  w0      ! layer single scattering albedo
-     &,  g       ! layer asymmetry parameter
+      real (kind=dbl_kind), dimension (nx_block,ny_block,0:klev) :: &
+         tau , & ! layer extinction optical depth
+         w0  , & ! layer single scattering albedo
+         g       ! layer asymmetry parameter
  
       ! following arrays are defined at model interfaces; 0 is the top of the
       ! layer above the sea ice; klevp is the sea ice/ocean interface.
-      real (kind=dbl_kind), dimension (nx_block,ny_block,0:klevp) ::
-     &   trndir  ! solar beam down transm from top
-     &,  trntdr  ! total transmission to direct beam for layers above
-     &,  trndif  ! diffuse transmission to diffuse beam for layers above
-     &,  rupdir  ! ref to dir rad for layers below
-     &,  rupdif  ! ref to dif rad for layers below
-     &,  rdndif  ! ref to dif rad for layers above
+      real (kind=dbl_kind), dimension (nx_block,ny_block,0:klevp) :: &
+         trndir, & ! solar beam down transm from top
+         trntdr, & ! total transmission to direct beam for layers above
+         trndif, & ! diffuse transmission to diffuse beam for layers above
+         rupdir, & ! ref to dir rad for layers below
+         rupdif, & ! ref to dif rad for layers below
+         rdndif    ! ref to dif rad for layers above
  
-      real (kind=dbl_kind) ::
-     &   refk    ! interface multiple scattering k
+      real (kind=dbl_kind) :: &
+         refk    ! interface multiple scattering k
  
-      real (kind=dbl_kind), dimension (nx_block,ny_block,0:klevp) ::
-     &   fdirup  ! up   flux to direct beam at model interface 
-     &,  fdirdn  ! down flux to direct beam at model interface
-     &,  fdifup  ! up   flux to diffuse beam at model interface 
-     &,  fdifdn  ! down flux to diffuse beam at model interface
+      real (kind=dbl_kind), dimension (nx_block,ny_block,0:klevp) :: &
+         fdirup, & ! up   flux to direct beam at model interface 
+         fdirdn, & ! down flux to direct beam at model interface
+         fdifup, & ! up   flux to diffuse beam at model interface 
+         fdifdn    ! down flux to diffuse beam at model interface
  
       ! inherent optical property (iop) arrays and data
-      real (kind=dbl_kind), dimension (nspint) ::
-     &   ks_f    ! fresh snow grain extinction coefficient m^{-1}
-     &,  ks_s    ! small snow grain extinction coefficient m^{-1}
-     &,  ks_l    ! large snow grain extinction coefficient m^{-1}    
-     &,  ws_f    ! fresh snow grain single scattering albedo    
-     &,  ws_s    ! small snow grain single scattering albedo    
-     &,  ws_l    ! large snow grain single scattering albedo    
-     &,  gs_f    ! fresh snow grain asymmetry parameter        
-     &,  gs_s    ! small snow grain asymmetry parameter
-     &,  gs_l    ! large snow grain asymmetry parameter
+      real (kind=dbl_kind), dimension (nspint) :: &
+         ks_f, & ! fresh snow grain extinction coefficient m^{-1}
+         ks_s, & ! small snow grain extinction coefficient m^{-1}
+         ks_l, & ! large snow grain extinction coefficient m^{-1}    
+         ws_f, & ! fresh snow grain single scattering albedo    
+         ws_s, & ! small snow grain single scattering albedo    
+         ws_l, & ! large snow grain single scattering albedo    
+         gs_f, & ! fresh snow grain asymmetry parameter        
+         gs_s, & ! small snow grain asymmetry parameter
+         gs_l    ! large snow grain asymmetry parameter
  
-      real (kind=dbl_kind), dimension (nspint,klev) ::
-     &   ki_f    ! first year ice extinction coefficient m^{-1}
-     &,  wi_f    ! first year ice single scattering albedo
-     &,  gi_f    ! first year ice asymmetry parameter
+      real (kind=dbl_kind), dimension (nspint,klev) :: &
+         ki_f, & ! first year ice extinction coefficient m^{-1}
+         wi_f, & ! first year ice single scattering albedo
+         gi_f    ! first year ice asymmetry parameter
 
 !echmod
-      real (kind=dbl_kind), dimension (nspint,2) ::
-     &   ki_f0    ! first year ice extinction coefficient m^{-1}
-     &,  wi_f0    ! first year ice single scattering albedo
+      real (kind=dbl_kind), dimension (nspint,2) :: &
+         ki_f0, & ! first year ice extinction coefficient m^{-1}
+         wi_f0    ! first year ice single scattering albedo
 !echmod
  
-      real (kind=dbl_kind), dimension (nspint) ::
-     &   ki_p    ! first year ice under pond extinction coefficient m^{-1}
-     &,  wi_p    ! first year ice under pond single scattering albedo
-     &,  gi_p    ! first year ice under pond asymmetry parameter
-     &,  kw      ! water extinction coefficient m^{-1}
-     &,  ww      ! water single scattering albedo
-     &,  gw      ! water asymmetry parameter
+      real (kind=dbl_kind), dimension (nspint) :: &
+         ki_p, & ! first year ice under pond extinction coefficient m^{-1}
+         wi_p, & ! first year ice under pond single scattering albedo
+         gi_p, & ! first year ice under pond asymmetry parameter
+         kw  , & ! water extinction coefficient m^{-1}
+         ww  , & ! water single scattering albedo
+         gw      ! water asymmetry parameter
  
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
-     &  albodr   ! spectral ocean albedo to direct rad
-     &, albodf   ! spectral ocean albedo to diffuse rad
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+        albodr, & ! spectral ocean albedo to direct rad
+        albodf    ! spectral ocean albedo to diffuse rad
      
-      real (kind=dbl_kind) ::
-     &  dz       ! sea ice layer thickness
-     &, dzs      ! sea ice surface layer thickness
-     &, dz1      ! sea ice layer thickness below surface layer
+      real (kind=dbl_kind) :: &
+        dz   , & ! sea ice layer thickness
+        dzs  , & ! sea ice surface layer thickness
+        dz1      ! sea ice layer thickness below surface layer
  
-      real (kind=dbl_kind), parameter ::
-     &  h1_4 = 0.050_dbl_kind   ! surface layer thickness (m)
+      real (kind=dbl_kind), parameter :: &
+        h1_4 = 0.050_dbl_kind   ! surface layer thickness (m)
  
       ! Extinction data for snow is taken from: Wiscombe and Warren, 1980
       ! and Warren and Wiscombe, 1980. Extinction for fresh snow is that 50
@@ -1227,21 +1228,21 @@
  
       ! Following data from Bonnie Light, February 2005
 
-!echmod      data ki_f /   1000._dbl_kind,  1005._dbl_kind,  2224._dbl_kind,
-!echmod     &                75._dbl_kind,    82._dbl_kind,  1969._dbl_kind,
-!echmod     &                60._dbl_kind,    67._dbl_kind,  1954._dbl_kind,
-!echmod     &                60._dbl_kind,    67._dbl_kind,  1954._dbl_kind,
-!echmod     &                60._dbl_kind,    67._dbl_kind,  1954._dbl_kind /
-!echmod      data wi_f /   .9999_dbl_kind,  .9954_dbl_kind,  .4495_dbl_kind,
-!echmod     &              .9972_dbl_kind,  .9125_dbl_kind,  .0381_dbl_kind,
-!echmod     &              .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind,
-!echmod     &              .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind,
-!echmod     &              .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind /
-!echmod      data gi_f /     .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind,
-!echmod     &                .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind,
-!echmod     &                .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind,
-!echmod     &                .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind,
-!echmod     &                .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind /
+!echmod      data ki_f /   1000._dbl_kind,  1005._dbl_kind,  2224._dbl_kind, &
+!echmod                      75._dbl_kind,    82._dbl_kind,  1969._dbl_kind, &
+!echmod                      60._dbl_kind,    67._dbl_kind,  1954._dbl_kind, &
+!echmod                      60._dbl_kind,    67._dbl_kind,  1954._dbl_kind, &
+!echmod                      60._dbl_kind,    67._dbl_kind,  1954._dbl_kind /
+!echmod      data wi_f /   .9999_dbl_kind,  .9954_dbl_kind,  .4495_dbl_kind, &
+!echmod                    .9972_dbl_kind,  .9125_dbl_kind,  .0381_dbl_kind, &
+!echmod                    .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind, &
+!echmod                    .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind, &
+!echmod                    .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind /
+!echmod      data gi_f /     .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind, &
+!echmod                      .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind, &
+!echmod                      .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind, &
+!echmod                      .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind, &
+!echmod                      .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind /
  
       data ki_p /     15._dbl_kind,    22._dbl_kind,  1900._dbl_kind /
       data wi_p /    .986_dbl_kind,   .676_dbl_kind,   .008_dbl_kind /
@@ -1256,10 +1257,10 @@
 !echmod begin
       ! data from Bruce Briegleb email to ECH 10/03/2006
       ! first year data values in top layers
-      data ki_f0 /  1060._dbl_kind,  1064._dbl_kind,  7042._dbl_kind,
-     &                40._dbl_kind,    47._dbl_kind,  1309._dbl_kind /
-      data wi_f0 /  .9999_dbl_kind,  .9965_dbl_kind,  .9088_dbl_kind,
-     &              .9951_dbl_kind,  .8441_dbl_kind,  .0305_dbl_kind /
+      data ki_f0 /  1060._dbl_kind,  1064._dbl_kind,  7042._dbl_kind, &
+                      40._dbl_kind,    47._dbl_kind,  1309._dbl_kind /
+      data wi_f0 /  .9999_dbl_kind,  .9965_dbl_kind,  .9088_dbl_kind, &
+                    .9951_dbl_kind,  .8441_dbl_kind,  .0305_dbl_kind /
 
       if (nilyr == 4) then
         ! initialize with background values in all layers
@@ -1328,19 +1329,19 @@
           ! snow
           else if( srftyp(i,j) == 1 ) then
             if( sage(i,j) < c0 ) then
-              tau(i,j,0) = (abs(sage(i,j))*ks_f(ns)+
-     &                     (c1-abs(sage(i,j)))*ks_s(ns))*hsn(i,j)
-              w0(i,j,0)  = (abs(sage(i,j))*ws_f(ns)+
-     &                     (c1-abs(sage(i,j)))*ws_s(ns))
-              g(i,j,0)   = (abs(sage(i,j))*gs_f(ns)+
-     &                     (c1-abs(sage(i,j)))*gs_s(ns))
+              tau(i,j,0) = (abs(sage(i,j))*ks_f(ns)+ &
+                           (c1-abs(sage(i,j)))*ks_s(ns))*hsn(i,j)
+              w0(i,j,0)  = (abs(sage(i,j))*ws_f(ns)+ &
+                           (c1-abs(sage(i,j)))*ws_s(ns))
+              g(i,j,0)   = (abs(sage(i,j))*gs_f(ns)+ &
+                           (c1-abs(sage(i,j)))*gs_s(ns))
             else if( sage(i,j) >= c0 ) then
-              tau(i,j,0) = ((c1-sage(i,j))*ks_s(ns)+
-     &                     sage(i,j)*ks_l(ns))*hsn(i,j)
-              w0(i,j,0)  = ((c1-sage(i,j))*ws_s(ns)+
-     &                     sage(i,j)*ws_l(ns))
-              g(i,j,0)   = ((c1-sage(i,j))*gs_s(ns)+
-     &                     sage(i,j)*gs_l(ns))
+              tau(i,j,0) = ((c1-sage(i,j))*ks_s(ns)+ &
+                           sage(i,j)*ks_l(ns))*hsn(i,j)
+              w0(i,j,0)  = ((c1-sage(i,j))*ws_s(ns)+ &
+                           sage(i,j)*ws_l(ns))
+              g(i,j,0)   = ((c1-sage(i,j))*gs_s(ns)+ &
+                           sage(i,j)*gs_l(ns))
             endif
           ! pond
           else if( srftyp(i,j) == 2 ) then
@@ -1412,12 +1413,12 @@
         ! scattering between layers, and finally start from the surface 
         ! and add successive layers upwards to the top:
  
-        call solution_dEdd
-     &      (nx_block, ny_block,
-     &       icells, indxi,  indxj,  coszen, srftyp,
-     &       tau,    w0,     g,      albodr, albodf,
-     &       trndir, trntdr, trndif, rupdir, rupdif,
-     &       rdndif)
+        call solution_dEdd                           &
+            (nx_block, ny_block,                     &
+             icells, indxi,  indxj,  coszen, srftyp, &
+             tau,    w0,     g,      albodr, albodf, &
+             trndir, trntdr, trndif, rupdir, rupdif, &
+             rdndif)
  
         ! Compute up and down fluxes for each interface, using the 
         ! added layer properties at each interface:
@@ -1434,14 +1435,14 @@
           refk          = c1/(c1 - rdndif(i,j,k)*rupdif(i,j,k))
           ! dir tran ref from below times interface scattering, plus diff
           ! tran and ref from below times interface scattering
-          fdirup(i,j,k) = (trndir(i,j,k)*rupdir(i,j,k) +
-     &                    (trntdr(i,j,k)-trndir(i,j,k)) *
-     &                     rupdif(i,j,k))*refk
+          fdirup(i,j,k) = (trndir(i,j,k)*rupdir(i,j,k) + &
+                          (trntdr(i,j,k)-trndir(i,j,k)) * &
+                           rupdif(i,j,k))*refk
           ! dir tran plus total diff trans times interface scattering plus
           ! dir tran with up dir ref and down dif ref times interface scattering 
-          fdirdn(i,j,k) = trndir(i,j,k) + (trntdr(i,j,k) - trndir(i,j,k)
-     &                  + trndir(i,j,k)*rupdir(i,j,k)
-     &                   *rdndif(i,j,k))*refk
+          fdirdn(i,j,k) = trndir(i,j,k) + (trntdr(i,j,k) - trndir(i,j,k) &
+                        + trndir(i,j,k)*rupdir(i,j,k) &
+                         *rdndif(i,j,k))*refk
           ! diffuse tran ref from below times interface scattering
           fdifup(i,j,k) = trndif(i,j,k)*rupdif(i,j,k)*refk
           ! diffuse tran times interface scattering
@@ -1464,28 +1465,28 @@
             avdr(i,j)  = rupdir(i,j,0)
             avdf(i,j)  = rupdif(i,j,0)
  
-            fsfc(i,j)  = fsfc(i,j) + 
-     &        ((fdirdn(i,j,0)-fdirup(i,j,0))*swvdr(i,j) +
-     &         (fdifdn(i,j,0)-fdifup(i,j,0))*swvdf(i,j)) -
-     &        ((fdirdn(i,j,2)-fdirup(i,j,2))*swvdr(i,j) +
-     &         (fdifdn(i,j,2)-fdifup(i,j,2))*swvdf(i,j))
+            fsfc(i,j)  = fsfc(i,j) +  &
+              ((fdirdn(i,j,0)-fdirup(i,j,0))*swvdr(i,j) + &
+               (fdifdn(i,j,0)-fdifup(i,j,0))*swvdf(i,j)) - &
+              ((fdirdn(i,j,2)-fdirup(i,j,2))*swvdr(i,j) + &
+               (fdifdn(i,j,2)-fdifup(i,j,2))*swvdf(i,j))
  
-            fint(i,j)  = fint(i,j) + 
-     &        ((fdirdn(i,j,2)-fdirup(i,j,2))*swvdr(i,j) +
-     &         (fdifdn(i,j,2)-fdifup(i,j,2))*swvdf(i,j)) -
-     &        ((fdirdn(i,j,klevp)-fdirup(i,j,klevp))*swvdr(i,j) +
-     &         (fdifdn(i,j,klevp)-fdifup(i,j,klevp))*swvdf(i,j))
+            fint(i,j)  = fint(i,j) +  &
+              ((fdirdn(i,j,2)-fdirup(i,j,2))*swvdr(i,j) + &
+               (fdifdn(i,j,2)-fdifup(i,j,2))*swvdf(i,j)) - &
+              ((fdirdn(i,j,klevp)-fdirup(i,j,klevp))*swvdr(i,j) + &
+               (fdifdn(i,j,klevp)-fdifup(i,j,klevp))*swvdf(i,j))
  
-            fthru(i,j)  = fthru(i,j) +
-     &         (fdirdn(i,j,klevp)-fdirup(i,j,klevp))*swvdr(i,j) +
-     &         (fdifdn(i,j,klevp)-fdifup(i,j,klevp))*swvdf(i,j)
+            fthru(i,j)  = fthru(i,j) + &
+               (fdirdn(i,j,klevp)-fdirup(i,j,klevp))*swvdr(i,j) + &
+               (fdifdn(i,j,klevp)-fdifup(i,j,klevp))*swvdf(i,j)
  
             do k=2,klev
-              Iabs(i,j,k-1) = Iabs(i,j,k-1) +
-     &        ((fdirdn(i,j,k)-fdirup(i,j,k))*swvdr(i,j) +
-     &         (fdifdn(i,j,k)-fdifup(i,j,k))*swvdf(i,j))
-     &       -((fdirdn(i,j,k+1)-fdirup(i,j,k+1))*swvdr(i,j) +
-     &         (fdifdn(i,j,k+1)-fdifup(i,j,k+1))*swvdf(i,j))
+              Iabs(i,j,k-1) = Iabs(i,j,k-1) + &
+              ((fdirdn(i,j,k)-fdirup(i,j,k))*swvdr(i,j) + &
+               (fdifdn(i,j,k)-fdifup(i,j,k))*swvdf(i,j)) &
+             -((fdirdn(i,j,k+1)-fdirup(i,j,k+1))*swvdr(i,j) + &
+               (fdifdn(i,j,k+1)-fdifup(i,j,k+1))*swvdf(i,j))
             enddo
           enddo                  ! ij
 
@@ -1497,33 +1498,33 @@
             aidr(i,j)   = aidr(i,j) + rupdir(i,j,0)*wghtns(i,j,ns)
             aidf(i,j)   = aidf(i,j) + rupdif(i,j,0)*wghtns(i,j,ns)
  
-            fsfc(i,j)  = fsfc(i,j) + 
-     &      ( ((fdirdn(i,j,0)-fdirup(i,j,0))*swidr(i,j) +
-     &         (fdifdn(i,j,0)-fdifup(i,j,0))*swidf(i,j)) -
-     &        ((fdirdn(i,j,2)-fdirup(i,j,2))*swidr(i,j) +
-     &         (fdifdn(i,j,2)-fdifup(i,j,2))*swidf(i,j)) )
-     &         *wghtns(i,j,ns)
+            fsfc(i,j)  = fsfc(i,j) +  &
+            ( ((fdirdn(i,j,0)-fdirup(i,j,0))*swidr(i,j) + &
+               (fdifdn(i,j,0)-fdifup(i,j,0))*swidf(i,j)) - &
+              ((fdirdn(i,j,2)-fdirup(i,j,2))*swidr(i,j) + &
+               (fdifdn(i,j,2)-fdifup(i,j,2))*swidf(i,j)) ) &
+               *wghtns(i,j,ns)
  
-            fint(i,j)  = fint(i,j) + 
-     &      ( ((fdirdn(i,j,2)-fdirup(i,j,2))*swidr(i,j) +
-     &         (fdifdn(i,j,2)-fdifup(i,j,2))*swidf(i,j)) -
-     &        ((fdirdn(i,j,klevp)-fdirup(i,j,klevp))*swidr(i,j) +
-     &         (fdifdn(i,j,klevp)-fdifup(i,j,klevp))*swidf(i,j)) )
-     &         *wghtns(i,j,ns)
+            fint(i,j)  = fint(i,j) +  &
+            ( ((fdirdn(i,j,2)-fdirup(i,j,2))*swidr(i,j) + &
+               (fdifdn(i,j,2)-fdifup(i,j,2))*swidf(i,j)) - &
+              ((fdirdn(i,j,klevp)-fdirup(i,j,klevp))*swidr(i,j) + &
+               (fdifdn(i,j,klevp)-fdifup(i,j,klevp))*swidf(i,j)) ) &
+               *wghtns(i,j,ns)
  
-            fthru(i,j) = fthru(i,j) + 
-     &        ((fdirdn(i,j,klevp)-fdirup(i,j,klevp))*swidr(i,j) +
-     &         (fdifdn(i,j,klevp)-fdifup(i,j,klevp))*swidf(i,j))
-     &         *wghtns(i,j,ns)
+            fthru(i,j) = fthru(i,j) +  &
+              ((fdirdn(i,j,klevp)-fdirup(i,j,klevp))*swidr(i,j) + &
+               (fdifdn(i,j,klevp)-fdifup(i,j,klevp))*swidf(i,j)) &
+               *wghtns(i,j,ns)
  
             do k=2,klev
-              Iabs(i,j,k-1) = Iabs(i,j,k-1) +
-     &        ((fdirdn(i,j,k)-fdirup(i,j,k))*swidr(i,j) +
-     &         (fdifdn(i,j,k)-fdifup(i,j,k))*swidf(i,j))
-     &         *wghtns(i,j,ns)
-     &       -((fdirdn(i,j,k+1)-fdirup(i,j,k+1))*swidr(i,j) +
-     &         (fdifdn(i,j,k+1)-fdifup(i,j,k+1))*swidf(i,j))
-     &         *wghtns(i,j,ns)
+              Iabs(i,j,k-1) = Iabs(i,j,k-1) + &
+              ((fdirdn(i,j,k)-fdirup(i,j,k))*swidr(i,j) + &
+               (fdifdn(i,j,k)-fdifup(i,j,k))*swidf(i,j)) &
+               *wghtns(i,j,ns) &
+             -((fdirdn(i,j,k+1)-fdirup(i,j,k+1))*swidr(i,j) + &
+               (fdifdn(i,j,k+1)-fdifup(i,j,k+1))*swidf(i,j)) &
+               *wghtns(i,j,ns)
             enddo
           enddo                 ! ij
 
@@ -1540,12 +1541,12 @@
 !
 ! !INTERFACE:
 !
-      subroutine solution_dEdd
-     &      (nx_block, ny_block,
-     &       icells,  indxi,  indxj,  coszen, srftyp,
-     &       tau,     w0,     g,      albodr, albodf,
-     &       trndir,  trntdr, trndif, rupdir, rupdif,
-     &       rdndif)
+      subroutine solution_dEdd                        &
+            (nx_block, ny_block,                      &
+             icells,  indxi,  indxj,  coszen, srftyp, &
+             tau,     w0,     g,      albodr, albodf, &
+             trndir,  trntdr, trndif, rupdir, rupdif, &
+             rdndif)
 !
 ! !DESCRIPTION:
 !
@@ -1560,43 +1561,43 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  icells  ! number of ice/ocean grid cells for surface type
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells  ! number of ice/ocean grid cells for surface type
  
-      integer (kind=int_kind), dimension (nx_block*ny_block),
-     &   intent(in) ::
-     &   indxi   ! compressed indices for ice/ocean cells for surface type
-     &,  indxj
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi, & ! compressed indices for ice/ocean cells for surface type
+         indxj
  
       ! cosine solar zenith angle; negative for sun below horizon
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
-     &   coszen  ! cosine solar zenith angle
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
+         coszen   ! cosine solar zenith angle
  
-      integer (kind=int_kind), dimension(nx_block,ny_block),
-     &   intent(in) ::
-     &   srftyp  ! surface type over ice: (0=air, 1=snow, 2=pond)
+      integer (kind=int_kind), dimension(nx_block,ny_block), &
+         intent(in) :: &
+         srftyp  ! surface type over ice: (0=air, 1=snow, 2=pond)
  
-      real (kind=dbl_kind), dimension(nx_block,ny_block,0:nilyr+1),
-     &   intent(in) ::
-     &   tau     ! layer extinction optical depth
-     &,  w0      ! layer single scattering albedo
-     &,  g       ! layer asymmetry parameter
+      real (kind=dbl_kind), dimension(nx_block,ny_block,0:nilyr+1), &
+         intent(in) :: &
+         tau , & ! layer extinction optical depth
+         w0  , & ! layer single scattering albedo
+         g       ! layer asymmetry parameter
  
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in)::
-     &  albodr   ! ocean albedo to direct rad
-     &, albodf   ! ocean albedo to diffuse rad
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in):: &
+        albodr, & ! ocean albedo to direct rad
+        albodf    ! ocean albedo to diffuse rad
  
       ! following arrays are defined at model interfaces; 0 is the top of the
       ! layer above the sea ice; klevp=nilyr+2 is the sea ice/ocean interface.
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,0:nilyr+2) ::
-     &   trndir  ! solar beam down transm from top
-     &,  trntdr  ! total transmission to direct beam for layers above
-     &,  trndif  ! diffuse transmission to diffuse beam for layers above
-     &,  rupdir  ! ref to dir rad for layers below
-     &,  rupdif  ! ref to dif rad for layers below
-     &,  rdndif  ! ref to dif rad for layers above
+      real (kind=dbl_kind), dimension (nx_block,ny_block,0:nilyr+2) :: &
+         trndir, & ! solar beam down transm from top
+         trntdr, & ! total transmission to direct beam for layers above
+         trndif, & ! diffuse transmission to diffuse beam for layers above
+         rupdir, & ! ref to dir rad for layers below
+         rupdif, & ! ref to dif rad for layers below
+         rdndif    ! ref to dif rad for layers above
 !
 !EOP
 !-----------------------------------------------------------------------
@@ -1677,140 +1678,140 @@
 
 ! Local
 
-      integer (kind=int_kind), parameter ::
-     &   klev   = nilyr + 1   ! number of radiation layers
-     &,  klevp  = klev  + 1   ! number of radiation layers + 1
-     &,  kfrsnl = 2  ! radiation index of sea ice layer whose top is fresnel lyr
+      integer (kind=int_kind), parameter :: &
+         klev   = nilyr + 1, & ! number of radiation layers
+         klevp  = klev  + 1, & ! number of radiation layers + 1
+         kfrsnl = 2  ! radiation index of sea ice layer whose top is fresnel lyr
  
       ! Following variables are defined for each layer; 0 refers to layer above 
       ! sea ice. In general we must distinguish directions above and below in 
       ! the diffuse reflectivity and transmissivity, as layers are not assumed
       ! to be homogeneous (apart from the single layer delta-Edd solutions); 
       ! the direct is always from above.
-      real (kind=dbl_kind), dimension (nx_block,ny_block,0:klev) ::
-     &   rdir    ! layer reflectivity to direct rad
-     &,  rdif_a  ! layer reflectivity to diffuse rad from above
-     &,  rdif_b  ! layer reflectivity to diffuse rad from below
-     &,  tdir    ! layer transmission to direct rad (inc. diffusely transmitted)
-     &,  tdif_a  ! layer transmission to diffuse rad from above
-     &,  tdif_b  ! layer transmission to diffuse rad from below
-     &,  trnlay  ! solar beam transm for layer (direct beam only)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,0:klev) :: &
+         rdir  , & ! layer reflectivity to direct rad
+         rdif_a, & ! layer reflectivity to diffuse rad from above
+         rdif_b, & ! layer reflectivity to diffuse rad from below
+         tdir  , & ! layer transmission to direct rad (inc. diffusely transmitted)
+         tdif_a, & ! layer transmission to diffuse rad from above
+         tdif_b, & ! layer transmission to diffuse rad from below
+         trnlay    ! solar beam transm for layer (direct beam only)
  
-      real (kind=dbl_kind), parameter ::
-     &   trmin = 0.001_dbl_kind   ! minimum total transmission allowed
+      real (kind=dbl_kind), parameter :: &
+         trmin = 0.001_dbl_kind   ! minimum total transmission allowed
  
-      integer (kind=int_kind) :: 
-     &   i       ! longitude index
-     &,  j       ! latitude index
-     &,  ij      ! longitude/latitude index
-     &,  k       ! level index
+      integer (kind=int_kind) :: & 
+         i   , & ! longitude index
+         j   , & ! latitude index
+         ij  , & ! longitude/latitude index
+         k       ! level index
  
-      integer (kind=int_kind) ::
-     &   icellstrmin  ! number of ice/ocean grid cells for which tr > trmin
+      integer (kind=int_kind) :: &
+         icellstrmin  ! number of ice/ocean grid cells for which tr > trmin
  
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
-     &   indxitrmin   ! indices for ice/ocean cells for which tr > trmin
-     &,  indxjtrmin
+      integer (kind=int_kind), dimension (nx_block*ny_block) :: &
+         indxitrmin, & ! indices for ice/ocean cells for which tr > trmin
+         indxjtrmin
  
-      real (kind=dbl_kind) ::
-     &   tautot   ! layer optical depth
-     &,  wtot     ! layer single scattering albedo
-     &,  gtot     ! layer asymmetry parameter
-     &,  ftot     ! layer forward scattering fraction
-     &,  ts       ! layer scaled extinction optical depth
-     &,  ws       ! layer scaled single scattering albedo
-     &,  gs       ! layer scaled asymmetry parameter
-     &,  rintfc   ! reflection (multiple) at an interface
-     &,  refkp1   ! interface multiple scattering for k+1
-     &,  refkm1   ! interface multiple scattering for k-1
-     &,  tdrrdir  ! direct tran times layer direct ref 
-     &,  tdndif   ! total down diffuse = tot tran - direct tran
+      real (kind=dbl_kind) :: &
+         tautot , & ! layer optical depth
+         wtot   , & ! layer single scattering albedo
+         gtot   , & ! layer asymmetry parameter
+         ftot   , & ! layer forward scattering fraction
+         ts     , & ! layer scaled extinction optical depth
+         ws     , & ! layer scaled single scattering albedo
+         gs     , & ! layer scaled asymmetry parameter
+         rintfc , & ! reflection (multiple) at an interface
+         refkp1 , & ! interface multiple scattering for k+1
+         refkm1 , & ! interface multiple scattering for k-1
+         tdrrdir, & ! direct tran times layer direct ref 
+         tdndif     ! total down diffuse = tot tran - direct tran
  
       ! perpendicular and parallel relative to pane of incidence and scattering
-      real (kind=dbl_kind) ::
-     &   R1       ! perpendicular polarization reflection amplitude
-     &,  R2       ! parallel polarization reflection amplitude
-     &,  T1       ! perpendicular polarization transmission amplitude
-     &,  T2       ! parallel polarization transmission amplitude
-     &,  Rf_dir_a ! fresnel reflection to direct radiation
-     &,  Tf_dir_a ! fresnel transmission to direct radiation
-     &,  Rf_dif_a ! fresnel reflection to diff radiation from above
-     &,  Rf_dif_b ! fresnel reflection to diff radiation from below
-     &,  Tf_dif_a ! fresnel transmission to diff radiation from above
-     &,  Tf_dif_b ! fresnel transmission to diff radiation from below
+      real (kind=dbl_kind) :: &
+         R1      , & ! perpendicular polarization reflection amplitude
+         R2      , & ! parallel polarization reflection amplitude
+         T1      , & ! perpendicular polarization transmission amplitude
+         T2      , & ! parallel polarization transmission amplitude
+         Rf_dir_a, & ! fresnel reflection to direct radiation
+         Tf_dir_a, & ! fresnel transmission to direct radiation
+         Rf_dif_a, & ! fresnel reflection to diff radiation from above
+         Rf_dif_b, & ! fresnel reflection to diff radiation from below
+         Tf_dif_a, & ! fresnel transmission to diff radiation from above
+         Tf_dif_b    ! fresnel transmission to diff radiation from below
  
       ! diffuse fresnel reflectivities pre-computed
-      real (kind=dbl_kind), parameter :: 
-     &   refindx = 1.310_dbl_kind  ! refractive index of ice (used for water also)
-     &,  cp063   = 0.063_dbl_kind  ! diffuse fresnel reflectivity from above
-     &,  cp455   = 0.455_dbl_kind  ! diffuse fresnel reflectivity from below
+      real (kind=dbl_kind), parameter :: & 
+         refindx = 1.310_dbl_kind, & ! refractive index of ice (used for water also)
+         cp063   = 0.063_dbl_kind, & ! diffuse fresnel reflectivity from above
+         cp455   = 0.455_dbl_kind    ! diffuse fresnel reflectivity from below
  
-      real (kind=dbl_kind) ::
-     &   mu0      ! cosine solar zenith angle incident
-     &,  mu0n     ! cosine solar zenith angle in medium
+      real (kind=dbl_kind) :: &
+         mu0  , & ! cosine solar zenith angle incident
+         mu0n     ! cosine solar zenith angle in medium
  
-      real (kind=dbl_kind) ::
-     &   alpha    ! term in direct reflectivity and transmissivity
-     &,  gamma    ! term in direct reflectivity and transmissivity
-     &,  el       ! term in alpha,gamma,n,u
-     &,  taus     ! scaled extinction optical depth
-     &,  omgs     ! scaled single particle scattering albedo
-     &,  asys     ! scaled asymmetry parameter
-     &,  u        ! term in diffuse reflectivity and transmissivity
-     &,  n        ! term in diffuse reflectivity and transmissivity
-     &,  lm       ! temporary for el
-     &,  mu       ! cosine solar zenith for either snow or water
-     &,  ne       ! temporary for n
+      real (kind=dbl_kind) :: &
+         alpha, & ! term in direct reflectivity and transmissivity
+         gamma, & ! term in direct reflectivity and transmissivity
+         el   , & ! term in alpha,gamma,n,u
+         taus , & ! scaled extinction optical depth
+         omgs , & ! scaled single particle scattering albedo
+         asys , & ! scaled asymmetry parameter
+         u    , & ! term in diffuse reflectivity and transmissivity
+         n    , & ! term in diffuse reflectivity and transmissivity
+         lm   , & ! temporary for el
+         mu   , & ! cosine solar zenith for either snow or water
+         ne       ! temporary for n
  
-      real (kind=dbl_kind) ::
-     &   w        ! dummy argument for statement function
-     &,  uu       ! dummy argument for statement function
-     &,  gg       ! dummy argument for statement function
-     &,  e        ! dummy argument for statement function
-     &,  f        ! dummy argument for statement function
-     &,  t        ! dummy argument for statement function
-     &,  et       ! dummy argument for statement function
+      real (kind=dbl_kind) :: &
+         w    , & ! dummy argument for statement function
+         uu   , & ! dummy argument for statement function
+         gg   , & ! dummy argument for statement function
+         e    , & ! dummy argument for statement function
+         f    , & ! dummy argument for statement function
+         t    , & ! dummy argument for statement function
+         et       ! dummy argument for statement function
  
-      real (kind=dbl_kind) ::
-     &   alp      ! temporary for alpha
-     &,  gam      ! temporary for gamma
-     &,  ue       ! temporary for u
-     &,  arg      ! exponential argument
-     &,  extins   ! extinction
-     &,  amg      ! alp - gam
-     &,  apg      ! alp + gam
+      real (kind=dbl_kind) :: &
+         alp   , & ! temporary for alpha
+         gam   , & ! temporary for gamma
+         ue    , & ! temporary for u
+         arg   , & ! exponential argument
+         extins, & ! extinction
+         amg   , & ! alp - gam
+         apg       ! alp + gam
  
-      integer (kind=int_kind), parameter ::
-     &   ngmax = 8  ! number of gaussian angles in hemisphere
+      integer (kind=int_kind), parameter :: &
+         ngmax = 8  ! number of gaussian angles in hemisphere
  
-      real (kind=dbl_kind), dimension (ngmax) ::
+      real (kind=dbl_kind), dimension (ngmax) :: &
          ! gaussian angles (points)
-     &   gauspt = (/ .9894009_dbl_kind,  .9445750_dbl_kind,
-     &               .8656312_dbl_kind,  .7554044_dbl_kind,
-     &               .6178762_dbl_kind,  .4580168_dbl_kind,
-     &               .2816036_dbl_kind,  .0950125_dbl_kind /)   
+         gauspt = (/ .9894009_dbl_kind,  .9445750_dbl_kind, &
+                     .8656312_dbl_kind,  .7554044_dbl_kind, &
+                     .6178762_dbl_kind,  .4580168_dbl_kind, &
+                     .2816036_dbl_kind,  .0950125_dbl_kind /), &
          ! gaussian weights (normalized so sum is 1)
-     &,  gauswt = (/ .0271525_dbl_kind,  .0622535_dbl_kind,
-     &               .0951585_dbl_kind,  .1246290_dbl_kind,
-     &               .1495960_dbl_kind,  .1691565_dbl_kind,
-     &               .1826034_dbl_kind,  .1894506_dbl_kind /)
+         gauswt = (/ .0271525_dbl_kind,  .0622535_dbl_kind, &
+                     .0951585_dbl_kind,  .1246290_dbl_kind, &
+                     .1495960_dbl_kind,  .1691565_dbl_kind, &
+                     .1826034_dbl_kind,  .1894506_dbl_kind /)
   
-      integer (kind=int_kind) ::
-     &   ng       ! gaussian integration index
+      integer (kind=int_kind) :: &
+         ng       ! gaussian integration index
  
-      real (kind=dbl_kind) ::
-     &   gwt      ! gaussian weight
-     &,  swt      ! sum of weights
-     &,  trn      ! layer transmission
-     &,  rdr      ! rdir for gaussian integration
-     &,  tdr      ! tdir for gaussian integration
-     &,  smr      ! accumulator for rdif gaussian integration
-     &,  smt      ! accumulator for tdif gaussian integration
+      real (kind=dbl_kind) :: &
+         gwt  , & ! gaussian weight
+         swt  , & ! sum of weights
+         trn  , & ! layer transmission
+         rdr  , & ! rdir for gaussian integration
+         tdr  , & ! tdir for gaussian integration
+         smr  , & ! accumulator for rdif gaussian integration
+         smt      ! accumulator for tdif gaussian integration
  
       ! Delta-Eddington solution expressions
       alpha(w,uu,gg,e) = p75*w*uu*((c1 + gg*(c1-w))/(c1 - e*e*uu*uu))
-      gamma(w,uu,gg,e) = p5*w*((c1 + c3*gg*(c1-w)*uu*uu)
-     &                  / (c1-e*e*uu*uu))
+      gamma(w,uu,gg,e) = p5*w*((c1 + c3*gg*(c1-w)*uu*uu) &
+                        / (c1-e*e*uu*uu))
       n(uu,et)         = ((uu+c1)*(uu+c1)/et ) - ((uu-c1)*(uu-c1)*et)
       u(w,gg,e)        = c1p5*(c1 - w*gg)/e
       el(w,gg)         = sqrt(c3*(c1-w)*(c1 - w*gg))
@@ -1906,10 +1907,10 @@
             gam = gamma(ws,mu,gs,lm)
             apg = alp + gam
             amg = alp - gam
-            rdir(i,j,0) = amg*(tdif_a(i,j,0)*trnlay(i,j,0) - c1) + 
-     &                  apg*rdif_a(i,j,0)
-            tdir(i,j,0) = apg*tdif_a(i,j,0) +
-     &                  (amg*rdif_a(i,j,0) - (apg-c1))*trnlay(i,j,0)
+            rdir(i,j,0) = amg*(tdif_a(i,j,0)*trnlay(i,j,0) - c1) +  &
+                        apg*rdif_a(i,j,0)
+            tdir(i,j,0) = apg*tdif_a(i,j,0) + &
+                        (amg*rdif_a(i,j,0) - (apg-c1))*trnlay(i,j,0)
  
             ! recalculate rdif,tdif using gaussian integration over rdir,tdir:
             swt = c0
@@ -1931,10 +1932,10 @@
               gam = gamma(ws,mu,gs,lm)
               apg = alp + gam
               amg = alp - gam
-              rdr = amg*(tdif_a(i,j,0)*trn-c1) + 
-     &              apg*rdif_a(i,j,0)
-              tdr = apg*tdif_a(i,j,0) +
-     &              (amg*rdif_a(i,j,0)-(apg-c1))*trn
+              rdr = amg*(tdif_a(i,j,0)*trn-c1) +  &
+                    apg*rdif_a(i,j,0)
+              tdr = apg*tdif_a(i,j,0) + &
+                    (amg*rdif_a(i,j,0)-(apg-c1))*trn
               smr = smr + mu*rdr*gwt
               smt = smt + mu*tdr*gwt
             enddo
@@ -1957,14 +1958,14 @@
           ! compute fresnel reflection and transmission amplitudes
           ! for two polarizations: 1=perpendicular and 2=parallel to
           ! the plane containing incident, reflected and refracted rays.
-          R1 = (mu0 - refindx*mu0n) / 
-     &         (mu0 + refindx*mu0n)
-          R2 = (refindx*mu0 - mu0n) / 
-     &         (refindx*mu0 + mu0n)
-          T1 = c2*mu0 / 
-     &         (mu0 + refindx*mu0n)
-          T2 = c2*mu0 / 
-     &         (refindx*mu0 + mu0n)
+          R1 = (mu0 - refindx*mu0n) /  &
+               (mu0 + refindx*mu0n)
+          R2 = (refindx*mu0 - mu0n) /  &
+               (refindx*mu0 + mu0n)
+          T1 = c2*mu0 /  &
+               (mu0 + refindx*mu0n)
+          T2 = c2*mu0 /  &
+               (refindx*mu0 + mu0n)
  
           ! unpolarized light for direct beam
           Rf_dir_a = p5 * (R1*R1 + R2*R2)
@@ -1991,15 +1992,15 @@
           ! angular refraction from the fresnel layer.
           if( srftyp(i,j) == 2 ) then
             rintfc        = c1/(c1 - Rf_dif_b*rdif_a(i,j,0))
-            tdir(i,j,0)   = Tf_dir_a*tdir(i,j,0) + 
-     &                      Tf_dir_a*rdir(i,j,0)*
-     &                      Rf_dif_b*rintfc*tdif_a(i,j,0)
-            rdir(i,j,0)   = Rf_dir_a + 
-     &                      Tf_dir_a*rdir(i,j,0)*rintfc*Tf_dif_b
-            rdif_a(i,j,0) = Rf_dif_a + 
-     &                      Tf_dif_a*rdif_a(i,j,0)*rintfc*Tf_dif_b
-            rdif_b(i,j,0) = rdif_b(i,j,0) + 
-     &                      tdif_b(i,j,0)*Rf_dif_b*rintfc*tdif_a(i,j,0)
+            tdir(i,j,0)   = Tf_dir_a*tdir(i,j,0) +  &
+                            Tf_dir_a*rdir(i,j,0)* &
+                            Rf_dif_b*rintfc*tdif_a(i,j,0)
+            rdir(i,j,0)   = Rf_dir_a +  &
+                            Tf_dir_a*rdir(i,j,0)*rintfc*Tf_dif_b
+            rdif_a(i,j,0) = Rf_dif_a +  &
+                            Tf_dif_a*rdif_a(i,j,0)*rintfc*Tf_dif_b
+            rdif_b(i,j,0) = rdif_b(i,j,0) +  &
+                            tdif_b(i,j,0)*Rf_dif_b*rintfc*tdif_a(i,j,0)
             tdif_a(i,j,0) = Tf_dif_a*rintfc*tdif_a(i,j,0)
             tdif_b(i,j,0) = tdif_b(i,j,0)*rintfc*Tf_dif_b
             trndir(i,j,1) = Tf_dir_a*trnlay(i,j,0)
@@ -2046,12 +2047,12 @@
                 refkm1        = c1/(c1-rdndif(i,j,k-1)*rdif_a(i,j,k-1))
                 tdrrdir       = trndir(i,j,k-1)*rdir(i,j,k-1)
                 tdndif        = trntdr(i,j,k-1) - trndir(i,j,k-1)
-                trntdr(i,j,k) = trndir(i,j,k-1)*tdir(i,j,k-1) + 
-     &                         (tdndif + tdrrdir*rdndif(i,j,k-1))
-     &                         *refkm1*tdif_a(i,j,k-1)
-                rdndif(i,j,k) = rdif_b(i,j,k-1)  +
-     &                         (tdif_b(i,j,k-1)*rdndif(i,j,k-1)
-     &                         *refkm1*tdif_a(i,j,k-1))
+                trntdr(i,j,k) = trndir(i,j,k-1)*tdir(i,j,k-1) +  &
+                               (tdndif + tdrrdir*rdndif(i,j,k-1)) &
+                               *refkm1*tdif_a(i,j,k-1)
+                rdndif(i,j,k) = rdif_b(i,j,k-1)  + &
+                               (tdif_b(i,j,k-1)*rdndif(i,j,k-1) &
+                               *refkm1*tdif_a(i,j,k-1))
                 trndif(i,j,k) = trndif(i,j,k-1)*tdif_a(i,j,k-1)*refkm1
               endif
          enddo ! end of top interface calculation
@@ -2117,10 +2118,10 @@
                gam = gamma(ws,mu0n,gs,lm)
                apg = alp + gam
                amg = alp - gam
-               rdir(i,j,k) = amg*(tdif_a(i,j,k)*trnlay(i,j,k) - c1) + 
-     &                     apg*rdif_a(i,j,k)
-               tdir(i,j,k) = apg*tdif_a(i,j,k) +
-     &                     (amg*rdif_a(i,j,k) - (apg-c1))*trnlay(i,j,k)
+               rdir(i,j,k) = amg*(tdif_a(i,j,k)*trnlay(i,j,k) - c1) +  &
+                           apg*rdif_a(i,j,k)
+               tdir(i,j,k) = apg*tdif_a(i,j,k) + &
+                           (amg*rdif_a(i,j,k) - (apg-c1))*trnlay(i,j,k)
  
                ! recalculate rdif,tdif using gaussian integration over rdir,tdir:
                swt = c0
@@ -2142,10 +2143,10 @@
                  gam = gamma(ws,mu,gs,lm)
                  apg = alp + gam
                  amg = alp - gam
-                 rdr = amg*(tdif_a(i,j,k)*trn-c1) + 
-     &                 apg*rdif_a(i,j,k)
-                 tdr = apg*tdif_a(i,j,k) +
-     &                 (amg*rdif_a(i,j,k)-(apg-c1))*trn
+                 rdr = amg*(tdif_a(i,j,k)*trn-c1) +  &
+                       apg*rdif_a(i,j,k)
+                 tdr = apg*tdif_a(i,j,k) + &
+                       (amg*rdif_a(i,j,k)-(apg-c1))*trn
                  smr = smr + mu*rdr*gwt
                  smt = smt + mu*tdr*gwt
                enddo
@@ -2160,21 +2161,21 @@
                ! air or snow overlies ice; we ignore refraction in ice 
                ! if a melt pond overlies it:
                if( srftyp(i,j) < 2 .and. k == kfrsnl ) then
-                 rintfc             = c1 /
-     &                               (c1-Rf_dif_b*rdif_a(i,j,kfrsnl))
-                 tdir(i,j,kfrsnl)   = Tf_dir_a*tdir(i,j,kfrsnl) + 
-     &                                Tf_dir_a*rdir(i,j,kfrsnl) *
-     &                                Rf_dif_b*rintfc*tdif_a(i,j,kfrsnl)
-                 rdir(i,j,kfrsnl)   = Rf_dir_a + 
-     &                                Tf_dir_a*rdir(i,j,kfrsnl) *
-     &                                rintfc*Tf_dif_b
-                 rdif_a(i,j,kfrsnl) = Rf_dif_a + 
-     &                                Tf_dif_a*rdif_a(i,j,kfrsnl) *
-     &                                rintfc*Tf_dif_b
-                 rdif_b(i,j,kfrsnl) = rdif_b(i,j,kfrsnl) + 
-     &                                tdif_b(i,j,kfrsnl)*Rf_dif_b*
-     &                                rintfc*tdif_a(i,j,kfrsnl)
-     &                                
+                 rintfc             = c1 / &
+                                     (c1-Rf_dif_b*rdif_a(i,j,kfrsnl))
+                 tdir(i,j,kfrsnl)   = Tf_dir_a*tdir(i,j,kfrsnl) + &
+                                      Tf_dir_a*rdir(i,j,kfrsnl) * &
+                                      Rf_dif_b*rintfc*tdif_a(i,j,kfrsnl)
+                 rdir(i,j,kfrsnl)   = Rf_dir_a +  &
+                                      Tf_dir_a*rdir(i,j,kfrsnl) * &
+                                      rintfc*Tf_dif_b
+                 rdif_a(i,j,kfrsnl) = Rf_dif_a +  &
+                                      Tf_dif_a*rdif_a(i,j,kfrsnl) * &
+                                      rintfc*Tf_dif_b
+                 rdif_b(i,j,kfrsnl) = rdif_b(i,j,kfrsnl) +  &
+                                      tdif_b(i,j,kfrsnl)*Rf_dif_b* &
+                                      rintfc*tdif_a(i,j,kfrsnl) 
+                                      
                  tdif_a(i,j,kfrsnl) = Tf_dif_a*rintfc*tdif_a(i,j,kfrsnl)
                  tdif_b(i,j,kfrsnl) = tdif_b(i,j,kfrsnl)*rintfc*Tf_dif_b
 
@@ -2206,10 +2207,10 @@
            refkm1        = c1/(c1 - rdndif(i,j,k-1)*rdif_a(i,j,k-1))
            tdrrdir       = trndir(i,j,k-1)*rdir(i,j,k-1)
            tdndif        = trntdr(i,j,k-1) - trndir(i,j,k-1)
-           trntdr(i,j,k) = trndir(i,j,k-1)*tdir(i,j,k-1) + 
-     &       (tdndif + tdrrdir*rdndif(i,j,k-1))*refkm1*tdif_a(i,j,k-1)
-           rdndif(i,j,k) = rdif_b(i,j,k-1)  +
-     &       (tdif_b(i,j,k-1)*rdndif(i,j,k-1)*refkm1*tdif_a(i,j,k-1))
+           trntdr(i,j,k) = trndir(i,j,k-1)*tdir(i,j,k-1) +  &
+             (tdndif + tdrrdir*rdndif(i,j,k-1))*refkm1*tdif_a(i,j,k-1)
+           rdndif(i,j,k) = rdif_b(i,j,k-1)  + &
+             (tdif_b(i,j,k-1)*rdndif(i,j,k-1)*refkm1*tdif_a(i,j,k-1))
            trndif(i,j,k) = trndif(i,j,k-1)*tdif_a(i,j,k-1)*refkm1
       enddo ! end surface layer
  
@@ -2238,15 +2239,15 @@
           ! dir from top layer plus exp tran ref from lower layer, interface
           ! scattered and tran thru top layer from below, plus diff tran ref
           ! from lower layer with interface scattering tran thru top from below
-          rupdir(i,j,k) = rdir(i,j,k) + 
-     &                  ( trnlay(i,j,k)*rupdir(i,j,k+1) +
-     &                   (tdir(i,j,k)-trnlay(i,j,k))*rupdif(i,j,k+1) ) *
-     &                    refkp1*tdif_b(i,j,k)
+          rupdir(i,j,k) = rdir(i,j,k) +  &
+                        ( trnlay(i,j,k)*rupdir(i,j,k+1) + &
+                         (tdir(i,j,k)-trnlay(i,j,k))*rupdif(i,j,k+1) ) * &
+                          refkp1*tdif_b(i,j,k)
           ! dif from top layer from above, plus dif tran upwards reflected and
           ! interface scattered which tran top from below
-          rupdif(i,j,k) = rdif_a(i,j,k) +
-     &                    tdif_a(i,j,k)*rupdif(i,j,k+1)*
-     &                    refkp1*tdif_b(i,j,k)
+          rupdif(i,j,k) = rdif_a(i,j,k) + &
+                          tdif_a(i,j,k)*rupdif(i,j,k+1)* &
+                          refkp1*tdif_b(i,j,k)
         enddo
       enddo
  

@@ -17,6 +17,7 @@
 ! 2004-05: Block structure added by William Lipscomb
 !          Restart module separated from history module
 ! 2006 ECH: Accepted some CCSM code into mainstream CICE
+!           Converted to free source form (F90) 
 ! 
 ! !INTERFACE:
 !
@@ -36,19 +37,19 @@
       implicit none
       save
 
-      logical (kind=log_kind) ::
-     &   restart ! if true, initialize using restart file instead of defaults
+      logical (kind=log_kind) :: &
+         restart ! if true, initialize using restart file instead of defaults
 
-      character (len=char_len) ::
-     &   restart_file      ! output file for restart dump
-     &,  runtype           ! initial, continue, hybrid or branch
+      character (len=char_len) :: &
+         restart_file  , & ! output file for restart dump
+         runtype           ! initial, continue, hybrid or branch
 
-      character (len=char_len_long) ::
-     &   restart_dir       ! directory name for restart dump
-     &,  runid             ! identifier for CCSM coupled run
+      character (len=char_len_long) :: &
+         restart_dir   , & ! directory name for restart dump
+         runid             ! identifier for CCSM coupled run
 
-      character (len=char_len_long) ::
-     &   pointer_file      ! input pointer file for restarts
+      character (len=char_len_long) :: &
+         pointer_file      ! input pointer file for restarts
 
 !=======================================================================
 
@@ -81,8 +82,8 @@
       use ice_domain_size
       use ice_flux
       use ice_grid
-      use ice_calendar, only: sec, month, mday, nyr, istep1,
-     &                        time, time_forc, idate, year_init
+      use ice_calendar, only: sec, month, mday, nyr, istep1, &
+                              time, time_forc, idate, year_init
       use ice_state
       use ice_dyn_evp
       use ice_work, only: work1
@@ -92,9 +93,9 @@
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &    i, j, k, n, it, iblk  ! counting indices
-     &,   iyear, imonth, iday   ! year, month, day
+      integer (kind=int_kind) :: &
+          i, j, k, n, it, iblk, & ! counting indices
+          iyear, imonth, iday     ! year, month, day
 
       character(len=80) :: filename
 
@@ -105,10 +106,10 @@
       imonth = month
       iday = mday
 
-      write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') 
-     &   restart_dir(1:lenstr(restart_dir)),
-     &   restart_file(1:lenstr(restart_file)),'.',
-     &   iyear,'-',month,'-',mday,'-',sec
+      write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
+         restart_dir(1:lenstr(restart_dir)), &
+         restart_file(1:lenstr(restart_file)),'.', &
+         iyear,'-',month,'-',mday,'-',sec
 
       ! write pointer (path/file)
       if (my_task == master_task) then
@@ -246,14 +247,14 @@
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, k, n, it, iblk ! counting indices
+      integer (kind=int_kind) :: &
+         i, j, k, n, it, iblk ! counting indices
 
-      character(len=80) ::
-     &   filename, filename0
+      character(len=80) :: &
+         filename, filename0
 
-      logical (kind=log_kind) ::
-     &   diag, hit_eof
+      logical (kind=log_kind) :: &
+         diag, hit_eof
 
       if (my_task == master_task) then
          open(nu_rst_pointer,file=pointer_file)
@@ -283,9 +284,9 @@
       ! state variables
       !-----------------------------------------------------------------
       do n=1,ncat
-         if (my_task == master_task)
-     &        write(nu_diag,*) 'cat ',n,
-     &                         ' min/max area, vol ice, vol snow, Tsfc'
+         if (my_task == master_task) &
+              write(nu_diag,*) 'cat ',n, &
+                               ' min/max area, vol ice, vol snow, Tsfc'
 
          call ice_read(nu_restart,0,aicen(:,:,n,:),'ruf8',diag)
          call ice_read(nu_restart,0,vicen(:,:,n,:),'ruf8',diag)
@@ -300,8 +301,8 @@
 #endif
       enddo
 
-      if (my_task == master_task)
-     &     write(nu_diag,*) 'min/max eicen for each layer'
+      if (my_task == master_task) &
+           write(nu_diag,*) 'min/max eicen for each layer'
       do k=1,ntilyr
          call ice_read(nu_restart,0,eicen(:,:,k,:),'ruf8',diag)
       enddo
@@ -310,8 +311,8 @@
       if (trim(runtype) == "continue") then
 #endif
 
-      if (my_task == master_task)
-     &     write(nu_diag,*) 'min/max esnon for each layer'
+      if (my_task == master_task) &
+           write(nu_diag,*) 'min/max esnon for each layer'
       do k=1,ntslyr
          call ice_read(nu_restart,0,esnon(:,:,k,:),'ruf8',diag)
       enddo
@@ -323,8 +324,8 @@
       !-----------------------------------------------------------------
       ! velocity
       !-----------------------------------------------------------------
-      if (my_task == master_task)
-     &     write(nu_diag,*) 'min/max velocity components'
+      if (my_task == master_task) &
+           write(nu_diag,*) 'min/max velocity components'
 
       call ice_read(nu_restart,0,uvel,'ruf8',diag)
       call ice_read(nu_restart,0,vvel,'ruf8',diag)
@@ -332,8 +333,8 @@
       !-----------------------------------------------------------------
       ! fresh water, salt, and heat flux
       !-----------------------------------------------------------------
-      if (my_task == master_task)
-     &   write(nu_diag,*) 'min/max fresh water and heat flux components'
+      if (my_task == master_task) &
+         write(nu_diag,*) 'min/max fresh water and heat flux components'
 
       call ice_read(nu_restart,0,fresh,'ruf8',diag)
 #ifdef CCSM
@@ -348,8 +349,8 @@
 #ifdef CCSM
       if (.not.(trim(runtype) == "continue")) then
 
-      if (my_task == master_task)
-     &     write(nu_diag,*) 'min/max ice strength'
+      if (my_task == master_task) &
+           write(nu_diag,*) 'min/max ice strength'
 
       call ice_read(nu_restart,0,strength,'ruf8',diag)
 
@@ -359,8 +360,8 @@
       !-----------------------------------------------------------------
       ! ocean stress
       !-----------------------------------------------------------------
-      if (my_task == master_task)
-     &     write(nu_diag,*) 'min/max ocean stress components'
+      if (my_task == master_task) &
+           write(nu_diag,*) 'min/max ocean stress components'
 
       call ice_read(nu_restart,0,strocnxT,'ruf8',diag)
       call ice_read(nu_restart,0,strocnyT,'ruf8',diag)
@@ -368,8 +369,8 @@
       !-----------------------------------------------------------------
       ! internal stress
       !-----------------------------------------------------------------
-      if (my_task == master_task) write(nu_diag,*)
-     &     'min/max internal stress components (3 per triangle)'
+      if (my_task == master_task) write(nu_diag,*) &
+           'min/max internal stress components (3 per triangle)'
       
       call ice_read(nu_restart,0,stressp_1,'ruf8',diag)
       call ice_read(nu_restart,0,stressm_1,'ruf8',diag)
@@ -390,8 +391,8 @@
       !-----------------------------------------------------------------
       ! ice mask for dynamics
       !-----------------------------------------------------------------
-      if (my_task == master_task)
-     &     write(nu_diag,*) 'ice mask for dynamics'
+      if (my_task == master_task) &
+           write(nu_diag,*) 'ice mask for dynamics'
 
       call ice_read(nu_restart,0,work1,'ruf8',diag)
 
@@ -407,8 +408,8 @@
       ! for mixed layer model
       if (oceanmixed_ice) then
 
-         if (my_task == master_task)
-     &        write(nu_diag,*) 'min/max sst, frzmlt'
+         if (my_task == master_task) &
+              write(nu_diag,*) 'min/max sst, frzmlt'
 
          call ice_read(nu_restart,0,sst,'ruf8',diag)
          call ice_read(nu_restart,0,frzmlt,'ruf8',diag)
@@ -422,8 +423,8 @@
       ! check for salt flux in restart file, if not there, set to 0.
       !-----------------------------------------------------------------
 
-      call ice_read(nu_restart, 0, work1, 'ruf8', diag,
-     &              ignore_eof=.true., hit_eof=hit_eof)
+      call ice_read(nu_restart, 0, work1, 'ruf8', diag, &
+                    ignore_eof=.true., hit_eof=hit_eof)
 
       if (hit_eof) then
         if (my_task.eq.master_task) then
@@ -432,8 +433,8 @@
         endif
         fsalt(:,:,:)=c0
       else
-        if (my_task.eq.master_task) 
-     &     write (nu_diag,*) 'min/max salt flux component'
+        if (my_task.eq.master_task) &
+           write (nu_diag,*) 'min/max salt flux component'
         fsalt(:,:,:)=work1(:,:,:)
       endif
 
@@ -448,38 +449,38 @@
 
       call ice_timer_start(timer_bound)
 
-      call bound_state (aicen, trcrn,
-     &                  vicen, vsnon, 
-     &                  eicen, esnon)
+      call bound_state (aicen, trcrn, &
+                        vicen, vsnon, &
+                        eicen, esnon)
 
-      call update_ghost_cells (uvel,               bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (vvel,               bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressp_1,               bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressm_1,               bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stress12_1,              bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressp_2,               bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressm_2,               bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stress12_2,              bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressp_3,               bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressm_3,               bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stress12_3,              bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressp_4,               bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressm_4,               bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stress12_4,              bndy_info,
-     &                         field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (uvel,               bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (vvel,               bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressp_1,               bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressm_1,               bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stress12_1,              bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressp_2,               bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressm_2,               bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stress12_2,              bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressp_3,               bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressm_3,               bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stress12_3,              bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressp_4,               bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stressm_4,               bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells (stress12_4,              bndy_info, &
+                               field_loc_NEcorner, field_type_vector)
 
       call ice_timer_stop(timer_bound)
 
@@ -498,22 +499,22 @@
 
       do iblk = 1, nblocks
 
-         call aggregate (nx_block, ny_block,
-     &                   aicen(:,:,:,iblk),
-     &                   trcrn(:,:,:,:,iblk),
-     &                   vicen(:,:,:,iblk),
-     &                   vsnon(:,:,:,iblk),
-     &                   eicen(:,:,:,iblk),
-     &                   esnon(:,:,:,iblk),
-     &                   aice (:,:,  iblk),
-     &                   trcr (:,:,:,iblk),
-     &                   vice (:,:,  iblk),
-     &                   vsno (:,:,  iblk),
-     &                   eice (:,:,  iblk),
-     &                   esno (:,:,  iblk),
-     &                   aice0(:,:,  iblk),
-     &                   tmask(:,:,  iblk),
-     &                   trcr_depend)
+         call aggregate (nx_block, ny_block, &
+                         aicen(:,:,:,iblk),  &
+                         trcrn(:,:,:,:,iblk),&
+                         vicen(:,:,:,iblk),  &
+                         vsnon(:,:,:,iblk),  &
+                         eicen(:,:,:,iblk),  &
+                         esnon(:,:,:,iblk),  &
+                         aice (:,:,  iblk),  &
+                         trcr (:,:,:,iblk),  &
+                         vice (:,:,  iblk),  &
+                         vsno (:,:,  iblk),  &
+                         eice (:,:,  iblk),  &
+                         esno (:,:,  iblk),  &
+                         aice0(:,:,  iblk),  &
+                         tmask(:,:,  iblk),  &
+                         trcr_depend)
 
          aice_init(:,:,iblk) = aice(:,:,iblk)
 
@@ -545,9 +546,9 @@
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   length  ! length of character string
-     &,  n       ! loop index
+      integer (kind=int_kind) :: &
+         length, & ! length of character string
+         n         ! loop index
 
       length = len(label)
       do n=length,1,-1

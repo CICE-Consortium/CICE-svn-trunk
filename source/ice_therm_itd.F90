@@ -41,8 +41,8 @@
       implicit none
       save
 
-      real (kind=dbl_kind), parameter, private ::
-     &   hfrazilmin = 0.05_dbl_kind ! min thickness of new frazil ice (m)
+      real (kind=dbl_kind), parameter, private :: &
+         hfrazilmin = 0.05_dbl_kind ! min thickness of new frazil ice (m)
 
 !=======================================================================
 
@@ -55,16 +55,16 @@
 !
 ! !INTERFACE:
 !
-      subroutine linear_itd (nx_block,    ny_block,
-     &                       icells, indxi, indxj,
-     &                       nghost,      trcr_depend,
-     &                       aicen_init,  vicen_init,
-     &                       aicen,       trcrn,
-     &                       vicen,       vsnon,
-     &                       eicen,       esnon,
-     &                       aice,        aice0,
-     &                       l_stop,
-     &                       istop,       jstop)
+      subroutine linear_itd (nx_block,    ny_block,    & 
+                             icells, indxi, indxj,     & 
+                             nghost,      trcr_depend, & 
+                             aicen_init,  vicen_init,  & 
+                             aicen,       trcrn,       & 
+                             vicen,       vsnon,       & 
+                             eicen,       esnon,       & 
+                             aice,        aice0,       & 
+                             l_stop,                   & 
+                             istop,       jstop)
 
 ! See Lipscomb, W. H.  Remapping the thickness distribution in sea
 !     ice models. 2001, J. Geophys. Res., Vol 106, 13989--14000.
@@ -91,124 +91,124 @@
 !
 ! !USES:
 !
-      use ice_itd, only: hin_max, hi_min, aggregate_area, shift_ice,
-     &                   column_sum, column_conservation_check 
+      use ice_itd, only: hin_max, hi_min, aggregate_area, shift_ice, & 
+                         column_sum, column_conservation_check 
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
-     &,  icells            ! number of grid cells with ice
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         nghost            , & ! number of ghost cells
+         icells                ! number of grid cells with ice
 
-       integer (kind=int_kind), dimension (nx_block*ny_block),
-     &   intent(in) ::
-     &   indxi, indxj      ! compressed i/j indices
+       integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi, indxj      ! compressed i/j indices
 
-      integer (kind=int_kind), dimension (ntrcr), intent(in) ::
-     &   trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
+      integer (kind=int_kind), dimension (ntrcr), intent(in) :: &
+         trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat),
-     &   intent(in) ::
-     &   aicen_init ! initial ice concentration (before vertical thermo)
-     &,  vicen_init ! initial ice volume               (m)
+      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+         intent(in) :: &
+         aicen_init, & ! initial ice concentration (before vertical thermo)
+         vicen_init    ! initial ice volume               (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),
-     &   intent(inout) ::
-     &   aicen      ! ice concentration
-     &,  vicen      ! volume per unit area of ice      (m)
-     &,  vsnon      ! volume per unit area of snow     (m)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
+         intent(inout) :: &
+         aicen  , & ! ice concentration
+         vicen  , & ! volume per unit area of ice      (m)
+         vsnon      ! volume per unit area of snow     (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat),
-     &   intent(inout) ::
-     &   trcrn     ! ice tracers
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
+         intent(inout) :: &
+         trcrn     ! ice tracers
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr),
-     &   intent(inout) ::
-     &   eicen     ! energy of melting for each ice layer (J/m^2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
+         intent(inout) :: &
+         eicen     ! energy of melting for each ice layer (J/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr),
-     &   intent(inout) ::
-     &   esnon     ! energy of melting for each snow layer (J/m^2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), &
+         intent(inout) :: &
+         esnon     ! energy of melting for each snow layer (J/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(inout) ::
-     &   aice      ! concentration of ice
-     &,  aice0     ! concentration of open water
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout) :: &
+         aice  , & ! concentration of ice
+         aice0     ! concentration of open water
 
-      logical (kind=log_kind), intent(out) ::
-     &   l_stop    ! if true, abort on return
+      logical (kind=log_kind), intent(out) :: &
+         l_stop    ! if true, abort on return
 
-      integer (kind=int_kind), intent(out) ::
-     &   istop, jstop    ! indices of grid cell where model aborts 
+      integer (kind=int_kind), intent(out) :: &
+         istop, jstop    ! indices of grid cell where model aborts 
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j             ! horizontal indices
-     &,  n, nd            ! category indices
-     &,  k                ! ice layer index
+      integer (kind=int_kind) :: &
+         i, j         , & ! horizontal indices
+         n, nd        , & ! category indices
+         k                ! ice layer index
 
-      real (kind=dbl_kind) ::
-     &   slope            ! rate of change of dhice with hice
-     &,  dh0              ! change in ice thickness at h = 0
-     &,  da0              ! area melting from category 1
-     &,  damax            ! max allowed reduction in category 1 area
-     &,  etamin, etamax   ! left and right limits of integration
-     &,  x1               ! etamax - etamin
-     &,  x2               ! (etamax^2 - etamin^2) / 2
-     &,  x3               ! (etamax^3 - etamin^3) / 3
-     &,  wk1, wk2         ! temporary variables
+      real (kind=dbl_kind) :: &
+         slope        , & ! rate of change of dhice with hice
+         dh0          , & ! change in ice thickness at h = 0
+         da0          , & ! area melting from category 1
+         damax        , & ! max allowed reduction in category 1 area
+         etamin, etamax,& ! left and right limits of integration
+         x1           , & ! etamax - etamin
+         x2           , & ! (etamax^2 - etamin^2) / 2
+         x3           , & ! (etamax^3 - etamin^3) / 3
+         wk1, wk2         ! temporary variables
 
-      real (kind=dbl_kind), dimension(icells,0:ncat) ::
-     &   hbnew            ! new boundary locations
+      real (kind=dbl_kind), dimension(icells,0:ncat) :: &
+         hbnew            ! new boundary locations
 
-      real (kind=dbl_kind), dimension(icells) ::
-     &   work             ! temporary work array (for hbnew)
+      real (kind=dbl_kind), dimension(icells) :: &
+         work             ! temporary work array (for hbnew)
 
-      integer (kind=int_kind), dimension(icells) ::
-     &   indxii, indxjj   ! compressed i/j indices
-     &,  indxij           ! compressed 1D i/j indices
+      integer (kind=int_kind), dimension(icells) :: &
+         indxii, indxjj,& ! compressed i/j indices
+         indxij           ! compressed 1D i/j indices
 
-      real (kind=dbl_kind), dimension(:,:), allocatable ::
-     &   g0               ! constant coefficient in g(h)
-     &,  g1               ! linear coefficient in g(h)
-     &,  hL               ! left end of range over which g(h) > 0
-     &,  hR               ! right end of range over which g(h) > 0
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         g0           , & ! constant coefficient in g(h)
+         g1           , & ! linear coefficient in g(h)
+         hL           , & ! left end of range over which g(h) > 0
+         hR               ! right end of range over which g(h) > 0
 
-      real (kind=dbl_kind), dimension(icells,ncat) ::
-     &   hicen            ! ice thickness for each cat     (m)
-     &,  hicen_init       ! initial ice thickness for each cat (pre-thermo)
-     &,  dhicen           ! thickness change for remapping (m)
-     &,  daice            ! ice area transferred across boundary
-     &,  dvice            ! ice volume transferred across boundary
+      real (kind=dbl_kind), dimension(icells,ncat) :: &
+         hicen        , & ! ice thickness for each cat     (m)
+         hicen_init   , & ! initial ice thickness for each cat (pre-thermo)
+         dhicen       , & ! thickness change for remapping (m)
+         daice        , & ! ice area transferred across boundary
+         dvice            ! ice volume transferred across boundary
 
-!      real (kind=dbl_kind), dimension(nx_block,ny_block) ::
-      real (kind=dbl_kind), dimension(icells) ::
-     &   vice_init, vice_final  ! ice volume summed over categories
-     &,  vsno_init, vsno_final  ! snow volume summed over categories
-     &,  eice_init, eice_final  ! ice energy summed over categories
-     &,  esno_init, esno_final  ! snow energy summed over categories
+!      real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
+      real (kind=dbl_kind), dimension(icells) :: &
+         vice_init, vice_final, & ! ice volume summed over categories
+         vsno_init, vsno_final, & ! snow volume summed over categories
+         eice_init, eice_final, & ! ice energy summed over categories
+         esno_init, esno_final    ! snow energy summed over categories
 
       ! NOTE: Third index of donor, daice, dvice should be ncat-1,
       !       except that compilers would have trouble when ncat = 1 
-      integer (kind=int_kind), dimension(icells,ncat) ::
-     &   donor            ! donor category index
+      integer (kind=int_kind), dimension(icells,ncat) :: &
+         donor            ! donor category index
 
-      logical (kind=log_kind), dimension(icells) ::
-     &   remap_flag       ! remap ITD if remap_flag(ij) is true
+      logical (kind=log_kind), dimension(icells) :: &
+         remap_flag       ! remap ITD if remap_flag(ij) is true
 
-      character (len=char_len) ::
-     &   fieldid           ! field identifier
+      character (len=char_len) :: &
+         fieldid           ! field identifier
 
-      logical (kind=log_kind), parameter ::
-     &   l_conservation_check = .true.   ! if true, check conservation
-!     &   l_conservation_check = .false.   ! if true, check conservation
+      logical (kind=log_kind), parameter :: &
+         l_conservation_check = .true.   ! if true, check conservation
+!         l_conservation_check = .false.   ! if true, check conservation
                                          ! (useful for debugging)
 
-       integer (kind=int_kind) ::
-     &   iflag             ! number of grid cells with remap_flag = .true.
-     &,  ij, m             ! combined horizontal indices
+       integer (kind=int_kind) :: &
+         iflag         , & ! number of grid cells with remap_flag = .true.
+         ij, m             ! combined horizontal indices
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -228,22 +228,22 @@
       !-----------------------------------------------------------------
 
       if (l_conservation_check) then
-         call column_sum (nx_block, ny_block,
-     &                    icells,   indxi,   indxj,
-     &                    ncat,
-     &                    vicen,    vice_init)
-         call column_sum (nx_block, ny_block,
-     &                    icells,   indxi,   indxj,
-     &                    ncat,
-     &                    vsnon,    vsno_init)
-         call column_sum (nx_block, ny_block,
-     &                    icells,   indxi,   indxj,
-     &                    ntilyr,
-     &                    eicen,    eice_init)
-         call column_sum (nx_block, ny_block,
-     &                    icells,   indxi,   indxj,
-     &                    ntslyr,
-     &                    esnon,    esno_init)
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          vicen,    vice_init)
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          vsnon,    vsno_init)
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ntilyr,                   &
+                          eicen,    eice_init)
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ntslyr,                   &
+                          esnon,    esno_init)
       endif
 
       !-----------------------------------------------------------------
@@ -269,8 +269,8 @@
             j = indxj(ij)
 
             if (aicen_init(i,j,n) > puny) then
-               hicen_init (ij,n) = vicen_init(i,j,n) / 
-     &                              aicen_init(i,j,n) 
+               hicen_init (ij,n) = vicen_init(i,j,n) /  &
+                                    aicen_init(i,j,n) 
             else
                hicen_init(ij,n) = c0
             endif               ! aicen_init > puny
@@ -304,13 +304,13 @@
             i = indxi(ij)
             j = indxj(ij)
 
-            if (hicen_init(ij,n)   > puny .and.
-     &          hicen_init(ij,n+1) > puny) then
+            if (hicen_init(ij,n)   > puny .and. &
+                hicen_init(ij,n+1) > puny) then
                  ! interpolate between adjacent category growth rates
-               slope = (dhicen(ij,n+1) - dhicen(ij,n)) /
-     &                 (hicen_init(ij,n+1) - hicen_init(ij,n))
-               hbnew(ij,n) = hin_max(n) + dhicen(ij,n)
-     &                      + slope * (hin_max(n) - hicen_init(ij,n))
+               slope = (dhicen(ij,n+1) - dhicen(ij,n)) / &
+                       (hicen_init(ij,n+1) - hicen_init(ij,n))
+               hbnew(ij,n) = hin_max(n) + dhicen(ij,n) &
+                            + slope * (hin_max(n) - hicen_init(ij,n))
             elseif (hicen_init(ij,n) > puny) then ! hicen_init(n+1)=0
                hbnew(ij,n) = hin_max(n) + dhicen(ij,n)
             elseif (hicen_init(ij,n+1) > puny) then ! hicen_init(n)=0
@@ -325,29 +325,29 @@
       ! Write diagnosis outputs if remap_flag was changed to false
       !-----------------------------------------------------------------
 
-            if (aicen(i,j,n) > puny .and.
-     &          hicen(ij,n) >= hbnew(ij,n)) then
+            if (aicen(i,j,n) > puny .and. &
+                hicen(ij,n) >= hbnew(ij,n)) then
                remap_flag(ij) = .false.
 
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'ITD: hicen(n) > hbnew(n)'
+                  write(nu_diag,*) my_task,':',i,j, &
+                       'ITD: hicen(n) > hbnew(n)'
                   write(nu_diag,*) 'cat ',n
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'hicen(n) =', hicen(ij,n)
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'hbnew(n) =', hbnew(ij,n)
+                  write(nu_diag,*) my_task,':',i,j, &
+                       'hicen(n) =', hicen(ij,n)
+                  write(nu_diag,*) my_task,':',i,j, &
+                       'hbnew(n) =', hbnew(ij,n)
 
-            elseif (aicen(i,j,n+1) > puny .and.
-     &              hicen(ij,n+1) <= hbnew(ij,n)) then
+            elseif (aicen(i,j,n+1) > puny .and. &
+                    hicen(ij,n+1) <= hbnew(ij,n)) then
                remap_flag(ij) = .false.
 
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'ITD: hicen(n+1) < hbnew(n)'
+                  write(nu_diag,*) my_task,':',i,j, &
+                       'ITD: hicen(n+1) < hbnew(n)'
                   write(nu_diag,*) 'cat ',n
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'hicen(n+1) =', hicen(ij,n+1)
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'hbnew(n) =', hbnew(ij,n)
+                  write(nu_diag,*) my_task,':',i,j, &
+                       'hicen(n+1) =', hicen(ij,n+1)
+                  write(nu_diag,*) my_task,':',i,j, &
+                       'hbnew(n) =', hbnew(ij,n)
             endif
 
       !-----------------------------------------------------------------
@@ -361,25 +361,25 @@
             if (hbnew(ij,n) > hin_max(n+1)) then
                remap_flag(ij) = .false.
 
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'ITD hbnew(n) > hin_max(n+1)'
+                  write(nu_diag,*) my_task,':',i,j, &
+                       'ITD hbnew(n) > hin_max(n+1)'
                   write(nu_diag,*) 'cat ',n
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'hbnew(n) =', hbnew(ij,n)
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'hin_max(n+1) =', hin_max(n+1)
+                  write(nu_diag,*) my_task,':',i,j, &
+                       'hbnew(n) =', hbnew(ij,n)
+                  write(nu_diag,*) my_task,':',i,j, &
+                       'hin_max(n+1) =', hin_max(n+1)
             endif
 
             if (hbnew(ij,n) < hin_max(n-1)) then
                remap_flag(ij) = .false.
 
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'ITD: hbnew(n) < hin_max(n-1)'
+                  write(nu_diag,*) my_task,':',i,j, &
+                       'ITD: hbnew(n) < hin_max(n-1)'
                   write(nu_diag,*) 'cat ',n
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'hbnew(n) =', hbnew(ij,n)
-                  write(nu_diag,*) my_task,':',i,j,
-     &                 'hin_max(n-1) =', hin_max(n-1)
+                  write(nu_diag,*) my_task,':',i,j, &
+                       'hbnew(n) =', hbnew(ij,n)
+                  write(nu_diag,*) my_task,':',i,j, &
+                       'hin_max(n-1) =', hin_max(n-1)
             endif
 
          enddo                  ! ij
@@ -434,13 +434,13 @@
          work(ij) = hin_max(1)
       enddo
 
-      call fit_line(nx_block,       ny_block,
-     &              iflag,          icells,
-     &              indxii,         indxjj,    indxij,
-     &              aicen(:,:,1),   hicen_init(:,1),
-     &              hbnew(:,0),   work     (:),
-     &              g0   (:,1),   g1        (:,1),
-     &              hL   (:,1),   hR        (:,1))
+      call fit_line(nx_block,       ny_block,          &
+                    iflag,          icells,            &
+                    indxii,         indxjj,    indxij, &
+                    aicen(:,:,1),   hicen_init(:,1),   &
+                    hbnew(:,0),   work     (:),        &
+                    g0   (:,1),   g1        (:,1),     &
+                    hL   (:,1),   hR        (:,1))
 
       !-----------------------------------------------------------------
       ! Find area lost due to melting of thin (category 1) ice
@@ -474,13 +474,13 @@
                   da0 = g1(ij,1)*x2 + g0(ij,1)*x1 ! ice area removed
 
                ! constrain new thickness <= hicen_init
-                  damax = aicen(i,j,1)
-     &                  * (c1-hicen(m,1)/hicen_init(m,1)) ! damax > 0
+                  damax = aicen(i,j,1) &
+                        * (c1-hicen(m,1)/hicen_init(m,1)) ! damax > 0
                   da0 = min (da0, damax)
 
                ! remove area, conserving volume
-                  hicen(m,1) = hicen(m,1)
-     &                         * aicen(i,j,1) / (aicen(i,j,1)-da0)
+                  hicen(m,1) = hicen(m,1) &
+                               * aicen(i,j,1) / (aicen(i,j,1)-da0)
                   aicen(i,j,1) = aicen(i,j,1) - da0
                endif            ! etamax > 0
 
@@ -496,13 +496,13 @@
       !-----------------------------------------------------------------
 
       do n = 1, ncat
-         call fit_line(nx_block,       ny_block,
-     &                 iflag,          icells,
-     &                 indxii,         indxjj,    indxij,
-     &                 aicen(:,:,n),   hicen(:,n),
-     &                 hbnew(:,n-1), hbnew(:,n),
-     &                 g0   (:,n),   g1   (:,n),
-     &                 hL   (:,n),   hR   (:,n))
+         call fit_line(nx_block,       ny_block,          &
+                       iflag,          icells,            &
+                       indxii,         indxjj,    indxij, &
+                       aicen(:,:,n),   hicen(:,n),        &
+                       hbnew(:,n-1), hbnew(:,n),          &
+                       g0   (:,n),   g1   (:,n),          &
+                       hL   (:,n),   hR   (:,n))
 
       enddo
 
@@ -554,8 +554,8 @@
                x3  = p333 * (wk2 - wk1)
                nd  = donor(m,n)
                daice(m,n) = g1(ij,nd)*x2 + g0(ij,nd)*x1
-               dvice(m,n) = g1(ij,nd)*x3 + g0(ij,nd)*x2
-     &                      + daice(m,n)*hL(ij,nd)
+               dvice(m,n) = g1(ij,nd)*x3 + g0(ij,nd)*x2 &
+                            + daice(m,n)*hL(ij,nd)
             endif               ! etamax > etamin
 
             ! If daice or dvice is very small, shift no ice.
@@ -599,16 +599,16 @@
       ! Shift ice between categories as necessary
       !-----------------------------------------------------------------
 
-      call shift_ice (nx_block, ny_block,
-     &                indxi,    indxj,
-     &                icells,   trcr_depend,
-     &                aicen,    trcrn,
-     &                vicen,    vsnon,
-     &                eicen,    esnon,
-     &                hicen,    donor,
-     &                daice,    dvice,
-     &                l_stop,
-     &                istop,    jstop)
+      call shift_ice (nx_block, ny_block,    &
+                      indxi,    indxj,       &
+                      icells,   trcr_depend, &
+                      aicen,    trcrn,       &
+                      vicen,    vsnon,       &
+                      eicen,    esnon,       &
+                      hicen,    donor,       &
+                      daice,    dvice,       &
+                      l_stop,                &
+                      istop,    jstop)
 
       if (l_stop) return
 
@@ -623,8 +623,8 @@
          i = indxii(ij)
          j = indxjj(ij)
          m = indxij(ij)
-         if (hi_min > c0 .and.
-     &        aicen(i,j,1) > puny .and. hicen(m,1) < hi_min) then
+         if (hi_min > c0 .and. &
+              aicen(i,j,1) > puny .and. hicen(m,1) < hi_min) then
             aicen(i,j,1) = aicen(i,j,1) * hicen(m,1)/hi_min
             hicen(m,1) = hi_min
          endif
@@ -633,11 +633,11 @@
       !-----------------------------------------------------------------
       ! Update fractional ice area in each grid cell.
       !-----------------------------------------------------------------
-      call aggregate_area (nx_block, ny_block,
-     &                     aicen,
-     &                     aice,     aice0,
-     &                     l_stop,
-     &                     istop,    jstop)
+      call aggregate_area (nx_block, ny_block, &
+                           aicen,              &
+                           aice,     aice0,    &
+                           l_stop,             &
+                           istop,    jstop)
 
       if (l_stop) return
 
@@ -647,58 +647,58 @@
 
       if (l_conservation_check) then
 
-         call column_sum (nx_block, ny_block,
-     &                    icells,   indxi,   indxj,
-     &                    ncat,
-     &                    vicen,    vice_final)
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          vicen,    vice_final)
          fieldid = 'vice, ITD remap'
-         call column_conservation_check (nx_block,  ny_block,
-     &                                   icells,   indxi,   indxj,
-     &                                   fieldid,
-     &                                   vice_init, vice_final,
-     &                                   puny,      l_stop,
-     &                                   istop,     jstop)
+         call column_conservation_check (nx_block,  ny_block,      &
+                                         icells,   indxi,   indxj, &
+                                         fieldid,                  &
+                                         vice_init, vice_final,    &
+                                         puny,      l_stop,        &
+                                         istop,     jstop)
          if (l_stop) return
 
-         call column_sum (nx_block, ny_block,
-     &                    icells,   indxi,   indxj,
-     &                    ncat,
-     &                    vsnon,    vsno_final)
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          vsnon,    vsno_final)
          fieldid = 'vsno, ITD remap'
-         call column_conservation_check (nx_block,  ny_block,
-     &                                   icells,   indxi,   indxj,
-     &                                   fieldid,
-     &                                   vsno_init, vsno_final,
-     &                                   puny,      l_stop,
-     &                                   istop,     jstop)
+         call column_conservation_check (nx_block,  ny_block,      &
+                                         icells,   indxi,   indxj, &
+                                         fieldid,                  &
+                                         vsno_init, vsno_final,    &
+                                         puny,      l_stop,        &
+                                         istop,     jstop)
          if (l_stop) return
 
-         call column_sum (nx_block, ny_block,
-     &                    icells,   indxi,   indxj,
-     &                    ntilyr,
-     &                    eicen,    eice_final)
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ntilyr,                   &
+                          eicen,    eice_final)
          fieldid = 'eice, ITD remap'
-         call column_conservation_check (nx_block,   ny_block,
-     &                                   icells,   indxi,   indxj,
-     &                                   fieldid,
-     &                                   eice_init,  eice_final,
-     &                                   puny*Lfresh*rhoi,
-     &                                   l_stop,
-     &                                   istop,     jstop)
+         call column_conservation_check (nx_block,   ny_block,     &
+                                         icells,   indxi,   indxj, &
+                                         fieldid,                  &
+                                         eice_init,  eice_final,   &
+                                         puny*Lfresh*rhoi,         &
+                                         l_stop,                   &
+                                         istop,     jstop)
          if (l_stop) return
 
-         call column_sum (nx_block, ny_block,
-     &                    icells,   indxi,   indxj,
-     &                    ntslyr,
-     &                    esnon,    esno_final)
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ntslyr,                   &
+                          esnon,    esno_final)
          fieldid = 'esno, ITD remap'
-         call column_conservation_check (nx_block,   ny_block,
-     &                                   icells,   indxi,   indxj,
-     &                                   fieldid,
-     &                                   esno_init,  esno_final,
-     &                                   puny*Lfresh*rhos,
-     &                                   l_stop,
-     &                                   istop,     jstop)
+         call column_conservation_check (nx_block,   ny_block,     &
+                                         icells,   indxi,   indxj, &
+                                         fieldid,                  &
+                                         esno_init,  esno_final,   &
+                                         puny*Lfresh*rhos,         &
+                                         l_stop,                   &
+                                         istop,     jstop)
          if (l_stop) return
 
       endif                     ! conservation check
@@ -713,13 +713,13 @@
 ! !INTERFACE:
 !
 
-      subroutine fit_line (nx_block, ny_block,
-     &                     iflag,   icells,  
-     &                     indxii,   indxjj,  indxij,
-     &                     aicen,    hice,
-     &                     hbL,      hbR,   
-     &                     g0,       g1,
-     &                     hL,       hR)
+      subroutine fit_line (nx_block, ny_block,        &
+                           iflag,   icells,           &
+                           indxii,   indxjj,  indxij, &
+                           aicen,    hice,            &
+                           hbL,      hbR,             &
+                           g0,       g1,              &
+                           hL,       hR)
 !
 ! !DESCRIPTION:
 !
@@ -737,40 +737,39 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  icells              ! number of grid cells with ice
-     &,  iflag               ! number of grid cells with remap_flag = .true.
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells            , & ! number of grid cells with ice
+         iflag                 ! number of grid cells with remap_flag = .true.
 
-       integer (kind=int_kind), dimension (icells),
-     &   intent(in) ::
-     &   indxii, indxjj      ! compressed i/j indices (from iflag)
-     &,  indxij        ! compressed i/j indices (from icells)
+       integer (kind=int_kind), dimension (icells), &
+         intent(in) :: &
+         indxii, indxjj, & ! compressed i/j indices (from iflag)
+         indxij            ! compressed i/j indices (from icells)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
-     &   aicen           ! concentration of ice
-!     &,  hice            ! ice thickness
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         aicen           ! concentration of ice
 
-      real (kind=dbl_kind), dimension (icells), intent(in) ::
-     &   hbL, hbR        ! left and right category boundaries
-     &,  hice            ! ice thickness
+      real (kind=dbl_kind), dimension (icells), intent(in) :: &
+         hbL, hbR    , & ! left and right category boundaries
+         hice            ! ice thickness
 
-      real (kind=dbl_kind), dimension (iflag), intent(out)::
-     &   g0, g1          ! coefficients in linear equation for g(eta)
-     &,  hL              ! min value of range over which g(h) > 0
-     &,  hR              ! max value of range over which g(h) > 0
+      real (kind=dbl_kind), dimension (iflag), intent(out):: &
+         g0, g1      , & ! coefficients in linear equation for g(eta)
+         hL          , & ! min value of range over which g(h) > 0
+         hR              ! max value of range over which g(h) > 0
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i,j             ! horizontal indices
-     &,  ij, m           ! combined horizontal indices
+      integer (kind=int_kind) :: &
+         i,j         , & ! horizontal indices
+         ij, m           ! combined horizontal indices
 
-      real  (kind=dbl_kind) ::
-     &   h13             ! hbL + 1/3 * (hbR - hbL)
-     &,  h23             ! hbL + 2/3 * (hbR - hbL)
-     &,  dhr             ! 1 / (hR - hL)
-     &,  wk1, wk2        ! temporary variables
+      real  (kind=dbl_kind) :: &
+         h13         , & ! hbL + 1/3 * (hbR - hbL)
+         h23         , & ! hbL + 2/3 * (hbR - hbL)
+         dhr         , & ! 1 / (hR - hL)
+         wk1, wk2        ! temporary variables
 
       !-----------------------------------------------------------------
       ! Compute g0, g1, hL, and hR for each category to be remapped.
@@ -842,115 +841,115 @@
 !
 ! !INTERFACE:
 !
-      subroutine add_new_ice (nx_block,  ny_block,
-     &                        icells,
-     &                        indxi,     indxj,
-     &                        tmask,     dt,
-     &                        aicen,     trcrn,
-     &                        vicen,     eicen,
-     &                        aice0,     aice,
-     &                        frzmlt,    frazil,
-     &                        frz_onset, yday,
-     &                        l_stop,
-     &                        istop,     jstop)
+      subroutine add_new_ice (nx_block,  ny_block, &
+                              icells,              &
+                              indxi,     indxj,    &
+                              tmask,     dt,       &
+                              aicen,     trcrn,    &
+                              vicen,     eicen,    &
+                              aice0,     aice,     &
+                              frzmlt,    frazil,   &
+                              frz_onset, yday,     &
+                              l_stop,              &
+                              istop,     jstop)
 !
 ! !USES:
 !
-      use ice_itd, only: hin_max, ilyr1, column_sum,
-     &                   column_conservation_check
+      use ice_itd, only: hin_max, ilyr1, column_sum, &
+                         column_conservation_check
 
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  icells              ! number of ice/ocean grid cells
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells                ! number of ice/ocean grid cells
 
-      integer (kind=int_kind), dimension (nx_block*ny_block),
-     &   intent(in) ::
-     &   indxi,  indxj          ! compressed i/j indices
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi,  indxj          ! compressed i/j indices
 
-      logical (kind=log_kind), dimension (nx_block,ny_block),
-     &    intent(in) ::
-     &   tmask     ! land/boundary mask, thickness (T-cell)
+      logical (kind=log_kind), dimension (nx_block,ny_block), &
+          intent(in) :: &
+         tmask     ! land/boundary mask, thickness (T-cell)
 
-      real (kind=dbl_kind), intent(in) ::
-     &   dt        ! time step (s)
+      real (kind=dbl_kind), intent(in) :: &
+         dt        ! time step (s)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
-     &   aice      ! total concentration of ice
-     &,  frzmlt    ! freezing/melting potential (W/m^2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         aice  , & ! total concentration of ice
+         frzmlt    ! freezing/melting potential (W/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),
-     &   intent(inout) ::
-     &   aicen     ! concentration of ice
-     &,  vicen     ! volume per unit area of ice          (m)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
+         intent(inout) :: &
+         aicen , & ! concentration of ice
+         vicen     ! volume per unit area of ice          (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat),
-     &   intent(inout) ::
-     &   trcrn     ! ice tracers
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
+         intent(inout) :: &
+         trcrn     ! ice tracers
                    ! 1: surface temperature
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr),
-     &   intent(inout) ::
-     &   eicen     ! energy of melting for each ice layer (J/m^2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
+         intent(inout) :: &
+         eicen     ! energy of melting for each ice layer (J/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(inout) ::
-     &   aice0     ! concentration of open water
-     &,  frazil    ! frazil ice growth        (m/step-->cm/day)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout) :: &
+         aice0 , & ! concentration of open water
+         frazil    ! frazil ice growth        (m/step-->cm/day)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(inout), optional ::
-     &   frz_onset ! day of year that freezing begins (congel or frazil)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout), optional :: &
+         frz_onset ! day of year that freezing begins (congel or frazil)
 
-      real (kind=dbl_kind), intent(in), optional ::
-     &   yday      ! day of year
+      real (kind=dbl_kind), intent(in), optional :: &
+         yday      ! day of year
 
-      logical (kind=log_kind), intent(out) ::
-     &   l_stop    ! if true, abort on return
+      logical (kind=log_kind), intent(out) :: &
+         l_stop    ! if true, abort on return
 
-      integer (kind=int_kind), intent(out) ::
-     &   istop, jstop    ! indices of grid cell where model aborts
+      integer (kind=int_kind), intent(out) :: &
+         istop, jstop    ! indices of grid cell where model aborts
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j             ! horizontal indices
-     &,  n                ! ice category index
-     &,  k                ! ice layer index
+      integer (kind=int_kind) :: &
+         i, j         , & ! horizontal indices
+         n            , & ! ice category index
+         k                ! ice layer index
 
-      real (kind=dbl_kind), dimension (icells) ::
-     &   ai0new           ! area of new ice added to cat 1
-     &,  vi0new           ! volume of new ice added to cat 1
-     &,  hsurp            ! thickness of new ice added to each cat
-     &,  vlyr             ! ice layer volume
+      real (kind=dbl_kind), dimension (icells) :: &
+         ai0new       , & ! area of new ice added to cat 1
+         vi0new       , & ! volume of new ice added to cat 1
+         hsurp        , & ! thickness of new ice added to each cat
+         vlyr             ! ice layer volume
 
-      real (kind=dbl_kind), dimension (icells) ::
-     &   vice_init, vice_final  ! ice volume summed over categories
+      real (kind=dbl_kind), dimension (icells) :: &
+         vice_init, vice_final  ! ice volume summed over categories
 
-      real (kind=dbl_kind) ::
-     &   fnew             ! heat flx to open water for new ice (W/m^2)
-     &,  hi0new           ! thickness of new ice
-     &,  hi0max           ! max allowed thickness of new ice
-     &,  qi0(nilyr)       ! frazil ice enthalpy
-     &,  qi0av            ! mean value of qi0 for new ice (J kg-1)
-     &,  vsurp            ! volume of new ice added to each cat
-     &,  area1            ! starting fractional area of existing ice
-     &,  rnilyr           ! real(nilyr)
-     &,  dfresh           ! change in fresh
-     &,  dfsalt           ! change in fsalt
+      real (kind=dbl_kind) :: &
+         fnew         , & ! heat flx to open water for new ice (W/m^2)
+         hi0new       , & ! thickness of new ice
+         hi0max       , & ! max allowed thickness of new ice
+         qi0(nilyr)   , & ! frazil ice enthalpy
+         qi0av        , & ! mean value of qi0 for new ice (J kg-1)
+         vsurp        , & ! volume of new ice added to each cat
+         area1        , & ! starting fractional area of existing ice
+         rnilyr       , & ! real(nilyr)
+         dfresh       , & ! change in fresh
+         dfsalt           ! change in fsalt
 
-      integer (kind=int_kind) ::
-     &   jcells, kcells         ! grid cell counters
-     &,  ij, m                  ! combined i/j horizontal indices
+      integer (kind=int_kind) :: &
+         jcells, kcells     , & ! grid cell counters
+         ij, m                  ! combined i/j horizontal indices
 
-      integer (kind=int_kind), dimension (icells) ::
-     &   indxij2,  indxij3      ! compressed i/j indices
-     &,  indxi2, indxj2
-     &,  indxi3, indxj3
+      integer (kind=int_kind), dimension (icells) :: &
+         indxij2,  indxij3  , & ! compressed i/j indices
+         indxi2, indxj2     , &
+         indxi3, indxj3
 
-      character (len=char_len) ::
-     &   fieldid           ! field identifier
+      character (len=char_len) :: &
+         fieldid           ! field identifier
 
       l_stop = .false.
       istop = 0
@@ -966,10 +965,10 @@
       endif
 
       ! initial ice volume in each grid cell
-      call column_sum (nx_block, ny_block,
-     &                 icells,   indxi,   indxj,
-     &                 ncat,
-     &                 vicen,    vice_init)
+      call column_sum (nx_block, ny_block,       &
+                       icells,   indxi,   indxj, &
+                       ncat,                     &
+                       vicen,    vice_init)
 
       !-----------------------------------------------------------------
       ! Compute average enthalpy of new ice.
@@ -1009,8 +1008,8 @@
          frazil(i,j) = vi0new(ij)
 
          if (present(frz_onset) .and. present(yday)) then
-            if (frazil(i,j) > puny .and. frz_onset(i,j) < puny)
-     &           frz_onset(i,j) = yday
+            if (frazil(i,j) > puny .and. frz_onset(i,j) < puny) &
+                 frz_onset(i,j) = yday
          endif
 
       !-----------------------------------------------------------------
@@ -1113,8 +1112,8 @@
                j = indxj3(ij)
                m = indxij3(ij)
 
-               eicen(i,j,ilyr1(n)+k-1) =
-     &              eicen(i,j,ilyr1(n)+k-1) + qi0(k)*vlyr(m)
+               eicen(i,j,ilyr1(n)+k-1) = &
+                    eicen(i,j,ilyr1(n)+k-1) + qi0(k)*vlyr(m)
             enddo               ! ij
          enddo                  ! k
 
@@ -1137,13 +1136,13 @@
          aicen(i,j,1) = aicen(i,j,1) + ai0new(m)
          aice0(i,j)   = aice0(i,j)   - ai0new(m)
          vicen(i,j,1) = vicen(i,j,1) + vi0new(m)
-         trcrn(i,j,1,1) = (Tocnfrz*ai0new(m) + trcrn(i,j,1,1)*area1)
-     &                / aicen(i,j,1)
+         trcrn(i,j,1,1) = (Tocnfrz*ai0new(m) + trcrn(i,j,1,1)*area1) &
+                      / aicen(i,j,1)
          trcrn(i,j,1,1) = min (trcrn(i,j,1,1), c0)
 
       ! For other tracers, do something like this:
-!         trcrn(i,j,99,1) = (tnew(i,j)*ai0new(m) + trcrn(i,j,99,1)*area1)
-!     &                   / aicen(i,j,1)
+!         trcrn(i,j,99,1) = (tnew(i,j)*ai0new(m) + trcrn(i,j,99,1)*area1) &
+!                         / aicen(i,j,1)
 
          vlyr(m)    = vi0new(m) / rnilyr
       enddo                     ! ij
@@ -1160,18 +1159,18 @@
          enddo
       enddo
 
-      call column_sum (nx_block, ny_block,
-     &                 icells,   indxi,   indxj,
-     &                 ncat,
-     &                 vicen,    vice_final)
+      call column_sum (nx_block, ny_block,       &
+                       icells,   indxi,   indxj, &
+                       ncat,                     &
+                       vicen,    vice_final)
 
       fieldid = 'vice, add_new_ice'
-      call column_conservation_check (nx_block,  ny_block,
-     &                                icells,   indxi,   indxj,
-     &                                fieldid,
-     &                                vice_init, vice_final,
-     &                                puny,      l_stop,
-     &                                istop,     jstop)
+      call column_conservation_check (nx_block,  ny_block,      &
+                                      icells,   indxi,   indxj, &
+                                      fieldid,                  &
+                                      vice_init, vice_final,    &
+                                      puny,      l_stop,        &
+                                      istop,     jstop)
       if (l_stop) return
 
       end subroutine add_new_ice
@@ -1193,15 +1192,15 @@
 !
 ! !INTERFACE:
 !
-      subroutine lateral_melt (nx_block,   ny_block,
-     &                         nghost,     dt,
-     &                         fresh,      fsalt,
-     &                         fhocn,      fresh_hist,
-     &                         fsalt_hist, fhocn_hist,
-     &                         rside,      meltl,
-     &                         aicen,      vicen,
-     &                         vsnon,      eicen,
-     &                         esnon)
+      subroutine lateral_melt (nx_block,   ny_block,   &
+                               nghost,     dt,         &
+                               fresh,      fsalt,      &
+                               fhocn,      fresh_hist, &
+                               fsalt_hist, fhocn_hist, &
+                               rside,      meltl,      &
+                               aicen,      vicen,      &
+                               vsnon,      eicen,      &
+                               esnon)
 !
 ! !USES:
 !
@@ -1209,57 +1208,57 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         nghost                ! number of ghost cells
 
-      real (kind=dbl_kind), intent(in) ::
-     &   dt        ! time step (s)
+      real (kind=dbl_kind), intent(in) :: &
+         dt        ! time step (s)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),
-     &   intent(inout) ::
-     &   aicen       ! concentration of ice
-     &,  vicen       ! volume per unit area of ice          (m)
-     &,  vsnon       ! volume per unit area of snow         (m)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
+         intent(inout) :: &
+         aicen   , & ! concentration of ice
+         vicen   , & ! volume per unit area of ice          (m)
+         vsnon       ! volume per unit area of snow         (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr),
-     &   intent(inout) ::
-     &   eicen     ! energy of melting for each ice layer (J/m^2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
+         intent(inout) :: &
+         eicen     ! energy of melting for each ice layer (J/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr),
-     &   intent(inout) ::
-     &   esnon     ! energy of melting for each snow layer (J/m^2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), &
+         intent(inout) :: &
+         esnon     ! energy of melting for each snow layer (J/m^2)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
-     &   rside       ! fraction of ice that melts laterally
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
+         rside     ! fraction of ice that melts laterally
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block),
-     &   intent(inout) ::
-     &   fresh       ! fresh water flux to ocean (kg/m^2/s)
-     &,  fsalt       ! salt flux to ocean (kg/m^2/s)
-     &,  fhocn       ! net heat flux to ocean (W/m^2)
-     &,  fresh_hist  ! fresh water flux to ocean (kg/m^2/s)
-     &,  fsalt_hist  ! salt flux to ocean (kg/m^2/s)
-     &,  fhocn_hist  ! net heat flux to ocean (W/m^2)
-     &,  meltl       ! lateral ice melt         (m/step-->cm/day)
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(inout) :: &
+         fresh     , & ! fresh water flux to ocean (kg/m^2/s)
+         fsalt     , & ! salt flux to ocean (kg/m^2/s)
+         fhocn     , & ! net heat flux to ocean (W/m^2)
+         fresh_hist, & ! fresh water flux to ocean (kg/m^2/s)
+         fsalt_hist, & ! salt flux to ocean (kg/m^2/s)
+         fhocn_hist, & ! net heat flux to ocean (W/m^2)
+         meltl         ! lateral ice melt         (m/step-->cm/day)
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j            ! horizontal indices
-     &,  n               ! thickness category index
-     &,  k               ! layer index
-     &,  ilo,ihi,jlo,jhi ! beginning and end of physical domain
-     &,  ij              ! horizontal index, combines i and j loops
-     &,  icells          ! number of cells with aice > puny
+      integer (kind=int_kind) :: &
+         i, j        , & ! horizontal indices
+         n           , & ! thickness category index
+         k           , & ! layer index
+         ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
+         ij          , & ! horizontal index, combines i and j loops
+         icells          ! number of cells with aice > puny
 
-      integer (kind=int_kind), dimension(nx_block*ny_block) ::
-     &   indxi, indxj    ! compressed indices for cells with aice > puny
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
+         indxi, indxj    ! compressed indices for cells with aice > puny
 
-      real (kind=dbl_kind) ::
-     &   dfhocn      ! change in fhocn
-     &,  dfresh      ! change in fresh
-     &,  dfsalt      ! change in fsalt
+      real (kind=dbl_kind) :: &
+         dfhocn  , & ! change in fhocn
+         dfresh  , & ! change in fresh
+         dfsalt      ! change in fsalt
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
@@ -1297,10 +1296,10 @@
             ! fluxes to coupler
             ! dfresh > 0, dfsalt > 0
 
-            dfresh = (rhos*vsnon(i,j,n) + rhoi*vicen(i,j,n))
-     &             * rside(i,j) / dt
-            dfsalt = rhoi*vicen(i,j,n)*ice_ref_salinity*p001
-     &             * rside(i,j) / dt
+            dfresh = (rhos*vsnon(i,j,n) + rhoi*vicen(i,j,n)) &
+                   * rside(i,j) / dt
+            dfsalt = rhoi*vicen(i,j,n)*ice_ref_salinity*p001 &
+                   * rside(i,j) / dt
 
             fresh(i,j)      = fresh(i,j)      + dfresh
             fresh_hist(i,j) = fresh_hist(i,j) + dfresh
@@ -1333,8 +1332,8 @@
                fhocn_hist(i,j) = fhocn_hist(i,j) + dfhocn
 
                ! ice energy
-               eicen(i,j,ilyr1(n)+k-1) = eicen(i,j,ilyr1(n)+k-1)
-     &                                 * (c1 - rside(i,j))
+               eicen(i,j,ilyr1(n)+k-1) = eicen(i,j,ilyr1(n)+k-1) &
+                                       * (c1 - rside(i,j))
             enddo               ! ij
          enddo                  ! nilyr
 
@@ -1353,8 +1352,8 @@
                fhocn_hist(i,j) = fhocn_hist(i,j) + dfhocn
 
                ! snow energy
-               esnon(i,j,slyr1(n)+k-1) = esnon(i,j,slyr1(n)+k-1)
-     &                                 * (c1 - rside(i,j))
+               esnon(i,j,slyr1(n)+k-1) = esnon(i,j,slyr1(n)+k-1) &
+                                       * (c1 - rside(i,j))
             enddo               ! ij
          enddo                  ! nslyr
 

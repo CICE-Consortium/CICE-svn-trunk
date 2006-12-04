@@ -19,6 +19,7 @@
 ! 2006 WHL: Module name changed from ice_flux_in
 ! 2006 ECH: Fixed bugs, rearranged routines, edited comments, etc.
 !           Added NCAR ocean forcing file
+!           Converted to free source form (F90)
 !
 ! !INTERFACE:
 !
@@ -31,8 +32,8 @@
       use ice_domain_size
       use ice_communicate, only: my_task, master_task
       use ice_constants
-      use ice_calendar, only: istep, istep1, time, time_forc, year_init,
-     &                        sec, mday, month, nyr, yday, daycal
+      use ice_calendar, only: istep, istep1, time, time_forc, year_init, &
+                              sec, mday, month, nyr, yday, daycal
       use ice_fileunits
       use ice_exit
 !
@@ -41,81 +42,81 @@
       implicit none
       save
 
-      integer (kind=int_kind) ::
-     &   ycycle              ! number of years in forcing cycle
-     &,  fyear_init          ! first year of data in forcing cycle
-     &,  fyear               ! current year in forcing cycle
-     &,  fyear_final         ! last year in cycle
+      integer (kind=int_kind) :: &
+         ycycle          , & ! number of years in forcing cycle
+         fyear_init      , & ! first year of data in forcing cycle
+         fyear           , & ! current year in forcing cycle
+         fyear_final         ! last year in cycle
 
-      character (char_len_long) ::        ! input data file names
-     &   height_file
-     &,   uwind_file
-     &,   vwind_file
-     &,    potT_file
-     &,    tair_file
-     &,   humid_file
-     &,    rhoa_file
-     &,     fsw_file
-     &,     flw_file
-     &,    rain_file
-     &,     sst_file
-     &,     sss_file
+      character (char_len_long) :: &        ! input data file names
+         height_file, &
+          uwind_file, &
+          vwind_file, &
+           potT_file, &
+           tair_file, &
+          humid_file, &
+           rhoa_file, &
+            fsw_file, &
+            flw_file, &
+           rain_file, &
+            sst_file, &
+            sss_file
 
-      real (kind=dbl_kind) ::
-     &     c1intp, c2intp     ! interpolation coefficients
-     &,    ftime              ! forcing time (for restart)
+      real (kind=dbl_kind) :: &
+           c1intp, c2intp , & ! interpolation coefficients
+           ftime              ! forcing time (for restart)
 
-      integer (kind=int_kind) ::
-     &     oldrecnum = 0      ! old record number (save between steps)
-     &,    oldrecslot = 1     ! old record slot (save between steps)
+      integer (kind=int_kind) :: &
+           oldrecnum = 0  , & ! old record number (save between steps)
+           oldrecslot = 1     ! old record slot (save between steps)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) ::
-     &    cldf                ! cloud fraction
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
+          cldf                ! cloud fraction
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks) ::
-     &      fsw_data      ! field values at 2 temporal data points
-     &,    cldf_data
-     &,   fsnow_data
-     &,    Tair_data
-     &,    uatm_data
-     &,    vatm_data
-     &,      Qa_data
-     &,    rhoa_data
-     &,    potT_data
-     &,    zlvl_data
-     &,     flw_data
-     &,     sst_data
-     &,     sss_data
+      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks) :: &
+            fsw_data, & ! field values at 2 temporal data points
+           cldf_data, &
+          fsnow_data, &
+           Tair_data, &
+           uatm_data, &
+           vatm_data, &
+             Qa_data, &
+           rhoa_data, &
+           potT_data, &
+           zlvl_data, &
+            flw_data, &
+            sst_data, &
+            sss_data
 
-      character(char_len) :: 
-     &   atm_data_type    ! 'default', 'ncar', 'ecmwf', or 'LYq'
-     &,  sss_data_type    ! 'default', 'clim', or 'ncar'
-     &,  sst_data_type    ! 'default', 'clim', or 'ncar'
-     &,  precip_units     ! 'mm_per_month', 'mm_per_sec', 'mks'
+      character(char_len) :: & 
+         atm_data_type, & ! 'default', 'ncar', 'ecmwf', or 'LYq'
+         sss_data_type, & ! 'default', 'clim', or 'ncar'
+         sst_data_type, & ! 'default', 'clim', or 'ncar'
+         precip_units     ! 'mm_per_month', 'mm_per_sec', 'mks'
  
-      character(char_len_long) :: 
-     &   atm_data_dir     ! top directory for atmospheric data
-     &,  ocn_data_dir     ! top directory for ocean data
-     &,  oceanmixed_file  ! netCDF file name for ocean forcing data
+      character(char_len_long) :: & 
+         atm_data_dir , & ! top directory for atmospheric data
+         ocn_data_dir , & ! top directory for ocean data
+         oceanmixed_file  ! netCDF file name for ocean forcing data
 
-      integer (kind=int_kind), parameter :: 
-     &   nfld = 8    ! number of fields to search for in netCDF file
+      integer (kind=int_kind), parameter :: & 
+         nfld = 8    ! number of fields to search for in netCDF file
 
-      real (kind=dbl_kind), 
-     & dimension (nx_block,ny_block,max_blocks,nfld,12) :: 
-     &   ocn_frc_m   ! ocn data for 12 months
+      real (kind=dbl_kind), &
+       dimension (nx_block,ny_block,max_blocks,nfld,12) :: & 
+         ocn_frc_m   ! ocn data for 12 months
 
-      logical (kind=log_kind) ::
-     &   restore_sst                 ! restore sst if true
+      logical (kind=log_kind) :: &
+         restore_sst                 ! restore sst if true
 
-      integer (kind=int_kind) ::
-     &   trestore                    ! restoring time scale (days)
+      integer (kind=int_kind) :: &
+         trestore                    ! restoring time scale (days)
 
-      real (kind=dbl_kind) :: 
-     &   trest                       ! restoring time scale (sec)
+      real (kind=dbl_kind) :: & 
+         trest                       ! restoring time scale (sec)
 
-      logical (kind=log_kind) ::
-     &   dbug             ! prints debugging output if true
+      logical (kind=log_kind) :: &
+         dbug             ! prints debugging output if true
 
 !=======================================================================
 
@@ -149,8 +150,8 @@
       fyear       = fyear_init + mod(nyr-1,ycycle) ! current year
       fyear_final = fyear_init + ycycle - 1 ! last year in forcing cycle
 
-      if (trim(atm_data_type) /= 'default' .and.
-     &                    my_task == master_task) then
+      if (trim(atm_data_type) /= 'default' .and. &
+                          my_task == master_task) then
          write (nu_diag,*) ' Initial forcing data year = ',fyear_init
          write (nu_diag,*) ' Final   forcing data year = ',fyear_final
       endif
@@ -204,15 +205,15 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), intent(in) ::
-     &     dt                   ! time step
+      real (kind=dbl_kind), intent(in) :: &
+           dt                   ! time step
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &     i, j, iblk           ! horizontal indices
-     &,    k                    ! month index
-     &,    nbits
+      integer (kind=int_kind) :: &
+           i, j, iblk       , & ! horizontal indices
+           k                , & ! month index
+           nbits
 
       nbits = 64                ! double precision data
 
@@ -233,8 +234,8 @@
             write (nu_diag,*) trim(sss_file)
          endif
 
-         if (my_task == master_task)
-     &        call ice_open (nu_forcing, sss_file, nbits)
+         if (my_task == master_task) &
+              call ice_open (nu_forcing, sss_file, nbits)
 
          sss(:,:,:) = c0
 
@@ -292,8 +293,8 @@
             write (nu_diag,*) 'Initial SST file:', trim(sst_file)
          endif
 
-         if (my_task == master_task)
-     &        call ice_open (nu_forcing, sst_file, nbits)
+         if (my_task == master_task) &
+              call ice_open (nu_forcing, sst_file, nbits)
 
          call ice_read (nu_forcing, month, sst, 'rda8', dbug)
 
@@ -310,16 +311,16 @@
 
       endif                     ! init_sst_data
 
-      if (trim(sst_data_type) == 'ncar' .or. 
-     &    trim(sss_data_type) == 'ncar') then
+      if (trim(sst_data_type) == 'ncar' .or.  &
+          trim(sss_data_type) == 'ncar') then
          call ocn_data_ncar_init
       endif
 
       ! set ustar_scale for case of zero currents
       ! default value of c1 (for nonzero currents) set in init_thermo_vertical
 
-      if (trim(sst_data_type) /= 'ncar' .or. 
-     &    trim(sss_data_type) /= 'ncar') then
+      if (trim(sst_data_type) /= 'ncar' .or.  &
+          trim(sss_data_type) /= 'ncar') then
          ustar_scale = c10            ! for zero currents
       endif
 
@@ -352,12 +353,12 @@
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   iblk                 ! block index
+      integer (kind=int_kind) :: &
+         iblk                 ! block index
 
       fyear = fyear_init + mod(nyr-1,ycycle)  ! current year
-      if (trim(atm_data_type) /= 'default' .and. istep <= 1
-     &             .and. my_task == master_task) then
+      if (trim(atm_data_type) /= 'default' .and. istep <= 1 &
+                   .and. my_task == master_task) then
          write (nu_diag,*) ' Current forcing data year = ',fyear
       endif
 
@@ -383,30 +384,30 @@
     ! Convert forcing data to fields needed by ice model
     !-------------------------------------------------------------------
 
-         call prepare_forcing (nx_block,  ny_block,
-     &                         nghost,
-     &                         hm    (:,:,iblk),
-     &                         Tair  (:,:,iblk),
-     &                         fsw   (:,:,iblk),     
-     &                         cldf  (:,:,iblk),
-     &                         flw   (:,:,iblk),
-     &                         frain (:,:,iblk),
-     &                         fsnow (:,:,iblk),
-     &                         Qa    (:,:,iblk),
-     &                         rhoa  (:,:,iblk),
-     &                         uatm  (:,:,iblk),
-     &                         vatm  (:,:,iblk),
-     &                         zlvl  (:,:,iblk),
-     &                         wind  (:,:,iblk),
-     &                         swvdr (:,:,iblk),
-     &                         swvdf (:,:,iblk),
-     &                         swidr (:,:,iblk),
-     &                         swidf (:,:,iblk),
-     &                         potT  (:,:,iblk),
-     &                         ANGLET(:,:,iblk), 
-     &                         trcr  (:,:,1,iblk),
-     &                         sst   (:,:,iblk),
-     &                         aice  (:,:,iblk) )
+         call prepare_forcing (nx_block, ny_block, &
+                               nghost,             &
+                               hm    (:,:,iblk),   &
+                               Tair  (:,:,iblk),   &
+                               fsw   (:,:,iblk),   &   
+                               cldf  (:,:,iblk),   &
+                               flw   (:,:,iblk),   &
+                               frain (:,:,iblk),   &
+                               fsnow (:,:,iblk),   &
+                               Qa    (:,:,iblk),   &
+                               rhoa  (:,:,iblk),   &
+                               uatm  (:,:,iblk),   &
+                               vatm  (:,:,iblk),   &
+                               zlvl  (:,:,iblk),   &
+                               wind  (:,:,iblk),   &
+                               swvdr (:,:,iblk),   &
+                               swvdf (:,:,iblk),   &
+                               swidr (:,:,iblk),   &
+                               swidf (:,:,iblk),   &
+                               potT  (:,:,iblk),   &
+                               ANGLET(:,:,iblk),   &
+                               trcr  (:,:,1,iblk), &
+                               sst   (:,:,iblk),   &
+                               aice  (:,:,iblk) )
 
       enddo                     ! iblk
 
@@ -438,16 +439,16 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), intent(in) ::
-     &   dt      ! time step
+      real (kind=dbl_kind), intent(in) :: &
+         dt      ! time step
 !
 !EOP
 !
-      if (trim(sst_data_type) == 'clim' .or. 
-     &    trim(sss_data_type) == 'clim') then
+      if (trim(sst_data_type) == 'clim' .or.  &
+          trim(sss_data_type) == 'clim') then
          call ocn_data_clim(dt)
-      elseif (trim(sst_data_type) == 'ncar' .or. 
-     &        trim(sss_data_type) == 'ncar') then
+      elseif (trim(sst_data_type) == 'ncar' .or.  &
+              trim(sss_data_type) == 'ncar') then
          call ocn_data_ncar(dt)      
       endif
 
@@ -461,8 +462,8 @@
 !
 ! !INTERFACE:
 !
-      subroutine read_data (flag, recd, yr, ixm, ixx, ixp,
-     &                      maxrec, data_file, field_data)
+      subroutine read_data (flag, recd, yr, ixm, ixx, ixp, &
+                            maxrec, data_file, field_data)
 !
 ! !DESCRIPTION:
 !
@@ -495,28 +496,28 @@
 !
       logical (kind=log_kind), intent(in) :: flag
 
-      integer (kind=int_kind), intent(in) ::
-     &   recd                    ! baseline record number
-     &,  yr                      ! year of forcing data
-     &,  ixm, ixx, ixp           ! record numbers of 3 data values
+      integer (kind=int_kind), intent(in) :: &
+         recd                , & ! baseline record number
+         yr                  , & ! year of forcing data
+         ixm, ixx, ixp       , & ! record numbers of 3 data values
                                  ! relative to recd
-     &,  maxrec                  ! maximum record value
+         maxrec                  ! maximum record value
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks),
-     &   intent(out) ::
-     &   field_data              ! 2 values needed for interpolation
+      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
+         intent(out) :: &
+         field_data              ! 2 values needed for interpolation
 !
 !EOP
 !
-      character (char_len_long) ::
-     &   data_file               ! data file to be read
+      character (char_len_long) :: &
+         data_file               ! data file to be read
 
-      integer (kind=int_kind) ::
-     &   nbits                ! = 32 for single precision, 64 for double
-     &,  nrec                 ! record number to read
-     &,  n2, n4               ! like ixm and ixp, but
+      integer (kind=int_kind) :: &
+         nbits            , & ! = 32 for single precision, 64 for double
+         nrec             , & ! record number to read
+         n2, n4           , & ! like ixm and ixp, but
                               ! adjusted at beginning and end of data
-     &,  arg                  ! value of time argument in field_data
+         arg                  ! value of time argument in field_data
 
       nbits = 64              ! double precision data
 
@@ -558,8 +559,8 @@
 
             arg = 1
             nrec = recd + n2
-            call ice_read (nu_forcing, nrec, field_data(:,:,arg,:),
-     &                     'rda8', dbug)
+            call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
+                           'rda8', dbug)
             if (ixx==1 .and. my_task == master_task) close(nu_forcing)
          endif                  ! ixm ne 99
 
@@ -569,8 +570,8 @@
 
          arg = arg + 1
          nrec = recd + ixx
-         call ice_read (nu_forcing, nrec, field_data(:,:,arg,:),
-     &                  'rda8', dbug)
+         call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
+                        'rda8', dbug)
 
          if (ixp /= 99) then
          ! currently in latter half of data interval
@@ -592,8 +593,8 @@
 
             arg = arg + 1
             nrec = recd + n4
-            call ice_read (nu_forcing, nrec, field_data(:,:,arg,:),
-     &                     'rda8', dbug)
+            call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
+                           'rda8', dbug)
          endif                  ! ixp /= 99
 
          if (my_task == master_task) close(nu_forcing)
@@ -610,8 +611,8 @@
 !
 ! !INTERFACE:
 !
-      subroutine read_clim_data (readflag, recd, ixm, ixx, ixp,
-     &                           data_file, field_data)
+      subroutine read_clim_data (readflag, recd, ixm, ixx, ixp, &
+                                 data_file, field_data)
 !
 ! !DESCRIPTION:
 !
@@ -633,30 +634,30 @@
 !
       logical (kind=log_kind),intent(in) :: readflag
 
-      integer (kind=int_kind), intent(in) ::
-     &  recd                ! baseline record number
-     &, ixm,ixx,ixp         ! record numbers of 3 data values
+      integer (kind=int_kind), intent(in) :: &
+        recd            , & ! baseline record number
+        ixm,ixx,ixp         ! record numbers of 3 data values
                             ! relative to recd
 
       character (char_len_long), intent(in) ::  data_file
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks),
-     &  intent(out) ::
-     &  field_data         ! 2 values needed for interpolation
+      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
+        intent(out) :: &
+        field_data         ! 2 values needed for interpolation
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &  nbits              ! = 32 for single precision, 64 for double
-     &, nrec               ! record number to read
-     &, arg                ! value of time argument in field_data
+      integer (kind=int_kind) :: &
+        nbits          , & ! = 32 for single precision, 64 for double
+        nrec           , & ! record number to read
+        arg                ! value of time argument in field_data
 
       nbits = 64                ! double precision data
 
       if (istep1 > check_step) dbug = .true.  !! debugging
 
-      if (my_task==master_task .and. (dbug))
-     &  write(nu_diag,*) '  ', trim(data_file)
+      if (my_task==master_task .and. (dbug)) &
+        write(nu_diag,*) '  ', trim(data_file)
 
       if (readflag) then
 
@@ -670,20 +671,20 @@
          if (ixm /= 99) then
             arg = 1
             nrec = recd + ixm
-            call ice_read (nu_forcing, nrec, field_data(:,:,arg,:),
-     &                     'rda8', dbug)
+            call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
+                           'rda8', dbug)
          endif
 
          arg = arg + 1
          nrec = recd + ixx
-         call ice_read (nu_forcing, nrec, field_data(:,:,arg,:),
-     &                  'rda8', dbug)
+         call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
+                        'rda8', dbug)
 
          if (ixp /= 99) then
             arg = arg + 1
             nrec = recd + ixp
-            call ice_read (nu_forcing, nrec, field_data(:,:,arg,:),
-     &                     'rda8', dbug)
+            call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
+                           'rda8', dbug)
          endif
 
          if (my_task == master_task) close (nu_forcing)
@@ -713,17 +714,17 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &    recslot         ! slot (1 or 2) for current record
+      integer (kind=int_kind), intent(in) :: &
+          recslot         ! slot (1 or 2) for current record
 !
 !EOP
 !
-      real (kind=dbl_kind) ::
-     &    tt               ! seconds elapsed in current year
-     &,   t1, t2           ! seconds elapsed at month midpoint
+      real (kind=dbl_kind) :: &
+          tt           , & ! seconds elapsed in current year
+          t1, t2           ! seconds elapsed at month midpoint
 
-      real (kind=dbl_kind) ::
-     &    daymid(0:13)     ! month mid-points
+      real (kind=dbl_kind) :: &
+          daymid(0:13)     ! month mid-points
 
       daymid(1:13) = 14._dbl_kind   ! time frame ends 0 sec into day 15
       daymid(0)    = -17._dbl_kind  ! Dec 15, 0 sec
@@ -774,26 +775,26 @@
 !
 ! !USES:
 !
-      integer (kind=int_kind), intent(in) ::
-     &    recnum          ! record number for current data value
-     &,   recslot         ! spline slot for current record
-     &,   dataloc         ! = 1 for data located in middle of time interval
+      integer (kind=int_kind), intent(in) :: &
+          recnum      , & ! record number for current data value
+          recslot     , & ! spline slot for current record
+          dataloc         ! = 1 for data located in middle of time interval
                           ! = 2 for date located at end of time interval
 
-      real (kind=dbl_kind), intent(in) ::
-     &    secint                    ! seconds in data interval
+      real (kind=dbl_kind), intent(in) :: &
+          secint                    ! seconds in data interval
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
 !
-      real (kind=dbl_kind), parameter ::
-     &    secyr = c365 * secday     ! seconds in a 365-day year
+      real (kind=dbl_kind), parameter :: &
+          secyr = c365 * secday     ! seconds in a 365-day year
 
-      real (kind=dbl_kind) ::
-     &    tt               ! seconds elapsed in current year
-     &,   t1, t2           ! seconds elapsed at data points
-     &,   rcnum            ! recnum => dbl_kind
+      real (kind=dbl_kind) :: &
+          tt           , & ! seconds elapsed in current year
+          t1, t2       , & ! seconds elapsed at data points
+          rcnum            ! recnum => dbl_kind
 
       tt = mod(ftime,secyr)
 
@@ -844,13 +845,13 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks),
-     &  intent(in) ::
-     &  field_data    ! 2 values used for interpolation
+      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
+        intent(in) :: &
+        field_data    ! 2 values used for interpolation
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks),
-     &  intent(out) ::
-     &  field         ! interpolated field
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
+        intent(out) :: &
+        field         ! interpolated field
 !
 !EOP
 !
@@ -859,8 +860,8 @@
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
-            field(i,j,iblk) = c1intp * field_data(i,j,1,iblk)
-     &                      + c2intp * field_data(i,j,2,iblk)
+            field(i,j,iblk) = c1intp * field_data(i,j,1,iblk) &
+                            + c2intp * field_data(i,j,2,iblk)
          enddo
          enddo
       enddo
@@ -914,7 +915,7 @@
 
       end subroutine file_year
 
-c=======================================================================
+!=======================================================================
 !
 !BOP
 !
@@ -922,19 +923,19 @@ c=======================================================================
 !
 ! !INTERFACE:
 !
-      subroutine prepare_forcing (nx_block, ny_block,
-     &                            nghost,   hm,
-     &                            Tair,     fsw,     
-     &                            cldf,     flw,
-     &                            frain,    fsnow,
-     &                            Qa,       rhoa,
-     &                            uatm,     vatm,
-     &                            zlvl,     wind,
-     &                            swvdr,    swvdf,
-     &                            swidr,    swidf,
-     &                            potT,     ANGLET,
-     &                            Tsfc,     sst,
-     &                            aice)
+      subroutine prepare_forcing (nx_block, ny_block, &
+                                  nghost,   hm,       &
+                                  Tair,     fsw,      &    
+                                  cldf,     flw,      &
+                                  frain,    fsnow,    &
+                                  Qa,       rhoa,     &
+                                  uatm,     vatm,     &
+                                  zlvl,     wind,     &
+                                  swvdr,    swvdf,    &
+                                  swidr,    swidf,    &
+                                  potT,     ANGLET,   &
+                                  Tsfc,     sst,      &
+                                  aice)
 !
 ! !DESCRIPTION:
 !
@@ -946,52 +947,52 @@ c=======================================================================
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block ! block dimensions
-     &,  nghost             ! number of ghost cells
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         nghost                ! number of ghost cells
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
-     &   Tair        ! air temperature  (K)
-     &,  ANGLET      ! ANGLE converted to T-cells
-     &,  Tsfc        ! ice skin temperature
-     &,  sst         ! sea surface temperature
-     &,  aice        ! ice area fraction
-     &,  hm          ! land mask
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
+         Tair    , & ! air temperature  (K)
+         ANGLET  , & ! ANGLE converted to T-cells
+         Tsfc    , & ! ice skin temperature
+         sst     , & ! sea surface temperature
+         aice    , & ! ice area fraction
+         hm          ! land mask
      
-      real (kind=dbl_kind), dimension(nx_block,ny_block),
-     &   intent(inout) ::
-     &   fsw         ! incoming shortwave radiation (W/m^2)
-     &,  cldf        ! cloud fraction
-     &,  frain       ! rainfall rate (kg/m^2 s)
-     &,  fsnow       ! snowfall rate (kg/m^2 s)
-     &,  Qa          ! specific humidity (kg/kg)
-     &,  rhoa        ! air density (kg/m^3)
-     &,  uatm        ! wind speed (m/s)
-     &,  vatm
-     &,  zlvl        ! atm level height (m)
-     &,  wind        ! wind speed (m/s)
-     &,  flw         ! incoming longwave radiation (W/m^2)
-     &,  swvdr       ! sw down, visible, direct  (W/m^2)
-     &,  swvdf       ! sw down, visible, diffuse (W/m^2)
-     &,  swidr       ! sw down, near IR, direct  (W/m^2)
-     &,  swidf       ! sw down, near IR, diffuse (W/m^2)
-     &,  potT        ! air potential temperature  (K)
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(inout) :: &
+         fsw     , & ! incoming shortwave radiation (W/m^2)
+         cldf    , & ! cloud fraction
+         frain   , & ! rainfall rate (kg/m^2 s)
+         fsnow   , & ! snowfall rate (kg/m^2 s)
+         Qa      , & ! specific humidity (kg/kg)
+         rhoa    , & ! air density (kg/m^3)
+         uatm    , & ! wind speed (m/s)
+         vatm    , &
+         zlvl    , & ! atm level height (m)
+         wind    , & ! wind speed (m/s)
+         flw     , & ! incoming longwave radiation (W/m^2)
+         swvdr   , & ! sw down, visible, direct  (W/m^2)
+         swvdf   , & ! sw down, visible, diffuse (W/m^2)
+         swidr   , & ! sw down, near IR, direct  (W/m^2)
+         swidf   , & ! sw down, near IR, diffuse (W/m^2)
+         potT        ! air potential temperature  (K)
 
       ! as in the dummy atm (latm)
-      real (kind=dbl_kind), parameter ::
-     &   frcvdr = 0.28_dbl_kind ! frac of incoming sw in vis direct band
-     &,  frcvdf = 0.24_dbl_kind ! frac of incoming sw in vis diffuse band
-     &,  frcidr = 0.31_dbl_kind ! frac of incoming sw in near IR direct band
-     &,  frcidf = 0.17_dbl_kind ! frac of incoming sw in near IR diffuse band
+      real (kind=dbl_kind), parameter :: &
+         frcvdr = 0.28_dbl_kind, & ! frac of incoming sw in vis direct band
+         frcvdf = 0.24_dbl_kind, & ! frac of incoming sw in vis diffuse band
+         frcidr = 0.31_dbl_kind, & ! frac of incoming sw in near IR direct band
+         frcidf = 0.17_dbl_kind    ! frac of incoming sw in near IR diffuse band
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j
-     &,  ilo,ihi,jlo,jhi    ! beginning and end of physical domain
+      integer (kind=int_kind) :: &
+         i, j, &
+         ilo,ihi,jlo,jhi    ! beginning and end of physical domain
 
-      real (kind=dbl_kind) :: workx, worky
-     &,  fcc, sstk, rtea, ptem, qlwm
+      real (kind=dbl_kind) :: workx, worky, &
+         fcc, sstk, rtea, ptem, qlwm
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
@@ -1033,10 +1034,10 @@ c=======================================================================
       ! (for now)
       !-----------------------------------------------------------------
 
-            flw(i,j) = stefan_boltzmann*Tair(i,j)**4
-     &               * (c1 - 0.261_dbl_kind
-     &                *exp(-7.77e-4_dbl_kind*(Tffresh - Tair(i,j))**2))
-     &               * (c1 + 0.275_dbl_kind*cldf(i,j))
+            flw(i,j) = stefan_boltzmann*Tair(i,j)**4 &
+                     * (c1 - 0.261_dbl_kind &
+                      *exp(-7.77e-4_dbl_kind*(Tffresh - Tair(i,j))**2)) &
+                     * (c1 + 0.275_dbl_kind*cldf(i,j))
 
       ! precip is in mm/month; converted to mks below
 
@@ -1059,10 +1060,10 @@ c=======================================================================
       ! (for now)
       !-----------------------------------------------------------------
 
-         flw(i,j) = stefan_boltzmann*Tair(i,j)**4
-     &            * (c1 - 0.261_dbl_kind
-     &             *exp(-7.77e-4_dbl_kind*(Tffresh - Tair(i,j))**2))
-     &            * (c1 + 0.275_dbl_kind*cldf(i,j))
+         flw(i,j) = stefan_boltzmann*Tair(i,j)**4 &
+                  * (c1 - 0.261_dbl_kind &
+                   *exp(-7.77e-4_dbl_kind*(Tffresh - Tair(i,j))**2)) &
+                  * (c1 + 0.275_dbl_kind*cldf(i,j))
 
       ! precip is in mm/month; converted to mks below
 
@@ -1075,14 +1076,14 @@ c=======================================================================
          do j = jlo, jhi
          do i = ilo, ihi
             fcc = c1 - 0.8_dbl_kind * cldf(i,j)
-            sstk = (Tsfc(i,j) * aice(i,j)
-     &           + sst(i,j) * (c1 - aice(i,j))) + Tffresh
-            rtea = sqrt(c1000*Qa(i,j) / 
-     &            (0.622_dbl_kind+0.378_dbl_kind*Qa(i,j)))
+            sstk = (Tsfc(i,j) * aice(i,j) &
+                 + sst(i,j) * (c1 - aice(i,j))) + Tffresh
+            rtea = sqrt(c1000*Qa(i,j) /  &
+                  (0.622_dbl_kind+0.378_dbl_kind*Qa(i,j)))
             ptem = Tair(i,j)    ! get this from stability?
-            qlwm = ptem * ptem * ptem 
-     &           * ( ptem*(0.39_dbl_kind-0.05_dbl_kind*rtea)*fcc 
-     &                                + c4*(sstk-ptem) )
+            qlwm = ptem * ptem * ptem  &
+                 * ( ptem*(0.39_dbl_kind-0.05_dbl_kind*rtea)*fcc  &
+                                      + c4*(sstk-ptem) )
             flw(i,j) = emissivity*stefan_boltzmann * ( sstk**4 - qlwm )
             flw(i,j) = flw(i,j) * hm(i,j) ! land mask
          enddo
@@ -1134,10 +1135,10 @@ c=======================================================================
       !-----------------------------------------------------------------
          workx      = uatm(i,j) ! wind velocity, m/s
          worky      = vatm(i,j)
-         uatm (i,j) = workx*cos(ANGLET(i,j)) ! convert to POP grid
-     &              + worky*sin(ANGLET(i,j)) ! note uatm, vatm, wind
-         vatm (i,j) = worky*cos(ANGLET(i,j)) !  are on the T-grid here
-     &              - workx*sin(ANGLET(i,j))
+         uatm (i,j) = workx*cos(ANGLET(i,j)) & ! convert to POP grid
+                    + worky*sin(ANGLET(i,j))   ! note uatm, vatm, wind
+         vatm (i,j) = worky*cos(ANGLET(i,j)) & !  are on the T-grid here
+                    - workx*sin(ANGLET(i,j))
       enddo                     ! i
       enddo                     ! j
 
@@ -1171,41 +1172,41 @@ c=======================================================================
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &     yr                   ! current forcing year
+      integer (kind=int_kind), intent(in) :: &
+           yr                   ! current forcing year
 !
 !EOP
 !
-      fsw_file =
-     &     trim(atm_data_dir)//'ISCCPM/MONTHLY/RADFLX/swdn.1996.dat'
+      fsw_file = &
+           trim(atm_data_dir)//'ISCCPM/MONTHLY/RADFLX/swdn.1996.dat'
       call file_year(fsw_file,yr)
 
-      flw_file =
-     &     trim(atm_data_dir)//'ISCCPM/MONTHLY/RADFLX/cldf.1996.dat'
+      flw_file = &
+           trim(atm_data_dir)//'ISCCPM/MONTHLY/RADFLX/cldf.1996.dat'
       call file_year(flw_file,yr)
 
-      rain_file =
-     &     trim(atm_data_dir)//'MXA/MONTHLY/PRECIP/prec.1996.dat'
+      rain_file = &
+           trim(atm_data_dir)//'MXA/MONTHLY/PRECIP/prec.1996.dat'
       call file_year(rain_file,yr)
 
-      uwind_file =
-     &     trim(atm_data_dir)//'NCEP/4XDAILY/STATES/u_10.1996.dat'
+      uwind_file = &
+           trim(atm_data_dir)//'NCEP/4XDAILY/STATES/u_10.1996.dat'
       call file_year(uwind_file,yr)
 
-      vwind_file =
-     &     trim(atm_data_dir)//'NCEP/4XDAILY/STATES/v_10.1996.dat'
+      vwind_file = &
+           trim(atm_data_dir)//'NCEP/4XDAILY/STATES/v_10.1996.dat'
       call file_year(vwind_file,yr)
 
-      tair_file =
-     &     trim(atm_data_dir)//'NCEP/4XDAILY/STATES/t_10.1996.dat'
+      tair_file = &
+           trim(atm_data_dir)//'NCEP/4XDAILY/STATES/t_10.1996.dat'
       call file_year(tair_file,yr)
 
-      humid_file =
-     &     trim(atm_data_dir)//'NCEP/4XDAILY/STATES/q_10.1996.dat'
+      humid_file = &
+           trim(atm_data_dir)//'NCEP/4XDAILY/STATES/q_10.1996.dat'
       call file_year(humid_file,yr)
 
-      rhoa_file =
-     &     trim(atm_data_dir)//'NCEP/4XDAILY/STATES/dn10.1996.dat'
+      rhoa_file = &
+           trim(atm_data_dir)//'NCEP/4XDAILY/STATES/dn10.1996.dat'
       call file_year(rhoa_file,yr)
 
       if (my_task == master_task) then
@@ -1224,7 +1225,7 @@ c=======================================================================
 
       end subroutine ncar_files
 
-c=======================================================================
+!=======================================================================
 !
 !BOP
 !
@@ -1249,18 +1250,18 @@ c=======================================================================
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &    i, j
-     &,   ixm,ixx,ixp     ! record numbers for neighboring months
-     &,   recnum          ! record number
-     &,   maxrec          ! maximum record number
-     &,   recslot         ! spline slot for current record
-     &,   dataloc         ! = 1 for data located in middle of time interval
+      integer (kind=int_kind) :: &
+          i, j        , &
+          ixm,ixx,ixp , & ! record numbers for neighboring months
+          recnum      , & ! record number
+          maxrec      , & ! maximum record number
+          recslot     , & ! spline slot for current record
+          dataloc     , & ! = 1 for data located in middle of time interval
                           ! = 2 for date located at end of time interval
-     &,   midmonth        ! middle day of month
+          midmonth        ! middle day of month
 
-      real (kind=dbl_kind) ::
-     &    sec6hr              ! number of seconds in 6 hours
+      real (kind=dbl_kind) :: &
+          sec6hr              ! number of seconds in 6 hours
 
       logical (kind=log_kind) :: readm, read6
 
@@ -1296,12 +1297,12 @@ c=======================================================================
       readm = .false.
       if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
 
-      call read_data (readm, 0, fyear, ixm, month, ixp,
-     &                maxrec, fsw_file, fsw_data)
-      call read_data (readm, 0, fyear, ixm, month, ixp,
-     &                maxrec, flw_file, cldf_data)
-      call read_data (readm, 0, fyear, ixm, month, ixp,
-     &                maxrec, rain_file, fsnow_data)
+      call read_data (readm, 0, fyear, ixm, month, ixp, &
+                      maxrec, fsw_file, fsw_data)
+      call read_data (readm, 0, fyear, ixm, month, ixp, &
+                      maxrec, flw_file, cldf_data)
+      call read_data (readm, 0, fyear, ixm, month, ixp, &
+                      maxrec, rain_file, fsnow_data)
 
       ! Interpolate to current time step
       call interpolate_data (fsw_data,   fsw)
@@ -1341,16 +1342,16 @@ c=======================================================================
       read6 = .false.
       if (istep==1 .or. oldrecnum /= recnum) read6 = .true.
 
-      call read_data (read6, 0, fyear, ixm, ixx, ixp,
-     &                maxrec, tair_file, Tair_data)
-      call read_data (read6, 0, fyear, ixm, ixx, ixp,
-     &                maxrec, uwind_file, uatm_data)
-      call read_data (read6, 0, fyear, ixm, ixx, ixp,
-     &                maxrec, vwind_file, vatm_data)
-      call read_data (read6, 0, fyear, ixm, ixx, ixp,
-     &                maxrec, rhoa_file, rhoa_data)
-      call read_data (read6, 0, fyear, ixm, ixx, ixp,
-     &                maxrec, humid_file, Qa_data)
+      call read_data (read6, 0, fyear, ixm, ixx, ixp, &
+                      maxrec, tair_file, Tair_data)
+      call read_data (read6, 0, fyear, ixm, ixx, ixp, &
+                      maxrec, uwind_file, uatm_data)
+      call read_data (read6, 0, fyear, ixm, ixx, ixp, &
+                      maxrec, vwind_file, vatm_data)
+      call read_data (read6, 0, fyear, ixm, ixx, ixp, &
+                      maxrec, rhoa_file, rhoa_data)
+      call read_data (read6, 0, fyear, ixm, ixx, ixp, &
+                      maxrec, humid_file, Qa_data)
 
       ! Interpolate
       call interpolate_data (Tair_data, Tair)
@@ -1393,42 +1394,42 @@ c=======================================================================
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &     yr                   ! current forcing year
+      integer (kind=int_kind), intent(in) :: &
+           yr                   ! current forcing year
 !
 !EOP
 !
-      fsw_file =
-     &     trim(atm_data_dir)//'sol_2002.r'
+      fsw_file = &
+           trim(atm_data_dir)//'sol_2002.r'
       call file_year(fsw_file,yr)
 
-      flw_file =
-     &     trim(atm_data_dir)//'flo_2002.r'
+      flw_file = &
+           trim(atm_data_dir)//'flo_2002.r'
       call file_year(flw_file,yr)
 
-      rain_file =
-     &     trim(atm_data_dir)//'prec_lanl_12.r'
+      rain_file = &
+           trim(atm_data_dir)//'prec_lanl_12.r'
       ! Comment out the file_year call if rain file is from climatology
 !!!      call file_year(rain_file,yr)
-
-      uwind_file =
-     &     trim(atm_data_dir)//'ucmp_2002.r'
+ 
+      uwind_file = &
+           trim(atm_data_dir)//'ucmp_2002.r'
       call file_year(uwind_file,yr)
 
-      vwind_file =
-     &     trim(atm_data_dir)//'vcmp_2002.r'
+      vwind_file = &
+           trim(atm_data_dir)//'vcmp_2002.r'
       call file_year(vwind_file,yr)
 
-      tair_file =
-     &     trim(atm_data_dir)//'tair_2002.r'
+      tair_file = &
+           trim(atm_data_dir)//'tair_2002.r'
       call file_year(tair_file,yr)
 
-      humid_file =
-     &     trim(atm_data_dir)//'qa_2002.r'
+      humid_file = &
+           trim(atm_data_dir)//'qa_2002.r'
       call file_year(humid_file,yr)
 
-      rhoa_file =
-     &     trim(atm_data_dir)//'rhoa_ncar85-88_12.r'
+      rhoa_file = &
+           trim(atm_data_dir)//'rhoa_ncar85-88_12.r'
       ! Comment out the file_year call if rhoa file is from climatology
 !!!      call file_year(rhoa_file,yr)
 
@@ -1476,15 +1477,15 @@ c=======================================================================
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &    i, j
-     &,   ixm,ixx,ixp     ! record numbers for neighboring months
-     &,   recnum          ! record number
-     &,   maxrec          ! maximum record number
-     &,   recslot         ! spline slot for current record
-     &,   dataloc         ! = 1 for data located in middle of time interval
+      integer (kind=int_kind) :: &
+          i, j        , &
+          ixm,ixx,ixp , & ! record numbers for neighboring months
+          recnum      , & ! record number
+          maxrec      , & ! maximum record number
+          recslot     , & ! spline slot for current record
+          dataloc     , & ! = 1 for data located in middle of time interval
                           ! = 2 for date located at end of time interval
-     &,   midmonth        ! middle day of month
+          midmonth        ! middle day of month
 
       logical (kind=log_kind) :: readm, readd
 
@@ -1520,10 +1521,10 @@ c=======================================================================
       readm = .false.
       if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
 
-      call read_clim_data (readm, 0,  ixm, month, ixp,
-     &     rhoa_file, rhoa_data)
-      call read_clim_data (readm, 0,  ixm, month, ixp,
-     &     rain_file, fsnow_data)
+      call read_clim_data (readm, 0,  ixm, month, ixp, &
+           rhoa_file, rhoa_data)
+      call read_clim_data (readm, 0,  ixm, month, ixp, &
+           rain_file, fsnow_data)
 
       ! Interpolate to current time step
       call interpolate_data (fsnow_data, fsnow)
@@ -1570,21 +1571,21 @@ c=======================================================================
       ! Read new data at midpoint of day
 
       readd = .false.
-      if (istep==1 .or. (recslot==1 .and. oldrecslot==2))
-     &     readd = .true.
+      if (istep==1 .or. (recslot==1 .and. oldrecslot==2)) &
+           readd = .true.
 
-      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec,
-     &                tair_file, Tair_data)
-      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec,
-     &                uwind_file, uatm_data)
-      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec,
-     &                vwind_file, vatm_data)
-      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, 
-     &                fsw_file, fsw_data)
-      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec,
-     &                flw_file, flw_data)
-      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec,
-     &                humid_file, Qa_data)
+      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                      tair_file, Tair_data)
+      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                      uwind_file, uatm_data)
+      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                      vwind_file, vatm_data)
+      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                      fsw_file, fsw_data)
+      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                      flw_file, flw_data)
+      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                      humid_file, Qa_data)
 
       ! Interpolate
       call interpolate_data (Tair_data, Tair)
@@ -1629,31 +1630,31 @@ c=======================================================================
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &     yr                   ! current forcing year
+      integer (kind=int_kind), intent(in) :: &
+           yr                   ! current forcing year
 !
 !EOP
 !
-      flw_file =
-     &     trim(atm_data_dir)//'MONTHLY/cldf.omip.dat'
+      flw_file = &
+           trim(atm_data_dir)//'MONTHLY/cldf.omip.dat'
 
-      rain_file =
-     &     trim(atm_data_dir)//'MONTHLY/prec.nmyr.dat'
+      rain_file = &
+           trim(atm_data_dir)//'MONTHLY/prec.nmyr.dat'
 
-      uwind_file =
-     &     trim(atm_data_dir)//'4XDAILY/u_10.1996.dat'
+      uwind_file = &
+           trim(atm_data_dir)//'4XDAILY/u_10.1996.dat'
       call file_year(uwind_file,yr)
 
-      vwind_file =
-     &     trim(atm_data_dir)//'4XDAILY/v_10.1996.dat'
+      vwind_file = &
+           trim(atm_data_dir)//'4XDAILY/v_10.1996.dat'
       call file_year(vwind_file,yr)
 
-      tair_file =
-     &     trim(atm_data_dir)//'4XDAILY/t_10.1996.dat'
+      tair_file = &
+           trim(atm_data_dir)//'4XDAILY/t_10.1996.dat'
       call file_year(tair_file,yr)
 
-      humid_file =
-     &     trim(atm_data_dir)//'4XDAILY/q_10.1996.dat'
+      humid_file = &
+           trim(atm_data_dir)//'4XDAILY/q_10.1996.dat'
       call file_year(humid_file,yr)
 
       if (my_task == master_task) then
@@ -1698,20 +1699,20 @@ c=======================================================================
 !
 !EOP
 !
-      integer (kind=int_kind) :: 
-     &    i, j
-     &,   imx,ixx,ipx     ! record numbers for neighboring months
-     &,   recnum          ! record number
-     &,   maxrec          ! maximum record number
-     &,   recslot         ! spline slot for current record
-     &,   midmonth        ! middle day of month
-     &,   dataloc         ! = 1 for data located in middle of time interval
+      integer (kind=int_kind) :: & 
+          i, j        , &
+          imx,ixx,ipx , & ! record numbers for neighboring months
+          recnum      , & ! record number
+          maxrec      , & ! maximum record number
+          recslot     , & ! spline slot for current record
+          midmonth    , & ! middle day of month
+          dataloc     , & ! = 1 for data located in middle of time interval
                           ! = 2 for date located at end of time interval
-     &,   iblk            ! block index
+          iblk            ! block index
 
-      real (kind=dbl_kind) ::
-     &    sec6hr              ! number of seconds in 6 hours
-     &,   vmin, vmax
+      real (kind=dbl_kind) :: &
+          sec6hr          , & ! number of seconds in 6 hours
+          vmin, vmax
 
       logical (kind=log_kind) :: readm, read6
 
@@ -1747,10 +1748,10 @@ c=======================================================================
       readm = .false.
       if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
 
-      call read_clim_data (readm, 0, imx, month, ipx, 
-     &       flw_file, cldf_data)
-      call read_clim_data (readm, 0, imx, month, ipx, 
-     &       rain_file, fsnow_data)
+      call read_clim_data (readm, 0, imx, month, ipx,  &
+             flw_file, cldf_data)
+      call read_clim_data (readm, 0, imx, month, ipx,  &
+             rain_file, fsnow_data)
 
       call interpolate_data (cldf_data, cldf)
       call interpolate_data (fsnow_data, fsnow)  ! units mm/s = kg/m^2/s
@@ -1788,14 +1789,14 @@ c=======================================================================
       read6 = .false.
       if (istep==1 .or. oldrecnum .ne. recnum) read6 = .true.
 
-      call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec,
-     &                tair_file, Tair_data)
-      call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec,
-     &                uwind_file, uatm_data)
-      call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec,
-     &                vwind_file, vatm_data)
-      call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec,
-     &                humid_file, Qa_data)
+      call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
+                      tair_file, Tair_data)
+      call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
+                      uwind_file, uatm_data)
+      call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
+                      vwind_file, vatm_data)
+      call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
+                      humid_file, Qa_data)
 
       ! Interpolate
       call interpolate_data (Tair_data, Tair)
@@ -1804,9 +1805,9 @@ c=======================================================================
       call interpolate_data (Qa_data, Qa)
 
       do iblk = 1, nblocks
-        call Qa_fixLY(nx_block,  ny_block,
-     &                           Tair (:,:,iblk),
-     &                           Qa   (:,:,iblk))
+        call Qa_fixLY(nx_block,  ny_block, &
+                                 Tair (:,:,iblk), &
+                                 Qa   (:,:,iblk))
 
         do j = 1, ny_block
           do i = 1, nx_block
@@ -1818,13 +1819,13 @@ c=======================================================================
         enddo
 
       ! AOMIP
-      call compute_shortwave(nx_block,  ny_block, nghost,
-     &                       TLON (:,:,iblk),
-     &                       TLAT (:,:,iblk),
-     &                       hm   (:,:,iblk),
-     &                       Qa   (:,:,iblk),
-     &                       cldf (:,:,iblk),
-     &                       fsw  (:,:,iblk))
+      call compute_shortwave(nx_block,  ny_block, nghost, &
+                             TLON (:,:,iblk), &
+                             TLAT (:,:,iblk), &
+                             hm   (:,:,iblk), &
+                             Qa   (:,:,iblk), &
+                             cldf (:,:,iblk), &
+                             fsw  (:,:,iblk))
 
       enddo  ! iblk
 
@@ -1833,88 +1834,88 @@ c=======================================================================
 
          if (dbug) then
            if (my_task == master_task) write (nu_diag,*) 'LY_bulk_data'
-           vmin = global_minval(fsw
-     &                         ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(fsw
-     &                         ,distrb_info,field_loc_center,tmask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'fsw',vmin,vmax
-           vmin = global_minval(cldf
-     &                         ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(cldf
-     &                         ,distrb_info,field_loc_center,tmask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'cldf',vmin,vmax
-           vmin =global_minval(fsnow
-     &                         ,distrb_info,field_loc_center,tmask)
-           vmax =global_maxval(fsnow
-     &                         ,distrb_info,field_loc_center,tmask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'fsnow',vmin,vmax
-           vmin = global_minval(Tair
-     &                         ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(Tair
-     &                         ,distrb_info,field_loc_center,tmask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'Tair',vmin,vmax
-           vmin = global_minval(uatm
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           vmax = global_maxval(uatm
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'uatm',vmin,vmax
-           vmin = global_minval(vatm
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           vmax = global_maxval(vatm
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'vatm',vmin,vmax
-           vmin = global_minval(Qa
-     &                         ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(Qa
-     &                         ,distrb_info,field_loc_center,tmask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'Qa',vmin,vmax
+           vmin = global_minval(fsw &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax = global_maxval(fsw &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'fsw',vmin,vmax 
+           vmin = global_minval(cldf &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax = global_maxval(cldf &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'cldf',vmin,vmax
+           vmin =global_minval(fsnow &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax =global_maxval(fsnow &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'fsnow',vmin,vmax
+           vmin = global_minval(Tair &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax = global_maxval(Tair &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'Tair',vmin,vmax
+           vmin = global_minval(uatm &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           vmax = global_maxval(uatm &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'uatm',vmin,vmax
+           vmin = global_minval(vatm &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           vmax = global_maxval(vatm &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'vatm',vmin,vmax
+           vmin = global_minval(Qa &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax = global_maxval(Qa &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'Qa',vmin,vmax
 
         endif                   ! dbug
 
       end subroutine LY_data
 
-c=======================================================================
+!=======================================================================
 
-      subroutine compute_shortwave(nx_block,  ny_block, nghost,
-     &                             TLON, TLAT, hm, Qa, cldf, fsw)
+      subroutine compute_shortwave(nx_block,  ny_block, nghost, &
+                                   TLON, TLAT, hm, Qa, cldf, fsw)
 
 !---!-------------------------------------------------------------------
 !---! AOMIP shortwave forcing
 !---!-------------------------------------------------------------------
 
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block ! block dimensions
-     &,  nghost             ! number of ghost cells
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         nghost                ! number of ghost cells
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
-     &   TLON, TLAT         ! longitude, latitude
-     &,  Qa                 ! specific humidity
-     &,  cldf               ! cloud fraction
-     &,  hm                 ! land mask
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
+         TLON, TLAT     , & ! longitude, latitude
+         Qa             , & ! specific humidity
+         cldf           , & ! cloud fraction
+         hm                 ! land mask
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), 
-     &   intent(inout) ::
-     &   fsw                ! shortwave
+      real (kind=dbl_kind), dimension(nx_block,ny_block),  &
+         intent(inout) :: &
+         fsw                ! shortwave
 
-      real (kind=dbl_kind) ::
-     &   hour_angle
-     &,  solar_time
-     &,  declin
-     &,  cosZ
-     &,  e, d
-     &,  sw0
-     &,  deg2rad
+      real (kind=dbl_kind) :: &
+         hour_angle, &
+         solar_time, &
+         declin    , &
+         cosZ      , &
+         e, d      , &
+         sw0       , &
+         deg2rad   
 
-      integer (kind=int_kind) ::
-     &   i, j
-     &,  ilo,ihi,jlo,jhi    ! beginning and end of physical domain
+      integer (kind=int_kind) :: &
+         i, j, &
+         ilo,ihi,jlo,jhi    ! beginning and end of physical domain
 
       ilo = 1 + nghost
       ihi = nx_block - nghost
@@ -1924,13 +1925,13 @@ c=======================================================================
       do j=jlo,jhi
        do i=ilo,ihi
         deg2rad = pi/c180
-        solar_time = mod(real(sec,kind=dbl_kind),secday)/c3600
-     &             + c12*sin(p5*TLON(i,j))
+        solar_time = mod(real(sec,kind=dbl_kind),secday)/c3600 &
+                   + c12*sin(p5*TLON(i,j))
         hour_angle = (c12 - solar_time)*pi/c12
-        declin = 23.44_dbl_kind*cos((172._dbl_kind-yday)
-     &           * c2*pi/c365)*deg2rad
-        cosZ = sin(TLAT(i,j))*sin(declin)            
-     &       + cos(TLAT(i,j))*cos(declin)*cos(hour_angle)
+        declin = 23.44_dbl_kind*cos((172._dbl_kind-yday) &
+                 * c2*pi/c365)*deg2rad
+        cosZ = sin(TLAT(i,j))*sin(declin) &
+             + cos(TLAT(i,j))*cos(declin)*cos(hour_angle)
         cosZ = max(cosZ,c0)
         e = 1.e5*Qa(i,j)/(0.622_dbl_kind + 0.378_dbl_kind*Qa(i,j))
         d = (cosZ+2.7_dbl_kind)*e*1.e-5_dbl_kind+1.085_dbl_kind*cosZ+p1
@@ -1945,26 +1946,26 @@ c=======================================================================
 
       end subroutine compute_shortwave
 
-c=======================================================================
+!=======================================================================
 
       subroutine Qa_fixLY(nx_block, ny_block, Tair, Qa)
 
       use ice_work, only: worka
 
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block ! block dimensions
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block ! block dimensions
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
-     &   Tair               ! air temperature
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
+         Tair               ! air temperature
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), 
-     &   intent(inout) ::
-     &   Qa                 ! specific humidity
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(inout) :: &
+         Qa                 ! specific humidity
 
       worka = Tair - Tffresh
-      worka = c2 + (0.7859_dbl_kind + 0.03477_dbl_kind*worka)
-     &               /(c1 + 0.00412_dbl_kind*worka) ! 2+ converts ea mb -> Pa
-     &          + 0.00422_dbl_kind*worka            ! for ice
+      worka = c2 + (0.7859_dbl_kind + 0.03477_dbl_kind*worka) &
+                     /(c1 + 0.00412_dbl_kind*worka) & ! 2+ converts ea mb -> Pa
+                + 0.00422_dbl_kind*worka              ! for ice
       ! vapor pressure
       worka = (c10**worka)      ! saturated 
       worka = max(worka,puny)   ! puny over land to prevent division by zero
@@ -2005,20 +2006,20 @@ c=======================================================================
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), intent(in) ::
-     &   dt      ! time step
+      real (kind=dbl_kind), intent(in) :: &
+         dt      ! time step
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &    i, j, iblk      ! horizontal indices
-     &,   ixm,ixp         ! record numbers for neighboring months
-     &,   maxrec          ! maximum record number
-     &,   recslot         ! spline slot for current record
-     &,   midmonth        ! middle day of month
+      integer (kind=int_kind) :: &
+          i, j, iblk  , & ! horizontal indices
+          ixm,ixp     , & ! record numbers for neighboring months
+          maxrec      , & ! maximum record number
+          recslot     , & ! spline slot for current record
+          midmonth        ! middle day of month
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) ::
-     &    sstdat              ! data value toward which SST is restored
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
+          sstdat              ! data value toward which SST is restored
 
       logical (kind=log_kind) :: readm
 
@@ -2032,8 +2033,8 @@ c=======================================================================
             write (nu_diag,*) ' '
             write (nu_diag,*) 'SST data interpolated to timestep:'
             write (nu_diag,*) trim(sst_file)
-            if (restore_sst) write (nu_diag,*)
-     &        'SST restoring timescale (days) =', trestore
+            if (restore_sst) write (nu_diag,*) &
+              'SST restoring timescale (days) =', trestore
          endif
       endif                     ! my_task, istep
 
@@ -2044,8 +2045,8 @@ c=======================================================================
     ! month.
     !-------------------------------------------------------------------
 
-      if (trim(sss_data_type)=='clim' .or. 
-     &    trim(sst_data_type)=='clim') then
+      if (trim(sss_data_type)=='clim' .or.  &
+          trim(sst_data_type)=='clim') then
 
          midmonth = 15          ! data is given on 15th of every month
 !!!      midmonth = fix(p5 * real(daymo(month)))  ! exact middle
@@ -2079,8 +2080,8 @@ c=======================================================================
     !-------------------------------------------------------------------
 
       if (trim(sss_data_type)=='clim') then
-         call read_clim_data (readm, 0, ixm, month, ixp,
-     &                        sss_file, sss_data)
+         call read_clim_data (readm, 0, ixm, month, ixp, &
+                              sss_file, sss_data)
          call interpolate_data (sss_data, sss)
 
          do iblk = 1, nblocks
@@ -2099,16 +2100,16 @@ c=======================================================================
     !-------------------------------------------------------------------
 
       if (trim(sst_data_type)=='clim') then
-         call read_clim_data (readm, 0, ixm, month, ixp,
-     &                        sst_file, sst_data)
+         call read_clim_data (readm, 0, ixm, month, ixp, &
+                              sst_file, sst_data)
          call interpolate_data (sst_data, sstdat)
 
          if (restore_sst) then
          do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
-               sst(i,j,iblk) = sst(i,j,iblk) 
-     &                   + (sstdat(i,j,iblk)-sst(i,j,iblk))*dt/trest
+               sst(i,j,iblk) = sst(i,j,iblk)  &
+                         + (sstdat(i,j,iblk)-sst(i,j,iblk))*dt/trest
             enddo
             enddo
          enddo
@@ -2170,29 +2171,29 @@ c=======================================================================
 !
 !EOP
 !
-      integer (kind=int_kind) :: 
-     &  i, j
-     &, n        ! field     index
-     &, m        ! month     index
+      integer (kind=int_kind) :: & 
+        i, j, &
+        n   , & ! field index
+        m       ! month index
 
-      character(len=16) ::
-     &  vname(nfld) ! variable names to search for on netCDF file
-      data vname / 
-     &     'T',      'S',      'hblt',  'U',     'V',
-     &     'dhdx',   'dhdy',   'qdp' /
+      character(len=16) :: &
+        vname(nfld) ! variable names to search for on netCDF file
+      data vname /  &
+           'T',      'S',      'hblt',  'U',     'V', &
+           'dhdx',   'dhdy',   'qdp' /
 
-      integer (kind=int_kind) ::
-     &  fid         ! file id for netCDF routines
-     &, dimid       ! dimension id for netCDF file
-     &, varid(nfld) ! variable id for field in netCDF file
-     &, ntim        ! number of times of data for netCDF file
+      integer (kind=int_kind) :: &
+        fid        , & ! file id for netCDF routines
+        dimid      , & ! dimension id for netCDF file
+        varid(nfld), & ! variable id for field in netCDF file
+        ntim           ! number of times of data for netCDF file
 
-      integer (kind=int_kind) ::
-     &  status   ! status variable from netCDF routine 
-     &, nlat     ! number of longitudes of data for netCDF file
-     &, nlon     ! number of latitudes  of data for netCDF file
-     &, start(3) ! start location for netCDF data reads
-     &, count(3) ! number of data items to read in
+      integer (kind=int_kind) :: &
+        status  , & ! status variable from netCDF routine 
+        nlat    , & ! number of longitudes of data for netCDF file
+        nlon    , & ! number of latitudes  of data for netCDF file
+        start(3), & ! start location for netCDF data reads
+        count(3)    ! number of data items to read in
 
       if (my_task == master_task) then
 
@@ -2201,16 +2202,16 @@ c=======================================================================
          write (nu_diag,*) 'WARNING: not data from ocean forcing file.'
          write (nu_diag,*) 'WARNING: Alter ice_dyn_evp.F if desired.'
 
-         if (restore_sst) write (nu_diag,*) 
-     &       'SST restoring timescale = ',trestore,' days' 
+         if (restore_sst) write (nu_diag,*)  &
+             'SST restoring timescale = ',trestore,' days' 
 
          sst_file = trim(ocn_data_dir)//oceanmixed_file ! not just sst
 
         !---------------------------------------------------------------
         ! Read in ocean forcing data from an existing local netCDF file
         !---------------------------------------------------------------
-        write (nu_diag,*) 'ocean mixed layer forcing data file = ',
-     &                     sst_file
+        write (nu_diag,*) 'ocean mixed layer forcing data file = ', &
+                           sst_file
 
         status = nf_open(sst_file, NF_NOWRITE, fid)
         if (status /= NF_NOERR) then
@@ -2265,15 +2266,15 @@ c=======================================================================
           ! Note: netCDF does single to double conversion if necessary
           status = nf_get_vara_double(fid,varid(n),start,count,work_g1)
           if (status /= NF_NOERR ) then
-            write(nu_diag,*) 'could not read in ocn forcing field ',
-     &                          vname(n)
+            write(nu_diag,*) 'could not read in ocn forcing field ', &
+                                vname(n)
             call abort_ice ('ice read failed')
           endif
 
           endif ! master_task
 
-          call scatter_global(work1,work_g1,master_task,
-     &                distrb_info, field_loc_center, field_type_scalar) 
+          call scatter_global(work1,work_g1,master_task, &
+                      distrb_info, field_loc_center, field_type_scalar) 
           ocn_frc_m(:,:,:,n,m) = work1(:,:,:)
 
         enddo               ! month loop
@@ -2312,8 +2313,8 @@ c=======================================================================
       use ice_gather_scatter
       use ice_exit
       use ice_work, only: work_g1, work1
-      use ice_flux, only: sss, sst, Tf, uocn, vocn, ss_tltx, ss_tlty,
-     &      qdp, hmix
+      use ice_flux, only: sss, sst, Tf, uocn, vocn, ss_tltx, ss_tlty, &
+            qdp, hmix
 !      use ice_ocean
       use ice_restart, only: restart
       use ice_grid, only: hm, tmask, umask
@@ -2321,20 +2322,20 @@ c=======================================================================
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), intent(in) ::
-     &   dt      ! time step
+      real (kind=dbl_kind), intent(in) :: &
+         dt      ! time step
 !
 !EOP
 !
-      integer (kind=int_kind) :: 
-     &    i, j, n, iblk
-     &,   imx,ipx             ! record numbers for neighboring months
-     &,   maxrec              ! maximum record number
-     &,   recslot             ! spline slot for current record
-     &,   midmonth            ! middle day of month
+      integer (kind=int_kind) :: & 
+          i, j, n, iblk   , &
+          imx,ipx         , & ! record numbers for neighboring months
+          maxrec          , & ! maximum record number
+          recslot         , & ! spline slot for current record
+          midmonth            ! middle day of month
 
-      real (kind=dbl_kind) ::
-     &    vmin, vmax
+      real (kind=dbl_kind) :: &
+          vmin, vmax
 
     !-------------------------------------------------------------------
     ! monthly data 
@@ -2435,62 +2436,62 @@ c=======================================================================
       endif
 
       if (dbug) then
-         if (my_task == master_task) 
-     &         write (nu_diag,*) 'ocn_data_ncar'
-           vmin = global_minval(Tf
-     &                         ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(Tf
-     &                         ,distrb_info,field_loc_center,tmask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'Tf',vmin,vmax
-           vmin = global_minval(sst
-     &                         ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(sst
-     &                         ,distrb_info,field_loc_center,tmask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'sst',vmin,vmax
-           vmin = global_minval(sss
-     &                         ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(sss
-     &                         ,distrb_info,field_loc_center,tmask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'sss',vmin,vmax
-           vmin = global_minval(hmix
-     &                         ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(hmix
-     &                         ,distrb_info,field_loc_center,tmask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'hmix',vmin,vmax
-           vmin = global_minval(uocn
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           vmax = global_maxval(uocn
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'uocn',vmin,vmax
-           vmin = global_minval(vocn
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           vmax = global_maxval(vocn
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'vocn',vmin,vmax
-           vmin = global_minval(ss_tltx
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           vmax = global_maxval(ss_tltx
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'ss_tltx',vmin,vmax
-           vmin = global_minval(ss_tlty
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           vmax = global_maxval(ss_tlty
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'ss_tlty',vmin,vmax
-           vmin = global_minval(qdp
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           vmax = global_maxval(qdp
-     &                         ,distrb_info,field_loc_NEcorner,umask)
-           if (my_task.eq.master_task) 
-     &         write (nu_diag,*) 'qdp',vmin,vmax
+         if (my_task == master_task)  &
+               write (nu_diag,*) 'ocn_data_ncar'
+           vmin = global_minval(Tf &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax = global_maxval(Tf &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'Tf',vmin,vmax
+           vmin = global_minval(sst &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax = global_maxval(sst &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'sst',vmin,vmax
+           vmin = global_minval(sss &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax = global_maxval(sss &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'sss',vmin,vmax
+           vmin = global_minval(hmix &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax = global_maxval(hmix &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'hmix',vmin,vmax
+           vmin = global_minval(uocn &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           vmax = global_maxval(uocn &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'uocn',vmin,vmax
+           vmin = global_minval(vocn &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           vmax = global_maxval(vocn &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'vocn',vmin,vmax
+           vmin = global_minval(ss_tltx &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           vmax = global_maxval(ss_tltx &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'ss_tltx',vmin,vmax
+           vmin = global_minval(ss_tlty &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           vmax = global_maxval(ss_tlty &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'ss_tlty',vmin,vmax
+           vmin = global_minval(qdp &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           vmax = global_maxval(qdp &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'qdp',vmin,vmax
       endif
 
       end subroutine ocn_data_ncar
