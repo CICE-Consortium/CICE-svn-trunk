@@ -19,6 +19,7 @@
 ! 2006 ECH: Accepted some CCSM code into mainstream CICE
 !           Added ice_present, aicen, vicen; removed aice1...10, vice1...1.
 !           Added histfreq_n and histfreq='h' options, removed histfreq='w'
+!           Converted to free source form (F90)
 !
 ! !INTERFACE:
 !
@@ -38,19 +39,19 @@
       implicit none
       save
       
-      logical (kind=log_kind) ::
-     &   hist_avg  ! if true, write averaged data instead of snapshots
+      logical (kind=log_kind) :: &
+         hist_avg  ! if true, write averaged data instead of snapshots
 
-      character (len=char_len) ::
-     &   history_file      ! output file for history
-     &,  incond_file       ! output file for snapshot initial conditions
+      character (len=char_len) :: &
+         history_file  , & ! output file for history
+         incond_file       ! output file for snapshot initial conditions
 
-      character (len=char_len_long) ::
-     &   history_dir       ! directory name for history file
-     &,  incond_dir        ! directory for snapshot initial conditions
+      character (len=char_len_long) :: &
+         history_dir   , & ! directory name for history file
+         incond_dir        ! directory for snapshot initial conditions
 
-      character (len=char_len_long) ::
-     &   pointer_file      ! input pointer file for restarts
+      character (len=char_len_long) :: &
+         pointer_file      ! input pointer file for restarts
 
       !---------------------------------------------------------------
       ! Instructions for adding a field:
@@ -77,214 +78,214 @@
       ! primary info for the history file
       !---------------------------------------------------------------
 
-      integer (kind=int_kind), parameter ::
-     &   ncat_hist = ncat           ! number of ice categories written <= ncat
-     &,  avgsiz = 76 + 2*ncat_hist  ! number of fields that can be written
+      integer (kind=int_kind), parameter :: &
+         ncat_hist = ncat       , & ! number of ice categories written <= ncat
+         avgsiz = 76 + 2*ncat_hist  ! number of fields that can be written
 
       real (kind=real_kind) :: time_beg, time_end ! bounds for averaging
 
-      real (kind=dbl_kind), 
-     &   dimension (nx_block,ny_block,avgsiz,max_blocks) ::
-     &   aa                ! field accumulations and averages
+      real (kind=dbl_kind), &
+         dimension (nx_block,ny_block,avgsiz,max_blocks) :: &
+         aa                ! field accumulations and averages
 
-      real (kind=dbl_kind) ::
-     &   avgct             ! average sample counter
-     &,  cona(avgsiz)      ! multiplicative conversion factor
-     &,  conb(avgsiz)      ! additive conversion factor
+      real (kind=dbl_kind) :: &
+         avgct         , & ! average sample counter
+         cona(avgsiz)  , & ! multiplicative conversion factor
+         conb(avgsiz)      ! additive conversion factor
 
-      logical (kind=log_kind) ::
-     &   iout(avgsiz)      ! true if field is written to output file
+      logical (kind=log_kind) :: &
+         iout(avgsiz)      ! true if field is written to output file
 
-      character (len=16) ::
-     &   vname(avgsiz)     ! variable names
-     &,  vunit(avgsiz)     ! variable units
-     &,  vcoord(avgsiz)    ! variable coordinates
+      character (len=16) :: &
+         vname(avgsiz) , & ! variable names
+         vunit(avgsiz) , & ! variable units
+         vcoord(avgsiz)    ! variable coordinates
 
-      character (len=16), parameter ::
-     &   tstr = 'TLON TLAT time'   ! vcoord for T cell quantities
-     &,  ustr = 'ULON ULAT time'   ! vcoord for U cell quantities
+      character (len=16), parameter :: &
+         tstr = 'TLON TLAT time', & ! vcoord for T cell quantities
+         ustr = 'ULON ULAT time'    ! vcoord for U cell quantities
 
-      character (len=55) :: 
-     &   vdesc(avgsiz)     ! variable descriptions
-     &,  vcomment(avgsiz)  ! variable comments
+      character (len=55) :: & 
+         vdesc(avgsiz) , & ! variable descriptions
+         vcomment(avgsiz)  ! variable comments
 
       !---------------------------------------------------------------
       ! logical flags: write to output file if true
       !---------------------------------------------------------------
 
-      logical (kind=log_kind) ::
-     &     f_hi        = .true., f_hs         = .true.
-     &,    f_Tsfc      = .true., f_aice       = .true.
-     &,    f_uvel      = .true., f_vvel       = .true.
-     &,    f_fswdn     = .true., f_flwdn      = .true.
-     &,    f_snow      = .true., f_snow_ai    = .true.
-     &,    f_rain      = .true., f_rain_ai    = .true.
-     &,    f_sst       = .true., f_sss        = .true.
-     &,    f_uocn      = .true., f_vocn       = .true.
-     &,    f_frzmlt    = .true.
-     &,    f_fswabs    = .true., f_fswabs_ai  = .true.
-     &,    f_albsni    = .true.
-     &,    f_alvdr     = .true., f_alidr      = .true.
-     &,    f_flat      = .true., f_flat_ai    = .true.  
-     &,    f_fsens     = .true., f_fsens_ai   = .true.
-     &,    f_flwup     = .true., f_flwup_ai   = .true.
-     &,    f_evap      = .true., f_evap_ai    = .true.
-     &,    f_Tair      = .true.
-     &,    f_Tref      = .true., f_Qref       = .true.
-     &,    f_congel    = .true., f_frazil     = .true.
-     &,    f_snoice    = .true., f_meltt      = .true.
-     &,    f_meltb     = .true., f_meltl      = .true.
-     &,    f_fresh     = .true., f_fresh_ai   = .true.
-     &,    f_fsalt     = .true., f_fsalt_ai   = .true. 
-     &,    f_fhocn     = .true., f_fhocn_ai   = .true.
-     &,    f_fswthru   = .true., f_fswthru_ai = .true.
-     &,    f_strairx   = .true., f_strairy    = .true.
-     &,    f_strtltx   = .true., f_strtlty    = .true.
-     &,    f_strcorx   = .true., f_strcory    = .true.
-     &,    f_strocnx   = .true., f_strocny    = .true.
-     &,    f_strintx   = .true., f_strinty    = .true.
-     &,    f_strength  = .true., f_opening    = .true.
-     &,    f_divu      = .true., f_shear      = .true.
-     &,    f_sig1      = .true., f_sig2       = .true.
-     &,    f_dvidtt    = .true., f_dvidtd     = .true.
-     &,    f_daidtt    = .true., f_daidtd     = .true.
-     &,    f_mlt_onset = .true., f_frz_onset  = .true.
-     &,    f_dardg1dt  = .true., f_dardg2dt   = .true.
-     &,    f_dvirdgdt  = .true. 
-     &,    f_hisnap    = .true., f_aisnap     = .true.
-     &,    f_aicen     = .true., f_vicen      = .true.
-     &,    f_trsig     = .true., f_icepresent = .true.
+      logical (kind=log_kind) :: &
+           f_hi        = .true., f_hs         = .true., &
+           f_Tsfc      = .true., f_aice       = .true., &
+           f_uvel      = .true., f_vvel       = .true., &
+           f_fswdn     = .true., f_flwdn      = .true., &
+           f_snow      = .true., f_snow_ai    = .true., &
+           f_rain      = .true., f_rain_ai    = .true., &
+           f_sst       = .true., f_sss        = .true., &
+           f_uocn      = .true., f_vocn       = .true., &
+           f_frzmlt    = .true., &
+           f_fswabs    = .true., f_fswabs_ai  = .true., &
+           f_albsni    = .true., &
+           f_alvdr     = .true., f_alidr      = .true., &
+           f_flat      = .true., f_flat_ai    = .true., &
+           f_fsens     = .true., f_fsens_ai   = .true., &
+           f_flwup     = .true., f_flwup_ai   = .true., &
+           f_evap      = .true., f_evap_ai    = .true., &
+           f_Tair      = .true., &
+           f_Tref      = .true., f_Qref       = .true., &
+           f_congel    = .true., f_frazil     = .true., &
+           f_snoice    = .true., f_meltt      = .true., &
+           f_meltb     = .true., f_meltl      = .true., &
+           f_fresh     = .true., f_fresh_ai   = .true., &
+           f_fsalt     = .true., f_fsalt_ai   = .true., &
+           f_fhocn     = .true., f_fhocn_ai   = .true., &
+           f_fswthru   = .true., f_fswthru_ai = .true., &
+           f_strairx   = .true., f_strairy    = .true., &
+           f_strtltx   = .true., f_strtlty    = .true., &
+           f_strcorx   = .true., f_strcory    = .true., &
+           f_strocnx   = .true., f_strocny    = .true., &
+           f_strintx   = .true., f_strinty    = .true., &
+           f_strength  = .true., f_opening    = .true., &
+           f_divu      = .true., f_shear      = .true., &
+           f_sig1      = .true., f_sig2       = .true., &
+           f_dvidtt    = .true., f_dvidtd     = .true., &
+           f_daidtt    = .true., f_daidtd     = .true., &
+           f_mlt_onset = .true., f_frz_onset  = .true., &
+           f_dardg1dt  = .true., f_dardg2dt   = .true., &
+           f_dvirdgdt  = .true. , &
+           f_hisnap    = .true., f_aisnap     = .true., &
+           f_aicen     = .true., f_vicen      = .true., &
+           f_trsig     = .true., f_icepresent = .true.
 
       !---------------------------------------------------------------
       ! namelist variables (same as logical flags)
       !---------------------------------------------------------------
 
-      namelist / icefields_nml /
-     &     f_hi,        f_hs
-     &,    f_Tsfc,      f_aice
-     &,    f_uvel,      f_vvel
-     &,    f_fswdn,     f_flwdn
-     &,    f_snow,      f_snow_ai      
-     &,    f_rain,      f_rain_ai
-     &,    f_sst,       f_sss
-     &,    f_uocn,      f_vocn
-     &,    f_frzmlt   
-     &,    f_fswabs,    f_fswabs_ai    
-     &,    f_albsni
-     &,    f_alvdr,     f_alidr
-     &,    f_flat,      f_flat_ai
-     &,    f_fsens,     f_fsens_ai
-     &,    f_flwup,     f_flwup_ai
-     &,    f_evap,      f_evap_ai
-     &,    f_Tair
-     &,    f_Tref,      f_Qref     
-     &,    f_congel,    f_frazil
-     &,    f_snoice,    f_meltt
-     &,    f_meltb,     f_meltl
-     &,    f_fresh,     f_fresh_ai  
-     &,    f_fsalt,     f_fsalt_ai
-     &,    f_fhocn,     f_fhocn_ai
-     &,    f_fswthru,   f_fswthru_ai
-     &,    f_strairx,   f_strairy
-     &,    f_strtltx,   f_strtlty
-     &,    f_strcorx,   f_strcory
-     &,    f_strocnx,   f_strocny
-     &,    f_strintx,   f_strinty
-     &,    f_strength,  f_opening
-     &,    f_divu,      f_shear
-     &,    f_sig1,      f_sig2
-     &,    f_dvidtt,    f_dvidtd
-     &,    f_daidtt,    f_daidtd
-     &,    f_mlt_onset, f_frz_onset
-     &,    f_dardg1dt,  f_dardg2dt
-     &,    f_dvirdgdt
-     &,    f_hisnap,    f_aisnap
-     &,    f_aicen,     f_vicen
-     &,    f_trsig,     f_icepresent
+      namelist / icefields_nml /     &
+           f_hi,        f_hs       , &
+           f_Tsfc,      f_aice     , &
+           f_uvel,      f_vvel     , &
+           f_fswdn,     f_flwdn    , &
+           f_snow,      f_snow_ai  , &     
+           f_rain,      f_rain_ai  , &
+           f_sst,       f_sss      , &
+           f_uocn,      f_vocn     , &
+           f_frzmlt                , &
+           f_fswabs,    f_fswabs_ai, &
+           f_albsni                , &
+           f_alvdr,     f_alidr    , &
+           f_flat,      f_flat_ai  , &
+           f_fsens,     f_fsens_ai , &
+           f_flwup,     f_flwup_ai , &
+           f_evap,      f_evap_ai  , &
+           f_Tair                  , &
+           f_Tref,      f_Qref     , &
+           f_congel,    f_frazil   , &
+           f_snoice,    f_meltt    , &
+           f_meltb,     f_meltl    , &
+           f_fresh,     f_fresh_ai , &  
+           f_fsalt,     f_fsalt_ai , &
+           f_fhocn,     f_fhocn_ai , &
+           f_fswthru,   f_fswthru_ai,&
+           f_strairx,   f_strairy  , &
+           f_strtltx,   f_strtlty  , &
+           f_strcorx,   f_strcory  , &
+           f_strocnx,   f_strocny  , &
+           f_strintx,   f_strinty  , &
+           f_strength,  f_opening  , &
+           f_divu,      f_shear    , &
+           f_sig1,      f_sig2     , &
+           f_dvidtt,    f_dvidtd   , &
+           f_daidtt,    f_daidtd   , &
+           f_mlt_onset, f_frz_onset, &
+           f_dardg1dt,  f_dardg2dt , &
+           f_dvirdgdt              , &
+           f_hisnap,    f_aisnap   , &
+           f_aicen,     f_vicen    , &
+           f_trsig,     f_icepresent
 
       !---------------------------------------------------------------
       ! field indices
       !---------------------------------------------------------------
 
-      integer (kind=int_kind), parameter ::
-     &     n_hi         = 1
-     &,    n_hs         = 2
-     &,    n_Tsfc       = 3
-     &,    n_aice       = 4
-     &,    n_uvel       = 5
-     &,    n_vvel       = 6
-     &,    n_fswdn      = 7
-     &,    n_flwdn      = 8
-     &,    n_snow       = 9
-     &,    n_snow_ai    = 10
-     &,    n_rain       = 11
-     &,    n_rain_ai    = 12
-     &,    n_sst        = 13
-     &,    n_sss        = 14
-     &,    n_uocn       = 15
-     &,    n_vocn       = 16
-     &,    n_frzmlt     = 17
-     &,    n_fswabs     = 18
-     &,    n_fswabs_ai  = 19
-     &,    n_albsni     = 20
-     &,    n_flat       = 21
-     &,    n_flat_ai    = 22
-     &,    n_fsens      = 23
-     &,    n_fsens_ai   = 24
-     &,    n_flwup      = 25
-     &,    n_flwup_ai   = 26
-     &,    n_evap       = 27
-     &,    n_evap_ai    = 28
-     &,    n_Tref       = 29
-     &,    n_Qref       = 30
-     &,    n_congel     = 31
-     &,    n_frazil     = 32
-     &,    n_snoice     = 33
-     &,    n_meltt      = 34
-     &,    n_meltb      = 35
-     &,    n_meltl      = 36
-     &,    n_fresh      = 37
-     &,    n_fresh_ai   = 38
-     &,    n_fsalt      = 39
-     &,    n_fsalt_ai   = 40
-     &,    n_fhocn      = 41
-     &,    n_fhocn_ai   = 42
-     &,    n_fswthru    = 43
-     &,    n_fswthru_ai = 44
-     &,    n_strairx    = 45
-     &,    n_strairy    = 46
-     &,    n_strtltx    = 47
-     &,    n_strtlty    = 48
-     &,    n_strcorx    = 49
-     &,    n_strcory    = 50
-     &,    n_strocnx    = 51
-     &,    n_strocny    = 52
-     &,    n_strintx    = 53
-     &,    n_strinty    = 54
-     &,    n_strength   = 55
-     &,    n_divu       = 56
-     &,    n_shear      = 57
-     &,    n_sig1       = 58
-     &,    n_sig2       = 59
-     &,    n_dvidtt     = 60
-     &,    n_dvidtd     = 61
-     &,    n_daidtt     = 62
-     &,    n_daidtd     = 63
-     &,    n_mlt_onset  = 64
-     &,    n_frz_onset  = 65
-     &,    n_opening    = 66
-     &,    n_alvdr      = 67
-     &,    n_alidr      = 68
-     &,    n_dardg1dt   = 69
-     &,    n_dardg2dt   = 70
-     &,    n_dvirdgdt   = 71
-     &,    n_hisnap     = 72
-     &,    n_aisnap     = 73
-     &,    n_Tair       = 74
-     &,    n_trsig      = 75
-     &,    n_icepresent = 76
-     &,    n_aicen      = 77 ! n_aicen, n_vicen must be last in this list
-     &,    n_vicen      = 78 + ncat_hist - 1
+      integer (kind=int_kind), parameter :: &
+           n_hi         = 1,  &
+           n_hs         = 2,  &
+           n_Tsfc       = 3,  &
+           n_aice       = 4,  &
+           n_uvel       = 5,  &
+           n_vvel       = 6,  &
+           n_fswdn      = 7,  &
+           n_flwdn      = 8,  &
+           n_snow       = 9,  &
+           n_snow_ai    = 10, &
+           n_rain       = 11, &
+           n_rain_ai    = 12, &
+           n_sst        = 13, &
+           n_sss        = 14, &
+           n_uocn       = 15, &
+           n_vocn       = 16, &
+           n_frzmlt     = 17, &
+           n_fswabs     = 18, &
+           n_fswabs_ai  = 19, &
+           n_albsni     = 20, &
+           n_flat       = 21, &
+           n_flat_ai    = 22, &
+           n_fsens      = 23, &
+           n_fsens_ai   = 24, &
+           n_flwup      = 25, &
+           n_flwup_ai   = 26, &
+           n_evap       = 27, &
+           n_evap_ai    = 28, &
+           n_Tref       = 29, &
+           n_Qref       = 30, &
+           n_congel     = 31, &
+           n_frazil     = 32, &
+           n_snoice     = 33, &
+           n_meltt      = 34, &
+           n_meltb      = 35, &
+           n_meltl      = 36, &
+           n_fresh      = 37, &
+           n_fresh_ai   = 38, &
+           n_fsalt      = 39, &
+           n_fsalt_ai   = 40, &
+           n_fhocn      = 41, &
+           n_fhocn_ai   = 42, &
+           n_fswthru    = 43, &
+           n_fswthru_ai = 44, &
+           n_strairx    = 45, &
+           n_strairy    = 46, &
+           n_strtltx    = 47, &
+           n_strtlty    = 48, &
+           n_strcorx    = 49, &
+           n_strcory    = 50, &
+           n_strocnx    = 51, &
+           n_strocny    = 52, &
+           n_strintx    = 53, &
+           n_strinty    = 54, &
+           n_strength   = 55, &
+           n_divu       = 56, &
+           n_shear      = 57, &
+           n_sig1       = 58, &
+           n_sig2       = 59, &
+           n_dvidtt     = 60, &
+           n_dvidtd     = 61, &
+           n_daidtt     = 62, &
+           n_daidtd     = 63, &
+           n_mlt_onset  = 64, &
+           n_frz_onset  = 65, &
+           n_opening    = 66, &
+           n_alvdr      = 67, &
+           n_alidr      = 68, &
+           n_dardg1dt   = 69, &
+           n_dardg2dt   = 70, &
+           n_dvirdgdt   = 71, &
+           n_hisnap     = 72, &
+           n_aisnap     = 73, &
+           n_Tair       = 74, &
+           n_trsig      = 75, &
+           n_icepresent = 76, &
+           n_aicen      = 77, & ! n_aicen, n_vicen must be last in this list
+           n_vicen      = 78 + ncat_hist - 1
 
 !=======================================================================
 
@@ -322,8 +323,8 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), intent(in) ::
-     &   dt      ! time step
+      real (kind=dbl_kind), intent(in) :: &
+         dt      ! time step
 !
 !EOP
 !
@@ -500,8 +501,8 @@
       vdesc(n_hisnap    ) = 'ice volume snapshot'         
       vdesc(n_aisnap    ) = 'ice area snapshot' 
       vdesc(n_trsig     ) = 'internal stress tensor trace'
-      vdesc(n_icepresent) = 
-     &  'fraction of time-avg interval that any ice is present'
+      vdesc(n_icepresent) = &
+        'fraction of time-avg interval that any ice is present'
       do n = 1, ncat_hist
         write(nchar,'(i3)') n
 
@@ -891,10 +892,10 @@
 
       if (my_task == master_task) then
         write(nu_diag,*) ' '
-        write(nu_diag,*) 'The following variables will be ',
-     &                   'written to the history tape: '
-        write(nu_diag,*) ' description                           units',
-     &       '     netcdf variable'
+        write(nu_diag,*) 'The following variables will be ', &
+                         'written to the history tape: '
+        write(nu_diag,*) ' description                           units', &
+             '     netcdf variable'
          do n=1,avgsiz
             if (iout(n)) write(nu_diag,100) vdesc(n), vunit(n), vname(n)
          enddo
@@ -1026,8 +1027,8 @@
       use ice_blocks
       use ice_domain
       use ice_grid, only: tmask, lmask_n, lmask_s
-      use ice_calendar, only: new_year, secday, yday, write_history,
-     &                        write_ic, time
+      use ice_calendar, only: new_year, secday, yday, write_history, &
+                              write_ic, time
       use ice_state
       use ice_constants
       use ice_flux
@@ -1035,21 +1036,21 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), intent(in) ::
-     &   dt      ! time step
+      real (kind=dbl_kind), intent(in) :: &
+         dt      ! time step
 !EOP
 !
-      integer (kind=int_kind) ::
-     &     i,j,k,n,nct
-     &,    iblk                 ! block index
-     &,    ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: &
+           i,j,k,n,nct      , &
+           iblk             , & ! block index
+           ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
-      real (kind=dbl_kind) ::
-     &     ravgct               ! 1/avgct
-     &,    ai                   ! aice_init
+      real (kind=dbl_kind) :: &
+           ravgct           , & ! 1/avgct
+           ai                   ! aice_init
 
-      type (block) ::
-     &   this_block           ! block information for current block
+      type (block) :: &
+         this_block           ! block information for current block
 
       ! ice vol. tendency for history, due to dynamics
 
@@ -1105,11 +1106,11 @@
         aa(i,j,n_fswdn, iblk)= aa(i,j,n_fswdn, iblk) + fsw  (i,j,iblk) 
         aa(i,j,n_flwdn, iblk)= aa(i,j,n_flwdn, iblk) + flw  (i,j,iblk) 
         aa(i,j,n_snow,  iblk)= aa(i,j,n_snow,  iblk) + fsnow(i,j,iblk) 
-        aa(i,j,n_snow_ai,iblk)  =aa(i,j,n_snow_ai,  iblk)
-     &                                            + ai*fsnow(i,j,iblk)
+        aa(i,j,n_snow_ai,iblk)  =aa(i,j,n_snow_ai,  iblk) &
+                                                  + ai*fsnow(i,j,iblk)
         aa(i,j,n_rain,  iblk)= aa(i,j,n_rain,  iblk) + frain(i,j,iblk) 
-        aa(i,j,n_rain_ai,iblk) = aa(i,j,n_rain_ai,  iblk) 
-     &                                            + ai*frain(i,j,iblk)
+        aa(i,j,n_rain_ai,iblk) = aa(i,j,n_rain_ai,  iblk) &
+                                                  + ai*frain(i,j,iblk)
         aa(i,j,n_sst,   iblk)= aa(i,j,n_sst,   iblk) + sst  (i,j,iblk) 
         aa(i,j,n_sss,   iblk)= aa(i,j,n_sss,   iblk) + sss  (i,j,iblk) 
         aa(i,j,n_uocn,  iblk)= aa(i,j,n_uocn,  iblk) + uocn (i,j,iblk) 
@@ -1117,28 +1118,28 @@
         aa(i,j,n_frzmlt,iblk)= aa(i,j,n_frzmlt,iblk) +frzmlt(i,j,iblk) 
 
         aa(i,j,n_fswabs,iblk)= aa(i,j,n_fswabs,iblk) +fswabs(i,j,iblk)
-        aa(i,j,n_fswabs_ai,iblk)=aa(i,j,n_fswabs_ai,iblk)
-     &                                            +ai*fswabs(i,j,iblk)
+        aa(i,j,n_fswabs_ai,iblk)=aa(i,j,n_fswabs_ai,iblk) &
+                                                  +ai*fswabs(i,j,iblk)
 
-        aa(i,j,n_albsni,iblk)= aa(i,j,n_albsni,iblk) 
-     &                                        + awtvdr*alvdr(i,j,iblk)
-     &                                        + awtidr*alidr(i,j,iblk)
-     &                                        + awtvdf*alvdf(i,j,iblk)
-     &                                        + awtidf*alidf(i,j,iblk)
+        aa(i,j,n_albsni,iblk)= aa(i,j,n_albsni,iblk)  &
+                                              + awtvdr*alvdr(i,j,iblk) &
+                                              + awtidr*alidr(i,j,iblk) &
+                                              + awtvdf*alvdf(i,j,iblk) &
+                                              + awtidf*alidf(i,j,iblk)
         aa(i,j,n_alvdr, iblk)= aa(i,j,n_alvdr, iblk) + alvdr(i,j,iblk)
         aa(i,j,n_alidr, iblk)= aa(i,j,n_alidr, iblk) + alidr(i,j,iblk)
         aa(i,j,n_flat,  iblk)= aa(i,j,n_flat,  iblk) + flat (i,j,iblk) 
-        aa(i,j,n_flat_ai,iblk)  =aa(i,j,n_flat_ai,  iblk) 
-     &                                            +  ai*flat(i,j,iblk)
+        aa(i,j,n_flat_ai,iblk)  =aa(i,j,n_flat_ai,  iblk)  &
+                                                  +  ai*flat(i,j,iblk)
         aa(i,j,n_fsens, iblk)= aa(i,j,n_fsens, iblk) + fsens(i,j,iblk) 
-        aa(i,j,n_fsens_ai,iblk) =aa(i,j,n_fsens_ai, iblk) 
-     &                                            + ai*fsens(i,j,iblk)
+        aa(i,j,n_fsens_ai,iblk) =aa(i,j,n_fsens_ai, iblk)  &
+                                                  + ai*fsens(i,j,iblk)
         aa(i,j,n_flwup, iblk)= aa(i,j,n_flwup, iblk) +flwout(i,j,iblk) 
-        aa(i,j,n_flwup_ai,iblk) =aa(i,j,n_flwup_ai, iblk) 
-     &                                            +ai*flwout(i,j,iblk)
+        aa(i,j,n_flwup_ai,iblk) =aa(i,j,n_flwup_ai, iblk)  &
+                                                  +ai*flwout(i,j,iblk)
         aa(i,j,n_evap,  iblk)= aa(i,j,n_evap,  iblk) + evap (i,j,iblk) 
-        aa(i,j,n_evap_ai, iblk) = aa(i,j,n_evap_ai, iblk) 
-     &                                            +  ai*evap(i,j,iblk)
+        aa(i,j,n_evap_ai, iblk) = aa(i,j,n_evap_ai, iblk)  &
+                                                  +  ai*evap(i,j,iblk)
         aa(i,j,n_Tair,  iblk)= aa(i,j,n_Tair,  iblk) + Tair (i,j,iblk) 
         aa(i,j,n_Tref,  iblk)= aa(i,j,n_Tref,  iblk) + Tref (i,j,iblk) 
         aa(i,j,n_Qref,  iblk)= aa(i,j,n_Qref,  iblk) + Qref (i,j,iblk) 
@@ -1148,73 +1149,73 @@
         aa(i,j,n_meltt, iblk)= aa(i,j,n_meltt, iblk) + meltt(i,j,iblk)
         aa(i,j,n_meltb, iblk)= aa(i,j,n_meltb, iblk) + meltb(i,j,iblk) 
         aa(i,j,n_meltl, iblk)= aa(i,j,n_meltl, iblk) + meltl(i,j,iblk)
-        aa(i,j,n_fresh, iblk)= aa(i,j,n_fresh, iblk) 
-     &                                          + fresh_hist(i,j,iblk)
-        aa(i,j,n_fresh_ai,iblk) = aa(i,j,n_fresh_ai,iblk) 
-     &                                       + ai*fresh_hist(i,j,iblk)
-        aa(i,j,n_fsalt, iblk)   = aa(i,j,n_fsalt, iblk) 
-     &                                          + fsalt_hist(i,j,iblk)
-        aa(i,j,n_fsalt_ai,iblk) = aa(i,j,n_fsalt_ai,iblk) 
-     &                                       + ai*fsalt_hist(i,j,iblk)
-        aa(i,j,n_fhocn, iblk)   = aa(i,j,n_fhocn, iblk) 
-     &                                          + fhocn_hist(i,j,iblk)
-        aa(i,j,n_fhocn_ai,iblk) = aa(i,j,n_fhocn_ai,iblk) 
-     &                                       + ai*fhocn_hist(i,j,iblk)
-        aa(i,j,n_fswthru,iblk)  = aa(i,j,n_fswthru,iblk) 
-     &                                        + fswthru_hist(i,j,iblk)
-        aa(i,j,n_fswthru_ai,iblk)=aa(i,j,n_fswthru_ai,iblk)
-     &                                     + ai*fswthru_hist(i,j,iblk)
+        aa(i,j,n_fresh, iblk)= aa(i,j,n_fresh, iblk)  &
+                                                + fresh_hist(i,j,iblk)
+        aa(i,j,n_fresh_ai,iblk) = aa(i,j,n_fresh_ai,iblk) &
+                                             + ai*fresh_hist(i,j,iblk)
+        aa(i,j,n_fsalt, iblk)   = aa(i,j,n_fsalt, iblk)   &
+                                                + fsalt_hist(i,j,iblk)
+        aa(i,j,n_fsalt_ai,iblk) = aa(i,j,n_fsalt_ai,iblk) &
+                                             + ai*fsalt_hist(i,j,iblk)
+        aa(i,j,n_fhocn, iblk)   = aa(i,j,n_fhocn, iblk)   &
+                                                + fhocn_hist(i,j,iblk)
+        aa(i,j,n_fhocn_ai,iblk) = aa(i,j,n_fhocn_ai,iblk) &
+                                             + ai*fhocn_hist(i,j,iblk)
+        aa(i,j,n_fswthru,iblk)  = aa(i,j,n_fswthru,iblk)  &
+                                              + fswthru_hist(i,j,iblk)
+        aa(i,j,n_fswthru_ai,iblk)=aa(i,j,n_fswthru_ai,iblk) &
+                                           + ai*fswthru_hist(i,j,iblk)
                
-        aa(i,j,n_strairx,iblk) = aa(i,j,n_strairx,iblk)
-     &                                             + strairx(i,j,iblk)
-        aa(i,j,n_strairy,iblk) = aa(i,j,n_strairy,iblk) 
-     &                                             + strairy(i,j,iblk)
-        aa(i,j,n_strtltx,iblk) = aa(i,j,n_strtltx,iblk) 
-     &                                             + strtltx(i,j,iblk)
-        aa(i,j,n_strtlty,iblk) = aa(i,j,n_strtlty,iblk) 
-     &                                             + strtlty(i,j,iblk)
-        aa(i,j,n_strcorx,iblk) = aa(i,j,n_strcorx,iblk)     
-     &                                   + fm(i,j,iblk)*vvel(i,j,iblk)
-        aa(i,j,n_strcory,iblk) = aa(i,j,n_strcory,iblk) 
-     &                                   - fm(i,j,iblk)*uvel(i,j,iblk)
-        aa(i,j,n_strocnx,iblk) = aa(i,j,n_strocnx,iblk) 
-     &                                             + strocnx(i,j,iblk)
-        aa(i,j,n_strocny,iblk) = aa(i,j,n_strocny,iblk) 
-     &                                             + strocny(i,j,iblk)
-        aa(i,j,n_strintx,iblk) = aa(i,j,n_strintx,iblk) 
-     &                                             + strintx(i,j,iblk)
-        aa(i,j,n_strinty,iblk) = aa(i,j,n_strinty,iblk) 
-     &                                             + strinty(i,j,iblk)
-        aa(i,j,n_strength,iblk)= aa(i,j,n_strength,iblk) 
-     &                                            + strength(i,j,iblk)
+        aa(i,j,n_strairx,iblk) = aa(i,j,n_strairx,iblk)  &
+                                                   + strairx(i,j,iblk)
+        aa(i,j,n_strairy,iblk) = aa(i,j,n_strairy,iblk)  &
+                                                   + strairy(i,j,iblk)
+        aa(i,j,n_strtltx,iblk) = aa(i,j,n_strtltx,iblk)  &
+                                                   + strtltx(i,j,iblk)
+        aa(i,j,n_strtlty,iblk) = aa(i,j,n_strtlty,iblk)  &
+                                                   + strtlty(i,j,iblk)
+        aa(i,j,n_strcorx,iblk) = aa(i,j,n_strcorx,iblk)  &  
+                                         + fm(i,j,iblk)*vvel(i,j,iblk)
+        aa(i,j,n_strcory,iblk) = aa(i,j,n_strcory,iblk)  &
+                                         - fm(i,j,iblk)*uvel(i,j,iblk)
+        aa(i,j,n_strocnx,iblk) = aa(i,j,n_strocnx,iblk)  &
+                                                   + strocnx(i,j,iblk)
+        aa(i,j,n_strocny,iblk) = aa(i,j,n_strocny,iblk)  &
+                                                   + strocny(i,j,iblk)
+        aa(i,j,n_strintx,iblk) = aa(i,j,n_strintx,iblk)  &
+                                                   + strintx(i,j,iblk)
+        aa(i,j,n_strinty,iblk) = aa(i,j,n_strinty,iblk)  &
+                                                   + strinty(i,j,iblk)
+        aa(i,j,n_strength,iblk)= aa(i,j,n_strength,iblk) &
+                                                  + strength(i,j,iblk)
 
 ! The following fields (divu, shear, sig1, and sig2) will be smeared
 !  if averaged over more than a few days.
 ! Snapshots may be more useful (see below).
 
-c         aa(i,j,n_divu    ) = aa(i,j,n_divu    ) + divu (i,j,iblk)
-c         aa(i,j,n_shear   ) = aa(i,j,n_shear   ) + shear(i,j,iblk)
-c         aa(i,j,n_sig1    ) = aa(i,j,n_sig1    ) + sig1 (i,j,iblk)
-c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
+!         aa(i,j,n_divu    ) = aa(i,j,n_divu    ) + divu (i,j,iblk)
+!         aa(i,j,n_shear   ) = aa(i,j,n_shear   ) + shear(i,j,iblk)
+!         aa(i,j,n_sig1    ) = aa(i,j,n_sig1    ) + sig1 (i,j,iblk)
+!         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
-        aa(i,j,n_dvidtt ,iblk) = aa(i,j,n_dvidtt ,iblk) 
-     &                                             + dvidtt(i,j,iblk)
-        aa(i,j,n_dvidtd ,iblk) = aa(i,j,n_dvidtd ,iblk) 
-     &                                             + dvidtd(i,j,iblk)
-        aa(i,j,n_daidtt ,iblk) = aa(i,j,n_daidtt ,iblk) 
-     &                                             + daidtt(i,j,iblk)
-        aa(i,j,n_daidtd ,iblk) = aa(i,j,n_daidtd ,iblk) 
-     &                                             + daidtd(i,j,iblk)
-        aa(i,j,n_opening,iblk) = aa(i,j,n_opening,iblk) 
-     &                                            + opening(i,j,iblk)
-        aa(i,j,n_dardg1dt,iblk)= aa(i,j,n_dardg1dt,iblk) 
-     &                                           + dardg1dt(i,j,iblk)
-        aa(i,j,n_dardg2dt,iblk)= aa(i,j,n_dardg2dt,iblk) 
-     &                                           + dardg2dt(i,j,iblk)
-        aa(i,j,n_dvirdgdt,iblk)= aa(i,j,n_dvirdgdt,iblk) 
-     &                                           + dvirdgdt(i,j,iblk)
-        if (aice(i,j,iblk).gt.puny) 
-     &  aa(i,j,n_icepresent,iblk) = aa(i,j,n_icepresent,iblk) + c1
+        aa(i,j,n_dvidtt ,iblk) = aa(i,j,n_dvidtt ,iblk)  &
+                                                   + dvidtt(i,j,iblk)
+        aa(i,j,n_dvidtd ,iblk) = aa(i,j,n_dvidtd ,iblk)  &
+                                                   + dvidtd(i,j,iblk)
+        aa(i,j,n_daidtt ,iblk) = aa(i,j,n_daidtt ,iblk)  &
+                                                   + daidtt(i,j,iblk)
+        aa(i,j,n_daidtd ,iblk) = aa(i,j,n_daidtd ,iblk)  &
+                                                   + daidtd(i,j,iblk)
+        aa(i,j,n_opening,iblk) = aa(i,j,n_opening,iblk)  &
+                                                  + opening(i,j,iblk)
+        aa(i,j,n_dardg1dt,iblk)= aa(i,j,n_dardg1dt,iblk) &
+                                                 + dardg1dt(i,j,iblk)
+        aa(i,j,n_dardg2dt,iblk)= aa(i,j,n_dardg2dt,iblk) &
+                                                 + dardg2dt(i,j,iblk)
+        aa(i,j,n_dvirdgdt,iblk)= aa(i,j,n_dvirdgdt,iblk) &
+                                                 + dvirdgdt(i,j,iblk)
+        if (aice(i,j,iblk).gt.puny)  &
+        aa(i,j,n_icepresent,iblk) = aa(i,j,n_icepresent,iblk) + c1
        endif                    ! tmask
        enddo                    ! i
        enddo                    ! j
@@ -1225,10 +1226,10 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           do i=ilo,ihi
              if (tmask(i,j,iblk)) then
                 ! assume consecutive indices
-                aa(i,j,n_aicen+n-1,iblk) = aa(i,j,n_aicen+n-1,iblk) 
-     &                                          + aicen(i,j,n,iblk)
-                aa(i,j,n_vicen+n-1,iblk) = aa(i,j,n_vicen+n-1,iblk) 
-     &                                          + vicen(i,j,n,iblk)
+                aa(i,j,n_aicen+n-1,iblk) = aa(i,j,n_aicen+n-1,iblk)  &
+                                                + aicen(i,j,n,iblk)
+                aa(i,j,n_vicen+n-1,iblk) = aa(i,j,n_vicen+n-1,iblk)  &
+                                                + vicen(i,j,n,iblk)
              endif              ! tmask
           enddo                 ! i
           enddo                 ! j
@@ -1260,8 +1261,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
                  if (.not. tmask(i,j,iblk)) then ! mask out land points
                     aa(i,j,k,iblk) = spval
                  else                            ! convert units
-                    aa(i,j,k,iblk) = cona(k)*aa(i,j,k,iblk)*ravgct 
-     &                             + conb(k)
+                    aa(i,j,k,iblk) = cona(k)*aa(i,j,k,iblk)*ravgct  &
+                                   + conb(k)
                  endif
               enddo             ! i
               enddo             ! j
@@ -1273,13 +1274,13 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
           ! compute sig1 and sig2
         
-           call principal_stress (nx_block,  ny_block,
-     &                            stressp_1 (:,:,iblk),
-     &                            stressm_1 (:,:,iblk),
-     &                            stress12_1(:,:,iblk),
-     &                            prs_sig   (:,:,iblk),
-     &                            sig1      (:,:,iblk),
-     &                            sig2      (:,:,iblk))
+           call principal_stress (nx_block,  ny_block,  &
+                                  stressp_1 (:,:,iblk), &
+                                  stressm_1 (:,:,iblk), &
+                                  stress12_1(:,:,iblk), &
+                                  prs_sig   (:,:,iblk), &
+                                  sig1      (:,:,iblk), &
+                                  sig2      (:,:,iblk))
  
            do j = jlo, jhi
            do i = ilo, ihi
@@ -1302,10 +1303,10 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
                  aa(i,j,n_frz_onset,iblk) = frz_onset(i,j,iblk)
                  aa(i,j,n_hisnap,iblk)    = vice(i,j,iblk)
                  aa(i,j,n_aisnap,iblk)    = aice(i,j,iblk)
-                 aa(i,j,n_trsig,iblk )    = p25*(stressp_1(i,j,iblk)
-     &                                    + stressp_2(i,j,iblk)
-     &                                    + stressp_3(i,j,iblk)
-     &                                    + stressp_4(i,j,iblk))
+                 aa(i,j,n_trsig,iblk )    = p25*(stressp_1(i,j,iblk) &
+                                          + stressp_2(i,j,iblk) &
+                                          + stressp_3(i,j,iblk) &
+                                          + stressp_4(i,j,iblk))
             endif
            enddo                ! i
            enddo                ! j
@@ -1347,8 +1348,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
             enddo
          endif                  ! new_year
 
-         if ((yday >= 181._dbl_kind) .and.
-     &       (yday <  181._dbl_kind+dt/secday)) then
+         if ((yday >= 181._dbl_kind) .and. &
+             (yday <  181._dbl_kind+dt/secday)) then
 
             do j=jlo,jhi
             do i=ilo,ihi
@@ -1391,9 +1392,9 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       use ice_domain_size
       use ice_constants
       use ice_grid
-      use ice_calendar, only: time, sec, idate, nyr, month, daymo, 
-     &                        mday, write_ic, histfreq, histfreq_n,
-     &                        year_init, new_year, new_month, new_day
+      use ice_calendar, only: time, sec, idate, nyr, month, daymo,  &
+                              mday, write_ic, histfreq, histfreq_n, &
+                              year_init, new_year, new_month, new_day
       use ice_work, only: work_g1, work_gr, work_gr3
       use ice_restart, only: lenstr, runid
       use ice_domain, only: distrb_info
@@ -1405,9 +1406,9 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 !
       include "netcdf.inc"
 
-      integer (kind=int_kind) :: i,j,n
-     &,  ncid,status,imtid,jmtid,timid,varid
-     &,  length
+      integer (kind=int_kind) :: i,j,n, &
+         ncid,status,imtid,jmtid,timid,varid, &
+         length
       integer (kind=int_kind), dimension(3) :: dimid,start,count
       real (kind=real_kind) :: ltime
       character (char_len) :: title
@@ -1449,9 +1450,9 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
         ! construct filename
         if (write_ic) then
-           write(ncfile,'(a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
-     &        incond_file(1:lenstr(incond_file)),iyear,'-',
-     &        imonth,'-',iday,'-',sec,'.nc'
+           write(ncfile,'(a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)')  &
+              incond_file(1:lenstr(incond_file)),iyear,'-', &
+              imonth,'-',iday,'-',sec,'.nc'
         else
 
          if (hist_avg) then
@@ -1470,34 +1471,32 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
          endif
 
          if (histfreq == '1') then ! instantaneous, write every dt
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
-     &      history_file(1:lenstr(history_file)),'_inst.',
-     &       iyear,'-',imonth,'-',iday,'-',sec,'.nc'
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)')  &
+            history_file(1:lenstr(history_file)),'_inst.', &
+             iyear,'-',imonth,'-',iday,'-',sec,'.nc'
 
          elseif (hist_avg) then    ! write averaged data
 
           if (histfreq.eq.'d'.or.histfreq.eq.'D') then     ! daily
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)') 
-     &      history_file(1:lenstr(history_file)),
-     &       '.',iyear,'-',imonth,'-',iday,'.nc'
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)')  &
+            history_file(1:lenstr(history_file)), &
+             '.',iyear,'-',imonth,'-',iday,'.nc'
           elseif (histfreq.eq.'h'.or.histfreq.eq.'H') then ! hourly
-           write(ncfile,'(a,a,i2.2,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
-     &      history_file(1:lenstr(history_file)),
-     &       '_',histfreq_n,'h.',
-     &       iyear,'-',imonth,'-',iday,'-',sec,'.nc'
+           write(ncfile,'(a,a,i2.2,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)')  &
+            history_file(1:lenstr(history_file)),'_',histfreq_n,'h.', &
+             iyear,'-',imonth,'-',iday,'-',sec,'.nc'
           elseif (histfreq.eq.'m'.or.histfreq.eq.'M') then ! monthly
-           write(ncfile,'(a,a,i4.4,a,i2.2,a)') 
-     &      history_file(1:lenstr(history_file)),'.',
-     &       iyear,'-',imonth,'.nc'
+           write(ncfile,'(a,a,i4.4,a,i2.2,a)')  &
+            history_file(1:lenstr(history_file)),'.',iyear,'-',imonth,'.nc'
           elseif (histfreq.eq.'y'.or.histfreq.eq.'Y') then ! yearly
-           write(ncfile,'(a,a,i4.4,a)')
-     &      history_file(1:lenstr(history_file)),'.', iyear,'.nc'
+           write(ncfile,'(a,a,i4.4,a)') &
+            history_file(1:lenstr(history_file)),'.', iyear,'.nc'
           endif
 
          else                     ! instantaneous with histfreq > dt
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
-     &      history_file(1:lenstr(history_file)),'_inst.',
-     &       iyear,'-',imonth,'-',iday,'-',sec,'.nc'
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)')  &
+            history_file(1:lenstr(history_file)),'_inst.', &
+             iyear,'-',imonth,'-',iday,'-',sec,'.nc'
          endif
         endif
 
@@ -1540,8 +1539,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         status = nf_put_att_text(ncid,varid,'long_name',10,'model time')
         call nf_stat_check (status,'Error assigning long_name for time')
 
-        status = nf_put_att_text(ncid,varid,'units',
-     $                  30,'days since 0001-01-01 00:00:00')  ! for now
+        status = nf_put_att_text(ncid,varid,'units', &
+                        30,'days since 0001-01-01 00:00:00')  ! for now
         call nf_stat_check (status,'Error assigning units for time')
 
         status = nf_put_att_text(ncid,varid,'calendar', 6,'noleap')
@@ -1560,16 +1559,16 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           dimid(1) = boundid
           dimid(2) = timid
           status = nf_def_var(ncid,'time_bounds',nf_float,2,dimid,varid)
-          call nf_stat_check (status,
-     $         'Error defining variable time_bounds')
-          status = nf_put_att_text(ncid,varid,'long_name',
-     $             38,'boundaries for time-averaging interval')
-          call nf_stat_check (status,
-     $         'Error with long_name to time_bounds')
-          status = nf_put_att_text(ncid,varid,'units',
-     $                  30,'days since 0001-01-01 00:00:00')  ! for now
-          call nf_stat_check (status,
-     $         'Error assigning units to time_bounds')
+          call nf_stat_check (status, &
+               'Error defining variable time_bounds')
+          status = nf_put_att_text(ncid,varid,'long_name', &
+                   38,'boundaries for time-averaging interval')
+          call nf_stat_check (status, &
+               'Error with long_name to time_bounds')
+          status = nf_put_att_text(ncid,varid,'units', &
+                        30,'days since 0001-01-01 00:00:00')  ! for now
+          call nf_stat_check (status, &
+               'Error assigning units to time_bounds')
         endif
 
       !-----------------------------------------------------------------
@@ -1578,63 +1577,63 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
       ind = 0
       ind = ind + 1
-      coord_var(ind) = coord_attributes('TLON',
-     &                 'T grid center longitude', 'degrees_east')
+      coord_var(ind) = coord_attributes('TLON', &
+                       'T grid center longitude', 'degrees_east')
       ind = ind + 1
-      coord_var(ind) = coord_attributes('TLAT', 
-     &                 'T grid center latitude',  'degrees_north')
+      coord_var(ind) = coord_attributes('TLAT', &
+                       'T grid center latitude',  'degrees_north')
       ind = ind + 1
-      coord_var(ind) = coord_attributes('ULON',
-     &                 'U grid center longitude', 'degrees_east')
+      coord_var(ind) = coord_attributes('ULON', &
+                       'U grid center longitude', 'degrees_east')
       ind = ind + 1
-      coord_var(ind) = coord_attributes('ULAT', 
-     &                 'U grid center latitude',  'degrees_north')
+      coord_var(ind) = coord_attributes('ULAT', &
+                       'U grid center latitude',  'degrees_north')
 
       ind = 0
       ind = ind + 1
-      var(ind)%req = coord_attributes('tarea', 'area of T grid cells',
-     &                          'm^2')
+      var(ind)%req = coord_attributes('tarea', 'area of T grid cells', &
+                                'm^2')
       var(ind)%coordinates = 'TLON TLAT'
       ind = ind + 1
-      var(ind)%req = coord_attributes('uarea', 'area of U grid cells',
-     &                          'm^2')
+      var(ind)%req = coord_attributes('uarea', 'area of U grid cells', &
+                                'm^2')
       var(ind)%coordinates = 'ULON ULAT'
 #ifdef CCSM
       ind = ind + 1
-      var(ind)%req = coord_attributes('dxt',
-     &               'T cell width through middle', 'm')
+      var(ind)%req = coord_attributes('dxt', &
+                     'T cell width through middle', 'm')
       var(ind)%coordinates = 'TLON TLAT'
       ind = ind + 1
-      var(ind)%req = coord_attributes('dyt',
-     &               'T cell height through middle', 'm')
+      var(ind)%req = coord_attributes('dyt', &
+                     'T cell height through middle', 'm')
       var(ind)%coordinates = 'TLON TLAT'
       ind = ind + 1
-      var(ind)%req = coord_attributes('dxu',
-     &               'U cell width through middle', 'm')
+      var(ind)%req = coord_attributes('dxu', &
+                     'U cell width through middle', 'm')
       var(ind)%coordinates = 'ULON ULAT'
       ind = ind + 1
-      var(ind)%req = coord_attributes('dyu',
-     &               'U cell height through middle', 'm')
+      var(ind)%req = coord_attributes('dyu', &
+                     'U cell height through middle', 'm')
       var(ind)%coordinates = 'ULON ULAT'
       ind = ind + 1
-      var(ind)%req = coord_attributes('HTN',
-     &               'T cell width on North side','m')
+      var(ind)%req = coord_attributes('HTN', &
+                     'T cell width on North side','m')
       var(ind)%coordinates = 'TLON TLAT'
 
       ind = ind + 1
-      var(ind)%req = coord_attributes('HTE',
-     &               'T cell width on East side', 'm')
+      var(ind)%req = coord_attributes('HTE', &
+                     'T cell width on East side', 'm')
       var(ind)%coordinates = 'TLON TLAT'
 #endif
       ind = ind + 1
-      var(ind)%req = coord_attributes('ANGLET',
-     &               'angle grid makes with latitude line on T grid',
-     &               'radians')
+      var(ind)%req = coord_attributes('ANGLET', &
+                     'angle grid makes with latitude line on T grid', &
+                     'radians')
       var(ind)%coordinates = 'TLON TLAT'
       ind = ind + 1
-      var(ind)%req = coord_attributes('ANGLE',
-     &               'angle grid makes with latitude line on U grid',
-     &               'radians')
+      var(ind)%req = coord_attributes('ANGLE', &
+                     'angle grid makes with latitude line on U grid', &
+                     'radians')
       var(ind)%coordinates = 'ULON ULAT'
 
       !-----------------------------------------------------------------
@@ -1646,94 +1645,94 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         dimid(3) = timid
 
         do i = 1, ncoord
-          status = nf_def_var(ncid, coord_var(i)%short_name, nf_float,
-     &                       2, dimid, varid)
-          call nf_stat_check (status,
-     &         'Error defining short_name for'//coord_var(i)%short_name)
+          status = nf_def_var(ncid, coord_var(i)%short_name, nf_float, &
+                             2, dimid, varid)
+          call nf_stat_check (status, &
+               'Error defining short_name for'//coord_var(i)%short_name)
           length = lenstr(coord_var(i)%long_name)
-          status = nf_put_att_text(ncid,varid, 'long_name', length,
-     &                       coord_var(i)%long_name)
-          call nf_stat_check (status,
-     &         'Error defining long_name for'//coord_var(i)%short_name)
+          status = nf_put_att_text(ncid,varid, 'long_name', length, &
+                             coord_var(i)%long_name)
+          call nf_stat_check (status, &
+               'Error defining long_name for'//coord_var(i)%short_name)
           length = lenstr(coord_var(i)%units)
-          status = nf_put_att_text(ncid, varid, 'units', length,
-     &                       coord_var(i)%units)
-          call nf_stat_check (status,
-     &            'Error defining units for'//coord_var(i)%short_name)
+          status = nf_put_att_text(ncid, varid, 'units', length, &
+                             coord_var(i)%units)
+          call nf_stat_check (status, &
+                  'Error defining units for'//coord_var(i)%short_name)
           if (coord_var(i)%short_name == 'ULAT') then
-            status = nf_put_att_text(ncid,varid,'comment', 36,
-     $            'Latitude of NE corner of T grid cell')
-            call nf_stat_check (status,
-     &            'Error defining comment for'//coord_var(i)%short_name)
+            status = nf_put_att_text(ncid,varid,'comment', 36, &
+                  'Latitude of NE corner of T grid cell')
+            call nf_stat_check (status, &
+                  'Error defining comment for'//coord_var(i)%short_name)
           endif
         enddo
 
 ! Attributes for tmask defined separately, since it has no units
         status = nf_def_var(ncid, 'tmask', nf_float, 2, dimid, varid)
         call nf_stat_check (status,'Error defining variable tmask')
-        status = nf_put_att_text(ncid,varid, 'long_name', 15,
-     &                      'ocean grid mask') 
+        status = nf_put_att_text(ncid,varid, 'long_name', 15, &
+                            'ocean grid mask') 
         call nf_stat_check (status,'Error defining long_name for tmask')
-        status = nf_put_att_text(ncid, varid, 'coordinates', 9,
-     &              'TLON TLAT')
-        call nf_stat_check (status,
-     &       'Error defining coordinates for tmask')
-        status = nf_put_att_text(ncid,varid,'comment', 19,
-     $            '0 = land, 1 = ocean')
+        status = nf_put_att_text(ncid, varid, 'coordinates', 9, &
+                    'TLON TLAT')
+        call nf_stat_check (status, &
+             'Error defining coordinates for tmask')
+        status = nf_put_att_text(ncid,varid,'comment', 19, &
+                  '0 = land, 1 = ocean')
         call nf_stat_check (status,'Error defining comment for tmask')
 
         do i = 1, nvar
-          status = nf_def_var(ncid, var(i)%req%short_name, nf_float,
-     &                        2, dimid, varid)
-          call nf_stat_check (status,
-     &         'Error defining variable'//var(i)%req%short_name)
+          status = nf_def_var(ncid, var(i)%req%short_name, nf_float, &
+                              2, dimid, varid)
+          call nf_stat_check (status, &
+               'Error defining variable'//var(i)%req%short_name)
           length = lenstr(var(i)%req%long_name)
-          status = nf_put_att_text(ncid,varid, 'long_name', length,
-     &              var(i)%req%long_name)
-          call nf_stat_check (status,
-     &         'Error defining long_name for'//var(i)%req%short_name)
+          status = nf_put_att_text(ncid,varid, 'long_name', length, &
+                    var(i)%req%long_name)
+          call nf_stat_check (status, &
+               'Error defining long_name for'//var(i)%req%short_name)
           length = lenstr(var(i)%req%units)
-          status = nf_put_att_text(ncid, varid, 'units', length,
-     &              var(i)%req%units)
-          call nf_stat_check (status,
-     &         'Error defining units for'//var(i)%req%short_name)
+          status = nf_put_att_text(ncid, varid, 'units', length, &
+                    var(i)%req%units)
+          call nf_stat_check (status, &
+               'Error defining units for'//var(i)%req%short_name)
           length = lenstr(var(i)%coordinates)
-          status = nf_put_att_text(ncid, varid, 'coordinates', length,
-     &              var(i)%coordinates)
-          call nf_stat_check (status,
-     &         'Error defining coordinates for'//var(i)%req%short_name)
+          status = nf_put_att_text(ncid, varid, 'coordinates', length, &
+                    var(i)%coordinates)
+          call nf_stat_check (status, &
+               'Error defining coordinates for'//var(i)%req%short_name)
          enddo
 
         do n=1,avgsiz
           if (iout(n)) then
-            status  = nf_def_var(ncid, vname(n), nf_float, 
-     $                         3, dimid, varid)
-            call nf_stat_check (status,
-     $           'Error defining variable'//vname(n))
+            status  = nf_def_var(ncid, vname(n), nf_float, &
+                               3, dimid, varid)
+            call nf_stat_check (status, &
+                 'Error defining variable'//vname(n))
             length = lenstr(vunit(n))
-            status = nf_put_att_text(ncid,varid,
-     $             'units',length,vunit(n))
-            call nf_stat_check (status,
-     $           'Error defining units for'//vname(n))
+            status = nf_put_att_text(ncid,varid, &
+                   'units',length,vunit(n))
+            call nf_stat_check (status, &
+                 'Error defining units for'//vname(n))
             length = lenstr(vdesc(n))
-            status = nf_put_att_text(ncid,varid,
-     $             'long_name',length,vdesc(n))
-            call nf_stat_check (status,
-     $           'Error defining long_name for'//vname(n))
+            status = nf_put_att_text(ncid,varid, &
+                   'long_name',length,vdesc(n))
+            call nf_stat_check (status, &
+                 'Error defining long_name for'//vname(n))
             length = lenstr(vcoord(n))
-            status = nf_put_att_text(ncid,varid,'coordinates',
-     $                             length,vcoord(n))
-            call nf_stat_check (status,
-     $           'Error defining coordinates for'//vname(n))
-            status = nf_put_att_real(ncid,varid,'missing_value',
-     $                             nf_float,1,spval)
-            call nf_stat_check (status,
-     $           'Error defining mising_value for'//vname(n))
+            status = nf_put_att_text(ncid,varid,'coordinates', &
+                                   length,vcoord(n))
+            call nf_stat_check (status, &
+                 'Error defining coordinates for'//vname(n))
+            status = nf_put_att_real(ncid,varid,'missing_value', &
+                                   nf_float,1,spval)
+            call nf_stat_check (status, &
+                 'Error defining mising_value for'//vname(n))
 
-            status = nf_put_att_real(ncid,varid,'_FillValue',
-     $                             nf_float,1,spval)
-            call nf_stat_check (status,
-     $           'Error defining _FillValue for'//vname(n))
+            status = nf_put_att_real(ncid,varid,'_FillValue', &
+                                   nf_float,1,spval)
+            call nf_stat_check (status, &
+                 'Error defining _FillValue for'//vname(n))
       !-----------------------------------------------------------------
       ! Append ice thickness range to aicen comments
       !-----------------------------------------------------------------
@@ -1748,32 +1747,32 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
               vcomment(n) = 'Ice range: '//c_hi_range(icategory)
             endif
             length = lenstr(vcomment(n))
-            status = nf_put_att_text(ncid,varid,'comment', 
-     &               length, vcomment(n))
-            call nf_stat_check (status,
-     &                     'Error defining comment for'//vname(n))
+            status = nf_put_att_text(ncid,varid,'comment',  &
+                     length, vcomment(n))
+            call nf_stat_check (status, &
+                           'Error defining comment for'//vname(n))
       !-----------------------------------------------------------------
       ! Add cell_methods attribute to variables if averaged
       !-----------------------------------------------------------------
             if (hist_avg) then
               if (TRIM(vname(n))/='sig1'.or.TRIM(vname(n))/='sig2') then
-                status = nf_put_att_text(ncid,varid,'cell_methods',
-     $                               9,'time:mean')
-                call nf_stat_check (status,
-     &               'Error defining cell methods for'//vname(n))
+                status = nf_put_att_text(ncid,varid,'cell_methods', &
+                                     9,'time:mean')
+                call nf_stat_check (status, &
+                     'Error defining cell methods for'//vname(n))
               endif
             endif
 
-            if (histfreq == '1' .or. .not.hist_avg
-     &          .or. n==n_divu .or. n==n_shear     ! snapshots
-     &          .or. n==n_sig1 .or. n==n_sig2 .or. n==n_trsig
-     &          .or. n==n_mlt_onset .or. n==n_frz_onset
-     &          .or. n==n_hisnap .or. n==n_aisnap) then
-            status = nf_put_att_text(ncid,varid,'time_rep',
-     $                              13,'instantaneous')
+            if (histfreq == '1'     .or. .not. hist_avg &
+                .or. n==n_divu      .or. n==n_shear     &  ! snapshots
+                .or. n==n_sig1      .or. n==n_sig2 .or. n==n_trsig &
+                .or. n==n_mlt_onset .or. n==n_frz_onset &
+                .or. n==n_hisnap    .or. n==n_aisnap) then
+            status = nf_put_att_text(ncid,varid,'time_rep', &
+                                    13,'instantaneous')
             else
-            status = nf_put_att_text(ncid,varid,'time_rep',
-     $                               8,'averaged')
+            status = nf_put_att_text(ncid,varid,'time_rep', &
+                                     8,'averaged')
             endif
           endif
         enddo
@@ -1810,21 +1809,21 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
         title = 'CF-1.0'
         length = lenstr(title)
-        status = 
-     &       nf_put_att_text(ncid,nf_global,'conventions',length,title)
-        call nf_stat_check (status,
-     &       'Error in global attribute conventions')
+        status =  &
+             nf_put_att_text(ncid,nf_global,'conventions',length,title)
+        call nf_stat_check (status, &
+             'Error in global attribute conventions')
 
         call date_and_time(date=current_date, time=current_time)
-        write(start_time,1000) current_date(1:4), current_date(5:6)
-     &,                        current_date(7:8), current_time(1:2)
-     &,                        current_time(3:4), current_time(5:8)
-1000    format('This dataset was created on '
-     &,         a,'-',a,'-',a,' at ',a,':',a,':',a)
+        write(start_time,1000) current_date(1:4), current_date(5:6), &
+                               current_date(7:8), current_time(1:2), &
+                               current_time(3:4), current_time(5:8)
+1000    format('This dataset was created on ', &
+                a,'-',a,'-',a,' at ',a,':',a,':',a)
 
         length = lenstr(start_time)
-        status = nf_put_att_text(ncid,nf_global,'history',
-     &                           length,start_time)
+        status = nf_put_att_text(ncid,nf_global,'history', &
+                                 length,start_time)
         call nf_stat_check (status,'Error in global attribute history')
 
       !-----------------------------------------------------------------
@@ -1901,11 +1900,11 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           
           if (my_task == master_task) then
              status = nf_inq_varid(ncid, coord_var(i)%short_name, varid)
-             call nf_stat_check (status,'Error getting varid for'
-     &                                   //coord_var(i)%short_name)
+             call nf_stat_check (status,'Error getting varid for' &
+                                         //coord_var(i)%short_name)
              status = nf_put_var_real(ncid,varid,work_gr)
-             call nf_stat_check (status,'Error writing'
-     &                                   //coord_var(i)%short_name)
+             call nf_stat_check (status,'Error writing' &
+                                         //coord_var(i)%short_name)
           endif
         enddo
 
@@ -1950,11 +1949,11 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         if (my_task == master_task) then
           work_gr=work_g1
           status = nf_inq_varid(ncid, var(i)%req%short_name, varid)
-          call nf_stat_check (status,'Error getting varid for'
-     &                          //var(i)%req%short_name)
+          call nf_stat_check (status,'Error getting varid for' &
+                                //var(i)%req%short_name)
           status = nf_put_var_real(ncid,varid,work_gr)
-          call nf_stat_check (status,'Error writing variable'
-     &                          //var(i)%req%short_name)
+          call nf_stat_check (status,'Error writing variable' &
+                                //var(i)%req%short_name)
         endif
       enddo
 
@@ -1976,16 +1975,16 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       count(3)=1
       do n=1,avgsiz
         if (iout(n)) then
-          call gather_global(work_g1, aa(:,:,n,:),
-     &                       master_task, distrb_info)
+          call gather_global(work_g1, aa(:,:,n,:), &
+                             master_task, distrb_info)
           if (my_task == master_task) then
             work_gr3(:,:,1) = work_g1(:,:)
             status  = nf_inq_varid(ncid,vname(n),varid)
-            call nf_stat_check (status,'Error getting varid for'
-     &                          //vname(n))
+            call nf_stat_check (status,'Error getting varid for' &
+                                //vname(n))
             status  = nf_put_vara_real(ncid,varid,start,count,work_gr3)
-            call nf_stat_check (status,'Error writing variable'
-     &                          //vname(n))
+            call nf_stat_check (status,'Error writing variable' &
+                                //vname(n))
           endif
         endif
       enddo
@@ -2039,8 +2038,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 !EOP
 !
       if (status /= NF_NOERR) then
-        write (nu_diag,*) msg/
-     &                   /nf_strerror(status)
+        write (nu_diag,*) msg, ':',  &
+                          nf_strerror(status)
         call abort_ice ('ice: writing netCDF file in ice_history.F')
       endif
 

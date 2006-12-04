@@ -13,6 +13,7 @@
 ! author: Tony Craig, NCAR
 !
 ! 2004: Block structure added by William Lipscomb, LANL
+! 2006: Converted to free source form (F90) by Elizabeth Hunke
 !
 ! !INTERFACE:
 !
@@ -59,9 +60,9 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &     nu            ! unit number
-     &,    nbits         ! no. of bits per variable (0 for sequential access)
+      integer (kind=int_kind), intent(in) :: &
+           nu        , & ! unit number
+           nbits         ! no. of bits per variable (0 for sequential access)
 
       character (*) :: filename
 !
@@ -74,8 +75,8 @@
             open(nu,file=filename,form='unformatted')
 
          else                   ! direct access
-            open(nu,file=filename,recl=nx_global*ny_global*nbits/8,
-     &            form='unformatted',access='direct')
+            open(nu,file=filename,recl=nx_global*ny_global*nbits/8, &
+                  form='unformatted',access='direct')
          endif                   ! nbits = 0
 
       endif                      ! my_task = master_task
@@ -89,8 +90,8 @@
 !
 ! !INTERFACE:
 !
-      subroutine ice_read(nu,  nrec,  work, atype, diag,
-     &                    ignore_eof, hit_eof)
+      subroutine ice_read(nu,  nrec,  work, atype, diag, &
+                          ignore_eof, hit_eof)
 !
 ! !DESCRIPTION:
 !
@@ -109,20 +110,20 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &     nu                ! unit number
-     &,    nrec              ! record number (0 for sequential access)
+      integer (kind=int_kind), intent(in) :: &
+           nu            , & ! unit number
+           nrec              ! record number (0 for sequential access)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks),
-     &     intent(out) ::
-     &     work              ! output array (real, 8-byte)
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
+           intent(out) :: &
+           work              ! output array (real, 8-byte)
 
-      character (len=4) ::
-     &     atype             ! format for input array
+      character (len=4) :: &
+           atype             ! format for input array
                              ! (real/integer, 4-byte/8-byte)
 
-      logical (kind=log_kind) ::
-     &     diag              ! if true, write diagnostic output
+      logical (kind=log_kind) :: &
+           diag              ! if true, write diagnostic output
 
       logical (kind=log_kind), optional, intent(in)  :: ignore_eof
       logical (kind=log_kind), optional, intent(out) :: hit_eof
@@ -131,8 +132,8 @@
 !
       integer (kind=int_kind) :: i, j, ios
 
-      real (kind=dbl_kind) ::
-     &   amin, amax         ! min and max values of input array
+      real (kind=dbl_kind) :: &
+         amin, amax         ! min and max values of input array
 
       logical (kind=log_kind) :: ignore_eof_use
 
@@ -174,8 +175,8 @@
             endif
             if (ignore_eof_use) then
              ! Read line from file, checking for end-of-file
-               read(nu, iostat=ios) ((work_g1(i,j),i=1,nx_global),
-     &                                             j=1,ny_global)
+               read(nu, iostat=ios) ((work_g1(i,j),i=1,nx_global), &
+                                                   j=1,ny_global)
                if (present(hit_eof)) hit_eof = ios < 0
             else
                read(nu) ((work_g1(i,j),i=1,nx_global),j=1,ny_global)
@@ -208,8 +209,8 @@
     ! NOTE: Ghost cells are not updated.
     !-------------------------------------------------------------------
 
-      call scatter_global(work, work_g1, master_task, distrb_info,
-     &                    field_loc_noupdate, field_type_noupdate)
+      call scatter_global(work, work_g1, master_task, distrb_info, &
+                          field_loc_noupdate, field_type_noupdate)
 
       deallocate(work_g1)
 
@@ -222,8 +223,8 @@
 !
 ! !INTERFACE:
 !
-      subroutine ice_read_global (nu,  nrec,  work_g, atype, diag,
-     &                            ignore_eof, hit_eof)
+      subroutine ice_read_global (nu,  nrec,  work_g, atype, diag, &
+                                  ignore_eof, hit_eof)
 !
 ! !DESCRIPTION:
 !
@@ -240,20 +241,20 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &     nu                ! unit number
-     &,    nrec              ! record number (0 for sequential access)
+      integer (kind=int_kind), intent(in) :: &
+           nu            , & ! unit number
+           nrec              ! record number (0 for sequential access)
 
-      real (kind=dbl_kind), dimension(nx_global,ny_global),
-     &     intent(out) ::
-     &     work_g            ! output array (real, 8-byte)
+      real (kind=dbl_kind), dimension(nx_global,ny_global), &
+           intent(out) :: &
+           work_g            ! output array (real, 8-byte)
 
-      character (len=4) ::
-     &     atype             ! format for input array
+      character (len=4) :: &
+           atype             ! format for input array
                              ! (real/integer, 4-byte/8-byte)
 
-      logical (kind=log_kind) ::
-     &     diag              ! if true, write diagnostic output
+      logical (kind=log_kind) :: &
+           diag              ! if true, write diagnostic output
 
       logical (kind=log_kind), optional, intent(in)  :: ignore_eof
       logical (kind=log_kind), optional, intent(out) :: hit_eof
@@ -262,8 +263,8 @@
 !
       integer (kind=int_kind) :: i, j, ios
 
-      real (kind=dbl_kind) ::
-     &   amin, amax         ! min and max values of input array
+      real (kind=dbl_kind) :: &
+         amin, amax         ! min and max values of input array
 
       logical (kind=log_kind) :: ignore_eof_use
 
@@ -301,8 +302,8 @@
             endif
             if (ignore_eof_use) then
                ! Read line from file, checking for end-of-file
-               read(nu, iostat=ios) ((work_g(i,j),i=1,nx_global),
-     &                                            j=1,ny_global)
+               read(nu, iostat=ios) ((work_g(i,j),i=1,nx_global), &
+                                                  j=1,ny_global)
                if (present(hit_eof)) hit_eof = ios < 0
             else
                read(nu) ((work_g(i,j),i=1,nx_global),j=1,ny_global)
@@ -354,27 +355,27 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &     nu                ! unit number
-     &,    nrec              ! record number (0 for sequential access)
+      integer (kind=int_kind), intent(in) :: &
+           nu            , & ! unit number
+           nrec              ! record number (0 for sequential access)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks),
-     &     intent(in) ::
-     &     work              ! input array (real, 8-byte)
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
+           intent(in) :: &
+           work              ! input array (real, 8-byte)
 
-      character (len=4) ::
-     &     atype             ! format for output array
+      character (len=4) :: &
+           atype             ! format for output array
                              ! (real/integer, 4-byte/8-byte)
 
-      logical (kind=log_kind) ::
-     &     diag              ! if true, write diagnostic output
+      logical (kind=log_kind) :: &
+           diag              ! if true, write diagnostic output
 !
 !EOP
 !
       integer (kind=int_kind) :: i, j
 
-      real (kind=dbl_kind) ::
-     &   amin, amax     ! min and max values of ouput array
+      real (kind=dbl_kind) :: &
+         amin, amax     ! min and max values of ouput array
 
     !-------------------------------------------------------------------
     ! Gather data from individual processors

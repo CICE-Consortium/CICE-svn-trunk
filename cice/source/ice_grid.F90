@@ -16,6 +16,7 @@
 ! 2004: Block structure added by William Lipscomb
 !       init_grid split into two parts as in POP 2.0
 !       Boundary update routines replaced by POP versions
+! 2006: Converted to free source form (F90) by Elizabeth Hunke
 !
 ! !INTERFACE:
 !
@@ -38,88 +39,88 @@
       implicit none
       save
 
-      character (len=char_len) ::
-     &   grid_file     !  input file for POP grid info
-     &,  kmt_file      !  input file for POP grid info
-     &,  landfrac_file !  input file for landfrac from CAM if COUP_CAM
-     &,  grid_type     !  current options are rectangular (default),
-                       !  displaced_pole, tripole, panarctic, latlon, column
+      character (len=char_len) :: &
+         grid_file    , & !  input file for POP grid info
+         kmt_file     , & !  input file for POP grid info
+         landfrac_file, & !  input file for landfrac from CAM if COUP_CAM
+         grid_type        !  current options are rectangular (default),
+                          !  displaced_pole, tripole, panarctic, latlon, column
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
-     &   dxt        ! width of T-cell through the middle (m)
-     &,  dyt        ! height of T-cell through the middle (m)
-     &,  dxu        ! width of U-cell through the middle (m)
-     &,  dyu        ! height of U-cell through the middle (m)
-     &,  HTE        ! length of eastern edge of T-cell (m)
-     &,  HTN        ! length of northern edge of T-cell (m)
-     &,  tarea      ! area of T-cell (m^2)
-     &,  uarea      ! area of U-cell (m^2)
-     &,  tarear     ! 1/tarea
-     &,  uarear     ! 1/uarea
-     &,  tinyarea   ! puny*tarea
-     &,  tarean     ! area of NH T-cells
-     &,  tareas     ! area of SH T-cells
-     &,  ULON       ! longitude of velocity pts (radians)
-     &,  ULAT       ! latitude of velocity pts (radians)
-     &,  TLON       ! longitude of temp pts (radians)
-     &,  TLAT       ! latitude of temp pts (radians)
-     &,  ANGLE      ! for conversions between POP grid and lat/lon
-     &,  ANGLET     ! ANGLE converted to T-cells
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+         dxt    , & ! width of T-cell through the middle (m)
+         dyt    , & ! height of T-cell through the middle (m)
+         dxu    , & ! width of U-cell through the middle (m)
+         dyu    , & ! height of U-cell through the middle (m)
+         HTE    , & ! length of eastern edge of T-cell (m)
+         HTN    , & ! length of northern edge of T-cell (m)
+         tarea  , & ! area of T-cell (m^2)
+         uarea  , & ! area of U-cell (m^2)
+         tarear , & ! 1/tarea
+         uarear , & ! 1/uarea
+         tinyarea,& ! puny*tarea
+         tarean , & ! area of NH T-cells
+         tareas , & ! area of SH T-cells
+         ULON   , & ! longitude of velocity pts (radians)
+         ULAT   , & ! latitude of velocity pts (radians)
+         TLON   , & ! longitude of temp pts (radians)
+         TLAT   , & ! latitude of temp pts (radians)
+         ANGLE  , & ! for conversions between POP grid and lat/lon
+         ANGLET     ! ANGLE converted to T-cells
 
-      real (kind=dbl_kind)::
-     &  column_lat  !latitude of single column
-     &, column_lon  !longitude of single column
+      real (kind=dbl_kind):: &
+        column_lat, & !latitude of single column
+        column_lon    !longitude of single column
 
 #ifdef COUP_CAM
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
-     &  CAMFRAC     ! Land fraction from CAM for COUP_CAM NOTE: This
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+        CAMFRAC     ! Land fraction from CAM for COUP_CAM NOTE: This
                     ! is in CAM format so 1 = LAND and 0 = OCEAN.  It
                     ! is used for weighting output variables when
                     ! CICE is coupled to standalone CAM
 #endif
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
-     &   cyp        ! 1.5*HTE - 0.5*HTE
-     &,  cxp        ! 1.5*HTN - 0.5*HTN
-     &,  cym        ! 0.5*HTE - 1.5*HTE
-     &,  cxm        ! 0.5*HTN - 1.5*HTN
-     &,  dxhy       ! 0.5*(HTE - HTE)
-     &,  dyhx       ! 0.5*(HTN - HTN)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+         cyp    , & ! 1.5*HTE - 0.5*HTE
+         cxp    , & ! 1.5*HTN - 0.5*HTN
+         cym    , & ! 0.5*HTE - 1.5*HTE
+         cxm    , & ! 0.5*HTN - 1.5*HTN
+         dxhy   , & ! 0.5*(HTE - HTE)
+         dyhx       ! 0.5*(HTN - HTN)
 
       ! geometric quantities used for remapping transport
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
-     &   xav    ! mean T-cell value of x
-     &,  yav    ! mean T-cell value of y
-     &,  xxav   ! mean T-cell value of xx
-     &,  xyav   ! mean T-cell value of xy
-     &,  yyav   ! mean T-cell value of yy
-     &,  xxxav  ! mean T-cell value of xxx
-     &,  xxyav  ! mean T-cell value of xxy
-     &,  xyyav  ! mean T-cell value of xyy
-     &,  yyyav  ! mean T-cell value of yyy
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+         xav  , & ! mean T-cell value of x
+         yav  , & ! mean T-cell value of y
+         xxav , & ! mean T-cell value of xx
+         xyav , & ! mean T-cell value of xy
+         yyav , & ! mean T-cell value of yy
+         xxxav, & ! mean T-cell value of xxx
+         xxyav, & ! mean T-cell value of xxy
+         xyyav, & ! mean T-cell value of xyy
+         yyyav    ! mean T-cell value of yyy
 
-      real (kind=dbl_kind),
-     &   dimension (2,2,nx_block,ny_block,max_blocks) ::
-     &   mne    ! matrices used for coordinate transformations in remapping
-     &,  mnw    ! ne = northeast corner, nw = northwest, etc.
-     &,  mse 
-     &,  msw
+      real (kind=dbl_kind), &
+         dimension (2,2,nx_block,ny_block,max_blocks) :: &
+         mne, & ! matrices used for coordinate transformations in remapping
+         mnw, & ! ne = northeast corner, nw = northwest, etc.
+         mse, & 
+         msw
 
       ! masks
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
-     &   hm         ! land/boundary mask, thickness (T-cell)
-     &,  uvm        ! land/boundary mask, velocity (U-cell)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+         hm     , & ! land/boundary mask, thickness (T-cell)
+         uvm        ! land/boundary mask, velocity (U-cell)
 
-      logical (kind=log_kind), 
-     &   dimension (nx_block,ny_block,max_blocks) ::
-     &   tmask      ! land/boundary mask, thickness (T-cell)
-     &,  umask      ! land/boundary mask, velocity (U-cell)
-     &,  lmask_n    ! northern hemisphere mask
-     &,  lmask_s    ! southern hemisphere mask
+      logical (kind=log_kind), &
+         dimension (nx_block,ny_block,max_blocks) :: &
+         tmask  , & ! land/boundary mask, thickness (T-cell)
+         umask  , & ! land/boundary mask, velocity (U-cell)
+         lmask_n, & ! northern hemisphere mask
+         lmask_s    ! southern hemisphere mask
 
 !lipscomb - not sure rndex_global is stil needed
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) ::
-     &   rndex_global           ! global index for local subdomain (dbl)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         rndex_global       ! global index for local subdomain (dbl)
 
 !=======================================================================
 
@@ -152,8 +153,8 @@
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
+      integer (kind=int_kind) :: &
+         i, j, iblk
 
       !-----------------------------------------------------------------
       ! Get global ULAT and KMT arrays used for block decomposition.
@@ -162,8 +163,8 @@
       allocate(work_g1(nx_global,ny_global))
       allocate(work_g2(nx_global,ny_global))
 
-      if (trim(grid_type) == 'displaced_pole' .or.
-     &    trim(grid_type) == 'tripole'      ) then
+      if (trim(grid_type) == 'displaced_pole' .or. &
+          trim(grid_type) == 'tripole'      ) then
 
          call ice_open(nu_grid,grid_file,64) ! ULAT
          call ice_open(nu_kmt, kmt_file, 32) ! KMT
@@ -252,25 +253,25 @@
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: &
+         i, j, iblk, &
+         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
-      real (kind=dbl_kind) ::
-     &   angle_0, angle_w, angle_s, angle_sw
+      real (kind=dbl_kind) :: &
+         angle_0, angle_w, angle_s, angle_sw
 
-      logical (kind=log_kind), dimension(nx_block,ny_block,max_blocks)::
-     &   out_of_range
+      logical (kind=log_kind), dimension(nx_block,ny_block,max_blocks):: &
+         out_of_range
 
-      type (block) ::
-     &   this_block           ! block information for current block
+      type (block) :: &
+         this_block           ! block information for current block
       
       !-----------------------------------------------------------------
       ! lat, lon, cell widths, angle, land mask
       !-----------------------------------------------------------------
 
-      if (trim(grid_type) == 'displaced_pole' .or.
-     &    trim(grid_type) == 'tripole'      ) then
+      if (trim(grid_type) == 'displaced_pole' .or. &
+          trim(grid_type) == 'tripole'      ) then
          call popgrid           ! read POP grid lengths directly
       elseif (trim(grid_type) == 'panarctic') then
          call panarctic_grid    ! pan-Arctic grid
@@ -283,16 +284,16 @@
       endif
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (HTN,                bndy_info,
-     &                         field_loc_Nface,    field_type_scalar)
-      call update_ghost_cells (HTE,                bndy_info,
-     &                         field_loc_Eface,    field_type_scalar)
-      call update_ghost_cells (ULAT,               bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
-      call update_ghost_cells (ULON,               bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
-      call update_ghost_cells (ANGLE,              bndy_info,
-     &                         field_loc_NEcorner, field_type_angle)
+      call update_ghost_cells (HTN,                bndy_info, &
+                               field_loc_Nface,    field_type_scalar)
+      call update_ghost_cells (HTE,                bndy_info, &
+                               field_loc_Eface,    field_type_scalar)
+      call update_ghost_cells (ULAT,               bndy_info, &
+                               field_loc_NEcorner, field_type_scalar)
+      call update_ghost_cells (ULON,               bndy_info, &
+                               field_loc_NEcorner, field_type_scalar)
+      call update_ghost_cells (ANGLE,              bndy_info, &
+                               field_loc_NEcorner, field_type_angle)
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -322,16 +323,16 @@
 
       enddo                     ! iblk
 
-      call update_ghost_cells (dxt,                bndy_info,
-     &                         field_loc_center,   field_type_scalar)
-      call update_ghost_cells (dyt,                bndy_info,
-     &                         field_loc_center,   field_type_scalar)
-      call update_ghost_cells (dxu,                bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
-      call update_ghost_cells (dyu,                bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
-      call update_ghost_cells (tarea,              bndy_info,
-     &                         field_loc_center,   field_type_scalar)
+      call update_ghost_cells (dxt,                bndy_info, &
+                               field_loc_center,   field_type_scalar)
+      call update_ghost_cells (dyt,                bndy_info, &
+                               field_loc_center,   field_type_scalar)
+      call update_ghost_cells (dxu,                bndy_info, &
+                               field_loc_NEcorner, field_type_scalar)
+      call update_ghost_cells (dyu,                bndy_info, &
+                               field_loc_NEcorner, field_type_scalar)
+      call update_ghost_cells (tarea,              bndy_info, &
+                               field_loc_center,   field_type_scalar)
 
       do iblk = 1, nblocks
          this_block = get_block(blocks(iblk),iblk)         
@@ -342,9 +343,9 @@
 
          do j = jlo, jhi
          do i = ilo, ihi
-            uarea(i,j,iblk) = p25*
-     &                       (tarea(i,j,  iblk) + tarea(i+1,j,  iblk)
-     &                      + tarea(i,j+1,iblk) + tarea(i+1,j+1,iblk))
+            uarea(i,j,iblk) = p25*  &
+                             (tarea(i,j,  iblk) + tarea(i+1,j,  iblk) &
+                            + tarea(i,j+1,iblk) + tarea(i+1,j+1,iblk))
 
             tarear(i,j,iblk) = c1/tarea(i,j,iblk)
             uarear(i,j,iblk) = c1/uarea(i,j,iblk)
@@ -378,23 +379,23 @@
       !-----------------------------------------------------------------
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (uarea,            bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
+      call update_ghost_cells (uarea,            bndy_info, &
+                               field_loc_NEcorner, field_type_scalar)
 
-      call update_ghost_cells (uarear,           bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
+      call update_ghost_cells (uarear,           bndy_info, &
+                               field_loc_NEcorner, field_type_scalar)
 
-      call update_ghost_cells (tarear,           bndy_info,
-     &                         field_loc_center, field_type_scalar)
+      call update_ghost_cells (tarear,           bndy_info, &
+                               field_loc_center, field_type_scalar)
 
-      call update_ghost_cells (tinyarea,         bndy_info,
-     &                         field_loc_center, field_type_scalar)
+      call update_ghost_cells (tinyarea,         bndy_info, &
+                               field_loc_center, field_type_scalar)
 
-      call update_ghost_cells (dxhy,             bndy_info,
-     &                         field_loc_center, field_type_vector)
+      call update_ghost_cells (dxhy,             bndy_info, &
+                               field_loc_center, field_type_vector)
 
-      call update_ghost_cells (dyhx,             bndy_info,
-     &                         field_loc_center, field_type_vector)
+      call update_ghost_cells (dyhx,             bndy_info, &
+                               field_loc_center, field_type_vector)
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -429,23 +430,23 @@
             angle_sw = ANGLE(i-1,j-1,iblk) !   sw---s
 
             if ( angle_0 < c0 ) then
-               if ( abs(angle_w - angle_0) > pi)
-     &                  angle_w = angle_w  - pi2
-               if ( abs(angle_s - angle_0) > pi)
-     &                  angle_s = angle_s  - pi2
-               if ( abs(angle_sw - angle_0) > pi)
-     &                  angle_sw = angle_sw - pi2
+               if ( abs(angle_w - angle_0) > pi) &
+                        angle_w = angle_w  - pi2
+               if ( abs(angle_s - angle_0) > pi) &
+                        angle_s = angle_s  - pi2
+               if ( abs(angle_sw - angle_0) > pi) &
+                        angle_sw = angle_sw - pi2
             endif
 
-            ANGLET(i,j,iblk) = angle_0 * p25 + angle_w * p25
-     &                       + angle_s * p25 + angle_sw* p25
+            ANGLET(i,j,iblk) = angle_0 * p25 + angle_w * p25 &
+                             + angle_s * p25 + angle_sw* p25
          enddo
          enddo
       enddo
       
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (ANGLET,             bndy_info,
-     &                         field_loc_NEcorner, field_type_angle)
+      call update_ghost_cells (ANGLET,             bndy_info, &
+                               field_loc_NEcorner, field_type_angle)
       call ice_timer_stop(timer_bound)
 
       call makemask          ! velocity mask, hemisphere masks
@@ -466,9 +467,9 @@
          allocate(work_g1(1,1)) ! to save memory
       endif
 
-      call scatter_global(rndex_global, work_g1, 
-     &                    master_task,  distrb_info,
-     &                    field_loc_center, field_type_scalar)
+      call scatter_global(rndex_global, work_g1,  &
+                          master_task,  distrb_info, &
+                          field_loc_center, field_type_scalar)
 
       deallocate(work_g1)
 
@@ -511,14 +512,14 @@
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: &
+         i, j, iblk, &
+         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
       logical (kind=log_kind) :: diag
 
-      type (block) ::
-     &   this_block           ! block information for current block
+      type (block) :: &
+         this_block           ! block information for current block
 
       call ice_open(nu_grid,grid_file,64)
       call ice_open(nu_kmt,kmt_file,32)
@@ -559,9 +560,9 @@
 
          ! uncomment to mask out tropics
          ! Do this only if running uncoupled
-!!!             if (ULAT(i,j,iblk) > shlat/rad_to_deg .and.
-!!!     &           ULAT(i,j,iblk) < nhlat/rad_to_deg) 
-!!!     &           hm(i,j,iblk) = c0
+!!!             if (ULAT(i,j,iblk) > shlat/rad_to_deg .and. &
+!!!                 ULAT(i,j,iblk) < nhlat/rad_to_deg) &
+!!!                 hm(i,j,iblk) = c0
          enddo
          enddo
       enddo
@@ -615,21 +616,21 @@
       ! NOTE: There is no separate kmt file.  Land mask is part of grid file.
       !-----------------------------------------------------------------
 
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: &
+         i, j, iblk, &
+         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
       logical (kind=log_kind) :: diag
 
-      type (block) ::
-     &   this_block           ! block information for current block
+      type (block) :: &
+         this_block           ! block information for current block
 
       call ice_open(nu_grid,grid_file,64)
 
       diag = .true.       ! write diagnostic info
 
-      if (my_task == master_task)
-     &     write (nu_diag,*) '** Reading pan-Arctic grid **'
+      if (my_task == master_task) &
+           write (nu_diag,*) '** Reading pan-Arctic grid **'
 
       ! read topography
       call ice_read(nu_grid,1,work1,'ida8',diag)
@@ -699,31 +700,31 @@
 !
       logical (kind=log_kind) :: diag  !print diagnostic info
 
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain        
-     &,  irow             ! latitude pair counter ny_global/2 
-     &,  lat              ! latitude counter             
+      integer (kind=int_kind) :: &
+         i, j, iblk     , &
+         ilo,ihi,jlo,jhi, & ! beginning and end of physical domain        
+         irow           , & ! latitude pair counter ny_global/2 
+         lat                ! latitude counter             
       
-      type (block) ::
-     &   this_block       ! block information for current block
+      type (block) :: &
+         this_block       ! block information for current block
 
-      real (kind=dbl_kind), dimension (nx_global, ny_global)::
-     &   clon       ! longitude (radians)
-     &,  HTE_in     ! length of E edge of grid cell in latxlon space
-     &,  HTN_in     ! length of N edge of grid cell in latxlon space
-     &,  latin      ! latitude (radians) in global grid to scatter to TLAT
+      real (kind=dbl_kind), dimension (nx_global, ny_global):: &
+         clon   , & ! longitude (radians)
+         HTE_in , & ! length of E edge of grid cell in latxlon space
+         HTN_in , & ! length of N edge of grid cell in latxlon space
+         latin      ! latitude (radians) in global grid to scatter to TLAT
 
-      real (kind=dbl_kind), dimension (ny_global)::
-     &   zsi        ! sin of latitudes
-     &,  clat       ! latitude (radians)
-     &,  rearth     ! radius of the earth along a line of latitude
+      real (kind=dbl_kind), dimension (ny_global):: &
+         zsi    , & ! sin of latitudes
+         clat   , & ! latitude (radians)
+         rearth     ! radius of the earth along a line of latitude
 
-      real (kind=dbl_kind)::
-     &   xlat       ! latitude (radians)
-     &,  slat       ! sin of latitudes
-     &,  dx         ! cell width: E-W
-     &,  dy         ! cell width: N-S
+      real (kind=dbl_kind):: &
+         xlat   , & ! latitude (radians)
+         slat   , & ! sin of latitudes
+         dx     , & ! cell width: E-W
+         dy         ! cell width: N-S
 
       !-----------------------------------------------------------------
       ! First need to calculate latitude and longitude values in
@@ -784,11 +785,11 @@
       ! Scatter HTE_in and HTN_in to blocks
       !----------------------------------------------------------------
 
-      call scatter_global(HTE, HTE_in, master_task, distrb_info,
-     &                    field_loc_Eface, field_type_scalar)
+      call scatter_global(HTE, HTE_in, master_task, distrb_info, &
+                          field_loc_Eface, field_type_scalar)
 
-      call scatter_global(HTN, HTN_in, master_task, distrb_info,
-     &                    field_loc_Nface, field_type_scalar)
+      call scatter_global(HTN, HTN_in, master_task, distrb_info, &
+                          field_loc_Nface, field_type_scalar)
 
       !-----------------------------------------------------------------
       ! Translate clat and clon into TLAT and TLON
@@ -801,11 +802,11 @@
          end do
       end do
 
-      call scatter_global(TLON, clon, master_task, distrb_info,
-     &                    field_loc_center, field_type_scalar)
+      call scatter_global(TLON, clon, master_task, distrb_info, &
+                          field_loc_center, field_type_scalar)
 
-      call scatter_global(TLAT, latin, master_task, distrb_info,
-     &                    field_loc_center, field_type_scalar)
+      call scatter_global(TLAT, latin, master_task, distrb_info, &
+                          field_loc_center, field_type_scalar)
 
       !-----------------------------------------------------------------
       ! Calculate various geometric 2d arrays
@@ -921,8 +922,8 @@
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
+      integer (kind=int_kind) :: &
+         i, j, iblk
 
       !-----------------------------------------------------------------
       ! Calculate various geometric 2d arrays
@@ -959,8 +960,7 @@
       !-----------------------------------------------------------------
 
       if ((nx_global /= 1).or. (ny_global /= 1)) then
-         write(nu_diag,*)
-     &        'Because you have selected the column model flag'
+         write(nu_diag,*) 'Because you have selected the column model flag'
          write(nu_diag,*) 'Please set nx_global=ny_global=1 in file'
          write(nu_diag,*) 'ice_domain_size.F and recompile'
          call abort_ice ('ice: columngrid: check nx_global, ny_global')
@@ -981,8 +981,8 @@
          allocate(work_g1(1,1)) ! to save memory
       endif
 
-      call scatter_global(hm, work_g1, master_task, distrb_info,
-     &                    field_loc_center, field_type_scalar)
+      call scatter_global(hm, work_g1, master_task, distrb_info, &
+                          field_loc_center, field_type_scalar)
 
       deallocate(work_g1)
 
@@ -1015,12 +1015,12 @@
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: &
+         i, j, iblk, &
+         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
-      type (block) ::
-     &   this_block           ! block information for current block
+      type (block) :: &
+         this_block           ! block information for current block
 
       !-----------------------------------------------------------------
       ! Calculate various geometric 2d arrays
@@ -1060,8 +1060,8 @@
          allocate(work_g1(1,1)) ! to save memory
       endif
 
-      call scatter_global(hm, work_g1, master_task, distrb_info,
-     &                    field_loc_center, field_type_scalar)
+      call scatter_global(hm, work_g1, master_task, distrb_info, &
+                          field_loc_center, field_type_scalar)
 
       deallocate(work_g1)
 
@@ -1094,16 +1094,16 @@
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: &
+         i, j, iblk, &
+         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
-      type (block) ::
-     &   this_block           ! block information for current block
+      type (block) :: &
+         this_block           ! block information for current block
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (hm,               bndy_info,
-     &                         field_loc_center, field_type_scalar)
+      call update_ghost_cells (hm,               bndy_info, &
+                               field_loc_center, field_type_scalar)
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -1119,15 +1119,15 @@
 
          do j = jlo, jhi
          do i = ilo, ihi
-            uvm(i,j,iblk) = min (hm(i,j,  iblk), hm(i+1,j,  iblk),
-     &                           hm(i,j+1,iblk), hm(i+1,j+1,iblk))
+            uvm(i,j,iblk) = min (hm(i,j,  iblk), hm(i+1,j,  iblk), &
+                                 hm(i,j+1,iblk), hm(i+1,j+1,iblk))
          enddo
          enddo
       enddo
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (uvm,                bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
+      call update_ghost_cells (uvm,                bndy_info, &
+                               field_loc_NEcorner, field_type_scalar)
       call ice_timer_stop(timer_bound)
 
       do iblk = 1, nblocks
@@ -1199,17 +1199,17 @@
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &     i, j, iblk           ! horizontal indices
-     &,    ig, jg               ! global horizontal indices
-     &,    im1                  ! ig - 1
-     &,    ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: &
+           i, j, iblk       , & ! horizontal indices
+           ig, jg           , & ! global horizontal indices
+           im1              , & ! ig - 1
+           ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
-      real (kind=dbl_kind) ::
-     &     z1,x1,y1,z2,x2,y2,z3,x3,y3,z4,x4,y4,tx,ty,tz,da
+      real (kind=dbl_kind) :: &
+           z1,x1,y1,z2,x2,y2,z3,x3,y3,z4,x4,y4,tx,ty,tz,da
 
-      type (block) ::
-     &     this_block           ! block information for current block
+      type (block) :: &
+           this_block           ! block information for current block
 
 #ifndef COUP_CAM 
       TLAT(:,:,:) = c0
@@ -1254,8 +1254,7 @@
 
             ! TLON in radians East
             TLON(i,j,iblk) = c0
-            if (tx /= c0 .or. ty /= c0)
-     &           TLON(i,j,iblk) = atan2(ty,tx)
+            if (tx /= c0 .or. ty /= c0) TLON(i,j,iblk) = atan2(ty,tx)
 
             ! TLAT in radians North
             TLAT(i,j,iblk) = asin(tz)
@@ -1266,10 +1265,10 @@
 #endif
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (TLON,             bndy_info,
-     &                         field_loc_center, field_type_scalar)
-      call update_ghost_cells (TLAT,             bndy_info,
-     &                         field_loc_center, field_type_scalar)
+      call update_ghost_cells (TLON,             bndy_info, &
+                               field_loc_center, field_type_scalar)
+      call update_ghost_cells (TLAT,             bndy_info, &
+                               field_loc_center, field_type_scalar)
       call ice_timer_stop(timer_bound)
 
       x1 = global_minval(TLON, distrb_info, field_loc_center, tmask)
@@ -1316,17 +1315,17 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks),
-     &     intent(inout) :: 
-     &     work
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
+           intent(inout) :: & 
+           work
 !
 !EOP
 !
       work1(:,:,:) = work(:,:,:)
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells(work1,            bndy_info,
-     &                        field_loc_center, field_type_vector)
+      call update_ghost_cells(work1,            bndy_info, &
+                              field_loc_center, field_type_vector)
       call ice_timer_stop(timer_bound)
 
       call to_ugrid(work1,work)
@@ -1357,20 +1356,20 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), intent(in) ::
-     &   work1(nx_block,ny_block,max_blocks)
+      real (kind=dbl_kind), intent(in) :: &
+         work1(nx_block,ny_block,max_blocks)
 
-      real (kind=dbl_kind), intent(out) ::
-     &   work2(nx_block,ny_block,max_blocks)
+      real (kind=dbl_kind), intent(out) :: &
+         work2(nx_block,ny_block,max_blocks)
 
-      type (block) ::
-     &   this_block           ! block information for current block
+      type (block) :: &
+         this_block           ! block information for current block
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: &
+         i, j, iblk, &
+         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
       work2(:,:,:) = c0
 
@@ -1383,12 +1382,12 @@
 
          do j = jlo, jhi
          do i = ilo, ihi
-            work2(i,j,iblk) = p25 *
-     &                        (work1(i,  j,  iblk)*tarea(i,  j,  iblk)
-     &                       + work1(i+1,j,  iblk)*tarea(i+1,j,  iblk)
-     &                       + work1(i,  j+1,iblk)*tarea(i,  j+1,iblk)
-     &                       + work1(i+1,j+1,iblk)*tarea(i+1,j+1,iblk))
-     &                       / uarea(i,  j,  iblk)
+            work2(i,j,iblk) = p25 * &
+                              (work1(i,  j,  iblk)*tarea(i,  j,  iblk)  &
+                             + work1(i+1,j,  iblk)*tarea(i+1,j,  iblk)  &
+                             + work1(i,  j+1,iblk)*tarea(i,  j+1,iblk)  &
+                             + work1(i+1,j+1,iblk)*tarea(i+1,j+1,iblk)) &
+                             / uarea(i,  j,  iblk)
          enddo
          enddo
       enddo
@@ -1421,17 +1420,17 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks),
-     &   intent(inout) ::
-     &   work
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), &
+         intent(inout) :: &
+         work
 !
 !EOP
 !
       work1(:,:,:) = work(:,:,:)
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells(work1,            bndy_info,
-     &                        field_loc_center, field_type_scalar)
+      call update_ghost_cells(work1,            bndy_info, &
+                              field_loc_center, field_type_scalar)
       call ice_timer_stop(timer_bound)
 
       call to_tgrid(work1,work)
@@ -1462,17 +1461,17 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind) :: work1(nx_block,ny_block,max_blocks)
-     &,                       work2(nx_block,ny_block,max_blocks)
+      real (kind=dbl_kind) :: work1(nx_block,ny_block,max_blocks), &
+                              work2(nx_block,ny_block,max_blocks)
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: &
+         i, j, iblk, &
+         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
-      type (block) ::
-     &   this_block           ! block information for current block
+      type (block) :: &
+         this_block           ! block information for current block
       
       do iblk = 1, nblocks
          this_block = get_block(blocks(iblk),iblk)         
@@ -1483,12 +1482,12 @@
 
          do j = jlo, jhi
          do i = ilo, ihi
-            work2(i,j,iblk) = p25 *
-     &                       (work1(i,  j  ,iblk) * uarea(i,  j,  iblk)
-     &                      + work1(i-1,j  ,iblk) * uarea(i-1,j,  iblk)
-     &                      + work1(i,  j-1,iblk) * uarea(i,  j-1,iblk)
-     &                      + work1(i-1,j-1,iblk) * uarea(i-1,j-1,iblk))
-     &                      / tarea(i,  j,  iblk)
+            work2(i,j,iblk) = p25 *  &
+                             (work1(i,  j  ,iblk) * uarea(i,  j,  iblk)  &
+                            + work1(i-1,j  ,iblk) * uarea(i-1,j,  iblk)  &
+                            + work1(i,  j-1,iblk) * uarea(i,  j-1,iblk)  & 
+                            + work1(i-1,j-1,iblk) * uarea(i-1,j-1,iblk)) &
+                            / tarea(i,  j,  iblk)
          enddo
          enddo
       enddo
@@ -1524,40 +1523,40 @@
 ! !INPUT/OUTPUT PARAMETERS:
 !
 
-      real (kind=dbl_kind), dimension(ny_global), intent(out) :: 
-     &     a            ! sin of latitudes
+      real (kind=dbl_kind), dimension(ny_global), intent(out) :: & 
+           a            ! sin of latitudes
 
-      integer (kind=int_kind), intent(in) ::
-     &     k            ! number of latitudes (ny_global)
+      integer (kind=int_kind), intent(in) :: &
+           k            ! number of latitudes (ny_global)
 !
 !EOP
 !
-      real (kind=dbl_kind), dimension(k) ::
-     &     sinlats      ! sine of latitudes
+      real (kind=dbl_kind), dimension(k) :: &
+           sinlats      ! sine of latitudes
 
-      real (kind=dbl_kind) ::
-     &     eps          ! convergence criterion
-     &,    c            ! constant combination
-     &,    fk           ! real k
-     &,    xz           ! abscissa estimate
-     &,    pkm1         ! |
-     &,    pkm2         ! |-polynomials
-     &,    pkmrk        ! |
-     &,    pk           ! |
-     &,    sp           ! current iteration latitude increment
-     &,    avsp         ! |sp|
-     &,    fn           ! real n
-     &,    avsp_prev
-     &,    testdiff
+      real (kind=dbl_kind) :: &
+           eps      , & ! convergence criterion
+           c        , & ! constant combination
+           fk       , & ! real k
+           xz       , & ! abscissa estimate
+           pkm1     , & ! |
+           pkm2     , & ! |-polynomials
+           pkmrk    , & ! |
+           pk       , & ! |
+           sp       , & ! current iteration latitude increment
+           avsp     , & ! |sp|
+           fn       , & ! real n
+           avsp_prev, &
+           testdiff
 
-      real (kind=dbl_kind), parameter ::
-     &     eps27 = 1.e-27_dbl_kind
+      real (kind=dbl_kind), parameter :: &
+           eps27 = 1.e-27_dbl_kind
 
-      integer (kind=int_kind) ::
-     &     n, l
-     &,    iter         ! iteration counter
-     &,    is           ! latitude index
-     &,    kk           ! k/2 (number of latitudes in a hemisphere)
+      integer (kind=int_kind) :: &
+           n, l     , &
+           iter     , & ! iteration counter
+           is       , & ! latitude index
+           kk           ! k/2 (number of latitudes in a hemisphere)
 
 !
 !----------------------------------------------------------------------
@@ -1644,11 +1643,11 @@
 ! !INPUT/OUTPUT PARAMETERS:
 !
 
-      integer (kind=int_kind), intent(in) ::
-     &     n          ! number of latitudes in hemisphere (ny_global/2)
+      integer (kind=int_kind), intent(in) :: &
+           n          ! number of latitudes in hemisphere (ny_global/2)
 
-      real (kind=dbl_kind), dimension(n), intent(inout) :: 
-     &     bes        ! sin of latitudes
+      real (kind=dbl_kind), dimension(n), intent(inout) :: & 
+           bes        ! sin of latitudes
 !
 !EOP
 !
@@ -1657,8 +1656,8 @@
 ! Local Variables
 !----------------------------------------
 
-      integer (kind=int_kind) ::
-     &   nn, j
+      integer (kind=int_kind) :: &
+         nn, j
      
       real (kind=dbl_kind), dimension(50) :: bz
       
@@ -1668,23 +1667,23 @@
 ! Local Workspace
 !-----------------------------------------
 
-      data bz/ 2.4048255577_r8, 5.5200781103_r8, 8.6537279129_r8
-     &,  11.7915344391_r8, 14.9309177086_r8, 18.0710639679_r8
-     &,  21.2116366299_r8, 24.3524715308_r8, 27.4934791320_r8
-     &,  30.6346064684_r8, 33.7758202136_r8, 36.9170983537_r8
-     &,  40.0584257646_r8, 43.1997917132_r8, 46.3411883717_r8
-     &,  49.4826098974_r8, 52.6240518411_r8, 55.7655107550_r8
-     &,  58.9069839261_r8, 62.0484691902_r8, 65.1899648002_r8
-     &,  68.3314693299_r8, 71.4729816036_r8, 74.6145006437_r8
-     &,  77.7560256304_r8, 80.8975558711_r8, 84.0390907769_r8
-     &,  87.1806298436_r8, 90.3221726372_r8, 93.4637187819_r8
-     &,  96.6052679510_r8, 99.7468198587_r8, 102.8883742542_r8
-     &,  106.0299309165_r8, 109.1714896498_r8, 112.3130502805_r8
-     &,  115.4546126537_r8, 118.5961766309_r8, 121.7377420880_r8
-     &,  124.8793089132_r8, 128.0208770059_r8, 131.1624462752_r8
-     &,  134.3040166383_r8, 137.4455880203_r8, 140.5871603528_r8
-     &,  143.7287335737_r8, 146.8703076258_r8, 150.0118824570_r8
-     &,  153.1534580192_r8, 156.2950342685_r8/  
+      data bz/ 2.4048255577_r8, 5.5200781103_r8, 8.6537279129_r8 ,&
+         11.7915344391_r8, 14.9309177086_r8, 18.0710639679_r8    ,&
+         21.2116366299_r8, 24.3524715308_r8, 27.4934791320_r8    ,&
+         30.6346064684_r8, 33.7758202136_r8, 36.9170983537_r8    ,&
+         40.0584257646_r8, 43.1997917132_r8, 46.3411883717_r8    ,&
+         49.4826098974_r8, 52.6240518411_r8, 55.7655107550_r8    ,&
+         58.9069839261_r8, 62.0484691902_r8, 65.1899648002_r8    ,&
+         68.3314693299_r8, 71.4729816036_r8, 74.6145006437_r8    ,&
+         77.7560256304_r8, 80.8975558711_r8, 84.0390907769_r8    ,&
+         87.1806298436_r8, 90.3221726372_r8, 93.4637187819_r8    ,&
+         96.6052679510_r8, 99.7468198587_r8, 102.8883742542_r8   ,&
+         106.0299309165_r8, 109.1714896498_r8, 112.3130502805_r8 ,&
+         115.4546126537_r8, 118.5961766309_r8, 121.7377420880_r8 ,&
+         124.8793089132_r8, 128.0208770059_r8, 131.1624462752_r8 ,&
+         134.3040166383_r8, 137.4455880203_r8, 140.5871603528_r8 ,&
+         143.7287335737_r8, 146.8703076258_r8, 150.0118824570_r8 ,&
+         153.1534580192_r8, 156.2950342685_r8/  
 !
       nn = n 
       if (n > 50) then 

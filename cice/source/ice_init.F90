@@ -16,6 +16,7 @@
 ! 2004 WHL: Block structure added 
 ! 2006 ECH: Added namelist variables, warnings.
 !           Replaced old default initial ice conditions with 3.14 version.
+!           Converted to free source form (F90).
 !
 ! !INTERFACE:
 !
@@ -28,8 +29,8 @@
       use ice_domain_size
       use ice_constants
 #ifdef COUP_CAM
-      use time_manager, only: get_nstep, get_step_size,
-     &                        start_ymd, nelapse
+      use time_manager, only: get_nstep, get_step_size, &
+                              start_ymd, nelapse
 #endif
 !
 !EOP
@@ -37,8 +38,8 @@
       implicit none
       save
 
-      character(len=char_len) :: 
-     &   ice_ic      ! method of ice cover initialization
+      character(len=char_len) :: & 
+         ice_ic      ! method of ice cover initialization
                      ! 'default'  => latitude and sst dependent
                      ! 'none'     => no ice 
                      ! note:  restart = .true. overwrites
@@ -70,28 +71,28 @@
       use ice_broadcast
       use ice_diagnostics
       use ice_fileunits
-      use ice_calendar, only: year_init, istep0, histfreq, histfreq_n, 
-     &                        dumpfreq, dumpfreq_n, diagfreq, 
-     &                        npt, dt, ndyn_dt
-      use ice_restart, only: 
-     &    restart, restart_dir, restart_file, pointer_file
-     &,   runid, runtype
-      use ice_history, only: hist_avg, history_dir, history_file,
-     &                       incond_dir, incond_file
+      use ice_calendar, only: year_init, istep0, histfreq, histfreq_n, &
+                              dumpfreq, dumpfreq_n, diagfreq, &
+                              npt, dt, ndyn_dt
+      use ice_restart, only: &
+          restart, restart_dir, restart_file, pointer_file, &
+          runid, runtype
+      use ice_history, only: hist_avg, history_dir, history_file, &
+                             incond_dir, incond_file
       use ice_exit
       use ice_itd, only: kitd, kcatbound
       use ice_ocean, only: oceanmixed_ice
-      use ice_forcing, only:
-     &    ycycle,          fyear_init,    dbug,
-     &    atm_data_type,   atm_data_dir,  precip_units, 
-     &    sss_data_type,   sst_data_type, ocn_data_dir,
-     &    oceanmixed_file, restore_sst,   trestore 
-      use ice_grid, only: grid_file, kmt_file, landfrac_file, grid_type,
-     &    column_lat, column_lon
+      use ice_forcing, only: &
+          ycycle,          fyear_init,    dbug, &
+          atm_data_type,   atm_data_dir,  precip_units, &
+          sss_data_type,   sst_data_type, ocn_data_dir, &
+          oceanmixed_file, restore_sst,   trestore 
+      use ice_grid, only: grid_file, kmt_file, landfrac_file, grid_type, &
+          column_lat, column_lon
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
-      use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi,
-     &                         shortwave
+      use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, &
+                               shortwave
       use ice_transport_driver, only: advection
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -107,27 +108,28 @@
       ! NOTE: Not all of these are used by both models.
       !-----------------------------------------------------------------
 
-      namelist /ice_nml/
-     &  year_init,      istep0,          dt,            npt
-     &, diagfreq       
-     &, print_points,   print_global,    diag_type,     diag_file
-     &, histfreq,       hist_avg,        history_dir,   history_file
-     &, histfreq_n,     dumpfreq,        dumpfreq_n,    restart_file
-     &, restart,        restart_dir,     pointer_file,  ice_ic
-     &, grid_type,      grid_file,       kmt_file,      landfrac_file
-     &, column_lat,     column_lon,      kitd,           kcatbound
-     &, kdyn,           ndyn_dt,         ndte,          evp_damping
-     &, yield_curve,    advection
-     &, kstrength,      krdg_partic,     krdg_redist,   shortwave
-     &, albicev,        albicei,         albsnowv,      albsnowi
-     &, fyear_init,     ycycle 
-     &, atm_data_type,  atm_data_dir,    precip_units
-     &, oceanmixed_ice, sss_data_type,   sst_data_type 
-     &, ocn_data_dir,   oceanmixed_file, restore_sst,   trestore
-     &, latpnt,         lonpnt,          dbug
-     &, runid,          runtype        
+      namelist /ice_nml/ &
+        year_init,      istep0,          dt,            npt, &
+        diagfreq, &       
+        print_points,   print_global,    diag_type,     diag_file, &
+        histfreq,       hist_avg,        history_dir,   history_file, &
+        histfreq_n,     dumpfreq,        dumpfreq_n,    restart_file, &
+        restart,        restart_dir,     pointer_file,  ice_ic, &
+        grid_type,      grid_file,       kmt_file,      landfrac_file, &
+        column_lat,     column_lon,      kitd,           kcatbound, &
+        kdyn,           ndyn_dt,         ndte,          evp_damping, &
+        yield_curve,    advection, &
+        kstrength,      krdg_partic,     krdg_redist,   shortwave, &
+        albicev,        albicei,         albsnowv,      albsnowi, &
+        fyear_init,     ycycle , &
+        atm_data_type,  atm_data_dir,    precip_units, &
+        oceanmixed_ice, sss_data_type,   sst_data_type, &
+        ocn_data_dir,   oceanmixed_file, restore_sst,   trestore, &
+        latpnt,         lonpnt,          dbug, &
+        runid,          runtype
 #ifdef CCSM
-     &, incond_dir,      incond_file
+        , &
+        incond_dir,      incond_file
 #endif
 
 
@@ -229,9 +231,9 @@
 
       chartmp = advection(1:6)
       if (chartmp /= 'upwind' .and. chartmp /= 'remap ') then
-         if (my_task == master_task) 
-     &   write (nu_diag,*) 
-     &   'WARNING: ',chartmp,' advection unavailable, using remap'
+         if (my_task == master_task) &
+         write (nu_diag,*) &
+         'WARNING: ',chartmp,' advection unavailable, using remap' 
          advection = 'remap'
       endif
 
@@ -340,114 +342,114 @@
          write(nu_diag,*) ' ==================================== '
          write(nu_diag,*) ' '
 #ifdef CCSM
-         if (trim(runid) /= 'unknown')
-     &    write(nu_diag,*)    ' runid                     = ',
-     &                         trim(runid)
-         if (trim(runtype) /= 'unknown')
-     &    write(nu_diag,1030) ' runtype                   = ',
-     &                         trim(runtype)
+         if (trim(runid) /= 'unknown') &
+          write(nu_diag,*)    ' runid                     = ', &
+                               trim(runid)
+         if (trim(runtype) /= 'unknown') &
+          write(nu_diag,1030) ' runtype                   = ', &
+                               trim(runtype)
 #endif
          write(nu_diag,1020) ' year_init                 = ', year_init
          write(nu_diag,1020) ' istep0                    = ', istep0
          write(nu_diag,1000) ' dt                        = ', dt
          write(nu_diag,1020) ' npt                       = ', npt
          write(nu_diag,1020) ' diagfreq                  = ', diagfreq
-         write(nu_diag,1010) ' print_global              = ',
-     &                         print_global
-         write(nu_diag,1010) ' print_points              = ',
-     &                         print_points
-         write(nu_diag,1030) ' histfreq                  = ',
-     &                         trim(histfreq)
+         write(nu_diag,1010) ' print_global              = ', &
+                               print_global
+         write(nu_diag,1010) ' print_points              = ', &
+                               print_points
+         write(nu_diag,1030) ' histfreq                  = ', &
+                               trim(histfreq)
          write(nu_diag,1020) ' histfreq_n                = ', histfreq_n
          write(nu_diag,1010) ' hist_avg                  = ', hist_avg
          if (hist_avg) then
-            write (nu_diag,*) 'History data will be averaged over ',
-     &                         histfreq_n,' ',histfreq
+            write (nu_diag,*) 'History data will be averaged over ', &
+                               histfreq_n,' ',histfreq
          else
             write (nu_diag,*) 'History data will be snapshots'
          endif
-         write(nu_diag,*)    ' history_dir               = ',
-     &                         trim(history_dir)
-         write(nu_diag,*)    ' history_file              = ',
-     &                         trim(history_file)
-         write(nu_diag,1030) ' dumpfreq                  = ',
-     &                         trim(dumpfreq)
+         write(nu_diag,*)    ' history_dir               = ', &
+                               trim(history_dir)
+         write(nu_diag,*)    ' history_file              = ', &
+                               trim(history_file)
+         write(nu_diag,1030) ' dumpfreq                  = ', &
+                               trim(dumpfreq)
          write(nu_diag,1020) ' dumpfreq_n                = ', dumpfreq_n
          write(nu_diag,1010) ' restart                   = ', restart
-         write(nu_diag,*)    ' restart_dir               = ',
-     &                         trim(restart_dir)
-         write(nu_diag,*)    ' restart_file              = ',
-     &                         trim(restart_file)
-         write(nu_diag,*)    ' pointer_file              = ',
-     &                         trim(pointer_file)
+         write(nu_diag,*)    ' restart_dir               = ', &
+                               trim(restart_dir)
+         write(nu_diag,*)    ' restart_file              = ', &
+                               trim(restart_file)
+         write(nu_diag,*)    ' pointer_file              = ', &
+                               trim(pointer_file)
          write(nu_diag,1030) ' ice_ic                    = ', ice_ic
-         write(nu_diag,*)    ' grid_type                 = ',
-     &                         trim(grid_type)
-         if (trim(grid_type) /= 'rectangular' .or.
-     &       trim(grid_type) /= 'column') then
-            write(nu_diag,*) ' grid_file                 = ',
-     &                         trim(grid_file)
-            write(nu_diag,*) ' kmt_file                  = ',
-     &                         trim(kmt_file)
+         write(nu_diag,*)    ' grid_type                 = ', &
+                               trim(grid_type)
+         if (trim(grid_type) /= 'rectangular' .or. &
+             trim(grid_type) /= 'column') then
+            write(nu_diag,*) ' grid_file                 = ', &
+                               trim(grid_file)
+            write(nu_diag,*) ' kmt_file                  = ', &
+                               trim(kmt_file)
          endif
          if (trim(grid_type) == 'column') then
-            write(nu_diag,1000) ' column_lat                = ',
-     &                         column_lat
-            write(nu_diag,1000) ' column_lon                = ',
-     &                         column_lon
+            write(nu_diag,1000) ' column_lat                = ', &
+                               column_lat
+            write(nu_diag,1000) ' column_lon                = ', &
+                               column_lon
          endif
 
          write(nu_diag,1020) ' kitd                      = ', kitd
-         write(nu_diag,1020) ' kcatbound                 = ',
-     &                         kcatbound
+         write(nu_diag,1020) ' kcatbound                 = ', &
+                               kcatbound
          write(nu_diag,1020) ' kdyn                      = ', kdyn
          write(nu_diag,1020) ' ndyn_dt                   = ', ndyn_dt
          write(nu_diag,1020) ' ndte                      = ', ndte
-         write(nu_diag,1010) ' evp_damping               = ',
-     &                         evp_damping
-         write(nu_diag,*)    ' yield_curve               = ',
-     &                         trim(yield_curve)
+         write(nu_diag,1010) ' evp_damping               = ', &
+                               evp_damping
+         write(nu_diag,*)    ' yield_curve               = ', &
+                               trim(yield_curve)
          write(nu_diag,1020) ' kstrength                 = ', kstrength
-         write(nu_diag,1020) ' krdg_partic               = ',
-     &                         krdg_partic
-         write(nu_diag,1020) ' krdg_redist               = ',
-     &                         krdg_redist
-         write(nu_diag,1030) ' advection                 = ',
-     &                         trim(advection)
-         write(nu_diag,1030) ' shortwave                 = ',
-     &                         trim(shortwave)
+         write(nu_diag,1020) ' krdg_partic               = ', &
+                               krdg_partic
+         write(nu_diag,1020) ' krdg_redist               = ', &
+                               krdg_redist
+         write(nu_diag,1030) ' advection                 = ', &
+                               trim(advection)
+         write(nu_diag,1030) ' shortwave                 = ', &
+                               trim(shortwave)
          write(nu_diag,1000) ' albicev                   = ', albicev
          write(nu_diag,1000) ' albicei                   = ', albicei
          write(nu_diag,1000) ' albsnowv                  = ', albsnowv
          write(nu_diag,1000) ' albsnowi                  = ', albsnowi
 
-         write(nu_diag,1020) ' fyear_init                = ',
-     &                         fyear_init
+         write(nu_diag,1020) ' fyear_init                = ', &
+                               fyear_init
          write(nu_diag,1020) ' ycycle                    = ', ycycle
-         write(nu_diag,*)    ' atm_data_type             = ',
-     &                         trim(atm_data_type)
+         write(nu_diag,*)    ' atm_data_type             = ', &
+                               trim(atm_data_type)
          if (trim(atm_data_type) /= 'default') then
-            write(nu_diag,*) ' atm_data_dir              = ',
-     &                         trim(atm_data_dir)
-            write(nu_diag,*) ' precip_units              = ',
-     &                         trim(precip_units)
+            write(nu_diag,*) ' atm_data_dir              = ', &
+                               trim(atm_data_dir)
+            write(nu_diag,*) ' precip_units              = ', &
+                               trim(precip_units)
          endif 
 
-         write(nu_diag,1010) ' oceanmixed_ice            = ',
-     &                         oceanmixed_ice
-         write(nu_diag,*)    ' sss_data_type             = ',
-     &                         trim(sss_data_type)
-         write(nu_diag,*)    ' sst_data_type             = ',
-     &                         trim(sst_data_type)
-         if (trim(sss_data_type) /= 'default' .or.
-     &       trim(sst_data_type) /= 'default') then
-            write(nu_diag,*) ' ocn_data_dir              = ',
-     &                         trim(ocn_data_dir)
+         write(nu_diag,1010) ' oceanmixed_ice            = ', &
+                               oceanmixed_ice
+         write(nu_diag,*)    ' sss_data_type             = ', &
+                               trim(sss_data_type)
+         write(nu_diag,*)    ' sst_data_type             = ', &
+                               trim(sst_data_type)
+         if (trim(sss_data_type) /= 'default' .or. &
+             trim(sst_data_type) /= 'default') then
+            write(nu_diag,*) ' ocn_data_dir              = ', &
+                               trim(ocn_data_dir)
          endif 
-         if (trim(sss_data_type) == 'ncar' .or.
-     &       trim(sst_data_type) == 'ncar') then
-            write(nu_diag,*) ' oceanmixed_file           = ',
-     &                         trim(oceanmixed_file)
+         if (trim(sss_data_type) == 'ncar' .or. &
+             trim(sst_data_type) == 'ncar') then
+            write(nu_diag,*) ' oceanmixed_file           = ', &
+                               trim(oceanmixed_file)
          endif
 
 #ifdef coupled
@@ -462,10 +464,10 @@
 #endif
 
          write (nu_diag,*) ' '
-         write (nu_diag,'(a30,2f8.2)') 'Diagnostic point 1: lat, lon =',
-     &                      latpnt(1), lonpnt(1)
-         write (nu_diag,'(a30,2f8.2)') 'Diagnostic point 2: lat, lon =',
-     &                      latpnt(2), lonpnt(2)
+         write (nu_diag,'(a30,2f8.2)') 'Diagnostic point 1: lat, lon =', &
+                            latpnt(1), lonpnt(1)
+         write (nu_diag,'(a30,2f8.2)') 'Diagnostic point 2: lat, lon =', &
+                            latpnt(2), lonpnt(2)
 
  1000    format (a30,2x,f9.2)  ! a30 to align formatted, unformatted statements
  1010    format (a30,2x,l6)    ! logical
@@ -473,12 +475,12 @@
  1030    format (a30,   a8)    ! character
 
          write (nu_diag,*) ' '
-         if (grid_type  /=  'displaced_pole' .and.
-     &       grid_type  /=  'tripole'        .and.
-     &       grid_type  /=  'column'         .and.
-     &       grid_type  /=  'rectangular'    .and.
-     &       grid_type  /=  'panarctic'      .and.
-     &       grid_type  /=  'latlon' ) then
+         if (grid_type  /=  'displaced_pole' .and. &
+             grid_type  /=  'tripole'        .and. &
+             grid_type  /=  'column'         .and. &
+             grid_type  /=  'rectangular'    .and. &
+             grid_type  /=  'panarctic'      .and. &
+             grid_type  /=  'latlon' ) then 
             call abort_ice('ice_init: unknown grid_type')
          endif
 
@@ -518,10 +520,10 @@
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j            ! horizontal indices
-     &,  it              ! tracer index
-     &,  iblk            ! block index
+      integer (kind=int_kind) :: &
+         i, j        , & ! horizontal indices
+         it          , & ! tracer index
+         iblk            ! block index
 
       !-----------------------------------------------------------------
       ! Check number of layers in ice and snow.
@@ -554,13 +556,13 @@
       ! Set state variables
       !-----------------------------------------------------------------
 
-         call set_state_var (nx_block,            ny_block,
-     &                       tmask(:,:,    iblk), ULAT (:,:,    iblk),
-     &                       Tair (:,:,    iblk),
-     &                       sst  (:,:,    iblk), trcr_depend, 
-     &                       aicen(:,:,  :,iblk), trcrn(:,:,:,:,iblk),
-     &                       vicen(:,:,  :,iblk), vsnon(:,:,  :,iblk),
-     &                       eicen(:,:,  :,iblk), esnon(:,:,  :,iblk))
+         call set_state_var (nx_block,            ny_block,            &
+                             tmask(:,:,    iblk), ULAT (:,:,    iblk), &
+                             Tair (:,:,    iblk),                      &
+                             sst  (:,:,    iblk), trcr_depend,         &
+                             aicen(:,:,  :,iblk), trcrn(:,:,:,:,iblk), &
+                             vicen(:,:,  :,iblk), vsnon(:,:,  :,iblk), &
+                             eicen(:,:,  :,iblk), esnon(:,:,  :,iblk))
 
       !-----------------------------------------------------------------
       ! compute aggregate ice state and open water area
@@ -575,22 +577,22 @@
             trcr(:,:,it,iblk) = c0
          enddo
 
-         call aggregate (nx_block, ny_block,
-     &                   aicen(:,:,:,iblk),
-     &                   trcrn(:,:,:,:,iblk),
-     &                   vicen(:,:,:,iblk),
-     &                   vsnon(:,:,:,iblk),
-     &                   eicen(:,:,:,iblk),
-     &                   esnon(:,:,:,iblk),
-     &                   aice (:,:,  iblk),
-     &                   trcr (:,:,:,iblk),
-     &                   vice (:,:,  iblk),
-     &                   vsno (:,:,  iblk),
-     &                   eice (:,:,  iblk),
-     &                   esno (:,:,  iblk),
-     &                   aice0(:,:,  iblk),
-     &                   tmask(:,:,  iblk),
-     &                   trcr_depend)
+         call aggregate (nx_block, ny_block,  &
+                         aicen(:,:,:,iblk),   &
+                         trcrn(:,:,:,:,iblk), &
+                         vicen(:,:,:,iblk),   &
+                         vsnon(:,:,:,iblk),   &
+                         eicen(:,:,:,iblk),   &
+                         esnon(:,:,:,iblk),   &
+                         aice (:,:,  iblk),   &
+                         trcr (:,:,:,iblk),   &
+                         vice (:,:,  iblk),   &
+                         vsno (:,:,  iblk),   &
+                         eice (:,:,  iblk),   &
+                         esno (:,:,  iblk),   &
+                         aice0(:,:,  iblk),   &
+                         tmask(:,:,  iblk),   &
+                         trcr_depend)
 
          aice_init(:,:,iblk) = aice(:,:,iblk)
 
@@ -600,9 +602,9 @@
       ! ghost cell updates
       !-----------------------------------------------------------------
 
-      call bound_state (aicen, trcrn,
-     &                  vicen, vsnon, 
-     &                  eicen, esnon)
+      call bound_state (aicen, trcrn, &
+                        vicen, vsnon, &
+                        eicen, esnon)
 
       end subroutine init_state
 
@@ -613,13 +615,13 @@
 !
 ! !INTERFACE:
 !
-      subroutine set_state_var (nx_block, ny_block,
-     &                          tmask,    ULAT,
-     &                          Tair,
-     &                          sst,      trcr_depend,
-     &                          aicen,    trcrn,
-     &                          vicen,    vsnon,
-     &                          eicen,    esnon)
+      subroutine set_state_var (nx_block, ny_block, &
+                                tmask,    ULAT, &
+                                Tair, &
+                                sst,      trcr_depend, &
+                                aicen,    trcrn, &
+                                vicen,    vsnon, &
+                                eicen,    esnon) 
 !
 ! !DESCRIPTION:
 !
@@ -637,65 +639,65 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block  ! block dimensions
 
-      logical (kind=log_kind), dimension (nx_block,ny_block),
-     &   intent(in) ::
-     &   tmask      ! true for ice/ocean cells
+      logical (kind=log_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         tmask      ! true for ice/ocean cells
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), 
-     &   intent(in) ::
-     &   ULAT       ! latitude of velocity pts (radians)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         ULAT       ! latitude of velocity pts (radians)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
-     &   Tair        ! air temperature  (K)
-     &,  sst         ! sea surface temperature (C) 
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         Tair    , & ! air temperature  (K)
+         sst         ! sea surface temperature (C) 
 
-      integer (kind=int_kind), dimension (ntrcr), intent(inout) ::
-     &   trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
+      integer (kind=int_kind), dimension (ntrcr), intent(inout) :: &
+         trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),
-     &   intent(out) ::
-     &   aicen     ! concentration of ice
-     &,  vicen     ! volume per unit area of ice          (m)
-     &,  vsnon     ! volume per unit area of snow         (m)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
+         intent(out) :: &
+         aicen , & ! concentration of ice
+         vicen , & ! volume per unit area of ice          (m)
+         vsnon     ! volume per unit area of snow         (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat),
-     &   intent(out) ::
-     &   trcrn     ! ice tracers
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
+         intent(out) :: &
+         trcrn     ! ice tracers
                    ! 1: surface temperature of ice/snow (C)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr),
-     &   intent(out) ::
-     &   eicen     ! energy of melting for each ice layer  (J/m^2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
+         intent(out) :: &
+         eicen     ! energy of melting for each ice layer  (J/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr),
-     &   intent(out) ::
-     &   esnon     ! energy of melting for each ice layer  (J/m^2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), &
+         intent(out) :: &
+         esnon     ! energy of melting for each ice layer  (J/m^2)
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j            ! horizontal indices
-     &,  ij              ! horizontal index, combines i and j loops
-     &,  k               ! ice layer index
-     &,  n               ! thickness category index
-     &,  it              ! tracer index
-     &,  icells          ! number of cells initialized with ice
+      integer (kind=int_kind) :: &
+         i, j        , & ! horizontal indices
+         ij          , & ! horizontal index, combines i and j loops
+         k           , & ! ice layer index
+         n           , & ! thickness category index
+         it          , & ! tracer index
+         icells          ! number of cells initialized with ice
 
-      integer (kind=int_kind), dimension(nx_block*ny_block) ::
-     &   indxi, indxj    ! compressed indices for cells with aicen > puny
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
+         indxi, indxj    ! compressed indices for cells with aicen > puny
 
-      real (kind=dbl_kind) ::
-     &   slope, Ti, sum, hbar
-     &,  ainit(ncat)
-     &,  hinit(ncat)
+      real (kind=dbl_kind) :: &
+         slope, Ti, sum, hbar, &
+         ainit(ncat), &
+         hinit(ncat)
 
-      real (kind=dbl_kind), parameter ::
-     &   hsno_init = 0.20_dbl_kind    ! initial snow thickness (m)
-     &,  edge_init_nh =  70._dbl_kind ! initial ice edge, N.Hem. (deg) 
-     &,  edge_init_sh = -60._dbl_kind ! initial ice edge, S.Hem. (deg)
+      real (kind=dbl_kind), parameter :: &
+         hsno_init = 0.20_dbl_kind   , & ! initial snow thickness (m)
+         edge_init_nh =  70._dbl_kind, & ! initial ice edge, N.Hem. (deg) 
+         edge_init_sh = -60._dbl_kind    ! initial ice edge, S.Hem. (deg)
 
 
       ! Initialize state variables.
@@ -748,9 +750,9 @@
          do i = 1, nx_block
             if (tmask(i,j)) then
                ! place ice in high latitudes where ocean sfc is cold
-               if ( (sst (i,j) <= Tocnfrz+p2) .and.
-     &              (ULAT(i,j) < edge_init_sh/rad_to_deg .or. 
-     &               ULAT(i,j) > edge_init_nh/rad_to_deg) ) then
+               if ( (sst (i,j) <= Tocnfrz+p2) .and. &
+                    (ULAT(i,j) < edge_init_sh/rad_to_deg .or. &
+                     ULAT(i,j) > edge_init_nh/rad_to_deg) ) then
                   icells = icells + 1
                   indxi(icells) = i
                   indxj(icells) = j
@@ -791,13 +793,13 @@
 
                   ! assume linear temp profile and compute enthalpy
                   slope = Tocnfrz - trcrn(i,j,1,n)
-                  Ti = trcrn(i,j,1,n) + slope*(real(k,kind=dbl_kind)-p5)
-     &                                        /real(nilyr,kind=dbl_kind)
+                  Ti = trcrn(i,j,1,n) + slope*(real(k,kind=dbl_kind)-p5) &
+                                              /real(nilyr,kind=dbl_kind)
 
-                  eicen(i,j,ilyr1(n)+k-1) =
-     &                 -(rhoi * (cp_ice*(Tmlt(k)-Ti)
-     &                 + Lfresh*(c1-Tmlt(k)/Ti) - cp_ocn*Tmlt(k)))
-     &                 * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+                  eicen(i,j,ilyr1(n)+k-1) = &
+                       -(rhoi * (cp_ice*(Tmlt(k)-Ti) &
+                       + Lfresh*(c1-Tmlt(k)/Ti) - cp_ocn*Tmlt(k))) &
+                       * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
 
                enddo            ! ij
             enddo               ! nilyr
@@ -810,9 +812,9 @@
                   j = indxj(ij)
 
                   Ti = min(c0, trcrn(i,j,1,n))
-                  esnon(i,j,slyr1(n)+k-1) = -rhos*(Lfresh - cp_ice*Ti)
-     &                                      *vsnon(i,j,n)
-     &                                      /real(nslyr,kind=dbl_kind)
+                  esnon(i,j,slyr1(n)+k-1) = -rhos*(Lfresh - cp_ice*Ti) &
+                                            *vsnon(i,j,n) &
+                                            /real(nslyr,kind=dbl_kind)
                enddo            ! ij
             enddo               ! nslyr
             
