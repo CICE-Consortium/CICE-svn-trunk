@@ -45,7 +45,7 @@
       implicit none
       save
       private
-      public :: init_remap, horizontal_remap
+      public :: init_remap, horizontal_remap, make_masks
 
 ! NOTE: For remapping, hice, hsno, qice, and qsno are considered tracers.
 !       ntrace is not equal to ntrcr!

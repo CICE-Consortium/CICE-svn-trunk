@@ -28,7 +28,7 @@
       use ice_constants
       use ice_fileunits
       use ice_transport_remap, only: horizontal_remap, ntrace,     &
-                                     tracer_type, depend
+                                     tracer_type, depend, make_masks
 !
 !EOP
 !
