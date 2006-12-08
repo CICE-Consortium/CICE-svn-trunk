@@ -245,11 +245,14 @@
 
       if (histfreq == '1') hist_avg = .false. ! potential conflict
 
+#ifdef CCSM
       if (runtype == "continue") then
          restart = .true.
       else
          restart = .false.
       endif
+#endif
+
 #if (defined CCSM) || (defined COUP_CAM)
       year_init = 0                           ! potential conflict
 #endif
