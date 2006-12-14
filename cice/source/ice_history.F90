@@ -1394,7 +1394,8 @@
       use ice_grid
       use ice_calendar, only: time, sec, idate, nyr, month, daymo,  &
                               mday, write_ic, histfreq, histfreq_n, &
-                              year_init, new_year, new_month, new_day
+                              year_init, new_year, new_month, new_day, &
+                              dayyr
       use ice_work, only: work_g1, work_gr, work_gr3
       use ice_restart, only: lenstr, runid
       use ice_domain, only: distrb_info
@@ -1461,7 +1462,7 @@
           elseif (new_year) then
            iyear = iyear - 1
            imonth = 12
-           iday = 31
+           iday = daymo(imonth)
           elseif (new_month) then
            imonth = month - 1
            iday = daymo(imonth)
@@ -1802,7 +1803,7 @@
         status = nf_put_att_text(ncid,nf_global,'source',length,title)
         call nf_stat_check (status,'Error in global attribute source')
 
-        title = 'All years have exactly 365 days'
+        write(title,'(a,i3,a)') 'All years have exactly ',int(dayyr),' days'
         length = lenstr(title)
         status = nf_put_att_text(ncid,nf_global,'comment',length,title)
         call nf_stat_check (status,'Error in global attribute comment')

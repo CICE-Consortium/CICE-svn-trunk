@@ -73,7 +73,7 @@
       use ice_fileunits
       use ice_calendar, only: year_init, istep0, histfreq, histfreq_n, &
                               dumpfreq, dumpfreq_n, diagfreq, &
-                              npt, dt, ndyn_dt
+                              npt, dt, ndyn_dt, days_per_year
       use ice_restart, only: &
           restart, restart_dir, restart_file, pointer_file, &
           runid, runtype
@@ -110,7 +110,7 @@
 
       namelist /ice_nml/ &
         year_init,      istep0,          dt,            npt, &
-        diagfreq, &       
+        diagfreq,       days_per_year,   &       
         print_points,   print_global,    diag_type,     diag_file, &
         histfreq,       hist_avg,        history_dir,   history_file, &
         histfreq_n,     dumpfreq,        dumpfreq_n,    restart_file, &
@@ -137,6 +137,7 @@
       ! default values
       !-----------------------------------------------------------------
 
+      days_per_year = 365    ! number of days in a year
       year_init = 0          ! initial year
       istep0 = 0             ! no. of steps taken in previous integrations,
                              ! real (dumped) or imagined (to set calendar)
@@ -177,7 +178,7 @@
       krdg_partic = 1        ! 1 = new participation, 0 = Thorndike et al 75
       krdg_redist = 1        ! 1 = new redistribution, 0 = Hibler 80
       advection  = 'remap'   ! incremental remapping transport scheme
-      shortwave = 'default'
+      shortwave = 'default'  ! or 'dEdd' (delta-Eddington)
       albicev   = 0.78_dbl_kind   ! visible ice albedo for h > ahmax
       albicei   = 0.36_dbl_kind   ! near-ir ice albedo for h > ahmax
       albsnowv  = 0.98_dbl_kind   ! cold snow albedo, visible
@@ -244,6 +245,7 @@
       endif
 
       if (histfreq == '1') hist_avg = .false. ! potential conflict
+      if (days_per_year /= 365) shortwave = 'default' ! definite conflict
 
 #ifdef CCSM
       if (runtype == "continue") then
@@ -254,12 +256,14 @@
 #endif
 
 #if (defined CCSM) || (defined COUP_CAM)
+      days_per_year = 365                     ! potential conflict
       year_init = 0                           ! potential conflict
 #endif
 #ifdef COUP_CAM
       history_file = trim(runid)//"_iceh"
 #endif
 
+      call broadcast_scalar(days_per_year,      master_task)
       call broadcast_scalar(year_init,          master_task)
       call broadcast_scalar(istep0,             master_task)
       call broadcast_scalar(dt,                 master_task)
@@ -352,6 +356,7 @@
           write(nu_diag,1030) ' runtype                   = ', &
                                trim(runtype)
 #endif
+         write(nu_diag,1020) ' days_per_year             = ', days_per_year
          write(nu_diag,1020) ' year_init                 = ', year_init
          write(nu_diag,1020) ' istep0                    = ', istep0
          write(nu_diag,1000) ' dt                        = ', dt
