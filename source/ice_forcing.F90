@@ -33,7 +33,7 @@
       use ice_communicate, only: my_task, master_task
       use ice_constants
       use ice_calendar, only: istep, istep1, time, time_forc, year_init, &
-                              sec, mday, month, nyr, yday, daycal
+                              sec, mday, month, nyr, yday, daycal, dayyr, daymo
       use ice_fileunits
       use ice_exit
 !
@@ -543,7 +543,7 @@
       !-----------------------------------------------------------------
 
          if (ixm /= 99) then
-      ! currently in first half of data interval
+         ! currently in first half of data interval
             if (ixx <= 1) then
                if (yr > fyear_init) then ! get data from previous year
                   call file_year (data_file, yr-1)
@@ -564,7 +564,7 @@
             if (ixx==1 .and. my_task == master_task) close(nu_forcing)
          endif                  ! ixm ne 99
 
-      ! always read ixx data from data file for current year
+         ! always read ixx data from data file for current year
          call file_year (data_file, yr)
          call ice_open (nu_forcing, data_file, nbits)
 
@@ -727,10 +727,10 @@
           daymid(0:13)     ! month mid-points
 
       daymid(1:13) = 14._dbl_kind   ! time frame ends 0 sec into day 15
-      daymid(0)    = -17._dbl_kind  ! Dec 15, 0 sec
+      daymid(0)    = 14._dbl_kind - daymo(12)  ! Dec 15, 0 sec
 
       ! make time cyclic
-      tt = mod(ftime/secday,c365)
+      tt = mod(ftime/secday,dayyr)
 
       ! Find neighboring times
 
@@ -765,7 +765,7 @@
 ! !DESCRIPTION:
 !
 ! Compute coefficients for interpolating data to current time step.
-! Works for any data interval that divides evenly into a 365-day
+! Works for any data interval that divides evenly into a
 !  year (daily, 6-hourly, etc.)
 ! Use interp_coef_monthly for monthly data.
 !
@@ -788,14 +788,15 @@
 !
 !EOP
 !
-      real (kind=dbl_kind), parameter :: &
-          secyr = c365 * secday     ! seconds in a 365-day year
+      real (kind=dbl_kind) :: &
+          secyr            ! seconds in a year
 
       real (kind=dbl_kind) :: &
           tt           , & ! seconds elapsed in current year
           t1, t2       , & ! seconds elapsed at data points
           rcnum            ! recnum => dbl_kind
 
+      secyr = dayyr * secday         ! seconds in a year
       tt = mod(ftime,secyr)
 
       ! Find neighboring times
@@ -811,7 +812,7 @@
          if (dataloc==1) then        ! data located at middle of interval
             t1 = (rcnum-p5)*secint
          else                        
-            t1 = rcnum*secint       ! data located at end of interval
+            t1 = rcnum*secint        ! data located at end of interval
          endif
          t2 = t1 + secint            !  + 1 interval
       endif
@@ -1929,7 +1930,7 @@
                    + c12*sin(p5*TLON(i,j))
         hour_angle = (c12 - solar_time)*pi/c12
         declin = 23.44_dbl_kind*cos((172._dbl_kind-yday) &
-                 * c2*pi/c365)*deg2rad
+                 * c2*pi/c365)*deg2rad     ! use dayyr instead of c365???
         cosZ = sin(TLAT(i,j))*sin(declin) &
              + cos(TLAT(i,j))*cos(declin)*cos(hour_angle)
         cosZ = max(cosZ,c0)

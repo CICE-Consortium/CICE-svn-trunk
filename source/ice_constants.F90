@@ -226,7 +226,6 @@
         m2_to_km2     = 1.e-6_dbl_kind  ,&! m^2 to km^2
         kg_to_g       = 1000._dbl_kind  ,&! kilograms to grams
         mps_to_cmpdy  = 8.64e6_dbl_kind ,&! m per s to cm per day
-        mps_to_cmpyr  = mps_to_cmpdy*365._dbl_kind,&! m per s to cm per yr
         C_to_K        = 273.15_dbl_kind ,&! Celsius to Kelvin
         rad_to_deg    = 180._dbl_kind/pi  ! degree-radian conversion
 

@@ -23,6 +23,7 @@
 ! !USES:
 !
       use ice_constants
+      use ice_exit, only: abort_ice
 !
 !EOP
 !
@@ -30,11 +31,23 @@
       save
 
       integer (kind=int_kind) :: &
+         days_per_year        , & ! number of days in one year
          daymo(12)            , & ! number of days in each month
          daycal(13)               ! day number at end of month
 
-      data daymo /   31,28,31, 30, 31, 30, 31, 31, 30, 31, 30, 31/
-      data daycal/ 0,31,59,90,120,151,181,212,243,273,304,334,365/
+      ! 360-day year data
+      integer (kind=int_kind) :: &
+         daymo360(12)         , & ! number of days in each month
+         daycal360(13)            ! day number at end of month
+      data daymo360 /   30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30/
+      data daycal360/ 0,30, 60, 90,120,150,180,210,240,270,300,330,360/
+
+      ! 365-day year data
+      integer (kind=int_kind) :: &
+         daymo365(12)         , & ! number of days in each month
+         daycal365(13)            ! day number at end of month
+      data daymo365 /   31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31/
+      data daycal365/ 0,31, 59, 90,120,151,181,212,243,273,304,334,365/
 
       integer (kind=int_kind) :: &
          istep    , & ! local step counter for time loop
@@ -119,6 +132,17 @@
       stop_now = 0      ! end program execution if stop_now=1
       dyn_dt = dt/real(ndyn_dt,kind=dbl_kind) ! dynamics et al timestep
 
+      dayyr = real(days_per_year, kind=dbl_kind)
+      if (days_per_year.eq.360) then
+        daymo  = daymo360
+        daycal = daycal360
+      elseif (days_per_year.eq.365) then
+        daymo  = daymo365
+        daycal = daycal365
+      else
+         call abort_ice('ice: year must have 360 or 365 days')
+      endif
+
       end subroutine init_calendar
 
 !=======================================================================
@@ -157,8 +181,6 @@
          elapsed_months             , & ! since beginning this run
          elapsed_hours                  ! since beginning this run
 
-      dayyr = 365.0_dbl_kind
-
       nyrp=nyr
       monthp=month
       mdayp=mday
@@ -169,7 +191,6 @@
       new_hour=.false.
       write_history=.false.
       write_restart=0
-
 
       sec = mod(ttime,secday)           ! elapsed seconds into date at
                                         ! end of dt
