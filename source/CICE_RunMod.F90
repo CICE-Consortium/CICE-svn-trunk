@@ -154,8 +154,10 @@
    !  initialize error code and step timer
    !--------------------------------------------------------------------
 
-      errorCode = ESMF_SUCCESS
       call ice_timer_start(timer_step)   ! start timing entire run
+
+#ifdef ESMF  
+      errorCode = ESMF_SUCCESS
 
    !--------------------------------------------------------------------
    !  check clock to make sure models agree on time info
@@ -189,7 +191,6 @@
    !  extract data from import state
    !--------------------------------------------------------------------
    
-#ifdef USE_ESMF
       call CICE_CoupledExtractImport(importState, errorCode)
    
       if (errorCode /= ESMF_SUCCESS) then
@@ -724,7 +725,7 @@
       type (block) :: &
          this_block      ! block information for current block
 
-      logical (kind=int_kind) :: &
+      logical (kind=log_kind) :: &
          l_stop          ! if true, abort model
 
       integer (kind=int_kind) :: &
@@ -1007,7 +1008,7 @@
       integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
          indxi, indxj    ! indirect indices for cells with aicen > puny
 
-      logical (kind=int_kind) :: &
+      logical (kind=log_kind) :: &
          l_stop          ! if true, abort model
 
       integer (kind=int_kind) :: &
