@@ -110,11 +110,11 @@
 
 #endif
 
+#ifdef USE_ESMF
       !--------------------------------------------------------------------
       !  initialize ESMF and retrieve the global VM
       !--------------------------------------------------------------------
 
-#ifdef USE_ESMF
       errorCode = ESMF_Success
 
       call ESMF_Initialize(rc=errorCode)

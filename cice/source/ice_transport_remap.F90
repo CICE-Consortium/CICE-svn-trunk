@@ -840,6 +840,10 @@
       integer (kind=int_kind) ::     &
          istop, jstop     ! indices of grid cell where model aborts
 
+      l_stop = .false.
+      istop = 0
+      jstop = 0
+
 !---!-------------------------------------------------------------------
 !---! Remap the ice area and associated tracers.
 !---! Remap the open water area (without tracers).
@@ -1415,7 +1419,7 @@
          l_dp_midpt          ! if true, find departure points using
                              ! corrected midpoint velocity
 
-      logical (kind=int_kind), intent(inout) ::     &
+      logical (kind=log_kind), intent(inout) ::     &
          l_stop       ! if true, abort on return
 
       integer (kind=int_kind), intent(inout) ::     &
@@ -3916,7 +3920,7 @@
          intent(inout), optional ::     &
          trm              ! mean tracers
 
-      logical (kind=int_kind), intent(inout) ::     &
+      logical (kind=log_kind), intent(inout) ::     &
          l_stop       ! if true, abort on return
 
       integer (kind=int_kind), intent(inout) ::     &

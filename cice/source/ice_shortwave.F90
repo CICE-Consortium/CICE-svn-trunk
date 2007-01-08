@@ -485,9 +485,7 @@
          i = indxi(ij)
          j = indxj(ij)
 
-         hi  = vicen(i,j) / aicen(i,j)
          hs  = vsnon(i,j) / aicen(i,j)
-         hilyr = hi / real(nilyr,kind=dbl_kind)
 
       !-----------------------------------------------------------------
       ! Fractional snow cover
@@ -544,6 +542,9 @@
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
+
+            hi  = vicen(i,j) / aicen(i,j)
+            hilyr = hi / real(nilyr,kind=dbl_kind)
 
             tranbot(i,j) = exp (-kappav * hilyr * real(k,kind=dbl_kind))
             Iswabs(i,j,k) = fswpen(i,j) * (trantop(i,j)-tranbot(i,j))

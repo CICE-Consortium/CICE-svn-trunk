@@ -192,7 +192,6 @@
 
          do j = 1, ny_block 
          do i = 1, nx_block 
-            str(i,j,iblk) = c0
             rdg_conv (i,j,iblk) = c0 
             rdg_shear(i,j,iblk) = c0 
             divu (i,j,iblk) = c0 
@@ -249,6 +248,8 @@
                          icetmask  (:,:,iblk), iceumask  (:,:,iblk), & 
                          fm        (:,:,iblk),                       & 
                          strtltx   (:,:,iblk), strtlty   (:,:,iblk), & 
+                         strocnx   (:,:,iblk), strocny   (:,:,iblk), & 
+                         strintx   (:,:,iblk), strinty   (:,:,iblk), & 
                          waterx    (:,:,iblk), watery    (:,:,iblk), & 
                          forcex    (:,:,iblk), forcey    (:,:,iblk), & 
                          stressp_1 (:,:,iblk), stressp_2 (:,:,iblk), & 
@@ -374,7 +375,8 @@
 
          call evp_finish                               & 
               (nx_block,           ny_block,           & 
-               nghost,                                 & 
+               icellu      (iblk),                     & 
+               indxui    (:,iblk), indxuj    (:,iblk), & 
                uvel    (:,:,iblk), vvel    (:,:,iblk), & 
                uocn    (:,:,iblk), vocn    (:,:,iblk), & 
                strocnx (:,:,iblk), strocny (:,:,iblk), & 
@@ -680,6 +682,8 @@
                             icetmask,   iceumask,   & 
                             fm,                     & 
                             strtltx,    strtlty,    & 
+                            strocnx,    strocny,    &
+                            strintx,    strinty,    &
                             waterx,     watery,     & 
                             forcex,     forcey,     &     
                             stressp_1,  stressp_2,  &   
@@ -762,7 +766,11 @@
          uvel    , & ! x-component of velocity (m/s)
          vvel    , & ! y-component of velocity (m/s)
          strtltx , & ! stress due to sea surface slope, x-direction
-         strtlty     ! stress due to sea surface slope, y-direction
+         strtlty , & ! stress due to sea surface slope, y-direction
+         strocnx , & ! ice-ocean stress, x-direction
+         strocny , & ! ice-ocean stress, y-direction
+         strintx , & ! divergence of internal ice stress, x (N/m^2)
+         strinty     ! divergence of internal ice stress, y (N/m^2)
 !
 !EOP
 !
@@ -843,15 +851,20 @@
             icellu = icellu + 1
             indxui(icellu) = i
             indxuj(icellu) = j
-         else
-         ! set velocity to zero for masked-out points
-            uvel(i,j) = c0
-            vvel(i,j) = c0
-         ! initialize velocity for new ice points to ocean sfc current
+
+            ! initialize velocity for new ice points to ocean sfc current
             if (.not. iceumask_old(i,j)) then
                uvel(i,j) = uocn(i,j)
                vvel(i,j) = vocn(i,j)
             endif
+         else
+            ! set velocity and stresses to zero for masked-out points
+            uvel(i,j)    = c0
+            vvel(i,j)    = c0
+            strintx(i,j) = c0
+            strinty(i,j) = c0
+            strocnx(i,j) = c0
+            strocny(i,j) = c0
          endif
       enddo
       enddo
@@ -968,7 +981,7 @@
          rdg_shear    ! shear term for ridging (1/s)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,8), & 
-         intent(inout) :: &
+         intent(out) :: &
          str          ! stress combinations
 !
 !EOP
@@ -1292,7 +1305,7 @@
          nghost            , & ! number of ghost cells
          ksub                  ! subcycling step
 
-      integer (kind=log_kind), dimension (nx_block,ny_block), &
+      integer (kind=int_kind), dimension (nx_block,ny_block), &
          intent(in):: &
          icetmask    ! ice extent mask (T-cell)
 
@@ -1324,7 +1337,7 @@
          rdg_conv , & ! convergence term for ridging (1/s)
          rdg_shear    ! shear term for ridging (1/s)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,8), intent(inout) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,8), intent(out) :: &
          str          ! stress combinations
 !
 !EOP
@@ -2010,7 +2023,8 @@
 ! !INTERFACE:
 !
       subroutine evp_finish (nx_block, ny_block, &
-                             nghost,             &
+                             icellu,             &
+                             indxui,   indxuj,   &
                              uvel,     vvel,     &
                              uocn,     vocn,     &
                              strocnx,  strocny,  &
@@ -2031,7 +2045,12 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         nghost                ! number of ghost cells
+         icellu                ! total count when iceumask is true
+
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxui  , & ! compressed index in i-direction
+         indxuj      ! compressed index in j-direction
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
          uvel    , & ! x-component of velocity (m/s)
@@ -2040,7 +2059,7 @@
          vocn        ! ocean current, y-direction (m/s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
-         intent(out) :: &
+         intent(inout) :: &
          strocnx , & ! ice-ocean stress, x-direction
          strocny , & ! ice-ocean stress, y-direction
          strocnxT, & ! ice-ocean stress, x-direction
@@ -2049,33 +2068,21 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-         i, j, ij, &
-         ilo,ihi,jlo,jhi     ! beginning and end of physical domain
+         i, j, ij
 
       real (kind=dbl_kind) :: vrel
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
-      do j = 1, ny_block
-      do i = 1, nx_block
-         strocnx(i,j) = c0
-         strocny(i,j) = c0
-      enddo
-      enddo
-
       ! ocean-ice stress for coupling
-      do j = jlo, jhi
-      do i = ilo, ihi
+      do ij =1, icellu
+         i = indxui(ij)
+         j = indxuj(ij)
+
          vrel = dragw*sqrt((uocn(i,j) - uvel(i,j))**2 + &
                            (vocn(i,j) - vvel(i,j))**2)  ! m/s
          strocnx(i,j) = strocnx(i,j) &
                       - vrel*(uvel(i,j)*cosw - vvel(i,j)*sinw)
          strocny(i,j) = strocny(i,j) &
                       - vrel*(vvel(i,j)*cosw + uvel(i,j)*sinw)
-      enddo
       enddo
 
       !-----------------------------------------------------------------
