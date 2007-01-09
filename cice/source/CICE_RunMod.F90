@@ -657,7 +657,7 @@
 
          call scale_fluxes (nx_block,            ny_block,           &
                             nghost,              tmask   (:,:,iblk), &
-                            aice_init(:,:,iblk),                     &
+                            aice_init(:,:,iblk), Tf      (:,:,iblk), &
                             Tair     (:,:,iblk), Qa      (:,:,iblk), &
                             strairxT (:,:,iblk), strairyT(:,:,iblk), &
                             fsens    (:,:,iblk), flat    (:,:,iblk), &
@@ -849,7 +849,7 @@
                            frzmlt   (:,:,  iblk),           &
                            frazil   (:,:,  iblk),           &
                            frz_onset(:,:,  iblk), yday,     &
-                           l_stop,                          &
+                           Tf       (:,:,  iblk), l_stop,   &
                            istop, jstop)
 
          if (l_stop) then

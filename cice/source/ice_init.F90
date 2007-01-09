@@ -518,6 +518,7 @@
 !
       use ice_blocks
       use ice_domain
+      use ice_flux, only: sst, Tf, Tair
       use ice_flux, only: sst, Tair
       use ice_grid
       use ice_state
@@ -566,8 +567,8 @@
 
          call set_state_var (nx_block,            ny_block,            &
                              tmask(:,:,    iblk), ULAT (:,:,    iblk), &
-                             Tair (:,:,    iblk),                      &
-                             sst  (:,:,    iblk), trcr_depend,         &
+                             Tair (:,:,    iblk), sst  (:,:,    iblk), &
+                             Tf   (:,:,    iblk), trcr_depend,         &
                              aicen(:,:,  :,iblk), trcrn(:,:,:,:,iblk), &
                              vicen(:,:,  :,iblk), vsnon(:,:,  :,iblk), &
                              eicen(:,:,  :,iblk), esnon(:,:,  :,iblk))
@@ -625,8 +626,8 @@
 !
       subroutine set_state_var (nx_block, ny_block, &
                                 tmask,    ULAT, &
-                                Tair, &
-                                sst,      trcr_depend, &
+                                Tair,     sst,  &
+                                Tf,       trcr_depend, &
                                 aicen,    trcrn, &
                                 vicen,    vsnon, &
                                 eicen,    esnon) 
@@ -660,6 +661,7 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
          Tair    , & ! air temperature  (K)
+         Tf      , & ! freezing temperature (C) 
          sst         ! sea surface temperature (C) 
 
       integer (kind=int_kind), dimension (ntrcr), intent(inout) :: &
@@ -711,17 +713,23 @@
       ! Initialize state variables.
       ! If restarting, these values are overwritten.
 
-      aicen(:,:,:) = c0
-      vicen(:,:,:) = c0
-      vsnon(:,:,:) = c0
-      eicen(:,:,:) = c0
-      esnon(:,:,:) = c0
-      trcrn(:,:,1,:) = Tocnfrz  ! surface temperature
-      if (ntrcr >= 2) then
-         do it = 2, ntrcr
-            trcrn(:,:,it,:) = c0
+      do n = 1, ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            aicen(i,j,n) = c0
+            vicen(i,j,n) = c0
+            vsnon(i,j,n) = c0
+            eicen(i,j,n) = c0
+            esnon(i,j,n) = c0
+            trcrn(i,j,1,n) = Tf(i,j)  ! surface temperature
+            if (ntrcr >= 2) then
+               do it = 2, ntrcr
+                  trcrn(i,j,it,n) = c0
+               enddo
+            endif
          enddo
-      endif
+         enddo
+      enddo
 
       if (trim(ice_ic) == 'default') then
 
@@ -758,7 +766,7 @@
          do i = 1, nx_block
             if (tmask(i,j)) then
                ! place ice in high latitudes where ocean sfc is cold
-               if ( (sst (i,j) <= Tocnfrz+p2) .and. &
+               if ( (sst (i,j) <= Tf(i,j)+p2) .and. &
                     (ULAT(i,j) < edge_init_sh/rad_to_deg .or. &
                      ULAT(i,j) > edge_init_nh/rad_to_deg) ) then
                   icells = icells + 1
@@ -800,7 +808,7 @@
                   j = indxj(ij)
 
                   ! assume linear temp profile and compute enthalpy
-                  slope = Tocnfrz - trcrn(i,j,1,n)
+                  slope = Tf(i,j) - trcrn(i,j,1,n)
                   Ti = trcrn(i,j,1,n) + slope*(real(k,kind=dbl_kind)-p5) &
                                               /real(nilyr,kind=dbl_kind)
 

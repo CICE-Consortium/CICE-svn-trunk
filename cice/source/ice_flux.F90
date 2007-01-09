@@ -679,7 +679,7 @@
 !
       subroutine scale_fluxes (nx_block, ny_block, &
                                nghost,   tmask,    &
-                               aice,               &
+                               aice,     Tf,       &
                                Tair,     Qa,       &
                                strairxT, strairyT, &
                                fsens,    flat,     &
@@ -711,6 +711,7 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
           intent(in):: &
           aice    , & ! fractional ice area
+          Tf      , & ! freezing temperature            (C)
           Tair    , & ! surface air temperature         (K)
           Qa          ! sfc air specific humidity       (kg/kg)
 
@@ -772,7 +773,7 @@
             fsens   (i,j) = c0
             flat    (i,j) = c0
             fswabs  (i,j) = c0
-            flwout  (i,j) = -stefan_boltzmann *(Tocnfrz + C_to_K)**4
+            flwout  (i,j) = -stefan_boltzmann *(Tf(i,j) + C_to_K)**4
                ! to make upward longwave over ocean reasonable for history file
             evap    (i,j) = c0
             Tref    (i,j) = Tair(i,j)

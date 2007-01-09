@@ -850,7 +850,7 @@
                               aice0,     aice,     &
                               frzmlt,    frazil,   &
                               frz_onset, yday,     &
-                              l_stop,              &
+                              Tf,        l_stop,   &
                               istop,     jstop)
 !
 ! !USES:
@@ -877,7 +877,8 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
          aice  , & ! total concentration of ice
-         frzmlt    ! freezing/melting potential (W/m^2)
+         frzmlt, & ! freezing/melting potential (W/m^2)
+         Tf        ! freezing temperature (C)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(inout) :: &
@@ -1136,7 +1137,7 @@
          aicen(i,j,1) = aicen(i,j,1) + ai0new(m)
          aice0(i,j)   = aice0(i,j)   - ai0new(m)
          vicen(i,j,1) = vicen(i,j,1) + vi0new(m)
-         trcrn(i,j,1,1) = (Tocnfrz*ai0new(m) + trcrn(i,j,1,1)*area1) &
+         trcrn(i,j,1,1) = (Tf(i,j)*ai0new(m) + trcrn(i,j,1,1)*area1) &
                       / aicen(i,j,1)
          trcrn(i,j,1,1) = min (trcrn(i,j,1,1), c0)
 
