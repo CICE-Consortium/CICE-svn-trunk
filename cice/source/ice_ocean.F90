@@ -70,7 +70,7 @@
       use ice_state, only: aice
       use ice_flux
       use ice_grid, only: tmask
-      use ice_atmo, only: atmo_boundary_layer
+      use ice_atmo, only: atmo_boundary_layer, atmbndy, atmo_boundary_const
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -130,25 +130,40 @@
       !-----------------------------------------------------------------
       ! Compute boundary layer quantities
       !-----------------------------------------------------------------
-         call atmo_boundary_layer (nx_block,  ny_block,   &
-                                   'ocn',     icells,     &
-                                   indxi,     indxj,      &
-                                   sst        (:,:,iblk), &    
-                                   potT       (:,:,iblk), &
-                                   uatm       (:,:,iblk), &   
-                                   vatm       (:,:,iblk), &   
-                                   wind       (:,:,iblk), &   
-                                   zlvl       (:,:,iblk), &   
-                                   Qa         (:,:,iblk), &     
-                                   rhoa       (:,:,iblk), &
-                                   strairx_ocn(:,:,iblk), & 
-                                   strairy_ocn(:,:,iblk), & 
-                                   Tref_ocn   (:,:,iblk), & 
-                                   Qref_ocn   (:,:,iblk), & 
-                                   delt       (:,:),      &    
-                                   delq       (:,:),      &
-                                   lhcoef     (:,:),      &
-                                   shcoef     (:,:) )
+
+         if (trim(atmbndy) == 'constant') then
+            call atmo_boundary_const (nx_block,  ny_block,   &
+                                      'ice',     icells,     &
+                                      indxi,     indxj,      &
+                                      uatm       (:,:,iblk), &   
+                                      vatm       (:,:,iblk), &   
+                                      wind       (:,:,iblk), &   
+                                      rhoa       (:,:,iblk), &
+                                      strairx_ocn(:,:,iblk), & 
+                                      strairy_ocn(:,:,iblk), & 
+                                      lhcoef     (:,:),      &
+                                      shcoef     (:,:) )
+         else ! default
+            call atmo_boundary_layer (nx_block,  ny_block,   &
+                                      'ocn',     icells,     &
+                                      indxi,     indxj,      &
+                                      sst        (:,:,iblk), &    
+                                      potT       (:,:,iblk), &
+                                      uatm       (:,:,iblk), &   
+                                      vatm       (:,:,iblk), &   
+                                      wind       (:,:,iblk), &   
+                                      zlvl       (:,:,iblk), &   
+                                      Qa         (:,:,iblk), &     
+                                      rhoa       (:,:,iblk), &
+                                      strairx_ocn(:,:,iblk), & 
+                                      strairy_ocn(:,:,iblk), & 
+                                      Tref_ocn   (:,:,iblk), & 
+                                      Qref_ocn   (:,:,iblk), & 
+                                      delt       (:,:),      &    
+                                      delq       (:,:),      &
+                                      lhcoef     (:,:),      &
+                                      shcoef     (:,:) )
+         endif
 
       !-----------------------------------------------------------------
       ! Ocean  albedo

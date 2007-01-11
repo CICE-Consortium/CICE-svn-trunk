@@ -33,7 +33,8 @@
       use ice_communicate, only: my_task, master_task
       use ice_constants
       use ice_calendar, only: istep, istep1, time, time_forc, year_init, &
-                              sec, mday, month, nyr, yday, daycal, dayyr, daymo
+                              sec, mday, month, nyr, yday, daycal, dayyr, &
+                              daymo, days_per_year
       use ice_fileunits
       use ice_exit
 !
@@ -1109,15 +1110,17 @@
          swidr(i,j) = fsw(i,j)*frcidr        ! near IR direct
          swidf(i,j) = fsw(i,j)*frcidf        ! near IR diffuse
                  
-        ! determine whether precip is rain or snow
-
-        ! determine whether precip is rain or snow
+        ! convert precipitation units to kg/m^2 s
         if (trim(precip_units) == 'mm_per_month') then
-          fsnow(i,j) = fsnow(i,j)/2.592e+06_dbl_kind  ! mm/month -> kg/m^2 s
+          fsnow(i,j) = fsnow(i,j)*c12/(secday*days_per_year) 
+        elseif (trim(precip_units) == 'mm_per_day') then
+          fsnow(i,j) = fsnow(i,j)/secday
 !       elseif (trim(precip_units) == 'mm_per_sec' .or.
 !               trim(precip_units) == 'mks') then
 !         no change:  mm/sec = kg/m^2 s
         endif
+
+        ! determine whether precip is rain or snow
         frain(i,j) = c0                     
         if (Tair(i,j) >= Tffresh) then
             frain(i,j) = fsnow(i,j)

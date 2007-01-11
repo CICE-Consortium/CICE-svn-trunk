@@ -42,6 +42,7 @@
          secday    = SHR_CONST_CDAY  ,&! seconds in calendar day
          omega     = SHR_CONST_OMEGA ,&! angular velocity of earth (rad/sec)
          radius    = SHR_CONST_REARTH,&! earth radius (m)
+         rhos      = 330.0_dbl_kind  ,&! density of snow (kg/m^3)
          rhoi      = SHR_CONST_RHOICE,&! density of ice (kg/m^3)
          rhow      = SHR_CONST_RHOSW ,&! density of seawater (kg/m^3)
          rhofresh  = SHR_CONST_RHOFW ,&! density of fresh water (kg/m^3)
@@ -49,10 +50,13 @@
          vonkar    = SHR_CONST_KARMAN,&! von Karman constant
          cp_air    = SHR_CONST_CPDAIR,&! specific heat of air (J/kg/K)
          cp_wv     = SHR_CONST_CPWV  ,&! specific heat of water vapor (J/kg/K)
+         ! (Briegleb JGR 97 11475-11485  July 1992)
+         emissivity = 0.95_dbl_kind  ,&! emissivity of snow and ice
          stefan_boltzmann = SHR_CONST_STEBOL,&!  W/m^2/K^4
          Tffresh   = SHR_CONST_TKFRZ ,&! freezing temp of fresh ice (K)
          cp_ice    = SHR_CONST_CPICE ,&! specific heat of fresh ice (J/kg/K)
          cp_ocn    = SHR_CONST_CPSW  ,&! specific heat of ocn    (J/kg/K)
+         depressT  = 0.054_dbl_kind  ,&! Tf:brine salinity ratio (C/ppt)
          Lsub      = SHR_CONST_LATSUB,&! latent heat, sublimation freshwater (J/kg)
          Lvap      = SHR_CONST_LATVAP,&! latent heat, vaporization freshwater (J/kg)
          Lfresh    = SHR_CONST_LATICE,&! latent heat of melting of fresh ice (J/kg)
@@ -60,26 +64,50 @@
          Tsmelt    = SHR_CONST_TKFRZ-SHR_CONST_TKFRZ,&! melting temp. snow top surface (C)
          ice_ref_salinity = SHR_CONST_ICE_REF_SAL ,&! (psu)
 !        ocn_ref_salinity = SHR_CONST_OCN_REF_SAL ,&! (psu)
+         albocn = 0.06_dbl_kind                   ,&! ocean albedo
+         dragio = 0.00536_dbl_kind                ,&! ice-ocn drag coefficient
 !        rho_air   = SHR_CONST_RHODAIR,&! ambient air density (kg/m^3)
-         spval_dbl = SHR_CONST_SPVAL   ! special value
+         spval_dbl = SHR_CONST_SPVAL    ! special value
 #else
+#ifdef AOMIP
+      real (kind=dbl_kind), parameter :: &
+         rhos      = 300.0_dbl_kind   ,&! density of snow (kg/m^3)
+         rhoi      = 900.0_dbl_kind   ,&! density of ice (kg/m^3)
+         rhow      = 1025.0_dbl_kind  ,&! density of seawater (kg/m^3)
+         cp_air    = 1004.0_dbl_kind  ,&! specific heat of air (J/kg/K)
+         emissivity= 0.98_dbl_kind    ,&! emissivity of snow and ice
+         cp_ice    = 2090._dbl_kind   ,&! specific heat of fresh ice (J/kg/K)
+         cp_ocn    = 4190._dbl_kind   ,&! specific heat of ocn    (J/kg/K)
+         depressT  = 0.0575_dbl_kind  ,&! Tf:brine salinity ratio (C/ppt)
+         dragio    = 0.0055_dbl_kind  ,&! ice-ocn drag coefficient
+         albocn    = 0.10_dbl_kind      ! ocean albedo
+#else
+! CICE default parameters
+      real (kind=dbl_kind), parameter :: &
+         rhos      = 330.0_dbl_kind   ,&! density of snow (kg/m^3)
+         rhoi      = 917.0_dbl_kind   ,&! density of ice (kg/m^3)
+         rhow      = 1026.0_dbl_kind  ,&! density of seawater (kg/m^3)
+         cp_air    = 1005.0_dbl_kind  ,&! specific heat of air (J/kg/K)
+         ! (Briegleb JGR 97 11475-11485  July 1992)
+         emissivity= 0.95_dbl_kind    ,&! emissivity of snow and ice
+         cp_ice    = 2106._dbl_kind   ,&! specific heat of fresh ice (J/kg/K)
+         cp_ocn    = 4218._dbl_kind   ,&! specific heat of ocn    (J/kg/K)
+         depressT  = 0.054_dbl_kind   ,&! Tf:brine salinity ratio (C/ppt)
+         dragio    = 0.00536_dbl_kind ,&! ice-ocn drag coefficient
+         albocn    = 0.06_dbl_kind      ! ocean albedo
+#endif
       real (kind=dbl_kind), parameter :: &
          pi = 3.14159265358979323846_dbl_kind,&! pi
          gravit    = 9.80616_dbl_kind ,&! gravitational acceleration (m/s^2)
          secday    = 86400.0_dbl_kind ,&! seconds in calendar day
          omega     = 7.292e-5_dbl_kind,&! angular velocity of earth (rad/sec)
          radius    = 6.37e6_dbl_kind  ,&! earth radius (m)
-         rhoi      = 917.0_dbl_kind   ,&! density of ice (kg/m^3)
-         rhow      = 1026.0_dbl_kind  ,&! density of seawater (kg/m^3)
          rhofresh  = 1000.0_dbl_kind  ,&! density of fresh water (kg/m^3)
          zvir      = 0.606_dbl_kind   ,&! rh2o/rair - 1.0
          vonkar    = 0.4_dbl_kind     ,&! von Karman constant
-         cp_air    = 1005.0_dbl_kind  ,&! specific heat of air (J/kg/K)
          cp_wv     = 1.81e3_dbl_kind  ,&! specific heat of water vapor (J/kg/K)
          stefan_boltzmann = 567.0e-10_dbl_kind,&!  W/m^2/K^4
          Tffresh   = 273.15_dbl_kind  ,&! freezing temp of fresh ice (K)
-         cp_ice = 2106._dbl_kind      ,&! specific heat of fresh ice (J/kg/K)
-         cp_ocn    = 4218._dbl_kind   ,&! specific heat of ocn    (J/kg/K)
          Lsub      = 2.835e6_dbl_kind ,&! latent heat, sublimation freshwater (J/kg)
          Lvap      = 2.501e6_dbl_kind ,&! latent heat, vaporization freshwater (J/kg)
          Lfresh    = Lsub-Lvap        ,&! latent heat of melting of fresh ice (J/kg)
@@ -95,23 +123,17 @@
          spval     = 1.0e30_real_kind   ! special value for netCDF output
 
       real (kind=dbl_kind), parameter :: &
-         rhos     = 330.0_dbl_kind    ,&! density of snow (kg/m^3)
-         depressT = 0.054_dbl_kind    ,&! Tf:brine salinity ratio (C/ppt)
          iceruf   = 0.0005_dbl_kind   ,&! ice surface roughness (m)
 
          ! (Ebert, Schramm and Curry JGR 100 15965-15975 Aug 1995)
          kappav = 1.4_dbl_kind ,&! vis extnctn coef in ice, wvlngth<700nm (1/m)
          kappan = 17.6_dbl_kind,&! vis extnctn coef in ice, wvlngth<700nm (1/m)
 
-         ! (Briegleb JGR 97 11475-11485  July 1992)
-         emissivity = 0.95_dbl_kind,&! emissivity of snow and ice
-
          kice   = 2.03_dbl_kind  ,&! thermal conductivity of fresh ice(W/m/deg)
          ksno   = 0.30_dbl_kind  ,&! thermal conductivity of snow  (W/m/deg)
          zref   = 10._dbl_kind   ,&! reference height for stability (m)
          Tocnfrz= -34.0_dbl_kind*depressT,&! freezing temp of seawater (C),
                                            ! used as Tsfcn for open water
-         albocn = 0.06_dbl_kind  ,&! ocean albedo
          snowpatch = 0.02_dbl_kind ! parameter for fractional snow area (m)
 
 

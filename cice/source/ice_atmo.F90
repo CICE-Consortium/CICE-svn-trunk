@@ -28,6 +28,10 @@
 !EOP
 !
       implicit none
+      save
+
+      character (len=char_len) :: &
+         atmbndy ! atmo boundary method, 'default' ('ccsm3') or 'constant'
 
 !=======================================================================
 
@@ -107,7 +111,9 @@
 !
        integer (kind=int_kind) :: &
          k     , & ! iteration index
-         i, j      ! horizontal indices
+         i, j  , & ! horizontal indices
+         ij        ! combined ij index
+
 
       real (kind=dbl_kind) :: &
          TsfK  , & ! surface temperature in Kelvin (K)
@@ -142,9 +148,6 @@
          stable, & ! stability factor
          psixh     ! stability function at zlvl   (heat and water)
 
-      integer (kind=int_kind) :: &
-         ij        ! combined ij index
-
       real (kind=dbl_kind), parameter :: &
          cpvir = cp_wv/cp_air-c1, & ! defined as cp_wv/cp_air - 1.
          zTrf  = c2             , & ! reference height for air temp (m)
@@ -172,14 +175,18 @@
       ! Initialize
       !------------------------------------------------------------
 
-      strx(:,:) = c0
-      stry(:,:) = c0
-      Tref(:,:) = c0
-      Qref(:,:) = c0
-      delt(:,:) = c0
-      delq(:,:) = c0
-      shcoef(:,:) = c0
-      lhcoef(:,:) = c0
+      do j = 1, ny_block
+      do i = 1, nx_block
+         strx(i,j) = c0
+         stry(i,j) = c0
+         Tref(i,j) = c0
+         Qref(i,j) = c0
+         delt(i,j) = c0
+         delq(i,j) = c0
+         shcoef(i,j) = c0
+         lhcoef(i,j) = c0
+      enddo
+      enddo
 
       !------------------------------------------------------------
       ! Compute turbulent flux coefficients, wind stress, and
@@ -339,6 +346,119 @@
       enddo                     ! ij
 
       end subroutine atmo_boundary_layer
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: atmo_boundary_const - compute coeeficients for atm-ice fluxes
+!
+!
+! !INTERFACE:
+!
+      subroutine atmo_boundary_const (nx_block, ny_block, &
+                                      sfctype,  icells,   &
+                                      indxi,    indxj,    & 
+                                      uatm,     vatm,     &  
+                                      wind,     rhoa,     &
+                                      strx,     stry,     &   
+                                      lhcoef,   shcoef)
+
+! !DESCRIPTION:
+!
+! Compute coefficients for atm/ice fluxes, stress
+! NOTE: \\
+! (1) all fluxes are positive downward,  \\
+! (2) reference temperature and humidity are NOT computed
+!
+! !REVISION HISTORY: same as module
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells                ! number of cells that require atmo fluxes
+
+      integer (kind=int_kind), dimension(nx_block*ny_block), &
+         intent(in) :: &
+         indxi, indxj    ! compressed i and j indices
+
+      character (len=3), intent(in) :: &
+         sfctype      ! ice or ocean
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         uatm     , & ! x-direction wind speed (m/s)
+         vatm     , & ! y-direction wind speed (m/s)
+         wind     , & ! wind speed (m/s)
+         rhoa         ! air density (kg/m^3)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
+         strx     , & ! x surface stress (N)
+         stry     , & ! y surface stress (N)
+         shcoef   , & ! transfer coefficient for sensible heat
+         lhcoef       ! transfer coefficient for latent heat
+!
+!EOP
+!
+       integer (kind=int_kind) :: &
+         i, j, & ! horizontal indices
+         ij      ! combined ij index
+
+      real (kind=dbl_kind) :: &
+         tau, &  ! stress at zlvl
+         Lheat   ! Lvap or Lsub, depending on surface type
+
+      !------------------------------------------------------------
+      ! Initialize
+      !------------------------------------------------------------
+
+      do j = 1, ny_block
+      do i = 1, nx_block
+         strx(i,j) = c0
+         stry(i,j) = c0
+         shcoef(i,j) = c0
+         lhcoef(i,j) = c0
+      enddo
+      enddo
+
+      !------------------------------------------------------------
+      ! define variables that depend on surface type
+      !------------------------------------------------------------
+
+      if (sfctype(1:3)=='ice') then
+         Lheat = Lsub           ! ice to vapor
+      elseif (sfctype(1:3)=='ocn') then
+         Lheat = Lvap           ! liquid to vapor
+      endif   ! sfctype
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+
+      !------------------------------------------------------------
+      ! coefficients for turbulent flux calculation
+      !------------------------------------------------------------
+
+         shcoef(i,j) = (1.20e-3_dbl_kind)*cp_air*rhoa(i,j)*wind(i,j)
+         lhcoef(i,j) = (1.50e-3_dbl_kind)*Lheat *rhoa(i,j)*wind(i,j)
+
+      !------------------------------------------------------------
+      ! momentum flux
+      !------------------------------------------------------------
+
+         tau = rhoa(i,j) * 0.0012_dbl_kind * wind(i,j)
+!AOMIP         tau = rhoa(i,j) * (1.10_dbl_kind + c4*p01*wind(i,j)) &
+!AOMIP                         * wind(i,j) * p001
+         strx(i,j) = tau * uatm(i,j)
+         stry(i,j) = tau * vatm(i,j)
+
+      enddo                     ! ij
+
+      end subroutine atmo_boundary_const
 
 !=======================================================================
 

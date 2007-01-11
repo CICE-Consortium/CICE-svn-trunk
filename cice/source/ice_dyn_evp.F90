@@ -69,7 +69,7 @@
                       ! Note: teardrop still needs debugging
                                                                       ! 
       real (kind=dbl_kind), parameter :: &
-         dragw = 0.00536_dbl_kind * rhow, &
+         dragw = dragio * rhow, &
                          ! drag coefficient for water on ice *rhow (kg/m^3)
          eyc = 0.36_dbl_kind, &
                          ! coefficient for calculating the parameter E
