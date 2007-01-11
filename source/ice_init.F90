@@ -92,7 +92,8 @@
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, &
-                               shortwave
+                               shortwave, albedo_type
+      use ice_atmo, only: atmbndy
       use ice_transport_driver, only: advection
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -121,7 +122,7 @@
         yield_curve,    advection, &
         kstrength,      krdg_partic,     krdg_redist,   shortwave, &
         albicev,        albicei,         albsnowv,      albsnowi, &
-        fyear_init,     ycycle , &
+        albedo_type,    atmbndy,         fyear_init,    ycycle , &
         atm_data_type,  atm_data_dir,    precip_units, &
         oceanmixed_ice, sss_data_type,   sst_data_type, &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore, &
@@ -179,10 +180,12 @@
       krdg_redist = 1        ! 1 = new redistribution, 0 = Hibler 80
       advection  = 'remap'   ! incremental remapping transport scheme
       shortwave = 'default'  ! or 'dEdd' (delta-Eddington)
+      albedo_type = 'default'! or 'constant'
       albicev   = 0.78_dbl_kind   ! visible ice albedo for h > ahmax
       albicei   = 0.36_dbl_kind   ! near-ir ice albedo for h > ahmax
       albsnowv  = 0.98_dbl_kind   ! cold snow albedo, visible
       albsnowi  = 0.70_dbl_kind   ! cold snow albedo, near IR
+      atmbndy   = 'default'  ! or 'constant'
 
       fyear_init = 1900           ! first year of forcing cycle
       ycycle = 1                  ! number of years in forcing cycle
@@ -301,10 +304,12 @@
       call broadcast_scalar(krdg_redist,        master_task)
       call broadcast_scalar(advection,          master_task)
       call broadcast_scalar(shortwave,          master_task)
+      call broadcast_scalar(albedo_type,        master_task)
       call broadcast_scalar(albicev,            master_task)
       call broadcast_scalar(albicei,            master_task)
       call broadcast_scalar(albsnowv,           master_task)
       call broadcast_scalar(albsnowi,           master_task)
+      call broadcast_scalar(atmbndy,            master_task)
       call broadcast_scalar(fyear_init,         master_task)
       call broadcast_scalar(ycycle,             master_task)
       call broadcast_scalar(atm_data_type,      master_task)
@@ -426,10 +431,14 @@
                                trim(advection)
          write(nu_diag,1030) ' shortwave                 = ', &
                                trim(shortwave)
+         write(nu_diag,1030) ' albedo_type               = ', &
+                               trim(albedo_type)
          write(nu_diag,1000) ' albicev                   = ', albicev
          write(nu_diag,1000) ' albicei                   = ', albicei
          write(nu_diag,1000) ' albsnowv                  = ', albsnowv
          write(nu_diag,1000) ' albsnowi                  = ', albsnowi
+         write(nu_diag,1030) ' atmbndy                   = ', &
+                               trim(atmbndy)
 
          write(nu_diag,1020) ' fyear_init                = ', &
                                fyear_init
@@ -519,7 +528,6 @@
       use ice_blocks
       use ice_domain
       use ice_flux, only: sst, Tf, Tair
-      use ice_flux, only: sst, Tair
       use ice_grid
       use ice_state
       use ice_itd

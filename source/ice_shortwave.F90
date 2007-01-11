@@ -52,7 +52,8 @@
       save
 
       character (len=char_len) :: &
-         shortwave     ! shortwave method, 'ccsm3' (default) or 'dEdd'
+         shortwave, & ! shortwave method, 'default' ('ccsm3') or 'dEdd'
+         albedo_type  ! albedo parameterization, 'default' ('ccsm3') or 'constant'
 
       ! baseline albedos, set in namelist
       real (kind=dbl_kind) :: &
@@ -163,17 +164,31 @@
       ! Compute albedos for ice and snow.
       !-----------------------------------------------------------------
 
-      call compute_albedos (nx_block,   ny_block, &
-                            icells,               &
-                            indxi,      indxj,    &
-                            aicen,      vicen,    &
-                            vsnon,      Tsfcn,    &
-                            alvdrni,    alidrni,  &
-                            alvdfni,    alidfni,  &
-                            alvdrns,    alidrns,  &
-                            alvdfns,    alidfns,  &
-                            alvdrn,     alidrn,   &
-                            alvdfn,     alidfn)
+      if (trim(albedo_type) == 'constant') then
+         call constant_albedos (nx_block,   ny_block, &
+                                icells,               &
+                                indxi,      indxj,    &
+                                aicen,                &
+                                vsnon,      Tsfcn,    &
+                                alvdrni,    alidrni,  &
+                                alvdfni,    alidfni,  &
+                                alvdrns,    alidrns,  &
+                                alvdfns,    alidfns,  &
+                                alvdrn,     alidrn,   &
+                                alvdfn,     alidfn)
+      else ! default 
+         call compute_albedos (nx_block,   ny_block, &
+                               icells,               &
+                               indxi,      indxj,    &
+                               aicen,      vicen,    &
+                               vsnon,      Tsfcn,    &
+                               alvdrni,    alidrni,  &
+                               alvdfni,    alidfni,  &
+                               alvdrns,    alidrns,  &
+                               alvdfns,    alidfns,  &
+                               alvdrn,     alidrn,   &
+                               alvdfn,     alidfn)
+      endif
 
       !-----------------------------------------------------------------
       ! Compute solar radiation absorbed in ice and penetrating to ocean.
@@ -373,6 +388,144 @@
       enddo                     ! ij
 
       end subroutine compute_albedos
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: constant_albedos - set albedos for each thickness ategory
+!
+! !INTERFACE:
+!
+      subroutine constant_albedos (nx_block, ny_block, &
+                                  icells,             &
+                                  indxi,    indxj,    &
+                                  aicen,              &
+                                  vsnon,    Tsfcn,    &
+                                  alvdrni,  alidrni,  &
+                                  alvdfni,  alidfni,  &
+                                  alvdrns,  alidrns,  &
+                                  alvdfns,  alidfns,  &
+                                  alvdrn,   alidrn,   &
+                                  alvdfn,   alidfn)
+!
+! !DESCRIPTION:
+!
+! Compute albedos for each thickness category
+!
+! !REVISION HISTORY:
+!
+! authors:  same as module
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells              ! number of ice-covered grid cells
+
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi   , & ! compressed indices for ice-covered cells
+         indxj
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         aicen   , & ! concentration of ice per category
+         vsnon   , & ! volume of ice per category
+         Tsfcn       ! surface temperature
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(out) :: &
+         alvdrni  , & ! visible, direct, ice   (fraction)
+         alidrni  , & ! near-ir, direct, ice   (fraction)
+         alvdfni  , & ! visible, diffuse, ice  (fraction)
+         alidfni  , & ! near-ir, diffuse, ice  (fraction)
+         alvdrns  , & ! visible, direct, snow  (fraction)
+         alidrns  , & ! near-ir, direct, snow  (fraction)
+         alvdfns  , & ! visible, diffuse, snow (fraction)
+         alidfns  , & ! near-ir, diffuse, snow (fraction)
+         alvdrn   , & ! visible, direct, avg   (fraction)
+         alidrn   , & ! near-ir, direct, avg   (fraction)
+         alvdfn   , & ! visible, diffuse, avg  (fraction)
+         alidfn       ! near-ir, diffuse, avg  (fraction)
+!
+!EOP
+!
+      real (kind=dbl_kind), parameter :: &
+         warmice  = 0.68_dbl_kind, &   
+         coldice  = 0.70_dbl_kind, &   
+         warmsnow = 0.77_dbl_kind, &   
+         coldsnow = 0.81_dbl_kind   
+
+      integer (kind=int_kind) :: &
+         i, j, n
+
+      real (kind=dbl_kind) :: &
+         hs      ! snow thickness  (m)
+
+      integer (kind=int_kind) :: &
+         ij      ! horizontal index, combines i and j loops
+
+      do j = 1, ny_block
+      do i = 1, nx_block
+         alvdrn(i,j) = albocn
+         alidrn(i,j) = albocn
+         alvdfn(i,j) = albocn
+         alidfn(i,j) = albocn
+      enddo
+      enddo
+
+         
+      !-----------------------------------------------------------------
+      ! Compute albedo for each thickness category.
+      !-----------------------------------------------------------------
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+
+         hs = vsnon(i,j) / aicen(i,j)            
+
+         if (hs > puny) then
+            ! snow, temperature dependence
+            if (Tsfcn(i,j) >= -c2*puny) then
+               alvdfn(i,j) = warmsnow
+               alidfn(i,j) = warmsnow
+            else
+               alvdfn(i,j) = coldsnow
+               alidfn(i,j) = coldsnow
+            endif
+         else      ! hs < puny
+            ! bare ice, temperature dependence
+            if (Tsfcn(i,j) >= -c2*puny) then
+               alvdfn(i,j) = warmsnow
+               alidfn(i,j) = warmsnow
+            else
+               alvdfn(i,j) = coldsnow
+               alidfn(i,j) = coldsnow
+            endif
+         endif                  ! hs > puny
+
+         ! direct albedos (same as diffuse for now)
+         alvdrn (i,j) = alvdfn(i,j)
+         alidrn (i,j) = alidfn(i,j)
+
+         alvdrni(i,j) = alvdrn(i,j)
+         alidrni(i,j) = alidrn(i,j)
+         alvdrns(i,j) = alvdrn(i,j)
+         alidrns(i,j) = alidrn(i,j)
+         alvdfni(i,j) = alvdfn(i,j)
+         alidfni(i,j) = alidfn(i,j)
+         alvdfns(i,j) = alvdfn(i,j)
+         alidfns(i,j) = alidfn(i,j)
+
+      enddo                     ! ij
+
+      end subroutine constant_albedos
 
 !=======================================================================
 !BOP

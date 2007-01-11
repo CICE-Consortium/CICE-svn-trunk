@@ -542,18 +542,28 @@
       ! NOTE: The wind stress is computed here for later use.
       !-----------------------------------------------------------------
 
-            call atmo_boundary_layer(nx_block,       ny_block,       &
-                                     'ice',          icells,         &
-                                     indxi,          indxj,          &
-                                     trcrn(:,:,1,n,iblk),            &
-                                     potT(:,:,iblk),                 &
-                                     uatm(:,:,iblk), vatm(:,:,iblk), &
-                                     wind(:,:,iblk), zlvl(:,:,iblk), &
-                                     Qa  (:,:,iblk), rhoa(:,:,iblk), &
-                                     strairxn,       strairyn,       &
-                                     Trefn,          Qrefn,          &
-                                     worka,          workb,          &
-                                     lhcoef,         shcoef)
+            if (trim(atmbndy) == 'constant') then
+               call atmo_boundary_const(nx_block,      ny_block,        &
+                                        'ice',          icells,         &
+                                        indxi,          indxj,          &
+                                        uatm(:,:,iblk), vatm(:,:,iblk), &
+                                        wind(:,:,iblk), rhoa(:,:,iblk), &
+                                        strairxn,       strairyn,       &
+                                        lhcoef,         shcoef)
+            else ! default
+               call atmo_boundary_layer(nx_block,       ny_block,       &
+                                        'ice',          icells,         &
+                                        indxi,          indxj,          &
+                                        trcrn(:,:,1,n,iblk),            &
+                                        potT(:,:,iblk),                 &
+                                        uatm(:,:,iblk), vatm(:,:,iblk), &
+                                        wind(:,:,iblk), zlvl(:,:,iblk), &
+                                        Qa  (:,:,iblk), rhoa(:,:,iblk), &
+                                        strairxn,       strairyn,       &
+                                        Trefn,          Qrefn,          &
+                                        worka,          workb,          &
+                                        lhcoef,         shcoef)
+            endif ! atmbndy
 
       !-----------------------------------------------------------------
       ! Vertical thermodynamics: Heat conduction, growth and melting.
