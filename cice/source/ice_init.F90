@@ -727,8 +727,6 @@
             aicen(i,j,n) = c0
             vicen(i,j,n) = c0
             vsnon(i,j,n) = c0
-            eicen(i,j,n) = c0
-            esnon(i,j,n) = c0
             trcrn(i,j,1,n) = Tf(i,j)  ! surface temperature
             if (ntrcr >= 2) then
                do it = 2, ntrcr
@@ -738,6 +736,8 @@
          enddo
          enddo
       enddo
+      eicen(:,:,:) = c0
+      esnon(:,:,:) = c0
 
       if (trim(ice_ic) == 'default') then
 
