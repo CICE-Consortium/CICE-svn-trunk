@@ -43,7 +43,6 @@
 ! !PUBLIC MEMBER FUNCTIONS:
 
    public :: create_blocks       ,&
-             destroy_blocks      ,&
              get_block           ,&
              get_block_parameter
 
@@ -382,29 +381,6 @@ end subroutine create_blocks
  end subroutine get_block_parameter
 
 !**********************************************************************
-!BOP
-! !IROUTINE: destroy_blocks
-! !INTERFACE:
-
- subroutine destroy_blocks
-
-! !DESCRIPTION:
-!  This subroutine deallocates the array with block information.
-!
-! !REVISION HISTORY:
-!  same as module
-!EOP
-!----------------------------------------------------------------------
-!BOC
-
-   deallocate(all_blocks)
-
-!EOC
-!----------------------------------------------------------------------
-
- end subroutine destroy_blocks
-
-!***********************************************************************
 
  end module ice_blocks
 

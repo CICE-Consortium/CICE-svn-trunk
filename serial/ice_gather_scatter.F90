@@ -6,9 +6,8 @@
 
 ! !DESCRIPTION:
 !  This module contains routines for gathering data to a single
-!  processor from a distributed array, scattering data from a
-!  single processor to a distributed array and changing distribution
-!  of blocks of data (eg from baroclinic to barotropic and back).
+!  processor from a distributed array, and scattering data from a
+!  single processor to a distributed array.
 !
 ! !REVISION HISTORY:
 !
@@ -33,8 +32,7 @@
 ! !PUBLIC MEMBER FUNCTIONS:
 
    public :: gather_global,      &
-             scatter_global,     &
-             redistribute_blocks
+             scatter_global
 
 !EOP
 !BOC
@@ -54,12 +52,6 @@
      module procedure scatter_global_dbl,  &
                       scatter_global_real, &
                       scatter_global_int
-   end interface
-
-   interface redistribute_blocks
-     module procedure redistribute_blocks_dbl,  &
-                      redistribute_blocks_real, &
-                      redistribute_blocks_int
    end interface
 
 !-----------------------------------------------------------------------
@@ -878,199 +870,6 @@
 !-----------------------------------------------------------------------
 
  end subroutine scatter_global_int
-
-!EOC
-!***********************************************************************
-!BOP
-! !IROUTINE: redistribute_blocks
-! !INTERFACE:
-
- subroutine redistribute_blocks_dbl(DST_ARRAY, dst_dist, &
-                                    SRC_ARRAY, src_dist)
-
-! !DESCRIPTION:
-!  This subroutine converts an array distributed in one decomposition
-!  to an array distributed in a different decomposition
-!
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
-!  This is the specific interface for double precision arrays
-!  corresponding to the generic interface scatter_global.  It is shown
-!  to provide information on the generic interface (the generic
-!  interface is identical, but chooses a specific interface based
-!  on the data type of the input argument).
-
-! !INPUT PARAMETERS:
-
-   type (distrb), intent(in) :: &
-     src_dist    ,&! info on distribution of blocks for source array
-     dst_dist      ! info on distribution of blocks for dest   array
-
-   real (r8), dimension(:,:,:), intent(in) :: &
-     SRC_ARRAY     ! array containing field in source distribution
-
-! !OUTPUT PARAMETERS:
-
-   real (r8), dimension(:,:,:), intent(inout) :: &
-     DST_ARRAY     ! array containing field in dest distribution
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-!
-!  local variables
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind) :: n
-
-!-----------------------------------------------------------------------
-!
-!  copy blocks from one distribution to another
-!
-!-----------------------------------------------------------------------
-
-   do n=1,nblocks_tot
-
-     if (src_dist%proc(n) /= 0) then
-
-       DST_ARRAY(:,:,dst_dist%local_block(n)) = &
-       SRC_ARRAY(:,:,src_dist%local_block(n))
-
-     endif
-   end do
-
-!-----------------------------------------------------------------------
-
- end subroutine redistribute_blocks_dbl
-
-!***********************************************************************
-
- subroutine redistribute_blocks_real(DST_ARRAY, dst_dist, &
-                                     SRC_ARRAY, src_dist)
-
-!-----------------------------------------------------------------------
-!
-!  This subroutine converts an array distributed in one decomposition
-!  to an array distributed in a different decomposition
-!
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
-!
-!  input variables
-!
-!-----------------------------------------------------------------------
-
-   type (distrb), intent(in) :: &
-     src_dist      ! info on distribution of blocks for source array
-
-   real (r4), dimension(:,:,:), intent(in) :: &
-     SRC_ARRAY     ! array containing field in source distribution
-
-!-----------------------------------------------------------------------
-!
-!  output variables
-!
-!-----------------------------------------------------------------------
-
-   type (distrb), intent(inout) :: &
-     dst_dist      ! info on dist of blocks for destination array
-
-   real (r4), dimension(:,:,:), intent(inout) :: &
-     DST_ARRAY     ! array containing field in dest distribution
-
-!-----------------------------------------------------------------------
-!
-!  local variables
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind) :: n
-
-!-----------------------------------------------------------------------
-!
-!  copy blocks from one distribution to another
-!
-!-----------------------------------------------------------------------
-
-   do n=1,nblocks_tot
-
-     if (src_dist%proc(n) /= 0) then
-
-       DST_ARRAY(:,:,dst_dist%local_block(n)) = &
-       SRC_ARRAY(:,:,src_dist%local_block(n))
-
-     endif
-   end do
-
-!-----------------------------------------------------------------------
-
- end subroutine redistribute_blocks_real
-
-!***********************************************************************
-
- subroutine redistribute_blocks_int(DST_ARRAY, dst_dist, &
-                                    SRC_ARRAY, src_dist)
-
-!-----------------------------------------------------------------------
-!
-!  This subroutine converts an array distributed in one decomposition
-!  to an array distributed in a different decomposition
-!
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
-!
-!  input variables
-!
-!-----------------------------------------------------------------------
-
-   type (distrb), intent(in) :: &
-     src_dist      ! info on distribution of blocks for source array
-
-   integer (int_kind), dimension(:,:,:), intent(in) :: &
-     SRC_ARRAY     ! array containing field in source distribution
-
-!-----------------------------------------------------------------------
-!
-!  output variables
-!
-!-----------------------------------------------------------------------
-
-   type (distrb), intent(inout) :: &
-     dst_dist      ! info on dist of blocks for destination array
-
-   integer (int_kind), dimension(:,:,:), intent(inout) :: &
-     DST_ARRAY     ! array containing field in dest distribution
-
-!-----------------------------------------------------------------------
-!
-!  local variables
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind) :: n
-
-!-----------------------------------------------------------------------
-!
-!  copy blocks from one distribution to another
-!
-!-----------------------------------------------------------------------
-
-   do n=1,nblocks_tot
-
-     if (src_dist%proc(n) /= 0) then
-
-       DST_ARRAY(:,:,dst_dist%local_block(n)) = &
-       SRC_ARRAY(:,:,src_dist%local_block(n))
-
-     endif
-   end do
-
-!-----------------------------------------------------------------------
-
- end subroutine redistribute_blocks_int
 
 !EOC
 !***********************************************************************

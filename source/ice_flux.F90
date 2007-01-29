@@ -773,7 +773,7 @@
             fsens   (i,j) = c0
             flat    (i,j) = c0
             fswabs  (i,j) = c0
-            flwout  (i,j) = -stefan_boltzmann *(Tf(i,j) + C_to_K)**4
+            flwout  (i,j) = -stefan_boltzmann *(Tf(i,j) + Tffresh)**4
                ! to make upward longwave over ocean reasonable for history file
             evap    (i,j) = c0
             Tref    (i,j) = Tair(i,j)
