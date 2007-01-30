@@ -2013,7 +2013,7 @@
       n=0
       do iblk = 1, nblocks
 
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -2226,7 +2226,7 @@
       n=0
       do iblk = 1, nblocks
 
-       this_block = get_block(blocks(iblk),iblk)         
+       this_block = get_block(blocks_ice(iblk),iblk)         
        ilo = this_block%ilo
        ihi = this_block%ihi
        jlo = this_block%jlo
@@ -2362,7 +2362,7 @@
            n2   = 0
            do iblk = 1, nblocks
 
-              this_block = get_block(blocks(iblk),iblk)         
+              this_block = get_block(blocks_ice(iblk),iblk)         
               ilo = this_block%ilo
               ihi = this_block%ihi
               jlo = this_block%jlo
@@ -2582,7 +2582,7 @@
       n=0
       do iblk = 1, nblocks
 
-       this_block = get_block(blocks(iblk),iblk)         
+       this_block = get_block(blocks_ice(iblk),iblk)         
        ilo = this_block%ilo
        ihi = this_block%ihi
        jlo = this_block%jlo
@@ -2646,7 +2646,7 @@
             n2 = 0
             do iblk = 1, nblocks
 
-               this_block = get_block(blocks(iblk),iblk)         
+               this_block = get_block(blocks_ice(iblk),iblk)         
                ilo = this_block%ilo
                ihi = this_block%ihi
                jlo = this_block%jlo

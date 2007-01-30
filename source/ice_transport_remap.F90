@@ -926,7 +926,7 @@
                                istop,             jstop)
 
          if (l_stop) then
-            this_block = get_block(blocks(iblk),iblk)         
+            this_block = get_block(blocks_ice(iblk),iblk)         
             write(nu_diag,*) 'istep1, my_task, iblk =',     &
                               istep1, my_task, iblk
             write (nu_diag,*) 'Global block:', this_block%block_id
@@ -1126,7 +1126,7 @@
                              aim   (:,:,0,iblk))
 
          if (l_stop) then
-            this_block = get_block(blocks(iblk),iblk)         
+            this_block = get_block(blocks_ice(iblk),iblk)         
             write (nu_diag,*) 'istep1, my_task, iblk, cat =',     &
                                istep1, my_task, iblk, n
             write (nu_diag,*) 'Global block:', this_block%block_id
@@ -1164,7 +1164,7 @@
                                trm   (:,:,:,n,iblk))
 
             if (l_stop) then
-               this_block = get_block(blocks(iblk),iblk)         
+               this_block = get_block(blocks_ice(iblk),iblk)         
                write (nu_diag,*) 'istep1, my_task, iblk, cat =',     &
                                   istep1, my_task, iblk, n
                write (nu_diag,*) 'Global block:', this_block%block_id

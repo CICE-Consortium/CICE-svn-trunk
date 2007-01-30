@@ -61,7 +61,8 @@
             flw_file, &
            rain_file, &
             sst_file, &
-            sss_file
+            sss_file, &
+           pslv_file
 
       real (kind=dbl_kind) :: &
            c1intp, c2intp , & ! interpolation coefficients

@@ -60,6 +60,9 @@
 #ifdef CCSM
       use ice_prescribed_mod
 #endif
+#ifdef popcice
+      use ice_to_drv, only: to_drv
+#endif
 
       implicit none
       private
@@ -67,7 +70,7 @@
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-      public :: CICE_Run, step_therm1, step_therm2, step_dynamics
+      public :: CICE_Run, step_therm1, step_therm2, step_dynamics, ice_step
 !
 !EOP
 !
@@ -128,7 +131,7 @@
 #else
 ! declare as integer dummy arguments
 
-      integer (int_kind), intent(inout) :: &
+      integer (int_kind), intent(inout), optional :: &
            CICE_Comp        , & ! dummy argument
            importState      , & ! dummy argument
            exportState      , & ! dummy argument
@@ -214,60 +217,15 @@
 #ifdef CCSM
          call from_coupler      ! get updated info from CCSM coupler
 #else
+#ifndef coupled
          call get_forcing_atmo     ! atmospheric forcing from data
          call get_forcing_ocn(dt)  ! ocean forcing from data
+#endif
 #endif
 
          if (stop_now >= 1) exit timeLoop
 
-         call init_mass_diags   ! diagnostics per timestep
-
-#ifdef CCSM
-         if(prescribed_ice) then  ! read prescribed ice
-            call ice_prescribed_run(idate, sec)
-         endif
-
-#endif
-      !-----------------------------------------------------------------
-      ! thermodynamics
-      !-----------------------------------------------------------------
-
-         call step_therm1 (dt)  ! pre-coupler thermodynamics
-
-#ifdef CCSM
-         call to_coupler        ! collect/send data to CCSM coupler
-
-         if (.not.prescribed_ice) then
-#endif
-
-         call step_therm2 (dt)  ! post-coupler thermodynamics
-
-      !-----------------------------------------------------------------
-      ! dynamics, transport, ridging
-      !-----------------------------------------------------------------
-
-         do k = 1, ndyn_dt
-            call step_dynamics (dyn_dt)
-         enddo
-
-#ifdef CCSM
-         endif ! not prescribed_ice
-#endif
-
-
-      !-----------------------------------------------------------------
-      ! write data
-      !-----------------------------------------------------------------
-
-         call ice_timer_start(timer_readwrite)  ! reading/writing
-
-         if (mod(istep,diagfreq) == 0) call runtime_diags(dt) ! log file
-
-         call ice_write_hist (dt)    ! history file
-
-         if (write_restart == 1) call dumpfile ! dumps for restarting
-
-         call ice_timer_stop(timer_readwrite)  ! reading/writing
+         call ice_step
 
 #ifdef USE_ESMF
          call CICE_CoupledAccumulateExport(errorCode)
@@ -313,7 +271,66 @@
 
       end subroutine CICE_Run
 
+!=======================================================================
 
+      subroutine ice_step
+
+      integer (kind=int_kind) :: k
+
+         call init_mass_diags   ! diagnostics per timestep
+
+#ifdef CCSM
+         if(prescribed_ice) then  ! read prescribed ice
+            call ice_prescribed_run(idate, sec)
+         endif
+
+#endif
+      !-----------------------------------------------------------------
+      ! thermodynamics
+      !-----------------------------------------------------------------
+
+         call step_therm1 (dt)  ! pre-coupler thermodynamics
+
+#ifdef CCSM
+         call to_coupler        ! collect/send data to CCSM coupler
+
+         if (.not.prescribed_ice) then
+#endif
+#ifdef popcice
+         call to_drv
+#endif
+
+         call step_therm2 (dt)  ! post-coupler thermodynamics
+
+      !-----------------------------------------------------------------
+      ! dynamics, transport, ridging
+      !-----------------------------------------------------------------
+
+         do k = 1, ndyn_dt
+            call step_dynamics (dyn_dt)
+         enddo
+
+#ifdef CCSM
+         endif ! not prescribed_ice
+#endif
+
+
+      !-----------------------------------------------------------------
+      ! write data
+      !-----------------------------------------------------------------
+
+         call ice_timer_start(timer_readwrite)  ! reading/writing
+
+         if (mod(istep,diagfreq) == 0) call runtime_diags(dt) ! log file
+
+         call ice_write_hist (dt)    ! history file
+
+         if (write_restart == 1) call dumpfile ! dumps for restarting
+
+         call ice_timer_stop(timer_readwrite)  ! reading/writing
+
+      end subroutine ice_step
+    
 !=======================================================================
 !BOP
 !
@@ -410,7 +427,7 @@
       call init_flux_atm         ! initialize atmosphere fluxes sent to coupler
 
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -494,6 +511,9 @@
             icells = 0
             do j = jlo, jhi
             do i = ilo, ihi
+!               if (aicen(i,j,n,iblk) > puny .and. .not.tmask(i,j,iblk)) then
+!                 print*,my_task,i,j,n,iblk,aicen(i,j,n,iblk),tmask(i,j,iblk)
+!               endif
                if (aicen(i,j,n,iblk) > puny) then
                   icells = icells + 1
                   indxi(icells) = i
@@ -748,7 +768,7 @@
       call init_flux_ocn        ! initialize ocean fluxes sent to coupler
       
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -1050,7 +1070,7 @@
       call ice_timer_start(timer_ridge)
 
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk), iblk)
+         this_block = get_block(blocks_ice(iblk), iblk)
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -1103,11 +1123,10 @@
 
       enddo                     ! iblk
 
-      call ice_timer_stop(timer_column)
       call ice_timer_stop(timer_ridge)
 
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk), iblk)
+         this_block = get_block(blocks_ice(iblk), iblk)
 
       !-----------------------------------------------------------------
       ! ITD cleanup: Rebin thickness categories if necessary, and remove
@@ -1153,6 +1172,8 @@
                          trcr_depend) 
 
       enddo
+
+      call ice_timer_stop(timer_column)
 
       call scale_hist_fluxes    ! to match coupler fluxes
 

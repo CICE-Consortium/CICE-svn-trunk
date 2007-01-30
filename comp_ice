@@ -1,6 +1,8 @@
 #! /bin/csh -f
 
-#Change these to your own site and user directory! 
+### Change these to your own site and user directory! 
+### You will need to create a Makefile Macro in bld/ and a run_ice script 
+### in input_templates/.
 setenv SITE LANL.mauve
 #setenv SITE LANL.epiphany
 #setenv SITE ORNL.jaguar
@@ -8,39 +10,36 @@ setenv SITE LANL.mauve
 #setenv SITE NAVO.kraken
 #setenv SITE NCAR.bluesky32
 
-# SYSTEM_USERDIR is predefined on ORNL machines
+### SYSTEM_USERDIR is predefined on ORNL machines
 setenv SYSTEM_USERDIR /scratch/eclare
 #setenv SYSTEM_USERDIR /scratch1/eclare  # epiphany
 #setenv SYSTEM_USERDIR /scr/eclare       # kraken
 #setenv SYSTEM_USERDIR /ptmp/eclare      # bluesky32
 
-# set grid resolution
-setenv RES gx3 # 100x116
-#setenv RES gx1 # 320x384
+### Grid resolution
+setenv RES gx3 ; setenv GRID 100x116
+#setenv RES gx1 ; setenv GRID 320x384
+#setenv RES tx1 ; setenv GRID 360x240
 
-# MPI runs
-setenv COMMDIR mpi 
+### Decomposition (cartesian distribution)
+### If using a load-balanced distribution (ice_in), these 
+### parameters set the initial decomposition prior to optimization.
+### nprocs in ice_in must equal NPX*NPY ###
+setenv NPX    2   # number of processors in x direction
+setenv NPY    2   # number of processors in y direction
+setenv BPX    1   # number of blocks per processor in x direction
+setenv BPY    1   # number of blocks per processor in y direction
 
-# Single processor runs
-#setenv COMMDIR serial
+### Specialty code
+setenv USE_ESMF no        # set to yes for ESMF runs
+setenv CAM_ICE  no        # set to yes for CAM runs (single column) 
+setenv SHRDIR   csm_share # location of CCSM shared code
 
-#ESMF runs
-#setenv USE_ESMF yes
-setenv USE_ESMF no
-
-#CAM runs
-#setenv CAM_ICE yes
-setenv CAM_ICE no
-
-#CSM shared code
-setenv SHRDIR csm_share
-
-# Set SRCDIR and EXEDIR to your own paths!
+### Set SRCDIR and EXEDIR to your own paths!
 #setenv SRCDIR $HOME/cice.v4.0/cice
 setenv SRCDIR /net/bob4/eclare/CODE/CICE_release/CICE.v4.0/cice
-#setenv SRCDIR /net/bob4/lipscomb/cice40_svn/cice
-setenv EXEDIR $SYSTEM_USERDIR/rundir4 ; if !(-d $EXEDIR) mkdir -p $EXEDIR
-
+setenv EXEDIR $SYSTEM_USERDIR/rundir4
+                                          if !(-d $EXEDIR) mkdir -p $EXEDIR
 setenv CBLD   $SRCDIR/bld
 setenv OBJDIR $EXEDIR/compile           ; if !(-d $OBJDIR) mkdir -p $OBJDIR
 setenv RSTDIR $EXEDIR/restart           ; if !(-d $RSTDIR) mkdir -p $RSTDIR
@@ -57,8 +56,6 @@ setenv ARCH $ARCH.$SITE
 
 cd $SRCDIR/source
 
-cp -fp ice_domain_size.F90.$RES ice_domain_size.F90
-
 cd $EXEDIR
 
 if !(-e grid)    cp $SRCDIR/input_templates/$RES/global_$RES.grid grid
@@ -71,9 +68,31 @@ cd $RSTDIR
 #cp $SRCDIR/input_templates/$RES/iced_$RES* .
 if !(-e ice.restart_file) cp $SRCDIR/input_templates/$RES/ice.restart_file .
 
+### Calculate processor tiling
+@ ntask = $NPX * $NPY ; setenv NTASK $ntask
+set NXGLOB = `echo $GRID | sed s/x.\*//`
+set NYGLOB = `echo $GRID | sed s/.\*x//`
+### x grid decomposition
+@ a = $NXGLOB / $NPX ; @ rem1 = $NXGLOB % $NPX ; @ b = $a + 1
+if ($rem1 == 0) setenv BLCKX $a ; if ($rem1 != 0) setenv BLCKX $b
+@ a = $BLCKX / $BPX  ; @ rem2 = $BLCKX % $BPX  ; @ b = $a + 1
+if ($rem2 == 0) setenv BLCKX $a ; if ($rem2 != 0) setenv BLCKX $b
+### y grid decomposition
+@ a = $NYGLOB / $NPY ; @ rem1 = $NYGLOB % $NPY ; @ b = $a + 1
+if ($rem1 == 0) setenv BLCKY $a ; if ($rem1 != 0) setenv BLCKY $b
+@ a = $BLCKY / $BPY  ; @ rem1 = $BLCKY % $BPY  ; @ b = $a + 1
+if ($rem1 == 0) setenv BLCKY $a ; if ($rem1 != 0) setenv BLCKY $b
+### max blocks
+@ m = $BPX * $BPY ; setenv MXBLCKS $m
+if ($NTASK == 1) then
+   setenv COMMDIR serial
+else
+   setenv COMMDIR mpi 
+endif
+
 cd $OBJDIR
 
-# Filepath: List of source code directories (in order of importance).
+### List of source code directories (in order of importance).
 cat >! Filepath << EOF
 $SRCDIR/source
 $SRCDIR/$COMMDIR
@@ -89,8 +108,15 @@ else
    cc -o makdep $CBLD/makdep.c                      || exit 2
 endif
 gmake VPFILE=Filepath EXEC=$EXEDIR/cice \
+           NXGLOB=$NXGLOB NYGLOB=$NYGLOB \
+           BLCKX=$BLCKX BLCKY=$BLCKY MXBLCKS=$MXBLCKS \
       -f  $CBLD/Makefile MACFILE=$CBLD/Macros.$ARCH || exit 2
 
 cd ..
-pwd 
-cd $SRCDIR
+pwd                                         
+echo NTASK = $NTASK
+echo "global N, N procs, N blocks/proc, block_size" 
+echo "x    $NXGLOB,    $NPX,           $BPX,          $BLCKX"
+echo "y    $NYGLOB,    $NPY,           $BPY,          $BLCKY"
+echo max_blocks = $MXBLCKS
+

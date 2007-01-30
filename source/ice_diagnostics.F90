@@ -80,11 +80,11 @@
       ! printing info for routine print_state
       character (char_len) :: plabel
       integer (kind=int_kind), parameter :: &
-         check_step = 99999999, &
+         check_step = 9999999, &
          iblkp = 1, &
-         ip = 15, &
-         jp = 14, &
-         mtask = 1
+         ip = 75, &
+         jp = 148, &
+         mtask = 5
 
 !=======================================================================
 
@@ -955,7 +955,7 @@
             mindis = 540.0_dbl_kind !  360. + 180.
 
             do iblk = 1, nblocks
-               this_block = get_block(blocks(iblk),iblk)         
+               this_block = get_block(blocks_ice(iblk),iblk)         
                ilo = this_block%ilo
                ihi = this_block%ihi
                jlo = this_block%jlo

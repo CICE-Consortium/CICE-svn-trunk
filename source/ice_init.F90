@@ -718,6 +718,9 @@
          edge_init_sh = -60._dbl_kind    ! initial ice edge, S.Hem. (deg)
 
 
+      indxi(:) = 0
+      indxj(:) = 0
+
       ! Initialize state variables.
       ! If restarting, these values are overwritten.
 

@@ -15,6 +15,7 @@
 ! 2004: Block structure and snow parameters added by William Lipscomb
 !       Renamed (used to be ice_model_size)
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
+!       Removed hardwired sizes (NX...can now be set in compile scripts)
 !
 ! !INTERFACE:
 !
@@ -31,8 +32,8 @@
       save
 
       integer (kind=int_kind), parameter :: &
-        nx_global = 100       , & ! i-axis size
-        ny_global = 116       , & ! j-axis size
+        nx_global = NXGLOB    , & ! i-axis size
+        ny_global = NYGLOB    , & ! j-axis size
         ncat      =   5       , & ! number of categories
         nilyr     =   4       , & ! number of ice layers per category
         ntilyr    = ncat*nilyr, & ! number of ice layers in all categories
@@ -42,8 +43,8 @@
                                   ! 1 = surface temperature
 
       integer (kind=int_kind), parameter :: &
-        block_size_x = 50     , & ! size of block in first horiz dimension
-        block_size_y = 58         ! size of block in second horiz dimension
+        block_size_x = BLCKX  , & ! size of block in first horiz dimension
+        block_size_y = BLCKY      ! size of block in second horiz dimension
 
    !*** The model will inform the user of the correct
    !*** values for the parameter below.  A value higher than
@@ -55,7 +56,7 @@
    !***               num_procs
  
       integer (kind=int_kind), parameter :: &
-        max_blocks = 1            ! max number of blocks per processor
+        max_blocks = MXBLCKS      ! max number of blocks per processor
 
 !=======================================================================
 

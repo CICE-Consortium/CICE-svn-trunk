@@ -1,5 +1,7 @@
 #==============================================================================
 # Makefile macros for "mauve," an SGI ALTIX system at LANL running Linux
+# Note:  Use the -mp flag if precision is critical.   It slows down the 
+#        code by 25% (or more).
 #==============================================================================
 
 INCLDIR    := -I.  -I/usr/projects/climate/maltrud/local/include 
@@ -13,13 +15,16 @@ FIXEDFLAGS := -132
 FREEFLAGS  := 
 FC         := ifort
 FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl 
+#FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -g
+#FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl -mp -g
 #FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB
-#FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -g 
 MOD_SUFFIX := mod
 LD         := $(FC)
 LDFLAGS    := $(FFLAGS) -v
 
-#   CPPDEFS :=  $(CPPDEFS)  -Dfcd_coupled -Dcoupled
+    CPPDEFS :=  $(CPPDEFS) -DNXGLOB=$(NXGLOB) -DNYGLOB=$(NYGLOB) \
+                -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS)
+#   CPPDEFS :=  $(CPPDEFS) -DAOMIP
 
 ifeq ($(COMMDIR), mpi)
    SLIBS   :=  $(SLIBS) -lmpi

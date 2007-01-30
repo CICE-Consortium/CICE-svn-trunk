@@ -38,8 +38,7 @@
       MPI_COMM_ICE,             &! MPI communicator for ice comms
       mpi_dbl,                  &! MPI type for dbl_kind
       my_task,                  &! MPI task number for this task
-      master_task,              &! task number of master task
-      cpl_task                   ! task number of coupler master task
+      master_task                ! task number of master task
 
    integer (int_kind), parameter, public :: &
       mpitag_bndy_2d        = 1,    &! MPI tags for various
@@ -87,16 +86,22 @@
 !-----------------------------------------------------------------------
 
 #ifdef CCSM
+   ! CCSM standard coupled mode
    call cpl_interface_init(cpl_fields_icename, MPI_COMM_ICE)
+#else
 
+#ifdef popcice
+      ! LANL directly coupled POP and CICE
+      call MPI_COMM_DUP(MPI_COMM_WORLD, MPI_COMM_ICE, ierr)
 #else
 
 #ifndef  COUP_CAM
-   call MPI_INIT(ierr)
+         call MPI_INIT(ierr)
 #endif
 
-   call create_ice_communicator
+      call create_ice_communicator
 
+#endif
 #endif
 
    master_task = 0
@@ -297,8 +302,6 @@
      end select
 
    end do
-
-   cpl_task = range_cpl(1)
 
 !-----------------------------------------------------------------------
 !

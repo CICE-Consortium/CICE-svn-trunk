@@ -34,9 +34,7 @@
       MPI_COMM_ICE,             &! MPI communicator for ice comms
       mpi_dbl,                  &! MPI type for dbl_kind
       my_task,                  &! MPI task number for this task
-      master_task,              &! task number of master task
-      cpl_task                   ! task number of coupler master task
-
+      master_task                ! task number of master task
 
 !EOP
 !BOC
@@ -286,8 +284,6 @@
 
    end do
 
-   cpl_task = range_cpl(1)
-
 !-----------------------------------------------------------------------
 !
 !  create subroup and communicator for each models internal
@@ -341,7 +337,6 @@
 
 #else
    MPI_COMM_ICE = 0
-   cpl_task = 0
 #endif
 !-----------------------------------------------------------------------
 !EOC

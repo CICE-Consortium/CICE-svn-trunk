@@ -22,7 +22,9 @@ MOD_SUFFIX := mod
 LD         := ftn
 LDFLAGS    := 
 
-#   CPPDEFS :=  $(CPPDEFS)  -Dfcd_coupled -Dcoupled
+    CPPDEFS :=  $(CPPDEFS) -DNXGLOB=$(NXGLOB) -DNYGLOB=$(NYGLOB) \
+                -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS)
+#   CPPDEFS :=  $(CPPDEFS) -DAOMIP
 
 ifeq ($(COMMDIR), mpi)
 #   SLIBS   :=  $(SLIBS) -lmpich

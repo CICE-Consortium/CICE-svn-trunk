@@ -60,6 +60,9 @@
 #if (defined CCSM) || (defined COUP_CAM)
       use ice_prescribed_mod
 #endif
+#ifdef popcice
+      use drv_forcing, only: sst_sss
+#endif
 
       implicit none
       private
@@ -128,7 +131,7 @@
 #else
 ! declare as integer dummy arguments
 
-      integer (int_kind) , intent(inout) :: &
+      integer (int_kind) , intent(inout), optional :: &
            CICE_Comp  , &       ! dummy argument
            importState, &       ! dummy argument
            exportState, &       ! dummy argument
@@ -238,6 +241,9 @@
       call init_hist (dt)       ! initialize output history file
       call init_evp (dt)        ! define evp dynamics parameters, variables
       call init_coupler_flux    ! initialize fluxes exchanged with coupler
+#ifdef popcice
+      call sst_sss              ! POP data for CICE initialization
+#endif
       call init_thermo_vertical ! initialize vertical thermodynamics
       if (shortwave == 'dEdd') then
          call init_orbit        ! initialize orbital parameters

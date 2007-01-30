@@ -34,8 +34,8 @@
 !
 ! Numerous others have contributed to this effort--thanks to all! 
 !=======================================================================
-! Remove the following code if CICE is coupled to CAM.
 #ifndef COUP_CAM
+#ifndef popcice
 !
 !BOP
 !
@@ -196,6 +196,7 @@
 
       end program icemodel
 
+#endif
 #endif
 !=======================================================================
 !BOP
