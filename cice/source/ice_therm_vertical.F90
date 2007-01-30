@@ -41,6 +41,9 @@
       implicit none
       save
 
+      real (kind=dbl_kind), parameter :: &
+         saltmax = 3.2_dbl_kind  ! max salinity at ice base (ppt)
+
       real (kind=dbl_kind), dimension(nilyr+1) :: &
          salin       , & ! salinity (ppt)   
          Tmlt            ! melting temp, -depressT * salinity
@@ -429,7 +432,6 @@
       real (kind=dbl_kind), parameter :: &
          nsal    = 0.407_dbl_kind, &
          msal    = 0.573_dbl_kind, &
-         saltmax = 3.2_dbl_kind  , & ! max salinity at ice base (ppt)
          min_salin = 0.1_dbl_kind  ! threshold for brine pocket treatment 
 
       integer (kind=int_kind) :: k        ! ice layer index

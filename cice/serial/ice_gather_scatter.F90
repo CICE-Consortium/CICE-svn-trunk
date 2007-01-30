@@ -383,7 +383,7 @@
    integer (int_kind) :: &
      i,j,n,bid,          &! dummy loop indices
      isrc, jsrc,         &! source addresses
-     xoffset, yoffset,   &! offsets for tripole bounday conditions
+     xoffset, yoffset,   &! offsets for tripole boundary conditions
      isign,              &! sign factor for tripole boundary conditions
      dst_block            ! local block index in dest distribution
 
@@ -562,7 +562,7 @@
    integer (int_kind) :: &
      i,j,n,bid,          &! dummy loop indices
      isrc, jsrc,         &! source addresses
-     xoffset, yoffset,   &! offsets for tripole bounday conditions
+     xoffset, yoffset,   &! offsets for tripole boundary conditions
      isign,              &! sign factor for tripole boundary conditions
      dst_block            ! local block index in dest distribution
 
@@ -741,7 +741,7 @@
    integer (int_kind) :: &
       i,j,n,bid,         &! dummy loop indices
       isrc, jsrc,        &! source addresses
-      xoffset, yoffset,  &! offsets for tripole bounday conditions
+      xoffset, yoffset,  &! offsets for tripole boundary conditions
       isign,             &! sign factor for tripole boundary conditions
       dst_block           ! local block index in dest distribution
 

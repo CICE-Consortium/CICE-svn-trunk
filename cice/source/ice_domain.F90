@@ -46,7 +46,7 @@
       nblocks            ! actual number of blocks on this processor
 
    integer (int_kind), dimension(:), pointer, public :: &
-      blocks             ! block ids for local blocks
+      blocks_ice         ! block ids for local blocks
 
    type (distrb), public :: &
       distrb_info        ! block distribution info
@@ -357,10 +357,10 @@
 !
 !----------------------------------------------------------------------
 
-   call create_local_block_ids(blocks, distrb_info)
+   call create_local_block_ids(blocks_ice, distrb_info)
 
-   if (associated(blocks)) then
-      nblocks = size(blocks)
+   if (associated(blocks_ice)) then
+      nblocks = size(blocks_ice)
    else
       nblocks = 0
    endif

@@ -1055,7 +1055,7 @@
       ! ice vol. tendency for history, due to dynamics
 
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -1086,7 +1086,7 @@
       !---------------------------------------------------------------
 
       do iblk = 1, nblocks
-       this_block = get_block(blocks(iblk),iblk)         
+       this_block = get_block(blocks_ice(iblk),iblk)         
        ilo = this_block%ilo
        ihi = this_block%ihi
        jlo = this_block%jlo
@@ -1249,7 +1249,7 @@
 
         ravgct = c1/avgct
         do iblk = 1, nblocks
-           this_block = get_block(blocks(iblk),iblk)         
+           this_block = get_block(blocks_ice(iblk),iblk)         
            ilo = this_block%ilo
            ihi = this_block%ihi
            jlo = this_block%jlo
@@ -1330,7 +1330,7 @@
       endif  ! write_history or write_ic
 
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo

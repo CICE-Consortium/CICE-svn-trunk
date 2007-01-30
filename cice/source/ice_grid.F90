@@ -248,6 +248,7 @@
       use ice_boundary
       use ice_work, only: work_g1
       use ice_exit
+      use ice_blocks, only: get_block, block
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -301,7 +302,7 @@
       !-----------------------------------------------------------------
 
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -335,7 +336,7 @@
                                field_loc_center,   field_type_scalar)
 
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -416,7 +417,7 @@
       ANGLET = c0
 
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -547,7 +548,7 @@
 
       hm(:,:,:) = c0
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -637,7 +638,7 @@
 
       hm(:,:,:) = c0
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -865,7 +866,7 @@
 
       hm(:,:,:) = c0
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -1111,7 +1112,7 @@
       !-----------------------------------------------------------------
 
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -1216,7 +1217,7 @@
       TLON(:,:,:) = c0
 
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -1374,7 +1375,7 @@
       work2(:,:,:) = c0
 
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
@@ -1474,7 +1475,7 @@
          this_block           ! block information for current block
       
       do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
+         this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo

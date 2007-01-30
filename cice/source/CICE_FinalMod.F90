@@ -95,7 +95,7 @@
 #else
 ! declare as integer dummy arguments
 
-      integer (int_kind) , intent(inout) :: &
+      integer (int_kind) , intent(inout), optional :: &
            CICE_Comp  , &       ! dummy argument
            importState, &       ! dummy argument
            exportState, &       ! dummy argument
@@ -120,7 +120,9 @@
 #ifdef CCSM
       call exit_coupler  ! disconnect cice from the CCSM coupled system
 #else
+#ifndef coupled
       call end_run       ! quit MPI
+#endif
 #endif
 
 !

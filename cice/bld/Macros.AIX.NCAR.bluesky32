@@ -25,7 +25,9 @@ MOD_SUFFIX := mod
 LD         := $(FC)
 LDFLAGS    := 
 
-#   CPPDEFS :=  $(CPPDEFS)  -Dfcd_coupled -Dcoupled
+    CPPDEFS :=  $(CPPDEFS) -DNXGLOB=$(NXGLOB) -DNYGLOB=$(NYGLOB) \
+                -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS)
+#   CPPDEFS :=  $(CPPDEFS) -DAOMIP
 
 ifeq ($(USE_ESMF), yes)
    CPPDEFS :=  $(CPPDEFS) -Duse_esmf

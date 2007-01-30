@@ -631,7 +631,7 @@
      nrecvs,             &! actual number of messages received
      isrc, jsrc,         &! source addresses
      dst_block,          &! location of block in dst array
-     xoffset, yoffset,   &! offsets for tripole bounday conditions
+     xoffset, yoffset,   &! offsets for tripole boundary conditions
      isign,              &! sign factor for tripole boundary conditions
      ierr                 ! MPI error flag
 
@@ -946,7 +946,7 @@
      nrecvs,             &! actual number of messages received
      isrc, jsrc,         &! source addresses
      dst_block,          &! location of block in dst array
-     xoffset, yoffset,   &! offsets for tripole bounday conditions
+     xoffset, yoffset,   &! offsets for tripole boundary conditions
      isign,              &! sign factor for tripole boundary conditions
      ierr                 ! MPI error flag
 
@@ -1261,7 +1261,7 @@
      nrecvs,             &! actual number of messages received
      isrc, jsrc,         &! source addresses
      dst_block,          &! location of block in dst array
-     xoffset, yoffset,   &! offsets for tripole bounday conditions
+     xoffset, yoffset,   &! offsets for tripole boundary conditions
      isign,              &! sign factor for tripole boundary conditions
      ierr                 ! MPI error flag
 

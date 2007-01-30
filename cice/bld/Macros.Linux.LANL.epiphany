@@ -20,7 +20,9 @@ MOD_SUFFIX := mod
 LD         := ifort 
 LDFLAGS    := -v -O -static -convert big_endian -assume byterecl
 
-#   CPPDEFS :=  $(CPPDEFS)  -Dfcd_coupled -Dcoupled
+    CPPDEFS :=  $(CPPDEFS) -DNXGLOB=$(NXGLOB) -DNYGLOB=$(NYGLOB) \
+                -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS)
+#   CPPDEFS :=  $(CPPDEFS) -DAOMIP
 
 ifeq ($(COMMDIR), mpi)
    SLIBS   :=  $(SLIBS) -lmpich
