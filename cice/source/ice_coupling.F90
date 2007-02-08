@@ -2214,12 +2214,12 @@
       ! recv input field msg
       !-----------------------------------------------------------------
      
-!     call ice_timer_start(16)  ! time spent receiving
+      call ice_timer_start(timer_cplrecv)  ! time spent receiving
 
       call cpl_interface_contractRecv &
            (cpl_fields_cplname, contractR, irbuf, buffr)
 
-!     call ice_timer_stop(16)
+      call ice_timer_stop(timer_cplrecv)
 !     call ice_timer_start(17)  ! time spent cr-unpacking
 
       !--- unpack message
@@ -2630,10 +2630,10 @@
 
 !     call ice_timer_stop(18)      ! Time spent packing
 
-!     call ice_timer_start(19)     ! Time spent sending
+      call ice_timer_start(timer_cplsend)     ! Time spent sending
       call cpl_interface_contractSend &
            (cpl_fields_cplname, contractS, isbuf, buffs)
-!     call ice_timer_stop(19)      ! Time spent sending
+      call ice_timer_stop(timer_cplsend)      ! Time spent sending
 
       !-----------------------------------------------------------------
       ! diagnostics

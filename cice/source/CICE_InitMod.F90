@@ -252,7 +252,9 @@
       call init_itd             ! initialize ice thickness distribution
       call calendar(time)       ! determine the initial date
 
+#ifndef CCSM
       call init_forcing_ocn(dt) ! initialize sss and sst from data
+#endif
       call init_state           ! initialize the ice state
 #ifdef CCSM
       if(prescribed_ice) then  ! initialize prescribed ice

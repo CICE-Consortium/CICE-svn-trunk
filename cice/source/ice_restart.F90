@@ -294,11 +294,6 @@
          do it = 1, ntrcr
             call ice_read(nu_restart,0,trcrn(:,:,it,n,:),'ruf8',diag)
          enddo
-#ifdef CCSM
-         if (.not.(trim(runtype) == "continue")) then
-            esnon(:,:,n,:) = -rhos*Lfresh*vsnon(:,:,n,:)
-         endif
-#endif
       enddo
 
       if (my_task == master_task) &
@@ -307,19 +302,11 @@
          call ice_read(nu_restart,0,eicen(:,:,k,:),'ruf8',diag)
       enddo
 
-#ifdef CCSM
-      if (trim(runtype) == "continue") then
-#endif
-
       if (my_task == master_task) &
            write(nu_diag,*) 'min/max esnon for each layer'
       do k=1,ntslyr
          call ice_read(nu_restart,0,esnon(:,:,k,:),'ruf8',diag)
       enddo
-
-#ifdef CCSM
-      endif
-#endif
 
       !-----------------------------------------------------------------
       ! velocity
@@ -337,25 +324,8 @@
          write(nu_diag,*) 'min/max fresh water and heat flux components'
 
       call ice_read(nu_restart,0,fresh,'ruf8',diag)
-#ifdef CCSM
-      if (trim(runtype) == "continue") then
-         call ice_read(nu_restart,0,fsalt,'ruf8',diag)
-      endif
-#else
       call ice_read(nu_restart,0,fsalt,'ruf8',diag)
-#endif
       call ice_read(nu_restart,0,fhocn,'ruf8',diag)
-
-#ifdef CCSM
-      if (.not.(trim(runtype) == "continue")) then
-
-      if (my_task == master_task) &
-           write(nu_diag,*) 'min/max ice strength'
-
-      call ice_read(nu_restart,0,strength,'ruf8',diag)
-
-      endif
-#endif
 
       !-----------------------------------------------------------------
       ! ocean stress
@@ -414,32 +384,6 @@
          call ice_read(nu_restart,0,sst,'ruf8',diag)
          call ice_read(nu_restart,0,frzmlt,'ruf8',diag)
       endif
-
-#ifdef CCSM
-      if (.not.(trim(runtype) == "continue")) then
-
-      !-----------------------------------------------------------------
-      ! salt flux read in from end of file for bkwds compatibility       
-      ! check for salt flux in restart file, if not there, set to 0.
-      !-----------------------------------------------------------------
-
-      call ice_read(nu_restart, 0, work1, 'ruf8', diag, &
-                    ignore_eof=.true., hit_eof=hit_eof)
-
-      if (hit_eof) then
-        if (my_task.eq.master_task) then
-          write (nu_diag,*) ' '
-          write (nu_diag,*) 'SALT FLUX NOT FOUND in restart file, SET TO 0'
-        endif
-        fsalt(:,:,:)=c0
-      else
-        if (my_task.eq.master_task) &
-           write (nu_diag,*) 'min/max salt flux component'
-        fsalt(:,:,:)=work1(:,:,:)
-      endif
-
-      endif
-#endif
 
       if (my_task == master_task) close(nu_restart)
 

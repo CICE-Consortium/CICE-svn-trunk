@@ -719,7 +719,6 @@
 
       call broadcast_scalar(nml_error, master_task)
       if (nml_error /= 0) then
-         print*, 'could not find icefields_nml'
          close (nu_nml)
          call abort_ice('ice: error reading icefields_nml')
       endif

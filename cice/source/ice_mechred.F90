@@ -73,7 +73,11 @@
          Cf = 17._dbl_kind   , & ! ratio of ridging work to PE change in ridging 
          Cs = p25            , & ! fraction of shear energy contrbtng to ridging 
          Cp = p5*gravit*(rhow-rhoi)*rhoi/rhow, & ! proport const for PE 
+#ifdef CCSM
+         fsnowrdg = c0       , & ! snow fraction that survives in ridging 
+#else
          fsnowrdg = p5       , & ! snow fraction that survives in ridging 
+#endif
          Gstar  = p15        , & ! max value of G(h) that participates 
                                  ! (krdg_partic = 0) 
          astar  = p05        , & ! e-folding scale for G(h) participation 
