@@ -63,6 +63,12 @@
       timer_catconv,          &! category conversions
       timer_couple,           &! coupling
       timer_readwrite,        &! read/write
+#ifdef CCSM
+      timer_cplrecv,          &! receive from coupler
+      timer_rcvsnd,           &! time between receive to send
+      timer_cplsend,          &! send to coupled
+      timer_sndrcv,           &! time between send to receive
+#endif
       timer_bound              ! boundary updates
 !      timer_tmp                ! for temporary timings
 
@@ -177,7 +183,11 @@
    end do
 
    call get_ice_timer(timer_total,    'Total',    nblocks,distrb_info%nprocs)
+#ifdef CCSM
+   call get_ice_timer(timer_step,     'TimeLoop', nblocks,distrb_info%nprocs)
+#else
    call get_ice_timer(timer_step,     'Step',     nblocks,distrb_info%nprocs)
+#endif
    call get_ice_timer(timer_dynamics, 'Dynamics', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_advect,   'Advection',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_column,   'Column',   nblocks,distrb_info%nprocs)
@@ -187,6 +197,12 @@
    call get_ice_timer(timer_couple,   'Coupling', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_readwrite,'ReadWrite',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_bound,    'Bound',    nblocks,distrb_info%nprocs)
+#ifdef CCSM
+   call get_ice_timer(timer_cplrecv,  'Cpl-recv', nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_rcvsnd,   'Rcv->Snd', nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_cplsend,  'Cpl-Send', nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_sndrcv,   'Snd->Rcv', nblocks,distrb_info%nprocs)
+#endif
 !   call get_ice_timer(timer_tmp,      '         ',nblocks,distrb_info%nprocs)
 
 !-----------------------------------------------------------------------

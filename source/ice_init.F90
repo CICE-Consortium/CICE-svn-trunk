@@ -127,10 +127,11 @@
         oceanmixed_ice, sss_data_type,   sst_data_type, &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore, &
         latpnt,         lonpnt,          dbug, &
-        runid,          runtype
 #ifdef CCSM
-        , &
+        runid,          runtype, &
         incond_dir,      incond_file
+#else
+        runid,          runtype
 #endif
 
 
@@ -250,19 +251,15 @@
       if (histfreq == '1') hist_avg = .false. ! potential conflict
       if (days_per_year /= 365) shortwave = 'default' ! definite conflict
 
-#ifdef CCSM
+#ifdef COUP_CAM
       if (runtype == "continue") then
          restart = .true.
       else
          restart = .false.
       endif
-#endif
 
-#if (defined CCSM) || (defined COUP_CAM)
       days_per_year = 365                     ! potential conflict
       year_init = 0                           ! potential conflict
-#endif
-#ifdef COUP_CAM
       history_file = trim(runid)//"_iceh"
 #endif
 

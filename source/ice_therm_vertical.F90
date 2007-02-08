@@ -55,7 +55,11 @@
       real (kind=dbl_kind), parameter, private :: &
          ferrmax = 1.0e-3_dbl_kind, & ! max allowed energy flux error (W m-2)
                                       ! recommend ferrmax < 0.01 W m-2
+#ifdef CCSM
+         hsnomin = 1.0e-3_dbl_kind    ! min thickness for which Tsno computed (m)
+#else
          hsnomin = 1.0e-6_dbl_kind    ! min thickness for which Tsno computed (m)
+#endif
 
       character (char_len) :: stoplabel
 

@@ -172,71 +172,87 @@ subroutine ice_prescribed_init
    character(*),parameter :: F02 = "('(ice_prescribed_init) ',a,2g20.13)"
 
 ! ech moved from ice_init.F
-      namelist /ice_prescribed_nml/ &
-        prescribed_ice, stream_info_file, stream_year_first &
-      , stream_year_last, model_year_align, prescribed_ice_fill
+   namelist /ice_prescribed_nml/ &
+     prescribed_ice, stream_info_file, stream_year_first &
+   , stream_year_last, model_year_align, prescribed_ice_fill
 
       ! default values for namelist
-      prescribed_ice      = .false.             ! if true, prescribe ice
-      stream_info_file  = 'csim_stream.txt'   ! file with prescribed ice stream info
-      stream_year_first = 1                   ! first year in  pice stream to use
-      stream_year_last  = 1                   ! last  year in  pice stream to use
-      model_year_align  = 1                   ! align stream_year_first with this model year
-      prescribed_ice_fill = .false.           ! true if pice data fill required
+   prescribed_ice      = .false.             ! if true, prescribe ice
+   stream_info_file  = 'csim_stream.txt'   ! file with prescribed ice stream info
+   stream_year_first = 1                   ! first year in  pice stream to use
+   stream_year_last  = 1                   ! last  year in  pice stream to use
+   model_year_align  = 1                   ! align stream_year_first with this model year
+   prescribed_ice_fill = .false.           ! true if pice data fill required
 
-      ! read from input file
-      if (my_task == master_task) then
-        open (nu_nml, file='ice_in', status='old')
-   10   continue  !*** keep reading until right namelist is found
-        read(nu_nml, nml=ice_prescribed_nml, iostat=nml_error)
-        if (nml_error > 0) goto 10 ! An error occurred
-        if (nml_error < 0) goto 20 ! End of file condition
-        close(nu_nml)
-   20   continue
-      endif
-      call broadcast_scalar(nml_error,master_task)
-
+   ! read from input file
+   if (my_task == master_task) then
+      open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
       if (nml_error /= 0) then
-         call abort_ice ('ice: Namelist read error in ice_prescribed_mod')
+         nml_error = -1
+      else
+         nml_error =  1
       endif
+      do while (nml_error > 0)
+         read(nu_nml, nml=ice_prescribed_nml,iostat=nml_error)
+         if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
+      end do
+      if (nml_error == 0) close(nu_nml)
+   endif
 
-      call broadcast_scalar(prescribed_ice,master_task)
-      call broadcast_scalar(stream_info_file,master_task)
-      call broadcast_scalar(stream_year_first,master_task)
-      call broadcast_scalar(stream_year_last,master_task)
-      call broadcast_scalar(model_year_align,master_task)
-      call broadcast_scalar(prescribed_ice_fill,master_task)
+   call broadcast_scalar(nml_error,master_task)
 
-      if (my_task == master_task) then
-         write(nu_diag,*) ' prescribed_ice            = ',prescribed_ice
-         write(nu_diag,*)    ' stream_info_file          = ', trim(adjustl(stream_info_file))
-         write(nu_diag,*) ' stream_year_first         = ', stream_year_first
-         write(nu_diag,*) ' stream_year_last          = ', stream_year_last
-         write(nu_diag,*) ' model_year_align          = ', model_year_align
-         write(nu_diag,*) ' prescribed_ice_fill       = ', prescribed_ice_fill
+   if (nml_error /= 0) then
+      call abort_ice ('ice: Namelist read error in ice_prescribed_mod')
+   endif
+
+   call broadcast_scalar(prescribed_ice,master_task)
+   call broadcast_scalar(stream_info_file,master_task)
+   call broadcast_scalar(stream_year_first,master_task)
+   call broadcast_scalar(stream_year_last,master_task)
+   call broadcast_scalar(model_year_align,master_task)
+   call broadcast_scalar(prescribed_ice_fill,master_task)
+
+   if (my_task == master_task) then
+      write(nu_diag,*) ' prescribed_ice            = ',prescribed_ice
+      write(nu_diag,*) ' stream_info_file          = ', trim(adjustl(stream_info_file))
+      write(nu_diag,*) ' stream_year_first         = ', stream_year_first
+      write(nu_diag,*) ' stream_year_last          = ', stream_year_last
+      write(nu_diag,*) ' model_year_align          = ', model_year_align
+      write(nu_diag,*) ' prescribed_ice_fill       = ', prescribed_ice_fill
 
 ! ech moved from ice_diagnostics.F
 ! set print_global to .false. in ice_in to prevent global diagnostics
-         write (nu_diag,*)   'This is the prescribed ice option.'
-         write (nu_diag,*)   'Heat and water will not be conserved.'   
-      endif
+      write (nu_diag,*)   'This is the prescribed ice option.'
+      write (nu_diag,*)   'Heat and water will not be conserved.'   
+   endif
 
 ! end ech changes
 
    !------------------------------------------------------------------
    ! Create integer CSIM mask with global dimensions
    !------------------------------------------------------------------
+   if (my_task == master_task) then
+
       allocate (work_g1(nx_global,ny_global),work_g2(nx_global,ny_global),&
       &  csim_mask_g(nx_global,ny_global))
 
-      call gather_global(work_g1, hm, master_task, distrb_info)
-      csim_mask_g = work_g1     ! Convert to integer array
+   endif
 
-      call gather_global(work_g1, TLAT, master_task, distrb_info)
-      call gather_global(work_g2, TLON, master_task, distrb_info)
+   call gather_global(work_g1, hm, master_task, distrb_info)
 
    if (my_task == master_task) then
 
+      csim_mask_g = work_g1     ! Convert to integer array
+
+   endif
+
+   call gather_global(work_g1, TLAT, master_task, distrb_info)
+   call gather_global(work_g2, TLON, master_task, distrb_info)
+
+   if (my_task == master_task) then
+
+      work_g1(:,:) = work_g1(:,:)*rad_to_deg
+      work_g2(:,:) = work_g2(:,:)*rad_to_deg
 
       !---------------------------------------------------------------------
       ! Parse info file, initialize csim_stream datatype and load with info
@@ -292,9 +308,10 @@ subroutine ice_prescribed_init
       write (nu_diag,F02) 'min/max dataYCoord = ',minval(dataYCoord), maxval(dataYCoord)
       write (nu_diag,F01) 'min/max dataMask = ',minval(dataMask), maxval(dataMask)
       write (nu_diag,F02) 'min/max dataArea = ',minval(dataArea), maxval(dataArea)
-      write (nu_diag,F02) 'min/max TLON = ',minval(work_g2), maxval(work_g2)
-      write (nu_diag,F02) 'min/max TLAT = ',minval(work_g1), maxval(work_g1)
-      write (nu_diag,F01) 'min/max csim_mask_g = ',minval(csim_mask_g), maxval(csim_mask_g)
+      write (nu_diag,F02) 'min/max TLON = ',minval(work_g2),maxval(work_g2)
+      write (nu_diag,F02) 'min/max TLAT = ',minval(work_g1),maxval(work_g1)
+      write (nu_diag,F01) 'min/max csim_mask_g = ',minval(csim_mask_g), &
+                                                   maxval(csim_mask_g)
       !------------------------------------------------------------------
       ! Check that data domain matches csim domain
       !------------------------------------------------------------------
@@ -342,12 +359,12 @@ subroutine ice_prescribed_init
          call abort_ice(subName)
       end if
 
-   end if           ! master_task
+      deallocate(dataXCoord,dataYCoord)
+      deallocate(dataMask,dataArea)
+      deallocate(work_g1,work_g2)
+      deallocate(csim_mask_g)
 
-   deallocate(dataXCoord,dataYCoord)
-   deallocate(dataMask,dataArea)
-   deallocate(work_g1,work_g2)
-   deallocate(csim_mask_g)
+   end if           ! master_task
 
    !-----------------------------------------------------------------
    ! For one ice category, set hin_max(1) to something big
@@ -479,19 +496,12 @@ subroutine ice_prescribed_run(mDateIn, secIn)
 
    end if    ! master_task
 
-   deallocate(dataInLB,dataInUB)
-   deallocate(dataOutLB,dataOutUB)
-   deallocate(dataSrcLB,dataSrcUB)
-   deallocate(dataDstLB,dataDstUB)
-
   !-----------------------------------------------------------------
   ! Scatter ice concentration to all processors
   !-----------------------------------------------------------------
    call scatter_global(ice_cov,   ice_cov_global, &
       &                master_task,  distrb_info, & 
       &                field_loc_center, field_type_scalar)
-
-   deallocate(ice_cov_global)
 
   !-----------------------------------------------------------------
   ! Set prescribed ice state and fluxes
@@ -750,6 +760,8 @@ subroutine ice_prescribed_phys
                      vsnon(i,j,nc,iblk) = hs * aicen(i,j,nc,iblk)
                   end if
 
+                  esnon(i,j,nc,iblk) = -rLfs*vsnon(i,j,nc,iblk)
+
                   !---------------------------------------------------------
                   ! make linear temp profile and compute enthalpy
                   !---------------------------------------------------------
@@ -765,24 +777,28 @@ subroutine ice_prescribed_phys
                   enddo
                end if    ! hin_max
             enddo        ! ncat
+         else
+            vsnon(i,j,:,iblk) = c0
+            esnon(i,j,:,iblk) = c0
          end if          ! ice_cov >= eps04
       end if             ! tmask
    enddo                 ! i
    enddo                 ! j
-   enddo                 ! iblk
 
    !--------------------------------------------------------------------
    ! compute aggregate ice state and open water area
    !--------------------------------------------------------------------
    call aggregate (nx_block, ny_block, &
-      &            aicen,    trcrn, &
-      &            vicen,    vsnon, &
-      &            eicen,    esnon, &
-      &            aice,     trcr, &
-      &            vice,     vsno, &
-      &            eice,     esno, &
-      &            aice0, &
-      &            tmask,    trcr_depend) 
+      &            aicen(:,:,:,iblk),  trcrn(:,:,:,:,iblk), &
+      &            vicen(:,:,:,iblk),  vsnon(:,:,:,iblk), &
+      &            eicen(:,:,:,iblk),  esnon(:,:,:,iblk), &
+      &            aice(:,:,iblk),     trcr(:,:,:,iblk), &
+      &            vice(:,:,iblk),     vsno(:,:,iblk), &
+      &            eice(:,:,iblk),     esno(:,:,iblk), &
+      &            aice0(:,:,iblk), &
+      &            tmask(:,:,iblk),    trcr_depend) 
+
+   enddo                 ! iblk
 
    do iblk = 1, nblocks
    do j = 1, ny_block
