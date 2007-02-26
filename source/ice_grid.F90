@@ -17,6 +17,7 @@
 !       init_grid split into two parts as in POP 2.0
 !       Boundary update routines replaced by POP versions
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
+! 2007: Neumann boundary condition option added by E. Hunke
 !
 ! !INTERFACE:
 !
@@ -264,6 +265,9 @@
       logical (kind=log_kind), dimension(nx_block,ny_block,max_blocks):: &
          out_of_range
 
+      character (char_len) :: &
+         bc                   ! boundary condition type (Dirichlet, Neumann)
+
       type (block) :: &
          this_block           ! block information for current block
       
@@ -285,16 +289,17 @@
       endif
 
       call ice_timer_start(timer_bound)
+      bc = 'Neumann'
       call update_ghost_cells (HTN,                bndy_info, &
-                               field_loc_Nface,    field_type_scalar)
+                               field_loc_Nface,    field_type_scalar, bc)
       call update_ghost_cells (HTE,                bndy_info, &
-                               field_loc_Eface,    field_type_scalar)
+                               field_loc_Eface,    field_type_scalar, bc)
       call update_ghost_cells (ULAT,               bndy_info, &
-                               field_loc_NEcorner, field_type_scalar)
+                               field_loc_NEcorner, field_type_scalar, bc)
       call update_ghost_cells (ULON,               bndy_info, &
-                               field_loc_NEcorner, field_type_scalar)
+                               field_loc_NEcorner, field_type_scalar, bc)
       call update_ghost_cells (ANGLE,              bndy_info, &
-                               field_loc_NEcorner, field_type_angle)
+                               field_loc_NEcorner, field_type_angle,  bc)
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -324,16 +329,19 @@
 
       enddo                     ! iblk
 
+      call ice_timer_start(timer_bound)
+      bc = 'Neumann'
       call update_ghost_cells (dxt,                bndy_info, &
-                               field_loc_center,   field_type_scalar)
+                               field_loc_center,   field_type_scalar, bc)
       call update_ghost_cells (dyt,                bndy_info, &
-                               field_loc_center,   field_type_scalar)
+                               field_loc_center,   field_type_scalar, bc)
       call update_ghost_cells (dxu,                bndy_info, &
-                               field_loc_NEcorner, field_type_scalar)
+                               field_loc_NEcorner, field_type_scalar, bc)
       call update_ghost_cells (dyu,                bndy_info, &
-                               field_loc_NEcorner, field_type_scalar)
+                               field_loc_NEcorner, field_type_scalar, bc)
       call update_ghost_cells (tarea,              bndy_info, &
-                               field_loc_center,   field_type_scalar)
+                               field_loc_center,   field_type_scalar, bc)
+      call ice_timer_stop(timer_bound)
 
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
@@ -380,23 +388,24 @@
       !-----------------------------------------------------------------
 
       call ice_timer_start(timer_bound)
+      bc = 'Neumann'
       call update_ghost_cells (uarea,            bndy_info, &
-                               field_loc_NEcorner, field_type_scalar)
+                               field_loc_NEcorner, field_type_scalar, bc)
 
       call update_ghost_cells (uarear,           bndy_info, &
-                               field_loc_NEcorner, field_type_scalar)
+                               field_loc_NEcorner, field_type_scalar, bc)
 
       call update_ghost_cells (tarear,           bndy_info, &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
 
       call update_ghost_cells (tinyarea,         bndy_info, &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
 
       call update_ghost_cells (dxhy,             bndy_info, &
-                               field_loc_center, field_type_vector)
+                               field_loc_center, field_type_vector, bc)
 
       call update_ghost_cells (dyhx,             bndy_info, &
-                               field_loc_center, field_type_vector)
+                               field_loc_center, field_type_vector, bc)
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -446,8 +455,9 @@
       enddo
       
       call ice_timer_start(timer_bound)
+      bc = 'Neumann'
       call update_ghost_cells (ANGLET,             bndy_info, &
-                               field_loc_NEcorner, field_type_angle)
+                               field_loc_NEcorner, field_type_angle, bc)
       call ice_timer_stop(timer_bound)
 
       call makemask          ! velocity mask, hemisphere masks
@@ -1099,12 +1109,16 @@
          i, j, iblk, &
          ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
+      character (char_len) :: &
+         bc                   ! boundary condition type (Dirichlet, Neumann)
+
       type (block) :: &
          this_block           ! block information for current block
 
       call ice_timer_start(timer_bound)
+      bc = 'Dirichlet'
       call update_ghost_cells (hm,               bndy_info, &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -1128,7 +1142,7 @@
 
       call ice_timer_start(timer_bound)
       call update_ghost_cells (uvm,                bndy_info, &
-                               field_loc_NEcorner, field_type_scalar)
+                               field_loc_NEcorner, field_type_scalar, bc)
       call ice_timer_stop(timer_bound)
 
       do iblk = 1, nblocks
@@ -1209,6 +1223,9 @@
       real (kind=dbl_kind) :: &
            z1,x1,y1,z2,x2,y2,z3,x3,y3,z4,x4,y4,tx,ty,tz,da
 
+      character (char_len) :: &
+         bc                   ! boundary condition type (Dirichlet, Neumann)
+
       type (block) :: &
            this_block           ! block information for current block
 
@@ -1266,10 +1283,11 @@
 #endif
 
       call ice_timer_start(timer_bound)
+      bc = 'Neumann'
       call update_ghost_cells (TLON,             bndy_info, &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
       call update_ghost_cells (TLAT,             bndy_info, &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
       call ice_timer_stop(timer_bound)
 
       x1 = global_minval(TLON, distrb_info, field_loc_center, tmask)
