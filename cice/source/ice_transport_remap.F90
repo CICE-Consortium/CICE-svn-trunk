@@ -275,6 +275,9 @@
       integer (kind=int_kind) ::     &
            i, j, k, iblk, nt, nt1  ! standard indices
 
+      character (char_len) :: &
+         bc                   ! boundary condition type (Dirichlet, Neumann)
+
     !-------------------------------------------------------------------
     ! Compute tracer type and dependency vectors
     ! NOTE: May need to change these if transporting
@@ -350,24 +353,25 @@
       ! Compute ghost cell values
 
       call ice_timer_start(timer_bound)
+      bc = 'Neumann'
       call update_ghost_cells (xav,              bndy_info,     &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
       call update_ghost_cells (yav,              bndy_info,     &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
       call update_ghost_cells (xxav,             bndy_info,     &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
       call update_ghost_cells (xyav,             bndy_info,     &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
       call update_ghost_cells (yyav,             bndy_info,     &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
       call update_ghost_cells (xxxav,            bndy_info,     &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
       call update_ghost_cells (xxyav,            bndy_info,     &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
       call update_ghost_cells (xyyav,            bndy_info,     &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
       call update_ghost_cells (yyyav,            bndy_info,     &
-                               field_loc_center, field_type_scalar)
+                               field_loc_center, field_type_scalar, bc)
       call ice_timer_stop(timer_bound)
 
       end subroutine init_remap
@@ -870,6 +874,7 @@
 
          ! open water
 
+!echmod         if (icellsnc(0,iblk) > 0) &
          call construct_fields(nx_block,            ny_block,             &
                                nghost,              icellsnc (0,iblk),    &
                                indxinc  (:,0,iblk), indxjnc(:,0,iblk),    &
@@ -888,6 +893,7 @@
 
          do n = 1, ncat
 
+!echmod            if (icellsnc(n,iblk) > 0) &
             call construct_fields                                         &
                                 (nx_block,            ny_block,           &
                                  nghost,              icellsnc (n,iblk),  &
@@ -1134,7 +1140,7 @@
                  write(nu_diag,*) 'Global i and j:',     &
                                   this_block%i_glob(istop),     &
                                   this_block%j_glob(jstop) 
-            call abort_ice ('ice remap_transport: negative area')
+            call abort_ice ('ice remap_transport: negative area, open water')
          endif
 
          ! ice categories
@@ -1172,7 +1178,7 @@
                     write(nu_diag,*) 'Global i and j:',     &
                                      this_block%i_glob(istop),     &
                                      this_block%j_glob(jstop) 
-               call abort_ice ('ice remap_transport: negative area')
+               call abort_ice ('ice remap_transport: negative area, ice')
             endif
          enddo                  ! n
 
@@ -1509,6 +1515,7 @@
 
          do j = jlo, jhi
          do i = ilo, ihi
+            if (uvel(i,j)/=c0 .or. vvel(i,j)/=c0) then
 
     !-------------------------------------------------------------------
     ! Estimate midpoint of backward trajectory relative to corner (i,j).
@@ -1691,10 +1698,12 @@
             dpx(i,j) = -dt * ump
             dpy(i,j) = -dt * vmp
 
+            endif               ! nonzero velocity
          enddo                  ! i
          enddo                  ! j
 
       endif                     ! l_dp_mipdt
+
       end subroutine departure_points
 
 !=======================================================================
@@ -3393,6 +3402,8 @@
 
       ! ice area
 
+      if (icells > 0) then
+
       do ij = 1,icells   ! ice is present
          i = indxi(ij)
          j = indxj(ij)
@@ -3537,6 +3548,8 @@
        enddo                    ! ntrace
 
       endif                     ! present (trm)
+
+      endif                     ! icells > 0
 
       end subroutine construct_fields
 

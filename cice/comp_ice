@@ -21,9 +21,11 @@ setenv RES gx3 ; setenv GRID 100x116
 #setenv RES gx1 ; setenv GRID 320x384
 #setenv RES tx1 ; setenv GRID 360x240
 
-### Decomposition (cartesian distribution)
-### If using a load-balanced distribution (ice_in), these 
-### parameters set the initial decomposition prior to optimization.
+### Decomposition (cartesian distribution, BPX=BPY=1).
+### If using more than one block per processor, or
+### if using a load-balanced distribution (ice_in), these 
+### parameters set the initial decomposition prior to optimization;
+### the actual decomposition may be very different!
 ### nprocs in ice_in must equal NPX*NPY ###
 setenv NPX    2   # number of processors in x direction
 setenv NPY    2   # number of processors in y direction
@@ -115,7 +117,7 @@ gmake VPFILE=Filepath EXEC=$EXEDIR/cice \
 cd ..
 pwd                                         
 echo NTASK = $NTASK
-echo "global N, N procs, N blocks/proc, block_size" 
+echo "global N, N procs, N blocks/proc, block_size (requested)" 
 echo "x    $NXGLOB,    $NPX,           $BPX,          $BLCKX"
 echo "y    $NYGLOB,    $NPY,           $BPY,          $BLCKY"
 echo max_blocks = $MXBLCKS

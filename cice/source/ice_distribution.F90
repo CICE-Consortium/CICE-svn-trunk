@@ -21,6 +21,7 @@
    use ice_communicate
    use ice_blocks
    use ice_exit
+   use ice_fileunits, only: nu_diag
 
    implicit none
    private
@@ -142,7 +143,6 @@
    integer (int_kind), dimension(:), pointer :: &
       block_ids              ! array of block ids for every block
                              ! that resides on the local processor
-
 !EOP
 !BOC
 !-----------------------------------------------------------------------
@@ -153,6 +153,8 @@
 
    integer (int_kind) :: &
       n, bid, bcount        ! dummy counters
+
+   logical (log_kind) :: dbug
 
 !-----------------------------------------------------------------------
 !
@@ -174,10 +176,18 @@
 !
 !-----------------------------------------------------------------------
 
+   dbug = .false.
    if (bcount > 0) then
       do n=1,size(distribution%proc)
          if (distribution%proc(n) == my_task+1) then
             block_ids(distribution%local_block(n)) = n
+
+            if (dbug) then
+            write(nu_diag,*) 'block id, proc, local_block: ', &
+                             block_ids(distribution%local_block(n)), &
+                             distribution%proc(n), &
+                             distribution%local_block(n)
+            endif
          endif
       end do
    endif

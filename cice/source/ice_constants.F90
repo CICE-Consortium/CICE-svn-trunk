@@ -150,9 +150,10 @@
          qqqocn  = 627572.4_dbl_kind    ,&! for qsat over ocn
          TTTocn  = 5107.4_dbl_kind        ! for qsat over ocn
 
+      ! these are currently set so as to have no effect on the decomposition
       real (kind=dbl_kind), parameter :: &
-         shlat  = -30.0_dbl_kind   ,&! artificial masking edge (deg)
-         nhlat  =  30.0_dbl_kind     ! artificial masking edge (deg)
+         shlat  =  30.0_dbl_kind   ,&! artificial masking edge (deg)
+         nhlat  = -30.0_dbl_kind     ! artificial masking edge (deg)
    
       !-----------------------------------------------------------------
       ! numbers

@@ -24,6 +24,11 @@
 ! (5) Minor changes for consistency with CICE
 ! NOTE: This module cannot use ice_timers because ice_timers uses
 !       ice_domain and ice_domain uses ice_boundary
+!
+! Feb. 2007: debugged by Elizabeth Hunke.  Numerous changes included
+!     removing destroy_boundary and the NE/SW boundary types, debugging
+!     the tripole grid apparatus, and reworking the Neumann boundary 
+!     conditions.
 
 ! !USES:
 
@@ -90,7 +95,6 @@
 ! !PUBLIC MEMBER FUNCTIONS:
 
    public :: create_boundary,  &
-             destroy_boundary, &
              update_ghost_cells
 
    interface update_ghost_cells  ! generic interface
@@ -130,8 +134,8 @@
       tripole_dbuf_3d,  &
       tripole_dghost_3d
 
-!maltrud debug
-   integer (int_kind) :: index_check
+   integer (int_kind) :: & 
+      index_check     !maltrud debug
 
 !EOC
 !***********************************************************************
@@ -145,9 +149,7 @@ contains
 
  subroutine create_boundary(newbndy, dist,              &
                             ns_bndy_type, ew_bndy_type, &
-                            nx_global, ny_global,       &
-                            l_north, l_south,           &
-                            l_east,  l_west)
+                            nx_global, ny_global)
 
 ! !DESCRIPTION:
 !  This routine creates a boundary type with info necessary for
@@ -174,10 +176,6 @@ contains
    integer (int_kind), intent(in) :: &
       nx_global, ny_global       ! global extents of domain
 
-   logical (log_kind), intent(in), optional ::  &
-      l_north, l_south         ,&! true if N and S ghost cells updated
-      l_east,  l_west            ! true if E and W ghost cells updated
-                                 
 ! !OUTPUT PARAMETERS:
 
    type (bndy), intent(out) :: &
@@ -227,10 +225,6 @@ contains
       src_block,       &! block info for source      block
       dst_block         ! block info for destination block
 
-   logical (log_kind) ::  &
-      go_north, go_south  ,&! true if messages passed to N and S
-      go_east,  go_west     ! true if messages passed to E and W
-
 !-----------------------------------------------------------------------
 !
 !  Initialize some useful variables and return if this task not
@@ -245,35 +239,6 @@ contains
    nblocks = size(dist%proc(:))
    lalloc_tripole = .false.
    newbndy%communicator = dist%communicator
-
-!-----------------------------------------------------------------------
-! Set logical variables that determine directions to pass messages.
-! Default is to pass messages in all directions.
-! Note sign convention.  If l_east is false, that means we do not
-!  update ghost cells along the east boundary of blocks, which means 
-!  we do not pass messages from east to west, which means go_west
-!  is false.
-!-----------------------------------------------------------------------
-
-   go_west = .true.
-   if (present(l_east)) then
-      if (.not.l_east) go_west = .false.
-   endif
-
-   go_east = .true.
-   if (present(l_west)) then
-      if (.not.l_west) go_east = .false.
-   endif
-
-   go_north = .true.
-   if (present(l_south)) then
-      if (.not.l_south) go_north = .false.
-   endif
-
-   go_south = .true.
-   if (present(l_north)) then
-      if (.not.l_north) go_south = .false.
-   endif
 
 !-----------------------------------------------------------------------
 !
@@ -396,36 +361,24 @@ contains
          if (iblock_dst == iblock_east .and. &
              jblock_dst == jblock_east) then
 
-	    if (go_east) then
-               call increment_message_counter(ew_snd_count, ew_rcv_count, &
-                                              src_proc, dst_proc)
-            else  ! no message passed to eastern neighbor
-               call increment_message_counter(ew_snd_count, ew_rcv_count, &
-                                              0, dst_proc)
-            endif
-
+             call increment_message_counter(ew_snd_count, ew_rcv_count, &
+                                            src_proc, dst_proc)
          endif
 
          !***
-         !*** if this block is an western neighbor
+         !*** if this block is a western neighbor
          !*** increment message counter
          !***
 
          if (iblock_dst == iblock_west .and. &
              jblock_dst == jblock_west) then
 
-	    if (go_west) then
-               call increment_message_counter(ew_snd_count, ew_rcv_count, &
-                                              src_proc, dst_proc)
-            else  ! no message passed to western neighbor
-               call increment_message_counter(ew_snd_count, ew_rcv_count, &
-                                              0, dst_proc)
-            endif
-
+             call increment_message_counter(ew_snd_count, ew_rcv_count, &
+                                            src_proc, dst_proc)
          endif
 
          !***
-         !*** if this block is an northern neighbor
+         !*** if this block is a northern neighbor
          !*** find out whether a message is required
          !*** for tripole, must communicate with all
          !*** north row blocks (triggered by iblock_dst <0)
@@ -434,32 +387,20 @@ contains
          if ((iblock_dst == iblock_north .or. iblock_north < 0) .and. &
               jblock_dst == jblock_north) then
 
-	    if (go_north) then
-               call increment_message_counter(ns_snd_count, ns_rcv_count, &
-                                              src_proc, dst_proc)
-            else  ! no message passed to northern neighbor
-               call increment_message_counter(ns_snd_count, ns_rcv_count, &
-                                              0, dst_proc)
-            endif
-
+              call increment_message_counter(ns_snd_count, ns_rcv_count, &
+                                             src_proc, dst_proc)
          endif
 
          !***
-         !*** if this block is an southern neighbor
+         !*** if this block is a southern neighbor
          !*** find out whether a message is required
          !***
 
          if (iblock_dst == iblock_south .and. &
              jblock_dst == jblock_south) then
 
-	    if (go_south) then
-               call increment_message_counter(ns_snd_count, ns_rcv_count, &
-                                              src_proc, dst_proc)
-            else  ! no message passed to southern neighbor
-               call increment_message_counter(ns_snd_count, ns_rcv_count, &
-                                              0, dst_proc)
-            endif
-
+             call increment_message_counter(ns_snd_count, ns_rcv_count, &
+                                            src_proc, dst_proc)
          endif
 
       end do  ! search for dest blocks
@@ -733,7 +674,7 @@ contains
 
       if (src_block_loc /= 0 .and. src_proc == my_task+1) then
 
-         if (iblock_east == 0 .or. .not.go_west) then
+         if (iblock_east == 0) then
             iloc_ew = iloc_ew + 1
             newbndy%local_ew_src_block(iloc_ew) = 0
             newbndy%local_ew_src_add(1,iloc_ew) = 0
@@ -743,7 +684,7 @@ contains
             newbndy%local_ew_dst_add(2,iloc_ew) = 1
          endif
 
-         if (iblock_west == 0 .or. .not.go_east) then
+         if (iblock_west == 0) then
             iloc_ew = iloc_ew + 1
             newbndy%local_ew_src_block(iloc_ew) = 0
             newbndy%local_ew_src_add(1,iloc_ew) = 0
@@ -753,7 +694,7 @@ contains
             newbndy%local_ew_dst_add(2,iloc_ew) = 1
          endif
 
-         if (jblock_north == 0 .or. .not.go_south) then
+         if (jblock_north == 0) then
             iloc_ns = iloc_ns + 1
             newbndy%local_ns_src_block(iloc_ns) = 0
             newbndy%local_ns_src_add(1,iloc_ns) = 0
@@ -763,7 +704,7 @@ contains
             newbndy%local_ns_dst_add(2,iloc_ns) = src_block%jhi + 1
          endif
 
-         if (jblock_south == 0 .or. .not.go_north) then
+         if (jblock_south == 0) then
             iloc_ns = iloc_ns + 1
             newbndy%local_ns_src_block(iloc_ns) = 0
             newbndy%local_ns_src_add(1,iloc_ns) = 0
@@ -803,7 +744,7 @@ contains
             !***
 
             if (iblock_dst == iblock_east .and. &
-                jblock_dst == jblock_east .and. go_east) then
+                jblock_dst == jblock_east) then
 
                if (src_proc == my_task+1 .and. &
                    src_proc == dst_proc) then
@@ -861,7 +802,7 @@ contains
             !***
 
             if (iblock_dst == iblock_west .and. &
-                jblock_dst == jblock_west .and. go_west) then
+                jblock_dst == jblock_west) then
 
                if (src_proc == my_task+1 .and. &
                    src_proc == dst_proc) then
@@ -918,7 +859,7 @@ contains
             !***
 
             if ((iblock_dst == iblock_north .or. iblock_north < 0) .and. &
-                 jblock_dst == jblock_north .and. go_north) then
+                 jblock_dst == jblock_north) then
 
                if (src_proc == my_task+1 .and. &
                    src_proc == dst_proc) then
@@ -933,7 +874,6 @@ contains
                   newbndy%local_ns_dst_add(2,iloc_ns) = 1
 
                   if (iblock_north < 0) then !*** tripole boundary
-
                      newbndy%local_ns_dst_block(iloc_ns) = -dst_block_loc
                      !*** copy nghost+1 northern rows of physical
                      !*** domain into global north tripole buffer
@@ -1020,7 +960,7 @@ contains
             !***
 
             if (iblock_dst == iblock_south .and. &
-                jblock_dst == jblock_south .and. go_south) then
+                jblock_dst == jblock_south) then
 
                if (src_proc == my_task+1 .and. &
                    src_proc == dst_proc) then
@@ -1071,6 +1011,7 @@ contains
          endif  ! not a land block
 
       end do
+
    end do block_loop2
 
 !-----------------------------------------------------------------------
@@ -1109,85 +1050,10 @@ contains
 
 !***********************************************************************
 !BOP
-! !IROUTINE: destroy_boundary
-! !INTERFACE:
-
- subroutine destroy_boundary(in_bndy)
-
-! !DESCRIPTION:
-!  This routine destroys a boundary by deallocating all memory
-!  associated with the boundary and nullifying pointers.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT/OUTPUT PARAMETERS:
-
-   type (bndy), intent(inout) :: &
-     in_bndy          ! boundary structure to be destroyed
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-!
-!  reset all scalars
-!
-!-----------------------------------------------------------------------
-
-   in_bndy%communicator      = 0
-   in_bndy%nmsg_ew_snd       = 0
-   in_bndy%nmsg_ns_snd       = 0
-   in_bndy%nmsg_ew_rcv       = 0
-   in_bndy%nmsg_ns_rcv       = 0
-   in_bndy%maxblocks_ew_snd  = 0
-   in_bndy%maxblocks_ew_rcv  = 0
-   in_bndy%maxblocks_ns_snd  = 0
-   in_bndy%maxblocks_ns_rcv  = 0
-   in_bndy%nlocal_ew         = 0
-   in_bndy%nlocal_ns         = 0
-
-!-----------------------------------------------------------------------
-!
-!  deallocate all pointers
-!
-!-----------------------------------------------------------------------
-
-   deallocate(in_bndy%nblocks_ew_snd,     &
-              in_bndy%nblocks_ns_snd,     &
-              in_bndy%nblocks_ew_rcv,     &
-              in_bndy%nblocks_ns_rcv,     &
-              in_bndy%ew_snd_proc,        &
-              in_bndy%ew_rcv_proc,        &
-              in_bndy%ns_snd_proc,        &
-              in_bndy%ns_rcv_proc,        &
-              in_bndy%local_ew_src_block, &
-              in_bndy%local_ew_dst_block, &
-              in_bndy%local_ns_src_block, &
-              in_bndy%local_ns_dst_block, &
-              in_bndy%local_ew_src_add,   &
-              in_bndy%local_ew_dst_add,   &
-              in_bndy%local_ns_src_add,   &
-              in_bndy%local_ns_dst_add,   &
-              in_bndy%ew_src_block,       &
-              in_bndy%ew_dst_block,       &
-              in_bndy%ns_src_block,       &
-              in_bndy%ns_dst_block,       &
-              in_bndy%ew_src_add,         &
-              in_bndy%ew_dst_add,         &
-              in_bndy%ns_src_add,         &
-              in_bndy%ns_dst_add )
-
-!-----------------------------------------------------------------------
-!EOC
-
- end subroutine destroy_boundary
-
-!***********************************************************************
-!BOP
 ! !IROUTINE: update_ghost_cells
 ! !INTERFACE:
 
- subroutine boundary_2d_dbl(ARRAY, in_bndy, grid_loc, field_type)
+ subroutine boundary_2d_dbl(ARRAY, in_bndy, grid_loc, field_type, bc)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
@@ -1216,6 +1082,9 @@ contains
       grid_loc                   ! id for location on horizontal grid
                                  !  (center, NEcorner, Nface, Eface)
 
+   character (char_len), intent(in), optional :: &
+      bc                         ! boundary condition type (Dirichlet, Neumann)
+
 ! !INPUT/OUTPUT PARAMETERS:
 
    real (r8), dimension(:,:,:), intent(inout) :: &
@@ -1239,6 +1108,7 @@ contains
       bufsize,                     &! buffer size for send/recv buffers
       xoffset, yoffset,            &! address shifts for tripole
       isign,                       &! sign factor for tripole grids
+      bcflag,                      &! boundary condition flag
       ierr                          ! MPI error flag
 
    integer (int_kind), dimension(:), allocatable :: &
@@ -1258,26 +1128,19 @@ contains
    real (r8) :: &
       xavg               ! scalar for enforcing symmetry at U pts
 
+   real (r8) :: &
+      cnt                ! sum of tripole_dbuf block region
+
    !logical (log_kind), save :: first_call = .true.
    !integer (int_kind), save :: bndy_2d_local, bndy_2d_recv, &
    !                            bndy_2d_send, bndy_2d_wait, bndy_2d_final
 
-   !call ice_timer_start(timer_bound)
 !-----------------------------------------------------------------------
 !
 !  allocate buffers for east-west sends and receives
 !
 !-----------------------------------------------------------------------
 
-   !if (first_call) then
-   !  first_call = .false.
-   !  call get_timer(bndy_2d_local, 'BNDY_2D_LOCAL')
-   !  call get_timer(bndy_2d_recv,  'BNDY_2D_RECV')
-   !  call get_timer(bndy_2d_send,  'BNDY_2D_SEND')
-   !  call get_timer(bndy_2d_wait,  'BNDY_2D_WAIT')
-   !  call get_timer(bndy_2d_final, 'BNDY_2D_FINAL')
-   !endif
-	
    if (in_bndy%nmsg_ew_snd > 0) &
       allocate(buf_ew_snd(nghost, ny_block, &
                           in_bndy%maxblocks_ew_snd, in_bndy%nmsg_ew_snd))
@@ -1302,7 +1165,6 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_2d_recv)
    do n=1,in_bndy%nmsg_ew_rcv
 
       bufsize = ny_block*nghost*in_bndy%nblocks_ew_rcv(n)
@@ -1312,7 +1174,6 @@ contains
                      mpitag_bndy_2d + in_bndy%ew_rcv_proc(n), &
                      in_bndy%communicator, rcv_request(n), ierr)
    end do
-   !call timer_stop(bndy_2d_recv)
 
 !-----------------------------------------------------------------------
 !
@@ -1320,7 +1181,6 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_2d_send)
    do n=1,in_bndy%nmsg_ew_snd
 
       bufsize = ny_block*nghost*in_bndy%nblocks_ew_snd(n)
@@ -1337,7 +1197,6 @@ contains
                      mpitag_bndy_2d + my_task + 1, &
                      in_bndy%communicator, snd_request(n), ierr)
    end do
-   !call timer_stop(bndy_2d_send)
 
 !-----------------------------------------------------------------------
 !
@@ -1346,7 +1205,6 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_2d_local)
    do n=1,in_bndy%nlocal_ew
       src_block = in_bndy%local_ew_src_block(n)
       dst_block = in_bndy%local_ew_dst_block(n)
@@ -1356,31 +1214,27 @@ contains
       ib_dst = in_bndy%local_ew_dst_add(1,n)
       ie_dst = ib_dst + nghost - 1
 
-!lipscomb - boundary update changes
-! In the original code, ghost cells along closed boundaries and in
-!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
-! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
-! That is, the ghost cells are filled with the values in the neighboring
-!  physical cell.
- 
       if (src_block /= 0) then
          ARRAY(ib_dst:ie_dst,:,dst_block) = &
          ARRAY(ib_src:ie_src,:,src_block)
       else
-!!!         ARRAY(ib_dst:ie_dst,:,dst_block) = c0
-         if (ib_dst == 1) then                       ! west boundary
-            do i = ib_dst, ie_dst
-               ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
-            enddo
-         elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
-            do i = ib_dst, ie_dst
-               ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
-            enddo
+         ARRAY(ib_dst:ie_dst,:,dst_block) = c0
+         if (present(bc)) then
+            if (bc == 'Neumann') then
+            if (ib_dst == 1) then                       ! west boundary
+               do i = ib_dst, ie_dst
+                  ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
+               enddo
+            elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
+               do i = ib_dst, ie_dst
+                  ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
+               enddo
+            endif
+            endif
          endif
       endif
 
    end do
-   !call timer_stop(bndy_2d_local)
 
 !-----------------------------------------------------------------------
 !
@@ -1389,12 +1243,9 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_2d_wait)
    if (in_bndy%nmsg_ew_rcv > 0)  &
       call MPI_WAITALL(in_bndy%nmsg_ew_rcv, rcv_request, rcv_status, ierr)
-   !call timer_stop(bndy_2d_wait)
 
-   !call timer_start(bndy_2d_final)
    do n=1,in_bndy%nmsg_ew_rcv
    do k=1,in_bndy%nblocks_ew_rcv(n)
       dst_block = in_bndy%ew_dst_block(k,n)
@@ -1405,7 +1256,6 @@ contains
       ARRAY(ib_dst:ie_dst,:,dst_block) = buf_ew_rcv(:,:,k,n)
    end do
    end do
-   !call timer_stop(bndy_2d_final)
 
 !-----------------------------------------------------------------------
 !
@@ -1413,10 +1263,8 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_2d_wait)
    if (in_bndy%nmsg_ew_snd > 0)  &
       call MPI_WAITALL(in_bndy%nmsg_ew_snd, snd_request, snd_status, ierr)
-   !call timer_stop(bndy_2d_wait)
 
    if (allocated(buf_ew_snd))  deallocate (buf_ew_snd)
    if (allocated(buf_ew_rcv))  deallocate (buf_ew_rcv)
@@ -1453,7 +1301,6 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_2d_recv)
    do n=1,in_bndy%nmsg_ns_rcv
 
       bufsize = nx_block*(nghost+1)*in_bndy%nblocks_ns_rcv(n)
@@ -1463,7 +1310,6 @@ contains
                      mpitag_bndy_2d + in_bndy%ns_rcv_proc(n), &
                      in_bndy%communicator, rcv_request(n), ierr)
    end do
-   !call timer_stop(bndy_2d_recv)
 
 !-----------------------------------------------------------------------
 !
@@ -1471,7 +1317,6 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_2d_send)
    do n=1,in_bndy%nmsg_ns_snd
 
       bufsize = nx_block*(nghost+1)*in_bndy%nblocks_ns_snd(n)
@@ -1488,7 +1333,6 @@ contains
                      mpitag_bndy_2d + my_task + 1, &
                      in_bndy%communicator, snd_request(n), ierr)
    end do
-   !call timer_stop(bndy_2d_send)
 
 !-----------------------------------------------------------------------
 !
@@ -1498,7 +1342,6 @@ contains
 
    if (allocated(tripole_dbuf)) tripole_dbuf = c0
 
-   !call timer_start(bndy_2d_local)
    do n=1,in_bndy%nlocal_ns
       src_block = in_bndy%local_ns_src_block(n)
       dst_block = in_bndy%local_ns_dst_block(n)
@@ -1510,26 +1353,23 @@ contains
          jb_dst = in_bndy%local_ns_dst_add(2,n)
          je_dst = jb_dst + nghost - 1
 
-!lipscomb - boundary update changes
-! In the original code, ghost cells along closed boundaries and in
-!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
-! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
-! That is, the ghost cells are filled with the values in the neighboring
-!  physical cell.
- 
          if (src_block /= 0) then
             ARRAY(:,jb_dst:je_dst,dst_block) = &
             ARRAY(:,jb_src:je_src,src_block)
          else
-!!!            ARRAY(:,jb_dst:je_dst,dst_block) = c0
-            if (jb_dst == 1) then                       ! south boundary
-               do j = jb_dst, je_dst
-                  ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
-               enddo
-            elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
-               do j = jb_dst, je_dst
-                  ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
-               enddo
+            ARRAY(:,jb_dst:je_dst,dst_block) = c0
+            if (present(bc)) then
+               if (bc == 'Neumann') then
+               if (jb_dst == 1) then                       ! south boundary
+                  do j = jb_dst, je_dst
+                     ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
+                  enddo
+               elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
+                  do j = jb_dst, je_dst
+                     ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
+                  enddo
+               endif
+               endif
             endif
          endif
 
@@ -1541,20 +1381,50 @@ contains
          !*** determine start, end addresses of physical domain
          !*** for both global buffer and local block
 
-         ib_dst = in_bndy%local_ns_src_add(1,n)
+!echmod - bug         ib_dst = in_bndy%local_ns_src_add(1,n)
+         ib_dst = in_bndy%local_ns_dst_add(1,n) !echmod
          ie_dst = ib_dst + (nx_block-2*nghost) - 1
-         if (ie_dst > nx_global) ie_dst = nx_global
+!echmod         if (ie_dst > nx_global) ie_dst = nx_global
+         ie_dst = min(ie_dst, nx_global) !echmod
          ib_src = nghost + 1
          ie_src = ib_src + ie_dst - ib_dst
+!echmod - fill buffer with Neumann conditions first, then overwrite where needed
+         if (src_block == 0 .and. dst_block /= 0) then ! echmod
+            if (present(bc)) then
+               if (bc == 'Neumann') then
+                  do m = 1, nghost + 1
+                     jb_dst = in_bndy%local_ns_dst_add(2,n)
+                     ie_src = ib_src + ie_dst - ib_dst
+                     tripole_dbuf(ib_dst:ie_dst,m) = &
+                        ARRAY(ib_src:ie_src,jb_dst-1,-dst_block)
+                  enddo
+               endif
+            endif
+         else if (src_block /= 0 .and. dst_block == -src_block) then ! echmod
 !maltrud - debug         if (src_block /= 0) then
-         if (dst_block /= 0) then
+!echmod - bug        if (dst_block /= 0) then
             tripole_dbuf(ib_dst:ie_dst,:) = &
                   ARRAY(ib_src:ie_src,jb_src:je_src,src_block)
+            if (present(bc)) then
+            if (bc == 'Neumann') then
+               do m = 1, nghost + 1
+                  do i = 1, nghost
+                     if (ib_dst > i) then
+                     if (tripole_dbuf(ib_dst-i,m) == c0) &
+                         tripole_dbuf(ib_dst-i,m) = tripole_dbuf(ib_dst,m)
+                     endif
+                     if (ie_dst < nx_global-i) then
+                     if (tripole_dbuf(ie_dst+i,m) == c0) &
+                         tripole_dbuf(ie_dst+i,m) = tripole_dbuf(ie_dst,m)
+                     endif
+                  enddo
+               enddo
+            endif
+            endif
          endif
 
       endif
    end do
-   !call timer_stop(bndy_2d_local)
 
 !-----------------------------------------------------------------------
 !
@@ -1563,12 +1433,9 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_2d_wait)
    if (in_bndy%nmsg_ns_rcv > 0)  &
       call MPI_WAITALL(in_bndy%nmsg_ns_rcv, rcv_request, rcv_status, ierr)
-   !call timer_stop(bndy_2d_wait)
 
-   !call timer_start(bndy_2d_final)
    do n=1,in_bndy%nmsg_ns_rcv
    do k=1,in_bndy%nblocks_ns_rcv(n)
       dst_block = in_bndy%ns_dst_block(k,n)  ! dest block
@@ -1579,23 +1446,39 @@ contains
 
          ARRAY(:,jb_dst:je_dst,dst_block) = buf_ns_rcv(:,1:nghost,k,n)
       else ! northern tripole bndy: copy into global tripole buffer
+         src_block = in_bndy%ns_src_block(k,n)  ! echmod - bug fix
 
          !*** determine start,end of physical domain for both
          !*** global buffer and local buffer
-
          ib_dst = in_bndy%ns_dst_add(1,k,n)
          ie_dst = ib_dst + (nx_block-2*nghost) - 1
-         if (ie_dst > nx_global) ie_dst = nx_global
+!echmod         if (ie_dst > nx_global) ie_dst = nx_global
+         ie_dst = min(ie_dst, nx_global) !echmod
          ib_src = nghost + 1
          ie_src = ib_src + ie_dst - ib_dst
          if (src_block /= 0) then
             tripole_dbuf(ib_dst:ie_dst,:) = &
             buf_ns_rcv(ib_src:ie_src,:,k,n)
          endif
+         if (present(bc)) then !echmod
+         if (bc == 'Neumann') then
+            do m = 1, nghost + 1
+               do i = 1, nghost
+                  if (ib_dst > i) then
+                  if (tripole_dbuf(ib_dst-i,m) == c0) &
+                      tripole_dbuf(ib_dst-i,m) = tripole_dbuf(ib_dst,m)
+                  endif
+                  if (ie_dst < nx_global-i) then
+                  if (tripole_dbuf(ie_dst+i,m) == c0) &
+                      tripole_dbuf(ie_dst+i,m) = tripole_dbuf(ie_dst,m)
+                  endif
+               enddo
+            enddo
+         endif
+         endif
       endif
    end do
    end do
-   !call timer_stop(bndy_2d_final)
 
 !-----------------------------------------------------------------------
 !
@@ -1604,6 +1487,8 @@ contains
 !-----------------------------------------------------------------------
 
    if (allocated(tripole_dbuf)) then
+
+      tripole_dghost(:,:) = c0 !echmod
 
       select case (grid_loc)
       case (field_loc_center)   ! cell center location
@@ -1687,16 +1572,36 @@ contains
       ib_src = nx_global + xoffset
       jb_src = nghost + yoffset + 1
 
-      do j=1,nghost
-      do i=1,nx_global
+      bcflag = 0
+      if (present(bc)) then
+         if (bc == 'Neumann') then
+            bcflag = 1
+            do j=1,nghost
+            do i=1,nx_global
+               index_check = max(ib_src-i,1)
+               if (tripole_dbuf(index_check, jb_src-j) /= c0) then !echmod
+                  tripole_dghost(i,1+j) = isign* &
+                                       tripole_dbuf(index_check, jb_src-j)
+               else
+                  tripole_dghost(i,1+j) = tripole_dbuf(i, jb_src-j)
+               endif
+            end do
+            end do
+         endif
+      endif
+
+      if (bcflag == 0) then
+         do j=1,nghost
+         do i=1,nx_global
 !maltrud debug
-!        tripole_dghost(i,1+j) = isign* &
-!                                tripole_dbuf(ib_src-i, jb_src-j)
-         index_check = max(ib_src-i,1)
-         tripole_dghost(i,1+j) = isign* &
-                                 tripole_dbuf(index_check, jb_src-j)
-      end do
-      end do
+!           tripole_dghost(i,1+j) = isign* &
+!                                   tripole_dbuf(ib_src-i, jb_src-j)
+            index_check = max(ib_src-i,1)
+            tripole_dghost(i,1+j) = isign* &
+                                    tripole_dbuf(index_check, jb_src-j)
+         end do
+         end do
+      endif ! bcflag = 0
 
       !*** copy out of global ghost cell buffer into local
       !*** ghost cells
@@ -1723,13 +1628,15 @@ contains
                      tripole_dghost(nx_global-nghost+i,:)
                end do
                ie_src = ib_src + nx_block - nghost - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = nghost + 1
                ie_dst = ib_dst + (ie_src - ib_src)
             else
                ib_src = ib_src - nghost
                ie_src = ib_src + nx_block - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = 1
                ie_dst = ib_dst + (ie_src - ib_src)
             endif
@@ -1772,13 +1679,15 @@ contains
                      tripole_dghost(nx_global-nghost+i,:)
                end do
                ie_src = ib_src + nx_block - nghost - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = nghost + 1
                ie_dst = ib_dst + (ie_src - ib_src)
             else
                ib_src = ib_src - nghost
                ie_src = ib_src + nx_block - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = 1
                ie_dst = ib_dst + (ie_src - ib_src)
             endif
@@ -1806,10 +1715,8 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_2d_wait)
    if (in_bndy%nmsg_ns_snd > 0)  &
       call MPI_WAITALL(in_bndy%nmsg_ns_snd, snd_request, snd_status, ierr)
-   !call timer_stop(bndy_2d_wait)
 
    if (allocated(buf_ns_snd))  deallocate (buf_ns_snd)
    if (allocated(buf_ns_rcv))  deallocate (buf_ns_rcv)
@@ -1817,8 +1724,6 @@ contains
    if (allocated(rcv_request)) deallocate (rcv_request)
    if (allocated(snd_status))  deallocate (snd_status)
    if (allocated(rcv_status))  deallocate (rcv_status)
-
-   !call ice_timer_stop(timer_bound)
 
 !-----------------------------------------------------------------------
 
@@ -1829,7 +1734,7 @@ contains
 ! !IROUTINE: update_ghost_cells
 ! !INTERFACE:
 
- subroutine boundary_2d_real(ARRAY, in_bndy, grid_loc, field_type)
+ subroutine boundary_2d_real(ARRAY, in_bndy, grid_loc, field_type, bc)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
@@ -1854,6 +1759,9 @@ contains
       grid_loc                   ! id for location on horizontal grid
                                  !  (center, NEcorner, Nface, Eface)
 
+   character (char_len), intent(in), optional :: &
+      bc                         ! boundary condition type (Dirichlet, Neumann)
+
 ! !INPUT/OUTPUT PARAMETERS:
 
    real (r4), dimension(:,:,:), intent(inout) :: &
@@ -1877,6 +1785,7 @@ contains
       bufsize,                     &! buffer size for send/recv buffers
       xoffset, yoffset,            &! address shifts for tripole
       isign,                       &! sign factor for tripole grids
+      bcflag,                      &! boundary condition flag
       ierr                          ! MPI error flag
 
    integer (int_kind), dimension(:), allocatable :: &
@@ -1895,8 +1804,6 @@ contains
 
    real (r4) :: &
       xavg               ! scalar for enforcing symmetry at U pts
-
-   !call ice_timer_start(timer_bound)
 
 !-----------------------------------------------------------------------
 !
@@ -1971,26 +1878,23 @@ contains
       ib_dst = in_bndy%local_ew_dst_add(1,n)
       ie_dst = ib_dst + nghost - 1
 
-!lipscomb - boundary update changes
-! In the original code, ghost cells along closed boundaries and in
-!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
-! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
-! That is, the ghost cells are filled with the values in the neighboring
-!  physical cell.
- 
       if (src_block /= 0) then
          ARRAY(ib_dst:ie_dst,:,dst_block) = &
          ARRAY(ib_src:ie_src,:,src_block)
       else
-!!!         ARRAY(ib_dst:ie_dst,:,dst_block) = c0
-         if (ib_dst == 1) then                       ! west boundary
-            do i = ib_dst, ie_dst
-               ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
-            enddo
-         elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
-            do i = ib_dst, ie_dst
-               ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
-            enddo
+         ARRAY(ib_dst:ie_dst,:,dst_block) = c0
+         if (present(bc)) then
+            if (bc == 'Neumann') then
+            if (ib_dst == 1) then                       ! west boundary
+               do i = ib_dst, ie_dst
+                  ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
+               enddo
+            elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
+               do i = ib_dst, ie_dst
+                  ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
+               enddo
+            endif
+            endif
          endif
       endif
 
@@ -2101,26 +2005,23 @@ contains
          jb_dst = in_bndy%local_ns_dst_add(2,n)
          je_dst = jb_dst + nghost - 1
 
-!lipscomb - boundary update changes
-! In the original code, ghost cells along closed boundaries and in
-!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
-! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
-! That is, the ghost cells are filled with the values in the neighboring
-!  physical cell.
- 
          if (src_block /= 0) then
             ARRAY(:,jb_dst:je_dst,dst_block) = &
             ARRAY(:,jb_src:je_src,src_block)
          else
-!!!            ARRAY(:,jb_dst:je_dst,dst_block) = c0
-            if (jb_dst == 1) then                       ! south boundary
-               do j = jb_dst, je_dst
-                  ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
-               enddo
-            elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
-               do j = jb_dst, je_dst
-                  ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
-               enddo
+            ARRAY(:,jb_dst:je_dst,dst_block) = c0
+            if (present(bc)) then
+               if (bc == 'Neumann') then
+               if (jb_dst == 1) then                       ! south boundary
+                  do j = jb_dst, je_dst
+                     ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
+                  enddo
+               elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
+                  do j = jb_dst, je_dst
+                     ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
+                  enddo
+               endif
+               endif
             endif
          endif
 
@@ -2132,15 +2033,46 @@ contains
          !*** determine start, end addresses of physical domain
          !*** for both global buffer and local block
 
-         ib_dst = in_bndy%local_ns_src_add(1,n)
+!echmod - bug         ib_dst = in_bndy%local_ns_src_add(1,n)
+         ib_dst = in_bndy%local_ns_dst_add(1,n)
          ie_dst = ib_dst + (nx_block-2*nghost) - 1
-         if (ie_dst > nx_global) ie_dst = nx_global
+!echmod         if (ie_dst > nx_global) ie_dst = nx_global
+         ie_dst = min(ie_dst, nx_global) !echmod
          ib_src = nghost + 1
          ie_src = ib_src + ie_dst - ib_dst
+!echmod - fill buffer with Neumann conditions first, then overwrite where needed
+         if (src_block == 0 .and. dst_block /= 0) then ! echmod
+            if (present(bc)) then
+               if (bc == 'Neumann') then
+                  do m = 1, nghost + 1
+                     jb_dst = in_bndy%local_ns_dst_add(2,n)
+                     ie_src = ib_src + ie_dst - ib_dst
+                     tripole_rbuf(ib_dst:ie_dst,m) = &
+                        ARRAY(ib_src:ie_src,jb_dst-1,-dst_block)
+                  enddo
+               endif
+            endif
+         else if (src_block /= 0 .and. dst_block == -src_block) then ! echmod
 !maltrud - debug         if (src_block /= 0) then
-         if (dst_block /= 0) then
+!echmod         if (dst_block /= 0) then
             tripole_rbuf(ib_dst:ie_dst,:) = &
                   ARRAY(ib_src:ie_src,jb_src:je_src,src_block)
+            if (present(bc)) then
+            if (bc == 'Neumann') then
+               do m = 1, nghost + 1
+                  do i = 1, nghost
+                     if (ib_dst > i) then
+                     if (tripole_rbuf(ib_dst-i,m) == c0) &
+                         tripole_rbuf(ib_dst-i,m) = tripole_rbuf(ib_dst,m)
+                     endif
+                     if (ie_dst < nx_global-i) then
+                     if (tripole_rbuf(ie_dst+i,m) == c0) &
+                         tripole_rbuf(ie_dst+i,m) = tripole_rbuf(ie_dst,m)
+                     endif
+                  enddo
+               enddo
+            endif
+            endif
          endif
 
       endif
@@ -2165,18 +2097,35 @@ contains
 
          ARRAY(:,jb_dst:je_dst,dst_block) = buf_ns_rcv(:,1:nghost,k,n)
       else ! northern tripole bndy: copy into global tripole buffer
+         src_block = in_bndy%ns_src_block(k,n)  ! echmod - bug fix
 
          !*** determine start,end of physical domain for both
          !*** global buffer and local buffer
-
          ib_dst = in_bndy%ns_dst_add(1,k,n)
          ie_dst = ib_dst + (nx_block-2*nghost) - 1
-         if (ie_dst > nx_global) ie_dst = nx_global
+!echmod         if (ie_dst > nx_global) ie_dst = nx_global
+         ie_dst = min(ie_dst, nx_global) !echmod
          ib_src = nghost + 1
          ie_src = ib_src + ie_dst - ib_dst
          if (src_block /= 0) then
             tripole_rbuf(ib_dst:ie_dst,:) = &
             buf_ns_rcv(ib_src:ie_src,:,k,n)
+         endif
+         if (present(bc)) then !echmod
+         if (bc == 'Neumann') then
+            do m = 1, nghost + 1
+               do i = 1, nghost
+                  if (ib_dst > i) then
+                  if (tripole_rbuf(ib_dst-i,m) == c0) &
+                      tripole_rbuf(ib_dst-i,m) = tripole_rbuf(ib_dst,m)
+                  endif
+                  if (ie_dst < nx_global-i) then
+                  if (tripole_rbuf(ie_dst+i,m) == c0) &
+                      tripole_rbuf(ie_dst+i,m) = tripole_rbuf(ie_dst,m)
+                  endif
+               enddo
+            enddo
+         endif
          endif
       endif
    end do
@@ -2189,6 +2138,8 @@ contains
 !-----------------------------------------------------------------------
 
    if (allocated(tripole_rbuf)) then
+
+      tripole_rghost(:,:) = c0 !echmod
 
       select case (grid_loc)
       case (field_loc_center)   ! cell center location
@@ -2272,16 +2223,36 @@ contains
       ib_src = nx_global + xoffset
       jb_src = nghost + yoffset + 1
 
-      do j=1,nghost
-      do i=1,nx_global
+      bcflag = 0
+      if (present(bc)) then
+         if (bc == 'Neumann') then
+            bcflag = 1
+            do j=1,nghost
+            do i=1,nx_global
+               index_check = max(ib_src-i,1)
+               if (tripole_rbuf(index_check, jb_src-j) /= c0) then !echmod
+                  tripole_rghost(i,1+j) = isign* &
+                                       tripole_rbuf(index_check, jb_src-j)
+               else
+                  tripole_rghost(i,1+j) = tripole_rbuf(i, jb_src-j)
+               endif
+            end do
+            end do
+         endif
+      endif
+
+      if (bcflag == 0) then
+         do j=1,nghost
+         do i=1,nx_global
 !maltrud debug
-!        tripole_rghost(i,1+j) = isign* &
-!                                tripole_rbuf(ib_src-i, jb_src-j)
-         index_check = max(ib_src-i,1)
-         tripole_rghost(i,1+j) = isign* &
-                                 tripole_rbuf(index_check, jb_src-j)
-      end do
-      end do
+!           tripole_rghost(i,1+j) = isign* &
+!                                   tripole_rbuf(ib_src-i, jb_src-j)
+            index_check = max(ib_src-i,1)
+            tripole_rghost(i,1+j) = isign* &
+                                    tripole_rbuf(index_check, jb_src-j)
+         end do
+         end do
+      endif ! bcflag = 0
 
       !*** copy out of global ghost cell buffer into local
       !*** ghost cells
@@ -2308,13 +2279,15 @@ contains
                      tripole_rghost(nx_global-nghost+i,:)
                end do
                ie_src = ib_src + nx_block - nghost - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = nghost + 1
                ie_dst = ib_dst + (ie_src - ib_src)
             else
                ib_src = ib_src - nghost
                ie_src = ib_src + nx_block - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = 1
                ie_dst = ib_dst + (ie_src - ib_src)
             endif
@@ -2357,13 +2330,15 @@ contains
                      tripole_rghost(nx_global-nghost+i,:)
                end do
                ie_src = ib_src + nx_block - nghost - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = nghost + 1
                ie_dst = ib_dst + (ie_src - ib_src)
             else
                ib_src = ib_src - nghost
                ie_src = ib_src + nx_block - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = 1
                ie_dst = ib_dst + (ie_src - ib_src)
             endif
@@ -2396,8 +2371,6 @@ contains
    deallocate(buf_ns_snd, buf_ns_rcv)
    deallocate(snd_request, rcv_request, snd_status, rcv_status)
 
-   !call ice_timer_stop(timer_bound)
-
 !-----------------------------------------------------------------------
 
 end subroutine boundary_2d_real
@@ -2407,7 +2380,7 @@ end subroutine boundary_2d_real
 ! !IROUTINE: update_ghost_cells
 ! !INTERFACE:
 
- subroutine boundary_2d_int(ARRAY, in_bndy, grid_loc, field_type)
+ subroutine boundary_2d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
@@ -2432,6 +2405,9 @@ end subroutine boundary_2d_real
       grid_loc                   ! id for location on horizontal grid
                                  !  (center, NEcorner, Nface, Eface)
 
+   character (char_len), intent(in), optional :: &
+      bc                         ! boundary condition type (Dirichlet, Neumann)
+
 ! !INPUT/OUTPUT PARAMETERS:
 
    integer (int_kind), dimension(:,:,:), intent(inout) :: &
@@ -2455,6 +2431,7 @@ end subroutine boundary_2d_real
       bufsize,                     &! buffer size for send/recv buffers
       xoffset, yoffset,            &! address shifts for tripole
       isign,                       &! sign factor for tripole grids
+      bcflag,                      &! boundary condition flag
       ierr                          ! MPI error flag
 
    integer (int_kind), dimension(:), allocatable :: &
@@ -2473,8 +2450,6 @@ end subroutine boundary_2d_real
 
    integer (int_kind) :: &
       xavg               ! scalar for enforcing symmetry at U pts
-
-   !call ice_timer_start(timer_bound)
 
 !-----------------------------------------------------------------------
 !
@@ -2549,26 +2524,23 @@ end subroutine boundary_2d_real
       ib_dst = in_bndy%local_ew_dst_add(1,n)
       ie_dst = ib_dst + nghost - 1
 
-!lipscomb - boundary update changes
-! In the original code, ghost cells along closed boundaries and in
-!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
-! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
-! That is, the ghost cells are filled with the values in the neighboring
-!  physical cell.
- 
       if (src_block /= 0) then
          ARRAY(ib_dst:ie_dst,:,dst_block) = &
          ARRAY(ib_src:ie_src,:,src_block)
       else
-!!!         ARRAY(ib_dst:ie_dst,:,dst_block) = 0
-         if (ib_dst == 1) then                       ! west boundary
-            do i = ib_dst, ie_dst
-               ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
-            enddo
-         elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
-            do i = ib_dst, ie_dst
-               ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
-            enddo
+         ARRAY(ib_dst:ie_dst,:,dst_block) = 0
+         if (present(bc)) then
+            if (bc == 'Neumann') then
+            if (ib_dst == 1) then                       ! west boundary
+               do i = ib_dst, ie_dst
+                  ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
+               enddo
+            elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
+               do i = ib_dst, ie_dst
+                  ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
+               enddo
+            endif
+            endif
          endif
       endif
 
@@ -2679,26 +2651,23 @@ end subroutine boundary_2d_real
          jb_dst = in_bndy%local_ns_dst_add(2,n)
          je_dst = jb_dst + nghost - 1
 
-!lipscomb - boundary update changes
-! In the original code, ghost cells along closed boundaries and in
-!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
-! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
-! That is, the ghost cells are filled with the values in the neighboring
-!  physical cell.
- 
          if (src_block /= 0) then
             ARRAY(:,jb_dst:je_dst,dst_block) = &
             ARRAY(:,jb_src:je_src,src_block)
          else
-!!!            ARRAY(:,jb_dst:je_dst,dst_block) = c0
-            if (jb_dst == 1) then                       ! south boundary
-               do j = jb_dst, je_dst
-                  ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
-               enddo
-            elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
-               do j = jb_dst, je_dst
-                  ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
-               enddo
+            ARRAY(:,jb_dst:je_dst,dst_block) = c0
+            if (present(bc)) then
+               if (bc == 'Neumann') then
+               if (jb_dst == 1) then                       ! south boundary
+                  do j = jb_dst, je_dst
+                     ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
+                  enddo
+               elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
+                  do j = jb_dst, je_dst
+                     ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
+                  enddo
+               endif
+               endif
             endif
          endif
 
@@ -2710,15 +2679,46 @@ end subroutine boundary_2d_real
          !*** determine start, end addresses of physical domain
          !*** for both global buffer and local block
 
-         ib_dst = in_bndy%local_ns_src_add(1,n)
+!echmod - bug         ib_dst = in_bndy%local_ns_src_add(1,n)
+         ib_dst = in_bndy%local_ns_dst_add(1,n)
          ie_dst = ib_dst + (nx_block-2*nghost) - 1
-         if (ie_dst > nx_global) ie_dst = nx_global
+!echmod         if (ie_dst > nx_global) ie_dst = nx_global
+         ie_dst = min(ie_dst, nx_global) !echmod
          ib_src = nghost + 1
          ie_src = ib_src + ie_dst - ib_dst
+!echmod - fill buffer with Neumann conditions first, then overwrite where needed
+         if (src_block == 0 .and. dst_block /= 0) then ! echmod
+            if (present(bc)) then
+               if (bc == 'Neumann') then
+                  do m = 1, nghost + 1
+                     jb_dst = in_bndy%local_ns_dst_add(2,n)
+                     ie_src = ib_src + ie_dst - ib_dst
+                     tripole_ibuf(ib_dst:ie_dst,m) = &
+                        ARRAY(ib_src:ie_src,jb_dst-1,-dst_block)
+                  enddo
+               endif
+            endif
+         else if (src_block /= 0 .and. dst_block == -src_block) then ! echmod
 !maltrud - debug         if (src_block /= 0) then
-         if (dst_block /= 0) then
+!echmod         if (dst_block /= 0) then
             tripole_ibuf(ib_dst:ie_dst,:) = &
                   ARRAY(ib_src:ie_src,jb_src:je_src,src_block)
+            if (present(bc)) then
+            if (bc == 'Neumann') then
+               do m = 1, nghost + 1
+                  do i = 1, nghost
+                     if (ib_dst > i) then
+                     if (tripole_ibuf(ib_dst-i,m) == c0) &
+                         tripole_ibuf(ib_dst-i,m) = tripole_ibuf(ib_dst,m)
+                     endif
+                     if (ie_dst < nx_global-i) then
+                     if (tripole_ibuf(ie_dst+i,m) == c0) &
+                         tripole_ibuf(ie_dst+i,m) = tripole_ibuf(ie_dst,m)
+                     endif
+                  enddo
+               enddo
+            endif
+            endif
          endif
 
       endif
@@ -2743,18 +2743,35 @@ end subroutine boundary_2d_real
 
          ARRAY(:,jb_dst:je_dst,dst_block) = buf_ns_rcv(:,1:nghost,k,n)
       else ! northern tripole bndy: copy into global tripole buffer
+         src_block = in_bndy%ns_src_block(k,n)  ! echmod - bug fix
 
          !*** determine start,end of physical domain for both
          !*** global buffer and local buffer
-
          ib_dst = in_bndy%ns_dst_add(1,k,n)
          ie_dst = ib_dst + (nx_block-2*nghost) - 1
-         if (ie_dst > nx_global) ie_dst = nx_global
+!echmod         if (ie_dst > nx_global) ie_dst = nx_global
+         ie_dst = min(ie_dst, nx_global) !echmod
          ib_src = nghost + 1
          ie_src = ib_src + ie_dst - ib_dst
          if (src_block /= 0) then
             tripole_ibuf(ib_dst:ie_dst,:) = &
             buf_ns_rcv(ib_src:ie_src,:,k,n)
+         endif
+         if (present(bc)) then !echmod
+         if (bc == 'Neumann') then
+            do m = 1, nghost + 1
+               do i = 1, nghost
+                  if (ib_dst > i) then
+                  if (tripole_ibuf(ib_dst-i,m) == c0) &
+                      tripole_ibuf(ib_dst-i,m) = tripole_ibuf(ib_dst,m)
+                  endif
+                  if (ie_dst < nx_global-i) then
+                  if (tripole_ibuf(ie_dst+i,m) == c0) &
+                      tripole_ibuf(ie_dst+i,m) = tripole_ibuf(ie_dst,m)
+                  endif
+               enddo
+            enddo
+         endif
          endif
       endif
    end do
@@ -2767,6 +2784,8 @@ end subroutine boundary_2d_real
 !-----------------------------------------------------------------------
 
    if (allocated(tripole_ibuf)) then
+
+      tripole_ighost(:,:) = c0 !echmod
 
       select case (grid_loc)
       case (field_loc_center)   ! cell center location
@@ -2850,16 +2869,36 @@ end subroutine boundary_2d_real
       ib_src = nx_global + xoffset
       jb_src = nghost + yoffset + 1
 
-      do j=1,nghost
-      do i=1,nx_global
+      bcflag = 0
+      if (present(bc)) then
+         if (bc == 'Neumann') then
+            bcflag = 1
+            do j=1,nghost
+            do i=1,nx_global
+               index_check = max(ib_src-i,1)
+               if (tripole_ibuf(index_check, jb_src-j) /= c0) then !echmod
+                  tripole_ighost(i,1+j) = isign* &
+                                       tripole_ibuf(index_check, jb_src-j)
+               else
+                  tripole_ighost(i,1+j) = tripole_ibuf(i, jb_src-j)
+               endif
+            end do
+            end do
+         endif
+      endif
+
+      if (bcflag == 0) then
+         do j=1,nghost
+         do i=1,nx_global
 !maltrud debug
-!        tripole_ighost(i,1+j) = isign* &
-!                                tripole_ibuf(ib_src-i, jb_src-j)
-         index_check = max(ib_src-i,1)
-         tripole_ighost(i,1+j) = isign* &
-                                 tripole_ibuf(index_check, jb_src-j)
-      end do
-      end do
+!           tripole_ighost(i,1+j) = isign* &
+!                                   tripole_ibuf(ib_src-i, jb_src-j)
+            index_check = max(ib_src-i,1)
+            tripole_ighost(i,1+j) = isign* &
+                                    tripole_ibuf(index_check, jb_src-j)
+         end do
+         end do
+      endif ! bcflag = 0
 
       !*** copy out of global ghost cell buffer into local
       !*** ghost cells
@@ -2886,13 +2925,15 @@ end subroutine boundary_2d_real
                      tripole_ighost(nx_global-nghost+i,:)
                end do
                ie_src = ib_src + nx_block - nghost - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = nghost + 1
                ie_dst = ib_dst + (ie_src - ib_src)
             else
                ib_src = ib_src - nghost
                ie_src = ib_src + nx_block - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = 1
                ie_dst = ib_dst + (ie_src - ib_src)
             endif
@@ -2935,13 +2976,15 @@ end subroutine boundary_2d_real
                      tripole_ighost(nx_global-nghost+i,:)
                end do
                ie_src = ib_src + nx_block - nghost - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = nghost + 1
                ie_dst = ib_dst + (ie_src - ib_src)
             else
                ib_src = ib_src - nghost
                ie_src = ib_src + nx_block - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = 1
                ie_dst = ib_dst + (ie_src - ib_src)
             endif
@@ -2969,82 +3012,21 @@ end subroutine boundary_2d_real
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_2d_wait)
    call MPI_WAITALL(in_bndy%nmsg_ns_snd, snd_request, snd_status, ierr)
-   !call timer_stop(bndy_2d_wait)
 
    deallocate(buf_ns_snd, buf_ns_rcv)
    deallocate(snd_request, rcv_request, snd_status, rcv_status)
-
-   !call ice_timer_stop(timer_bound)
 
 !-----------------------------------------------------------------------
 
 end subroutine boundary_2d_int
 
 !***********************************************************************
-!lipscomb - Commented out this version of boundary_3d_dbl from POP
-!lipscomb - Replaced by a modified version of boundary_2d_dbl
-!lipscomb - Calling 2D slices makes boundary calls much slower
-!
 !BOP
 ! !IROUTINE: update_ghost_cells
 ! !INTERFACE:
 
-!!subroutine boundary_3d_dbl(ARRAY, in_bndy, grid_loc, field_type)
-
-! !DESCRIPTION:
-!  This routine updates ghost cells for an input array and is a
-!  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
-!  for 3d horizontal arrays of double precision.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT/OUTPUT PARAMETERS:
-
-!!   type (bndy), intent(inout) :: &
-!!      in_bndy                 ! boundary update structure for the array
-
-!!   integer (int_kind), intent(in) :: &
-!!      field_type,               &! id for type of field (scalar, vector, angle)
-!!      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
-
-!!   real (r8), dimension(:,:,:,:), intent(inout) :: &
-!!      ARRAY              ! array containing horizontal slab to update
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-!
-!  local variables
-!
-!-----------------------------------------------------------------------
-
-!!   integer (int_kind) ::           &
-!!      k,m                           ! dummy loop indices
-
-!-----------------------------------------------------------------------
-
-!!   m = size(ARRAY,3)
-!!   do k = 1, m
-!!      call boundary_2d_dbl(ARRAY(:,:,k,:),in_bndy,grid_loc,field_type)
-!!   end do
-
-!-----------------------------------------------------------------------
-
-!!end subroutine boundary_3d_dbl
-
-!***********************************************************************
-!BOP
-! !IROUTINE: update_ghost_cells
-! !INTERFACE:
-
- subroutine boundary_3d_dbl(ARRAY, in_bndy, grid_loc, field_type)
+ subroutine boundary_3d_dbl(ARRAY, in_bndy, grid_loc, field_type, bc)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
@@ -3068,6 +3050,9 @@ end subroutine boundary_2d_int
       field_type,               &! id for type of field (scalar, vector, angle)
       grid_loc                   ! id for location on horizontal grid
                                  !  (center, NEcorner, Nface, Eface)
+
+   character (char_len), intent(in), optional :: &
+      bc                         ! boundary condition type (Dirichlet, Neumann)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
@@ -3093,6 +3078,7 @@ end subroutine boundary_2d_int
       bufsize,                     &! buffer size for send/recv buffers
       xoffset, yoffset,            &! address shifts for tripole
       isign,                       &! sign factor for tripole grids
+      bcflag,                      &! boundary condition flag
       ierr                          ! MPI error flag
 
    integer (int_kind), dimension(:), allocatable :: &
@@ -3116,22 +3102,11 @@ end subroutine boundary_2d_int
    !integer (int_kind), save :: bndy_3d_local, bndy_3d_recv, &
    !                            bndy_3d_send, bndy_3d_wait, bndy_3d_final
 
-   !call ice_timer_start(timer_bound)
-
 !-----------------------------------------------------------------------
 !
 !  allocate buffers for east-west sends and receives
 !
 !-----------------------------------------------------------------------
-
-   !if (first_call) then
-   !  first_call = .false.
-   !  call get_timer(bndy_3d_local, 'BNDY_3D_LOCAL')
-   !  call get_timer(bndy_3d_recv,  'BNDY_3D_RECV')
-   !  call get_timer(bndy_3d_send,  'BNDY_3D_SEND')
-   !  call get_timer(bndy_3d_wait,  'BNDY_3D_WAIT')
-   !  call get_timer(bndy_3d_final, 'BNDY_3D_FINAL')
-   !endif
 
    narr = size(ARRAY,dim=3)
 	
@@ -3159,13 +3134,15 @@ end subroutine boundary_2d_int
 	          tripole_dghost_3d(nx_global,nghost+1,narr))
     endif
 
+    if (allocated(tripole_dbuf_3d)) tripole_dbuf_3d = c0
+    if (allocated(tripole_dghost_3d)) tripole_dghost_3d = c0
+
 !-----------------------------------------------------------------------
 !
 !  post receives
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_3d_recv)
    do n=1,in_bndy%nmsg_ew_rcv
 
       bufsize = ny_block*nghost*narr*in_bndy%nblocks_ew_rcv(n)
@@ -3175,7 +3152,6 @@ end subroutine boundary_2d_int
                      mpitag_bndy_3d + in_bndy%ew_rcv_proc(n), &
                      in_bndy%communicator, rcv_request(n), ierr)
    end do
-   !call timer_stop(bndy_3d_recv)
 
 !-----------------------------------------------------------------------
 !
@@ -3183,7 +3159,6 @@ end subroutine boundary_2d_int
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_3d_send)
    do n=1,in_bndy%nmsg_ew_snd
 
       bufsize = ny_block*nghost*narr*in_bndy%nblocks_ew_snd(n)
@@ -3200,7 +3175,6 @@ end subroutine boundary_2d_int
                      mpitag_bndy_3d + my_task + 1, &
                      in_bndy%communicator, snd_request(n), ierr)
    end do
-   !call timer_stop(bndy_3d_send)
 
 !-----------------------------------------------------------------------
 !
@@ -3209,7 +3183,6 @@ end subroutine boundary_2d_int
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_3d_local)
    do n=1,in_bndy%nlocal_ew
       src_block = in_bndy%local_ew_src_block(n)
       dst_block = in_bndy%local_ew_dst_block(n)
@@ -3219,31 +3192,27 @@ end subroutine boundary_2d_int
       ib_dst = in_bndy%local_ew_dst_add(1,n)
       ie_dst = ib_dst + nghost - 1
 
-!lipscomb - boundary update changes
-! In the original code, ghost cells along closed boundaries and in
-!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
-! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
-! That is, the ghost cells are filled with the values in the neighboring
-!  physical cell.
- 
       if (src_block /= 0) then
          ARRAY(ib_dst:ie_dst,:,:,dst_block) = &
          ARRAY(ib_src:ie_src,:,:,src_block)
       else
-!!!         ARRAY(ib_dst:ie_dst,:,:,dst_block) = c0
-         if (ib_dst == 1) then                       ! west boundary
-            do i = ib_dst, ie_dst
-               ARRAY(i,:,:,dst_block) = ARRAY(ie_dst+1,:,:,dst_block)
-            enddo
-         elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
-            do i = ib_dst, ie_dst
-               ARRAY(i,:,:,dst_block) = ARRAY(ib_dst-1,:,:,dst_block)
-            enddo
-         endif
+         ARRAY(ib_dst:ie_dst,:,:,dst_block) = c0
+         if (present(bc)) then
+            if (bc == 'Neumann') then
+            if (ib_dst == 1) then                       ! west boundary
+               do i = ib_dst, ie_dst
+                  ARRAY(i,:,:,dst_block) = ARRAY(ie_dst+1,:,:,dst_block)
+               enddo
+            elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
+               do i = ib_dst, ie_dst
+                  ARRAY(i,:,:,dst_block) = ARRAY(ib_dst-1,:,:,dst_block)
+               enddo
+            endif
+            endif
+          endif
       endif
 
    end do
-   !call timer_stop(bndy_3d_local)
 
 !-----------------------------------------------------------------------
 !
@@ -3252,12 +3221,9 @@ end subroutine boundary_2d_int
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_3d_wait)
    if (in_bndy%nmsg_ew_rcv > 0)  &
       call MPI_WAITALL(in_bndy%nmsg_ew_rcv, rcv_request, rcv_status, ierr)
-   !call timer_stop(bndy_3d_wait)
 
-   !call timer_start(bndy_3d_final)
    do n=1,in_bndy%nmsg_ew_rcv
    do k=1,in_bndy%nblocks_ew_rcv(n)
       dst_block = in_bndy%ew_dst_block(k,n)
@@ -3268,7 +3234,6 @@ end subroutine boundary_2d_int
       ARRAY(ib_dst:ie_dst,:,:,dst_block) = buf_ew_rcv(:,:,:,k,n)
    end do
    end do
-   !call timer_stop(bndy_3d_final)
 
 !-----------------------------------------------------------------------
 !
@@ -3276,10 +3241,8 @@ end subroutine boundary_2d_int
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_3d_wait)
    if (in_bndy%nmsg_ew_snd > 0)  &
       call MPI_WAITALL(in_bndy%nmsg_ew_snd, snd_request, snd_status, ierr)
-   !call timer_stop(bndy_3d_wait)
 
    if (allocated(buf_ew_snd))  deallocate (buf_ew_snd)
    if (allocated(buf_ew_rcv))  deallocate (buf_ew_rcv)
@@ -3316,7 +3279,6 @@ end subroutine boundary_2d_int
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_3d_recv)
    do n=1,in_bndy%nmsg_ns_rcv
 
       bufsize = nx_block*(nghost+1)*narr*in_bndy%nblocks_ns_rcv(n)
@@ -3326,7 +3288,6 @@ end subroutine boundary_2d_int
                      mpitag_bndy_3d + in_bndy%ns_rcv_proc(n), &
                      in_bndy%communicator, rcv_request(n), ierr)
    end do
-   !call timer_stop(bndy_3d_recv)
 
 !-----------------------------------------------------------------------
 !
@@ -3334,7 +3295,6 @@ end subroutine boundary_2d_int
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_3d_send)
    do n=1,in_bndy%nmsg_ns_snd
 
       bufsize = nx_block*(nghost+1)*narr*in_bndy%nblocks_ns_snd(n)
@@ -3351,7 +3311,6 @@ end subroutine boundary_2d_int
                      mpitag_bndy_3d + my_task + 1, &
                      in_bndy%communicator, snd_request(n), ierr)
    end do
-   !call timer_stop(bndy_3d_send)
 
 !-----------------------------------------------------------------------
 !
@@ -3359,7 +3318,6 @@ end subroutine boundary_2d_int
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_3d_local)
    do n=1,in_bndy%nlocal_ns
 
       src_block = in_bndy%local_ns_src_block(n)
@@ -3372,26 +3330,23 @@ end subroutine boundary_2d_int
          jb_dst = in_bndy%local_ns_dst_add(2,n)
          je_dst = jb_dst + nghost - 1
 
-!lipscomb - boundary update changes
-! In the original code, ghost cells along closed boundaries and in
-!  discarded land blocks are filled with zeroes.  (Dirichlet BCs)
-! In CICE, this can lead to divzero problems.  We use Neumann BCs instead.
-! That is, the ghost cells are filled with the values in the neighboring
-!  physical cell.
- 
          if (src_block /= 0) then
             ARRAY(:,jb_dst:je_dst,:,dst_block) = &
             ARRAY(:,jb_src:je_src,:,src_block)
          else
-!!!            ARRAY(:,jb_dst:je_dst,:,dst_block) = c0
-            if (jb_dst == 1) then                       ! south boundary
-               do j = jb_dst, je_dst
-                  ARRAY(:,j,:,dst_block) = ARRAY(:,je_dst+1,:,dst_block)
-               enddo
-            elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
-               do j = jb_dst, je_dst
-                  ARRAY(:,j,:,dst_block) = ARRAY(:,jb_dst-1,:,dst_block)
-               enddo
+            ARRAY(ib_dst:ie_dst,:,:,dst_block) = c0
+            if (present(bc)) then
+               if (bc == 'Neumann') then
+               if (jb_dst == 1) then                       ! south boundary
+                  do j = jb_dst, je_dst
+                     ARRAY(:,j,:,dst_block) = ARRAY(:,je_dst+1,:,dst_block)
+                  enddo
+               elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
+                  do j = jb_dst, je_dst
+                     ARRAY(:,j,:,dst_block) = ARRAY(:,jb_dst-1,:,dst_block)
+                  enddo
+               endif
+               endif
             endif
          endif
 
@@ -3403,20 +3358,52 @@ end subroutine boundary_2d_int
          !*** determine start, end addresses of physical domain
          !*** for both global buffer and local block
 
-         ib_dst = in_bndy%local_ns_src_add(1,n)
+!echmod - bug         ib_dst = in_bndy%local_ns_src_add(1,n)
+         ib_dst = in_bndy%local_ns_dst_add(1,n)
          ie_dst = ib_dst + (nx_block-2*nghost) - 1
-         if (ie_dst > nx_global) ie_dst = nx_global
+!echmod         if (ie_dst > nx_global) ie_dst = nx_global
+         ie_dst = min(ie_dst, nx_global) !echmod
          ib_src = nghost + 1
          ie_src = ib_src + ie_dst - ib_dst
+!echmod - fill buffer with Neumann conditions first, then overwrite where needed
+         if (src_block == 0 .and. dst_block /= 0) then ! echmod
+            if (present(bc)) then
+               if (bc == 'Neumann') then
+                  do m = 1, nghost + 1
+                     jb_dst = in_bndy%local_ns_dst_add(2,n)
+                     ie_src = ib_src + ie_dst - ib_dst
+                     tripole_dbuf_3d(ib_dst:ie_dst,m,:) = &
+                        ARRAY(ib_src:ie_src,jb_dst-1,:,-dst_block)
+                  enddo
+               endif
+            endif
+         else if (src_block /= 0 .and. dst_block == -src_block) then ! echmod
 !maltrud - debug         if (src_block /= 0) then
-         if (dst_block /= 0) then
+!echmod         if (dst_block /= 0) then
             tripole_dbuf_3d(ib_dst:ie_dst,:,:) = &
                   ARRAY(ib_src:ie_src,jb_src:je_src,:,src_block)
+            if (present(bc)) then
+            if (bc == 'Neumann') then
+               do k = 1, narr
+               do m = 1, nghost + 1
+                  do i = 1, nghost
+                     if (ib_dst > i) then
+                     if (tripole_dbuf_3d(ib_dst-i,m,k) == c0) &
+                         tripole_dbuf_3d(ib_dst-i,m,k) = tripole_dbuf_3d(ib_dst,m,k)
+                     endif
+                     if (ie_dst < nx_global-i) then
+                     if (tripole_dbuf_3d(ie_dst+i,m,k) == c0) &
+                         tripole_dbuf_3d(ie_dst+i,m,k) = tripole_dbuf_3d(ie_dst,m,k)
+                     endif
+                  enddo
+                  enddo
+               enddo
+            endif
+            endif
          endif
 
       endif
    end do
-   !call timer_stop(bndy_3d_local)
 
 !-----------------------------------------------------------------------
 !
@@ -3425,12 +3412,9 @@ end subroutine boundary_2d_int
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_3d_wait)
    if (in_bndy%nmsg_ns_rcv > 0)  &
       call MPI_WAITALL(in_bndy%nmsg_ns_rcv, rcv_request, rcv_status, ierr)
-   !call timer_stop(bndy_3d_wait)
 
-   !call timer_start(bndy_3d_final)
    do n=1,in_bndy%nmsg_ns_rcv
    do k=1,in_bndy%nblocks_ns_rcv(n)
       dst_block = in_bndy%ns_dst_block(k,n)  ! dest block
@@ -3441,23 +3425,41 @@ end subroutine boundary_2d_int
 
          ARRAY(:,jb_dst:je_dst,:,dst_block) = buf_ns_rcv(:,1:nghost,:,k,n)
       else ! northern tripole bndy: copy into global tripole buffer
+         src_block = in_bndy%ns_src_block(k,n)  ! echmod - bug fix
 
          !*** determine start,end of physical domain for both
          !*** global buffer and local buffer
-
          ib_dst = in_bndy%ns_dst_add(1,k,n)
          ie_dst = ib_dst + (nx_block-2*nghost) - 1
-         if (ie_dst > nx_global) ie_dst = nx_global
+!echmod         if (ie_dst > nx_global) ie_dst = nx_global
+         ie_dst = min(ie_dst, nx_global) !echmod
          ib_src = nghost + 1
          ie_src = ib_src + ie_dst - ib_dst
          if (src_block /= 0) then
             tripole_dbuf_3d(ib_dst:ie_dst,:,:) = &
             buf_ns_rcv(ib_src:ie_src,:,:,k,n)
          endif
+         if (present(bc)) then !echmod
+         if (bc == 'Neumann') then
+           do j = 1, narr
+            do m = 1, nghost + 1
+               do i = 1, nghost
+                  if (ib_dst > i) then
+                  if (tripole_dbuf_3d(ib_dst-i,m,j) == c0) &
+                      tripole_dbuf_3d(ib_dst-i,m,j) = tripole_dbuf_3d(ib_dst,m,j)
+                  endif
+                  if (ie_dst < nx_global-i) then
+                  if (tripole_dbuf_3d(ie_dst+i,m,j) == c0) &
+                      tripole_dbuf_3d(ie_dst+i,m,j) = tripole_dbuf_3d(ie_dst,m,j)
+                  endif
+               enddo
+            enddo
+           enddo
+         endif
+         endif
       endif
    end do
    end do
-   !call timer_stop(bndy_3d_final)
 
 !-----------------------------------------------------------------------
 !
@@ -3467,6 +3469,7 @@ end subroutine boundary_2d_int
 
    if (allocated(tripole_dbuf_3d)) then
 
+      tripole_dghost_3d(:,:,:) = c0 !echmod
       allocate(xavg(narr))
 
       select case (grid_loc)
@@ -3495,6 +3498,7 @@ end subroutine boundary_2d_int
          !*** catch nx_global point
          tripole_dghost_3d(nx_global,1,:) = tripole_dbuf_3d(nx_global,nghost+1,:)
          tripole_dbuf_3d(:,nghost+1,:) = tripole_dghost_3d(:,1,:)
+
       case (field_loc_Eface)   ! cell center location
          xoffset = 0
          yoffset = 1
@@ -3517,6 +3521,7 @@ end subroutine boundary_2d_int
                                              tripole_dbuf_3d(ib_dst,nghost+1,:))
          end do
          tripole_dbuf_3d(:,nghost+1,:) = tripole_dghost_3d(:,1,:)
+
 !lipscomb - added W face
       case (field_loc_Wface)
          xoffset = 1
@@ -3553,16 +3558,38 @@ end subroutine boundary_2d_int
       ib_src = nx_global + xoffset
       jb_src = nghost + yoffset + 1
 
-      do j=1,nghost
-      do i=1,nx_global
+      bcflag = 0
+      if (present(bc)) then
+         if (bc == 'Neumann') then
+            bcflag = 1
+            do n=1,narr
+            do j=1,nghost
+            do i=1,nx_global
+               index_check = max(ib_src-i,1)
+               if (tripole_dbuf_3d(index_check, jb_src-j,n) /= c0) then !echmod
+                  tripole_dghost_3d(i,1+j,n) = isign* &
+                                       tripole_dbuf_3d(index_check, jb_src-j,n)
+               else
+                  tripole_dghost_3d(i,1+j,n) = tripole_dbuf_3d(i, jb_src-j,n)
+               endif
+            end do
+            end do
+            end do
+         endif
+      endif
+
+      if (bcflag == 0) then
+         do j=1,nghost
+         do i=1,nx_global
 !maltrud debug
-!        tripole_dghost_3d(i,1+j,:) = isign* &
-!                                   tripole_dbuf_3d(ib_src-i, jb_src-j,:)
-         index_check = max(ib_src-i,1)
-         tripole_dghost_3d(i,1+j,:) = isign* &
-                                 tripole_dbuf_3d(index_check, jb_src-j,:)
-      end do
-      end do
+!           tripole_dghost_3d(i,1+j,:) = isign* &
+!                                      tripole_dbuf_3d(ib_src-i, jb_src-j,:)
+            index_check = max(ib_src-i,1)
+            tripole_dghost_3d(i,1+j,:) = isign* &
+                                    tripole_dbuf_3d(index_check, jb_src-j,:)
+         end do
+         end do
+      endif ! bcflag = 0
 
       !*** copy out of global ghost cell buffer into local
       !*** ghost cells
@@ -3589,13 +3616,15 @@ end subroutine boundary_2d_int
                      tripole_dghost_3d(nx_global-nghost+i,:,:)
                end do
                ie_src = ib_src + nx_block - nghost - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = nghost + 1
                ie_dst = ib_dst + (ie_src - ib_src)
             else
                ib_src = ib_src - nghost
                ie_src = ib_src + nx_block - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = 1
                ie_dst = ib_dst + (ie_src - ib_src)
             endif
@@ -3638,13 +3667,15 @@ end subroutine boundary_2d_int
                      tripole_dghost_3d(nx_global-nghost+i,:,:)
                end do
                ie_src = ib_src + nx_block - nghost - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = nghost + 1
                ie_dst = ib_dst + (ie_src - ib_src)
             else
                ib_src = ib_src - nghost
                ie_src = ib_src + nx_block - 1
-               if (ie_src > nx_global) ie_src = nx_global
+!echmod               if (ie_src > nx_global) ie_src = nx_global
+               ie_src = min(ie_src, nx_global) !echmod
                ib_dst = 1
                ie_dst = ib_dst + (ie_src - ib_src)
             endif
@@ -3660,7 +3691,6 @@ end subroutine boundary_2d_int
                tripole_dghost_3d(ib_src:ie_src,:,:)
          endif
 
-
       end do
       end do
 
@@ -3674,10 +3704,8 @@ end subroutine boundary_2d_int
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_3d_wait)
    if (in_bndy%nmsg_ns_snd > 0)  &
       call MPI_WAITALL(in_bndy%nmsg_ns_snd, snd_request, snd_status, ierr)
-   !call timer_stop(bndy_3d_wait)
 
    if (allocated(buf_ns_snd))  deallocate (buf_ns_snd)
    if (allocated(buf_ns_rcv))  deallocate (buf_ns_rcv)
@@ -3685,8 +3713,6 @@ end subroutine boundary_2d_int
    if (allocated(rcv_request)) deallocate (rcv_request)
    if (allocated(snd_status))  deallocate (snd_status)
    if (allocated(rcv_status))  deallocate (rcv_status)
-
-   !call ice_timer_stop(timer_bound)
 
 !-----------------------------------------------------------------------
 
@@ -3698,7 +3724,7 @@ end subroutine boundary_2d_int
 ! !IROUTINE: update_ghost_cells
 ! !INTERFACE:
 
-subroutine boundary_3d_real(ARRAY, in_bndy, grid_loc, field_type)
+subroutine boundary_3d_real(ARRAY, in_bndy, grid_loc, field_type, bc)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
@@ -3721,6 +3747,9 @@ subroutine boundary_3d_real(ARRAY, in_bndy, grid_loc, field_type)
       grid_loc                   ! id for location on horizontal grid
                                  !  (center, NEcorner, Nface, Eface)
 
+   character (char_len), intent(in), optional :: &
+      bc                         ! boundary condition type (Dirichlet, Neumann)
+
    real (r4), dimension(:,:,:,:), intent(inout) :: &
       ARRAY              ! array containing horizontal slab to update
 
@@ -3739,7 +3768,7 @@ subroutine boundary_3d_real(ARRAY, in_bndy, grid_loc, field_type)
 
    m = size(ARRAY,3)
    do k = 1, m
-      call boundary_2d_real(ARRAY(:,:,k,:),in_bndy,grid_loc,field_type)
+      call boundary_2d_real(ARRAY(:,:,k,:),in_bndy,grid_loc,field_type, bc)
    end do
 
 !-----------------------------------------------------------------------
@@ -3751,7 +3780,7 @@ end subroutine boundary_3d_real
 ! !IROUTINE: update_ghost_cells
 ! !INTERFACE:
 
-subroutine boundary_3d_int(ARRAY, in_bndy, grid_loc, field_type)
+subroutine boundary_3d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
@@ -3774,6 +3803,9 @@ subroutine boundary_3d_int(ARRAY, in_bndy, grid_loc, field_type)
       grid_loc                   ! id for location on horizontal grid
                                  !  (center, NEcorner, Nface, Eface)
 
+   character (char_len), intent(in), optional :: &
+      bc                         ! boundary condition type (Dirichlet, Neumann)
+
    integer (int_kind), dimension(:,:,:,:), intent(inout) :: &
       ARRAY              ! array containing horizontal slab to update
 
@@ -3792,7 +3824,7 @@ subroutine boundary_3d_int(ARRAY, in_bndy, grid_loc, field_type)
 
    m = size(ARRAY,3)
    do k = 1, m
-      call boundary_2d_int(ARRAY(:,:,k,:),in_bndy,grid_loc,field_type)
+      call boundary_2d_int(ARRAY(:,:,k,:),in_bndy,grid_loc,field_type, bc)
    end do
 
 !-----------------------------------------------------------------------
@@ -3804,7 +3836,7 @@ end subroutine boundary_3d_int
 ! !IROUTINE: update_ghost_cells
 ! !INTERFACE:
 
-subroutine boundary_4d_dbl(ARRAY, in_bndy, grid_loc, field_type)
+subroutine boundary_4d_dbl(ARRAY, in_bndy, grid_loc, field_type, bc)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
@@ -3830,6 +3862,9 @@ subroutine boundary_4d_dbl(ARRAY, in_bndy, grid_loc, field_type)
       grid_loc                   ! id for location on horizontal grid
                                  !  (center, NEcorner, Nface, Eface)
 
+   character (char_len), intent(in), optional :: &
+      bc                         ! boundary condition type (Dirichlet, Neumann)
+
    real (r8), dimension(:,:,:,:,:), intent(inout) :: &
       ARRAY              ! array containing horizontal slab to update
 
@@ -3846,18 +3881,9 @@ subroutine boundary_4d_dbl(ARRAY, in_bndy, grid_loc, field_type)
 
 !-----------------------------------------------------------------------
 
-!lipscomb - commented out and replaced with code below
-!   l = size(ARRAY,dim=3)
-!   n = size(ARRAY,dim=4)
-!   do k=1,l
-!   do m=1,n
-!      call boundary_2d_dbl(ARRAY(:,:,k,m,:),in_bndy,grid_loc,field_type)
-!   end do
-!   end do
-
    n = size(ARRAY,dim=4)
    do m=1,n
-      call boundary_3d_dbl(ARRAY(:,:,:,m,:),in_bndy,grid_loc,field_type)
+      call boundary_3d_dbl(ARRAY(:,:,:,m,:),in_bndy,grid_loc,field_type, bc)
    end do
 
 !-----------------------------------------------------------------------
@@ -3869,7 +3895,7 @@ end subroutine boundary_4d_dbl
 ! !IROUTINE: update_ghost_cells
 ! !INTERFACE:
 
-subroutine boundary_4d_real(ARRAY, in_bndy, grid_loc, field_type)
+subroutine boundary_4d_real(ARRAY, in_bndy, grid_loc, field_type, bc)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
@@ -3892,6 +3918,9 @@ subroutine boundary_4d_real(ARRAY, in_bndy, grid_loc, field_type)
       grid_loc                   ! id for location on horizontal grid
                                  !  (center, NEcorner, Nface, Eface)
 
+   character (char_len), intent(in), optional :: &
+      bc                         ! boundary condition type (Dirichlet, Neumann)
+
    real (r4), dimension(:,:,:,:,:), intent(inout) :: &
       ARRAY              ! array containing horizontal slab to update
 
@@ -3912,7 +3941,7 @@ subroutine boundary_4d_real(ARRAY, in_bndy, grid_loc, field_type)
    n = size(ARRAY,dim=4)
    do k=1,l
    do m=1,n
-     call boundary_2d_real(ARRAY(:,:,k,m,:),in_bndy,grid_loc,field_type)
+      call boundary_2d_real(ARRAY(:,:,k,m,:),in_bndy,grid_loc,field_type, bc)
    end do
    end do
 
@@ -3925,7 +3954,7 @@ end subroutine boundary_4d_real
 ! !IROUTINE: update_ghost_cells
 ! !INTERFACE:
 
-subroutine boundary_4d_int(ARRAY, in_bndy, grid_loc, field_type)
+subroutine boundary_4d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
@@ -3948,6 +3977,9 @@ subroutine boundary_4d_int(ARRAY, in_bndy, grid_loc, field_type)
       grid_loc                   ! id for location on horizontal grid
                                  !  (center, NEcorner, Nface, Eface)
 
+   character (char_len), intent(in), optional :: &
+      bc                         ! boundary condition type (Dirichlet, Neumann)
+
    integer (int_kind), dimension(:,:,:,:,:), intent(inout) :: &
       ARRAY              ! array containing horizontal slab to update
 
@@ -3969,7 +4001,7 @@ subroutine boundary_4d_int(ARRAY, in_bndy, grid_loc, field_type)
 
    do k=1,l
    do m=1,n
-      call boundary_2d_int(ARRAY(:,:,k,m,:),in_bndy,grid_loc,field_type)
+      call boundary_2d_int(ARRAY(:,:,k,m,:),in_bndy,grid_loc,field_type, bc)
    end do
    end do
 

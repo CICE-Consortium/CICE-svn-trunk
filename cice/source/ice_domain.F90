@@ -16,6 +16,8 @@
 !
 ! author: Phil Jones, LANL
 ! Oct. 2004: Adapted from POP by William H. Lipscomb, LANL
+! Feb. 2007: E. Hunke removed NE and SW boundary options (they were buggy
+!  and not used anyhow).
 !
 ! !USES:
 !
@@ -26,7 +28,6 @@
    use ice_blocks
    use ice_distribution
    use ice_exit
-!!   use io_types
    use ice_fileunits
    use ice_boundary
    use ice_domain_size
@@ -52,9 +53,7 @@
       distrb_info        ! block distribution info
 
    type (bndy), public :: &
-      bndy_info        ,&!  ghost cell update info
-      bndy_info_NE     ,&!  ghost cell update info (N and E boundaries)
-      bndy_info_SW       !  ghost cell update info (S and W boundaries)
+      bndy_info          !  ghost cell update info
 
    logical (log_kind), public :: &
       ltripole_grid      ! flag to signal use of tripole grid
@@ -323,6 +322,10 @@
       !*** points, so where the block is not completely land,
       !*** reset nocn to be the full size of the block
 
+      ! NOTE - array syntax use in CICE is limited, so commenting this
+      ! out might improve performance.  However I want the CICE and POP
+      ! decompositions to be identical, so I am leaving it as is. --ech
+
       if (nocn(n) > 0) nocn(n) = nx_block*ny_block
 
    end do
@@ -383,8 +386,8 @@
 
 !----------------------------------------------------------------------
 !
-!  set up ghost cell updates for each distribution
-!  Boundary types are cyclic, closed, or tripole
+!  Set up ghost cell updates for each distribution.
+!  Boundary types are cyclic, closed, or tripole. 
 !
 !----------------------------------------------------------------------
 
@@ -393,20 +396,6 @@
                         trim(ns_boundary_type),     &
                         trim(ew_boundary_type),     &
                         nx_global, ny_global)
-
-   ! update ghost cells only on N and E boundaries
-   call create_boundary(bndy_info_NE, distrb_info,  &
-                        trim(ns_boundary_type),     &
-                        trim(ew_boundary_type),     &
-                        nx_global, ny_global,       &
-                        .true., .false., .true., .false.)
-
-   ! update ghost cells only on S and W boundaries
-   call create_boundary(bndy_info_SW, distrb_info,  &
-                        trim(ns_boundary_type),     &
-                        trim(ew_boundary_type),     &
-                        nx_global, ny_global,       &
-                        .false., .true., .false., .true.)
 
 !----------------------------------------------------------------------
 !EOC

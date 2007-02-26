@@ -97,6 +97,10 @@ contains
 ! !REVISION HISTORY: 
 !  same as module
 !
+! !USES:
+
+   use ice_fileunits, only: nu_diag
+
 ! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
@@ -118,6 +122,8 @@ contains
       i, ip1, j, jp1, n    ,&! loop indices
       iblock, jblock       ,&! block loop indices
       is, ie, js, je         ! temp start, end indices
+
+   logical (log_kind) :: dbug
 
 !----------------------------------------------------------------------
 !
@@ -269,6 +275,17 @@ contains
 
       end do
    end do
+
+   dbug = .false.
+   if (dbug) then
+      write(nu_diag,*) 'block i,j locations'
+      do n = 1, nblocks_tot
+         write(nu_diag,*) 'block id, iblock, jblock:', &
+         all_blocks(n)%block_id, &
+         all_blocks(n)%iblock,   & 
+         all_blocks(n)%jblock
+      enddo
+   endif
 
 !EOC
 !----------------------------------------------------------------------
