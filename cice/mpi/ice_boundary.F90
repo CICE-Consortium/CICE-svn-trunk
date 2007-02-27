@@ -683,7 +683,7 @@ contains
             newbndy%local_ew_dst_add(1,iloc_ew) = src_block%ihi + 1
             newbndy%local_ew_dst_add(2,iloc_ew) = 1
          endif
-
+!echmod note: pop has the rest of these as elseifs
          if (iblock_west == 0) then
             iloc_ew = iloc_ew + 1
             newbndy%local_ew_src_block(iloc_ew) = 0
@@ -1127,9 +1127,6 @@ contains
 
    real (r8) :: &
       xavg               ! scalar for enforcing symmetry at U pts
-
-   real (r8) :: &
-      cnt                ! sum of tripole_dbuf block region
 
    !logical (log_kind), save :: first_call = .true.
    !integer (int_kind), save :: bndy_2d_local, bndy_2d_recv, &
@@ -2655,7 +2652,7 @@ end subroutine boundary_2d_real
             ARRAY(:,jb_dst:je_dst,dst_block) = &
             ARRAY(:,jb_src:je_src,src_block)
          else
-            ARRAY(:,jb_dst:je_dst,dst_block) = c0
+            ARRAY(:,jb_dst:je_dst,dst_block) = 0
             if (present(bc)) then
                if (bc == 'Neumann') then
                if (jb_dst == 1) then                       ! south boundary
@@ -3334,7 +3331,7 @@ end subroutine boundary_2d_int
             ARRAY(:,jb_dst:je_dst,:,dst_block) = &
             ARRAY(:,jb_src:je_src,:,src_block)
          else
-            ARRAY(ib_dst:ie_dst,:,:,dst_block) = c0
+            ARRAY(:,jb_dst:je_dst,:,dst_block) = c0
             if (present(bc)) then
                if (bc == 'Neumann') then
                if (jb_dst == 1) then                       ! south boundary
