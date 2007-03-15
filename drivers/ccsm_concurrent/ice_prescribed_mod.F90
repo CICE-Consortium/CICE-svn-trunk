@@ -24,7 +24,6 @@ module ice_prescribed_mod
 
 ! !USES:
 
-#if (defined CCSM) || (defined COUP_CAM)
    use shr_stream_mod
    use shr_map_mod
    use shr_ncread_mod
@@ -43,14 +42,11 @@ module ice_prescribed_mod
    use ice_calendar,   only : idate, sec
    use ice_itd,        only : ilyr1, hin_max
    use ice_work,       only : work_g1, work_g2
-#endif
 
    implicit none
    save
 
    private ! except
-
-#if (defined CCSM) || (defined COUP_CAM)
 
 ! !PUBLIC TYPES:
 
@@ -211,6 +207,8 @@ subroutine ice_prescribed_init
    call broadcast_scalar(stream_year_last,master_task)
    call broadcast_scalar(model_year_align,master_task)
    call broadcast_scalar(prescribed_ice_fill,master_task)
+
+   if (.not.prescribed_ice) return
 
    if (my_task == master_task) then
       write(nu_diag,*) ' prescribed_ice            = ',prescribed_ice
@@ -827,9 +825,6 @@ subroutine ice_prescribed_phys
 end subroutine ice_prescribed_phys
 
 !==============================================================================
-
-#endif
-! endif CCSM/COUP_CAM
 
 end module ice_prescribed_mod
 

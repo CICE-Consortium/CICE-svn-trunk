@@ -9,7 +9,7 @@
 !  Contains main driver routine for time stepping of CICE.
 !
 ! !REVISION HISTORY:
-!  SVN:$Id$
+!  SVN:$Id: CICE_RunMod.F90 52 2007-01-30 18:04:24Z eclare $
 !
 !  authors Elizabeth C. Hunke, LANL
 !          Philip W. Jones, LANL
@@ -26,9 +26,6 @@
 !
 ! !USES:
 !
-#ifdef USE_ESMF
-      use esmf_mod
-#endif
       use ice_atmo
       use ice_calendar
       use ice_communicate
@@ -57,12 +54,7 @@
       use ice_transport_driver
       use ice_transport_remap
       use ice_work
-#ifdef CCSM
       use ice_prescribed_mod
-#endif
-#ifdef popcice
-      use ice_to_drv, only: to_drv
-#endif
 
       implicit none
       private
@@ -103,43 +95,12 @@
 ! !INTERFACE:
 !
 
-      subroutine CICE_Run(CICE_Comp,  importState, exportState, &
-                          synchClock, errorCode)
+      subroutine CICE_Run
 
 !
 ! !USES:
 !
 ! !INPUT/OUTPUT PARAMETERS:
-
-#ifdef USE_ESMF
-
-      type (ESMF_GridComp), intent(inout) :: &
-           CICE_Comp            ! defined ESMF component for CICE
-
-      type (ESMF_State), intent(in) :: &
-           importState          ! CICE import state (forcing data)
-
-      type (ESMF_State), intent(out) :: &
-           exportState          ! CICE export state (surface fields)
-
-      type (ESMF_Clock), intent(inout) :: &
-           synchClock           ! ESMF clock to check init time
-
-      integer (int_kind), intent(inout) :: &
-           errorCode            ! returns an error code if any init fails
-
-#else
-! declare as integer dummy arguments
-
-      integer (int_kind), intent(inout), optional :: &
-           CICE_Comp        , & ! dummy argument
-           importState      , & ! dummy argument
-           exportState      , & ! dummy argument
-           synchClock       , & ! dummy argument
-           errorCode            ! dummy argument
-
-#endif
-
 !
 !EOP
 !BOC
@@ -159,77 +120,26 @@
 
       call ice_timer_start(timer_step)   ! start timing entire run
 
-#ifdef ESMF  
-      errorCode = ESMF_SUCCESS
-
-   !--------------------------------------------------------------------
-   !  check clock to make sure models agree on time info
-   !--------------------------------------------------------------------
-   !
-   !   call CICE_CoupledCheckTime(synchClock, 'start', errorCode)
-   !
-   !   if (errorCode /= ESMF_SUCCESS) then
-   !      write (nu_diag,*) &
-   !         '(ice) CICE_Run: error in clock synchronization'
-   !      return
-   !   endif
-   !
-   !UNCOMMENT THESE TWO SECTIONS FOR COUPLED MODEL SIMULATIONS WITH ESMF
-   !--------------------------------------------------------------------
-   !  reset timer to stop when requested by input clock
-   !--------------------------------------------------------------------
-   !
-   ! Use appropriate ESMF Clock query functions to determine the
-   ! coupling interval in seconds.  Because this depends on how the
-   ! coupled model driver is using an ESMF clock, this is left to
-   ! the user of the coupled model.
-   !
-   !coupledInterval = ?
-   !
-   ! reset number of time steps based on coupling interval
-   !
-   !npt = nint(coupledInterval/dt)
-   !
-   !--------------------------------------------------------------------
-   !  extract data from import state
-   !--------------------------------------------------------------------
-   
-      call CICE_CoupledExtractImport(importState, errorCode)
-   
-      if (errorCode /= ESMF_SUCCESS) then
-         write(nu_diag,*) &
-              '(ice) CICE_Run: error extracting data from import state'
-         return
-      endif
-#endif
-
    !--------------------------------------------------------------------
    ! timestep loop
    !--------------------------------------------------------------------
 
       timeLoop: do
 
+         call ice_timer_start(timer_sndrcv)   ! timing between send-recv
+
          istep  = istep  + 1    ! update time step counters
          istep1 = istep1 + 1
          time = time + dt       ! determine the time and date
          call calendar(time)    ! at the end of the timestep
 
-#ifdef CCSM
+         call ice_timer_stop(timer_sndrcv)   ! timing between send-recv
+
          call from_coupler      ! get updated info from CCSM coupler
-#else
-#ifndef coupled
-         call get_forcing_atmo     ! atmospheric forcing from data
-         call get_forcing_ocn(dt)  ! ocean forcing from data
-#endif
-#endif
 
          if (stop_now >= 1) exit timeLoop
 
          call ice_step
-
-#ifdef USE_ESMF
-         call CICE_CoupledAccumulateExport(errorCode)
-#endif
 
       enddo timeLoop
 
@@ -239,32 +149,6 @@
 
       call ice_timer_stop(timer_step)   ! end timestepping loop timer     
 
-
-#ifdef USE_ESMF
-   !--------------------------------------------------------------------
-   !  check clock to make sure models agree on time info
-   !--------------------------------------------------------------------
-   !
-   !   call CICE_CoupledCheckTime(synchClock, 'stop', errorCode)
-   !
-   !   if (errorCode /= ESMF_SUCCESS) then
-   !      write(nu_diag,*)
-   !          '(ice) CICE_Run: error in stop time synchronization'
-   !      return
-   !   endif
-   !
-   !--------------------------------------------------------------------
-   !  fill the export state
-   !--------------------------------------------------------------------
-
-      call CICE_CoupledFillExport(exportState, errorCode)
-
-      if (errorCode /= ESMF_SUCCESS) then
-         write(nu_diag,*) &
-              '(ice) CICE_Run: error filling export state'
-         return
-      endif
-#endif
 !
 !EOC
 !
@@ -277,28 +161,27 @@
 
       integer (kind=int_kind) :: k
 
+         call ice_timer_start(timer_rcvsnd)   ! timing between send-recv
+
          call init_mass_diags   ! diagnostics per timestep
 
-#ifdef CCSM
          if(prescribed_ice) then  ! read prescribed ice
             call ice_prescribed_run(idate, sec)
          endif
 
-#endif
       !-----------------------------------------------------------------
       ! thermodynamics
       !-----------------------------------------------------------------
 
          call step_therm1 (dt)  ! pre-coupler thermodynamics
 
-#ifdef CCSM
+         call ice_timer_stop(timer_rcvsnd)   ! timing between recv-send
+
          call to_coupler        ! collect/send data to CCSM coupler
 
+         call ice_timer_start(timer_sndrcv)   ! timing between send-recv
+
          if (.not.prescribed_ice) then
-#endif
-#ifdef popcice
-         call to_drv
-#endif
 
          call step_therm2 (dt)  ! post-coupler thermodynamics
 
@@ -310,9 +193,7 @@
             call step_dynamics (dyn_dt)
          enddo
 
-#ifdef CCSM
          endif ! not prescribed_ice
-#endif
 
 
       !-----------------------------------------------------------------
@@ -328,6 +209,8 @@
          if (write_restart == 1) call dumpfile ! dumps for restarting
 
          call ice_timer_stop(timer_readwrite)  ! reading/writing
+
+         call ice_timer_stop(timer_sndrcv)   ! timing between send-recv
 
       end subroutine ice_step
     
@@ -375,10 +258,6 @@
 ! 2D coupler variables (computed for each category, then aggregated)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         alvdrn      , & ! visible direct albedo           (fraction)
-         alidrn      , & ! near-ir direct albedo           (fraction)
-         alvdfn      , & ! visible diffuse albedo          (fraction)
-         alidfn      , & ! near-ir diffuse albedo          (fraction)
          fsensn      , & ! surface downward sensible heat     (W/m^2)
          flatn       , & ! surface downward latent heat       (W/m^2)
          fswabsn     , & ! shortwave absorbed by ice          (W/m^2)
@@ -536,8 +415,8 @@
                                  vsnon(:,:,n,iblk), trcrn(:,:,1,n,iblk), &
                                  swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
                                  swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                                 alvdrn,            alidrn,              &
-                                 alvdfn,            alidfn,              &
+                                 alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
+                                 alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
                                  fswsfcn,           fswintn,             &
                                  fswthrun,          Iswabsn)
 
@@ -549,8 +428,8 @@
                                  vsnon(:,:,n,iblk), trcrn(:,:,1,n,iblk), &
                                  swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
                                  swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                                 alvdrn,            alidrn,              &
-                                 alvdfn,            alidfn,              &
+                                 alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
+                                 alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
                                  fswsfcn,           fswintn,             &
                                  fswthrun,          Iswabsn)
             endif
@@ -627,6 +506,9 @@
                  write(nu_diag,*) 'Global i and j:', &
                                   this_block%i_glob(istop), &
                                   this_block%j_glob(jstop) 
+                 write(nu_diag,*) 'Lat, Lon:', &
+                                 TLAT(istop,jstop,iblk)*rad_to_deg, &
+                                 TLON(istop,jstop,iblk)*rad_to_deg
             call abort_ice ('ice: Vertical thermo error')
          endif
 
@@ -639,8 +521,8 @@
                             indxi,              indxj,                &
                             aicen_init(:,:,n,iblk),                   &
                             flw(:,:,iblk),      coszen(:,:,iblk),     &
-                            alvdrn,             alidrn,               &
-                            alvdfn,             alidfn,               &
+                            alvdrn(:,:,n,iblk), alidrn(:,:,n,iblk),   &
+                            alvdfn(:,:,n,iblk), alidfn(:,:,n,iblk),   &
                             strairxn,           strairyn,             &
                             fsensn,             flatn,                &
                             fswabsn,            flwoutn,              &
@@ -836,17 +718,18 @@
                              aice0     (:,:,  iblk),   &
                              l_stop,                   &
                              istop,    jstop)
-         endif
 
-         if (l_stop) then
-            write (nu_diag,*) 'istep1, my_task, iblk =', &
-                               istep1, my_task, iblk
-            write (nu_diag,*) 'Global block:', this_block%block_id
-            if (istop > 0 .and. jstop > 0) &
-                 write(nu_diag,*) 'Global i and j:', &
-                                  this_block%i_glob(istop), &
-                                  this_block%j_glob(jstop) 
-            call abort_ice ('ice: Linear ITD error')
+            if (l_stop) then
+               write (nu_diag,*) 'istep1, my_task, iblk =', &
+                                  istep1, my_task, iblk
+               write (nu_diag,*) 'Global block:', this_block%block_id
+               if (istop > 0 .and. jstop > 0) &
+                    write(nu_diag,*) 'Global i and j:', &
+                                     this_block%i_glob(istop), &
+                                     this_block%j_glob(jstop) 
+               call abort_ice ('ice: Linear ITD error')
+            endif
+
          endif
 
          call ice_timer_stop(timer_catconv)    ! category conversions
@@ -912,6 +795,8 @@
                             vsnon     (:,:,:,iblk), &
                             eicen     (:,:,:,iblk), &
                             esnon     (:,:,:,iblk) )
+
+         call ice_timer_stop(timer_thermo) ! thermodynamics
 
       !-----------------------------------------------------------------
       ! For the special case of a single category, adjust the area and
@@ -988,7 +873,6 @@
       enddo                     ! iblk
 
 !      call ice_timer_stop(timer_tmp)  ! temporary timer
-      call ice_timer_stop(timer_thermo) ! thermodynamics
       call ice_timer_stop(timer_column)  ! column physics
 
       end subroutine step_therm2

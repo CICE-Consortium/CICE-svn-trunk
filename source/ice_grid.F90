@@ -43,7 +43,6 @@
       character (len=char_len) :: &
          grid_file    , & !  input file for POP grid info
          kmt_file     , & !  input file for POP grid info
-         landfrac_file, & !  input file for landfrac from CAM if COUP_CAM
          grid_type        !  current options are rectangular (default),
                           !  displaced_pole, tripole, panarctic, latlon, column
 
@@ -71,14 +70,6 @@
       real (kind=dbl_kind):: &
         column_lat, & !latitude of single column
         column_lon    !longitude of single column
-
-#ifdef COUP_CAM
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
-        CAMFRAC     ! Land fraction from CAM for COUP_CAM NOTE: This
-                    ! is in CAM format so 1 = LAND and 0 = OCEAN.  It
-                    ! is used for weighting output variables when
-                    ! CICE is coupled to standalone CAM
-#endif
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
          cyp    , & ! 1.5*HTE - 0.5*HTE
@@ -890,11 +881,6 @@
          enddo
       enddo
 
-#ifdef COUP_CAM
-      call ice_open(nu_grid,landfrac_file,64)
-      call ice_read(nu_grid,1,CAMFRAC,'rda8',diag)
-#endif
-
       if (my_task == master_task) close (nu_grid)
 
       end subroutine latlongrid
@@ -1229,7 +1215,6 @@
       type (block) :: &
            this_block           ! block information for current block
 
-#ifndef COUP_CAM 
       TLAT(:,:,:) = c0
       TLON(:,:,:) = c0
 
@@ -1280,7 +1265,6 @@
          enddo                  ! i
          enddo                  ! j         
       enddo                     ! iblk
-#endif
 
       call ice_timer_start(timer_bound)
       bc = 'Neumann'

@@ -31,9 +31,6 @@
       use ice_fileunits
       use ice_kinds_mod
       use ice_timers
-#ifdef CCSM
-      use ice_coupling
-#endif
 
       implicit none
       private
@@ -116,13 +113,8 @@
       call ice_timer_print_all(stats=.false.) ! print timing information
 
       if (nu_diag /= 6) close (nu_diag) ! diagnostic output
-
-#ifdef CCSM
-      call exit_coupler  ! disconnect cice from the CCSM coupled system
-#else
 #ifndef coupled
       call end_run       ! quit MPI
-#endif
 #endif
 
 !
