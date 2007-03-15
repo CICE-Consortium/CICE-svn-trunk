@@ -216,11 +216,7 @@
 
       if (histfreq == '1') write_history=.true.
 
-#ifdef COUP_CAM 
-      if (istep >= 1) then
-#else
       if (istep > 1) then
-#endif
         select case (histfreq)
         case ("y", "Y")
           if (new_year  .and. mod(nyr, histfreq_n)==0) &

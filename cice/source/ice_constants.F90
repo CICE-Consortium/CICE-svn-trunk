@@ -21,7 +21,7 @@
 !
 ! !USES:
 !
-#if (defined CCSM) || (defined COUP_CAM)
+#if (defined CCSM) || (defined SEQ_MCT)
       use shr_const_mod
 #endif
       use ice_kinds_mod
@@ -35,7 +35,7 @@
       ! physical constants
       !-----------------------------------------------------------------
 
-#if (defined CCSM) || (defined COUP_CAM)
+#if (defined CCSM) || (defined SEQ_MCT)
       real (kind=dbl_kind), parameter :: &
          pi        = SHR_CONST_PI    ,&! pi
          gravit    = SHR_CONST_G     ,&! gravitational acceleration (m/s^2)

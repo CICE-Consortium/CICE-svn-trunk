@@ -28,10 +28,6 @@
       use ice_communicate, only: my_task, master_task
       use ice_domain_size
       use ice_constants
-#ifdef COUP_CAM
-      use time_manager, only: get_nstep, get_step_size, &
-                              start_ymd, nelapse
-#endif
 !
 !EOP
 !
@@ -87,7 +83,7 @@
           atm_data_type,   atm_data_dir,  precip_units, &
           sss_data_type,   sst_data_type, ocn_data_dir, &
           oceanmixed_file, restore_sst,   trestore 
-      use ice_grid, only: grid_file, kmt_file, landfrac_file, grid_type, &
+      use ice_grid, only: grid_file, kmt_file, grid_type, &
           column_lat, column_lon
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
@@ -116,7 +112,7 @@
         histfreq,       hist_avg,        history_dir,   history_file, &
         histfreq_n,     dumpfreq,        dumpfreq_n,    restart_file, &
         restart,        restart_dir,     pointer_file,  ice_ic, &
-        grid_type,      grid_file,       kmt_file,      landfrac_file, &
+        grid_type,      grid_file,       kmt_file,      &
         column_lat,     column_lon,      kitd,           kcatbound, &
         kdyn,           ndyn_dt,         ndte,          evp_damping, &
         yield_curve,    advection, &
@@ -165,7 +161,6 @@
       grid_type    = 'rectangular'   ! define rectangular grid internally
       grid_file    = 'unknown_grid_file'
       kmt_file     = 'unknown_kmt_file'
-      landfrac_file= 'lndfrac.seq.cam.da'
       column_lat   = 75.0_dbl_kind  !arbitrary polar latitude
       column_lon   = 170.0_dbl_kind !arbitrary polar longitude
 
@@ -251,18 +246,6 @@
       if (histfreq == '1') hist_avg = .false. ! potential conflict
       if (days_per_year /= 365) shortwave = 'default' ! definite conflict
 
-#ifdef COUP_CAM
-      if (runtype == "continue") then
-         restart = .true.
-      else
-         restart = .false.
-      endif
-
-      days_per_year = 365                     ! potential conflict
-      year_init = 0                           ! potential conflict
-      history_file = trim(runid)//"_iceh"
-#endif
-
       call broadcast_scalar(days_per_year,      master_task)
       call broadcast_scalar(year_init,          master_task)
       call broadcast_scalar(istep0,             master_task)
@@ -288,7 +271,6 @@
       call broadcast_scalar(grid_type,          master_task)
       call broadcast_scalar(grid_file,          master_task)
       call broadcast_scalar(kmt_file,           master_task)
-      call broadcast_scalar(landfrac_file,      master_task)
       call broadcast_scalar(kitd,               master_task)
       call broadcast_scalar(kcatbound,          master_task)
       call broadcast_scalar(kdyn,               master_task)

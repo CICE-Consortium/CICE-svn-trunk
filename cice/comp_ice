@@ -96,6 +96,7 @@ cd $OBJDIR
 
 ### List of source code directories (in order of importance).
 cat >! Filepath << EOF
+$SRCDIR/drivers/cice4
 $SRCDIR/source
 $SRCDIR/$COMMDIR
 $SRCDIR/$SHRDIR
