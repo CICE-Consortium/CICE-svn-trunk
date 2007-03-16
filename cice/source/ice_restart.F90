@@ -97,7 +97,7 @@
           i, j, k, n, it, iblk, & ! counting indices
           iyear, imonth, iday     ! year, month, day
 
-      character(len=80) :: filename
+      character(len=char_len_long) :: filename
 
       logical (kind=log_kind) :: diag
 
@@ -114,7 +114,7 @@
       ! write pointer (path/file)
       if (my_task == master_task) then
         open(nu_rst_pointer,file=pointer_file)
-        write(nu_rst_pointer,'(a80)') filename
+        write(nu_rst_pointer,'(a)') filename
         close(nu_rst_pointer)
       endif
 
@@ -250,7 +250,7 @@
       integer (kind=int_kind) :: &
          i, j, k, n, it, iblk ! counting indices
 
-      character(len=80) :: &
+      character(len=char_len_long) :: &
          filename, filename0
 
       logical (kind=log_kind) :: &
