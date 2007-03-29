@@ -1,37 +1,36 @@
 #==============================================================================
-# Makefile macros for "bluesky," an NCAR IBM
+# Makefile macros for "coyote," a "clustermatic" Linux cluster at LANL
 #==============================================================================
 
-INCLDIR    := -I. -I/usr/local/include -I/usr/include \
-                  -I/usr/lpp/ppe.poe/include
-SLIBS      := -L /usr/local/lib32/r4i4
+INCLDIR    := -I.
+SLIBS      := 
 ULIBS      := 
-CPP        := /lib/cpp
-CPPFLAGS   := -P 
-CPPDEFS    := -DAIX
+CPP        := /usr/bin/cpp
+CPPFLAGS   := -P -traditional
+CPPDEFS    := -DLINUX -DPAROPT
 CFLAGS     := -c -O2
-FIXEDFLAGS := -qsuffix=f=f   -qfixed=132
-FREEFLAGS  := -qsuffix=f=f90 -qfree=f90
-
-ifeq ($(COMMDIR), mpi)
-  FC         := mpxlf90_r
-else
-  FC         := xlf90
-endif
-
-FFLAGS     := -c -O3 -qstrict -Q -qmaxmem=-1 -qrealsize=8  \
-              -qarch=auto -qtune=auto 
+FIXEDFLAGS := -132
+FREEFLAGS  := 
+FC         := ifort
+FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl 
 MOD_SUFFIX := mod
 LD         := $(FC)
-LDFLAGS    := 
+LDFLAGS    := $(FFLAGS) -v
 
     CPPDEFS :=  $(CPPDEFS) -DNXGLOB=$(NXGLOB) -DNYGLOB=$(NYGLOB) \
                 -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS)
 #   CPPDEFS :=  $(CPPDEFS) -DAOMIP
+#   CPPDEFS :=  $(CPPDEFS)  -DAOMIP
+
+ifeq ($(COMMDIR), mpi)
+   INCLDIR :=  $(INCLDIR) -I$(MPI_ROOT)/include
+   SLIBS   :=  $(SLIBS) -L$(MPI_ROOT)/lib64 -lmpi
+endif
 
 ifeq ($(NETCDF), yes)
    CPPDEFS :=  $(CPPDEFS) -Dnetcdf
-   SLIBS   :=  $(SLIBS) -lnetcdf
+   INCLDIR := $(INCLDIR) -I/usr/projects/climate/maltrud/local/include 
+   SLIBS   := $(SLIBS) -L/usr/projects/climate/maltrud/local/lib -lnetcdf
 endif
 
 ifeq ($(USE_ESMF), yes)

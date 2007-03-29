@@ -6,7 +6,7 @@
 !
 
 !
-! Output files: netCDF data, Fortran unformatted dumps
+! Output files: netCDF or binary data, Fortran unformatted dumps
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
@@ -20,6 +20,7 @@
 !           Added ice_present, aicen, vicen; removed aice1...10, vice1...1.
 !           Added histfreq_n and histfreq='h' options, removed histfreq='w'
 !           Converted to free source form (F90)
+!           Added option for binary output instead of netCDF
 !
 ! !INTERFACE:
 !
@@ -1318,7 +1319,11 @@
       ! write netCDF file
       !---------------------------------------------------------------
 
-        call icecdf         
+#ifdef netcdf
+        call icecdf         ! netcdf output
+#else
+        call icebin         ! binary output
+#endif
 
       !---------------------------------------------------------------
       ! reset to zero
@@ -1404,7 +1409,9 @@
 !
 !EOP
 !
+#ifdef netcdf
       include "netcdf.inc"
+#endif
 
       integer (kind=int_kind) :: i,j,n, &
          ncid,status,imtid,jmtid,timid,varid, &
@@ -1440,65 +1447,13 @@
       TYPE(req_attributes), dimension(nvar) :: var
       TYPE(coord_attributes), dimension(ncoord) :: coord_var
 
+#ifdef netcdf
+
       if (my_task == master_task) then
 
         ltime=time/int(secday)
 
-        iyear = nyr + year_init - 1 ! set year_init=1 in ice_in to get iyear=nyr
-        imonth = month
-        iday = mday
-
-        ! construct filename
-        if (write_ic) then
-           write(ncfile,'(a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)')  &
-              incond_file(1:lenstr(incond_file)),iyear,'-', &
-              imonth,'-',iday,'-',sec,'.nc'
-        else
-
-         if (hist_avg) then
-          if (histfreq.eq.'h'.or.histfreq.eq.'H') then
-           ! do nothing
-          elseif (new_year) then
-           iyear = iyear - 1
-           imonth = 12
-           iday = daymo(imonth)
-          elseif (new_month) then
-           imonth = month - 1
-           iday = daymo(imonth)
-          elseif (new_day) then
-           iday = iday - 1
-          endif
-         endif
-
-         if (histfreq == '1') then ! instantaneous, write every dt
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)')  &
-            history_file(1:lenstr(history_file)),'_inst.', &
-             iyear,'-',imonth,'-',iday,'-',sec,'.nc'
-
-         elseif (hist_avg) then    ! write averaged data
-
-          if (histfreq.eq.'d'.or.histfreq.eq.'D') then     ! daily
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)')  &
-            history_file(1:lenstr(history_file)), &
-             '.',iyear,'-',imonth,'-',iday,'.nc'
-          elseif (histfreq.eq.'h'.or.histfreq.eq.'H') then ! hourly
-           write(ncfile,'(a,a,i2.2,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)')  &
-            history_file(1:lenstr(history_file)),'_',histfreq_n,'h.', &
-             iyear,'-',imonth,'-',iday,'-',sec,'.nc'
-          elseif (histfreq.eq.'m'.or.histfreq.eq.'M') then ! monthly
-           write(ncfile,'(a,a,i4.4,a,i2.2,a)')  &
-            history_file(1:lenstr(history_file)),'.',iyear,'-',imonth,'.nc'
-          elseif (histfreq.eq.'y'.or.histfreq.eq.'Y') then ! yearly
-           write(ncfile,'(a,a,i4.4,a)') &
-            history_file(1:lenstr(history_file)),'.', iyear,'.nc'
-          endif
-
-         else                     ! instantaneous with histfreq > dt
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)')  &
-            history_file(1:lenstr(history_file)),'_inst.', &
-             iyear,'-',imonth,'-',iday,'-',sec,'.nc'
-         endif
-        endif
+        call construct_filename(ncfile,'nc')
 
         ! add local directory path name to ncfile
         if (write_ic) then
@@ -2003,9 +1958,12 @@
          write(nu_diag,*) 'Finished writing ',trim(ncfile)
       endif
 
+#endif
+
       end subroutine icecdf
 
 !=======================================================================
+#ifdef netcdf
 !
 !BOP
 !
@@ -2044,6 +2002,231 @@
       endif
 
       end subroutine nf_stat_check
+
+#endif
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: icebin - write binary history file
+! This routine writes fewer grid variables compared with the netcdf
+! version, to reduce file size.  Grid variables can be obtained from
+! the original grid input files.
+!
+! !INTERFACE:
+!
+      subroutine icebin
+!
+! !DESCRIPTION:
+!
+! write binary history file
+!
+! !REVISION HISTORY:
+!
+! authors:   E.C.Hunke, LANL
+!
+! !USES:
+!
+      use ice_gather_scatter
+      use ice_domain_size
+      use ice_constants
+      use ice_grid
+      use ice_restart, only: lenstr, runid
+      use ice_itd, only: c_hi_range
+      use ice_calendar, only: write_ic, dayyr, histfreq
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) :: i,j,n,nrec,nbits
+      character (char_len) :: title
+      character (char_len_long) :: ncfile, hdrfile
+
+      integer (kind=int_kind) :: icategory,i_aice
+
+      character (char_len) :: current_date,current_time
+      character (len=16) :: c_aice
+      logical (kind=log_kind) :: dbug
+
+      dbug = .false.
+
+      if (my_task == master_task) then
+
+        call construct_filename(ncfile,'da')
+
+        ! add local directory path name to ncfile
+        if (write_ic) then
+          ncfile = trim(incond_dir)//ncfile
+        else
+          ncfile = trim(history_dir)//ncfile
+        endif
+        hdrfile = trim(ncfile)//'.hdr'
+
+        !-----------------------------------------------------------------
+        ! create history files
+        !-----------------------------------------------------------------
+        nbits = 32 ! single precision
+        call ice_open(nu_history, ncfile, nbits) ! direct access
+        open(nu_hdr,file=hdrfile,form='formatted',status='unknown') ! ascii
+
+!echmod call ice_write(nu_history, nrec, work, rda8 or ida4, dbug)
+
+        title  = 'sea ice model: Community Ice Code (CICE)'
+        write (nu_hdr, 999) 'source',title,' '
+
+        write (nu_hdr, 999) 'file name contains model date',trim(ncfile),' '
+#ifdef CCSM
+        write (nu_hdr, 999) 'runid',runid,' '
+#endif
+        write (nu_hdr, 999) 'calendar','noleap',' '
+        write (title,'(a,i3,a)') 'All years have exactly ',int(dayyr),' days'
+        write (nu_hdr, 999) 'comment',title,' '
+        write (nu_hdr, 999) 'conventions','CICE',' '
+        write (nu_hdr, 997) 'missing_value',spval
+        write (nu_hdr, 997) '_FillValue',spval
+
+        call date_and_time(date=current_date, time=current_time)
+        write (nu_hdr,1000) current_date(1:4), current_date(5:6), &
+                                current_date(7:8), current_time(1:2), &
+                                current_time(3:4), current_time(5:8)
+        write (nu_hdr, *  ) ' '
+        write (nu_hdr, *  ) 'Grid size:'
+        write (nu_hdr, 998) '  ni',nx_global
+        write (nu_hdr, 998) '  nj',ny_global
+
+        write (nu_hdr, *  ) 'Grid variables: (left column = nrec)'
+        nrec = 1
+        write (nu_hdr, 996) nrec,'tarea','area of T grid cells','m^2'
+        write (nu_hdr, *  ) 'History variables: (left column = nrec)'
+      endif  ! my_task = master_task
+      call ice_write(nu_history, nrec, tarea, 'rda4', dbug)
+
+      do n=1,avgsiz
+        if (iout(n)) then
+          nrec = nrec + 1
+          if (my_task == master_task) then
+            write (nu_hdr, 996) nrec,trim(vname(n)),trim(vdesc(n)),trim(vunit(n))
+
+            ! Append ice thickness range to aicen comments
+            c_aice = TRIM(vname(n))
+            i_aice = lenstr(c_aice)
+            if (c_aice(1:4) == 'aice' .and. i_aice > 4 ) then
+              if (i_aice == 5) then         ! categories 1-9
+                read(c_aice(i_aice:i_aice), '(i1)') icategory
+              else                          ! categories > 9
+                read(c_aice(i_aice-1:i_aice), '(i2)') icategory
+              endif
+              vcomment(n) = 'Ice range: '//c_hi_range(icategory)
+            endif
+            write (nu_hdr, 995) nrec,trim(vname(n)),trim(vcomment(n))
+
+            if (histfreq == '1'     .or. .not. hist_avg &
+                .or. n==n_divu      .or. n==n_shear     &  ! snapshots
+                .or. n==n_sig1      .or. n==n_sig2 .or. n==n_trsig &
+                .or. n==n_mlt_onset .or. n==n_frz_onset &
+                .or. n==n_hisnap    .or. n==n_aisnap) then
+               write (nu_hdr, 996) nrec,trim(vname(n)),'time_rep','instantaneous'
+            else
+               write (nu_hdr, 996) nrec,trim(vname(n)),'time_rep','averaged'
+            endif
+          endif
+
+          call ice_write(nu_history, nrec, aa(:,:,n,:), 'rda4', dbug)
+
+        endif
+      enddo
+
+995     format(i3,2x,a,' comment: ',a)
+996     format(i3,2x,a,': ',a,',',2x,a)
+997     format(a,': ',es13.6)
+998     format(a,': ',i6)
+999     format(a,': ',a,2x,a)
+1000    format('This dataset was created on ', &
+                a,'-',a,'-',a,' at ',a,':',a,':',a)
+
+      if (my_task == master_task) then
+        close (nu_hdr)     ! header file
+        close (nu_history) ! data file
+        write (nu_diag,*) ' '
+        write (nu_diag,*) 'Finished writing ',trim(ncfile)
+      endif
+
+      end subroutine icebin
+
+!=======================================================================
+
+      subroutine construct_filename(ncfile,suffix)
+
+      use ice_calendar, only: time, sec, idate, nyr, month, daymo,  &
+                              mday, write_ic, histfreq, histfreq_n, &
+                              year_init, new_year, new_month, new_day, &
+                              dayyr
+      use ice_restart, only: lenstr
+
+      character (char_len_long), intent(inout) :: ncfile
+      character (len=2), intent(in) :: suffix
+
+      integer (kind=int_kind) :: iyear, imonth, iday
+
+        iyear = nyr + year_init - 1 ! set year_init=1 in ice_in to get iyear=nyr
+        imonth = month
+        iday = mday
+
+        ! construct filename
+        if (write_ic) then
+           write(ncfile,'(a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
+              incond_file(1:lenstr(incond_file)),iyear,'-', &
+              imonth,'-',iday,'-',sec,'.',suffix
+        else
+
+         if (hist_avg) then
+          if (histfreq.eq.'h'.or.histfreq.eq.'H') then
+           ! do nothing
+          elseif (new_year) then
+           iyear = iyear - 1
+           imonth = 12
+           iday = daymo(imonth)
+          elseif (new_month) then
+           imonth = month - 1
+           iday = daymo(imonth)
+          elseif (new_day) then
+           iday = iday - 1
+          endif
+         endif
+
+         if (histfreq == '1') then ! instantaneous, write every dt
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
+            history_file(1:lenstr(history_file)),'_inst.', &
+             iyear,'-',imonth,'-',iday,'-',sec,'.',suffix
+
+         elseif (hist_avg) then    ! write averaged data
+
+          if (histfreq.eq.'d'.or.histfreq.eq.'D') then     ! daily
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,a)')  &
+            history_file(1:lenstr(history_file)), &
+             '.',iyear,'-',imonth,'-',iday,'.',suffix
+          elseif (histfreq.eq.'h'.or.histfreq.eq.'H') then ! hourly
+           write(ncfile,'(a,a,i2.2,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
+            history_file(1:lenstr(history_file)),'_',histfreq_n,'h.', &
+             iyear,'-',imonth,'-',iday,'-',sec,'.',suffix
+          elseif (histfreq.eq.'m'.or.histfreq.eq.'M') then ! monthly
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,a)')  &
+            history_file(1:lenstr(history_file)),'.', &
+             iyear,'-',imonth,'.',suffix
+          elseif (histfreq.eq.'y'.or.histfreq.eq.'Y') then ! yearly
+           write(ncfile,'(a,a,i4.4,a,a)') &
+            history_file(1:lenstr(history_file)),'.', iyear,'.',suffix
+          endif
+
+         else                     ! instantaneous with histfreq > dt
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
+            history_file(1:lenstr(history_file)),'_inst.', &
+             iyear,'-',imonth,'-',iday,'-',sec,'.',suffix
+         endif
+        endif
+
+      end subroutine construct_filename
 
 !=======================================================================
 

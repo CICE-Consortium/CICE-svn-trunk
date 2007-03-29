@@ -4,8 +4,8 @@
 #        code by 25% (or more).
 #==============================================================================
 
-INCLDIR    := -I.  -I/usr/projects/climate/maltrud/local/include 
-SLIBS      := -L /usr/projects/climate/maltrud/local/lib -lnetcdf
+INCLDIR    := -I.
+SLIBS      := 
 ULIBS      := 
 CPP        := /usr/bin/cpp
 CPPFLAGS   := -P -traditional
@@ -17,7 +17,8 @@ FC         := ifort
 FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl 
 #FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -g
 #FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl -mp -g
-#FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB
+#FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB -g
+#FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB -g
 MOD_SUFFIX := mod
 LD         := $(FC)
 LDFLAGS    := $(FFLAGS) -v
@@ -25,9 +26,16 @@ LDFLAGS    := $(FFLAGS) -v
     CPPDEFS :=  $(CPPDEFS) -DNXGLOB=$(NXGLOB) -DNYGLOB=$(NYGLOB) \
                 -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS)
 #   CPPDEFS :=  $(CPPDEFS) -DAOMIP
+#   CPPDEFS :=  $(CPPDEFS)  -DAOMIP
 
 ifeq ($(COMMDIR), mpi)
    SLIBS   :=  $(SLIBS) -lmpi
+endif
+
+ifeq ($(NETCDF), yes)
+   CPPDEFS :=  $(CPPDEFS) -Dnetcdf
+   INCLDIR := $(INCLDIR) -I/usr/projects/climate/maltrud/local/include 
+   SLIBS   := $(SLIBS) -L/usr/projects/climate/maltrud/local/lib -lnetcdf
 endif
 
 ifeq ($(USE_ESMF), yes)

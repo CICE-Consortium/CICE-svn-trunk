@@ -99,10 +99,10 @@
       character(char_len_long) :: & 
          atm_data_dir , & ! top directory for atmospheric data
          ocn_data_dir , & ! top directory for ocean data
-         oceanmixed_file  ! netCDF file name for ocean forcing data
+         oceanmixed_file  ! file name for ocean forcing data
 
       integer (kind=int_kind), parameter :: & 
-         nfld = 8    ! number of fields to search for in netCDF file
+         nfld = 8    ! number of fields to search for in forcing file
 
       real (kind=dbl_kind), &
        dimension (nx_block,ny_block,max_blocks,nfld,12) :: & 
@@ -2167,10 +2167,13 @@
       use ice_gather_scatter
       use ice_exit
       use ice_work, only: work_g1, work1
+      use ice_read_write
 #ifdef CCSM
       use shr_sys_mod, only : shr_sys_flush
 #endif
+#ifdef netcdf
       include "netcdf.inc"
+#endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -2179,7 +2182,9 @@
       integer (kind=int_kind) :: & 
         i, j, &
         n   , & ! field index
-        m       ! month index
+        m   , & ! month index
+        nrec, & ! record number for direct access
+        nbits
 
       character(len=16) :: &
         vname(nfld) ! variable names to search for on netCDF file
@@ -2213,11 +2218,28 @@
          sst_file = trim(ocn_data_dir)//oceanmixed_file ! not just sst
 
         !---------------------------------------------------------------
-        ! Read in ocean forcing data from an existing local netCDF file
+        ! Read in ocean forcing data from an existing file
         !---------------------------------------------------------------
         write (nu_diag,*) 'ocean mixed layer forcing data file = ', &
                            sst_file
 
+      endif ! master_task
+
+#ifndef netcdf
+      nbits = 64
+      call ice_open (nu_forcing, sst_file, nbits)
+
+      nrec = 0
+      do n=1,nfld
+         do m=1,12
+            nrec = nrec + 1
+            call ice_read (nu_forcing, nrec, work1, 'rda8', dbug)
+            ocn_frc_m(:,:,:,n,m) = work1(:,:,:)
+         enddo               ! month loop
+      enddo               ! field loop
+      close (nu_forcing)
+#else
+      if (my_task == master_task) then
         status = nf_open(sst_file, NF_NOWRITE, fid)
         if (status /= NF_NOERR) then
           call abort_ice ('ice: no netCDF file with ocn forcing data')
@@ -2289,6 +2311,8 @@
         status = nf_close(fid)
         deallocate (work_g1)
       endif
+
+#endif
 
       end subroutine ocn_data_ncar_init
 

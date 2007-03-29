@@ -22,8 +22,8 @@
 #  -qinitauto=...  => initializes automatic variables
 #===============================================================================
 
-INCLDIR    := -I. -I/site/netcdf350_64/include -I/usr/include -I/usr/lpp/ppe.poe/include
-SLIBS      := -L /site/netcdf350_64/lib  -l netcdf
+INCLDIR    := -I. -I/usr/include -I/usr/lpp/ppe.poe/include
+SLIBS      := 
 ULIBS      := 
 CPP        := /lib/cpp
 CPPFLAGS   := -P
@@ -44,6 +44,12 @@ LDFLAGS    := -q64
 
 ifeq ($(COMMDIR), mpi)
    SLIBS   :=  $(SLIBS) -lmpi
+endif
+
+ifeq ($(NETCDF), yes)
+   CPPDEFS := $(CPPDEFS) -Dnetcdf
+   INCLDIR := $(INCLDIR) -I/site/netcdf350_64/include 
+   SLIBS   := $(SLIBS) -L/site/netcdf350_64/lib -lnetcdf
 endif
 
 ifeq ($(USE_ESMF), yes)

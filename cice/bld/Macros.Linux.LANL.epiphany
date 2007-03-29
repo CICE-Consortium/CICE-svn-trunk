@@ -1,10 +1,11 @@
 #==============================================================================
 # Makefile macros for "epiphany," a LANL cluster running Linux
+# NOTE:  uncomment underflow code in ice_dyn_evp.F (-ftz does not work???)
 #==============================================================================
 
 INCLDIR    := -I. -I/usr/local/include -I/usr/include \
               -I/usr/local/mpi/include
-SLIBS      := -L/usr/local/lib -L/usr/local/mpi/lib -lnetcdf \
+SLIBS      := -L/usr/local/lib -L/usr/local/mpi/lib \
               -L/usr/local/lf9562/lib
               
 ULIBS      := 
@@ -26,6 +27,11 @@ LDFLAGS    := -v -O -static -convert big_endian -assume byterecl
 
 ifeq ($(COMMDIR), mpi)
    SLIBS   :=  $(SLIBS) -lmpich
+endif
+
+ifeq ($(NETCDF), yes)
+   CPPDEFS := $(CPPDEFS) -Dnetcdf
+   SLIBS   := $(SLIBS) -lnetcdf
 endif
 
 ifeq ($(USE_ESMF), yes)
