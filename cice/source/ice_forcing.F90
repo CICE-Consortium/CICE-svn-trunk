@@ -2171,7 +2171,7 @@
 #ifdef CCSM
       use shr_sys_mod, only : shr_sys_flush
 #endif
-#ifdef netcdf
+#ifdef ncdf
       include "netcdf.inc"
 #endif
 !
@@ -2225,7 +2225,7 @@
 
       endif ! master_task
 
-#ifndef netcdf
+#ifndef ncdf
       nbits = 64
       call ice_open (nu_forcing, sst_file, nbits)
 

@@ -33,7 +33,7 @@ ifeq ($(COMMDIR), mpi)
 endif
 
 ifeq ($(NETCDF), yes)
-   CPPDEFS :=  $(CPPDEFS) -Dnetcdf
+   CPPDEFS :=  $(CPPDEFS) -Dncdf
    INCLDIR := $(INCLDIR) -I/usr/projects/climate/maltrud/local/include 
    SLIBS   := $(SLIBS) -L/usr/projects/climate/maltrud/local/lib -lnetcdf
 endif

@@ -31,7 +31,7 @@ ifeq ($(COMMDIR), mpi)
 endif
 
 ifeq ($(NETCDF), yes)
-   CPPDEFS := $(CPPDEFS) -Dnetcdf
+   CPPDEFS := $(CPPDEFS) -Dncdf
    INCLDIR := $(INCLDIR) -I/apps/netcdf/prod/x1_r4/include -p/apps/netcdf/prod/x1_r4/include
    SLIBS   := $(SLIBS) -L/apps/netcdf/prod/x1_r4/lib -lnetcdf 
 endif

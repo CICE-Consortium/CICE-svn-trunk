@@ -30,7 +30,7 @@ LDFLAGS    :=
 #   CPPDEFS :=  $(CPPDEFS) -DAOMIP
 
 ifeq ($(NETCDF), yes)
-   CPPDEFS :=  $(CPPDEFS) -Dnetcdf
+   CPPDEFS :=  $(CPPDEFS) -Dncdf
    SLIBS   :=  $(SLIBS) -lnetcdf
 endif
 
