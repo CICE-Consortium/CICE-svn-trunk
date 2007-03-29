@@ -1319,7 +1319,7 @@
       ! write netCDF file
       !---------------------------------------------------------------
 
-#ifdef netcdf
+#ifdef ncdf
         call icecdf         ! netcdf output
 #else
         call icebin         ! binary output
@@ -1409,7 +1409,7 @@
 !
 !EOP
 !
-#ifdef netcdf
+#ifdef ncdf
       include "netcdf.inc"
 #endif
 
@@ -1447,7 +1447,7 @@
       TYPE(req_attributes), dimension(nvar) :: var
       TYPE(coord_attributes), dimension(ncoord) :: coord_var
 
-#ifdef netcdf
+#ifdef ncdf
 
       if (my_task == master_task) then
 
@@ -1963,7 +1963,7 @@
       end subroutine icecdf
 
 !=======================================================================
-#ifdef netcdf
+#ifdef ncdf
 !
 !BOP
 !

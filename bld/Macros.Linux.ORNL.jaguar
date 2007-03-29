@@ -29,7 +29,7 @@ ifeq ($(COMMDIR), mpi)
 endif
 
 ifeq ($(NETCDF), yes)
-   CPPDEFS := $(CPPDEFS) -Dnetcdf
+   CPPDEFS := $(CPPDEFS) -Dncdf
    INCLDIR := $(INCLDIR) -I/apps/netcdf/prod/jaguar/include 
    SLIBS   := $(SLIBS) -L/apps/netcdf/prod/jaguar/lib -lnetcdf 
 endif

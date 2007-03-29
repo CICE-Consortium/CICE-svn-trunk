@@ -30,7 +30,7 @@ ifeq ($(COMMDIR), mpi)
 endif
 
 ifeq ($(NETCDF), yes)
-   CPPDEFS := $(CPPDEFS) -Dnetcdf
+   CPPDEFS := $(CPPDEFS) -Dncdf
    SLIBS   := $(SLIBS) -lnetcdf
 endif
 
