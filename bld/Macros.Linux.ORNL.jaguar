@@ -2,10 +2,8 @@
 # Makefile macros for "jaguar," an ORNL Cray XT3 running Linux
 #==============================================================================
 
-#INCLDIR    := -I. -I/scratch/levesque/BM/ORNL/pop/netcdf-xt3-3.5.1/include 
-INCLDIR    := -I. -I/apps/netcdf/prod/jaguar/include 
-#SLIBS      := -L/scratch/levesque/BM/ORNL/pop/netcdf-xt3-3.5.1/lib -lnetcdf 
-SLIBS      := -L/apps/netcdf/prod/jaguar/lib -lnetcdf 
+INCLDIR    := -I.
+SLIBS      := 
 ULIBS      := 
 CPP        := /usr/bin/cpp
 CPPFLAGS   := -P -traditional-cpp -DPOSIX
@@ -28,6 +26,12 @@ LDFLAGS    :=
 
 ifeq ($(COMMDIR), mpi)
 #   SLIBS   :=  $(SLIBS) -lmpich
+endif
+
+ifeq ($(NETCDF), yes)
+   CPPDEFS := $(CPPDEFS) -Dnetcdf
+   INCLDIR := $(INCLDIR) -I/apps/netcdf/prod/jaguar/include 
+   SLIBS   := $(SLIBS) -L/apps/netcdf/prod/jaguar/lib -lnetcdf 
 endif
 
 ifeq ($(USE_ESMF), yes)

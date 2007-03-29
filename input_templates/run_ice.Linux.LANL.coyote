@@ -1,0 +1,18 @@
+#!/bin/tcsh 
+##BSUB -q largeq
+#BSUB -q devq
+#BSUB -W 1:00
+#BSUB -n 4
+#BSUB -J cice.v4.0
+
+module load openmpi
+limit stacksize unlimited
+     
+set  stamp   = `date -u '+%y%m%d%H%M%S'`
+setenv ICE_LOG_FILE ice.log.${stamp}
+
+cd /scratch2/eclare/CICE.v4.0/rundir4
+mpirun -np 4 ./cice  >&! $ICE_LOG_FILE
+
+exit 0
+

@@ -4,8 +4,8 @@
 # OPENMP is turned OFF
 #==============================================================================
 
-INCLDIR    := -I/apps/netcdf/prod/x1_r4/include -p/apps/netcdf/prod/x1_r4/include
-SLIBS      := -L/apps/netcdf/prod/x1_r4/lib -lnetcdf 
+INCLDIR    := 
+SLIBS      := 
 ULIBS      := 
 CPP        := cpp
 CPPFLAGS   := 
@@ -28,6 +28,12 @@ LDFLAGS    := -em -e0 -ev -xomp
 
 ifeq ($(COMMDIR), mpi)
    SLIBS   :=  $(SLIBS) -lmpi
+endif
+
+ifeq ($(NETCDF), yes)
+   CPPDEFS := $(CPPDEFS) -Dnetcdf
+   INCLDIR := $(INCLDIR) -I/apps/netcdf/prod/x1_r4/include -p/apps/netcdf/prod/x1_r4/include
+   SLIBS   := $(SLIBS) -L/apps/netcdf/prod/x1_r4/lib -lnetcdf 
 endif
 
 ifeq ($(USE_ESMF), yes)
