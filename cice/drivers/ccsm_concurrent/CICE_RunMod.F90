@@ -438,7 +438,9 @@
       ! Atmosphere boundary layer calculation; compute coefficients
       ! for sensible and latent heat fluxes.
       !
-      ! NOTE: The wind stress is computed here for later use.
+      ! NOTE: The wind stress is computed here for later use if 
+      !       calc_strair = .true.   Otherwise, the wind stress
+      !       components are set to the data values.
       !-----------------------------------------------------------------
 
             if (trim(atmbndy) == 'constant') then
@@ -463,6 +465,11 @@
                                         worka,          workb,          &
                                         lhcoef,         shcoef)
             endif ! atmbndy
+
+            if (.not.(calc_strair)) then
+               strairxn(:,:) = strax(:,:,iblk)
+               strairyn(:,:) = stray(:,:,iblk)
+            endif
 
       !-----------------------------------------------------------------
       ! Vertical thermodynamics: Heat conduction, growth and melting.

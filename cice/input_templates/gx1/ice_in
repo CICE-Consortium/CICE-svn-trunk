@@ -45,6 +45,7 @@
   , ycycle       = 20
   , atm_data_type= 'LYq'
   , atm_data_dir = '/scratch/eclare/DATA/gx1v3/LargeYeager/'
+  , calc_strair  = .true.
   , precip_units = 'mm_per_sec'
   , oceanmixed_ice = .true.
   , sss_data_type= 'default'

@@ -104,6 +104,9 @@
          zlvl    , & ! atm level height (m)
          uatm    , & ! wind velocity components (m/s)
          vatm    , &
+         wind    , & ! wind speed (m/s)
+         strax   , & ! wind stress components (N/m^2)
+         stray   , & ! 
          potT    , & ! air potential temperature  (K)
          Tair    , & ! air temperature  (K)
          Qa      , & ! specific humidity (kg/kg)
@@ -204,7 +207,6 @@
       !-----------------------------------------------------------------
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
-         wind    , & ! wind speed (m/s)
          rside   , & ! fraction of ice that melts laterally
          fsw     , & ! incoming shortwave radiation (W/m^2)
          coszen  , & ! cosine solar zenith angle, < 0 for sun below horizon 

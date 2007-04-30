@@ -631,14 +631,13 @@
       !-----------------------------------------------------------------
       ! prep to convert to U grid
       !-----------------------------------------------------------------
-          ! Factor of aice needed for correct treatment of free drift
-          strairx(i,j) = strairxT(i,j)*aice(i,j)
-          strairy(i,j) = strairyT(i,j)*aice(i,j)
+         ! Factor of aice needed for correct treatment of free drift
+         strairx(i,j) = strairxT(i,j)*aice(i,j)
+         strairy(i,j) = strairyT(i,j)*aice(i,j)
 
       !-----------------------------------------------------------------
       ! augmented mask (land + open ocean)
       !-----------------------------------------------------------------
-
          icetmask (i,j) = 0
 
       enddo
