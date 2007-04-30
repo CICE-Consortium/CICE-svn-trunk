@@ -45,6 +45,7 @@
   , ycycle       = 1
   , atm_data_type= 'ncar'
   , atm_data_dir = '/scratch/eclare/atm/gx3v2m/NCAR_bulk/'
+  , calc_strair  = .true.
   , precip_units = 'mm_per_month'
   , oceanmixed_ice = .true.
   , sss_data_type= 'clim'

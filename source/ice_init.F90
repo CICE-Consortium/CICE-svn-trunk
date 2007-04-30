@@ -89,7 +89,7 @@
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, &
                                shortwave, albedo_type
-      use ice_atmo, only: atmbndy
+      use ice_atmo, only: atmbndy, calc_strair
       use ice_transport_driver, only: advection
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -119,7 +119,7 @@
         kstrength,      krdg_partic,     krdg_redist,   shortwave, &
         albicev,        albicei,         albsnowv,      albsnowi, &
         albedo_type,    atmbndy,         fyear_init,    ycycle , &
-        atm_data_type,  atm_data_dir,    precip_units, &
+        atm_data_type,  atm_data_dir,    calc_strair,   precip_units, &
         oceanmixed_ice, sss_data_type,   sst_data_type, &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore, &
         latpnt,         lonpnt,          dbug, &
@@ -187,6 +187,7 @@
       ycycle = 1                  ! number of years in forcing cycle
       atm_data_type   = 'default'
       atm_data_dir    = ' '
+      calc_strair     = .true.    ! calculate wind stress
       precip_units    = 'mks'     ! 'mm_per_month' or
                                   ! 'mm_per_sec' = 'mks' = kg/m^2 s
       oceanmixed_ice  = .false.   ! if true, use internal ocean mixed layer
@@ -243,6 +244,15 @@
          nu_diag = 6
       endif
 
+      if (trim(atm_data_type) == 'monthly' .and. calc_strair) then
+         if (my_task == master_task) &
+         write (nu_diag,*) &
+         'WARNING: Monthly atmospheric data chosen and calc_strair = T.'
+         write (nu_diag,*) &
+         'WARNING: Changing calc_strair to F.'
+         calc_strair = .false.
+      endif
+
       if (histfreq == '1') hist_avg = .false. ! potential conflict
       if (days_per_year /= 365) shortwave = 'default' ! definite conflict
 
@@ -293,6 +303,7 @@
       call broadcast_scalar(ycycle,             master_task)
       call broadcast_scalar(atm_data_type,      master_task)
       call broadcast_scalar(atm_data_dir,       master_task)
+      call broadcast_scalar(calc_strair,        master_task)
       call broadcast_scalar(precip_units,       master_task)
       call broadcast_scalar(oceanmixed_ice,     master_task)
       call broadcast_scalar(sss_data_type,      master_task)
@@ -424,6 +435,7 @@
          write(nu_diag,1020) ' ycycle                    = ', ycycle
          write(nu_diag,*)    ' atm_data_type             = ', &
                                trim(atm_data_type)
+         write(nu_diag,1010) ' calc_strair               = ', calc_strair
          if (trim(atm_data_type) /= 'default') then
             write(nu_diag,*) ' atm_data_dir              = ', &
                                trim(atm_data_dir)

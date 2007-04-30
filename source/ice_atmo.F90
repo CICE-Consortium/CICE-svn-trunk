@@ -33,6 +33,9 @@
       character (len=char_len) :: &
          atmbndy ! atmo boundary method, 'default' ('ccsm3') or 'constant'
 
+      logical (kind=log_kind) :: &
+         calc_strair ! if true, calculate wind stress components
+
 !=======================================================================
 
       contains
@@ -97,9 +100,12 @@
          Qa       , & ! specific humidity (kg/kg)
          rhoa         ! air density (kg/m^3)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout) :: &
          strx     , & ! x surface stress (N)
-         stry     , & ! y surface stress (N)
+         stry         ! y surface stress (N)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out) :: &
          Tref     , & ! reference height temperature  (K)
          Qref     , & ! reference height specific humidity (kg/kg)
          delt     , & ! potential T difference   (K)
@@ -113,7 +119,6 @@
          k     , & ! iteration index
          i, j  , & ! horizontal indices
          ij        ! combined ij index
-
 
       real (kind=dbl_kind) :: &
          TsfK  , & ! surface temperature in Kelvin (K)
@@ -177,8 +182,6 @@
 
       do j = 1, ny_block
       do i = 1, nx_block
-         strx(i,j) = c0
-         stry(i,j) = c0
          Tref(i,j) = c0
          Qref(i,j) = c0
          delt(i,j) = c0
@@ -299,6 +302,39 @@
          enddo                  ! ij
       enddo                     ! end iteration
 
+      if (calc_strair) then
+
+      ! initialize
+      do j = 1, ny_block
+      do i = 1, nx_block
+         strx(i,j) = c0
+         stry(i,j) = c0
+      enddo
+      enddo
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+
+      !------------------------------------------------------------
+      ! momentum flux
+      !------------------------------------------------------------
+      ! tau = rhoa(i,j) * ustar * ustar
+      ! strx = tau * uatm(i,j) / vmag
+      ! stry = tau * vatm(i,j) / vmag
+      !------------------------------------------------------------
+
+         tau = rhoa(i,j) * ustar(ij) * rd(ij) ! not the stress at zlvl(i,j)
+         strx(i,j) = tau * uatm(i,j)
+         stry(i,j) = tau * vatm(i,j)
+
+      enddo                     ! ij
+
+      endif                     ! calc_strair
+
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -315,18 +351,6 @@
 
          shcoef(i,j) = rhoa(i,j) * ustar(ij) * cp(ij) * rh(ij) + c1
          lhcoef(i,j) = rhoa(i,j) * ustar(ij) * Lheat  * re(ij)
-
-      !------------------------------------------------------------
-      ! momentum flux
-      !------------------------------------------------------------
-      ! tau = rhoa(i,j) * ustar * ustar
-      ! strx = tau * uatm(i,j) / vmag
-      ! stry = tau * vatm(i,j) / vmag
-      !------------------------------------------------------------
-
-         tau = rhoa(i,j) * ustar(ij) * rd(ij) ! not the stress at zlvl(i,j)
-         strx(i,j) = tau * uatm(i,j)
-         stry(i,j) = tau * vatm(i,j)
 
       !------------------------------------------------------------
       ! Compute diagnostics: 2m ref T & Q
@@ -393,9 +417,11 @@
          wind     , & ! wind speed (m/s)
          rhoa         ! air density (kg/m^3)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(inout):: &
          strx     , & ! x surface stress (N)
-         stry     , & ! y surface stress (N)
+         stry         ! y surface stress (N)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
          shcoef   , & ! transfer coefficient for sensible heat
          lhcoef       ! transfer coefficient for latent heat
 !
@@ -415,12 +441,40 @@
 
       do j = 1, ny_block
       do i = 1, nx_block
-         strx(i,j) = c0
-         stry(i,j) = c0
          shcoef(i,j) = c0
          lhcoef(i,j) = c0
       enddo
       enddo
+
+      if (calc_strair) then
+
+      do j = 1, ny_block
+      do i = 1, nx_block
+         strx(i,j) = c0
+         stry(i,j) = c0
+      enddo
+      enddo
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+
+      !------------------------------------------------------------
+      ! momentum flux
+      !------------------------------------------------------------
+
+         tau = rhoa(i,j) * 0.0012_dbl_kind * wind(i,j)
+!AOMIP         tau = rhoa(i,j) * (1.10_dbl_kind + c4*p01*wind(i,j)) &
+!AOMIP                         * wind(i,j) * p001
+         strx(i,j) = tau * uatm(i,j)
+         stry(i,j) = tau * vatm(i,j)
+
+      enddo                     ! ij
+
+      endif                     ! calc_strair
 
       !------------------------------------------------------------
       ! define variables that depend on surface type
@@ -445,16 +499,6 @@
 
          shcoef(i,j) = (1.20e-3_dbl_kind)*cp_air*rhoa(i,j)*wind(i,j)
          lhcoef(i,j) = (1.50e-3_dbl_kind)*Lheat *rhoa(i,j)*wind(i,j)
-
-      !------------------------------------------------------------
-      ! momentum flux
-      !------------------------------------------------------------
-
-         tau = rhoa(i,j) * 0.0012_dbl_kind * wind(i,j)
-!AOMIP         tau = rhoa(i,j) * (1.10_dbl_kind + c4*p01*wind(i,j)) &
-!AOMIP                         * wind(i,j) * p001
-         strx(i,j) = tau * uatm(i,j)
-         stry(i,j) = tau * vatm(i,j)
 
       enddo                     ! ij
 

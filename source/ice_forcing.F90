@@ -36,6 +36,7 @@
                               sec, mday, month, nyr, yday, daycal, dayyr, &
                               daymo, days_per_year
       use ice_fileunits
+      use ice_atmo, only: calc_strair
       use ice_exit
 !
 !EOP
@@ -53,6 +54,9 @@
          height_file, &
           uwind_file, &
           vwind_file, &
+           wind_file, &
+          strax_file, &
+          stray_file, &
            potT_file, &
            tair_file, &
           humid_file, &
@@ -82,6 +86,9 @@
            Tair_data, &
            uatm_data, &
            vatm_data, &
+           wind_data, &
+          strax_data, &
+          stray_data, &
              Qa_data, &
            rhoa_data, &
            potT_data, &
@@ -91,7 +98,7 @@
             sss_data
 
       character(char_len) :: & 
-         atm_data_type, & ! 'default', 'ncar', 'ecmwf', or 'LYq'
+         atm_data_type, & ! 'default', 'monthly', 'ncar', 'ecmwf', or 'LYq'
          sss_data_type, & ! 'default', 'clim', or 'ncar'
          sst_data_type, & ! 'default', 'clim', or 'ncar'
          precip_units     ! 'mm_per_month', 'mm_per_sec', 'mks'
@@ -169,6 +176,8 @@
          call ecmwf_files(fyear)    
       elseif (trim(atm_data_type) == 'LYq') then
          call LY_files(fyear)
+      elseif (trim(atm_data_type) == 'monthly') then
+         call monthly_files(fyear)
       endif
 
       end subroutine init_forcing_atmo
@@ -377,6 +386,8 @@
          call ecmwf_data
       elseif (trim(atm_data_type) == 'LYq') then
          call LY_data
+      elseif (trim(atm_data_type) == 'monthly') then
+         call monthly_data
 !     else    ! default values set in init_flux
       endif
 
@@ -399,6 +410,8 @@
                                rhoa  (:,:,iblk),   &
                                uatm  (:,:,iblk),   &
                                vatm  (:,:,iblk),   &
+                               strax (:,:,iblk),   &
+                               stray (:,:,iblk),   &
                                zlvl  (:,:,iblk),   &
                                wind  (:,:,iblk),   &
                                swvdr (:,:,iblk),   &
@@ -933,6 +946,7 @@
                                   frain,    fsnow,    &
                                   Qa,       rhoa,     &
                                   uatm,     vatm,     &
+                                  strax,    stray,    &
                                   zlvl,     wind,     &
                                   swvdr,    swvdf,    &
                                   swidr,    swidf,    &
@@ -970,8 +984,10 @@
          fsnow   , & ! snowfall rate (kg/m^2 s)
          Qa      , & ! specific humidity (kg/kg)
          rhoa    , & ! air density (kg/m^3)
-         uatm    , & ! wind speed (m/s)
+         uatm    , & ! wind velocity components (m/s)
          vatm    , &
+         strax   , & ! wind stress components (N/m^2)
+         stray   , &
          zlvl    , & ! atm level height (m)
          wind    , & ! wind speed (m/s)
          flw     , & ! incoming longwave radiation (W/m^2)
@@ -1048,6 +1064,8 @@
          enddo
 
       elseif (trim(atm_data_type) == 'ecmwf') then
+         do j = jlo, jhi
+         do i = ilo, ihi
 
       !-----------------------------------------------------------------
       ! The following assumes that the input Qa is really dew point temp
@@ -1069,6 +1087,9 @@
                   * (c1 + 0.275_dbl_kind*cldf(i,j))
 
       ! precip is in mm/month; converted to mks below
+
+         enddo
+         enddo
 
       elseif (trim(atm_data_type) == 'LYq') then
 
@@ -1102,7 +1123,6 @@
       do i = ilo, ihi
 
          zlvl(i,j) = c10
-         wind(i,j) = sqrt(uatm(i,j)**2 + vatm(i,j)**2)
          potT(i,j) = Tair(i,j)
 
         ! divide shortwave into spectral bands
@@ -1128,22 +1148,39 @@
             fsnow(i,j) = c0
         endif
 
+        if (calc_strair) then
+
+            wind(i,j) = sqrt(uatm(i,j)**2 + vatm(i,j)**2)
+
       !-----------------------------------------------------------------
-      ! rotate zonal/meridional vectors to local coordinates
-      ! Vector fields come in on T grid, but are oriented geographically
+      ! Rotate zonal/meridional vectors to local coordinates.
+      ! Velocity comes in on T grid, but is oriented geographically ---
       ! need to rotate to pop-grid FIRST using ANGLET
       ! then interpolate to the U-cell centers  (otherwise we
-      ! interpolate across the pole)
-      ! use ANGLET which is on the T grid !
-      ! atmo variables are needed in T cell centers in subroutine stability,
-      ! and are interpolated to the U grid later as necessary
+      ! interpolate across the pole).
+      ! Use ANGLET which is on the T grid !
+      ! Atmo variables are needed in T cell centers in subroutine 
+      ! atmo_boundary_layer, and are interpolated to the U grid later as 
+      ! necessary.
       !-----------------------------------------------------------------
-         workx      = uatm(i,j) ! wind velocity, m/s
-         worky      = vatm(i,j)
-         uatm (i,j) = workx*cos(ANGLET(i,j)) & ! convert to POP grid
-                    + worky*sin(ANGLET(i,j))   ! note uatm, vatm, wind
-         vatm (i,j) = worky*cos(ANGLET(i,j)) & !  are on the T-grid here
-                    - workx*sin(ANGLET(i,j))
+           workx      = uatm(i,j) ! wind velocity, m/s
+           worky      = vatm(i,j)
+           uatm (i,j) = workx*cos(ANGLET(i,j)) & ! convert to POP grid
+                      + worky*sin(ANGLET(i,j))   ! note uatm, vatm, wind
+           vatm (i,j) = worky*cos(ANGLET(i,j)) & !  are on the T-grid here
+                      - workx*sin(ANGLET(i,j))
+
+        else  ! strax, stray, wind are read from files
+
+           workx      = strax(i,j) ! wind stress
+           worky      = stray(i,j)
+           strax(i,j) = workx*cos(ANGLET(i,j)) & ! convert to POP grid
+                      + worky*sin(ANGLET(i,j))   ! note strax, stray, wind
+           stray(i,j) = worky*cos(ANGLET(i,j)) & !  are on the T-grid here
+                      - workx*sin(ANGLET(i,j))
+
+        endif                   ! calc_strair
+
       enddo                     ! i
       enddo                     ! j
 
@@ -1980,6 +2017,263 @@
       Qa = min(Qa, worka)
 
       end subroutine Qa_fixLY
+
+!=======================================================================
+! monthly forcing 
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: monthly_files - construct filenames for monthly data
+!
+! !INTERFACE:
+!
+      subroutine monthly_files (yr)
+!
+! !DESCRIPTION:
+!
+! Construct filenames based on the LANL naming conventions for NCAR data.
+! Edit for other directory structures or filenames.
+! Note: The year number in these filenames does not matter, because
+!       subroutine file_year will insert the correct year.
+!
+! !REVISION HISTORY:
+!
+! author: Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+           yr                   ! current forcing year
+!
+!EOP
+!
+      flw_file = &
+           trim(atm_data_dir)//'MONTHLY/cldf.omip.dat'
+
+      rain_file = &
+           trim(atm_data_dir)//'MONTHLY/prec.nmyr.dat'
+
+      tair_file = &
+           trim(atm_data_dir)//'MONTHLY/t_10.1996.dat'
+      call file_year(tair_file,yr)
+
+      humid_file = &
+           trim(atm_data_dir)//'MONTHLY/q_10.1996.dat'
+      call file_year(humid_file,yr)
+
+      ! stress/speed is used instead of wind components
+      strax_file = &
+           trim(atm_data_dir)//'MONTHLY/strx.1996.dat'
+      call file_year(strax_file,yr)
+
+      stray_file = &
+           trim(atm_data_dir)//'MONTHLY/stry.1996.dat'
+      call file_year(stray_file,yr)
+
+      wind_file = &
+           trim(atm_data_dir)//'MONTHLY/wind.1996.dat'
+      call file_year(wind_file,yr)
+
+      if (my_task == master_task) then
+         write (nu_diag,*) ' '
+         write (nu_diag,*) 'Forcing data year = ', fyear         
+         write (nu_diag,*) 'Atmospheric data files:'
+         write (nu_diag,*) trim(flw_file)
+         write (nu_diag,*) trim(rain_file)
+         write (nu_diag,*) trim(tair_file)
+         write (nu_diag,*) trim(humid_file)
+         write (nu_diag,*) trim(uwind_file)
+         write (nu_diag,*) trim(vwind_file)
+      endif                     ! master_task
+
+      end subroutine monthly_files
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: monthly_data - read monthly atmospheric data
+!
+! !INTERFACE:
+!
+      subroutine monthly_data
+!
+! !DESCRIPTION:
+!
+! !REVISION HISTORY:
+!
+! authors: same as module
+!
+! !USES:
+!
+      use ice_global_reductions
+      use ice_domain, only: nblocks, distrb_info
+      use ice_flux 
+      use ice_grid, only: hm, tlon, tlat, tmask, umask
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) :: & 
+          i, j        , &
+          imx,ixx,ipx , & ! record numbers for neighboring months
+          recnum      , & ! record number
+          maxrec      , & ! maximum record number
+          recslot     , & ! spline slot for current record
+          midmonth    , & ! middle day of month
+          dataloc     , & ! = 1 for data located in middle of time interval
+                          ! = 2 for date located at end of time interval
+          iblk            ! block index
+
+      real (kind=dbl_kind) :: &
+          sec6hr          , & ! number of seconds in 6 hours
+          vmin, vmax
+
+      logical (kind=log_kind) :: readm, read6
+
+    !-------------------------------------------------------------------
+    ! monthly data 
+    !
+    ! Assume that monthly data values are located in the middle of the 
+    ! month.
+    !-------------------------------------------------------------------
+
+      midmonth = 15  ! data is given on 15th of every month
+!      midmonth = fix(p5 * real(daymo(month)))  ! exact middle
+
+      ! Compute record numbers for surrounding months
+      maxrec = 12
+      imx  = mod(month+maxrec-2,maxrec) + 1
+      ipx  = mod(month,         maxrec) + 1
+      if (mday >= midmonth) imx = 99  ! other two points will be used
+      if (mday <  midmonth) ipx = 99
+
+      ! Determine whether interpolation will use values 1:2 or 2:3
+      ! recslot = 2 means we use values 1:2, with the current value (2)
+      !  in the second slot
+      ! recslot = 1 means we use values 2:3, with the current value (2)
+      !  in the first slot
+      recslot = 1                             ! latter half of month
+      if (mday < midmonth) recslot = 2        ! first half of month
+
+      ! Find interpolation coefficients
+      call interp_coeff_monthly (recslot)
+
+      ! Read 2 monthly values 
+      readm = .false.
+      if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
+
+      call read_clim_data (readm, 0, imx, month, ipx,  &
+             flw_file, cldf_data)
+      call read_clim_data (readm, 0, imx, month, ipx,  &
+             rain_file, fsnow_data)
+      call read_clim_data (readm, 0, imx, month, ipx,  &
+             tair_file, Tair_data)
+      call read_clim_data (readm, 0, imx, month, ipx,  &
+             humid_file, Qa_data)
+      call read_clim_data (readm, 0, imx, month, ipx,  &
+             wind_file, wind_data)
+      call read_clim_data (readm, 0, imx, month, ipx,  &
+             strax_file, strax_data)
+      call read_clim_data (readm, 0, imx, month, ipx,  &
+             stray_file, stray_data)
+
+      call interpolate_data (cldf_data, cldf)
+      call interpolate_data (fsnow_data, fsnow)  ! units mm/s = kg/m^2/s
+      call interpolate_data (Tair_data, Tair)
+      call interpolate_data (Qa_data, Qa)
+      call interpolate_data (wind_data, wind)
+      call interpolate_data (strax_data, strax)
+      call interpolate_data (stray_data, stray)
+
+      do iblk = 1, nblocks
+        call Qa_fixLY(nx_block,  ny_block, &
+                                 Tair (:,:,iblk), &
+                                 Qa   (:,:,iblk))
+
+        do j = 1, ny_block
+          do i = 1, nx_block
+            Qa   (i,j,iblk) = Qa   (i,j,iblk) * hm(i,j,iblk)
+            Tair (i,j,iblk) = Tair (i,j,iblk) * hm(i,j,iblk)
+            wind (i,j,iblk) = wind (i,j,iblk) * hm(i,j,iblk)
+            strax(i,j,iblk) = strax(i,j,iblk) * hm(i,j,iblk)
+            stray(i,j,iblk) = stray(i,j,iblk) * hm(i,j,iblk)
+          enddo
+        enddo
+
+      ! AOMIP
+      call compute_shortwave(nx_block,  ny_block, nghost, &
+                             TLON (:,:,iblk), &
+                             TLAT (:,:,iblk), &
+                             hm   (:,:,iblk), &
+                             Qa   (:,:,iblk), &
+                             cldf (:,:,iblk), &
+                             fsw  (:,:,iblk))
+
+      enddo  ! iblk
+
+      ! Save record number
+      oldrecnum = recnum
+
+         if (dbug) then
+           if (my_task == master_task) write (nu_diag,*) 'LY_bulk_data'
+           vmin = global_minval(fsw &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax = global_maxval(fsw &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'fsw',vmin,vmax 
+           vmin = global_minval(cldf &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax = global_maxval(cldf &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'cldf',vmin,vmax
+           vmin =global_minval(fsnow &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax =global_maxval(fsnow &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'fsnow',vmin,vmax
+           vmin = global_minval(Tair &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax = global_maxval(Tair &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'Tair',vmin,vmax
+           vmin = global_minval(wind &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           vmax = global_maxval(wind &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'wind',vmin,vmax
+           vmin = global_minval(strax &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           vmax = global_maxval(strax &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'strax',vmin,vmax
+           vmin = global_minval(stray &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           vmax = global_maxval(stray &
+                               ,distrb_info,field_loc_NEcorner,umask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'stray',vmin,vmax
+           vmin = global_minval(Qa &
+                               ,distrb_info,field_loc_center,tmask)
+           vmax = global_maxval(Qa &
+                               ,distrb_info,field_loc_center,tmask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'Qa',vmin,vmax
+
+        endif                   ! dbug
+
+      end subroutine monthly_data
 
 !=======================================================================
 ! Climatological ocean forcing
