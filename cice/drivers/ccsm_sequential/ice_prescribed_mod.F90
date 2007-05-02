@@ -48,6 +48,7 @@ module ice_prescribed_mod
 
    private ! except
 
+
 ! !PUBLIC TYPES:
 
 ! !PUBLIC MEMBER FUNCTIONS:
@@ -234,7 +235,12 @@ subroutine ice_prescribed_init
       allocate (work_g1(nx_global,ny_global),work_g2(nx_global,ny_global),&
       &  csim_mask_g(nx_global,ny_global))
 
-   endif
+   else
+
+      allocate (work_g1(1,1),work_g2(1,1),&
+      &  csim_mask_g(1,1))
+
+   end if
 
    call gather_global(work_g1, hm, master_task, distrb_info)
 
@@ -359,6 +365,12 @@ subroutine ice_prescribed_init
 
       deallocate(dataXCoord,dataYCoord)
       deallocate(dataMask,dataArea)
+      deallocate(work_g1,work_g2)
+      deallocate(csim_mask_g)
+
+   else
+
+      allocate(ice_cov_global(1,1))   
       deallocate(work_g1,work_g2)
       deallocate(csim_mask_g)
 

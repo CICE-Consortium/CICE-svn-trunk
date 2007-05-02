@@ -848,6 +848,14 @@
       istop = 0
       jstop = 0
 
+      aic(:,:,:,:) = c0
+      aix(:,:,:,:) = c0
+      aiy(:,:,:,:) = c0
+      trc(:,:,:,:,:) = c0
+      trx(:,:,:,:,:) = c0
+      try(:,:,:,:,:) = c0
+      extmask(:,:,:) = c0
+
 !---!-------------------------------------------------------------------
 !---! Remap the ice area and associated tracers.
 !---! Remap the open water area (without tracers).

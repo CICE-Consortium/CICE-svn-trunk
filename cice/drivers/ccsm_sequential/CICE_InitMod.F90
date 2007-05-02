@@ -26,14 +26,12 @@
 !
       use ice_calendar
       use ice_communicate
-      use ice_coupling
       use ice_diagnostics
       use ice_domain
       use ice_dyn_evp
       use ice_exit
       use ice_fileunits
       use ice_flux
-      use ice_forcing
       use ice_grid
       use ice_history
       use ice_restart
@@ -50,7 +48,6 @@
       use ice_transport_driver
       use ice_transport_remap
       use ice_work
-      use shr_msg_mod           ! for CCSM coupled runs only
       use ice_prescribed_mod
 
       implicit none
@@ -59,7 +56,7 @@
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-      public :: CICE_Initialize, cice_init
+      public :: cice_init
 
 !
 !EOP
@@ -67,60 +64,6 @@
 !=======================================================================
 
       contains
-
-!=======================================================================
-!BOP
-!
-! !ROUTINE: CICE_Initialize - initialize CICE model
-!
-! !DESCRIPTION:
-!
-!  Initialize the basic state, grid and all necessary parameters for
-!  running the CICE model.  Return the initial state in routine
-!  export state.
-!  Note: This initialization driver is designed for standalone and
-!        CCSM-coupled applications, with or without ESMF.  For other
-!        applications (e.g., standalone CAM), this driver would be
-!        replaced by a different driver that calls subroutine cice_init,
-!        where most of the work is done.
-!
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
-      subroutine CICE_Initialize
-!
-! !USES:
-!
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!
-!EOP
-!BOC
-!
-   !--------------------------------------------------------------------
-   ! CCSM-specific stuff to redirect stdin,stdout
-   !--------------------------------------------------------------------
-
-      call shr_msg_chdir('ice')! change cwd
-
-   !--------------------------------------------------------------------
-   ! model initialization
-   !--------------------------------------------------------------------
-
-      call cice_init
-
-   !--------------------------------------------------------------------
-   ! coupler communication or forcing data initialization
-   !--------------------------------------------------------------------
-
-      call init_cpl             ! initialize message passing (CCSM only)
-
-!
-!EOC
-!
-      end subroutine CICE_Initialize
 
 !=======================================================================
 !BOP
@@ -135,7 +78,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine cice_init
+      subroutine cice_init( mpicom_ice )
 !
 ! !USES:
 !
@@ -145,6 +88,8 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
+      integer (kind=int_kind), intent(in) :: &
+         mpicom_ice ! communicator for sequential ccsm
 !EOP
 !
 !     local temporary variables
@@ -167,8 +112,7 @@
 
       integer (kind=int_kind) :: i, j, ij, n, iblk, ilo, ihi, jlo, jhi
 
-      call init_communicate     ! initial setup for message passing
-      if (my_task == master_task) call shr_msg_dirio('ice')    ! redirect stdin/stdout
+      call init_communicate( mpicom_ice ) ! initial setup for message passing
       call input_data           ! namelist variables
       call init_work            ! work arrays
 

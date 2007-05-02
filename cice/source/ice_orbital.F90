@@ -13,6 +13,7 @@
 ! author:  Bruce P. Briegleb, NCAR 
 !
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
+! 2006: BPB  26 December Modified to compute diurnal mean coszen
 !
 ! !INTERFACE:
 !
@@ -25,6 +26,9 @@
       use ice_domain_size
       use ice_constants
       use shr_orb_mod
+
+! 2 Jan07 BPB
+      use ice_diagnostics
 !
 !EOP
 !
@@ -93,7 +97,8 @@
                                  icells,             &
                                  indxi,    indxj,    &
                                  tlat,     tlon,     &
-                                 coszen)
+                                 coszen,   dt,       &
+                                 coszen_mean)
 !
 ! !DESCRIPTION:
 !
@@ -121,6 +126,20 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out) :: &
          coszen              ! cosine solar zenith angle 
                              ! negative for sun below horizon
+ 
+      real (kind=dbl_kind), intent(in) :: &
+         dt                  ! thermodynamic time step
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out) :: &
+         coszen_mean         ! diurnal mean cosine solar zenith angle 
+
+      integer (kind=int_kind) :: &
+         nmbday        , &   ! number of time steps in one day
+         nd                  ! counter for diurnal mean
+
+      real (kind=dbl_kind) :: &
+         cszn                ! accumulator for diurnal mean cosine solar zenith angle 
+
 !
 !EOP
 !
@@ -156,6 +175,32 @@
                       *cos(ydayp1*c2*pi + tlon(i,j))
 
       enddo
+
+!BPB 27 Dec 2006 compute diurnal mean cosine zenith angle
+
+      coszen_mean(:,:) = c0  ! sun at horizon
+      nmbday = int(secday/dt)
+
+!      write(nu_diag,*) 'yday, secday, sec, nmbday, delta =', &
+!                        yday,secday,sec,nmbday,delta
+      do ij = 1, icells
+        i = indxi(ij)
+        j = indxj(ij)
+        do nd = 1, nmbday
+          cszn = sin(tlat(i,j))*sin(delta) - &
+                 cos(tlat(i,j))*cos(delta)   &
+                *cos((yday+((nd-1)*sec/secday))*c2*pi + tlon(i,j))
+!          if( i.eq.1 .and. j.eq.1 ) then
+!            write(nu_diag,*) 'nd i j tlat tlon cszn =',nd,i,j, &
+!                             tlat(i,j)*180./pi, &
+!                             tlon(i,j)*180./pi,cszn
+!          endif
+          if( cszn .gt. c0 ) then
+            coszen_mean(i,j) = coszen_mean(i,j) + cszn/real(nmbday)
+          endif          
+        enddo    ! nd
+      enddo  ! ij
+  
  
       end subroutine compute_coszen
  

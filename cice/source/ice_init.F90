@@ -83,14 +83,15 @@
           atm_data_type,   atm_data_dir,  precip_units, &
           sss_data_type,   sst_data_type, ocn_data_dir, &
           oceanmixed_file, restore_sst,   trestore 
-      use ice_grid, only: grid_file, kmt_file, grid_type, &
-          column_lat, column_lon
+      use ice_grid, only: grid_file, kmt_file, grid_type
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, &
-                               shortwave, albedo_type
+                               shortwave, albedo_type, R_ice, R_pnd, &
+                               R_snw
       use ice_atmo, only: atmbndy, calc_strair
       use ice_transport_driver, only: advection
+      use ice_meltpond, only: kpond
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -112,20 +113,23 @@
         histfreq,       hist_avg,        history_dir,   history_file, &
         histfreq_n,     dumpfreq,        dumpfreq_n,    restart_file, &
         restart,        restart_dir,     pointer_file,  ice_ic, &
-        grid_type,      grid_file,       kmt_file,      &
-        column_lat,     column_lon,      kitd,           kcatbound, &
+        grid_type,      grid_file,       kmt_file, &
+        kitd,           kcatbound, &
         kdyn,           ndyn_dt,         ndte,          evp_damping, &
         yield_curve,    advection, &
         kstrength,      krdg_partic,     krdg_redist,   shortwave, &
+        R_ice,          R_pnd,           R_snw, &
         albicev,        albicei,         albsnowv,      albsnowi, &
         albedo_type,    atmbndy,         fyear_init,    ycycle , &
         atm_data_type,  atm_data_dir,    calc_strair,   precip_units, &
         oceanmixed_ice, sss_data_type,   sst_data_type, &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore, &
-        latpnt,         lonpnt,          dbug, &
-#ifdef CCSM
+        latpnt,         lonpnt,          dbug,          kpond,    &
+#if (defined CCSM)
         runid,          runtype, &
-        incond_dir,      incond_file
+        incond_dir,     incond_file
+#elif (defined SEQ_MCT)
+        incond_dir,     incond_file
 #else
         runid,          runtype
 #endif
@@ -161,8 +165,6 @@
       grid_type    = 'rectangular'   ! define rectangular grid internally
       grid_file    = 'unknown_grid_file'
       kmt_file     = 'unknown_kmt_file'
-      column_lat   = 75.0_dbl_kind  !arbitrary polar latitude
-      column_lon   = 170.0_dbl_kind !arbitrary polar longitude
 
       kitd = 1           ! type of itd conversions (0 = delta, 1 = linear)
       kcatbound = 1      ! category boundary formula (0 = old, 1 = new)
@@ -174,9 +176,13 @@
       kstrength = 1          ! 1 = Rothrock 75 strength, 0 = Hibler 79
       krdg_partic = 1        ! 1 = new participation, 0 = Thorndike et al 75
       krdg_redist = 1        ! 1 = new redistribution, 0 = Hibler 80
+      kpond       = 0        ! 1 = explicit melt ponds
       advection  = 'remap'   ! incremental remapping transport scheme
       shortwave = 'default'  ! or 'dEdd' (delta-Eddington)
       albedo_type = 'default'! or 'constant'
+      R_ice     = 0.00_dbl_kind   ! tuning parameter for sea ice
+      R_pnd     = 0.00_dbl_kind   ! tuning parameter for ponded sea ice
+      R_snw     = 0.00_dbl_kind   ! tuning parameter for snow over sea ice
       albicev   = 0.78_dbl_kind   ! visible ice albedo for h > ahmax
       albicei   = 0.36_dbl_kind   ! near-ir ice albedo for h > ahmax
       albsnowv  = 0.98_dbl_kind   ! cold snow albedo, visible
@@ -204,8 +210,10 @@
       latpnt(2) = -65._dbl_kind   ! latitude of diagnostic point 2 (deg)
       lonpnt(2) = -45._dbl_kind   ! longitude of point 2 (deg)
 
+#ifdef CCSM
       runid   = 'unknown'   ! run ID, only used in CCSM
       runtype = 'unknown'   ! run type, only used in CCSM
+#endif
 
       !-----------------------------------------------------------------
       ! read from input file
@@ -231,7 +239,7 @@
       endif
 
       chartmp = advection(1:6)
-      if (chartmp /= 'upwind' .and. chartmp /= 'remap ') then
+      if (chartmp /= 'upwind' .and. chartmp /= 'remap ' .and. chartmp /= 'none') then
          if (my_task == master_task) &
          write (nu_diag,*) &
          'WARNING: ',chartmp,' advection unavailable, using remap' 
@@ -243,6 +251,18 @@
       else
          nu_diag = 6
       endif
+
+#ifdef SEQ_MCT
+      !
+      ! Note in SEQ_MCT mode the runid and runtype flag are obtained from the
+      ! sequential driver - not from the cice namelist 
+      !
+      if (my_task == master_task) then
+         restart = .true.
+         if (runtype == "initial") restart = .false.
+         history_file = trim(runid)//"_iceh"
+      endif
+#endif
 
       if (trim(atm_data_type) == 'monthly' .and. calc_strair) then
          if (my_task == master_task) &
@@ -291,9 +311,13 @@
       call broadcast_scalar(kstrength,          master_task)
       call broadcast_scalar(krdg_partic,        master_task)
       call broadcast_scalar(krdg_redist,        master_task)
+      call broadcast_scalar(kpond,              master_task)
       call broadcast_scalar(advection,          master_task)
       call broadcast_scalar(shortwave,          master_task)
       call broadcast_scalar(albedo_type,        master_task)
+      call broadcast_scalar(R_ice,              master_task)
+      call broadcast_scalar(R_pnd,              master_task)
+      call broadcast_scalar(R_snw,              master_task)
       call broadcast_scalar(albicev,            master_task)
       call broadcast_scalar(albicei,            master_task)
       call broadcast_scalar(albsnowv,           master_task)
@@ -319,11 +343,6 @@
       call broadcast_scalar (runtype,           master_task)
 ! only master_task writes to file
 !      call broadcast_scalar(nu_diag),           master_task)
-
-      if (trim(grid_type) == 'column') then
-         call broadcast_scalar(column_lat,         master_task)
-         call broadcast_scalar(column_lon,         master_task)
-      endif
 
       !-----------------------------------------------------------------
       ! spew
@@ -395,12 +414,6 @@
             write(nu_diag,*) ' kmt_file                  = ', &
                                trim(kmt_file)
          endif
-         if (trim(grid_type) == 'column') then
-            write(nu_diag,1000) ' column_lat                = ', &
-                               column_lat
-            write(nu_diag,1000) ' column_lon                = ', &
-                               column_lon
-         endif
 
          write(nu_diag,1020) ' kitd                      = ', kitd
          write(nu_diag,1020) ' kcatbound                 = ', &
@@ -417,12 +430,17 @@
                                krdg_partic
          write(nu_diag,1020) ' krdg_redist               = ', &
                                krdg_redist
+         write(nu_diag,1020) ' kpond                     = ', &
+                               kpond
          write(nu_diag,1030) ' advection                 = ', &
                                trim(advection)
          write(nu_diag,1030) ' shortwave                 = ', &
                                trim(shortwave)
          write(nu_diag,1030) ' albedo_type               = ', &
                                trim(albedo_type)
+         write(nu_diag,1000) ' R_ice                     = ', R_ice
+         write(nu_diag,1000) ' R_pnd                     = ', R_pnd
+         write(nu_diag,1000) ' R_snw                     = ', R_snw
          write(nu_diag,1000) ' albicev                   = ', albicev
          write(nu_diag,1000) ' albicei                   = ', albicei
          write(nu_diag,1000) ' albsnowv                  = ', albsnowv

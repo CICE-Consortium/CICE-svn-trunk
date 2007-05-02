@@ -18,6 +18,7 @@
 ! 2006 ECH: moved exit timeLoop to prevent execution of unnecessary timestep
 ! 2006 ECH: Streamlined for efficiency 
 ! 2006 ECH: Converted to free source form (F90)
+! 2007 BPB: Modified Delta-Eddington shortwave interface
 !
 ! !INTERFACE:
 !
@@ -44,6 +45,7 @@
       use ice_itd
       use ice_kinds_mod
       use ice_mechred
+      use ice_meltpond
       use ice_ocean
       use ice_orbital
       use ice_shortwave
@@ -242,7 +244,7 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-         i, j        , & ! horizontal indices
+         i, j, ij    , & ! horizontal indices
          iblk        , & ! block index
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          n           , & ! thickness category index
@@ -281,8 +283,32 @@
          fswsfcn     , & ! SW absorbed at ice/snow surface (W m-2)
          fswintn         ! SW absorbed in ice interior, below surface (W m-2)
 
+      ! Local variables to keep track of melt for ponds
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         melts_old, &
+         meltt_old, &
+         melts_tmp, &
+         meltt_tmp
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr) :: &
          Iswabsn         ! SW radiation absorbed in ice layers (W m-2)
+
+      ! snow variables for Delta-Eddington shortwave
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         fsn             ! snow horizontal fraction
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr) :: &
+         rhosnwn     , & ! snow density (kg/m3)
+         rsnwn       , & ! snow grain radius (micro-meters)
+         Sswabsn         ! SW radiation absorbed in snow layers (W m-2)
+
+      ! pond variables for Delta-Eddington shortwave
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         fpn         , & ! pond fraction
+         hpn             ! pond depth (m)
+
+! BPB 4 Jan 2007  daily mean coszen
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         coszen_mean     ! diurnal mean coszen
 
       type (block) :: &
          this_block      ! block information for current block
@@ -375,7 +401,8 @@
                                  icells,                           &
                                  indxi,            indxj,          &
                                  tlat  (:,:,iblk), tlon(:,:,iblk), &
-                                 coszen(:,:,iblk))
+                                 coszen(:,:,iblk), dt,             &
+                                 coszen_mean)
 
          else                     ! basic (ccsm3) shortwave
             coszen(:,:,iblk) = p5 ! sun above the horizon
@@ -402,25 +429,81 @@
             enddo               ! j
 
       !-----------------------------------------------------------------
+      ! Melt pond initialization
+      !-----------------------------------------------------------------
+
+            apondn(:,:,n,iblk) = c0
+            hpondn(:,:,n,iblk) = c0
+
+            if (kpond == 1 .and. istep == 1) then
+
+               melts_tmp = melts(:,:,iblk)
+               meltt_tmp = meltt(:,:,iblk)
+
+               call compute_ponds(nx_block, ny_block, nghost,              &
+                                  meltt_tmp,          melts_tmp,           &
+                                  aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
+                                  vsnon (:,:,n,iblk), trcrn (:,:,1,n,iblk),&
+                                  trcrn (:,:,ntrcr,n,iblk),                &
+                                  apondn(:,:,n,iblk), hpondn(:,:,n,iblk))
+
+            endif
+
+      !-----------------------------------------------------------------
       ! Solar radiation: albedo and absorbed shortwave
       !-----------------------------------------------------------------
 
             if (trim(shortwave) == 'dEdd') then   ! delta Eddington
 
+      ! note that rhoswn, rsnw, fp, hp and Sswabs ARE NOT dimensioned with ncat
+      ! BPB 19 Dec 2006
+
+               ! set snow properties
+               call shortwave_dEdd_set_snow(nx_block, ny_block,           &
+                                 icells,                                  &
+                                 indxi,               indxj,              &
+                                 aicen(:,:,n,iblk),   vsnon(:,:,n,iblk),  &
+                                 trcrn(:,:,1,n,iblk), fsn,                &
+                                 rhosnwn,             rsnwn)
+
+
+               if (kpond == 0) then
+
+               ! set pond properties
+               call shortwave_dEdd_set_pond(nx_block, ny_block,            &
+                                 icells,                                   &
+                                 indxi,               indxj,               &
+                                 aicen(:,:,n,iblk),   trcrn(:,:,1,n,iblk), &
+                                 fsn,                 fpn,                 &
+                                 hpn)
+
+               else
+
+
+               fpn(:,:) = apondn(:,:,n,iblk)
+               hpn(:,:) = hpondn(:,:,n,iblk)
+
+               endif
+
                call shortwave_dEdd(nx_block,        ny_block,            &
                                  icells,                                 &
                                  indxi,             indxj,               &
-                                 tlat (:,:,  iblk), coszen(:,:, iblk),   &
+                                 coszen(:,:, iblk),                      &
                                  aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
-                                 vsnon(:,:,n,iblk), trcrn(:,:,1,n,iblk), &
+                                 vsnon(:,:,n,iblk), fsn,                 &
+                                 rhosnwn,           rsnwn,               &
+                                 fpn,               hpn,                 &
                                  swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
                                  swidr(:,:,  iblk), swidf(:,:,  iblk),   &
                                  alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
                                  alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
                                  fswsfcn,           fswintn,             &
-                                 fswthrun,          Iswabsn)
+                                 fswthrun,          Sswabsn,             &
+                                 Iswabsn)
 
             else
+               Sswabsn(:,:,:) = c0
+
                call shortwave_ccsm3(nx_block,       ny_block,            &
                                  icells,                                 &
                                  indxi,             indxj,               &
@@ -431,7 +514,8 @@
                                  alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
                                  alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
                                  fswsfcn,           fswintn,             &
-                                 fswthrun,          Iswabsn)
+                                 fswthrun,          Iswabsn,             &
+                                 apondn(:,:,n,iblk),hpondn(:,:,n,iblk))
             endif
 
       !-----------------------------------------------------------------
@@ -480,6 +564,9 @@
             sl1 = slyr1(n)
             sl2 = slyrn(n)
 
+            melts_old = melts(:,:,iblk)
+            meltt_old = meltt(:,:,iblk)
+
             call thermo_vertical                                       &
                             (nx_block,            ny_block,            &
                              dt,                  icells,              &
@@ -494,12 +581,14 @@
                              fbot,                Tbot,                &
                              lhcoef,              shcoef,              &
                              fswsfcn,             fswintn,             &
-                             fswthrun,            Iswabsn,             &
+                             fswthrun,                                 &
+                             Sswabsn,             Iswabsn,             &
                              fsensn,              flatn,               &
                              fswabsn,             flwoutn,             &
                              evapn,               freshn,              &
                              fsaltn,              fhocnn,              &
-                             meltt   (:,:,iblk),  meltb   (:,:,iblk),  &
+                             meltt   (:,:,iblk),  melts(:,:,iblk),     &
+                             meltb   (:,:,iblk),                       &
                              congel  (:,:,iblk),  snoice  (:,:,iblk),  &
                              mlt_onset(:,:,iblk), frz_onset(:,:,iblk), &
                              yday,                l_stop,              &
@@ -517,6 +606,24 @@
                                  TLAT(istop,jstop,iblk)*rad_to_deg, &
                                  TLON(istop,jstop,iblk)*rad_to_deg
             call abort_ice ('ice: Vertical thermo error')
+         endif
+
+      !-----------------------------------------------------------------
+      ! Melt ponds
+      !-----------------------------------------------------------------
+
+         if (kpond == 1) then
+
+            melts_tmp = melts(:,:,iblk) - melts_old
+            meltt_tmp = meltt(:,:,iblk) - meltt_old
+
+            call compute_ponds(nx_block, ny_block, nghost,              &
+                               meltt_tmp,          melts_tmp,           &
+                               aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
+                               vsnon (:,:,n,iblk), trcrn (:,:,1,n,iblk),&
+                               trcrn (:,:,ntrcr,n,iblk),                &
+                               apondn(:,:,n,iblk), hpondn(:,:,n,iblk))
+
          endif
 
       !-----------------------------------------------------------------
