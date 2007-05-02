@@ -67,7 +67,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine dumpfile
+      subroutine dumpfile(filename_spec)
 !
 ! !DESCRIPTION:
 !
@@ -91,6 +91,8 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
+      character(len=char_len_long), intent(in), optional :: filename_spec
+
 !EOP
 !
       integer (kind=int_kind) :: &
@@ -102,15 +104,19 @@
       logical (kind=log_kind) :: diag
 
       ! construct path/file
-      iyear = nyr + year_init - 1
-      imonth = month
-      iday = mday
-
-      write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
-         restart_dir(1:lenstr(restart_dir)), &
-         restart_file(1:lenstr(restart_file)),'.', &
-         iyear,'-',month,'-',mday,'-',sec
-
+      if (present(filename_spec)) then
+         filename = trim(filename_spec)
+      else
+         iyear = nyr + year_init - 1
+         imonth = month
+         iday = mday
+         
+         write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
+              restart_dir(1:lenstr(restart_dir)), &
+              restart_file(1:lenstr(restart_file)),'.', &
+              iyear,'-',month,'-',mday,'-',sec
+      end if
+         
       ! write pointer (path/file)
       if (my_task == master_task) then
         open(nu_rst_pointer,file=pointer_file)

@@ -55,8 +55,8 @@
       real (kind=dbl_kind), parameter, private :: &
          ferrmax = 1.0e-3_dbl_kind, & ! max allowed energy flux error (W m-2)
                                       ! recommend ferrmax < 0.01 W m-2
-#ifdef CCSM
-         hsnomin = 1.0e-3_dbl_kind    ! min thickness for which Tsno computed (m)
+#if (defined CCSM) || (defined SEQ_MCT)
+         hsnomin = 1.0e-4_dbl_kind    ! min thickness for which Tsno computed (m)
 #else
          hsnomin = 1.0e-6_dbl_kind    ! min thickness for which Tsno computed (m)
 #endif
@@ -101,12 +101,14 @@
                                   fbot,        Tbot,      &
                                   lhcoef,      shcoef,    &
                                   fswsfc,      fswint,    &
-                                  fswthrun,    Iswabs,    &
+                                  fswthrun,    Sswabs,    &
+                                  Iswabs,                 &
                                   fsensn,      flatn,     &
                                   fswabsn,     flwoutn,   &
                                   evapn,       freshn,    &
                                   fsaltn,      fhocnn,    &
-                                  meltt,       meltb,     &
+                                  meltt,       melts,     &
+                                  meltb,                  &
                                   congel,      snoice,    &
                                   mlt_onset,   frz_onset, &
                                   yday,        l_stop,    &
@@ -160,13 +162,20 @@
          rhoa    , & ! air density (kg/m^3) 
          fsnow   , & ! snowfall rate (kg m-2 s-1)
          shcoef  , & ! transfer coefficient for sensible heat
-         lhcoef  , & ! transfer coefficient for latent heat
+         lhcoef      ! transfer coefficient for latent heat
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout) :: &
          fswsfc  , & ! SW absorbed at ice/snow surface (W m-2)
          fswint  , & ! SW absorbed in ice interior, below surface (W m-2)
          fswthrun    ! SW through ice to ocean         (W/m^2)
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
+         intent(inout) :: &
+         Sswabs      ! SW radiation absorbed in snow layers (W m-2)
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
-         intent(in) :: &
+         intent(inout) :: &
          Iswabs      ! SW radiation absorbed in ice layers (W m-2)
 
       ! input from ocean
@@ -192,6 +201,7 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(inout):: &
          meltt    , & ! top ice melt             (m/step-->cm/day) 
+         melts    , & ! snow melt                (m/step-->cm/day) 
          meltb    , & ! basal ice melt           (m/step-->cm/day) 
          congel   , & ! basal ice growth         (m/step-->cm/day) 
          snoice   , & ! snow-ice formation       (m/step-->cm/day) 
@@ -315,7 +325,8 @@
                                 potT,          Qa,       &
                                 shcoef,        lhcoef,   &
                                 fswsfc,        fswint,   &
-                                fswthrun,      Iswabs,   &
+                                fswthrun,      Sswabs,   &
+                                Iswabs,                  &
                                 hilyr,         hslyr,    &
                                 qin,           Tin,      &
                                 qsn,           Tsn,      &
@@ -348,7 +359,8 @@
                              fcondtop,     fcondbot, &
                              fsnow,        hsn_new,  &
                              fhocnn,       evapn,    &
-                             meltt,        meltb,    &
+                             meltt,        melts,    &
+                             meltb,                  &
                              congel,       snoice,   &
                              mlt_onset,    frz_onset)
 
@@ -1137,7 +1149,8 @@
                                       potT,     Qa,       &
                                       shcoef,   lhcoef,   &
                                       fswsfc,   fswint,   &
-                                      fswthrun, Iswabs,   &
+                                      fswthrun, Sswabs,   &
+                                      Iswabs,             &
                                       hilyr,    hslyr,    &
                                       qin,      Tin,      &
                                       qsn,      Tsn,      &
@@ -1166,14 +1179,18 @@
          intent(in) :: &
          indxi, indxj    ! compressed indices for cells with aicen > puny
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
          rhoa        , & ! air density (kg/m^3)
          flw         , & ! incoming longwave radiation (W/m^2)
          potT        , & ! air potential temperature  (K)
          Qa          , & ! specific humidity (kg/kg)
          shcoef      , & ! transfer coefficient for sensible heat
          lhcoef      , & ! transfer coefficient for latent heat
-         Tbot        , & ! ice bottom surface temperature (deg C)
+         Tbot            ! ice bottom surface temperature (deg C)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout) :: &
          fswsfc      , & ! SW absorbed at ice/snow surface (W m-2)
          fswint      , & ! SW absorbed in ice interior below surface (W m-2)
          fswthrun        ! SW through ice to ocean         (W m-2)
@@ -1183,8 +1200,12 @@
          hslyr       , & ! snow layer thickness (m)
          einit           ! initial energy of melting (J m-2)
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
+         intent(inout) :: &
+         Sswabs          ! SW radiation absorbed in snow layers (W m-2)
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
-         intent(in) :: &
+         intent(inout) :: &
          Iswabs          ! SW radiation absorbed in ice layers (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
@@ -1284,7 +1305,9 @@
       real (kind=dbl_kind) :: &
          ci          , & ! specific heat of sea ice (J kg-1 deg-1)
          avg_Tsf     , & ! = 1. if Tsf averaged w/Tsf_start, else = 0.
-         ferr            ! energy conservation error (W m-2)
+         ferr        , & ! energy conservation error (W m-2)
+         Iswabs_tmp  , &
+         Sswabs_tmp
 
       logical (kind=log_kind), dimension (icells) :: &
          converged      ! = true when local solution has converged
@@ -1342,6 +1365,69 @@
                          hilyr,    hslyr,            &
                          Tin,      kh )
 
+      allocate(etai(icells,nilyr))
+
+      do k = 1, nilyr
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+            if (l_brine) then
+               ci = cp_ice - Lfresh*Tmlt(k) /  &
+                  max( (Tin_init(ij,k)*Tin_init(ij,k)), &
+                       (1.21_dbl_kind*Tmlt(k)*Tmlt(k)) )
+            else
+               ci = cp_ice
+            endif
+            etai(ij,k) = dt_rhoi_hlyr(ij) / ci
+
+         enddo
+      enddo
+
+      do k = 1, nilyr
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+            if (l_brine) then
+               Iswabs_tmp = min(Iswabs(i,j,k), &
+                    0.9_dbl_kind*(Tmlt(k)-Tin_init(ij,k))/etai(ij,k))
+            else
+               Iswabs_tmp = min(Iswabs(i,j,k), &
+                   -0.9_dbl_kind*Tin_init(ij,k)/etai(ij,k))
+            endif
+
+            if (Tin_init(ij,k) > (Tmlt(k) - p01)) Iswabs_tmp = c0
+
+            fswsfc(i,j) = fswsfc(i,j) &
+                        + (Iswabs(i,j,k) - Iswabs_tmp)
+            fswint(i,j) = fswint(i,j) &
+                        - (Iswabs(i,j,k) - Iswabs_tmp)
+            Iswabs(i,j,k) = Iswabs_tmp
+         enddo
+      enddo
+
+      deallocate (etai)
+
+      do k = 1, nslyr
+         do ij = 1, icells
+            if (l_snow(ij)) then
+               i = indxi(ij)
+               j = indxj(ij)
+
+               Sswabs_tmp = min(Sswabs(i,j,k), &
+                    -0.9_dbl_kind*Tsn_init(ij,k)/etas(ij,k))
+
+               if (Tsn_init(ij,k) > -p01) Sswabs_tmp = c0
+
+               fswsfc(i,j) = fswsfc(i,j) &
+                           + (Sswabs(i,j,k) - Sswabs_tmp)
+               fswint(i,j) = fswint(i,j) &
+                           - (Sswabs(i,j,k) - Sswabs_tmp)
+               Sswabs(i,j,k) = Sswabs_tmp
+            endif
+         enddo
+      enddo
 
       !-----------------------------------------------------------------
       ! Solve for new temperatures.
@@ -1439,6 +1525,8 @@
          do k = 1, nilyr
             do ij = 1, isolve
                m = indxij(ij)
+               i = indxii(ij)
+               j = indxjj(ij)
 
                if (l_brine) then
                   ci = cp_ice - Lfresh*Tmlt(k) /  &
@@ -1458,7 +1546,8 @@
                                    Tsf,      Tbot,             &
                                    fsurf,    dfsurf_dT,        &
                                    Tin_init, Tsn_init,         &
-                                   kh,       Iswabs,           &
+                                   kh,       Sswabs,           &
+                                   Iswabs,                     &
                                    etai,     etas,             &
                                    sbdiag,   diag,             &
                                    spdiag,   rhs)
@@ -1737,6 +1826,8 @@
                write(nu_diag,*) 'fsurf:', fsurf(ij)
                write(nu_diag,*) 'fcondtop, fcondbot, fswint', &
                                fcondtop(ij), fcondbot(ij), fswint(i,j)
+               write(nu_diag,*) 'fswsfc, fswthrun', &
+                               fswsfc(i,j), fswthrun(i,j)
                write(nu_diag,*) 'Flux conservation error =', ferr
                write(nu_diag,*) 'Initial snow temperatures:'
                write(nu_diag,*) (Tsn_init(ij,k),k=1,nslyr)
@@ -2063,7 +2154,8 @@
                                       Tsf,      Tbot,             &
                                       fsurf,    dfsurf_dT,        &
                                       Tin_init, Tsn_init,         &
-                                      kh,       Iswabs,           &
+                                      kh,       Sswabs,           &
+                                      Iswabs,                     &
                                       etai,     etas,             &
                                       sbdiag,   diag,             &
                                       spdiag,   rhs)
@@ -2107,6 +2199,10 @@
       real (kind=dbl_kind), dimension (icells,nilyr), &
          intent(in) :: &
          Tin_init        ! ice temp at beginning of time step
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
+         intent(in) :: &
+         Sswabs          ! SW radiation absorbed in snow layers (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
          intent(in) :: &
@@ -2197,14 +2293,16 @@
                spdiag(ij,2) = -etas(m,1) * kh(m,2)
                diag  (ij,2) = c1 &
                               + etas(m,1) * (kh(m,1) + kh(m,2))
-               rhs   (ij,2) = Tsn_init(m,1)
+               rhs   (ij,2) = Tsn_init(m,1) &
+                              + etas(m,1) * Sswabs(i,j,1)
             else                ! melting surface
                sbdiag(ij,2) = c0
                spdiag(ij,2) = -etas(m,1) * kh(m,2)
                diag  (ij,2) = c1 &
                               + etas(m,1) * (kh(m,1) + kh(m,2))
                rhs   (ij,2) = Tsn_init(m,1) &
-                              + etas(m,1)*kh(m,1)*Tsf(m)
+                              + etas(m,1)*kh(m,1)*Tsf(m) &
+                              + etas(m,1) * Sswabs(i,j,1)
             endif               ! l_cold
          endif                  ! l_snow
 
@@ -2260,6 +2358,8 @@
             kr = k + 1
 
             do ij = 1, isolve
+               i = indxii(ij)
+               j = indxjj(ij)
                m = indxij(ij)
 
                if (l_snow(m)) then
@@ -2267,7 +2367,8 @@
                   spdiag(ij,kr) = -etas(m,k) * kh(m,k+1)
                   diag  (ij,kr) = c1 &
                                + etas(m,k) * (kh(m,k) + kh(m,k+1))
-                  rhs   (ij,kr) = Tsn_init(m,k)
+                  rhs   (ij,kr) = Tsn_init(m,k) &
+                               + etas(m,k) * Sswabs(i,j,k)
                endif
             enddo               ! ij
          enddo                  ! nslyr
@@ -2423,7 +2524,8 @@
                                     fcondtop,  fcondbot, &
                                     fsnow,     hsn_new,  &
                                     fhocnn,    evapn,    &
-                                    meltt,     meltb,    &
+                                    meltt,     melts,    &
+                                    meltb,               &
                                     congel,    snoice,   &  
                                     mlt_onset, frz_onset)
 !
@@ -2471,6 +2573,7 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
          meltt       , & ! top ice melt             (m/step-->cm/day)
+         melts       , & ! snow melt                (m/step-->cm/day)
          meltb       , & ! basal ice melt           (m/step-->cm/day)
          congel      , & ! basal ice growth         (m/step-->cm/day)
          snoice      , & ! snow-ice formation       (m/step-->cm/day)
@@ -2685,6 +2788,7 @@
             ! history diagnostics
             if (dhs < -puny .and. mlt_onset(i,j) < puny) &
                mlt_onset(i,j) = yday
+            melts(i,j) = melts(i,j) - dhs*aicen(i,j)
 
          enddo                  ! ij
       enddo                     ! nslyr

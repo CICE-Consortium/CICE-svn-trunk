@@ -14,13 +14,12 @@
 ! as two distinct routines.
 ! Either can be called from the ice driver.
 !
-! The delta-Eddington method is described here:
+! The Delta-Eddington method is described here:
 !
-! Briegleb, B. P., and B. Light (2006): A delta-Eddington parameterization
-!    for sea ice shortwave radiation in the Community Climate System
-!    Model, NCAR Technical Note, NCAR/TN-?+STR, National Center for 
-!    Atmospheric Research, Boulder, Colo., ?? pp.
-! [Still in draft form as of May 2006 - WHL]
+! Briegleb, B. P., and B. Light (2007): A Delta-Eddington Multiple 
+!    Scattering Parameterization for Solar Radiation in the Sea Ice 
+!    Component of the Community Climate System Model, NCAR Technical 
+!    Note  NCAR/TN-472+STR  February 2007
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
@@ -31,10 +30,18 @@
 !           Elizabeth C. Hunke and William H. Lipscomb, LANL
 ! 2005, WHL: Moved absorbed_solar from ice_therm_vertical to this 
 !            module and changed name from ice_albedo
-! 2006, WHL: Added delta Eddington routines from Bruce Briegleb
-! 2006, ECH: Changed data statements in delta Eddington routines (no 
+! 2006, WHL: Added Delta Eddington routines from Bruce Briegleb
+! 2006, ECH: Changed data statements in Delta Eddington routines (no 
 !            longer hardwired)
 !            Converted to free source form (F90)
+! 2007, BPB: Completely updated Delta-Eddington code, so that:
+!            (1) multiple snow layers enabled (i.e. nslyr > 1)
+!            (2) included SSL for snow surface absorption
+!            (3) added Sswabs for internal snow layer absorption
+!            (4) variable sea ice layers allowed (i.e. not hardwired)
+!            (5) updated all inherent optical properties
+!            (6) included algae absorption for sea ice lowest layer
+!            (7) very complete internal documentation included
 !
 ! !INTERFACE:
 !
@@ -53,7 +60,12 @@
 
       character (len=char_len) :: &
          shortwave, & ! shortwave method, 'default' ('ccsm3') or 'dEdd'
-         albedo_type  ! albedo parameterization, 'default' ('ccsm3') or 'constant'
+         albedo_type  ! albedo parameterization, 'default' ('ccsm3') or 'constant' 'ccsm3'
+      ! tuning parameters, set in namelist
+      real (kind=dbl_kind) :: &
+         R_ice , & ! sea ice tuning parameter; +1 > 1sig increase in albedo
+         R_pnd , & ! ponded ice tuning parameter; +1 > 1sig increase in albedo
+         R_snw     ! snow tuning parameter; +1 > ~.01 change in broadband albedo
 
       ! baseline albedos, set in namelist
       real (kind=dbl_kind) :: &
@@ -62,7 +74,10 @@
          albsnowv, & ! cold snow albedo, visible
          albsnowi    ! cold snow albedo, near IR
 
-      ! storage for approximate exponential for delta-Eddington
+      ! storage for approximate exponential for Delta-Eddington;
+      ! approximate exp(-x) to better than c10/nmbexp relative
+      ! error for computational efficieny by evaluating table; 
+      ! numerical error is acceptible scientifically
       integer (kind=int_kind), parameter :: & 
          nmbexp = 1000000  ! number of exponential values in lookup table
 
@@ -98,7 +113,8 @@
                                   alvdrn,   alidrn,   &
                                   alvdfn,   alidfn,   &
                                   fswsfc,   fswint,   &
-                                  fswthru,  Iswabs)
+                                  fswthru,  Iswabs,   &
+                                  apondn,   hpondn)
 !
 ! !DESCRIPTION:
 !
@@ -131,6 +147,11 @@
          swvdf    , & ! sw down, visible, diffuse (W/m^2)
          swidr    , & ! sw down, near IR, direct  (W/m^2)
          swidf        ! sw down, near IR, diffuse (W/m^2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         hpondn, &    ! pond depth (m)
+         apondn            ! pond fractional coverage (0 to 1)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(out) :: &
@@ -176,7 +197,7 @@
                                 alvdfns,    alidfns,  &
                                 alvdrn,     alidrn,   &
                                 alvdfn,     alidfn)
-      else ! default 
+      else ! default
          call compute_albedos (nx_block,   ny_block, &
                                icells,               &
                                indxi,      indxj,    &
@@ -187,7 +208,8 @@
                                alvdrns,    alidrns,  &
                                alvdfns,    alidfns,  &
                                alvdrn,     alidrn,   &
-                               alvdfn,     alidfn)
+                               alvdfn,     alidfn,   &
+                               apondn,     hpondn)
       endif
 
       !-----------------------------------------------------------------
@@ -227,7 +249,8 @@
                                   alvdrns,  alidrns,  &
                                   alvdfns,  alidfns,  &
                                   alvdrn,   alidrn,   &
-                                  alvdfn,   alidfn)
+                                  alvdfn,   alidfn,   &
+                                  apondn,   hpondn)
 !
 ! !DESCRIPTION:
 !
@@ -238,6 +261,8 @@
 ! authors:  same as module
 !
 ! !USES:
+!
+      use ice_meltpond, only: kpond
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -256,6 +281,11 @@
          vicen   , & ! volume of ice per category
          vsnon   , & ! volume of ice per category
          Tsfcn       ! surface temperature
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         hpondn, &   ! pond depth (m)
+         apondn      ! pond fractional coverage (0 to 1)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(out) :: &
@@ -298,6 +328,11 @@
          dTs , & ! difference of Tsfc and Timelt
          fhtan,& ! factor used in albedo dependence on ice thickness
          asnow   ! fractional area of snow cover
+
+      real (kind=dbl_kind) :: &
+         wsfc(4),albpnd(4)
+
+      data wsfc /1.00,0.78, 0.21, 0.01/
 
       integer (kind=int_kind) :: &
          ij      ! horizontal index, combines i and j loops
@@ -345,6 +380,24 @@
          fT = min(dTs/dT_mlt-c1,c0)
          alvdfni(i,j) = alvdfni(i,j) - dalb_mlt*fT
          alidfni(i,j) = alidfni(i,j) - dalb_mlt*fT
+
+         if (kpond == 1) then
+
+            albpnd(1) = wsfc(1) * (0.342 &
+                      + exp(-20.512*hpondn(i,j) - 0.830))
+            albpnd(2) = wsfc(2) * (0.020 &
+                      + exp(-14.187*hpondn(i,j) - 0.860))
+            albpnd(3) = wsfc(3) * (0.033 &
+                      + exp(-2.5800*hpondn(i,j) - 3.820))
+            albpnd(4) = wsfc(4) * 0.030
+
+            alvdfni(i,j) = (1.-apondn(i,j))*alvdfni(i,j) &
+                        + apondn(i,j) * albpnd(1)
+
+            alidfni(i,j) = (1.-apondn(i,j))*alidfni(i,j) &
+                        + apondn(i,j) * (albpnd(2)+albpnd(3)+albpnd(4))
+
+         endif ! kpond
 
          ! avoid negative albedos for thin, bare, melting ice
          alvdfni(i,j) = max (alvdfni(i,j), albocn)
@@ -453,10 +506,10 @@
 !EOP
 !
       real (kind=dbl_kind), parameter :: &
-         warmice  = 0.68_dbl_kind, &   
-         coldice  = 0.70_dbl_kind, &   
-         warmsnow = 0.77_dbl_kind, &   
-         coldsnow = 0.81_dbl_kind   
+         warmice  = 0.68_dbl_kind, &
+         coldice  = 0.70_dbl_kind, &
+         warmsnow = 0.77_dbl_kind, &
+         coldsnow = 0.81_dbl_kind
 
       integer (kind=int_kind) :: &
          i, j, n
@@ -476,7 +529,7 @@
       enddo
       enddo
 
-         
+
       !-----------------------------------------------------------------
       ! Compute albedo for each thickness category.
       !-----------------------------------------------------------------
@@ -488,7 +541,7 @@
          i = indxi(ij)
          j = indxj(ij)
 
-         hs = vsnon(i,j) / aicen(i,j)            
+         hs = vsnon(i,j) / aicen(i,j)
 
          if (hs > puny) then
             ! snow, temperature dependence
@@ -727,11 +780,11 @@
 
 ! End ccsm3 shortwave method
 !=======================================================================
-! Begin delta-Eddington shortwave method
+! Begin Delta-Eddington shortwave method
 !
 !BOP
 !
-! !IROUTINE: init_dEdd - initialize delta-Eddington parameters
+! !IROUTINE: init_dEdd - initialize Delta-Eddington parameters
 !
 ! !INTERFACE:
 !
@@ -739,7 +792,7 @@
 !
 ! !DESCRIPTION:
 !
-! Compute initial data for delta-Eddington method, specifically, 
+! Compute initial data for Delta-Eddington method, specifically, 
 ! the approximate exponential look-up table.
 !
 ! !REVISION HISTORY:
@@ -770,159 +823,191 @@
 !=======================================================================
 !BOP
 !
-! !IROUTINE: shortwave_dEdd - compute shortwave using delta-Eddington method
+! !IROUTINE: shortwave_dEdd - driver for Delta-Eddington shortwave
 !
 ! !INTERFACE:
 !
-      subroutine shortwave_dEdd  (nx_block, ny_block, &
-                                  icells,             &
-                                  indxi,    indxj,    &
-                                  tlat,     coszen,   &
-                                  aicen,    vicen,    &
-                                  vsnon,    Tsfcn,    &
-                                  swvdr,    swvdf,    &
-                                  swidr,    swidf,    &
-                                  alvdrn,   alidrn,   &
-                                  alvdfn,   alidfn,   &
-                                  fswsfc,   fswint,   &
-                                  fswthru,  Iswabs)
-!
+      subroutine shortwave_dEdd  (nx_block, ny_block,    &
+                                  icells,   indxi,       &
+                                  indxj,    coszen,      &
+                                  aice,     vice,        &
+                                  vsno,     fs,          & 
+                                  rhosnw,   rsnw,        &
+                                  fp,       hp,          &
+                                  swvdr,    swvdf,       &
+                                  swidr,    swidf,       &
+                                  alvdr,    alvdf,       &
+                                  alidr,    alidf,       &
+                                  fswsfc,   fswint,      &
+                                  fswthru,  Sswabs,      &
+                                  Iswabs)
 !
 ! !DESCRIPTION:
 !
-!   Compute snow/ice shortwave, including albedos, absorbed and transmitted flux
-!   For each category, compute shortwave albedos and fluxes for two surface types:
-!   snow over ice (including bare ice) and ponded ice. For large snow depths, no 
-!   ponds are assumed present, so a single snow-over-ice calculation is done. For
-!   small snow (or no snow) depths, ponds are present, for which a weighted average 
-!   over a prescribed pond fraction is done between bare ice and ponded ice.
-!   Albedos and fluxes are stored for later use by thermodynamic routines. 
-!   Invokes at most two calls to compute_dEdd, which sets inherent optical
-!   properties appropriate for the surface type, and then calls solution_dEdd
-!   to evaluate the delta-Eddington solution.
+!   Compute snow/bare ice/ponded ice shortwave albedos, absorbed and transmitted 
+!   flux using the Delta-Eddington solar radiation method as described in:
 !
-!   Two important prescribed quantities are the snow age and the pond fraction/depth.
-!   These are empirically determined at the present from snow/ice state (snow depth
-!   and surface temperature in the former, and calendar date in the latter).
-!   The snow age is a linear weight between -1 for fresh, 0 for small, and +1 for 
-!   large grain snow inherent optical properties. The pond fraction is simply
-!   prescribed based on a calendar date, and depth is the pond fraction unless the
-!   depth is greater than half the ice thickness, for which it takes half ice 
-!   thickness value. Ideally, these quantities should be made prognostic in the
-!   future.
+!   "A Delta-Eddington Multiple Scattering Parameterization for Solar Radiation
+!        in the Sea Ice Component of the Community Climate System Model"
+!            B.P.Briegleb and B.Light   NCAR/TN-472+STR  February 2007
+!
+!   Compute shortwave albedos and fluxes for three surface types: 
+!   snow over ice, bare ice and ponded ice. 
+!   
+!   Albedos and fluxes are output for later use by thermodynamic routines. 
+!   Invokes three calls to compute_dEdd, which sets inherent optical properties 
+!   appropriate for the surface type. Within compute_dEdd, a call to solution_dEdd 
+!   evaluates the Delta-Eddington solution. The final albedos and fluxes are then
+!   evaluated in compute_dEdd. Albedos and fluxes are transferred to output in 
+!   this routine.
 !
 !   NOTE regarding albedo diagnostics:  This method yields zero albedo values
 !   if there is no incoming solar and thus the albedo diagnostics are masked
 !   out when the sun is below the horizon.  To estimate albedo from the history 
 !   output (post-processing), compute ice albedo using
-!   (1 - albedo)*swdn = swabs - swthru. -ECH
+!   (1 - albedo)*swdn = swabs. -ECH
 !
 ! !REVISION HISTORY:
 !
 ! author:  Bruce P. Briegleb, NCAR 
+! update:  8 February 2007
 !
 ! !USES:
 !
       use ice_calendar
+
+! BPB 8 February 2007  For diagnostic prints
+      use ice_diagnostics
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) :: &
+      integer (kind=int_kind), &
+         intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         icells              ! number of ice-covered grid cells
+         icells                ! number of ice-covered grid cells
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
-         indxi    , & ! compressed indices for ice-covered cells
+         indxi   , & ! compressed indices for ice-covered cells
          indxj
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
-         tlat     , & ! latitude (radians)
-         coszen   , & ! cosine of solar zenith angle 
-         aicen    , & ! concentration of ice per category
-         vicen    , & ! volume of ice per category
-         vsnon    , & ! volume of ice per category
-         Tsfcn    , & ! surface temperature
-         swvdr    , & ! sw down, visible, direct  (W/m^2)
-         swvdf    , & ! sw down, visible, diffuse (W/m^2)
-         swidr    , & ! sw down, near IR, direct  (W/m^2)
-         swidf        ! sw down, near IR, diffuse (W/m^2)
+         coszen  , & ! cosine of solar zenith angle 
+         aice    , & ! concentration of ice 
+         vice    , & ! volume of ice 
+         vsno    , & ! volume of snow 
+         fs          ! horizontal coverage of snow
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
+         intent(in) :: &
+         rhosnw  , & ! density in snow layer (kg/m3)
+         rsnw        ! grain radius in snow layer (m)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         fp      , & ! pond fractional coverage (0 to 1) 
+         hp      , & ! pond depth (m) 
+         swvdr   , & ! sw down, visible, direct  (W/m^2)
+         swvdf   , & ! sw down, visible, diffuse (W/m^2)
+         swidr   , & ! sw down, near IR, direct  (W/m^2)
+         swidf       ! sw down, near IR, diffuse (W/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(out) :: &
-         alvdrn   , & ! visible, direct, avg   (fraction)
-         alidrn   , & ! near-ir, direct, avg   (fraction)
-         alvdfn   , & ! visible, diffuse, avg  (fraction)
-         alidfn   , & ! near-ir, diffuse, avg  (fraction)
-         fswsfc   , & ! SW absorbed at ice/snow surface (W m-2)
-         fswint   , & ! SW absorbed in ice interior, below surface (W m-2)
-         fswthru      ! SW through ice to ocean (W m-2)
+         alvdr   , & ! visible, direct, albedo (fraction) 
+         alvdf   , & ! visible, diffuse, albedo (fraction) 
+         alidr   , & ! near-ir, direct, albedo (fraction) 
+         alidf   , & ! near-ir, diffuse, albedo (fraction) 
+         fswsfc  , & ! SW absorbed at snow/bare ice/pondedi ice surface (W m-2)
+         fswint  , & ! SW interior absorption (below surface, above ocean,W m-2)
+         fswthru     ! SW through snow/bare ice/ponded ice into ocean (W m-2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
+         intent(out) :: &
+         Sswabs      ! SW absorbed in snow layer (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
-           intent(out) :: &
-         Iswabs         ! SW absorbed in particular layer (W m-2)
+         intent(out) :: &
+         Iswabs      ! SW absorbed in ice layer (W m-2)
 !      
 !EOP
 ! 
 ! !LOCAL PARAMETERS:
 !
       real (kind=dbl_kind),dimension (nx_block,ny_block) :: &
-         fnidr         ! fraction of direct to total down surface flux in nir
+         fnidr        ! fraction of direct to total down surface flux in nir
 
       ! albedos and fluxes for a given surface type
       real (kind=dbl_kind),dimension (nx_block,ny_block) :: &
-         avdr      , & ! vis direct albedo
-         avdf      , & ! vis diffuse albedo
-         aidr      , & ! nir direct albedo
-         aidf      , & ! nir direct albedo
-         fsfc      , & ! SW absorbed at ice/snow surface (W m-2)
-         fint      , & ! SW absorbed in ice interior, below surface (W m-2)
-         fthru         ! SW through ice to ocean (W m-2)
+         avdr     , & ! vis direct albedo
+         avdf     , & ! vis diffuse albedo
+         aidr     , & ! nir direct albedo
+         aidf     , & ! nir diffuse albedo
+         fsfc     , & ! SW absorbed at snow/bare ice/ponded ice surface (W m-2)
+         fint     , & ! SW interior absorption (below surface, above ocean,W m-2)
+         fthru        ! SW through snow/bare ice/ponded ice into ocean (W m-2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr) :: &
+         Sabs         ! SW absorbed in snow layer (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr) :: &
-         Iabs          ! SW absorbed in particular layer (W m-2)
+         Iabs         ! SW absorbed in ice layer (W m-2)
  
       real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
-         hsn       , & ! snow thickness (m)
-         sage      , & ! snow age (-1 to +1)
-         hin       , & ! ice thickness (m)
-         hpn       , & ! pond depth (m)
-         fi        , & ! snow/bare ice fractional coverage (0 to 1)
-         fs        , & ! snow fractional coverage (0 to 1)
-         fp            ! pond fractional coverage (0 to 1)
+         hs       , & ! snow thickness (all snow layers, m)
+         hi       , & ! ice thickness (all sea ice layers, m)
+         fi           ! snow/bare ice fractional coverage (0 to 1)
 
       integer (kind=int_kind), dimension(nx_block,ny_block) :: &
-         srftyp        ! surface type over ice: (0=air, 1=snow, 2=pond)
- 
-      real (kind=dbl_kind), parameter :: &
-         hspond = 0.025_dbl_kind, &  ! snow depth (m) below which ponded ice exists
-         cp40   = 0.400_dbl_kind, &  ! snow age numerical parameter
-         cp50   = 0.500_dbl_kind, &  ! snow age numerical parameter
-         fpmin  = 0.100_dbl_kind, &  ! ponded ice minimum fractional coverage
-         fpmax  = 0.450_dbl_kind, &  ! ponded ice maximum fractional coverage
-         c165   = 165.0_dbl_kind, &  ! day offset for ponded ice fraction
-         c167   = 167.0_dbl_kind     ! normalization day for ponded ice fraction
- 
-      real (kind=dbl_kind) :: &      
-         dTs , & ! temperature difference for snow age
-         fT  , & ! temperature weight for snow age
-         ydaysh  ! southern hemisphere day of year for pond fraction
+         srftyp       ! surface type over ice: (0=air, 1=snow, 2=pond)
  
       integer (kind=int_kind) :: &
-         i   , & ! longitude index
-         j   , & ! latitude index
-         ij  , & ! horizontal index, combines i and j loops
-         k   , & ! level index
-         icells2 ! number of cells in delta-Eddington calculation
+         i        , & ! longitude index
+         j        , & ! latitude index
+         ij       , & ! horizontal index, combines i and j loops
+         k        , & ! level index
+         icells_DE    ! number of cells in Delta-Eddington calculation
  
       integer (kind=int_kind), dimension (nx_block*ny_block) :: &
-         indxi2, & ! compressed indices for delta-Eddington cells
-         indxj2  
+         indxi_DE , & ! compressed indices for Delta-Eddington cells
+         indxj_DE  
+
+      real (kind=dbl_kind) :: &
+         hpmin    , & ! minimum allowed melt pond depth
+         hsmax    , & ! maximum snow depth below which Sswabs adjustment
+         hs_ssl   , & ! assumed snow surface scattering layer for Sswabs adj
+         frcadj       ! fractional Sswabs adjustment
+      data hpmin  / .005_dbl_kind /
+      data hs_ssl / .040_dbl_kind /
+
+! For printing points
+      integer (kind=int_kind) :: &
+         n            ! point number for prints
+
+      real (kind=dbl_kind) :: &
+               swdn  , & ! swvdr(i,j)+swvdf(i,j)+swidr(i,j)+swidf(i,j)
+               swab  , & ! fswsfc(i,j)+fswint(i,j)+fswthru(i,j)
+               swalb     ! (1.-swab/(swdn+.0001))
 
 !-----------------------------------------------------------------------
  
-      ! compute fraction of nir down direct to total:
+      ! zero storage albedos and fluxes for accumulation over surface types:
+      hs(:,:)       = c0
+      hi(:,:)       = c0
+      fi(:,:)       = c0
+      srftyp(:,:)   =  0
+      alvdr(:,:)    = c0
+      alvdf(:,:)    = c0
+      alidr(:,:)    = c0
+      alidf(:,:)    = c0
+      fswsfc(:,:)   = c0
+      fswint(:,:)   = c0
+      fswthru(:,:)  = c0
+      Sswabs(:,:,:) = c0
+      Iswabs(:,:,:) = c0
+
+      ! compute fraction of nir down direct to total over all points:
       do j = 1, ny_block
       do i = 1, nx_block
          fnidr(i,j) = c0
@@ -932,522 +1017,801 @@
       enddo                ! i
       enddo                ! j
  
-      ! zero storage albedos and fluxes for accumulation over 
-      ! surface types
-      fi(:,:) = c0
-      fp(:,:) = c0
-      hin(:,:) = c0
-      hsn(:,:) = c0
-      hpn(:,:) = c0
-      alvdfn(:,:)   = c0
-      alidfn(:,:)   = c0
-      alvdrn(:,:)   = c0
-      alidrn(:,:)   = c0
-      fswsfc(:,:)   = c0
-      fswint(:,:)   = c0
-      fswthru(:,:)  = c0
-      Iswabs(:,:,:) = c0
- 
       ! compute shortwave radiation accounting for snow/ice (both snow over 
       ! ice and bare ice) and ponded ice (if any):
  
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-      ! southern hemisphere pond day (6 month phase difference with northern)
-      ydaysh  = yday + c365/c2
-      if(ydaysh > c365 ) ydaysh = ydaysh - c365
-      if(ydaysh < c365 ) ydaysh = ydaysh + c365
-
-      ! find snow/ice properties for ice points
-      icells2 = 0
+      ! find bare ice points 
+      icells_DE = 0
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
-         if (aicen(i,j) > puny .and. coszen(i,j) > puny) then
-            icells2 = icells2 + 1
-            indxi2(icells2) = i
-            indxj2(icells2) = j 
-
-            hsn(i,j)  = vsnon(i,j) / aicen(i,j)
-            hin(i,j)  = vicen(i,j) / aicen(i,j)
-            hpn(i,j)  = c0
-            fi(i,j)   = c1
-            fp(i,j)   = c0
-            if( hsn(i,j) > puny ) then
-               ! snow over ice
-               srftyp(i,j) = 1
-            else
-               ! bare ice
-               srftyp(i,j) = 0
-            endif
-            ! snow thin; some melt ponds
-            if( hsn(i,j) < hspond) then
-               fs(i,j) = hsn(i,j)/hspond
-               ! northern hemisphere 
-               if(tlat(i,j) > c0) then
-                fp(i,j)= min(max(fpmin+(yday-c165)/c167,c0),fpmax) &
-                         *(c1-fs(i,j))
-               ! southern hemisphere 
-               else 
-                fp(i,j)= min(max(fpmin+(ydaysh-c165/c167),c0),fpmax) &
-                         *(c1-fs(i,j))
-               endif
-               fi(i,j) = c1-fp(i,j)
-            endif
-            ! snow age
-            dTs = Timelt - Tsfcn(i,j)
-            fT  = min(dTs/c3,c1)
-            sage(i,j) = max(c1-hsn(i,j)/cp40,-cp50) - cp50*fT
-         endif
+         ! sea ice points with sun above horizon
+         if (aice(i,j) > puny .and. coszen(i,j) > puny) then
+            ! evaluate sea ice thickness and fraction
+            hi(i,j)  = vice(i,j) / aice(i,j)
+            fi(i,j)  = c1 - fs(i,j) - fp(i,j)
+            ! bare sea ice points
+            if(fi(i,j) > c0) then
+              icells_DE = icells_DE + 1
+              indxi_DE(icells_DE) = i
+              indxj_DE(icells_DE) = j 
+              ! bare ice
+              srftyp(i,j) = 0
+            endif               ! fi > 0
+         endif                  ! aice > 0 and coszen > 0
       enddo                     ! ij
 
-      ! calculate snow/ice
-      call compute_dEdd                              &
-            (nx_block,ny_block,                      &
-             icells2, indxi2, indxj2, fnidr, coszen, &
-             swvdr,   swvdf,  swidr,  swidf,         &
-             srftyp,  hsn,    sage,   hin,   hpn,    &
-             avdr,    avdf,   aidr,   aidf,          &
-             fsfc,    fint,   fthru,  Iabs)
+      ! calculate bare sea ice
+      call compute_dEdd                                    &
+            (nx_block,ny_block,                            &
+             icells_DE, indxi_DE, indxj_DE, fnidr, coszen, &
+             swvdr,     swvdf,    swidr,    swidf, srftyp, &
+             hs,        rhosnw,   rsnw,     hi,    hp,     &
+             avdr,      avdf,     aidr,     aidf,  fsfc,   &
+             fint,      fthru,    Sabs,     Iabs)
 
-      ! accumulate fluxes over snow/ice
+      ! accumulate fluxes over bare sea ice
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-      do ij = 1, icells2
-         i = indxi2(ij)
-         j = indxj2(ij)
-         alvdfn(i,j)  = alvdfn(i,j)  + avdf(i,j) *fi(i,j)
-         alidfn(i,j)  = alidfn(i,j)  + aidf(i,j) *fi(i,j)
-         alvdrn(i,j)  = alvdrn(i,j)  + avdr(i,j) *fi(i,j)
-         alidrn(i,j)  = alidrn(i,j)  + aidr(i,j) *fi(i,j)
+      do ij = 1, icells_DE
+         i = indxi_DE(ij)
+         j = indxj_DE(ij)
+         alvdr(i,j)   = alvdr(i,j)   + avdr(i,j) *fi(i,j)
+         alvdf(i,j)   = alvdf(i,j)   + avdf(i,j) *fi(i,j)
+         alidr(i,j)   = alidr(i,j)   + aidr(i,j) *fi(i,j)
+         alidf(i,j)   = alidf(i,j)   + aidf(i,j) *fi(i,j)
          fswsfc(i,j)  = fswsfc(i,j)  + fsfc(i,j) *fi(i,j)
          fswint(i,j)  = fswint(i,j)  + fint(i,j) *fi(i,j)
          fswthru(i,j) = fswthru(i,j) + fthru(i,j)*fi(i,j)
       enddo                     ! ij
 
+      do k = 1, nslyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
+            Sswabs(i,j,k) = Sswabs(i,j,k) + Sabs(i,j,k)*fi(i,j)
+         enddo                  ! ij
+      enddo                     ! k
+
       do k = 1, nilyr
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do ij = 1, icells2
-            i = indxi2(ij)
-            j = indxj2(ij)
+         do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
             Iswabs(i,j,k) = Iswabs(i,j,k) + Iabs(i,j,k)*fi(i,j)
          enddo                  ! ij
       enddo                     ! k
-      
-      ! find ponded ice properties for ice points
-      icells2 = 0
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      ! find snow-covered ice points
+      icells_DE = 0
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
-         hin(i,j) = c0
-         hsn(i,j) = c0
-         if (aicen(i,j) > puny .and. coszen(i,j) > puny) then
-            hsn(i,j)  = vsnon(i,j) / aicen(i,j)
-            hin(i,j)  = vicen(i,j) / aicen(i,j)
-            ! snow thin or no snow: melt ponds
-            if( hsn(i,j) < hspond ) then
-               icells2 = icells2 + 1
-               indxi2(icells2) = i
-               indxj2(icells2) = j
+         ! sea ice points with sun above horizon
+         if (aice(i,j) > puny .and. coszen(i,j) > puny) then
+            ! evaluate snow thickness
+            hs(i,j)  = vsno(i,j) / aice(i,j)
+            ! snow-covered sea ice points
+            if(fs(i,j) > c0) then
+              icells_DE = icells_DE + 1
+              indxi_DE(icells_DE) = i
+              indxj_DE(icells_DE) = j 
+              ! snow-covered ice
+              srftyp(i,j) = 1
+            endif               ! fs > 0
+         endif                  ! aice > 0 and coszen > 0
+      enddo                     ! ij
+
+      ! calculate snow covered sea ice
+      call compute_dEdd                                    &
+            (nx_block,ny_block,                            &
+             icells_DE, indxi_DE, indxj_DE, fnidr, coszen, &
+             swvdr,     swvdf,    swidr,    swidf, srftyp, &
+             hs,        rhosnw,   rsnw,     hi,    hp,     &
+             avdr,      avdf,     aidr,     aidf,  fsfc,   &
+             fint,      fthru,    Sabs,     Iabs)
+
+      ! accumulate fluxes over snow covered sea ice
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      do ij = 1, icells_DE
+         i = indxi_DE(ij)
+         j = indxj_DE(ij)
+         alvdr(i,j)   = alvdr(i,j)   + avdr(i,j) *fs(i,j)
+         alvdf(i,j)   = alvdf(i,j)   + avdf(i,j) *fs(i,j)
+         alidr(i,j)   = alidr(i,j)   + aidr(i,j) *fs(i,j)
+         alidf(i,j)   = alidf(i,j)   + aidf(i,j) *fs(i,j)
+         fswsfc(i,j)  = fswsfc(i,j)  + fsfc(i,j) *fs(i,j)
+         fswint(i,j)  = fswint(i,j)  + fint(i,j) *fs(i,j)
+         fswthru(i,j) = fswthru(i,j) + fthru(i,j)*fs(i,j)
+      enddo                     ! ij
+
+      do k = 1, nslyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
+            Sswabs(i,j,k) = Sswabs(i,j,k) + Sabs(i,j,k)*fs(i,j)
+         enddo                  ! ij
+      enddo                     ! k
+
+      do k = 1, nilyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
+            Iswabs(i,j,k) = Iswabs(i,j,k) + Iabs(i,j,k)*fs(i,j)
+         enddo                  ! ij
+      enddo                     ! k
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      ! find ponded points
+      icells_DE = 0
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+         hi(i,j) = c0
+         ! sea ice points with sun above horizon
+         if (aice(i,j) > puny .and. coszen(i,j) > puny) then
+            hi(i,j)  = vice(i,j) / aice(i,j)
+            ! if non-zero pond fraction and sufficient pond depth
+            if( fp(i,j) > puny .and. hp(i,j) > hpmin ) then
+               icells_DE = icells_DE + 1
+               indxi_DE(icells_DE) = i
+               indxj_DE(icells_DE) = j
                ! ponded ice
                srftyp(i,j)   = 2
-               fs(i,j) = hsn(i,j)/hspond
-               ! northern hemisphere
-               if(tlat(i,j) > c0) then
-                fp(i,j)= min(max(fpmin+(yday-c165)/c167,c0),fpmax) &
-                        *(c1-fs(i,j))
-               ! southern hemisphere
-               else 
-                fp(i,j)= min(max(fpmin+(ydaysh-c165/c167),c0),fpmax) &
-                         *(c1-fs(i,j))
-               endif              
-               hpn(i,j)= fp(i,j)
-               ! limit pond depth to less than 1/2 ice thickness
-               hpn(i,j) = min(hpn(i,j), hin(i,j)/c2)
-            endif               ! hsn < hspond
-         endif                  ! aicen > puny, coszen > puny
+            endif               
+         endif                  ! aice > puny, coszen > puny
       enddo                     ! ij
 
       ! calculate ponded ice
-      call compute_dEdd                              &
-            (nx_block,ny_block,                      &
-             icells2, indxi2, indxj2, fnidr, coszen, &
-             swvdr,   swvdf,  swidr,  swidf,         &
-             srftyp,  hsn,    sage,   hin,   hpn,    &
-             avdr,    avdf,   aidr,   aidf,          &
-             fsfc,    fint,   fthru,  Iabs)
+      call compute_dEdd                                    &
+            (nx_block,ny_block,                            &
+             icells_DE, indxi_DE, indxj_DE, fnidr, coszen, &
+             swvdr,     swvdf,    swidr,    swidf, srftyp, &
+             hs,        rhosnw,   rsnw,     hi,    hp,     &
+             avdr,      avdf,     aidr,     aidf,  fsfc,   &
+             fint,      fthru,    Sabs,     Iabs)
 
       ! accumulate fluxes over ponded ice
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-      do ij = 1, icells2
-         i = indxi2(ij)
-         j = indxj2(ij)
-         alvdfn(i,j) = alvdfn(i,j)  + avdf(i,j) *fp(i,j)
-         alidfn(i,j) = alidfn(i,j)  + aidf(i,j) *fp(i,j)
-         alvdrn(i,j) = alvdrn(i,j)  + avdr(i,j) *fp(i,j)
-         alidrn(i,j) = alidrn(i,j)  + aidr(i,j) *fp(i,j)
+      do ij = 1, icells_DE
+         i = indxi_DE(ij)
+         j = indxj_DE(ij)
+         alvdr(i,j)  = alvdr(i,j)   + avdr(i,j) *fp(i,j)
+         alvdf(i,j)  = alvdf(i,j)   + avdf(i,j) *fp(i,j)
+         alidr(i,j)  = alidr(i,j)   + aidr(i,j) *fp(i,j)
+         alidf(i,j)  = alidf(i,j)   + aidf(i,j) *fp(i,j)
          fswsfc(i,j) = fswsfc(i,j)  + fsfc(i,j) *fp(i,j)
          fswint(i,j) = fswint(i,j)  + fint(i,j) *fp(i,j)
          fswthru(i,j)= fswthru(i,j) + fthru(i,j)*fp(i,j) 
       enddo                     ! ij
 
+      do k = 1, nslyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
+            Sswabs(i,j,k) = Sswabs(i,j,k) + Sabs(i,j,k)*fp(i,j)
+         enddo                  ! ij
+      enddo                     ! k
+
       do k = 1, nilyr
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do ij = 1, icells2
-            i = indxi2(ij)
-            j = indxj2(ij)
+         do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
             Iswabs(i,j,k) = Iswabs(i,j,k) + Iabs(i,j,k)*fp(i,j)
          enddo                  ! ij
       enddo                     ! k
+
+! BPB 8 Feb 2007  Extra diagnostic printouts
+      if (print_points) then
+         do n = 1, npnt
+            if (my_task == pmloc(n)) then
+               i = piloc(n)
+               j = pjloc(n)
+               if( coszen(i,j) > .01_dbl_kind ) then
+               write(nu_diag,*) ' my_task = ',my_task &
+                               ,' printing point = ',n &
+                               ,' i and j = ',i,j
+               write(nu_diag,*) ' coszen = ', &
+                                  coszen(i,j)
+               write(nu_diag,*) ' swvdr  swvdf = ', &
+                                  swvdr(i,j),swvdf(i,j)
+               write(nu_diag,*) ' swidr  swidf = ', &
+                                  swidr(i,j),swidf(i,j)
+               write(nu_diag,*) ' aice = ', &
+                                  aice(i,j)
+               write(nu_diag,*) ' hs = ', &
+                                  hs(i,j)
+               write(nu_diag,*) ' hp = ', &
+                                  hp(i,j)
+               write(nu_diag,*) ' fs = ', &
+                                  fs(i,j)
+               write(nu_diag,*) ' fi = ', &
+                                  fi(i,j)
+               write(nu_diag,*) ' fp = ', &
+                                  fp(i,j)
+               write(nu_diag,*) ' hi = ', &
+                                  hi(i,j)
+               write(nu_diag,*) ' srftyp = ', &
+                                  srftyp(i,j)
+               write(nu_diag,*) ' alvdr  alvdf = ', &
+                                  alvdr(i,j),alvdf(i,j)
+               write(nu_diag,*) ' alidr  alidf = ', &
+                                  alidr(i,j),alidf(i,j)
+               write(nu_diag,*) ' fswsfc fswint fswthru = ', &
+                                  fswsfc(i,j),fswint(i,j),fswthru(i,j)
+               swdn  = swvdr(i,j)+swvdf(i,j)+swidr(i,j)+swidf(i,j)
+               swab  = fswsfc(i,j)+fswint(i,j)+fswthru(i,j)
+               swalb = (1.-swab/(swdn+.0001))
+               write(nu_diag,*) ' swdn swab swalb = ',swdn,swab,swalb
+               do k = 1, nslyr               
+                 write(nu_diag,*) ' snow layer k    = ', k, &
+                                  ' rhosnw = ', &
+                                    rhosnw(i,j,k), &
+                                  ' rsnw = ', &
+                                    rsnw(i,j,k)
+               enddo
+               do k = 1, nslyr               
+                 write(nu_diag,*) ' snow layer k    = ', k, &
+                                  ' Sswabs(k)       = ', Sswabs(i,j,k)
+               enddo
+               do k = 1, nilyr               
+                 write(nu_diag,*) ' sea ice layer k = ', k, &
+                                  ' Iswabs(k)       = ', Iswabs(i,j,k)
+               enddo
+               endif  ! coszen(i,j) > .01
+            endif     ! my_task
+         enddo        ! n for printing points
+      endif           ! if print_points
 
       end subroutine shortwave_dEdd
 
 !=======================================================================
 !BOP
 !
-! !IROUTINE: compute_dEdd - evaluate iops for delta-Edd and compute solution
+! !IROUTINE: compute_dEdd - evaluate Delta-Edd IOPs and compute solution
 !
 ! !INTERFACE:
 !
-      subroutine compute_dEdd                        &
-            (nx_block,ny_block,                      &
-             icells,  indxi,  indxj,  fnidr, coszen, &
-             swvdr,   swvdf,  swidr,  swidf,         &
-             srftyp,  hsn,    sage,   hin,   hpn,    &
-             avdr ,   avdf,   aidr,   aidf,          &
-             fsfc,    fint,   fthru,  Iabs)
+      subroutine compute_dEdd                              &
+            (nx_block,ny_block,                            &
+             icells_DE, indxi_DE, indxj_DE, fnidr, coszen, &
+             swvdr,     swvdf,    swidr,    swidf, srftyp, &
+             hs,        rhosnw,   rsnw,     hi,    hp,     &
+             avdr,      avdf,     aidr,     aidf,  fsfc,   &
+             fint,      fthru,    Sabs,     Iabs)
 !
 ! !DESCRIPTION:
 !
-! Evaluate snow/ice/pond inherent optical properties (iops) for evaluation 
-! of delta-Eddington solution, and then calculate the solution.
+! Evaluate snow/ice/ponded ice inherent optical properties (IOPs), and 
+! then calculate the multiple scattering solution by calling solution_dEdd.
 !
 ! !REVISION HISTORY:
 !
 ! author:  Bruce P. Briegleb, NCAR 
+! update:  8 February 2007
 !
 ! !USES:
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) :: &
+      integer (kind=int_kind), &
+         intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         icells   ! number of ice/ocean grid cells for surface type
+         icells_DE             ! number of sea ice grid cells for surface type
  
-      integer (kind=int_kind), dimension(nx_block*ny_block),  &
-         intent(in):: &
-         indxi , & ! compressed indices for ice/ocean cells for surface type
-         indxj
+      integer (kind=int_kind), dimension(nx_block*ny_block), &
+         intent(in) :: &
+         indxi_DE, & ! compressed indices for sea ice cells for surface type
+         indxj_DE
  
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         fnidr , & ! fraction of direct to total down flux in nir
-         coszen, & ! cosine solar zenith angle
-         swvdr , & ! sw down, visible, direct  (W/m^2)
-         swvdf , & ! sw down, visible, diffuse (W/m^2)
-         swidr , & ! sw down, near IR, direct  (W/m^2)
-         swidf     ! sw down, near IR, diffuse (W/m^2)
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         fnidr   , & ! fraction of direct to total down flux in nir
+         coszen  , & ! cosine solar zenith angle
+         swvdr   , & ! shortwave down at surface, visible, direct  (W/m^2)
+         swvdf   , & ! shortwave down at surface, visible, diffuse (W/m^2)
+         swidr   , & ! shortwave down at surface, near IR, direct  (W/m^2)
+         swidf       ! shortwave down at surface, near IR, diffuse (W/m^2)
  
       integer (kind=int_kind), dimension(nx_block,ny_block), &
-         intent(in):: &
-         srftyp  ! surface type over ice: (0=air, 1=snow, 2=pond)
+         intent(in) :: &
+         srftyp      ! surface type over ice: (0=air, 1=snow, 2=pond)
  
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
-         hsn , & ! snow thickness (m)
-         sage, & ! snow age (-1 to +1)
-         hin , & ! ice thickness (m)
-         hpn     ! ponded depth (m)
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(in) :: &
+         hs          ! snow thickness (m)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
+         intent(in) :: &
+         rhosnw  , & ! snow density in snow layer (kg/m3)
+         rsnw        ! snow grain radius in snow layer (m)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(in) :: &
+         hi      , & ! ice thickness (m)
+         hp          ! pond depth (m)
  
-      ! albedos 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out) :: &
-         avdr, & ! visible, direct   (fraction)
-         avdf, & ! visible, diffuse  (fraction)
-         aidr, & ! near-ir, direct   (fraction)
-         aidf    ! near-ir, diffuse  (fraction)
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(out) :: &
+         avdr    , & ! visible albedo, direct   (fraction)
+         avdf    , & ! visible albedo, diffuse  (fraction)
+         aidr    , & ! near-ir albedo, direct   (fraction)
+         aidf        ! near-ir albedo, diffuse  (fraction)
  
-      ! fluxes absorbed in snow/sea ice and through to ocean
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out) :: &
-         fsfc    , & ! SW absorbed at ice/snow surface (W m-2)
-         fint    , & ! SW absorbed in ice interior, below surface (W m-2)
-         fthru       ! SW through ice to ocean            (W/m^2)
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(out) :: &
+         fsfc    , & ! shortwave absorbed at snow/bare ice/ponded ice surface (W m-2)
+         fint    , & ! shortwave absorbed in interior (below surface but above ocean, W m-2)
+         fthru       ! shortwave through snow/bare ice/ponded ice to ocean (W/m^2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
+         intent(out) :: &
+         Sabs        ! shortwave absorbed in snow layer (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
          intent(out) :: &
-         Iabs        ! SW absorbed in particular layer (W m-2)
+         Iabs        ! shortwave absorbed in ice layer (W m-2)
 ! 
 !EOP
 !-----------------------------------------------------------------------
-! Compute shortwave radiation (surface albedos and fluxes)
-! August 2005  Bruce P. Briegleb
 !
-! Uses delta-Eddington adding method 
-! 
-! Snow/ice is divided into horizontally and vertically homogeneous layers.
-! For each layer, a solution for reflectivity/transmissivity (R/T) for direct 
-! and diffuse radiation is evaluated using the delta-Eddington method. This
-! method assumes the scattering phase function can be expressed as a delta 
-! function forward peak with the remainder a cosine function, in accordance 
-! with the Eddington approximation. The resulting transfer equation can be 
-! solved in closed form. Direct and diffuse incident radiation are distinguished, 
-! with the diffuse assumed isotropic in each hemisphere. Once R/T are evaluated
-! for each layer for direct and diffuse incident radiation, the layers are added 
-! assuming that interlayer diffuse radiation is isotropic in each hemisphere. 
-! Refraction at a specified layer interface is handled assuming an extra
-! non-absorbing layer whose R/T are given by the fresnel formulas. Once the 
-! layers are added, the up/down direct and diffuse fluxes at each layer 
-! interface can be evaluated, and hence reflectivity, layer absorption 
-! and transmission to the underlying ocean. 
+! Set up optical property profiles, based on snow, sea ice and ponded 
+! ice IOPs from:
 !
-! Divides solar spectrum into 3 intervals: 0.2-0.7, 0.7-1.19, and 1.19-5.0 
-! micro-meters. The latter two are added (using a partition of incident 
-! shortwave dependent on the 0.7-5.0 micro-meter direct to total incident
-! flux) to give the final output of 0.2-0.7 visible and 0.7-5.0 infrared 
-! albedos and fluxes.
+! Briegleb, B. P., and B. Light (2007): A Delta-Eddington Multiple 
+!    Scattering Parameterization for Solar Radiation in the Sea Ice 
+!    Component of the Community Climate System Model, NCAR Technical 
+!    Note  NCAR/TN-472+STR  February 2007
 !
-! This routine specifies vertical layer optical properties based on input 
-! surface type, while the called-routine solution_dEdd computes layer by layer 
-! delta-Eddington reflectivity and transmissivity, and adds layers. Finally, 
-! surface albedos and internal fluxes/flux divergences are evaluated in this 
-! routine and saved for later use.
+! Computes column Delta-Eddington radiation solution for specific
+! surface type: either snow over sea ice, bare sea ice, or ponded sea ice.
 !
+! Divides solar spectrum into 3 intervals: 0.2-0.7, 0.7-1.19, and
+! 1.19-5.0 micro-meters. The latter two are added (using an assumed
+! partition of incident shortwave in the 0.7-5.0 micro-meter band between
+! the 0.7-1.19 and 1.19-5.0 micro-meter band) to give the final output 
+! of 0.2-0.7 visible and 0.7-5.0 near-infrared albedos and fluxes.
 !
-!      Description of the level and layer index conventions.
+! Specifies vertical layer optical properties based on input snow depth,
+! density and grain radius, along with ice and pond depths, then computes
+! layer by layer Delta-Eddington reflectivity, transmissivity and combines
+! layers (done by calling routine solution_dEdd). Finally, surface albedos
+! and internal fluxes/flux divergences are evaluated.
 !
-!  CCSM3 Sea Ice Model Layers       dEdd shortwave calculation
-!                                 
-!                                 (radiation layers and interfaces)
-!                             layer index             interface index
+!  Description of the level and layer index conventions. This is
+!  for the standard case of one snow layer and four sea ice layers.
 !
-!                                     ----------------------  0
-!    /////////////////////            //////////////////////
-!    Snow layer if present         0  air, snow or melt pond
-!    /////////////////////            //////////////////////
-!    ---------------------            ----------------------  1
-!                                  1  \\\ surface layer \\\\
-!          layer 1                    ----------------------  2
-!                                  2
-!    ---------------------            ----------------------  3
+!  Please read the following; otherwise, there is 99.9% chance you
+!  will be confused about indices at some point in time........ :)
 !
-!          layer 2                 3
+!  CICE4.0 snow treatment has one snow layer above the sea ice. This 
+!  snow layer has finite heat capacity, so that surface absorption must
+!  be distinguished from internal. The Delta-Eddington solar radiation
+!  thus adds extra surface scattering layers to both snow and sea ice.
+!  Note that in the following, we assume a fixed vertical layer structure
+!  for the radiation calculation. In other words, we always have the 
+!  structure shown below for one snow and four sea ice layers, but for 
+!  ponded ice the pond fills "snow" layer 1 over the sea ice, and for 
+!  bare sea ice the top layers over sea ice are treated as transparent air.
 !
-!    ---------------------            ----------------------  4
+!  SSL = surface scattering layer for either snow or sea ice
+!  DL  = drained layer for sea ice immediately under sea ice SSL
+!  INT = interior layers for sea ice below the drained layer.
 !
-!          layer 3                 4
+!  Notice that the radiation level starts with 0 at the top. Thus,
+!  the total number radiation layers is klev+1, where klev is the
+!  sum of nslyr, the number of CCSM snow layers, and nilyr, the
+!  number of CCSM sea ice layers, plus the sea ice SSL:
+!  klev = 1 + nslyr + nilyr
 !
-!    ---------------------            ----------------------  5
+!  For the standard case illustrated below, nslyr=1, nilyr=4,
+!  and klev=6, with the number of layer interfaces klevp=klev+1.
+!  Layer interfaces are the surfaces on which reflectivities,
+!  transmissivities and fluxes are evaluated.
 !
-!          layer 4                 5
+!  CCSM3 Sea Ice Model            Delta-Eddington Solar Radiation
+!                                     Layers and Interfaces
+!                             Layer Index             Interface Index
+!    ---------------------            ---------------------  0
+!                                  0  \\\   snow SSL    \\\
+!       snow layer 1                  ---------------------  1
+!                                  1    rest of snow layer
+!    +++++++++++++++++++++            +++++++++++++++++++++  2
+!                                  2  \\\ sea ice SSL   \\\
+!      sea ice layer 1                ---------------------  3
+!                                  3      sea ice  DL
+!    ---------------------            ---------------------  4
 !
-!    ---------------------            ----------------------  6
+!      sea ice layer 2             4      sea ice INT
 !
-! The CCSM sea ice model has four vertical layers for the thermodynamic 
-! heat tranfer; for the dEdd calculation, the same four vertical layers 
-! are used plus a surface layer. This surface layer is implicit in the 
-! CCSM3 snow/ice absorption calculation, but here is made explicit. The 
-! surface layer is h1_4 thick (a specified constant) unless the first layer 
-! is smaller than twice this; then it uses hi/8 for the thickness (hi=total 
-! ice thickness). The dEdd layer thickness for layer 2 is hi/4 - h1_4, and
-! for layers 3,4,5 it is hi/4.
+!    ---------------------            ---------------------  5
 !
-! The radiation absorbed in the surface layer is used for the surface 
-! melting calculation for bare ice; that which penetrates into radiation 
-! layer 2 is used for sea ice model layer 1 heating. For the case of snow 
-! and melt ponds, the radiation absorbed in the snow layer or the melt pond 
-! is also used for surface melting. The net transmission in visible (vs) and 
-! near-ir (ni) bands at the radiation interface 2 is equivalent to the 
-! classical I_0 fraction of shortwave radiation (absorbed in the column) 
-! that penetrates the surface layer.
+!      sea ice layer 3             5      sea ice INT
+!
+!    ---------------------            ---------------------  6
+!
+!      sea ice layer 4             6      sea ice INT
+!
+!    ---------------------            ---------------------  7
+!
+! When snow lies over sea ice, the radiation absorbed in the
+! snow SSL is used for surface heating, and that in the rest
+! of the snow layer for its internal heating. For sea ice in
+! this case, all of the radiant heat absorbed in both the
+! sea ice SSL and the DL are used for sea ice layer 1 heating.
+!
+! When pond lies over sea ice, and for bare sea ice, all of the
+! radiant heat absorbed within and above the sea ice SSL is used
+! for surface heating, and that absorbed in the sea ice DL is
+! used for sea ice layer 1 heating.
+!
+! Basically, vertical profiles of the layer extinction optical depth (tau), 
+! single scattering albedo (w0) and asymmetry parameter (g) are required over
+! the klev+1 layers, where klev+1 = 2 + nslyr + nilyr. All of the surface type
+! information and snow/ice iop properties are evaulated in this routine, so
+! the tau,w0,g profiles can be passed to solution_dEdd for multiple scattering
+! evaluation. Snow, bare ice and ponded ice iops are contained in data arrays
+! in this routine.
 !
 !-----------------------------------------------------------------------
 !
 ! !LOCAL PARAMETERS
 !
       integer (kind=int_kind) :: &
-         i   , & ! longitude index
-         j   , & ! latitude index
-         k   , & ! level index
-         ij  , & ! horizontal index, combines i and j loops
-         ns      ! spectral index
+         i       , & ! longitude index
+         j       , & ! latitude index
+         k       , & ! level index
+         ij      , & ! horizontal index, combines i and j loops
+         ns      , & ! spectral index
+         nr      , & ! index for grain radius tables
+         ksa     , & ! index for snow internal absorption
+         ki      , & ! index for sea ice internal absorption
+         km      , & ! k starting index for snow, sea ice internal absorption
+         kp      , & ! k+1 or k+2 index for snow, sea ice internal absorption
+         ksrf    , & ! level index for surface absorption
+         ksnow   , & ! level index for snow density and grain size
+         kice        ! level starting index for sea ice (nslyr+1)
+
+      integer (kind=int_kind), parameter :: & 
+         klev    = nslyr + nilyr + 1   , & ! number of radiation layers - 1
+         klevp   = klev  + 1               ! number of radiation interfaces - 1
+                                           ! (0 layer is included also)
  
       integer (kind=int_kind), parameter :: & 
-         klev    = nilyr + 1, & ! number of radiation layers
-         klevp   = klev  + 1    ! number of radiation layers + 1
- 
-      integer (kind=int_kind), parameter :: & 
-         nspint  = 3     ! number of solar spectral intervals
+         nspint  = 3     , & ! number of solar spectral intervals
+         nmbrad  = 32        ! number of snow grain radii in tables
  
       real (kind=dbl_kind), dimension (nx_block,ny_block,nspint) :: &
-         wghtns          ! spectral weights
+         wghtns              ! spectral weights
  
       real (kind=dbl_kind), parameter :: & 
-         cp67    = 0.67_dbl_kind, & ! nir band weight parameter
-         cp33    = 0.33_dbl_kind, & ! nir band weight parameter
-         cp78    = 0.78_dbl_kind, & ! nir band weight parameter
-         cp22    = 0.22_dbl_kind, & ! nir band weight parameter
-         cp01    = 0.01_dbl_kind    ! for ocean albedo
+         cp67    = 0.67_dbl_kind   , & ! nir band weight parameter
+         cp33    = 0.33_dbl_kind   , & ! nir band weight parameter
+         cp78    = 0.78_dbl_kind   , & ! nir band weight parameter
+         cp22    = 0.22_dbl_kind   , & ! nir band weight parameter
+         cp01    = 0.01_dbl_kind       ! for ocean visible albedo
  
       real (kind=dbl_kind), dimension (nx_block,ny_block,0:klev) :: &
-         tau , & ! layer extinction optical depth
-         w0  , & ! layer single scattering albedo
-         g       ! layer asymmetry parameter
+         tau     , & ! layer extinction optical depth
+         w0      , & ! layer single scattering albedo
+         g           ! layer asymmetry parameter
  
       ! following arrays are defined at model interfaces; 0 is the top of the
       ! layer above the sea ice; klevp is the sea ice/ocean interface.
       real (kind=dbl_kind), dimension (nx_block,ny_block,0:klevp) :: &
-         trndir, & ! solar beam down transm from top
-         trntdr, & ! total transmission to direct beam for layers above
-         trndif, & ! diffuse transmission to diffuse beam for layers above
-         rupdir, & ! ref to dir rad for layers below
-         rupdif, & ! ref to dif rad for layers below
-         rdndif    ! ref to dif rad for layers above
+         trndir  , & ! solar beam down transmission from top
+         trntdr  , & ! total transmission to direct beam for layers above
+         trndif  , & ! diffuse transmission to diffuse beam for layers above
+         rupdir  , & ! reflectivity to direct radiation for layers below
+         rupdif  , & ! reflectivity to diffuse radiation for layers below
+         rdndif      ! reflectivity to diffuse radiation for layers above
  
       real (kind=dbl_kind) :: &
-         refk    ! interface multiple scattering k
+         refk        ! interface k multiple scattering term
  
       real (kind=dbl_kind), dimension (nx_block,ny_block,0:klevp) :: &
-         fdirup, & ! up   flux to direct beam at model interface 
-         fdirdn, & ! down flux to direct beam at model interface
-         fdifup, & ! up   flux to diffuse beam at model interface 
-         fdifdn    ! down flux to diffuse beam at model interface
+         fdirup  , & ! up   flux at model interface due to direct beam at top surface
+         fdirdn  , & ! down flux at model interface due to direct beam at top surface
+         fdifup  , & ! up   flux at model interface due to diffuse beam at top surface
+         fdifdn      ! down flux at model interface due to diffuse beam at top surface
  
-      ! inherent optical property (iop) arrays and data
+      ! inherent optical property (iop) arrays for snow
       real (kind=dbl_kind), dimension (nspint) :: &
-         ks_f, & ! fresh snow grain extinction coefficient m^{-1}
-         ks_s, & ! small snow grain extinction coefficient m^{-1}
-         ks_l, & ! large snow grain extinction coefficient m^{-1}    
-         ws_f, & ! fresh snow grain single scattering albedo    
-         ws_s, & ! small snow grain single scattering albedo    
-         ws_l, & ! large snow grain single scattering albedo    
-         gs_f, & ! fresh snow grain asymmetry parameter        
-         gs_s, & ! small snow grain asymmetry parameter
-         gs_l    ! large snow grain asymmetry parameter
- 
-      real (kind=dbl_kind), dimension (nspint,klev) :: &
-         ki_f, & ! first year ice extinction coefficient m^{-1}
-         wi_f, & ! first year ice single scattering albedo
-         gi_f    ! first year ice asymmetry parameter
+         Qs      , & ! Snow extinction efficiency
+         ks      , & ! Snow extinction coefficient (/m)
+         ws      , & ! Snow single scattering albedo
+         gs          ! Snow asymmetry parameter
 
-!echmod
-      real (kind=dbl_kind), dimension (nspint,2) :: &
-         ki_f0, & ! first year ice extinction coefficient m^{-1}
-         wi_f0    ! first year ice single scattering albedo
-!echmod
- 
-      real (kind=dbl_kind), dimension (nspint) :: &
-         ki_p, & ! first year ice under pond extinction coefficient m^{-1}
-         wi_p, & ! first year ice under pond single scattering albedo
-         gi_p, & ! first year ice under pond asymmetry parameter
-         kw  , & ! water extinction coefficient m^{-1}
-         ww  , & ! water single scattering albedo
-         gw      ! water asymmetry parameter
- 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-        albodr, & ! spectral ocean albedo to direct rad
-        albodf    ! spectral ocean albedo to diffuse rad
-     
+      real (kind=dbl_kind), dimension (nmbrad) :: &
+         rsnw_tab    ! snow grain radius for each table entry (micro-meters)
+
+      real (kind=dbl_kind), dimension (nspint,nmbrad) :: &
+         Qs_tab  , & ! extinction efficiency for each snow grain radius
+         ws_tab  , & ! single scatter albedo for each snow grain radius
+         gs_tab      ! assymetry parameter   for each snow grain radius
       real (kind=dbl_kind) :: &
-        dz   , & ! sea ice layer thickness
-        dzs  , & ! sea ice surface layer thickness
-        dz1      ! sea ice layer thickness below surface layer
- 
-      real (kind=dbl_kind), parameter :: &
-        h1_4 = 0.050_dbl_kind   ! surface layer thickness (m)
- 
-      ! Extinction data for snow is taken from: Wiscombe and Warren, 1980
-      ! and Warren and Wiscombe, 1980. Extinction for fresh snow is that 50
-      ! micron radius ice spheres, aged 100 micron radius ice spheres, and
-      ! that of melting snow 1000 micron radius ice spheres. The single 
-      ! scattering albedos are those for ice with small dust and graphitic 
-      ! carbon soot inclusions (latter order 1.5ppmw). The asymmetry 
-      ! parameters are rounded to two significant digits.
+         delr    , & ! snow grain radius interpolation parameter
+         rhoi    , & ! pure ice density (kg/m3)
+         fr      , & ! snow grain adjustment factor 
+         fr_max  , & ! snow grain adjustment factor max
+         fr_min      ! snow grain adjustment factor min
 
-      data ks_f /  10900._dbl_kind, 11000._dbl_kind, 11100._dbl_kind /
-      data ks_s /   5450._dbl_kind,  5500._dbl_kind,  5550._dbl_kind /
-      data ks_l /    545._dbl_kind,   550._dbl_kind,   555._dbl_kind /
- 
-      data ws_f /  0.9999_dbl_kind, 0.9998_dbl_kind,  0.997_dbl_kind /
-      data ws_s /  0.9995_dbl_kind, 0.9992_dbl_kind,  0.995_dbl_kind /
-      data ws_l /  0.9975_dbl_kind, 0.9955_dbl_kind,  0.900_dbl_kind /
- 
-      data gs_f /    0.89_dbl_kind,   0.89_dbl_kind,   0.90_dbl_kind /
-      data gs_s /    0.89_dbl_kind,   0.89_dbl_kind,   0.90_dbl_kind /
-      data gs_l /    0.89_dbl_kind,   0.90_dbl_kind,   0.93_dbl_kind /
- 
-      ! Following data from Bonnie Light, February 2005
+      ! inherent optical property (iop) arrays for ice and ponded ice
+      ! mn = specified mean (or base) value
+      real (kind=dbl_kind), dimension (nspint) :: &
+         ki_ssl_mn    , & ! Surface-scattering-layer ice extinction coefficient (/m)
+         wi_ssl_mn    , & ! Surface-scattering-layer ice single scattering albedo
+         gi_ssl_mn    , & ! Surface-scattering-layer ice asymmetry parameter
+         ki_dl_mn     , & ! Drained-layer ice extinction coefficient (/m)
+         wi_dl_mn     , & ! Drained-layer ice single scattering albedo
+         gi_dl_mn     , & ! Drained-layer ice asymmetry parameter
+         ki_int_mn    , & ! Interior-layer ice extinction coefficient (/m)
+         wi_int_mn    , & ! Interior-layer ice single scattering albedo
+         gi_int_mn    , & ! Interior-layer ice asymmetry parameter
+         ki_p_ssl_mn  , & ! Ice under pond surface-scattering-layer extinction coefficient (/m)
+         wi_p_ssl_mn  , & ! Ice under pond surface-scattering-layer single scattering albedo
+         gi_p_ssl_mn  , & ! Ice under pond surface-scattering-layer asymmetry parameter
+         ki_p_int_mn  , & ! Ice under pond interior extinction coefficient (/m)
+         wi_p_int_mn  , & ! Ice under pond interior single scattering albedo
+         gi_p_int_mn      ! Ice under pond interior asymmetry parameter
 
-!echmod      data ki_f /   1000._dbl_kind,  1005._dbl_kind,  2224._dbl_kind, &
-!echmod                      75._dbl_kind,    82._dbl_kind,  1969._dbl_kind, &
-!echmod                      60._dbl_kind,    67._dbl_kind,  1954._dbl_kind, &
-!echmod                      60._dbl_kind,    67._dbl_kind,  1954._dbl_kind, &
-!echmod                      60._dbl_kind,    67._dbl_kind,  1954._dbl_kind /
-!echmod      data wi_f /   .9999_dbl_kind,  .9954_dbl_kind,  .4495_dbl_kind, &
-!echmod                    .9972_dbl_kind,  .9125_dbl_kind,  .0381_dbl_kind, &
-!echmod                    .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind, &
-!echmod                    .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind, &
-!echmod                    .9965_dbl_kind,  .8930_dbl_kind,  .0307_dbl_kind /
-!echmod      data gi_f /     .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind, &
-!echmod                      .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind, &
-!echmod                      .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind, &
-!echmod                      .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind, &
-!echmod                      .94_dbl_kind,    .94_dbl_kind,    .94_dbl_kind /
+      ! actual used ice and ponded ice IOPs, allowing for tuning 
+      ! modifications of the above "_mn" value
+      real (kind=dbl_kind), dimension (nspint) :: &
+         ki_ssl       , & ! Surface-scattering-layer ice extinction coefficient (/m)
+         wi_ssl       , & ! Surface-scattering-layer ice single scattering albedo
+         gi_ssl       , & ! Surface-scattering-layer ice asymmetry parameter
+         ki_dl        , & ! Drained-layer ice extinction coefficient (/m)
+         wi_dl        , & ! Drained-layer ice single scattering albedo
+         gi_dl        , & ! Drained-layer ice asymmetry parameter
+         ki_int       , & ! Interior-layer ice extinction coefficient (/m)
+         wi_int       , & ! Interior-layer ice single scattering albedo
+         gi_int       , & ! Interior-layer ice asymmetry parameter
+         ki_p_ssl     , & ! Ice under pond srf scat layer extinction coefficient (/m)
+         wi_p_ssl     , & ! Ice under pond srf scat layer single scattering albedo
+         gi_p_ssl     , & ! Ice under pond srf scat layer asymmetry parameter
+         ki_p_int     , & ! Ice under pond extinction coefficient (/m)
+         wi_p_int     , & ! Ice under pond single scattering albedo
+         gi_p_int         ! Ice under pond asymmetry parameter
+
+      real (kind=dbl_kind) :: &
+         hi_ssl       , & ! sea ice surface scattering layer thickness (m)
+         hs_ssl       , & ! snow surface scattering layer thickness (m)
+         dz           , & ! snow, sea ice or pond water layer thickness
+         dz_ssl       , & ! snow or sea ice surface scattering layer thickness
+         fs               ! scaling factor to reduce (nilyr<4) or increase (nilyr>4) DL
+                          ! extinction coefficient to maintain DL optical depth constant
+                          ! with changing number of sea ice layers, to approximately 
+                          ! conserve computed albedo for constant physical depth of sea
+                          ! ice when the number of sea ice layers vary
+      real (kind=dbl_kind) :: &
+         kalg         , & ! algae absorption coefficient for 0.5 m thick layer
+         sig          , & ! scattering coefficient for tuning
+         kabs         , & ! absorption coefficient for tuning
+         sigp             ! modified scattering coefficient for tuning
+
+      ! inherent optical property (iop) arrays for pond water and underlying ocean
+      real (kind=dbl_kind), dimension (nspint) :: &
+         kw           , & ! Pond water extinction coefficient (/m)
+         ww           , & ! Pond water single scattering albedo
+         gw               ! Pond water asymmetry parameter
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         albodr       , & ! spectral ocean albedo to direct rad
+         albodf           ! spectral ocean albedo to diffuse rad
+      
+      ! tuning parameters
+      real (kind=dbl_kind) :: &
+         fp_ice       , & ! ice fraction of scat coeff for + stn dev in alb
+         fm_ice       , & ! ice fraction of scat coeff for - stn dev in alb
+         fp_pnd       , & ! ponded ice fraction of scat coeff for + stn dev in alb
+         fm_pnd           ! ponded ice fraction of scat coeff for - stn dev in alb
  
-      data ki_p /     15._dbl_kind,    22._dbl_kind,  1900._dbl_kind /
-      data wi_p /    .986_dbl_kind,   .676_dbl_kind,   .008_dbl_kind /
-      data gi_p /    .940_dbl_kind,   .940_dbl_kind,   .940_dbl_kind /
- 
-      data kw   /    0.16_dbl_kind,   11.3_dbl_kind,  1980._dbl_kind /
-      data ww   /    0.01_dbl_kind,   0.01_dbl_kind,   0.01_dbl_kind /
-      data gw   /    0.01_dbl_kind,   0.01_dbl_kind,   0.01_dbl_kind /
- 
+      ! for melt pond transition to bare sea ice for small pond depths 
+      real (kind=dbl_kind) :: &
+         hpmin        , & ! minimum allowed melt pond depth (m)
+         hp0          , & ! melt pond depth below which iops are weighted bare ice + pond (m)
+         sig_i        , & ! ice scattering coefficient (/m)
+         sig_p        , & ! pond scattering coefficient (/m)
+         kext             ! weighted extinction coefficient (/m)
+
+      ! snow grain radii (micro-meters) for table
+      data rsnw_tab/ &
+          5._dbl_kind,    7._dbl_kind,   10._dbl_kind,   15._dbl_kind, &
+         20._dbl_kind,   30._dbl_kind,   40._dbl_kind,   50._dbl_kind, &
+         65._dbl_kind,   80._dbl_kind,  100._dbl_kind,  120._dbl_kind, &
+        140._dbl_kind,  170._dbl_kind,  200._dbl_kind,  240._dbl_kind, &
+        290._dbl_kind,  350._dbl_kind,  420._dbl_kind,  500._dbl_kind, &
+        570._dbl_kind,  660._dbl_kind,  760._dbl_kind,  870._dbl_kind, &
+       1000._dbl_kind, 1100._dbl_kind, 1250._dbl_kind, 1400._dbl_kind, &
+       1600._dbl_kind, 1800._dbl_kind, 2000._dbl_kind, 2500._dbl_kind/
+
+      ! snow extinction efficiency (unitless)
+      data Qs_tab/ &
+          2.131798_dbl_kind,  2.187756_dbl_kind,  2.267358_dbl_kind, &
+          2.104499_dbl_kind,  2.148345_dbl_kind,  2.236078_dbl_kind, &
+          2.081580_dbl_kind,  2.116885_dbl_kind,  2.175067_dbl_kind, &
+          2.062595_dbl_kind,  2.088937_dbl_kind,  2.130242_dbl_kind, &
+          2.051403_dbl_kind,  2.072422_dbl_kind,  2.106610_dbl_kind, &
+          2.039223_dbl_kind,  2.055389_dbl_kind,  2.080586_dbl_kind, &
+          2.032383_dbl_kind,  2.045751_dbl_kind,  2.066394_dbl_kind, &
+          2.027920_dbl_kind,  2.039388_dbl_kind,  2.057224_dbl_kind, &
+          2.023444_dbl_kind,  2.033137_dbl_kind,  2.048055_dbl_kind, &
+          2.020412_dbl_kind,  2.028840_dbl_kind,  2.041874_dbl_kind, &
+          2.017608_dbl_kind,  2.024863_dbl_kind,  2.036046_dbl_kind, &
+          2.015592_dbl_kind,  2.022021_dbl_kind,  2.031954_dbl_kind, &
+          2.014083_dbl_kind,  2.019887_dbl_kind,  2.028853_dbl_kind, &
+          2.012368_dbl_kind,  2.017471_dbl_kind,  2.025353_dbl_kind, &
+          2.011092_dbl_kind,  2.015675_dbl_kind,  2.022759_dbl_kind, &
+          2.009837_dbl_kind,  2.013897_dbl_kind,  2.020168_dbl_kind, &
+          2.008668_dbl_kind,  2.012252_dbl_kind,  2.017781_dbl_kind, &
+          2.007627_dbl_kind,  2.010813_dbl_kind,  2.015678_dbl_kind, &
+          2.006764_dbl_kind,  2.009577_dbl_kind,  2.013880_dbl_kind, &
+          2.006037_dbl_kind,  2.008520_dbl_kind,  2.012382_dbl_kind, &
+          2.005528_dbl_kind,  2.007807_dbl_kind,  2.011307_dbl_kind, &
+          2.005025_dbl_kind,  2.007079_dbl_kind,  2.010280_dbl_kind, &
+          2.004562_dbl_kind,  2.006440_dbl_kind,  2.009333_dbl_kind, &
+          2.004155_dbl_kind,  2.005898_dbl_kind,  2.008523_dbl_kind, &
+          2.003794_dbl_kind,  2.005379_dbl_kind,  2.007795_dbl_kind, &
+          2.003555_dbl_kind,  2.005041_dbl_kind,  2.007329_dbl_kind, &
+          2.003264_dbl_kind,  2.004624_dbl_kind,  2.006729_dbl_kind, &
+          2.003037_dbl_kind,  2.004291_dbl_kind,  2.006230_dbl_kind, &
+          2.002776_dbl_kind,  2.003929_dbl_kind,  2.005700_dbl_kind, &
+          2.002590_dbl_kind,  2.003627_dbl_kind,  2.005276_dbl_kind, &
+          2.002395_dbl_kind,  2.003391_dbl_kind,  2.004904_dbl_kind, &
+          2.002071_dbl_kind,  2.002922_dbl_kind,  2.004241_dbl_kind/
+
+      ! snow single scattering albedo (unitless)
+      data ws_tab/ &
+         0.9999994_dbl_kind,  0.9999673_dbl_kind,  0.9954589_dbl_kind, &
+         0.9999992_dbl_kind,  0.9999547_dbl_kind,  0.9938576_dbl_kind, &
+         0.9999990_dbl_kind,  0.9999382_dbl_kind,  0.9917989_dbl_kind, &
+         0.9999985_dbl_kind,  0.9999123_dbl_kind,  0.9889724_dbl_kind, &
+         0.9999979_dbl_kind,  0.9998844_dbl_kind,  0.9866190_dbl_kind, &
+         0.9999970_dbl_kind,  0.9998317_dbl_kind,  0.9823021_dbl_kind, &
+         0.9999960_dbl_kind,  0.9997800_dbl_kind,  0.9785269_dbl_kind, &
+         0.9999951_dbl_kind,  0.9997288_dbl_kind,  0.9751601_dbl_kind, &
+         0.9999936_dbl_kind,  0.9996531_dbl_kind,  0.9706974_dbl_kind, &
+         0.9999922_dbl_kind,  0.9995783_dbl_kind,  0.9667577_dbl_kind, &
+         0.9999903_dbl_kind,  0.9994798_dbl_kind,  0.9621007_dbl_kind, &
+         0.9999885_dbl_kind,  0.9993825_dbl_kind,  0.9579541_dbl_kind, &
+         0.9999866_dbl_kind,  0.9992862_dbl_kind,  0.9541924_dbl_kind, &
+         0.9999838_dbl_kind,  0.9991434_dbl_kind,  0.9490959_dbl_kind, &
+         0.9999810_dbl_kind,  0.9990025_dbl_kind,  0.9444940_dbl_kind, &
+         0.9999772_dbl_kind,  0.9988171_dbl_kind,  0.9389141_dbl_kind, &
+         0.9999726_dbl_kind,  0.9985890_dbl_kind,  0.9325819_dbl_kind, &
+         0.9999670_dbl_kind,  0.9983199_dbl_kind,  0.9256405_dbl_kind, &
+         0.9999605_dbl_kind,  0.9980117_dbl_kind,  0.9181533_dbl_kind, &
+         0.9999530_dbl_kind,  0.9976663_dbl_kind,  0.9101540_dbl_kind, &
+         0.9999465_dbl_kind,  0.9973693_dbl_kind,  0.9035031_dbl_kind, &
+         0.9999382_dbl_kind,  0.9969939_dbl_kind,  0.8953134_dbl_kind, &
+         0.9999289_dbl_kind,  0.9965848_dbl_kind,  0.8865789_dbl_kind, &
+         0.9999188_dbl_kind,  0.9961434_dbl_kind,  0.8773350_dbl_kind, &
+         0.9999068_dbl_kind,  0.9956323_dbl_kind,  0.8668233_dbl_kind, &
+         0.9998975_dbl_kind,  0.9952464_dbl_kind,  0.8589990_dbl_kind, &
+         0.9998837_dbl_kind,  0.9946782_dbl_kind,  0.8476493_dbl_kind, &
+         0.9998699_dbl_kind,  0.9941218_dbl_kind,  0.8367318_dbl_kind, &
+         0.9998515_dbl_kind,  0.9933966_dbl_kind,  0.8227881_dbl_kind, &
+         0.9998332_dbl_kind,  0.9926888_dbl_kind,  0.8095131_dbl_kind, &
+         0.9998148_dbl_kind,  0.9919968_dbl_kind,  0.7968620_dbl_kind, &
+         0.9997691_dbl_kind,  0.9903277_dbl_kind,  0.7677887_dbl_kind/
+
+      ! snow asymmetry parameter (unitless)
+      data gs_tab / &
+          0.859913_dbl_kind,  0.848003_dbl_kind,  0.824415_dbl_kind, &
+          0.867130_dbl_kind,  0.858150_dbl_kind,  0.848445_dbl_kind, &
+          0.873381_dbl_kind,  0.867221_dbl_kind,  0.861714_dbl_kind, &
+          0.878368_dbl_kind,  0.874879_dbl_kind,  0.874036_dbl_kind, &
+          0.881462_dbl_kind,  0.879661_dbl_kind,  0.881299_dbl_kind, &
+          0.884361_dbl_kind,  0.883903_dbl_kind,  0.890184_dbl_kind, &
+          0.885937_dbl_kind,  0.886256_dbl_kind,  0.895393_dbl_kind, &
+          0.886931_dbl_kind,  0.887769_dbl_kind,  0.899072_dbl_kind, &
+          0.887894_dbl_kind,  0.889255_dbl_kind,  0.903285_dbl_kind, &
+          0.888515_dbl_kind,  0.890236_dbl_kind,  0.906588_dbl_kind, &
+          0.889073_dbl_kind,  0.891127_dbl_kind,  0.910152_dbl_kind, &
+          0.889452_dbl_kind,  0.891750_dbl_kind,  0.913100_dbl_kind, &
+          0.889730_dbl_kind,  0.892213_dbl_kind,  0.915621_dbl_kind, &
+          0.890026_dbl_kind,  0.892723_dbl_kind,  0.918831_dbl_kind, &
+          0.890238_dbl_kind,  0.893099_dbl_kind,  0.921540_dbl_kind, &
+          0.890441_dbl_kind,  0.893474_dbl_kind,  0.924581_dbl_kind, &
+          0.890618_dbl_kind,  0.893816_dbl_kind,  0.927701_dbl_kind, &
+          0.890762_dbl_kind,  0.894123_dbl_kind,  0.930737_dbl_kind, &
+          0.890881_dbl_kind,  0.894397_dbl_kind,  0.933568_dbl_kind, &
+          0.890975_dbl_kind,  0.894645_dbl_kind,  0.936148_dbl_kind, &
+          0.891035_dbl_kind,  0.894822_dbl_kind,  0.937989_dbl_kind, &
+          0.891097_dbl_kind,  0.895020_dbl_kind,  0.939949_dbl_kind, &
+          0.891147_dbl_kind,  0.895212_dbl_kind,  0.941727_dbl_kind, &
+          0.891189_dbl_kind,  0.895399_dbl_kind,  0.943339_dbl_kind, &
+          0.891225_dbl_kind,  0.895601_dbl_kind,  0.944915_dbl_kind, &
+          0.891248_dbl_kind,  0.895745_dbl_kind,  0.945950_dbl_kind, &
+          0.891277_dbl_kind,  0.895951_dbl_kind,  0.947288_dbl_kind, &
+          0.891299_dbl_kind,  0.896142_dbl_kind,  0.948438_dbl_kind, &
+          0.891323_dbl_kind,  0.896388_dbl_kind,  0.949762_dbl_kind, &
+          0.891340_dbl_kind,  0.896623_dbl_kind,  0.950916_dbl_kind, &
+          0.891356_dbl_kind,  0.896851_dbl_kind,  0.951945_dbl_kind, &
+          0.891386_dbl_kind,  0.897399_dbl_kind,  0.954156_dbl_kind/
+
+      ! ice surface scattering layer (ssl) iops (units of k = /m)
+      data ki_ssl_mn / 1000.1_dbl_kind, 1003.7_dbl_kind, 7042._dbl_kind/
+      data wi_ssl_mn / .9999_dbl_kind,  .9963_dbl_kind,  .9088_dbl_kind/
+      data gi_ssl_mn /  .94_dbl_kind,     .94_dbl_kind,    .94_dbl_kind/
+
+      ! ice drained layer (dl) iops (units of k = /m)
+      data ki_dl_mn  / 100.2_dbl_kind, 107.7_dbl_kind,  1309._dbl_kind /
+      data wi_dl_mn  / .9980_dbl_kind,  .9287_dbl_kind, .0305_dbl_kind /
+      data gi_dl_mn  / .94_dbl_kind,     .94_dbl_kind,    .94_dbl_kind /
+
+      ! ice interior layer (int) iops (units of k = /m)
+      data ki_int_mn /  20.2_dbl_kind,  27.7_dbl_kind,  1445._dbl_kind /
+      data wi_int_mn / .9901_dbl_kind, .7223_dbl_kind,  .0277_dbl_kind /
+      data gi_int_mn / .94_dbl_kind,    .94_dbl_kind,     .94_dbl_kind /
+
+      ! ponded ice surface scattering layer (ssl) iops (units of k = /m)
+      data ki_p_ssl_mn / 70.2_dbl_kind,  77.7_dbl_kind,  1309._dbl_kind/
+      data wi_p_ssl_mn / .9972_dbl_kind, .9009_dbl_kind, .0305_dbl_kind/
+      data gi_p_ssl_mn / .94_dbl_kind,   .94_dbl_kind,   .94_dbl_kind  /
+
+      ! ponded ice interior layer (int) iops (units of k = /m)
+      data ki_p_int_mn /  20.2_dbl_kind,  27.7_dbl_kind, 1445._dbl_kind/
+      data wi_p_int_mn / .9901_dbl_kind, .7223_dbl_kind, .0277_dbl_kind/
+      data gi_p_int_mn / .94_dbl_kind,   .94_dbl_kind,   .94_dbl_kind  /
+
+      ! pond water iops (units of k = /m)
+      data kw   /    0.20_dbl_kind,   12.0_dbl_kind,   729._dbl_kind /
+      data ww   /    0.00_dbl_kind,   0.00_dbl_kind,   0.00_dbl_kind /
+      data gw   /    0.00_dbl_kind,   0.00_dbl_kind,   0.00_dbl_kind /
+
+      ! snow data
+      data hs_ssl / 0.040_dbl_kind / ! snow surface scattering layer thickness (m)
+      data rhoi   /917.0_dbl_kind /  ! snow mass density (kg/m3)
+      data fr_max / 1.00_dbl_kind /  ! snow grain adjustment factor max
+      data fr_min / 0.80_dbl_kind /  ! snow grain adjustment factor min
+
+      ! ice data
+      data hi_ssl / 0.050_dbl_kind / ! sea ice surface scattering layer thickness (m)
+      data kalg   / 0.60_dbl_kind /  ! for 0.5 m path of 75 mg Chl a / m2
+
+      ! ice and pond scat coeff fractional change for +- one-sigma in albedo
+      data fp_ice / 0.15_dbl_kind /
+      data fm_ice / 0.15_dbl_kind /
+      data fp_pnd / 2.00_dbl_kind /
+      data fm_pnd / 0.50_dbl_kind /
+
+      ! ice to pond parameters
+      data hpmin  / .005_dbl_kind / ! minimum allowable pond depth (m)
+      data hp0    / .200_dbl_kind / ! pond depth below which transition to bare sea ice
+
 !-----------------------------------------------------------------------
-
-!echmod begin
-      ! data from Bruce Briegleb email to ECH 10/03/2006
-      ! first year data values in top layers
-      data ki_f0 /  1060._dbl_kind,  1064._dbl_kind,  7042._dbl_kind, &
-                      40._dbl_kind,    47._dbl_kind,  1309._dbl_kind /
-      data wi_f0 /  .9999_dbl_kind,  .9965_dbl_kind,  .9088_dbl_kind, &
-                    .9951_dbl_kind,  .8441_dbl_kind,  .0305_dbl_kind /
-
-      if (nilyr == 4) then
-        ! initialize with background values in all layers
-        ki_f(1,:) =   40._dbl_kind
-        ki_f(2,:) =   48._dbl_kind
-        ki_f(3,:) = 1445._dbl_kind
-        wi_f(1,:) = .9946_dbl_kind
-        wi_f(2,:) = .8299_dbl_kind
-        wi_f(3,:) = .0277_dbl_kind
-        gi_f(:,:) =   .94_dbl_kind
-        ! reset values in top two layers
-        do k = 1,2
-          do ns = 1, nspint
-            ki_f(ns,k) = ki_f0(ns,k)
-            wi_f(ns,k) = wi_f0(ns,k)
-          enddo
-        enddo
-      else
-        ! initialize with background values in all layers
-        ki_f(1,:) =   40._dbl_kind
-        ki_f(2,:) =   48._dbl_kind
-        ki_f(3,:) = 1400._dbl_kind
-        wi_f(1,:) =  .995_dbl_kind
-        wi_f(2,:) =  .840_dbl_kind
-        wi_f(3,:) =  .030_dbl_kind
-        gi_f(:,:) =   .94_dbl_kind
-        ! reset values in top layer
-        do ns = 1, nspint
-          ki_f(ns,1) = ki_f0(ns,1)
-          wi_f(ns,1) = wi_f0(ns,1)
-        enddo
-      endif
-!echmod end
+! Initialize and tune bare ice/ponded ice iops
  
       ! initialize albedos and fluxes to 0
       avdr(:,:)   = c0
@@ -1457,510 +1821,783 @@
       fsfc(:,:)   = c0
       fint(:,:)   = c0
       fthru(:,:)  = c0
+      Sabs(:,:,:) = c0
       Iabs(:,:,:) = c0
  
-      ! spectral weights
-      do ij = 1, icells
-        i = indxi(ij)
-        j = indxj(ij)
+      ! spectral weights; weights 2 (0.7-1.19 micro-meters) and 3 (1.19-5.0 micro-meters) 
+      ! are chosen based on 1D calculations using ratio of direct to total near-infrared
+      ! solar (0.7-5.0 micro-meter) which indicates clear/cloudy conditions: more cloud,
+      ! the less 1.19-5.0 relative to the 0.7-1.19 micro-meter due to cloud absorption.
+      do ij = 1, icells_DE
+        i = indxi_DE(ij)
+        j = indxj_DE(ij)
         wghtns(i,j,1) = c1
         wghtns(i,j,2) = cp67 + (cp78-cp67)*(c1-fnidr(i,j))
         wghtns(i,j,3) = cp33 + (cp22-cp33)*(c1-fnidr(i,j))
       enddo
+
+      ! adjust sea ice iops with tuning parameters; tune only the
+      ! scattering coefficient by factors of R_ice, R_pnd, where
+      ! R values of +1 correspond approximately to +1 sigma changes in albedo, and
+      ! R values of -1 correspond approximately to -1 sigma changes in albedo
+      ! Note: the albedo change becomes non-linear for R values > +1 or < -1
+      if( R_ice >= c0 ) then
+        do ns = 1, nspint
+          kabs       = ki_ssl_mn(ns)*(c1-wi_ssl_mn(ns))
+          sig        = ki_ssl_mn(ns)*wi_ssl_mn(ns)
+          sigp       = sig*(c1+fp_ice*R_ice)
+          ki_ssl(ns) = sigp+kabs
+          wi_ssl(ns) = sigp/ki_ssl(ns)
+          gi_ssl(ns) = gi_ssl_mn(ns)
+
+          kabs       = ki_dl_mn(ns)*(c1-wi_dl_mn(ns))
+          sig        = ki_dl_mn(ns)*wi_dl_mn(ns)
+          sigp       = sig*(c1+fp_ice*R_ice)
+          ki_dl(ns)  = sigp+kabs
+          wi_dl(ns)  = sigp/ki_dl(ns)
+          gi_dl(ns)  = gi_dl_mn(ns)
+
+          kabs       = ki_int_mn(ns)*(c1-wi_int_mn(ns))
+          sig        = ki_int_mn(ns)*wi_int_mn(ns)
+          sigp       = sig*(c1+fp_ice*R_ice)
+          ki_int(ns) = sigp+kabs
+          wi_int(ns) = sigp/ki_int(ns)
+          gi_int(ns) = gi_int_mn(ns)
+        enddo
+      else if( R_ice < c0 ) then
+        do ns = 1, nspint
+          kabs       = ki_ssl_mn(ns)*(c1-wi_ssl_mn(ns))
+          sig        = ki_ssl_mn(ns)*wi_ssl_mn(ns)
+          sigp       = sig*(c1+fm_ice*R_ice)
+          if( sigp < c0 ) sigp = c0
+          ki_ssl(ns) = sigp+kabs
+          wi_ssl(ns) = sigp/ki_ssl(ns)
+          gi_ssl(ns) = gi_ssl_mn(ns)
+
+          kabs       = ki_dl_mn(ns)*(c1-wi_dl_mn(ns))
+          sig        = ki_dl_mn(ns)*wi_dl_mn(ns)
+          sigp       = sig*(c1+fm_ice*R_ice)
+          if( sigp < c0 ) sigp = c0
+          ki_dl(ns)  = sigp+kabs
+          wi_dl(ns)  = sigp/ki_dl(ns)
+          gi_dl(ns)  = gi_dl_mn(ns)
+
+          kabs       = ki_int_mn(ns)*(c1-wi_int_mn(ns))
+          sig        = ki_int_mn(ns)*wi_int_mn(ns)
+          sigp       = sig*(c1+fm_ice*R_ice)
+          if( sigp < c0 ) sigp = c0
+          ki_int(ns) = sigp+kabs
+          wi_int(ns) = sigp/ki_int(ns)
+          gi_int(ns) = gi_int_mn(ns)
+        enddo
+      endif          ! adjust ice iops
+
+      ! adjust ponded ice iops with tuning parameters
+      if( R_pnd >= c0 ) then
+        do ns = 1, nspint
+          kabs         = ki_p_ssl_mn(ns)*(c1-wi_p_ssl_mn(ns))
+          sig          = ki_p_ssl_mn(ns)*wi_p_ssl_mn(ns)
+          sigp         = sig*(c1+fp_pnd*R_pnd)
+          ki_p_ssl(ns) = sigp+kabs
+          wi_p_ssl(ns) = sigp/ki_p_ssl(ns)
+          gi_p_ssl(ns) = gi_p_ssl_mn(ns)
+
+          kabs         = ki_p_int_mn(ns)*(c1-wi_p_int_mn(ns))
+          sig          = ki_p_int_mn(ns)*wi_p_int_mn(ns)
+          sigp         = sig*(c1+fp_pnd*R_pnd)
+          ki_p_int(ns) = sigp+kabs
+          wi_p_int(ns) = sigp/ki_p_int(ns)
+          gi_p_int(ns) = gi_p_int_mn(ns)
+        enddo
+      else if( R_pnd < c0 ) then
+        do ns = 1, nspint
+          kabs         = ki_p_ssl_mn(ns)*(c1-wi_p_ssl_mn(ns))
+          sig          = ki_p_ssl_mn(ns)*wi_p_ssl_mn(ns)
+          sigp         = sig*(c1+fm_pnd*R_pnd)
+          if( sigp < c0 ) sigp = c0
+          ki_p_ssl(ns) = sigp+kabs
+          wi_p_ssl(ns) = sigp/ki_p_ssl(ns)
+          gi_p_ssl(ns) = gi_p_ssl_mn(ns)
+
+          kabs         = ki_p_int_mn(ns)*(c1-wi_p_int_mn(ns))
+          sig          = ki_p_int_mn(ns)*wi_p_int_mn(ns)
+          sigp         = sig*(c1+fm_pnd*R_pnd)
+          if( sigp < c0 ) sigp = c0
+          ki_p_int(ns) = sigp+kabs
+          wi_p_int(ns) = sigp/ki_p_int(ns)
+          gi_p_int(ns) = gi_p_int_mn(ns)
+        enddo
+      endif            ! adjust ponded ice iops
+
+!-----------------------------------------------------------------------
  
-      ! Begin spectral loop
+      ! begin spectral loop
       do ns = 1, nspint
  
-        ! Set optical properties of air/snow/melt_pond/ice
-        do ij = 1, icells
-          i = indxi(ij)
-          j = indxj(ij)
+        ! set optical properties of air/snow/pond overlying sea ice
+        do ij = 1, icells_DE
+          i = indxi_DE(ij)
+          j = indxj_DE(ij)
           ! air
           if( srftyp(i,j) == 0 ) then
-            tau(i,j,0) = c0
-            w0(i,j,0)  = c0
-            g(i,j,0)   = c0
+            do k=0,nslyr
+              tau(i,j,k) = c0
+              w0(i,j,k)  = c0
+              g(i,j,k)   = c0
+            enddo       ! k
           ! snow
           else if( srftyp(i,j) == 1 ) then
-            if( sage(i,j) < c0 ) then
-              tau(i,j,0) = (abs(sage(i,j))*ks_f(ns)+ &
-                           (c1-abs(sage(i,j)))*ks_s(ns))*hsn(i,j)
-              w0(i,j,0)  = (abs(sage(i,j))*ws_f(ns)+ &
-                           (c1-abs(sage(i,j)))*ws_s(ns))
-              g(i,j,0)   = (abs(sage(i,j))*gs_f(ns)+ &
-                           (c1-abs(sage(i,j)))*gs_s(ns))
-            else if( sage(i,j) >= c0 ) then
-              tau(i,j,0) = ((c1-sage(i,j))*ks_s(ns)+ &
-                           sage(i,j)*ks_l(ns))*hsn(i,j)
-              w0(i,j,0)  = ((c1-sage(i,j))*ws_s(ns)+ &
-                           sage(i,j)*ws_l(ns))
-              g(i,j,0)   = ((c1-sage(i,j))*gs_s(ns)+ &
-                           sage(i,j)*gs_l(ns))
-            endif
+            dz_ssl = hs_ssl
+            dz     = hs(i,j)/real(nslyr,kind=dbl_kind)
+            ! for small enough snow thickness, ssl thickness half of snow layer
+            if( dz_ssl > dz/c2 ) dz_ssl = dz/c2
+            ! find snow grain adjustment factor, dependent upon clear/overcast sky
+            ! estimate. comparisons with SNICAR show better agreement with DE when
+            ! this factor is included (clear sky near 1 and overcast near 0.8 give
+            ! best agreement).
+            fr     = fr_max*fnidr(i,j) + fr_min*(c1-fnidr(i,j))
+            ! interpolate snow iops using input snow grain radius,
+            ! snow density and tabular data
+            ksnow = 1
+            do k=0,nslyr
+              ! use top rsnw, rhosnw for snow ssl and rest of top layer
+              if( k > 1 ) ksnow = k
+              ! find snow iops using input snow density and snow grain radius:
+              if( fr*rsnw(i,j,ksnow) < rsnw_tab(1) ) then
+                Qs(ns) = Qs_tab(ns,1)
+                ws(ns) = ws_tab(ns,1)
+                gs(ns) = gs_tab(ns,1)
+              else if( fr*rsnw(i,j,ksnow) >= rsnw_tab(nmbrad) ) then
+                Qs(ns) = Qs_tab(ns,nmbrad)
+                ws(ns) = ws_tab(ns,nmbrad)
+                gs(ns) = gs_tab(ns,nmbrad)
+              else
+                ! linear interpolation in rsnw
+                do nr=2,nmbrad
+                  if( rsnw_tab(nr-1) <= fr*rsnw(i,j,ksnow) .and. &
+                      fr*rsnw(i,j,ksnow) < rsnw_tab(nr)) then
+                        delr = (fr*rsnw(i,j,ksnow) - rsnw_tab(nr-1)) / &
+                               (rsnw_tab(nr) - rsnw_tab(nr-1))
+                        Qs(ns) = Qs_tab(ns,nr-1)*(c1-delr) + &
+                                 Qs_tab(ns,nr)*delr
+                        ws(ns) = ws_tab(ns,nr-1)*(c1-delr) + &
+                                 ws_tab(ns,nr)*delr
+                        gs(ns) = gs_tab(ns,nr-1)*(c1-delr) + &
+                                 gs_tab(ns,nr)*delr
+                  endif
+                enddo       ! nr
+              endif
+              ks(ns) = Qs(ns)*((rhosnw(i,j,ksnow)/rhoi)*3._dbl_kind / &
+                       (4._dbl_kind*fr*rsnw(i,j,ksnow)*1.0e-6_dbl_kind))
+              if( k == 0 ) then
+                tau(i,j,k) = ks(ns)*dz_ssl
+              else if( k == 1 ) then
+                tau(i,j,k) = ks(ns)*(dz-dz_ssl)
+              else if( k >= 2 ) then
+                tau(i,j,k) = ks(ns)*dz
+              endif
+              w0(i,j,k)  = ws(ns)
+              g(i,j,k)   = gs(ns)
+            enddo       ! k
           ! pond
           else if( srftyp(i,j) == 2 ) then
-            tau(i,j,0) = kw(ns)*hpn(i,j)
-            w0(i,j,0)  = ww(ns)
-            g(i,j,0)   = gw(ns)
-          endif                 ! srftyp
-        enddo                   ! ij
+            ! pond water layers evenly spaced
+            dz = hp(i,j)/real(nslyr+1,kind=dbl_kind)
+            do k=0,nslyr
+              tau(i,j,k) = kw(ns)*dz
+              w0(i,j,k)  = ww(ns)
+              g(i,j,k)   = gw(ns)
+            enddo       ! k
+          endif        ! srftyp
+        enddo         ! ij ... optical properties above sea ice set
 
-        ! sea ice layers 
-        do ij = 1, icells
-          i = indxi(ij)
-          j = indxj(ij)
+        ! set optical properties of sea ice
+        kice = nslyr + 1
+        do ij = 1, icells_DE
+          i = indxi_DE(ij)
+          j = indxj_DE(ij)
+          dz_ssl = hi_ssl
+          dz     = hi(i,j)/real(nilyr,kind=dbl_kind)
+          ! empirical reduction in sea ice ssl thickness for ice thinner than 1.5m;
+          ! factor of 30 selected to give best albedo comparison with limited observations
+          if( hi(i,j) < 1.5_dbl_kind ) dz_ssl = hi(i,j)/30._dbl_kind
+          ! set sea ice ssl thickness to half top layer if sea ice thin enough
+          if( dz_ssl > dz/c2 ) dz_ssl = dz/c2
           ! bare or snow-covered sea ice layers
           if( srftyp(i,j) <= 1 ) then
-            dzs    = h1_4
-            dz     = hin(i,j)/real(nilyr,kind=dbl_kind)
-            if( hin(i,j) < 1.5_dbl_kind ) dzs = hin(i,j)/30._dbl_kind
-            if( dzs > dz/c2 ) dzs = dz/c2
-            dz1    = dz - dzs
-            do k=1,klev
-              if( k==1 ) then
-                tau(i,j,k) = ki_f(ns,k)*dzs
-              else if( k==2 ) then
-                tau(i,j,k) = ki_f(ns,k)*dz1
-              else
-                tau(i,j,k) = ki_f(ns,k)*dz
-              endif 
-              w0(i,j,k)  = wi_f(ns,k)
-              g(i,j,k)   = gi_f(ns,k)
-            enddo  
+            do k = kice, klev
+              ! ssl
+              if( k == kice ) then
+                tau(i,j,k) = ki_ssl(ns)*dz_ssl
+                w0(i,j,k)  = wi_ssl(ns)
+                g(i,j,k)   = gi_ssl(ns)
+              ! dl
+              else if( k == kice+1 ) then
+                ! scale dz for dl relative to 4 even-layer-thickness 1.5m case
+                fs = real(nilyr,kind=dbl_kind)/real(4,kind=dbl_kind)
+                tau(i,j,k) = ki_dl(ns)*(dz-dz_ssl)*fs
+                w0(i,j,k)  = wi_dl(ns)
+                g(i,j,k)   = gi_dl(ns)
+              ! int above lowest layer
+              else if( k > kice+1 .and. k < klev ) then
+                tau(i,j,k) = ki_int(ns)*dz
+                w0(i,j,k)  = wi_int(ns)
+                g(i,j,k)   = gi_int(ns)
+              ! lowest layer
+              else if( k == klev ) then
+                ! add algae to lowest sea ice layer, visible only:
+                kabs       = ki_int(ns)*(c1-wi_int(ns))
+                if( ns == 1 ) then
+                  ! total layer absorption optical depth fixed at value
+                  ! of kalg*0.50m, independent of actual layer thickness
+                  kabs = kabs + kalg*(0.50_dbl_kind/dz)
+                endif
+                sig        = ki_int(ns)*wi_int(ns)
+                tau(i,j,k) = (kabs+sig)*dz
+                w0(i,j,k)  = (sig/(sig+kabs))
+                g(i,j,k)   = gi_int(ns)
+              endif
+            enddo       ! k
           ! sea ice layers under ponds
           else if( srftyp(i,j) == 2 ) then
-            dz     = hin(i,j)/real(nilyr,kind=dbl_kind)
-            dzs = dz/c2
-            do k=1,klev
-              if( k <= 2 ) then
-                tau(i,j,k) = ki_p(ns)*dzs
-              else
-                tau(i,j,k) = ki_p(ns)*dz
-              endif 
-              w0(i,j,k)  = wi_p(ns)
-              g(i,j,k)   = gi_p(ns)
+            do k = kice, klev
+              if( k == kice ) then
+                tau(i,j,k) = ki_p_ssl(ns)*dz_ssl
+                w0(i,j,k)  = wi_p_ssl(ns)
+                g(i,j,k)   = gi_p_ssl(ns)
+              else if( k == kice+1 ) then
+                tau(i,j,k) = ki_p_int(ns)*(dz-dz_ssl)
+                w0(i,j,k)  = wi_p_int(ns)
+                g(i,j,k)   = gi_p_int(ns)
+              else if( k > kice+1 ) then
+                tau(i,j,k) = ki_p_int(ns)*dz
+                w0(i,j,k)  = wi_p_int(ns)
+                g(i,j,k)   = gi_p_int(ns)
+              endif
             enddo       ! k
-          endif         ! srftyp
-        enddo           ! ij
+            ! adjust pond iops if pond depth within specified range
+            if( hpmin <= hp(i,j) .and. hp(i,j) <= hp0 ) then
+              do k = kice, klev
+                if( k == kice ) then
+                  sig_i      = ki_ssl(ns)*wi_ssl(ns)
+                  sig_p      = ki_p_ssl(ns)*wi_p_ssl(ns)
+                  sig        = sig_i + (sig_p-sig_i)*(hp(i,j)/hp0)
+                  kext       = sig + ki_p_ssl(ns)*(c1-wi_p_ssl(ns))
+                  tau(i,j,k) = kext*dz_ssl
+                else if( k == kice+1 ) then
+                  ! scale dz for dl relative to 4 even-layer-thickness 1.5m case
+                  fs = real(nilyr,kind=dbl_kind)/real(4,kind=dbl_kind)
+                  sig_i      = ki_dl(ns)*wi_dl(ns)*fs
+                  sig_p      = ki_p_int(ns)*wi_p_int(ns)
+                  sig        = sig_i + (sig_p-sig_i)*(hp(i,j)/hp0)
+                  kext       = sig + ki_p_int(ns)*(c1-wi_p_int(ns))
+                  tau(i,j,k) = kext*(dz-dz_ssl)
+                else if( k > kice+1 ) then
+                  sig_i      = ki_int(ns)*wi_int(ns)
+                  sig_p      = ki_p_int(ns)*wi_p_int(ns)
+                  sig        = sig_i + (sig_p-sig_i)*(hp(i,j)/hp0)
+                  kext       = sig + ki_p_int(ns)*(c1-wi_p_int(ns))
+                  tau(i,j,k) = kext*dz
+                endif
+                w0(i,j,k) = sig/kext
+                g(i,j,k)  = gi_p_int(ns)
+              enddo       ! k
+            endif        ! small pond depth transition to bare sea ice
+          endif         ! srftyp  
+        enddo          ! ij ... optical properties of sea ice set
  
-        ! Set reflectivities for ocean underlying sea ice
+        ! set reflectivities for ocean underlying sea ice
         if(ns == 1) then
-          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
+          do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
             albodr(i,j) = cp01
             albodf(i,j) = cp01
-          enddo
+          enddo       ! ij
         else if(ns >= 2) then
-          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
+          do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
             albodr(i,j) = c0
             albodf(i,j) = c0
-          enddo
+          enddo       ! ij
         endif
  
-        ! Layer input properties now completely specified; compute the
-        ! delta-Eddington solution reflectivities and transmissivities
-        ! for each layer, starting from the top and working downwards;
-        ! next, add the layers going downwards accounting for multiple
-        ! scattering between layers, and finally start from the surface 
-        ! and add successive layers upwards to the top:
+        ! layer input properties now completely specified: tau, w0, g,
+        ! albodr, albodf; now compute the Delta-Eddington solution 
+        ! reflectivities and transmissivities for each layer; then,
+        ! combine the layers going downwards accounting for multiple
+        ! scattering between layers, and finally start from the 
+        ! underlying ocean and combine successive layers upwards to
+        ! the surface; see comments in solution_dEdd for more details.
  
-        call solution_dEdd                           &
-            (nx_block, ny_block,                     &
-             icells, indxi,  indxj,  coszen, srftyp, &
-             tau,    w0,     g,      albodr, albodf, &
-             trndir, trntdr, trndif, rupdir, rupdif, &
+        call solution_dEdd                                    &
+            (nx_block, ny_block,                              &
+             icells_DE, indxi_DE,  indxj_DE,  coszen, srftyp, &
+             tau,       w0,        g,         albodr, albodf, &
+             trndir,    trntdr,    trndif,    rupdir, rupdif, &
              rdndif)
- 
-        ! Compute up and down fluxes for each interface, using the 
-        ! added layer properties at each interface:
+
+        ! the interface reflectivities and transmissivities required
+        ! to evaluate interface fluxes are returned from solution_dEdd;
+        ! now compute up and down fluxes for each interface, using the 
+        ! combined layer properties at each interface:
+        !
         !              layers       interface
         !
         !       ---------------------  k
         !                 k
         !       --------------------- 
+
         do k=0,klevp
-        do ij = 1, icells
-          i = indxi(ij)
-          j = indxj(ij)
-          ! interface scattering
-          refk          = c1/(c1 - rdndif(i,j,k)*rupdif(i,j,k))
-          ! dir tran ref from below times interface scattering, plus diff
-          ! tran and ref from below times interface scattering
-          fdirup(i,j,k) = (trndir(i,j,k)*rupdir(i,j,k) + &
-                          (trntdr(i,j,k)-trndir(i,j,k)) * &
-                           rupdif(i,j,k))*refk
-          ! dir tran plus total diff trans times interface scattering plus
-          ! dir tran with up dir ref and down dif ref times interface scattering 
-          fdirdn(i,j,k) = trndir(i,j,k) + (trntdr(i,j,k) - trndir(i,j,k) &
-                        + trndir(i,j,k)*rupdir(i,j,k) &
-                         *rdndif(i,j,k))*refk
-          ! diffuse tran ref from below times interface scattering
-          fdifup(i,j,k) = trndif(i,j,k)*rupdif(i,j,k)*refk
-          ! diffuse tran times interface scattering
-          fdifdn(i,j,k) = trndif(i,j,k)*refk
-        enddo                   ! ij
-        enddo                   ! k
+          do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
+            ! interface scattering
+            refk          = c1/(c1 - rdndif(i,j,k)*rupdif(i,j,k))
+            ! dir tran ref from below times interface scattering, plus diff
+            ! tran and ref from below times interface scattering
+            fdirup(i,j,k) = (trndir(i,j,k)*rupdir(i,j,k) + &
+                            (trntdr(i,j,k)-trndir(i,j,k))  &
+                            *rupdif(i,j,k))*refk
+            ! dir tran plus total diff trans times interface scattering plus
+            ! dir tran with up dir ref and down dif ref times interface scattering 
+            fdirdn(i,j,k) = trndir(i,j,k) + (trntdr(i,j,k) &
+                          - trndir(i,j,k) + trndir(i,j,k)  &
+                          *rupdir(i,j,k)*rdndif(i,j,k))*refk
+            ! diffuse tran ref from below times interface scattering
+            fdifup(i,j,k) = trndif(i,j,k)*rupdif(i,j,k)*refk
+            ! diffuse tran times interface scattering
+            fdifdn(i,j,k) = trndif(i,j,k)*refk
+          enddo       ! ij
+        enddo       ! k
  
-        ! Calculate final surface albedos and fluxes-
-        ! Note assumptions about surface absorption: regardless of what may overlie
-        ! sea ice (air, snow or pond), absorption in the surface scattering layer is
-        ! included along with snow or pond (if present) absorption. Since the 
-        ! interface index of the bottom of the surface layer is 2, that index
-        ! appears explicitly.
+        ! calculate final surface albedos and fluxes-
+        ! all absorbed flux above ksrf is included in surface absorption
 
         if( ns == 1) then      ! visible
 
-          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
+          do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
             avdr(i,j)  = rupdir(i,j,0)
             avdf(i,j)  = rupdif(i,j,0)
+
+            ! use srftyp to determine interface index of surface absorption
+            if( srftyp(i,j) == 1 ) then
+              ! snow covered sea ice
+              ksrf = 1
+            else
+              ! bare sea ice or ponded ice
+              ksrf = 1 + nslyr + 1
+            endif
  
-            fsfc(i,j)  = fsfc(i,j) +  &
+            fsfc(i,j)  = fsfc(i,j) + &
               ((fdirdn(i,j,0)-fdirup(i,j,0))*swvdr(i,j) + &
                (fdifdn(i,j,0)-fdifup(i,j,0))*swvdf(i,j)) - &
-              ((fdirdn(i,j,2)-fdirup(i,j,2))*swvdr(i,j) + &
-               (fdifdn(i,j,2)-fdifup(i,j,2))*swvdf(i,j))
+              ((fdirdn(i,j,ksrf)-fdirup(i,j,ksrf))*swvdr(i,j) + &
+               (fdifdn(i,j,ksrf)-fdifup(i,j,ksrf))*swvdf(i,j))
  
-            fint(i,j)  = fint(i,j) +  &
-              ((fdirdn(i,j,2)-fdirup(i,j,2))*swvdr(i,j) + &
-               (fdifdn(i,j,2)-fdifup(i,j,2))*swvdf(i,j)) - &
+            fint(i,j)  = fint(i,j) + &
+              ((fdirdn(i,j,ksrf)-fdirup(i,j,ksrf))*swvdr(i,j) + &
+               (fdifdn(i,j,ksrf)-fdifup(i,j,ksrf))*swvdf(i,j)) - &
               ((fdirdn(i,j,klevp)-fdirup(i,j,klevp))*swvdr(i,j) + &
                (fdifdn(i,j,klevp)-fdifup(i,j,klevp))*swvdf(i,j))
  
             fthru(i,j)  = fthru(i,j) + &
                (fdirdn(i,j,klevp)-fdirup(i,j,klevp))*swvdr(i,j) + &
                (fdifdn(i,j,klevp)-fdifup(i,j,klevp))*swvdf(i,j)
- 
-            do k=2,klev
-              Iabs(i,j,k-1) = Iabs(i,j,k-1) + &
-              ((fdirdn(i,j,k)-fdirup(i,j,k))*swvdr(i,j) + &
-               (fdifdn(i,j,k)-fdifup(i,j,k))*swvdf(i,j)) &
-             -((fdirdn(i,j,k+1)-fdirup(i,j,k+1))*swvdr(i,j) + &
-               (fdifdn(i,j,k+1)-fdifup(i,j,k+1))*swvdf(i,j))
-            enddo
-          enddo                  ! ij
+
+            ! if snow covered ice, set snow internal absorption; else, Sabs=0
+            if( srftyp(i,j) == 1 ) then
+              ksa = 0
+              do k=1,nslyr
+                ! skip snow SSL, since SSL absorption included in the surface
+                ! absorption fsfc above
+                km  = k
+                kp  = km + 1
+                ksa = ksa + 1
+                Sabs(i,j,ksa) = Sabs(i,j,ksa) + &
+                ((fdirdn(i,j,km)-fdirup(i,j,km))*swvdr(i,j) + &
+                 (fdifdn(i,j,km)-fdifup(i,j,km))*swvdf(i,j)) - &
+                ((fdirdn(i,j,kp)-fdirup(i,j,kp))*swvdr(i,j) + &
+                 (fdifdn(i,j,kp)-fdifup(i,j,kp))*swvdf(i,j))
+              enddo       ! k
+            endif
+
+            ! complex indexing to insure proper absorptions for sea ice
+            ki = 0
+            do k=nslyr+2,nslyr+1+nilyr
+              ! for bare ice, DL absorption for sea ice layer 1
+              km = k  
+              kp = km + 1
+              ! modify for top sea ice layer for snow over sea ice
+              if( srftyp(i,j) == 1 ) then
+                ! must add SSL and DL absorption for sea ice layer 1
+                if( k == nslyr+2 ) then
+                  km = k  - 1
+                  kp = km + 2
+                endif
+              endif
+              ki = ki + 1
+              Iabs(i,j,ki) = Iabs(i,j,ki) + &
+              ((fdirdn(i,j,km)-fdirup(i,j,km))*swvdr(i,j) + &
+               (fdifdn(i,j,km)-fdifup(i,j,km))*swvdf(i,j)) - &
+              ((fdirdn(i,j,kp)-fdirup(i,j,kp))*swvdr(i,j) + &
+               (fdifdn(i,j,kp)-fdifup(i,j,kp))*swvdf(i,j))
+            enddo       ! k
+          enddo        ! ij
 
         else if(ns > 1) then  ! near IR
 
-          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
+          do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
+
+            ! let fr1 = alb_1*swd*wght1 and fr2 = alb_2*swd*wght2 be the ns=2,3
+            ! reflected fluxes respectively, where alb_1, alb_2 are the band
+            ! albedos, swd = nir incident shortwave flux, and wght1, wght2 are
+            ! the 2,3 band weights. thus, the total reflected flux is:
+            ! fr = fr1 + fr2 = alb_1*swd*wght1 + alb_2*swd*wght2  hence, the
+            ! 2,3 nir band albedo is alb = fr/swd = alb_1*wght1 + alb_2*wght2
+
             aidr(i,j)   = aidr(i,j) + rupdir(i,j,0)*wghtns(i,j,ns)
             aidf(i,j)   = aidf(i,j) + rupdif(i,j,0)*wghtns(i,j,ns)
+
+            ! use srftyp to determine interface index of surface absorption
+            if( srftyp(i,j) == 1 ) then
+              ! snow covered sea ice
+              ksrf = 1
+            else
+              ! bare sea ice or ponded ice
+              ksrf = 1 + nslyr + 1
+            endif
  
-            fsfc(i,j)  = fsfc(i,j) +  &
+            fsfc(i,j)  = fsfc(i,j) + &
             ( ((fdirdn(i,j,0)-fdirup(i,j,0))*swidr(i,j) + &
                (fdifdn(i,j,0)-fdifup(i,j,0))*swidf(i,j)) - &
-              ((fdirdn(i,j,2)-fdirup(i,j,2))*swidr(i,j) + &
-               (fdifdn(i,j,2)-fdifup(i,j,2))*swidf(i,j)) ) &
+              ((fdirdn(i,j,ksrf)-fdirup(i,j,ksrf))*swidr(i,j) + &
+               (fdifdn(i,j,ksrf)-fdifup(i,j,ksrf))*swidf(i,j)) ) &
                *wghtns(i,j,ns)
  
-            fint(i,j)  = fint(i,j) +  &
-            ( ((fdirdn(i,j,2)-fdirup(i,j,2))*swidr(i,j) + &
-               (fdifdn(i,j,2)-fdifup(i,j,2))*swidf(i,j)) - &
+            fint(i,j)  = fint(i,j) + &
+            ( ((fdirdn(i,j,ksrf)-fdirup(i,j,ksrf))*swidr(i,j) + &
+               (fdifdn(i,j,ksrf)-fdifup(i,j,ksrf))*swidf(i,j)) - &
               ((fdirdn(i,j,klevp)-fdirup(i,j,klevp))*swidr(i,j) + &
                (fdifdn(i,j,klevp)-fdifup(i,j,klevp))*swidf(i,j)) ) &
                *wghtns(i,j,ns)
  
-            fthru(i,j) = fthru(i,j) +  &
+            fthru(i,j) = fthru(i,j) + &
               ((fdirdn(i,j,klevp)-fdirup(i,j,klevp))*swidr(i,j) + &
                (fdifdn(i,j,klevp)-fdifup(i,j,klevp))*swidf(i,j)) &
                *wghtns(i,j,ns)
- 
-            do k=2,klev
-              Iabs(i,j,k-1) = Iabs(i,j,k-1) + &
-              ((fdirdn(i,j,k)-fdirup(i,j,k))*swidr(i,j) + &
-               (fdifdn(i,j,k)-fdifup(i,j,k))*swidf(i,j)) &
-               *wghtns(i,j,ns) &
-             -((fdirdn(i,j,k+1)-fdirup(i,j,k+1))*swidr(i,j) + &
-               (fdifdn(i,j,k+1)-fdifup(i,j,k+1))*swidf(i,j)) &
-               *wghtns(i,j,ns)
-            enddo
-          enddo                 ! ij
 
-        endif                   ! ns = 1
+            ! if snow covered ice, set snow internal absorption; else, Sabs=0
+            if( srftyp(i,j) == 1 ) then
+              ksa = 0
+              do k=1,nslyr
+                ! skip snow SSL, since SSL absorption included in the surface
+                ! absorption fsfc above
+                km  = k
+                kp  = km + 1
+                ksa = ksa + 1
+                Sabs(i,j,ksa) = Sabs(i,j,ksa) + &
+                ( ((fdirdn(i,j,km)-fdirup(i,j,km))*swidr(i,j) + &
+                   (fdifdn(i,j,km)-fdifup(i,j,km))*swidf(i,j)) - &
+                  ((fdirdn(i,j,kp)-fdirup(i,j,kp))*swidr(i,j) + &
+                   (fdifdn(i,j,kp)-fdifup(i,j,kp))*swidf(i,j)) ) & 
+                   *wghtns(i,j,ns)
+              enddo       ! k
+            endif
 
-      enddo                     ! ns
+            ! complex indexing to insure proper absorptions for sea ice
+            ki = 0
+            do k=nslyr+2,nslyr+1+nilyr
+              ! for bare ice, DL absorption for sea ice layer 1
+              km = k  
+              kp = km + 1
+              ! modify for top sea ice layer for snow over sea ice
+              if( srftyp(i,j) == 1 ) then
+                ! must add SSL and DL absorption for sea ice layer 1
+                if( k == nslyr+2 ) then
+                  km = k  - 1
+                  kp = km + 2
+                endif
+              endif
+              ki = ki + 1
+              Iabs(i,j,ki) = Iabs(i,j,ki) + &
+              ( ((fdirdn(i,j,km)-fdirup(i,j,km))*swidr(i,j) + &
+                 (fdifdn(i,j,km)-fdifup(i,j,km))*swidf(i,j)) - &
+                ((fdirdn(i,j,kp)-fdirup(i,j,kp))*swidr(i,j) + &
+                 (fdifdn(i,j,kp)-fdifup(i,j,kp))*swidf(i,j)) ) &
+                 *wghtns(i,j,ns)
+            enddo       ! k
+          enddo        ! ij
+
+        endif        ! ns = 1, ns > 1
+
+      enddo         ! end spectral loop  ns
 
       end subroutine compute_dEdd
- 
+
 !=======================================================================
 !BOP
 !
-! !IROUTINE: solution_dEdd - evaluate solution for delta-Edddington
+! !IROUTINE: solution_dEdd - evaluate solution for Delta-Edddington solar
 !
 ! !INTERFACE:
 !
-      subroutine solution_dEdd                        &
-            (nx_block, ny_block,                      &
-             icells,  indxi,  indxj,  coszen, srftyp, &
-             tau,     w0,     g,      albodr, albodf, &
-             trndir,  trntdr, trndif, rupdir, rupdif, &
+      subroutine solution_dEdd                                 &
+            (nx_block, ny_block,                               &
+             icells_DE,  indxi_DE,  indxj_DE,  coszen, srftyp, &
+             tau,        w0,        g,         albodr, albodf, &
+             trndir,     trntdr,    trndif,    rupdir, rupdif, &
              rdndif)
 !
 ! !DESCRIPTION:
 !
-! Given input optical properties, evaluate the monochromatic 
-! delta-Eddington solution.
+! Given input vertical profiles of optical properties, evaluate the 
+! monochromatic Delta-Eddington solution.
 !
 ! !REVISION HISTORY:
 !
 ! author:  Bruce P. Briegleb, NCAR
+! updated: 8 February 2007
 !
 ! !USES:
 !
 ! !INPUT/OUTPUT PARAMETERS:
 
-      integer (kind=int_kind), intent(in) :: &
-         nx_block, ny_block, & ! block dimensions
-         icells  ! number of ice/ocean grid cells for surface type
- 
-      integer (kind=int_kind), dimension (nx_block*ny_block), &
+      integer (kind=int_kind), &
          intent(in) :: &
-         indxi, & ! compressed indices for ice/ocean cells for surface type
-         indxj
- 
-      ! cosine solar zenith angle; negative for sun below horizon
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
-         coszen   ! cosine solar zenith angle
- 
+         nx_block, ny_block, & ! block dimensions
+         icells_DE             ! number of sea ice grid cells for surface type
+
+      integer (kind=int_kind), dimension(nx_block*ny_block), &
+         intent(in) :: &
+         indxi_DE, & ! compressed indices for sea ice cells for surface type
+         indxj_DE
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         coszen      ! cosine solar zenith angle
+
       integer (kind=int_kind), dimension(nx_block,ny_block), &
          intent(in) :: &
-         srftyp  ! surface type over ice: (0=air, 1=snow, 2=pond)
+         srftyp      ! surface type over ice: (0=air, 1=snow, 2=pond)
  
-      real (kind=dbl_kind), dimension(nx_block,ny_block,0:nilyr+1), &
+      integer (kind=int_kind), parameter :: &
+         klev    = nslyr + nilyr + 1 , &  ! number of radiation layers - 1
+         klevp   = klev  + 1              ! number of radiation interfaces - 1
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,0:klev), &
          intent(in) :: &
-         tau , & ! layer extinction optical depth
-         w0  , & ! layer single scattering albedo
-         g       ! layer asymmetry parameter
+         tau     , & ! layer extinction optical depth
+         w0      , & ! layer single scattering albedo
+         g           ! layer asymmetry parameter
  
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in):: &
-        albodr, & ! ocean albedo to direct rad
-        albodf    ! ocean albedo to diffuse rad
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(in) :: &
+         albodr  , & ! ocean albedo to direct rad
+         albodf      ! ocean albedo to diffuse rad
  
       ! following arrays are defined at model interfaces; 0 is the top of the
-      ! layer above the sea ice; klevp=nilyr+2 is the sea ice/ocean interface.
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,0:nilyr+2) :: &
-         trndir, & ! solar beam down transm from top
-         trntdr, & ! total transmission to direct beam for layers above
-         trndif, & ! diffuse transmission to diffuse beam for layers above
-         rupdir, & ! ref to dir rad for layers below
-         rupdif, & ! ref to dif rad for layers below
-         rdndif    ! ref to dif rad for layers above
+      ! layer above the sea ice; klevp is the sea ice/ocean interface.
+      real (kind=dbl_kind), dimension (nx_block,ny_block,0:klevp), &
+         intent(out) :: &
+         trndir  , & ! solar beam down transmission from top
+         trntdr  , & ! total transmission to direct beam for layers above
+         trndif  , & ! diffuse transmission to diffuse beam for layers above
+         rupdir  , & ! reflectivity to direct radiation for layers below
+         rupdif  , & ! reflectivity to diffuse radiation for layers below
+         rdndif      ! reflectivity to diffuse radiation for layers above
 !
 !EOP
 !-----------------------------------------------------------------------
-! Sea ice model delta-Eddington     August 2005   Bruce P. Briegleb
+!
+! Delta-Eddington solution for snow/air/pond over sea ice
+!
+! Generic solution for a snow/air/pond input column of klev+1 layers,
+! with srftyp determining at what interface fresnel refraction occurs.
 !
 ! Computes layer reflectivities and transmissivities, from the top down
-! to the lowest interface using the delta-Eddington solutions for each 
-! layer; adds layers from top down to lowest interface, and from the
-! lowest interface (underlying ocean) up to the top of the sea ice 
-! surface, or to the top of the layer above if snow or pond present.
+! to the lowest interface using the Delta-Eddington solutions for each
+! layer; combines layers from top down to lowest interface, and from the
+! lowest interface (underlying ocean) up to the top of the column.
 !
-! Note that the diffuse reflectivity and transmissivity are computed
+! Note that layer diffuse reflectivity and transmissivity are computed
 ! by integrating the direct over several gaussian angles. This is
-! because the diffuse reflectivity expression sometimes is negative.
+! because the diffuse reflectivity expression sometimes is negative,
+! but the direct reflectivity is always well-behaved. We assume isotropic
+! radiation in the upward and downward hemispheres for this integration.
 !
-! Assumes monochromatic or spectrally uniform properties across a band
+! Assumes monochromatic (spectrally uniform) properties across a band
 ! for the input optical parameters.
 !
-! If total transmission to the interface above a particular layer is
-! less than trmin, then no further delta-Eddington solutions are
+! If total transmission of the direct beam to the interface above a particular 
+! layer is less than trmin, then no further Delta-Eddington solutions are
 ! evaluated for layers below.
 !
 ! The following describes how refraction is handled in the calculation.
 !
-! First, we assume that radiation is refracted when entering sea ice at 
-! the base of the surface layer, or water (i.e. melt pond); we assume that
-! radiation does not refract when entering snow, nor upon entering sea ice
-! from a melt pond, nor upon entering the underlying ocean from sea ice. 
+! First, we assume that radiation is refracted when entering either
+! sea ice at the base of the surface scattering layer, or water (i.e. melt
+! pond); we assume that radiation does not refract when entering snow, nor 
+! upon entering sea ice from a melt pond, nor upon entering the underlying 
+! ocean from sea ice.
 !
-! To handle refraction, we define a "fresnel" layer, which physically 
-! is of neglible vertical extent and is non-absorbing, which can be
-! added to any sea ice layer or top of melt pond. The following diagram 
-! shows where the fresnel layers are in relation to other layer/interfaces
-! in the standard configuration: 
-!
-!   Radiation layers and interfaces
-!
-! layer index             interface index
-!
-!       ----------------------  0                   <<< Fresnel
-!       //////////////////////
-!    0  air, snow or melt pond    Air or snow       Melt pond
-!       //////////////////////
-!       ----------------------  1  
-!    1  \\\ surface layer \\\\
-!       ----------------------  2  <<< Fresnel  
-!    2
-!       ----------------------  3
-!    3
-!       ----------------------  4
-!    4
-!       ----------------------  5
-!    5
-!       ----------------------  6
-!       ~~~~~~~~~~~~~~~~~~~~~~
-!       ~~~~~~~ ocean ~~~~~~~~
-!       ~~~~~~~~~~~~~~~~~~~~~~
-!
-! Layers of ice are indexed from 1 to klev (present 5) downwards; k=0 
-! refers to layer above top sea ice layer. This 0 layer is either air, 
-! snow or melt pond. A fresnel layer is positioned at the top of a melt 
-! pond or to the top of the layer just underneath the sea ice surface 
-! layer if no melt pond lies over it. The fresnel layer accounts for 
-! refraction of direct beam and associated reflection and transmission 
-! for solar radiation. It is assumed that radiation crossing the air/snow, 
-! melt pond/sea ice and sea ice/ocean interfaces is not refracted.
+! To handle refraction, we define a "fresnel" layer, which physically
+! is of neglible thickness and is non-absorbing, which can be combined to 
+! any sea ice layer or top of melt pond. The fresnel layer accounts for 
+! refraction of direct beam and associated reflection and transmission for
+! solar radiation. A fresnel layer is combined with the top of a melt pond 
+! or to the surface scattering layer of sea ice if no melt pond lies over it. 
 !
 ! Some caution must be exercised for the fresnel layer, because any layer
-! to which it is added is no longer a homogeneous layer, as are all other
-! individual layers. For all other layers for example, the direct and diffuse 
-! reflectivities/transmissivities (R/T) are the same for radiation above or 
-! below the layer. This is the implication of homogeneous! But for the fresnel 
-! layer this is not so. Thus, the R/T for this layer must be distinguished 
-! for radiation above from that from radiation below. For generality, we 
-! treat all layers to be added as inhomogeneous.
+! to which it is combined is no longer a homogeneous layer, as are all other
+! individual layers. For all other layers for example, the direct and diffuse
+! reflectivities/transmissivities (R/T) are the same for radiation above or
+! below the layer. This is the meaning of homogeneous! But for the fresnel
+! layer this is not so. Thus, the R/T for this layer must be distinguished
+! for radiation above from that from radiation below. For generality, we
+! treat all layers to be combined as inhomogeneous.
 !
 !-----------------------------------------------------------------------
 
 ! Local
 
-      integer (kind=int_kind), parameter :: &
-         klev   = nilyr + 1, & ! number of radiation layers
-         klevp  = klev  + 1, & ! number of radiation layers + 1
-         kfrsnl = 2  ! radiation index of sea ice layer whose top is fresnel lyr
+      integer (kind=int_kind) :: & 
+         kfrsnl      ! radiation interface index for fresnel layer
  
-      ! Following variables are defined for each layer; 0 refers to layer above 
-      ! sea ice. In general we must distinguish directions above and below in 
+      ! following variables are defined for each layer; 0 refers to the top
+      ! layer. In general we must distinguish directions above and below in 
       ! the diffuse reflectivity and transmissivity, as layers are not assumed
-      ! to be homogeneous (apart from the single layer delta-Edd solutions); 
+      ! to be homogeneous (apart from the single layer Delta-Edd solutions); 
       ! the direct is always from above.
-      real (kind=dbl_kind), dimension (nx_block,ny_block,0:klev) :: &
-         rdir  , & ! layer reflectivity to direct rad
-         rdif_a, & ! layer reflectivity to diffuse rad from above
-         rdif_b, & ! layer reflectivity to diffuse rad from below
-         tdir  , & ! layer transmission to direct rad (inc. diffusely transmitted)
-         tdif_a, & ! layer transmission to diffuse rad from above
-         tdif_b, & ! layer transmission to diffuse rad from below
-         trnlay    ! solar beam transm for layer (direct beam only)
+      Real (kind=dbl_kind), dimension (nx_block,ny_block,0:klev) :: &
+         rdir    , & ! layer reflectivity to direct radiation
+         rdif_a  , & ! layer reflectivity to diffuse radiation from above
+         rdif_b  , & ! layer reflectivity to diffuse radiation from below
+         tdir    , & ! layer transmission to direct radiation (solar beam + diffuse)
+         tdif_a  , & ! layer transmission to diffuse radiation from above
+         tdif_b  , & ! layer transmission to diffuse radiation from below
+         trnlay      ! solar beam transm for layer (direct beam only)
+ 
+      integer (kind=int_kind) :: & 
+         i       , & ! longitude index
+         j       , & ! latitude index
+         ij      , & ! longitude/latitude index
+         k           ! level index
  
       real (kind=dbl_kind), parameter :: &
          trmin = 0.001_dbl_kind   ! minimum total transmission allowed
- 
-      integer (kind=int_kind) :: & 
-         i   , & ! longitude index
-         j   , & ! latitude index
-         ij  , & ! longitude/latitude index
-         k       ! level index
- 
+      ! total transmission is that due to the direct beam; i.e. it includes
+      ! both the directly transmitted solar beam and the diffuse downwards
+      ! transmitted radiation resulting from scattering out of the direct beam 
       integer (kind=int_kind) :: &
-         icellstrmin  ! number of ice/ocean grid cells for which tr > trmin
- 
-      integer (kind=int_kind), dimension (nx_block*ny_block) :: &
-         indxitrmin, & ! indices for ice/ocean cells for which tr > trmin
-         indxjtrmin
+         icellstrmin    ! number of cells with total transmission > trmin
+       integer (kind=int_kind), dimension (nx_block*ny_block) :: &
+         indxitrmin , & ! i index for cells with total transmission > trmin
+         indxjtrmin     ! j index for cells with total transmission > trmin
  
       real (kind=dbl_kind) :: &
-         tautot , & ! layer optical depth
-         wtot   , & ! layer single scattering albedo
-         gtot   , & ! layer asymmetry parameter
-         ftot   , & ! layer forward scattering fraction
-         ts     , & ! layer scaled extinction optical depth
-         ws     , & ! layer scaled single scattering albedo
-         gs     , & ! layer scaled asymmetry parameter
-         rintfc , & ! reflection (multiple) at an interface
-         refkp1 , & ! interface multiple scattering for k+1
-         refkm1 , & ! interface multiple scattering for k-1
-         tdrrdir, & ! direct tran times layer direct ref 
-         tdndif     ! total down diffuse = tot tran - direct tran
+         tautot   , & ! layer optical depth
+         wtot     , & ! layer single scattering albedo
+         gtot     , & ! layer asymmetry parameter
+         ftot     , & ! layer forward scattering fraction
+         ts       , & ! layer scaled extinction optical depth
+         ws       , & ! layer scaled single scattering albedo
+         gs       , & ! layer scaled asymmetry parameter
+         rintfc   , & ! reflection (multiple) at an interface
+         refkp1   , & ! interface multiple scattering for k+1
+         refkm1   , & ! interface multiple scattering for k-1
+         tdrrdir  , & ! direct tran times layer direct ref 
+         tdndif       ! total down diffuse = tot tran - direct tran
  
-      ! perpendicular and parallel relative to pane of incidence and scattering
+      ! perpendicular and parallel relative to plane of incidence and scattering
       real (kind=dbl_kind) :: &
-         R1      , & ! perpendicular polarization reflection amplitude
-         R2      , & ! parallel polarization reflection amplitude
-         T1      , & ! perpendicular polarization transmission amplitude
-         T2      , & ! parallel polarization transmission amplitude
-         Rf_dir_a, & ! fresnel reflection to direct radiation
-         Tf_dir_a, & ! fresnel transmission to direct radiation
-         Rf_dif_a, & ! fresnel reflection to diff radiation from above
-         Rf_dif_b, & ! fresnel reflection to diff radiation from below
-         Tf_dif_a, & ! fresnel transmission to diff radiation from above
-         Tf_dif_b    ! fresnel transmission to diff radiation from below
+         R1       , & ! perpendicular polarization reflection amplitude
+         R2       , & ! parallel polarization reflection amplitude
+         T1       , & ! perpendicular polarization transmission amplitude
+         T2       , & ! parallel polarization transmission amplitude
+         Rf_dir_a , & ! fresnel reflection to direct radiation
+         Tf_dir_a , & ! fresnel transmission to direct radiation
+         Rf_dif_a , & ! fresnel reflection to diff radiation from above
+         Rf_dif_b , & ! fresnel reflection to diff radiation from below
+         Tf_dif_a , & ! fresnel transmission to diff radiation from above
+         Tf_dif_b     ! fresnel transmission to diff radiation from below
  
-      ! diffuse fresnel reflectivities pre-computed
+      ! refractive index for sea ice, water; pre-computed, band-independent,
+      ! diffuse fresnel reflectivities
       real (kind=dbl_kind), parameter :: & 
-         refindx = 1.310_dbl_kind, & ! refractive index of ice (used for water also)
-         cp063   = 0.063_dbl_kind, & ! diffuse fresnel reflectivity from above
-         cp455   = 0.455_dbl_kind    ! diffuse fresnel reflectivity from below
+         refindx = 1.310_dbl_kind  , & ! refractive index of sea ice (used for water also)
+         cp063   = 0.063_dbl_kind  , & ! diffuse fresnel reflectivity from above
+         cp455   = 0.455_dbl_kind      ! diffuse fresnel reflectivity from below
  
       real (kind=dbl_kind) :: &
-         mu0  , & ! cosine solar zenith angle incident
-         mu0n     ! cosine solar zenith angle in medium
+         mu0      , & ! cosine solar zenith angle incident
+         mu0n         ! cosine solar zenith angle in medium
  
       real (kind=dbl_kind) :: &
-         alpha, & ! term in direct reflectivity and transmissivity
-         gamma, & ! term in direct reflectivity and transmissivity
-         el   , & ! term in alpha,gamma,n,u
-         taus , & ! scaled extinction optical depth
-         omgs , & ! scaled single particle scattering albedo
-         asys , & ! scaled asymmetry parameter
-         u    , & ! term in diffuse reflectivity and transmissivity
-         n    , & ! term in diffuse reflectivity and transmissivity
-         lm   , & ! temporary for el
-         mu   , & ! cosine solar zenith for either snow or water
-         ne       ! temporary for n
+         alpha    , & ! term in direct reflectivity and transmissivity
+         gamma    , & ! term in direct reflectivity and transmissivity
+         el       , & ! term in alpha,gamma,n,u
+         taus     , & ! scaled extinction optical depth
+         omgs     , & ! scaled single particle scattering albedo
+         asys     , & ! scaled asymmetry parameter
+         u        , & ! term in diffuse reflectivity and transmissivity
+         n        , & ! term in diffuse reflectivity and transmissivity
+         lm       , & ! temporary for el
+         mu       , & ! cosine solar zenith for either snow or water
+         ne           ! temporary for n
  
       real (kind=dbl_kind) :: &
-         w    , & ! dummy argument for statement function
-         uu   , & ! dummy argument for statement function
-         gg   , & ! dummy argument for statement function
-         e    , & ! dummy argument for statement function
-         f    , & ! dummy argument for statement function
-         t    , & ! dummy argument for statement function
-         et       ! dummy argument for statement function
+         w        , & ! dummy argument for statement function
+         uu       , & ! dummy argument for statement function
+         gg       , & ! dummy argument for statement function
+         e        , & ! dummy argument for statement function
+         f        , & ! dummy argument for statement function
+         t        , & ! dummy argument for statement function
+         et           ! dummy argument for statement function
  
       real (kind=dbl_kind) :: &
-         alp   , & ! temporary for alpha
-         gam   , & ! temporary for gamma
-         ue    , & ! temporary for u
-         arg   , & ! exponential argument
-         extins, & ! extinction
-         amg   , & ! alp - gam
-         apg       ! alp + gam
+         alp      , & ! temporary for alpha
+         gam      , & ! temporary for gamma
+         ue       , & ! temporary for u
+         arg      , & ! exponential argument
+         extins   , & ! extinction
+         amg      , & ! alp - gam
+         apg          ! alp + gam
  
       integer (kind=int_kind), parameter :: &
-         ngmax = 8  ! number of gaussian angles in hemisphere
+         ngmax = 8    ! number of gaussian angles in hemisphere
  
       real (kind=dbl_kind), dimension (ngmax) :: &
-         ! gaussian angles (points)
-         gauspt = (/ .9894009_dbl_kind,  .9445750_dbl_kind, &
-                     .8656312_dbl_kind,  .7554044_dbl_kind, &
-                     .6178762_dbl_kind,  .4580168_dbl_kind, &
-                     .2816036_dbl_kind,  .0950125_dbl_kind /), &
-         ! gaussian weights (normalized so sum is 1)
-         gauswt = (/ .0271525_dbl_kind,  .0622535_dbl_kind, &
-                     .0951585_dbl_kind,  .1246290_dbl_kind, &
-                     .1495960_dbl_kind,  .1691565_dbl_kind, &
-                     .1826034_dbl_kind,  .1894506_dbl_kind /)
+         gauspt   , & ! gaussian angles (radians)
+         gauswt       ! gaussian weights
+
+      data gauspt/ &
+                 .9894009_dbl_kind,  .9445750_dbl_kind, &
+                 .8656312_dbl_kind,  .7554044_dbl_kind, &
+                 .6178762_dbl_kind,  .4580168_dbl_kind, &
+                 .2816036_dbl_kind,  .0950125_dbl_kind  /
+      data gauswt/ &     
+                 .0271525_dbl_kind,  .0622535_dbl_kind, &
+                 .0951585_dbl_kind,  .1246290_dbl_kind, &
+                 .1495960_dbl_kind,  .1691565_dbl_kind, &
+                 .1826034_dbl_kind,  .1894506_dbl_kind  /
   
       integer (kind=int_kind) :: &
-         ng       ! gaussian integration index
+         ng           ! gaussian integration index
  
       real (kind=dbl_kind) :: &
-         gwt  , & ! gaussian weight
-         swt  , & ! sum of weights
-         trn  , & ! layer transmission
-         rdr  , & ! rdir for gaussian integration
-         tdr  , & ! tdir for gaussian integration
-         smr  , & ! accumulator for rdif gaussian integration
-         smt      ! accumulator for tdif gaussian integration
+         gwt      , & ! gaussian weight
+         swt      , & ! sum of weights
+         trn      , & ! layer transmission
+         rdr      , & ! rdir for gaussian integration
+         tdr      , & ! tdir for gaussian integration
+         smr      , & ! accumulator for rdif gaussian integration
+         smt          ! accumulator for tdif gaussian integration
  
       ! Delta-Eddington solution expressions
       alpha(w,uu,gg,e) = p75*w*uu*((c1 + gg*(c1-w))/(c1 - e*e*uu*uu))
@@ -1975,375 +2612,268 @@
  
 !-----------------------------------------------------------------------
  
-      ! initialize all output to 0, so that nighttime 
-      ! values from previous computations are not used:
-      do k=0,klevp
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-         trndir(i,j,k) = c0
-         trntdr(i,j,k) = c0
-         trndif(i,j,k) = c0
-         rupdir(i,j,k) = c0
-         rupdif(i,j,k) = c0
-         rdndif(i,j,k) = c0
-      enddo 
-      enddo
- 
-      ! for the layer over sea ice (either air, snow or water):
-      do ij = 1, icells
-        i = indxi(ij)
-        j = indxj(ij)
- 
-          ! initialize top interface of top layer:
-          trndir(i,j,0) =   c1
-          trntdr(i,j,0) =   c1
-          trndif(i,j,0) =   c1
-          rdndif(i,j,0) =   c0
- 
-          ! compute solar zenith angle in medium
-          mu0  = max(coszen(i,j),p01)
-          mu0n = sqrt(c1-((c1-mu0*mu0)/(refindx*refindx)))
- 
-          ! set layer properties if air:
-          if( srftyp(i,j) == 0 ) then
- 
-            rdir(i,j,0)   = c0
-            rdif_a(i,j,0) = c0
-            rdif_b(i,j,0) = c0
-            tdir(i,j,0)   = c1
-            tdif_a(i,j,0) = c1
-            tdif_b(i,j,0) = c1
-            trnlay(i,j,0) = c1
- 
-          ! compute layer properties if snow or water:
-          else if( srftyp(i,j) > 0 ) then
- 
-            ! Set appropriate direct beam angle:
-            mu = mu0
-            if( srftyp(i,j) == 2 ) mu = mu0n
- 
-            tautot  = tau(i,j,0)
-            wtot    = w0(i,j,0)
-            gtot    = g(i,j,0)
-            ftot    = gtot*gtot
- 
-            ts   = taus(wtot,ftot,tautot)
-            ws   = omgs(wtot,ftot)
-            gs   = asys(gtot,ftot)
-            lm   = el(ws,gs)
-            ue   = u(ws,gs,lm)
- 
-            ! use approximate exponential
-            arg  = lm*ts
-            if( arg > argmax ) then
-              extins   = exp_min
-            else
-              indx_exp = arg/dx_exp
-              extins   = app_exp(indx_exp)
-            endif
-            ne = n(ue,extins)
- 
-            ! first calculation of rdif, tdif:
-            rdif_a(i,j,0) = (ue+c1)*(ue-c1)*(c1/extins - extins)/ne
-            tdif_a(i,j,0) = c4*ue/ne
- 
-            ! evaluate rdir,tdir:
-            ! use approximate exponential
-            arg  = ts/mu
-            if( arg > argmax ) then
-              trnlay(i,j,0) = exp_min
-            else
-              indx_exp      = arg/dx_exp
-              trnlay(i,j,0) = app_exp(indx_exp)
-            endif
-            alp = alpha(ws,mu,gs,lm)
-            gam = gamma(ws,mu,gs,lm)
-            apg = alp + gam
-            amg = alp - gam
-            rdir(i,j,0) = amg*(tdif_a(i,j,0)*trnlay(i,j,0) - c1) +  &
-                        apg*rdif_a(i,j,0)
-            tdir(i,j,0) = apg*tdif_a(i,j,0) + &
-                        (amg*rdif_a(i,j,0) - (apg-c1))*trnlay(i,j,0)
- 
-            ! recalculate rdif,tdif using gaussian integration over rdir,tdir:
-            swt = c0
-            smr = c0
-            smt = c0
-            do ng=1,ngmax
-              mu  = gauspt(ng)
-              gwt = gauswt(ng)
-              swt = swt + mu*gwt
-              ! use approximate exponential
-              arg = ts/mu
-              if( arg > argmax ) then
-                trn      = exp_min
-              else
-                indx_exp = arg/dx_exp
-                trn      = app_exp(indx_exp)
-              endif
-              alp = alpha(ws,mu,gs,lm)
-              gam = gamma(ws,mu,gs,lm)
-              apg = alp + gam
-              amg = alp - gam
-              rdr = amg*(tdif_a(i,j,0)*trn-c1) +  &
-                    apg*rdif_a(i,j,0)
-              tdr = apg*tdif_a(i,j,0) + &
-                    (amg*rdif_a(i,j,0)-(apg-c1))*trn
-              smr = smr + mu*rdr*gwt
-              smt = smt + mu*tdr*gwt
-            enddo
-            rdif_a(i,j,0) = smr/swt
-            tdif_a(i,j,0) = smt/swt
- 
-            ! homogeneous layer
-            rdif_b(i,j,0) = rdif_a(i,j,0)
-            tdif_b(i,j,0) = tdif_a(i,j,0)
- 
-          endif ! srftyp for top layer
- 
-          ! set top interface terms for sea ice layer 1: note that rdndif
-          ! is diffuse reflectivity from below to combined layers above.
-          trndir(i,j,1) = trnlay(i,j,0)
-          trntdr(i,j,1) = tdir(i,j,0)
-          trndif(i,j,1) = tdif_a(i,j,0)
-          rdndif(i,j,1) = rdif_b(i,j,0)
- 
-          ! compute fresnel reflection and transmission amplitudes
-          ! for two polarizations: 1=perpendicular and 2=parallel to
-          ! the plane containing incident, reflected and refracted rays.
-          R1 = (mu0 - refindx*mu0n) /  &
-               (mu0 + refindx*mu0n)
-          R2 = (refindx*mu0 - mu0n) /  &
-               (refindx*mu0 + mu0n)
-          T1 = c2*mu0 /  &
-               (mu0 + refindx*mu0n)
-          T2 = c2*mu0 /  &
-               (refindx*mu0 + mu0n)
- 
-          ! unpolarized light for direct beam
-          Rf_dir_a = p5 * (R1*R1 + R2*R2)
-          Tf_dir_a = p5 * (T1*T1 + T2*T2)*refindx*mu0n/mu0
- 
-          ! precalculated diffuse reflectivities and transmissivities
-          ! for incident radiation above and below fresnel layer, using
-          ! the direct albedos and accounting for complete internal
-          ! reflection from below; precalculated because high order
-          ! number of gaussian points (~256) is required for convergence:
- 
-          ! above
-          Rf_dif_a = cp063
-          Tf_dif_a = c1 - Rf_dif_a
-          ! below
-          Rf_dif_b = cp455
-          Tf_dif_b = c1 - Rf_dif_b
- 
-          ! add fresnel layer to top of melt pond. The usual two-layer adding 
-          ! formulas are used, with modifications for the direct transmission 
-          ! in particular, since there is no equivalent exponential transmission 
-          ! term for the fresnel layer. Note that the melt pond reflection and 
-          ! transmission to direct radiation have already accounted for the 
-          ! angular refraction from the fresnel layer.
-          if( srftyp(i,j) == 2 ) then
-            rintfc        = c1/(c1 - Rf_dif_b*rdif_a(i,j,0))
-            tdir(i,j,0)   = Tf_dir_a*tdir(i,j,0) +  &
-                            Tf_dir_a*rdir(i,j,0)* &
-                            Rf_dif_b*rintfc*tdif_a(i,j,0)
-            rdir(i,j,0)   = Rf_dir_a +  &
-                            Tf_dir_a*rdir(i,j,0)*rintfc*Tf_dif_b
-            rdif_a(i,j,0) = Rf_dif_a +  &
-                            Tf_dif_a*rdif_a(i,j,0)*rintfc*Tf_dif_b
-            rdif_b(i,j,0) = rdif_b(i,j,0) +  &
-                            tdif_b(i,j,0)*Rf_dif_b*rintfc*tdif_a(i,j,0)
-            tdif_a(i,j,0) = Tf_dif_a*rintfc*tdif_a(i,j,0)
-            tdif_b(i,j,0) = tdif_b(i,j,0)*rintfc*Tf_dif_b
-            trndir(i,j,1) = Tf_dir_a*trnlay(i,j,0)
-            trntdr(i,j,1) = tdir(i,j,0)
-            trndif(i,j,1) = tdif_a(i,j,0)
-            rdndif(i,j,1) = rdif_b(i,j,0)
-          endif
- 
-      enddo ! end of layer over sea ice (either air, snow or water)
- 
-      ! now, continue down one layer at a time; if the total transmission to
-      ! the interface just above a given layer is less than trmin, then no
-      ! delta-eddington computation for that layer is done:
-      do k=1,klev
- 
-         ! initialize current layer properties to zero; only if total
-         ! transmission to the top interface of the current layer exceeds the
-         ! minimum, will these values be computed below:
-         do ij = 1, icells
-           i = indxi(ij)
-           j = indxj(ij)
- 
-               rdir(i,j,k)   =  c0
-               rdif_a(i,j,k) =  c0
-               rdif_b(i,j,k) =  c0
-               tdir(i,j,k)   =  c0
-               tdif_a(i,j,k) =  c0
-               tdif_b(i,j,k) =  c0
-               trnlay(i,j,k) =  c0
- 
-               ! Calculates the solar beam transmission, total transmission, and
-               ! reflectivity for diffuse radiation from below at the top of the
-               ! current layer:
-               !
-               !              layers       interface
-               !         
-               !       ---------------------  k-1 
-               !                k-1
-               !       ---------------------  k
-               !                 k
-               !       ---------------------  
-              if ( k > 1 ) then
-                trndir(i,j,k) = trndir(i,j,k-1)*trnlay(i,j,k-1)
-                refkm1        = c1/(c1-rdndif(i,j,k-1)*rdif_a(i,j,k-1))
-                tdrrdir       = trndir(i,j,k-1)*rdir(i,j,k-1)
-                tdndif        = trntdr(i,j,k-1) - trndir(i,j,k-1)
-                trntdr(i,j,k) = trndir(i,j,k-1)*tdir(i,j,k-1) +  &
-                               (tdndif + tdrrdir*rdndif(i,j,k-1)) &
-                               *refkm1*tdif_a(i,j,k-1)
-                rdndif(i,j,k) = rdif_b(i,j,k-1)  + &
-                               (tdif_b(i,j,k-1)*rdndif(i,j,k-1) &
-                               *refkm1*tdif_a(i,j,k-1))
-                trndif(i,j,k) = trndif(i,j,k-1)*tdif_a(i,j,k-1)*refkm1
-              endif
-         enddo ! end of top interface calculation
- 
-         ! compute next layer delta-eddington solution only if total transmission
-         ! of radiation to the interface just above the layer exceeds trmin.
-         icellstrmin = 0
-         do ij = 1, icells
-           i = indxi(ij)
-           j = indxj(ij)
-           if (trntdr(i,j,k) > trmin ) then
-             icellstrmin   = icellstrmin + 1
-             indxitrmin(icellstrmin) = i
-             indxjtrmin(icellstrmin) = j
-           endif
-         enddo
- 
-            ! calculation over layers with penetrating radiation
-            do ij=1,icellstrmin
-               i = indxitrmin(ij)
-               j = indxjtrmin(ij)
- 
-               tautot  = tau(i,j,k)
-               wtot    = w0(i,j,k)
-               gtot    = g(i,j,k)
-               ftot    = gtot*gtot
- 
-               ts   = taus(wtot,ftot,tautot)
-               ws   = omgs(wtot,ftot)
-               gs   = asys(gtot,ftot)
-               lm   = el(ws,gs)
-               ue   = u(ws,gs,lm)
-               ! mu0 in medium
-               mu0  = max(coszen(i,j),p01)
-               mu0n = sqrt(c1-((c1-mu0*mu0)/(refindx*refindx)))
-               ! do not change if above fresnel layer and in non-pond medium
-               if( srftyp(i,j) .ne. 2 .and. k < kfrsnl ) mu0n = mu0
- 
-               ! use approximate exponential
-               arg  = lm*ts
-               if( arg > argmax ) then
-                 extins   = exp_min
-               else
-                 indx_exp = arg/dx_exp
-                 extins   = app_exp(indx_exp)
-               endif
-               ne = n(ue,extins)
- 
-               ! first calculation of rdif, tdif:
-               rdif_a(i,j,k) = (ue+c1)*(ue-c1)*(c1/extins - extins)/ne
-               tdif_a(i,j,k) = c4*ue/ne
- 
-               ! evaluate rdir,tdir:
-               ! use approximate exponential
-               arg  = ts/mu0n
-               if( arg > argmax ) then
-                 trnlay(i,j,k) = exp_min
-               else
-                 indx_exp      = arg/dx_exp
-                 trnlay(i,j,k) = app_exp(indx_exp)
-               endif
-               alp = alpha(ws,mu0n,gs,lm)
-               gam = gamma(ws,mu0n,gs,lm)
-               apg = alp + gam
-               amg = alp - gam
-               rdir(i,j,k) = amg*(tdif_a(i,j,k)*trnlay(i,j,k) - c1) +  &
-                           apg*rdif_a(i,j,k)
-               tdir(i,j,k) = apg*tdif_a(i,j,k) + &
-                           (amg*rdif_a(i,j,k) - (apg-c1))*trnlay(i,j,k)
- 
-               ! recalculate rdif,tdif using gaussian integration over rdir,tdir:
-               swt = c0
-               smr = c0
-               smt = c0
-               do ng=1,ngmax
-                 mu  = gauspt(ng)
-                 gwt = gauswt(ng)
-                 swt = swt + mu*gwt
-                 ! use approximate exponential
-                 arg = ts/mu
-                 if( arg > argmax ) then
-                   trn      = exp_min
-                 else
-                   indx_exp = arg/dx_exp
-                   trn      = app_exp(indx_exp)
-                 endif
-                 alp = alpha(ws,mu,gs,lm)
-                 gam = gamma(ws,mu,gs,lm)
-                 apg = alp + gam
-                 amg = alp - gam
-                 rdr = amg*(tdif_a(i,j,k)*trn-c1) +  &
-                       apg*rdif_a(i,j,k)
-                 tdr = apg*tdif_a(i,j,k) + &
-                       (amg*rdif_a(i,j,k)-(apg-c1))*trn
-                 smr = smr + mu*rdr*gwt
-                 smt = smt + mu*tdr*gwt
-               enddo
-               rdif_a(i,j,k) = smr/swt
-               tdif_a(i,j,k) = smt/swt
- 
-               ! homogeneous layer
-               rdif_b(i,j,k) = rdif_a(i,j,k)
-               tdif_b(i,j,k) = tdif_a(i,j,k)
- 
-               ! add fresnel layer to top of desired layer if either 
-               ! air or snow overlies ice; we ignore refraction in ice 
-               ! if a melt pond overlies it:
-               if( srftyp(i,j) < 2 .and. k == kfrsnl ) then
-                 rintfc             = c1 / &
-                                     (c1-Rf_dif_b*rdif_a(i,j,kfrsnl))
-                 tdir(i,j,kfrsnl)   = Tf_dir_a*tdir(i,j,kfrsnl) + &
-                                      Tf_dir_a*rdir(i,j,kfrsnl) * &
-                                      Rf_dif_b*rintfc*tdif_a(i,j,kfrsnl)
-                 rdir(i,j,kfrsnl)   = Rf_dir_a +  &
-                                      Tf_dir_a*rdir(i,j,kfrsnl) * &
-                                      rintfc*Tf_dif_b
-                 rdif_a(i,j,kfrsnl) = Rf_dif_a +  &
-                                      Tf_dif_a*rdif_a(i,j,kfrsnl) * &
-                                      rintfc*Tf_dif_b
-                 rdif_b(i,j,kfrsnl) = rdif_b(i,j,kfrsnl) +  &
-                                      tdif_b(i,j,kfrsnl)*Rf_dif_b* &
-                                      rintfc*tdif_a(i,j,kfrsnl) 
-                                      
-                 tdif_a(i,j,kfrsnl) = Tf_dif_a*rintfc*tdif_a(i,j,kfrsnl)
-                 tdif_b(i,j,kfrsnl) = tdif_b(i,j,kfrsnl)*rintfc*Tf_dif_b
+      ! initialize all output to 0
 
-                 ! update trnlay to include fresnel transmission
-                 trnlay(i,j,kfrsnl) = Tf_dir_a*trnlay(i,j,kfrsnl)
-               endif
-            enddo ! end transmission large enough
+      trndir(:,:,:) = c0
+      trntdr(:,:,:) = c0
+      trndif(:,:,:) = c0
+      rupdir(:,:,:) = c0
+      rupdif(:,:,:) = c0
+      rdndif(:,:,:) = c0
  
-      enddo ! end level k loop
+      ! initialize all layer apparent optical properties to 0
+
+      rdir(:,:,:)   = c0
+      rdif_a(:,:,:) = c0
+      rdif_b(:,:,:) = c0
+      tdir(:,:,:)   = c0
+      tdif_a(:,:,:) = c0
+      tdif_b(:,:,:) = c0
+      trnlay(:,:,:) = c0
+
+      ! initialize top interface of top layer 
+      do ij = 1, icells_DE
+        i = indxi_DE(ij)
+        j = indxj_DE(ij)
+        trndir(i,j,0) =   c1
+        trntdr(i,j,0) =   c1
+        trndif(i,j,0) =   c1
+        rdndif(i,j,0) =   c0
+      enddo       ! ij
  
+      ! proceed down one layer at a time; if the total transmission to
+      ! the interface just above a given layer is less than trmin, then no
+      ! Delta-Eddington computation for that layer is done.
+
+      ! begin main level loop
+      do k=0,klev
+ 
+        ! initialize current layer properties to zero; only if total
+        ! transmission to the top interface of the current layer exceeds the
+        ! minimum, will these values be computed below:
+        do ij = 1, icells_DE
+          i = indxi_DE(ij)
+          j = indxj_DE(ij)
+ 
+            ! Calculate the solar beam transmission, total transmission, and
+            ! reflectivity for diffuse radiation from below at interface k, 
+            ! the top of the current layer k:
+            !
+            !              layers       interface
+            !         
+            !       ---------------------  k-1 
+            !                k-1
+            !       ---------------------  k
+            !                 k
+            !       ---------------------  
+
+            if ( k > 0 ) then
+              trndir(i,j,k) = trndir(i,j,k-1)*trnlay(i,j,k-1)
+              refkm1        = c1/(c1 - rdndif(i,j,k-1)*rdif_a(i,j,k-1))
+              tdrrdir       = trndir(i,j,k-1)*rdir(i,j,k-1)
+              tdndif        = trntdr(i,j,k-1) - trndir(i,j,k-1)
+              trntdr(i,j,k) = trndir(i,j,k-1)*tdir(i,j,k-1) + &
+               (tdndif + tdrrdir*rdndif(i,j,k-1))*refkm1*tdif_a(i,j,k-1)
+              rdndif(i,j,k) = rdif_b(i,j,k-1) + &
+                (tdif_b(i,j,k-1)*rdndif(i,j,k-1)*refkm1*tdif_a(i,j,k-1))
+              trndif(i,j,k) = trndif(i,j,k-1)*refkm1*tdif_a(i,j,k-1)
+            endif     ! k > 0
+        enddo       ! ij  end of interface calculation
+ 
+        ! compute next layer Delta-eddington solution only if total transmission
+        ! of radiation to the interface just above the layer exceeds trmin.
+        icellstrmin = 0
+        do ij = 1, icells_DE
+          i = indxi_DE(ij)
+          j = indxj_DE(ij)
+          if (trntdr(i,j,k) > trmin ) then
+            icellstrmin   = icellstrmin + 1
+            indxitrmin(icellstrmin) = i
+            indxjtrmin(icellstrmin) = j
+          endif
+        enddo       ! ij  
+ 
+        ! calculation over layers with penetrating radiation
+        do ij=1,icellstrmin
+           i = indxitrmin(ij)
+           j = indxjtrmin(ij)
+ 
+           tautot  = tau(i,j,k)
+           wtot    = w0(i,j,k)
+           gtot    = g(i,j,k)
+           ftot    = gtot*gtot
+ 
+           ts   = taus(wtot,ftot,tautot)
+           ws   = omgs(wtot,ftot)
+           gs   = asys(gtot,ftot)
+           lm   = el(ws,gs)
+           ue   = u(ws,gs,lm)
+
+           ! compute level of fresnel refraction
+           if( srftyp(i,j) < 2 ) then
+             ! if snow over sea ice or bare sea ice, fresnel level is
+             ! at base of sea ice SSL (and top of the sea ice DL); the
+             ! snow SSL counts for one, then the number of snow layers,
+             ! then the sea ice SSL which also counts for one:
+             kfrsnl = 1 + nslyr + 1
+           else
+             ! if ponded sea ice, fresnel level is the top of the pond 
+             kfrsnl = 0
+           endif
+
+           ! mu0 is cosine solar zenith angle above the fresnel level; make 
+           ! sure mu0 is large enough for stable and meaningful radiation
+           ! solution: .01 is like sun just touching horizon with its lower edge
+
+           mu0  = max(coszen(i,j),p01)
+
+           ! mu0n is cosine solar zenith angle used to compute the layer
+           ! Delta-Eddington solution; it is initially computed to be the
+           ! value below the fresnel level, i.e. the cosine solar zenith 
+           ! angle below the fresnel level for the refracted solar beam:
+
+           mu0n = sqrt(c1-((c1-mu0*mu0)/(refindx*refindx)))
+
+           ! if level k is above fresnel level and the cell is non-pond, use the
+           ! non-refracted beam instead
+
+           if( srftyp(i,j) < 2 .and. k < kfrsnl ) mu0n = mu0
+ 
+           ! use approximate exponential for exp(-arg)
+           arg  = lm*ts
+           if( arg > argmax ) then
+             extins   = exp_min
+           else
+             indx_exp = arg/dx_exp
+             extins   = app_exp(indx_exp)
+           endif
+           ne = n(ue,extins)
+ 
+           ! first calculation of rdif, tdif using Delta-Eddington formulas
+
+           rdif_a(i,j,k) = (ue+c1)*(ue-c1)*(c1/extins - extins)/ne
+           tdif_a(i,j,k) = c4*ue/ne
+ 
+           ! evaluate rdir,tdir for direct beam
+           ! use approximate exponential for exp(-arg)
+           arg  = ts/mu0n
+           if( arg > argmax ) then
+             trnlay(i,j,k) = exp_min
+           else
+             indx_exp      = arg/dx_exp
+             trnlay(i,j,k) = app_exp(indx_exp)
+           endif
+           alp = alpha(ws,mu0n,gs,lm)
+           gam = gamma(ws,mu0n,gs,lm)
+           apg = alp + gam
+           amg = alp - gam
+           rdir(i,j,k) = amg*(tdif_a(i,j,k)*trnlay(i,j,k) - c1) + &
+                       apg*rdif_a(i,j,k)
+           tdir(i,j,k) = apg*tdif_a(i,j,k) + &
+                       (amg*rdif_a(i,j,k) - (apg-c1))*trnlay(i,j,k)
+ 
+           ! recalculate rdif,tdif using direct angular integration over rdir,tdir,
+           ! since Delta-Eddington rdif formula is not well-behaved (it is usually
+           ! biased low and can even be negative); use ngmax angles and gaussian
+           ! integration for most accuracy:
+           swt = c0
+           smr = c0
+           smt = c0
+           do ng=1,ngmax
+             mu  = gauspt(ng)
+             gwt = gauswt(ng)
+             swt = swt + mu*gwt
+             ! use approximate exponential
+             arg = ts/mu
+             if( arg > argmax ) then
+               trn      = exp_min
+             else
+               indx_exp = arg/dx_exp
+               trn      = app_exp(indx_exp)
+             endif
+             alp = alpha(ws,mu,gs,lm)
+             gam = gamma(ws,mu,gs,lm)
+             apg = alp + gam
+             amg = alp - gam
+             rdr = amg*(tdif_a(i,j,k)*trn-c1) + &
+                   apg*rdif_a(i,j,k)
+             tdr = apg*tdif_a(i,j,k) + &
+                   (amg*rdif_a(i,j,k)-(apg-c1))*trn
+             smr = smr + mu*rdr*gwt
+             smt = smt + mu*tdr*gwt
+           enddo      ! ng
+           rdif_a(i,j,k) = smr/swt
+           tdif_a(i,j,k) = smt/swt
+ 
+           ! homogeneous layer
+           rdif_b(i,j,k) = rdif_a(i,j,k)
+           tdif_b(i,j,k) = tdif_a(i,j,k)
+ 
+           ! add fresnel layer to top of desired layer if either 
+           ! air or snow overlies ice; we ignore refraction in ice 
+           ! if a melt pond overlies it:
+
+           if( k == kfrsnl ) then
+             ! compute fresnel reflection and transmission amplitudes
+             ! for two polarizations: 1=perpendicular and 2=parallel to
+             ! the plane containing incident, reflected and refracted rays.
+             R1 = (mu0 - refindx*mu0n) / & 
+                  (mu0 + refindx*mu0n)
+             R2 = (refindx*mu0 - mu0n) / &
+                  (refindx*mu0 + mu0n)
+             T1 = c2*mu0 / &
+                  (mu0 + refindx*mu0n)
+             T2 = c2*mu0 / &
+                  (refindx*mu0 + mu0n)
+ 
+             ! unpolarized light for direct beam
+             Rf_dir_a = p5 * (R1*R1 + R2*R2)
+             Tf_dir_a = p5 * (T1*T1 + T2*T2)*refindx*mu0n/mu0
+ 
+             ! precalculated diffuse reflectivities and transmissivities
+             ! for incident radiation above and below fresnel layer, using
+             ! the direct albedos and accounting for complete internal
+             ! reflection from below; precalculated because high order
+             ! number of gaussian points (~256) is required for convergence:
+ 
+             ! above
+             Rf_dif_a = cp063
+             Tf_dif_a = c1 - Rf_dif_a
+             ! below
+             Rf_dif_b = cp455
+             Tf_dif_b = c1 - Rf_dif_b
+
+             ! the k = kfrsnl layer properties are updated to combined 
+             ! the fresnel (refractive) layer, always taken to be above
+             ! the present layer k (i.e. be the top interface):
+
+             rintfc   = c1 / (c1-Rf_dif_b*rdif_a(i,j,kfrsnl))
+             tdir(i,j,kfrsnl)   = Tf_dir_a*tdir(i,j,kfrsnl) + &
+                                  Tf_dir_a*rdir(i,j,kfrsnl) * &
+                                  Rf_dif_b*rintfc*tdif_a(i,j,kfrsnl)
+             rdir(i,j,kfrsnl)   = Rf_dir_a + &
+                                  Tf_dir_a*rdir(i,j,kfrsnl) * &
+                                  rintfc*Tf_dif_b
+             rdif_a(i,j,kfrsnl) = Rf_dif_a + &
+                                  Tf_dif_a*rdif_a(i,j,kfrsnl) * &
+                                  rintfc*Tf_dif_b
+             rdif_b(i,j,kfrsnl) = rdif_b(i,j,kfrsnl) + &
+                                  tdif_b(i,j,kfrsnl)*Rf_dif_b * &
+                                  rintfc*tdif_a(i,j,kfrsnl)
+             tdif_a(i,j,kfrsnl) = Tf_dif_a*rintfc*tdif_a(i,j,kfrsnl)
+             tdif_b(i,j,kfrsnl) = tdif_b(i,j,kfrsnl)*rintfc*Tf_dif_b
+
+             ! update trnlay to include fresnel transmission
+             trnlay(i,j,kfrsnl) = Tf_dir_a*trnlay(i,j,kfrsnl)
+           endif      ! k = kfrsnl
+        enddo       ! ij  end total transmission > trmin
+ 
+      enddo       ! k   end main level loop
+
       ! compute total direct beam transmission, total transmission, and
       ! reflectivity for diffuse radiation (from below) for all layers
-      ! above the surface; note that we ignore refraction between ice
-      ! and underlying ocean:
+      ! above the underlying ocean; note that we ignore refraction between 
+      ! sea ice and underlying ocean:
       !
       !       For k = klevp
       !
@@ -2353,23 +2883,25 @@
       !                k-1
       !       ---------------------  k
       !       \\\\\\\ ocean \\\\\\\
+
       k = klevp
-      do ij = 1, icells
-        i = indxi(ij)
-        j = indxj(ij)
+      do ij = 1, icells_DE
+        i = indxi_DE(ij)
+        j = indxj_DE(ij)
            trndir(i,j,k) = trndir(i,j,k-1)*trnlay(i,j,k-1)
            refkm1        = c1/(c1 - rdndif(i,j,k-1)*rdif_a(i,j,k-1))
            tdrrdir       = trndir(i,j,k-1)*rdir(i,j,k-1)
            tdndif        = trntdr(i,j,k-1) - trndir(i,j,k-1)
-           trntdr(i,j,k) = trndir(i,j,k-1)*tdir(i,j,k-1) +  &
+           trntdr(i,j,k) = trndir(i,j,k-1)*tdir(i,j,k-1) + &
              (tdndif + tdrrdir*rdndif(i,j,k-1))*refkm1*tdif_a(i,j,k-1)
-           rdndif(i,j,k) = rdif_b(i,j,k-1)  + &
+           rdndif(i,j,k) = rdif_b(i,j,k-1) + &
              (tdif_b(i,j,k-1)*rdndif(i,j,k-1)*refkm1*tdif_a(i,j,k-1))
-           trndif(i,j,k) = trndif(i,j,k-1)*tdif_a(i,j,k-1)*refkm1
-      enddo ! end surface layer
+           trndif(i,j,k) = trndif(i,j,k-1)*refkm1*tdif_a(i,j,k-1)
+      enddo       ! ij  
  
-      ! compute reflectivity to direct and diffuse radiation for layers below by
-      ! adding succesive layers starting from the surface and working upwards:
+      ! compute reflectivity to direct and diffuse radiation for layers 
+      ! below by adding succesive layers starting from the underlying 
+      ! ocean and working upwards:
       !
       !              layers       interface
       !
@@ -2378,22 +2910,23 @@
       !       ---------------------  k+1
       !                k+1
       !       ---------------------
-      do ij = 1, icells
-        i = indxi(ij)
-        j = indxj(ij)
+
+      do ij = 1, icells_DE
+        i = indxi_DE(ij)
+        j = indxj_DE(ij)
         rupdir(i,j,klevp) = albodr(i,j)
         rupdif(i,j,klevp) = albodf(i,j)
-      enddo
+      enddo       ! ij  
       do k=klev,0,-1
-        do ij = 1, icells
-          i = indxi(ij)
-          j = indxj(ij)
+        do ij = 1, icells_DE
+          i = indxi_DE(ij)
+          j = indxj_DE(ij)
           ! interface scattering
           refkp1        = c1/( c1 - rdif_b(i,j,k)*rupdif(i,j,k+1))
           ! dir from top layer plus exp tran ref from lower layer, interface
           ! scattered and tran thru top layer from below, plus diff tran ref
           ! from lower layer with interface scattering tran thru top from below
-          rupdir(i,j,k) = rdir(i,j,k) +  &
+          rupdir(i,j,k) = rdir(i,j,k) + &
                         ( trnlay(i,j,k)*rupdir(i,j,k+1) + &
                          (tdir(i,j,k)-trnlay(i,j,k))*rupdif(i,j,k+1) ) * &
                           refkp1*tdif_b(i,j,k)
@@ -2402,12 +2935,240 @@
           rupdif(i,j,k) = rdif_a(i,j,k) + &
                           tdif_a(i,j,k)*rupdif(i,j,k+1)* &
                           refkp1*tdif_b(i,j,k)
-        enddo
-      enddo
+        enddo       ! ij  
+      enddo       ! k
  
       end subroutine solution_dEdd
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: shortwave_dEdd_set_snow - routine for Delta-Eddington shortwave
+!            that sets snow density and snow grain radius.
+!
+! !INTERFACE:
+!
+      subroutine shortwave_dEdd_set_snow(nx_block, ny_block, &
+                                         icells,             &
+                                         indxi,    indxj,    &
+                                         aice,     vsno,     &
+                                         Tsfc,     fs,       &
+                                         rhosnw,   rsnw)
+!
+! !DESCRIPTION:
+!
+!   Set snow horizontal coverage, density and grain radius diagnostically 
+!   for the Delta-Eddington solar radiation method.
+!
+! !REVISION HISTORY:
+!
+! author:  Bruce P. Briegleb, NCAR 
+!          8 February 2007
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), &
+         intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells                ! number of ice-covered grid cells
+
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi   , & ! compressed indices for ice-covered cells
+         indxj
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         aice   , & ! concentration of ice
+         vsno   , & ! volume of snow
+         Tsfc       ! surface temperature 
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(out) :: &
+         fs         ! horizontal coverage of snow
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
+         intent(out) :: &
+         rhosnw , & ! density in snow layer (kg/m3)
+         rsnw       ! grain radius in snow layer (micro-meters)
+!      
+!EOP
+! 
+! !LOCAL PARAMETERS:
+!
+
+      integer (kind=int_kind) :: &
+         i        , & ! longitude index
+         j        , & ! latitude index
+         ij       , & ! horizontal index, combines i and j loops
+         ks           ! snow vertical index
+
+      real (kind=dbl_kind) :: &
+         hs           ! snow depth (m)
+
+      real (kind=dbl_kind) :: &
+         rsnw_fresh    , & ! freshly-fallen snow grain radius (micro-meters)
+         rsnw_non_melt , & ! nonmelt snow grain radius (micro-meters)
+         rsnw_nm       , & ! actual used nonmelt snow grain radius (micro-meters)
+         sig_rsnw      , & ! assumed sigma for snow grain radius (micro-meters)
+         rsnw_melt         ! melting snow grain radius (micro-meters)
+      data rsnw_fresh    /  100._dbl_kind /  ! micro-meters
+      data rsnw_non_melt /  500._dbl_kind /  ! micro-meters
+      data sig_rsnw      /  250._dbl_kind /  ! micro-meters
+      data rsnw_melt     / 1000._dbl_kind /  ! micro-meters
+
+      real (kind=dbl_kind) :: &
+         fT  , & ! piecewise linear function of surface temperature
+         dTs     ! difference of Tsfc and Timelt
+
+      real (kind=dbl_kind), parameter :: &
+         dT_mlt    = c1    ! change in temp to give non-melt to melt change
+                           ! in snow grain radius
+      real (kind=dbl_kind) :: &
+         hsmin        , & ! minimum allowed snow depth (m) for DE
+         hs0              ! snow depth below which transition to bare sea ice
+
+      ! snow to ice parameters
+      data hsmin  / .0001_dbl_kind / ! minimum allowable snow depth (m) for DE 
+      data hs0    / .0300_dbl_kind / ! snow depth below which transition to bare sea ice
+
+!-----------------------------------------------------------------------
  
-! End delta-Eddington shortwave method
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+
+      fs(:,:)       = c0
+      rhosnw(:,:,:) = c0
+      rsnw(:,:,:)   = c0
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+         ! set snow horizontal fraction
+         if( aice(i,j) > puny ) then
+           hs = vsno(i,j) / aice(i,j)
+           if( hs < hsmin ) then
+             fs(i,j) = c0
+           else if( hsmin .le. hs .and. hs .le. hs0 ) then
+             fs(i,j) = hs/hs0
+           else
+             fs(i,j) = c1
+           endif
+           ! bare ice, temperature dependence
+           dTs = Timelt - Tsfc(i,j)
+           fT  = -min(dTs/dT_mlt-c1,c0)
+           ! tune non_melt snow grain radius if desired: note that
+           ! the sign is negative so that if R_snw is 1, then the
+           ! snow grain radius is reduced and thus albedo increased.
+           rsnw_nm = rsnw_non_melt - R_snw*sig_rsnw
+           if( rsnw_nm < rsnw_fresh ) rsnw_nm = rsnw_fresh
+           if( rsnw_nm > rsnw_melt  ) rsnw_nm = rsnw_melt
+           do ks = 1, nslyr
+             ! snow density ccsm3 constant value
+             rhosnw(i,j,ks) = rhos
+             ! snow grain radius between rsnw_non_melt and rsnw_melt
+             rsnw(i,j,ks) = rsnw_nm + (rsnw_melt-rsnw_nm)*fT
+             if( rsnw(i,j,ks) < rsnw_fresh ) rsnw(i,j,ks) = rsnw_fresh
+             if( rsnw(i,j,ks) > rsnw_melt  ) rsnw(i,j,ks) = rsnw_melt
+           enddo        ! ks
+         endif         ! aice(i,j) > puny
+      enddo          ! ij
+
+      end subroutine shortwave_dEdd_set_snow
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: shortwave_dEdd_set_pond - routine for Delta-Eddington shortwave
+!            that sets pond fraction and depth.
+!
+! !INTERFACE:
+!
+      subroutine shortwave_dEdd_set_pond(nx_block, ny_block, &
+                                         icells,             &
+                                         indxi,    indxj,    &
+                                         aice,     Tsfc,     &
+                                         fs,       fp,       &
+                                         hp)
+!
+! !DESCRIPTION:
+!
+!   Set pond fraction and depth diagnostically for
+!   the Delta-Eddington solar radiation method.
+!
+! !REVISION HISTORY:
+!
+! author:  Bruce P. Briegleb, NCAR 
+!          8 February 2007
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), &
+         intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells                ! number of ice-covered grid cells
+
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi   , & ! compressed indices for ice-covered cells
+         indxj
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         aice   , & ! concentration of ice
+         Tsfc   , & ! surface temperature
+         fs         ! horizontal coverage of snow
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(out) :: &
+         fp     , & ! pond fractional coverage (0 to 1)
+         hp         ! pond depth (m)
+
+!      
+!EOP
+! 
+! !LOCAL PARAMETERS:
+!
+
+      integer (kind=int_kind) :: &
+         i   , & ! longitude index
+         j   , & ! latitude index
+         ij      ! horizontal index, combines i and j loops
+
+      real (kind=dbl_kind) :: &
+         fT  , & ! piecewise linear function of surface temperature
+         dTs     ! difference of Tsfc and Timelt
+
+      real (kind=dbl_kind), parameter :: &
+         dT_mlt    = c1   ! change in temp for pond fraction and depth
+
+!-----------------------------------------------------------------------
+ 
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+
+      fp(:,:) = c0
+      hp(:,:) = c0
+      ! find pond fraction and depth for ice points
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+         fp(i,j) = c0
+         hp(i,j) = c0
+         ! bare ice, temperature dependence
+         dTs = Timelt - Tsfc(i,j)
+         fT  = -min(dTs/dT_mlt-c1,c0)
+         if (aice(i,j) > puny) then
+           ! pond
+           fp(i,j) = 0.3_dbl_kind*fT*(c1-fs(i,j))
+           hp(i,j) = 0.3_dbl_kind*fT*(c1-fs(i,j))
+         endif
+      enddo          ! ij
+
+      end subroutine shortwave_dEdd_set_pond
+
+! End Delta-Eddington shortwave method
 !=======================================================================
 
       end module ice_shortwave

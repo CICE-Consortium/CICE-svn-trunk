@@ -17,7 +17,7 @@
 ! !USES:
 
    use ice_kinds_mod
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
    use cpl_interface_mod, only : cpl_interface_init
    use cpl_fields_mod, only : cpl_fields_icename
 #endif
@@ -85,23 +85,21 @@
 !
 !-----------------------------------------------------------------------
 
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
+
    ! CCSM standard coupled mode
    call cpl_interface_init(cpl_fields_icename, MPI_COMM_ICE)
+
 #else
 
 #ifdef popcice
-      ! LANL directly coupled POP and CICE
-      call MPI_COMM_DUP(MPI_COMM_WORLD, MPI_COMM_ICE, ierr)
+   ! LANL directly coupled POP and CICE
+   call MPI_COMM_DUP(MPI_COMM_WORLD, MPI_COMM_ICE, ierr)
 #else
-
-#ifndef  COUP_CAM
-         call MPI_INIT(ierr)
+   call MPI_INIT(ierr)
+   call create_ice_communicator
 #endif
 
-      call create_ice_communicator
-
-#endif
 #endif
 
    master_task = 0

@@ -136,13 +136,18 @@
                                            ! used as Tsfcn for open water
          snowpatch = 0.02_dbl_kind ! parameter for fractional snow area (m)
 
+      real (kind=dbl_kind), parameter :: &
+         rfrac  = 0.9_dbl_kind       ! water runoff fraction for melt ponds
 
       ! weights for albedos (match those for isccp shortwave forcing)
+! 4 Jan 2007 BPB  Following are appropriate for complete cloud
+! in a summer polar atmosphere with 1.5m bare sea ice surface:
+! .636/.364 vis/nir with only 0.5% direct for each band.
       real (kind=dbl_kind), parameter :: &           ! currently used only
-         awtvdr = 0.29_dbl_kind, &! visible, direct  ! for history and
-         awtidr = 0.31_dbl_kind, &! near IR, direct  ! diagnostics
-         awtvdf = 0.24_dbl_kind, &! visible, diffuse
-         awtidf = 0.16_dbl_kind   ! near IR, diffuse
+         awtvdr = 0.00318_dbl_kind, &! visible, direct  ! for history and
+         awtidr = 0.63282_dbl_kind, &! near IR, direct  ! diagnostics
+         awtvdf = 0.00182_dbl_kind, &! visible, diffuse
+         awtidf = 0.36218_dbl_kind   ! near IR, diffuse
 
       real (kind=dbl_kind), parameter :: &
          qqqice  = 11637800._dbl_kind   ,&! for qsat over ice
@@ -250,7 +255,6 @@
         kg_to_g       = 1000._dbl_kind  ,&! kilograms to grams
         mps_to_cmpdy  = 8.64e6_dbl_kind ,&! m per s to cm per day
         rad_to_deg    = 180._dbl_kind/pi  ! degree-radian conversion
-!       C_to_K        = Tffresh           ! Celsius to Kelvin
 
 #ifndef USE_ESMF
       integer (kind=int_kind), parameter :: &

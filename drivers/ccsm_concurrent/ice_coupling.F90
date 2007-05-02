@@ -734,7 +734,7 @@
        do i = 1, nx_block
 
         ! ice fraction
-        ailohi(i,j,iblk) = aice(i,j,iblk)
+        ailohi(i,j,iblk) = min(aice(i,j,iblk), c1)
 
         ! surface temperature
         Tsrf(i,j,iblk)  = Tffresh + trcr(i,j,1,iblk)             !Kelvin

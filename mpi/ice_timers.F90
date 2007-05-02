@@ -63,7 +63,7 @@
       timer_catconv,          &! category conversions
       timer_couple,           &! coupling
       timer_readwrite,        &! read/write
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
       timer_cplrecv,          &! receive from coupler
       timer_rcvsnd,           &! time between receive to send
       timer_cplsend,          &! send to coupled
@@ -183,7 +183,7 @@
    end do
 
    call get_ice_timer(timer_total,    'Total',    nblocks,distrb_info%nprocs)
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
    call get_ice_timer(timer_step,     'TimeLoop', nblocks,distrb_info%nprocs)
 #else
    call get_ice_timer(timer_step,     'Step',     nblocks,distrb_info%nprocs)
@@ -197,7 +197,7 @@
    call get_ice_timer(timer_couple,   'Coupling', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_readwrite,'ReadWrite',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_bound,    'Bound',    nblocks,distrb_info%nprocs)
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
    call get_ice_timer(timer_cplrecv,  'Cpl-recv', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_rcvsnd,   'Rcv->Snd', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_cplsend,  'Cpl-Send', nblocks,distrb_info%nprocs)

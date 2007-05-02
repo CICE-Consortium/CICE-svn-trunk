@@ -41,6 +41,7 @@
         ntslyr    = ncat*nslyr, & ! number of snow layers in all categories
         ntrcr     =   1           ! number of tracers
                                   ! 1 = surface temperature
+                                  ! 2 = meltpond volume
 
       integer (kind=int_kind), parameter :: &
         block_size_x = BLCKX  , & ! size of block in first horiz dimension

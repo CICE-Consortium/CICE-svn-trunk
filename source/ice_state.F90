@@ -74,6 +74,7 @@
          dimension(nx_block,ny_block,ntrcr,max_blocks) :: &
          trcr      ! ice tracers
                    ! 1: surface temperature of ice/snow (C)
+                   ! 2: meltpond volume                 (m)
 
       !-----------------------------------------------------------------
       ! state of the ice for each category
@@ -89,9 +90,24 @@
          vsnon     ! volume per unit area of snow         (m)
 
       real (kind=dbl_kind), &
+         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         apondn , & ! concentration of ponds
+         hpondn     ! pond depth         (m)
+
+#if (defined CCSM) || (defined SEQ_MCT)
+      real (kind=dbl_kind), &
+         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         alvdrn      , & ! visible direct albedo           (fraction)
+         alidrn      , & ! near-ir direct albedo           (fraction)
+         alvdfn      , & ! visible diffuse albedo          (fraction)
+         alidfn          ! near-ir diffuse albedo          (fraction)
+#endif
+
+      real (kind=dbl_kind), &
          dimension (nx_block,ny_block,ntrcr,ncat,max_blocks) :: &
          trcrn     ! tracers
                    ! 1: surface temperature of ice/snow (C)
+                   ! 2: meltpond volume                 (m)
 
       integer (kind=int_kind), dimension (ntrcr) :: &
          trcr_depend   ! = 0 for ice area tracers

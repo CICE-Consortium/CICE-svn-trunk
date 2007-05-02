@@ -2462,7 +2462,7 @@
       use ice_exit
       use ice_work, only: work_g1, work1
       use ice_read_write
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
       use shr_sys_mod, only : shr_sys_flush
 #endif
 #ifdef ncdf
@@ -2564,7 +2564,7 @@
           write (nu_diag,*) 'Ocean forcing field found = ',vname(n)
         enddo
 
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
         call shr_sys_flush(nu_diag)
 #endif
 

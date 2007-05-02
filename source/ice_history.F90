@@ -81,7 +81,7 @@
 
       integer (kind=int_kind), parameter :: &
          ncat_hist = ncat       , & ! number of ice categories written <= ncat
-         avgsiz = 76 + 2*ncat_hist  ! number of fields that can be written
+         avgsiz = 76 + 3*ncat_hist  ! number of fields that can be written
 
       real (kind=real_kind) :: time_beg, time_end ! bounds for averaging
 
@@ -155,6 +155,7 @@
            f_dvirdgdt  = .true. , &
            f_hisnap    = .true., f_aisnap     = .true., &
            f_aicen     = .true., f_vicen      = .true., &
+           f_volpn     = .false.,                       &
            f_trsig     = .true., f_icepresent = .true.
 
       !---------------------------------------------------------------
@@ -202,6 +203,7 @@
            f_dvirdgdt              , &
            f_hisnap,    f_aisnap   , &
            f_aicen,     f_vicen    , &
+           f_volpn,                  &
            f_trsig,     f_icepresent
 
       !---------------------------------------------------------------
@@ -286,7 +288,8 @@
            n_trsig      = 75, &
            n_icepresent = 76, &
            n_aicen      = 77, & ! n_aicen, n_vicen must be last in this list
-           n_vicen      = 78 + ncat_hist - 1
+           n_vicen      = 78 + ncat_hist - 1, &
+           n_volpn      = 78 + 2*ncat_hist - 1
 
 !=======================================================================
 
@@ -418,9 +421,11 @@
       do n = 1, ncat_hist
         write(nchar,'(i3.3)') n
         write(vname(n_aicen+n-1),'(a,a)') 'aice', trim(nchar) ! aicen
-        write(vname(n_vicen+n-1),'(a,a)') 'vice', trim(nchar) ! aicen
+        write(vname(n_vicen+n-1),'(a,a)') 'vice', trim(nchar) ! vicen
+        write(vname(n_volpn+n-1),'(a,a)') 'volp', trim(nchar) ! volpn
         vname(n_aicen+n-1) = trim(vname(n_aicen+n-1))
         vname(n_vicen+n-1) = trim(vname(n_vicen+n-1))
+        vname(n_volpn+n-1) = trim(vname(n_volpn+n-1))
       enddo
 
       !---------------------------------------------------------------
@@ -514,6 +519,10 @@
         tmp = 'ice volume, category ' ! vicen
         write(vdesc(n_vicen+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
         vdesc(n_vicen+n-1) = trim(vdesc(n_vicen+n-1))
+
+        tmp = 'meltpond volume, category ' ! volpn
+        write(vdesc(n_volpn+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
+        vdesc(n_volpn+n-1) = trim(vdesc(n_volpn+n-1))
       enddo
 
       !---------------------------------------------------------------
@@ -599,9 +608,10 @@
       do n = 1, ncat_hist
         vunit(n_aicen+n-1) = ' ' ! aicen
         vunit(n_vicen+n-1) = 'm' ! vicen
+        vunit(n_volpn+n-1) = 'm' ! volpn
       enddo
 
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
       ! redefine for CCSM conventions
       vunit(n_aice      ) = '%'
       vunit(n_uvel      ) = 'cm/s'
@@ -698,6 +708,7 @@
       do n = 1, ncat_hist
         vcomment(n_aicen+n-1) = 'Ice range:' ! aicen
         vcomment(n_vicen+n-1) = 'none' ! vicen
+        vcomment(n_volpn+n-1) = 'none' ! volpn
       enddo
 
       !-----------------------------------------------------------------
@@ -800,6 +811,7 @@
       call broadcast_scalar (f_hisnap, master_task)
       call broadcast_scalar (f_aicen, master_task)
       call broadcast_scalar (f_vicen, master_task)
+      call broadcast_scalar (f_volpn, master_task)
       call broadcast_scalar (f_trsig, master_task)
       call broadcast_scalar (f_icepresent, master_task)
 
@@ -888,6 +900,7 @@
       do n = 1, ncat_hist
         iout(n_aicen+n-1) = f_aicen
         iout(n_vicen+n-1) = f_vicen
+        iout(n_volpn+n-1) = f_volpn
       enddo
 
       if (my_task == master_task) then
@@ -961,7 +974,7 @@
       cona(n_dardg2dt) = secday*c100    ! dardg2dt frac/s to %/day
       cona(n_dvirdgdt) = mps_to_cmpdy   ! dvirdgdt m/s to cm/day
 
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
       ! CCSM conventions
       cona(n_aice  ) = c100             ! aice  fraction to %
       do n = 1, ncat_hist
@@ -1230,6 +1243,8 @@
                                                 + aicen(i,j,n,iblk)
                 aa(i,j,n_vicen+n-1,iblk) = aa(i,j,n_vicen+n-1,iblk)  &
                                                 + vicen(i,j,n,iblk)
+                aa(i,j,n_volpn+n-1,iblk) = aa(i,j,n_volpn+n-1,iblk)  &
+                                         + trcrn(i,j,ntrcr,n,iblk)
              endif              ! tmask
           enddo                 ! i
           enddo                 ! j
@@ -1319,7 +1334,7 @@
       ! write netCDF file
       !---------------------------------------------------------------
 
-#ifdef ncdf
+#if (defined ncdf) || (defined CCSM) || (defined SEQ_MCT)
         call icecdf         ! netcdf output
 #else
         call icebin         ! binary output
@@ -1409,7 +1424,7 @@
 !
 !EOP
 !
-#ifdef ncdf
+#if (defined ncdf) || (defined CCSM) || (defined SEQ_MCT)
       include "netcdf.inc"
 #endif
 
@@ -1428,7 +1443,7 @@
       character (len=16) :: c_aice
 
 ! Info for lat, lon and time invariant variables
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
       INTEGER (kind=int_kind), PARAMETER :: ncoord = 4, nvar = 10
 #else
       INTEGER (kind=int_kind), PARAMETER :: ncoord = 4, nvar = 4
@@ -1447,7 +1462,7 @@
       TYPE(req_attributes), dimension(nvar) :: var
       TYPE(coord_attributes), dimension(ncoord) :: coord_var
 
-#ifdef ncdf
+#if (defined ncdf) || (defined CCSM) || (defined SEQ_MCT)
 
       if (my_task == master_task) then
 
@@ -1553,7 +1568,7 @@
       var(ind)%req = coord_attributes('uarea', 'area of U grid cells', &
                                 'm^2')
       var(ind)%coordinates = 'ULON ULAT'
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
       ind = ind + 1
       var(ind)%req = coord_attributes('dxt', &
                      'T cell width through middle', 'm')
@@ -1737,7 +1752,7 @@
       !-----------------------------------------------------------------
       ! ... the user should change these to something useful ...
       !-----------------------------------------------------------------
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
         length = lenstr(runid)
         status = nf_put_att_text(ncid,nf_global,'title',length,runid)
         call nf_stat_check (status,'Error in global attribute title')
@@ -1963,7 +1978,7 @@
       end subroutine icecdf
 
 !=======================================================================
-#ifdef ncdf
+#if (defined ncdf) || (defined CCSM) || (defined SEQ_MCT)
 !
 !BOP
 !
@@ -2076,7 +2091,7 @@
         write (nu_hdr, 999) 'source',title,' '
 
         write (nu_hdr, 999) 'file name contains model date',trim(ncfile),' '
-#ifdef CCSM
+#if (defined CCSM) || (defined SEQ_MCT)
         write (nu_hdr, 999) 'runid',runid,' '
 #endif
         write (nu_hdr, 999) 'calendar','noleap',' '
