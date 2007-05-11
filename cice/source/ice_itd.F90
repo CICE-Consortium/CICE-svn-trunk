@@ -497,8 +497,7 @@
 ! !INTERFACE:
 !
       subroutine aggregate_area (nx_block, ny_block,        &
-                                 aicen,    aice,     aice0, &
-                                 l_stop,   istop,    jstop)
+                                 aicen,    aice,     aice0)
 !
 ! !DESCRIPTION:
 !
@@ -523,30 +522,17 @@
       real (kind=dbl_kind), dimension (:,:), intent(inout) :: &
          aice, &   ! concentration of ice
          aice0     ! concentration of open water
-
-      logical (kind=log_kind), intent(out) :: &
-         l_stop    ! if true, abort on return
-
-      integer (kind=int_kind), intent(out) :: &
-         istop, jstop    ! indices of grid cell where model aborts 
 !
 !EOP
 !
       integer (kind=int_kind) :: i, j, n
 
       !-----------------------------------------------------------------
-      ! Initialize
+      ! Aggregate
       !-----------------------------------------------------------------
-
-      l_stop = .false.
-      istop = 0
-      jstop = 0
 
       aice(:,:) = c0
 
-      !-----------------------------------------------------------------
-      ! Aggregate
-      !-----------------------------------------------------------------
       do n = 1, ncat
          do j = 1, ny_block
          do i = 1, nx_block
@@ -558,30 +544,11 @@
       do j = 1, ny_block
       do i = 1, nx_block
 
-         ! Bug check
-         if (aice(i,j) > c1+puny .or. aice(i,j) < -puny) then
-            l_stop = .true.
-            istop = i
-            jstop = j
-         endif
-
          ! open water fraction
          aice0(i,j) = max (c1 - aice(i,j), c0)
 
       enddo                     ! i
       enddo                     ! j
-
-      if (l_stop) then      ! area out of bounds
-         i = istop
-         j = jstop
-         write(nu_diag,*) ' '
-         write(nu_diag,*) 'aggregate ice area out of bounds'
-         write(nu_diag,*) 'my_task, i, j, aice:', &
-                           my_task, i, j, aice(i,j)
-         do n = 1, ncat
-            write(nu_diag,*) 'n, aicen:', n, aicen(i,j,n)
-         enddo
-      endif                     ! l_stop
 
       end subroutine aggregate_area
 
@@ -1644,7 +1611,8 @@
                               fsalt,       fsalt_hist, &
                               fhocn,       fhocn_hist, &
                               l_stop,                  &
-                              istop,       jstop)
+                              istop,       jstop,      &
+                              l_limit_aice_in)
 !
 ! !DESCRIPTION:
 !
@@ -1711,7 +1679,11 @@
          fsalt_hist,& ! salt flux to ocean        (kg/m^2/s)
          fhocn    , & ! net heat flux to ocean     (W/m^2)
          fhocn_hist   ! net heat flux to ocean     (W/m^2)
-!
+
+      logical (kind=log_kind), intent(in), optional ::   &
+         l_limit_aice_in  ! if false, allow aice to be out of bounds
+                          ! may want to allow this for unit tests
+!    
 !EOP
 !
       integer (kind=int_kind) :: &
@@ -1728,9 +1700,18 @@
          dfsalt   , & ! zapped salt flux   (kg/m^2/s)
          dfhocn       ! zapped energy flux ( W/m^2)
 
+      logical (kind=log_kind) ::   &
+         l_limit_aice  ! if true, check for aice out of bounds
+
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
+
+      if (present(l_limit_aice_in)) then
+         l_limit_aice = l_limit_aice_in
+      else
+         l_limit_aice = .true.
+      endif
 
       l_stop = .false.
       istop = 0
@@ -1747,9 +1728,34 @@
 
       call aggregate_area (nx_block, ny_block, &
                            aicen, &
-                           aice,     aice0, &
-                           l_stop, &
-                           istop,    jstop)
+                           aice,     aice0)
+
+
+      if (l_limit_aice) then  ! check for aice out of bounds
+      
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (aice(i,j) > c1+puny .or. aice(i,j) < -puny) then
+               l_stop = .true.
+               istop = i
+               jstop = j
+            endif
+         enddo
+         enddo
+
+         if (l_stop) then      ! area out of bounds
+            i = istop
+            j = jstop
+            write(nu_diag,*) ' '
+            write(nu_diag,*) 'aggregate ice area out of bounds'
+            write(nu_diag,*) 'my_task, i, j, aice:', &
+                              my_task, i, j, aice(i,j)
+            do n = 1, ncat
+               write(nu_diag,*) 'n, aicen:', n, aicen(i,j,n)
+            enddo
+            return
+         endif                  ! l_stop
+      endif                     ! l_limit_aice
 
       !-----------------------------------------------------------------
       ! Identify grid cells with ice.
@@ -1790,18 +1796,19 @@
       ! Zero out ice categories with very small areas.
       !-----------------------------------------------------------------
 
-      call zap_small_areas (nx_block, ny_block, &
-                            nghost,   dt, &
-                            aice,     aice0, &
-                            aicen,    trcrn, &
-                            vicen,    vsnon, &
-                            eicen,    esnon, &
-                            dfresh,   dfsalt, &
-                            dfhocn, &
-                            l_stop, &
-                            istop,    jstop)
-
-      if (l_stop) return
+      if (l_limit_aice) then
+         call zap_small_areas (nx_block, ny_block, &
+                               nghost,   dt, &
+                               aice,     aice0, &
+                               aicen,    trcrn, &
+                               vicen,    vsnon, &
+                               eicen,    esnon, &
+                               dfresh,   dfsalt, &
+                               dfhocn,           &
+                               l_stop,           &
+                               istop,    jstop)
+         if (l_stop) return
+      endif   ! l_limit_aice
 
       if (present(fresh)) &
            fresh     (:,:) = fresh(:,:)      + dfresh(:,:) 

@@ -107,9 +107,15 @@
          lmask_n, & ! northern hemisphere mask
          lmask_s    ! southern hemisphere mask
 
+      ! grid dimensions for rectangular grid
+      real (kind=dbl_kind), parameter ::  &
+         dxrect = 1.6e4_dbl_kind   ,&! uniform HTN (m)
+         dyrect = 1.6e4_dbl_kind     ! uniform HTE (m)
+
 !lipscomb - not sure rndex_global is stil needed
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          rndex_global       ! global index for local subdomain (dbl)
+
 
 !=======================================================================
 
@@ -947,14 +953,11 @@
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
-            HTN  (i,j,iblk) = 1.6e4_dbl_kind  ! constant longitude spacing =
-                                              ! POP <2/3> min, m
-            HTE  (i,j,iblk) = 1.6e4_dbl_kind  ! constant latitude  spacing =
-                                              ! POP <2/3> min, m
+            HTN  (i,j,iblk) = dxrect
+            HTE  (i,j,iblk) = dyrect
             ULAT (i,j,iblk) = c0              ! remember to set Coriolis !
             ULON (i,j,iblk) = c0
             ANGLE(i,j,iblk) = c0              ! "square with the world"
-
          enddo
          enddo
       enddo

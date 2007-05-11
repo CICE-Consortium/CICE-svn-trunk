@@ -66,7 +66,7 @@
       ! (6) Add to field descriptions, vdesc
       ! (7) Add to field units, vunit
       ! (8) Add to field units, vcomment
-      ! (9) Add to ice_bcast to broadcast nml info
+      ! (9) Add to broadcast list
       ! (10) Load iout array with the logical flag
       ! (11) Specify unit conversion factor if necessary
       ! (12) Increment the field in ice_write_hist
