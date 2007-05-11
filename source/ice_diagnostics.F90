@@ -45,9 +45,13 @@
       integer (kind=int_kind), parameter :: &
          npnt = 2             ! total number of points to be printed
 
+!lipscomb - set to false for testing
+      logical (kind=log_kind), parameter ::  &
+         check_umax = .false.  ! if true, check for speed > umax_stab
+
       real (kind=dbl_kind), parameter :: &
-         aice_extmin = 0.15_dbl_kind, & ! min aice value for ice extent calc
-         umax_stab   = 1.0_dbl_kind     ! ice speed threshold for instability
+         umax_stab   = 1.0_dbl_kind , & ! ice speed threshold for instability (m/s)
+         aice_extmin = 0.15_dbl_kind    ! min aice value for ice extent calc
  
       real (kind=dbl_kind), dimension(npnt) :: &
          latpnt           , & !  latitude of diagnostic points
@@ -308,9 +312,10 @@
 
       ! Write warning message if ice speed is too big
       ! (Ice speeds of ~1 m/s or more usually indicate instability)
- 
-      if (umaxn > umax_stab) then
-         do iblk = 1, nblocks
+
+      if (check_umax) then
+      	 if (umaxn > umax_stab) then
+            do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
                if (abs(work1(i,j,iblk) - umaxn) < puny) then
@@ -321,9 +326,9 @@
                endif
             enddo
             enddo
-         enddo
-      elseif (umaxs > umax_stab) then
-         do iblk = 1, nblocks
+            enddo
+         elseif (umaxs > umax_stab) then
+            do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
                if (abs(work1(i,j,iblk) - umaxs) < puny) then
@@ -334,8 +339,9 @@
                endif
             enddo
             enddo
-         enddo
-      endif
+            enddo
+         endif   ! umax
+      endif      ! check_umax
 
       ! maximum ice strength
 

@@ -27,8 +27,6 @@
       use ice_domain_size
       use ice_constants
       use ice_fileunits
-      use ice_transport_remap, only: horizontal_remap, ntrace,     &
-                                     tracer_type, depend, make_masks
 !
 !EOP
 !
@@ -40,14 +38,147 @@
                      ! 'upwind' => 1st order donor cell scheme
                      ! 'remap' => remapping scheme
 
+!lipscomb - Remove when there is again just one remapping routine
+      integer (kind=int_kind), parameter ::    &
+         newremap = .false.    ! if true, call new remapping scheme
+                               ! if false, call old (CICE 3.14) scheme
+
+      logical, parameter :: & ! if true, prescribe area flux across each edge  
+         l_fixed_area = .false.
+
+! NOTE: For remapping, hice, hsno, qice, and qsno are considered tracers.
+!       ntrace is not equal to ntrcr!
+
+      integer (kind=int_kind), parameter ::                      &
+         ntrace = 2+ntrcr+nilyr+nslyr  ! hice,hsno,qice,qsno,trcr
+                          
+      integer (kind=int_kind), dimension (ntrace) ::             &
+         tracer_type       ,&! = 1, 2, or 3 (see comments below)
+         depend              ! tracer dependencies (see below)
+
+      logical (kind=log_kind), dimension (ntrace) ::             &
+         has_dependents      ! true if a tracer has dependent tracers
+
+      integer (kind=int_kind), parameter ::                      &
+         integral_order = 3   ! polynomial order of quadrature integrals
+                              ! linear=1, quadratic=2, cubic=3
+
+      logical (kind=log_kind), parameter ::     &
+         l_dp_midpt = .true.  ! if true, find departure points using
+                              ! corrected midpoint velocity
+                          
 !=======================================================================
 
       contains
 
 !=======================================================================
+
 !BOP
 !
-! !IROUTINE: transport_remap - remapping transport scheme
+! !IROUTINE: init_transport - initializations for horizontal transport
+!
+! !INTERFACE:
+!
+      subroutine init_transport
+!
+! !DESCRIPTION:
+!
+! This subroutine is a wrapper for init_remap, which initializes the
+! remapping transport scheme.  If the model is run with upwind
+! transport, no initializations are necessary.
+!
+! !REVISION HISTORY:
+!
+! authors William H. Lipscomb, LANL
+!
+! !USES:
+!
+      use ice_state, only: trcr_depend
+      use ice_exit
+      use ice_timers
+      use ice_transport_remap, only: init_remap
+
+!lipscomb - delete later
+      use ice_transport_remap, only: init_remap_old
+!
+!EOP
+!
+      integer (kind=int_kind) ::       &
+         k, nt, nt1     ! tracer indices
+
+      call ice_timer_start(timer_advect)  ! advection 
+
+      if (trim(advection)=='remap') then
+
+!lipscomb - two branches for now; consolidate later
+       if (newremap) then
+
+         ! define tracer dependency arrays
+         ! see comments in remapping routine
+
+          depend(1:2)         = 0 ! hice, hsno
+          tracer_type(1:2)    = 1 ! no dependency
+      
+          k = 2
+
+          do nt = 1, ntrcr
+             depend(k+nt) = trcr_depend(nt) ! 0 for ice area tracers
+                                            ! 1 for ice volume tracers
+                                            ! 2 for snow volume tracers
+             if (trcr_depend(nt) == 0) then
+                tracer_type(k+nt) = 1
+             else               ! trcr_depend = 1 or 2
+                tracer_type(k+nt) = 2
+             endif
+          enddo
+
+          k = k + ntrcr
+          
+          depend(k+1:k+nilyr) = 1 ! qice depends on hice
+          tracer_type(k+1:k+nilyr) = 2 
+
+          k = k + nilyr
+
+          depend(k+1:k+nslyr) = 2 ! qsno depends on hsno
+          tracer_type(k+1:k+nslyr) = 2 
+
+          has_dependents = .false.
+          do nt = 1, ntrace
+             if (depend(nt) > 0) then
+                nt1 = depend(nt)
+                has_dependents(nt1) = .true.
+                if (nt1 > nt) then
+                   write(nu_diag,*)     &
+                      'Tracer nt2 =',nt,' depends on tracer nt1 =',nt1
+                   call abort_ice       &
+                      ('ice: remap transport: Must have nt2 > nt1')
+                endif
+             endif
+          enddo                 ! ntrace
+
+          call init_remap    ! grid quantities
+
+       else      ! old remapping
+
+         call init_remap_old (ntrace,    tracer_type,  &
+                              depend,    has_dependents)
+
+       endif  ! newremap
+
+      else   ! upwind
+
+         continue
+
+      endif
+
+      call ice_timer_stop(timer_advect)  ! advection 
+
+      end subroutine init_transport
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: transport_remap - wrapper for remapping transport scheme
 !
 ! !INTERFACE:
 !
@@ -75,11 +206,16 @@
       use ice_domain
       use ice_blocks
       use ice_state
-      use ice_grid, only: tarea
+      use ice_grid, only: tarea, HTE, HTN
       use ice_exit
       use ice_work, only: work1
       use ice_calendar, only: istep1
       use ice_timers
+      use ice_transport_remap, only: horizontal_remap, make_masks
+
+!lipscomb - delete later
+      use ice_transport_remap, only: horizontal_remap_old
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -92,7 +228,8 @@
 
       integer (kind=int_kind) ::     &
          i, j           ,&! horizontal indices
-         iblk           ,&! block indices
+         iblk           ,&! block index
+         ilo,ihi,jlo,jhi,&! beginning and end of physical domain
          n              ,&! ice category index
          nt, nt1, nt2     ! tracer indices
 
@@ -118,6 +255,18 @@
       integer (kind=int_kind),      &
          dimension(nx_block*ny_block,0:ncat,max_blocks) ::     &
          indxinc, indxjnc   ! compressed i/j indices
+
+    !-------------------------------------------------------------------
+    ! If l_fixed_area is true, the area of each departure region is
+    !  computed in advance (e.g., by taking the divergence of the 
+    !  velocity field and passed to locate_triangles.  The departure 
+    !  regions are adjusted to obtain the desired area.
+    ! If false, edgearea is computed in locate_triangles and passed out.
+    !-------------------------------------------------------------------
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) ::   &
+         edgearea_e     ,&! area of departure regions for east edges
+         edgearea_n       ! area of departure regions for north edges
 
       ! variables related to optional bug checks
 
@@ -149,6 +298,11 @@
       l_stop = .false.
       istop = 0
       jstop = 0
+
+      ilo = 1 + nghost
+      ihi = nx_block - 1
+      jlo = 1 + nghost
+      jhi = ny_block - 1
 
     !-------------------------------------------------------------------
     ! Compute open water area in each grid cell.
@@ -273,19 +427,28 @@
     !  from being used in the monotonicity check.
     !------------------------------------------------------------------- 
 
-            call make_masks (nx_block,          ny_block,              &
-                             nghost,                                   &
-                             icellsnc(:,iblk),                         &
-                             indxinc(:,:,iblk), indxjnc(:,:,iblk),     &
-                             aim(:,:,:,iblk),   aimask(:,:,:,iblk),    &
+          if (newremap) then
+            call make_masks (nx_block,          ny_block,               &
+                             nghost,            has_dependents,         &
+                             icellsnc(:,iblk),                          &
+                             indxinc(:,:,iblk), indxjnc(:,:,iblk),      &
+                             aim(:,:,:,iblk),   aimask(:,:,:,iblk),     &
                              trm(:,:,:,:,iblk), trmask(:,:,:,:,iblk))
+          else
+            call make_masks_old (nx_block,          ny_block,               &
+                             nghost,            has_dependents,         &
+                             icellsnc(:,iblk),                          &
+                             indxinc(:,:,iblk), indxjnc(:,:,iblk),      &
+                             aim(:,:,:,iblk),   aimask(:,:,:,iblk),     &
+                             trm(:,:,:,:,iblk), trmask(:,:,:,:,iblk))
+          endif
 
     !-------------------------------------------------------------------
     ! Compute local max and min of tracer fields.
     !-------------------------------------------------------------------
 
             do n = 1, ncat
-               call local_max_min                                      & 
+               call local_max_min                                      &  
                             (nx_block,           ny_block,             &
                              nghost,                                   &
                              trm (:,:,:,n,iblk),                       &
@@ -314,15 +477,62 @@
 
     !-------------------------------------------------------------------
     ! Main remapping routine: Step ice area and tracers forward in time.
-    ! Two choices: (1) Old code, based on Lipscomb   Hunke (2004)
+    ! Two choices: (1) Old code, based on Lipscomb and Hunke (2004)
     !              (2) New code, incorporating Mats Bentsen's ideas
     !                  for prescribing area fluxes across each edge
-    !lipscomb - new code to be added later
     !-------------------------------------------------------------------
 
-      call horizontal_remap (dt,     &
-                             uvel   (:,:,:),   vvel      (:,:,:),     &
-                             aim  (:,:,:,:),   trm   (:,:,:,:,:))
+      if (newremap) then
+
+    !-------------------------------------------------------------------
+    ! If l_fixed_area is true, compute edgearea by taking the divergence
+    !  of the velocity field.  Otherwise, initialize edgearea.
+    !-------------------------------------------------------------------
+
+         edgearea_e(:,:,:) = c0
+         edgearea_n(:,:,:) = c0
+
+         if (l_fixed_area) then
+
+            do iblk = 1, nblocks
+               do j = jlo, jhi
+               do i = ilo-1, ihi
+                  edgearea_e(i,j,iblk) = (uvel(i,j,iblk) + uvel(i,j-1,iblk)) &
+                                        * p5 * HTE(i,j,iblk) * dt
+               enddo
+               enddo
+
+               do j = jlo-1, jhi
+               do i = ilo, ihi
+                  edgearea_n(i,j,iblk) = (vvel(i,j,iblk) + vvel(i-1,j,iblk)) &
+                                        * p5 * HTN(i,j,iblk) * dt
+               enddo
+               enddo
+
+            enddo  ! iblk
+
+         endif
+
+         call horizontal_remap (dt,                                    &
+                                uvel      (:,:,:), vvel      (:,:,:),  &
+                                aim     (:,:,:,:), trm   (:,:,:,:,:),  &
+                                l_fixed_area,                          &
+                                edgearea_e(:,:,:), edgearea_n(:,:,:),  &
+                                tracer_type,       depend,             &
+                                has_dependents,    integral_order,     &
+                                l_dp_midpt)
+
+      else  ! standard remapping
+
+         call horizontal_remap_old (dt,                                &
+                                uvel   (:,:,:),    vvel      (:,:,:),  &
+                                aim  (:,:,:,:),    trm   (:,:,:,:,:),  &
+                                edgearea_e(:,:,:), edgearea_n(:,:,:),  &
+                                tracer_type,       depend,             &
+                                has_dependents,    integral_order,     &
+                                l_dp_midpt)
+
+      endif  ! newremap
 
     !-------------------------------------------------------------------
     ! Given new fields, recompute state variables.

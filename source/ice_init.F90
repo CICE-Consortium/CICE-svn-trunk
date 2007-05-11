@@ -125,14 +125,10 @@
         oceanmixed_ice, sss_data_type,   sst_data_type, &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore, &
         latpnt,         lonpnt,          dbug,          kpond,    &
-#if (defined CCSM)
+#ifndef SEQ_MCT
         runid,          runtype, &
-        incond_dir,     incond_file
-#elif (defined SEQ_MCT)
-        incond_dir,     incond_file
-#else
-        runid,          runtype
 #endif
+        incond_dir,     incond_file
 
 
       !-----------------------------------------------------------------
@@ -155,6 +151,8 @@
       hist_avg = .true.      ! if true, write time-averages (not snapshots)
       history_dir  = ' '     ! Write to executable dir for default
       history_file = 'iceh'  ! history file name prefix
+      incond_dir = ' '       ! Write to executable dir for default
+      incond_file = 'iceh'   ! same as history file prefix
       dumpfreq='y'           ! restart frequency option
       dumpfreq_n = 1         ! restart frequency
       restart = .false.      ! if true, read restart files for initialization
@@ -210,7 +208,7 @@
       latpnt(2) = -65._dbl_kind   ! latitude of diagnostic point 2 (deg)
       lonpnt(2) = -45._dbl_kind   ! longitude of point 2 (deg)
 
-#ifdef CCSM
+#ifndef SEQ_MCT
       runid   = 'unknown'   ! run ID, only used in CCSM
       runtype = 'unknown'   ! run type, only used in CCSM
 #endif
@@ -291,6 +289,8 @@
       call broadcast_scalar(hist_avg,           master_task)
       call broadcast_scalar(history_dir,        master_task)
       call broadcast_scalar(history_file,       master_task)
+      call broadcast_scalar(incond_dir,         master_task)
+      call broadcast_scalar(incond_file,        master_task)
       call broadcast_scalar(dumpfreq,           master_task)
       call broadcast_scalar(dumpfreq_n,         master_task)
       call broadcast_scalar(restart_file,       master_task)
@@ -362,7 +362,7 @@
          write(nu_diag,*) ' Document ice_in namelist parameters:'
          write(nu_diag,*) ' ==================================== '
          write(nu_diag,*) ' '
-#ifdef CCSM
+#ifndef SEQ_MCT
          if (trim(runid) /= 'unknown') &
           write(nu_diag,*)    ' runid                     = ', &
                                trim(runid)

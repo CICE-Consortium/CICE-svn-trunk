@@ -635,9 +635,7 @@
       !-----------------------------------------------------------------
       call aggregate_area (nx_block, ny_block, &
                            aicen,              &
-                           aice,     aice0,    &
-                           l_stop,             &
-                           istop,    jstop)
+                           aice,     aice0)
 
       if (l_stop) return
 
