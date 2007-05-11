@@ -916,9 +916,7 @@
       !-----------------------------------------------------------------
             call aggregate_area (nx_block, ny_block, &
                            aicen(:,:,:,iblk), &
-                           aice(:,:,iblk),     aice0(:,:,iblk),  &
-                           l_stop, &
-                           istop,    jstop)
+                           aice(:,:,iblk),     aice0(:,:,iblk))
 
       !-----------------------------------------------------------------
       ! Identify grid cells with ice.
