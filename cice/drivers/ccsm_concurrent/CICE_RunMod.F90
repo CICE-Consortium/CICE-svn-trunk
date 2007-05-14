@@ -795,11 +795,9 @@
       !-----------------------------------------------------------------
       ! Compute fractional ice area in each grid cell.
       !-----------------------------------------------------------------
-            call aggregate_area (nx_block, ny_block, &
-                           aicen(:,:,:,iblk), &
-                           aice(:,:,iblk),     aice0(:,:,iblk),  &
-                           l_stop, &
-                           istop,    jstop)
+            call aggregate_area (nx_block,          ny_block, &
+                                 aicen(:,:,:,iblk),           &
+                                 aice (:,:,  iblk), aice0(:,:,iblk))
 
       !-----------------------------------------------------------------
       ! Identify grid cells with ice.
