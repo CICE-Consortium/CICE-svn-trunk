@@ -178,8 +178,7 @@
       call ice_timer_start(timer_total)   ! start timing entire run
       call init_grid2           ! grid variables
 
-      if (advection == 'remap') &
-         call init_remap        ! grid variables for remapping transport
+      call init_transport       ! initialize horizontal transport
       call init_calendar        ! initialize some calendar stuff
       call init_hist (dt)       ! initialize output history file
       call init_evp (dt)        ! define evp dynamics parameters, variables
