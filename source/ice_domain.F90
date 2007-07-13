@@ -127,11 +127,7 @@
 !
 !----------------------------------------------------------------------
 
-#if (defined SEQ_MCT) || (defined CCSM)
-   nprocs = get_num_procs()
-#else
    nprocs = -1
-#endif
    distribution_type = 'cartesian'
    ew_boundary_type  = 'cyclic'
    ns_boundary_type  = 'closed'
@@ -155,9 +151,7 @@
       call abort_ice('ice: error reading domain_nml')
    endif
 
-#if (!defined SEQ_MCT) || (!defined CCSM)
    call broadcast_scalar(nprocs,            master_task)
-#endif
    call broadcast_scalar(distribution_type, master_task)
    call broadcast_scalar(ew_boundary_type,  master_task)
    call broadcast_scalar(ns_boundary_type,  master_task)
@@ -179,11 +173,13 @@
       !*** domain size zero or negative
       !***
       call abort_ice('ice: Invalid domain: size < 1') ! no domain
-#if (!defined SEQ_MCT) || (!defined CCSM)
    else if (nprocs /= get_num_procs()) then
       !***
       !*** input nprocs does not match system (eg MPI) request
       !***
+#if (defined SEQ_MCT)
+      nprocs = get_num_procs()
+#else
       call abort_ice('ice: Input nprocs not same as system request')
 #endif
    else if (nghost < 1) then

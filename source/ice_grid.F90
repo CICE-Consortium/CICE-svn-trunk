@@ -1650,8 +1650,8 @@
 !EOP
 !
       if (ret /= NF_NOERR) then
-         write(6,*)'netcdf error from ',trim(calling)
-         write(6,*)'netcdf strerror = ',trim(NF_STRERROR(ret))
+         write(nu_diag,*)'netcdf error from ',trim(calling)
+         write(nu_diag,*)'netcdf strerror = ',trim(NF_STRERROR(ret))
          call abort_ice('ice ice_grid: netcdf check_ret error')
       end if
         

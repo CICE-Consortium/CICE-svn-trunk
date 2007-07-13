@@ -39,7 +39,7 @@
                      ! 'remap' => remapping scheme
 
 !lipscomb - Remove when there is again just one remapping routine
-      integer (kind=int_kind), parameter ::    &
+      logical, parameter ::    &
          newremap = .false.    ! if true, call new remapping scheme
                                ! if false, call old (CICE 3.14) scheme
 
@@ -427,21 +427,12 @@
     !  from being used in the monotonicity check.
     !------------------------------------------------------------------- 
 
-          if (newremap) then
-            call make_masks (nx_block,          ny_block,               &
-                             nghost,            has_dependents,         &
-                             icellsnc(:,iblk),                          &
-                             indxinc(:,:,iblk), indxjnc(:,:,iblk),      &
-                             aim(:,:,:,iblk),   aimask(:,:,:,iblk),     &
+            call make_masks (nx_block,          ny_block,              &
+                             nghost,            has_dependents,        &
+                             icellsnc(:,iblk),                         &
+                             indxinc(:,:,iblk), indxjnc(:,:,iblk),     &
+                             aim(:,:,:,iblk),   aimask(:,:,:,iblk),    &
                              trm(:,:,:,:,iblk), trmask(:,:,:,:,iblk))
-          else
-            call make_masks_old (nx_block,          ny_block,               &
-                             nghost,            has_dependents,         &
-                             icellsnc(:,iblk),                          &
-                             indxinc(:,:,iblk), indxjnc(:,:,iblk),      &
-                             aim(:,:,:,iblk),   aimask(:,:,:,iblk),     &
-                             trm(:,:,:,:,iblk), trmask(:,:,:,:,iblk))
-          endif
 
     !-------------------------------------------------------------------
     ! Compute local max and min of tracer fields.

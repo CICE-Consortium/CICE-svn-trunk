@@ -236,18 +236,20 @@
          call abort_ice('ice: error reading ice_nml')
       endif
 
+      nu_diag = 6
+
+      if (trim(diag_type) == 'file') then
+         write(nu_diag,*) 'Diagnostic output will be in file ',diag_file
+         nu_diag = 48
+      endif
+
       chartmp = advection(1:6)
-      if (chartmp /= 'upwind' .and. chartmp /= 'remap ' .and. chartmp /= 'none') then
+      if (chartmp /= 'upwind' .and. chartmp /= 'remap ' .and. &
+          chartmp /= 'none') then
          if (my_task == master_task) &
          write (nu_diag,*) &
          'WARNING: ',chartmp,' advection unavailable, using remap' 
          advection = 'remap'
-      endif
-
-      if (trim(diag_type) == 'file') then
-         nu_diag = 48
-      else
-         nu_diag = 6
       endif
 
 #ifdef SEQ_MCT
@@ -351,7 +353,6 @@
       if (my_task == master_task) then
 
          if (trim(diag_type) == 'file') then
-            write(6,*) 'Diagnostic output will be in file ', diag_file
             open (nu_diag, file=diag_file, status='unknown')
          endif
 

@@ -295,7 +295,8 @@ subroutine ice_prescribed_init
       &                             lonName, latName, maskName, areaName)
 
       call shr_ncread_varDimSizes(domain_info_fn,areaName,nlon,nlat)
-      write (nu_diag,F01) 'dimsizes for areaName', nlon,nlat ; call shr_sys_flush(6)
+      write (nu_diag,F01) 'dimsizes for areaName', nlon,nlat 
+      call shr_sys_flush(nu_diag)
 
       allocate(dataXCoord(nlon,nlat)) 
       allocate(dataYCoord(nlon,nlat))

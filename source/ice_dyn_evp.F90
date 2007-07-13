@@ -44,6 +44,7 @@
 ! !USES:
 !
       use ice_kinds_mod
+      use ice_fileunits
       use ice_communicate, only: my_task, master_task
       use ice_domain_size
       use ice_constants
@@ -1531,22 +1532,22 @@
 !lipscomb - debug
          if (my_task==mtest .and. i==itest .and. j==jtest &
                             .and. ksub==ndte) then 
-            print*, ' ' 
-            print*, 'Strain rates, ksub =', ksub 
-            print*, ' ' 
-            print*, 'divu:' 
-            print*, divunw, divune 
-            print*, divusw, divuse 
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*) 'Strain rates, ksub =', ksub 
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*) 'divu:' 
+            write(nu_diag,*) divunw, divune 
+            write(nu_diag,*) divusw, divuse 
  
-            print*, ' ' 
-            print*, 'tension:' 
-            print*, tensionnw, tensionne 
-            print*, tensionsw, tensionse 
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*) 'tension:' 
+            write(nu_diag,*) tensionnw, tensionne 
+            write(nu_diag,*) tensionsw, tensionse 
  
-            print*, ' ' 
-            print*, 'shear:' 
-            print*, shearnw, shearne
-            print*, shearsw, shearse
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*) 'shear:' 
+            write(nu_diag,*) shearnw, shearne
+            write(nu_diag,*) shearsw, shearse
  
          endif 
  
@@ -1645,15 +1646,15 @@
 !lipscomb - debug
          if (my_task==999 .and. i==itest .and. j==jtest &
                             .and. ksub==ndte) then 
-            print*, ' ' 
-            print*,'i, j', i, j 
-            print*, 'kne =', kne 
-            print*, ' ' 
-            print*, 'gamma*DD =', gammaDD_ne 
-            print*, '-4x - 6x^2 =', -c4*xne - c6*xne**2 
-            print*, ' ' 
-            print*, 'xstar =', xstar 
-            print*, 'x1_ne =', xne 
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*)'i, j', i, j 
+            write(nu_diag,*) 'kne =', kne 
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*) 'gamma*DD =', gammaDD_ne 
+            write(nu_diag,*) '-4x - 6x^2 =', -c4*xne - c6*xne**2 
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*) 'xstar =', xstar 
+            write(nu_diag,*) 'x1_ne =', xne 
          endif 
 
          if (knw >= kmax) then 
@@ -1686,22 +1687,22 @@
 !lipscomb - bug check 
  
          if (xne > atd) then 
-            print*, 'my_task, i, j, xne:', my_task, i, j, xne 
+            write(nu_diag,*) 'my_task, i, j, xne:', my_task, i, j, xne 
 !            stop 
          endif 
  
          if (xnw > atd) then 
-            print*, 'my_task, i, j, xnw:', my_task, i, j, xnw 
+            write(nu_diag,*) 'my_task, i, j, xnw:', my_task, i, j, xnw 
 !            stop 
          endif 
  
          if (xse > atd) then 
-            print*, 'my_task, i, j, xse:', my_task, i, j, xse 
+            write(nu_diag,*) 'my_task, i, j, xse:', my_task, i, j, xse 
 !            stop 
          endif 
  
          if (xsw > atd) then
-            print*, 'my_task, i, j, xsw:', my_task, i, j, xsw
+            write(nu_diag,*) 'my_task, i, j, xsw:', my_task, i, j, xsw
 !            stop
          endif 
 
@@ -1731,9 +1732,9 @@
  
          if (my_task==999 .and. i==itest .and. j==jtest  &
                             .and. ksub==ndte) then 
-            print*, ' ' 
-            print*, 'gamma*DT/4 =', gammaDT_ne/c4 
-            print*, 'x2_ne =', xne 
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*) 'gamma*DT/4 =', gammaDT_ne/c4 
+            write(nu_diag,*) 'x2_ne =', xne 
          endif 
 
       ! stress12 = sig12 = sigma_II*sin(theta)/2 
@@ -1762,45 +1763,45 @@
 
          if (my_task==999 .and. i==itest .and. j==jtest  &
                             .and. ksub==ndte) then 
-            print*, ' ' 
-            print*, 'gamma*DS/8 =', gammaDS_ne/c8 
-            print*, 'x12_ne =', xne 
-            print*, ' ' 
-            print*, 'gamma*eII/4 =', gammaDD_ne / (c4*kne) 
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*) 'gamma*DS/8 =', gammaDS_ne/c8 
+            write(nu_diag,*) 'x12_ne =', xne 
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*) 'gamma*eII/4 =', gammaDD_ne / (c4*kne) 
             yne = sqrt(stressm_1(i,j)**2 +c4* stress12_1(i,j)**2)  &
                 / (c2*strength(i,j)) 
-            print*, 'yne =', yne 
+            write(nu_diag,*) 'yne =', yne 
          endif 
  
          if (my_task==mtest .and. i==itest .and. j==jtest  &
                             .and. ksub==ndte) then 
-            print*, ' ' 
-            print*, 'New stresses:' 
-            print*, 'stressp:' 
-            print*, stressp_2(i,j), stressp_1(i,j) 
-            print*, stressp_3(i,j), stressp_4(i,j) 
-            print*, ' ' 
-            print*, 'stressm:' 
-            print*, stressm_2(i,j), stressm_1(i,j) 
-            print*, stressm_3(i,j), stressm_4(i,j) 
-            print*, ' ' 
-            print*, 'stress12:' 
-            print*, stress12_2(i,j), stress12_1(i,j) 
-            print*, stress12_3(i,j), stress12_4(i,j) 
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*) 'New stresses:' 
+            write(nu_diag,*) 'stressp:' 
+            write(nu_diag,*) stressp_2(i,j), stressp_1(i,j) 
+            write(nu_diag,*) stressp_3(i,j), stressp_4(i,j) 
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*) 'stressm:' 
+            write(nu_diag,*) stressm_2(i,j), stressm_1(i,j) 
+            write(nu_diag,*) stressm_3(i,j), stressm_4(i,j) 
+            write(nu_diag,*) ' ' 
+            write(nu_diag,*) 'stress12:' 
+            write(nu_diag,*) stress12_2(i,j), stress12_1(i,j) 
+            write(nu_diag,*) stress12_3(i,j), stress12_4(i,j) 
          endif 
 
 !lipscomb - bug check 
          if (stressp_1(i,j) > c2*strength(i,j)*atd)  &
-              print*,'my_task, i, j, stressp_1', &
+              write(nu_diag,*)'my_task, i, j, stressp_1', &
                       my_task, i, j, stressp_1(i,j)
          if (stressp_2(i,j) > c2*strength(i,j)*atd)  &
-              print*,'my_task, i, j, stressp_2',  &
+              write(nu_diag,*)'my_task, i, j, stressp_2',  &
                       my_task, i, j, stressp_2(i,j)
          if (stressp_3(i,j) > c2*strength(i,j)*atd) &
-              print*,'my_task, i, j, stressp_3', &
+              write(nu_diag,*)'my_task, i, j, stressp_3', &
                       my_task, i, j, stressp_3(i,j)
          if (stressp_4(i,j) > c2*strength(i,j)*atd) &
-              print*,'my_task, i, j, stressp_4',  &
+              write(nu_diag,*)'my_task, i, j, stressp_4',  &
                       my_task, i, j, stressp_4(i,j) 
  
       !----------------------------------------------------------------- 
@@ -1869,22 +1870,22 @@
             rdg_shear(i,j) = p25*tarear(i,j)*(M1ne + M1nw + M1sw + M1se) 
             rdg_conv(i,j)  = p25*tarear(i,j)*(M2ne + M2nw + M2sw + M2se) 
 
-            if (M1ne < c0) print*, 'my_task, i, j, nweshear:',  &
+            if (M1ne < c0) write(nu_diag,*) 'my_task, i, j, nweshear:',&
                                     my_task, i, j, M1ne 
-            if (M1nw < c0) print*, 'my_task, i, j, nw shear:',  &
+            if (M1nw < c0) write(nu_diag,*) 'my_task, i, j, nw shear:',&
                                     my_task, i, j, M1nw 
-            if (M1se < c0) print*, 'my_task, i, j, se shear:',  &
+            if (M1se < c0) write(nu_diag,*) 'my_task, i, j, se shear:',&
                                     my_task, i, j, M1se 
-            if (M1sw < c0) print*, 'my_task, i, j, sw shear:',  &
+            if (M1sw < c0) write(nu_diag,*) 'my_task, i, j, sw shear:',&
                                     my_task, i, j, M1sw 
 
-            if (M2ne < c0) print*, 'my_task, i, j, nweshear:',  &
+            if (M2ne < c0) write(nu_diag,*) 'my_task, i, j, nweshear:',&
                                     my_task, i, j, M2ne 
-            if (M2nw < c0) print*, 'my_task, i, j, nw shear:',  &
+            if (M2nw < c0) write(nu_diag,*) 'my_task, i, j, nw shear:',&
                                     my_task, i, j, M2nw 
-            if (M2se < c0) print*, 'my_task, i, j, se shear:',  &
+            if (M2se < c0) write(nu_diag,*) 'my_task, i, j, se shear:',&
                                     my_task, i, j, M2se 
-            if (M2sw < c0) print*, 'my_task, i, j, sw shear:',  &
+            if (M2sw < c0) write(nu_diag,*) 'my_task, i, j, sw shear:',&
                                     my_task, i, j, M2sw 
 
          ! shear and divergence for diagnostics 
@@ -1896,11 +1897,11 @@
  
             if (my_task==mtest .and. i==itest .and. j==jtest  &
                             .and. ksub==ndte) then 
-               print*, ' ' 
-               print*, 'divu =', divu(i,j)
-               print*, 'shear =', shear(i,j)
-               print*, 'rdg_conv =', rdg_conv(i,j) 
-               print*, 'rdg_shear =', rdg_shear(i,j) 
+               write(nu_diag,*) ' ' 
+               write(nu_diag,*) 'divu =', divu(i,j)
+               write(nu_diag,*) 'shear =', shear(i,j)
+               write(nu_diag,*) 'rdg_conv =', rdg_conv(i,j) 
+               write(nu_diag,*) 'rdg_shear =', rdg_shear(i,j) 
             endif 
 
          endif                  ! ksub = ndte
