@@ -12,12 +12,12 @@ module ice_comp_mct
 
   use shr_kind_mod,   only : r8 => shr_kind_r8
   use shr_inputInfo_mod
+  use shr_sys_mod
 
   use mct_mod
   use seq_flds_mod
   use seq_flds_indices
   use seq_cdata_mod
-  use seq_infobuf_mod
 
   use eshr_timemgr_mod
 
@@ -166,25 +166,31 @@ contains
     !   - istep0 and istep1 are set to 0 
 
     if (runtype == 'initial') then
-       call eshr_timemgr_clockGet(                                          &
-            SyncClock, start_ymd=start_ymd, start_tod=start_tod,            &
+       call eshr_timemgr_clockGet(                                     &
+            SyncClock, start_ymd=start_ymd, start_tod=start_tod,       &
             ref_ymd=ref_ymd, ref_tod=ref_tod)
 
        if (ref_ymd /= start_ymd .or. ref_tod /= start_tod) then
-          write(6,*)'ice_comp_mct: ref_ymd ',ref_ymd,' must equal start_ymd ',start_ymd
-          write(6,*)'ice_comp_mct: ref_ymd ',ref_tod,' must equal start_ymd ',start_tod
+          write(nu_diag,*) 'ice_comp_mct: ref_ymd ',ref_ymd, &
+                           ' must equal start_ymd ',start_ymd
+          write(nu_diag,*) 'ice_comp_mct: ref_ymd ',ref_tod, &
+                           ' must equal start_ymd ',start_tod
           call shr_sys_abort()
        end if
 
-       write(nu_diag,*) '(ice_init_mct) idate from sync clock = ',start_ymd
-       write(nu_diag,*) '(ice_init_mct)   tod from sync clock = ',start_tod
-       write(nu_diag,*) '(ice_init_mct) resetting idate to match sync clock'
+       write(nu_diag,*) '(ice_init_mct) idate from sync clock = ', &
+                        start_ymd
+       write(nu_diag,*) '(ice_init_mct)   tod from sync clock = ', &
+                        start_tod
+       write(nu_diag,*) &
+             '(ice_init_mct) resetting idate to match sync clock'
 
        idate = start_ymd
        iyear = (idate/10000)                     ! integer year of basedate
        month = (idate-iyear*10000)/100           ! integer month of basedate
        mday  =  idate-iyear*10000-month*100-1    ! day of month of basedate
-       time  = (((iyear)*daycal(13)+daycal(month)+mday)*secday) + start_tod
+       time  = (((iyear)*daycal(13)+daycal(month)+mday)*secday) &
+             + start_tod
        call shr_sys_flush(nu_diag)
     end if
     call calendar(time)     ! update calendar info
@@ -259,7 +265,6 @@ contains
     integer :: day_sync      ! Sync current day
     integer :: tod_sync      ! Sync current time of day (sec)
     integer :: ymd_sync      ! Current year of sync clock
-    type(seq_infobuf), pointer   :: infobuf_i  
     character(len=char_len_long) :: fname
     character(len=*), parameter  :: SubName = "ice_run_mct"
 !
@@ -269,25 +274,6 @@ contains
 !EOP
 !---------------------------------------------------------------------------
 
-    !--------------------------------------------------------------------
-    ! Get cdata pointers
-    !--------------------------------------------------------------------
-
-    call seq_cdata_setptrs(cdata_i, infobuf=infobuf_i)
-
-    !--------------------------------------------------------------------
-    ! Check that internal clock is in sync with master clock
-    !--------------------------------------------------------------------
-
-    tod = sec
-    ymd = idate
-    if ( .not. eshr_timemgr_clockDateInSync( SyncClock, ymd, tod ) )then
-       call eshr_timemgr_clockGet( Syncclock, CurrentYMD=ymd_sync, CurrentTOD=tod_sync )
-       write(6,*)' cice ymd=',ymd     ,'  cice tod= ',tod
-       write(6,*)' sync ymd=',ymd_sync,'  sync tod= ',tod_sync
-       call shr_sys_abort( SubName//":: Internal sea-ice clock not in sync with Sync Clock")
-    end if
-   
     !-------------------------------------------------------------------
     ! run thermodynamic sea ice
     !-------------------------------------------------------------------
@@ -350,14 +336,31 @@ contains
 
     rstwr = eshr_timemgr_clockAlarmIsOnRes( SyncClock )
     if (rstwr) then
-       call eshr_timemgr_clockGet(SyncClock, year=yr_sync, month=mon_sync, day=day_sync, CurrentTOD=tod_sync)
+       call eshr_timemgr_clockGet(SyncClock, year=yr_sync, &
+          month=mon_sync, day=day_sync, CurrentTOD=tod_sync)
        fname = restart_filename(yr_sync, mon_sync, day_sync, tod_sync)
-       write(6,*)'ice_comp_mct: callinng dumpfile for restart filename= ',fname
+       write(nu_diag,*) &
+          'ice_comp_mct: callinng dumpfile for restart filename= ',fname
        call dumpfile(fname)
     end if
 
     call ice_timer_stop(timer_readwrite)  ! reading/writing
     
+    !--------------------------------------------------------------------
+    ! Check that internal clock is in sync with master clock
+    !--------------------------------------------------------------------
+
+    tod = sec
+    ymd = idate
+    if ( .not. eshr_timemgr_clockDateInSync( SyncClock, ymd, tod ) )then
+       call eshr_timemgr_clockGet( Syncclock, CurrentYMD=ymd_sync, &
+          CurrentTOD=tod_sync )
+       write(nu_diag,*)' cice ymd=',ymd     ,'  cice tod= ',tod
+       write(nu_diag,*)' sync ymd=',ymd_sync,'  sync tod= ',tod_sync
+       call shr_sys_abort( SubName// &
+          ":: Internal sea-ice clock not in sync with Sync Clock")
+    end if
+   
   end subroutine ice_run_mct
 
 !---------------------------------------------------------------------------
@@ -851,6 +854,8 @@ contains
          enddo
       enddo
 
+    call mct_aVect_permute(x2i_i, perm)
+
    end subroutine ice_import_mct
 
 !=======================================================================
@@ -878,7 +883,7 @@ contains
     ! Initialize mct domain type
     ! lat/lon in degrees,  area in radians^2, mask is 1 (ocean), 0 (non-ocean)
     !
-    call mct_gGrid_init( GGrid=dom_i, CoordChars="lat:lon", OtherChars="area:mask:aream", lsize=lsize )
+    call mct_gGrid_init( GGrid=dom_i, CoordChars="lat:lon", OtherChars="area:aream:mask:frac", lsize=lsize )
     !  
     allocate(data(lsize))
     !
@@ -897,6 +902,8 @@ contains
     call mct_gGrid_importRAttr(dom_i,"area" ,data,lsize) 
     call mct_gGrid_importRAttr(dom_i,"aream",data,lsize) 
     data(:) = 0.0_R8     
+    call mct_gGrid_importRAttr(dom_i,"mask",data,lsize) 
+    call mct_gGrid_importRAttr(dom_i,"frac",data,lsize) 
     !
     ! Fill in correct values for domain components
     !
@@ -971,11 +978,29 @@ contains
     enddo      !iblk
     call mct_gGrid_importRattr(dom_i,"mask",data,lsize) 
 
+    n=0
+    do iblk = 1, nblocks
+       this_block = get_block(blocks_ice(iblk),iblk)         
+       ilo = this_block%ilo
+       ihi = this_block%ihi
+       jlo = this_block%jlo
+       jhi = this_block%jhi
+       
+       do j = jlo, jhi
+       do i = ilo, ihi
+          n = n+1
+          data(n) = 1._dbl_kind
+       enddo   !i
+       enddo   !j
+    enddo      !iblk
+    call mct_gGrid_importRattr(dom_i,"frac",data,lsize) 
+
     ! Permute dom_i to have ascending order
 
     call mct_gGrid_permute(dom_i, perm)
 
     deallocate(data)
+    deallocate(idata)
     deallocate(work_dom)
 
   end subroutine ice_domain_mct
