@@ -112,7 +112,9 @@
       call ice_timer_stop(timer_total)        ! stop timing entire run
       call ice_timer_print_all(stats=.false.) ! print timing information
 
-      if (nu_diag /= 6) close (nu_diag) ! diagnostic output
+!echmod      if (nu_diag /= 6) close (nu_diag) ! diagnostic output
+      call release_all_fileunits
+
 #ifndef coupled
       call end_run       ! quit MPI
 #endif

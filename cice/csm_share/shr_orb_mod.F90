@@ -6,11 +6,21 @@
 
 MODULE shr_orb_mod
 
-   use shr_kind_mod, only: SHR_KIND_R8, SHR_KIND_IN
-   use shr_sys_mod, only: shr_sys_abort
-   use shr_const_mod, only: SHR_CONST_PI
+!echmod This module was borrowed from the CCSM shared code library and
+!echmod modified to work within CICE without other CCSM shared code.  All
+!echmod such changes are marked with "!echmod"  -- E.C. Hunke, 2007
+!echmod
+!echmod   use shr_kind_mod, only: SHR_KIND_R8, SHR_KIND_IN
+!echmod   use shr_sys_mod, only: shr_sys_abort
+!echmod   use shr_const_mod, only: SHR_CONST_PI
+   use ice_kinds_mod, only : dbl_kind, int_kind !echmod
+   use ice_exit, only : abort_ice               !echmod
+   use ice_constants, only : pi                 !echmod
 
    IMPLICIT none
+
+   integer (kind=int_kind), parameter :: SHR_KIND_R8 = dbl_kind !echmod
+   integer (kind=int_kind), parameter :: SHR_KIND_IN = int_kind !echmod
 
    !----------------------------------------------------------------------------
    ! PUBLIC: Interfaces and global data
@@ -22,7 +32,7 @@ MODULE shr_orb_mod
    ! PRIVATE: by default everything else is private to this module
    !----------------------------------------------------------------------------
    private
-   real   (SHR_KIND_R8),parameter :: pi = SHR_CONST_PI
+!echmod   real   (SHR_KIND_R8),parameter :: pi = SHR_CONST_PI
    real   (SHR_KIND_R8),parameter :: SHR_ORB_ECCEN_MIN  =   0.0 ! min value for eccen
    real   (SHR_KIND_R8),parameter :: SHR_ORB_ECCEN_MAX  =   0.1 ! max value for eccen
    real   (SHR_KIND_R8),parameter :: SHR_ORB_OBLIQ_MIN  = -90.0 ! min value for obliq
@@ -320,7 +330,8 @@ SUBROUTINE shr_orb_params( iyear_AD , eccen  , obliq , mvelp     ,     &
           write(6,F00) ' eccen =   0.016715'
           write(6,F00) ' mvelp = 102.7'
         end if
-        call shr_sys_abort()
+!echmod        call shr_sys_abort()
+        call abort_ice('Have to specify orbital parameters') !echmod
       else if ( log_print ) then
          write(6,F00) 'Use input orbital parameters: '
       end if
@@ -328,19 +339,22 @@ SUBROUTINE shr_orb_params( iyear_AD , eccen  , obliq , mvelp     ,     &
          if ( log_print ) then
             write(6,F03) 'Input obliquity unreasonable: ', obliq
          end if
-         call shr_sys_abort()
+!echmod         call shr_sys_abort()
+         call abort_ice('Input obliquity unreasonable') !echmod
       end if
       if( (eccen < SHR_ORB_ECCEN_MIN).or.(eccen > SHR_ORB_ECCEN_MAX) ) then
          if ( log_print ) then
             write(6,F03) 'Input eccentricity unreasonable: ', eccen
          end if
-         call shr_sys_abort()
+!echmod         call shr_sys_abort()
+         call abort_ice('Input eccentricity unreasonable') !echmod
       end if
       if( (mvelp < SHR_ORB_MVELP_MIN).or.(mvelp > SHR_ORB_MVELP_MAX) ) then
          if ( log_print ) then
             write(6,F03) 'Input mvelp unreasonable: ' , mvelp
          end if
-         call shr_sys_abort()
+!echmod         call shr_sys_abort()
+         call abort_ice('Input mvelp unreasonable') !echmod
       end if
       eccen2 = eccen*eccen
       eccen3 = eccen2*eccen
@@ -358,7 +372,8 @@ SUBROUTINE shr_orb_params( iyear_AD , eccen  , obliq , mvelp     ,     &
             write(6,F03) '# of years before 1950: ',yb4_1950AD
             write(6,F01) 'Year to simulate was  : ',iyear_AD
          end if
-         call shr_sys_abort()
+!echmod         call shr_sys_abort()
+         call abort_ice('orbital year invalid') !echmod
       end if
  
       ! The following calculates the earths obliquity, orbital eccentricity

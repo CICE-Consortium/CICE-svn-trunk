@@ -72,6 +72,7 @@
       call shr_sys_abort(error_message)
 #else
       write (nu_diag,*) error_message
+      call flush_fileunit(nu_diag)
       stop
 #endif
 

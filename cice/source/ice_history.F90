@@ -44,6 +44,7 @@
          hist_avg  ! if true, write averaged data instead of snapshots
 
       character (len=char_len) :: &
+         history_format, & ! file format ('bin'=binary or 'nc'=netcdf)
          history_file  , & ! output file for history
          incond_file       ! output file for snapshot initial conditions
 
@@ -287,8 +288,8 @@
            n_Tair       = 74, &
            n_trsig      = 75, &
            n_icepresent = 76, &
-           n_aicen      = 77, & ! n_aicen, n_vicen must be last in this list
-           n_vicen      = 78 + ncat_hist - 1, &
+           n_aicen      = 77, & ! n_aicen, n_vicen, n_volpn must be 
+           n_vicen      = 78 + ncat_hist - 1, & ! last in this list
            n_volpn      = 78 + 2*ncat_hist - 1
 
 !=======================================================================
@@ -531,8 +532,8 @@
 
       vunit(n_hi        ) = 'm'
       vunit(n_hs        ) = 'm'
-      vunit(n_Tsfc      ) = 'C'
-      vunit(n_aice      ) = ' '
+      vunit(n_Tsfc      ) = 'degC'
+      vunit(n_aice      ) = '1'
       vunit(n_uvel      ) = 'm/s'
       vunit(n_vvel      ) = 'm/s'
       vunit(n_fswdn     ) = 'W/m^2'
@@ -570,8 +571,8 @@
       vunit(n_meltl     ) = 'cm/day'
       vunit(n_fresh     ) = 'cm/day'
       vunit(n_fresh_ai  ) = 'cm/day'
-      vunit(n_fsalt     ) = 'kg/m^2 s'
-      vunit(n_fsalt_ai  ) = 'kg/m^2 s'
+      vunit(n_fsalt     ) = 'kg/m^2/s'
+      vunit(n_fsalt_ai  ) = 'kg/m^2/s'
       vunit(n_fhocn     ) = 'W/m^2'
       vunit(n_fhocn_ai  ) = 'W/m^2'
       vunit(n_fswthru   ) = 'W/m^2'
@@ -1331,14 +1332,14 @@
         time_end = time/int(secday)
 
       !---------------------------------------------------------------
-      ! write netCDF file
+      ! write file
       !---------------------------------------------------------------
 
-#if (defined ncdf) || (defined CCSM) || (defined SEQ_MCT)
+      if (history_format == 'nc') then
         call icecdf         ! netcdf output
-#else
+      else
         call icebin         ! binary output
-#endif
+      endif
 
       !---------------------------------------------------------------
       ! reset to zero
@@ -1407,6 +1408,8 @@
 !
 ! !USES:
 !
+#ifdef ncdf
+
       use ice_gather_scatter
       use ice_domain_size
       use ice_constants
@@ -1419,19 +1422,17 @@
       use ice_restart, only: lenstr, runid
       use ice_domain, only: distrb_info
       use ice_itd, only: c_hi_range
+      use ice_exit
+      use netcdf
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
 !
-#if (defined ncdf) || (defined CCSM) || (defined SEQ_MCT)
-      include "netcdf.inc"
-#endif
-
       integer (kind=int_kind) :: i,j,n, &
          ncid,status,imtid,jmtid,timid,varid, &
          length
-      integer (kind=int_kind), dimension(3) :: dimid,start,count
+      integer (kind=int_kind), dimension(3) :: dimid
       real (kind=real_kind) :: ltime
       character (char_len) :: title
       character (char_len_long) :: ncfile
@@ -1462,8 +1463,6 @@
       TYPE(req_attributes), dimension(nvar) :: var
       TYPE(coord_attributes), dimension(ncoord) :: coord_var
 
-#if (defined ncdf) || (defined CCSM) || (defined SEQ_MCT)
-
       if (my_task == master_task) then
 
         ltime=time/int(secday)
@@ -1478,47 +1477,55 @@
         endif
 
         ! create file
-        status = nf_create(ncfile, nf_clobber, ncid)
+        status = nf90_create(ncfile, nf90_clobber, ncid)
 
       !-----------------------------------------------------------------
       ! define dimensions
       !-----------------------------------------------------------------
 
         if (hist_avg) then
-          status = nf_def_dim(ncid,'d2',2,boundid)
-          call nf_stat_check (status,'Error defining dimension d2')
+          status = nf90_def_dim(ncid,'d2',2,boundid)
+          if (status /= nf90_noerr) call abort_ice( &
+                        'ice: Error defining dim d2')
         endif
 
-        status = nf_def_dim(ncid,'ni',nx_global,imtid)
-        call nf_stat_check (status,'Error defining dimension ni')
+        status = nf90_def_dim(ncid,'ni',nx_global,imtid)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error defining dim ni')
 
-        status = nf_def_dim(ncid,'nj',ny_global,jmtid)
-        call nf_stat_check (status,'Error defining dimension nj')
+        status = nf90_def_dim(ncid,'nj',ny_global,jmtid)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error defining dim nj')
 
-        status = nf_def_dim(ncid,'time',NF_UNLIMITED,timid)
-        call nf_stat_check (status,'Error defining dimension time')
+        status = nf90_def_dim(ncid,'time',NF90_UNLIMITED,timid)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error defining dim time')
 
       !-----------------------------------------------------------------
       ! define coordinate variables
       !-----------------------------------------------------------------
 
-        dimid(1) = timid
-        status = nf_def_var(ncid,'time',nf_float,1,dimid,varid)
-        call nf_stat_check (status,'Error defining variable time')
+        status = nf90_def_var(ncid,'time',nf90_float,timid,varid)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error defining var time')
 
-        status = nf_put_att_text(ncid,varid,'long_name',10,'model time')
-        call nf_stat_check (status,'Error assigning long_name for time')
+        status = nf90_put_att(ncid,varid,'long_name','model time')
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice Error: time long_name')
 
-        status = nf_put_att_text(ncid,varid,'units', &
-                        30,'days since 0001-01-01 00:00:00')  ! for now
-        call nf_stat_check (status,'Error assigning units for time')
+        status = nf90_put_att(ncid,varid,'units', &
+                              'days since 0001-01-01 00:00:00')  ! for now
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice Error: time units')
 
-        status = nf_put_att_text(ncid,varid,'calendar', 6,'noleap')
-        call nf_stat_check (status,'Error assigning calendar for time')
+        status = nf90_put_att(ncid,varid,'calendar','noleap')
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice Error: time calendar')
 
         if (hist_avg) then
-          status = nf_put_att_text(ncid,varid,'bounds',11,'time_bounds')
-          call nf_stat_check (status,'Error assigning bounds for time')
+          status = nf90_put_att(ncid,varid,'bounds','time_bounds')
+          if (status /= nf90_noerr) call abort_ice( &
+                      'ice Error: time bounds')
         endif
 
       !-----------------------------------------------------------------
@@ -1528,17 +1535,17 @@
         if (hist_avg) then
           dimid(1) = boundid
           dimid(2) = timid
-          status = nf_def_var(ncid,'time_bounds',nf_float,2,dimid,varid)
-          call nf_stat_check (status, &
-               'Error defining variable time_bounds')
-          status = nf_put_att_text(ncid,varid,'long_name', &
-                   38,'boundaries for time-averaging interval')
-          call nf_stat_check (status, &
-               'Error with long_name to time_bounds')
-          status = nf_put_att_text(ncid,varid,'units', &
-                        30,'days since 0001-01-01 00:00:00')  ! for now
-          call nf_stat_check (status, &
-               'Error assigning units to time_bounds')
+          status = nf90_def_var(ncid,'time_bounds',nf90_float,dimid(1:2),varid)
+          if (status /= nf90_noerr) call abort_ice( &
+                        'ice: Error defining var time_bounds')
+          status = nf90_put_att(ncid,varid,'long_name', &
+                                'boundaries for time-averaging interval')
+          if (status /= nf90_noerr) call abort_ice( &
+                        'ice Error: time_bounds long_name')
+          status = nf90_put_att(ncid,varid,'units', &
+                        'days since 0001-01-01 00:00:00')  ! for now
+          if (status /= nf90_noerr) call abort_ice( &
+                        'ice Error: time_bounds units')
         endif
 
       !-----------------------------------------------------------------
@@ -1615,93 +1622,72 @@
         dimid(3) = timid
 
         do i = 1, ncoord
-          status = nf_def_var(ncid, coord_var(i)%short_name, nf_float, &
-                             2, dimid, varid)
-          call nf_stat_check (status, &
+          status = nf90_def_var(ncid, coord_var(i)%short_name, nf90_float, &
+                                dimid, varid)
+          if (status /= nf90_noerr) call abort_ice( &
                'Error defining short_name for'//coord_var(i)%short_name)
-          length = lenstr(coord_var(i)%long_name)
-          status = nf_put_att_text(ncid,varid, 'long_name', length, &
-                             coord_var(i)%long_name)
-          call nf_stat_check (status, &
+          status = nf90_put_att(ncid,varid,'long_name',coord_var(i)%long_name)
+          if (status /= nf90_noerr) call abort_ice( &
                'Error defining long_name for'//coord_var(i)%short_name)
-          length = lenstr(coord_var(i)%units)
-          status = nf_put_att_text(ncid, varid, 'units', length, &
-                             coord_var(i)%units)
-          call nf_stat_check (status, &
+          status = nf90_put_att(ncid, varid, 'units', coord_var(i)%units)
+          if (status /= nf90_noerr) call abort_ice( &
                   'Error defining units for'//coord_var(i)%short_name)
           if (coord_var(i)%short_name == 'ULAT') then
-            status = nf_put_att_text(ncid,varid,'comment', 36, &
+            status = nf90_put_att(ncid,varid,'comment', &
                   'Latitude of NE corner of T grid cell')
-            call nf_stat_check (status, &
+            if (status /= nf90_noerr) call abort_ice( &
                   'Error defining comment for'//coord_var(i)%short_name)
           endif
         enddo
 
-! Attributes for tmask defined separately, since it has no units
-        status = nf_def_var(ncid, 'tmask', nf_float, 2, dimid, varid)
-        call nf_stat_check (status,'Error defining variable tmask')
-        status = nf_put_att_text(ncid,varid, 'long_name', 15, &
-                            'ocean grid mask') 
-        call nf_stat_check (status,'Error defining long_name for tmask')
-        status = nf_put_att_text(ncid, varid, 'coordinates', 9, &
-                    'TLON TLAT')
-        call nf_stat_check (status, &
-             'Error defining coordinates for tmask')
-        status = nf_put_att_text(ncid,varid,'comment', 19, &
-                  '0 = land, 1 = ocean')
-        call nf_stat_check (status,'Error defining comment for tmask')
+        ! Attributes for tmask defined separately, since it has no units
+        status = nf90_def_var(ncid, 'tmask', nf90_float, dimid, varid)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error defining var tmask')
+        status = nf90_put_att(ncid,varid, 'long_name', 'ocean grid mask') 
+        if (status /= nf90_noerr) call abort_ice('ice Error: tmask long_name') 
+        status = nf90_put_att(ncid, varid, 'coordinates', 'TLON TLAT')
+        if (status /= nf90_noerr) call abort_ice('ice Error: tmask units') 
+        status = nf90_put_att(ncid,varid,'comment', '0 = land, 1 = ocean')
+        if (status /= nf90_noerr) call abort_ice('ice Error: tmask comment') 
 
         do i = 1, nvar
-          status = nf_def_var(ncid, var(i)%req%short_name, nf_float, &
-                              2, dimid, varid)
-          call nf_stat_check (status, &
+          status = nf90_def_var(ncid, var(i)%req%short_name, &
+                                nf90_float, dimid, varid)
+          if (status /= nf90_noerr) call abort_ice( &
                'Error defining variable'//var(i)%req%short_name)
-          length = lenstr(var(i)%req%long_name)
-          status = nf_put_att_text(ncid,varid, 'long_name', length, &
-                    var(i)%req%long_name)
-          call nf_stat_check (status, &
+          status = nf90_put_att(ncid,varid, 'long_name', var(i)%req%long_name)
+          if (status /= nf90_noerr) call abort_ice( &
                'Error defining long_name for'//var(i)%req%short_name)
-          length = lenstr(var(i)%req%units)
-          status = nf_put_att_text(ncid, varid, 'units', length, &
-                    var(i)%req%units)
-          call nf_stat_check (status, &
+          status = nf90_put_att(ncid, varid, 'units', var(i)%req%units)
+          if (status /= nf90_noerr) call abort_ice( &
                'Error defining units for'//var(i)%req%short_name)
-          length = lenstr(var(i)%coordinates)
-          status = nf_put_att_text(ncid, varid, 'coordinates', length, &
-                    var(i)%coordinates)
-          call nf_stat_check (status, &
+          status = nf90_put_att(ncid, varid, 'coordinates', var(i)%coordinates)
+          if (status /= nf90_noerr) call abort_ice( &
                'Error defining coordinates for'//var(i)%req%short_name)
-         enddo
+        enddo
 
         do n=1,avgsiz
           if (iout(n)) then
-            status  = nf_def_var(ncid, vname(n), nf_float, &
-                               3, dimid, varid)
-            call nf_stat_check (status, &
+            status  = nf90_def_var(ncid, vname(n), nf90_float, &
+                               dimid, varid)
+            if (status /= nf90_noerr) call abort_ice( &
                  'Error defining variable'//vname(n))
-            length = lenstr(vunit(n))
-            status = nf_put_att_text(ncid,varid, &
-                   'units',length,vunit(n))
-            call nf_stat_check (status, &
+            status = nf90_put_att(ncid,varid, 'units',vunit(n))
+            if (status /= nf90_noerr) call abort_ice( &
                  'Error defining units for'//vname(n))
-            length = lenstr(vdesc(n))
-            status = nf_put_att_text(ncid,varid, &
-                   'long_name',length,vdesc(n))
-            call nf_stat_check (status, &
+            status = nf90_put_att(ncid,varid, 'long_name',vdesc(n))
+                   
+            if (status /= nf90_noerr) call abort_ice( &
                  'Error defining long_name for'//vname(n))
-            length = lenstr(vcoord(n))
-            status = nf_put_att_text(ncid,varid,'coordinates', &
-                                   length,vcoord(n))
-            call nf_stat_check (status, &
+            status = nf90_put_att(ncid,varid,'coordinates', vcoord(n))
+            if (status /= nf90_noerr) call abort_ice( &
                  'Error defining coordinates for'//vname(n))
-            status = nf_put_att_real(ncid,varid,'missing_value', &
-                                   nf_float,1,spval)
-            call nf_stat_check (status, &
+            status = nf90_put_att(ncid,varid,'missing_value',spval)
+            if (status /= nf90_noerr) call abort_ice( &
                  'Error defining mising_value for'//vname(n))
-
-            status = nf_put_att_real(ncid,varid,'_FillValue', &
-                                   nf_float,1,spval)
-            call nf_stat_check (status, &
+            status = nf90_put_att(ncid,varid,'_FillValue',spval)
+            if (status /= nf90_noerr) call abort_ice( &
                  'Error defining _FillValue for'//vname(n))
       !-----------------------------------------------------------------
       ! Append ice thickness range to aicen comments
@@ -1716,20 +1702,17 @@
               endif
               vcomment(n) = 'Ice range: '//c_hi_range(icategory)
             endif
-            length = lenstr(vcomment(n))
-            status = nf_put_att_text(ncid,varid,'comment',  &
-                     length, vcomment(n))
-            call nf_stat_check (status, &
+            status = nf90_put_att(ncid,varid,'comment',vcomment(n))
+            if (status /= nf90_noerr) call abort_ice( &
                            'Error defining comment for'//vname(n))
       !-----------------------------------------------------------------
       ! Add cell_methods attribute to variables if averaged
       !-----------------------------------------------------------------
             if (hist_avg) then
               if (TRIM(vname(n))/='sig1'.or.TRIM(vname(n))/='sig2') then
-                status = nf_put_att_text(ncid,varid,'cell_methods', &
-                                     9,'time:mean')
-                call nf_stat_check (status, &
-                     'Error defining cell methods for'//vname(n))
+                status = nf90_put_att(ncid,varid,'cell_methods','time: mean')
+                if (status /= nf90_noerr) call abort_ice( &
+                              'Error defining cell methods for'//vname(n))
               endif
             endif
 
@@ -1738,11 +1721,9 @@
                 .or. n==n_sig1      .or. n==n_sig2 .or. n==n_trsig &
                 .or. n==n_mlt_onset .or. n==n_frz_onset &
                 .or. n==n_hisnap    .or. n==n_aisnap) then
-            status = nf_put_att_text(ncid,varid,'time_rep', &
-                                    13,'instantaneous')
+            status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
             else
-            status = nf_put_att_text(ncid,varid,'time_rep', &
-                                     8,'averaged')
+            status = nf90_put_att(ncid,varid,'time_rep','averaged')
             endif
           endif
         enddo
@@ -1753,35 +1734,44 @@
       ! ... the user should change these to something useful ...
       !-----------------------------------------------------------------
 #if (defined CCSM) || (defined SEQ_MCT)
-        length = lenstr(runid)
-        status = nf_put_att_text(ncid,nf_global,'title',length,runid)
-        call nf_stat_check (status,'Error in global attribute title')
+        status = nf90_put_att(ncid,nf90_global,'title',runid)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error in global attribute title')
 #else
         title  = 'sea ice model output for CICE'
-        length = lenstr(title)
-        status = nf_put_att_text(ncid,nf_global,'title',length,title)
-        call nf_stat_check (status,'Error in global attribute title')
+        status = nf90_put_att(ncid,nf90_global,'title',title)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error in global attribute title')
 #endif
         title = 'Diagnostic and Prognostic Variables'
-        length = lenstr(title)
-        status = nf_put_att_text(ncid,nf_global,'contents',length,title)
-        call nf_stat_check (status,'Error in global attribute contents')
+        status = nf90_put_att(ncid,nf90_global,'contents',title)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice Error: global attribute contents')
 
         title  = 'sea ice model: Community Ice Code (CICE)'
-        length = lenstr(title)
-        status = nf_put_att_text(ncid,nf_global,'source',length,title)
-        call nf_stat_check (status,'Error in global attribute source')
+        status = nf90_put_att(ncid,nf90_global,'source',title)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice Error: global attribute source')
 
         write(title,'(a,i3,a)') 'All years have exactly ',int(dayyr),' days'
-        length = lenstr(title)
-        status = nf_put_att_text(ncid,nf_global,'comment',length,title)
-        call nf_stat_check (status,'Error in global attribute comment')
+        status = nf90_put_att(ncid,nf90_global,'comment',title)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice Error: global attribute comment')
+
+        write(title,'(a,i8)') 'File written on model date ',idate
+        status = nf90_put_att(ncid,nf90_global,'comment2',title)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice Error: global attribute date1')
+
+        write(title,'(a,i6)') 'seconds elapsed into model date: ',sec
+        status = nf90_put_att(ncid,nf90_global,'comment3',title)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice Error: global attribute date2')
 
         title = 'CF-1.0'
-        length = lenstr(title)
         status =  &
-             nf_put_att_text(ncid,nf_global,'conventions',length,title)
-        call nf_stat_check (status, &
+             nf90_put_att(ncid,nf90_global,'conventions',title)
+        if (status /= nf90_noerr) call abort_ice( &
              'Error in global attribute conventions')
 
         call date_and_time(date=current_date, time=current_time)
@@ -1791,43 +1781,42 @@
 1000    format('This dataset was created on ', &
                 a,'-',a,'-',a,' at ',a,':',a,':',a)
 
-        length = lenstr(start_time)
-        status = nf_put_att_text(ncid,nf_global,'history', &
-                                 length,start_time)
-        call nf_stat_check (status,'Error in global attribute history')
+        status = nf90_put_att(ncid,nf90_global,'history',start_time)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice Error: global attribute history')
 
       !-----------------------------------------------------------------
       ! end define mode
       !-----------------------------------------------------------------
 
-        status = nf_enddef(ncid)
-        call nf_stat_check (status,'Error in nf_enddef')
+        status = nf90_enddef(ncid)
+        if (status /= nf90_noerr) call abort_ice('ice: Error in nf90_enddef')
 
       !-----------------------------------------------------------------
       ! write time variable
       !-----------------------------------------------------------------
 
-        status = nf_inq_varid(ncid,'time',varid)
-        call nf_stat_check (status,'Error getting time varid')
-        status = nf_put_vara_real(ncid,varid,1,1,ltime)
-        call nf_stat_check (status,'Error writing time variable')
+        status = nf90_inq_varid(ncid,'time',varid)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error getting time varid')
+        status = nf90_put_var(ncid,varid,ltime)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error writing time variable')
 
       !-----------------------------------------------------------------
       ! write time_bounds info
       !-----------------------------------------------------------------
 
         if (hist_avg) then
-          start(1) = 1
-          start(2) = 1
-          count(1)=1
-          count(2)=1
-          status = nf_inq_varid(ncid,'time_bounds',varid)
-          call nf_stat_check (status,'Error getting time_bounds id')
-          status = nf_put_vara_real(ncid,varid,start,count,time_beg)
-          call nf_stat_check (status,'Error writing time_beg')
-          start(1) = 2
-          status = nf_put_vara_real(ncid,varid,start,count,time_end)
-          call nf_stat_check (status,'Error writing time_end')
+          status = nf90_inq_varid(ncid,'time_bounds',varid)
+          if (status /= nf90_noerr) call abort_ice( &
+                        'ice: Error getting time_bounds id')
+          status = nf90_put_var(ncid,varid,time_beg,start=(/1/))
+          if (status /= nf90_noerr) call abort_ice( &
+                        'ice: Error writing time_beg')
+          status = nf90_put_var(ncid,varid,time_end,start=(/2/))
+          if (status /= nf90_noerr) call abort_ice( &
+                        'ice: Error writing time_end')
         endif
 
       endif                     ! master_task
@@ -1869,12 +1858,12 @@
           END SELECT
           
           if (my_task == master_task) then
-             status = nf_inq_varid(ncid, coord_var(i)%short_name, varid)
-             call nf_stat_check (status,'Error getting varid for' &
-                                         //coord_var(i)%short_name)
-             status = nf_put_var_real(ncid,varid,work_gr)
-             call nf_stat_check (status,'Error writing' &
-                                         //coord_var(i)%short_name)
+             status = nf90_inq_varid(ncid, coord_var(i)%short_name, varid)
+             if (status /= nf90_noerr) call abort_ice( &
+                  'ice: Error getting varid for'//coord_var(i)%short_name)
+             status = nf90_put_var(ncid,varid,work_gr)
+             if (status /= nf90_noerr) call abort_ice( &
+                           'ice: Error writing'//coord_var(i)%short_name)
           endif
         enddo
 
@@ -1885,10 +1874,12 @@
       call gather_global(work_g1, hm, master_task, distrb_info)
       if (my_task == master_task) then
         work_gr=work_g1
-        status = nf_inq_varid(ncid, 'tmask', varid)
-        call nf_stat_check (status,'Error getting varid for tmask')
-        status = nf_put_var_real(ncid,varid,work_gr)
-        call nf_stat_check (status,'Error writing variable tmask')
+        status = nf90_inq_varid(ncid, 'tmask', varid)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error getting varid for tmask')
+        status = nf90_put_var(ncid,varid,work_gr)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error writing variable tmask')
       endif
 
       do i = 1,nvar
@@ -1918,12 +1909,12 @@
 
         if (my_task == master_task) then
           work_gr=work_g1
-          status = nf_inq_varid(ncid, var(i)%req%short_name, varid)
-          call nf_stat_check (status,'Error getting varid for' &
-                                //var(i)%req%short_name)
-          status = nf_put_var_real(ncid,varid,work_gr)
-          call nf_stat_check (status,'Error writing variable' &
-                                //var(i)%req%short_name)
+          status = nf90_inq_varid(ncid, var(i)%req%short_name, varid)
+          if (status /= nf90_noerr) call abort_ice( &
+                        'ice: Error getting varid for'//var(i)%req%short_name)
+          status = nf90_put_var(ncid,varid,work_gr)
+          if (status /= nf90_noerr) call abort_ice( &
+                        'ice: Error writing variable'//var(i)%req%short_name)
         endif
       enddo
 
@@ -1939,22 +1930,19 @@
       ! write variable data
       !-----------------------------------------------------------------
 
-      start=1
-      count(1)=nx_global
-      count(2)=ny_global
-      count(3)=1
       do n=1,avgsiz
         if (iout(n)) then
           call gather_global(work_g1, aa(:,:,n,:), &
                              master_task, distrb_info)
           if (my_task == master_task) then
             work_gr3(:,:,1) = work_g1(:,:)
-            status  = nf_inq_varid(ncid,vname(n),varid)
-            call nf_stat_check (status,'Error getting varid for' &
-                                //vname(n))
-            status  = nf_put_vara_real(ncid,varid,start,count,work_gr3)
-            call nf_stat_check (status,'Error writing variable' &
-                                //vname(n))
+            status  = nf90_inq_varid(ncid,vname(n),varid)
+            if (status /= nf90_noerr) call abort_ice( &
+                          'ice: Error getting varid for'//vname(n))
+            status  = nf90_put_var(ncid,varid,work_gr3, &
+                                   count=(/nx_global,ny_global,1/))
+            if (status /= nf90_noerr) call abort_ice( &
+                          'ice: Error writing variable'//vname(n))
           endif
         endif
       enddo
@@ -1967,58 +1955,16 @@
       !-----------------------------------------------------------------
 
       if (my_task == master_task) then
-         status = nf_close(ncid)
-         call nf_stat_check (status,'Error closing netCDF history file')
+         status = nf90_close(ncid)
+         if (status /= nf90_noerr) call abort_ice( &
+                       'ice: Error closing netCDF history file')
          write(nu_diag,*) ' '
          write(nu_diag,*) 'Finished writing ',trim(ncfile)
       endif
-
 #endif
 
       end subroutine icecdf
 
-!=======================================================================
-#if (defined ncdf) || (defined CCSM) || (defined SEQ_MCT)
-!
-!BOP
-!
-! !IROUTINE: nf_stat_check - check error code returned from netCDF call
-!
-! !INTERFACE:
-!
-      subroutine nf_stat_check (status,msg)
-
-!
-! !DESCRIPTION:
-!
-! Check error code returned from netCDF calls \\
-! If bad, abort
-!
-! !REVISION HISTORY:
-!
-! author:   ?
-! 
-! !USES:
-!
-      use ice_exit
-      include "netcdf.inc"
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-      integer (kind=int_kind), intent(in) :: status
-      character (len = *), intent(in) :: msg
-!
-!EOP
-!
-      if (status /= NF_NOERR) then
-        write (nu_diag,*) msg, ':',  &
-                          nf_strerror(status)
-        call abort_ice ('ice: writing netCDF file in ice_history.F')
-      endif
-
-      end subroutine nf_stat_check
-
-#endif
 !=======================================================================
 !
 !BOP

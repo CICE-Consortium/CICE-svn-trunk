@@ -18,6 +18,7 @@
 !       Boundary update routines replaced by POP versions
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
 ! 2007: Neumann boundary condition option added by E. Hunke
+!       Option to read from netcdf files (A. Keen, Met Office)
 !
 ! !INTERFACE:
 !
@@ -41,7 +42,8 @@
       implicit none
       save
 
-      character (len=char_len) :: &
+      character (len=char_len_long) :: &
+         grid_format  , & ! file format ('bin'=binary or 'nc'=netcdf)
          grid_file    , & !  input file for POP grid info
          kmt_file     , & !  input file for POP grid info
          grid_type        !  current options are rectangular (default),
@@ -149,7 +151,13 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-         i, j, iblk
+         i, j, iblk, &
+         fid_grid, &     ! file id for netCDF grid file
+         fid_kmt         ! file id for netCDF kmt file
+
+
+      character (char_len) :: &
+         fieldname       ! field name in netCDF file
 
       !-----------------------------------------------------------------
       ! Get global ULAT and KMT arrays used for block decomposition.
@@ -161,15 +169,34 @@
       if (trim(grid_type) == 'displaced_pole' .or. &
           trim(grid_type) == 'tripole'      ) then
 
-         call ice_open(nu_grid,grid_file,64) ! ULAT
-         call ice_open(nu_kmt, kmt_file, 32) ! KMT
+         if (trim(grid_format) == 'nc') then
 
-         call ice_read_global(nu_grid,1,work_g1,'rda8',.true.)  ! ULAT
-         call ice_read_global(nu_kmt, 1,work_g2,'ida4',.true.)  ! KMT
+            call ice_open_nc(grid_file,fid_grid)
+            call ice_open_nc(kmt_file,fid_kmt)
 
-         if (my_task == master_task) then
-            close (nu_grid)
-            close (nu_kmt)
+            fieldname='ulat'
+            call ice_read_global_nc(fid_grid,1,fieldname,work_g1,.true.)
+            fieldname='kmt'
+            call ice_read_global_nc(fid_kmt,1,fieldname,work_g2,.true.)
+
+            if (my_task == master_task) then
+               call ice_close_nc(fid_grid)
+               call ice_close_nc(fid_kmt)
+            endif
+
+         else
+
+            call ice_open(nu_grid,grid_file,64) ! ULAT
+            call ice_open(nu_kmt, kmt_file, 32) ! KMT
+
+            call ice_read_global(nu_grid,1,work_g1,'rda8',.true.)  ! ULAT
+            call ice_read_global(nu_kmt, 1,work_g2,'ida4',.true.)  ! KMT
+
+            if (my_task == master_task) then
+               close (nu_grid)
+               close (nu_kmt)
+            endif
+
          endif
 
       elseif (trim(grid_type) == 'panarctic') then
@@ -266,7 +293,11 @@
 
       if (trim(grid_type) == 'displaced_pole' .or. &
           trim(grid_type) == 'tripole'      ) then
-         call popgrid           ! read POP grid lengths directly
+         if (trim(grid_format) == 'nc') then
+            call popgrid_nc     ! read POP grid lengths from nc file
+         else
+            call popgrid        ! read POP grid lengths directly
+         endif 
       elseif (trim(grid_type) == 'panarctic') then
          call panarctic_grid    ! pan-Arctic grid
 #ifdef SEQ_MCT
@@ -570,6 +601,119 @@
       enddo
 
       end subroutine popgrid
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: popgrid_nc - read and set POP tripole
+!                      grid and land mask from netCDF file 
+!
+! !INTERFACE:
+!
+      subroutine popgrid_nc
+
+#ifdef ncdf
+!
+! !DESCRIPTION:
+!
+! POP displaced pole grid and land mask. \\
+! Grid record number, field and units are: \\
+! (1) ULAT  (radians)    \\
+! (2) ULON  (radians)    \\
+! (3) HTN   (cm)         \\
+! (4) HTE   (cm)         \\
+! (5) HUS   (cm)         \\
+! (6) HUW   (cm)         \\
+! (7) ANGLE (radians)    \\
+!
+! Land mask record number and field is (1) KMT.
+!
+! !REVISION HISTORY:
+!
+! author: Elizabeth C. Hunke, LANL
+! Revised for netcdf input: Ann Keen, Met Office, May 2007
+!
+! !USES:
+!
+      use ice_work, only: work1
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+         i, j, iblk, &
+         ilo,ihi,jlo,jhi, &     ! beginning and end of physical domain
+	 fid_grid, &		! file id for netCDF grid file
+	 fid_kmt		! file id for netCDF kmt file
+
+      logical (kind=log_kind) :: diag
+
+      character (char_len) :: &
+         fieldname		! field name in netCDF file
+
+      type (block) :: &
+         this_block           ! block information for current block
+
+      call ice_open_nc(grid_file,fid_grid)
+      call ice_open_nc(kmt_file,fid_kmt)
+
+      diag = .true.       ! write diagnostic info
+
+      ! lat, lon, cell dimensions, angles
+      fieldname='ulat'
+      call ice_read_nc(fid_grid,1,fieldname,ULAT,diag)
+      fieldname='ulon'
+      call ice_read_nc(fid_grid,2,fieldname,ULON,diag)
+      fieldname='htn'
+      call ice_read_nc(fid_grid,3,fieldname,HTN,diag)
+      fieldname='hte'
+      call ice_read_nc(fid_grid,4,fieldname,HTE,diag)
+      fieldname='angle'
+      call ice_read_nc(fid_grid,7,fieldname,ANGLE,diag)
+
+      ! fix units
+      HTN(:,:,:) = HTN(:,:,:) * cm_to_m
+      HTE(:,:,:) = HTE(:,:,:) * cm_to_m
+
+      ! fix ANGLE: roundoff error due to single precision
+      where (ANGLE >  pi) ANGLE =  pi
+      where (ANGLE < -pi) ANGLE = -pi
+
+      ! topography
+      fieldname='kmt'
+      call ice_read_nc(fid_kmt,1,fieldname,work1,diag)
+
+      if (my_task == master_task) then
+         call ice_close_nc(fid_grid)
+         call ice_close_nc(fid_kmt)
+      endif
+
+      hm(:,:,:) = c0
+      do iblk = 1, nblocks
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do j = jlo, jhi
+         do i = ilo, ihi
+            hm(i,j,iblk) = work1(i,j,iblk)
+            if (hm(i,j,iblk) >= c1) hm(i,j,iblk) = c1
+
+         ! uncomment to mask out tropics
+         ! Do this only if running uncoupled
+!!!             if (ULAT(i,j,iblk) > shlat/rad_to_deg .and. &
+!!!                 ULAT(i,j,iblk) < nhlat/rad_to_deg) &
+!!!                 hm(i,j,iblk) = c0
+         enddo
+         enddo
+      enddo
+
+#endif
+      end subroutine popgrid_nc
 
 !=======================================================================
 !BOP

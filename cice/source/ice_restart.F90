@@ -346,7 +346,7 @@
       ! internal stress
       !-----------------------------------------------------------------
       if (my_task == master_task) write(nu_diag,*) &
-           'min/max internal stress components (3 per triangle)'
+           'internal stress components'
       
       call ice_read(nu_restart,0,stressp_1,'ruf8',diag)
       call ice_read(nu_restart,0,stressm_1,'ruf8',diag)

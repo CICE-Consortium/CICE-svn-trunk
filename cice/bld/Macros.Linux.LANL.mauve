@@ -34,8 +34,8 @@ endif
 
 ifeq ($(NETCDF), yes)
    CPPDEFS :=  $(CPPDEFS) -Dncdf
-   INCLDIR := $(INCLDIR) -I/usr/projects/climate/maltrud/local/include 
-   SLIBS   := $(SLIBS) -L/usr/projects/climate/maltrud/local/lib -lnetcdf
+   INCLDIR := $(INCLDIR) -I/usr/projects/climate/maltrud/local/include_8.1 
+   SLIBS   := $(SLIBS) -L/usr/projects/climate/maltrud/local/lib_8.1 -lnetcdf
 endif
 
 ifeq ($(USE_ESMF), yes)

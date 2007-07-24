@@ -7,7 +7,7 @@
 set  stamp   = `date -u '+%y%m%d%H%M%S'`
 setenv ICE_LOG_FILE ice.log.${stamp}
 
-cd /scratch/eclare/rundir4
+cd /scratch/eclare/cice/rundir4
 setenv MPI_DSM_DISTRIBUTE
 mpirun -np 4 ./cice  >&! $ICE_LOG_FILE
 

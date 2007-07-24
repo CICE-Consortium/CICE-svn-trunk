@@ -75,7 +75,11 @@
 #if (defined CCSM) || (defined SEQ_MCT)
       call shr_sys_abort(error_message)
 #else
-      write (nu_diag,*) error_message
+      call flush_fileunit(nu_diag)
+
+      write (ice_stderr,*) error_message
+      call flush_fileunit(ice_stderr)
+
       call MPI_ABORT(MPI_COMM_WORLD, ierr)
       stop
 #endif

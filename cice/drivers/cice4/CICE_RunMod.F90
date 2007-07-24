@@ -478,6 +478,8 @@
       ! For basic shortwave, simply set coszen to a constant between 0 and 1.
       !-----------------------------------------------------------------
 
+      call ice_timer_start(timer_tmp)
+
          if (trim(shortwave) == 'dEdd') then ! delta Eddington
 
             ! identify ice-ocean cells
@@ -540,9 +542,6 @@
             icells = 0
             do j = jlo, jhi
             do i = ilo, ihi
-!               if (aicen(i,j,n,iblk) > puny .and. .not.tmask(i,j,iblk)) then
-!                 print*,my_task,i,j,n,iblk,aicen(i,j,n,iblk),tmask(i,j,iblk)
-!               endif
                if (aicen(i,j,n,iblk) > puny) then
                   icells = icells + 1
                   indxi(icells) = i
@@ -639,6 +638,9 @@
                                  fswthrun,          Iswabsn,             &
                                  apondn(:,:,n,iblk),hpondn(:,:,n,iblk))
             endif
+
+
+      call ice_timer_stop(timer_tmp)
 
       !-----------------------------------------------------------------
       ! Atmosphere boundary layer calculation; compute coefficients

@@ -1,4 +1,4 @@
-!=======================================================================
+ !=======================================================================
 !BOP
 !
 ! !MODULE:   ice_init - parameter and variable initializations
@@ -73,7 +73,8 @@
       use ice_restart, only: &
           restart, restart_dir, restart_file, pointer_file, &
           runid, runtype
-      use ice_history, only: hist_avg, history_dir, history_file, &
+      use ice_history, only: hist_avg, &
+                             history_format, history_dir, history_file, &
                              incond_dir, incond_file
       use ice_exit
       use ice_itd, only: kitd, kcatbound
@@ -81,9 +82,10 @@
       use ice_forcing, only: &
           ycycle,          fyear_init,    dbug, &
           atm_data_type,   atm_data_dir,  precip_units, &
+          atm_data_format, ocn_data_format, &
           sss_data_type,   sst_data_type, ocn_data_dir, &
           oceanmixed_file, restore_sst,   trestore 
-      use ice_grid, only: grid_file, kmt_file, grid_type
+      use ice_grid, only: grid_file, kmt_file, grid_type, grid_format
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, &
@@ -110,10 +112,11 @@
         year_init,      istep0,          dt,            npt, &
         diagfreq,       days_per_year,   &       
         print_points,   print_global,    diag_type,     diag_file, &
+        history_format, &
         histfreq,       hist_avg,        history_dir,   history_file, &
         histfreq_n,     dumpfreq,        dumpfreq_n,    restart_file, &
         restart,        restart_dir,     pointer_file,  ice_ic, &
-        grid_type,      grid_file,       kmt_file, &
+        grid_format,    grid_type,       grid_file,     kmt_file,      &
         kitd,           kcatbound, &
         kdyn,           ndyn_dt,         ndte,          evp_damping, &
         yield_curve,    advection, &
@@ -121,8 +124,9 @@
         R_ice,          R_pnd,           R_snw, &
         albicev,        albicei,         albsnowv,      albsnowi, &
         albedo_type,    atmbndy,         fyear_init,    ycycle , &
+        atm_data_format, &
         atm_data_type,  atm_data_dir,    calc_strair,   precip_units, &
-        oceanmixed_ice, sss_data_type,   sst_data_type, &
+        oceanmixed_ice, sss_data_type,   sst_data_type, ocn_data_format, &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore, &
         latpnt,         lonpnt,          dbug,          kpond,    &
 #ifndef SEQ_MCT
@@ -151,6 +155,7 @@
       hist_avg = .true.      ! if true, write time-averages (not snapshots)
       history_dir  = ' '     ! Write to executable dir for default
       history_file = 'iceh'  ! history file name prefix
+      history_format = 'bin' ! file format ('bin'=binary or 'nc'=netcdf)
       incond_dir = ' '       ! Write to executable dir for default
       incond_file = 'iceh'   ! same as history file prefix
       dumpfreq='y'           ! restart frequency option
@@ -159,8 +164,9 @@
       restart_dir  = ' '     ! Write to executable dir for default
       restart_file = 'iced'  ! restart file name prefix
       pointer_file = 'ice.restart_file'
-      ice_ic       = 'default'       ! latitude and sst-dependent
-      grid_type    = 'rectangular'   ! define rectangular grid internally
+      ice_ic       = 'default'      ! latitude and sst-dependent
+      grid_format  = 'bin'          ! file format ('bin'=binary or 'nc'=netcdf)
+      grid_type    = 'rectangular'  ! define rectangular grid internally
       grid_file    = 'unknown_grid_file'
       kmt_file     = 'unknown_kmt_file'
 
@@ -189,12 +195,14 @@
 
       fyear_init = 1900           ! first year of forcing cycle
       ycycle = 1                  ! number of years in forcing cycle
+      atm_data_format = 'bin'     ! file format ('bin'=binary or 'nc'=netcdf)
       atm_data_type   = 'default'
       atm_data_dir    = ' '
       calc_strair     = .true.    ! calculate wind stress
       precip_units    = 'mks'     ! 'mm_per_month' or
                                   ! 'mm_per_sec' = 'mks' = kg/m^2 s
       oceanmixed_ice  = .false.   ! if true, use internal ocean mixed layer
+      ocn_data_format = 'bin'     ! file format ('bin'=binary or 'nc'=netcdf)
       sss_data_type   = 'default'
       sst_data_type   = 'default'
       ocn_data_dir    = ' '
@@ -217,6 +225,7 @@
       ! read from input file
       !-----------------------------------------------------------------
 
+      call get_fileunit(nu_nml)
       if (my_task == master_task) then
          open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
          if (nml_error /= 0) then
@@ -230,33 +239,22 @@
          end do
          if (nml_error == 0) close(nu_nml)
       endif
+      call release_fileunit(nu_nml)
 
       call broadcast_scalar(nml_error, master_task)
       if (nml_error /= 0) then
          call abort_ice('ice: error reading ice_nml')
       endif
 
-      nu_diag = 6
-
       if (trim(diag_type) == 'file') then
-         write(nu_diag,*) 'Diagnostic output will be in file ',diag_file
-         nu_diag = 48
-      endif
-
-      chartmp = advection(1:6)
-      if (chartmp /= 'upwind' .and. chartmp /= 'remap ' .and. &
-          chartmp /= 'none') then
-         if (my_task == master_task) &
-         write (nu_diag,*) &
-         'WARNING: ',chartmp,' advection unavailable, using remap' 
-         advection = 'remap'
+         call get_fileunit(nu_diag)
+      else
+         nu_diag = 6
       endif
 
 #ifdef SEQ_MCT
-      !
       ! Note in SEQ_MCT mode the runid and runtype flag are obtained from the
       ! sequential driver - not from the cice namelist 
-      !
       if (my_task == master_task) then
          restart = .true.
          if (runtype == "initial") restart = .false.
@@ -264,17 +262,22 @@
       endif
 #endif
 
-      if (trim(atm_data_type) == 'monthly' .and. calc_strair) then
-         if (my_task == master_task) &
-         write (nu_diag,*) &
-         'WARNING: Monthly atmospheric data chosen and calc_strair = T.'
-         write (nu_diag,*) &
-         'WARNING: Changing calc_strair to F.'
-         calc_strair = .false.
-      endif
+#ifndef ncdf
+      ! netcdf is unavailable
+      history_format  = 'bin'
+      grid_format     = 'bin'
+      atm_data_format = 'bin'
+      ocn_data_format = 'bin'
+#endif
 
       if (histfreq == '1') hist_avg = .false. ! potential conflict
       if (days_per_year /= 365) shortwave = 'default' ! definite conflict
+
+      chartmp = advection(1:6)
+      if (chartmp /= 'upwind' .and. chartmp /= 'remap ') advection = 'remap'
+
+      if (trim(atm_data_type) == 'monthly' .and. calc_strair) &
+         calc_strair = .false.
 
       call broadcast_scalar(days_per_year,      master_task)
       call broadcast_scalar(year_init,          master_task)
@@ -286,6 +289,7 @@
       call broadcast_scalar(print_global,       master_task)
       call broadcast_scalar(diag_type,          master_task)
       call broadcast_scalar(diag_file,          master_task)
+      call broadcast_scalar(history_format,     master_task)
       call broadcast_scalar(histfreq,           master_task)
       call broadcast_scalar(histfreq_n,         master_task)
       call broadcast_scalar(hist_avg,           master_task)
@@ -300,6 +304,7 @@
       call broadcast_scalar(restart_dir,        master_task)
       call broadcast_scalar(pointer_file,       master_task)
       call broadcast_scalar(ice_ic,             master_task)
+      call broadcast_scalar(grid_format,        master_task)
       call broadcast_scalar(grid_type,          master_task)
       call broadcast_scalar(grid_file,          master_task)
       call broadcast_scalar(kmt_file,           master_task)
@@ -327,11 +332,13 @@
       call broadcast_scalar(atmbndy,            master_task)
       call broadcast_scalar(fyear_init,         master_task)
       call broadcast_scalar(ycycle,             master_task)
+      call broadcast_scalar(atm_data_format,    master_task)
       call broadcast_scalar(atm_data_type,      master_task)
       call broadcast_scalar(atm_data_dir,       master_task)
       call broadcast_scalar(calc_strair,        master_task)
       call broadcast_scalar(precip_units,       master_task)
       call broadcast_scalar(oceanmixed_ice,     master_task)
+      call broadcast_scalar(ocn_data_format,    master_task)
       call broadcast_scalar(sss_data_type,      master_task)
       call broadcast_scalar(sst_data_type,      master_task)
       call broadcast_scalar(ocn_data_dir,       master_task)
@@ -353,6 +360,7 @@
       if (my_task == master_task) then
 
          if (trim(diag_type) == 'file') then
+            write(ice_stdout,*) 'Diagnostic output will be in file ',diag_file
             open (nu_diag, file=diag_file, status='unknown')
          endif
 

@@ -9,11 +9,12 @@
   , print_global = .false.
   , diag_type    = 'stdout'
   , diag_file    = 'ice_diag.d'
-  , histfreq     = 'y'
+  , histfreq     = 'm'
   , histfreq_n   = 1
   , hist_avg     = .true.
   , history_dir  = './history/'
   , history_file = 'iceh'
+  , history_format = 'nc'
   , dumpfreq     = 'y'
   , dumpfreq_n   = 1
   , restart      = .false.
@@ -21,6 +22,7 @@
   , restart_file = 'iced'
   , pointer_file = './restart/ice.restart_file'
   , ice_ic       = 'default'
+  , grid_format  = 'bin'
   , grid_type    = 'displaced_pole'
   , grid_file    = 'grid'
   , kmt_file     = 'kmt'
@@ -43,11 +45,13 @@
   , atmbndy      = 'default'
   , fyear_init   = 1997
   , ycycle       = 1
+  , atm_data_format = 'bin'
   , atm_data_type= 'ncar'
   , atm_data_dir = '/scratch/eclare/atm/gx3v2m/NCAR_bulk/'
   , calc_strair  = .true.
   , precip_units = 'mm_per_month'
   , oceanmixed_ice = .true.
+  , ocn_data_format = 'bin'
   , sss_data_type= 'clim'
   , sst_data_type= 'clim'
   , ocn_data_dir = '/scratch/eclare/DATA/gx3v2m/ocn/'
