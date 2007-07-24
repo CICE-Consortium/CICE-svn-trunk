@@ -14,6 +14,7 @@
 !
 ! 2004: Block structure added by William Lipscomb, LANL
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
+! 2007: netcdf versions added by Alison McLaren & Ann Keen, Met Office
 !
 ! !INTERFACE:
 !
@@ -28,6 +29,9 @@
       use ice_domain_size
       use ice_blocks
       use ice_fileunits
+#ifdef ncdf
+      use netcdf      
+#endif
 !
 !EOP
 
@@ -431,6 +435,334 @@
       deallocate(work_g1)
 
       end subroutine ice_write
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: ice_open_nc - opens a netCDF file for reading
+!
+! !INTERFACE:
+!
+      subroutine ice_open_nc(filename, fid)
+!
+! !DESCRIPTION:
+!
+! Opens a netCDF file for reading
+!
+! !REVISION HISTORY:
+!
+! Adapted by Alison McLaren, Met Office from ice_open
+!
+! !USES:
+ 
+      use ice_exit
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+
+      character (char_len_long), intent(in) :: & 
+           filename      ! netCDF filename
+
+      integer (kind=int_kind), intent(out) :: &
+           fid           ! unit number
+!
+!EOP
+!
+#ifdef ncdf
+      integer (kind=int_kind) :: &
+        status        ! status variable from netCDF routine 
+
+
+      if (my_task == master_task) then
+
+          status = nf90_open(filename, NF90_NOWRITE, fid)
+          if (status /= nf90_noerr) then
+             call abort_ice ( & 
+                   'ice_open_nc: Cannot open '//trim(filename) )
+          endif
+
+      endif                      ! my_task = master_task
+
+#else
+      fid = -999 ! to satisfy intent(out) attribute
+#endif
+      end subroutine ice_open_nc
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: ice_read_nc - read and scatter one field from a netCDF file
+!
+! !INTERFACE:
+!
+      subroutine ice_read_nc(fid,  nrec,  varname, work,  diag)
+!
+! !DESCRIPTION:
+!
+! Read a netCDF file and scatter to processors\\
+! work is a real array.
+!
+! !REVISION HISTORY:
+!
+! Adapted by Alison McLaren, Met Office from ice_read
+!
+! !USES:
+!
+      use ice_domain
+      use ice_gather_scatter
+      use ice_work, only: work_g1
+      use ice_exit
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+           fid           , & ! file id
+           nrec              ! record number 
+
+      logical (kind=log_kind), intent(in) :: &
+           diag              ! if true, write diagnostic output
+
+      character (char_len), intent(in) :: & 
+           varname           ! field name in netcdf file
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
+           intent(out) :: &
+           work              ! output array (real, 8-byte)
+!
+!EOP
+!
+#ifdef ncdf
+! netCDF file diagnostics:
+      integer (kind=int_kind) :: & 
+         varid,           & ! netcdf id for field
+         status,          & ! status output from netcdf routines
+         ndim, nvar,      & ! sizes of netcdf file
+         id,              & ! dimension index
+         varndim,         & ! no. of dimensions for field
+         dimlen             ! size of dimension
+
+      real (kind=dbl_kind) :: &
+         amin, amax         ! min and max values of input array
+
+      character (char_len) :: &
+         dimname            ! dimension name            
+!
+
+      if (my_task == master_task) then
+         allocate(work_g1(nx_global,ny_global))
+      else
+         allocate(work_g1(1,1))   ! to save memory
+      endif
+
+      if (my_task == master_task) then
+
+        !-------------------------------------------------------------
+        ! Find out ID of required variable
+        !-------------------------------------------------------------
+
+         status = nf90_inq_varid(fid, trim(varname), varid)
+ 
+         if (status /= nf90_noerr) then
+           call abort_ice ( & 
+               'ice_read_nc: Cannot find variable '//trim(varname) )
+         endif
+
+       !--------------------------------------------------------------
+       ! Read global array 
+       !--------------------------------------------------------------
+
+         status = nf90_get_var( fid, varid, work_g1, &
+               start=(/1,1,nrec/), & 
+               count=(/nx_global,ny_global,1/) )
+
+      endif                     ! my_task = master_task
+
+    !-------------------------------------------------------------------
+    ! optional diagnostics
+    !-------------------------------------------------------------------
+
+      if (my_task==master_task .and. diag) then
+
+          write(nu_diag,*) & 
+            'ice_read_nc, fid= ',fid, ', nrec = ',nrec, & 
+            ', varname = ',trim(varname)
+          status = nf90_inquire(fid, nDimensions=ndim, nVariables=nvar)
+          write(nu_diag,*) 'ndim= ',ndim,', nvar= ',nvar
+          do id=1,varndim
+            status = nf90_inquire_dimension(fid,id,name=dimname,len=dimlen)
+            write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
+         enddo
+         amin = minval(work_g1)
+         amax = maxval(work_g1)
+         write(nu_diag,*) ' min and max =', amin, amax
+         write(nu_diag,*) ''
+
+      endif
+
+    !-------------------------------------------------------------------
+    ! Scatter data to individual processors.
+    ! NOTE: Ghost cells are not updated.
+    !-------------------------------------------------------------------
+
+      call scatter_global(work, work_g1, master_task, distrb_info, &
+                          field_loc_noupdate, field_type_noupdate)
+
+      deallocate(work_g1)
+
+#else
+      work = c0 ! to satisfy intent(out) attribute
+#endif
+      end subroutine ice_read_nc
+!
+!=======================================================================
+!BOP
+!
+! !IROUTINE: ice_read_global_nc - read one field from a netcdf file
+!
+! !INTERFACE:
+!
+      subroutine ice_read_global_nc (fid,  nrec, varname, work_g, diag)
+!
+! !DESCRIPTION:
+!
+! Read a netcdf file \\
+! Just like ice_read_nc except that it returns a global array \\
+! work_g is a real array
+!
+! !REVISION HISTORY:
+! Adapted by William Lipscomb, LANL, from ice_read
+! Adapted by Ann Keen, Met Office, to read from a netcdf file 
+!
+! !USES:
+! 
+      use ice_exit
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+           fid           , & ! file id
+           nrec              ! record number 
+
+     character (char_len), intent(in) :: & 
+           varname           ! field name in netcdf file        
+
+      real (kind=dbl_kind), dimension(nx_global,ny_global), &
+           intent(out) :: &
+           work_g            ! output array (real, 8-byte)
+
+      logical (kind=log_kind) :: &
+           diag              ! if true, write diagnostic output
+!
+!EOP
+!
+#ifdef ncdf
+! netCDF file diagnostics:
+      integer (kind=int_kind) :: & 
+         varid,           & ! netcdf id for field
+         status,          & ! status output from netcdf routines
+         ndim, nvar,      & ! sizes of netcdf file
+         id,              & ! dimension index
+         varndim,         & ! no. of dimensions for field
+         dimlen             ! size of dimension      
+
+      real (kind=dbl_kind) :: &
+         amin, amax         ! min and max values of input array
+
+     character (char_len) :: &
+         dimname            ! dimension name            
+
+!
+      work_g(:,:) = c0
+
+      if (my_task == master_task) then
+
+        !-------------------------------------------------------------
+        ! Find out ID of required variable
+        !-------------------------------------------------------------
+
+         status = nf90_inq_varid(fid, trim(varname), varid)
+
+         if (status /= nf90_noerr) then
+           call abort_ice ( & 
+            'ice_read_global_nc: Cannot find variable '//trim(varname) )
+         endif
+
+       !--------------------------------------------------------------
+       ! Read global array 
+       !--------------------------------------------------------------
+ 
+         status = nf90_get_var( fid, varid, work_g, &
+               start=(/1,1,nrec/), & 
+               count=(/nx_global,ny_global,1/) )
+
+      endif                     ! my_task = master_task
+
+    !-------------------------------------------------------------------
+    ! optional diagnostics
+    !-------------------------------------------------------------------
+
+      if (my_task == master_task .and. diag) then
+
+          write(nu_diag,*) & 
+            'ice_read_global_nc, fid= ',fid, ', nrec = ',nrec, & 
+            ', varname = ',trim(varname)
+          status = nf90_inquire(fid, nDimensions=ndim, nVariables=nvar)
+          write(nu_diag,*) 'ndim= ',ndim,', nvar= ',nvar
+          do id=1,varndim
+            status = nf90_inquire_dimension(fid,id,name=dimname,len=dimlen)
+            write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
+         enddo
+         amin = minval(work_g)
+         amax = maxval(work_g)
+         write(nu_diag,*) 'min and max = ', amin, amax
+         write(nu_diag,*) ''
+
+      endif
+
+#else
+      work_g = c0 ! to satisfy intent(out) attribute
+#endif
+      end subroutine ice_read_global_nc
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: ice_close_nc - closes a netCDF file
+!
+! !INTERFACE:
+!
+      subroutine ice_close_nc(fid)
+!
+! !DESCRIPTION:
+!
+! Closes a netCDF file
+!
+! !REVISION HISTORY:
+!
+! author: Alison McLaren, Met Office
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+           fid           ! unit number
+!
+!EOP
+!
+#ifdef ncdf
+      integer (kind=int_kind) :: &
+        status        ! status variable from netCDF routine 
+
+      if (my_task == master_task) then
+
+         status = nf90_close(fid)
+
+      endif
+
+#endif
+      end subroutine ice_close_nc
 
 !=======================================================================
 

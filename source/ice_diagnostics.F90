@@ -127,7 +127,6 @@
 
 #if (defined CCSM) || (defined SEQ_MCT)
       use ice_prescribed_mod, only : prescribed_ice
-      use shr_sys_mod, only : shr_sys_flush
 #endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -730,9 +729,7 @@
         endif                    ! print_global
        endif                     ! grid_type
 
-#if (defined CCSM) || (defined SEQ_MCT)
-       call shr_sys_flush(nu_diag)
-#endif
+       call flush_fileunit(nu_diag)
 
       !-----------------------------------------------------------------
       ! diagnostics for Arctic and Antarctic points

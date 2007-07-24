@@ -416,7 +416,7 @@
             iflag = iflag + 1
             indxii(iflag) = i
             indxjj(iflag) = j
-            indxij(iflag) = iflag
+            indxij(iflag) = ij
          endif
       enddo
 

@@ -69,8 +69,8 @@
       timer_cplsend,          &! send to coupled
       timer_sndrcv,           &! time between send to receive
 #endif
-      timer_bound              ! boundary updates
-!      timer_tmp                ! for temporary timings
+      timer_bound,&              ! boundary updates
+      timer_tmp                ! for temporary timings
 
 !-----------------------------------------------------------------------
 !
@@ -204,6 +204,7 @@
    call get_ice_timer(timer_sndrcv,   'Snd->Rcv', nblocks,distrb_info%nprocs)
 #endif
 !   call get_ice_timer(timer_tmp,      '         ',nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_tmp,      'shortwave',nblocks,distrb_info%nprocs)
 
 !-----------------------------------------------------------------------
 !EOC

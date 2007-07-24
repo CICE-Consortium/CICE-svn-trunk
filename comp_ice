@@ -46,7 +46,7 @@ if ( $SITE == 'LANL.coyote' ) setenv NETCDF no
 #setenv SRCDIR $HOME/cice.v4.0/cice
 setenv SRCDIR /net/bob4/eclare/CODE/CICE_release/CICE.v4.0/cice
 #setenv SRCDIR $SYSTEM_USERDIR/cice
-setenv EXEDIR $SYSTEM_USERDIR/rundir4
+setenv EXEDIR $SYSTEM_USERDIR/cice/rundir4.1
                                           if !(-d $EXEDIR) mkdir -p $EXEDIR
 setenv CBLD   $SRCDIR/bld
 setenv OBJDIR $EXEDIR/compile           ; if !(-d $OBJDIR) mkdir -p $OBJDIR
@@ -66,6 +66,8 @@ cd $SRCDIR/source
 
 cd $EXEDIR
 
+#if !(-e grid.nc)    cp $SRCDIR/input_templates/$RES/global_$RES.grid.nc grid.nc
+#if !(-e kmt.nc)     cp $SRCDIR/input_templates/$RES/global_$RES.kmt.nc kmt.nc
 if !(-e grid)    cp $SRCDIR/input_templates/$RES/global_$RES.grid grid
 if !(-e kmt)     cp $SRCDIR/input_templates/$RES/global_$RES.kmt kmt
 if !(-e ice_in)  cp $SRCDIR/input_templates/$RES/ice_in .
@@ -73,7 +75,7 @@ if !(-e run_ice) cp $SRCDIR/input_templates/run_ice.$ARCH run_ice
 
 cd $RSTDIR
 
-#cp $SRCDIR/input_templates/$RES/iced_$RES* .
+cp $SRCDIR/input_templates/$RES/iced_$RES* .
 if !(-e ice.restart_file) cp $SRCDIR/input_templates/$RES/ice.restart_file .
 
 ### Calculate processor tiling

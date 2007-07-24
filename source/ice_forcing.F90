@@ -20,6 +20,7 @@
 ! 2006 ECH: Fixed bugs, rearranged routines, edited comments, etc.
 !           Added NCAR ocean forcing file
 !           Converted to free source form (F90)
+! 2007: netcdf version of read_data added by Alison McLaren, Met Office
 !
 ! !INTERFACE:
 !
@@ -98,10 +99,12 @@
             sss_data
 
       character(char_len) :: & 
-         atm_data_type, & ! 'default', 'monthly', 'ncar', 'ecmwf', or 'LYq'
-         sss_data_type, & ! 'default', 'clim', or 'ncar'
-         sst_data_type, & ! 'default', 'clim', or 'ncar'
-         precip_units     ! 'mm_per_month', 'mm_per_sec', 'mks'
+         atm_data_format, & ! 'bin'=binary or 'nc'=netcdf
+         ocn_data_format, & ! 'bin'=binary or 'nc'=netcdf
+         atm_data_type,   & ! 'default', 'monthly', 'ncar', 'ecmwf', or 'LYq'
+         sss_data_type,   & ! 'default', 'clim', or 'ncar'
+         sst_data_type,   & ! 'default', 'clim', or 'ncar'
+         precip_units       ! 'mm_per_month', 'mm_per_sec', 'mks'
  
       character(char_len_long) :: & 
          atm_data_dir , & ! top directory for atmospheric data
@@ -617,6 +620,167 @@
       endif                     ! flag
 
       end subroutine read_data
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: read_data_nc - Read netcdf data needed for interpolation
+!
+! !INTERFACE:
+!
+      subroutine read_data_nc (flag, recd, yr, ixm, ixx, ixp, &
+                            maxrec, data_file, fieldname, field_data)
+!
+! !DESCRIPTION:
+!
+! If data is at the beginning of a one-year record, get data from
+!  the previous year.
+! If data is at the end of a one-year record, get data from the
+!  following year.
+! If no earlier data exists (beginning of fyear_init), then
+!  (1) For monthly data, get data from the end of fyear_final.
+!  (2) For more frequent data, let the ixm value equal the
+!      first value of the year.
+! If no later data exists (end of fyear_final), then
+!  (1) For monthly data, get data from the beginning of fyear_init.
+!  (2) For more frequent data, let the ipx value
+!      equal the last value of the year.
+! In other words, we assume persistence when daily or 6-hourly
+!   data is missing, and we assume periodicity when monthly data
+!   is missing.
+!
+! !REVISION HISTORY:
+!
+! Adapted by Alison McLaren, Met Office from read_data
+!
+! !USES:
+!
+      use ice_read_write
+      use ice_diagnostics, only: check_step
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      logical (kind=log_kind), intent(in) :: flag
+
+      integer (kind=int_kind), intent(in) :: &
+         recd                , & ! baseline record number
+         yr                  , & ! year of forcing data
+         ixm, ixx, ixp       , & ! record numbers of 3 data values
+                                 ! relative to recd
+         maxrec                  ! maximum record value
+
+      character (char_len_long) :: &
+         data_file               ! data file to be read
+
+      character (char_len), intent(in) :: &
+         fieldname               ! field name in netCDF file
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
+         intent(out) :: &
+         field_data              ! 2 values needed for interpolation
+!
+!EOP
+!
+#ifdef ncdf 
+      integer (kind=int_kind) :: &
+         nrec             , & ! record number to read
+         n2, n4           , & ! like ixm and ixp, but
+                              ! adjusted at beginning and end of data
+         arg              , & ! value of time argument in field_data
+         fid                  ! file id for netCDF routines
+
+
+      if (istep1 > check_step) dbug = .true.  !! debugging
+
+      if (my_task==master_task .and. (dbug)) then
+         write(nu_diag,*) '  ', trim(data_file)
+      endif
+
+      if (flag) then
+
+      !-----------------------------------------------------------------
+      ! Initialize record counters
+      ! (n2, n4 will change only at the very beginning or end of
+      !  a forcing cycle.)
+      !-----------------------------------------------------------------
+         n2 = ixm
+         n4 = ixp
+         arg = 0
+
+      !-----------------------------------------------------------------
+      ! read data
+      !-----------------------------------------------------------------
+
+         if (ixm /= 99) then
+         ! currently in first half of data interval
+            if (ixx <= 1) then
+               if (yr > fyear_init) then ! get data from previous year
+                  call file_year (data_file, yr-1)
+               else             ! yr = fyear_init, no prior data exists
+                  if (maxrec > 12) then ! extrapolate from first record
+                     if (ixx == 1) n2 = ixx
+                  else          ! go to end of fyear_final
+                     call file_year (data_file, fyear_final)
+                  endif
+               endif            ! yr > fyear_init
+            endif               ! ixx <= 1
+
+            call ice_open_nc (data_file, fid)
+
+            arg = 1
+            nrec = recd + n2
+
+            call ice_read_nc & 
+                 (fid, nrec, fieldname, field_data(:,:,arg,:), dbug)
+
+            if (ixx==1) call ice_close_nc(fid)
+         endif                  ! ixm ne 99
+
+         ! always read ixx data from data file for current year
+         call file_year (data_file, yr)
+         call ice_open_nc (data_file, fid)
+
+         arg = arg + 1
+         nrec = recd + ixx
+
+         call ice_read_nc & 
+              (fid, nrec, fieldname, field_data(:,:,arg,:), dbug)
+
+         if (ixp /= 99) then
+         ! currently in latter half of data interval
+            if (ixx==maxrec) then
+               if (yr < fyear_final) then ! get data from following year
+                  call ice_close_nc(fid)
+                  call file_year (data_file, yr+1)
+                  call ice_open_nc (data_file, fid)
+               else             ! yr = fyear_final, no more data exists
+                  if (maxrec > 12) then ! extrapolate from ixx
+                     n4 = ixx
+                  else          ! go to beginning of fyear_init
+                     call ice_close_nc(fid)
+                     call file_year (data_file, fyear_init)
+                     call ice_open_nc (data_file, fid)
+
+                  endif
+               endif            ! yr < fyear_final
+            endif               ! ixx = maxrec
+
+            arg = arg + 1
+            nrec = recd + n4
+
+            call ice_read_nc & 
+                 (fid, nrec, fieldname, field_data(:,:,arg,:), dbug)
+         endif                  ! ixp /= 99
+
+         call ice_close_nc(fid)
+
+      endif                     ! flag
+
+#else
+      field_data = c0 ! to satisfy intent(out) attribute
+#endif
+      end subroutine read_data_nc
 
 !=======================================================================
 !
@@ -1339,12 +1503,23 @@
       readm = .false.
       if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
 
-      call read_data (readm, 0, fyear, ixm, month, ixp, &
-                      maxrec, fsw_file, fsw_data)
-      call read_data (readm, 0, fyear, ixm, month, ixp, &
-                      maxrec, flw_file, cldf_data)
-      call read_data (readm, 0, fyear, ixm, month, ixp, &
-                      maxrec, rain_file, fsnow_data)
+      if (trim(atm_data_format) == 'bin') then
+         call read_data (readm, 0, fyear, ixm, month, ixp, &
+                         maxrec, fsw_file, fsw_data)
+         call read_data (readm, 0, fyear, ixm, month, ixp, &
+                         maxrec, flw_file, cldf_data)
+         call read_data (readm, 0, fyear, ixm, month, ixp, &
+                         maxrec, rain_file, fsnow_data)
+      else
+         call abort_ice ('nonbinary atm_data_format unavailable')
+!        The routine exists, for example:  
+!         call read_data_nc (readm, 0, fyear, ixm, month, ixp, &
+!                            maxrec, fsw_file, 'fsw', fsw_data)
+!         call read_data_nc (readm, 0, fyear, ixm, month, ixp, &
+!                            maxrec, flw_file, 'cldf',cldf_data)
+!         call read_data_nc (readm, 0, fyear, ixm, month, ixp, &
+!                            maxrec, rain_file,'prec',fsnow_data)
+      endif
 
       ! Interpolate to current time step
       call interpolate_data (fsw_data,   fsw)
@@ -1384,16 +1559,20 @@
       read6 = .false.
       if (istep==1 .or. oldrecnum /= recnum) read6 = .true.
 
-      call read_data (read6, 0, fyear, ixm, ixx, ixp, &
-                      maxrec, tair_file, Tair_data)
-      call read_data (read6, 0, fyear, ixm, ixx, ixp, &
-                      maxrec, uwind_file, uatm_data)
-      call read_data (read6, 0, fyear, ixm, ixx, ixp, &
-                      maxrec, vwind_file, vatm_data)
-      call read_data (read6, 0, fyear, ixm, ixx, ixp, &
-                      maxrec, rhoa_file, rhoa_data)
-      call read_data (read6, 0, fyear, ixm, ixx, ixp, &
-                      maxrec, humid_file, Qa_data)
+      if (trim(atm_data_format) == 'bin') then
+         call read_data (read6, 0, fyear, ixm, ixx, ixp, &
+                         maxrec, tair_file, Tair_data)
+         call read_data (read6, 0, fyear, ixm, ixx, ixp, &
+                         maxrec, uwind_file, uatm_data)
+         call read_data (read6, 0, fyear, ixm, ixx, ixp, &
+                         maxrec, vwind_file, vatm_data)
+         call read_data (read6, 0, fyear, ixm, ixx, ixp, &
+                         maxrec, rhoa_file, rhoa_data)
+         call read_data (read6, 0, fyear, ixm, ixx, ixp, &
+                         maxrec, humid_file, Qa_data)
+      else
+         call abort_ice ('nonbinary atm_data_format unavailable')
+      endif
 
       ! Interpolate
       call interpolate_data (Tair_data, Tair)
@@ -1563,10 +1742,14 @@
       readm = .false.
       if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
 
-      call read_clim_data (readm, 0,  ixm, month, ixp, &
-           rhoa_file, rhoa_data)
-      call read_clim_data (readm, 0,  ixm, month, ixp, &
-           rain_file, fsnow_data)
+      if (trim(atm_data_format) == 'bin') then
+         call read_clim_data (readm, 0,  ixm, month, ixp, &
+              rhoa_file, rhoa_data)
+         call read_clim_data (readm, 0,  ixm, month, ixp, &
+              rain_file, fsnow_data)
+      else
+         call abort_ice ('nonbinary atm_data_format unavailable')
+      endif
 
       ! Interpolate to current time step
       call interpolate_data (fsnow_data, fsnow)
@@ -1616,18 +1799,22 @@
       if (istep==1 .or. (recslot==1 .and. oldrecslot==2)) &
            readd = .true.
 
-      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
-                      tair_file, Tair_data)
-      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
-                      uwind_file, uatm_data)
-      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
-                      vwind_file, vatm_data)
-      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
-                      fsw_file, fsw_data)
-      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
-                      flw_file, flw_data)
-      call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
-                      humid_file, Qa_data)
+      if (trim(atm_data_format) == 'bin') then
+         call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                         tair_file, Tair_data)
+         call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                         uwind_file, uatm_data)
+         call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                         vwind_file, vatm_data)
+         call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                         fsw_file, fsw_data)
+         call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                         flw_file, flw_data)
+         call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                         humid_file, Qa_data)
+      else
+         call abort_ice ('nonbinary atm_data_format unavailable')
+      endif
 
       ! Interpolate
       call interpolate_data (Tair_data, Tair)
@@ -1817,7 +2004,7 @@
 
       imx = mod(recnum+maxrec-2,maxrec) + 1
       ixx = mod(recnum-1,       maxrec) + 1
-!      ipx = mod(recnum,         maxrec) + 1
+!     ipx = mod(recnum,         maxrec) + 1
 
       ! Compute interpolation coefficients
       ! If data is located at the end of the time interval, then the
@@ -1831,14 +2018,18 @@
       read6 = .false.
       if (istep==1 .or. oldrecnum .ne. recnum) read6 = .true.
 
-      call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
-                      tair_file, Tair_data)
-      call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
-                      uwind_file, uatm_data)
-      call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
-                      vwind_file, vatm_data)
-      call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
-                      humid_file, Qa_data)
+      if (trim(atm_data_format) == 'bin') then
+         call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
+                         tair_file, Tair_data)
+         call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
+                         uwind_file, uatm_data)
+         call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
+                         vwind_file, vatm_data)
+         call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
+                         humid_file, Qa_data)
+      else
+         call abort_ice ('nonbinary atm_data_format unavailable')
+      endif
 
       ! Interpolate
       call interpolate_data (Tair_data, Tair)
@@ -2460,13 +2651,10 @@
       use ice_domain, only: nblocks, distrb_info
       use ice_gather_scatter
       use ice_exit
-      use ice_work, only: work_g1, work1
+      use ice_work, only: work1
       use ice_read_write
-#if (defined CCSM) || (defined SEQ_MCT)
-      use shr_sys_mod, only : shr_sys_flush
-#endif
 #ifdef ncdf
-      include "netcdf.inc"
+      use netcdf
 #endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -2480,24 +2668,21 @@
         nrec, & ! record number for direct access
         nbits
 
-      character(len=16) :: &
-        vname(nfld) ! variable names to search for on netCDF file
+      character(char_len) :: &
+        vname(nfld) ! variable names to search for in file
       data vname /  &
            'T',      'S',      'hblt',  'U',     'V', &
            'dhdx',   'dhdy',   'qdp' /
 
       integer (kind=int_kind) :: &
-        fid        , & ! file id for netCDF routines
-        dimid      , & ! dimension id for netCDF file
-        varid(nfld), & ! variable id for field in netCDF file
-        ntim           ! number of times of data for netCDF file
+        fid        , & ! file id 
+        dimid      , & ! dimension id 
+        varid(nfld)    ! variable id 
 
       integer (kind=int_kind) :: &
-        status  , & ! status variable from netCDF routine 
-        nlat    , & ! number of longitudes of data for netCDF file
-        nlon    , & ! number of latitudes  of data for netCDF file
-        start(3), & ! start location for netCDF data reads
-        count(3)    ! number of data items to read in
+        status  , & ! status flag
+        nlat    , & ! number of longitudes of data
+        nlon        ! number of latitudes  of data
 
       if (my_task == master_task) then
 
@@ -2519,94 +2704,58 @@
 
       endif ! master_task
 
-#ifndef ncdf
-      nbits = 64
-      call ice_open (nu_forcing, sst_file, nbits)
+      if (trim(ocn_data_format) == 'nc') then
+#ifdef ncdf
+        if (my_task == master_task) then
+          call ice_open_nc(sst_file, fid)
 
-      nrec = 0
-      do n=1,nfld
-         do m=1,12
-            nrec = nrec + 1
-            call ice_read (nu_forcing, nrec, work1, 'rda8', dbug)
-            ocn_frc_m(:,:,:,n,m) = work1(:,:,:)
-         enddo               ! month loop
-      enddo               ! field loop
-      close (nu_forcing)
-#else
-      if (my_task == master_task) then
-        status = nf_open(sst_file, NF_NOWRITE, fid)
-        if (status /= NF_NOERR) then
-          call abort_ice ('ice: no netCDF file with ocn forcing data')
-        endif
-        write(nu_diag,*) 'Successful open of ocean forcing file'
+!          status = nf90_inq_dimid(fid,'nlon',dimid)
+          status = nf90_inq_dimid(fid,'ni',dimid)
+          status = nf90_inquire_dimension(fid,dimid,len=nlon)
+  
+!          status = nf90_inq_dimid(fid,'nlat',dimid)
+          status = nf90_inq_dimid(fid,'nj',dimid)
+          status = nf90_inquire_dimension(fid,dimid,len=nlat)
 
-!        status = nf_inq_dimid(fid,'nlon',dimid)
-        status = nf_inq_dimid(fid,'ni',dimid)
-        status = nf_inq_dimlen(fid,dimid,nlon)
+          if( nlon .ne. nx_global ) then
+            call abort_ice ('ice: ocn frc file nlon ne nx_global')
+          endif
+          if( nlat .ne. ny_global ) then
+            call abort_ice ('ice: ocn frc file nlat ne ny_global')
+          endif
 
-!        status = nf_inq_dimid(fid,'nlat',dimid)
-        status = nf_inq_dimid(fid,'nj',dimid)
-        status = nf_inq_dimlen(fid,dimid,nlat)
+        endif ! master_task
 
-        if( nlon .ne. nx_global ) then
-          call abort_ice ('ice: ocn frc file nlon ne nx_global')
-        endif
-        if( nlat .ne. ny_global ) then
-          call abort_ice ('ice: ocn frc file nlat ne ny_global')
-        endif
-
+        ! Read in ocean forcing data for all 12 months
         do n=1,nfld
-          status = nf_inq_varid(fid,vname(n),varid(n))
-          if (status /= NF_NOERR ) then
-            write(nu_diag,*) 'ice error- cannot find field ',vname(n)
-            call abort_ice ('ice: cannot find ocn frc field')
-          endif
-          write (nu_diag,*) 'Ocean forcing field found = ',vname(n)
-        enddo
-
-#if (defined CCSM) || (defined SEQ_MCT)
-        call shr_sys_flush(nu_diag)
-#endif
-
-        allocate (work_g1(nx_global,ny_global))
-
-      endif ! master_task
-
-      ! Read in ocean forcing data for all 12 months
-      do n=1,nfld
-        do m=1,12
+          do m=1,12
                 
-          if (my_task == master_task) then
-          start(1) = 1
-          start(2) = 1
-          start(3) = m
-          count(1) = nx_global
-          count(2) = ny_global
-          count(3) = 1
+            ! Note: netCDF does single to double conversion if necessary
+            call ice_read_nc(fid, m, vname(n), work1, dbug)
+            ocn_frc_m(:,:,:,n,m) = work1(:,:,:)
 
-          ! Note: netCDF does single to double conversion if necessary
-          status = nf_get_vara_double(fid,varid(n),start,count,work_g1)
-          if (status /= NF_NOERR ) then
-            write(nu_diag,*) 'could not read in ocn forcing field ', &
-                                vname(n)
-            call abort_ice ('ice read failed')
-          endif
+          enddo               ! month loop
+        enddo               ! field loop
 
-          endif ! master_task
-
-          call scatter_global(work1,work_g1,master_task, &
-                      distrb_info, field_loc_center, field_type_scalar) 
-          ocn_frc_m(:,:,:,n,m) = work1(:,:,:)
-
-        enddo               ! month loop
-      enddo               ! field loop
-
-      if (my_task == master_task) then
-        status = nf_close(fid)
-        deallocate (work_g1)
-      endif
-
+        if (my_task == master_task) status = nf90_close(fid)
 #endif
+
+      else  ! binary format
+
+        nbits = 64
+        call ice_open (nu_forcing, sst_file, nbits)
+
+        nrec = 0
+        do n=1,nfld
+           do m=1,12
+              nrec = nrec + 1
+              call ice_read (nu_forcing, nrec, work1, 'rda8', dbug)
+              ocn_frc_m(:,:,:,n,m) = work1(:,:,:)
+           enddo               ! month loop
+        enddo               ! field loop
+        close (nu_forcing)
+
+      endif
 
       end subroutine ocn_data_ncar_init
 
