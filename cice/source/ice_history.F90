@@ -1478,6 +1478,8 @@
 
         ! create file
         status = nf90_create(ncfile, nf90_clobber, ncid)
+        if (status /= nf90_noerr) call abort_ice( &
+                        'ice: Error creating history ncfile')
 
       !-----------------------------------------------------------------
       ! define dimensions
@@ -1623,7 +1625,7 @@
 
         do i = 1, ncoord
           status = nf90_def_var(ncid, coord_var(i)%short_name, nf90_float, &
-                                dimid, varid)
+                                dimid(1:2), varid)
           if (status /= nf90_noerr) call abort_ice( &
                'Error defining short_name for'//coord_var(i)%short_name)
           status = nf90_put_att(ncid,varid,'long_name',coord_var(i)%long_name)
@@ -1641,7 +1643,7 @@
         enddo
 
         ! Attributes for tmask defined separately, since it has no units
-        status = nf90_def_var(ncid, 'tmask', nf90_float, dimid, varid)
+        status = nf90_def_var(ncid, 'tmask', nf90_float, dimid(1:2), varid)
         if (status /= nf90_noerr) call abort_ice( &
                       'ice: Error defining var tmask')
         status = nf90_put_att(ncid,varid, 'long_name', 'ocean grid mask') 
@@ -1653,7 +1655,7 @@
 
         do i = 1, nvar
           status = nf90_def_var(ncid, var(i)%req%short_name, &
-                                nf90_float, dimid, varid)
+                                nf90_float, dimid(1:2), varid)
           if (status /= nf90_noerr) call abort_ice( &
                'Error defining variable'//var(i)%req%short_name)
           status = nf90_put_att(ncid,varid, 'long_name', var(i)%req%long_name)
