@@ -855,6 +855,7 @@
 !
       use ice_itd, only: hin_max, ilyr1, column_sum, &
                          column_conservation_check
+      use ice_state, only: nt_Tsfc
 
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1135,9 +1136,10 @@
          aicen(i,j,1) = aicen(i,j,1) + ai0new(m)
          aice0(i,j)   = aice0(i,j)   - ai0new(m)
          vicen(i,j,1) = vicen(i,j,1) + vi0new(m)
-         trcrn(i,j,1,1) = (Tf(i,j)*ai0new(m) + trcrn(i,j,1,1)*area1) &
-                      / aicen(i,j,1)
-         trcrn(i,j,1,1) = min (trcrn(i,j,1,1), c0)
+         trcrn(i,j,nt_Tsfc,1) = (Tf(i,j)*ai0new(m) &
+                              + trcrn(i,j,nt_Tsfc,1)*area1) &
+                                / aicen(i,j,1)
+         trcrn(i,j,nt_Tsfc,1) = min (trcrn(i,j,nt_Tsfc,1), c0)
 
       ! For other tracers, do something like this:
 !         trcrn(i,j,99,1) = (tnew(i,j)*ai0new(m) + trcrn(i,j,99,1)*area1) &

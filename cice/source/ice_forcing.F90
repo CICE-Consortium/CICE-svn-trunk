@@ -423,7 +423,7 @@
                                swidf (:,:,iblk),   &
                                potT  (:,:,iblk),   &
                                ANGLET(:,:,iblk),   &
-                               trcr  (:,:,1,iblk), &
+                               trcr  (:,:,nt_Tsfc,iblk), &
                                sst   (:,:,iblk),   &
                                aice  (:,:,iblk) )
 

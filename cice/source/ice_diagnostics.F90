@@ -558,7 +558,7 @@
                   hiavg(n) = vice(i,j,iblk)/paice(n)
                   hsavg(n) = vsno(i,j,iblk)/paice(n)
                endif
-               pTsfc(n) = trcr(i,j,1,iblk)         ! ice/snow sfc temperature
+               pTsfc(n) = trcr(i,j,nt_Tsfc,iblk)   ! ice/snow sfc temperature
                pevap(n) = evap(i,j,iblk)*dt/rhoi   ! sublimation/condensation
                pfswabs(n) = fswabs(i,j,iblk)       ! absorbed solar flux
                pflwout(n) = flwout(i,j,iblk)       ! outward longwave flux
@@ -1086,7 +1086,7 @@
             write(nu_diag,*) 'hin', vicen(i,j,n,iblk)/aicen(i,j,n,iblk)
             write(nu_diag,*) 'hsn', vsnon(i,j,n,iblk)/aicen(i,j,n,iblk)
          endif
-         write(nu_diag,*) 'Tsfcn',trcrn(i,j,1,n,iblk)
+         write(nu_diag,*) 'Tsfcn',trcrn(i,j,nt_Tsfc,n,iblk)
          write(nu_diag,*) ' '
       enddo                     ! n
 
