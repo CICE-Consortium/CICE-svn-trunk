@@ -145,6 +145,7 @@
 !
       use ice_state, only: nt_Tsfc, nt_volpn
       use ice_calendar, only: dt
+      use ice_domain_size, only: ntrcr
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions

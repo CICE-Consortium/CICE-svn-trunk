@@ -364,14 +364,12 @@
         i, j, k, n, it, &
         ij                    ! combined i/j horizontal index
 
-      real (kind=dbl_kind), dimension (nx_block*ny_block,ntrcr) :: &
+      real (kind=dbl_kind), dimension (:,:), allocatable :: &
         atrcr      ! sum of aicen*trcrn or vicen*trcrn or vsnon*trcrn
 
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
-
-      atrcr(:,:) = c0
 
       icells = 0
       do j = 1, ny_block
@@ -391,11 +389,16 @@
       enddo
       enddo
 
+
+      allocate (atrcr(icells,ntrcr))
+
       !-----------------------------------------------------------------
       ! Aggregate
       !-----------------------------------------------------------------
 
       do n = 1, ncat
+
+      atrcr(:,:) = c0
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1503,6 +1506,8 @@
 !          
 ! !USES:
 !
+      use ice_state, only: nt_Tsfc
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -1543,7 +1548,7 @@
       !-----------------------------------------------------------------
 
       do it = 1, ntrcr
-         if (it == 1) then      ! surface temperature
+         if (it == nt_Tsfc) then      ! surface temperature
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)
