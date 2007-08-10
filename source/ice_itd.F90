@@ -1854,6 +1854,8 @@
 !
 ! !USES:
 !
+      use ice_state, only: nt_Tsfc
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -2018,7 +2020,7 @@
             aicen(i,j,n) = c0
             vicen(i,j,n) = c0
             vsnon(i,j,n) = c0
-            trcrn(i,j,1,n) = Tocnfrz
+            trcrn(i,j,nt_Tsfc,n) = Tocnfrz
 
          enddo                  ! ij
 

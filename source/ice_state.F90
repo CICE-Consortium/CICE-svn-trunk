@@ -74,7 +74,6 @@
          dimension(nx_block,ny_block,ntrcr,max_blocks) :: &
          trcr      ! ice tracers
                    ! 1: surface temperature of ice/snow (C)
-                   ! 2: meltpond volume                 (m)
 
       !-----------------------------------------------------------------
       ! state of the ice for each category
@@ -107,7 +106,6 @@
          dimension (nx_block,ny_block,ntrcr,ncat,max_blocks) :: &
          trcrn     ! tracers
                    ! 1: surface temperature of ice/snow (C)
-                   ! 2: meltpond volume                 (m)
 
       integer (kind=int_kind), dimension (ntrcr) :: &
          trcr_depend   ! = 0 for ice area tracers
@@ -121,6 +119,17 @@
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,ntslyr,max_blocks) :: &
          esnon     ! energy of melting for each snow layer (J/m^2)
+
+      !-----------------------------------------------------------------
+      ! indices for tracers
+      ! The maximum index should be no greater than ntrcr to prevent
+      ! array out-of-bounds errors.
+      !-----------------------------------------------------------------
+
+      integer (kind=int_kind), parameter :: &
+         nt_Tsfc =  1, & ! ice/snow surface temperature
+         nt_pond =  1    ! melt pond volume - not used, for now
+!         nt_iage =  2    ! volume-weighted ice age
 
       !-----------------------------------------------------------------
       ! dynamic variables closely related to the state of the ice

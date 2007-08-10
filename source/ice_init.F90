@@ -576,16 +576,15 @@
          call abort_ice('ice_init: Not enough snow layers')
       endif
 
-      do iblk = 1, nblocks
-
       !-----------------------------------------------------------------
       ! Set tracer types
-!lipscomb - Do this later based on tracer indices, e.g. it_age
       !-----------------------------------------------------------------
 
-      trcr_depend(1) = 0   ! ice/snow surface temperature
-!!      trcr_depend(2) = 1   ! volume-weighted ice age
+      trcr_depend(nt_Tsfc)  = 0   ! ice/snow surface temperature
+      trcr_depend(nt_volpn) = 0   ! melt pond volume
+!      trcr_depend(nt_iage)  = 1   ! volume-weighted ice age
 
+      do iblk = 1, nblocks
 
       !-----------------------------------------------------------------
       ! Set state variables
@@ -669,6 +668,7 @@
 !
 ! !USES:
 !
+      use ice_state, only: nt_Tsfc
       use ice_therm_vertical, only: Tmlt
       use ice_itd, only: ilyr1, slyr1, hin_max
 !
@@ -748,7 +748,7 @@
             aicen(i,j,n) = c0
             vicen(i,j,n) = c0
             vsnon(i,j,n) = c0
-            trcrn(i,j,1,n) = Tf(i,j)  ! surface temperature
+            trcrn(i,j,nt_Tsfc,n) = Tf(i,j)  ! surface temperature
             if (ntrcr >= 2) then
                do it = 2, ntrcr
                   trcrn(i,j,it,n) = c0
@@ -822,10 +822,10 @@
                vsnon(i,j,n) =min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
 
                ! surface temperature
-               trcrn(i,j,1,n) = min(Tsmelt, Tair(i,j) - Tffresh) ! deg C
+               trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) ! deg C
 
                !lipscomb - volume-weighted test tracer
-!               trcrn(i,j,2,n) = c1
+!               trcrn(i,j,nt_iage,n) = c1
 
             enddo               ! ij
 
@@ -837,9 +837,10 @@
                   j = indxj(ij)
 
                   ! assume linear temp profile and compute enthalpy
-                  slope = Tf(i,j) - trcrn(i,j,1,n)
-                  Ti = trcrn(i,j,1,n) + slope*(real(k,kind=dbl_kind)-p5) &
-                                              /real(nilyr,kind=dbl_kind)
+                  slope = Tf(i,j) - trcrn(i,j,nt_Tsfc,n)
+                  Ti = trcrn(i,j,nt_Tsfc,n) &
+                     + slope*(real(k,kind=dbl_kind)-p5) &
+                             /real(nilyr,kind=dbl_kind)
 
                   eicen(i,j,ilyr1(n)+k-1) = &
                        -(rhoi * (cp_ice*(Tmlt(k)-Ti) &
@@ -856,7 +857,7 @@
                   i = indxi(ij)
                   j = indxj(ij)
 
-                  Ti = min(c0, trcrn(i,j,1,n))
+                  Ti = min(c0, trcrn(i,j,nt_Tsfc,n))
                   esnon(i,j,slyr1(n)+k-1) = -rhos*(Lfresh - cp_ice*Ti) &
                                             *vsnon(i,j,n) &
                                             /real(nslyr,kind=dbl_kind)

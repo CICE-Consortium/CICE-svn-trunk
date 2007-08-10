@@ -1112,7 +1112,7 @@
         ai = aice_init(i,j,iblk)
         aa(i,j,n_hi,    iblk)= aa(i,j,n_hi,    iblk) + vice (i,j,iblk) 
         aa(i,j,n_hs,    iblk)= aa(i,j,n_hs,    iblk) + vsno (i,j,iblk) 
-        aa(i,j,n_Tsfc,  iblk)= aa(i,j,n_Tsfc,  iblk) +trcr(i,j,1,iblk)
+        aa(i,j,n_Tsfc,  iblk)= aa(i,j,n_Tsfc,  iblk) + trcr (i,j,nt_Tsfc,iblk)
         aa(i,j,n_aice,  iblk)= aa(i,j,n_aice,  iblk) + aice (i,j,iblk)
         aa(i,j,n_uvel,  iblk)= aa(i,j,n_uvel,  iblk) + uvel (i,j,iblk)
         aa(i,j,n_vvel,  iblk)= aa(i,j,n_vvel,  iblk) + vvel (i,j,iblk)
@@ -1245,7 +1245,7 @@
                 aa(i,j,n_vicen+n-1,iblk) = aa(i,j,n_vicen+n-1,iblk)  &
                                                 + vicen(i,j,n,iblk)
                 aa(i,j,n_volpn+n-1,iblk) = aa(i,j,n_volpn+n-1,iblk)  &
-                                         + trcrn(i,j,ntrcr,n,iblk)
+                                         + trcrn(i,j,nt_volpn,n,iblk)
              endif              ! tmask
           enddo                 ! i
           enddo                 ! j
