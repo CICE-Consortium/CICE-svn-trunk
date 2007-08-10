@@ -74,6 +74,7 @@
          dimension(nx_block,ny_block,ntrcr,max_blocks) :: &
          trcr      ! ice tracers
                    ! 1: surface temperature of ice/snow (C)
+                   ! 2: meltpond volume                 (m)
 
       !-----------------------------------------------------------------
       ! state of the ice for each category
@@ -106,6 +107,7 @@
          dimension (nx_block,ny_block,ntrcr,ncat,max_blocks) :: &
          trcrn     ! tracers
                    ! 1: surface temperature of ice/snow (C)
+                   ! 2: meltpond volume                 (m)
 
       integer (kind=int_kind), dimension (ntrcr) :: &
          trcr_depend   ! = 0 for ice area tracers
