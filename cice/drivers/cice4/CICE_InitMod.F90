@@ -43,6 +43,7 @@
       use ice_itd
       use ice_kinds_mod
       use ice_mechred
+      use ice_meltponds
       use ice_ocean
       use ice_orbital
       use ice_shortwave
@@ -230,6 +231,9 @@
       call init_forcing_ocn(dt) ! initialize sss and sst from data
       call init_state           ! initialize the ice state
       if (restart) call restartfile      ! start from restart file
+
+      if (kpond == 1) call init_meltponds
+      call init_shortwave
       call init_diags           ! initialize diagnostic output points
       call init_history_therm   ! initialize thermo history variables
       call init_history_dyn     ! initialize dynamic history variables
