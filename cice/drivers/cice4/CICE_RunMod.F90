@@ -353,10 +353,6 @@
 ! 2D coupler variables (computed for each category, then aggregated)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         alvdrn      , & ! visible direct albedo           (fraction)
-         alidrn      , & ! near-ir direct albedo           (fraction)
-         alvdfn      , & ! visible diffuse albedo          (fraction)
-         alidfn      , & ! near-ir diffuse albedo          (fraction)
          fsensn      , & ! surface downward sensible heat     (W/m^2)
          flatn       , & ! surface downward latent heat       (W/m^2)
          fswabsn     , & ! shortwave absorbed by ice          (W/m^2)
@@ -596,8 +592,8 @@
                                  fpn,               hpn,                 &
                                  swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
                                  swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                                 alvdrn,            alidrn,              &
-                                 alvdfn,            alidfn,              &
+                                 alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
+                                 alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
                                  fswsfcn,           fswintn,             &
                                  fswthrun,          Sswabsn,             &
                                  Iswabsn)
@@ -613,8 +609,8 @@
                                  trcrn(:,:,nt_Tsfc,n,iblk),              &
                                  swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
                                  swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                                 alvdrn,            alidrn,              &
-                                 alvdfn,            alidfn,              &
+                                 alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
+                                 alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
                                  fswsfcn,           fswintn,             &
                                  fswthrun,          Iswabsn,             &
                                  apondn(:,:,n,iblk),hpondn(:,:,n,iblk))
@@ -724,7 +720,7 @@
             meltt_tmp = meltt(:,:,iblk) - meltt_old
 
             call compute_ponds(nx_block, ny_block, nghost,              &
-                               meltt_tmp,          melts_tmp,           &
+                               meltt_tmp, melts_tmp, frain(:,:,iblk),   &
                                aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
                                vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk),&
                                apondn(:,:,n,iblk), hpondn(:,:,n,iblk))
@@ -740,8 +736,8 @@
                             indxi,              indxj,                &
                             aicen_init(:,:,n,iblk),                   &
                             flw(:,:,iblk),      coszen(:,:,iblk),     &
-                            alvdrn,             alidrn,               &
-                            alvdfn,             alidfn,               &
+                            alvdrn(:,:,n,iblk), alidrn(:,:,n,iblk),   &
+                            alvdfn(:,:,n,iblk), alidfn(:,:,n,iblk),   &
                             strairxn,           strairyn,             &
                             fsensn,             flatn,                &
                             fswabsn,            flwoutn,              &

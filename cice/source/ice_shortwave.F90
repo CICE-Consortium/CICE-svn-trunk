@@ -53,6 +53,7 @@
       use ice_kinds_mod
       use ice_domain_size
       use ice_constants
+      use ice_blocks
 !
 !EOP
 !
@@ -91,6 +92,13 @@
 
       integer (kind=int_kind) :: &
          indx_exp          ! index for exponential lookup table
+
+      real (kind=dbl_kind), &
+         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         alvdrn      , & ! visible direct albedo           (fraction)
+         alidrn      , & ! near-ir direct albedo           (fraction)
+         alvdfn      , & ! visible diffuse albedo          (fraction)
+         alidfn          ! near-ir diffuse albedo          (fraction)
 
 !=======================================================================
 
