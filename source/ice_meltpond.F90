@@ -37,6 +37,96 @@
 !=======================================================================
 !BOP
 !
+! !ROUTINE: init_meltponds
+!
+! !DESCRIPTION:
+!
+!  Initialize melt ponds.
+! 
+! !REVISION HISTORY: same as module
+!
+! !INTERFACE:
+!
+      subroutine init_meltponds
+!
+! !USES:
+!
+      use ice_domain_size
+      use ice_blocks
+      use ice_domain
+      use ice_flux
+      use ice_state
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+!     local temporary variables
+
+      integer (kind=int_kind) :: &
+         icells          ! number of cells with aicen > puny
+
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
+         indxi, indxj    ! indirect indices for cells with aicen > puny
+
+      ! Local variables to keep track of melt for ponds
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         melts_old, &
+         meltt_old, &
+         melts_tmp, &
+         meltt_tmp
+
+      integer (kind=int_kind) :: i, j, ij, n, iblk, ilo, ihi, jlo, jhi
+
+      ! Need to compute albedos before init_cpl in CCSM
+
+      ilo = 1 + nghost
+      ihi = nx_block - nghost
+      jlo = 1 + nghost
+      jhi = ny_block - nghost
+
+      do iblk=1,nblocks
+      do n=1,ncat
+
+         icells = 0
+         do j = jlo, jhi
+         do i = ilo, ihi
+            if (aicen(i,j,n,iblk) > puny) then
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
+            endif
+         enddo               ! i
+         enddo               ! j
+
+      !-----------------------------------------------------------------
+      ! Melt pond initialization
+      !-----------------------------------------------------------------
+
+         apondn(:,:,n,iblk) = c0
+         hpondn(:,:,n,iblk) = c0
+
+         if (kpond == 1) then
+
+            melts_tmp = c0
+            meltt_tmp = c0
+
+            call compute_ponds(nx_block, ny_block, nghost,              &
+                               meltt_tmp, melts_tmp, frain(:,:,iblk),   &
+                               aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
+                               vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk),&
+                               apondn(:,:,n,iblk), hpondn(:,:,n,iblk))
+
+         endif
+
+      enddo
+      enddo
+
+      end subroutine init_meltponds
+
+!=======================================================================
+!BOP
+!
 ! !ROUTINE: 
 !
 ! !INTERFACE:

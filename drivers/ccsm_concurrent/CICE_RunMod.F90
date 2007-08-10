@@ -429,26 +429,6 @@
             enddo               ! j
 
       !-----------------------------------------------------------------
-      ! Melt pond initialization
-      !-----------------------------------------------------------------
-
-            apondn(:,:,n,iblk) = c0
-            hpondn(:,:,n,iblk) = c0
-
-            if (kpond == 1 .and. istep == 1) then
-
-               melts_tmp = melts(:,:,iblk)
-               meltt_tmp = meltt(:,:,iblk)
-
-               call compute_ponds(nx_block, ny_block, nghost,              &
-                                  meltt_tmp,          melts_tmp,           &
-                                  aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
-                                  vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk),&
-                                  apondn(:,:,n,iblk), hpondn(:,:,n,iblk))
-
-            endif
-
-      !-----------------------------------------------------------------
       ! Solar radiation: albedo and absorbed shortwave
       !-----------------------------------------------------------------
 

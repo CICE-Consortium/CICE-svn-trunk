@@ -39,6 +39,7 @@
       use ice_itd
       use ice_kinds_mod
       use ice_mechred
+      use ice_meltpond
       use ice_ocean
       use ice_orbital
       use ice_shortwave
@@ -82,9 +83,6 @@
 !
 ! !USES:
 !
-      use ice_domain_size
-      use ice_blocks
-      use ice_state
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -93,24 +91,6 @@
 !EOP
 !
 !     local temporary variables
-
-      integer (kind=int_kind) :: &
-         icells          ! number of cells with aicen > puny
-
-      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
-         indxi, indxj    ! indirect indices for cells with aicen > puny
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         alvdrni      , & 
-         alidrni      , &
-         alvdfni      , &
-         alidfni      , &
-         alvdrns      , & 
-         alidrns      , &
-         alvdfns      , &
-         alidfns
-
-      integer (kind=int_kind) :: i, j, ij, n, iblk, ilo, ihi, jlo, jhi
 
       call init_communicate( mpicom_ice ) ! initial setup for message passing
       call input_data           ! namelist variables
@@ -138,64 +118,8 @@
       call ice_prescribed_init
       if (restart) call restartfile      ! start from restart file
 
-      ! Need to compute albedos before init_cpl in CCSM
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
-      alvdr   (:,:,:) = c0
-      alidr   (:,:,:) = c0
-      alvdf   (:,:,:) = c0
-      alidf   (:,:,:) = c0
-
-      do iblk=1,nblocks
-      do n=1,ncat
-
-         icells = 0
-         do j = jlo, jhi
-         do i = ilo, ihi
-            if (aicen(i,j,n,iblk) > puny) then
-               icells = icells + 1
-               indxi(icells) = i
-               indxj(icells) = j
-            endif
-         enddo               ! i
-         enddo               ! j
-
-         call compute_albedos (nx_block,   ny_block, &
-                               icells,               &
-                               indxi,      indxj,    &
-                               aicen(:,:,n,iblk), vicen(:,:,n,iblk),    &
-                               vsnon(:,:,n,iblk), trcrn(:,:,1,n,iblk),  &
-                               alvdrni,           alidrni,  &
-                               alvdfni,           alidfni,  &
-                               alvdrns,           alidrns,  &
-                               alvdfns,           alidfns,  &
-                               alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),   &
-                               alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),   &
-                               apondn(:,:,n,iblk),hpondn(:,:,n,iblk))
-
-         ! Aggregate albedos for coupler
-
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
-            alvdf(i,j,iblk) = alvdf(i,j,iblk) &
-               + alvdfn(i,j,n,iblk)*aicen(i,j,n,iblk)
-            alidf(i,j,iblk) = alidf(i,j,iblk) &
-               + alidfn(i,j,n,iblk)*aicen(i,j,n,iblk)
-            alvdr(i,j,iblk) = alvdr(i,j,iblk) &
-               + alvdrn(i,j,n,iblk)*aicen(i,j,n,iblk)
-            alidr(i,j,iblk) = alidr(i,j,iblk) &
-               + alidrn(i,j,n,iblk)*aicen(i,j,n,iblk)
-         enddo
-
-      enddo
-      enddo
-
+      if (kpond == 1) call init_meltponds
+      call init_shortwave
       call init_diags           ! initialize diagnostic output points
       call init_history_therm   ! initialize thermo history variables
       call init_history_dyn     ! initialize dynamic history variables
