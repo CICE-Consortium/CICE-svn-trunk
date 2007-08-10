@@ -19,7 +19,6 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size
       use ice_constants
       use ice_fileunits
 !
@@ -132,7 +131,7 @@
 ! !INTERFACE:
 !
       subroutine compute_ponds(nx_block,ny_block,nghost,   &
-                               meltt, melts,               &
+                               meltt, melts,  frain,       &
                                aicen, vicen,  vsnon,       &
                                trcrn, apondn, hpondn)
 !
@@ -145,26 +144,31 @@
 ! !USES:
 !
       use ice_state, only: nt_Tsfc, nt_volpn
+      use ice_calendar, only: dt
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          nghost
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(in) :: &
          meltt, &
          melts, &
+         frain, &
          aicen, &
          vicen, &
          vsnon
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(inout) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(inout) :: &
          apondn, &
          hpondn
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr), intent(inout) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr), &
+         intent(inout) :: &
          trcrn
 
-      real (kind=dbl_kind), dimension (nx_block, ny_block) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
          volpn, &
          Tsfcn
 
@@ -210,7 +214,8 @@
          dTs = Timelt - Tsfcn(i,j)
 
          volpn(i,j) = volpn(i,j) + (c1-rfrac) &
-            * (meltt(i,j)*(rhoi/rhofresh) + melts(i,j)*(rhos/rhofresh))
+            * (meltt(i,j)*(rhoi/rhofresh) + melts(i,j)*(rhos/rhofresh) &
+            + frain(i,j)*dt/rhofresh)
 
 !        Use exponential decrease in pond volume DAB
          if (Tsfcn(i,j) .lt. Timelt-c2) then

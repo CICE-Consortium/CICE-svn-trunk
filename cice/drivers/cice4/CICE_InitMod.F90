@@ -43,7 +43,7 @@
       use ice_itd
       use ice_kinds_mod
       use ice_mechred
-      use ice_meltponds
+      use ice_meltpond
       use ice_ocean
       use ice_orbital
       use ice_shortwave

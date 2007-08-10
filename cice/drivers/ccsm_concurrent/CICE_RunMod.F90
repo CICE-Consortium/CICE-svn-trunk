@@ -488,7 +488,7 @@
                                  icells,                                 &
                                  indxi,             indxj,               &
                                  aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
-                                 vsnon(:,:,n,iblk),                      & 
+                                 vsnon(:,:,n,iblk),                      &
                                  trcrn(:,:,nt_Tsfc,n,iblk),              &
                                  swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
                                  swidr(:,:,  iblk), swidf(:,:,  iblk),   &
@@ -600,7 +600,7 @@
             meltt_tmp = meltt(:,:,iblk) - meltt_old
 
             call compute_ponds(nx_block, ny_block, nghost,              &
-                               meltt_tmp,          melts_tmp,           &
+                               meltt_tmp, melts_tmp, frain(:,:,iblk),   &
                                aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
                                vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk),&
                                apondn(:,:,n,iblk), hpondn(:,:,n,iblk))

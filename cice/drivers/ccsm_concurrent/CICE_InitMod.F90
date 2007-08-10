@@ -150,6 +150,7 @@
       call init_communicate     ! initial setup for message passing
       if (my_task == master_task) call shr_msg_dirio('ice')    ! redirect stdin/stdout
       call input_data           ! namelist variables
+      call init_fileunits       ! fileunits
       call init_work            ! work arrays
 
       call init_domain_blocks   ! set up block decomposition
@@ -176,6 +177,7 @@
 
       if (kpond == 1) call init_meltponds
       call init_shortwave
+      call init_diags           ! initialize diagnostic output points
       call init_history_therm   ! initialize thermo history variables
       call init_history_dyn     ! initialize dynamic history variables
 
