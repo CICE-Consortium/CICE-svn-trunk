@@ -396,9 +396,9 @@
       ! Aggregate
       !-----------------------------------------------------------------
 
-      do n = 1, ncat
-
       atrcr(:,:) = c0
+
+      do n = 1, ncat
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
