@@ -57,8 +57,9 @@
       timer_step,             &! time stepping
       timer_dynamics,         &! dynamics
       timer_advect,           &! horizontal advection
-      timer_thermo,           &! column
       timer_column,           &! column
+      timer_thermo,           &! thermodynamics
+      timer_sw,               &! radiative transfer
       timer_ridge,            &! ridging
       timer_catconv,          &! category conversions
       timer_couple,           &! coupling
@@ -69,8 +70,8 @@
       timer_cplsend,          &! send to coupled
       timer_sndrcv,           &! time between send to receive
 #endif
-      timer_bound,&              ! boundary updates
-      timer_tmp                ! for temporary timings
+      timer_bound              ! boundary updates
+!      timer_tmp                ! for temporary timings
 
 !-----------------------------------------------------------------------
 !
@@ -192,6 +193,7 @@
    call get_ice_timer(timer_advect,   'Advection',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_column,   'Column',   nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_thermo,   'Thermo',   nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_sw,       'Shortwave',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_ridge,    'Ridging',  nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_catconv,  'Cat Conv', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_couple,   'Coupling', nblocks,distrb_info%nprocs)
@@ -204,7 +206,6 @@
    call get_ice_timer(timer_sndrcv,   'Snd->Rcv', nblocks,distrb_info%nprocs)
 #endif
 !   call get_ice_timer(timer_tmp,      '         ',nblocks,distrb_info%nprocs)
-   call get_ice_timer(timer_tmp,      'shortwave',nblocks,distrb_info%nprocs)
 
 !-----------------------------------------------------------------------
 !EOC

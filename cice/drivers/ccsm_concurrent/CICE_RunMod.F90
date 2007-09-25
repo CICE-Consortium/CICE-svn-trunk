@@ -383,6 +383,8 @@
       ! For basic shortwave, simply set coszen to a constant between 0 and 1.
       !-----------------------------------------------------------------
 
+         call ice_timer_start(timer_sw)
+
          if (trim(shortwave) == 'dEdd') then ! delta Eddington
 
             ! identify ice-ocean cells
@@ -408,6 +410,8 @@
             coszen(:,:,iblk) = p5 ! sun above the horizon
          endif
 
+         call ice_timer_stop(timer_sw)
+
          do n = 1, ncat
 
       !-----------------------------------------------------------------
@@ -427,6 +431,8 @@
                endif
             enddo               ! i
             enddo               ! j
+
+            call ice_timer_start(timer_sw)
 
       !-----------------------------------------------------------------
       ! Solar radiation: albedo and absorbed shortwave
@@ -498,6 +504,8 @@
                                  fswthrun,          Iswabsn,             &
                                  apondn(:,:,n,iblk),hpondn(:,:,n,iblk))
             endif
+
+            call ice_timer_stop(timer_sw)
 
       !-----------------------------------------------------------------
       ! Atmosphere boundary layer calculation; compute coefficients
@@ -744,6 +752,8 @@
 
       call init_flux_ocn        ! initialize ocean fluxes sent to coupler
       
+      l_stop = .false.
+
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo

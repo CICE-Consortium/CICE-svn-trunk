@@ -60,7 +60,7 @@
  subroutine init_communicate
 
 ! !DESCRIPTION:
-!  This routine sets up MPI environment and defines ocean
+!  This routine sets up MPI environment and defines ice
 !  communicator.
 !
 ! !REVISION HISTORY:
@@ -81,7 +81,7 @@
 !-----------------------------------------------------------------------
 !
 !  initiate mpi environment and create communicator for internal
-!  ocean communications
+!  ice communications
 !
 !-----------------------------------------------------------------------
 
@@ -366,7 +366,7 @@
 
 ! !DESCRIPTION:
 !  This routine creates a separate communicator for a subset of
-!  processors under default ocean communicator.
+!  processors under default ice communicator.
 !
 !  this routine should be called from init_domain1 when the
 !  domain configuration (e.g. nprocs_btrop) has been determined
