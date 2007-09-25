@@ -539,7 +539,6 @@
          status,          & ! status output from netcdf routines
          ndim, nvar,      & ! sizes of netcdf file
          id,              & ! dimension index
-         varndim,         & ! no. of dimensions for field
          dimlen             ! size of dimension
 
       real (kind=dbl_kind) :: &
@@ -589,7 +588,7 @@
             ', varname = ',trim(varname)
           status = nf90_inquire(fid, nDimensions=ndim, nVariables=nvar)
           write(nu_diag,*) 'ndim= ',ndim,', nvar= ',nvar
-          do id=1,varndim
+          do id=1,ndim
             status = nf90_inquire_dimension(fid,id,name=dimname,len=dimlen)
             write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
          enddo
@@ -663,7 +662,6 @@
          status,          & ! status output from netcdf routines
          ndim, nvar,      & ! sizes of netcdf file
          id,              & ! dimension index
-         varndim,         & ! no. of dimensions for field
          dimlen             ! size of dimension      
 
       real (kind=dbl_kind) :: &
@@ -709,7 +707,7 @@
             ', varname = ',trim(varname)
           status = nf90_inquire(fid, nDimensions=ndim, nVariables=nvar)
           write(nu_diag,*) 'ndim= ',ndim,', nvar= ',nvar
-          do id=1,varndim
+          do id=1,ndim
             status = nf90_inquire_dimension(fid,id,name=dimname,len=dimlen)
             write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
          enddo

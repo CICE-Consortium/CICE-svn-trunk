@@ -377,8 +377,16 @@
                              (tarea(i,j,  iblk) + tarea(i+1,j,  iblk) &
                             + tarea(i,j+1,iblk) + tarea(i+1,j+1,iblk))
 
-            tarear(i,j,iblk) = c1/tarea(i,j,iblk)
-            uarear(i,j,iblk) = c1/uarea(i,j,iblk)
+            if (tarea(i,j,iblk) > c0) then
+               tarear(i,j,iblk) = c1/tarea(i,j,iblk)
+            else
+               tarear(i,j,iblk) = c0 ! possible on boundaries
+            endif
+            if (uarea(i,j,iblk) > c0) then
+               uarear(i,j,iblk) = c1/uarea(i,j,iblk)
+            else
+               uarear(i,j,iblk) = c0 ! possible on boundaries
+            endif
             tinyarea(i,j,iblk) = puny*tarea(i,j,iblk)
 
             dxhy(i,j,iblk) = p5*(HTE(i,j,iblk) - HTE(i-1,j,iblk))
@@ -830,6 +838,7 @@
 ! !REVISION HISTORY:
 !
 ! author: Mariana Vertenstein
+! 2007: Elizabeth Hunke upgraded to netcdf90 and cice ncdf calls
 !
 ! !USES:
 !
@@ -837,10 +846,8 @@
       use ice_domain_size
       use ice_gather_scatter
       use ice_scam, only : scmlat, scmlon, single_column
+      use netcdf
 !
-! !ARGUMENTS
-      include "netcdf.inc"
-
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
@@ -850,9 +857,6 @@
       
       integer (kind=int_kind) :: &
          ni, nj, ncid, dimid, varid, ier
-
-      real (kind=dbl_kind), dimension (nx_global, ny_global):: &
-         glob_in    ! global array
 
       character (len=char_len) :: &
          subname='latlongrid' ! subroutine name
@@ -887,13 +891,12 @@
 
       ! Determine dimension of domain file and check for consistency
 
-      if (my_task == master_task) then
-         call check_ret( nf_open(kmt_file, 0, ncid), subname )
+         call ice_open_nc(kmt_file, ncid))
 
-         call check_ret(nf_inq_dimid (ncid, 'ni', dimid), subname)
-         call check_ret(nf_inq_dimlen(ncid, dimid, ni), subname)
-         call check_ret(nf_inq_dimid (ncid, 'nj', dimid), subname)
-         call check_ret(nf_inq_dimlen(ncid, dimid, nj), subname)
+         call check_ret(nf90_inq_dimid (ncid, 'ni', dimid), subname)
+         call check_ret(nf90_inq_dimension(ncid, dimid, len=ni), subname)
+         call check_ret(nf90_inq_dimid (ncid, 'nj', dimid), subname)
+         call check_ret(nf90_inq_dimension(ncid, dimid, len=nj), subname)
 
          if (single_column) then
             if ((nx_global /= 1).or. (ny_global /= 1)) then
@@ -907,7 +910,6 @@
                call abort_ice ('latlongrid: ni,ny not equal to nx_global,ny_global')
             end if
          end if
-      end if
          
       ! Determine start/count to read in for either single column or global lat-lon grid
 
@@ -917,13 +919,11 @@
          allocate(pos_lons(ni))
          allocate(glob_grid(ni,nj))
 
-         call check_ret(nf_inq_varid(ncid, 'xc' , varid), subname)
-         call check_ret(nf_get_var_double(ncid, varid, glob_grid), subname)
+         call ice_read_global_nc(ncid, 1, 'xc', glob_grid, dbug)
          do i = 1,ni
             lons(i) = glob_grid(i,1)
          end do
-         call check_ret(nf_inq_varid(ncid, 'yc' , varid), subname)
-         call check_ret(nf_get_var_double(ncid, varid, glob_grid), subname)
+         call ice_read_global_nc(ncid, 1, 'yc', glob_grid, dbug)
          do j = 1,nj
             lats(j) = glob_grid(1,j) 
          end do
@@ -949,57 +949,31 @@
       
       ! Read in domain file for either single column or for global lat-lon grid
 
-      if (my_task == master_task) then
-         call check_ret(nf_inq_varid(ncid, 'xc' , varid), subname)
-         call check_ret(nf_get_vara_double(ncid, varid, start, count, glob_in), subname)
+         call ice_read_nc(ncid, 1, 'xc', TLON, dbug)
          do j = 1, ny_global
          do i = 1, nx_global
             ! Convert from degrees to radians
-            glob_in(i,j) = pi*glob_in(i,j)/180._dbl_kind 
+            TLON(i,j) = pi*TLON(i,j)/180._dbl_kind 
          end do
          end do 
-      end if
-      call scatter_global(TLON, glob_in, master_task, distrb_info, &
-                          field_loc_center, field_type_scalar)
-
-      if (my_task == master_task) then
-         call check_ret(nf_inq_varid(ncid, 'yc' , varid), subname)
-         call check_ret(nf_get_vara_double(ncid, varid, start, count, glob_in), subname)
+         call ice_read_nc(ncid, 1, 'yc', TLAT, dbug)
          do j = 1, ny_global
          do i = 1, nx_global
             ! Convert from degrees to radians
-            glob_in(i,j) = pi*glob_in(i,j)/180._dbl_kind 
+            TLAT(i,j) = pi*TLAT(i,j)/180._dbl_kind 
          end do
          end do 
-      end if
-      call scatter_global(TLAT, glob_in, master_task, distrb_info, &
-                          field_loc_center, field_type_scalar)
-
-      if (my_task == master_task) then
          ! Note that area read in from domain file is in km^2 - must first convert to m^2 and 
          ! then convert to radians^2
-         call check_ret(nf_inq_varid(ncid, 'area' , varid), subname)
-         call check_ret(nf_get_vara_double(ncid, varid, start, count, glob_in), subname)
+         call ice_read_nc(ncid, 1, 'area', tarea, dbug)
          do j = 1, ny_global
          do i = 1, nx_global
             ! Convert from km^2 to m^2
-            glob_in(i,j) = glob_in(i,j) * 1.e6_dbl_kind
+            tarea(i,j) = tarea(i,j) * 1.e6_dbl_kind
          end do
          end do 
-      end if
-      call scatter_global(tarea, glob_in, master_task, distrb_info, &
-                          field_loc_center, field_type_scalar)
-
-      if (my_task == master_task) then
-         call check_ret(nf_inq_varid(ncid, 'mask', varid), subname)
-         call check_ret(nf_get_vara_double(ncid, varid, start, count, glob_in), subname)
-      end if
-      call scatter_global(hm, glob_in, master_task, distrb_info, &
-                          field_loc_center, field_type_scalar)
-
-      if (my_task == master_task) then
-         call check_ret(nf_close(ncid), subname)
-      end if
+         call ice_read_nc(ncid, 1, 'mask', hm, dbug)
+         call ice_close(ncid)
 
       !-----------------------------------------------------------------
       ! Calculate various geometric 2d arrays
@@ -1055,7 +1029,40 @@
       call makemask
 
       end subroutine latlongrid
-#endif
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: check_ret
+!
+! !INTERFACE:
+      subroutine check_ret(ret, calling)
+!
+! !DESCRIPTION:
+!     Check return status from netcdf call
+!
+! !USES:
+        use netcdf
+! !ARGUMENTS:
+        implicit none
+        integer, intent(in) :: ret
+        character(len=*) :: calling
+!
+! !REVISION HISTORY:
+! author: Mariana Vertenstein
+! 2007: Elizabeth Hunke upgraded to netcdf90
+!
+!EOP
+!
+      if (ret /= NF90_NOERR) then
+         write(nu_diag,*)'netcdf error from ',trim(calling)
+         write(nu_diag,*)'netcdf strerror = ',trim(NF90_STRERROR(ret))
+         call abort_ice('ice ice_grid: netcdf check_ret error')
+      end if
+        
+      end subroutine check_ret
+
+#endif      
 !=======================================================================
 !BOP
 !
@@ -1770,37 +1777,6 @@
 
       end subroutine bsslzr 
 
-!=======================================================================
-!BOP
-!
-! !IROUTINE: check_ret
-!
-! !INTERFACE:
-      subroutine check_ret(ret, calling)
-!
-! !DESCRIPTION:
-!     Check return status from netcdf call
-!
-! !ARGUMENTS:
-        implicit none
-        integer, intent(in) :: ret
-        character(len=*) :: calling
-!
-        include "netcdf.inc"
-!
-! !REVISION HISTORY:
-! author: Mariana Vertenstein
-!
-!EOP
-!
-      if (ret /= NF_NOERR) then
-         write(nu_diag,*)'netcdf error from ',trim(calling)
-         write(nu_diag,*)'netcdf strerror = ',trim(NF_STRERROR(ret))
-         call abort_ice('ice ice_grid: netcdf check_ret error')
-      end if
-        
-      end subroutine check_ret
-      
 !=======================================================================
 
       end module ice_grid

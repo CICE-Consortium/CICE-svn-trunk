@@ -73,7 +73,7 @@
 !-----------------------------------------------------------------------
 !
 !  initiate mpi environment and create communicator for internal
-!  ocean communications
+!  ice communications
 !
 !-----------------------------------------------------------------------
 
@@ -112,8 +112,8 @@
  function get_num_procs()
 
 ! !DESCRIPTION:
-!  This function returns the number of processor assigned to
-!  the ocean model.
+!  This function returns the number of processors assigned to
+!  the ice model.
 !
 ! !REVISION HISTORY:
 !  same as module
@@ -352,7 +352,7 @@
 
 ! !DESCRIPTION:
 !  This routine creates a separate communicator for a subset of
-!  processors under default ocean communicator.
+!  processors under default ice communicator.
 !
 !  this routine should be called from init_domain1 when the
 !  domain configuration (e.g. nprocs_btrop) has been determined

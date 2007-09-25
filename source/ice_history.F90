@@ -2010,9 +2010,9 @@
 
       character (char_len) :: current_date,current_time
       character (len=16) :: c_aice
-      logical (kind=log_kind) :: dbug
+      logical (kind=log_kind) :: diag
 
-      dbug = .false.
+      diag = .false.
 
       if (my_task == master_task) then
 
@@ -2033,7 +2033,7 @@
         call ice_open(nu_history, ncfile, nbits) ! direct access
         open(nu_hdr,file=hdrfile,form='formatted',status='unknown') ! ascii
 
-!echmod call ice_write(nu_history, nrec, work, rda8 or ida4, dbug)
+!echmod call ice_write(nu_history, nrec, work, rda8 or ida4, diag)
 
         title  = 'sea ice model: Community Ice Code (CICE)'
         write (nu_hdr, 999) 'source',title,' '
@@ -2063,7 +2063,7 @@
         write (nu_hdr, 996) nrec,'tarea','area of T grid cells','m^2'
         write (nu_hdr, *  ) 'History variables: (left column = nrec)'
       endif  ! my_task = master_task
-      call ice_write(nu_history, nrec, tarea, 'rda4', dbug)
+      call ice_write(nu_history, nrec, tarea, 'rda4', diag)
 
       do n=1,avgsiz
         if (iout(n)) then
@@ -2095,7 +2095,7 @@
             endif
           endif
 
-          call ice_write(nu_history, nrec, aa(:,:,n,:), 'rda4', dbug)
+          call ice_write(nu_history, nrec, aa(:,:,n,:), 'rda4', diag)
 
         endif
       enddo
