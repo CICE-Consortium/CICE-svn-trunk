@@ -27,6 +27,7 @@
 #ifdef USE_ESMF
       use esmf_mod
 #endif
+      use ice_age
       use ice_calendar
       use ice_communicate
       use ice_diagnostics
@@ -230,10 +231,14 @@
 
       call init_forcing_ocn(dt) ! initialize sss and sst from data
       call init_state           ! initialize the ice state
-      if (restart) call restartfile      ! start from restart file
 
-      if (kpond == 1) call init_meltponds
-      call init_shortwave
+      if (restart) call restartfile     ! start from restart file (core)
+
+      ! tracers
+      if (tr_iage) call init_age        ! ice age tracer
+      if (tr_pond) call init_meltponds  ! melt ponds
+
+      call init_shortwave       ! initialize radiative transfer
       call init_diags           ! initialize diagnostic output points
       call init_history_therm   ! initialize thermo history variables
       call init_history_dyn     ! initialize dynamic history variables

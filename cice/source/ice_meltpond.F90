@@ -26,8 +26,9 @@
 !
       implicit none
 
-      integer (kind=int_kind) :: & ! defined in namelist 
-         kpond          ! 1 = explicit meltponds
+      logical (kind=log_kind) :: & 
+         tr_pond,       & ! if .true., use explicit meltponds
+         restart_pond     ! if .true., read meltponds restart file
 
 !=======================================================================
 
@@ -102,10 +103,14 @@
       ! Melt pond initialization
       !-----------------------------------------------------------------
 
+!         if (restart_pond) then
+!            call read_restart_ponds
+!         else
+
          apondn(:,:,n,iblk) = c0
          hpondn(:,:,n,iblk) = c0
 
-         if (kpond == 1) then
+         if (tr_pond) then
 
             melts_tmp = c0
             meltt_tmp = c0
@@ -117,6 +122,7 @@
                                apondn(:,:,n,iblk), hpondn(:,:,n,iblk))
 
          endif
+!         endif ! .not restart_pond
 
       enddo
       enddo

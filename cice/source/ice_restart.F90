@@ -137,15 +137,15 @@
 
       !-----------------------------------------------------------------
       ! state variables
+      ! Tsfc is the only tracer written to this file.  All other
+      ! tracers are written to their own dump/restart files.
       !-----------------------------------------------------------------
 
       do n=1,ncat
          call ice_write(nu_dump,0,aicen(:,:,n,:),'ruf8',diag)
          call ice_write(nu_dump,0,vicen(:,:,n,:),'ruf8',diag)
          call ice_write(nu_dump,0,vsnon(:,:,n,:),'ruf8',diag)
-         do it = 1, ntrcr
-            call ice_write(nu_dump,0,trcrn(:,:,it,n,:),'ruf8',diag)
-         enddo
+         call ice_write(nu_dump,0,trcrn(:,:,nt_Tsfc,n,:),'ruf8',diag)
       enddo
 
       do k=1,ntilyr
@@ -288,6 +288,8 @@
 
       !-----------------------------------------------------------------
       ! state variables
+      ! Tsfc is the only tracer read in this file.  All other
+      ! tracers are in their own dump/restart files.
       !-----------------------------------------------------------------
       do n=1,ncat
          if (my_task == master_task) &
@@ -297,9 +299,7 @@
          call ice_read(nu_restart,0,aicen(:,:,n,:),'ruf8',diag)
          call ice_read(nu_restart,0,vicen(:,:,n,:),'ruf8',diag)
          call ice_read(nu_restart,0,vsnon(:,:,n,:),'ruf8',diag)
-         do it = 1, ntrcr
-            call ice_read(nu_restart,0,trcrn(:,:,it,n,:),'ruf8',diag)
-         enddo
+         call ice_read(nu_restart,0,trcrn(:,:,nt_Tsfc,n,:),'ruf8',diag)
       enddo
 
       if (my_task == master_task) &

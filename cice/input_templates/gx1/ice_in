@@ -72,6 +72,13 @@
   , ns_boundary_type  = 'closed'
 /
 
+&tracer_nml
+    tr_iage      = .false.
+  , restart_age  = .false.
+  , tr_pond      = .false.
+  , restart_pond = .false.
+/
+
 &icefields_nml
     f_hi        = .true.
   , f_hs        = .true. 
@@ -149,6 +156,7 @@
   , f_aisnap    = .false.
   , f_trsig     = .true.
   , f_icepresent= .true.
+  , f_iage      = .false.
   , f_aicen     = .false.
   , f_vicen     = .false.
 /

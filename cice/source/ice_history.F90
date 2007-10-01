@@ -82,7 +82,7 @@
 
       integer (kind=int_kind), parameter :: &
          ncat_hist = ncat       , & ! number of ice categories written <= ncat
-         avgsiz = 76 + 3*ncat_hist  ! number of fields that can be written
+         avgsiz = 77 + 3*ncat_hist  ! number of fields that can be written
 
       real (kind=real_kind) :: time_beg, time_end ! bounds for averaging
 
@@ -153,10 +153,10 @@
            f_daidtt    = .true., f_daidtd     = .true., &
            f_mlt_onset = .true., f_frz_onset  = .true., &
            f_dardg1dt  = .true., f_dardg2dt   = .true., &
-           f_dvirdgdt  = .true. , &
+           f_dvirdgdt  = .true., f_iage       = .false.,&
            f_hisnap    = .true., f_aisnap     = .true., &
            f_aicen     = .true., f_vicen      = .true., &
-           f_volpn     = .false.,                       &
+           f_volpn     = .false., &           
            f_trsig     = .true., f_icepresent = .true.
 
       !---------------------------------------------------------------
@@ -204,7 +204,7 @@
            f_dvirdgdt              , &
            f_hisnap,    f_aisnap   , &
            f_aicen,     f_vicen    , &
-           f_volpn,                  &
+           f_iage,      f_volpn    , &
            f_trsig,     f_icepresent
 
       !---------------------------------------------------------------
@@ -288,9 +288,10 @@
            n_Tair       = 74, &
            n_trsig      = 75, &
            n_icepresent = 76, &
-           n_aicen      = 77, & ! n_aicen, n_vicen, n_volpn must be 
-           n_vicen      = 78 + ncat_hist - 1, & ! last in this list
-           n_volpn      = 78 + 2*ncat_hist - 1
+           n_iage       = 77, &
+           n_aicen      = 78, & ! n_aicen, n_vicen, n_volpn must be 
+           n_vicen      = 79 + ncat_hist - 1, & ! last in this list
+           n_volpn      = 79 + 2*ncat_hist - 1
 
 !=======================================================================
 
@@ -321,9 +322,10 @@
 ! !USES:
 !
       use ice_constants
-      use ice_calendar, only: yday
+      use ice_calendar, only: yday, days_per_year
       use ice_flux, only: mlt_onset, frz_onset
       use ice_restart, only: restart
+      use ice_age, only: tr_iage
       use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -419,6 +421,7 @@
       vname(n_aisnap    ) = 'aisnap'
       vname(n_trsig     ) = 'trsig'
       vname(n_icepresent) = 'ice_present'
+      vname(n_iage      ) = 'iage'
       do n = 1, ncat_hist
         write(nchar,'(i3.3)') n
         write(vname(n_aicen+n-1),'(a,a)') 'aice', trim(nchar) ! aicen
@@ -510,6 +513,7 @@
       vdesc(n_trsig     ) = 'internal stress tensor trace'
       vdesc(n_icepresent) = &
         'fraction of time-avg interval that any ice is present'
+      vdesc(n_iage      ) = 'sea ice age'
       do n = 1, ncat_hist
         write(nchar,'(i3)') n
 
@@ -606,6 +610,7 @@
       vunit(n_aisnap    ) = ' ' 
       vunit(n_trsig     ) = 'N/m^2'
       vunit(n_icepresent) = '1'
+      vunit(n_iage      ) = 'years'
       do n = 1, ncat_hist
         vunit(n_aicen+n-1) = ' ' ! aicen
         vunit(n_vicen+n-1) = 'm' ! vicen
@@ -706,6 +711,7 @@
       vcomment(n_aisnap    ) = 'none' 
       vcomment(n_trsig     ) = 'ice strength approximation' 
       vcomment(n_icepresent) = 'ice extent flag'
+      vcomment(n_iage      ) = 'none' 
       do n = 1, ncat_hist
         vcomment(n_aicen+n-1) = 'Ice range:' ! aicen
         vcomment(n_vicen+n-1) = 'none' ! vicen
@@ -735,6 +741,8 @@
          close (nu_nml)
          call abort_ice('ice: error reading icefields_nml')
       endif
+
+      if (.not. tr_iage) f_iage = .false.
 
       call broadcast_scalar (f_hi, master_task)
       call broadcast_scalar (f_hs, master_task)
@@ -815,6 +823,7 @@
       call broadcast_scalar (f_volpn, master_task)
       call broadcast_scalar (f_trsig, master_task)
       call broadcast_scalar (f_icepresent, master_task)
+      call broadcast_scalar (f_iage, master_task)
 
       !-----------------------------------------------------------------
       ! fill iout array with namelist values
@@ -898,6 +907,7 @@
       iout(n_aisnap    ) = f_aisnap
       iout(n_trsig     ) = f_trsig
       iout(n_icepresent) = f_icepresent
+      iout(n_iage      ) = f_iage
       do n = 1, ncat_hist
         iout(n_aicen+n-1) = f_aicen
         iout(n_vicen+n-1) = f_vicen
@@ -974,6 +984,8 @@
       cona(n_dardg1dt) = secday*c100    ! dardg1dt frac/s to %/day
       cona(n_dardg2dt) = secday*c100    ! dardg2dt frac/s to %/day
       cona(n_dvirdgdt) = mps_to_cmpdy   ! dvirdgdt m/s to cm/day
+
+      cona(n_iage)   = c1/(secday*days_per_year) ! seconds to years
 
 #if (defined CCSM) || (defined SEQ_MCT)
       ! CCSM conventions
@@ -1310,6 +1322,7 @@
                  aa(i,j,n_hisnap,iblk)    = spval
                  aa(i,j,n_aisnap,iblk)    = spval
                  aa(i,j,n_trsig,iblk )    = spval
+                 aa(i,j,n_iage,iblk )     = spval
               else
                  aa(i,j,n_divu,iblk)  = divu (i,j,iblk)*cona(n_divu)
                  aa(i,j,n_shear,iblk) = shear(i,j,iblk)*cona(n_shear)
@@ -1323,6 +1336,7 @@
                                           + stressp_2(i,j,iblk) &
                                           + stressp_3(i,j,iblk) &
                                           + stressp_4(i,j,iblk))
+                 aa(i,j,n_iage,iblk)  = trcr(i,j,nt_iage,iblk)*cona(n_iage)
             endif
            enddo                ! i
            enddo                ! j
