@@ -250,7 +250,7 @@
                                  rhosnwn,             rsnwn)
 
 
-               if (kpond == 0) then
+               if (.not. tr_pond) then
 
                ! set pond properties
                call shortwave_dEdd_set_pond(nx_block, ny_block,            &
@@ -488,7 +488,7 @@
 !
 ! !USES:
 !
-      use ice_meltpond, only: kpond
+      use ice_meltpond, only: tr_pond
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -611,7 +611,7 @@
          alvdfni(i,j) = alvdfni(i,j) - dalb_mlt*fT
          alidfni(i,j) = alidfni(i,j) - dalb_mlt*fT
 
-         if (kpond == 1) then
+         if (tr_pond) then
 
             albpnd(1) = wsfc(1) * (0.342 &
                       + exp(-20.512*hpondn(i,j) - 0.830))
@@ -627,7 +627,7 @@
             alidfni(i,j) = (1.-apondn(i,j))*alidfni(i,j) &
                         + apondn(i,j) * (albpnd(2)+albpnd(3)+albpnd(4))
 
-         endif ! kpond
+         endif ! tr_pond
 
          ! avoid negative albedos for thin, bare, melting ice
          alvdfni(i,j) = max (alvdfni(i,j), albocn)

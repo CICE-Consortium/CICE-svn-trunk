@@ -1,4 +1,4 @@
- !=======================================================================
+!=======================================================================
 !BOP
 !
 ! !MODULE:   ice_init - parameter and variable initializations
@@ -93,13 +93,16 @@
                                R_snw
       use ice_atmo, only: atmbndy, calc_strair
       use ice_transport_driver, only: advection
-      use ice_meltpond, only: kpond
+      use ice_age, only: tr_iage, restart_age
+      use ice_meltpond, only: tr_pond, restart_pond
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
 !
-      integer (kind=int_kind) :: nml_error ! namelist i/o error flag
+      integer (kind=int_kind) :: &
+        nml_error, & ! namelist i/o error flag
+        ntr           ! counter for number of tracers turned on
 
       character (len=6) :: chartmp
 
@@ -128,12 +131,15 @@
         atm_data_type,  atm_data_dir,    calc_strair,   precip_units, &
         oceanmixed_ice, sss_data_type,   sst_data_type, ocn_data_format, &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore, &
-        latpnt,         lonpnt,          dbug,          kpond,    &
+        latpnt,         lonpnt,          dbug,             &
 #ifndef SEQ_MCT
         runid,          runtype, &
 #endif
         incond_dir,     incond_file
 
+      namelist /tracer_nml/   &
+        tr_iage, restart_age, &
+        tr_pond, restart_pond
 
       !-----------------------------------------------------------------
       ! default values
@@ -180,7 +186,6 @@
       kstrength = 1          ! 1 = Rothrock 75 strength, 0 = Hibler 79
       krdg_partic = 1        ! 1 = new participation, 0 = Thorndike et al 75
       krdg_redist = 1        ! 1 = new redistribution, 0 = Hibler 80
-      kpond       = 0        ! 1 = explicit melt ponds
       advection  = 'remap'   ! incremental remapping transport scheme
       shortwave = 'default'  ! or 'dEdd' (delta-Eddington)
       albedo_type = 'default'! or 'constant'
@@ -221,11 +226,19 @@
       runtype = 'unknown'   ! run type, only used in CCSM
 #endif
 
+      ! extra tracers
+      tr_iage      = .false. ! ice age
+      restart_age  = .false. ! ice age restart
+      tr_pond      = .false. ! explicit melt ponds
+      restart_pond = .false. ! melt ponds restart
+
       !-----------------------------------------------------------------
       ! read from input file
       !-----------------------------------------------------------------
 
       call get_fileunit(nu_nml)
+
+      ! primary namelist
       if (my_task == master_task) then
          open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
          if (nml_error /= 0) then
@@ -235,16 +248,40 @@
          endif
          do while (nml_error > 0)
             read(nu_nml, nml=ice_nml,iostat=nml_error)
+            read(nu_nml, nml=tracer_nml,iostat=nml_error)
             if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
          end do
          if (nml_error == 0) close(nu_nml)
       endif
-      call release_fileunit(nu_nml)
-
       call broadcast_scalar(nml_error, master_task)
       if (nml_error /= 0) then
          call abort_ice('ice: error reading ice_nml')
       endif
+
+      ! tracer namelist
+      if (my_task == master_task) then
+         open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
+         if (nml_error /= 0) then
+            nml_error = -1
+         else
+            nml_error =  1
+         endif
+         do while (nml_error > 0)
+            read(nu_nml, nml=tracer_nml,iostat=nml_error)
+            if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
+         end do
+         if (nml_error == 0) close(nu_nml)
+      endif
+      call broadcast_scalar(nml_error, master_task)
+      if (nml_error /= 0) then
+         call abort_ice('ice: error reading tracer_nml')
+      endif
+
+      call release_fileunit(nu_nml)
+
+      !-----------------------------------------------------------------
+      ! set up diagnostics output and resolve conflicts
+      !-----------------------------------------------------------------
 
       if (trim(diag_type) == 'file') then
          call get_fileunit(nu_diag)
@@ -318,7 +355,6 @@
       call broadcast_scalar(kstrength,          master_task)
       call broadcast_scalar(krdg_partic,        master_task)
       call broadcast_scalar(krdg_redist,        master_task)
-      call broadcast_scalar(kpond,              master_task)
       call broadcast_scalar(advection,          master_task)
       call broadcast_scalar(shortwave,          master_task)
       call broadcast_scalar(albedo_type,        master_task)
@@ -348,10 +384,16 @@
       call broadcast_scalar(dbug,               master_task)
       call broadcast_array (latpnt(1:2),        master_task)
       call broadcast_array (lonpnt(1:2),        master_task)
-      call broadcast_scalar (runid,             master_task)
-      call broadcast_scalar (runtype,           master_task)
+      call broadcast_scalar(runid,              master_task)
+      call broadcast_scalar(runtype,            master_task)
 ! only master_task writes to file
 !      call broadcast_scalar(nu_diag),           master_task)
+
+      ! tracers
+      call broadcast_scalar(tr_iage,            master_task)
+      call broadcast_scalar(restart_age,        master_task)
+      call broadcast_scalar(tr_pond,            master_task)
+      call broadcast_scalar(restart_pond,       master_task)
 
       !-----------------------------------------------------------------
       ! spew
@@ -439,8 +481,6 @@
                                krdg_partic
          write(nu_diag,1020) ' krdg_redist               = ', &
                                krdg_redist
-         write(nu_diag,1020) ' kpond                     = ', &
-                               kpond
          write(nu_diag,1030) ' advection                 = ', &
                                trim(advection)
          write(nu_diag,1030) ' shortwave                 = ', &
@@ -504,6 +544,22 @@
          write (nu_diag,'(a30,2f8.2)') 'Diagnostic point 2: lat, lon =', &
                             latpnt(2), lonpnt(2)
 
+         ! tracers
+         write(nu_diag,1010) ' tr_iage                   = ', tr_iage
+         write(nu_diag,1010) ' restart_age               = ', restart_age
+         write(nu_diag,1010) ' tr_pond                   = ', tr_pond
+         write(nu_diag,1010) ' restart_pond              = ', restart_pond
+
+         ntr = 1 ! count tracers, starting with Tsfc = 1
+         if (tr_iage) ntr = ntr + 1
+         if (tr_pond) ntr = ntr + 1
+         if (ntr /= ntrcr) &
+            write(nu_diag,*) 'WARNING: ntrcr > number of tracers requested'
+         if (ntr > ntrcr) then
+            write(nu_diag,*) 'ntrcr < number of namelist tracers'
+            call abort_ice('ntrcr < number of namelist tracers')
+         endif                               
+
  1000    format (a30,2x,f9.2)  ! a30 to align formatted, unformatted statements
  1010    format (a30,2x,l6)    ! logical
  1020    format (a30,2x,i6)    ! integer
@@ -550,6 +606,8 @@
       use ice_state
       use ice_itd
       use ice_exit
+      use ice_age, only: tr_iage
+      use ice_meltpond, only: tr_pond
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -581,8 +639,8 @@
       !-----------------------------------------------------------------
 
       trcr_depend(nt_Tsfc)  = 0   ! ice/snow surface temperature
-      trcr_depend(nt_volpn) = 0   ! melt pond volume
-!      trcr_depend(nt_iage)  = 1   ! volume-weighted ice age
+      if (tr_iage) trcr_depend(nt_iage)  = 1   ! volume-weighted ice age
+      if (tr_pond) trcr_depend(nt_volpn) = 0   ! melt pond volume
 
       do iblk = 1, nblocks
 
@@ -823,10 +881,6 @@
 
                ! surface temperature
                trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) ! deg C
-
-               !lipscomb - volume-weighted test tracer
-!               trcrn(i,j,nt_iage,n) = c1
-
             enddo               ! ij
 
             ! ice energy

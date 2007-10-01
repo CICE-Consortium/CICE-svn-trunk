@@ -27,6 +27,7 @@
 !
 ! !USES:
 !
+      use ice_age
       use ice_atmo
       use ice_calendar
       use ice_communicate
@@ -208,7 +209,11 @@
 
          call ice_write_hist (dt)    ! history file
 
-         if (write_restart == 1) call dumpfile ! dumps for restarting
+         if (write_restart == 1) then
+            call dumpfile ! core variables for restarting
+            if (tr_iage) call write_restart_age
+!            if (tr_pond) call write_restart_ponds
+         endif
 
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 
@@ -452,7 +457,7 @@
                                  rhosnwn,             rsnwn)
 
 
-               if (kpond == 0) then
+               if (.not. tr_pond) then
 
                ! set pond properties
                call shortwave_dEdd_set_pond(nx_block, ny_block,            &
@@ -545,6 +550,19 @@
             endif
 
       !-----------------------------------------------------------------
+      ! Update ice age
+      ! This is further adjusted for freezing in the thermodynamics.
+      ! Melting does not alter the ice age.
+      !-----------------------------------------------------------------
+
+         if (tr_iage) then
+             call increment_age (nx_block, ny_block,      &
+                                 dt, icells,              &
+                                 indxi, indxj,            &
+                                 trcrn(:,:,nt_iage,n,iblk))
+         endif
+
+      !-----------------------------------------------------------------
       ! Vertical thermodynamics: Heat conduction, growth and melting.
       !----------------------------------------------------------------- 
 
@@ -561,7 +579,7 @@
                              dt,                  icells,              &
                              indxi,               indxj,               &
                              aicen(:,:,n,iblk),                        &
-                             trcrn(:,:,nt_Tsfc,n,iblk),                &
+                             trcrn(:,:,:,n,iblk),                &
                              vicen(:,:,n,iblk),   vsnon(:,:,n,iblk),   &
                              eicen  (:,:,il1:il2,iblk),                &
                              esnon  (:,:,sl1:sl2,iblk),                &
@@ -602,7 +620,7 @@
       ! Melt ponds
       !-----------------------------------------------------------------
 
-         if (kpond == 1) then
+         if (tr_pond) then
 
             melts_tmp = melts(:,:,iblk) - melts_old
             meltt_tmp = meltt(:,:,iblk) - meltt_old
@@ -899,8 +917,6 @@
                             eicen     (:,:,:,iblk), &
                             esnon     (:,:,:,iblk) )
 
-         call ice_timer_stop(timer_thermo) ! thermodynamics
-
       !-----------------------------------------------------------------
       ! For the special case of a single category, adjust the area and
       ! volume (assuming that half the volume change decreases the
@@ -976,6 +992,7 @@
       enddo                     ! iblk
 
 !      call ice_timer_stop(timer_tmp)  ! temporary timer
+      call ice_timer_stop(timer_thermo)  ! thermodynamics
       call ice_timer_stop(timer_column)  ! column physics
 
       end subroutine step_therm2

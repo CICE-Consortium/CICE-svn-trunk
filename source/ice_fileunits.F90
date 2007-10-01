@@ -49,6 +49,8 @@
          nu_forcing    , &  ! forcing data file
          nu_dump       , &  ! dump file for restarting
          nu_restart    , &  ! restart input file
+         nu_dump_age   , &  ! dump file for restarting ice age tracer
+         nu_restart_age, &  ! restart input file for ice age tracer
          nu_rst_pointer, &  ! pointer to latest restart file
          nu_history    , &  ! binary history output file
          nu_hdr        , &  ! header file for binary history output

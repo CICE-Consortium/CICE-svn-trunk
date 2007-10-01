@@ -3522,7 +3522,11 @@
 
          do nt = 1, ntrace
 
-            tm(:,:,nt) = c0
+            do j = jlo, jhi
+            do i = ilo, ihi
+               tm(i,j,nt) = c0
+            enddo
+            enddo
 
             if (tracer_type(nt)==1) then ! does not depend on other tracers
 

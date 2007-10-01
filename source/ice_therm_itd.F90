@@ -855,7 +855,8 @@
 !
       use ice_itd, only: hin_max, ilyr1, column_sum, &
                          column_conservation_check
-      use ice_state, only: nt_Tsfc
+      use ice_state, only: nt_Tsfc, nt_iage
+      use ice_age, only: tr_iage
 
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -935,6 +936,7 @@
          qi0av        , & ! mean value of qi0 for new ice (J kg-1)
          vsurp        , & ! volume of new ice added to each cat
          area1        , & ! starting fractional area of existing ice
+         vice1        , & ! starting volume of existing ice
          rnilyr       , & ! real(nilyr)
          dfresh       , & ! change in fresh
          dfsalt           ! change in fsalt
@@ -1099,8 +1101,17 @@
             j = indxj3(ij)
             m = indxij3(ij)
 
-            vicen(i,j,n) = vicen(i,j,n) + aicen(i,j,n)*hsurp(m)
-            vlyr(m) = hsurp(m)/rnilyr * aicen(i,j,n)
+            vsurp = hsurp(m) * aicen(i,j,n)
+
+            ! update ice age due to freezing (new ice age = dt)
+            if (tr_iage) trcrn(i,j,nt_iage,n)  &
+                   = (trcrn(i,j,nt_iage,n)*vicen(i,j,n) + dt*vsurp) &
+                   / (vicen(i,j,n) + vsurp)
+
+            ! update category volumes
+            vicen(i,j,n) = vicen(i,j,n) + vsurp
+            vlyr(m) = vsurp/rnilyr
+
          enddo                  ! ij
 
          do k = 1, nilyr
@@ -1133,6 +1144,7 @@
          m = indxij2(ij)
 
          area1 = aicen(i,j,1)   ! save
+         vice1 = vicen(i,j,1)   ! save
          aicen(i,j,1) = aicen(i,j,1) + ai0new(m)
          aice0(i,j)   = aice0(i,j)   - ai0new(m)
          vicen(i,j,1) = vicen(i,j,1) + vi0new(m)
@@ -1141,9 +1153,8 @@
                                 / aicen(i,j,1)
          trcrn(i,j,nt_Tsfc,1) = min (trcrn(i,j,nt_Tsfc,1), c0)
 
-      ! For other tracers, do something like this:
-!         trcrn(i,j,99,1) = (tnew(i,j)*ai0new(m) + trcrn(i,j,99,1)*area1) &
-!                         / aicen(i,j,1)
+         if (tr_iage) trcrn(i,j,nt_iage,n) = &
+            (trcrn(i,j,nt_iage,n)*vice1 + dt*vi0new(m))/vicen(i,j,1)
 
          vlyr(m)    = vi0new(m) / rnilyr
       enddo                     ! ij
