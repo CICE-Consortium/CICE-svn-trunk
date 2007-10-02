@@ -60,6 +60,7 @@
          year_init, & ! initial year
          nyr      , & ! year number
          idate    , & ! date (yyyymmdd)
+         idate0   , & ! initial date (yyyymmdd)
          sec      , & ! elapsed seconds into date
          npt      , & ! total number of time steps (dt)
          ndyn_dt  , & ! reduced timestep for dynamics: ndyn_dt=dt/dyn_dt
@@ -119,6 +120,9 @@
 !
 !EOP
 !
+      integer (kind=int_kind) :: &
+         k                          , &
+
       istep = 0         ! local timestep number
       time=istep0*dt    ! s
       yday=c0           ! absolute day number
@@ -142,6 +146,18 @@
       else
          call abort_ice('ice: year must have 360 or 365 days')
       endif
+
+      ! determine initial date (assumes namelist year_init, istep0 unchanged)     
+      sec = mod(time,secday)            ! elapsed seconds into date at
+                                        ! end of dt
+      tday = (time-sec)/secday + c1     ! absolute day number
+      yday = mod(tday-c1,dayyr) + c1    ! day of the year
+      do k = 1, 12
+        if (yday > real(daycal(k),kind=dbl_kind)) month = k
+      enddo
+      mday = int(yday) - daycal(month)  ! day of the month
+      nyr = int((tday-c1)/dayyr) + 1    ! year number
+      idate0 = (nyr+year_init-1)*10000 + month*100 + mday ! date (yyyymmdd) 
 
       end subroutine init_calendar
 

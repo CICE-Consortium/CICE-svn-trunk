@@ -71,9 +71,6 @@
       ! (10) Load iout array with the logical flag
       ! (11) Specify unit conversion factor if necessary
       ! (12) Increment the field in ice_write_hist
-      !
-      ! Note: Ice area and volume fields defined for ncat <= 10
-      ! To change this behavior, alter ncat_hist below.
       !---------------------------------------------------------------
 
       !---------------------------------------------------------------
@@ -1428,10 +1425,10 @@
       use ice_domain_size
       use ice_constants
       use ice_grid
-      use ice_calendar, only: time, sec, idate, nyr, month, daymo,  &
+      use ice_calendar, only: time, sec, idate, idate0, nyr, month, &
                               mday, write_ic, histfreq, histfreq_n, &
                               year_init, new_year, new_month, new_day, &
-                              dayyr
+                              dayyr, daymo
       use ice_work, only: work_g1, work_gr, work_gr3
       use ice_restart, only: lenstr, runid
       use ice_domain, only: distrb_info
@@ -1529,8 +1526,8 @@
         if (status /= nf90_noerr) call abort_ice( &
                       'ice Error: time long_name')
 
-        status = nf90_put_att(ncid,varid,'units', &
-                              'days since 0001-01-01 00:00:00')  ! for now
+        write(title,'(a,i8,a)') 'days since ',idate0,' 00:00:00'
+        status = nf90_put_att(ncid,varid,'units',title)
         if (status /= nf90_noerr) call abort_ice( &
                       'ice Error: time units')
 
@@ -1558,8 +1555,8 @@
                                 'boundaries for time-averaging interval')
           if (status /= nf90_noerr) call abort_ice( &
                         'ice Error: time_bounds long_name')
-          status = nf90_put_att(ncid,varid,'units', &
-                        'days since 0001-01-01 00:00:00')  ! for now
+          write(title,'(a,i8,a)') 'days since ',idate0,' 00:00:00'
+          status = nf90_put_att(ncid,varid,'units',title)
           if (status /= nf90_noerr) call abort_ice( &
                         'ice Error: time_bounds units')
         endif

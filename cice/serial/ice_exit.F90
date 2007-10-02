@@ -6,12 +6,7 @@
 !
 ! !DESCRIPTION:
 !
-! Exit the model.  Logically, this routine should be used for "normal"
-! exit of the ice model (called from CICE.F), but there would be only
-! one such call, and creating a subroutine here to accomplish that
-! causes circular dependencies due to the coupler exit strategy.  Hence
-! this module is used only to isolate CCSM "shr-" code calls during an
-! abort.
+! Exit the model.
 !
 ! !REVISION HISTORY:
 !  SVN:$Id: ice_exit.F 20 2006-09-01 17:09:49Z  $
