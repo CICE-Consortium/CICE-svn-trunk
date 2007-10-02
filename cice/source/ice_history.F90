@@ -1453,6 +1453,7 @@
 
       character (char_len) :: start_time,current_date,current_time
       character (len=16) :: c_aice
+      character (len=8) :: cdate
 
 ! Info for lat, lon and time invariant variables
 #if (defined CCSM) || (defined SEQ_MCT)
@@ -1526,7 +1527,9 @@
         if (status /= nf90_noerr) call abort_ice( &
                       'ice Error: time long_name')
 
-        write(title,'(a,i8,a)') 'days since ',idate0,' 00:00:00'
+        write(cdate,'(i8)') idate0
+        write(title,'(a,a,a,a,a,a,a,a)') 'days since ', &
+              cdate(1:4),'-',cdate(5:6),'-',cdate(7:8),' 00:00:00'
         status = nf90_put_att(ncid,varid,'units',title)
         if (status /= nf90_noerr) call abort_ice( &
                       'ice Error: time units')
@@ -1555,7 +1558,9 @@
                                 'boundaries for time-averaging interval')
           if (status /= nf90_noerr) call abort_ice( &
                         'ice Error: time_bounds long_name')
-          write(title,'(a,i8,a)') 'days since ',idate0,' 00:00:00'
+          write(cdate,'(i8)') idate0
+          write(title,'(a,a,a,a,a,a,a,a)') 'days since ', &
+                cdate(1:4),'-',cdate(5:6),'-',cdate(7:8),' 00:00:00'
           status = nf90_put_att(ncid,varid,'units',title)
           if (status /= nf90_noerr) call abort_ice( &
                         'ice Error: time_bounds units')
