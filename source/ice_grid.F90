@@ -486,7 +486,7 @@
       call ice_timer_start(timer_bound)
       bc = 'Neumann'
       call update_ghost_cells (ANGLET,             bndy_info, &
-                               field_loc_NEcorner, field_type_angle, bc)
+                               field_loc_center, field_type_angle, bc)
       call ice_timer_stop(timer_bound)
 
       call makemask          ! velocity mask, hemisphere masks

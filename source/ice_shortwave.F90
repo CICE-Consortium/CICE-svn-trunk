@@ -62,7 +62,7 @@
 
       character (len=char_len) :: &
          shortwave, & ! shortwave method, 'default' ('ccsm3') or 'dEdd'
-         albedo_type  ! albedo parameterization, 'default' ('ccsm3') or 'constant' 'ccsm3'
+         albedo_type  ! albedo parameterization, 'default' ('ccsm3') or 'constant'
       ! tuning parameters, set in namelist
       real (kind=dbl_kind) :: &
          R_ice , & ! sea ice tuning parameter; +1 > 1sig increase in albedo
@@ -76,22 +76,9 @@
          albsnowv, & ! cold snow albedo, visible
          albsnowi    ! cold snow albedo, near IR
 
-      ! storage for approximate exponential for Delta-Eddington;
-      ! approximate exp(-x) to better than c10/nmbexp relative
-      ! error for computational efficieny by evaluating table; 
-      ! numerical error is acceptible scientifically
-      integer (kind=int_kind), parameter :: & 
-         nmbexp = 1000000  ! number of exponential values in lookup table
-
-      real (kind=dbl_kind), parameter :: & 
-         argmax = c10      ! maximum argument of exponential
-
       real (kind=dbl_kind) :: &
          dx_exp           , & ! change in argument between table values
          exp_min              ! minimum exponential value
-
-      integer (kind=int_kind) :: &
-         indx_exp          ! index for exponential lookup table
 
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,ncat,max_blocks) :: &
@@ -1039,6 +1026,16 @@
 !
 !EOP
 !     
+      ! storage for approximate exponential for Delta-Eddington;
+      ! approximate exp(-x) to better than c10/nmbexp relative
+      ! error for computational efficieny by evaluating table; 
+      ! numerical error is acceptible scientifically
+      integer (kind=int_kind), parameter :: & 
+         nmbexp = 1000000  ! number of exponential values in lookup table
+
+      real (kind=dbl_kind), parameter :: & 
+         argmax = c10      ! maximum argument of exponential
+
       dx_exp = argmax / real(nmbexp,kind=dbl_kind)
       exp_min = exp(-argmax)
  
