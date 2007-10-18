@@ -232,7 +232,7 @@
          filename, filename0, string1, string2
 
       logical (kind=log_kind) :: &
-         diag, hit_eof
+         diag
 
       if (my_task == master_task) then
          open(nu_rst_pointer,file=pointer_file)
