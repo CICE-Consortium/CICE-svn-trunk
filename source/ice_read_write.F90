@@ -95,12 +95,18 @@
 ! !INTERFACE:
 !
       subroutine ice_read(nu,  nrec,  work, atype, diag, &
+                          field_loc, field_type, &
                           ignore_eof, hit_eof)
 !
 ! !DESCRIPTION:
 !
 ! Read an unformatted file and scatter to processors\\
-! work is a real array, atype indicates the format of the data
+! work is a real array, atype indicates the format of the data\\
+! If the optional variables field_loc and field_type are present \\
+! the ghost cells are filled using values from the global array.\\
+! This prevents them from being filled with zeroes or Neumann \\
+! conditions in land cells (subroutine update_ghost_cells need \\
+! not be called).
 !
 ! !REVISION HISTORY:
 !
@@ -122,12 +128,16 @@
            intent(out) :: &
            work              ! output array (real, 8-byte)
 
-      character (len=4) :: &
+      character (len=4), intent(in) :: &
            atype             ! format for input array
                              ! (real/integer, 4-byte/8-byte)
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), intent(in) :: &
            diag              ! if true, write diagnostic output
+
+      integer (kind=int_kind), optional, intent(in) :: &
+           field_loc, &      ! location of field on staggered grid
+           field_type        ! type of field (scalar, vector, angle)
 
       logical (kind=log_kind), optional, intent(in)  :: ignore_eof
       logical (kind=log_kind), optional, intent(out) :: hit_eof
@@ -210,11 +220,16 @@
 
     !-------------------------------------------------------------------
     ! Scatter data to individual processors.
-    ! NOTE: Ghost cells are not updated.
+    ! NOTE: Ghost cells are not updated unless field_loc is present.
     !-------------------------------------------------------------------
 
-      call scatter_global(work, work_g1, master_task, distrb_info, &
-                          field_loc_noupdate, field_type_noupdate)
+      if (present(field_loc)) then
+         call scatter_global(work, work_g1, master_task, distrb_info, &
+                             field_loc, field_type)
+      else
+         call scatter_global(work, work_g1, master_task, distrb_info, &
+                             field_loc_noupdate, field_type_noupdate)
+      endif
 
       deallocate(work_g1)
 
@@ -496,12 +511,17 @@
 !
 ! !INTERFACE:
 !
-      subroutine ice_read_nc(fid,  nrec,  varname, work,  diag)
+      subroutine ice_read_nc(fid,  nrec,  varname, work,  diag, &
+                             field_loc, field_type)
 !
 ! !DESCRIPTION:
 !
 ! Read a netCDF file and scatter to processors\\
-! work is a real array.
+! If the optional variables field_loc and field_type are present \\
+! the ghost cells are filled using values from the global array.\\
+! This prevents them from being filled with zeroes or Neumann \\
+! conditions in land cells (subroutine update_ghost_cells need \\
+! not be called).
 !
 ! !REVISION HISTORY:
 !
@@ -529,6 +549,10 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
            intent(out) :: &
            work              ! output array (real, 8-byte)
+
+      integer (kind=int_kind), optional, intent(in) :: &
+           field_loc, &      ! location of field on staggered grid
+           field_type        ! type of field (scalar, vector, angle)
 !
 !EOP
 !
@@ -601,11 +625,16 @@
 
     !-------------------------------------------------------------------
     ! Scatter data to individual processors.
-    ! NOTE: Ghost cells are not updated.
+    ! NOTE: Ghost cells are not updated unless field_loc is present.
     !-------------------------------------------------------------------
 
-      call scatter_global(work, work_g1, master_task, distrb_info, &
-                          field_loc_noupdate, field_type_noupdate)
+      if (present(field_loc)) then
+         call scatter_global(work, work_g1, master_task, distrb_info, &
+                             field_loc, field_type)
+      else
+         call scatter_global(work, work_g1, master_task, distrb_info, &
+                             field_loc_noupdate, field_type_noupdate)
+      endif
 
       deallocate(work_g1)
 

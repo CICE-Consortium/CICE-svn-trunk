@@ -309,20 +309,6 @@
          call rectgrid          ! regular rectangular grid
       endif
 
-      call ice_timer_start(timer_bound)
-      bc = 'Neumann'
-      call update_ghost_cells (HTN,                bndy_info, &
-                               field_loc_Nface,    field_type_scalar, bc)
-      call update_ghost_cells (HTE,                bndy_info, &
-                               field_loc_Eface,    field_type_scalar, bc)
-      call update_ghost_cells (ULAT,               bndy_info, &
-                               field_loc_NEcorner, field_type_scalar, bc)
-      call update_ghost_cells (ULON,               bndy_info, &
-                               field_loc_NEcorner, field_type_scalar, bc)
-      call update_ghost_cells (ANGLE,              bndy_info, &
-                               field_loc_NEcorner, field_type_angle,  bc)
-      call ice_timer_stop(timer_bound)
-
       !-----------------------------------------------------------------
       ! T-grid cell and U-grid cell quantities
       !-----------------------------------------------------------------
@@ -336,7 +322,6 @@
 
          do j = jlo, jhi
          do i = ilo, ihi
-
             dxt(i,j,iblk) = p5*(HTN(i,j,iblk) + HTN(i,j-1,iblk))
             dyt(i,j,iblk) = p5*(HTE(i,j,iblk) + HTE(i-1,j,iblk))
             
@@ -345,37 +330,7 @@
             dxu(i,j,iblk) = p5*(HTN(i,j,iblk) + HTN(i+1,j,iblk))
             dyu(i,j,iblk) = p5*(HTE(i,j,iblk) + HTE(i,j+1,iblk))
 
-         enddo
-         enddo
-
-      enddo                     ! iblk
-
-      call ice_timer_start(timer_bound)
-      bc = 'Neumann'
-      call update_ghost_cells (dxt,                bndy_info, &
-                               field_loc_center,   field_type_scalar, bc)
-      call update_ghost_cells (dyt,                bndy_info, &
-                               field_loc_center,   field_type_scalar, bc)
-      call update_ghost_cells (dxu,                bndy_info, &
-                               field_loc_NEcorner, field_type_scalar, bc)
-      call update_ghost_cells (dyu,                bndy_info, &
-                               field_loc_NEcorner, field_type_scalar, bc)
-      call update_ghost_cells (tarea,              bndy_info, &
-                               field_loc_center,   field_type_scalar, bc)
-      call ice_timer_stop(timer_bound)
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks_ice(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo, jhi
-         do i = ilo, ihi
-            uarea(i,j,iblk) = p25*  &
-                             (tarea(i,j,  iblk) + tarea(i+1,j,  iblk) &
-                            + tarea(i,j+1,iblk) + tarea(i+1,j+1,iblk))
+            uarea(i,j,iblk) = dxu(i,j,iblk)*dyu(i,j,iblk)
 
             if (tarea(i,j,iblk) > c0) then
                tarear(i,j,iblk) = c1/tarea(i,j,iblk)
@@ -391,9 +346,8 @@
 
             dxhy(i,j,iblk) = p5*(HTE(i,j,iblk) - HTE(i-1,j,iblk))
             dyhx(i,j,iblk) = p5*(HTN(i,j,iblk) - HTN(i,j-1,iblk))
-
-         enddo                  ! i
-         enddo                  ! j 
+         enddo
+         enddo
 
          do j = jlo, jhi+1
          do i = ilo, ihi+1
@@ -418,23 +372,28 @@
 
       call ice_timer_start(timer_bound)
       bc = 'Neumann'
-      call update_ghost_cells (uarea,            bndy_info, &
+      call update_ghost_cells (dxt,                bndy_info, &
+                               field_loc_center,   field_type_scalar, bc)
+      call update_ghost_cells (dyt,                bndy_info, &
+                               field_loc_center,   field_type_scalar, bc)
+      call update_ghost_cells (tarea,              bndy_info, &
+                               field_loc_center,   field_type_scalar, bc)
+      call update_ghost_cells (dxu,                bndy_info, &
                                field_loc_NEcorner, field_type_scalar, bc)
-
-      call update_ghost_cells (uarear,           bndy_info, &
+      call update_ghost_cells (dyu,                bndy_info, &
                                field_loc_NEcorner, field_type_scalar, bc)
-
-      call update_ghost_cells (tarear,           bndy_info, &
-                               field_loc_center, field_type_scalar, bc)
-
-      call update_ghost_cells (tinyarea,         bndy_info, &
-                               field_loc_center, field_type_scalar, bc)
-
-      call update_ghost_cells (dxhy,             bndy_info, &
-                               field_loc_center, field_type_vector, bc)
-
-      call update_ghost_cells (dyhx,             bndy_info, &
-                               field_loc_center, field_type_vector, bc)
+      call update_ghost_cells (uarea,              bndy_info, &
+                               field_loc_NEcorner, field_type_scalar, bc)
+      call update_ghost_cells (uarear,             bndy_info, &
+                               field_loc_NEcorner, field_type_scalar, bc)
+      call update_ghost_cells (tarear,             bndy_info, &
+                               field_loc_center,   field_type_scalar, bc)
+      call update_ghost_cells (tinyarea,           bndy_info, &
+                               field_loc_center,   field_type_scalar, bc)
+      call update_ghost_cells (dxhy,               bndy_info, &
+                               field_loc_center,   field_type_vector, bc)
+      call update_ghost_cells (dyhx,               bndy_info, &
+                               field_loc_center,   field_type_vector, bc)
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -447,7 +406,6 @@
       if (count(out_of_range) > 0) then
          call abort_ice ('ice: init_grid: ANGLE out of expected range')
       endif
-
 
       !-----------------------------------------------------------------
       ! Compute ANGLE on T-grid
@@ -568,18 +526,24 @@
       diag = .true.       ! write diagnostic info
 
       ! lat, lon, cell dimensions, angles
-      call ice_read(nu_grid,1,ULAT, 'rda8',diag)
-      call ice_read(nu_grid,2,ULON, 'rda8',diag)
-      call ice_read(nu_grid,3,HTN,  'rda8',diag)
-      call ice_read(nu_grid,4,HTE,  'rda8',diag)
-      call ice_read(nu_grid,7,ANGLE,'rda8',diag)
+      call ice_read(nu_grid,1,ULAT, 'rda8',diag, &
+                    field_loc_NEcorner, field_type_scalar)
+      call ice_read(nu_grid,2,ULON, 'rda8',diag, &
+                    field_loc_NEcorner, field_type_scalar)
+      call ice_read(nu_grid,3,HTN,  'rda8',diag, &
+                    field_loc_Nface, field_type_scalar)
+      call ice_read(nu_grid,4,HTE,  'rda8',diag, &
+                    field_loc_Eface, field_type_scalar)
+      call ice_read(nu_grid,7,ANGLE,'rda8',diag, &
+                    field_loc_NEcorner, field_type_scalar)
 
       ! fix units
       HTN(:,:,:) = HTN(:,:,:) * cm_to_m
       HTE(:,:,:) = HTE(:,:,:) * cm_to_m
 
       ! topography
-      call ice_read(nu_kmt,1,work1,'ida4',diag)
+      call ice_read(nu_kmt,1,work1,'ida4',diag, &
+                    field_loc_center, field_type_scalar)
 
       if (my_task == master_task) then
          close (nu_grid)
@@ -671,15 +635,20 @@
 
       ! lat, lon, cell dimensions, angles
       fieldname='ulat'
-      call ice_read_nc(fid_grid,1,fieldname,ULAT,diag)
+      call ice_read_nc(fid_grid,1,fieldname,ULAT,diag, &
+                       field_loc_NEcorner, field_type_scalar)
       fieldname='ulon'
-      call ice_read_nc(fid_grid,2,fieldname,ULON,diag)
+      call ice_read_nc(fid_grid,2,fieldname,ULON,diag, &
+                       field_loc_NEcorner, field_type_scalar)
       fieldname='htn'
-      call ice_read_nc(fid_grid,3,fieldname,HTN,diag)
+      call ice_read_nc(fid_grid,3,fieldname,HTN,diag, &
+                       field_loc_Nface, field_type_scalar)
       fieldname='hte'
-      call ice_read_nc(fid_grid,4,fieldname,HTE,diag)
+      call ice_read_nc(fid_grid,4,fieldname,HTE,diag, &
+                       field_loc_Eface, field_type_scalar)
       fieldname='angle'
-      call ice_read_nc(fid_grid,7,fieldname,ANGLE,diag)
+      call ice_read_nc(fid_grid,7,fieldname,ANGLE,diag, &
+                       field_loc_NEcorner, field_type_scalar)
 
       ! fix units
       HTN(:,:,:) = HTN(:,:,:) * cm_to_m
@@ -691,7 +660,8 @@
 
       ! topography
       fieldname='kmt'
-      call ice_read_nc(fid_kmt,1,fieldname,work1,diag)
+      call ice_read_nc(fid_kmt,1,fieldname,work1,diag, &
+                       field_loc_center, field_type_scalar)
 
       if (my_task == master_task) then
          call ice_close_nc(fid_grid)
@@ -787,7 +757,8 @@
            write (nu_diag,*) '** Reading pan-Arctic grid **'
 
       ! read topography
-      call ice_read(nu_grid,1,work1,'ida8',diag)
+      call ice_read(nu_grid,1,work1,'ida8',diag, &
+                    field_loc_center, field_type_scalar)
 
       hm(:,:,:) = c0
       do iblk = 1, nblocks
@@ -807,11 +778,16 @@
 
       ! read other grid quantities
 
-      call ice_read(nu_grid,2,ULAT, 'rda8',diag)
-      call ice_read(nu_grid,3,ULON, 'rda8',diag)
-      call ice_read(nu_grid,4,HTN,  'rda8',diag)
-      call ice_read(nu_grid,5,HTE,  'rda8',diag)
-      call ice_read(nu_grid,8,ANGLE,'rda8',diag)
+      call ice_read(nu_grid,2,ULAT, 'rda8',diag, &
+                    field_loc_NEcorner, field_type_scalar)
+      call ice_read(nu_grid,3,ULON, 'rda8',diag, &
+                    field_loc_NEcorner, field_type_scalar)
+      call ice_read(nu_grid,4,HTN,  'rda8',diag, &
+                    field_loc_Nface, field_type_scalar)
+      call ice_read(nu_grid,5,HTE,  'rda8',diag, &
+                    field_loc_Eface, field_type_scalar)
+      call ice_read(nu_grid,8,ANGLE,'rda8',diag, &
+                    field_loc_NEcorner, field_type_scalar)
 
       ! fix units
       HTN(:,:,:) = HTN(:,:,:)*cm_to_m
@@ -979,7 +955,7 @@
       ! Calculate various geometric 2d arrays
       ! The U grid (velocity) is not used when run with sequential CAM
       ! because we only use thermodynamic sea ice.  However, ULAT is used
-      ! in the defualt initialization of CICE so we calculate it here as 
+      ! in the default initialization of CICE so we calculate it here as 
       ! a "dummy" so that CICE will initialize with ice.  If a no ice
       ! initialization is OK (or desired) this can be commented out and
       ! ULAT will remain 0 as specified above.  ULAT is located at the
