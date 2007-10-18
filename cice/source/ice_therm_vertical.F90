@@ -436,7 +436,7 @@
       !-----------------------------------------------------------------
 
       do j = 1, ny_block
-      do i = 1, ny_block
+      do i = 1, nx_block
          trcrn(i,j,nt_Tsfc) = Tsfcn(i,j)
          if (tr_iage) trcrn(i,j,nt_iage) = iage(i,j)
       enddo
