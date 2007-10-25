@@ -622,9 +622,9 @@
       ! Check number of layers in ice and snow.
       !-----------------------------------------------------------------
 
-      if (nilyr < 2) then
+      if (nilyr < 1) then
          write (nu_diag,*) 'nilyr =', nilyr
-         write (nu_diag,*) 'Must have at least two ice layers'
+         write (nu_diag,*) 'Must have at least one ice layer'
          call abort_ice('ice_init: Not enough ice layers')
       endif
 
