@@ -56,11 +56,7 @@
       real (kind=dbl_kind), parameter, private :: &
          ferrmax = 1.0e-3_dbl_kind, & ! max allowed energy flux error (W m-2)
                                       ! recommend ferrmax < 0.01 W m-2
-#if (defined CCSM) || (defined SEQ_MCT)
-         hsnomin = 1.0e-4_dbl_kind    ! min thickness for which Tsno computed (m)
-#else
-         hsnomin = 1.0e-6_dbl_kind    ! min thickness for which Tsno computed (m)
-#endif
+         hsnomin = 1.0e-4_dbl_kind    ! min thickness for which Tsno computed
 
       character (char_len) :: stoplabel
 
@@ -2329,48 +2325,8 @@
             endif               ! l_cold
          endif                  ! l_snow
 
-      !-----------------------------------------------------------------
-      ! top ice layer
-      !-----------------------------------------------------------------
-
-         ki = 1
-         k  = ki + nslyr
-         kr = k + 1
-
-         if (.not.l_snow(m) .and. .not.l_cold(m)) then
-            sbdiag(ij,kr) = c0
-            spdiag(ij,kr) = -etai(ij,ki) * kh(m,k+1)
-            diag  (ij,kr) = c1 &
-                           + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
-            rhs   (ij,kr) = Tin_init(m,ki) &
-                           + etai(ij,ki)*Iswabs(i,j,ki) &
-                           + etai(ij,ki)*kh(m,k)*Tsf(m)
-         else
-            sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
-            spdiag(ij,kr) = -etai(ij,ki) * kh(m,k+1)
-            diag  (ij,kr) = c1 &
-                           + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
-            rhs   (ij,kr) = Tin_init(m,ki) &
-                           + etai(ij,ki)*Iswabs(i,j,ki)
-         endif
-
-      !-----------------------------------------------------------------
-      ! bottom ice layer
-      !-----------------------------------------------------------------
-
-         ki = nilyr
-         k  = ki + nslyr
-         kr = k + 1
-      
-         sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
-         spdiag(ij,kr) = c0
-         diag  (ij,kr) = c1  &
-                        + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
-         rhs   (ij,kr) = Tin_init(m,ki) &
-                        + etai(ij,ki)*Iswabs(i,j,ki) &
-                        + etai(ij,ki)*kh(m,k+1)*Tbot(i,j)
       enddo                     ! ij
-      
+
       !-----------------------------------------------------------------
       ! remaining snow layers
       !-----------------------------------------------------------------
@@ -2398,9 +2354,98 @@
 
       endif                     ! nslyr > 1
 
+
+      if (nilyr > 1) then
+
+         do ij = 1, isolve
+            i = indxii(ij)
+            j = indxjj(ij)
+            m = indxij(ij)
+
+      !-----------------------------------------------------------------
+      ! top ice layer
+      !-----------------------------------------------------------------
+
+            ki = 1
+            k  = ki + nslyr
+            kr = k + 1
+
+            if (l_snow(m) .or. l_cold(m)) then
+               sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
+               spdiag(ij,kr) = -etai(ij,ki) * kh(m,k+1)
+               diag  (ij,kr) = c1 &
+                              + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+               rhs   (ij,kr) = Tin_init(m,ki) &
+                              + etai(ij,ki)*Iswabs(i,j,ki)
+            else    ! no snow, warm surface
+               sbdiag(ij,kr) = c0
+               spdiag(ij,kr) = -etai(ij,ki) * kh(m,k+1)
+               diag  (ij,kr) = c1 &
+                              + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+               rhs   (ij,kr) = Tin_init(m,ki) &
+                              + etai(ij,ki)*Iswabs(i,j,ki) &
+                              + etai(ij,ki)*kh(m,k)*Tsf(m)
+            endif
+
+      !-----------------------------------------------------------------
+      ! bottom ice layer
+      !-----------------------------------------------------------------
+
+            ki = nilyr
+            k  = ki + nslyr
+            kr = k + 1
+      
+            sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
+            spdiag(ij,kr) = c0
+            diag  (ij,kr) = c1  &
+                           + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+            rhs   (ij,kr) = Tin_init(m,ki) &
+                           + etai(ij,ki)*Iswabs(i,j,ki) &
+                           + etai(ij,ki)*kh(m,k+1)*Tbot(i,j)
+
+         enddo                   ! ij
+      
+      else         ! nilyr = 1
+
+      !-----------------------------------------------------------------
+      ! single ice layer
+      !-----------------------------------------------------------------
+
+         ki = 1
+         k  = ki + nslyr
+         kr = k + 1
+
+         do ij = 1, isolve
+            i = indxii(ij)
+            j = indxjj(ij)
+            m = indxij(ij)
+
+            if (l_snow(m) .or. l_cold(m)) then
+               sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
+               spdiag(ij,kr) = c0
+               diag  (ij,kr) = c1                                 &
+                              + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+               rhs   (ij,kr) = Tin_init(m,ki)                     &
+                              + etai(ij,ki) * Iswabs(i,j,ki)      &
+                              + etai(ij,ki) * kh(m,k+1)*Tbot(i,j)
+            else   ! no snow, warm surface
+               sbdiag(ij,kr) = c0
+               spdiag(ij,kr) = c0
+               diag  (ij,kr) = c1                                 &
+                              + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+               rhs   (ij,kr) = Tin_init(m,ki)                     &
+                              + etai(ij,ki) * Iswabs(i,j,ki)      &
+                              + etai(ij,ki) * kh(m,k)*Tsf(m)      &
+                              + etai(ij,ki) * kh(m,k+1)*Tbot(i,j)
+            endif
+         enddo                     ! ij
+
+      endif        ! nilyr > 1
+
       !-----------------------------------------------------------------
       ! interior ice layers
       !-----------------------------------------------------------------
+
       do ki = 2, nilyr-1
            
          k  = ki + nslyr
