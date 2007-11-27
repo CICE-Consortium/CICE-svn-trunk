@@ -227,35 +227,6 @@
       call to_ugrid(tmass,umass)
       call to_ugrid(aice, aiu)
 
-!ECH WONDERS WHY THIS IS HERE:
-
-#if (defined CCSM) || (defined SEQ_MCT)
-      call update_ghost_cells (stressp_1,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressm_1,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stress12_1,              bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressp_2,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressm_2,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stress12_2,              bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressp_3,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressm_3,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stress12_3,              bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressp_4,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressm_4,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stress12_4,              bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-#endif
-
       do iblk = 1, nblocks
 
       !-----------------------------------------------------------------

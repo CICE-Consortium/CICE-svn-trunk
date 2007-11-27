@@ -765,7 +765,7 @@
                         isrc = nx_global + xoffset - this_block%i_glob(i)
                         if (isrc < 1) isrc = isrc + nx_global
                         if (isrc > nx_global) isrc = isrc - nx_global
-                        msg_buffer(i,j) = ARRAY_G(isrc,jsrc)
+                        msg_buffer(i,j) = isign * ARRAY_G(isrc,jsrc)
                      endif
                   end do
 
@@ -846,7 +846,7 @@
                         isrc = nx_global + xoffset - this_block%i_glob(i)
                         if (isrc < 1) isrc = isrc + nx_global
                         if (isrc > nx_global) isrc = isrc - nx_global
-                        ARRAY(i,j,dst_block) = ARRAY_G(isrc,jsrc)
+                        ARRAY(i,j,dst_block) = isign * ARRAY_G(isrc,jsrc)
                      endif
                   end do
 
@@ -1080,7 +1080,7 @@
                         isrc = nx_global + xoffset - this_block%i_glob(i)
                         if (isrc < 1) isrc = isrc + nx_global
                         if (isrc > nx_global) isrc = isrc - nx_global
-                        msg_buffer(i,j) = ARRAY_G(isrc,jsrc)
+                        msg_buffer(i,j) = isign * ARRAY_G(isrc,jsrc)
                      endif
                   end do
 
@@ -1161,7 +1161,7 @@
                         isrc = nx_global + xoffset - this_block%i_glob(i)
                         if (isrc < 1) isrc = isrc + nx_global
                         if (isrc > nx_global) isrc = isrc - nx_global
-                        ARRAY(i,j,dst_block) = ARRAY_G(isrc,jsrc)
+                        ARRAY(i,j,dst_block) = isign * ARRAY_G(isrc,jsrc)
                      endif
                   end do
 
@@ -1395,7 +1395,7 @@
                         isrc = nx_global + xoffset - this_block%i_glob(i)
                         if (isrc < 1) isrc = isrc + nx_global
                         if (isrc > nx_global) isrc = isrc - nx_global
-                        msg_buffer(i,j) = ARRAY_G(isrc,jsrc)
+                        msg_buffer(i,j) = isign * ARRAY_G(isrc,jsrc)
                      endif
                   end do
 
@@ -1476,7 +1476,7 @@
                         isrc = nx_global + xoffset - this_block%i_glob(i)
                         if (isrc < 1) isrc = isrc + nx_global
                         if (isrc > nx_global) isrc = isrc - nx_global
-                        ARRAY(i,j,dst_block) = ARRAY_G(isrc,jsrc)
+                        ARRAY(i,j,dst_block) = isign * ARRAY_G(isrc,jsrc)
                      endif
                   end do
 
