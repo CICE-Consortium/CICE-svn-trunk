@@ -296,22 +296,28 @@
               write(nu_diag,*) 'cat ',n, &
                                ' min/max area, vol ice, vol snow, Tsfc'
 
-         call ice_read(nu_restart,0,aicen(:,:,n,:),'ruf8',diag)
-         call ice_read(nu_restart,0,vicen(:,:,n,:),'ruf8',diag)
-         call ice_read(nu_restart,0,vsnon(:,:,n,:),'ruf8',diag)
-         call ice_read(nu_restart,0,trcrn(:,:,nt_Tsfc,n,:),'ruf8',diag)
+         call ice_read(nu_restart,0,aicen(:,:,n,:),'ruf8',diag, &
+                       field_loc_center, field_type_scalar)
+         call ice_read(nu_restart,0,vicen(:,:,n,:),'ruf8',diag, &
+                       field_loc_center, field_type_scalar)
+         call ice_read(nu_restart,0,vsnon(:,:,n,:),'ruf8',diag, &
+                       field_loc_center, field_type_scalar)
+         call ice_read(nu_restart,0,trcrn(:,:,nt_Tsfc,n,:),'ruf8',diag, &
+                       field_loc_center, field_type_scalar)
       enddo
 
       if (my_task == master_task) &
            write(nu_diag,*) 'min/max eicen for each layer'
       do k=1,ntilyr
-         call ice_read(nu_restart,0,eicen(:,:,k,:),'ruf8',diag)
+         call ice_read(nu_restart,0,eicen(:,:,k,:),'ruf8',diag, &
+                       field_loc_center, field_type_scalar)
       enddo
 
       if (my_task == master_task) &
            write(nu_diag,*) 'min/max esnon for each layer'
       do k=1,ntslyr
-         call ice_read(nu_restart,0,esnon(:,:,k,:),'ruf8',diag)
+         call ice_read(nu_restart,0,esnon(:,:,k,:),'ruf8',diag, &
+                       field_loc_center, field_type_scalar)
       enddo
 
       !-----------------------------------------------------------------
@@ -320,8 +326,10 @@
       if (my_task == master_task) &
            write(nu_diag,*) 'min/max velocity components'
 
-      call ice_read(nu_restart,0,uvel,'ruf8',diag)
-      call ice_read(nu_restart,0,vvel,'ruf8',diag)
+      call ice_read(nu_restart,0,uvel,'ruf8',diag, &
+                       field_loc_NEcorner, field_type_vector)
+      call ice_read(nu_restart,0,vvel,'ruf8',diag, &
+                       field_loc_NEcorner, field_type_vector)
 
       !-----------------------------------------------------------------
       ! fresh water, salt, and heat flux
@@ -329,9 +337,12 @@
       if (my_task == master_task) &
          write(nu_diag,*) 'min/max fresh water and heat flux components'
 
-      call ice_read(nu_restart,0,fresh,'ruf8',diag)
-      call ice_read(nu_restart,0,fsalt,'ruf8',diag)
-      call ice_read(nu_restart,0,fhocn,'ruf8',diag)
+      call ice_read(nu_restart,0,fresh,'ruf8',diag, &
+                    field_loc_center, field_type_scalar)
+      call ice_read(nu_restart,0,fsalt,'ruf8',diag, &
+                    field_loc_center, field_type_scalar)
+      call ice_read(nu_restart,0,fhocn,'ruf8',diag, &
+                    field_loc_center, field_type_scalar)
 
       !-----------------------------------------------------------------
       ! ocean stress
@@ -339,8 +350,10 @@
       if (my_task == master_task) &
            write(nu_diag,*) 'min/max ocean stress components'
 
-      call ice_read(nu_restart,0,strocnxT,'ruf8',diag)
-      call ice_read(nu_restart,0,strocnyT,'ruf8',diag)
+      call ice_read(nu_restart,0,strocnxT,'ruf8',diag, &
+                       field_loc_center, field_type_vector)
+      call ice_read(nu_restart,0,strocnyT,'ruf8',diag, &
+                       field_loc_center, field_type_vector)
 
       !-----------------------------------------------------------------
       ! internal stress
@@ -348,21 +361,33 @@
       if (my_task == master_task) write(nu_diag,*) &
            'internal stress components'
       
-      call ice_read(nu_restart,0,stressp_1,'ruf8',diag)
-      call ice_read(nu_restart,0,stressm_1,'ruf8',diag)
-      call ice_read(nu_restart,0,stress12_1,'ruf8',diag)
+      call ice_read(nu_restart,0,stressp_1,'ruf8',diag, &
+                    field_loc_center, field_type_vector)
+      call ice_read(nu_restart,0,stressm_1,'ruf8',diag, &
+                    field_loc_center, field_type_vector)
+      call ice_read(nu_restart,0,stress12_1,'ruf8',diag, &
+                    field_loc_center, field_type_vector)
 
-      call ice_read(nu_restart,0,stressp_2,'ruf8',diag)
-      call ice_read(nu_restart,0,stressm_2,'ruf8',diag)
-      call ice_read(nu_restart,0,stress12_2,'ruf8',diag)
+      call ice_read(nu_restart,0,stressp_2,'ruf8',diag, &
+                    field_loc_center, field_type_vector)
+      call ice_read(nu_restart,0,stressm_2,'ruf8',diag, &
+                    field_loc_center, field_type_vector)
+      call ice_read(nu_restart,0,stress12_2,'ruf8',diag, &
+                    field_loc_center, field_type_vector)
 
-      call ice_read(nu_restart,0,stressp_3,'ruf8',diag)
-      call ice_read(nu_restart,0,stressm_3,'ruf8',diag)
-      call ice_read(nu_restart,0,stress12_3,'ruf8',diag)
+      call ice_read(nu_restart,0,stressp_3,'ruf8',diag, &
+                    field_loc_center, field_type_vector)
+      call ice_read(nu_restart,0,stressm_3,'ruf8',diag, &
+                    field_loc_center, field_type_vector)
+      call ice_read(nu_restart,0,stress12_3,'ruf8',diag, &
+                    field_loc_center, field_type_vector)
 
-      call ice_read(nu_restart,0,stressp_4,'ruf8',diag)
-      call ice_read(nu_restart,0,stressm_4,'ruf8',diag)
-      call ice_read(nu_restart,0,stress12_4,'ruf8',diag)
+      call ice_read(nu_restart,0,stressp_4,'ruf8',diag, &
+                    field_loc_center, field_type_vector)
+      call ice_read(nu_restart,0,stressm_4,'ruf8',diag, &
+                    field_loc_center, field_type_vector)
+      call ice_read(nu_restart,0,stress12_4,'ruf8',diag, &
+                    field_loc_center, field_type_vector)
 
       !-----------------------------------------------------------------
       ! ice mask for dynamics
@@ -370,7 +395,8 @@
       if (my_task == master_task) &
            write(nu_diag,*) 'ice mask for dynamics'
 
-      call ice_read(nu_restart,0,work1,'ruf8',diag)
+      call ice_read(nu_restart,0,work1,'ruf8',diag, &
+                    field_loc_center, field_type_scalar)
 
       iceumask(:,:,:) = .false.
       do iblk = 1, nblocks
@@ -387,52 +413,13 @@
          if (my_task == master_task) &
               write(nu_diag,*) 'min/max sst, frzmlt'
 
-         call ice_read(nu_restart,0,sst,'ruf8',diag)
-         call ice_read(nu_restart,0,frzmlt,'ruf8',diag)
+         call ice_read(nu_restart,0,sst,'ruf8',diag, &
+                       field_loc_center, field_type_scalar)
+         call ice_read(nu_restart,0,frzmlt,'ruf8',diag, &
+                       field_loc_center, field_type_scalar)
       endif
 
       if (my_task == master_task) close(nu_restart)
-
-      !-----------------------------------------------------------------
-      ! update boundary conditions
-      !-----------------------------------------------------------------
-
-      call ice_timer_start(timer_bound)
-
-      call bound_state (aicen, trcrn, &
-                        vicen, vsnon, &
-                        eicen, esnon)
-
-      call update_ghost_cells (uvel,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (vvel,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressp_1,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressm_1,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stress12_1,              bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressp_2,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressm_2,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stress12_2,              bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressp_3,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressm_3,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stress12_3,              bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressp_4,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stressm_4,               bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (stress12_4,              bndy_info, &
-                               field_loc_NEcorner, field_type_vector)
-
-      call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
       ! Ensure ice is binned in correct categories
