@@ -391,7 +391,8 @@
          call LY_data
       elseif (trim(atm_data_type) == 'monthly') then
          call monthly_data
-!     else    ! default values set in init_flux
+      else    ! default values set in init_flux
+         return
       endif
 
       do iblk = 1, nblocks

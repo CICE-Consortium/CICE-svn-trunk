@@ -279,6 +279,11 @@
       call ice_timer_start(timer_bound)
       call update_ghost_cells(strength,         bndy_info, & 
                               field_loc_center, field_type_scalar)
+      ! velocities may have changed in evp_prep2
+      call update_ghost_cells(uvel,             bndy_info, & 
+                              field_loc_NEcorner, field_type_vector)
+      call update_ghost_cells(vvel,             bndy_info, & 
+                              field_loc_NEcorner, field_type_vector)
       call ice_timer_stop(timer_bound)
 
 
