@@ -40,7 +40,8 @@
 
 !lipscomb - Remove when there is again just one remapping routine
       logical, parameter ::    &
-         newremap = .false.    ! if true, call new remapping scheme
+!         newremap = .false.    ! if true, call new remapping scheme
+         newremap = .true.    ! if true, call new remapping scheme
                                ! if false, call old (CICE 3.14) scheme
 
       logical, parameter :: & ! if true, prescribe area flux across each edge  
@@ -321,18 +322,18 @@
 
     !-------------------------------------------------------------------
     ! Ghost cell updates for state variables.
+    ! Commented out because ghost cells are updated after cleanup_itd.
     !-------------------------------------------------------------------
+!      call ice_timer_start(timer_bound)
 
-      call ice_timer_start(timer_bound)
+!      call update_ghost_cells (aice0,            bndy_info,     &
+!                               field_loc_center, field_type_scalar)
 
-      call update_ghost_cells (aice0,            bndy_info,     &
-                               field_loc_center, field_type_scalar)
+!      call bound_state (aicen, trcrn,     &
+!                        vicen, vsnon,      &
+!                        eicen, esnon)
 
-      call bound_state (aicen, trcrn,     &
-                        vicen, vsnon,      &
-                        eicen, esnon)
-
-      call ice_timer_stop(timer_bound)
+!      call ice_timer_stop(timer_bound)
 
     !-------------------------------------------------------------------
     ! Ghost cell updates for ice velocity.
@@ -540,6 +541,18 @@
 
       enddo                     ! iblk
 
+    !-------------------------------------------------------------------
+    ! Ghost cell updates for state variables.
+    !-------------------------------------------------------------------
+
+      call ice_timer_start(timer_bound)
+
+      call bound_state (aicen, trcrn,     &
+                        vicen, vsnon,      &
+                        eicen, esnon)
+
+      call ice_timer_stop(timer_bound)
+
 !---!-------------------------------------------------------------------
 !---! Optional conservation and monotonicity checks
 !---!-------------------------------------------------------------------
@@ -702,12 +715,11 @@
 
     !-------------------------------------------------------------------
     ! Get ghost cell values of state variables.
-    ! (Assume velocities are already known for ghost cells.)
+    ! (Assume velocities are already known for ghost cells, also.)
     !-------------------------------------------------------------------
-
-      call bound_state (aicen, trcrn,     &
-                        vicen, vsnon,     &
-                        eicen, esnon)
+!      call bound_state (aicen, trcrn,     &
+!                        vicen, vsnon,     &
+!                        eicen, esnon)
 
     !-------------------------------------------------------------------
     ! Average corner velocities to edges.
@@ -784,6 +796,18 @@
 
       enddo                     ! iblk
  
+    !-------------------------------------------------------------------
+    ! Ghost cell updates for state variables.
+    !-------------------------------------------------------------------
+
+      call ice_timer_start(timer_bound)
+
+      call bound_state (aicen, trcrn,     &
+                        vicen, vsnon,      &
+                        eicen, esnon)
+
+      call ice_timer_stop(timer_bound)
+
       call ice_timer_stop(timer_advect)  ! advection 
 
       end subroutine transport_upwind

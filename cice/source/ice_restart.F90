@@ -422,6 +422,44 @@
       if (my_task == master_task) close(nu_restart)
 
       !-----------------------------------------------------------------
+      ! Ensure unused stress values in west and south ghost cells are 0
+      !-----------------------------------------------------------------
+      do iblk = 1, nblocks
+         do j = 1, nghost
+         do i = 1, nx_block
+            stressp_1 (i,j,iblk) = c0
+            stressp_2 (i,j,iblk) = c0
+            stressp_3 (i,j,iblk) = c0
+            stressp_4 (i,j,iblk) = c0
+            stressm_1 (i,j,iblk) = c0
+            stressm_2 (i,j,iblk) = c0
+            stressm_3 (i,j,iblk) = c0
+            stressm_4 (i,j,iblk) = c0
+            stress12_1(i,j,iblk) = c0
+            stress12_2(i,j,iblk) = c0
+            stress12_3(i,j,iblk) = c0
+            stress12_4(i,j,iblk) = c0
+         enddo
+         enddo
+         do j = 1, ny_block
+         do i = 1, nghost
+            stressp_1 (i,j,iblk) = c0
+            stressp_2 (i,j,iblk) = c0
+            stressp_3 (i,j,iblk) = c0
+            stressp_4 (i,j,iblk) = c0
+            stressm_1 (i,j,iblk) = c0
+            stressm_2 (i,j,iblk) = c0
+            stressm_3 (i,j,iblk) = c0
+            stressm_4 (i,j,iblk) = c0
+            stress12_1(i,j,iblk) = c0
+            stress12_2(i,j,iblk) = c0
+            stress12_3(i,j,iblk) = c0
+            stress12_4(i,j,iblk) = c0
+         enddo
+         enddo
+      enddo
+
+      !-----------------------------------------------------------------
       ! Ensure ice is binned in correct categories
       ! (should not be necessary unless restarting from a run with
       !  different category boundaries).

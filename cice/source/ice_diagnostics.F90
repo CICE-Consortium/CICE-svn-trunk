@@ -84,10 +84,10 @@
       ! printing info for routine print_state
       character (char_len) :: plabel
       integer (kind=int_kind), parameter :: &
-         check_step = 9999999, &
+         check_step = 99999999, &
          iblkp = 1, &
-         ip = 75, &
-         jp = 148, &
+         ip = 4, &
+         jp = 4, &
          mtask = 5
 
 !=======================================================================
@@ -1050,6 +1050,8 @@
 !
 ! !USES:
 !
+      use ice_blocks
+      use ice_domain
       use ice_domain_size
       use ice_state
       use ice_itd
@@ -1071,9 +1073,17 @@
 
       integer (kind=int_kind) :: n, k
 
+      type (block) :: &
+         this_block           ! block information for current block
+
+      this_block = get_block(blocks_ice(iblk),iblk)         
+
       write(nu_diag,*) plabel
       write(nu_diag,*) 'istep1, my_task, i, j, iblk:', &
                         istep1, my_task, i, j, iblk
+      write(nu_diag,*) 'Global i and j:', &
+                        this_block%i_glob(i), &
+                        this_block%j_glob(j) 
       write(nu_diag,*) ' '
       write(nu_diag,*) 'aice0', aice0(i,j,iblk)
       do n = 1, ncat

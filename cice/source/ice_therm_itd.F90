@@ -1153,8 +1153,8 @@
                                 / aicen(i,j,1)
          trcrn(i,j,nt_Tsfc,1) = min (trcrn(i,j,nt_Tsfc,1), c0)
 
-         if (tr_iage) trcrn(i,j,nt_iage,n) = &
-            (trcrn(i,j,nt_iage,n)*vice1 + dt*vi0new(m))/vicen(i,j,1)
+         if (tr_iage) trcrn(i,j,nt_iage,1) = &
+            (trcrn(i,j,nt_iage,1)*vice1 + dt*vi0new(m))/vicen(i,j,1)
 
          vlyr(m)    = vi0new(m) / rnilyr
       enddo                     ! ij

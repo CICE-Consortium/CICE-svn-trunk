@@ -172,20 +172,23 @@
       jhi = ny_block - nghost
 
        ! This call is needed only if dt changes during runtime.
+!echmod: automate this
 !      call set_evp_parameters (dt)
 
       !-----------------------------------------------------------------
       ! boundary updates
+      ! commented out because the ghost cells are freshly 
+      ! updated after cleanup_itd
       !-----------------------------------------------------------------
 
-      call ice_timer_start(timer_bound)
-      call update_ghost_cells(aice,              bndy_info, & 
-                              field_loc_center,  field_type_scalar)
-      call update_ghost_cells(vice,              bndy_info, & 
-                              field_loc_center,  field_type_scalar)
-      call update_ghost_cells(vsno,              bndy_info, &  
-                              field_loc_center,  field_type_scalar)
-      call ice_timer_stop(timer_bound)
+!      call ice_timer_start(timer_bound)
+!      call update_ghost_cells(aice,              bndy_info, & 
+!                              field_loc_center,  field_type_scalar)
+!      call update_ghost_cells(vice,              bndy_info, & 
+!                              field_loc_center,  field_type_scalar)
+!      call update_ghost_cells(vsno,              bndy_info, &  
+!                              field_loc_center,  field_type_scalar)
+!      call ice_timer_stop(timer_bound)
 
       do iblk = 1, nblocks
 

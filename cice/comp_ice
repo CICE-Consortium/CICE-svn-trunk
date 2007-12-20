@@ -3,8 +3,8 @@
 ### Change these to your own site and user directory! 
 ### You will need to create a Makefile Macro in bld/ and a run_ice script 
 ### in input_templates/.
-setenv SITE LANL.mauve
-#setenv SITE LANL.coyote
+#setenv SITE LANL.mauve
+setenv SITE LANL.coyote
 #setenv SITE LANL.epiphany
 #setenv SITE ORNL.jaguar
 #setenv SITE ORNL.phoenix
@@ -12,8 +12,8 @@ setenv SITE LANL.mauve
 #setenv SITE NCAR.bluesky32
 
 ### SYSTEM_USERDIR is predefined on ORNL machines
-setenv SYSTEM_USERDIR /scratch/eclare
-#setenv SYSTEM_USERDIR /scratch2/eclare/CICE.v4.0 # coyote
+#setenv SYSTEM_USERDIR /scratch/eclare
+setenv SYSTEM_USERDIR /scratch2/eclare/CICE.v4.0   # coyote
 #setenv SYSTEM_USERDIR /scratch1/eclare  # epiphany
 #setenv SYSTEM_USERDIR /scr/eclare       # kraken
 #setenv SYSTEM_USERDIR /ptmp/eclare      # bluesky32
@@ -40,13 +40,11 @@ setenv CAM_ICE  no        # set to yes for CAM runs (single column)
 setenv SHRDIR   csm_share # location of CCSM shared code
 setenv NETCDF   yes       # set to no if netcdf library is unavailable
 
-if ( $SITE == 'LANL.coyote' ) setenv NETCDF no
-
 ### Set SRCDIR and EXEDIR to your own paths!
 #setenv SRCDIR $HOME/cice.v4.0/cice
-setenv SRCDIR /net/bob4/eclare/CODE/CICE_release/CICE.v4.0/cice
-#setenv SRCDIR $SYSTEM_USERDIR/cice
-setenv EXEDIR $SYSTEM_USERDIR/cice/rundir4.1
+#setenv SRCDIR /net/bob4/eclare/CODE/CICE_release/CICE.v4.0/cice
+setenv SRCDIR /usr/projects/climate/eclare/CICE.v4.0/cice
+setenv EXEDIR $SYSTEM_USERDIR/rundir4
                                           if !(-d $EXEDIR) mkdir -p $EXEDIR
 setenv CBLD   $SRCDIR/bld
 setenv OBJDIR $EXEDIR/compile           ; if !(-d $OBJDIR) mkdir -p $OBJDIR
@@ -66,8 +64,6 @@ cd $SRCDIR/source
 
 cd $EXEDIR
 
-#if !(-e grid.nc)    cp $SRCDIR/input_templates/$RES/global_$RES.grid.nc grid.nc
-#if !(-e kmt.nc)     cp $SRCDIR/input_templates/$RES/global_$RES.kmt.nc kmt.nc
 if !(-e grid)    cp $SRCDIR/input_templates/$RES/global_$RES.grid grid
 if !(-e kmt)     cp $SRCDIR/input_templates/$RES/global_$RES.kmt kmt
 if !(-e ice_in)  cp $SRCDIR/input_templates/$RES/ice_in .
