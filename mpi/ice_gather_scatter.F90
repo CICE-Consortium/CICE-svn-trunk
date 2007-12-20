@@ -888,6 +888,42 @@
      deallocate(rcv_request, rcv_status)
    endif
 
+   !-----------------------------------------------------------------
+   ! Ensure unused ghost cell values are 0
+   !-----------------------------------------------------------------
+
+   if (field_loc == field_loc_noupdate) then
+      do n=1,nblocks_tot
+         dst_block = dst_dist%local_block(n)
+         this_block = get_block(n,n)
+
+         ! north edge
+         do j = this_block%jhi+1,ny_block
+         do i = 1, nx_block
+            ARRAY (i,j,dst_block) = c0
+         enddo
+         enddo
+         ! east edge
+         do j = 1, ny_block
+         do i = this_block%ihi+1,nx_block
+            ARRAY (i,j,dst_block) = c0
+         enddo
+         enddo
+         ! south edge
+         do j = 1, this_block%jlo-1
+         do i = 1, nx_block
+            ARRAY (i,j,dst_block) = c0
+         enddo
+         enddo
+         ! west edge
+         do j = 1, ny_block
+         do i = 1, this_block%ilo-1
+            ARRAY (i,j,dst_block) = c0
+         enddo
+         enddo
+      enddo
+   endif
+
 !-----------------------------------------------------------------------
 
  end subroutine scatter_global_dbl
@@ -1203,6 +1239,42 @@
      deallocate(rcv_request, rcv_status)
    endif
 
+   !-----------------------------------------------------------------
+   ! Ensure unused ghost cell values are 0
+   !-----------------------------------------------------------------
+
+   if (field_loc == field_loc_noupdate) then
+      do n=1,nblocks_tot
+         dst_block = dst_dist%local_block(n)
+         this_block = get_block(n,n)
+
+         ! north edge
+         do j = this_block%jhi+1,ny_block
+         do i = 1, nx_block
+            ARRAY (i,j,dst_block) = 0._real_kind
+         enddo
+         enddo
+         ! east edge
+         do j = 1, ny_block
+         do i = this_block%ihi+1,nx_block
+            ARRAY (i,j,dst_block) = 0._real_kind
+         enddo
+         enddo
+         ! south edge
+         do j = 1, this_block%jlo-1
+         do i = 1, nx_block
+            ARRAY (i,j,dst_block) = 0._real_kind
+         enddo
+         enddo
+         ! west edge
+         do j = 1, ny_block
+         do i = 1, this_block%ilo-1
+            ARRAY (i,j,dst_block) = 0._real_kind
+         enddo
+         enddo
+      enddo
+   endif
+
 !-----------------------------------------------------------------------
 
  end subroutine scatter_global_real
@@ -1516,6 +1588,42 @@
        call MPI_WAITALL(nrecvs, rcv_request, rcv_status, ierr)
 
      deallocate(rcv_request, rcv_status)
+   endif
+
+   !-----------------------------------------------------------------
+   ! Ensure unused ghost cell values are 0
+   !-----------------------------------------------------------------
+
+   if (field_loc == field_loc_noupdate) then
+      do n=1,nblocks_tot
+         dst_block = dst_dist%local_block(n)
+         this_block = get_block(n,n)
+
+         ! north edge
+         do j = this_block%jhi+1,ny_block
+         do i = 1, nx_block
+            ARRAY (i,j,dst_block) = 0
+         enddo
+         enddo
+         ! east edge
+         do j = 1, ny_block
+         do i = this_block%ihi+1,nx_block
+            ARRAY (i,j,dst_block) = 0
+         enddo
+         enddo
+         ! south edge
+         do j = 1, this_block%jlo-1
+         do i = 1, nx_block
+            ARRAY (i,j,dst_block) = 0
+         enddo
+         enddo
+         ! west edge
+         do j = 1, ny_block
+         do i = 1, this_block%ilo-1
+            ARRAY (i,j,dst_block) = 0
+         enddo
+         enddo
+      enddo
    endif
 
 !-----------------------------------------------------------------------

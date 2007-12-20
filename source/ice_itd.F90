@@ -1738,8 +1738,8 @@
 
       if (l_limit_aice) then  ! check for aice out of bounds
       
-         do j = 1, ny_block
-         do i = 1, nx_block
+         do j = jlo,jhi
+         do i = ilo,ihi
             if (aice(i,j) > c1+puny .or. aice(i,j) < -puny) then
                l_stop = .true.
                istop = i
@@ -1767,8 +1767,6 @@
       !-----------------------------------------------------------------
 
       icells = 0
-!      do j = 1, ny_block
-!      do i = 1, nx_block
       do j = jlo,jhi
       do i = ilo,ihi
          if (aice(i,j) > puny) then
@@ -1814,6 +1812,10 @@
                                istop,    jstop)
          if (l_stop) return
       endif   ! l_limit_aice
+
+    !-------------------------------------------------------------------
+    ! Update ice-ocean fluxes for strict conservation
+    !-------------------------------------------------------------------
 
       if (present(fresh)) &
            fresh     (:,:) = fresh(:,:)      + dfresh(:,:) 

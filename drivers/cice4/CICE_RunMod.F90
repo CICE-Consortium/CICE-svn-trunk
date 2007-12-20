@@ -1076,20 +1076,6 @@
          endif
 
       !-----------------------------------------------------------------
-      ! Aggregate the updated state variables. 
-      !----------------------------------------------------------------- 
- 
-         call aggregate (nx_block,          ny_block,             &
-                         aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk),  &
-                         vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
-                         eicen(:,:,:,iblk), esnon(:,:,  :,iblk),  &
-                         aice (:,:,  iblk), trcr (:,:,:,  iblk),  &
-                         vice (:,:,  iblk), vsno (:,:,    iblk),  &
-                         eice (:,:,  iblk), esno (:,:,    iblk),  &
-                         aice0(:,:,  iblk), tmask(:,:,    iblk),  &
-                         trcr_depend) 
-
-      !-----------------------------------------------------------------
       ! Compute thermodynamic area and volume tendencies.
       !-----------------------------------------------------------------
 
@@ -1100,6 +1086,32 @@
          enddo
          enddo
 
+      enddo                     ! iblk
+
+      !-------------------------------------------------------------------
+      ! Ghost cell updates for state variables.
+      !-------------------------------------------------------------------
+
+      call ice_timer_start(timer_bound)
+      call bound_state (aicen, trcrn, &
+                        vicen, vsnon, &
+                        eicen, esnon)
+      call ice_timer_stop(timer_bound)
+
+      !-----------------------------------------------------------------
+      ! Aggregate the updated state variables (includes ghost cells). 
+      !----------------------------------------------------------------- 
+ 
+      do iblk = 1, nblocks
+         call aggregate (nx_block,          ny_block,             &
+                         aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk),  &
+                         vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
+                         eicen(:,:,:,iblk), esnon(:,:,  :,iblk),  &
+                         aice (:,:,  iblk), trcr (:,:,:,  iblk),  &
+                         vice (:,:,  iblk), vsno (:,:,    iblk),  &
+                         eice (:,:,  iblk), esno (:,:,    iblk),  &
+                         aice0(:,:,  iblk), tmask(:,:,    iblk),  &
+                         trcr_depend) 
       enddo                     ! iblk
 
       call ice_timer_stop(timer_column)  ! column physics
@@ -1271,10 +1283,23 @@
             call abort_ice ('ice: ITD cleanup error')
          endif
 
+      enddo                     ! iblk
+
+      !-------------------------------------------------------------------
+      ! Ghost cell updates for state variables.
+      !-------------------------------------------------------------------
+
+      call ice_timer_start(timer_bound)
+      call bound_state (aicen, trcrn, &
+                        vicen, vsnon, &
+                        eicen, esnon)
+      call ice_timer_stop(timer_bound)
+
       !-----------------------------------------------------------------
-      ! Aggregate the updated state variables. 
+      ! Aggregate the updated state variables (includes ghost cells). 
       !----------------------------------------------------------------- 
  
+      do iblk = 1, nblocks
          call aggregate (nx_block,          ny_block,             &
                          aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk),  &
                          vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
@@ -1284,7 +1309,6 @@
                          eice (:,:,  iblk), esno (:,:,    iblk),  &
                          aice0(:,:,  iblk), tmask(:,:,    iblk),  &
                          trcr_depend) 
-
       enddo
 
       call ice_timer_stop(timer_column)
