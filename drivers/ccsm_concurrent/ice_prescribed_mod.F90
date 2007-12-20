@@ -152,6 +152,7 @@ subroutine ice_prescribed_init
    real(kind=dbl_kind)     :: aice_max                 ! maximun ice concentration
    character(len=char_len_long) :: first_data_file     ! first data file in stream
    character(len=char_len_long) :: domain_info_fn      ! file with domain info
+   character(len=char_len_long) :: data_path           ! path/location of stream data files
    integer(kind=int_kind)  :: ndims                    ! # dimensions in domain info
    character(len=char_len) :: timeName                 ! domain time var name
    character(len=char_len) :: latName                  ! domain latitude var name
@@ -279,7 +280,8 @@ subroutine ice_prescribed_init
          call abort_ice(subName)
       end if
 
-      call shr_stream_getFirstFileName(csim_stream,first_data_file)
+      call shr_stream_getFirstFileName(csim_stream,first_data_file,data_path)
+      call shr_stream_getFile         (data_path,first_data_file)
       check = shr_ncread_varExists(first_data_file,fldName) 
 
       if (.not.check) then
@@ -291,9 +293,10 @@ subroutine ice_prescribed_init
       ! Get size of the input data domain and allocate arrays
       !---------------------------------------------------------------------
 
-      call shr_stream_getDomainInfo(csim_stream, domain_info_fn, timeName, &
+      call shr_stream_getDomainInfo(csim_stream,data_path,domain_info_fn, timeName, &
       &                             lonName, latName, maskName, areaName)
 
+      call shr_stream_getFile         (data_path,domain_info_fn)
       call shr_ncread_varDimSizes(domain_info_fn,areaName,nlon,nlat)
       write (nu_diag,F01) 'dimsizes for areaName', nlon,nlat 
       call shr_sys_flush(nu_diag)
