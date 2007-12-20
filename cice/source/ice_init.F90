@@ -34,11 +34,13 @@
       implicit none
       save
 
+#if (!defined CCSM) && (!defined SEQ_MCT)
       character(len=char_len) :: & 
          ice_ic      ! method of ice cover initialization
                      ! 'default'  => latitude and sst dependent
                      ! 'none'     => no ice 
                      ! note:  restart = .true. overwrites
+#endif
 
 !=======================================================================
 
@@ -70,9 +72,20 @@
       use ice_calendar, only: year_init, istep0, histfreq, histfreq_n, &
                               dumpfreq, dumpfreq_n, diagfreq, &
                               npt, dt, ndyn_dt, days_per_year
+#if (!defined CCSM) && (!defined SEQ_MCT)
       use ice_restart, only: &
           restart, restart_dir, restart_file, pointer_file, &
-          runid, runtype
+          runid, runtype 
+#elif (defined CCSM)
+      use ice_restart, only:  &
+           inic_file, restart_dir, restart_file, pointer_file, &
+           runid, runtype 
+#elif (defined SEQ_MCT)
+      use ice_restart, only:  &
+           inic_file, restart_dir, restart_file, pointer_file, &
+           runid, runtype 
+      use shr_file_mod, only: shr_file_setio
+#endif
       use ice_history, only: hist_avg, &
                              history_format, history_dir, history_file, &
                              incond_dir, incond_file
@@ -111,6 +124,17 @@
       ! NOTE: Not all of these are used by both models.
       !-----------------------------------------------------------------
 
+#if (!defined CCSM) && (!defined SEQ_MCT)
+      namelist /ice_nml/ &
+           restart, ice_ic, runid, runtype
+#elif (defined CCSM)
+      namelist /ice_nml/ &
+           inic_file, runid, runtype
+#elif (defined SEQ_MCT)
+      namelist /ice_nml/ &
+           inic_file
+#endif
+
       namelist /ice_nml/ &
         year_init,      istep0,          dt,            npt, &
         diagfreq,       days_per_year,   &       
@@ -118,7 +142,7 @@
         history_format, &
         histfreq,       hist_avg,        history_dir,   history_file, &
         histfreq_n,     dumpfreq,        dumpfreq_n,    restart_file, &
-        restart,        restart_dir,     pointer_file,  ice_ic, &
+        restart_dir,    pointer_file,  &
         grid_format,    grid_type,       grid_file,     kmt_file,      &
         kitd,           kcatbound, &
         kdyn,           ndyn_dt,         ndte,          evp_damping, &
@@ -132,9 +156,6 @@
         oceanmixed_ice, sss_data_type,   sst_data_type, ocn_data_format, &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore, &
         latpnt,         lonpnt,          dbug,             &
-#ifndef SEQ_MCT
-        runid,          runtype, &
-#endif
         incond_dir,     incond_file
 
       namelist /tracer_nml/   &
@@ -161,18 +182,33 @@
       hist_avg = .true.      ! if true, write time-averages (not snapshots)
       history_dir  = ' '     ! Write to executable dir for default
       history_file = 'iceh'  ! history file name prefix
+#if (defined CCSM) || (defined SEQ_MCT)
+      history_format = 'nc'  ! file format ('bin'=binary or 'nc'=netcdf)
+#else
       history_format = 'bin' ! file format ('bin'=binary or 'nc'=netcdf)
+#endif
       incond_dir = ' '       ! Write to executable dir for default
       incond_file = 'iceh'   ! same as history file prefix
       dumpfreq='y'           ! restart frequency option
       dumpfreq_n = 1         ! restart frequency
+
+#if (!defined CCSM) && (!defined SEQ_MCT)
       restart = .false.      ! if true, read restart files for initialization
-      restart_dir  = ' '     ! Write to executable dir for default
-      restart_file = 'iced'  ! restart file name prefix
-      pointer_file = 'ice.restart_file'
-      ice_ic       = 'default'      ! latitude and sst-dependent
-      grid_format  = 'bin'          ! file format ('bin'=binary or 'nc'=netcdf)
-      grid_type    = 'rectangular'  ! define rectangular grid internally
+      ice_ic  = 'default'    ! latitude and sst-dependent
+      runid   = 'unknown'    ! namelist run ID
+      runtype = 'unknown'    ! namelist run type
+#elif (defined CCSM)
+      inic_file = 'default'  ! 'default', 'none' or restart filename
+      runid   = 'unknown'    ! namelist run ID, only used in CCSM 
+      runtype = 'unknown'    ! namelist run type, only used in CCSM
+#elif (defined SEQ_MCT)
+      inic_file = 'default'  ! 'default', 'none' or restart file 
+#endif
+      restart_dir  = ' '                  ! Write to executable dir for default
+      restart_file = 'iced'               ! restart file name prefix
+      pointer_file = 'ice.restart_file'   ! ice restart pointer file
+      grid_format  = 'bin'                ! file format ('bin'=binary or 'nc'=netcdf)
+      grid_type    = 'rectangular'        ! define rectangular grid internally
       grid_file    = 'unknown_grid_file'
       kmt_file     = 'unknown_kmt_file'
 
@@ -221,11 +257,6 @@
       latpnt(2) = -65._dbl_kind   ! latitude of diagnostic point 2 (deg)
       lonpnt(2) = -45._dbl_kind   ! longitude of point 2 (deg)
 
-#ifndef SEQ_MCT
-      runid   = 'unknown'   ! run ID, only used in CCSM
-      runtype = 'unknown'   ! run type, only used in CCSM
-#endif
-
       ! extra tracers
       tr_iage      = .false. ! ice age
       restart_age  = .false. ! ice age restart
@@ -246,11 +277,12 @@
          else
             nml_error =  1
          endif
+         write(6,*)'reading in ice_nml'
          do while (nml_error > 0)
             read(nu_nml, nml=ice_nml,iostat=nml_error)
-            read(nu_nml, nml=tracer_nml,iostat=nml_error)
             if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
          end do
+         write(6,*)'finished reading in ice_nml'
          if (nml_error == 0) close(nu_nml)
       endif
       call broadcast_scalar(nml_error, master_task)
@@ -283,19 +315,27 @@
       ! set up diagnostics output and resolve conflicts
       !-----------------------------------------------------------------
 
+#ifdef SEQ_MCT
+      ! Note that diag_file is not utilized in SEQ_MCT mode
+      if (my_task == master_task) then
+         nu_diag = shr_file_getUnit()
+         call shr_file_setIO('ice_modelio.nml',nu_diag)
+      end if
+#else
       if (trim(diag_type) == 'file') then
          call get_fileunit(nu_diag)
       else
          nu_diag = 6
       endif
+#endif
 
 #ifdef SEQ_MCT
       ! Note in SEQ_MCT mode the runid and runtype flag are obtained from the
       ! sequential driver - not from the cice namelist 
       if (my_task == master_task) then
-         restart = .true.
-         if (runtype == "initial") restart = .false.
-         history_file = trim(runid)//"_iceh"
+         history_file  = trim(runid) // ".cice.h"
+         restart_file  = trim(runid) // ".cice.r"
+         incond_file   = trim(runid) // ".cice.i"
       endif
 #endif
 
@@ -311,7 +351,8 @@
       if (days_per_year /= 365) shortwave = 'default' ! definite conflict
 
       chartmp = advection(1:6)
-      if (chartmp /= 'upwind' .and. chartmp /= 'remap ') advection = 'remap'
+      if (chartmp /= 'upwind' .and. chartmp /= 'remap ' &
+           .and. chartmp /= 'none') advection = 'remap'		
 
       if (trim(atm_data_type) == 'monthly' .and. calc_strair) &
          calc_strair = .false.
@@ -337,10 +378,14 @@
       call broadcast_scalar(dumpfreq,           master_task)
       call broadcast_scalar(dumpfreq_n,         master_task)
       call broadcast_scalar(restart_file,       master_task)
-      call broadcast_scalar(restart,            master_task)
       call broadcast_scalar(restart_dir,        master_task)
       call broadcast_scalar(pointer_file,       master_task)
+#if (!defined CCSM) && (!defined SEQ_MCT)
+      call broadcast_scalar(restart,            master_task)
       call broadcast_scalar(ice_ic,             master_task)
+#else
+      call broadcast_scalar(inic_file,          master_task)
+#endif
       call broadcast_scalar(grid_format,        master_task)
       call broadcast_scalar(grid_type,          master_task)
       call broadcast_scalar(grid_file,          master_task)
@@ -388,7 +433,6 @@
       call broadcast_scalar(runtype,            master_task)
 ! only master_task writes to file
 !      call broadcast_scalar(nu_diag),           master_task)
-
       ! tracers
       call broadcast_scalar(tr_iage,            master_task)
       call broadcast_scalar(restart_age,        master_task)
@@ -401,14 +445,16 @@
 
       if (my_task == master_task) then
 
+#if !(defined SEQ_MCT)
          if (trim(diag_type) == 'file') then
             write(ice_stdout,*) 'Diagnostic output will be in file ',diag_file
             open (nu_diag, file=diag_file, status='unknown')
          endif
+#endif
 
-         write (nu_diag,*) '--------------------------------'
-         write (nu_diag,*) '  CICE model diagnostic output  '
-         write (nu_diag,*) '--------------------------------'
+         write(nu_diag,*) '--------------------------------'
+         write(nu_diag,*) '  CICE model diagnostic output  '
+         write(nu_diag,*) '--------------------------------'
          write(nu_diag,*) ' '
          write(nu_diag,*) ' Document ice_in namelist parameters:'
          write(nu_diag,*) ' ==================================== '
@@ -448,14 +494,19 @@
          write(nu_diag,1030) ' dumpfreq                  = ', &
                                trim(dumpfreq)
          write(nu_diag,1020) ' dumpfreq_n                = ', dumpfreq_n
-         write(nu_diag,1010) ' restart                   = ', restart
          write(nu_diag,*)    ' restart_dir               = ', &
                                trim(restart_dir)
          write(nu_diag,*)    ' restart_file              = ', &
                                trim(restart_file)
          write(nu_diag,*)    ' pointer_file              = ', &
                                trim(pointer_file)
+#if (!defined CCSM) && (!defined SEQ_MCT)
+         write(nu_diag,1010) ' restart                   = ', restart
          write(nu_diag,1030) ' ice_ic                    = ', ice_ic
+#else 
+         write(nu_diag,1030) ' inic_file                 = ', &
+                               trim(inic_file)
+#endif
          write(nu_diag,*)    ' grid_type                 = ', &
                                trim(grid_type)
          if (trim(grid_type) /= 'rectangular' .or. &
@@ -634,6 +685,8 @@
          call abort_ice('ice_init: Not enough snow layers')
       endif
 
+      do iblk = 1, nblocks
+
       !-----------------------------------------------------------------
       ! Set tracer types
       !-----------------------------------------------------------------
@@ -642,7 +695,6 @@
       if (tr_iage) trcr_depend(nt_iage)  = 1   ! volume-weighted ice age
       if (tr_pond) trcr_depend(nt_volpn) = 0   ! melt pond volume
 
-      do iblk = 1, nblocks
 
       !-----------------------------------------------------------------
       ! Set state variables
@@ -726,9 +778,12 @@
 !
 ! !USES:
 !
-      use ice_state, only: nt_Tsfc
       use ice_therm_vertical, only: Tmlt
       use ice_itd, only: ilyr1, slyr1, hin_max
+      use ice_state, only: nt_Tsfc
+#if (defined CCSM) || (defined SEQ_MCT)
+      use ice_restart, only: inic_file
+#endif	
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -818,7 +873,11 @@
       eicen(:,:,:) = c0
       esnon(:,:,:) = c0
 
+#if (!defined CCSM) && (!defined SEQ_MCT)
       if (trim(ice_ic) == 'default') then
+#else
+      if (trim(inic_file) == 'default') then
+#endif
 
       !-----------------------------------------------------------------
       ! Place ice where ocean surface is cold.
@@ -920,7 +979,7 @@
             
          enddo                  ! ncat
 
-      endif                     ! ice_ic
+      endif                     ! inic_file or ice_ic
 
       end subroutine set_state_var
 

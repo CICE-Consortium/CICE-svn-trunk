@@ -911,11 +911,11 @@
       ! where 'd' denotes an error due to roundoff.
       !-----------------------------------------------------------------
 
-            if (hslyr(ij) > hsnomin) then
+            if (hslyr(ij) > (hsnomin / real(nslyr,kind=dbl_kind))) then
                ! qsn, esnon < 0              
                qsn  (ij,k) = esnon(i,j,k)*real(nslyr,kind=dbl_kind) &
                              /vsnon(i,j) 
-               Tmax = -qsn(ij,k)*puny / &
+               Tmax = -qsn(ij,k)*puny*real(nslyr,kind=dbl_kind) / &
                        (rhos*cp_ice*vsnon(i,j))
             else
                qsn  (ij,k) = -rhos * Lfresh
@@ -949,8 +949,8 @@
                i = indxi(ij)
                j = indxj(ij)
 
-               if (hslyr(ij) > hsnomin) then
-                  Tmax = -qsn(ij,k)*puny / &
+               if (hslyr(ij) > (hsnomin / real(nslyr,kind=dbl_kind))) then
+                  Tmax = -qsn(ij,k)*puny*real(nslyr,kind=dbl_kind) / &
                            (rhos*cp_ice*vsnon(i,j))
                else
                   Tmax = puny
@@ -1352,7 +1352,7 @@
          dTsf_prev (ij) = c0
 
          dt_rhoi_hlyr(ij) = dt / (rhoi*hilyr(ij))  ! hilyr > 0
-         if (hslyr(ij) > hsnomin) l_snow(ij) = .true.
+         if (hslyr(ij) > (hsnomin / real(nslyr,kind=dbl_kind))) l_snow(ij) = .true.
       enddo                     ! ij
 
       do k = 1, nslyr
@@ -1843,6 +1843,7 @@
                                  Tsf_errmax
                write(nu_diag,*) 'Tsf:', Tsf(ij)
                write(nu_diag,*) 'fsurf:', fsurf(ij)
+               write(nu_diag,*) 'fsensn,flatn:', fsensn(i,j), flatn(i,j)
                write(nu_diag,*) 'fcondtop, fcondbot, fswint', &
                                fcondtop(ij), fcondbot(ij), fswint(i,j)
                write(nu_diag,*) 'fswsfc, fswthrun', &
@@ -3122,6 +3123,16 @@
                                zs1,      zs2,      &
                                hslyr,    hsn,      &
                                qsn)
+
+! May need this to fix round off problems.
+!        do k = 1, nslyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+!           do ij = 1, icells
+!              qsn(ij,k) = min(qsn(ij,k),-rhos*Lfresh)
+!           end do
+!        enddo
 
       endif   ! nslyr > 1
 

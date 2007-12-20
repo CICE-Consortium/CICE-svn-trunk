@@ -6,13 +6,14 @@ module ice_comp_mct
 ! !MODULE: ice_comp_mct
 !
 ! !DESCRIPTION:
-! This interface 
+! CICE interface routine for the ccsm cpl7 mct system
 !
 ! !USES:
 
   use shr_kind_mod,   only : r8 => shr_kind_r8
   use shr_inputInfo_mod
   use shr_sys_mod
+  use shr_file_mod 
 
   use mct_mod
   use seq_flds_mod
@@ -37,6 +38,7 @@ module ice_comp_mct
   use ice_boundary
   use ice_prescribed_mod
   use ice_scam
+  use ice_fileunits
 !
 ! !PUBLIC MEMBER FUNCTIONS:
   implicit none
@@ -49,7 +51,7 @@ module ice_comp_mct
 ! ! PUBLIC DATA:
 !
 ! !REVISION HISTORY:
-! Author: Jacob Sewall
+! Author: Jacob Sewall, Mariana Vertenstein
 !
 !EOP
 ! !PRIVATE MEMBER FUNCTIONS:
@@ -105,22 +107,23 @@ contains
     integer            :: ref_ymd            ! Reference date (YYYYMMDD)
     integer            :: ref_tod            ! reference time of day (s)
     integer            :: iyear              ! yyyy
+    integer            :: shrlogunit,shrloglev ! old values
 
 ! !REVISION HISTORY:
 ! Author: Jacob Sewall
 !EOP
 !-----------------------------------------------------------------------
 
-    !=============================================================
+    !----------------------------------------------------------------------------
     ! Set cdata pointers
-    !=============================================================
+    !----------------------------------------------------------------------------
 
     call seq_cdata_setptrs(cdata_i, ID=ICEID, mpicom=mpicom_ice, &
          gsMap=gsMap_ice, dom=dom_i, CCSMInit=CCSMInit)
 
-    !=============================================================
+    !----------------------------------------------------------------------------
     ! use CCSMInit to determine type of run
-    !=============================================================
+    !----------------------------------------------------------------------------
 
     ! Preset single column values
 
@@ -149,7 +152,18 @@ contains
     call cice_init( mpicom_ice )
     call t_stopf ('cice_init')
 
+    !----------------------------------------------------------------------------
+    ! Reset shr logging to my log file
+    !----------------------------------------------------------------------------
+
+    call shr_file_getLogUnit (shrlogunit)
+    call shr_file_getLogLevel(shrloglev)
+    call shr_file_setLogUnit (nu_diag)
+   
+    !----------------------------------------------------------------------------
     ! use SyncClock to reset calendar information on initial start
+    !----------------------------------------------------------------------------
+
     ! - the following logic duplicates the logic for the concurrent system - 
     ! cice_init is called then init_cpl is called where the start date is received
     ! from the flux coupler
@@ -171,19 +185,23 @@ contains
             ref_ymd=ref_ymd, ref_tod=ref_tod)
 
        if (ref_ymd /= start_ymd .or. ref_tod /= start_tod) then
-          write(nu_diag,*) 'ice_comp_mct: ref_ymd ',ref_ymd, &
-                           ' must equal start_ymd ',start_ymd
-          write(nu_diag,*) 'ice_comp_mct: ref_ymd ',ref_tod, &
-                           ' must equal start_ymd ',start_tod
+          if (my_task == master_task) then
+             write(nu_diag,*) 'ice_comp_mct: ref_ymd ',ref_ymd, &
+                  ' must equal start_ymd ',start_ymd
+             write(nu_diag,*) 'ice_comp_mct: ref_ymd ',ref_tod, &
+                  ' must equal start_ymd ',start_tod
+          end if
           call shr_sys_abort()
        end if
 
-       write(nu_diag,*) '(ice_init_mct) idate from sync clock = ', &
-                        start_ymd
-       write(nu_diag,*) '(ice_init_mct)   tod from sync clock = ', &
-                        start_tod
-       write(nu_diag,*) &
-             '(ice_init_mct) resetting idate to match sync clock'
+       if (my_task == master_task) then
+          write(nu_diag,*) '(ice_init_mct) idate from sync clock = ', &
+               start_ymd
+          write(nu_diag,*) '(ice_init_mct)   tod from sync clock = ', &
+               start_tod
+          write(nu_diag,*) &
+               '(ice_init_mct) resetting idate to match sync clock'
+       end if
 
        idate = start_ymd
        iyear = (idate/10000)                     ! integer year of basedate
@@ -194,10 +212,10 @@ contains
        call shr_sys_flush(nu_diag)
     end if
     call calendar(time)     ! update calendar info
-
-    !=============================================================
+ 
+    !----------------------------------------------------------------------------
     ! Initialize MCT attribute vectors and indices
-    !=============================================================
+    !----------------------------------------------------------------------------
 
     call t_startf ('cice_mct_init')
 
@@ -218,12 +236,20 @@ contains
     call mct_aVect_init(i2x_i, rList=seq_flds_i2x_fields, lsize=lsize) 
     call mct_aVect_zero(i2x_i)
 
-    !============================================================= 
+    !----------------------------------------------------------------------------
     ! send intial state to driver
-    !=============================================================
+    !----------------------------------------------------------------------------
 
     call ice_export_mct (i2x_i)  !Send initial state to driver
+    call shr_inputInfo_initPutData( CCSMInit, ice_prognostic=.true.)
     call t_stopf ('cice_mct_init')
+
+    !----------------------------------------------------------------------------
+    ! Reset shr logging to original values
+    !----------------------------------------------------------------------------
+
+    call shr_file_setLogUnit (shrlogunit)
+    call shr_file_setLogLevel(shrloglev)
 
   end subroutine ice_init_mct
 
@@ -239,10 +265,13 @@ contains
 ! Run thermodynamic CICE
 !
 ! !USES:
-    use CICE_RunMod
+    use ice_step_mod
+    use ice_age
     use ice_history
     use ice_restart
     use ice_diagnostics
+    use ice_meltpond
+    use ice_shortwave
 
     use eshr_timemgr_mod, only: eshr_timemgr_clockIsOnLastStep,  &
                                 eshr_timemgr_clockAlarmIsOnRes,  &
@@ -265,6 +294,7 @@ contains
     integer :: day_sync      ! Sync current day
     integer :: tod_sync      ! Sync current time of day (sec)
     integer :: ymd_sync      ! Current year of sync clock
+    integer :: shrlogunit,shrloglev ! old values
     character(len=char_len_long) :: fname
     character(len=*), parameter  :: SubName = "ice_run_mct"
 !
@@ -274,57 +304,91 @@ contains
 !EOP
 !---------------------------------------------------------------------------
 
+    !----------------------------------------------------------------------------
+    ! Reset shr logging to my log file
+    !----------------------------------------------------------------------------
+
+    call shr_file_getLogUnit (shrlogunit)
+    call shr_file_getLogLevel(shrloglev)
+    call shr_file_setLogUnit (nu_diag)
+   
     !-------------------------------------------------------------------
-    ! run thermodynamic sea ice
+    ! get import state
     !-------------------------------------------------------------------
-    
-    ! Get import state
     
     call t_startf ('cice_import')
     call ice_import_mct( x2i_i )
     call t_stopf ('cice_import')
  
-    ! Update time
+    !--------------------------------------------------------------------
+    ! timestep update
+    !--------------------------------------------------------------------
 
     istep  = istep  + 1    ! update time step counters
     istep1 = istep1 + 1
     time = time + dt       ! determine the time and date
     call calendar(time)    ! at the end of the timestep
     
-    ! If prescribed ice
+    if ((istep == 1) .and. (trim(runtype) == 'startup') .and. &
+       (trim(shortwave) == 'dEdd')) call init_dEdd
+
+    call init_mass_diags   ! diagnostics per timestep
 
     if(prescribed_ice) then  ! read prescribed ice
        call ice_prescribed_run(idate, sec)
     endif
     
-     ! Step through the first part of the thermodynamics
+    call init_flux_atm
+
+    !-----------------------------------------------------------------
+    ! radiation1
+    !-----------------------------------------------------------------
+
+    call t_startf ('cice_rad1')
+    call step_rad1(dt)
+    call t_stopf ('cice_rad1')
+    
+    !-----------------------------------------------------------------
+    ! thermodynamics1
+    !-----------------------------------------------------------------
 
     call t_startf ('cice_therm1')
     call step_therm1(dt)
     call t_stopf ('cice_therm1')
     
-    ! Send export state to driver (this matches cpl6 logic)
-    
-    call t_startf ('cice_export')
-    call ice_export_mct ( i2x_i )
-    call t_stopf ('cice_export')
-    
-    ! Step through the second part of the thermodynamics and dynamics
-    
-    call t_startf ('cice_therm2_dyn')
+    !-----------------------------------------------------------------
+    ! thermodynamics2
+    !-----------------------------------------------------------------
+
     if (.not.prescribed_ice) then
+       call t_startf ('cice_therm2')
        call step_therm2 (dt)  ! post-coupler thermodynamics
+       call t_stopf ('cice_therm2')
+    end if
+
+   !-----------------------------------------------------------------
+   ! dynamics, transport, ridging
+   !-----------------------------------------------------------------
+
+    if (.not.prescribed_ice) then
+       call t_startf ('cice_dyn')
        do k = 1, ndyn_dt
           call step_dynamics (dyn_dt) ! dynamics, transport, ridging
        enddo
+       call t_stopf ('cice_dyn')
     endif ! not prescribed_ice
-    call t_stopf ('cice_therm2_dyn')
+    
+    !-----------------------------------------------------------------
+    ! radiation2
+    !-----------------------------------------------------------------
+
+    call t_startf ('cice_rad2')
+    call step_rad2(dt)
+    call t_stopf ('cice_rad2')
     
     !-----------------------------------------------------------------
     ! write data
     !-----------------------------------------------------------------
-    
-    call ice_timer_start(timer_readwrite)  ! reading/writing
     
     call t_startf ('cice_diag')
     if (mod(istep,diagfreq) == 0) call runtime_diags(dt) ! log file
@@ -339,15 +403,24 @@ contains
        call eshr_timemgr_clockGet(SyncClock, year=yr_sync, &
           month=mon_sync, day=day_sync, CurrentTOD=tod_sync)
        fname = restart_filename(yr_sync, mon_sync, day_sync, tod_sync)
-       write(nu_diag,*) &
-          'ice_comp_mct: callinng dumpfile for restart filename= ',fname
+       write(nu_diag,*)'ice_comp_mct: callinng dumpfile for restart filename= ',&
+            fname
        call dumpfile(fname)
+       if (tr_iage) call write_restart_age
+       if (tr_pond) call write_restart_pond
+       if (trim(shortwave) == 'dEdd') call write_restart_dEdd
     end if
 
-    call ice_timer_stop(timer_readwrite)  ! reading/writing
+    !-----------------------------------------------------------------
+    ! send export state to driver 
+    !-----------------------------------------------------------------
+    
+    call t_startf ('cice_export')
+    call ice_export_mct ( i2x_i )
+    call t_stopf ('cice_export')
     
     !--------------------------------------------------------------------
-    ! Check that internal clock is in sync with master clock
+    ! check that internal clock is in sync with master clock
     !--------------------------------------------------------------------
 
     tod = sec
@@ -361,6 +434,11 @@ contains
           ":: Internal sea-ice clock not in sync with Sync Clock")
     end if
    
+    ! reset shr logging to my original values
+
+    call shr_file_setLogUnit (shrlogunit)
+    call shr_file_setLogLevel(shrloglev)
+  
   end subroutine ice_run_mct
 
 !---------------------------------------------------------------------------
@@ -377,7 +455,6 @@ contains
 !
 ! !USES:
     use ice_exit
-    use ice_fileunits
 !
 !------------------------------------------------------------------------------
 !BOP
@@ -397,7 +474,7 @@ contains
     call ice_timer_stop(timer_total)        ! stop timing entire run
     call ice_timer_print_all(stats=.false.) ! print timing information
     
-    if (nu_diag /= 6) close (nu_diag) ! diagnostic output
+!    if (nu_diag /= 6) close (nu_diag) ! diagnostic output
     
     ! do *NOT* call end_run from this subroutine.  For a serial
     ! run it is a moot point as end_run does nothing.  But for an
@@ -891,7 +968,6 @@ contains
     !
     call mct_gsMap_orderedPoints(gsMap_i, my_task, idata)
     call mct_gGrid_importIAttr(dom_i,'GlobGridNum',idata,lsize)
-    call mct_gGrid_importIAttr(dom_i,'GlobGridNum',idata,lsize)
     !
     ! Determine domain (numbering scheme is: West to East and South to North to South pole)
     ! Initialize attribute vector with special value
@@ -989,7 +1065,11 @@ contains
        do j = jlo, jhi
        do i = ilo, ihi
           n = n+1
-          data(n) = 1._dbl_kind
+	  if (trim(grid_type) == 'latlon') then
+             data(n) = ocn_gridcell_frac(i,j,iblk)
+          else
+             data(n) = real(nint(hm(i,j,iblk)),kind=dbl_kind)
+          end if
        enddo   !i
        enddo   !j
     enddo      !iblk

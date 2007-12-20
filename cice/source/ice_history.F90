@@ -153,7 +153,7 @@
            f_dvirdgdt  = .true., f_iage       = .false.,&
            f_hisnap    = .true., f_aisnap     = .true., &
            f_aicen     = .true., f_vicen      = .true., &
-           f_volpn     = .false., &           
+           f_apondn    = .false.,                       &
            f_trsig     = .true., f_icepresent = .true.
 
       !---------------------------------------------------------------
@@ -201,7 +201,7 @@
            f_dvirdgdt              , &
            f_hisnap,    f_aisnap   , &
            f_aicen,     f_vicen    , &
-           f_iage,      f_volpn    , &
+           f_iage,      f_apondn   , &
            f_trsig,     f_icepresent
 
       !---------------------------------------------------------------
@@ -286,9 +286,9 @@
            n_trsig      = 75, &
            n_icepresent = 76, &
            n_iage       = 77, &
-           n_aicen      = 78, & ! n_aicen, n_vicen, n_volpn must be 
+           n_aicen      = 78, & ! n_aicen, n_vicen, n_apondn must be 
            n_vicen      = 79 + ncat_hist - 1, & ! last in this list
-           n_volpn      = 79 + 2*ncat_hist - 1
+           n_apondn     = 79 + 2*ncat_hist - 1
 
 !=======================================================================
 
@@ -423,10 +423,10 @@
         write(nchar,'(i3.3)') n
         write(vname(n_aicen+n-1),'(a,a)') 'aice', trim(nchar) ! aicen
         write(vname(n_vicen+n-1),'(a,a)') 'vice', trim(nchar) ! vicen
-        write(vname(n_volpn+n-1),'(a,a)') 'volp', trim(nchar) ! volpn
+        write(vname(n_apondn+n-1),'(a,a)') 'apond', trim(nchar) ! apondn
         vname(n_aicen+n-1) = trim(vname(n_aicen+n-1))
         vname(n_vicen+n-1) = trim(vname(n_vicen+n-1))
-        vname(n_volpn+n-1) = trim(vname(n_volpn+n-1))
+        vname(n_apondn+n-1) = trim(vname(n_apondn+n-1))
       enddo
 
       !---------------------------------------------------------------
@@ -522,9 +522,9 @@
         write(vdesc(n_vicen+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
         vdesc(n_vicen+n-1) = trim(vdesc(n_vicen+n-1))
 
-        tmp = 'meltpond volume, category ' ! volpn
-        write(vdesc(n_volpn+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
-        vdesc(n_volpn+n-1) = trim(vdesc(n_volpn+n-1))
+        tmp = 'meltpond area, category ' ! apondn
+        write(vdesc(n_apondn+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
+        vdesc(n_apondn+n-1) = trim(vdesc(n_apondn+n-1))
       enddo
 
       !---------------------------------------------------------------
@@ -611,7 +611,7 @@
       do n = 1, ncat_hist
         vunit(n_aicen+n-1) = ' ' ! aicen
         vunit(n_vicen+n-1) = 'm' ! vicen
-        vunit(n_volpn+n-1) = 'm' ! volpn
+        vunit(n_apondn+n-1) = ' ' ! apondn
       enddo
 
 #if (defined CCSM) || (defined SEQ_MCT)
@@ -712,7 +712,7 @@
       do n = 1, ncat_hist
         vcomment(n_aicen+n-1) = 'Ice range:' ! aicen
         vcomment(n_vicen+n-1) = 'none' ! vicen
-        vcomment(n_volpn+n-1) = 'none' ! volpn
+        vcomment(n_apondn+n-1) = 'none' ! apondn
       enddo
 
       !-----------------------------------------------------------------
@@ -817,7 +817,7 @@
       call broadcast_scalar (f_hisnap, master_task)
       call broadcast_scalar (f_aicen, master_task)
       call broadcast_scalar (f_vicen, master_task)
-      call broadcast_scalar (f_volpn, master_task)
+      call broadcast_scalar (f_apondn, master_task)
       call broadcast_scalar (f_trsig, master_task)
       call broadcast_scalar (f_icepresent, master_task)
       call broadcast_scalar (f_iage, master_task)
@@ -908,7 +908,7 @@
       do n = 1, ncat_hist
         iout(n_aicen+n-1) = f_aicen
         iout(n_vicen+n-1) = f_vicen
-        iout(n_volpn+n-1) = f_volpn
+        iout(n_apondn+n-1) = f_apondn
       enddo
 
       if (my_task == master_task) then
@@ -957,6 +957,7 @@
       cona(n_alidr  ) = c100              ! avg of near IR albedo to %
       cona(n_evap   ) = mps_to_cmpdy/rhofresh   ! evap kg/m2/s to cm/day
       cona(n_evap_ai) = mps_to_cmpdy/rhofresh   ! evap kg/m2/s to cm/day
+      conb(n_Tair   ) = -tffresh                ! Tair K to C
       conb(n_Tref   ) = -tffresh                ! Tref K to C
       cona(n_Qref   ) = kg_to_g                 ! Qref kg/kg to g/kg
 
@@ -1253,8 +1254,8 @@
                                                 + aicen(i,j,n,iblk)
                 aa(i,j,n_vicen+n-1,iblk) = aa(i,j,n_vicen+n-1,iblk)  &
                                                 + vicen(i,j,n,iblk)
-                aa(i,j,n_volpn+n-1,iblk) = aa(i,j,n_volpn+n-1,iblk)  &
-                                         + trcrn(i,j,nt_volpn,n,iblk)
+                aa(i,j,n_apondn+n-1,iblk) = aa(i,j,n_apondn+n-1,iblk)  &
+                                                + apondn(i,j,n,iblk)
              endif              ! tmask
           enddo                 ! i
           enddo                 ! j
