@@ -378,34 +378,34 @@
 
          ! evaporation
 
-         evpn = global_sum_prod(evap, aice_init, distrb_info, &
+         evpn = global_sum_prod(evap, aice, distrb_info, &
                                 field_loc_center, tarean)
-         evps = global_sum_prod(evap, aice_init, distrb_info, &
+         evps = global_sum_prod(evap, aice, distrb_info, &
                                 field_loc_center, tareas)
          evpn = evpn*dt
          evps = evps*dt
 
          ! salt flux
-         sfsaltn = global_sum_prod(fsalt_hist, aice_init, distrb_info, &
+         sfsaltn = global_sum_prod(fsalt, aice, distrb_info, &
                                    field_loc_center, tarean)
-         sfsalts = global_sum_prod(fsalt_hist, aice_init, distrb_info, &
+         sfsalts = global_sum_prod(fsalt, aice, distrb_info, &
                                    field_loc_center, tareas)
          sfsaltn = sfsaltn*dt
          sfsalts = sfsalts*dt
 
          ! fresh water flux
-         sfreshn = global_sum_prod(fresh_hist, aice_init, distrb_info, &
+         sfreshn = global_sum_prod(fresh, aice, distrb_info, &
                                    field_loc_center, tarean)
-         sfreshs = global_sum_prod(fresh_hist, aice_init, distrb_info, &
+         sfreshs = global_sum_prod(fresh, aice, distrb_info, &
                                    field_loc_center, tareas)
          sfreshn = sfreshn*dt
          sfreshs = sfreshs*dt
 
          ! ocean heat
          ! Note: fswthru not included because it does not heat ice
-         fhocnn = global_sum_prod(fhocn_hist, aice_init, distrb_info, &
+         fhocnn = global_sum_prod(fhocn, aice, distrb_info, &
                                   field_loc_center, tarean)
-         fhocns = global_sum_prod(fhocn_hist, aice_init, distrb_info, &
+         fhocns = global_sum_prod(fhocn, aice, distrb_info, &
                                   field_loc_center, tareas)
 
          ! latent heat
@@ -424,9 +424,10 @@
             do j = 1, ny_block
             do i = 1, nx_block
                work1(i,j,iblk) = &
-                            (fswabs(i,j,iblk) - fswthru_hist(i,j,iblk) &
-                           + flw   (i,j,iblk) + flwout      (i,j,iblk) &
-                           + fsens (i,j,iblk)) * aice_init(i,j,iblk)
+                            (fswabs(i,j,iblk) - fswthru(i,j,iblk) &
+                           + flwout(i,j,iblk)                          &
+                           + fsens (i,j,iblk)) * aice(i,j,iblk)        &
+                           + flw   (i,j,iblk)  * aice_init(i,j,iblk)
             enddo
             enddo
          enddo
@@ -576,7 +577,7 @@
                         + esno(i,j,iblk) - pde(n)) / dt
                psst(n) = sst(i,j,iblk)             ! sea surface temperature
                pTf(n) = Tf(i,j,iblk)               ! freezing temperature
-               pfhocn(n) = -fhocn_hist(i,j,iblk)   ! ocean heat used by ice
+               pfhocn(n) = -fhocn(i,j,iblk)   ! ocean heat used by ice
 
             endif  ! my_task = pmloc
 

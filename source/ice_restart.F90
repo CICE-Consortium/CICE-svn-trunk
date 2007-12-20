@@ -37,14 +37,28 @@
       implicit none
       save
 
-      logical (kind=log_kind) :: &
-         restart ! if true, initialize using restart file instead of defaults
 
-      character (len=char_len) :: &
-         restart_file  , & ! output file for restart dump
-         runtype           ! initial, continue, hybrid or branch
+      character(len=char_len) :: & 
+        inic_file          ! method of ice cover initialization
+                           ! 'default'  => latitude and sst dependent
+                           ! 'none'     => no ice 
+                           ! restart filename (can be a full path)
+                           ! only used if CCSM or SEQ_MCT is defined
+
+      logical (kind=log_kind) :: &
+         restart ! ONLY USED if CCSM or SEQ_MCT are not defined
+                 ! if true, initialize using restart file instead of defaults
+                 ! ice_forcing uses this variable, so cannot use a ccp if-def here
+                 
+      character (len=char_len) :: &       	 
+         runtype           ! ONLY USED if CCSM or SEQ_MCT are defined
+                           ! initial, continue, branch or hybrid 
+                           ! branch/hybrid applies to ccsm concurrent mode
+                           ! branch applies to ccsm sequential model
+                           ! branch or hybrid do not apply to stand-alone cice
 
       character (len=char_len_long) :: &
+         restart_file  , & ! output file prefix for restart dump
          restart_dir   , & ! directory name for restart dump
          runid             ! identifier for CCSM coupled run
 
@@ -225,7 +239,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine restartfile
+      subroutine restartfile(inic_file)
 !
 ! !DESCRIPTION:
 !
@@ -251,6 +265,7 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
+      character(len=*), optional :: inic_file
 !EOP
 !
       integer (kind=int_kind) :: &
@@ -262,18 +277,22 @@
       logical (kind=log_kind) :: &
          diag
 
-      if (my_task == master_task) then
-         open(nu_rst_pointer,file=pointer_file)
-         read(nu_rst_pointer,'(a)') filename0
-         filename = trim(filename0)
-         close(nu_rst_pointer)
+      if (present(inic_file)) then 
+         filename = inic_file
+      else
+         if (my_task == master_task) then
+            open(nu_rst_pointer,file=pointer_file)
+            read(nu_rst_pointer,'(a)') filename0
+            filename = trim(filename0)
+            close(nu_rst_pointer)
+            write(nu_diag,*) 'read ',pointer_file(1:lenstr(pointer_file))
+         endif
       endif
 
       call ice_open(nu_restart,filename,0)
 
       if (my_task == master_task) then
          read (nu_restart) istep0,time,time_forc
-         write(nu_diag,*) 'read ',pointer_file(1:lenstr(pointer_file))
          write(nu_diag,*) 'restart read at istep=',istep0,time,time_forc
       endif
 
@@ -351,9 +370,9 @@
            write(nu_diag,*) 'min/max ocean stress components'
 
       call ice_read(nu_restart,0,strocnxT,'ruf8',diag, &
-                       field_loc_center, field_type_vector)
+                    field_loc_center, field_type_vector)
       call ice_read(nu_restart,0,strocnyT,'ruf8',diag, &
-                       field_loc_center, field_type_vector)
+                    field_loc_center, field_type_vector)
 
       !-----------------------------------------------------------------
       ! internal stress
