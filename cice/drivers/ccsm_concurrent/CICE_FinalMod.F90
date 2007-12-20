@@ -78,8 +78,7 @@
       call ice_timer_stop(timer_total)        ! stop timing entire run
       call ice_timer_print_all(stats=.false.) ! print timing information
 
-!echmod      if (nu_diag /= 6) close (nu_diag) ! diagnostic output
-      call release_all_fileunits
+      if (nu_diag /= 6) close (nu_diag) ! diagnostic output
 
       call exit_coupler  ! disconnect cice from the CCSM coupled system
 

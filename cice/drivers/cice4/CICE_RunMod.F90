@@ -307,7 +307,7 @@
          if (write_restart == 1) then
             call dumpfile ! core variables for restarting
             if (tr_iage) call write_restart_age
-            if (tr_pond) call write_restart_pond
+!            if (tr_pond) call write_restart_ponds
          endif
 
          call ice_timer_stop(timer_readwrite)  ! reading/writing
@@ -404,6 +404,10 @@
          fpn         , & ! pond fraction
          hpn             ! pond depth (m)
 
+! BPB 4 Jan 2007  daily mean coszen
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         coszen_mean     ! diurnal mean coszen
+
       type (block) :: &
          this_block      ! block information for current block
 
@@ -417,7 +421,6 @@
       call ice_timer_start(timer_thermo)  ! thermodynamics
 
       call init_history_therm    ! initialize thermo history variables
-      call init_flux_ocn        ! initialize ocean fluxes sent to coupler
 
       if (oceanmixed_ice) &
            call ocean_mixed_layer (dt)   ! ocean surface fluxes and sst
@@ -496,8 +499,37 @@
                                  icells,                           &
                                  indxi,            indxj,          &
                                  tlat  (:,:,iblk), tlon(:,:,iblk), &
-                                 coszen(:,:,iblk), dt)
+                                 coszen(:,:,iblk), dt,             &
+                                 coszen_mean)
 
+! BPB 27 December 2006
+! correct shortwave incident fluxes from diurnal means to hourly. Do this
+! by multiplying by the normalized cosine solar zenith angle (normalized
+! by diurnal mean):
+!           do ij = 1, icells
+!             i = indxi(ij)
+!             j = indxj(ij)
+!             if( coszen_mean(i,j) .gt. .01_dbl_kind ) then
+!               swvdr(i,j,iblk) = swvdr(i,j,iblk) * &
+!                      (coszen(i,j,iblk)/coszen_mean(i,j))
+!               swvdf(i,j,iblk) = swvdf(i,j,iblk) * &
+!                      (coszen(i,j,iblk)/coszen_mean(i,j))
+!               swidr(i,j,iblk) = swidr(i,j,iblk) * &
+!                      (coszen(i,j,iblk)/coszen_mean(i,j))
+!               swidf(i,j,iblk) = swidf(i,j,iblk) * &
+!                      (coszen(i,j,iblk)/coszen_mean(i,j))
+!             else
+!               swvdr(i,j,iblk) = c0
+!               swvdf(i,j,iblk) = c0
+!               swidr(i,j,iblk) = c0
+!               swidf(i,j,iblk) = c0
+!             endif
+! BPB 4 Jan 2007  update fsw for diurnal cycle
+!             fsw  (i,j,iblk) = swvdr(i,j,iblk) + swvdf(i,j,iblk) &
+!                             + swidr(i,j,iblk) + swidf(i,j,iblk)
+!             if( fsw(i,j,iblk) < c0 ) fsw(i,j,iblk) = 0.
+
+!           enddo  ! ij
          else                     ! basic (ccsm3) shortwave
             coszen(:,:,iblk) = p5 ! sun above the horizon
          endif
@@ -764,6 +796,25 @@
             enddo
          endif
 
+      !-----------------------------------------------------------------
+      ! Divide fluxes by ice area for the coupler, which assumes fluxes
+      ! are per unit ice area.
+      !-----------------------------------------------------------------
+
+         call scale_fluxes (nx_block,            ny_block,           &
+                            nghost,              tmask   (:,:,iblk), &
+                            aice_init(:,:,iblk), Tf      (:,:,iblk), &
+                            Tair     (:,:,iblk), Qa      (:,:,iblk), &
+                            strairxT (:,:,iblk), strairyT(:,:,iblk), &
+                            fsens    (:,:,iblk), flat    (:,:,iblk), &
+                            fswabs   (:,:,iblk), flwout  (:,:,iblk), &
+                            evap     (:,:,iblk),                     &
+                            Tref     (:,:,iblk), Qref    (:,:,iblk), &
+                            fresh    (:,:,iblk), fsalt   (:,:,iblk), &
+                            fhocn    (:,:,iblk), fswthru (:,:,iblk), &
+                            alvdr    (:,:,iblk), alidr   (:,:,iblk), &
+                            alvdf    (:,:,iblk), alidf   (:,:,iblk))
+
       enddo                      ! iblk
 
       call ice_timer_stop(timer_column) ! column physics
@@ -828,6 +879,8 @@
 
       call ice_timer_start(timer_column)  ! column physics
       call ice_timer_start(timer_thermo)  ! thermodynamics
+
+      call init_flux_ocn        ! initialize ocean fluxes sent to coupler
 
       l_stop = .false.
       
@@ -1231,25 +1284,6 @@
                          eice (:,:,  iblk), esno (:,:,    iblk),  &
                          aice0(:,:,  iblk), tmask(:,:,    iblk),  &
                          trcr_depend) 
-
-      !-----------------------------------------------------------------
-      ! Divide fluxes by ice area for the coupler, which assumes fluxes
-      ! are per unit ice area.
-      !-----------------------------------------------------------------
-
-         call scale_fluxes (nx_block,            ny_block,           &
-                            nghost,              tmask   (:,:,iblk), &
-                            aice(:,:,iblk),      Tf      (:,:,iblk), &
-                            Tair     (:,:,iblk), Qa      (:,:,iblk), &
-                            strairxT (:,:,iblk), strairyT(:,:,iblk), &
-                            fsens    (:,:,iblk), flat    (:,:,iblk), &
-                            fswabs   (:,:,iblk), flwout  (:,:,iblk), &
-                            evap     (:,:,iblk),                     &
-                            Tref     (:,:,iblk), Qref    (:,:,iblk), &
-                            fresh    (:,:,iblk), fsalt   (:,:,iblk), &
-                            fhocn    (:,:,iblk), fswthru (:,:,iblk), &
-                            alvdr    (:,:,iblk), alidr   (:,:,iblk), &
-                            alvdf    (:,:,iblk), alidf   (:,:,iblk))
 
       enddo
 

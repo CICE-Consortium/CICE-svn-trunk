@@ -56,7 +56,7 @@
  subroutine init_communicate (mpicom_ice)
 
 ! !DESCRIPTION:
-!  This routine sets up MPI environment and defines ice
+!  This routine sets up MPI environment and defines ocean
 !  communicator.
 !
 ! !REVISION HISTORY:
@@ -86,7 +86,8 @@
 !
 !-----------------------------------------------------------------------
 
-   call MPI_COMM_DUP(mpicom_ice, MPI_COMM_ICE, ierr)
+   ! CCSM sequential mode
+   call MPI_COMM_DUP(MPI_COMM_WORLD, MPI_COMM_ICE, ierr)
 
    master_task = 0
    call MPI_COMM_RANK  (MPI_COMM_ICE, my_task, ierr)
@@ -219,7 +220,7 @@
    call MPI_COMM_CREATE (MPI_COMM_ICE, MPI_GROUP_NEW,  &
                          new_comm, ierr)
 #else
-   call MPI_COMM_DUP(MPI_COMM_ICE, new_comm, ierr)
+   call MPI_COMM_DUP(MPI_COMM_WORLD, new_comm, ierr)
 #endif
 
 !-----------------------------------------------------------------------

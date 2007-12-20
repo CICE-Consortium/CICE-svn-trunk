@@ -34,6 +34,7 @@
       use ice_exit
       use ice_fileunits
       use ice_flux
+      use ice_forcing
       use ice_grid
       use ice_history
       use ice_restart
@@ -42,6 +43,7 @@
       use ice_kinds_mod
       use ice_mechred
       use ice_meltpond
+      use ice_ocean
       use ice_orbital
       use ice_shortwave
       use ice_therm_itd
@@ -59,7 +61,7 @@
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-      public :: CICE_Init
+      public :: CICE_Initialize, cice_init
 
 !
 !EOP
@@ -71,7 +73,61 @@
 !=======================================================================
 !BOP
 !
-! !ROUTINE: CICE_Init - initialize CICE model
+! !ROUTINE: CICE_Initialize - initialize CICE model
+!
+! !DESCRIPTION:
+!
+!  Initialize the basic state, grid and all necessary parameters for
+!  running the CICE model.  Return the initial state in routine
+!  export state.
+!  Note: This initialization driver is designed for standalone and
+!        CCSM-coupled applications, with or without ESMF.  For other
+!        applications (e.g., standalone CAM), this driver would be
+!        replaced by a different driver that calls subroutine cice_init,
+!        where most of the work is done.
+!
+! !REVISION HISTORY: same as module
+!
+! !INTERFACE:
+!
+      subroutine CICE_Initialize
+!
+! !USES:
+!
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!
+!EOP
+!BOC
+!
+   !--------------------------------------------------------------------
+   ! CCSM-specific stuff to redirect stdin,stdout
+   !--------------------------------------------------------------------
+
+      call shr_msg_chdir('ice')! change cwd
+
+   !--------------------------------------------------------------------
+   ! model initialization
+   !--------------------------------------------------------------------
+
+      call cice_init
+
+   !--------------------------------------------------------------------
+   ! coupler communication or forcing data initialization
+   !--------------------------------------------------------------------
+
+      call init_cpl             ! initialize message passing (CCSM only)
+
+!
+!EOC
+!
+      end subroutine CICE_Initialize
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: cice_init - initialize CICE model
 !
 ! !DESCRIPTION:
 !
@@ -92,20 +148,10 @@
 !
 !     local temporary variables
 
-   !--------------------------------------------------------------------
-   ! CCSM-specific stuff to redirect stdin,stdout
-   !--------------------------------------------------------------------
-
-      call shr_msg_chdir('ice')! change cwd
-
-   !--------------------------------------------------------------------
-   ! model initialization
-   !--------------------------------------------------------------------
-
       call init_communicate     ! initial setup for message passing
       if (my_task == master_task) call shr_msg_dirio('ice')    ! redirect stdin/stdout
-      call init_fileunits       ! unit numbers
       call input_data           ! namelist variables
+      call init_fileunits       ! fileunits
       call init_work            ! work arrays
 
       call init_domain_blocks   ! set up block decomposition
@@ -120,24 +166,15 @@
       call init_evp (dt)        ! define evp dynamics parameters, variables
       call init_coupler_flux    ! initialize fluxes exchanged with coupler
       call init_thermo_vertical ! initialize vertical thermodynamics
-      if (trim(shortwave) == 'dEdd') then
+      if (shortwave == 'dEdd') then
          call init_orbit        ! initialize orbital parameters
+         call init_dEdd         ! initialize delta-Eddington scheme
       endif
       call init_itd             ! initialize ice thickness distribution
       call calendar(time)       ! determine the initial date
       call init_state           ! initialize the ice state
       call ice_prescribed_init
-
-      if (runtype /= 'continue') then
-         ! for non-continuation run, determine if should read restart file
-         if (trim(inic_file) /= 'default' .and. trim(inic_file) /= 'none') then
-            call restartfile(inic_file)      
-         end if
-      else	
-         ! for continuation run, always start for restart pointer file
-         call restartfile()
-         call calendar(time)       ! For restart runs, use initial time
-      end if
+      if (restart) call restartfile     ! start from restart file (core)
 
       ! tracers
       if (tr_iage) call init_age        ! ice age tracer
@@ -152,13 +189,7 @@
       if(.not.prescribed_ice) call ice_write_hist(dt)
       write_ic = .false.
 
-   !--------------------------------------------------------------------
-   ! coupler communication or forcing data initialization
-   !--------------------------------------------------------------------
-
-      call init_cpl             ! initialize message passing (CCSM only)
-
-      end subroutine CICE_Init
+      end subroutine cice_init
 
 !=======================================================================
 

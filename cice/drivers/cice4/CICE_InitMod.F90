@@ -224,6 +224,7 @@
       call init_thermo_vertical ! initialize vertical thermodynamics
       if (shortwave == 'dEdd') then
          call init_orbit        ! initialize orbital parameters
+         call init_dEdd         ! initialize delta-Eddington scheme
       endif
       call init_itd             ! initialize ice thickness distribution
       call calendar(time)       ! determine the initial date
