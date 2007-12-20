@@ -304,12 +304,10 @@
       evap    (:,:,:) = c0
       Tref    (:,:,:) = c0
       Qref    (:,:,:) = c0
-#if (!defined CCSM) || (!defined SEQ_MCT)
       alvdr   (:,:,:) = c0
       alidr   (:,:,:) = c0
       alvdf   (:,:,:) = c0
       alidf   (:,:,:) = c0
-#endif
 
       !-----------------------------------------------------------------
       ! fluxes sent to ocean
@@ -632,7 +630,6 @@
          i = indxi(ij)
          j = indxj(ij)
 
-#if (!defined CCSM) || (!defined SEQ_MCT)
         ! albedos
          if (coszn(i,j) > puny) then      ! sun above the horizon
             alvdf(i,j) = alvdf(i,j) + alvdfn(i,j)*aicen(i,j)
@@ -640,7 +637,6 @@
             alvdr(i,j) = alvdr(i,j) + alvdrn(i,j)*aicen(i,j)
             alidr(i,j) = alidr(i,j) + alidrn(i,j)*aicen(i,j)
          endif
-#endif
 
         ! atmo fluxes
 
@@ -825,7 +821,7 @@
 !
       use ice_domain, only: nblocks
       use ice_grid, only: tmask
-      use ice_state, only: aice
+      use ice_state, only: aice_init
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -838,8 +834,8 @@
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
-            if (tmask(i,j,iblk) .and. aice(i,j,iblk) > c0) then
-               ar = c1/aice(i,j,iblk)
+            if (tmask(i,j,iblk) .and. aice_init(i,j,iblk) > c0) then
+               ar = c1/aice_init(i,j,iblk)
                fresh_hist  (i,j,iblk)  = fresh_hist  (i,j,iblk) * ar
                fsalt_hist  (i,j,iblk)  = fsalt_hist  (i,j,iblk) * ar
                fhocn_hist  (i,j,iblk)  = fhocn_hist  (i,j,iblk) * ar

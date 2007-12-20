@@ -32,9 +32,6 @@
 !
 ! !USES:
       use ice_kinds_mod
-#ifdef SEQ_MCT
-      use shr_file_mod
-#endif
 !
 !EOP
 !=======================================================================
@@ -52,19 +49,12 @@
          nu_forcing    , &  ! forcing data file
          nu_dump       , &  ! dump file for restarting
          nu_restart    , &  ! restart input file
-         nu_dump_pond , &
-         nu_restart_pond, &
-         nu_dump_dEdd , &
-         nu_restart_dEdd, &
          nu_dump_age   , &  ! dump file for restarting ice age tracer
          nu_restart_age, &  ! restart input file for ice age tracer
          nu_rst_pointer, &  ! pointer to latest restart file
          nu_history    , &  ! binary history output file
          nu_hdr        , &  ! header file for binary history output
          nu_diag            ! diagnostics output file
-
-      integer (kind=int_kind) :: &
-         diag_level         ! per-processor diagnostics level
 
       character (6), parameter :: &
          nml_filename = 'ice_in' ! namelist input file name
@@ -73,8 +63,6 @@
          ice_stdin  =  5, & ! reserved unit for standard input
          ice_stdout =  6, & ! reserved unit for standard output
          ice_stderr =  6    ! reserved unit for standard error
-
-
 !EOP
 !BOC
       integer (kind=int_kind), parameter :: &
@@ -102,42 +90,21 @@ contains
 
          nu_diag = ice_stdout  ! default
 
-#ifdef SEQ_MCT
          ice_IOUnitsInUse = .false.
          ice_IOUnitsInUse(ice_stdin)  = .true. ! reserve unit 5
          ice_IOUnitsInUse(ice_stdout) = .true. ! reserve unit 6
          ice_IOUnitsInUse(ice_stderr) = .true.
 
-         nu_grid        = shr_file_getUnit()
-         nu_kmt         = shr_file_getUnit()
-         nu_forcing     = shr_file_getUnit()
-         nu_dump        = shr_file_getUnit()
-         nu_restart     = shr_file_getUnit()
-         nu_dump_pond  = shr_file_getUnit()
-         nu_restart_pond = shr_file_getUnit()
-         nu_dump_dEdd   = shr_file_getUnit()
-         nu_restart_dEdd = shr_file_getUnit()
-         nu_dump_age   = shr_file_getUnit()
-         nu_restart_age = shr_file_getUnit()
-         nu_rst_pointer = shr_file_getUnit()
-         nu_history     = shr_file_getUnit()
-         nu_hdr         = shr_file_getUnit()
-#else
          call get_fileunit(nu_grid)
          call get_fileunit(nu_kmt)
          call get_fileunit(nu_forcing)
          call get_fileunit(nu_dump)
          call get_fileunit(nu_restart)
-         call get_fileunit(nu_dump_pond)
-         call get_fileunit(nu_restart_pond)
-         call get_fileunit(nu_dump_dEdd)
-         call get_fileunit(nu_restart_dEdd)
          call get_fileunit(nu_dump_age)
          call get_fileunit(nu_restart_age)
          call get_fileunit(nu_rst_pointer)
          call get_fileunit(nu_history)
          call get_fileunit(nu_hdr)
-#endif
 
  end subroutine init_fileunits
 
@@ -169,9 +136,6 @@ contains
 
    logical (kind=log_kind) :: alreadyInUse
 
-#ifdef SEQ_MCT
-   iunit = shr_file_getUnit()
-#else
    srch_units: do n=ice_IOUnitsMinUnits, ice_IOUnitsMaxUnits
       if (.not. ice_IOUnitsInUse(n)) then   ! I found one, I found one
 
@@ -191,7 +155,6 @@ contains
    end do srch_units
 
    if (iunit > ice_IOUnitsMaxUnits) stop 'ice_IOUnitsGet: No free units'
-#endif
 
 !EOC
  end subroutine get_fileunit
@@ -206,17 +169,6 @@ contains
 ! !DESCRIPTION:
 !  This routine releases unit numbers at the end of a run. 
 
-#ifdef SEQ_MCT
- 	 call shr_file_freeUnit(nu_grid) 
- 	 call shr_file_freeUnit(nu_kmt) 
- 	 call shr_file_freeUnit(nu_forcing) 
- 	 call shr_file_freeUnit(nu_dump) 
- 	 call shr_file_freeUnit(nu_restart) 
- 	 call shr_file_freeUnit(nu_rst_pointer) 
- 	 call shr_file_freeUnit(nu_history) 
- 	 call shr_file_freeUnit(nu_hdr) 
-         if (nu_diag /= 6) call shr_file_freeUnit(nu_diag)
-#else
          call release_fileunit(nu_grid)
          call release_fileunit(nu_kmt)
          call release_fileunit(nu_forcing)
@@ -228,7 +180,6 @@ contains
          call release_fileunit(nu_history)
          call release_fileunit(nu_hdr)
          if (nu_diag /= 6) call release_fileunit(nu_diag)
-#endif
 
  end subroutine release_all_fileunits
 
