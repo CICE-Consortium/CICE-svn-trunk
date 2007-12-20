@@ -41,7 +41,6 @@
       use ice_kinds_mod
       use ice_mechred
       use ice_meltpond
-      use ice_ocean
       use ice_orbital
       use ice_shortwave
       use ice_therm_itd
@@ -58,7 +57,7 @@
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-      public :: cice_init
+      public :: CICE_Init
 
 !
 !EOP
@@ -70,7 +69,7 @@
 !=======================================================================
 !BOP
 !
-! !ROUTINE: cice_init - initialize CICE model
+! !ROUTINE: CICE_Init - initialize CICE model
 !
 ! !DESCRIPTION:
 !
@@ -80,7 +79,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine cice_init( mpicom_ice )
+      subroutine CICE_Init( mpicom_ice )
 !
 ! !USES:
 !
@@ -94,8 +93,8 @@
 !     local temporary variables
 
       call init_communicate( mpicom_ice ) ! initial setup for message passing
+      call init_fileunits       ! set unit numbers (including nu_diag)
       call input_data           ! namelist variables
-      call init_fileunits       ! fileunits
       call init_work            ! work arrays
 
       call init_domain_blocks   ! set up block decomposition
@@ -110,15 +109,24 @@
       call init_evp (dt)        ! define evp dynamics parameters, variables
       call init_coupler_flux    ! initialize fluxes exchanged with coupler
       call init_thermo_vertical ! initialize vertical thermodynamics
-      if (shortwave == 'dEdd') then
+      if (trim(shortwave) == 'dEdd') then
          call init_orbit        ! initialize orbital parameters
-         call init_dEdd         ! initialize delta-Eddington scheme
       endif
       call init_itd             ! initialize ice thickness distribution
       call calendar(time)       ! determine the initial date
       call init_state           ! initialize the ice state
       call ice_prescribed_init
-      if (restart) call restartfile     ! start from restart file (core)
+
+      if (runtype /= 'continue') then
+         ! for non-continuation run, determine if should read restart file
+         if (trim(inic_file) /= 'default' .and. trim(inic_file) /= 'none') then
+            call restartfile(inic_file)      
+         end if
+      else	
+         ! for continuation run, always start for restart pointer file
+         call restartfile()
+         call calendar(time)       ! use time from restart
+      end if
 
       ! tracers
       if (tr_iage) call init_age        ! ice age tracer
@@ -133,7 +141,7 @@
       if(.not.prescribed_ice) call ice_write_hist(dt)
       write_ic = .false.
 
-      end subroutine cice_init
+      end subroutine CICE_Init
 
 !=======================================================================
 
