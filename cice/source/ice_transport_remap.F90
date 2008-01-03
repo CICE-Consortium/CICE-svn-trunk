@@ -1957,6 +1957,7 @@
       do ng = 1, ngroups
          do j = 1, ny_block
          do i = 1, nx_block
+            triarea (i,j,ng) = c0
             fluxsign(i,j,ng) = 0
             iflux   (i,j,ng) = i
             jflux   (i,j,ng) = j
@@ -3642,9 +3643,6 @@
       integer (kind=int_kind) ::     &
            i, j, k, iblk, nt, nt1  ! standard indices
 
-      character (char_len) :: &
-         bc                   ! boundary condition type (Dirichlet, Neumann)
-
     !-------------------------------------------------------------------
     ! Compute tracer type and dependency vectors
     ! NOTE: May need to change these if transporting
@@ -3720,25 +3718,24 @@
       ! Compute ghost cell values
 
       call ice_timer_start(timer_bound)
-      bc = 'Neumann'
       call update_ghost_cells (xav,              bndy_info,     &
-                               field_loc_center, field_type_scalar, bc)
+                               field_loc_center, field_type_scalar)
       call update_ghost_cells (yav,              bndy_info,     &
-                               field_loc_center, field_type_scalar, bc)
+                               field_loc_center, field_type_scalar)
       call update_ghost_cells (xxav,             bndy_info,     &
-                               field_loc_center, field_type_scalar, bc)
+                               field_loc_center, field_type_scalar)
       call update_ghost_cells (xyav,             bndy_info,     &
-                               field_loc_center, field_type_scalar, bc)
+                               field_loc_center, field_type_scalar)
       call update_ghost_cells (yyav,             bndy_info,     &
-                               field_loc_center, field_type_scalar, bc)
+                               field_loc_center, field_type_scalar)
       call update_ghost_cells (xxxav,            bndy_info,     &
-                               field_loc_center, field_type_scalar, bc)
+                               field_loc_center, field_type_scalar)
       call update_ghost_cells (xxyav,            bndy_info,     &
-                               field_loc_center, field_type_scalar, bc)
+                               field_loc_center, field_type_scalar)
       call update_ghost_cells (xyyav,            bndy_info,     &
-                               field_loc_center, field_type_scalar, bc)
+                               field_loc_center, field_type_scalar)
       call update_ghost_cells (yyyav,            bndy_info,     &
-                               field_loc_center, field_type_scalar, bc)
+                               field_loc_center, field_type_scalar)
       call ice_timer_stop(timer_bound)
 
       end subroutine init_remap_old

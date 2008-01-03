@@ -130,7 +130,7 @@
    nprocs = -1
    distribution_type = 'cartesian'
    ew_boundary_type  = 'cyclic'
-   ns_boundary_type  = 'closed'
+   ns_boundary_type  = 'open'
 
    if (my_task == master_task) then
       open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
@@ -280,6 +280,67 @@
 
    type (block) :: &
       this_block           ! block information for current block
+
+!----------------------------------------------------------------------
+!
+!  check that there are at least nghost+1 rows or columns of land cells
+!  for closed boundary conditions (otherwise grid lengths are zero in
+!  cells neighboring ocean points).  
+!
+!----------------------------------------------------------------------
+
+   if (trim(ns_boundary_type) == 'closed') then
+      allocate(nocn(nblocks_tot))
+      nocn = 0
+      do n=1,nblocks_tot
+         this_block = get_block(n,n)
+         do j = this_block%jhi-1, this_block%jhi
+         do i = 1, nx_block
+            ig = this_block%i_glob(i)
+            jg = this_block%j_glob(j)
+            if (KMTG(ig,jg) > puny) nocn(n) = nocn(n) + 1
+         enddo
+         enddo
+         do j = this_block%jlo, this_block%jlo+1
+         do i = 1, nx_block
+            ig = this_block%i_glob(i)
+            jg = this_block%j_glob(j)
+            if (KMTG(ig,jg) > puny) nocn(n) = nocn(n) + 1
+         enddo
+         enddo
+         if (nocn(n) > 0) then
+            print*, 'ice: Not enough land cells along ns edge'
+            call abort_ice('ice: Not enough land cells along ns edge')
+         endif
+      enddo
+      deallocate(nocn)
+   endif
+   if (trim(ew_boundary_type) == 'closed') then
+      allocate(nocn(nblocks_tot))
+      nocn = 0
+      do n=1,nblocks_tot
+         this_block = get_block(n,n)
+         do j = 1, ny_block
+         do i = this_block%ihi-1, this_block%ihi
+            ig = this_block%i_glob(i)
+            jg = this_block%j_glob(j)
+            if (KMTG(ig,jg) > puny) nocn(n) = nocn(n) + 1
+         enddo
+         enddo
+         do j = 1, ny_block
+         do i = this_block%ilo, this_block%ilo+1
+            ig = this_block%i_glob(i)
+            jg = this_block%j_glob(j)
+            if (KMTG(ig,jg) > puny) nocn(n) = nocn(n) + 1
+         enddo
+         enddo
+         if (nocn(n) > 0) then
+            print*, 'ice: Not enough land cells along ew edge'
+            call abort_ice('ice: Not enough land cells along ew edge')
+         endif
+      enddo
+      deallocate(nocn)
+   endif
 
 !----------------------------------------------------------------------
 !

@@ -17,7 +17,7 @@
   , history_format = 'nc'
   , dumpfreq     = 'y'
   , dumpfreq_n   = 1
-  , restart      = .false.
+  , restart      = .true.
   , restart_dir  = './restart/'
   , restart_file = 'iced'
   , pointer_file = './restart/ice.restart_file'
@@ -27,7 +27,7 @@
   , grid_file    = 'grid'
   , kmt_file     = 'kmt'
   , kitd         = 1
-  , kcatbound    = 1
+  , kcatbound    = 0
   , kdyn         = 1
   , ndyn_dt      = 1
   , ndte         = 120
@@ -44,17 +44,17 @@
   , albsnowi     = 0.70 
   , atmbndy      = 'default'
   , fyear_init   = 1981
-  , ycycle       = 20
+  , ycycle       = 1
   , atm_data_format = 'bin'
   , atm_data_type= 'LYq'
-  , atm_data_dir = '/scratch/eclare/DATA/gx1v3/LargeYeager/'
+  , atm_data_dir = '/scratch2/eclare/DATA/gx1v3/LargeYeager/'
   , calc_strair  = .true.
   , precip_units = 'mm_per_sec'
   , oceanmixed_ice = .true.
   , ocn_data_format = 'bin'
   , sss_data_type= 'default'
   , sst_data_type= 'default'
-  , ocn_data_dir = '/scratch/eclare/DATA/gx1v3/gx1v3/forcing/'
+  , ocn_data_dir = '/scratch2/eclare/DATA/gx1v3/gx1v3/forcing/'
   , oceanmixed_file= 'pop_frc.gx1v3.051202.nc'
   , restore_sst  = .false.
   , trestore     =  90
@@ -69,7 +69,7 @@
     nprocs = 8
   , distribution_type = 'cartesian'
   , ew_boundary_type  = 'cyclic'
-  , ns_boundary_type  = 'closed'
+  , ns_boundary_type  = 'open'
 /
 
 &tracer_nml

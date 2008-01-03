@@ -188,10 +188,12 @@ contains
                select case (ns_boundary_type)
                case ('cyclic')
                   j_global(j,n) = j_global(j,n) + ny_global
+               case ('open')
+                  j_global(j,n) = -j_global(j,n) + 1
                case ('closed')
                   j_global(j,n) = 0
                case ('tripole')
-                  j_global(j,n) = 0
+                  j_global(j,n) = -j_global(j,n) + 1 ! open
                case default
                   call abort_ice(&
                            'ice: create_blocks: unknown n-s bndy type')
@@ -209,6 +211,8 @@ contains
                select case (ns_boundary_type)
                case ('cyclic')
                   j_global(j,n) = j_global(j,n) - ny_global
+               case ('open')
+                  j_global(j,n) = j_global(j,n) - 1
                case ('closed')
                   j_global(j,n) = 0
                case ('tripole')
@@ -221,8 +225,9 @@ contains
             !*** set last physical point if padded domain
 
             else if (j_global(j,n) == ny_global .and. &
-                     j > all_blocks(n)%jlo) then
-               all_blocks(n)%jhi = j   ! last physical point in padded domain
+                     j > all_blocks(n)%jlo .and. &
+                     j < all_blocks(n)%jhi) then
+               all_blocks(n)%jhi = j
             endif
          end do
 
@@ -237,6 +242,8 @@ contains
                select case (ew_boundary_type)
                case ('cyclic')
                   i_global(i,n) = i_global(i,n) + nx_global
+               case ('open')
+                  i_global(i,n) = -i_global(i,n) + 1
                case ('closed')
                   i_global(i,n) = 0
                case default
@@ -256,6 +263,8 @@ contains
                select case (ew_boundary_type)
                case ('cyclic')
                   i_global(i,n) = i_global(i,n) - nx_global
+               case ('open')
+                  i_global(i,n) = i_global(i,n) - 1
                case ('closed')
                   i_global(i,n) = 0
                case default
@@ -266,7 +275,8 @@ contains
             !*** last physical point in padded domain
 
             else if (i_global(i,n) == nx_global .and. &
-                     i > all_blocks(n)%ilo) then
+                     i > all_blocks(n)%ilo .and. &
+                     i < all_blocks(n)%ihi) then
                all_blocks(n)%ihi = i
             endif
          end do
