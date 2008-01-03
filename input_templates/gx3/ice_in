@@ -17,7 +17,7 @@
   , history_format = 'nc'
   , dumpfreq     = 'y'
   , dumpfreq_n   = 1
-  , restart      = .false.
+  , restart      = .true.
   , restart_dir  = './restart/'
   , restart_file = 'iced'
   , pointer_file = './restart/ice.restart_file'
@@ -27,7 +27,7 @@
   , grid_file    = 'grid'
   , kmt_file     = 'kmt'
   , kitd         = 1
-  , kcatbound    = 1
+  , kcatbound    = 0
   , kdyn         = 1
   , ndyn_dt      = 1
   , ndte         = 120
@@ -47,14 +47,14 @@
   , ycycle       = 1
   , atm_data_format = 'bin'
   , atm_data_type= 'ncar'
-  , atm_data_dir = '/scratch/eclare/atm/gx3v2m/NCAR_bulk/'
+  , atm_data_dir = '/scratch2/eclare/DATA/gx3v2m/atm/NCAR_bulk/'
   , calc_strair  = .true.
   , precip_units = 'mm_per_month'
   , oceanmixed_ice = .true.
   , ocn_data_format = 'bin'
   , sss_data_type= 'clim'
   , sst_data_type= 'clim'
-  , ocn_data_dir = '/scratch/eclare/DATA/gx3v2m/ocn/'
+  , ocn_data_dir = '/scratch2/eclare/DATA/gx3v2m/ocn/'
   , oceanmixed_file= 'unknown_oceanmixed_file'
   , restore_sst  = .true.
   , trestore     =  180
@@ -69,7 +69,7 @@
     nprocs = 4
   , distribution_type = 'cartesian'
   , ew_boundary_type  = 'cyclic'
-  , ns_boundary_type  = 'closed'
+  , ns_boundary_type  = 'open'
 /
 
 &tracer_nml

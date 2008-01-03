@@ -183,7 +183,6 @@
          daice        , & ! ice area transferred across boundary
          dvice            ! ice volume transferred across boundary
 
-!      real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
       real (kind=dbl_kind), dimension(icells) :: &
          vice_init, vice_final, & ! ice volume summed over categories
          vsno_init, vsno_final, & ! snow volume summed over categories
@@ -202,9 +201,8 @@
          fieldid           ! field identifier
 
       logical (kind=log_kind), parameter :: &
-         l_conservation_check = .true.   ! if true, check conservation
-!         l_conservation_check = .false.   ! if true, check conservation
-                                         ! (useful for debugging)
+         l_conservation_check = .false.   ! if true, check conservation
+                                          ! (useful for debugging)
 
        integer (kind=int_kind) :: &
          iflag         , & ! number of grid cells with remap_flag = .true.
@@ -219,8 +217,6 @@
       jstop = 0
 
       hin_max(ncat) = 999.9_dbl_kind ! arbitrary big number
-
-      if (l_stop) return
 
       !-----------------------------------------------------------------
       ! Compute volume and energy sums that linear remapping should

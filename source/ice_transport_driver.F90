@@ -481,8 +481,14 @@
     !  of the velocity field.  Otherwise, initialize edgearea.
     !-------------------------------------------------------------------
 
-         edgearea_e(:,:,:) = c0
-         edgearea_n(:,:,:) = c0
+         do iblk = 1, nblocks
+         do j = 1, ny_block
+         do i = 1, nx_block
+            edgearea_e(i,j,iblk) = c0
+            edgearea_n(i,j,iblk) = c0
+         enddo
+         enddo
+         enddo
 
          if (l_fixed_area) then
 
@@ -604,6 +610,7 @@
             if (l_stop) then
                write (nu_diag,*) 'istep1, my_task, iblk =',     &
                                   istep1, my_task, iblk
+               write (nu_diag,*) 'transport: conservation error, cat 0'
                call abort_ice('ice remap transport: conservation error')
             endif
 
@@ -616,6 +623,7 @@
                if (l_stop) then
                   write (nu_diag,*) 'istep1, my_task, iblk, cat =',     &
                                      istep1, my_task, iblk, n
+                  write (nu_diag,*) 'transport: conservation error, cat ',n
                   call abort_ice     &
                        ('ice remap transport: conservation error')
                endif

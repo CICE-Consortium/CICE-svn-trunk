@@ -276,6 +276,13 @@ contains
          if (iblock_west == 0) iblock_west = nblocks_x
          jblock_east = jblock_src
          jblock_west = jblock_src
+      case ('open')
+         iblock_east = iblock_src + 1
+         iblock_west = iblock_src - 1
+         if (iblock_east > nblocks_x) iblock_east = iblock_src
+         if (iblock_west < 1        ) iblock_west = iblock_src
+         jblock_east = jblock_src
+         jblock_west = jblock_src
       case ('closed')
          iblock_east = iblock_src + 1
          iblock_west = iblock_src - 1
@@ -292,6 +299,13 @@ contains
          jblock_north = mod(jblock_src,nblocks_y) + 1
          jblock_south = jblock_src - 1
          if (jblock_south == 0) jblock_south = nblocks_y
+         iblock_north = iblock_src
+         iblock_south = iblock_src
+      case ('open')
+         jblock_north = jblock_src + 1
+         jblock_south = jblock_src - 1
+         if (jblock_north > nblocks_y) jblock_north = jblock_src
+         if (jblock_south < 1        ) jblock_south = jblock_src
          iblock_north = iblock_src
          iblock_south = iblock_src
       case ('closed')
@@ -628,6 +642,13 @@ contains
          if (iblock_west == 0) iblock_west = nblocks_x
          jblock_east = jblock_src
          jblock_west = jblock_src
+      case ('open')
+         iblock_east = iblock_src + 1
+         iblock_west = iblock_src - 1
+         if (iblock_east > nblocks_x) iblock_east = iblock_src
+         if (iblock_west < 1        ) iblock_west = iblock_src
+         jblock_east = jblock_src
+         jblock_west = jblock_src
       case ('closed')
          iblock_east = iblock_src + 1
          iblock_west = iblock_src - 1
@@ -644,6 +665,13 @@ contains
          jblock_north = mod(jblock_src,nblocks_y) + 1
          jblock_south = jblock_src - 1
          if (jblock_south == 0) jblock_south = nblocks_y
+         iblock_north = iblock_src
+         iblock_south = iblock_src
+      case ('open')
+         jblock_north = jblock_src + 1
+         jblock_south = jblock_src - 1
+         if (jblock_north > nblocks_y) jblock_north = jblock_src
+         if (jblock_south < 1        ) jblock_south = jblock_src
          iblock_north = iblock_src
          iblock_south = iblock_src
       case ('closed')
