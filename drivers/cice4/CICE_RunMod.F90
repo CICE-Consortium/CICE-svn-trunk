@@ -1220,6 +1220,7 @@
          enddo               ! i
          enddo               ! j
 
+         if (icells > 0) &
          call ridge_ice (nx_block,             ny_block,                 &
                          dt,                   icells,                   &
                          indxi,                indxj,                    &

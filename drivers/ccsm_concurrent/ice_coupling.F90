@@ -494,48 +494,48 @@
        end do
       end do
 
-      call update_ghost_cells(sst    , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(sss    , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(uocn   , bndy_info, field_loc_center, &
-                                                  field_type_vector)
-      call update_ghost_cells(vocn   , bndy_info, field_loc_center, &
-                                                  field_type_vector)
-      call update_ghost_cells(zlvl   , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(uatm   , bndy_info, field_loc_center, &
-                                                  field_type_vector)
-      call update_ghost_cells(vatm   , bndy_info, field_loc_center, &
-                                                  field_type_vector)
-      call update_ghost_cells(potT   , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(Tair   , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(Qa     , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(rhoa   , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(ss_tltx, bndy_info, field_loc_center, &
-                                                  field_type_vector)
-      call update_ghost_cells(ss_tlty, bndy_info, field_loc_center, &
-                                                  field_type_vector)
-      call update_ghost_cells(frzmlt , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(swvdr  , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(swidr  , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(swvdf  , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(swidf  , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(flw    , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(frain  , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
-      call update_ghost_cells(fsnow  , bndy_info, field_loc_center, &
-                                                  field_type_scalar)
+      call ice_HaloUpdate(sst    , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(sss    , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(uocn   , halo_info, field_loc_center, &
+                                              field_type_vector)
+      call ice_HaloUpdate(vocn   , halo_info, field_loc_center, &
+                                              field_type_vector)
+      call ice_HaloUpdate(zlvl   , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(uatm   , halo_info, field_loc_center, &
+                                              field_type_vector)
+      call ice_HaloUpdate(vatm   , halo_info, field_loc_center, &
+                                              field_type_vector)
+      call ice_HaloUpdate(potT   , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(Tair   , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(Qa     , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(rhoa   , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(ss_tltx, halo_info, field_loc_center, &
+                                              field_type_vector)
+      call ice_HaloUpdate(ss_tlty, halo_info, field_loc_center, &
+                                              field_type_vector)
+      call ice_HaloUpdate(frzmlt , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(swvdr  , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(swidr  , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(swvdf  , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(swidf  , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(flw    , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(frain  , halo_info, field_loc_center, &
+                                              field_type_scalar)
+      call ice_HaloUpdate(fsnow  , halo_info, field_loc_center, &
+                                              field_type_scalar)
 
 !     call ice_timer_stop(17)  ! time spent cr-unpacking
 
@@ -596,8 +596,8 @@
               enddo
            enddo
 
-           call update_ghost_cells (work1,            bndy_info, &
-                                    field_loc_center, field_type_scalar)
+           call ice_HaloUpdate (work1,            halo_info, &
+                                field_loc_center, field_type_scalar)
 
            gsum = global_sum(work1, distrb_info, field_loc_center, &
                              tarea)
@@ -883,8 +883,8 @@
                enddo
             enddo
 
-            call update_ghost_cells (work1,            bndy_info, &
-                                     field_loc_center, field_type_scalar)
+            call ice_HaloUpdate (work1,            halo_info, &
+                                 field_loc_center, field_type_scalar)
 
             gsum = global_sum(work1, distrb_info, field_loc_center, &
                               tarea)

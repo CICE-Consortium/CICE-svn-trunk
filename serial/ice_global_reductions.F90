@@ -138,7 +138,7 @@
 
 ! !INPUT PARAMETERS:
 
-   real (r8), dimension(:,:,:), intent(in) :: &
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
       X                    ! array to be summed
 
    type (distrb), intent(in) :: &
@@ -147,14 +147,14 @@
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (r8), dimension(size(X,dim=1), &
+   real (dbl_kind), dimension(size(X,dim=1), &
                         size(X,dim=2), &
                         size(X,dim=3)), intent(in), optional :: &
       MASK                 ! real multiplicative mask
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       global_sum_dbl       ! resulting global sum
 
 !EOP
@@ -165,7 +165,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       local_block_sum      ! sum of local block domain
 
    integer (int_kind) :: &
@@ -184,8 +184,8 @@
                             field_loc == field_loc_NEcorner)) then
       !*** must exclude redundant points
       do n=1,nblocks_tot
-         if (dist%proc(n) /= 0) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) /= 0) then
+            bid = dist%blockLocalID(n)
             this_block = get_block(n,bid)
             ib = this_block%ilo
             ie = this_block%ihi
@@ -229,8 +229,8 @@
       end do
    else ! normal global sum
       do n=1,nblocks_tot
-         if (dist%proc(n) /= 0) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) /= 0) then
+            bid = dist%blockLocalID(n)
             call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
             local_block_sum = c0
             if (present(MASK)) then
@@ -273,7 +273,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), dimension(:,:,:), intent(in) :: &
+   real (real_kind), dimension(:,:,:), intent(in) :: &
       X                    ! array to be summed
 
    type (distrb), intent(in) :: &
@@ -282,7 +282,7 @@
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (r8), dimension(size(X,dim=1), &
+   real (dbl_kind), dimension(size(X,dim=1), &
                         size(X,dim=2), &
                         size(X,dim=3)), intent(in), optional :: &
       MASK                 ! real multiplicative mask
@@ -293,7 +293,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4) :: &
+   real (real_kind) :: &
       global_sum_real       ! resulting global sum
 
 !-----------------------------------------------------------------------
@@ -302,7 +302,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       local_block_sum      ! sum of local block domain
 
    integer (int_kind) :: &
@@ -321,8 +321,8 @@
                             field_loc == field_loc_NEcorner)) then
       !*** must exclude redundant points
       do n=1,nblocks_tot
-         if (dist%proc(n) /= 0) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) /= 0) then
+            bid = dist%blockLocalID(n)
             this_block = get_block(n,bid)
             ib = this_block%ilo
             ie = this_block%ihi
@@ -366,8 +366,8 @@
       end do
    else ! normal global sum
       do n=1,nblocks_tot
-         if (dist%proc(n) /= 0) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) /= 0) then
+            bid = dist%blockLocalID(n)
             call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
             local_block_sum = c0
             if (present(MASK)) then
@@ -419,7 +419,7 @@
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (r8), dimension(size(X,dim=1), &
+   real (dbl_kind), dimension(size(X,dim=1), &
                         size(X,dim=2), &
                         size(X,dim=3)), intent(in), optional :: &
       MASK                 ! real multiplicative mask
@@ -458,8 +458,8 @@
                             field_loc == field_loc_NEcorner)) then
       !*** must exclude redundant points
       do n=1,nblocks_tot
-         if (dist%proc(n) /= 0) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) /= 0) then
+            bid = dist%blockLocalID(n)
             this_block = get_block(n,bid)
             ib = this_block%ilo
             ie = this_block%ihi
@@ -503,8 +503,8 @@
       end do
    else ! normal global sum
       do n=1,nblocks_tot
-         if (dist%proc(n) /= 0) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) /= 0) then
+            bid = dist%blockLocalID(n)
             call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
             local_block_sum = c0
             if (present(MASK)) then
@@ -544,10 +544,10 @@
    type (distrb), intent(in) :: &
       dist                 ! distribution from which this is called
 
-   real (r8), intent(in) :: &
+   real (dbl_kind), intent(in) :: &
       local_scalar                ! local scalar to be compared
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       global_sum_scalar_dbl   ! sum of scalars across processors
 
 !-----------------------------------------------------------------------
@@ -572,13 +572,13 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), intent(in) :: &
+   real (real_kind), intent(in) :: &
       local_scalar                ! local scalar to be compared
 
    type (distrb), intent(in) :: &
       dist                 ! distribution from which this is called
 
-   real (r4) :: &
+   real (real_kind) :: &
       global_sum_scalar_real   ! sum of scalars across processors
 
 !-----------------------------------------------------------------------
@@ -647,7 +647,7 @@
 
 ! !INPUT PARAMETERS:
 
-   real (r8), dimension(:,:,:), intent(in) :: &
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
      X,                &! first array in product to be summed
      Y                  ! second array in product to be summed
 
@@ -657,14 +657,14 @@
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (r8), &
+   real (dbl_kind), &
      dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
      intent(in), optional :: &
      MASK               ! real multiplicative mask
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8) :: &
+   real (dbl_kind) :: &
      global_sum_prod_dbl ! resulting global sum of X*Y
 
 !EOP
@@ -675,7 +675,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       local_block_sum      ! sum of local block domain
 
    integer (int_kind) :: &
@@ -694,8 +694,8 @@
                             field_loc == field_loc_NEcorner)) then
       !*** must exclude redundant points
       do n=1,nblocks_tot
-         if (dist%proc(n) /= 0) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) /= 0) then
+            bid = dist%blockLocalID(n)
             this_block = get_block(n,bid)
             ib = this_block%ilo
             ie = this_block%ihi
@@ -740,8 +740,8 @@
       end do
    else ! normal global sum
       do n=1,nblocks_tot
-         if (dist%proc(n) /= 0) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) /= 0) then
+            bid = dist%blockLocalID(n)
             call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
             local_block_sum = c0
             if (present(MASK)) then
@@ -784,7 +784,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), dimension(:,:,:), intent(in) :: &
+   real (real_kind), dimension(:,:,:), intent(in) :: &
      X,                &! first array in product to be summed
      Y                  ! second array in product to be summed
 
@@ -794,7 +794,7 @@
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (r8), &
+   real (dbl_kind), &
      dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
      intent(in), optional :: &
      MASK               ! real multiplicative mask
@@ -805,7 +805,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4) :: &
+   real (real_kind) :: &
      global_sum_prod_real ! resulting global sum of X*Y
 
 !-----------------------------------------------------------------------
@@ -814,7 +814,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       local_block_sum      ! sum of local block domain
 
    integer (int_kind) :: &
@@ -833,8 +833,8 @@
                             field_loc == field_loc_NEcorner)) then
       !*** must exclude redundant points
       do n=1,nblocks_tot
-         if (dist%proc(n) /= 0) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) /= 0) then
+            bid = dist%blockLocalID(n)
             this_block = get_block(n,bid)
             ib = this_block%ilo
             ie = this_block%ihi
@@ -879,8 +879,8 @@
       end do
    else ! normal global sum
       do n=1,nblocks_tot
-         if (dist%proc(n) /= 0) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) /= 0) then
+            bid = dist%blockLocalID(n)
             call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
             local_block_sum = c0
             if (present(MASK)) then
@@ -933,7 +933,7 @@
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (r8), &
+   real (dbl_kind), &
      dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
      intent(in), optional :: &
      MASK               ! real multiplicative mask
@@ -972,8 +972,8 @@
                             field_loc == field_loc_NEcorner)) then
       !*** must exclude redundant points
       do n=1,nblocks_tot
-         if (dist%proc(n) /= 0) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) /= 0) then
+            bid = dist%blockLocalID(n)
             this_block = get_block(n,bid)
             ib = this_block%ilo
             ie = this_block%ihi
@@ -1018,8 +1018,8 @@
       end do
    else ! normal global sum
       do n=1,nblocks_tot
-         if (dist%proc(n) /= 0) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) /= 0) then
+            bid = dist%blockLocalID(n)
             call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
             local_block_sum = c0
             if (present(MASK)) then
@@ -1074,7 +1074,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), dimension(:,:,:), intent(in) :: &
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
       X            ! array containing field for which max required
 
    type (distrb), intent(in) :: &
@@ -1094,7 +1094,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       global_maxval_dbl   ! resulting max val of global domain
 
 !-----------------------------------------------------------------------
@@ -1112,8 +1112,8 @@
    global_maxval_dbl = -bignum
 
    do n=1,nblocks_tot
-      if (dist%proc(n) /= 0) then
-         bid = dist%local_block(n)
+      if (dist%blockLocation(n) /= 0) then
+         bid = dist%blockLocalID(n)
          call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
          if (present(LMASK)) then
             do j=jb,je
@@ -1155,7 +1155,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), dimension(:,:,:), intent(in) :: &
+   real (real_kind), dimension(:,:,:), intent(in) :: &
       X            ! array containing field for which max required
 
    type (distrb), intent(in) :: &
@@ -1175,7 +1175,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4) :: &
+   real (real_kind) :: &
       global_maxval_real   ! resulting max val of global domain
 
 !-----------------------------------------------------------------------
@@ -1193,8 +1193,8 @@
    global_maxval_real = -bignum
 
    do n=1,nblocks_tot
-      if (dist%proc(n) /= 0) then
-         bid = dist%local_block(n)
+      if (dist%blockLocation(n) /= 0) then
+         bid = dist%blockLocalID(n)
          call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
          if (present(LMASK)) then
             do j=jb,je
@@ -1274,8 +1274,8 @@
    global_maxval_int = -1000000
 
    do n=1,nblocks_tot
-      if (dist%proc(n) /= 0) then
-         bid = dist%local_block(n)
+      if (dist%blockLocation(n) /= 0) then
+         bid = dist%blockLocalID(n)
          call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
          if (present(LMASK)) then
             do j=jb,je
@@ -1323,7 +1323,7 @@
 
 ! !INPUT PARAMETERS:
 
-   real (r8), dimension(:,:,:), intent(in) :: &
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
       X            ! array containing field for which min required
 
    type (distrb), intent(in) :: &
@@ -1339,7 +1339,7 @@
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       global_minval_dbl   ! resulting min val of global domain
 
 !EOP
@@ -1359,8 +1359,8 @@
    global_minval_dbl = bignum
 
    do n=1,nblocks_tot
-      if (dist%proc(n) /= 0) then
-         bid = dist%local_block(n)
+      if (dist%blockLocation(n) /= 0) then
+         bid = dist%blockLocalID(n)
          call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
          if (present(LMASK)) then
             do j=jb,je
@@ -1402,7 +1402,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), dimension(:,:,:), intent(in) :: &
+   real (real_kind), dimension(:,:,:), intent(in) :: &
       X            ! array containing field for which min required
 
    type (distrb), intent(in) :: &
@@ -1422,7 +1422,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4) :: &
+   real (real_kind) :: &
       global_minval_real   ! resulting min val of global domain
 
 !-----------------------------------------------------------------------
@@ -1440,8 +1440,8 @@
    global_minval_real = bignum
 
    do n=1,nblocks_tot
-      if (dist%proc(n) /= 0) then
-         bid = dist%local_block(n)
+      if (dist%blockLocation(n) /= 0) then
+         bid = dist%blockLocalID(n)
          call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
          if (present(LMASK)) then
             do j=jb,je
@@ -1521,8 +1521,8 @@
    global_minval_int = 1000000
 
    do n=1,nblocks_tot
-      if (dist%proc(n) /= 0) then
-         bid = dist%local_block(n)
+      if (dist%blockLocation(n) /= 0) then
+         bid = dist%blockLocalID(n)
          call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
          if (present(LMASK)) then
             do j=jb,je
@@ -1558,10 +1558,10 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), intent(inout) :: &
+   real (dbl_kind), intent(inout) :: &
       local_scalar                ! local scalar to be compared
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       global_maxval_scalar_dbl   ! resulting global max
 
 !-----------------------------------------------------------------------
@@ -1586,10 +1586,10 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), intent(inout) :: &
+   real (real_kind), intent(inout) :: &
       local_scalar                ! local scalar to be compared
 
-   real (r4) :: &
+   real (real_kind) :: &
       global_maxval_scalar_real   ! resulting global max
 
 !-----------------------------------------------------------------------
@@ -1642,10 +1642,10 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), intent(inout) :: &
+   real (dbl_kind), intent(inout) :: &
       local_scalar                ! local scalar to be compared
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       global_minval_scalar_dbl   ! resulting global min
 
 !-----------------------------------------------------------------------
@@ -1670,10 +1670,10 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), intent(inout) :: &
+   real (real_kind), intent(inout) :: &
       local_scalar                ! local scalar to be compared
 
-   real (r4) :: &
+   real (real_kind) :: &
       global_minval_scalar_real   ! resulting global min
 
 !-----------------------------------------------------------------------

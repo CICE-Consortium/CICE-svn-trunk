@@ -148,7 +148,7 @@
 
 ! !INPUT PARAMETERS:
 
-   real (r8), dimension(:,:,:), intent(in) :: &
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
       X                    ! array to be summed
 
    type (distrb), intent(in) :: &
@@ -157,14 +157,14 @@
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (r8), dimension(size(X,dim=1), &
+   real (dbl_kind), dimension(size(X,dim=1), &
                         size(X,dim=2), &
                         size(X,dim=3)), intent(in), optional :: &
       MASK                 ! real multiplicative mask
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       global_sum_dbl       ! resulting global sum
 
 !EOP
@@ -175,11 +175,11 @@
 !
 !-----------------------------------------------------------------------
 
-!   real (r8), dimension(:), allocatable :: &
+!   real (dbl_kind), dimension(:), allocatable :: &
 !      local_block_sum,    &! sum of local blocks
 !      global_block_sum     ! sum of all blocks
 
-   real (r8) ::          &
+   real (dbl_kind) ::          &
       local_sum           ! sum of all local blocks
 
    integer (int_kind) :: &
@@ -204,8 +204,8 @@
                             field_loc == field_loc_NEcorner)) then
       !*** must remove redundant points from sum
       do n=1,nblocks_tot
-         if (dist%proc(n) == my_task+1) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) == my_task+1) then
+            bid = dist%blockLocalID(n)
             this_block = get_block(n,bid)
             ib = this_block%ilo
             ie = this_block%ihi
@@ -244,8 +244,8 @@
       end do !block loop
    else ! regular global sum
       do n=1,nblocks_tot
-         if (dist%proc(n) == my_task+1) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) == my_task+1) then
+            bid = dist%blockLocalID(n)
             call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
             if (present(MASK)) then
                do j=jb,je
@@ -269,7 +269,7 @@
    if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLREDUCE(local_sum, global_sum_dbl, 1, &
-                            mpi_dbl, MPI_SUM, dist%communicator, ierr)
+                            mpiR8, MPI_SUM, dist%communicator, ierr)
       else
          global_sum_dbl = c0
       endif
@@ -294,8 +294,8 @@
 !   !call timer_start(timer_local)
 !   if (present(MASK)) then
 !     do n=1,nblocks_tot
-!       if (dist%proc(n) == my_task+1) then
-!         bid = dist%local_block(n)
+!       if (dist%blockLocation(n) == my_task+1) then
+!         bid = dist%blockLocalID(n)
 !         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
 !         do j=jb,je
 !         do i=ib,ie
@@ -307,8 +307,8 @@
 !     end do
 !   else
 !     do n=1,nblocks_tot
-!       if (dist%proc(n) == my_task+1) then
-!         bid = dist%local_block(n)
+!       if (dist%blockLocation(n) == my_task+1) then
+!         bid = dist%blockLocalID(n)
 !         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
 !         do j=jb,je
 !         do i=ib,ie
@@ -323,7 +323,7 @@
 !
 !   !call timer_start(timer_mpi)
 !   call MPI_ALLREDUCE(local_block_sum, global_block_sum, nblocks_tot, &
-!                      mpi_dbl, MPI_SUM, dist%communicator, ierr)
+!                      mpiR8, MPI_SUM, dist%communicator, ierr)
 !   !call timer_stop(timer_mpi)
 !
 !   global_sum_dbl = c0
@@ -356,7 +356,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), dimension(:,:,:), intent(in) :: &
+   real (real_kind), dimension(:,:,:), intent(in) :: &
       X                    ! array to be summed
 
    type (distrb), intent(in) :: &
@@ -365,7 +365,7 @@
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (r8), dimension(size(X,dim=1), &
+   real (dbl_kind), dimension(size(X,dim=1), &
                               size(X,dim=2), &
                               size(X,dim=3)), intent(in), optional :: &
       MASK                 ! real multiplicative mask
@@ -376,7 +376,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4) :: &
+   real (real_kind) :: &
       global_sum_real       ! resulting global sum
 
 !-----------------------------------------------------------------------
@@ -385,11 +385,11 @@
 !
 !-----------------------------------------------------------------------
 
-!   real (r4), dimension(:), allocatable :: &
+!   real (real_kind), dimension(:), allocatable :: &
 !      local_block_sum,    &! sum of local blocks
 !      global_block_sum     ! sum of all blocks
 
-   real (r4) ::          &
+   real (real_kind) ::          &
       local_sum           ! sum of local blocks
 
    integer (int_kind) :: &
@@ -414,8 +414,8 @@
                             field_loc == field_loc_NEcorner)) then
       !*** must remove redundant points from sum
       do n=1,nblocks_tot
-         if (dist%proc(n) == my_task+1) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) == my_task+1) then
+            bid = dist%blockLocalID(n)
             this_block = get_block(n,bid)
             ib = this_block%ilo
             ie = this_block%ihi
@@ -454,8 +454,8 @@
       end do !block loop
    else ! regular global sum
       do n=1,nblocks_tot
-         if (dist%proc(n) == my_task+1) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) == my_task+1) then
+            bid = dist%blockLocalID(n)
             call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
             if (present(MASK)) then
                do j=jb,je
@@ -478,7 +478,7 @@
    if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLREDUCE(local_sum, global_sum_real, 1, &
-                            mpi_real, MPI_SUM, dist%communicator, ierr)
+                            mpiR4, MPI_SUM, dist%communicator, ierr)
       else
          global_sum_real = c0
       endif
@@ -501,8 +501,8 @@
 !
 !   if (present(MASK)) then
 !     do n=1,nblocks_tot
-!       if (dist%proc(n) == my_task+1) then
-!         bid = dist%local_block(n)
+!       if (dist%blockLocation(n) == my_task+1) then
+!         bid = dist%blockLocalID(n)
 !         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
 !         do j=jb,je
 !         do i=ib,ie
@@ -514,8 +514,8 @@
 !     end do
 !   else
 !     do n=1,nblocks_tot
-!       if (dist%proc(n) == my_task+1) then
-!         bid = dist%local_block(n)
+!       if (dist%blockLocation(n) == my_task+1) then
+!         bid = dist%blockLocalID(n)
 !         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
 !         do j=jb,je
 !         do i=ib,ie
@@ -528,7 +528,7 @@
 !   endif
 !
 !   call MPI_ALLREDUCE(local_block_sum, global_block_sum, nblocks_tot, &
-!                      mpi_real, MPI_SUM, dist%communicator, ierr)
+!                      mpiR4, MPI_SUM, dist%communicator, ierr)
 !
 !   global_sum_real = c0
 !   do n=1,nblocks_tot
@@ -569,7 +569,7 @@
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (r8), dimension(size(X,dim=1), &
+   real (dbl_kind), dimension(size(X,dim=1), &
                               size(X,dim=2), &
                               size(X,dim=3)), intent(in), optional :: &
       MASK                 ! real multiplicative mask
@@ -618,8 +618,8 @@
                             field_loc == field_loc_NEcorner)) then
       !*** must remove redundant points from sum
       do n=1,nblocks_tot
-         if (dist%proc(n) == my_task+1) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) == my_task+1) then
+            bid = dist%blockLocalID(n)
             this_block = get_block(n,bid)
             ib = this_block%ilo
             ie = this_block%ihi
@@ -658,8 +658,8 @@
       end do !block loop
    else ! regular global sum
       do n=1,nblocks_tot
-         if (dist%proc(n) == my_task+1) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) == my_task+1) then
+            bid = dist%blockLocalID(n)
             call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
             if (present(MASK)) then
                do j=jb,je
@@ -705,8 +705,8 @@
 !
 !   if (present(MASK)) then
 !     do n=1,nblocks_tot
-!       if (dist%proc(n) == my_task+1) then
-!         bid = dist%local_block(n)
+!       if (dist%blockLocation(n) == my_task+1) then
+!         bid = dist%blockLocalID(n)
 !         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
 !         do j=jb,je
 !         do i=ib,ie
@@ -718,8 +718,8 @@
 !     end do
 !   else
 !     do n=1,nblocks_tot
-!       if (dist%proc(n) == my_task+1) then
-!         bid = dist%local_block(n)
+!       if (dist%blockLocation(n) == my_task+1) then
+!         bid = dist%blockLocalID(n)
 !         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
 !         do j=jb,je
 !         do i=ib,ie
@@ -760,10 +760,10 @@
    type (distrb), intent(in) :: &
       dist                 ! distribution from which this is called
 
-   real (r8), intent(inout) :: &
+   real (dbl_kind), intent(inout) :: &
       local_scalar                ! local scalar to be compared
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       global_sum_scalar_dbl   ! resulting global sum
 
    integer (int_kind) :: ierr ! MPI error flag
@@ -773,7 +773,7 @@
    if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLREDUCE(local_scalar, global_sum_scalar_dbl, 1, &
-                            mpi_dbl, MPI_SUM, dist%communicator, ierr)
+                            mpiR8, MPI_SUM, dist%communicator, ierr)
       else
          global_sum_scalar_dbl = c0
       endif
@@ -797,13 +797,13 @@
 
    include 'mpif.h'  ! MPI Fortran include file
 
-   real (r4), intent(inout) :: &
+   real (real_kind), intent(inout) :: &
       local_scalar                ! local scalar to be compared
 
    type (distrb), intent(in) :: &
       dist                 ! distribution from which this is called
 
-   real (r4) :: &
+   real (real_kind) :: &
       global_sum_scalar_real   ! resulting global sum
 
    integer (int_kind) :: ierr ! MPI error flag
@@ -813,7 +813,7 @@
    if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLREDUCE(local_scalar, global_sum_scalar_real, 1, &
-                            MPI_REAL, MPI_SUM, dist%communicator, ierr)
+                            mpiR4, MPI_SUM, dist%communicator, ierr)
       else
          global_sum_scalar_real = c0
       endif
@@ -892,7 +892,7 @@
 
 ! !INPUT PARAMETERS:
 
-   real (r8), dimension(:,:,:), intent(in) :: &
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
      X,                &! first array in product to be summed
      Y                  ! second array in product to be summed
 
@@ -902,14 +902,14 @@
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (r8), &
+   real (dbl_kind), &
      dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
      intent(in), optional :: &
      MASK               ! real multiplicative mask
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8) :: &
+   real (dbl_kind) :: &
      global_sum_prod_dbl ! resulting global sum of X*Y
 
 !EOP
@@ -920,11 +920,11 @@
 !
 !-----------------------------------------------------------------------
 
-!   real (r8), dimension(:), allocatable :: &
+!   real (dbl_kind), dimension(:), allocatable :: &
 !     local_block_sum,  &! sum of each block
 !     global_block_sum   ! global sum each block
 
-   real (r8) ::         & 
+   real (dbl_kind) ::         & 
      local_sum           ! sum of each block
 
    integer (int_kind) :: &
@@ -949,8 +949,8 @@
                             field_loc == field_loc_NEcorner)) then
       !*** must remove redundant points from sum
       do n=1,nblocks_tot
-         if (dist%proc(n) == my_task+1) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) == my_task+1) then
+            bid = dist%blockLocalID(n)
             this_block = get_block(n,bid)
             ib = this_block%ilo
             ie = this_block%ihi
@@ -991,8 +991,8 @@
       end do !block loop
    else ! regular global sum
       do n=1,nblocks_tot
-         if (dist%proc(n) == my_task+1) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) == my_task+1) then
+            bid = dist%blockLocalID(n)
             call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
             if (present(MASK)) then
                do j=jb,je
@@ -1016,7 +1016,7 @@
    if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLREDUCE(local_sum, global_sum_prod_dbl, 1, &
-                      mpi_dbl, MPI_SUM, dist%communicator, ierr)
+                      mpiR8, MPI_SUM, dist%communicator, ierr)
       else
          global_sum_prod_dbl = 0
       endif
@@ -1039,8 +1039,8 @@
 !
 !   if (present(MASK)) then
 !     do n=1,nblocks_tot
-!       if (dist%proc(n) == my_task+1) then
-!         bid = dist%local_block(n)
+!       if (dist%blockLocation(n) == my_task+1) then
+!         bid = dist%blockLocalID(n)
 !         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
 !         do j=jb,je
 !         do i=ib,ie
@@ -1052,8 +1052,8 @@
 !     end do
 !   else
 !     do n=1,nblocks_tot
-!       if (dist%proc(n) == my_task+1) then
-!         bid = dist%local_block(n)
+!       if (dist%blockLocation(n) == my_task+1) then
+!         bid = dist%blockLocalID(n)
 !         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
 !         do j=jb,je
 !         do i=ib,ie
@@ -1066,7 +1066,7 @@
 !   endif
 !
 !   call MPI_ALLREDUCE(local_block_sum, global_block_sum, nblocks_tot, &
-!                      mpi_dbl, MPI_SUM, dist%communicator, ierr)
+!                      mpiR8, MPI_SUM, dist%communicator, ierr)
 !
 !   global_sum_prod_dbl = c0
 !   do n=1,nblocks_tot
@@ -1098,7 +1098,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), dimension(:,:,:), intent(in) :: &
+   real (real_kind), dimension(:,:,:), intent(in) :: &
      X,                &! first array in product to be summed
      Y                  ! second array in product to be summed
 
@@ -1108,7 +1108,7 @@
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (r8), &
+   real (dbl_kind), &
      dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
      intent(in), optional :: &
      MASK               ! real multiplicative mask
@@ -1119,7 +1119,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4) :: &
+   real (real_kind) :: &
      global_sum_prod_real ! resulting global sum of X*Y
 
 !-----------------------------------------------------------------------
@@ -1128,11 +1128,11 @@
 !
 !-----------------------------------------------------------------------
 
-!   real (r8), dimension(:), allocatable :: &
+!   real (dbl_kind), dimension(:), allocatable :: &
 !     local_block_sum,  &! sum of each block
 !     global_block_sum   ! global sum each block
 
-   real (r8) ::         &
+   real (dbl_kind) ::         &
      local_sum,         &! sum of local blocks
      global_sum_prod_tmp ! sum of global blocks
 
@@ -1158,8 +1158,8 @@
                             field_loc == field_loc_NEcorner)) then
       !*** must remove redundant points from sum
       do n=1,nblocks_tot
-         if (dist%proc(n) == my_task+1) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) == my_task+1) then
+            bid = dist%blockLocalID(n)
             this_block = get_block(n,bid)
             ib = this_block%ilo
             ie = this_block%ihi
@@ -1200,8 +1200,8 @@
       end do !block loop
    else ! regular global sum
       do n=1,nblocks_tot
-         if (dist%proc(n) == my_task+1) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) == my_task+1) then
+            bid = dist%blockLocalID(n)
             call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
             if (present(MASK)) then
                do j=jb,je
@@ -1225,7 +1225,7 @@
    if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLREDUCE(local_sum, global_sum_prod_tmp, 1, &
-                      mpi_dbl, MPI_SUM, dist%communicator, ierr)
+                      mpiR8, MPI_SUM, dist%communicator, ierr)
          global_sum_prod_real = global_sum_prod_tmp
       else
          global_sum_prod_real = 0
@@ -1250,8 +1250,8 @@
 !
 !   if (present(MASK)) then
 !     do n=1,nblocks_tot
-!       if (dist%proc(n) == my_task+1) then
-!         bid = dist%local_block(n)
+!       if (dist%blockLocation(n) == my_task+1) then
+!         bid = dist%blockLocalID(n)
 !         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
 !         do j=jb,je
 !         do i=ib,ie
@@ -1263,8 +1263,8 @@
 !     end do
 !   else
 !     do n=1,nblocks_tot
-!       if (dist%proc(n) == my_task+1) then
-!         bid = dist%local_block(n)
+!       if (dist%blockLocation(n) == my_task+1) then
+!         bid = dist%blockLocalID(n)
 !         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
 !         do j=jb,je
 !         do i=ib,ie
@@ -1277,7 +1277,7 @@
 !   endif
 !
 !   call MPI_ALLREDUCE(local_block_sum, global_block_sum, nblocks_tot, &
-!                      mpi_dbl, MPI_SUM, dist%communicator, ierr)
+!                      mpiR8, MPI_SUM, dist%communicator, ierr)
 !
 !   global_sum_prod_real = c0
 !   do n=1,nblocks_tot
@@ -1319,7 +1319,7 @@
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (r8), &
+   real (dbl_kind), &
      dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
      intent(in), optional :: &
      MASK               ! real multiplicative mask
@@ -1368,8 +1368,8 @@
                             field_loc == field_loc_NEcorner)) then
       !*** must remove redundant points from sum
       do n=1,nblocks_tot
-         if (dist%proc(n) == my_task+1) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) == my_task+1) then
+            bid = dist%blockLocalID(n)
             this_block = get_block(n,bid)
             ib = this_block%ilo
             ie = this_block%ihi
@@ -1410,8 +1410,8 @@
       end do !block loop
    else ! regular global sum
       do n=1,nblocks_tot
-         if (dist%proc(n) == my_task+1) then
-            bid = dist%local_block(n)
+         if (dist%blockLocation(n) == my_task+1) then
+            bid = dist%blockLocalID(n)
             call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
             if (present(MASK)) then
                do j=jb,je
@@ -1458,8 +1458,8 @@
 !
 !   if (present(MASK)) then
 !     do n=1,nblocks_tot
-!       if (dist%proc(n) == my_task+1) then
-!         bid = dist%local_block(n)
+!       if (dist%blockLocation(n) == my_task+1) then
+!         bid = dist%blockLocalID(n)
 !         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
 !         do j=jb,je
 !         do i=ib,ie
@@ -1471,8 +1471,8 @@
 !     end do
 !   else
 !     do n=1,nblocks_tot
-!       if (dist%proc(n) == my_task+1) then
-!         bid = dist%local_block(n)
+!       if (dist%blockLocation(n) == my_task+1) then
+!         bid = dist%blockLocalID(n)
 !         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
 !         do j=jb,je
 !         do i=ib,ie
@@ -1530,7 +1530,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), dimension(:,:,:), intent(in) :: &
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
       X            ! array containing field for which max required
 
    type (distrb), intent(in) :: &
@@ -1550,7 +1550,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       global_maxval_dbl   ! resulting max val of global domain
 
 !-----------------------------------------------------------------------
@@ -1559,7 +1559,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       local_maxval         ! max value of local subdomain
 
    integer (int_kind) :: &
@@ -1571,8 +1571,8 @@
 
    local_maxval = -bignum
    do n=1,nblocks_tot
-      if (dist%proc(n) == my_task+1) then
-         bid = dist%local_block(n)
+      if (dist%blockLocation(n) == my_task+1) then
+         bid = dist%blockLocalID(n)
          call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
          if (present(LMASK)) then
             do j=jb,je
@@ -1594,7 +1594,7 @@
    if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLREDUCE(local_maxval, global_maxval_dbl, 1, &
-                            mpi_dbl, MPI_MAX, dist%communicator, ierr)
+                            mpiR8, MPI_MAX, dist%communicator, ierr)
       else
          global_maxval_dbl = c0
       endif
@@ -1625,7 +1625,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), dimension(:,:,:), intent(in) :: &
+   real (real_kind), dimension(:,:,:), intent(in) :: &
       X            ! array containing field for which max required
 
    type (distrb), intent(in) :: &
@@ -1645,7 +1645,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4) :: &
+   real (real_kind) :: &
       global_maxval_real   ! resulting max val of global domain
 
 !-----------------------------------------------------------------------
@@ -1654,7 +1654,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4) :: &
+   real (real_kind) :: &
       local_maxval         ! max value of local subdomain
 
    integer (int_kind) :: &
@@ -1666,8 +1666,8 @@
 
    local_maxval = -bignum
    do n=1,nblocks_tot
-      if (dist%proc(n) == my_task+1) then
-         bid = dist%local_block(n)
+      if (dist%blockLocation(n) == my_task+1) then
+         bid = dist%blockLocalID(n)
          call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
          if (present(LMASK)) then
             do j=jb,je
@@ -1689,7 +1689,7 @@
    if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLREDUCE(local_maxval, global_maxval_real, 1, &
-                            mpi_real, MPI_MAX, dist%communicator, ierr)
+                            mpiR4, MPI_MAX, dist%communicator, ierr)
       else
          global_maxval_real = c0
       endif
@@ -1761,8 +1761,8 @@
 
    local_maxval = -1000000
    do n=1,nblocks_tot
-      if (dist%proc(n) == my_task+1) then
-         bid = dist%local_block(n)
+      if (dist%blockLocation(n) == my_task+1) then
+         bid = dist%blockLocalID(n)
          call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
          if (present(LMASK)) then
             do j=jb,je
@@ -1822,7 +1822,7 @@
 
 ! !INPUT PARAMETERS:
 
-   real (r8), dimension(:,:,:), intent(in) :: &
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
       X            ! array containing field for which min required
 
    type (distrb), intent(in) :: &
@@ -1838,7 +1838,7 @@
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       global_minval_dbl   ! resulting min val of global domain
 
 !EOP
@@ -1849,7 +1849,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       local_minval         ! min value of local subdomain
 
    integer (int_kind) :: &
@@ -1861,8 +1861,8 @@
 
    local_minval = bignum
    do n=1,nblocks_tot
-      if (dist%proc(n) == my_task+1) then
-         bid = dist%local_block(n)
+      if (dist%blockLocation(n) == my_task+1) then
+         bid = dist%blockLocalID(n)
          call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
          if (present(LMASK)) then
             do j=jb,je
@@ -1884,7 +1884,7 @@
    if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLREDUCE(local_minval, global_minval_dbl, 1, &
-                            mpi_dbl, MPI_MIN, dist%communicator, ierr)
+                            mpiR8, MPI_MIN, dist%communicator, ierr)
       else
          global_minval_dbl = c0
       endif
@@ -1915,7 +1915,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), dimension(:,:,:), intent(in) :: &
+   real (real_kind), dimension(:,:,:), intent(in) :: &
       X            ! array containing field for which min required
 
    type (distrb), intent(in) :: &
@@ -1935,7 +1935,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4) :: &
+   real (real_kind) :: &
       global_minval_real   ! resulting min val of global domain
 
 !-----------------------------------------------------------------------
@@ -1944,7 +1944,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4) :: &
+   real (real_kind) :: &
       local_minval         ! min value of local subdomain
 
    integer (int_kind) :: &
@@ -1956,8 +1956,8 @@
 
    local_minval = bignum
    do n=1,nblocks_tot
-      if (dist%proc(n) == my_task+1) then
-         bid = dist%local_block(n)
+      if (dist%blockLocation(n) == my_task+1) then
+         bid = dist%blockLocalID(n)
          call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
          if (present(LMASK)) then
             do j=jb,je
@@ -1979,7 +1979,7 @@
    if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLREDUCE(local_minval, global_minval_real, 1, &
-                            mpi_real, MPI_MIN, dist%communicator, ierr)
+                            mpiR4, MPI_MIN, dist%communicator, ierr)
       else
          global_minval_real = c0
       endif
@@ -2051,8 +2051,8 @@
 
    local_minval = 1000000
    do n=1,nblocks_tot
-      if (dist%proc(n) == my_task+1) then
-         bid = dist%local_block(n)
+      if (dist%blockLocation(n) == my_task+1) then
+         bid = dist%blockLocalID(n)
          call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
          if (present(LMASK)) then
             do j=jb,je
@@ -2098,10 +2098,10 @@
 
    include 'mpif.h'  ! MPI Fortran include file
 
-   real (r8), intent(inout) :: &
+   real (dbl_kind), intent(inout) :: &
       local_scalar                ! local scalar to be compared
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       global_maxval_scalar_dbl   ! resulting global max
 
    integer (int_kind) :: ierr ! MPI error flag
@@ -2109,7 +2109,7 @@
 !-----------------------------------------------------------------------
 
    call MPI_ALLREDUCE(local_scalar, global_maxval_scalar_dbl, 1, &
-                      mpi_dbl, MPI_MAX, MPI_COMM_ICE, ierr)
+                      mpiR8, MPI_MAX, MPI_COMM_ICE, ierr)
 
 !-----------------------------------------------------------------------
 
@@ -2127,10 +2127,10 @@
 
    include 'mpif.h'  ! MPI Fortran include file
 
-   real (r4), intent(inout) :: &
+   real (real_kind), intent(inout) :: &
       local_scalar                ! local scalar to be compared
 
-   real (r4) :: &
+   real (real_kind) :: &
       global_maxval_scalar_real   ! resulting global max
 
    integer (int_kind) :: ierr ! MPI error flag
@@ -2138,7 +2138,7 @@
 !-----------------------------------------------------------------------
 
    call MPI_ALLREDUCE(local_scalar, global_maxval_scalar_real, 1, &
-                      MPI_REAL, MPI_MAX, MPI_COMM_ICE, ierr)
+                      mpiR4, MPI_MAX, MPI_COMM_ICE, ierr)
 
 !-----------------------------------------------------------------------
 
@@ -2185,10 +2185,10 @@
 
    include 'mpif.h'  ! MPI Fortran include file
 
-   real (r8), intent(inout) :: &
+   real (dbl_kind), intent(inout) :: &
       local_scalar                ! local scalar to be compared
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       global_minval_scalar_dbl   ! resulting global min
 
    integer (int_kind) :: ierr ! MPI error flag
@@ -2196,7 +2196,7 @@
 !-----------------------------------------------------------------------
 
    call MPI_ALLREDUCE(local_scalar, global_minval_scalar_dbl, 1, &
-                      mpi_dbl, MPI_MIN, MPI_COMM_ICE, ierr)
+                      mpiR8, MPI_MIN, MPI_COMM_ICE, ierr)
 
 !-----------------------------------------------------------------------
 
@@ -2214,10 +2214,10 @@
 
    include 'mpif.h'  ! MPI Fortran include file
 
-   real (r4), intent(inout) :: &
+   real (real_kind), intent(inout) :: &
       local_scalar                ! local scalar to be compared
 
-   real (r4) :: &
+   real (real_kind) :: &
       global_minval_scalar_real   ! resulting global min
 
    integer (int_kind) :: ierr ! MPI error flag
@@ -2225,7 +2225,7 @@
 !-----------------------------------------------------------------------
 
    call MPI_ALLREDUCE(local_scalar, global_minval_scalar_real, 1, &
-                      MPI_REAL, MPI_MIN, MPI_COMM_ICE, ierr)
+                      mpiR4, MPI_MIN, MPI_COMM_ICE, ierr)
 
 !-----------------------------------------------------------------------
 

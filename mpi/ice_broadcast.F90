@@ -90,7 +90,7 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), intent(inout) :: &
+   real (dbl_kind), intent(inout) :: &
       scalar               ! scalar to be broadcast
 
 !EOP
@@ -105,7 +105,7 @@
 
 !-----------------------------------------------------------------------
 
-   call MPI_BCAST(scalar, 1, MPI_DBL, root_pe, MPI_COMM_ICE, ierr)
+   call MPI_BCAST(scalar, 1, mpiR8, root_pe, MPI_COMM_ICE, ierr)
    call MPI_BARRIER(MPI_COMM_ICE, ierr)
 
 !-----------------------------------------------------------------------
@@ -139,7 +139,7 @@ subroutine broadcast_scalar_real(scalar, root_pe)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r4), intent(inout) :: &
+   real (real_kind), intent(inout) :: &
       scalar               ! scalar to be broadcast
 
 !EOP
@@ -154,7 +154,7 @@ subroutine broadcast_scalar_real(scalar, root_pe)
 
 !-----------------------------------------------------------------------
 
-   call MPI_BCAST(scalar, 1, MPI_REAL, root_pe, MPI_COMM_ICE, ierr)
+   call MPI_BCAST(scalar, 1, mpiR4, root_pe, MPI_COMM_ICE, ierr)
    call MPI_BARRIER(MPI_COMM_ICE, ierr)
 
 !-----------------------------------------------------------------------
@@ -353,7 +353,7 @@ subroutine broadcast_array_dbl_1d(array, root_pe)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), dimension(:), intent(inout) :: &
+   real (dbl_kind), dimension(:), intent(inout) :: &
      array             ! array to be broadcast
 
 !EOP
@@ -372,7 +372,7 @@ subroutine broadcast_array_dbl_1d(array, root_pe)
 
    nelements = size(array)
 
-   call MPI_BCAST(array, nelements, MPI_DBL, root_pe, MPI_COMM_ICE, ierr)
+   call MPI_BCAST(array, nelements, mpiR8, root_pe, MPI_COMM_ICE, ierr)
    call MPI_BARRIER(MPI_COMM_ICE, ierr)
 
 !-----------------------------------------------------------------------
@@ -406,7 +406,7 @@ subroutine broadcast_array_real_1d(array, root_pe)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r4), dimension(:), intent(inout) :: &
+   real (real_kind), dimension(:), intent(inout) :: &
      array                ! array to be broadcast
 
 !EOP
@@ -425,7 +425,7 @@ subroutine broadcast_array_real_1d(array, root_pe)
 
    nelements = size(array)
 
-   call MPI_BCAST(array, nelements, MPI_REAL, root_pe, MPI_COMM_ICE, ierr)
+   call MPI_BCAST(array, nelements, mpiR4, root_pe, MPI_COMM_ICE, ierr)
    call MPI_BARRIER(MPI_COMM_ICE, ierr)
 
 !-----------------------------------------------------------------------
@@ -584,7 +584,7 @@ subroutine broadcast_array_log_1d(array, root_pe)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), dimension(:,:), intent(inout) :: &
+   real (dbl_kind), dimension(:,:), intent(inout) :: &
      array             ! array to be broadcast
 
 !EOP
@@ -603,7 +603,7 @@ subroutine broadcast_array_log_1d(array, root_pe)
 
    nelements = size(array)
 
-   call MPI_BCAST(array, nelements, MPI_DBL, root_pe, MPI_COMM_ICE, ierr)
+   call MPI_BCAST(array, nelements, mpiR8, root_pe, MPI_COMM_ICE, ierr)
    call MPI_BARRIER(MPI_COMM_ICE, ierr)
 
 !-----------------------------------------------------------------------
@@ -637,7 +637,7 @@ subroutine broadcast_array_log_1d(array, root_pe)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r4), dimension(:,:), intent(inout) :: &
+   real (real_kind), dimension(:,:), intent(inout) :: &
      array                ! array to be broadcast
 
 !EOP
@@ -656,7 +656,7 @@ subroutine broadcast_array_log_1d(array, root_pe)
 
    nelements = size(array)
 
-   call MPI_BCAST(array, nelements, MPI_REAL, root_pe, MPI_COMM_ICE, ierr)
+   call MPI_BCAST(array, nelements, mpiR4, root_pe, MPI_COMM_ICE, ierr)
    call MPI_BARRIER(MPI_COMM_ICE, ierr)
 
 !-----------------------------------------------------------------------
@@ -815,7 +815,7 @@ subroutine broadcast_array_log_1d(array, root_pe)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), dimension(:,:,:), intent(inout) :: &
+   real (dbl_kind), dimension(:,:,:), intent(inout) :: &
      array             ! array to be broadcast
 
 !EOP
@@ -834,7 +834,7 @@ subroutine broadcast_array_log_1d(array, root_pe)
 
    nelements = size(array)
 
-   call MPI_BCAST(array, nelements, MPI_DBL, root_pe, MPI_COMM_ICE, ierr)
+   call MPI_BCAST(array, nelements, mpiR8, root_pe, MPI_COMM_ICE, ierr)
    call MPI_BARRIER(MPI_COMM_ICE, ierr)
 
 !-----------------------------------------------------------------------
@@ -868,7 +868,7 @@ subroutine broadcast_array_log_1d(array, root_pe)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r4), dimension(:,:,:), intent(inout) :: &
+   real (real_kind), dimension(:,:,:), intent(inout) :: &
      array                ! array to be broadcast
 
 !EOP
@@ -887,7 +887,7 @@ subroutine broadcast_array_log_1d(array, root_pe)
 
    nelements = size(array)
 
-   call MPI_BCAST(array, nelements, MPI_REAL, root_pe, MPI_COMM_ICE, ierr)
+   call MPI_BCAST(array, nelements, mpiR4, root_pe, MPI_COMM_ICE, ierr)
    call MPI_BARRIER(MPI_COMM_ICE, ierr)
 
 !-----------------------------------------------------------------------

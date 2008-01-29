@@ -34,13 +34,6 @@
                             dbl_kind  = selected_real_kind(13), &
                             quad_kind = selected_real_kind(20)
 
-      ! additional definitions for modules imported from POP
-      integer, parameter :: i4        = selected_int_kind(6), &
-                            i8        = selected_int_kind(13), &
-                            r4        = selected_real_kind(6), &
-                            r8        = selected_real_kind(13), &
-                            r16       = selected_real_kind(20)
-
 !=======================================================================
 
       end module ice_kinds_mod

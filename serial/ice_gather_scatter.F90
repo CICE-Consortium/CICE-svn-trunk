@@ -5,7 +5,8 @@
  module ice_gather_scatter
 
 ! !DESCRIPTION:
-!  This module contains routines for gathering data to a single
+!  This module contains routines that mimic the behavior of the mpi
+!  version in the case of a single processor:  gathering data to a single
 !  processor from a distributed array, and scattering data from a
 !  single processor to a distributed array.
 !
@@ -13,6 +14,8 @@
 !
 ! author: Phil Jones, LANL
 ! Oct. 2004: Adapted from POP version by William H. Lipscomb, LANL
+! Jan. 2008: Elizabeth Hunke replaced old routines with new POP
+!              infrastructure, added specialized routine scatter_global_stress
 
 ! !USES:
 
@@ -32,7 +35,8 @@
 ! !PUBLIC MEMBER FUNCTIONS:
 
    public :: gather_global,      &
-             scatter_global
+             scatter_global,     &
+             scatter_global_stress
 
 !EOP
 !BOC
@@ -94,12 +98,12 @@
    type (distrb), intent(in) :: &
      src_dist   ! distribution of blocks in the source array
 
-   real (r8), dimension(:,:,:), intent(in) :: &
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
      ARRAY      ! array containing horizontal slab of distributed field
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(:,:), intent(inout) :: &
+   real (dbl_kind), dimension(:,:), intent(inout) :: &
      ARRAY_G    ! array containing global horizontal field on dst_task
 
 !EOP
@@ -129,13 +133,13 @@
 
       !*** copy local blocks
 
-      if (src_dist%proc(n) /= 0) then
+      if (src_dist%blockLocation(n) /= 0) then
 
          do j=this_block%jlo,this_block%jhi
          do i=this_block%ilo,this_block%ihi
             ARRAY_G(this_block%i_glob(i), &
                     this_block%j_glob(j)) = &
-                  ARRAY(i,j,src_dist%local_block(n))
+                  ARRAY(i,j,src_dist%blockLocalID(n))
          end do
          end do
 
@@ -178,7 +182,7 @@
    type (distrb), intent(in) :: &
      src_dist       ! distribution of blocks in the source array
 
-   real (r4), dimension(:,:,:), intent(in) :: &
+   real (real_kind), dimension(:,:,:), intent(in) :: &
      ARRAY          ! array containing distributed field
 
 !-----------------------------------------------------------------------
@@ -187,7 +191,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), dimension(:,:), intent(inout) :: &
+   real (real_kind), dimension(:,:), intent(inout) :: &
      ARRAY_G        ! array containing global field on dst_task
 
 !-----------------------------------------------------------------------
@@ -215,13 +219,13 @@
 
       !*** copy local blocks
 
-      if (src_dist%proc(n) /= 0) then
+      if (src_dist%blockLocation(n) /= 0) then
 
          do j=this_block%jlo,this_block%jhi
          do i=this_block%ilo,this_block%ihi
             ARRAY_G(this_block%i_glob(i), &
                     this_block%j_glob(j)) = &
-                  ARRAY(i,j,src_dist%local_block(n))
+                  ARRAY(i,j,src_dist%blockLocalID(n))
          end do
          end do
 
@@ -301,13 +305,13 @@
 
       !*** copy local blocks
 
-      if (src_dist%proc(n) /= 0) then
+      if (src_dist%blockLocation(n) /= 0) then
 
          do j=this_block%jlo,this_block%jhi
          do i=this_block%ilo,this_block%ihi
             ARRAY_G(this_block%i_glob(i), &
                     this_block%j_glob(j)) = &
-                  ARRAY(i,j,src_dist%local_block(n))
+                  ARRAY(i,j,src_dist%blockLocalID(n))
          end do
          end do
 
@@ -359,7 +363,7 @@
    type (distrb), intent(in) :: &
      dst_dist       ! distribution of resulting blocks
 
-   real (r8), dimension(:,:), intent(in) :: &
+   real (dbl_kind), dimension(:,:), intent(in) :: &
      ARRAY_G        ! array containing global field on src_task
 
    integer (int_kind), intent(in) :: &
@@ -369,7 +373,7 @@
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(:,:,:), intent(inout) :: &
+   real (dbl_kind), dimension(:,:,:), intent(inout) :: &
      ARRAY          ! array containing distributed field
 
 !EOP
@@ -402,13 +406,13 @@
    case (field_loc_center)   ! cell center location
       xoffset = 1
       yoffset = 1
-   case (field_loc_NEcorner)   ! cell corner (velocity) location
+   case (field_loc_NEcorner) ! cell corner (velocity) location
       xoffset = 0
       yoffset = 0
-   case (field_loc_Eface)   ! cell center location
+   case (field_loc_Eface)    ! cell face location
       xoffset = 0
       yoffset = 1
-   case (field_loc_Nface)   ! cell corner (velocity) location
+   case (field_loc_Nface)    ! cell face location
       xoffset = 1
       yoffset = 0
    case (field_loc_noupdate) ! ghost cells not needed - use cell center
@@ -437,10 +441,10 @@
 
    do n=1,nblocks_tot
 
-      if (dst_dist%proc(n) /= 0) then
+      if (dst_dist%blockLocation(n) /= 0) then
 
          this_block = get_block(n,n)
-         dst_block  = dst_dist%local_block(n)
+         dst_block  = dst_dist%blockLocalID(n)
 
          !*** if this is an interior block, then there is no
          !*** padding or update checking required
@@ -515,7 +519,7 @@
 
    if (field_loc == field_loc_noupdate) then
       do n=1,nblocks_tot
-         dst_block = dst_dist%local_block(n)
+         dst_block = dst_dist%blockLocalID(n)
          this_block = get_block(n,n)
 
          ! north edge
@@ -572,7 +576,7 @@
    type (distrb), intent(in) :: &
      dst_dist       ! distribution of resulting blocks
 
-   real (r4), dimension(:,:), intent(in) :: &
+   real (real_kind), dimension(:,:), intent(in) :: &
      ARRAY_G        ! array containing global field on src_task
 
    integer (int_kind), intent(in) :: &
@@ -586,7 +590,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r4), dimension(:,:,:), intent(inout) :: &
+   real (real_kind), dimension(:,:,:), intent(inout) :: &
      ARRAY          ! array containing distributed field
 
 !-----------------------------------------------------------------------
@@ -652,10 +656,10 @@
 
    do n=1,nblocks_tot
 
-      if (dst_dist%proc(n) /= 0) then
+      if (dst_dist%blockLocation(n) /= 0) then
 
          this_block = get_block(n,n)
-         dst_block  = dst_dist%local_block(n)
+         dst_block  = dst_dist%blockLocalID(n)
 
          !*** if this is an interior block, then there is no
          !*** padding or update checking required
@@ -730,7 +734,7 @@
 
    if (field_loc == field_loc_noupdate) then
       do n=1,nblocks_tot
-         dst_block = dst_dist%local_block(n)
+         dst_block = dst_dist%blockLocalID(n)
          this_block = get_block(n,n)
 
          ! north edge
@@ -867,10 +871,10 @@
 
    do n=1,nblocks_tot
 
-      if (dst_dist%proc(n) /= 0) then
+      if (dst_dist%blockLocation(n) /= 0) then
 
          this_block = get_block(n,n)
-         dst_block  = dst_dist%local_block(n)
+         dst_block  = dst_dist%blockLocalID(n)
 
          !*** if this is an interior block, then there is no
          !*** padding or update checking required
@@ -945,7 +949,7 @@
 
    if (field_loc == field_loc_noupdate) then
       do n=1,nblocks_tot
-         dst_block = dst_dist%local_block(n)
+         dst_block = dst_dist%blockLocalID(n)
          this_block = get_block(n,n)
 
          ! north edge
@@ -980,6 +984,155 @@
  end subroutine scatter_global_int
 
 !EOC
+!***********************************************************************
+!BOP
+! !IROUTINE: scatter_global_stress
+! !INTERFACE:
+
+ subroutine scatter_global_stress(ARRAY, ARRAY_G1, ARRAY_G2, &
+                                  src_task, dst_dist)
+
+! !DESCRIPTION:
+!  This subroutine scatters global stresses to a distributed array.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+!  Ghost cells in the stress tensor must be handled separately on tripole
+!  grids, because matching the corner values requires 2 different arrays.
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+     src_task       ! task from which array should be scattered
+
+   type (distrb), intent(in) :: &
+     dst_dist       ! distribution of resulting blocks
+
+   real (dbl_kind), dimension(:,:), intent(in) :: &
+     ARRAY_G1,     &! array containing global field on src_task
+     ARRAY_G2       ! array containing global field on src_task
+
+! !OUTPUT PARAMETERS:
+
+   real (dbl_kind), dimension(:,:,:), intent(inout) :: &
+     ARRAY          ! array containing distributed field
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) :: &
+     i,j,n,bid,          &! dummy loop indices
+     isrc, jsrc,         &! source addresses
+     xoffset, yoffset,   &! offsets for tripole boundary conditions
+     isign,              &! sign factor for tripole boundary conditions
+     dst_block            ! local block index in dest distribution
+
+   type (block) :: &
+     this_block  ! block info for current block
+
+!-----------------------------------------------------------------------
+!
+!  initialize return array to zero and set up tripole quantities
+!
+!-----------------------------------------------------------------------
+
+   ARRAY = c0
+
+   xoffset = 1  ! treat stresses as cell-centered scalars (they are not 
+   yoffset = 1  ! shared with neighboring grid cells)
+   isign   = 1
+
+!-----------------------------------------------------------------------
+!
+!  copy blocks of global array into local block distribution
+!
+!-----------------------------------------------------------------------
+
+   do n=1,nblocks_tot
+
+      if (dst_dist%blockLocation(n) /= 0) then
+
+         this_block = get_block(n,n)
+         dst_block  = dst_dist%blockLocalID(n)
+
+         !*** if this is an interior block, then there is no
+         !*** padding or update checking required
+
+         if (this_block%iblock > 1         .and. &
+             this_block%iblock < nblocks_x .and. &
+             this_block%jblock > 1         .and. &
+             this_block%jblock < nblocks_y) then
+
+            do j=1,ny_block
+            do i=1,nx_block
+               ARRAY(i,j,dst_block) = ARRAY_G1(this_block%i_glob(i),&
+                                               this_block%j_glob(j))
+            end do
+            end do
+
+         !*** if this is an edge block but not a northern edge
+         !*** we only need to check for closed boundaries and
+         !*** padding (global index = 0)
+
+         else if (this_block%jblock /= nblocks_y) then
+
+            do j=1,ny_block
+               if (this_block%j_glob(j) /= 0) then
+                  do i=1,nx_block
+                     if (this_block%i_glob(i) /= 0) then
+                        ARRAY(i,j,dst_block) = ARRAY_G1(this_block%i_glob(i),&
+                                                        this_block%j_glob(j))
+                     endif
+                  end do
+               endif
+            end do
+
+         !*** if this is a northern edge block, we need to check
+         !*** for and properly deal with tripole boundaries
+
+         else
+
+            do j=1,ny_block
+               if (this_block%j_glob(j) > 0) then ! normal boundary
+
+                  do i=1,nx_block
+                     if (this_block%i_glob(i) /= 0) then
+                        ARRAY(i,j,dst_block) = ARRAY_G1(this_block%i_glob(i),&
+                                                        this_block%j_glob(j))
+                     endif
+                  end do
+
+               else if (this_block%j_glob(j) < 0) then  ! tripole
+
+                  jsrc = ny_global + yoffset + &
+                         (this_block%j_glob(j) + ny_global)
+                  do i=1,nx_block
+                     if (this_block%i_glob(i) /= 0) then
+                        isrc = nx_global + xoffset - this_block%i_glob(i)
+                        if (isrc < 1) isrc = isrc + nx_global
+                        if (isrc > nx_global) isrc = isrc - nx_global
+                        ARRAY(i,j,dst_block) = isign * ARRAY_G2(isrc,jsrc)
+                     endif
+                  end do
+
+               endif
+            end do
+
+         endif
+      endif ! dst block not land
+   end do  ! block loop
+
+!-----------------------------------------------------------------------
+
+ end subroutine scatter_global_stress
+
 !***********************************************************************
 
  end module ice_gather_scatter

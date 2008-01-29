@@ -5,32 +5,40 @@
  module ice_boundary
 
 ! !DESCRIPTION:
-!  This module contains data types and routines for updating ghost cell
-!  boundaries using MPI calls
+!  This module contains data types and routines for updating halo
+!  regions (ghost cells) 
 !
 ! !REVISION HISTORY:
-!
-! author: Phil Jones, LANL
-! Oct. 2004: Adapted from POP version by William H. Lipscomb, LANL
-! (1) Modified create_boundary so that ghost cell updates can be
-!     neglected for N, S, E, and/or W boundaries.
-! (2) Modified boundary_2d_dbl and boundary_3d_dbl to allow blocks
-!     to have no EW and/or NS communications with other blocks.     
-! (3) Minor changes for consistency with CICE
-!
-! Feb. 2007: debugged by Elizabeth Hunke.  Numerous changes included
-!     removing destroy_boundary and the NE/SW boundary types, debugging
-!     the tripole grid apparatus, and reworking the Neumann boundary 
-!     conditions.
+!  SVN:$Id$
+!  2007-07-19: Phil Jones, Yoshi Yoshida, John Dennis
+!              new naming conventions, optimizations during
+!              initialization, true multi-dimensional updates 
+!              (rather than serial call to two-dimensional updates), 
+!              fixes for non-existent blocks
+!  2008-01-28: Elizabeth Hunke replaced old routines with new POP
+!              infrastructure
 
 ! !USES:
 
    use ice_kinds_mod
-   use ice_communicate
-   use ice_constants
-   use ice_blocks
-   use ice_distribution
+   use ice_communicate, only: my_task
+   use ice_constants, only: field_type_scalar, &
+           field_type_vector, field_type_angle, &
+           field_loc_center,  field_loc_NEcorner, &
+           field_loc_Nface, field_loc_Eface
+   use ice_global_reductions, only: global_maxval
    use ice_exit
+
+   use ice_blocks, only: nx_block, ny_block, nghost, &
+           nblocks_tot, ice_blocksNorth, &
+           ice_blocksSouth, ice_blocksEast, ice_blocksWest, &
+           ice_blocksEast2, ice_blocksWest2, &
+           ice_blocksNorthEast, ice_blocksNorthWest, &
+           ice_blocksEastNorthEast, ice_blocksWestNorthWest, &
+           ice_blocksSouthEast, ice_blocksSouthWest, &
+           ice_blocksGetNbrID, get_block_parameter
+   use ice_distribution, only: distrb, &
+           ice_distributionGetBlockLoc, ice_distributionGet
 
    implicit none
    private
@@ -38,70 +46,51 @@
 
 ! !PUBLIC TYPES:
 
-   type, public :: bndy
-     integer (int_kind) :: &
-       communicator       ,&! communicator to use for update messages
-       nlocal_ew          ,&! num local copies for east-west bndy update
-       nlocal_ns            ! num local copies for east-west bndy update
+   type, public :: ice_halo
+      integer (int_kind) ::  &
+         communicator,     &! communicator to use for update messages
+         numLocalCopies     ! num local copies for halo update
 
-     integer (int_kind), dimension(:), pointer :: &
-       local_ew_src_block ,&! source block for each local east-west copy
-       local_ew_dst_block ,&! dest   block for each local east-west copy
-       local_ns_src_block ,&! source block for each local north-south copy
-       local_ns_dst_block   ! dest   block for each local north-south copy
+      integer (int_kind), dimension(:,:), pointer :: &
+         srcLocalAddr,     &! src addresses for each local copy
+         dstLocalAddr       ! dst addresses for each local copy
 
-     integer (int_kind), dimension(:,:), pointer :: &
-       local_ew_src_add   ,&! starting source address for local e-w copies
-       local_ew_dst_add   ,&! starting dest   address for local e-w copies
-       local_ns_src_add   ,&! starting source address for local n-s copies
-       local_ns_dst_add     ! starting dest   address for local n-s copies
-
-   end type bndy
+   end type
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-   public :: create_boundary,  &
-             destroy_boundary, &
-             update_ghost_cells
+   public :: ice_HaloCreate,  &
+             ice_HaloDestroy, &
+             ice_HaloUpdate
 
-   interface update_ghost_cells  ! generic interface
-     module procedure boundary_2d_dbl,  &
-                      boundary_2d_real, &
-                      boundary_2d_int,  &
-                      boundary_3d_dbl,  &
-                      boundary_3d_real, &
-                      boundary_3d_int,  &
-                      boundary_4d_dbl,  &
-                      boundary_4d_real, &
-                      boundary_4d_int
+   interface ice_HaloUpdate  ! generic interface
+      module procedure ice_HaloUpdate2DR8, &
+                       ice_HaloUpdate2DR4, &
+                       ice_HaloUpdate2DI4, &
+                       ice_HaloUpdate3DR8, &
+                       ice_HaloUpdate3DR4, &
+                       ice_HaloUpdate3DI4, &
+                       ice_HaloUpdate4DR8, &
+                       ice_HaloUpdate4DR4, &
+                       ice_HaloUpdate4DI4
    end interface
 
 !EOP
 !BOC
 !-----------------------------------------------------------------------
 !
-!  global boundary buffers for tripole boundary
+!  global buffers for tripole boundary
 !
 !-----------------------------------------------------------------------
 
    integer (int_kind), dimension(:,:), allocatable :: &
-      tripole_ibuf,  &
-      tripole_ighost
+      bufTripoleI4
 
-   real (r4), dimension(:,:), allocatable :: &
-      tripole_rbuf,  &
-      tripole_rghost
+   real (real_kind), dimension(:,:), allocatable :: &
+      bufTripoleR4
 
-   real (r8), dimension(:,:), allocatable :: &
-      tripole_dbuf,  &
-      tripole_dghost
-
-   real (r8), dimension(:,:,:), allocatable :: &
-      tripole_dbuf_3d,  &
-      tripole_dghost_3d
-
-   integer (int_kind) :: & 
-      index_check
+   real (dbl_kind), dimension(:,:), allocatable :: &
+      bufTripoleR8
 
 !EOC
 !***********************************************************************
@@ -110,48 +99,36 @@ contains
 
 !***********************************************************************
 !BOP
-! !IROUTINE: create_boundary
+! !IROUTINE: ice_HaloCreate
 ! !INTERFACE:
 
- subroutine create_boundary(newbndy, dist,              &
-                            ns_bndy_type, ew_bndy_type, &
-                            nx_global, ny_global,       &
-                            l_north, l_south,           &
-                            l_east,  l_west)
+ function ice_HaloCreate(dist, nsBoundaryType, ewBoundaryType, &
+                         nxGlobal)  result(halo)
 
 ! !DESCRIPTION:
-!  This routine creates a boundary type with info necessary for
-!  performing a boundary (ghost cell) update based on the input block
-!  distribution.
+!  This routine creates a halo type with info necessary for
+!  performing a halo (ghost cell) update. This info is computed
+!  based on the input block distribution.
 !
 ! !REVISION HISTORY:
 !  same as module
-!
-!  Modified Sept. 2004 by William Lipscomb:
-!    Added optional arguments so that ghost cell updates can be
-!    limited to fewer than four boundaries; this reduces the
-!    cost of boundary updates in the EVP dynamics.
 
 ! !INPUT PARAMETERS:
 
    type (distrb), intent(in) :: &
-      dist       ! distribution of blocks across procs
+      dist             ! distribution of blocks across procs
 
    character (*), intent(in) :: &
-      ns_bndy_type,             &! type of boundary to use in ns dir
-      ew_bndy_type               ! type of boundary to use in ew dir
+      nsBoundaryType,   &! type of boundary to use in logical ns dir
+      ewBoundaryType     ! type of boundary to use in logical ew dir
 
    integer (int_kind), intent(in) :: &
-      nx_global, ny_global       ! global extents of domain
+      nxGlobal           ! global grid extent for tripole grids
 
-   logical (log_kind), intent(in), optional ::  &
-      l_north, l_south         ,&! true if N and S ghost cells updated
-      l_east,  l_west            ! true if E and W ghost cells updated
-                                 
 ! !OUTPUT PARAMETERS:
 
-   type (bndy), intent(out) :: &
-      newbndy    ! a new boundary type with info for updates
+   type (ice_halo) :: &
+      halo               ! a new halo type with info for halo updates
 
 !EOP
 !BOC
@@ -161,32 +138,31 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) ::           &
-      i,j,k,n,                     &! dummy counters
-      iblock_src  , jblock_src  ,  &! i,j index of source block
-      iblock_dst  , jblock_dst  ,  &! i,j index of dest   block
-      iblock_north, jblock_north,  &! i,j index of north neighbor block
-      iblock_south, jblock_south,  &! i,j index of south neighbor block
-      iblock_east , jblock_east ,  &! i,j index of east  neighbor block
-      iblock_west , jblock_west ,  &! i,j index of west  neighbor block
-      src_block_loc,               &! local block location of source
-      dst_block_loc,               &! local block location of dest
-      nprocs,                      &! num of processors involved
-      nblocks,                     &! total number of blocks
-      iloc_ew, iloc_ns,            &!
-      src_proc, dst_proc            ! src,dst processor for message
+   integer (int_kind) ::             &
+      i,j,k,l,n,m,&
+      istat,                       &! allocate status flag
+      numProcs,                    &! num of processors involved
+      communicator,                &! communicator for message passing
+      iblock,                      &! block counter
+      eastBlock, westBlock,        &! block id  east,  west neighbors
+      northBlock, southBlock,      &! block id north, south neighbors
+      neBlock, nwBlock,            &! block id northeast, northwest nbrs
+      seBlock, swBlock,            &! block id southeast, southwest nbrs
+      srcProc, dstProc,            &! source, dest processor locations
+      srcLocalID, dstLocalID,      &! local block index of src,dst blocks
+      blockSizeX,                  &! size of default physical domain in X 
+      blockSizeY,                  &! size of default physical domain in Y 
+      eastMsgSize, westMsgSize,    &! nominal sizes for e-w msgs
+      northMsgSize, southMsgSize,  &! nominal sizes for n-s msgs
+      cornerMsgSize, msgSize        ! nominal size for corner msg
+
+   integer (int_kind), dimension(:), allocatable :: &
+      sendCount, recvCount          ! count number of words to each proc
 
    logical (log_kind) :: &
-      lalloc_tripole      ! flag for allocating tripole buffers
+      tripoleFlag,          &! flag for allocating tripole buffers
+      tripoleBlock           ! flag for identifying north tripole blocks
 
-   type (block) ::     &
-      src_block,       &! block info for source      block
-      dst_block         ! block info for destination block
-
-   logical (log_kind) ::  &
-      go_north, go_south  ,&! true if messages passed to N and S
-      go_east,  go_west     ! true if messages passed to E and W
-                                 
 !-----------------------------------------------------------------------
 !
 !  Initialize some useful variables and return if this task not
@@ -194,253 +170,294 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   nprocs = dist%nprocs
+   call ice_distributionGet(dist,          &
+                            nprocs = numProcs,       &
+                            communicator = communicator)
 
-   if (my_task >= nprocs) return
+   if (my_task >= numProcs) return
 
-   nblocks = size(dist%proc(:))
-   lalloc_tripole = .false.
-   newbndy%communicator = dist%communicator
+   halo%communicator = communicator
 
-!-----------------------------------------------------------------------
-! Set logical variables that determine directions to pass messages.
-! Default is to pass messages in all directions.
-! Note sign convention.  If l_east is false, that means we do not
-!  update ghost cells along the east boundary of blocks, which means 
-!  we do not pass messages from east to west, which means go_west
-!  is false.
-!-----------------------------------------------------------------------
+   blockSizeX = nx_block - 2*nghost
+   blockSizeY = ny_block - 2*nghost
+   eastMsgSize  = nghost*blockSizeY
+   westMsgSize  = nghost*blockSizeY
+   southMsgSize = nghost*blockSizeX
+   cornerMsgSize = nghost*nghost
 
-   go_west = .true.
-   if (present(l_east)) then
-      if (.not.l_east) go_west = .false.
-   endif
+   if (nsBoundaryType == 'tripole') then
+      tripoleFlag = .true.
+      northMsgSize = (nghost+1)*blockSizeX
 
-   go_east = .true.
-   if (present(l_west)) then
-      if (.not.l_west) go_east = .false.
-   endif
+      !*** allocate tripole message buffers if not already done
 
-   go_north = .true.
-   if (present(l_south)) then
-      if (.not.l_south) go_north = .false.
-   endif
+      if (.not. allocated(bufTripoleR8)) then
+         allocate (bufTripoleI4(nxGlobal, nghost+1), &
+                   bufTripoleR4(nxGlobal, nghost+1), &
+                   bufTripoleR8(nxGlobal, nghost+1), &
+                   stat=istat)
 
-   go_south = .true.
-   if (present(l_north)) then
-      if (.not.l_north) go_south = .false.
+         if (istat > 0) then
+            call abort_ice( &
+               'ice_HaloCreate: error allocating tripole buffers')
+            return
+         endif
+      endif
+
+   else
+      tripoleFlag = .false.
+      northMsgSize = nghost*blockSizeX
    endif
 
 !-----------------------------------------------------------------------
 !
 !  Count the number of messages to send/recv from each processor
-!  and number of blocks in each message.  These quantities are
+!  and number of words in each message.  These quantities are
 !  necessary for allocating future arrays.
 !
 !-----------------------------------------------------------------------
-   iloc_ew = 0
-   iloc_ns = 0
 
-   block_loop1: do n=1,nblocks
-      src_proc  = dist%proc(n)
-      src_block = get_block(n,n)
+   allocate (sendCount(numProcs), recvCount(numProcs), stat=istat)
 
-      iblock_src = src_block%iblock  ! i,j index of this block in
-      jblock_src = src_block%jblock  !   block cartesian decomposition
+   if (istat > 0) then
+      call abort_ice('ice_HaloCreate: error allocating count arrays')
+      return
+   endif
 
-      !*** compute cartesian i,j block indices for each neighbor
-      !*** use zero if off the end of closed boundary
-      !*** use jnorth=nblocks_y and inorth < 0 for tripole boundary
-      !***   to make sure top boundary communicated to all top
-      !***   boundary blocks
+   sendCount  = 0
+   recvCount  = 0
 
-      select case(ew_bndy_type)
-      case ('cyclic')
-         iblock_east = mod(iblock_src,nblocks_x) + 1
-         iblock_west = iblock_src - 1
-         if (iblock_west == 0) iblock_west = nblocks_x
-         jblock_east = jblock_src
-         jblock_west = jblock_src
-      case ('open')
-         iblock_east = iblock_src + 1
-         iblock_west = iblock_src - 1
-         if (iblock_east > nblocks_x) iblock_east = iblock_src
-         if (iblock_west < 1        ) iblock_west = iblock_src
-         jblock_east = jblock_src
-         jblock_west = jblock_src
-      case ('closed')
-         iblock_east = iblock_src + 1
-         iblock_west = iblock_src - 1
-         if (iblock_east > nblocks_x) iblock_east = 0
-         if (iblock_west < 1        ) iblock_west = 0
-         jblock_east = jblock_src
-         jblock_west = jblock_src
-      case default
-         call abort_ice('Unknown east-west boundary type')
-      end select
+   msgCountLoop: do iblock=1,nblocks_tot
 
-      select case(ns_bndy_type)
-      case ('cyclic')
-         jblock_north = mod(jblock_src,nblocks_y) + 1
-         jblock_south = jblock_src - 1
-         if (jblock_south == 0) jblock_south = nblocks_y
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-      case ('open')
-         jblock_north = jblock_src + 1
-         jblock_south = jblock_src - 1
-         if (jblock_north > nblocks_y) jblock_north = jblock_src
-         if (jblock_south < 1        ) jblock_south = jblock_src
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-      case ('closed')
-         jblock_north = jblock_src + 1
-         jblock_south = jblock_src - 1
-         if (jblock_north > nblocks_y) jblock_north = 0
-         if (jblock_south < 1        ) jblock_south = 0
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-      case ('tripole')
-         lalloc_tripole = .true.
-         jblock_north = jblock_src + 1
-         jblock_south = jblock_src - 1
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-         if (jblock_south < 1        ) jblock_south = 0
-         if (jblock_north > nblocks_y) then
-            jblock_north = nblocks_y
-            iblock_north = -iblock_src
-         endif
-      case default
-         call abort_ice('Unknown north-south boundary type')
-      end select
+      call ice_distributionGetBlockLoc(dist, iblock, srcProc, &
+                                       srcLocalID)
 
-      !***
-      !*** if any neighbors are closed boundaries, must
-      !*** create a local pseudo-message to zero ghost cells
-      !***
+      !*** find north neighbor block and add to message count
+      !***  also set tripole block flag for later special cases
 
-      if (src_proc /= 0) then
-         if (iblock_east  == 0) iloc_ew = iloc_ew + 1
-         if (iblock_west  == 0) iloc_ew = iloc_ew + 1
-         if (jblock_north == 0) iloc_ns = iloc_ns + 1
-         if (jblock_south == 0) iloc_ns = iloc_ns + 1
+      northBlock = ice_blocksGetNbrID(iblock, ice_blocksNorth,        &
+                                      ewBoundaryType, nsBoundaryType)
+      if (northBlock > 0) then
+         tripoleBlock = .false.
+         call ice_distributionGetBlockLoc(dist, northBlock, dstProc, &
+                                          dstLocalID)
+      else if (northBlock < 0) then ! tripole north row, count block
+         tripoleBlock = .true.
+         call ice_distributionGetBlockLoc(dist, abs(northBlock), &
+                                 dstProc, dstLocalID)
+      else
+         tripoleBlock = .false.
+         dstProc = 0
+         dstLocalID = 0
       endif
 
-      !***
-      !*** now look through all the blocks for the neighbors
-      !*** of the source block and check whether a message is
-      !*** required for communicating with the neighbor
-      !***
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,           &
+                                     srcProc, dstProc, northMsgSize)
 
-      do k=1,nblocks
-         dst_block = get_block(k,k)
+      !*** if a tripole boundary block, also create a local
+      !*** message into and out of tripole buffer 
 
-         iblock_dst = dst_block%iblock  !*** i,j block index of
-         jblock_dst = dst_block%jblock  !*** potential neighbor block
+      if (tripoleBlock) then
+         !*** copy in
+         call ice_HaloIncrementMsgCount(sendCount, recvCount,        &
+                                        srcProc, srcProc,            &
+                                        northMsgSize)
 
-         dst_proc = dist%proc(k)  ! processor that holds dst block
+         !*** copy out of tripole buffer - includes halo
+         call ice_HaloIncrementMsgCount(sendCount, recvCount,     &
+                                           srcProc, srcProc,      & 
+                                           (nghost+1)*nx_block)
+      endif
 
-         !***
-         !*** if this block is an eastern neighbor
-         !*** increment message counter
-         !***
+      !*** find south neighbor block and add to message count
 
-         if (iblock_dst == iblock_east .and. &
-             jblock_dst == jblock_east) then
+      southBlock = ice_blocksGetNbrID(iblock, ice_blocksSouth,        &
+                                      ewBoundaryType, nsBoundaryType)
 
-	    if (dst_proc/= 0) then
-               iloc_ew = iloc_ew + 1
-            endif
+      if (southBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, southBlock, dstProc, &
+                                          dstLocalID)
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
 
-         endif
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,           &
+                                     srcProc, dstProc, southMsgSize)
 
-         !***
-         !*** if this block is an western neighbor
-         !*** increment message counter
-         !***
+      !*** find east neighbor block and add to message count
 
-         if (iblock_dst == iblock_west .and. &
-             jblock_dst == jblock_west) then
+      eastBlock = ice_blocksGetNbrID(iblock, ice_blocksEast,         &
+                                     ewBoundaryType, nsBoundaryType)
 
-	    if (dst_proc/= 0) then
-               iloc_ew = iloc_ew + 1
-            endif
+      if (eastBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, eastBlock, dstProc, &
+                                          dstLocalID)
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
 
-         endif
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,          &
+                                     srcProc, dstProc, eastMsgSize)
 
-         !***
-         !*** if this block is an northern neighbor
-         !*** find out whether a message is required
-         !*** for tripole, must communicate with all
-         !*** north row blocks (triggered by iblock_dst <0)
-         !***
+      !*** if a tripole boundary block, non-local east neighbor
+      !*** needs a chunk of the north boundary, so add a message
+      !*** for that
 
-         if ((iblock_dst == iblock_north .or. iblock_north < 0) .and. &
-              jblock_dst == jblock_north) then
+!echmod      if (tripoleBlock .and. dstProc /= srcProc) then
+      if (tripoleBlock) then
+         call ice_HaloIncrementMsgCount(sendCount, recvCount,          &
+                                     srcProc, dstProc, northMsgSize)
+      endif
 
-	    if (dst_proc/= 0) then
-               iloc_ns = iloc_ns + 1
-            endif
+      !*** find west neighbor block and add to message count
 
-         endif
+      westBlock = ice_blocksGetNbrID(iblock, ice_blocksWest,         &
+                                     ewBoundaryType, nsBoundaryType)
 
-         !***
-         !*** if this block is an southern neighbor
-         !*** find out whether a message is required
-         !***
+      if (westBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, westBlock, dstProc, &
+                                          dstLocalID)
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
 
-         if (iblock_dst == iblock_south .and. &
-             jblock_dst == jblock_south) then
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,          &
+                                     srcProc, dstProc, westMsgSize)
 
-	    if (dst_proc/= 0) then
-               iloc_ns = iloc_ns + 1
-            endif
+      !*** if a tripole boundary block, non-local west neighbor
+      !*** needs a chunk of the north boundary, so add a message
+      !*** for that
 
-         endif
+!echmod      if (tripoleBlock .and. dstProc /= srcProc) then
+      if (tripoleBlock) then
+         call ice_HaloIncrementMsgCount(sendCount, recvCount,          &
+                                     srcProc, dstProc, northMsgSize)
+      endif
 
-      end do  ! search for dest blocks
-   end do block_loop1
+      !*** find northeast neighbor block and add to message count
 
-   !***
-   !*** in this serial version, all messages are local copies
-   !***
+      neBlock = ice_blocksGetNbrID(iblock, ice_blocksNorthEast,    &
+                                   ewBoundaryType, nsBoundaryType)
 
-   newbndy%nlocal_ew = iloc_ew
-   newbndy%nlocal_ns = iloc_ns
+      if (neBlock > 0) then
+         msgSize = cornerMsgSize  ! normal corner message 
+
+         call ice_distributionGetBlockLoc(dist, neBlock, dstProc, &
+                                          dstLocalID)
+
+      else if (neBlock < 0) then ! tripole north row
+         msgSize = northMsgSize  ! tripole needs whole top row of block
+
+         call ice_distributionGetBlockLoc(dist, abs(neBlock), dstProc, &
+                                          dstLocalID)
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
+
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,      &
+                                     srcProc, dstProc, msgSize)
+
+      !*** find northwest neighbor block and add to message count
+
+      nwBlock = ice_blocksGetNbrID(iblock, ice_blocksNorthWest,    &
+                                   ewBoundaryType, nsBoundaryType)
+
+      if (nwBlock > 0) then
+         msgSize = cornerMsgSize ! normal NE corner update
+
+         call ice_distributionGetBlockLoc(dist, nwBlock, dstProc, &
+                                          dstLocalID)
+
+      else if (nwBlock < 0) then ! tripole north row, count block
+         msgSize = northMsgSize ! tripole NE corner update - entire row needed
+
+         call ice_distributionGetBlockLoc(dist, abs(nwBlock), dstProc, &
+                                          dstLocalID)
+
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
+
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,      &
+                                     srcProc, dstProc, msgSize)
+
+      !*** find southeast neighbor block and add to message count
+
+      seBlock = ice_blocksGetNbrID(iblock, ice_blocksSouthEast,    &
+                                   ewBoundaryType, nsBoundaryType)
+
+      if (seBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, seBlock, dstProc, &
+                                          dstLocalID)
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
+
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,            &
+                                     srcProc, dstProc, cornerMsgSize)
+
+      !*** find southwest neighbor block and add to message count
+
+      swBlock = ice_blocksGetNbrID(iblock, ice_blocksSouthWest,    &
+                                   ewBoundaryType, nsBoundaryType)
+
+      if (swBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, swBlock, dstProc, &
+                                          dstLocalID)
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
+
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,            &
+                                     srcProc, dstProc, cornerMsgSize)
+
+   end do msgCountLoop
 
 !-----------------------------------------------------------------------
 !
-!  allocate buffers and arrays necessary for boundary comms
+!  if messages are received from the same processor, the message is 
+!  actually a local copy - count them and reset to zero
 !
 !-----------------------------------------------------------------------
 
-   allocate (newbndy%local_ew_src_block(newbndy%nlocal_ew), &
-             newbndy%local_ew_dst_block(newbndy%nlocal_ew), &
-             newbndy%local_ns_src_block(newbndy%nlocal_ns), &
-             newbndy%local_ns_dst_block(newbndy%nlocal_ns), &
-             newbndy%local_ew_src_add(2,newbndy%nlocal_ew), &
-             newbndy%local_ew_dst_add(2,newbndy%nlocal_ew), &
-             newbndy%local_ns_src_add(2,newbndy%nlocal_ns), &
-             newbndy%local_ns_dst_add(2,newbndy%nlocal_ns))
+   halo%numLocalCopies = recvCount(my_task+1)
 
-   newbndy%local_ew_src_block = 0
-   newbndy%local_ew_dst_block = 0
-   newbndy%local_ns_src_block = 0
-   newbndy%local_ns_dst_block = 0
-   newbndy%local_ew_src_add = 0
-   newbndy%local_ew_dst_add = 0
-   newbndy%local_ns_src_add = 0
-   newbndy%local_ns_dst_add = 0
+   sendCount(my_task+1) = 0
+   recvCount(my_task+1) = 0
 
 !-----------------------------------------------------------------------
 !
-!  now set up indices into buffers and address arrays
+!  allocate arrays for message information and initialize
 !
 !-----------------------------------------------------------------------
 
-   iloc_ew = 0
-   iloc_ns = 0
+   allocate(halo%srcLocalAddr(3,halo%numLocalCopies), &
+            halo%dstLocalAddr(3,halo%numLocalCopies), &
+            stat = istat)
+
+   if (istat > 0) then
+      call abort_ice( &
+         'ice_HaloCreate: error allocating halo message info arrays')
+      return
+   endif
+
+   halo%srcLocalAddr = 0
+   halo%dstLocalAddr = 0
+
+   deallocate(sendCount, recvCount, stat=istat)
+
+   if (istat > 0) then
+      call abort_ice( &
+         'ice_HaloCreate: error deallocating count arrays')
+      return
+   endif
 
 !-----------------------------------------------------------------------
 !
@@ -449,369 +466,144 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   block_loop2: do n=1,nblocks
+   !*** reset halo scalars to use as counters
 
-      src_proc  = dist%proc(n)    ! processor location for this block
-      src_block = get_block(n,n)  ! block info for this block
+   halo%numLocalCopies = 0
 
-      iblock_src = src_block%iblock  ! i,j index of this block in
-      jblock_src = src_block%jblock  !   block cartesian decomposition
+   msgConfigLoop: do iblock=1,nblocks_tot
 
-      if (src_proc /= 0) then
-         src_block_loc = dist%local_block(n)  ! local block location
+      call ice_distributionGetBlockLoc(dist, iblock, srcProc, &
+                                       srcLocalID)
+
+      !*** find north neighbor block
+
+      northBlock = ice_blocksGetNbrID(iblock, ice_blocksNorth,        &
+                                      ewBoundaryType, nsBoundaryType)
+
+      call ice_HaloMsgCreate(halo, dist, iblock, northBlock, 'north')
+
+      !*** set tripole flag and add two copies for inserting
+      !*** and extracting info from the tripole buffer
+
+      if (northBlock < 0) then
+         tripoleBlock = .true.
+         call ice_HaloMsgCreate(halo, dist, iblock, -iblock, 'north')
+         call ice_HaloMsgCreate(halo, dist, -iblock, iblock, 'north')
       else
-         src_block_loc = 0  ! block is a land block
+         tripoleBlock = .false.
       endif
 
-      !*** compute cartesian i,j block indices for each neighbor
-      !*** use zero if off the end of closed boundary
-      !*** use jnorth=nblocks_y and inorth < 0 for tripole boundary
-      !***   to make sure top boundary communicated to all top
-      !***   boundary blocks
+      !*** find south neighbor block
 
-      select case(ew_bndy_type)
-      case ('cyclic')
-         iblock_east = mod(iblock_src,nblocks_x) + 1
-         iblock_west = iblock_src - 1
-         if (iblock_west == 0) iblock_west = nblocks_x
-         jblock_east = jblock_src
-         jblock_west = jblock_src
-      case ('open')
-         iblock_east = iblock_src + 1
-         iblock_west = iblock_src - 1
-         if (iblock_east > nblocks_x) iblock_east = iblock_src
-         if (iblock_west < 1        ) iblock_west = iblock_src
-         jblock_east = jblock_src
-         jblock_west = jblock_src
-      case ('closed')
-         iblock_east = iblock_src + 1
-         iblock_west = iblock_src - 1
-         if (iblock_east > nblocks_x) iblock_east = 0
-         if (iblock_west < 1        ) iblock_west = 0
-         jblock_east = jblock_src
-         jblock_west = jblock_src
-      case default
-         call abort_ice('Unknown east-west boundary type')
-      end select
+      southBlock = ice_blocksGetNbrID(iblock, ice_blocksSouth,        &
+                                      ewBoundaryType, nsBoundaryType)
 
-      select case(ns_bndy_type)
-      case ('cyclic')
-         jblock_north = mod(jblock_src,nblocks_y) + 1
-         jblock_south = jblock_src - 1
-         if (jblock_south == 0) jblock_south = nblocks_y
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-      case ('open')
-         jblock_north = jblock_src + 1
-         jblock_south = jblock_src - 1
-         if (jblock_north > nblocks_y) jblock_north = jblock_src
-         if (jblock_south < 1        ) jblock_south = jblock_src
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-      case ('closed')
-         jblock_north = jblock_src + 1
-         jblock_south = jblock_src - 1
-         if (jblock_north > nblocks_y) jblock_north = 0
-         if (jblock_south < 1        ) jblock_south = 0
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-      case ('tripole')
-         jblock_north = jblock_src + 1
-         jblock_south = jblock_src - 1
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-         if (jblock_south < 1        ) jblock_south = 0
-         if (jblock_north > nblocks_y) then
-            jblock_north = nblocks_y
-            iblock_north = -iblock_src
-         endif
-      case default
-         call abort_ice('Unknown north-south boundary type')
-      end select
+      call ice_HaloMsgCreate(halo, dist, iblock, southBlock, 'south')
 
-      !***
-      !*** if any boundaries are closed boundaries, set up
-      !*** pseudo-message to zero ghost cells
-      !***
+      !*** find east neighbor block
 
-      if (src_block_loc /= 0) then
+      eastBlock = ice_blocksGetNbrID(iblock, ice_blocksEast,         &
+                                     ewBoundaryType, nsBoundaryType)
 
-         if (iblock_east == 0 .or. .not.go_west) then
-            iloc_ew = iloc_ew + 1
-            newbndy%local_ew_src_block(iloc_ew) = 0
-            newbndy%local_ew_src_add(1,iloc_ew) = 0
-            newbndy%local_ew_src_add(2,iloc_ew) = 0
-            newbndy%local_ew_dst_block(iloc_ew) = src_block_loc
-            newbndy%local_ew_dst_add(1,iloc_ew) = src_block%ihi + 1
-            newbndy%local_ew_dst_add(2,iloc_ew) = 1
-         endif
+      call ice_HaloMsgCreate(halo, dist, iblock, eastBlock, 'east')
 
-         if (iblock_west == 0 .or. .not.go_east) then
-            iloc_ew = iloc_ew + 1
-            newbndy%local_ew_src_block(iloc_ew) = 0
-            newbndy%local_ew_src_add(1,iloc_ew) = 0
-            newbndy%local_ew_src_add(2,iloc_ew) = 0
-            newbndy%local_ew_dst_block(iloc_ew) = src_block_loc
-            newbndy%local_ew_dst_add(1,iloc_ew) = 1
-            newbndy%local_ew_dst_add(2,iloc_ew) = 1
-         endif
+      !*** for tripole grids, send a north tripole message to
+      !*** the east block to make sure enough information is
+      !*** available for tripole manipulations
 
-         if (jblock_north == 0 .or. .not.go_south) then
-            iloc_ns = iloc_ns + 1
-            newbndy%local_ns_src_block(iloc_ns) = 0
-            newbndy%local_ns_src_add(1,iloc_ns) = 0
-            newbndy%local_ns_src_add(2,iloc_ns) = 0
-            newbndy%local_ns_dst_block(iloc_ns) = src_block_loc
-            newbndy%local_ns_dst_add(1,iloc_ns) = 1
-            newbndy%local_ns_dst_add(2,iloc_ns) = src_block%jhi + 1
-         endif
-
-         if (jblock_south == 0 .or. .not.go_north) then
-            iloc_ns = iloc_ns + 1
-            newbndy%local_ns_src_block(iloc_ns) = 0
-            newbndy%local_ns_src_add(1,iloc_ns) = 0
-            newbndy%local_ns_src_add(2,iloc_ns) = 0
-            newbndy%local_ns_dst_block(iloc_ns) = src_block_loc
-            newbndy%local_ns_dst_add(1,iloc_ns) = 1
-            newbndy%local_ns_dst_add(2,iloc_ns) = 1
-         endif
-
+      if (tripoleBlock) then
+         call ice_HaloMsgCreate(halo, dist, iblock, -eastBlock, 'north')
       endif
 
-      !***
-      !*** now search through blocks looking for neighbors to
-      !*** the source block
-      !***
+      !*** find west neighbor block
 
-      do k=1,nblocks
+      westBlock = ice_blocksGetNbrID(iblock, ice_blocksWest,         &
+                                     ewBoundaryType, nsBoundaryType)
 
-         dst_proc      = dist%proc(k)  ! processor holding dst block
+      call ice_HaloMsgCreate(halo, dist, iblock, westBlock, 'west')
 
-         !***
-         !*** compute the rest only if this block is not a land block
-         !***
+      !*** for tripole grids, send a north tripole message to
+      !*** the west block to make sure enough information is
+      !*** available for tripole manipulations
+ 
+      if (tripoleBlock) then
+         call ice_HaloMsgCreate(halo, dist, iblock, -westBlock, 'north')
+      endif
 
-         if (dst_proc /= 0) then
+      !*** find northeast neighbor block
 
-            dst_block = get_block(k,k)  ! block info for this block
+      neBlock = ice_blocksGetNbrID(iblock, ice_blocksNorthEast,    &
+                                   ewBoundaryType, nsBoundaryType)
 
-            iblock_dst = dst_block%iblock  ! i,j block index in 
-            jblock_dst = dst_block%jblock  ! Cartesian block decomposition
+      call ice_HaloMsgCreate(halo, dist, iblock, neBlock, 'northeast')
 
-            dst_block_loc = dist%local_block(k)  ! local block location
+      !*** find northwest neighbor block
 
-            !***
-            !*** if this block is an eastern neighbor
-            !*** determine send/receive addresses
-            !***
+      nwBlock = ice_blocksGetNbrID(iblock, ice_blocksNorthWest,    &
+                                   ewBoundaryType, nsBoundaryType)
 
-            if (iblock_dst == iblock_east .and. &
-                jblock_dst == jblock_east .and. go_east) then
+      call ice_HaloMsgCreate(halo, dist, iblock, nwBlock, 'northwest')
 
-               if (src_proc /= 0) then
-                  !*** local copy from one block to another
-                  iloc_ew = iloc_ew + 1
-                  newbndy%local_ew_src_block(iloc_ew) = src_block_loc
-                  newbndy%local_ew_src_add(1,iloc_ew) = src_block%ihi - &
-                                                        nghost + 1
-                  newbndy%local_ew_src_add(2,iloc_ew) = 1
-                  newbndy%local_ew_dst_block(iloc_ew) = dst_block_loc
-                  newbndy%local_ew_dst_add(1,iloc_ew) = 1
-                  newbndy%local_ew_dst_add(2,iloc_ew) = 1
-               else
-                  !*** source block is all land so treat as local copy
-                  !*** with source block zero to fill ghost cells with 
-                  !*** zeroes
-                  iloc_ew = iloc_ew + 1
-                  newbndy%local_ew_src_block(iloc_ew) = 0
-                  newbndy%local_ew_src_add(1,iloc_ew) = 0
-                  newbndy%local_ew_src_add(2,iloc_ew) = 0
-                  newbndy%local_ew_dst_block(iloc_ew) = dst_block_loc
-                  newbndy%local_ew_dst_add(1,iloc_ew) = 1
-                  newbndy%local_ew_dst_add(2,iloc_ew) = 1
-               endif
+      !*** find southeast neighbor block
 
-            endif ! east neighbor
+      seBlock = ice_blocksGetNbrID(iblock, ice_blocksSouthEast,    &
+                                   ewBoundaryType, nsBoundaryType)
 
-            !***
-            !*** if this block is a western neighbor
-            !*** determine send/receive addresses
-            !***
+      call ice_HaloMsgCreate(halo, dist, iblock, seBlock, 'southeast')
 
-            if (iblock_dst == iblock_west .and. &
-                jblock_dst == jblock_west .and. go_west) then
+      !*** find southwest neighbor block
 
-               if (src_proc /= 0) then
-                  !*** perform a local copy
-                  iloc_ew = iloc_ew + 1
-                  newbndy%local_ew_src_block(iloc_ew) = src_block_loc
-                  newbndy%local_ew_src_add(1,iloc_ew) = nghost + 1
-                  newbndy%local_ew_src_add(2,iloc_ew) = 1
-                  newbndy%local_ew_dst_block(iloc_ew) = dst_block_loc
-                  newbndy%local_ew_dst_add(1,iloc_ew) = dst_block%ihi + 1
-                  newbndy%local_ew_dst_add(2,iloc_ew) = 1
-               else
-                  !*** neighbor is a land block so zero ghost cells
-                  iloc_ew = iloc_ew + 1
-                  newbndy%local_ew_src_block(iloc_ew) = 0
-                  newbndy%local_ew_src_add(1,iloc_ew) = 0
-                  newbndy%local_ew_src_add(2,iloc_ew) = 0
-                  newbndy%local_ew_dst_block(iloc_ew) = dst_block_loc
-                  newbndy%local_ew_dst_add(1,iloc_ew) = dst_block%ihi + 1
-                  newbndy%local_ew_dst_add(2,iloc_ew) = 1
-               endif
+      swBlock = ice_blocksGetNbrID(iblock, ice_blocksSouthWest,    &
+                                   ewBoundaryType, nsBoundaryType)
 
-            endif ! west neighbor
+      call ice_HaloMsgCreate(halo, dist, iblock, swBlock, 'southwest')
 
-            !***
-            !*** if this block is a northern neighbor
-            !***  compute send/recv addresses
-            !*** for tripole, must communicate with all
-            !*** north row blocks (triggered by iblock_north <0)
-            !***
-
-            if ((iblock_dst == iblock_north .or. iblock_north < 0) .and. &
-                 jblock_dst == jblock_north .and. go_north) then
-
-               if (src_proc /= 0) then
-                  !*** local copy
-                  iloc_ns = iloc_ns + 1
-                  newbndy%local_ns_src_block(iloc_ns) = src_block_loc
-                  newbndy%local_ns_src_add(1,iloc_ns) = 1
-                  newbndy%local_ns_src_add(2,iloc_ns) = src_block%jhi - &
-                                                        nghost + 1
-                  newbndy%local_ns_dst_block(iloc_ns) = dst_block_loc
-                  newbndy%local_ns_dst_add(1,iloc_ns) = 1
-                  newbndy%local_ns_dst_add(2,iloc_ns) = 1
-
-                  if (iblock_north < 0) then !*** tripole boundary
-
-                     newbndy%local_ns_dst_block(iloc_ns) = -dst_block_loc
-                     !*** copy nghost+1 northern rows of physical
-                     !*** domain into global north tripole buffer
-                     newbndy%local_ns_src_add(1,iloc_ns) = &
-                                        src_block%i_glob(nghost+1)
-                     newbndy%local_ns_src_add(2,iloc_ns) = &
-                                        dst_block%jhi - nghost
-
-                     !*** copy out of tripole ghost cell buffer
-                     !*** over-write the last row of the destination
-                     !*** block to enforce for symmetry for fields
-                     !*** located on domain boundary
-                     newbndy%local_ns_dst_add(1,iloc_ns) = &
-                                          dst_block%i_glob(nghost+1)
-                     newbndy%local_ns_dst_add(2,iloc_ns) = & 
-                                          dst_block%jhi
-                  endif
-               else
-                  !*** source is land block so zero ghost cells
-                  iloc_ns = iloc_ns + 1
-                  newbndy%local_ns_src_block(iloc_ns) = 0
-                  newbndy%local_ns_src_add(1,iloc_ns) = 0
-                  newbndy%local_ns_src_add(2,iloc_ns) = 0
-                  newbndy%local_ns_dst_block(iloc_ns) = dst_block_loc
-                  newbndy%local_ns_dst_add(1,iloc_ns) = 1
-                  newbndy%local_ns_dst_add(2,iloc_ns) = 1
-                  if (iblock_north < 0) then !*** tripole boundary
-                     newbndy%local_ns_dst_block(iloc_ns) = -dst_block_loc
-                     !*** replace i addresses with global i location
-                     !*** for copies into and out of global buffer
-                     newbndy%local_ns_dst_add(1,iloc_ns) = &
-                                             dst_block%i_glob(nghost+1)
-                     newbndy%local_ns_dst_add(2,iloc_ns) = dst_block%jhi
-                  endif
-               endif
-
-            endif ! north neighbor
-
-            !***
-            !*** if this block is a southern neighbor
-            !*** determine send/receive addresses
-            !***
-
-            if (iblock_dst == iblock_south .and. &
-                jblock_dst == jblock_south .and. go_south) then
-
-               if (src_proc /= 0) then
-                  iloc_ns = iloc_ns + 1
-                  newbndy%local_ns_src_block(iloc_ns) = src_block_loc
-                  newbndy%local_ns_src_add(1,iloc_ns) = 1
-                  newbndy%local_ns_src_add(2,iloc_ns) = nghost + 1
-                  newbndy%local_ns_dst_block(iloc_ns) = dst_block_loc
-                  newbndy%local_ns_dst_add(1,iloc_ns) = 1
-                  newbndy%local_ns_dst_add(2,iloc_ns) = dst_block%jhi + 1
-               else
-                  !*** neighbor is a land block so zero ghost cells
-                  iloc_ns = iloc_ns + 1
-                  newbndy%local_ns_src_block(iloc_ns) = 0
-                  newbndy%local_ns_src_add(1,iloc_ns) = 0
-                  newbndy%local_ns_src_add(2,iloc_ns) = 0
-                  newbndy%local_ns_dst_block(iloc_ns) = dst_block_loc
-                  newbndy%local_ns_dst_add(1,iloc_ns) = 1
-                  newbndy%local_ns_dst_add(2,iloc_ns) = dst_block%jhi + 1
-               endif
-            endif ! south neighbor
-
-         endif  ! not a land block
-
-      end do
-   end do block_loop2
-
-!-----------------------------------------------------------------------
-!
-!  if necessary, create tripole boundary buffers for each
-!  common data type.  the ghost cell buffer includes an
-!  extra row for the last physical row in order to enforce
-!  symmetry conditions on variables at U points.  the other buffer
-!  contains an extra row for handling y-offset for north face or
-!  northeast corner points.
-!
-!-----------------------------------------------------------------------
-
-   if (lalloc_tripole .and. .not. allocated(tripole_ibuf)) then
-      allocate(tripole_ibuf  (nx_global,nghost+1), &
-               tripole_rbuf  (nx_global,nghost+1), &
-               tripole_dbuf  (nx_global,nghost+1), &
-               tripole_ighost(nx_global,nghost+1), &
-               tripole_rghost(nx_global,nghost+1), &
-               tripole_dghost(nx_global,nghost+1))
-   endif
+   end do msgConfigLoop
 
 !-----------------------------------------------------------------------
 !EOC
 
- end subroutine create_boundary
+ end function ice_HaloCreate
 
 !***********************************************************************
 !BOP
-! !IROUTINE: destroy_boundary
+! !IROUTINE: ice_HaloDestroy
 ! !INTERFACE:
 
- subroutine destroy_boundary(in_bndy)
+ subroutine ice_HaloDestroy(halo)
 
 ! !DESCRIPTION:
-!  This routine destroys a boundary by deallocating all memory
-!  associated with the boundary and nullifying pointers.
+!  This routine destroys a halo structure by deallocating all memory
+!  associated with the halo and nullifying pointers.
 !
 ! !REVISION HISTORY:
 !  same as module
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   type (bndy), intent(inout) :: &
-     in_bndy          ! boundary structure to be destroyed
+   type (ice_halo), intent(inout) :: &
+      halo          ! boundary structure to be destroyed
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
+!-----------------------------------------------------------------------
+!
+!  local status flag for deallocate
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) :: istat
+
 !-----------------------------------------------------------------------
 !
 !  reset all scalars
 !
 !-----------------------------------------------------------------------
 
-   in_bndy%communicator      = 0
-   in_bndy%nlocal_ew         = 0
-   in_bndy%nlocal_ns         = 0
+   halo%communicator   = 0
+   halo%numLocalCopies = 0
 
 !-----------------------------------------------------------------------
 !
@@ -819,59 +611,73 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   deallocate(in_bndy%local_ew_src_block, &
-              in_bndy%local_ew_dst_block, &
-              in_bndy%local_ns_src_block, &
-              in_bndy%local_ns_dst_block, &
-              in_bndy%local_ew_src_add,   &
-              in_bndy%local_ew_dst_add,   &
-              in_bndy%local_ns_src_add,   &
-              in_bndy%local_ns_dst_add )
+   deallocate(halo%srcLocalAddr, halo%dstLocalAddr, &
+              stat = istat)
+
+   if (istat > 0) then
+      call abort_ice( &
+         'ice_HaloDestroy: error deallocating halo')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  nullify all pointers
+!
+!-----------------------------------------------------------------------
+
+   nullify(halo%srcLocalAddr)
+   nullify(halo%dstLocalAddr)
 
 !-----------------------------------------------------------------------
 !EOC
 
- end subroutine destroy_boundary
+ end subroutine ice_HaloDestroy
 
 !***********************************************************************
 !BOP
-! !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloUpdate2DR8
 ! !INTERFACE:
 
- subroutine boundary_2d_dbl(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloUpdate2DR8(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
+!  POP\_HaloUpdate.  This routine is the specific interface
 !  for 2d horizontal arrays of double precision.
 !
 ! !REVISION HISTORY:
 !  same as module
-!
-!  Sept. 2004: Modified by William Lipscomb to allow for cases where
-!              blocks have no EW and/or NS communications with other 
-!              blocks.  E.g., do not allocate arrays with dimension 0.
- 
+
 ! !USER:
 
 ! !INPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
 
    integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
 
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
+   real (dbl_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), dimension(:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+   real (dbl_kind), dimension(:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -882,222 +688,130 @@ contains
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      i,j,k,m,n,                   &! dummy loop indices
-      ib_src,ie_src,jb_src,je_src, &! beg,end indices for bndy cells
-      ib_dst,ie_dst,jb_dst,je_dst, &!
-      nx_global,                   &! global domain size in x
-      src_block,                   &! local block number for source
-      dst_block,                   &! local block number for destination
-      xoffset, yoffset,            &! address shifts for tripole
-      isign,                       &! sign factor for tripole grids
-      bcflag                        ! boundary condition flag
+      i,j,n,nmsg,                &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
 
-   real (r8) :: &
-      xavg               ! scalar for enforcing symmetry at U pts
-
-   !call ice_timer_start(timer_bound)  ! boundary updates
+   real (dbl_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
 
 !-----------------------------------------------------------------------
 !
-!  set nx_global for tripole
+!  initialize error code and fill value
 !
 !-----------------------------------------------------------------------
 
-   if (allocated(tripole_dbuf)) nx_global = size(tripole_dbuf,dim=1)
-	
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0.0_dbl_kind
+   endif
+
+   nxGlobal = 0
+   if (allocated(bufTripoleR8)) then
+      nxGlobal = size(bufTripoleR8,dim=1)
+      bufTripoleR8 = fill
+   endif
+
 !-----------------------------------------------------------------------
 !
-!  do local copies for east-west ghost cell updates
-!  also initialize ghost cells to zero
+!  do local copies while waiting for messages to complete
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
 !
 !-----------------------------------------------------------------------
 
-   !call timer_start(bndy_2d_local)
-   do n=1,in_bndy%nlocal_ew
-      src_block = in_bndy%local_ew_src_block(n)
-      dst_block = in_bndy%local_ew_dst_block(n)
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
 
-      ib_src = in_bndy%local_ew_src_add(1,n)
-      ie_src = ib_src + nghost - 1
-      ib_dst = in_bndy%local_ew_dst_add(1,n)
-      ie_dst = ib_dst + nghost - 1
-
-      if (src_block /= 0) then
-         ARRAY(ib_dst:ie_dst,:,dst_block) = &
-         ARRAY(ib_src:ie_src,:,src_block)
-      else
-         ARRAY(ib_dst:ie_dst,:,dst_block) = c0
-         if (present(bc)) then
-            if (bc == 'Neumann') then
-            if (ib_dst == 1) then                       ! west boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
-               enddo
-            elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
-               enddo
-            endif
-            endif
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            array(iDst,jDst,dstBlock) = &
+            array(iSrc,jSrc,srcBlock)
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            bufTripoleR8(iDst,jDst) = &
+            array(iSrc,jSrc,srcBlock)
          endif
-      endif
-
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  now exchange north-south boundary info
-!
-!-----------------------------------------------------------------------
-
-   if (allocated(tripole_dbuf)) tripole_dbuf = c0
-
-   do n=1,in_bndy%nlocal_ns
-      src_block = in_bndy%local_ns_src_block(n)
-      dst_block = in_bndy%local_ns_dst_block(n)
-
-      if (dst_block > 0) then ! straight local copy
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost - 1
-         jb_dst = in_bndy%local_ns_dst_add(2,n)
-         je_dst = jb_dst + nghost - 1
-
-         if (src_block /= 0) then
-            ARRAY(:,jb_dst:je_dst,dst_block) = &
-            ARRAY(:,jb_src:je_src,src_block)
-         else
-            ARRAY(:,jb_dst:je_dst,dst_block) = c0
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-               if (jb_dst == 1) then                       ! south boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
-                  enddo
-               elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
-                  enddo
-               endif
-               endif
-            endif
-         endif
-
-      else  !north boundary tripole grid - copy into global north buffer
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost ! need nghost+1 rows for tripole
-
-         !*** determine start, end addresses of physical domain
-         !*** for both global buffer and local block
-
-!echmod - bug         ib_dst = in_bndy%local_ns_src_add(1,n)
-         ib_dst = in_bndy%local_ns_dst_add(1,n) !echmod
-         ie_dst = ib_dst + (nx_block-2*nghost) - 1
-!echmod         if (ie_dst > nx_global) ie_dst = nx_global
-         ie_dst = min(ie_dst, nx_global) !echmod
-         ib_src = nghost + 1
-         ie_src = ib_src + ie_dst - ib_dst
-!echmod - fill buffer with Neumann conditions first, then overwrite where needed
-         if (src_block == 0 .and. dst_block /= 0) then ! echmod
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-                  do m = 1, nghost + 1
-                     jb_dst = in_bndy%local_ns_dst_add(2,n)
-                     ie_src = ib_src + ie_dst - ib_dst
-                     tripole_dbuf(ib_dst:ie_dst,m) = &
-                        ARRAY(ib_src:ie_src,jb_dst-1,-dst_block)
-                  enddo
-               endif
-            endif
-         else if (src_block /= 0 .and. dst_block == -src_block) then ! echmod
-!maltrud - debug         if (src_block /= 0) then
-!echmod         if (dst_block /= 0) then
-            tripole_dbuf(ib_dst:ie_dst,:) = &
-                  ARRAY(ib_src:ie_src,jb_src:je_src,src_block)
-            if (present(bc)) then
-            if (bc == 'Neumann') then
-               do m = 1, nghost + 1
-                  do i = 1, nghost
-                     if (ib_dst > i) then
-                     if (tripole_dbuf(ib_dst-i,m) == c0) &
-                         tripole_dbuf(ib_dst-i,m) = tripole_dbuf(ib_dst,m)
-                     endif
-                     if (ie_dst < nx_global-i) then
-                     if (tripole_dbuf(ie_dst+i,m) == c0) &
-                         tripole_dbuf(ie_dst+i,m) = tripole_dbuf(ie_dst,m)
-                     endif
-                  enddo
-               enddo
-            endif
-            endif
-         endif
-
+      else if (srcBlock == 0) then
+         array(iDst,jDst,dstBlock) = fill
       endif
    end do
 
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
+!  bufTripole array contains the top nghost+1 rows of physical
+!    domain for entire (global) top row 
 !
 !-----------------------------------------------------------------------
 
-   if (allocated(tripole_dbuf)) then
+   if (nxGlobal > 0) then
 
-      tripole_dghost(:,:) = c0 !echmod
-
-      select case (grid_loc)
+      select case (fieldLoc)
       case (field_loc_center)   ! cell center location
-         xoffset = 1
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_dghost(:,1) = tripole_dbuf(:,nghost+1)
-      case (field_loc_NEcorner)   ! cell corner (velocity) location
-         xoffset = 0
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global - i
-            xavg = p5*(abs(tripole_dbuf(i     ,nghost+1)) + &
-                       abs(tripole_dbuf(ib_dst,nghost+1)))
-            tripole_dghost(i     ,1) = sign(xavg, &
-                                            tripole_dbuf(i,nghost+1))
-            tripole_dghost(ib_dst,1) = sign(xavg, &
-                                            tripole_dbuf(ib_dst,nghost+1))
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripoleR8(i   ,nghost+1)
+            x2 = bufTripoleR8(iDst,nghost+1)
+            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
+            bufTripoleR8(i   ,nghost+1) = sign(xavg, x1)
+            bufTripoleR8(iDst,nghost+1) = sign(xavg, x2)
          end do
-         !*** catch nx_global case (should be land anyway...)
-         tripole_dghost(nx_global,1) = tripole_dbuf(nx_global,nghost+1)
-         tripole_dbuf(:,nghost+1) = tripole_dghost(:,1)
+
       case (field_loc_Eface)   ! cell center location
-         xoffset = 0
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_dghost(:,1) = tripole_dbuf(:,nghost+1)
+
+         ioffset = 1
+         joffset = 0
+
       case (field_loc_Nface)   ! cell corner (velocity) location
-         xoffset = 1
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global + 1 - i
-            xavg = p5*(abs(tripole_dbuf(i     ,nghost+1)) + &
-                       abs(tripole_dbuf(ib_dst,nghost+1)))
-            tripole_dghost(i     ,1) = sign(xavg, &
-                                            tripole_dbuf(i,nghost+1))
-            tripole_dghost(ib_dst,1) = sign(xavg, &
-                                            tripole_dbuf(ib_dst,nghost+1))
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripoleR8(i   ,nghost+1)
+            x2 = bufTripoleR8(iDst,nghost+1)
+            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
+            bufTripoleR8(i   ,nghost+1) = sign(xavg, x1)
+            bufTripoleR8(iDst,nghost+1) = sign(xavg, x2)
          end do
-         tripole_dbuf(:,nghost+1) = tripole_dghost(:,1)
+
       case default
-         call abort_ice('Unknown location in boundary_2d')
+         call abort_ice( &
+            'ice_HaloUpdate2DR8: Unknown field location')
       end select
 
-      select case (field_type)
+      select case (fieldKind)
       case (field_type_scalar)
          isign =  1
       case (field_type_vector)
@@ -1105,146 +819,96 @@ contains
       case (field_type_angle)
          isign = -1
       case default
-         call abort_ice('Unknown field type in boundary')
+         call abort_ice( &
+            'ice_HaloUpdate2DR8: Unknown field kind')
       end select
 
-      !*** copy source (physical) cells into ghost cells
-      !*** global source addresses are:
-      !*** nx_global + xoffset - i
-      !*** ny_global + yoffset - j
-      !*** in the actual tripole buffer, the indices are:
-      !*** nx_global + xoffset - i = ib_src - i
-      !*** ny_global + yoffset - j - (ny_global - nghost) + 1 =
-      !***    nghost + yoffset +1 - j = jb_src - j
-
-      ib_src = nx_global + xoffset
-      jb_src = nghost + yoffset + 1
-
-      bcflag = 0
-      if (present(bc)) then
-         if (bc == 'Neumann') then
-            bcflag = 1
-            do j=1,nghost
-            do i=1,nx_global
-               index_check = max(ib_src-i,1)
-               if (tripole_dbuf(index_check, jb_src-j) /= c0) then !echmod
-                  tripole_dghost(i,1+j) = isign* &
-                                       tripole_dbuf(index_check, jb_src-j)
-               else
-                  tripole_dghost(i,1+j) = tripole_dbuf(i, jb_src-j)
-               endif
-            end do
-            end do
-         endif
-      endif
-
-      if (bcflag == 0) then
-         do j=1,nghost
-         do i=1,nx_global
-            index_check = max(ib_src-i,1)
-            tripole_dghost(i,1+j) = isign* &
-                                    tripole_dbuf(index_check, jb_src-j)
-         end do
-         end do
-      endif ! bcflag = 0
-
-      !*** copy out of global ghost cell buffer into local
+      !*** copy out of global tripole buffer into local
       !*** ghost cells
 
-      do n=1,in_bndy%nlocal_ns
-         dst_block = in_bndy%local_ns_dst_block(n)
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
 
-         if (dst_block < 0) then
-            dst_block = -dst_block
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
 
-            jb_dst = in_bndy%local_ns_dst_add(2,n)
-            je_dst = jb_dst + nghost
-            ib_src = in_bndy%local_ns_dst_add(1,n)
-            !*** ib_src is glob address of 1st point in physical
-            !*** domain.  must now adjust to properly copy
-            !*** east-west ghost cell info in the north boundary
+         if (srcBlock < 0) then
 
-            if (ib_src == 1) then  ! western boundary
-               !*** impose cyclic conditions at western boundary
-               !*** then set up remaining indices to copy rest
-               !*** of domain from tripole ghost cell buffer
-               do i=1,nghost
-                  ARRAY(i,jb_dst:je_dst,dst_block) = &
-                     tripole_dghost(nx_global-nghost+i,:)
-               end do
-               ie_src = ib_src + nx_block - nghost - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = nghost + 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            else
-               ib_src = ib_src - nghost
-               ie_src = ib_src + nx_block - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            endif
-            if (ie_src == nx_global) then ! eastern boundary
-               !*** impose cyclic conditions in ghost cells
-               do i=1,nghost
-                  ARRAY(ie_dst+i,jb_dst:je_dst,dst_block) = &
-                     tripole_dghost(i,:)
-               end do
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               array(iDst,jDst,dstBlock) = isign*bufTripoleR8(iSrc,jSrc)
             endif
 
-            !*** now copy the remaining ghost cell values
-
-            ARRAY(ib_dst:ie_dst,jb_dst:je_dst,dst_block) = &
-               tripole_dghost(ib_src:ie_src,:)
          endif
-
       end do
 
    endif
 
-   !call timer_stop(bndy_2d_local)
-   !call ice_timer_stop(timer_bound)
-
 !-----------------------------------------------------------------------
+!EOC
 
- end subroutine boundary_2d_dbl
+ end subroutine ice_HaloUpdate2DR8
 
 !***********************************************************************
 !BOP
-! !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloUpdate2DR4
 ! !INTERFACE:
 
- subroutine boundary_2d_real(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloUpdate2DR4(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
+!  POP\_HaloUpdate.  This routine is the specific interface
 !  for 2d horizontal arrays of single precision.
 !
 ! !REVISION HISTORY:
 !  same as module
 
-! !USES:
+! !USER:
 
 ! !INPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
 
    integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
 
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
+   real (real_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r4), dimension(:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+   real (real_kind), dimension(:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -1255,221 +919,130 @@ contains
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      i,j,k,m,n,                   &! dummy loop indices
-      ib_src,ie_src,jb_src,je_src, &! beg,end indices for bndy cells
-      ib_dst,ie_dst,jb_dst,je_dst, &!
-      nx_global,                   &! global domain size in x
-      src_block,                   &! local block number for source
-      dst_block,                   &! local block number for destination
-      xoffset, yoffset,            &! address shifts for tripole
-      isign,                       &! sign factor for tripole grids
-      bcflag                        ! boundary condition flag
+      i,j,n,nmsg,                &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
 
-   real (r4) :: &
-      xavg               ! scalar for enforcing symmetry at U pts
-
-   !call ice_timer_start(timer_bound)
-
-!-----------------------------------------------------------------------
-!
-!  set nx_global for tripole
-!
-!-----------------------------------------------------------------------
-
-   if (allocated(tripole_rbuf)) nx_global = size(tripole_rbuf,dim=1)
+   real (real_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
 
 !-----------------------------------------------------------------------
 !
-!  do local copies for east-west ghost cell updates
-!  also initialize ghost cells to zero
+!  initialize error code and fill value
 !
 !-----------------------------------------------------------------------
 
-   do n=1,in_bndy%nlocal_ew
-      src_block = in_bndy%local_ew_src_block(n)
-      dst_block = in_bndy%local_ew_dst_block(n)
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0.0_real_kind
+   endif
 
-      ib_src = in_bndy%local_ew_src_add(1,n)
-      ie_src = ib_src + nghost - 1
-      ib_dst = in_bndy%local_ew_dst_add(1,n)
-      ie_dst = ib_dst + nghost - 1
+   nxGlobal = 0
+   if (allocated(bufTripoleR4)) then
+      nxGlobal = size(bufTripoleR4,dim=1)
+      bufTripoleR4 = fill
+   endif
 
-      if (src_block /= 0) then
-         ARRAY(ib_dst:ie_dst,:,dst_block) = &
-         ARRAY(ib_src:ie_src,:,src_block)
-      else
-         ARRAY(ib_dst:ie_dst,:,dst_block) = c0
-         if (present(bc)) then
-            if (bc == 'Neumann') then
-            if (ib_dst == 1) then                       ! west boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
-               enddo
-            elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
-               enddo
-            endif
-            endif
+!-----------------------------------------------------------------------
+!
+!  do local copies while waiting for messages to complete
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            array(iDst,jDst,dstBlock) = &
+            array(iSrc,jSrc,srcBlock)
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            bufTripoleR4(iDst,jDst) = &
+            array(iSrc,jSrc,srcBlock)
          endif
-      endif
-
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  now exchange north-south boundary info
-!
-!-----------------------------------------------------------------------
-
-   if (allocated(tripole_rbuf)) tripole_rbuf = c0
-
-   do n=1,in_bndy%nlocal_ns
-      src_block = in_bndy%local_ns_src_block(n)
-      dst_block = in_bndy%local_ns_dst_block(n)
-
-      if (dst_block > 0) then ! straight local copy
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost - 1
-         jb_dst = in_bndy%local_ns_dst_add(2,n)
-         je_dst = jb_dst + nghost - 1
-
-         if (src_block /= 0) then
-            ARRAY(:,jb_dst:je_dst,dst_block) = &
-            ARRAY(:,jb_src:je_src,src_block)
-         else
-            ARRAY(:,jb_dst:je_dst,dst_block) = c0
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-               if (jb_dst == 1) then                       ! south boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
-                  enddo
-               elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
-                  enddo
-               endif
-               endif
-            endif
-         endif
-
-      else  !north boundary tripole grid - copy into global north buffer
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost ! need nghost+1 rows for tripole
-
-         !*** determine start, end addresses of physical domain
-         !*** for both global buffer and local block
-
-!echmod - bug         ib_dst = in_bndy%local_ns_src_add(1,n)
-         ib_dst = in_bndy%local_ns_dst_add(1,n)
-         ie_dst = ib_dst + (nx_block-2*nghost) - 1
-!echmod         if (ie_dst > nx_global) ie_dst = nx_global
-         ie_dst = min(ie_dst, nx_global) !echmod
-         ib_src = nghost + 1
-         ie_src = ib_src + ie_dst - ib_dst
-!echmod - fill buffer with Neumann conditions first, then overwrite where needed
-         if (src_block == 0 .and. dst_block /= 0) then ! echmod
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-                  do m = 1, nghost + 1
-                     jb_dst = in_bndy%local_ns_dst_add(2,n)
-                     ie_src = ib_src + ie_dst - ib_dst
-                     tripole_rbuf(ib_dst:ie_dst,m) = &
-                        ARRAY(ib_src:ie_src,jb_dst-1,-dst_block)
-                  enddo
-               endif
-            endif
-         else if (src_block /= 0 .and. dst_block == -src_block) then ! echmod
-!maltrud - debug         if (src_block /= 0) then
-!echmod         if (dst_block /= 0) then
-            tripole_rbuf(ib_dst:ie_dst,:) = &
-                  ARRAY(ib_src:ie_src,jb_src:je_src,src_block)
-            if (present(bc)) then
-            if (bc == 'Neumann') then
-               do m = 1, nghost + 1
-                  do i = 1, nghost
-                     if (ib_dst > i) then
-                     if (tripole_rbuf(ib_dst-i,m) == c0) &
-                         tripole_rbuf(ib_dst-i,m) = tripole_rbuf(ib_dst,m)
-                     endif
-                     if (ie_dst < nx_global-i) then
-                     if (tripole_rbuf(ie_dst+i,m) == c0) &
-                         tripole_rbuf(ie_dst+i,m) = tripole_rbuf(ie_dst,m)
-                     endif
-                  enddo
-               enddo
-            endif
-            endif
-         endif
-
+      else if (srcBlock == 0) then
+         array(iDst,jDst,dstBlock) = fill
       endif
    end do
 
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
 !
 !-----------------------------------------------------------------------
 
-   if (allocated(tripole_rbuf)) then
+   if (nxGlobal > 0) then
 
-      tripole_rghost(:,:) = c0 !echmod
-
-      select case (grid_loc)
+      select case (fieldLoc)
       case (field_loc_center)   ! cell center location
-         xoffset = 1
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_rghost(:,1) = tripole_rbuf(:,nghost+1)
-      case (field_loc_NEcorner)   ! cell corner (velocity) location
-         xoffset = 0
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global - i
-            xavg = p5*(abs(tripole_rbuf(i     ,nghost+1)) + &
-                       abs(tripole_rbuf(ib_dst,nghost+1)))
-            tripole_rghost(i     ,1) = sign(xavg, &
-                                            tripole_rbuf(i,nghost+1))
-            tripole_rghost(ib_dst,1) = sign(xavg, &
-                                            tripole_rbuf(ib_dst,nghost+1))
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripoleR4(i   ,nghost+1)
+            x2 = bufTripoleR4(iDst,nghost+1)
+            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
+            bufTripoleR4(i   ,nghost+1) = sign(xavg, x1)
+            bufTripoleR4(iDst,nghost+1) = sign(xavg, x2)
          end do
-         !*** catch nx_global case (should be land anyway...)
-         tripole_rghost(nx_global,1) = tripole_rbuf(nx_global,nghost+1)
-         tripole_rbuf(:,nghost+1) = tripole_rghost(:,1)
+
       case (field_loc_Eface)   ! cell center location
-         xoffset = 0
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_rghost(:,1) = tripole_rbuf(:,nghost+1)
+
+         ioffset = 1
+         joffset = 0
+
       case (field_loc_Nface)   ! cell corner (velocity) location
-         xoffset = 1
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global + 1 - i
-            xavg = p5*(abs(tripole_rbuf(i     ,nghost+1)) + &
-                       abs(tripole_rbuf(ib_dst,nghost+1)))
-            tripole_rghost(i     ,1) = sign(xavg, &
-                                            tripole_rbuf(i,nghost+1))
-            tripole_rghost(ib_dst,1) = sign(xavg, &
-                                            tripole_rbuf(ib_dst,nghost+1))
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripoleR4(i   ,nghost+1)
+            x2 = bufTripoleR4(iDst,nghost+1)
+            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
+            bufTripoleR4(i   ,nghost+1) = sign(xavg, x1)
+            bufTripoleR4(iDst,nghost+1) = sign(xavg, x2)
          end do
-         tripole_rbuf(:,nghost+1) = tripole_rghost(:,1)
+
       case default
-         call abort_ice('Unknown location in boundary_2d')
+         call abort_ice( &
+            'ice_HaloUpdate2DR4: Unknown field location')
       end select
 
-      select case (field_type)
+      select case (fieldKind)
       case (field_type_scalar)
          isign =  1
       case (field_type_vector)
@@ -1477,146 +1050,96 @@ contains
       case (field_type_angle)
          isign = -1
       case default
-         call abort_ice('Unknown field type in boundary')
+         call abort_ice( &
+            'ice_HaloUpdate2DR4: Unknown field kind')
       end select
 
-      !*** copy source (physical) cells into ghost cells
-      !*** global source addresses are:
-      !*** nx_global + xoffset - i
-      !*** ny_global + yoffset - j
-      !*** in the actual tripole buffer, the indices are:
-      !*** nx_global + xoffset - i = ib_src - i
-      !*** ny_global + yoffset - j - (ny_global - nghost) + 1 =
-      !***    nghost + yoffset +1 - j = jb_src - j
-
-      ib_src = nx_global + xoffset
-      jb_src = nghost + yoffset + 1
-
-      bcflag = 0
-      if (present(bc)) then
-         if (bc == 'Neumann') then
-            bcflag = 1
-            do j=1,nghost
-            do i=1,nx_global
-               index_check = max(ib_src-i,1)
-               if (tripole_rbuf(index_check, jb_src-j) /= c0) then !echmod
-                  tripole_rghost(i,1+j) = isign* &
-                                       tripole_rbuf(index_check, jb_src-j)
-               else
-                  tripole_rghost(i,1+j) = tripole_rbuf(i, jb_src-j)
-               endif
-            end do
-            end do
-         endif
-      endif
-
-      if (bcflag == 0) then
-         do j=1,nghost
-         do i=1,nx_global
-            index_check = max(ib_src-i,1)
-            tripole_rghost(i,1+j) = isign* &
-                                    tripole_rbuf(index_check, jb_src-j)
-         end do
-         end do
-      endif ! bcflag = 0
-
-      !*** copy out of global ghost cell buffer into local
+      !*** copy out of global tripole buffer into local
       !*** ghost cells
 
-      do n=1,in_bndy%nlocal_ns
-         dst_block = in_bndy%local_ns_dst_block(n)
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
 
-         if (dst_block < 0) then
-            dst_block = -dst_block
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
 
-            jb_dst = in_bndy%local_ns_dst_add(2,n)
-            je_dst = jb_dst + nghost
-            ib_src = in_bndy%local_ns_dst_add(1,n)
-            !*** ib_src is glob address of 1st point in physical
-            !*** domain.  must now adjust to properly copy
-            !*** east-west ghost cell info in the north boundary
+         if (srcBlock < 0) then
 
-            if (ib_src == 1) then  ! western boundary
-               !*** impose cyclic conditions at western boundary
-               !*** then set up remaining indices to copy rest
-               !*** of domain from tripole ghost cell buffer
-               do i=1,nghost
-                  ARRAY(i,jb_dst:je_dst,dst_block) = &
-                     tripole_rghost(nx_global-nghost+i,:)
-               end do
-               ie_src = ib_src + nx_block - nghost - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = nghost + 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            else
-               ib_src = ib_src - nghost
-               ie_src = ib_src + nx_block - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            endif
-            if (ie_src == nx_global) then ! eastern boundary
-               !*** impose cyclic conditions in ghost cells
-               do i=1,nghost
-                  ARRAY(ie_dst+i,jb_dst:je_dst,dst_block) = &
-                     tripole_rghost(i,:)
-               end do
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               array(iDst,jDst,dstBlock) = isign*bufTripoleR4(iSrc,jSrc)
             endif
 
-            !*** now copy the remaining ghost cell values
-
-            ARRAY(ib_dst:ie_dst,jb_dst:je_dst,dst_block) = &
-               tripole_rghost(ib_src:ie_src,:)
          endif
-
       end do
 
    endif
 
-
-   !call ice_timer_stop(timer_bound)
-
 !-----------------------------------------------------------------------
+!EOC
 
-end subroutine boundary_2d_real
+ end subroutine ice_HaloUpdate2DR4
 
 !***********************************************************************
 !BOP
-! !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloUpdate2DI4
 ! !INTERFACE:
 
- subroutine boundary_2d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloUpdate2DI4(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
-!  for 2d horizontal arrays of double precision.
+!  POP\_HaloUpdate.  This routine is the specific interface
+!  for 2d horizontal integer arrays.
 !
 ! !REVISION HISTORY:
 !  same as module
 
-! !USES:
+! !USER:
 
 ! !INPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
 
    integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
 
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
+   integer (int_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
    integer (int_kind), dimension(:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -1627,221 +1150,130 @@ end subroutine boundary_2d_real
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      i,j,k,m,n,                   &! dummy loop indices
-      ib_src,ie_src,jb_src,je_src, &! beg,end indices for bndy cells
-      ib_dst,ie_dst,jb_dst,je_dst, &!
-      nx_global,                   &! global domain size in x
-      src_block,                   &! local block number for source
-      dst_block,                   &! local block number for destination
-      xoffset, yoffset,            &! address shifts for tripole
-      isign,                       &! sign factor for tripole grids
-      bcflag                        ! boundary condition flag
+      i,j,n,nmsg,                &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
 
    integer (int_kind) :: &
-      xavg               ! scalar for enforcing symmetry at U pts
-
-   !call ice_timer_start(timer_bound)
-
-!-----------------------------------------------------------------------
-!
-!  set nx_global for tripole
-!
-!-----------------------------------------------------------------------
-
-   if (allocated(tripole_ibuf)) nx_global = size(tripole_ibuf,dim=1)
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
 
 !-----------------------------------------------------------------------
 !
-!  do local copies for east-west ghost cell updates
-!  also initialize ghost cells to zero
+!  initialize error code and fill value
 !
 !-----------------------------------------------------------------------
 
-   do n=1,in_bndy%nlocal_ew
-      src_block = in_bndy%local_ew_src_block(n)
-      dst_block = in_bndy%local_ew_dst_block(n)
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0_int_kind
+   endif
 
-      ib_src = in_bndy%local_ew_src_add(1,n)
-      ie_src = ib_src + nghost - 1
-      ib_dst = in_bndy%local_ew_dst_add(1,n)
-      ie_dst = ib_dst + nghost - 1
+   nxGlobal = 0
+   if (allocated(bufTripoleI4)) then
+      nxGlobal = size(bufTripoleI4,dim=1)
+      bufTripoleI4 = fill
+   endif
 
-      if (src_block /= 0) then
-         ARRAY(ib_dst:ie_dst,:,dst_block) = &
-         ARRAY(ib_src:ie_src,:,src_block)
-      else
-         ARRAY(ib_dst:ie_dst,:,dst_block) = 0
-         if (present(bc)) then
-            if (bc == 'Neumann') then
-            if (ib_dst == 1) then                       ! west boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
-               enddo
-            elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
-               enddo
-            endif
-            endif
+!-----------------------------------------------------------------------
+!
+!  do local copies while waiting for messages to complete
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            array(iDst,jDst,dstBlock) = &
+            array(iSrc,jSrc,srcBlock)
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            bufTripoleI4(iDst,jDst) = &
+            array(iSrc,jSrc,srcBlock)
          endif
-      endif
-
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  now exchange north-south boundary info
-!
-!-----------------------------------------------------------------------
-
-   if (allocated(tripole_ibuf)) tripole_ibuf = c0
-
-   do n=1,in_bndy%nlocal_ns
-      src_block = in_bndy%local_ns_src_block(n)
-      dst_block = in_bndy%local_ns_dst_block(n)
-
-      if (dst_block > 0) then ! straight local copy
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost - 1
-         jb_dst = in_bndy%local_ns_dst_add(2,n)
-         je_dst = jb_dst + nghost - 1
-
-         if (src_block /= 0) then
-            ARRAY(:,jb_dst:je_dst,dst_block) = &
-            ARRAY(:,jb_src:je_src,src_block)
-         else
-            ARRAY(:,jb_dst:je_dst,dst_block) = 0
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-               if (jb_dst == 1) then                       ! south boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
-                  enddo
-               elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
-                  enddo
-               endif
-               endif
-            endif
-         endif
-
-      else  !north boundary tripole grid - copy into global north buffer
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost ! need nghost+1 rows for tripole
-
-         !*** determine start, end addresses of physical domain
-         !*** for both global buffer and local block
-
-!echmod - bug         ib_dst = in_bndy%local_ns_src_add(1,n)
-         ib_dst = in_bndy%local_ns_dst_add(1,n)
-         ie_dst = ib_dst + (nx_block-2*nghost) - 1
-!echmod         if (ie_dst > nx_global) ie_dst = nx_global
-         ie_dst = min(ie_dst, nx_global) !echmod
-         ib_src = nghost + 1
-         ie_src = ib_src + ie_dst - ib_dst
-!echmod - fill buffer with Neumann conditions first, then overwrite where needed
-         if (src_block == 0 .and. dst_block /= 0) then ! echmod
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-                  do m = 1, nghost + 1
-                     jb_dst = in_bndy%local_ns_dst_add(2,n)
-                     ie_src = ib_src + ie_dst - ib_dst
-                     tripole_ibuf(ib_dst:ie_dst,m) = &
-                        ARRAY(ib_src:ie_src,jb_dst-1,-dst_block)
-                  enddo
-               endif
-            endif
-         else if (src_block /= 0 .and. dst_block == -src_block) then ! echmod
-!maltrud - debug         if (src_block /= 0) then
-!echmod         if (dst_block /= 0) then
-            tripole_ibuf(ib_dst:ie_dst,:) = &
-                  ARRAY(ib_src:ie_src,jb_src:je_src,src_block)
-            if (present(bc)) then
-            if (bc == 'Neumann') then
-               do m = 1, nghost + 1
-                  do i = 1, nghost
-                     if (ib_dst > i) then
-                     if (tripole_ibuf(ib_dst-i,m) == c0) &
-                         tripole_ibuf(ib_dst-i,m) = tripole_ibuf(ib_dst,m)
-                     endif
-                     if (ie_dst < nx_global-i) then
-                     if (tripole_ibuf(ie_dst+i,m) == c0) &
-                         tripole_ibuf(ie_dst+i,m) = tripole_ibuf(ie_dst,m)
-                     endif
-                  enddo
-               enddo
-            endif
-            endif
-         endif
-
+      else if (srcBlock == 0) then
+         array(iDst,jDst,dstBlock) = fill
       endif
    end do
 
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
 !
 !-----------------------------------------------------------------------
 
-   if (allocated(tripole_ibuf)) then
+   if (nxGlobal > 0) then
 
-      tripole_ighost(:,:) = c0 !echmod
-
-      select case (grid_loc)
+      select case (fieldLoc)
       case (field_loc_center)   ! cell center location
-         xoffset = 1
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_ighost(:,1) = tripole_ibuf(:,nghost+1)
-      case (field_loc_NEcorner)   ! cell corner (velocity) location
-         xoffset = 0
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global - i
-            xavg = p5*(abs(tripole_ibuf(i     ,nghost+1)) + &
-                       abs(tripole_ibuf(ib_dst,nghost+1)))
-            tripole_ighost(i     ,1) = sign(xavg, &
-                                          tripole_ibuf(i,nghost+1))
-            tripole_ighost(ib_dst,1) = sign(xavg, &
-                                          tripole_ibuf(ib_dst,nghost+1))
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripoleI4(i   ,nghost+1)
+            x2 = bufTripoleI4(iDst,nghost+1)
+            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
+            bufTripoleI4(i   ,nghost+1) = sign(xavg, x1)
+            bufTripoleI4(iDst,nghost+1) = sign(xavg, x2)
          end do
-         !*** catch nx_global case (should be land anyway...)
-         tripole_ighost(nx_global,1) = tripole_ibuf(nx_global,nghost+1)
-         tripole_ibuf(:,nghost+1) = tripole_ighost(:,1)
+
       case (field_loc_Eface)   ! cell center location
-         xoffset = 0
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_ighost(:,1) = tripole_ibuf(:,nghost+1)
+
+         ioffset = 1
+         joffset = 0
+
       case (field_loc_Nface)   ! cell corner (velocity) location
-         xoffset = 1
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global + 1 - i
-            xavg = p5*(abs(tripole_ibuf(i     ,nghost+1)) + &
-                       abs(tripole_ibuf(ib_dst,nghost+1)))
-            tripole_ighost(i     ,1) = sign(xavg, &
-                                          tripole_ibuf(i,nghost+1))
-            tripole_ighost(ib_dst,1) = sign(xavg, &
-                                          tripole_ibuf(ib_dst,nghost+1))
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripoleI4(i   ,nghost+1)
+            x2 = bufTripoleI4(iDst,nghost+1)
+            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
+            bufTripoleI4(i   ,nghost+1) = sign(xavg, x1)
+            bufTripoleI4(iDst,nghost+1) = sign(xavg, x2)
          end do
-         tripole_ibuf(:,nghost+1) = tripole_ighost(:,1)
+
       case default
-         call abort_ice('Unknown location in boundary_2d')
+         call abort_ice( &
+            'ice_HaloUpdate2DI4: Unknown field location')
       end select
 
-      select case (field_type)
+      select case (fieldKind)
       case (field_type_scalar)
          isign =  1
       case (field_type_vector)
@@ -1849,144 +1281,96 @@ end subroutine boundary_2d_real
       case (field_type_angle)
          isign = -1
       case default
-         call abort_ice('Unknown field type in boundary')
+         call abort_ice( &
+            'ice_HaloUpdate2DI4: Unknown field kind')
       end select
 
-      !*** copy source (physical) cells into ghost cells
-      !*** global source addresses are:
-      !*** nx_global + xoffset - i
-      !*** ny_global + yoffset - j
-      !*** in the actual tripole buffer, the indices are:
-      !*** nx_global + xoffset - i = ib_src - i
-      !*** ny_global + yoffset - j - (ny_global - nghost) + 1 =
-      !***    nghost + yoffset +1 - j = jb_src - j
-
-      ib_src = nx_global + xoffset
-      jb_src = nghost + yoffset + 1
-
-      bcflag = 0
-      if (present(bc)) then
-         if (bc == 'Neumann') then
-            bcflag = 1
-            do j=1,nghost
-            do i=1,nx_global
-               index_check = max(ib_src-i,1)
-               if (tripole_ibuf(index_check, jb_src-j) /= c0) then !echmod
-                  tripole_ighost(i,1+j) = isign* &
-                                       tripole_ibuf(index_check, jb_src-j)
-               else
-                  tripole_ighost(i,1+j) = tripole_ibuf(i, jb_src-j)
-               endif
-            end do
-            end do
-         endif
-      endif
-
-      if (bcflag == 0) then
-         do j=1,nghost
-         do i=1,nx_global
-            index_check = max(ib_src-i,1)
-            tripole_ighost(i,1+j) = isign* &
-                                    tripole_ibuf(index_check, jb_src-j)
-         end do
-         end do
-      endif ! bcflag = 0
-
-      !*** copy out of global ghost cell buffer into local
+      !*** copy out of global tripole buffer into local
       !*** ghost cells
 
-      do n=1,in_bndy%nlocal_ns
-         dst_block = in_bndy%local_ns_dst_block(n)
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
 
-         if (dst_block < 0) then
-            dst_block = -dst_block
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
 
-            jb_dst = in_bndy%local_ns_dst_add(2,n)
-            je_dst = jb_dst + nghost
-            ib_src = in_bndy%local_ns_dst_add(1,n)
-            !*** ib_src is glob address of 1st point in physical
-            !*** domain.  must now adjust to properly copy
-            !*** east-west ghost cell info in the north boundary
+         if (srcBlock < 0) then
 
-            if (ib_src == 1) then  ! western boundary
-               !*** impose cyclic conditions at western boundary
-               !*** then set up remaining indices to copy rest
-               !*** of domain from tripole ghost cell buffer
-               do i=1,nghost
-                  ARRAY(i,jb_dst:je_dst,dst_block) = &
-                     tripole_ighost(nx_global-nghost+i,:)
-               end do
-               ie_src = ib_src + nx_block - nghost - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = nghost + 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            else
-               ib_src = ib_src - nghost
-               ie_src = ib_src + nx_block - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            endif
-            if (ie_src == nx_global) then ! eastern boundary
-               !*** impose cyclic conditions in ghost cells
-               do i=1,nghost
-                  ARRAY(ie_dst+i,jb_dst:je_dst,dst_block) = &
-                     tripole_ighost(i,:)
-               end do
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               array(iDst,jDst,dstBlock) = isign*bufTripoleI4(iSrc,jSrc)
             endif
 
-            !*** now copy the remaining ghost cell values
-
-            ARRAY(ib_dst:ie_dst,jb_dst:je_dst,dst_block) = &
-               tripole_ighost(ib_src:ie_src,:)
          endif
-
       end do
 
    endif
 
-   !call ice_timer_stop(timer_bound)
-
 !-----------------------------------------------------------------------
+!EOC
 
-end subroutine boundary_2d_int
+ end subroutine ice_HaloUpdate2DI4
 
 !***********************************************************************
-!
 !BOP
-  !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloUpdate3DR8
 ! !INTERFACE:
 
-subroutine boundary_3d_dbl(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloUpdate3DR8(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
+!  POP\_HaloUpdate.  This routine is the specific interface
 !  for 3d horizontal arrays of double precision.
 !
 ! !REVISION HISTORY:
 !  same as module
 
-! !USES:
+! !USER:
+
+! !INPUT PARAMETERS:
+
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
+
+   integer (int_kind), intent(in) :: &
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
+
+   real (dbl_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   real (dbl_kind), dimension(:,:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
 
-   integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
-
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
-
-   real (r8), dimension(:,:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -1997,35 +1381,218 @@ subroutine boundary_3d_dbl(ARRAY, in_bndy, grid_loc, field_type, bc)
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      k,m                           ! dummy loop indices
+      i,j,k,n,nmsg,              &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      nz,                        &! size of array in 3rd dimension
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
+
+   real (dbl_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
+
+   real (dbl_kind), dimension(:,:,:), allocatable :: &
+      bufTripole                  ! 3d tripole buffer
 
 !-----------------------------------------------------------------------
+!
+!  initialize error code and fill value
+!
+!-----------------------------------------------------------------------
 
-!lipscomb - This subroutine could be sped up by modeling it after the
-!           mpi version of boundary_3d_dbl, so as to pass fewer and 
-!           longer messages.  But when running in serial mode,
-!           speed is likely not an issue.
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0.0_dbl_kind
+   endif
 
-   m = size(ARRAY,3)
-   do k = 1, m
-      call boundary_2d_dbl(ARRAY(:,:,k,:),in_bndy,grid_loc,field_type, bc)
+   nz = size(array, dim=3)
+
+   nxGlobal = 0
+   if (allocated(bufTripoleR8)) then
+      nxGlobal = size(bufTripoleR8,dim=1)
+      allocate(bufTripole(nxGlobal,nghost+1,nz))
+      bufTripole = fill
+   endif      
+
+!-----------------------------------------------------------------------
+!
+!  do local copies
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            do k=1,nz
+               array(iDst,jDst,k,dstBlock) = &
+               array(iSrc,jSrc,k,srcBlock)
+            end do
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            do k=1,nz
+               bufTripole(iDst,jDst,k) = &
+               array(iSrc,jSrc,k,srcBlock)
+            end do
+         endif
+      else if (srcBlock == 0) then
+         do k=1,nz
+            array(iDst,jDst,k,dstBlock) = fill
+         end do
+      endif
    end do
 
 !-----------------------------------------------------------------------
+!
+!  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
+!
+!-----------------------------------------------------------------------
 
- end subroutine boundary_3d_dbl
+   if (nxGlobal > 0) then
+
+      select case (fieldLoc)
+      case (field_loc_center)   ! cell center location
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do k=1,nz
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripole(i   ,nghost+1,k)
+            x2 = bufTripole(iDst,nghost+1,k)
+            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+         end do
+         end do
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do k=1,nz
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripole(i   ,nghost+1,k)
+            x2 = bufTripole(iDst,nghost+1,k)
+            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+         end do
+         end do
+
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DR8: Unknown field location')
+      end select
+
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DR8: Unknown field kind')
+      end select
+
+      !*** copy out of global tripole buffer into local
+      !*** ghost cells
+
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
+
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
+
+         if (srcBlock < 0) then
+
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               do k=1,nz
+                  array(iDst,jDst,k,dstBlock) = isign*    &
+                                  bufTripole(iSrc,jSrc,k)
+               end do
+            endif
+
+         endif
+      end do
+
+   endif
+
+   if (allocated(bufTripole)) deallocate(bufTripole)
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_HaloUpdate3DR8
 
 !***********************************************************************
 !BOP
-! !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloUpdate3DR4
 ! !INTERFACE:
 
-subroutine boundary_3d_real(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloUpdate3DR4(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
+!  POP\_HaloUpdate.  This routine is the specific interface
 !  for 3d horizontal arrays of single precision.
 !
 ! !REVISION HISTORY:
@@ -2033,21 +1600,30 @@ subroutine boundary_3d_real(ARRAY, in_bndy, grid_loc, field_type, bc)
 
 ! !USER:
 
-! !INPUT/OUTPUT PARAMETERS:
+! !INPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
 
    integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
 
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
+   real (real_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
 
-   real (r4), dimension(:,:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+! !INPUT/OUTPUT PARAMETERS:
+
+   real (real_kind), dimension(:,:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -2058,52 +1634,249 @@ subroutine boundary_3d_real(ARRAY, in_bndy, grid_loc, field_type, bc)
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      k,m                           ! dummy loop indices
+      i,j,k,n,nmsg,              &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      nz,                        &! size of array in 3rd dimension
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
+
+   real (real_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
+
+   real (real_kind), dimension(:,:,:), allocatable :: &
+      bufTripole                  ! 3d tripole buffer
 
 !-----------------------------------------------------------------------
+!
+!  initialize error code and fill value
+!
+!-----------------------------------------------------------------------
 
-   m = size(ARRAY,3)
-   do k = 1, m
-      call boundary_2d_real(ARRAY(:,:,k,:),in_bndy,grid_loc,field_type, bc)
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0.0_real_kind
+   endif
+
+   nz = size(array, dim=3)
+
+   nxGlobal = 0
+   if (allocated(bufTripoleR4)) then
+      nxGlobal = size(bufTripoleR4,dim=1)
+      allocate(bufTripole(nxGlobal,nghost+1,nz))
+      bufTripole = fill
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  do local copies
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            do k=1,nz
+               array(iDst,jDst,k,dstBlock) = &
+               array(iSrc,jSrc,k,srcBlock)
+            end do
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            do k=1,nz
+               bufTripole(iDst,jDst,k) = &
+               array(iSrc,jSrc,k,srcBlock)
+            end do
+         endif
+      else if (srcBlock == 0) then
+         do k=1,nz
+            array(iDst,jDst,k,dstBlock) = fill
+         end do
+      endif
    end do
 
 !-----------------------------------------------------------------------
+!
+!  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
+!
+!-----------------------------------------------------------------------
 
-end subroutine boundary_3d_real
+   if (nxGlobal > 0) then
+
+      select case (fieldLoc)
+      case (field_loc_center)   ! cell center location
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do k=1,nz
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripole(i   ,nghost+1,k)
+            x2 = bufTripole(iDst,nghost+1,k)
+            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+         end do
+         end do
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do k=1,nz
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripole(i   ,nghost+1,k)
+            x2 = bufTripole(iDst,nghost+1,k)
+            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+         end do
+         end do
+
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DR4: Unknown field location')
+      end select
+
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DR4: Unknown field kind')
+      end select
+
+      !*** copy out of global tripole buffer into local
+      !*** ghost cells
+
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
+
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
+
+         if (srcBlock < 0) then
+
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               do k=1,nz
+                  array(iDst,jDst,k,dstBlock) = isign*    &
+                                  bufTripole(iSrc,jSrc,k)
+               end do
+            endif
+
+         endif
+      end do
+
+   endif
+
+   if (allocated(bufTripole)) deallocate(bufTripole)
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_HaloUpdate3DR4
 
 !***********************************************************************
 !BOP
-! !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloUpdate3DI4
 ! !INTERFACE:
 
-subroutine boundary_3d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloUpdate3DI4(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
-!  for 3d horizontal arrays of integer.
+!  POP\_HaloUpdate.  This routine is the specific interface
+!  for 3d horizontal arrays of double precision.
 !
 ! !REVISION HISTORY:
 !  same as module
 
 ! !USER:
 
-! !INPUT/OUTPUT PARAMETERS:
+! !INPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
 
    integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
 
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
+   integer (int_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
+
+! !INPUT/OUTPUT PARAMETERS:
 
    integer (int_kind), dimension(:,:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -2114,52 +1887,249 @@ subroutine boundary_3d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      k,m                           ! dummy loop indices
+      i,j,k,n,nmsg,              &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      nz,                        &! size of array in 3rd dimension
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
+
+   integer (int_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
+
+   integer (int_kind), dimension(:,:,:), allocatable :: &
+      bufTripole                  ! 3d tripole buffer
 
 !-----------------------------------------------------------------------
+!
+!  initialize error code and fill value
+!
+!-----------------------------------------------------------------------
 
-   m = size(ARRAY,3)
-   do k = 1, m
-      call boundary_2d_int(ARRAY(:,:,k,:),in_bndy,grid_loc,field_type, bc)
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0_int_kind
+   endif
+
+   nz = size(array, dim=3)
+
+   nxGlobal = 0
+   if (allocated(bufTripoleI4)) then
+      nxGlobal = size(bufTripoleI4,dim=1)
+      allocate(bufTripole(nxGlobal,nghost+1,nz))
+      bufTripole = fill
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  do local copies
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            do k=1,nz
+               array(iDst,jDst,k,dstBlock) = &
+               array(iSrc,jSrc,k,srcBlock)
+            end do
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            do k=1,nz
+               bufTripole(iDst,jDst,k) = &
+               array(iSrc,jSrc,k,srcBlock)
+            end do
+         endif
+      else if (srcBlock == 0) then
+         do k=1,nz
+            array(iDst,jDst,k,dstBlock) = fill
+         end do
+      endif
    end do
 
 !-----------------------------------------------------------------------
+!
+!  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
+!
+!-----------------------------------------------------------------------
 
-end subroutine boundary_3d_int
+   if (nxGlobal > 0) then
+
+      select case (fieldLoc)
+      case (field_loc_center)   ! cell center location
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do k=1,nz
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripole(i   ,nghost+1,k)
+            x2 = bufTripole(iDst,nghost+1,k)
+            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
+            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+         end do
+         end do
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do k=1,nz
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripole(i   ,nghost+1,k)
+            x2 = bufTripole(iDst,nghost+1,k)
+            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
+            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+         end do
+         end do
+
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DI4: Unknown field location')
+      end select
+
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DI4: Unknown field kind')
+      end select
+
+      !*** copy out of global tripole buffer into local
+      !*** ghost cells
+
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
+
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
+
+         if (srcBlock < 0) then
+
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               do k=1,nz
+                  array(iDst,jDst,k,dstBlock) = isign*    &
+                                  bufTripole(iSrc,jSrc,k)
+               end do
+            endif
+
+         endif
+      end do
+
+   endif
+
+   if (allocated(bufTripole)) deallocate(bufTripole)
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_HaloUpdate3DI4
 
 !***********************************************************************
 !BOP
-! !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloUpdate4DR8
 ! !INTERFACE:
 
-subroutine boundary_4d_dbl(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloUpdate4DR8(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
-!  for 3d horizontal arrays of double precision.
+!  POP\_HaloUpdate.  This routine is the specific interface
+!  for 4d horizontal arrays of double precision.
 !
 ! !REVISION HISTORY:
 !  same as module
 
 ! !USER:
 
-! !INPUT/OUTPUT PARAMETERS:
+! !INPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
 
    integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
 
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
+   real (dbl_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
 
-   real (r8), dimension(:,:,:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+! !INPUT/OUTPUT PARAMETERS:
+
+   real (dbl_kind), dimension(:,:,:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -2170,55 +2140,262 @@ subroutine boundary_4d_dbl(ARRAY, in_bndy, grid_loc, field_type, bc)
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      k,l,m,n                      ! dummy loop indices
+      i,j,k,l,n,nmsg,            &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      nz, nt,                    &! size of array in 3rd,4th dimensions
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
+
+   real (dbl_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
+
+   real (dbl_kind), dimension(:,:,:,:), allocatable :: &
+      bufTripole                  ! 4d tripole buffer
 
 !-----------------------------------------------------------------------
+!
+!  initialize error code and fill value
+!
+!-----------------------------------------------------------------------
 
-   l = size(ARRAY,dim=3)
-   n = size(ARRAY,dim=4)
-   do k=1,l
-   do m=1,n
-      call boundary_2d_dbl(ARRAY(:,:,k,m,:),in_bndy,grid_loc,field_type, bc)
-   end do
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0.0_dbl_kind
+   endif
+
+   nz = size(array, dim=3)
+   nt = size(array, dim=4)
+
+   nxGlobal = 0
+   if (allocated(bufTripoleR8)) then
+      nxGlobal = size(bufTripoleR8,dim=1)
+      allocate(bufTripole(nxGlobal,nghost+1,nz,nt))
+      bufTripole = fill
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  do local copies
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            do l=1,nt
+            do k=1,nz
+               array(iDst,jDst,k,l,dstBlock) = &
+               array(iSrc,jSrc,k,l,srcBlock)
+            end do
+            end do
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            do l=1,nt
+            do k=1,nz
+               bufTripole(iDst,jDst,k,l) = &
+               array(iSrc,jSrc,k,l,srcBlock)
+            end do
+            end do
+         endif
+      else if (srcBlock == 0) then
+         do l=1,nt
+         do k=1,nz
+            array(iDst,jDst,k,l,dstBlock) = fill
+         end do
+         end do
+      endif
    end do
 
 !-----------------------------------------------------------------------
+!
+!  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
+!
+!-----------------------------------------------------------------------
 
-end subroutine boundary_4d_dbl
+   if (nxGlobal > 0) then
+
+      select case (fieldLoc)
+      case (field_loc_center)   ! cell center location
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do l=1,nt
+         do k=1,nz
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripole(i   ,nghost+1,k,l)
+            x2 = bufTripole(iDst,nghost+1,k,l)
+            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+         end do
+         end do
+         end do
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do l=1,nt
+         do k=1,nz
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripole(i   ,nghost+1,k,l)
+            x2 = bufTripole(iDst,nghost+1,k,l)
+            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+         end do
+         end do
+         end do
+
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DR8: Unknown field location')
+      end select
+
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DR8: Unknown field kind')
+      end select
+
+      !*** copy out of global tripole buffer into local
+      !*** ghost cells
+
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
+
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
+
+         if (srcBlock < 0) then
+
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               do l=1,nt
+               do k=1,nz
+                  array(iDst,jDst,k,l,dstBlock) = isign*    &
+                                  bufTripole(iSrc,jSrc,k,l)
+               end do
+               end do
+            endif
+
+         endif
+      end do
+
+   endif
+
+   if (allocated(bufTripole)) deallocate(bufTripole)
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_HaloUpdate4DR8
 
 !***********************************************************************
 !BOP
-! !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloUpdate4DR4
 ! !INTERFACE:
 
-subroutine boundary_4d_real(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloUpdate4DR4(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
-!  for 3d horizontal arrays of single precision.
+!  POP\_HaloUpdate.  This routine is the specific interface
+!  for 4d horizontal arrays of single precision.
 !
 ! !REVISION HISTORY:
 !  same as module
 
 ! !USER:
 
-! !INPUT/OUTPUT PARAMETERS:
+! !INPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
 
    integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
 
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
+   real (real_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
 
-   real (r4), dimension(:,:,:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+! !INPUT/OUTPUT PARAMETERS:
+
+   real (real_kind), dimension(:,:,:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -2229,55 +2406,262 @@ subroutine boundary_4d_real(ARRAY, in_bndy, grid_loc, field_type, bc)
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      k,l,m,n                      ! dummy loop indices
+      i,j,k,l,n,nmsg,            &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      nz, nt,                    &! size of array in 3rd,4th dimensions
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
+
+   real (real_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
+
+   real (real_kind), dimension(:,:,:,:), allocatable :: &
+      bufTripole                  ! 4d tripole buffer
 
 !-----------------------------------------------------------------------
+!
+!  initialize error code and fill value
+!
+!-----------------------------------------------------------------------
 
-   l = size(ARRAY,dim=3)
-   n = size(ARRAY,dim=4)
-   do k=1,l
-   do m=1,n
-      call boundary_2d_real(ARRAY(:,:,k,m,:),in_bndy,grid_loc,field_type, bc)
-   end do
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0.0_real_kind
+   endif
+
+   nz = size(array, dim=3)
+   nt = size(array, dim=4)
+
+   nxGlobal = 0
+   if (allocated(bufTripoleR4)) then
+      nxGlobal = size(bufTripoleR4,dim=1)
+      allocate(bufTripole(nxGlobal,nghost+1,nz,nt))
+      bufTripole = fill
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  do local copies
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            do l=1,nt
+            do k=1,nz
+               array(iDst,jDst,k,l,dstBlock) = &
+               array(iSrc,jSrc,k,l,srcBlock)
+            end do
+            end do
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            do l=1,nt
+            do k=1,nz
+               bufTripole(iDst,jDst,k,l) = &
+               array(iSrc,jSrc,k,l,srcBlock)
+            end do
+            end do
+         endif
+      else if (srcBlock == 0) then
+         do l=1,nt
+         do k=1,nz
+            array(iDst,jDst,k,l,dstBlock) = fill
+         end do
+         end do
+      endif
    end do
 
 !-----------------------------------------------------------------------
+!
+!  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
+!
+!-----------------------------------------------------------------------
 
-end subroutine boundary_4d_real
+   if (nxGlobal > 0) then
+
+      select case (fieldLoc)
+      case (field_loc_center)   ! cell center location
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do l=1,nt
+         do k=1,nz
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripole(i   ,nghost+1,k,l)
+            x2 = bufTripole(iDst,nghost+1,k,l)
+            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+         end do
+         end do
+         end do
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do l=1,nt
+         do k=1,nz
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripole(i   ,nghost+1,k,l)
+            x2 = bufTripole(iDst,nghost+1,k,l)
+            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+         end do
+         end do
+         end do
+
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DR4: Unknown field location')
+      end select
+
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DR4: Unknown field kind')
+      end select
+
+      !*** copy out of global tripole buffer into local
+      !*** ghost cells
+
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
+
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
+
+         if (srcBlock < 0) then
+
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               do l=1,nt
+               do k=1,nz
+                  array(iDst,jDst,k,l,dstBlock) = isign*    &
+                                  bufTripole(iSrc,jSrc,k,l)
+               end do
+               end do
+            endif
+
+         endif
+      end do
+
+   endif
+
+   if (allocated(bufTripole)) deallocate(bufTripole)
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_HaloUpdate4DR4
 
 !***********************************************************************
 !BOP
-! !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloUpdate4DI4
 ! !INTERFACE:
 
-subroutine boundary_4d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloUpdate4DI4(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
-!  for 3d horizontal arrays of double precision.
+!  POP\_HaloUpdate.  This routine is the specific interface
+!  for 4d horizontal integer arrays.
 !
 ! !REVISION HISTORY:
 !  same as module
 
 ! !USER:
 
-! !INPUT/OUTPUT PARAMETERS:
+! !INPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
 
    integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
 
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
+   integer (int_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
+
+! !INPUT/OUTPUT PARAMETERS:
 
    integer (int_kind), dimension(:,:,:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -2288,24 +2672,1024 @@ subroutine boundary_4d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      k,l,m,n                      ! dummy loop indices
+      i,j,k,l,n,nmsg,            &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      nz, nt,                    &! size of array in 3rd,4th dimensions
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
+
+   integer (int_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
+
+   integer (int_kind), dimension(:,:,:,:), allocatable :: &
+      bufTripole                  ! 4d tripole buffer
 
 !-----------------------------------------------------------------------
+!
+!  initialize error code and fill value
+!
+!-----------------------------------------------------------------------
 
-   l = size(ARRAY,dim=3)
-   n = size(ARRAY,dim=4)
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0_int_kind
+   endif
 
-   do k=1,l
-   do m=1,n
-      call boundary_2d_int(ARRAY(:,:,k,m,:),in_bndy,grid_loc,field_type, bc)
-   end do
+   nz = size(array, dim=3)
+   nt = size(array, dim=4)
+
+   nxGlobal = 0
+   if (allocated(bufTripoleI4)) then
+      nxGlobal = size(bufTripoleI4,dim=1)
+      allocate(bufTripole(nxGlobal,nghost+1,nz,nt))
+      bufTripole = fill
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  do local copies
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            do l=1,nt
+            do k=1,nz
+               array(iDst,jDst,k,l,dstBlock) = &
+               array(iSrc,jSrc,k,l,srcBlock)
+            end do
+            end do
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            do l=1,nt
+            do k=1,nz
+               bufTripole(iDst,jDst,k,l) = &
+               array(iSrc,jSrc,k,l,srcBlock)
+            end do
+            end do
+         endif
+      else if (srcBlock == 0) then
+         do l=1,nt
+         do k=1,nz
+            array(iDst,jDst,k,l,dstBlock) = fill
+         end do
+         end do
+      endif
    end do
 
 !-----------------------------------------------------------------------
+!
+!  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
+!
+!-----------------------------------------------------------------------
 
-end subroutine boundary_4d_int
+   if (nxGlobal > 0) then
 
+      select case (fieldLoc)
+      case (field_loc_center)   ! cell center location
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do l=1,nt
+         do k=1,nz
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripole(i   ,nghost+1,k,l)
+            x2 = bufTripole(iDst,nghost+1,k,l)
+            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
+            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+         end do
+         end do
+         end do
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do l=1,nt
+         do k=1,nz
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripole(i   ,nghost+1,k,l)
+            x2 = bufTripole(iDst,nghost+1,k,l)
+            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
+            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+         end do
+         end do
+         end do
+
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DI4: Unknown field location')
+      end select
+
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DI4: Unknown field kind')
+      end select
+
+      !*** copy out of global tripole buffer into local
+      !*** ghost cells
+
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
+
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
+
+         if (srcBlock < 0) then
+
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               do l=1,nt
+               do k=1,nz
+                  array(iDst,jDst,k,l,dstBlock) = isign*    &
+                                  bufTripole(iSrc,jSrc,k,l)
+               end do
+               end do
+            endif
+
+         endif
+      end do
+
+   endif
+
+   if (allocated(bufTripole)) deallocate(bufTripole)
+
+!-----------------------------------------------------------------------
 !EOC
+
+ end subroutine ice_HaloUpdate4DI4
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_HaloIncrementMsgCount
+! !INTERFACE:
+
+   subroutine ice_HaloIncrementMsgCount(sndCounter, rcvCounter,    &
+                                        srcProc, dstProc, msgSize)
+
+! !DESCRIPTION:
+!  This is a utility routine to increment the arrays for counting
+!  whether messages are required.  It checks the source and destination
+!  task to see whether the current task needs to send, receive or
+!  copy messages to fill halo regions (ghost cells).
+
+! !REVISION HISTORY:
+!  Same as module.
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+      srcProc,               &! source processor for communication
+      dstProc,               &! destination processor for communication
+      msgSize                 ! number of words for this message
+
+! !INPUT/OUTPUT PARAMETERS:
+
+   integer (int_kind), dimension(:), intent(inout) :: &
+      sndCounter,       &! array for counting messages to be sent
+      rcvCounter         ! array for counting messages to be received
+
+! !OUTPUT PARAMETERS:
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  error check
+!
+!-----------------------------------------------------------------------
+
+   if (srcProc < 0 .or. dstProc < 0 .or. &
+       srcProc > size(sndCounter)   .or. &
+       dstProc > size(rcvCounter)) then
+      call abort_ice( &
+         'ice_HaloIncrementMsgCount: invalid processor number')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  if destination all land or outside closed boundary (dstProc = 0), 
+!  then no send is necessary, so do the rest only for dstProc /= 0
+!
+!-----------------------------------------------------------------------
+
+   if (dstProc == 0) return
+
+!-----------------------------------------------------------------------
+!
+!  if the current processor is the source, must send data 
+!  local copy if dstProc = srcProc
+!
+!-----------------------------------------------------------------------
+
+   if (srcProc == my_task + 1) sndCounter(dstProc) = &
+                               sndCounter(dstProc) + msgSize
+
+!-----------------------------------------------------------------------
+!
+!  if the current processor is the destination, must receive data 
+!  local copy if dstProc = srcProc
+!
+!-----------------------------------------------------------------------
+
+   if (dstProc == my_task + 1) then
+
+      if (srcProc > 0) then  
+         !*** the source block has ocean points
+         !*** count as a receive from srcProc
+
+         rcvCounter(srcProc) = rcvCounter(srcProc) + msgSize
+
+      else
+         !*** if the source block has been dropped, create
+         !*** a local copy to fill halo with a fill value
+
+         rcvCounter(dstProc) = rcvCounter(dstProc) + msgSize
+
+      endif
+   endif
+!-----------------------------------------------------------------------
+!EOC
+
+   end subroutine ice_HaloIncrementMsgCount
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_HaloMsgCreate
+! !INTERFACE:
+
+   subroutine ice_HaloMsgCreate(halo, dist, srcBlock, dstBlock, direction)
+
+! !DESCRIPTION:
+!  This is a utility routine to determine the required address and
+!  message information for a particular pair of blocks.
+
+! !REVISION HISTORY:
+!  Same as module.
+
+! !INPUT PARAMETERS:
+
+   type (distrb), intent(in) :: &
+      dist             ! distribution of blocks across procs
+
+   integer (int_kind), intent(in) :: &
+      srcBlock,   dstBlock   ! source,destination block id
+
+   character (*), intent(in) :: &
+      direction              ! direction of neighbor block
+                             !  (north,south,east,west,
+                             !   and NE, NW, SE, SW)
+
+! !INPUT/OUTPUT PARAMETERS:
+
+   type (ice_halo), intent(inout) :: &
+      halo                   ! data structure containing halo info
+
+! !OUTPUT PARAMETERS:
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) :: &
+      srcProc, srcLocalID,   &! source block location in distribution
+      dstProc, dstLocalID,   &! source block location in distribution
+      msgIndx,               &! message counter and index into msg array
+      ibSrc, ieSrc, jbSrc, jeSrc, &! phys domain info for source block
+      ibDst, ieDst, jbDst, jeDst, &! phys domain info for dest   block
+      nxGlobal,              &! size of global domain in e-w direction
+      i,j,n                   ! dummy loop index
+
+   integer (int_kind), dimension(:), pointer :: &
+      iGlobal                 ! global i index for location in tripole
+
+!-----------------------------------------------------------------------
+!
+!  initialize
+!
+!-----------------------------------------------------------------------
+
+   if (allocated(bufTripoleR8)) nxGlobal = size(bufTripoleR8,dim=1)
+
+!-----------------------------------------------------------------------
+!
+!  find source and destination block locations
+!
+!-----------------------------------------------------------------------
+
+   if (srcBlock /= 0) then
+      call ice_DistributionGetBlockLoc(dist, abs(srcBlock), srcProc, &
+                                       srcLocalID)
+   else
+      srcProc    = 0
+      srcLocalID = 0
+   endif
+
+   if (dstBlock /= 0) then
+      call ice_DistributionGetBlockLoc(dist, abs(dstBlock), dstProc, &
+                                       dstLocalID)
+   else
+      dstProc    = 0
+      dstLocalID = 0
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  if destination all land or outside closed boundary (dstProc = 0), 
+!  then no send is necessary, so do the rest only for dstProc /= 0
+!
+!-----------------------------------------------------------------------
+
+   if (dstProc == 0) return
+
+!-----------------------------------------------------------------------
+!
+!  get block information if either block is local
+!
+!-----------------------------------------------------------------------
+
+   if (srcProc == my_task+1 .or. dstProc == my_task+1) then
+
+      if (srcBlock >= 0 .and. dstBlock >= 0) then
+         call get_block_parameter(srcBlock, &
+                                     ilo=ibSrc, ihi=ieSrc,   &
+                                     jlo=jbSrc, jhi=jeSrc)
+      else ! tripole - need iGlobal info
+         call get_block_parameter(abs(srcBlock), &
+                                     ilo=ibSrc, ihi=ieSrc,        &
+                                     jlo=jbSrc, jhi=jeSrc,        &
+                                     i_glob=iGlobal)
+
+      endif
+
+      if (dstBlock /= 0) then
+         call get_block_parameter(abs(dstBlock), &
+                                     ilo=ibDst, ihi=ieDst,   &
+                                     jlo=jbDst, jhi=jeDst)
+      endif
+
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  if both blocks are local, create a local copy to fill halo
+!
+!-----------------------------------------------------------------------
+
+   if (srcProc == my_task+1 .and. &
+       dstProc == my_task+1) then   
+
+      !*** compute addresses based on direction
+
+      select case (direction)
+      case ('east')
+
+         !*** copy easternmost physical domain of src
+         !*** into westernmost halo of dst
+
+         msgIndx = halo%numLocalCopies
+
+         do j=1,jeSrc-jbSrc+1
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = ieSrc - nghost + i
+            halo%srcLocalAddr(2,msgIndx) = jbSrc + j - 1
+            halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+            halo%dstLocalAddr(1,msgIndx) = i
+            halo%dstLocalAddr(2,msgIndx) = jbDst + j - 1
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%numLocalCopies = msgIndx
+
+      case ('west')
+
+         !*** copy westernmost physical domain of src
+         !*** into easternmost halo of dst
+
+         msgIndx = halo%numLocalCopies
+
+         do j=1,jeSrc-jbSrc+1
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+            halo%srcLocalAddr(2,msgIndx) = jbSrc + j - 1
+            halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+            halo%dstLocalAddr(1,msgIndx) = ieDst + i
+            halo%dstLocalAddr(2,msgIndx) = jbDst + j - 1
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%numLocalCopies = msgIndx
+
+      case ('north')
+
+         !*** copy northern physical domain of src
+         !*** into southern halo of dst
+
+         if (srcBlock > 0 .and. dstBlock > 0) then  ! normal north boundary
+
+            msgIndx = halo%numLocalCopies
+
+            do j=1,nghost
+            do i=1,ieSrc-ibSrc+1
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+               halo%srcLocalAddr(2,msgIndx) = jeSrc - nghost + j
+               halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+               halo%dstLocalAddr(1,msgIndx) = ibDst + i - 1
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+            halo%numLocalCopies = msgIndx
+
+         else if (srcBlock > 0 .and. dstBlock < 0) then
+
+            !*** tripole grid - copy info into tripole buffer
+            !*** copy physical domain of top halo+1 rows
+            !*** into global buffer at src location
+
+            !*** perform an error check to make sure the
+            !*** block has enough points to perform a tripole
+            !*** update
+
+            if (jeSrc - jbSrc + 1 < nghost + 1) then
+               call abort_ice( &
+               'ice_HaloMsgCreate: not enough points in block for tripole')
+               return
+            endif 
+
+            msgIndx = halo%numLocalCopies
+
+            do j=1,nghost+1
+            do i=1,ieSrc-ibSrc+1
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+               halo%srcLocalAddr(2,msgIndx) = jeSrc-1-nghost+j
+               halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+               halo%dstLocalAddr(1,msgIndx) = iGlobal(ibSrc + i - 1)
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = -dstLocalID
+
+            end do
+            end do
+
+            halo%numLocalCopies = msgIndx
+
+         else if (srcBlock < 0 .and. dstBlock > 0) then
+
+            !*** tripole grid - set up for copying out of 
+            !*** tripole buffer into ghost cell domains
+            !*** include e-w ghost cells
+
+            msgIndx = halo%numLocalCopies
+
+            do j=1,nghost+1
+            do i=1,ieSrc+nghost
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = nxGlobal - iGlobal(i) + 1
+               halo%srcLocalAddr(2,msgIndx) = nghost + 3 - j
+               halo%srcLocalAddr(3,msgIndx) = -srcLocalID
+
+               halo%dstLocalAddr(1,msgIndx) = i
+               halo%dstLocalAddr(2,msgIndx) = jeSrc + j - 1
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+            halo%numLocalCopies = msgIndx
+
+         endif
+
+      case ('south')
+
+         !*** copy southern physical domain of src
+         !*** into northern halo of dst
+
+         msgIndx = halo%numLocalCopies
+
+         do j=1,nghost
+         do i=1,ieSrc-ibSrc+1
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+            halo%srcLocalAddr(2,msgIndx) = jbSrc + j - 1
+            halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+            halo%dstLocalAddr(1,msgIndx) = ibDst + i - 1
+            halo%dstLocalAddr(2,msgIndx) = jeDst + j
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%numLocalCopies = msgIndx
+
+      case ('northeast')
+
+         !*** normal northeast boundary - just copy NE corner
+         !*** of physical domain into SW halo of NE nbr block
+
+         if (dstBlock > 0) then
+
+            msgIndx = halo%numLocalCopies
+
+            do j=1,nghost
+            do i=1,nghost
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = ieSrc - nghost + i
+               halo%srcLocalAddr(2,msgIndx) = jeSrc - nghost + j
+               halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+               halo%dstLocalAddr(1,msgIndx) = i
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+            halo%numLocalCopies = msgIndx
+
+         else
+
+            !*** tripole grid - copy entire top halo+1 
+            !*** rows into global buffer at src location
+
+            msgIndx = halo%numLocalCopies
+
+            do j=1,nghost+1
+            do i=1,ieSrc-ibSrc+1
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+               halo%srcLocalAddr(2,msgIndx) = jeSrc-1-nghost+j
+               halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+               halo%dstLocalAddr(1,msgIndx) = iGlobal(ibSrc + i - 1)
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = -dstLocalID
+
+            end do
+            end do
+
+            halo%numLocalCopies = msgIndx
+
+         endif
+
+      case ('northwest')
+
+         !*** normal northeast boundary - just copy NW corner
+         !*** of physical domain into SE halo of NW nbr block
+
+         if (dstBlock > 0) then
+
+            msgIndx = halo%numLocalCopies
+
+            do j=1,nghost
+            do i=1,nghost
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+               halo%srcLocalAddr(2,msgIndx) = jeSrc - nghost + j
+               halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+               halo%dstLocalAddr(1,msgIndx) = ieDst + i
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+            halo%numLocalCopies = msgIndx
+
+         else
+
+            !*** tripole grid - copy entire top halo+1 
+            !*** rows into global buffer at src location
+
+            msgIndx = halo%numLocalCopies
+
+            do j=1,nghost+1
+            do i=1,ieSrc-ibSrc+1
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+               halo%srcLocalAddr(2,msgIndx) = jeSrc-1-nghost+j
+               halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+               halo%dstLocalAddr(1,msgIndx) = iGlobal(ibSrc + i - 1)
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = -dstLocalID
+
+            end do
+            end do
+
+            halo%numLocalCopies = msgIndx
+
+         endif
+
+      case ('southeast')
+
+         !*** copy southeastern corner of src physical domain
+         !*** into northwestern halo of dst
+
+         msgIndx = halo%numLocalCopies
+
+         do j=1,nghost
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = ieSrc - nghost + i
+            halo%srcLocalAddr(2,msgIndx) = jbSrc + j - 1
+            halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+            halo%dstLocalAddr(1,msgIndx) = i
+            halo%dstLocalAddr(2,msgIndx) = jeDst + j
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%numLocalCopies = msgIndx
+
+      case ('southwest')
+
+         !*** copy southwestern corner of src physical domain
+         !*** into northeastern halo of dst
+
+         msgIndx = halo%numLocalCopies
+
+         do j=1,nghost
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+            halo%srcLocalAddr(2,msgIndx) = jbSrc + j - 1
+            halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+            halo%dstLocalAddr(1,msgIndx) = ieDst + i
+            halo%dstLocalAddr(2,msgIndx) = jeDst + j
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%numLocalCopies = msgIndx
+
+      case default
+
+         call abort_ice( &
+            'ice_HaloMsgCreate: unknown direction local copy')
+         return
+
+      end select
+
+!-----------------------------------------------------------------------
+!
+!  if dest block is local and source block does not exist, create a 
+!  local copy to fill halo with a fill value
+!
+!-----------------------------------------------------------------------
+
+   else if (srcProc == 0 .and. dstProc == my_task+1) then   
+
+      !*** compute addresses based on direction
+
+      select case (direction)
+      case ('east')
+
+         !*** copy easternmost physical domain of src
+         !*** into westernmost halo of dst
+
+         msgIndx = halo%numLocalCopies
+
+         do j=1,jeSrc-jbSrc+1
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = 0
+            halo%srcLocalAddr(2,msgIndx) = 0
+            halo%srcLocalAddr(3,msgIndx) = 0
+
+            halo%dstLocalAddr(1,msgIndx) = i
+            halo%dstLocalAddr(2,msgIndx) = jbDst + j - 1
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%numLocalCopies = msgIndx
+
+      case ('west')
+
+         !*** copy westernmost physical domain of src
+         !*** into easternmost halo of dst
+
+         msgIndx = halo%numLocalCopies
+
+         do j=1,jeSrc-jbSrc+1
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = 0
+            halo%srcLocalAddr(2,msgIndx) = 0
+            halo%srcLocalAddr(3,msgIndx) = 0
+
+            halo%dstLocalAddr(1,msgIndx) = ieDst + i
+            halo%dstLocalAddr(2,msgIndx) = jbDst + j - 1
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%numLocalCopies = msgIndx
+
+      case ('north')
+
+         !*** copy northern physical domain of src
+         !*** into southern halo of dst
+
+         if (dstBlock > 0) then  ! normal north boundary
+
+            msgIndx = halo%numLocalCopies
+
+            do j=1,nghost
+            do i=1,ieSrc-ibSrc+1
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = 0
+               halo%srcLocalAddr(2,msgIndx) = 0
+               halo%srcLocalAddr(3,msgIndx) = 0
+
+               halo%dstLocalAddr(1,msgIndx) = ibDst + i - 1
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+            halo%numLocalCopies = msgIndx
+
+         endif
+
+      case ('south')
+
+         !*** copy southern physical domain of src
+         !*** into northern halo of dst
+
+         msgIndx = halo%numLocalCopies
+
+         do j=1,nghost
+         do i=1,ieSrc-ibSrc+1
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = 0
+            halo%srcLocalAddr(2,msgIndx) = 0
+            halo%srcLocalAddr(3,msgIndx) = 0
+
+            halo%dstLocalAddr(1,msgIndx) = ibDst + i - 1
+            halo%dstLocalAddr(2,msgIndx) = jeDst + j
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%numLocalCopies = msgIndx
+
+      case ('northeast')
+
+         !*** normal northeast boundary - just copy NE corner
+         !*** of physical domain into SW halo of NE nbr block
+
+         if (dstBlock > 0) then
+
+            msgIndx = halo%numLocalCopies
+
+            do j=1,nghost
+            do i=1,nghost
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = 0
+               halo%srcLocalAddr(2,msgIndx) = 0
+               halo%srcLocalAddr(3,msgIndx) = 0
+
+               halo%dstLocalAddr(1,msgIndx) = i
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+            halo%numLocalCopies = msgIndx
+
+         endif
+
+      case ('northwest')
+
+         !*** normal northeast boundary - just copy NW corner
+         !*** of physical domain into SE halo of NW nbr block
+
+         if (dstBlock > 0) then
+
+            msgIndx = halo%numLocalCopies
+
+            do j=1,nghost
+            do i=1,nghost
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = 0
+               halo%srcLocalAddr(2,msgIndx) = 0
+               halo%srcLocalAddr(3,msgIndx) = 0
+
+               halo%dstLocalAddr(1,msgIndx) = ieDst + i
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+            halo%numLocalCopies = msgIndx
+
+         endif
+
+      case ('southeast')
+
+         !*** copy southeastern corner of src physical domain
+         !*** into northwestern halo of dst
+
+         msgIndx = halo%numLocalCopies
+
+         do j=1,nghost
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = 0
+            halo%srcLocalAddr(2,msgIndx) = 0
+            halo%srcLocalAddr(3,msgIndx) = 0
+
+            halo%dstLocalAddr(1,msgIndx) = i
+            halo%dstLocalAddr(2,msgIndx) = jeDst + j
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%numLocalCopies = msgIndx
+
+      case ('southwest')
+
+         !*** copy southwestern corner of src physical domain
+         !*** into northeastern halo of dst
+
+         msgIndx = halo%numLocalCopies
+
+         do j=1,nghost
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = 0
+            halo%srcLocalAddr(2,msgIndx) = 0
+            halo%srcLocalAddr(3,msgIndx) = 0
+
+            halo%dstLocalAddr(1,msgIndx) = ieDst + i
+            halo%dstLocalAddr(2,msgIndx) = jeDst + j
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%numLocalCopies = msgIndx
+
+      case default
+
+         call abort_ice( &
+            'ice_HaloMsgCreate: unknown direction local copy')
+         return
+
+      end select
+
+!-----------------------------------------------------------------------
+!
+!  if none of the cases above, no message info required for this
+!  block pair
+!
+!-----------------------------------------------------------------------
+
+   endif
+
+!-----------------------------------------------------------------------
+!EOC
+
+   end subroutine ice_HaloMsgCreate
+
 !***********************************************************************
 
 end module ice_boundary

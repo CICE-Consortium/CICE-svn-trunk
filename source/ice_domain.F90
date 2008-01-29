@@ -52,8 +52,8 @@
    type (distrb), public :: &
       distrb_info        ! block distribution info
 
-   type (bndy), public :: &
-      bndy_info          !  ghost cell update info
+   type (ice_halo), public :: &
+      halo_info          !  ghost cell update info
 
    logical (log_kind), public :: &
       ltripole_grid      ! flag to signal use of tripole grid
@@ -249,7 +249,7 @@
 
 ! !INPUT PARAMETERS:
 
-   real (r8), dimension(nx_global,ny_global), intent(in) :: &
+   real (dbl_kind), dimension(nx_global,ny_global), intent(in) :: &
       KMTG           ,&! global topography
       ULATG            ! global latitude field (radians)
 
@@ -366,7 +366,7 @@
       !do j=1,ny_block
       do j=this_block%jlo,this_block%jhi
          if (this_block%j_glob(j) > 0) then
-            do i=1,nx_block
+            do i=this_block%ilo,this_block%ihi
                if (this_block%i_glob(i) > 0) then
 	          ig = this_block%i_glob(i)
                   jg = this_block%j_glob(j)
@@ -457,10 +457,10 @@
 !----------------------------------------------------------------------
 
    ! update ghost cells on all four boundaries
-   call create_boundary(bndy_info, distrb_info,     &
+   halo_info = ice_HaloCreate(distrb_info,     &
                         trim(ns_boundary_type),     &
                         trim(ew_boundary_type),     &
-                        nx_global, ny_global)
+                        nx_global)
 
 !----------------------------------------------------------------------
 !EOC

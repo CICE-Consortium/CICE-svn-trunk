@@ -36,6 +36,9 @@
          ilo, ihi, jlo, jhi ,&! begin, end indices for physical domain
          iblock, jblock       ! cartesian i,j position for block
 
+      logical (log_kind) :: &
+         tripole              ! flag is true if block is at tripole bndy
+
       integer (int_kind), dimension(:), pointer :: &
          i_glob, j_glob     ! global domain location for each point
    end type
@@ -44,7 +47,8 @@
 
    public :: create_blocks       ,&
              get_block           ,&
-             get_block_parameter
+             get_block_parameter ,&
+             ice_blocksGetNbrID
 
 ! !DEFINED PARAMETERS:
 
@@ -54,6 +58,39 @@
    integer (int_kind), parameter, public :: &! size of block domain in
       nx_block = block_size_x + 2*nghost,   &!  x,y dir including ghost
       ny_block = block_size_y + 2*nghost     !  cells 
+
+   ! predefined directions for neighbor id routine
+   ! Note: the directions that are commented out are implemented in 
+   !       POP but not in CICE.  If the tripole cut were in the south
+   !       instead of the north, these would need to be used (and also
+   !       implemented in ice_boundary.F90).
+   integer (int_kind), parameter, public :: &
+      ice_blocksNorth          =  1,      & ! (i  ,j+1)
+      ice_blocksSouth          =  2,      & ! (i  ,j-1)
+      ice_blocksEast           =  3,      & ! (i+1,j  )
+      ice_blocksWest           =  4,      & ! (i-1,j  )
+      ice_blocksNorthEast      =  5,      & ! (i+1,j+1)
+      ice_blocksNorthWest      =  6,      & ! (i-1,j+1)
+      ice_blocksSouthEast      =  7,      & ! (i+1,j-1)
+      ice_blocksSouthWest      =  8         ! (i-1,j-1)
+   integer (int_kind), parameter, public :: &
+!      ice_blocksNorth2         =  9,      & ! (i  ,j+2)
+!      ice_blocksSouth2         = 10,      & ! (i  ,j-2)
+      ice_blocksEast2          = 11,      & ! (i+2,j  )
+      ice_blocksWest2          = 12         ! (i-2,j  )
+!      ice_blocksNorthEast2     = 13,      & ! (i+2,j+2)
+!      ice_blocksNorthWest2     = 14,      & ! (i-2,j+2)
+!      ice_blocksSouthEast2     = 15,      & ! (i+2,j-2)
+!      ice_blocksSouthWest2     = 16         ! (i-2,j-2)
+   integer (int_kind), parameter, public :: &
+      ice_blocksEastNorthEast  = 17,      & ! (i+2,j+1)
+!      ice_blocksEastSouthEast  = 18,      & ! (i+2,j-1)
+      ice_blocksWestNorthWest  = 19         ! (i-2,j+1)
+!      ice_blocksWestSouthWest  = 20,      & ! (i-2,j-1)
+!      ice_blocksNorthNorthEast = 21,      & ! (i+1,j-2)
+!      ice_blocksSouthSouthEast = 22,      & ! (i+1,j-2)
+!      ice_blocksNorthNorthWest = 23,      & ! (i-1,j+2)
+!      ice_blocksSouthSouthWest = 24         ! (i-1,j-2)
 
 ! !PUBLIC DATA MEMBERS:
 
@@ -72,6 +109,11 @@
 
    type (block), dimension(:), allocatable :: &
       all_blocks         ! block information for all blocks in domain
+
+   integer (int_kind), dimension(:,:),allocatable :: &
+      all_blocks_ij      ! block index stored in Cartesian order
+                         !   useful for determining block index
+                         !   of neighbor blocks
 
    integer (int_kind), dimension(:,:), allocatable, target :: &
       i_global,         &! global i index for each point in each block
@@ -146,6 +188,7 @@ contains
    allocate(all_blocks(nblocks_tot))
    allocate(i_global(nx_block,nblocks_tot), &
             j_global(ny_block,nblocks_tot))
+   allocate(all_blocks_ij(nblocks_x,nblocks_y))
 
 !----------------------------------------------------------------------
 !
@@ -156,18 +199,18 @@ contains
    n = 0
    do jblock=1,nblocks_y
       js = (jblock-1)*block_size_y + 1
-      je = js + block_size_y - 1
       if (js > ny_global) call abort_ice(&
             'ice: create_blocks: Bad block decomp: ny_block too large?')
+      je = js + block_size_y - 1
       if (je > ny_global) je = ny_global ! pad array
 
       do iblock=1,nblocks_x
          n = n + 1  ! global block id
 
          is = (iblock-1)*block_size_x + 1
-         ie = is + block_size_x - 1
          if (is > nx_global) call abort_ice(&
             'ice: create_blocks: Bad block decomp: nx_block too large?')
+         ie = is + block_size_x - 1
          if (ie > nx_global) ie = nx_global
 
          all_blocks(n)%block_id = n
@@ -178,9 +221,17 @@ contains
          all_blocks(n)%ihi      = nx_block - nghost ! default value
          all_blocks(n)%jhi      = ny_block - nghost ! default value
 
+         if (jblock == nblocks_y .and. &
+             ns_boundary_type == 'tripole') then
+             all_blocks(n)%tripole = .true.
+         else
+             all_blocks(n)%tripole = .false.
+         endif
+
+         all_blocks_ij(iblock,jblock) = n
+
          do j=1,ny_block
             j_global(j,n) = js - nghost + j - 1
-
 
             !*** southern ghost cells
 
@@ -225,9 +276,9 @@ contains
             !*** set last physical point if padded domain
 
             else if (j_global(j,n) == ny_global .and. &
-                     j > all_blocks(n)%jlo .and. &
+                     j > all_blocks(n)%jlo      .and. &
                      j < all_blocks(n)%jhi) then
-               all_blocks(n)%jhi = j
+               all_blocks(n)%jhi = j   ! last physical point in padded domain
             endif
          end do
 
@@ -275,7 +326,7 @@ contains
             !*** last physical point in padded domain
 
             else if (i_global(i,n) == nx_global .and. &
-                     i > all_blocks(n)%ilo .and. &
+                     i > all_blocks(n)%ilo      .and. &
                      i < all_blocks(n)%ihi) then
                all_blocks(n)%ihi = i
             endif
@@ -303,6 +354,463 @@ contains
 end subroutine create_blocks
 
 !***********************************************************************
+!BOP
+! !IROUTINE: ice_blocksGetNbrID
+! !INTERFACE:
+
+ function ice_blocksGetNbrID(blockID, direction, iBoundary, jBoundary) &
+                             result (nbrID)
+
+! !DESCRIPTION:
+!  This function returns the block id of a neighboring block in a
+!  requested direction.  Directions:
+!      ice\_blocksNorth             (i  ,j+1)
+!      ice\_blocksSouth             (i  ,j-1)
+!      ice\_blocksEast              (i+1,j  )
+!      ice\_blocksWest              (i-1,j  )
+!      ice\_blocksNorthEast         (i+1,j+1)
+!      ice\_blocksNorthWest         (i-1,j+1)
+!      ice\_blocksSouthEast         (i  ,j-1)
+!      ice\_blocksSouthWest         (i-1,j-1)
+!      ice\_blocksNorth2            (i  ,j+2)
+!      ice\_blocksSouth2            (i  ,j-2)
+!      ice\_blocksEast2             (i+2,j  )
+!      ice\_blocksWest2             (i-2,j  )
+!      ice\_blocksNorthEast2        (i+2,j+2)
+!      ice\_blocksNorthWest2        (i-2,j+2)
+!      ice\_blocksSouthEast2        (i+2,j-2)
+!      ice\_blocksSouthWest2        (i-2,j-2)
+!      ice\_blocksEastNorthEast     (i+2,j+1)
+!      ice\_blocksEastSouthEast     (i+2,j-1)
+!      ice\_blocksWestNorthWest     (i-2,j+1)
+!      ice\_blocksWestSouthWest     (i-2,j-1)
+!      ice\_blocksNorthNorthEast    (i+1,j-2)
+!      ice\_blocksSouthSouthEast    (i+1,j-2)
+!      ice\_blocksNorthNorthWest    (i-1,j+2)
+!      ice\_blocksSouthSouthWest    (i-1,j-2)
+!
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in)  :: &
+      blockID,       &! id of block for which neighbor id requested
+      direction       ! direction for which to look for neighbor -
+                      !   must be one of the predefined module
+                      !   variables for block direction
+
+   character (*), intent(in) :: &
+      iBoundary,     &! determines what to do at edges of domain
+      jBoundary       !  options are - open, closed, cyclic, tripole
+
+! !OUTPUT PARAMETERS:
+
+   integer (int_kind) :: &
+      nbrID           ! block ID of neighbor in requested dir
+
+!EOP
+!BOC
+!----------------------------------------------------------------------
+!
+!  local variables
+!
+!----------------------------------------------------------------------
+    
+   integer (int_kind) :: &
+      iBlock, jBlock,  &! i,j block location of current block
+      inbr,   jnbr      ! i,j block location of neighboring block
+
+!----------------------------------------------------------------------
+!
+!  retrieve info for current block
+!
+!----------------------------------------------------------------------
+
+   call get_block_parameter(blockID, iblock=iBlock, jblock=jBlock)
+
+!----------------------------------------------------------------------
+!
+!  compute i,j block location of neighbor
+!
+!----------------------------------------------------------------------
+
+   select case(direction)
+
+   case (ice_blocksNorth)
+
+      inbr = iBlock
+      jnbr = jBlock + 1
+      if (jnbr > nblocks_y) then
+         select case(jBoundary)
+         case ('open')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            jnbr = 0
+         case ('cyclic')
+            jnbr = 1
+         case ('tripole')
+            !*** return negative j value to flag tripole
+            !*** i index of main northern neighbor across the
+            !*** tripole cut - may also need i+1,i-1 to get
+            !*** other points if there has been padding or
+            !*** if the block size does not divide the domain
+            !*** evenly
+            inbr =  nblocks_x - iBlock + 1 
+            jnbr = -jBlock
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown north boundary')
+         end select
+      endif
+
+   case (ice_blocksSouth)
+
+      inbr = iBlock
+      jnbr = jBlock - 1
+      if (jnbr < 1) then
+         select case(jBoundary)
+         case ('open')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            jnbr = 0
+         case ('cyclic')
+            jnbr = nblocks_y
+         case ('tripole')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown south boundary')
+         end select
+      endif
+
+   case (ice_blocksEast )
+
+      inbr = iBlock + 1
+      jnbr = jBlock
+      if (inbr > nblocks_x) then
+         select case(iBoundary)
+         case ('open')
+            inbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            inbr = 0
+         case ('cyclic')
+            inbr = 1
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown east boundary')
+         end select
+      endif
+
+   case (ice_blocksWest )
+
+      jnbr = jBlock
+      inbr = iBlock - 1
+      if (inbr < 1) then
+         select case(iBoundary)
+         case ('open')
+            inbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            inbr = 0
+         case ('cyclic')
+            inbr = nblocks_x
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown west boundary')
+         end select
+      endif
+
+   case (ice_blocksNorthEast)
+
+      inbr = iBlock + 1
+      jnbr = jBlock + 1
+      if (inbr > nblocks_x) then
+         select case(iBoundary)
+         case ('open')
+            inbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            inbr = 0
+         case ('cyclic')
+            inbr = 1
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown east boundary')
+         end select
+      endif
+      if (jnbr > nblocks_y) then
+         select case(jBoundary)
+         case ('open')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            jnbr = 0
+         case ('cyclic')
+            jnbr = 1
+         case ('tripole')
+            !*** return negative j value to flag tripole
+            !*** i index of main northern neighbor across the
+            !*** tripole cut - may also need i+1,i-1 to get
+            !*** other points if there has been padding or
+            !*** if the block size does not divide the domain
+            !*** evenly
+            inbr =  nblocks_x - iBlock 
+            if (inbr == 0) inbr = nblocks_x
+            jnbr = -jBlock
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown north boundary')
+         end select
+      endif
+
+   case (ice_blocksNorthWest)
+
+      inbr = iBlock - 1
+      jnbr = jBlock + 1
+      if (inbr < 1) then
+         select case(iBoundary)
+         case ('open')
+            inbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            inbr = 0
+         case ('cyclic')
+            inbr = nblocks_x
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown west boundary')
+         end select
+      endif
+      if (jnbr > nblocks_y) then
+         select case(jBoundary)
+         case ('open')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            jnbr = 0
+         case ('cyclic')
+            jnbr = 1
+         case ('tripole')
+            !*** return negative j value to flag tripole
+            !*** i index of main northern neighbor across the
+            !*** tripole cut - may also need i+1,i-1 to get
+            !*** other points if there has been padding or
+            !*** if the block size does not divide the domain
+            !*** evenly
+            inbr =  nblocks_x - iBlock + 2 
+            if (inbr > nblocks_x) inbr = 1
+            jnbr = -jBlock
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown north boundary')
+         end select
+      endif
+
+   case (ice_blocksSouthEast )
+
+      inbr = iBlock + 1
+      jnbr = jBlock - 1
+      if (inbr > nblocks_x) then
+         select case(iBoundary)
+         case ('open')
+            inbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            inbr = 0
+         case ('cyclic')
+            inbr = 1
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown east boundary')
+         end select
+      endif
+      if (jnbr < 1) then
+         select case(jBoundary)
+         case ('open')
+            inbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            jnbr = 0
+         case ('cyclic')
+            jnbr = nblocks_y
+         case ('tripole')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown south boundary')
+         end select
+      endif
+
+   case (ice_blocksSouthWest )
+      inbr = iBlock - 1
+      jnbr = jBlock - 1
+      if (inbr < 1) then
+         select case(iBoundary)
+         case ('open')
+            inbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            inbr = 0
+         case ('cyclic')
+            inbr = nblocks_x
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown west boundary')
+         end select
+      endif
+      if (jnbr < 1) then
+         select case(jBoundary)
+         case ('open')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            jnbr = 0
+         case ('cyclic')
+            jnbr = nblocks_y
+         case ('tripole')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown south boundary')
+         end select
+      endif
+
+   case (ice_blocksEast2)
+
+      inbr = iBlock + 2
+      jnbr = jBlock
+      if (inbr > nblocks_x) then
+         select case(iBoundary)
+         case ('open')
+            inbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            inbr = 0
+         case ('cyclic')
+            inbr = inbr - nblocks_x
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown east boundary')
+         end select
+      endif
+
+   case (ice_blocksWest2)
+      jnbr = jBlock
+      inbr = iBlock - 2
+      if (inbr < 1) then
+         select case(iBoundary)
+         case ('open')
+            inbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            inbr = 0
+         case ('cyclic')
+            inbr = nblocks_x + inbr
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown west boundary')
+         end select
+      endif
+
+   case (ice_blocksEastNorthEast)
+
+      inbr = iBlock + 2
+      jnbr = jBlock + 1
+      if (inbr > nblocks_x) then
+         select case(iBoundary)
+         case ('open')
+            inbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            inbr = 0
+         case ('cyclic')
+            inbr = inbr - nblocks_x
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown east boundary')
+         end select
+      endif
+      if (jnbr > nblocks_y) then
+         select case(jBoundary)
+         case ('open')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            jnbr = 0
+         case ('cyclic')
+            jnbr = jnbr - nblocks_y
+         case ('tripole')
+            !*** return negative j value to flag tripole
+            !*** i index of main northern neighbor across the
+            !*** tripole cut - may also need i+1,i-1 to get
+            !*** other points if there has been padding or
+            !*** if the block size does not divide the domain
+            !*** evenly
+            inbr =  nblocks_x - iBlock - 1 
+            if (inbr == 0) inbr = nblocks_x
+            jnbr = -(nblocks_y - (jnbr - nblocks_y - 1))
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown north boundary')
+         end select
+      endif
+
+   case (ice_blocksWestNorthWest)
+
+      inbr = iBlock - 2
+      jnbr = jBlock + 1
+      if (inbr < 1) then
+         select case(iBoundary)
+         case ('open')
+            inbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            inbr = 0
+         case ('cyclic')
+            inbr = nblocks_x + inbr
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown west boundary')
+         end select
+      endif
+      if (jnbr > nblocks_y) then
+         select case(jBoundary)
+         case ('open')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
+         case ('closed')
+            jnbr = 0
+         case ('cyclic')
+            jnbr = jnbr + nblocks_y
+         case ('tripole')
+            !*** return negative j value to flag tripole
+            !*** i index of main northern neighbor across the
+            !*** tripole cut - may also need i+1,i-1 to get
+            !*** other points if there has been padding or
+            !*** if the block size does not divide the domain
+            !*** evenly
+            inbr =  nblocks_x - iBlock + 3
+            if (inbr > nblocks_x) inbr = 0
+            jnbr = -(nblocks_y - (jnbr - nblocks_y - 1))
+         case default
+            call abort_ice( &
+               'ice_blocksGetNbrID: unknown north boundary')
+         end select
+      endif
+
+   case default
+
+      call abort_ice( &
+          'ice_blocksGetNbrID: unknown direction')
+      return
+
+   end select
+
+!----------------------------------------------------------------------
+!
+!  now get block id for this neighbor block
+!
+!----------------------------------------------------------------------
+
+   if (inbr > 0 .and. jnbr > 0) then
+      nbrID = all_blocks_ij(inbr,jnbr)
+   else if (inbr > 0 .and. jnbr < 0) then  ! tripole upper boundary
+      !*** return negative value to flag tripole
+      nbrID = -all_blocks_ij(inbr,abs(jnbr))
+   else
+      nbrID = 0   ! neighbor outside domain
+   endif
+
+!----------------------------------------------------------------------
+!EOC
+
+ end function ice_blocksGetNbrID
+
+!**********************************************************************
 !BOP
 ! !IROUTINE: get_block
 ! !INTERFACE:
@@ -352,9 +860,10 @@ end subroutine create_blocks
 ! !IROUTINE: get_block_parameter
 ! !INTERFACE:
 
- subroutine get_block_parameter(block_id, local_id,                   & 
-                                ilo, ihi, jlo, jhi,                   &
-                                iblock, jblock, i_glob, j_glob)
+ subroutine get_block_parameter(block_id, local_id,           & 
+                                ilo, ihi, jlo, jhi,           &
+                                iblock, jblock, tripole,      &
+                                i_glob, j_glob)
 
 ! !DESCRIPTION:
 !  This routine returns requested parts of the block data type
@@ -376,6 +885,9 @@ end subroutine create_blocks
       local_id           ,&! local id assigned to block in current distrb
       ilo, ihi, jlo, jhi ,&! begin,end indices for physical domain
       iblock, jblock       ! cartesian i,j position for bloc
+
+   logical (log_kind), intent(out), optional :: &
+      tripole              ! flag is true if block on tripole bndy
 
    integer (int_kind), dimension(:), pointer, optional :: &
       i_glob, j_glob     ! global domain location for each point
@@ -399,8 +911,9 @@ end subroutine create_blocks
    if (present(jhi     )) jhi      = all_blocks(block_id)%jhi
    if (present(iblock  )) iblock   = all_blocks(block_id)%iblock
    if (present(jblock  )) jblock   = all_blocks(block_id)%jblock
-   if (present(i_glob  )) i_glob   = all_blocks(block_id)%i_glob
-   if (present(j_glob  )) j_glob   = all_blocks(block_id)%j_glob
+   if (present(i_glob  )) i_glob   => all_blocks(block_id)%i_glob
+   if (present(j_glob  )) j_glob   => all_blocks(block_id)%j_glob
+   if (present(tripole )) tripole  = all_blocks(block_id)%tripole
 
 !----------------------------------------------------------------------
 !EOC

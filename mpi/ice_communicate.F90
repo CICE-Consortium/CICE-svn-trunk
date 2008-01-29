@@ -36,14 +36,14 @@
 
    integer (int_kind), public :: &
       MPI_COMM_ICE,             &! MPI communicator for ice comms
-      mpi_dbl,                  &! MPI type for dbl_kind
+      mpiR8,                    &! MPI type for dbl_kind
+      mpiR4,                    &! MPI type for real_kind
       my_task,                  &! MPI task number for this task
       master_task                ! task number of master task
 
    integer (int_kind), parameter, public :: &
-      mpitag_bndy_2d        = 1,    &! MPI tags for various
-      mpitag_bndy_3d        = 2,    &! communication patterns
-      mpitag_gs             = 1000   ! 
+      mpitagHalo            = 1,    &! MPI tags for various
+      mpitag_gs             = 1000   ! communication patterns
 
 !EOP
 !BOC
@@ -105,15 +105,8 @@
    master_task = 0
    call MPI_COMM_RANK  (MPI_COMM_ICE, my_task, ierr)
 
-!-----------------------------------------------------------------------
-!
-!  On some 64-bit machines where real_kind and dbl_kind are
-!  identical, the MPI implementation uses MPI_REAL for both.
-!  In these cases, set MPI_DBL to MPI_REAL.
-!
-!-----------------------------------------------------------------------
-
-   MPI_DBL = MPI_DOUBLE_PRECISION
+   mpiR8 = MPI_REAL8
+   mpiR4 = MPI_REAL4
 
 !-----------------------------------------------------------------------
 !EOC
