@@ -182,12 +182,12 @@
       !-----------------------------------------------------------------
 
 !      call ice_timer_start(timer_bound)
-!      call update_ghost_cells(aice,              bndy_info, & 
-!                              field_loc_center,  field_type_scalar)
-!      call update_ghost_cells(vice,              bndy_info, & 
-!                              field_loc_center,  field_type_scalar)
-!      call update_ghost_cells(vsno,              bndy_info, &  
-!                              field_loc_center,  field_type_scalar)
+!      call ice_HaloUpdate (aice,              halo_info, &
+!                           field_loc_center,  field_type_scalar)
+!      call ice_HaloUpdate (vice,              halo_info, &
+!                           field_loc_center,  field_type_scalar)
+!      call ice_HaloUpdate (vsno,              halo_info, &
+!                           field_loc_center,  field_type_scalar)
 !      call ice_timer_stop(timer_bound)
 
       do iblk = 1, nblocks
@@ -217,8 +217,8 @@
       enddo                     ! iblk
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells(icetmask,         bndy_info, & 
-                              field_loc_center, field_type_scalar)
+      call ice_HaloUpdate (icetmask,          halo_info, &
+                           field_loc_center,  field_type_scalar)
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -280,13 +280,13 @@
       enddo  ! iblk
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells(strength,         bndy_info, & 
-                              field_loc_center, field_type_scalar)
+      call ice_HaloUpdate (strength,           halo_info, &
+                           field_loc_center,   field_type_scalar)
       ! velocities may have changed in evp_prep2
-      call update_ghost_cells(uvel,             bndy_info, & 
-                              field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells(vvel,             bndy_info, & 
-                              field_loc_NEcorner, field_type_vector)
+      call ice_HaloUpdate (uvel,               halo_info, &
+                           field_loc_NEcorner, field_type_vector)
+      call ice_HaloUpdate (vvel,               halo_info, &
+                           field_loc_NEcorner, field_type_vector)
       call ice_timer_stop(timer_bound)
 
 
@@ -341,10 +341,10 @@
          enddo
 
          call ice_timer_start(timer_bound)
-         call update_ghost_cells (uvel,               bndy_info, & 
-                                  field_loc_NEcorner, field_type_vector)
-         call update_ghost_cells (vvel,               bndy_info, & 
-                                  field_loc_NEcorner, field_type_vector)
+         call ice_HaloUpdate (uvel,               halo_info, &
+                              field_loc_NEcorner, field_type_vector)
+         call ice_HaloUpdate (vvel,               halo_info, &
+                              field_loc_NEcorner, field_type_vector)
          call ice_timer_stop(timer_bound)
 
       enddo                     ! subcycling

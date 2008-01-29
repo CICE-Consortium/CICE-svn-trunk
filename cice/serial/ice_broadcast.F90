@@ -87,7 +87,7 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), intent(inout) :: &
+   real (dbl_kind), intent(inout) :: &
       scalar               ! scalar to be broadcast
 
 !EOP
@@ -123,7 +123,7 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r4), intent(inout) :: &
+   real (real_kind), intent(inout) :: &
       scalar               ! scalar to be broadcast
 
 !EOP
@@ -267,7 +267,7 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), dimension(:), intent(inout) :: &
+   real (dbl_kind), dimension(:), intent(inout) :: &
      array             ! array to be broadcast
 
 !EOP
@@ -303,7 +303,7 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r4), dimension(:), intent(inout) :: &
+   real (real_kind), dimension(:), intent(inout) :: &
      array                ! array to be broadcast
 
 !EOP
@@ -411,7 +411,7 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), dimension(:,:), intent(inout) :: &
+   real (dbl_kind), dimension(:,:), intent(inout) :: &
      array             ! array to be broadcast
 
 !EOP
@@ -447,7 +447,7 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r4), dimension(:,:), intent(inout) :: &
+   real (real_kind), dimension(:,:), intent(inout) :: &
      array                ! array to be broadcast
 
 !EOP
@@ -555,7 +555,7 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), dimension(:,:,:), intent(inout) :: &
+   real (dbl_kind), dimension(:,:,:), intent(inout) :: &
      array             ! array to be broadcast
 
 !EOP
@@ -591,7 +591,7 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r4), dimension(:,:,:), intent(inout) :: &
+   real (real_kind), dimension(:,:,:), intent(inout) :: &
      array                ! array to be broadcast
 
 !EOP

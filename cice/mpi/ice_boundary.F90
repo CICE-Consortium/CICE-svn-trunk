@@ -5,137 +5,129 @@
  module ice_boundary
 
 ! !DESCRIPTION:
-!  This module contains data types and routines for updating ghost cell
-!  boundaries using MPI calls
+!  This module contains data types and routines for updating halo
+!  regions (ghost cells) using MPI calls
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
-!
-! author: Phil Jones, LANL
-!
-! Oct. 2004: Adapted by William Lipscomb from original POP version
-! (1) Modified create_boundary so that ghost cell updates can be
-!     neglected for N, S, E, and/or W boundaries.
-! (2) Modified boundary_3d_dbl so that 3d arrays can be updated more 
-!     efficiently.
-! (3) Modified boundary_2d_dbl and boundary_3d_dbl to allow blocks
-!     to have no EW and/or NS communications with other blocks. 
-! (4) Added update option for scalars on W faces.  (Not tested)
-! (5) Minor changes for consistency with CICE
-! NOTE: This module cannot use ice_timers because ice_timers uses
-!       ice_domain and ice_domain uses ice_boundary
-!
-! Feb. 2007: debugged by Elizabeth Hunke.  Numerous changes included
-!     removing destroy_boundary and the NE/SW boundary types, debugging
-!     the tripole grid apparatus, and reworking the Neumann boundary 
-!     conditions.
+!  2007-07-19: Phil Jones, Yoshi Yoshida, John Dennis
+!              new naming conventions, optimizations during
+!              initialization, true multi-dimensional updates 
+!              (rather than serial call to two-dimensional updates), 
+!              fixes for non-existent blocks
+!  2008-01-28: Elizabeth Hunke replaced old routines with new POP
+!              infrastructure
 
 ! !USES:
 
    use ice_kinds_mod
-   use ice_communicate
-   use ice_constants
-   use ice_blocks
-   use ice_distribution
+   use ice_communicate, only: my_task, mpiR4, mpiR8, mpitagHalo
+   use ice_constants, only: field_type_scalar, &
+          field_type_vector, field_type_angle, &
+         field_loc_center,  field_loc_NEcorner, &
+         field_loc_Nface, field_loc_Eface
+   use ice_global_reductions, only: global_maxval
    use ice_exit
 
+   use ice_blocks, only: nx_block, ny_block, nghost, &
+           nblocks_tot, ice_blocksNorth, &
+           ice_blocksSouth, ice_blocksEast, ice_blocksWest, &
+           ice_blocksEast2, ice_blocksWest2, &
+           ice_blocksNorthEast, ice_blocksNorthWest, &
+           ice_blocksEastNorthEast, ice_blocksWestNorthWest, &
+           ice_blocksSouthEast, ice_blocksSouthWest, &
+           ice_blocksGetNbrID, get_block_parameter
+   use ice_distribution, only: distrb, &
+          ice_distributionGetBlockLoc, ice_distributionGet
+
    implicit none
+   include 'mpif.h'
    private
    save
 
 ! !PUBLIC TYPES:
 
-   type, public :: bndy
-     integer (int_kind) :: &
-       communicator       ,&! communicator to use for update messages
-       nmsg_ew_snd        ,&! number of messages to send for e-w update
-       nmsg_ns_snd        ,&! number of messages to send for n-s update
-       nmsg_ew_rcv        ,&! number of messages to recv for e-w update
-       nmsg_ns_rcv        ,&! number of messages to recv for n-s update
-       maxblocks_ew_snd   ,&! max num blocks involved in east-west sends
-       maxblocks_ew_rcv   ,&! max num blocks involved in east-west recvs
-       maxblocks_ns_snd   ,&! max num blocks involved in north-south sends
-       maxblocks_ns_rcv   ,&! max num blocks involved in north-south recvs
-       nlocal_ew          ,&! num local copies for east-west bndy update
-       nlocal_ns            ! num local copies for north-south bndy update
+   type, public :: ice_halo
+      integer (int_kind) ::  &
+         communicator,     &! communicator to use for update messages
+         numMsgSend,       &! number of messages to send halo update
+         numMsgRecv,       &! number of messages to recv halo update
+         numLocalCopies     ! num local copies for halo update
 
-     integer (int_kind), dimension(:), pointer :: &
-       nblocks_ew_snd     ,&! num blocks in each east-west send msg
-       nblocks_ns_snd     ,&! num blocks in each north-south send msg
-       nblocks_ew_rcv     ,&! num blocks in each east-west recv msg
-       nblocks_ns_rcv     ,&! num blocks in each north-south recv msg
-       ew_snd_proc        ,&! dest   proc for east-west send message
-       ew_rcv_proc        ,&! source proc for east-west recv message
-       ns_snd_proc        ,&! dest   proc for north-south send message
-       ns_rcv_proc        ,&! source proc for north-south recv message
-       local_ew_src_block ,&! source block for each local east-west copy
-       local_ew_dst_block ,&! dest   block for each local east-west copy
-       local_ns_src_block ,&! source block for each local north-south copy
-       local_ns_dst_block   ! dest   block for each local north-south copy
+      integer (int_kind), dimension(:), pointer :: &
+         recvTask,         &! task from which to recv each msg
+         sendTask,         &! task to   which to send each msg
+         sizeSend,         &! size of each sent message
+         sizeRecv           ! size of each recvd message
 
-     integer (int_kind), dimension(:,:), pointer :: &
-       local_ew_src_add   ,&! starting source address for local e-w copies
-       local_ew_dst_add   ,&! starting dest   address for local e-w copies
-       local_ns_src_add   ,&! starting source address for local n-s copies
-       local_ns_dst_add     ! starting dest   address for local n-s copies
+      integer (int_kind), dimension(:,:), pointer :: &
+         srcLocalAddr,     &! src addresses for each local copy
+         dstLocalAddr       ! dst addresses for each local copy
 
-     integer (int_kind), dimension(:,:), pointer :: &
-       ew_src_block       ,&! source block for sending   e-w bndy msg
-       ew_dst_block       ,&! dest   block for receiving e-w bndy msg
-       ns_src_block       ,&! source block for sending   n-s bndy msg
-       ns_dst_block         ! dest   block for sending   n-s bndy msg
+      integer (int_kind), dimension(:,:,:), pointer :: &
+         sendAddr,         &! src addresses for each sent message
+         recvAddr           ! dst addresses for each recvd message
 
-     integer (int_kind), dimension(:,:,:), pointer :: &
-       ew_src_add         ,&! starting source address for e-w msgs
-       ew_dst_add         ,&! starting dest   address for e-w msgs
-       ns_src_add         ,&! starting source address for n-s msgs
-       ns_dst_add           ! starting dest   address for n-s msgs
-   end type bndy
+   end type
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-   public :: create_boundary,  &
-             update_ghost_cells
+   public :: ice_HaloCreate,  &
+             ice_HaloDestroy, &
+             ice_HaloUpdate
 
-   interface update_ghost_cells  ! generic interface
-     module procedure boundary_2d_dbl,  &
-                      boundary_2d_real, &
-                      boundary_2d_int,  &
-                      boundary_3d_dbl,  &
-                      boundary_3d_real, &
-                      boundary_3d_int,  &
-                      boundary_4d_dbl,  &
-                      boundary_4d_real, &
-                      boundary_4d_int
+   interface ice_HaloUpdate  ! generic interface
+      module procedure ice_HaloUpdate2DR8, &
+                       ice_HaloUpdate2DR4, &
+                       ice_HaloUpdate2DI4, &
+                       ice_HaloUpdate3DR8, &
+                       ice_HaloUpdate3DR4, &
+                       ice_HaloUpdate3DI4, &
+                       ice_HaloUpdate4DR8, &
+                       ice_HaloUpdate4DR4, &
+                       ice_HaloUpdate4DI4
    end interface
 
 !EOP
 !BOC
 !-----------------------------------------------------------------------
 !
-!  global boundary buffers for tripole boundary
+!  to prevent frequent allocate-deallocate for 2d halo updates, create
+!  a static 2d buffer to be allocated once at creation.  if future 
+!  creation needs larger buffer, resize during the creation.
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) :: &
+      bufSizeSend,    &! max buffer size for send messages
+      bufSizeRecv      ! max buffer size for recv messages
+
+   integer (int_kind), dimension(:,:), allocatable :: &
+      bufSendI4,     &! buffer for use to send in 2D i4 halo updates
+      bufRecvI4       ! buffer for use to recv in 2D i4 halo updates
+
+   real (real_kind), dimension(:,:), allocatable :: &
+      bufSendR4,     &! buffer for use to send in 2D r4 halo updates
+      bufRecvR4       ! buffer for use to recv in 2D r4 halo updates
+
+   real (dbl_kind), dimension(:,:), allocatable :: &
+      bufSendR8,     &! buffer for use to send in 2D r8 halo updates
+      bufRecvR8       ! buffer for use to recv in 2D r8 halo updates
+
+!-----------------------------------------------------------------------
+!
+!  global buffers for tripole boundary
 !
 !-----------------------------------------------------------------------
 
    integer (int_kind), dimension(:,:), allocatable :: &
-      tripole_ibuf,  &
-      tripole_ighost
+      bufTripoleI4
 
-   real (r4), dimension(:,:), allocatable :: &
-      tripole_rbuf,  &
-      tripole_rghost
+   real (real_kind), dimension(:,:), allocatable :: &
+      bufTripoleR4
 
-   real (r8), dimension(:,:), allocatable :: &
-      tripole_dbuf,  &
-      tripole_dghost
-
-!whl - new 3d arrays
-   real (r8), dimension(:,:,:), allocatable :: &
-      tripole_dbuf_3d,  &
-      tripole_dghost_3d
-
-   integer (int_kind) :: & 
-      index_check     !maltrud debug
+   real (dbl_kind), dimension(:,:), allocatable :: &
+      bufTripoleR8
 
 !EOC
 !***********************************************************************
@@ -144,42 +136,36 @@ contains
 
 !***********************************************************************
 !BOP
-! !IROUTINE: create_boundary
+! !IROUTINE: ice_HaloCreate
 ! !INTERFACE:
 
- subroutine create_boundary(newbndy, dist,              &
-                            ns_bndy_type, ew_bndy_type, &
-                            nx_global, ny_global)
+ function ice_HaloCreate(dist, nsBoundaryType, ewBoundaryType, &
+                         nxGlobal)  result(halo)
 
 ! !DESCRIPTION:
-!  This routine creates a boundary type with info necessary for
-!  performing a boundary (ghost cell) update based on the input block
-!  distribution.
+!  This routine creates a halo type with info necessary for
+!  performing a halo (ghost cell) update. This info is computed
+!  based on the input block distribution.
 !
 ! !REVISION HISTORY:
 !  same as module
-!
-!  Modified Sept. 2004 by William Lipscomb:
-!    Added optional arguments so that ghost cell updates can be
-!    limited to fewer than four boundaries; this reduces the
-!    cost of boundary updates in the EVP dynamics.
 
 ! !INPUT PARAMETERS:
 
    type (distrb), intent(in) :: &
-      dist       ! distribution of blocks across procs
+      dist             ! distribution of blocks across procs
 
    character (*), intent(in) :: &
-      ns_bndy_type,             &! type of boundary to use in ns dir
-      ew_bndy_type               ! type of boundary to use in ew dir
+      nsBoundaryType,   &! type of boundary to use in logical ns dir
+      ewBoundaryType     ! type of boundary to use in logical ew dir
 
    integer (int_kind), intent(in) :: &
-      nx_global, ny_global       ! global extents of domain
+      nxGlobal           ! global grid extent for tripole grids
 
 ! !OUTPUT PARAMETERS:
 
-   type (bndy), intent(out) :: &
-      newbndy    ! a new boundary type with info for updates
+   type (ice_halo) :: &
+      halo               ! a new halo type with info for halo updates
 
 !EOP
 !BOC
@@ -189,41 +175,36 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) ::           &
-      i,j,k,n,                     &! dummy counters
-      iblock_src  , jblock_src  ,  &! i,j index of source block
-      iblock_dst  , jblock_dst  ,  &! i,j index of dest   block
-      iblock_north, jblock_north,  &! i,j index of north neighbor block
-      iblock_south, jblock_south,  &! i,j index of south neighbor block
-      iblock_east , jblock_east ,  &! i,j index of east  neighbor block
-      iblock_west , jblock_west ,  &! i,j index of west  neighbor block
-      src_block_loc,               &! local block location of source
-      dst_block_loc,               &! local block location of dest
-      imsg_ew_snd, imsg_ew_rcv,    &! counters for ew send/recv
-      imsg_ns_snd, imsg_ns_rcv,    &! counters for ns send/recv
-      nprocs,                      &! num of processors involved
-      nblocks,                     &! total number of blocks
-      bid, pid,                    &! block and processor locators
-      iblk, imsg,                  &!
-      iloc_ew, iloc_ns,            &!
-      src_proc, dst_proc            ! src,dst processor for message
-
-   logical (log_kind) :: &
-      lalloc_tripole      ! flag for allocating tripole buffers
+   integer (int_kind) ::             &
+      i,j,k,l,n,m,&
+      istat,                       &! allocate status flag
+      numProcs,                    &! num of processors involved
+      communicator,                &! communicator for message passing
+      iblock,                      &! block counter
+      eastBlock, westBlock,        &! block id  east,  west neighbors
+      northBlock, southBlock,      &! block id north, south neighbors
+      neBlock, nwBlock,            &! block id northeast, northwest nbrs
+      seBlock, swBlock,            &! block id southeast, southwest nbrs
+      srcProc, dstProc,            &! source, dest processor locations
+      srcLocalID, dstLocalID,      &! local block index of src,dst blocks
+      maxTmp,                      &! temp for global maxval      
+      blockSizeX,                  &! size of default physical domain in X 
+      blockSizeY,                  &! size of default physical domain in Y 
+      maxSizeSend, maxSizeRecv,    &! max buffer sizes
+      numMsgSend, numMsgRecv,      &! number of messages for this halo
+      eastMsgSize, westMsgSize,    &! nominal sizes for e-w msgs
+      northMsgSize, southMsgSize,  &! nominal sizes for n-s msgs
+      tripoleMsgSize,              &! size for tripole messages
+      tripoleMsgSizeOut,           &! size for tripole messages
+      cornerMsgSize, msgSize        ! nominal size for corner msg
 
    integer (int_kind), dimension(:), allocatable :: &
-      ew_snd_count,    &! array for counting blocks in each message
-      ew_rcv_count,    &! array for counting blocks in each message
-      ns_snd_count,    &! array for counting blocks in each message
-      ns_rcv_count,    &! array for counting blocks in each message
-      msg_ew_snd  ,    &! msg counter for each active processor
-      msg_ew_rcv  ,    &! msg counter for each active processor
-      msg_ns_snd  ,    &! msg counter for each active processor
-      msg_ns_rcv        ! msg counter for each active processor
+      sendCount, recvCount          ! count number of words to each proc
 
-   type (block) ::     &
-      src_block,       &! block info for source      block
-      dst_block         ! block info for destination block
+   logical (log_kind) :: &
+      resize,               &! flag for resizing buffers
+      tripoleFlag,          &! flag for allocating tripole buffers
+      tripoleBlock           ! flag for identifying north tripole blocks
 
 !-----------------------------------------------------------------------
 !
@@ -232,381 +213,481 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   nprocs = dist%nprocs
+   call ice_distributionGet(dist,          &
+                            nprocs = numProcs,       &
+                            communicator = communicator)
 
-   if (my_task >= nprocs) return
+   if (my_task >= numProcs) return
 
-   nblocks = size(dist%proc(:))
-   lalloc_tripole = .false.
-   newbndy%communicator = dist%communicator
+   halo%communicator = communicator
+
+   blockSizeX = nx_block - 2*nghost
+   blockSizeY = ny_block - 2*nghost
+   eastMsgSize  = nghost*blockSizeY
+   westMsgSize  = nghost*blockSizeY
+   southMsgSize = nghost*blockSizeX
+   northMsgSize = nghost*blockSizeX
+   cornerMsgSize = nghost*nghost
+   tripoleMsgSize = (nghost+1)*blockSizeX
+   tripoleMsgSizeOut = (nghost+1)*nx_block
+
+   if (nsBoundaryType == 'tripole') then
+      tripoleFlag = .true.
+
+      !*** allocate tripole message buffers if not already done
+
+      if (.not. allocated(bufTripoleR8)) then
+         allocate (bufTripoleI4(nxGlobal, nghost+1), &
+                   bufTripoleR4(nxGlobal, nghost+1), &
+                   bufTripoleR8(nxGlobal, nghost+1), &
+                   stat=istat)
+
+         if (istat > 0) then
+            call abort_ice( &
+               'ice_HaloCreate: error allocating tripole buffers')
+            return
+         endif
+      endif
+
+   else
+      tripoleFlag = .false.
+   endif
 
 !-----------------------------------------------------------------------
 !
 !  Count the number of messages to send/recv from each processor
-!  and number of blocks in each message.  These quantities are
+!  and number of words in each message.  These quantities are
 !  necessary for allocating future arrays.
 !
 !-----------------------------------------------------------------------
 
-   allocate (ew_snd_count(nprocs), ew_rcv_count(nprocs), &
-             ns_snd_count(nprocs), ns_rcv_count(nprocs))
+   allocate (sendCount(numProcs), recvCount(numProcs), stat=istat)
 
-   ew_snd_count = 0
-   ew_rcv_count = 0
-   ns_snd_count = 0
-   ns_rcv_count = 0
+   if (istat > 0) then
+      call abort_ice( &
+                        'ice_HaloCreate: error allocating count arrays')
+      return
+   endif
 
-   block_loop1: do n=1,nblocks
-      src_proc  = dist%proc(n)
-      src_block = get_block(n,n)
+   sendCount  = 0
+   recvCount  = 0
 
-      iblock_src = src_block%iblock  ! i,j index of this block in
-      jblock_src = src_block%jblock  !   block cartesian decomposition
+   msgCountLoop: do iblock=1,nblocks_tot
 
-      !*** compute cartesian i,j block indices for each neighbor
-      !*** use zero if off the end of closed boundary
-      !*** use jnorth=nblocks_y and inorth < 0 for tripole boundary
-      !***   to make sure top boundary communicated to all top
-      !***   boundary blocks
+      call ice_distributionGetBlockLoc(dist, iblock, srcProc, &
+                                       srcLocalID)
 
-      select case(ew_bndy_type)
-      case ('cyclic')
-         iblock_east = mod(iblock_src,nblocks_x) + 1
-         iblock_west = iblock_src - 1
-         if (iblock_west == 0) iblock_west = nblocks_x
-         jblock_east = jblock_src
-         jblock_west = jblock_src
-      case ('open')
-         iblock_east = iblock_src + 1
-         iblock_west = iblock_src - 1
-         if (iblock_east > nblocks_x) iblock_east = iblock_src
-         if (iblock_west < 1        ) iblock_west = iblock_src
-         jblock_east = jblock_src
-         jblock_west = jblock_src
-      case ('closed')
-         iblock_east = iblock_src + 1
-         iblock_west = iblock_src - 1
-         if (iblock_east > nblocks_x) iblock_east = 0
-         if (iblock_west < 1        ) iblock_west = 0
-         jblock_east = jblock_src
-         jblock_west = jblock_src
-      case default
-         call abort_ice('Unknown east-west boundary type')
-      end select
+      !*** find north neighbor block and add to message count
+      !***  also set tripole block flag for later special cases
 
-      select case(ns_bndy_type)
-      case ('cyclic')
-         jblock_north = mod(jblock_src,nblocks_y) + 1
-         jblock_south = jblock_src - 1
-         if (jblock_south == 0) jblock_south = nblocks_y
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-      case ('open')
-         jblock_north = jblock_src + 1
-         jblock_south = jblock_src - 1
-         if (jblock_north > nblocks_y) jblock_north = jblock_src
-         if (jblock_south < 1        ) jblock_south = jblock_src
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-      case ('closed')
-         jblock_north = jblock_src + 1
-         jblock_south = jblock_src - 1
-         if (jblock_north > nblocks_y) jblock_north = 0
-         if (jblock_south < 1        ) jblock_south = 0
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-      case ('tripole')
-         lalloc_tripole = .true.
-         jblock_north = jblock_src + 1
-         jblock_south = jblock_src - 1
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-         if (jblock_south < 1        ) jblock_south = 0
-         if (jblock_north > nblocks_y) then
-            jblock_north = nblocks_y
-            iblock_north = -iblock_src
-         endif
-      case default
-         call abort_ice('Unknown north-south boundary type')
-      end select
-
-!-----------------------------------------------------------------------
-! If a boundary does not need to be updated, treat it as closed.
-! In this case, ghost cells will be filled with zeroes.
-!-----------------------------------------------------------------------
-
-      !***
-      !*** if any boundary is closed boundary, create a local
-      !*** copy pseudo-message to fill ghost cells
-      !***
-
-      if (iblock_east == 0) &
-         call increment_message_counter(ew_snd_count, ew_rcv_count, &
-                                        0, src_proc)
-      if (iblock_west == 0) &
-         call increment_message_counter(ew_snd_count, ew_rcv_count, &
-                                        0, src_proc)
-      if (jblock_north == 0) &
-         call increment_message_counter(ns_snd_count, ns_rcv_count, &
-                                        0, src_proc)
-      if (jblock_south == 0) &
-         call increment_message_counter(ns_snd_count, ns_rcv_count, &
-                                        0, src_proc)
-
-      !***
-      !*** now look through all the blocks for the neighbors
-      !*** of the source block and check whether a message is
-      !*** required for communicating with the neighbor
-      !***
-
-      do k=1,nblocks
-         dst_block = get_block(k,k)
-
-         iblock_dst = dst_block%iblock  !*** i,j block index of
-         jblock_dst = dst_block%jblock  !*** potential neighbor block
-
-         dst_proc = dist%proc(k)  ! processor that holds dst block
-
-         !***
-         !*** if this block is an eastern neighbor
-         !*** increment message counter
-         !***
-
-         if (iblock_dst == iblock_east .and. &
-             jblock_dst == jblock_east) then
-
-             call increment_message_counter(ew_snd_count, ew_rcv_count, &
-                                            src_proc, dst_proc)
-         endif
-
-         !***
-         !*** if this block is a western neighbor
-         !*** increment message counter
-         !***
-
-         if (iblock_dst == iblock_west .and. &
-             jblock_dst == jblock_west) then
-
-             call increment_message_counter(ew_snd_count, ew_rcv_count, &
-                                            src_proc, dst_proc)
-         endif
-
-         !***
-         !*** if this block is a northern neighbor
-         !*** find out whether a message is required
-         !*** for tripole, must communicate with all
-         !*** north row blocks (triggered by iblock_dst <0)
-         !***
-
-         if ((iblock_dst == iblock_north .or. iblock_north < 0) .and. &
-              jblock_dst == jblock_north) then
-
-              call increment_message_counter(ns_snd_count, ns_rcv_count, &
-                                             src_proc, dst_proc)
-         endif
-
-         !***
-         !*** if this block is a southern neighbor
-         !*** find out whether a message is required
-         !***
-
-         if (iblock_dst == iblock_south .and. &
-             jblock_dst == jblock_south) then
-
-             call increment_message_counter(ns_snd_count, ns_rcv_count, &
-                                            src_proc, dst_proc)
-         endif
-
-      end do  ! search for dest blocks
-   end do block_loop1
-
-   !*** if messages are received from the same processor
-   !*** the message is actually a local copy - count them
-   !*** and reset to zero
-
-   newbndy%nlocal_ew = ew_rcv_count(my_task+1)
-   newbndy%nlocal_ns = ns_rcv_count(my_task+1)
-   ew_snd_count(my_task+1) = 0
-   ew_rcv_count(my_task+1) = 0
-   ns_snd_count(my_task+1) = 0
-   ns_rcv_count(my_task+1) = 0
-
-   !*** now count the number of actual messages to be
-   !*** sent and received
-
-   newbndy%nmsg_ew_snd = count(ew_snd_count /= 0)
-   newbndy%nmsg_ns_snd = count(ns_snd_count /= 0)
-   newbndy%nmsg_ew_rcv = count(ew_rcv_count /= 0)
-   newbndy%nmsg_ns_rcv = count(ns_rcv_count /= 0)
-
-   !*** find the maximum number of blocks sent in any one
-   !*** message to use as an array size parameter
-
-   newbndy%maxblocks_ew_snd = maxval(ew_snd_count)
-   newbndy%maxblocks_ew_rcv = maxval(ew_rcv_count)
-   newbndy%maxblocks_ns_snd = maxval(ns_snd_count)
-   newbndy%maxblocks_ns_rcv = maxval(ns_rcv_count)
-
-   !***
-   !*** create buffers for tracking which message
-   !*** is sent/received from which processor
-   !***
-
-   allocate(msg_ew_snd(nprocs), msg_ew_rcv(nprocs), &
-            msg_ns_snd(nprocs), msg_ns_rcv(nprocs))
-
-   msg_ew_snd = 0
-   msg_ew_rcv = 0
-   msg_ns_snd = 0
-   msg_ns_rcv = 0
-
-   !***
-   !*** assign a location in buffer for each message to a
-   !*** different processor. scramble the processor order
-   !*** using current task id as offset to prevent all
-   !*** processors sending to the same processor at the
-   !*** same time
-   !***
-
-   imsg_ew_snd = 0
-   imsg_ew_rcv = 0
-   imsg_ns_snd = 0
-   imsg_ns_rcv = 0
-
-   do n=1,nprocs
-      dst_proc = modulo(my_task+n,nprocs) + 1
-      if (ew_snd_count(dst_proc) /= 0) then
-         imsg_ew_snd = imsg_ew_snd + 1
-         msg_ew_snd(dst_proc) = imsg_ew_snd
+      northBlock = ice_blocksGetNbrID(iblock, ice_blocksNorth,        &
+                                      ewBoundaryType, nsBoundaryType)
+      if (northBlock > 0) then
+         tripoleBlock = .false.
+         msgSize = northMsgSize
+         call ice_distributionGetBlockLoc(dist, northBlock, dstProc, &
+                                          dstLocalID)
+      else if (northBlock < 0) then ! tripole north row, count block
+         tripoleBlock = .true.
+         msgSize = tripoleMsgSize
+         call ice_distributionGetBlockLoc(dist, abs(northBlock), &
+                                 dstProc, dstLocalID)
+      else
+         tripoleBlock = .false.
+         msgSize = northMsgSize
+         dstProc = 0
+         dstLocalID = 0
       endif
-      if (ew_rcv_count(dst_proc) /= 0) then
-         imsg_ew_rcv = imsg_ew_rcv + 1
-         msg_ew_rcv(dst_proc) = imsg_ew_rcv
-      endif
-      if (ns_snd_count(dst_proc) /= 0) then
-         imsg_ns_snd = imsg_ns_snd + 1
-         msg_ns_snd(dst_proc) = imsg_ns_snd
-      endif
-      if (ns_rcv_count(dst_proc) /= 0) then
-         imsg_ns_rcv = imsg_ns_rcv + 1
-         msg_ns_rcv(dst_proc) = imsg_ns_rcv
-      endif
-   end do
 
-   deallocate(ew_snd_count, ew_rcv_count, ns_snd_count, ns_rcv_count)
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,           &
+                                     srcProc, dstProc, msgSize)
+
+      !*** if a tripole boundary block, also create a local
+      !*** message into and out of tripole buffer 
+
+      if (tripoleBlock) then
+         !*** copy out of tripole buffer - includes halo
+         call ice_HaloIncrementMsgCount(sendCount, recvCount,        &
+                                        srcProc, srcProc,            &
+                                        tripoleMsgSizeOut)
+
+         !*** copy in only required if dstProc not same as srcProc
+         if (dstProc /= srcProc) then
+            call ice_HaloIncrementMsgCount(sendCount, recvCount,  &
+                                           srcProc, srcProc,      & 
+                                           msgSize)
+         endif
+      endif
+
+      !*** find south neighbor block and add to message count
+
+      southBlock = ice_blocksGetNbrID(iblock, ice_blocksSouth,        &
+                                      ewBoundaryType, nsBoundaryType)
+
+      if (southBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, southBlock, dstProc, &
+                                          dstLocalID)
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
+
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,           &
+                                     srcProc, dstProc, southMsgSize)
+
+      !*** find east neighbor block and add to message count
+
+      eastBlock = ice_blocksGetNbrID(iblock, ice_blocksEast,         &
+                                     ewBoundaryType, nsBoundaryType)
+
+      if (eastBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, eastBlock, dstProc, &
+                                          dstLocalID)
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
+
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,          &
+                                     srcProc, dstProc, eastMsgSize)
+
+      !*** if a tripole boundary block, non-local east neighbor
+      !*** needs a chunk of the north boundary, so add a message
+      !*** for that
+
+      if (tripoleBlock .and. dstProc /= srcProc) then
+         call ice_HaloIncrementMsgCount(sendCount, recvCount,          &
+                                     srcProc, dstProc, tripoleMsgSize)
+      endif
+
+      !*** find west neighbor block and add to message count
+
+      westBlock = ice_blocksGetNbrID(iblock, ice_blocksWest,         &
+                                     ewBoundaryType, nsBoundaryType)
+
+      if (westBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, westBlock, dstProc, &
+                                          dstLocalID)
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
+
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,          &
+                                     srcProc, dstProc, westMsgSize)
+
+      !*** if a tripole boundary block, non-local west neighbor
+      !*** needs a chunk of the north boundary, so add a message
+      !*** for that
+
+      if (tripoleBlock .and. dstProc /= srcProc) then
+         call ice_HaloIncrementMsgCount(sendCount, recvCount,          &
+                                     srcProc, dstProc, tripoleMsgSize)
+      endif
+
+      !*** find northeast neighbor block and add to message count
+
+      neBlock = ice_blocksGetNbrID(iblock, ice_blocksNorthEast,    &
+                                   ewBoundaryType, nsBoundaryType)
+
+      if (neBlock > 0) then
+         msgSize = cornerMsgSize  ! normal corner message 
+
+         call ice_distributionGetBlockLoc(dist, neBlock, dstProc, &
+                                          dstLocalID)
+
+      else if (neBlock < 0) then ! tripole north row
+         msgSize = tripoleMsgSize  ! tripole needs whole top row of block
+
+         call ice_distributionGetBlockLoc(dist, abs(neBlock), dstProc, &
+                                          dstLocalID)
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
+
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,      &
+                                     srcProc, dstProc, msgSize)
+
+      !*** find northwest neighbor block and add to message count
+
+      nwBlock = ice_blocksGetNbrID(iblock, ice_blocksNorthWest,    &
+                                   ewBoundaryType, nsBoundaryType)
+
+      if (nwBlock > 0) then
+         msgSize = cornerMsgSize ! normal NE corner update
+
+         call ice_distributionGetBlockLoc(dist, nwBlock, dstProc, &
+                                          dstLocalID)
+
+      else if (nwBlock < 0) then ! tripole north row, count block
+         msgSize = tripoleMsgSize ! tripole NE corner update - entire row needed
+
+         call ice_distributionGetBlockLoc(dist, abs(nwBlock), dstProc, &
+                                          dstLocalID)
+
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
+
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,      &
+                                     srcProc, dstProc, msgSize)
+
+      !*** find southeast neighbor block and add to message count
+
+      seBlock = ice_blocksGetNbrID(iblock, ice_blocksSouthEast,    &
+                                   ewBoundaryType, nsBoundaryType)
+
+      if (seBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, seBlock, dstProc, &
+                                          dstLocalID)
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
+
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,            &
+                                     srcProc, dstProc, cornerMsgSize)
+
+      !*** find southwest neighbor block and add to message count
+
+      swBlock = ice_blocksGetNbrID(iblock, ice_blocksSouthWest,    &
+                                   ewBoundaryType, nsBoundaryType)
+
+      if (swBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, swBlock, dstProc, &
+                                          dstLocalID)
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
+
+      call ice_HaloIncrementMsgCount(sendCount, recvCount,            &
+                                     srcProc, dstProc, cornerMsgSize)
+
+      !*** for tripole grids with padded domain, padding will
+      !*** prevent tripole buffer from getting all the info
+      !*** it needs - must extend footprint at top boundary
+
+      if (tripoleBlock                  .and. & !tripole
+          mod(nxGlobal,blockSizeX) /= 0) then   !padding
+
+         !*** find east2 neighbor block and add to message count
+
+         eastBlock = ice_blocksGetNbrID(iBlock, ice_blocksEast2,     &
+                                     ewBoundaryType, nsBoundaryType)
+
+         if (eastBlock > 0) then
+            call ice_distributionGetBlockLoc(dist, eastBlock, dstProc, &
+                                             dstLocalID)
+         else
+            dstProc = 0
+            dstLocalID = 0
+         endif
+
+         if (dstProc /= srcProc) then
+            call ice_HaloIncrementMsgCount(sendCount, recvCount,       &
+                                     srcProc, dstProc, tripoleMsgSize)
+         endif
+
+         !*** find EastNorthEast neighbor block and add to message count
+
+         neBlock = ice_blocksGetNbrID(iBlock, ice_blocksEastNorthEast, &
+                                     ewBoundaryType, nsBoundaryType)
+
+         if (neBlock < 0) then ! tripole north row
+            msgSize = tripoleMsgSize  ! tripole needs whole top row of block
+
+            call ice_distributionGetBlockLoc(dist, abs(neBlock), dstProc, &
+                                             dstLocalID)
+         else
+            dstProc = 0
+            dstLocalID = 0
+         endif
+
+         if (dstProc /= srcProc) then
+            call ice_HaloIncrementMsgCount(sendCount, recvCount,   &
+                                        srcProc, dstProc, msgSize)
+         endif
+
+         !*** find west2 neighbor block and add to message count
+
+         westBlock = ice_blocksGetNbrID(iBlock, ice_blocksWest2,     &
+                                     ewBoundaryType, nsBoundaryType)
+
+         if (westBlock > 0) then
+            call ice_distributionGetBlockLoc(dist, westBlock, dstProc, &
+                                             dstLocalID)
+         else
+            dstProc = 0
+            dstLocalID = 0
+         endif
+
+         if (dstProc /= srcProc) then
+            call ice_HaloIncrementMsgCount(sendCount, recvCount,       &
+                                     srcProc, dstProc, tripoleMsgSize)
+         endif
+
+         !*** find WestNorthWest neighbor block and add to message count
+
+         nwBlock = ice_blocksGetNbrID(iBlock, ice_blocksWestNorthWest, &
+                                     ewBoundaryType, nsBoundaryType)
+
+         if (nwBlock < 0) then ! tripole north row
+            msgSize = tripoleMsgSize  ! tripole needs whole top row of block
+
+            call ice_distributionGetBlockLoc(dist, abs(nwBlock), dstProc, &
+                                             dstLocalID)
+         else
+            dstProc = 0
+            dstLocalID = 0
+         endif
+
+         if (dstProc /= srcProc) then
+            call ice_HaloIncrementMsgCount(sendCount, recvCount,   &
+                                        srcProc, dstProc, msgSize)
+         endif
+
+      endif
+
+   end do msgCountLoop
 
 !-----------------------------------------------------------------------
 !
-!  allocate buffers and arrays necessary for boundary comms
+!  if messages are received from the same processor, the message is 
+!  actually a local copy - count them and reset to zero
 !
 !-----------------------------------------------------------------------
 
-   if (newbndy%nmsg_ew_snd > 0) then
-      allocate (newbndy%nblocks_ew_snd(newbndy%nmsg_ew_snd))
-      newbndy%nblocks_ew_snd = 0
-   endif
+   halo%numLocalCopies = recvCount(my_task+1)
 
-   if (newbndy%nmsg_ew_rcv > 0) then
-      allocate (newbndy%nblocks_ew_rcv(newbndy%nmsg_ew_rcv))
-      newbndy%nblocks_ew_rcv = 0
-   endif
-
-   if (newbndy%nmsg_ns_snd > 0) then
-      allocate (newbndy%nblocks_ns_snd(newbndy%nmsg_ns_snd))
-      newbndy%nblocks_ns_snd = 0
-   endif
-
-   if (newbndy%nmsg_ns_rcv > 0) then
-      allocate (newbndy%nblocks_ns_rcv(newbndy%nmsg_ns_rcv))
-      newbndy%nblocks_ns_rcv = 0
-   endif
-
-   allocate (newbndy%local_ew_src_block(newbndy%nlocal_ew), &
-             newbndy%local_ew_dst_block(newbndy%nlocal_ew), &
-             newbndy%local_ns_src_block(newbndy%nlocal_ns), &
-             newbndy%local_ns_dst_block(newbndy%nlocal_ns), &
-             newbndy%local_ew_src_add(2,newbndy%nlocal_ew), &
-             newbndy%local_ew_dst_add(2,newbndy%nlocal_ew), &
-             newbndy%local_ns_src_add(2,newbndy%nlocal_ns), &
-             newbndy%local_ns_dst_add(2,newbndy%nlocal_ns))
-
-   if (newbndy%nmsg_ew_snd > 0) then
-      allocate ( &
-        newbndy%ew_snd_proc (newbndy%nmsg_ew_snd), &
-        newbndy%ew_src_block(newbndy%maxblocks_ew_snd,newbndy%nmsg_ew_snd), &
-        newbndy%ew_src_add(2,newbndy%maxblocks_ew_snd,newbndy%nmsg_ew_snd))
-      newbndy%ew_snd_proc = 0
-      newbndy%ew_src_block = 0
-      newbndy%ew_src_add = 0
-   endif
-
-   if (newbndy%nmsg_ew_rcv > 0) then
-      allocate ( &
-        newbndy%ew_rcv_proc (newbndy%nmsg_ew_rcv), &
-        newbndy%ew_dst_block(newbndy%maxblocks_ew_rcv,newbndy%nmsg_ew_rcv), &
-        newbndy%ew_dst_add(2,newbndy%maxblocks_ew_rcv,newbndy%nmsg_ew_rcv))
-      newbndy%ew_rcv_proc = 0
-      newbndy%ew_dst_block = 0
-      newbndy%ew_dst_add = 0
-   endif
-
-   if (newbndy%nmsg_ns_snd > 0) then
-      allocate ( &
-        newbndy%ns_snd_proc (newbndy%nmsg_ns_snd), &
-        newbndy%ns_src_block(newbndy%maxblocks_ns_snd,newbndy%nmsg_ns_snd), &
-        newbndy%ns_src_add(2,newbndy%maxblocks_ns_snd,newbndy%nmsg_ns_snd))
-      newbndy%ns_snd_proc = 0
-      newbndy%ns_src_block = 0
-      newbndy%ns_src_add = 0
-   endif
-
-   if (newbndy%nmsg_ns_rcv > 0) then
-      allocate ( &
-        newbndy%ns_rcv_proc (newbndy%nmsg_ns_rcv), &
-        newbndy%ns_dst_block(newbndy%maxblocks_ns_rcv,newbndy%nmsg_ns_rcv), &
-        newbndy%ns_dst_add(3,newbndy%maxblocks_ns_rcv,newbndy%nmsg_ns_rcv))
-      newbndy%ns_rcv_proc = 0
-      newbndy%ns_dst_block = 0
-      newbndy%ns_dst_add = 0
-   endif
-
-   newbndy%local_ew_src_block = 0
-   newbndy%local_ew_dst_block = 0
-   newbndy%local_ns_src_block = 0
-   newbndy%local_ns_dst_block = 0
-   newbndy%local_ew_src_add = 0
-   newbndy%local_ew_dst_add = 0
-   newbndy%local_ns_src_add = 0
-   newbndy%local_ns_dst_add = 0
+   sendCount(my_task+1) = 0
+   recvCount(my_task+1) = 0
 
 !-----------------------------------------------------------------------
 !
-!  now set up indices into buffers and address arrays
+!  now count the number of actual messages to be sent and received
 !
 !-----------------------------------------------------------------------
 
-   if (newbndy%nmsg_ew_snd > 0) then
-      allocate (ew_snd_count(newbndy%nmsg_ew_snd))
-      ew_snd_count = 0
+   numMsgSend = count(sendCount /= 0)
+   numMsgRecv = count(recvCount /= 0)
+   halo%numMsgSend = numMsgSend
+   halo%numMsgRecv = numMsgRecv
+
+!-----------------------------------------------------------------------
+!
+!  allocate buffers for 2-d halo updates to save time later
+!  if the buffers are already allocated by previous create call,
+!   check to see if they need to be re-sized
+!
+!-----------------------------------------------------------------------
+   
+   maxTmp = maxval(sendCount)
+   maxSizeSend = global_maxval(maxTmp)
+   maxTmp = maxval(recvCount)
+   maxSizeRecv = global_maxval(maxTmp)
+
+   if (.not. allocated(bufSendR8)) then
+
+      bufSizeSend = maxSizeSend
+      bufSizeRecv = maxSizeRecv
+
+      allocate(bufSendI4(bufSizeSend, numMsgSend), &
+               bufRecvI4(bufSizeRecv, numMsgRecv), &
+               bufSendR4(bufSizeSend, numMsgSend), &
+               bufRecvR4(bufSizeRecv, numMsgRecv), &
+               bufSendR8(bufSizeSend, numMsgSend), &
+               bufRecvR8(bufSizeRecv, numMsgRecv), stat=istat)
+
+      if (istat > 0) then
+         call abort_ice( &
+            'ice_HaloCreate: error allocating 2d buffers')
+         return
+      endif
+
+   else
+
+      resize = .false.
+
+      if (maxSizeSend > bufSizeSend) then
+         resize = .true.
+         bufSizeSend = maxSizeSend
+      endif
+      if (maxSizeRecv > bufSizeRecv) then
+         resize = .true.
+         bufSizeRecv = maxSizeRecv
+      endif
+
+      if (numMsgSend > size(bufSendR8,dim=2)) resize = .true.
+      if (numMsgRecv > size(bufRecvR8,dim=2)) resize = .true.
+
+      if (resize) then
+         deallocate(bufSendI4, bufRecvI4, bufSendR4, &
+                    bufRecvR4, bufSendR8, bufRecvR8, stat=istat)
+
+         if (istat > 0) then
+            call abort_ice( &
+               'ice_HaloCreate: error deallocating 2d buffers')
+            return
+         endif
+
+         allocate(bufSendI4(bufSizeSend, numMsgSend), &
+                  bufRecvI4(bufSizeRecv, numMsgRecv), &
+                  bufSendR4(bufSizeSend, numMsgSend), &
+                  bufRecvR4(bufSizeRecv, numMsgRecv), &
+                  bufSendR8(bufSizeSend, numMsgSend), &
+                  bufRecvR8(bufSizeRecv, numMsgRecv), stat=istat)
+
+         if (istat > 0) then
+            call abort_ice( &
+               'ice_HaloCreate: error reallocating 2d buffers')
+            return
+         endif
+
+      endif
+
    endif
 
-   if (newbndy%nmsg_ew_rcv > 0) then
-      allocate (ew_rcv_count(newbndy%nmsg_ew_rcv))
-      ew_rcv_count = 0
+!-----------------------------------------------------------------------
+!
+!  allocate arrays for message information and initialize
+!
+!-----------------------------------------------------------------------
+
+   allocate(halo%sendTask(numMsgSend), &
+            halo%recvTask(numMsgRecv), &
+            halo%sizeSend(numMsgSend), &
+            halo%sizeRecv(numMsgRecv), &
+            halo%sendAddr(3,bufSizeSend,numMsgSend), &
+            halo%recvAddr(3,bufSizeRecv,numMsgRecv), &
+            halo%srcLocalAddr(3,halo%numLocalCopies), &
+            halo%dstLocalAddr(3,halo%numLocalCopies), &
+            stat = istat)
+
+   if (istat > 0) then
+      call abort_ice( &
+         'ice_HaloCreate: error allocating halo message info arrays')
+      return
    endif
 
-   if (newbndy%nmsg_ns_snd > 0) then
-      allocate (ns_snd_count(newbndy%nmsg_ns_snd))
-      ns_snd_count = 0
-   endif
+   halo%sendTask = 0
+   halo%recvTask = 0
+   halo%sizeSend = 0
+   halo%sizeRecv = 0
+   halo%sendAddr = 0
+   halo%recvAddr = 0
+   halo%srcLocalAddr = 0
+   halo%dstLocalAddr = 0
 
-   if (newbndy%nmsg_ns_rcv > 0) then
-      allocate (ns_rcv_count(newbndy%nmsg_ns_rcv))
-      ns_rcv_count = 0
-   endif
+   deallocate(sendCount, recvCount, stat=istat)
 
-   iloc_ew = 0
-   iloc_ns = 0
+   if (istat > 0) then
+      call abort_ice( &
+         'ice_HaloCreate: error deallocating count arrays')
+      return
+   endif
 
 !-----------------------------------------------------------------------
 !
@@ -615,508 +696,435 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   block_loop2: do n=1,nblocks
+   !*** reset halo scalars to use as counters
 
-      src_proc  = dist%proc(n)    ! processor location for this block
-      src_block = get_block(n,n)  ! block info for this block
+   halo%numMsgSend     = 0
+   halo%numMsgRecv     = 0
+   halo%numLocalCopies = 0
 
-      iblock_src = src_block%iblock  ! i,j index of this block in
-      jblock_src = src_block%jblock  !   block cartesian decomposition
+   msgConfigLoop: do iblock=1,nblocks_tot
 
-      if (src_proc /= 0) then
-         src_block_loc = dist%local_block(n)  ! local block location
+      call ice_distributionGetBlockLoc(dist, iblock, srcProc, &
+                                       srcLocalID)
+
+      !*** find north neighbor block and set msg info
+      !***  also set tripole block flag for later special cases
+
+      northBlock = ice_blocksGetNbrID(iblock, ice_blocksNorth,        &
+                                      ewBoundaryType, nsBoundaryType)
+
+      if (northBlock > 0) then
+         tripoleBlock = .false.
+         call ice_distributionGetBlockLoc(dist, northBlock, dstProc, &
+                                          dstLocalID)
+      else if (northBlock < 0) then ! tripole north row, count block
+         tripoleBlock = .true.
+         call ice_distributionGetBlockLoc(dist, abs(northBlock), &
+                                 dstProc, dstLocalID)
       else
-         src_block_loc = 0  ! block is a land block
+         tripoleBlock = .false.
+         dstProc = 0
+         dstLocalID = 0
       endif
 
-      !*** compute cartesian i,j block indices for each neighbor
-      !*** use zero if off the end of closed boundary
-      !*** use jnorth=nblocks_y and inorth < 0 for tripole boundary
-      !***   to make sure top boundary communicated to all top
-      !***   boundary blocks
+      call ice_HaloMsgCreate(halo, iblock,     srcProc, srcLocalID, &
+                                   northBlock, dstProc, dstLocalID, &
+                                   'north')
 
-      select case(ew_bndy_type)
-      case ('cyclic')
-         iblock_east = mod(iblock_src,nblocks_x) + 1
-         iblock_west = iblock_src - 1
-         if (iblock_west == 0) iblock_west = nblocks_x
-         jblock_east = jblock_src
-         jblock_west = jblock_src
-      case ('open')
-         iblock_east = iblock_src + 1
-         iblock_west = iblock_src - 1
-         if (iblock_east > nblocks_x) iblock_east = iblock_src
-         if (iblock_west < 1        ) iblock_west = iblock_src
-         jblock_east = jblock_src
-         jblock_west = jblock_src
-      case ('closed')
-         iblock_east = iblock_src + 1
-         iblock_west = iblock_src - 1
-         if (iblock_east > nblocks_x) iblock_east = 0
-         if (iblock_west < 1        ) iblock_west = 0
-         jblock_east = jblock_src
-         jblock_west = jblock_src
-      case default
-         call abort_ice('Unknown east-west boundary type')
-      end select
+      !*** if a tripole boundary block, also create a local
+      !*** message into and out of tripole buffer 
 
-      select case(ns_bndy_type)
-      case ('cyclic')
-         jblock_north = mod(jblock_src,nblocks_y) + 1
-         jblock_south = jblock_src - 1
-         if (jblock_south == 0) jblock_south = nblocks_y
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-      case ('open')
-         jblock_north = jblock_src + 1
-         jblock_south = jblock_src - 1
-         if (jblock_north > nblocks_y) jblock_north = jblock_src
-         if (jblock_south < 1        ) jblock_south = jblock_src
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-      case ('closed')
-         jblock_north = jblock_src + 1
-         jblock_south = jblock_src - 1
-         if (jblock_north > nblocks_y) jblock_north = 0
-         if (jblock_south < 1        ) jblock_south = 0
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-      case ('tripole')
-         jblock_north = jblock_src + 1
-         jblock_south = jblock_src - 1
-         iblock_north = iblock_src
-         iblock_south = iblock_src
-         if (jblock_south < 1        ) jblock_south = 0
-         if (jblock_north > nblocks_y) then
-            jblock_north = nblocks_y
-            iblock_north = -iblock_src
+      if (tripoleBlock) then
+         !*** copy out of tripole buffer - includes halo
+         call ice_HaloMsgCreate(halo,-iblock, srcProc, srcLocalID, &
+                                      iblock, srcProc, srcLocalID, &
+                                      'north')
+
+         !*** copy in only required if dstProc not same as srcProc
+         if (dstProc /= srcProc) then
+            call ice_HaloMsgCreate(halo, iblock, srcProc, srcLocalID, &
+                                        -iblock, srcProc, srcLocalID, &
+                                         'north')
+
          endif
-      case default
-         call abort_ice('Unknown north-south boundary type')
-      end select
+      endif
 
-      !***
-      !*** if blocks are at closed boundary, create local copy
-      !*** pseudo-message to fill ghost cells
-      !***
+      !*** find south neighbor block and add to message count
 
-      if (src_block_loc /= 0 .and. src_proc == my_task+1) then
+      southBlock = ice_blocksGetNbrID(iblock, ice_blocksSouth,        &
+                                      ewBoundaryType, nsBoundaryType)
 
-         if (iblock_east == 0) then
-            iloc_ew = iloc_ew + 1
-            newbndy%local_ew_src_block(iloc_ew) = 0
-            newbndy%local_ew_src_add(1,iloc_ew) = 0
-            newbndy%local_ew_src_add(2,iloc_ew) = 0
-            newbndy%local_ew_dst_block(iloc_ew) = src_block_loc
-            newbndy%local_ew_dst_add(1,iloc_ew) = src_block%ihi + 1
-            newbndy%local_ew_dst_add(2,iloc_ew) = 1
-         endif
-!echmod note: pop has the rest of these as elseifs
-         if (iblock_west == 0) then
-            iloc_ew = iloc_ew + 1
-            newbndy%local_ew_src_block(iloc_ew) = 0
-            newbndy%local_ew_src_add(1,iloc_ew) = 0
-            newbndy%local_ew_src_add(2,iloc_ew) = 0
-            newbndy%local_ew_dst_block(iloc_ew) = src_block_loc
-            newbndy%local_ew_dst_add(1,iloc_ew) = 1
-            newbndy%local_ew_dst_add(2,iloc_ew) = 1
-         endif
+      if (southBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, southBlock, dstProc, &
+                                          dstLocalID)
 
-         if (jblock_north == 0) then
-            iloc_ns = iloc_ns + 1
-            newbndy%local_ns_src_block(iloc_ns) = 0
-            newbndy%local_ns_src_add(1,iloc_ns) = 0
-            newbndy%local_ns_src_add(2,iloc_ns) = 0
-            newbndy%local_ns_dst_block(iloc_ns) = src_block_loc
-            newbndy%local_ns_dst_add(1,iloc_ns) = 1
-            newbndy%local_ns_dst_add(2,iloc_ns) = src_block%jhi + 1
-         endif
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
 
-         if (jblock_south == 0) then
-            iloc_ns = iloc_ns + 1
-            newbndy%local_ns_src_block(iloc_ns) = 0
-            newbndy%local_ns_src_add(1,iloc_ns) = 0
-            newbndy%local_ns_src_add(2,iloc_ns) = 0
-            newbndy%local_ns_dst_block(iloc_ns) = src_block_loc
-            newbndy%local_ns_dst_add(1,iloc_ns) = 1
-            newbndy%local_ns_dst_add(2,iloc_ns) = 1
-         endif
+      call ice_HaloMsgCreate(halo, iblock,     srcProc, srcLocalID, &
+                                   southBlock, dstProc, dstLocalID, &
+                                   'south')
+
+      !*** find east neighbor block and add to message count
+
+      eastBlock = ice_blocksGetNbrID(iblock, ice_blocksEast,         &
+                                     ewBoundaryType, nsBoundaryType)
+
+      if (eastBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, eastBlock, dstProc, &
+                                          dstLocalID)
+
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
+
+      call ice_HaloMsgCreate(halo, iblock,    srcProc, srcLocalID, &
+                                   eastBlock, dstProc, dstLocalID, &
+                                   'east')
+
+      !*** if a tripole boundary block, non-local east neighbor
+      !*** needs a chunk of the north boundary, so add a message
+      !*** for that
+
+      if (tripoleBlock .and. dstProc /= srcProc) then
+         call ice_HaloMsgCreate(halo, iblock,    srcProc, srcLocalID, &
+                                     -eastBlock, dstProc, dstLocalID, &
+                                      'north')
 
       endif
 
-      !***
-      !*** now search through blocks looking for neighbors to
-      !*** the source block
-      !***
+      !*** find west neighbor block and add to message count
 
-      do k=1,nblocks
+      westBlock = ice_blocksGetNbrID(iblock, ice_blocksWest,         &
+                                     ewBoundaryType, nsBoundaryType)
 
-         dst_proc      = dist%proc(k)  ! processor holding dst block
+      if (westBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, westBlock, dstProc, &
+                                          dstLocalID)
 
-         !***
-         !*** compute the rest only if this block is not a land block
-         !***
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
 
-         if (dst_proc /= 0) then
+      call ice_HaloMsgCreate(halo, iblock,    srcProc, srcLocalID, &
+                                   westBlock, dstProc, dstLocalID, &
+                                   'west')
 
-            dst_block = get_block(k,k)  ! block info for this block
 
-            iblock_dst = dst_block%iblock  ! i,j block index in 
-            jblock_dst = dst_block%jblock  ! Cartesian block decomposition
+      !*** if a tripole boundary block, non-local west neighbor
+      !*** needs a chunk of the north boundary, so add a message
+      !*** for that
 
-            dst_block_loc = dist%local_block(k)  ! local block location
+      if (tripoleBlock .and. dstProc /= srcProc) then
+         call ice_HaloMsgCreate(halo, iblock,    srcProc, srcLocalID, &
+                                     -westBlock, dstProc, dstLocalID, &
+                                      'north')
 
-            !***
-            !*** if this block is an eastern neighbor
-            !*** determine send/receive addresses
-            !***
+      endif
 
-            if (iblock_dst == iblock_east .and. &
-                jblock_dst == jblock_east) then
+      !*** find northeast neighbor block and add to message count
 
-               if (src_proc == my_task+1 .and. &
-                   src_proc == dst_proc) then
-                  !*** local copy from one block to another
-                  iloc_ew = iloc_ew + 1
-                  newbndy%local_ew_src_block(iloc_ew) = src_block_loc
-                  newbndy%local_ew_src_add(1,iloc_ew) = src_block%ihi - &
-                                                        nghost + 1
-                  newbndy%local_ew_src_add(2,iloc_ew) = 1
-                  newbndy%local_ew_dst_block(iloc_ew) = dst_block_loc
-                  newbndy%local_ew_dst_add(1,iloc_ew) = 1
-                  newbndy%local_ew_dst_add(2,iloc_ew) = 1
-               else if (src_proc == 0 .and. dst_proc == my_task+1) then
-                  !*** source block is all land so treat as local copy
-                  !*** with source block zero to fill ghost cells with 
-                  !*** zeroes
-                  iloc_ew = iloc_ew + 1
-                  newbndy%local_ew_src_block(iloc_ew) = 0
-                  newbndy%local_ew_src_add(1,iloc_ew) = 0
-                  newbndy%local_ew_src_add(2,iloc_ew) = 0
-                  newbndy%local_ew_dst_block(iloc_ew) = dst_block_loc
-                  newbndy%local_ew_dst_add(1,iloc_ew) = 1
-                  newbndy%local_ew_dst_add(2,iloc_ew) = 1
-               else if (src_proc == my_task+1 .and. &
-                        dst_proc /= my_task+1) then
-                  !*** an actual message must be sent
-                  imsg = msg_ew_snd(dst_proc)
-                  ew_snd_count(imsg) = ew_snd_count(imsg) + 1
-                  iblk = ew_snd_count(imsg)
-                  newbndy%ew_snd_proc (     imsg) = dst_proc
-                  newbndy%ew_src_block(iblk,imsg) = src_block_loc
-                  newbndy%ew_src_add(1,iblk,imsg) = src_block%ihi - &
-                                                    nghost + 1
-                  newbndy%ew_src_add(2,iblk,imsg) = 1
-                  newbndy%nblocks_ew_snd(imsg) = &
-                  newbndy%nblocks_ew_snd(imsg) + 1
-               else if (dst_proc == my_task+1 .and. &
-                        src_proc /= my_task+1) then
-                  !*** must receive a message
-                  imsg = msg_ew_rcv(src_proc)
-                  ew_rcv_count(imsg) = ew_rcv_count(imsg) + 1
-                  iblk = ew_rcv_count(imsg)
-                  newbndy%ew_rcv_proc (     imsg) = src_proc
-                  newbndy%ew_dst_block(iblk,imsg) = dst_block_loc
-                  newbndy%ew_dst_add(:,iblk,imsg) = 1
-                  newbndy%nblocks_ew_rcv(imsg) = &
-                  newbndy%nblocks_ew_rcv(imsg) + 1
-               endif
+      neBlock = ice_blocksGetNbrID(iblock, ice_blocksNorthEast,    &
+                                   ewBoundaryType, nsBoundaryType)
 
-            endif ! east neighbor
+      if (neBlock /= 0) then
+         call ice_distributionGetBlockLoc(dist, abs(neBlock), dstProc, &
+                                          dstLocalID)
 
-            !***
-            !*** if this block is a western neighbor
-            !*** determine send/receive addresses
-            !***
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
 
-            if (iblock_dst == iblock_west .and. &
-                jblock_dst == jblock_west) then
+      call ice_HaloMsgCreate(halo, iblock,  srcProc, srcLocalID, &
+                                   neBlock, dstProc, dstLocalID, &
+                                   'northeast')
 
-               if (src_proc == my_task+1 .and. &
-                   src_proc == dst_proc) then
-                  !*** perform a local copy
-                  iloc_ew = iloc_ew + 1
-                  newbndy%local_ew_src_block(iloc_ew) = src_block_loc
-                  newbndy%local_ew_src_add(1,iloc_ew) = nghost + 1
-                  newbndy%local_ew_src_add(2,iloc_ew) = 1
-                  newbndy%local_ew_dst_block(iloc_ew) = dst_block_loc
-                  newbndy%local_ew_dst_add(1,iloc_ew) = dst_block%ihi + 1
-                  newbndy%local_ew_dst_add(2,iloc_ew) = 1
-               else if (src_proc == 0 .and. dst_proc == my_task+1) then
-                  !*** neighbor is a land block so zero ghost cells
-                  iloc_ew = iloc_ew + 1
-                  newbndy%local_ew_src_block(iloc_ew) = 0
-                  newbndy%local_ew_src_add(1,iloc_ew) = 0
-                  newbndy%local_ew_src_add(2,iloc_ew) = 0
-                  newbndy%local_ew_dst_block(iloc_ew) = dst_block_loc
-                  newbndy%local_ew_dst_add(1,iloc_ew) = dst_block%ihi + 1
-                  newbndy%local_ew_dst_add(2,iloc_ew) = 1
-               else if (src_proc == my_task+1 .and. &
-                        dst_proc /= my_task+1) then
-                  !*** message must be sent
-                  imsg = msg_ew_snd(dst_proc)
-                  ew_snd_count(imsg) = ew_snd_count(imsg) + 1
-                  iblk = ew_snd_count(imsg)
-                  newbndy%ew_snd_proc (     imsg) = dst_proc
-                  newbndy%ew_src_block(iblk,imsg) = src_block_loc
-                  newbndy%ew_src_add(1,iblk,imsg) = nghost + 1
-                  newbndy%ew_src_add(2,iblk,imsg) = 1
-                  newbndy%nblocks_ew_snd(imsg) = &
-                  newbndy%nblocks_ew_snd(imsg) + 1
-               else if (dst_proc == my_task+1 .and. &
-                        src_proc /= my_task+1) then
-                  !*** message must be received
-                  imsg = msg_ew_rcv(src_proc)
-                  ew_rcv_count(imsg) = ew_rcv_count(imsg) + 1
-                  iblk = ew_rcv_count(imsg)
-                  newbndy%ew_rcv_proc (     imsg) = src_proc
-                  newbndy%ew_dst_block(iblk,imsg) = dst_block_loc
-                  newbndy%ew_dst_add(1,iblk,imsg) = dst_block%ihi + 1
-                  newbndy%ew_dst_add(2,iblk,imsg) = 1
-                  newbndy%nblocks_ew_rcv(imsg) = &
-                  newbndy%nblocks_ew_rcv(imsg) + 1
-               endif
+      !*** find northwest neighbor block and add to message count
 
-            endif ! west neighbor
+      nwBlock = ice_blocksGetNbrID(iblock, ice_blocksNorthWest,    &
+                                   ewBoundaryType, nsBoundaryType)
 
-            !***
-            !*** if this block is a northern neighbor
-            !***  compute send/recv addresses
-            !*** for tripole, must communicate with all
-            !*** north row blocks (triggered by iblock_dst <0)
-            !***
+      if (nwBlock /= 0) then
+         call ice_distributionGetBlockLoc(dist, abs(nwBlock), dstProc, &
+                                          dstLocalID)
 
-            if ((iblock_dst == iblock_north .or. iblock_north < 0) .and. &
-                 jblock_dst == jblock_north) then
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
 
-               if (src_proc == my_task+1 .and. &
-                   src_proc == dst_proc) then
-                  !*** local copy
-                  iloc_ns = iloc_ns + 1
-                  newbndy%local_ns_src_block(iloc_ns) = src_block_loc
-                  newbndy%local_ns_src_add(1,iloc_ns) = 1
-                  newbndy%local_ns_src_add(2,iloc_ns) = src_block%jhi - &
-                                                        nghost + 1
-                  newbndy%local_ns_dst_block(iloc_ns) = dst_block_loc
-                  newbndy%local_ns_dst_add(1,iloc_ns) = 1
-                  newbndy%local_ns_dst_add(2,iloc_ns) = 1
+      call ice_HaloMsgCreate(halo, iblock,  srcProc, srcLocalID, &
+                                   nwBlock, dstProc, dstLocalID, &
+                                   'northwest')
 
-                  if (iblock_north < 0) then !*** tripole boundary
-                     newbndy%local_ns_dst_block(iloc_ns) = -dst_block_loc
-                     !*** copy nghost+1 northern rows of physical
-                     !*** domain into global north tripole buffer
-                     newbndy%local_ns_src_add(1,iloc_ns) = &
-                                        src_block%i_glob(nghost+1)
-                     newbndy%local_ns_src_add(2,iloc_ns) = &
-                                        dst_block%jhi - nghost
+      !*** find southeast neighbor block and add to message count
 
-                     !*** copy out of tripole ghost cell buffer
-                     !*** over-write the last row of the destination
-                     !*** block to enforce for symmetry for fields
-                     !*** located on domain boundary
-                     newbndy%local_ns_dst_add(1,iloc_ns) = &
-                                          dst_block%i_glob(nghost+1)
-                     newbndy%local_ns_dst_add(2,iloc_ns) = & 
-                                          dst_block%jhi
-                  endif
-               else if (src_proc == 0 .and. dst_proc == my_task+1) then
-                  !*** source is land block so zero ghost cells
-                  iloc_ns = iloc_ns + 1
-                  newbndy%local_ns_src_block(iloc_ns) = 0
-                  newbndy%local_ns_src_add(1,iloc_ns) = 0
-                  newbndy%local_ns_src_add(2,iloc_ns) = 0
-                  newbndy%local_ns_dst_block(iloc_ns) = dst_block_loc
-                  newbndy%local_ns_dst_add(1,iloc_ns) = 1
-                  newbndy%local_ns_dst_add(2,iloc_ns) = 1
-                  if (iblock_north < 0) then !*** tripole boundary
-                     newbndy%local_ns_dst_block(iloc_ns) = -dst_block_loc
-                     !*** replace i addresses with global i location
-                     !*** for copies into and out of global buffer
-                     newbndy%local_ns_dst_add(1,iloc_ns) = &
-                                             dst_block%i_glob(nghost+1)
-                     newbndy%local_ns_dst_add(2,iloc_ns) = dst_block%jhi
-                  endif
-               else if (src_proc == my_task+1 .and. &
-                        dst_proc /= my_task+1) then
-                  !*** message must be sent
-                  imsg = msg_ns_snd(dst_proc)
-                  ns_snd_count(imsg) = ns_snd_count(imsg) + 1
-                  iblk = ns_snd_count(imsg)
-                  newbndy%ns_snd_proc (     imsg) = dst_proc
-                  newbndy%ns_src_block(iblk,imsg) = src_block_loc
-                  newbndy%ns_src_add(1,iblk,imsg) = 1
-                  newbndy%ns_src_add(2,iblk,imsg) = src_block%jhi - &
-                                                    nghost + 1
-                  newbndy%nblocks_ns_snd(imsg) = &
-                  newbndy%nblocks_ns_snd(imsg) + 1
-                  if (iblock_north < 0) then !*** tripole boundary
-                     !*** need extra ghost cell for U points
-                     newbndy%ns_src_add(2,iblk,imsg) = src_block%jhi - nghost
-                  endif
-               else if (dst_proc == my_task+1 .and. &
-                        src_proc /= my_task+1) then
-                  !*** message must be received
-                  imsg = msg_ns_rcv(src_proc)
-                  ns_rcv_count(imsg) = ns_rcv_count(imsg) + 1
-                  iblk = ns_rcv_count(imsg)
-                  newbndy%ns_rcv_proc (     imsg) = src_proc
-                  newbndy%ns_dst_block(iblk,imsg) = dst_block_loc
-                  newbndy%ns_dst_add(1,iblk,imsg) = 1
-                  newbndy%ns_dst_add(2,iblk,imsg) = 1
-                  newbndy%nblocks_ns_rcv(imsg) = &
-                  newbndy%nblocks_ns_rcv(imsg) + 1
-                  if (iblock_north < 0) then !*** tripole
-                     newbndy%ns_dst_block(iblk,imsg) = -dst_block_loc
-                     !*** upon receiving message, store in global 
-                     !*** tripole buffer for src, then copy out of
-                     !*** ghost cell buffer once global buffer filled
-                     !*** i address for storing in global buffer
-                     newbndy%ns_dst_add(1,iblk,imsg) = &
-                                            src_block%i_glob(nghost+1)
-                     !*** addresses for copying out of ghost buffer
-                     newbndy%ns_dst_add(2,iblk,imsg) = dst_block%jhi
-                     newbndy%ns_dst_add(3,iblk,imsg) = &
-                                       dst_block%i_glob(nghost+1)
-                  endif
-               endif
+      seBlock = ice_blocksGetNbrID(iblock, ice_blocksSouthEast,    &
+                                   ewBoundaryType, nsBoundaryType)
 
-            endif ! north neighbor
+      if (seBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, seBlock, dstProc, &
+                                          dstLocalID)
 
-            !***
-            !*** if this block is a southern neighbor
-            !*** determine send/receive addresses
-            !***
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
 
-            if (iblock_dst == iblock_south .and. &
-                jblock_dst == jblock_south) then
+      call ice_HaloMsgCreate(halo, iblock,  srcProc, srcLocalID, &
+                                   seBlock, dstProc, dstLocalID, &
+                                   'southeast')
 
-               if (src_proc == my_task+1 .and. &
-                   src_proc == dst_proc) then
-                  !*** local copy
-                  iloc_ns = iloc_ns + 1
-                  newbndy%local_ns_src_block(iloc_ns) = src_block_loc
-                  newbndy%local_ns_src_add(1,iloc_ns) = 1
-                  newbndy%local_ns_src_add(2,iloc_ns) = nghost + 1
-                  newbndy%local_ns_dst_block(iloc_ns) = dst_block_loc
-                  newbndy%local_ns_dst_add(1,iloc_ns) = 1
-                  newbndy%local_ns_dst_add(2,iloc_ns) = dst_block%jhi + 1
-               else if (src_proc == 0 .and. dst_proc == my_task+1) then
-                  !*** neighbor is a land block so zero ghost cells
-                  iloc_ns = iloc_ns + 1
-                  newbndy%local_ns_src_block(iloc_ns) = 0
-                  newbndy%local_ns_src_add(1,iloc_ns) = 0
-                  newbndy%local_ns_src_add(2,iloc_ns) = 0
-                  newbndy%local_ns_dst_block(iloc_ns) = dst_block_loc
-                  newbndy%local_ns_dst_add(1,iloc_ns) = 1
-                  newbndy%local_ns_dst_add(2,iloc_ns) = dst_block%jhi + 1
-               else if (src_proc == my_task+1 .and. &
-                        dst_proc /= my_task+1) then
-                  !*** message must be sent
-                  imsg = msg_ns_snd(dst_proc)
-                  ns_snd_count(imsg) = ns_snd_count(imsg) + 1
-                  iblk = ns_snd_count(imsg)
-                  newbndy%ns_snd_proc (     imsg) = dst_proc
-                  newbndy%ns_src_block(iblk,imsg) = src_block_loc
-                  newbndy%ns_src_add(1,iblk,imsg) = 1
-                  newbndy%ns_src_add(2,iblk,imsg) = nghost+1
-                  newbndy%nblocks_ns_snd(imsg) = &
-                  newbndy%nblocks_ns_snd(imsg) + 1
-               else if (dst_proc == my_task+1 .and. &
-                        src_proc /= my_task+1) then
-                  !*** message must be received
-                  imsg = msg_ns_rcv(src_proc)
-                  ns_rcv_count(imsg) = ns_rcv_count(imsg) + 1
-                  iblk = ns_rcv_count(imsg)
-                  newbndy%ns_rcv_proc (     imsg) = src_proc
-                  newbndy%ns_dst_block(iblk,imsg) = dst_block_loc
-                  newbndy%ns_dst_add(1,iblk,imsg) = 1
-                  newbndy%ns_dst_add(2,iblk,imsg) = dst_block%jhi + 1
-                  newbndy%nblocks_ns_rcv(imsg) = &
-                  newbndy%nblocks_ns_rcv(imsg) + 1
-               endif
-            endif ! south neighbor
+      !*** find southwest neighbor block and add to message count
 
-         endif  ! not a land block
+      swBlock = ice_blocksGetNbrID(iblock, ice_blocksSouthWest,    &
+                                   ewBoundaryType, nsBoundaryType)
 
-      end do
+      if (swBlock > 0) then
+         call ice_distributionGetBlockLoc(dist, swBlock, dstProc, &
+                                          dstLocalID)
 
-   end do block_loop2
+      else
+         dstProc = 0
+         dstLocalID = 0
+      endif
 
-!-----------------------------------------------------------------------
+      call ice_HaloMsgCreate(halo, iblock,  srcProc, srcLocalID, &
+                                   swBlock, dstProc, dstLocalID, &
+                                   'southwest')
 
-   if (allocated(ew_snd_count)) deallocate (ew_snd_count)
-   if (allocated(ew_rcv_count)) deallocate (ew_rcv_count)
-   if (allocated(ns_snd_count)) deallocate (ns_snd_count)
-   if (allocated(ns_rcv_count)) deallocate (ns_rcv_count)
+      !*** for tripole grids with padded domain, padding will
+      !*** prevent tripole buffer from getting all the info
+      !*** it needs - must extend footprint at top boundary
 
-   deallocate(msg_ew_snd, msg_ew_rcv, msg_ns_snd, msg_ns_rcv)
+      if (tripoleBlock                  .and. & !tripole
+          mod(nxGlobal,blockSizeX) /= 0) then   !padding
 
-!-----------------------------------------------------------------------
-!
-!  if necessary, create tripole boundary buffers for each
-!  common data type.  the ghost cell buffer includes an
-!  extra row for the last physical row in order to enforce
-!  symmetry conditions on variables at U points.  the other buffer
-!  contains an extra row for handling y-offset for north face or
-!  northeast corner points.
-!
-!-----------------------------------------------------------------------
+         !*** find east2 neighbor block and add to message count
 
-   if (lalloc_tripole .and. .not. allocated(tripole_ibuf)) then
-      allocate(tripole_ibuf  (nx_global,nghost+1), &
-               tripole_rbuf  (nx_global,nghost+1), &
-               tripole_dbuf  (nx_global,nghost+1), &
-               tripole_ighost(nx_global,nghost+1), &
-               tripole_rghost(nx_global,nghost+1), &
-               tripole_dghost(nx_global,nghost+1))
-   endif
+         eastBlock = ice_blocksGetNbrID(iBlock, ice_blocksEast2,     &
+                                     ewBoundaryType, nsBoundaryType)
+
+         if (eastBlock > 0) then
+            call ice_distributionGetBlockLoc(dist, eastBlock, dstProc, &
+                                             dstLocalID)
+
+         else
+            dstProc = 0
+            dstLocalID = 0
+         endif
+
+         if (dstProc /= srcProc) then
+            call ice_HaloMsgCreate(halo, iblock,    srcProc, srcLocalID, &
+                                        -eastBlock, dstProc, dstLocalID, &
+                                         'north')
+
+         endif
+
+         !*** find EastNorthEast neighbor block and add to message count
+
+         neBlock = ice_blocksGetNbrID(iBlock, ice_blocksEastNorthEast, &
+                                     ewBoundaryType, nsBoundaryType)
+
+         if (neBlock < 0) then ! tripole north row
+            msgSize = tripoleMsgSize  ! tripole needs whole top row of block
+
+            call ice_distributionGetBlockLoc(dist, abs(neBlock), dstProc, &
+                                             dstLocalID)
+
+         else
+            dstProc = 0
+            dstLocalID = 0
+         endif
+
+         if (dstProc /= srcProc) then
+            call ice_HaloMsgCreate(halo, iblock,  srcProc, srcLocalID, &
+                                         neBlock, dstProc, dstLocalID, &
+                                         'north')
+         endif
+
+         !*** find west2 neighbor block and add to message count
+
+         westBlock = ice_blocksGetNbrID(iBlock, ice_blocksWest2,     &
+                                     ewBoundaryType, nsBoundaryType)
+
+         if (westBlock > 0) then
+            call ice_distributionGetBlockLoc(dist, westBlock, dstProc, &
+                                             dstLocalID)
+
+         else
+            dstProc = 0
+            dstLocalID = 0
+         endif
+
+         if (dstProc /= srcProc) then
+            call ice_HaloMsgCreate(halo, iblock,    srcProc, srcLocalID, &
+                                        -westBlock, dstProc, dstLocalID, &
+                                         'north')
+
+         endif
+
+         !*** find WestNorthWest neighbor block and add to message count
+
+         nwBlock = ice_blocksGetNbrID(iBlock, ice_blocksWestNorthWest, &
+                                     ewBoundaryType, nsBoundaryType)
+
+         if (nwBlock < 0) then ! tripole north row
+            msgSize = tripoleMsgSize  ! tripole needs whole top row of block
+
+            call ice_distributionGetBlockLoc(dist, abs(nwBlock), dstProc, &
+                                             dstLocalID)
+
+         else
+            dstProc = 0
+            dstLocalID = 0
+         endif
+
+         if (dstProc /= srcProc) then
+            call ice_HaloMsgCreate(halo, iblock,  srcProc, srcLocalID, &
+                                         nwBlock, dstProc, dstLocalID, &
+                                         'north')
+
+         endif
+
+      endif
+
+   end do msgConfigLoop
 
 !-----------------------------------------------------------------------
 !EOC
 
- end subroutine create_boundary
+ end function ice_HaloCreate
 
 !***********************************************************************
 !BOP
-! !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloDestroy
 ! !INTERFACE:
 
- subroutine boundary_2d_dbl(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloDestroy(halo)
+
+! !DESCRIPTION:
+!  This routine destroys a halo structure by deallocating all memory
+!  associated with the halo and nullifying pointers.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !INPUT/OUTPUT PARAMETERS:
+
+   type (ice_halo), intent(inout) :: &
+      halo          ! boundary structure to be destroyed
+
+! !OUTPUT PARAMETERS:
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local status flag for deallocate
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) :: istat
+
+!-----------------------------------------------------------------------
+!
+!  reset all scalars
+!
+!-----------------------------------------------------------------------
+
+   halo%communicator   = 0
+   halo%numMsgSend     = 0
+   halo%numMsgRecv     = 0
+   halo%numLocalCopies = 0
+
+!-----------------------------------------------------------------------
+!
+!  deallocate all pointers
+!
+!-----------------------------------------------------------------------
+
+   deallocate(halo%recvTask, halo%sendTask, &
+              halo%sizeSend, halo%sizeRecv, &
+              halo%srcLocalAddr, halo%dstLocalAddr, &
+              halo%sendAddr, halo%recvAddr,         &
+              stat = istat)
+
+   if (istat > 0) then
+      call abort_ice( &
+         'ice_HaloDestroy: error deallocating halo')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  nullify all pointers
+!
+!-----------------------------------------------------------------------
+
+   nullify(halo%recvTask)
+   nullify(halo%sendTask)
+   nullify(halo%sizeSend)
+   nullify(halo%sizeRecv)
+   nullify(halo%srcLocalAddr)
+   nullify(halo%dstLocalAddr)
+   nullify(halo%sendAddr)
+   nullify(halo%recvAddr)
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_HaloDestroy
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_HaloUpdate2DR8
+! !INTERFACE:
+
+ subroutine ice_HaloUpdate2DR8(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
+!  ice\_HaloUpdate.  This routine is the specific interface
 !  for 2d horizontal arrays of double precision.
 !
 ! !REVISION HISTORY:
 !  same as module
-!
-!  Sept. 2004: Modified by William Lipscomb to allow for cases where
-!              blocks have no EW and/or NS communications with other 
-!              blocks.  E.g., do not allocate arrays with dimension 0.
- 
-! !USER:
 
-   include 'mpif.h'   ! MPI Fortran include file
+! !USER:
 
 ! !INPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
 
    integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
 
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
+   real (dbl_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), dimension(:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+   real (dbl_kind), dimension(:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -1127,77 +1135,75 @@ contains
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      i,j,k,m,n,                   &! dummy loop indices
-      ib_src,ie_src,jb_src,je_src, &! beg,end indices for bndy cells
-      ib_dst,ie_dst,jb_dst,je_dst, &!
-      nx_global,                   &! global domain size in x
-      src_block,                   &! local block number for source
-      dst_block,                   &! local block number for destination
-      bufsize,                     &! buffer size for send/recv buffers
-      xoffset, yoffset,            &! address shifts for tripole
-      isign,                       &! sign factor for tripole grids
-      bcflag,                      &! boundary condition flag
-      ierr                          ! MPI error flag
+      i,j,n,nmsg,                &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
 
    integer (int_kind), dimension(:), allocatable :: &
-      snd_request,              &! MPI request ids
-      rcv_request                ! MPI request ids
+      sndRequest,      &! MPI request ids
+      rcvRequest        ! MPI request ids
 
    integer (int_kind), dimension(:,:), allocatable :: &
-      snd_status,               &! MPI status flags
-      rcv_status                 ! MPI status flags
+      sndStatus,       &! MPI status flags
+      rcvStatus         ! MPI status flags
 
-   real (r8), dimension(:,:,:,:), allocatable :: &
-      buf_ew_snd,       &! message buffer for east-west sends
-      buf_ew_rcv,       &! message buffer for east-west recvs
-      buf_ns_snd,       &! message buffer for north-south sends
-      buf_ns_rcv         ! message buffer for north-south recvs
-
-   real (r8) :: &
-      xavg               ! scalar for enforcing symmetry at U pts
-
-   !logical (log_kind), save :: first_call = .true.
-   !integer (int_kind), save :: bndy_2d_local, bndy_2d_recv, &
-   !                            bndy_2d_send, bndy_2d_wait, bndy_2d_final
+   real (dbl_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
 
 !-----------------------------------------------------------------------
 !
-!  allocate buffers for east-west sends and receives
+!  initialize error code and fill value
 !
 !-----------------------------------------------------------------------
 
-   if (in_bndy%nmsg_ew_snd > 0) &
-      allocate(buf_ew_snd(nghost, ny_block, &
-                          in_bndy%maxblocks_ew_snd, in_bndy%nmsg_ew_snd))
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0.0_dbl_kind
+   endif
 
-   if (in_bndy%nmsg_ew_rcv > 0) &
-      allocate(buf_ew_rcv(nghost, ny_block, &
-                          in_bndy%maxblocks_ew_rcv, in_bndy%nmsg_ew_rcv))
+   nxGlobal = 0
+   if (allocated(bufTripoleR8)) then
+      nxGlobal = size(bufTripoleR8,dim=1)
+      bufTripoleR8 = fill
+   endif
 
-   if (in_bndy%nmsg_ew_snd > 0) &
-      allocate(snd_request(in_bndy%nmsg_ew_snd), &
-               snd_status(MPI_STATUS_SIZE,in_bndy%nmsg_ew_snd))
+!-----------------------------------------------------------------------
+!
+!  allocate request and status arrays for messages
+!
+!-----------------------------------------------------------------------
 
-   if (in_bndy%nmsg_ew_rcv > 0) &
-      allocate(rcv_request(in_bndy%nmsg_ew_rcv), &
-               rcv_status(MPI_STATUS_SIZE,in_bndy%nmsg_ew_rcv))
+   allocate(sndRequest(halo%numMsgSend), &
+            rcvRequest(halo%numMsgRecv), &
+            sndStatus(MPI_STATUS_SIZE,halo%numMsgSend), &
+            rcvStatus(MPI_STATUS_SIZE,halo%numMsgRecv), stat=ierr)
 
-   if (allocated(tripole_dbuf)) nx_global = size(tripole_dbuf,dim=1)
-	
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate2DR8: error allocating req,status arrays')
+      return
+   endif
+
 !-----------------------------------------------------------------------
 !
 !  post receives
 !
 !-----------------------------------------------------------------------
 
-   do n=1,in_bndy%nmsg_ew_rcv
+   do nmsg=1,halo%numMsgRecv
 
-      bufsize = ny_block*nghost*in_bndy%nblocks_ew_rcv(n)
-
-      call MPI_IRECV(buf_ew_rcv(1,1,1,n), bufsize, mpi_dbl,   &
-                     in_bndy%ew_rcv_proc(n)-1,                &
-                     mpitag_bndy_2d + in_bndy%ew_rcv_proc(n), &
-                     in_bndy%communicator, rcv_request(n), ierr)
+      call MPI_IRECV(bufRecvR8(:,nmsg), bufSizeRecv, mpiR8, &
+                     halo%recvTask(nmsg),                       &
+                     mpitagHalo + halo%recvTask(nmsg),      &
+                     halo%communicator, rcvRequest(nmsg), ierr)
    end do
 
 !-----------------------------------------------------------------------
@@ -1206,248 +1212,53 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   do n=1,in_bndy%nmsg_ew_snd
+   do nmsg=1,halo%numMsgSend
 
-      bufsize = ny_block*nghost*in_bndy%nblocks_ew_snd(n)
+      do n=1,halo%sizeSend(nmsg)
+         iSrc     = halo%sendAddr(1,n,nmsg)
+         jSrc     = halo%sendAddr(2,n,nmsg)
+         srcBlock = halo%sendAddr(3,n,nmsg)
 
-      do i=1,in_bndy%nblocks_ew_snd(n)
-         ib_src    = in_bndy%ew_src_add(1,i,n)
-         ie_src    = ib_src + nghost - 1
-         src_block = in_bndy%ew_src_block(i,n)
-         buf_ew_snd(:,:,i,n) = ARRAY(ib_src:ie_src,:,src_block)
+         bufSendR8(n,nmsg) = array(iSrc,jSrc,srcBlock)
+      end do
+      do n=halo%sizeSend(nmsg)+1,bufSizeSend
+         bufSendR8(n,nmsg) = fill  ! fill remainder of buffer
       end do
 
-      call MPI_ISEND(buf_ew_snd(1,1,1,n), bufsize, mpi_dbl, &
-                     in_bndy%ew_snd_proc(n)-1, &
-                     mpitag_bndy_2d + my_task + 1, &
-                     in_bndy%communicator, snd_request(n), ierr)
+      call MPI_ISEND(bufSendR8(:,nmsg), bufSizeSend, mpiR8, &
+                     halo%sendTask(nmsg),                       &
+                     mpitagHalo + my_task,               &
+                     halo%communicator, sndRequest(nmsg), ierr)
    end do
 
 !-----------------------------------------------------------------------
 !
 !  do local copies while waiting for messages to complete
-!  also initialize ghost cells to zero
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
 !
 !-----------------------------------------------------------------------
 
-   do n=1,in_bndy%nlocal_ew
-      src_block = in_bndy%local_ew_src_block(n)
-      dst_block = in_bndy%local_ew_dst_block(n)
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
 
-      ib_src = in_bndy%local_ew_src_add(1,n)
-      ie_src = ib_src + nghost - 1
-      ib_dst = in_bndy%local_ew_dst_add(1,n)
-      ie_dst = ib_dst + nghost - 1
-
-      if (src_block /= 0) then
-         ARRAY(ib_dst:ie_dst,:,dst_block) = &
-         ARRAY(ib_src:ie_src,:,src_block)
-      else
-         ARRAY(ib_dst:ie_dst,:,dst_block) = c0
-         if (present(bc)) then
-            if (bc == 'Neumann') then
-            if (ib_dst == 1) then                       ! west boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
-               enddo
-            elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
-               enddo
-            endif
-            endif
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            array(iDst,jDst,dstBlock) = &
+            array(iSrc,jSrc,srcBlock)
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            bufTripoleR8(iDst,jDst) = &
+            array(iSrc,jSrc,srcBlock)
          endif
-      endif
-
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  wait for receives to finish and then unpack the recv buffer into
-!  ghost cells
-!
-!-----------------------------------------------------------------------
-
-   if (in_bndy%nmsg_ew_rcv > 0)  &
-      call MPI_WAITALL(in_bndy%nmsg_ew_rcv, rcv_request, rcv_status, ierr)
-
-   do n=1,in_bndy%nmsg_ew_rcv
-   do k=1,in_bndy%nblocks_ew_rcv(n)
-      dst_block = in_bndy%ew_dst_block(k,n)
-
-      ib_dst = in_bndy%ew_dst_add(1,k,n)
-      ie_dst = ib_dst + nghost - 1
-
-      ARRAY(ib_dst:ie_dst,:,dst_block) = buf_ew_rcv(:,:,k,n)
-   end do
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  wait for sends to complete and deallocate arrays
-!
-!-----------------------------------------------------------------------
-
-   if (in_bndy%nmsg_ew_snd > 0)  &
-      call MPI_WAITALL(in_bndy%nmsg_ew_snd, snd_request, snd_status, ierr)
-
-   if (allocated(buf_ew_snd))  deallocate (buf_ew_snd)
-   if (allocated(buf_ew_rcv))  deallocate (buf_ew_rcv)
-   if (allocated(snd_request)) deallocate (snd_request)
-   if (allocated(rcv_request)) deallocate (rcv_request)
-   if (allocated(snd_status))  deallocate (snd_status)
-   if (allocated(rcv_status))  deallocate (rcv_status)
-
-!-----------------------------------------------------------------------
-!
-!  now exchange north-south boundary info
-!
-!-----------------------------------------------------------------------
-
-   if (in_bndy%nmsg_ns_snd > 0)  &
-      allocate(buf_ns_snd(nx_block, nghost+1, &
-                       in_bndy%maxblocks_ns_snd, in_bndy%nmsg_ns_snd))
-
-   if (in_bndy%nmsg_ns_rcv > 0)  &
-      allocate(buf_ns_rcv(nx_block, nghost+1, &
-                       in_bndy%maxblocks_ns_rcv, in_bndy%nmsg_ns_rcv))
-
-   if (in_bndy%nmsg_ns_snd > 0)  &
-      allocate(snd_request(in_bndy%nmsg_ns_snd), &
-               snd_status(MPI_STATUS_SIZE,in_bndy%nmsg_ns_snd))
-
-   if (in_bndy%nmsg_ns_rcv > 0)  &
-      allocate(rcv_request(in_bndy%nmsg_ns_rcv), &
-               rcv_status(MPI_STATUS_SIZE,in_bndy%nmsg_ns_rcv))
-
-!-----------------------------------------------------------------------
-!
-!  post receives
-!
-!-----------------------------------------------------------------------
-
-   do n=1,in_bndy%nmsg_ns_rcv
-
-      bufsize = nx_block*(nghost+1)*in_bndy%nblocks_ns_rcv(n)
-
-      call MPI_IRECV(buf_ns_rcv(1,1,1,n), bufsize, mpi_dbl,   &
-                     in_bndy%ns_rcv_proc(n)-1,                &
-                     mpitag_bndy_2d + in_bndy%ns_rcv_proc(n), &
-                     in_bndy%communicator, rcv_request(n), ierr)
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  fill send buffer and post sends
-!
-!-----------------------------------------------------------------------
-
-   do n=1,in_bndy%nmsg_ns_snd
-
-      bufsize = nx_block*(nghost+1)*in_bndy%nblocks_ns_snd(n)
-
-      do i=1,in_bndy%nblocks_ns_snd(n)
-         jb_src    = in_bndy%ns_src_add(2,i,n)
-         je_src    = jb_src + nghost  ! nghost+1 rows needed for tripole
-         src_block = in_bndy%ns_src_block(i,n)
-         buf_ns_snd(:,:,i,n) = ARRAY(:,jb_src:je_src,src_block)
-      end do
-
-      call MPI_ISEND(buf_ns_snd(1,1,1,n), bufsize, mpi_dbl, &
-                     in_bndy%ns_snd_proc(n)-1, &
-                     mpitag_bndy_2d + my_task + 1, &
-                     in_bndy%communicator, snd_request(n), ierr)
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  do local copies while waiting for messages to complete
-!
-!-----------------------------------------------------------------------
-
-   if (allocated(tripole_dbuf)) tripole_dbuf = c0
-
-   do n=1,in_bndy%nlocal_ns
-      src_block = in_bndy%local_ns_src_block(n)
-      dst_block = in_bndy%local_ns_dst_block(n)
-
-      if (dst_block > 0) then ! straight local copy
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost - 1
-         jb_dst = in_bndy%local_ns_dst_add(2,n)
-         je_dst = jb_dst + nghost - 1
-
-         if (src_block /= 0) then
-            ARRAY(:,jb_dst:je_dst,dst_block) = &
-            ARRAY(:,jb_src:je_src,src_block)
-         else
-            ARRAY(:,jb_dst:je_dst,dst_block) = c0
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-               if (jb_dst == 1) then                       ! south boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
-                  enddo
-               elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
-                  enddo
-               endif
-               endif
-            endif
-         endif
-
-      else  !north boundary tripole grid - copy into global north buffer
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost ! need nghost+1 rows for tripole
-
-         !*** determine start, end addresses of physical domain
-         !*** for both global buffer and local block
-
-!echmod - bug         ib_dst = in_bndy%local_ns_src_add(1,n)
-         ib_dst = in_bndy%local_ns_dst_add(1,n) !echmod
-         ie_dst = ib_dst + (nx_block-2*nghost) - 1
-!echmod         if (ie_dst > nx_global) ie_dst = nx_global
-         ie_dst = min(ie_dst, nx_global) !echmod
-         ib_src = nghost + 1
-         ie_src = ib_src + ie_dst - ib_dst
-!echmod - fill buffer with Neumann conditions first, then overwrite where needed
-         if (src_block == 0 .and. dst_block /= 0) then ! echmod
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-                  do m = 1, nghost + 1
-                     jb_dst = in_bndy%local_ns_dst_add(2,n)
-                     ie_src = ib_src + ie_dst - ib_dst
-                     tripole_dbuf(ib_dst:ie_dst,m) = &
-                        ARRAY(ib_src:ie_src,jb_dst-1,-dst_block)
-                  enddo
-               endif
-            endif
-         else if (src_block /= 0 .and. dst_block == -src_block) then ! echmod
-!maltrud - debug         if (src_block /= 0) then
-!echmod - bug        if (dst_block /= 0) then
-            tripole_dbuf(ib_dst:ie_dst,:) = &
-                  ARRAY(ib_src:ie_src,jb_src:je_src,src_block)
-            if (present(bc)) then
-            if (bc == 'Neumann') then
-               do m = 1, nghost + 1
-                  do i = 1, nghost
-                     if (ib_dst > i) then
-                     if (tripole_dbuf(ib_dst-i,m) == c0) &
-                         tripole_dbuf(ib_dst-i,m) = tripole_dbuf(ib_dst,m)
-                     endif
-                     if (ie_dst < nx_global-i) then
-                     if (tripole_dbuf(ie_dst+i,m) == c0) &
-                         tripole_dbuf(ie_dst+i,m) = tripole_dbuf(ie_dst,m)
-                     endif
-                  enddo
-               enddo
-            endif
-            endif
-         endif
-
+      else if (srcBlock == 0) then
+         array(iDst,jDst,dstBlock) = fill
       endif
    end do
 
@@ -1458,123 +1269,83 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   if (in_bndy%nmsg_ns_rcv > 0)  &
-      call MPI_WAITALL(in_bndy%nmsg_ns_rcv, rcv_request, rcv_status, ierr)
+   call MPI_WAITALL(halo%numMsgRecv, rcvRequest, rcvStatus, ierr)
 
-   do n=1,in_bndy%nmsg_ns_rcv
-   do k=1,in_bndy%nblocks_ns_rcv(n)
-      dst_block = in_bndy%ns_dst_block(k,n)  ! dest block
+   do nmsg=1,halo%numMsgRecv
+      do n=1,halo%sizeRecv(nmsg)
+         iDst     = halo%recvAddr(1,n,nmsg)
+         jDst     = halo%recvAddr(2,n,nmsg)
+         dstBlock = halo%recvAddr(3,n,nmsg)
 
-      if (dst_block > 0) then  ! normal receive
-         jb_dst = in_bndy%ns_dst_add(2,k,n)
-         je_dst = jb_dst + nghost - 1
-
-         ARRAY(:,jb_dst:je_dst,dst_block) = buf_ns_rcv(:,1:nghost,k,n)
-      else ! northern tripole bndy: copy into global tripole buffer
-         src_block = in_bndy%ns_src_block(k,n)  ! echmod - bug fix
-
-         !*** determine start,end of physical domain for both
-         !*** global buffer and local buffer
-         ib_dst = in_bndy%ns_dst_add(1,k,n)
-         ie_dst = ib_dst + (nx_block-2*nghost) - 1
-!echmod         if (ie_dst > nx_global) ie_dst = nx_global
-         ie_dst = min(ie_dst, nx_global) !echmod
-         ib_src = nghost + 1
-         ie_src = ib_src + ie_dst - ib_dst
-         if (src_block /= 0) then
-            tripole_dbuf(ib_dst:ie_dst,:) = &
-            buf_ns_rcv(ib_src:ie_src,:,k,n)
+         if (dstBlock > 0) then
+            array(iDst,jDst,dstBlock) = bufRecvR8(n,nmsg)
+         else if (dstBlock < 0) then !tripole
+            bufTripoleR8(iDst,jDst) = bufRecvR8(n,nmsg)
          endif
-         if (present(bc)) then !echmod
-         if (bc == 'Neumann') then
-            do m = 1, nghost + 1
-               do i = 1, nghost
-                  if (ib_dst > i) then
-                  if (tripole_dbuf(ib_dst-i,m) == c0) &
-                      tripole_dbuf(ib_dst-i,m) = tripole_dbuf(ib_dst,m)
-                  endif
-                  if (ie_dst < nx_global-i) then
-                  if (tripole_dbuf(ie_dst+i,m) == c0) &
-                      tripole_dbuf(ie_dst+i,m) = tripole_dbuf(ie_dst,m)
-                  endif
-               enddo
-            enddo
-         endif
-         endif
-      endif
-   end do
+      end do
    end do
 
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
 !
 !-----------------------------------------------------------------------
 
-   if (allocated(tripole_dbuf)) then
+   if (nxGlobal > 0) then
 
-      tripole_dghost(:,:) = c0 !echmod
-
-      select case (grid_loc)
+      select case (fieldLoc)
       case (field_loc_center)   ! cell center location
-         xoffset = 1
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_dghost(:,1) = tripole_dbuf(:,nghost+1)
-      case (field_loc_NEcorner)   ! cell corner (velocity) location
-         xoffset = 0
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global - i
-            if (ib_dst == 0) ib_dst = nx_global
-            xavg = p5*(abs(tripole_dbuf(i     ,nghost+1)) + &
-                       abs(tripole_dbuf(ib_dst,nghost+1)))
-            tripole_dghost(i     ,1) = sign(xavg, &
-                                            tripole_dbuf(i,nghost+1))
-            tripole_dghost(ib_dst,1) = sign(xavg, &
-                                            tripole_dbuf(ib_dst,nghost+1))
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripoleR8(i   ,nghost+1)
+            x2 = bufTripoleR8(iDst,nghost+1)
+            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
+            bufTripoleR8(i   ,nghost+1) = sign(xavg, x1)
+            bufTripoleR8(iDst,nghost+1) = sign(xavg, x2)
          end do
-         !*** catch nx_global point
-         tripole_dghost(nx_global,1) = tripole_dbuf(nx_global,nghost+1)
-         tripole_dbuf(:,nghost+1) = tripole_dghost(:,1)
-      case (field_loc_Eface)
-         xoffset = 0
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_dghost(:,1) = tripole_dbuf(:,nghost+1)
-      case (field_loc_Nface)
-         xoffset = 1
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global + 1 - i
-            xavg = p5*(abs(tripole_dbuf(i     ,nghost+1)) + &
-                       abs(tripole_dbuf(ib_dst,nghost+1)))
-            tripole_dghost(i     ,1) = sign(xavg, &
-                                            tripole_dbuf(i,nghost+1))
-            tripole_dghost(ib_dst,1) = sign(xavg, &
-                                            tripole_dbuf(ib_dst,nghost+1))
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripoleR8(i   ,nghost+1)
+            x2 = bufTripoleR8(iDst,nghost+1)
+            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
+            bufTripoleR8(i   ,nghost+1) = sign(xavg, x1)
+            bufTripoleR8(iDst,nghost+1) = sign(xavg, x2)
          end do
-         tripole_dbuf(:,nghost+1) = tripole_dghost(:,1)
-!lipscomb - added W face
-      case (field_loc_Wface)
-         xoffset = 1
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_dghost(:,1) = tripole_dbuf(:,nghost+1)
+
       case default
-         call abort_ice('Unknown location in boundary_2d')
+         call abort_ice( &
+            'ice_HaloUpdate2DR8: Unknown field location')
       end select
 
-      select case (field_type)
+      select case (fieldKind)
       case (field_type_scalar)
          isign =  1
       case (field_type_vector)
@@ -1582,157 +1353,46 @@ contains
       case (field_type_angle)
          isign = -1
       case default
-         call abort_ice('Unknown field type in boundary')
+         call abort_ice( &
+            'ice_HaloUpdate2DR8: Unknown field kind')
       end select
 
-      !*** copy source (physical) cells into ghost cells
-      !*** global source addresses are:
-      !*** nx_global + xoffset - i
-      !*** ny_global + yoffset - j
-      !*** in the actual tripole buffer, the indices are:
-      !*** nx_global + xoffset - i = ib_src - i
-      !*** ny_global + yoffset - j - (ny_global - nghost) + 1 =
-      !***    nghost + yoffset +1 - j = jb_src - j
-
-      ib_src = nx_global + xoffset
-      jb_src = nghost + yoffset + 1
-
-      bcflag = 0
-      if (present(bc)) then
-         if (bc == 'Neumann') then
-            bcflag = 1
-            do j=1,nghost
-            do i=1,nx_global
-               index_check = max(ib_src-i,1)
-               if (tripole_dbuf(index_check, jb_src-j) /= c0) then !echmod
-                  tripole_dghost(i,1+j) = isign* &
-                                       tripole_dbuf(index_check, jb_src-j)
-               else
-                  tripole_dghost(i,1+j) = tripole_dbuf(i, jb_src-j)
-               endif
-            end do
-            end do
-         endif
-      endif
-
-      if (bcflag == 0) then
-         do j=1,nghost
-         do i=1,nx_global
-!maltrud debug
-!           tripole_dghost(i,1+j) = isign* &
-!                                   tripole_dbuf(ib_src-i, jb_src-j)
-            index_check = max(ib_src-i,1)
-            tripole_dghost(i,1+j) = isign* &
-                                    tripole_dbuf(index_check, jb_src-j)
-         end do
-         end do
-      endif ! bcflag = 0
-
-      !*** copy out of global ghost cell buffer into local
+      !*** copy out of global tripole buffer into local
       !*** ghost cells
 
-      do n=1,in_bndy%nlocal_ns
-         dst_block = in_bndy%local_ns_dst_block(n)
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
 
-         if (dst_block < 0) then
-            dst_block = -dst_block
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
 
-            jb_dst = in_bndy%local_ns_dst_add(2,n)
-            je_dst = jb_dst + nghost
-            ib_src = in_bndy%local_ns_dst_add(1,n)
-            !*** ib_src is glob address of 1st point in physical
-            !*** domain.  must now adjust to properly copy
-            !*** east-west ghost cell info in the north boundary
+         if (srcBlock < 0) then
 
-            if (ib_src == 1) then  ! western boundary
-               !*** impose cyclic conditions at western boundary
-               !*** then set up remaining indices to copy rest
-               !*** of domain from tripole ghost cell buffer
-               do i=1,nghost
-                  ARRAY(i,jb_dst:je_dst,dst_block) = &
-                     tripole_dghost(nx_global-nghost+i,:)
-               end do
-               ie_src = ib_src + nx_block - nghost - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = nghost + 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            else
-               ib_src = ib_src - nghost
-               ie_src = ib_src + nx_block - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            endif
-            if (ie_src == nx_global) then ! eastern boundary
-               !*** impose cyclic conditions in ghost cells
-               do i=1,nghost
-                  ARRAY(ie_dst+i,jb_dst:je_dst,dst_block) = &
-                     tripole_dghost(i,:)
-               end do
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               array(iDst,jDst,dstBlock) = isign*bufTripoleR8(iSrc,jSrc)
             endif
 
-            !*** now copy the remaining ghost cell values
-
-            ARRAY(ib_dst:ie_dst,jb_dst:je_dst,dst_block) = &
-               tripole_dghost(ib_src:ie_src,:)
          endif
-
       end do
 
-      do n=1,in_bndy%nmsg_ns_rcv
-      do k=1,in_bndy%nblocks_ns_rcv(n)
-         dst_block = in_bndy%ns_dst_block(k,n)  ! dest block
-
-         if (dst_block < 0) then
-            dst_block = -dst_block
-
-            jb_dst = in_bndy%ns_dst_add(2,k,n)
-            je_dst = jb_dst + nghost ! last phys row incl for symmetry
-            ib_src = in_bndy%ns_dst_add(3,k,n)
-            !*** ib_src is glob address of 1st point in physical
-            !*** domain.  must now adjust to properly copy
-            !*** east-west ghost cell info in the north boundary
-
-            if (ib_src == 1) then  ! western boundary
-               !*** impose cyclic conditions at western boundary
-               !*** then set up remaining indices to copy rest
-               !*** of domain from tripole ghost cell buffer
-               do i=1,nghost
-                  ARRAY(i,jb_dst:je_dst,dst_block) = &
-                     tripole_dghost(nx_global-nghost+i,:)
-               end do
-               ie_src = ib_src + nx_block - nghost - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = nghost + 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            else
-               ib_src = ib_src - nghost
-               ie_src = ib_src + nx_block - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            endif
-            if (ie_src == nx_global) then ! eastern boundary
-               !*** impose cyclic conditions in ghost cells
-               do i=1,nghost
-                  ARRAY(ie_dst+i,jb_dst:je_dst,dst_block) = &
-                     tripole_dghost(i,:)
-               end do
-            endif
-
-            ARRAY(ib_dst:ie_dst,jb_dst:je_dst,dst_block) = &
-               tripole_dghost(ib_src:ie_src,:)
-         endif
-
-
-      end do
-      end do
-
-   endif  ! allocated(tripole_dbuf)
+   endif
 
 !-----------------------------------------------------------------------
 !
@@ -1740,31 +1400,34 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   if (in_bndy%nmsg_ns_snd > 0)  &
-      call MPI_WAITALL(in_bndy%nmsg_ns_snd, snd_request, snd_status, ierr)
+   call MPI_WAITALL(halo%numMsgSend, sndRequest, sndStatus, ierr)
 
-   if (allocated(buf_ns_snd))  deallocate (buf_ns_snd)
-   if (allocated(buf_ns_rcv))  deallocate (buf_ns_rcv)
-   if (allocated(snd_request)) deallocate (snd_request)
-   if (allocated(rcv_request)) deallocate (rcv_request)
-   if (allocated(snd_status))  deallocate (snd_status)
-   if (allocated(rcv_status))  deallocate (rcv_status)
+   deallocate(sndRequest, rcvRequest, sndStatus, rcvStatus, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate2DR8: error deallocating req,status arrays')
+      return
+   endif
 
 !-----------------------------------------------------------------------
+!EOC
 
- end subroutine boundary_2d_dbl
+ end subroutine ice_HaloUpdate2DR8
 
 !***********************************************************************
 !BOP
-! !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloUpdate2DR4
 ! !INTERFACE:
 
- subroutine boundary_2d_real(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloUpdate2DR4(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
+!  ice\_HaloUpdate.  This routine is the specific interface
 !  for 2d horizontal arrays of single precision.
 !
 ! !REVISION HISTORY:
@@ -1772,25 +1435,30 @@ contains
 
 ! !USER:
 
-   include 'mpif.h'   ! MPI Fortran include file
-
 ! !INPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
 
    integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
 
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
+   real (real_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r4), dimension(:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+   real (real_kind), dimension(:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -1801,52 +1469,62 @@ contains
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      i,j,k,m,n,                   &! dummy loop indices
-      ib_src,ie_src,jb_src,je_src, &! beg,end indices for bndy cells
-      ib_dst,ie_dst,jb_dst,je_dst, &!
-      nx_global,                   &! global domain size in x
-      src_block,                   &! local block number for source
-      dst_block,                   &! local block number for destination
-      bufsize,                     &! buffer size for send/recv buffers
-      xoffset, yoffset,            &! address shifts for tripole
-      isign,                       &! sign factor for tripole grids
-      bcflag,                      &! boundary condition flag
-      ierr                          ! MPI error flag
+      i,j,n,nmsg,                &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
 
    integer (int_kind), dimension(:), allocatable :: &
-      snd_request,              &! MPI request ids
-      rcv_request                ! MPI request ids
+      sndRequest,      &! MPI request ids
+      rcvRequest        ! MPI request ids
 
    integer (int_kind), dimension(:,:), allocatable :: &
-      snd_status,               &! MPI status flags
-      rcv_status                 ! MPI status flags
+      sndStatus,       &! MPI status flags
+      rcvStatus         ! MPI status flags
 
-   real (r4), dimension(:,:,:,:), allocatable :: &
-      buf_ew_snd,       &! message buffer for east-west sends
-      buf_ew_rcv,       &! message buffer for east-west recvs
-      buf_ns_snd,       &! message buffer for north-south sends
-      buf_ns_rcv         ! message buffer for north-south recvs
-
-   real (r4) :: &
-      xavg               ! scalar for enforcing symmetry at U pts
+   real (real_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
 
 !-----------------------------------------------------------------------
 !
-!  allocate buffers for east-west sends and receives
+!  initialize error code and fill value
 !
 !-----------------------------------------------------------------------
 
-   allocate(buf_ew_snd(nghost, ny_block, &
-                       in_bndy%maxblocks_ew_snd, in_bndy%nmsg_ew_snd),&
-            buf_ew_rcv(nghost, ny_block, &
-                       in_bndy%maxblocks_ew_rcv, in_bndy%nmsg_ew_rcv))
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0.0_real_kind
+   endif
 
-   allocate(snd_request(in_bndy%nmsg_ew_snd), &
-            rcv_request(in_bndy%nmsg_ew_rcv), &
-            snd_status(MPI_STATUS_SIZE,in_bndy%nmsg_ew_snd), &
-            rcv_status(MPI_STATUS_SIZE,in_bndy%nmsg_ew_rcv))
+   nxGlobal = 0
+   if (allocated(bufTripoleR4)) then
+      nxGlobal = size(bufTripoleR4,dim=1)
+      bufTripoleR4 = fill
+   endif
 
-   if (allocated(tripole_rbuf)) nx_global = size(tripole_rbuf,dim=1)
+!-----------------------------------------------------------------------
+!
+!  allocate request and status arrays for messages
+!
+!-----------------------------------------------------------------------
+
+   allocate(sndRequest(halo%numMsgSend), &
+            rcvRequest(halo%numMsgRecv), &
+            sndStatus(MPI_STATUS_SIZE,halo%numMsgSend), &
+            rcvStatus(MPI_STATUS_SIZE,halo%numMsgRecv), stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate2DR4: error allocating req,status arrays')
+      return
+   endif
 
 !-----------------------------------------------------------------------
 !
@@ -1854,14 +1532,12 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   do n=1,in_bndy%nmsg_ew_rcv
+   do nmsg=1,halo%numMsgRecv
 
-      bufsize = ny_block*nghost*in_bndy%nblocks_ew_rcv(n)
-
-      call MPI_IRECV(buf_ew_rcv(1,1,1,n), bufsize, mpi_real,  &
-                     in_bndy%ew_rcv_proc(n)-1,                &
-                     mpitag_bndy_2d + in_bndy%ew_rcv_proc(n), &
-                     in_bndy%communicator, rcv_request(n), ierr)
+      call MPI_IRECV(bufRecvR4(:,nmsg), bufSizeRecv, mpiR4, &
+                     halo%recvTask(nmsg),                       &
+                     mpitagHalo + halo%recvTask(nmsg),      &
+                     halo%communicator, rcvRequest(nmsg), ierr)
    end do
 
 !-----------------------------------------------------------------------
@@ -1870,236 +1546,53 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   do n=1,in_bndy%nmsg_ew_snd
+   do nmsg=1,halo%numMsgSend
 
-      bufsize = ny_block*nghost*in_bndy%nblocks_ew_snd(n)
+      do n=1,halo%sizeSend(nmsg)
+         iSrc     = halo%sendAddr(1,n,nmsg)
+         jSrc     = halo%sendAddr(2,n,nmsg)
+         srcBlock = halo%sendAddr(3,n,nmsg)
 
-      do i=1,in_bndy%nblocks_ew_snd(n)
-         ib_src    = in_bndy%ew_src_add(1,i,n)
-         ie_src    = ib_src + nghost - 1
-         src_block = in_bndy%ew_src_block(i,n)
-         buf_ew_snd(:,:,i,n) = ARRAY(ib_src:ie_src,:,src_block)
+         bufSendR4(n,nmsg) = array(iSrc,jSrc,srcBlock)
+      end do
+      do n=halo%sizeSend(nmsg)+1,bufSizeSend
+         bufSendR4(n,nmsg) = fill  ! fill remainder of buffer
       end do
 
-      call MPI_ISEND(buf_ew_snd(1,1,1,n), bufsize, mpi_real, &
-                     in_bndy%ew_snd_proc(n)-1, &
-                     mpitag_bndy_2d + my_task + 1, &
-                     in_bndy%communicator, snd_request(n), ierr)
+      call MPI_ISEND(bufSendR4(:,nmsg), bufSizeSend, mpiR4, &
+                     halo%sendTask(nmsg),                       &
+                     mpitagHalo + my_task,               &
+                     halo%communicator, sndRequest(nmsg), ierr)
    end do
 
 !-----------------------------------------------------------------------
 !
 !  do local copies while waiting for messages to complete
-!  also initialize ghost cells to zero
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
 !
 !-----------------------------------------------------------------------
 
-   do n=1,in_bndy%nlocal_ew
-      src_block = in_bndy%local_ew_src_block(n)
-      dst_block = in_bndy%local_ew_dst_block(n)
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
 
-      ib_src = in_bndy%local_ew_src_add(1,n)
-      ie_src = ib_src + nghost - 1
-      ib_dst = in_bndy%local_ew_dst_add(1,n)
-      ie_dst = ib_dst + nghost - 1
-
-      if (src_block /= 0) then
-         ARRAY(ib_dst:ie_dst,:,dst_block) = &
-         ARRAY(ib_src:ie_src,:,src_block)
-      else
-         ARRAY(ib_dst:ie_dst,:,dst_block) = c0
-         if (present(bc)) then
-            if (bc == 'Neumann') then
-            if (ib_dst == 1) then                       ! west boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
-               enddo
-            elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
-               enddo
-            endif
-            endif
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            array(iDst,jDst,dstBlock) = &
+            array(iSrc,jSrc,srcBlock)
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            bufTripoleR4(iDst,jDst) = &
+            array(iSrc,jSrc,srcBlock)
          endif
-      endif
-
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  wait for receives to finish and then unpack the recv buffer into
-!  ghost cells
-!
-!-----------------------------------------------------------------------
-
-   call MPI_WAITALL(in_bndy%nmsg_ew_rcv, rcv_request, rcv_status, ierr)
-
-   do n=1,in_bndy%nmsg_ew_rcv
-   do k=1,in_bndy%nblocks_ew_rcv(n)
-      dst_block = in_bndy%ew_dst_block(k,n)
-
-      ib_dst = in_bndy%ew_dst_add(1,k,n)
-      ie_dst = ib_dst + nghost - 1
-
-      ARRAY(ib_dst:ie_dst,:,dst_block) = buf_ew_rcv(:,:,k,n)
-   end do
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  wait for sends to complete and deallocate arrays
-!
-!-----------------------------------------------------------------------
-
-   call MPI_WAITALL(in_bndy%nmsg_ew_snd, snd_request, snd_status, ierr)
-
-   deallocate(buf_ew_snd, buf_ew_rcv)
-   deallocate(snd_request, rcv_request, snd_status, rcv_status)
-
-!-----------------------------------------------------------------------
-!
-!  now exchange north-south boundary info
-!
-!-----------------------------------------------------------------------
-
-   allocate(buf_ns_snd(nx_block, nghost+1, &
-                       in_bndy%maxblocks_ns_snd, in_bndy%nmsg_ns_snd),&
-            buf_ns_rcv(nx_block, nghost+1, &
-                       in_bndy%maxblocks_ns_rcv, in_bndy%nmsg_ns_rcv))
-
-   allocate(snd_request(in_bndy%nmsg_ns_snd), &
-            rcv_request(in_bndy%nmsg_ns_rcv), &
-            snd_status(MPI_STATUS_SIZE,in_bndy%nmsg_ns_snd), &
-            rcv_status(MPI_STATUS_SIZE,in_bndy%nmsg_ns_rcv))
-
-!-----------------------------------------------------------------------
-!
-!  post receives
-!
-!-----------------------------------------------------------------------
-
-   do n=1,in_bndy%nmsg_ns_rcv
-
-      bufsize = nx_block*(nghost+1)*in_bndy%nblocks_ns_rcv(n)
-
-      call MPI_IRECV(buf_ns_rcv(1,1,1,n), bufsize, mpi_real,  &
-                     in_bndy%ns_rcv_proc(n)-1,                &
-                     mpitag_bndy_2d + in_bndy%ns_rcv_proc(n), &
-                     in_bndy%communicator, rcv_request(n), ierr)
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  fill send buffer and post sends
-!
-!-----------------------------------------------------------------------
-
-   do n=1,in_bndy%nmsg_ns_snd
-
-      bufsize = nx_block*(nghost+1)*in_bndy%nblocks_ns_snd(n)
-
-      do i=1,in_bndy%nblocks_ns_snd(n)
-         jb_src    = in_bndy%ns_src_add(2,i,n)
-         je_src    = jb_src + nghost  ! nghost+1 rows needed for tripole
-         src_block = in_bndy%ns_src_block(i,n)
-         buf_ns_snd(:,:,i,n) = ARRAY(:,jb_src:je_src,src_block)
-      end do
-
-      call MPI_ISEND(buf_ns_snd(1,1,1,n), bufsize, mpi_real, &
-                     in_bndy%ns_snd_proc(n)-1, &
-                     mpitag_bndy_2d + my_task + 1, &
-                     in_bndy%communicator, snd_request(n), ierr)
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  do local copies while waiting for messages to complete
-!
-!-----------------------------------------------------------------------
-
-   if (allocated(tripole_rbuf)) tripole_rbuf = c0
-
-   do n=1,in_bndy%nlocal_ns
-      src_block = in_bndy%local_ns_src_block(n)
-      dst_block = in_bndy%local_ns_dst_block(n)
-
-      if (dst_block > 0) then ! straight local copy
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost - 1
-         jb_dst = in_bndy%local_ns_dst_add(2,n)
-         je_dst = jb_dst + nghost - 1
-
-         if (src_block /= 0) then
-            ARRAY(:,jb_dst:je_dst,dst_block) = &
-            ARRAY(:,jb_src:je_src,src_block)
-         else
-            ARRAY(:,jb_dst:je_dst,dst_block) = c0
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-               if (jb_dst == 1) then                       ! south boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
-                  enddo
-               elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
-                  enddo
-               endif
-               endif
-            endif
-         endif
-
-      else  !north boundary tripole grid - copy into global north buffer
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost ! need nghost+1 rows for tripole
-
-         !*** determine start, end addresses of physical domain
-         !*** for both global buffer and local block
-
-!echmod - bug         ib_dst = in_bndy%local_ns_src_add(1,n)
-         ib_dst = in_bndy%local_ns_dst_add(1,n)
-         ie_dst = ib_dst + (nx_block-2*nghost) - 1
-!echmod         if (ie_dst > nx_global) ie_dst = nx_global
-         ie_dst = min(ie_dst, nx_global) !echmod
-         ib_src = nghost + 1
-         ie_src = ib_src + ie_dst - ib_dst
-!echmod - fill buffer with Neumann conditions first, then overwrite where needed
-         if (src_block == 0 .and. dst_block /= 0) then ! echmod
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-                  do m = 1, nghost + 1
-                     jb_dst = in_bndy%local_ns_dst_add(2,n)
-                     ie_src = ib_src + ie_dst - ib_dst
-                     tripole_rbuf(ib_dst:ie_dst,m) = &
-                        ARRAY(ib_src:ie_src,jb_dst-1,-dst_block)
-                  enddo
-               endif
-            endif
-         else if (src_block /= 0 .and. dst_block == -src_block) then ! echmod
-!maltrud - debug         if (src_block /= 0) then
-!echmod         if (dst_block /= 0) then
-            tripole_rbuf(ib_dst:ie_dst,:) = &
-                  ARRAY(ib_src:ie_src,jb_src:je_src,src_block)
-            if (present(bc)) then
-            if (bc == 'Neumann') then
-               do m = 1, nghost + 1
-                  do i = 1, nghost
-                     if (ib_dst > i) then
-                     if (tripole_rbuf(ib_dst-i,m) == c0) &
-                         tripole_rbuf(ib_dst-i,m) = tripole_rbuf(ib_dst,m)
-                     endif
-                     if (ie_dst < nx_global-i) then
-                     if (tripole_rbuf(ie_dst+i,m) == c0) &
-                         tripole_rbuf(ie_dst+i,m) = tripole_rbuf(ie_dst,m)
-                     endif
-                  enddo
-               enddo
-            endif
-            endif
-         endif
-
+      else if (srcBlock == 0) then
+         array(iDst,jDst,dstBlock) = fill
       endif
    end do
 
@@ -2110,122 +1603,83 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   call MPI_WAITALL(in_bndy%nmsg_ns_rcv, rcv_request, rcv_status, ierr)
+   call MPI_WAITALL(halo%numMsgRecv, rcvRequest, rcvStatus, ierr)
 
-   do n=1,in_bndy%nmsg_ns_rcv
-   do k=1,in_bndy%nblocks_ns_rcv(n)
-      dst_block = in_bndy%ns_dst_block(k,n)  ! dest block
+   do nmsg=1,halo%numMsgRecv
+      do n=1,halo%sizeRecv(nmsg)
+         iDst     = halo%recvAddr(1,n,nmsg)
+         jDst     = halo%recvAddr(2,n,nmsg)
+         dstBlock = halo%recvAddr(3,n,nmsg)
 
-      if (dst_block > 0) then  ! normal receive
-         jb_dst = in_bndy%ns_dst_add(2,k,n)
-         je_dst = jb_dst + nghost - 1
-
-         ARRAY(:,jb_dst:je_dst,dst_block) = buf_ns_rcv(:,1:nghost,k,n)
-      else ! northern tripole bndy: copy into global tripole buffer
-         src_block = in_bndy%ns_src_block(k,n)  ! echmod - bug fix
-
-         !*** determine start,end of physical domain for both
-         !*** global buffer and local buffer
-         ib_dst = in_bndy%ns_dst_add(1,k,n)
-         ie_dst = ib_dst + (nx_block-2*nghost) - 1
-!echmod         if (ie_dst > nx_global) ie_dst = nx_global
-         ie_dst = min(ie_dst, nx_global) !echmod
-         ib_src = nghost + 1
-         ie_src = ib_src + ie_dst - ib_dst
-         if (src_block /= 0) then
-            tripole_rbuf(ib_dst:ie_dst,:) = &
-            buf_ns_rcv(ib_src:ie_src,:,k,n)
+         if (dstBlock > 0) then
+            array(iDst,jDst,dstBlock) = bufRecvR4(n,nmsg)
+         else if (dstBlock < 0) then !tripole
+            bufTripoleR4(iDst,jDst) = bufRecvR4(n,nmsg)
          endif
-         if (present(bc)) then !echmod
-         if (bc == 'Neumann') then
-            do m = 1, nghost + 1
-               do i = 1, nghost
-                  if (ib_dst > i) then
-                  if (tripole_rbuf(ib_dst-i,m) == c0) &
-                      tripole_rbuf(ib_dst-i,m) = tripole_rbuf(ib_dst,m)
-                  endif
-                  if (ie_dst < nx_global-i) then
-                  if (tripole_rbuf(ie_dst+i,m) == c0) &
-                      tripole_rbuf(ie_dst+i,m) = tripole_rbuf(ie_dst,m)
-                  endif
-               enddo
-            enddo
-         endif
-         endif
-      endif
-   end do
+      end do
    end do
 
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
 !
 !-----------------------------------------------------------------------
 
-   if (allocated(tripole_rbuf)) then
+   if (nxGlobal > 0) then
 
-      tripole_rghost(:,:) = c0 !echmod
-
-      select case (grid_loc)
+      select case (fieldLoc)
       case (field_loc_center)   ! cell center location
-         xoffset = 1
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_rghost(:,1) = tripole_rbuf(:,nghost+1)
-      case (field_loc_NEcorner)   ! cell corner (velocity) location
-         xoffset = 0
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global - i
-            if (ib_dst == 0) ib_dst = nx_global
-            xavg = p5*(abs(tripole_rbuf(i     ,nghost+1)) + &
-                       abs(tripole_rbuf(ib_dst,nghost+1)))
-            tripole_rghost(i     ,1) = sign(xavg, &
-                                            tripole_rbuf(i,nghost+1))
-            tripole_rghost(ib_dst,1) = sign(xavg, &
-                                            tripole_rbuf(ib_dst,nghost+1))
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripoleR4(i   ,nghost+1)
+            x2 = bufTripoleR4(iDst,nghost+1)
+            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
+            bufTripoleR4(i   ,nghost+1) = sign(xavg, x1)
+            bufTripoleR4(iDst,nghost+1) = sign(xavg, x2)
          end do
-         !*** catch nx_global point
-         tripole_rghost(nx_global,1) = tripole_rbuf(nx_global,nghost+1)
-         tripole_rbuf(:,nghost+1) = tripole_rghost(:,1)
+
       case (field_loc_Eface)   ! cell center location
-         xoffset = 0
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_rghost(:,1) = tripole_rbuf(:,nghost+1)
+
+         ioffset = 1
+         joffset = 0
+
       case (field_loc_Nface)   ! cell corner (velocity) location
-         xoffset = 1
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global + 1 - i
-            xavg = p5*(abs(tripole_rbuf(i     ,nghost+1)) + &
-                       abs(tripole_rbuf(ib_dst,nghost+1)))
-            tripole_rghost(i     ,1) = sign(xavg, &
-                                            tripole_rbuf(i,nghost+1))
-            tripole_rghost(ib_dst,1) = sign(xavg, &
-                                            tripole_rbuf(ib_dst,nghost+1))
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripoleR4(i   ,nghost+1)
+            x2 = bufTripoleR4(iDst,nghost+1)
+            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
+            bufTripoleR4(i   ,nghost+1) = sign(xavg, x1)
+            bufTripoleR4(iDst,nghost+1) = sign(xavg, x2)
          end do
-         tripole_rbuf(:,nghost+1) = tripole_rghost(:,1)
-!lipscomb - added W face
-      case (field_loc_Wface)
-         xoffset = 1
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_rghost(:,1) = tripole_rbuf(:,nghost+1)
+
       case default
-         call abort_ice('Unknown location in boundary_2d')
+         call abort_ice( &
+            'ice_HaloUpdate2DR4: Unknown field location')
       end select
 
-      select case (field_type)
+      select case (fieldKind)
       case (field_type_scalar)
          isign =  1
       case (field_type_vector)
@@ -2233,154 +1687,43 @@ contains
       case (field_type_angle)
          isign = -1
       case default
-         call abort_ice('Unknown field type in boundary')
+         call abort_ice( &
+            'ice_HaloUpdate2DR4: Unknown field kind')
       end select
 
-      !*** copy source (physical) cells into ghost cells
-      !*** global source addresses are:
-      !*** nx_global + xoffset - i
-      !*** ny_global + yoffset - j
-      !*** in the actual tripole buffer, the indices are:
-      !*** nx_global + xoffset - i = ib_src - i
-      !*** ny_global + yoffset - j - (ny_global - nghost) + 1 =
-      !***    nghost + yoffset +1 - j = jb_src - j
-
-      ib_src = nx_global + xoffset
-      jb_src = nghost + yoffset + 1
-
-      bcflag = 0
-      if (present(bc)) then
-         if (bc == 'Neumann') then
-            bcflag = 1
-            do j=1,nghost
-            do i=1,nx_global
-               index_check = max(ib_src-i,1)
-               if (tripole_rbuf(index_check, jb_src-j) /= c0) then !echmod
-                  tripole_rghost(i,1+j) = isign* &
-                                       tripole_rbuf(index_check, jb_src-j)
-               else
-                  tripole_rghost(i,1+j) = tripole_rbuf(i, jb_src-j)
-               endif
-            end do
-            end do
-         endif
-      endif
-
-      if (bcflag == 0) then
-         do j=1,nghost
-         do i=1,nx_global
-!maltrud debug
-!           tripole_rghost(i,1+j) = isign* &
-!                                   tripole_rbuf(ib_src-i, jb_src-j)
-            index_check = max(ib_src-i,1)
-            tripole_rghost(i,1+j) = isign* &
-                                    tripole_rbuf(index_check, jb_src-j)
-         end do
-         end do
-      endif ! bcflag = 0
-
-      !*** copy out of global ghost cell buffer into local
+      !*** copy out of global tripole buffer into local
       !*** ghost cells
 
-      do n=1,in_bndy%nlocal_ns
-         dst_block = in_bndy%local_ns_dst_block(n)
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
 
-         if (dst_block < 0) then
-            dst_block = -dst_block
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
 
-            jb_dst = in_bndy%local_ns_dst_add(2,n)
-            je_dst = jb_dst + nghost
-            ib_src = in_bndy%local_ns_dst_add(1,n)
-            !*** ib_src is glob address of 1st point in physical
-            !*** domain.  must now adjust to properly copy
-            !*** east-west ghost cell info in the north boundary
+         if (srcBlock < 0) then
 
-            if (ib_src == 1) then  ! western boundary
-               !*** impose cyclic conditions at western boundary
-               !*** then set up remaining indices to copy rest
-               !*** of domain from tripole ghost cell buffer
-               do i=1,nghost
-                  ARRAY(i,jb_dst:je_dst,dst_block) = &
-                     tripole_rghost(nx_global-nghost+i,:)
-               end do
-               ie_src = ib_src + nx_block - nghost - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = nghost + 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            else
-               ib_src = ib_src - nghost
-               ie_src = ib_src + nx_block - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            endif
-            if (ie_src == nx_global) then ! eastern boundary
-               !*** impose cyclic conditions in ghost cells
-               do i=1,nghost
-                  ARRAY(ie_dst+i,jb_dst:je_dst,dst_block) = &
-                     tripole_rghost(i,:)
-               end do
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               array(iDst,jDst,dstBlock) = isign*bufTripoleR4(iSrc,jSrc)
             endif
 
-            !*** now copy the remaining ghost cell values
-
-            ARRAY(ib_dst:ie_dst,jb_dst:je_dst,dst_block) = &
-               tripole_rghost(ib_src:ie_src,:)
          endif
-
-      end do
-
-      do n=1,in_bndy%nmsg_ns_rcv
-      do k=1,in_bndy%nblocks_ns_rcv(n)
-         dst_block = in_bndy%ns_dst_block(k,n)  ! dest block
-
-         if (dst_block < 0) then
-            dst_block = -dst_block
-
-            jb_dst = in_bndy%ns_dst_add(2,k,n)
-            je_dst = jb_dst + nghost ! last phys row incl for symmetry
-            ib_src = in_bndy%ns_dst_add(3,k,n)
-            !*** ib_src is glob address of 1st point in physical
-            !*** domain.  must now adjust to properly copy
-            !*** east-west ghost cell info in the north boundary
-
-            if (ib_src == 1) then  ! western boundary
-               !*** impose cyclic conditions at western boundary
-               !*** then set up remaining indices to copy rest
-               !*** of domain from tripole ghost cell buffer
-               do i=1,nghost
-                  ARRAY(i,jb_dst:je_dst,dst_block) = &
-                     tripole_rghost(nx_global-nghost+i,:)
-               end do
-               ie_src = ib_src + nx_block - nghost - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = nghost + 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            else
-               ib_src = ib_src - nghost
-               ie_src = ib_src + nx_block - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            endif
-            if (ie_src == nx_global) then ! eastern boundary
-               !*** impose cyclic conditions in ghost cells
-               do i=1,nghost
-                  ARRAY(ie_dst+i,jb_dst:je_dst,dst_block) = &
-                     tripole_rghost(i,:)
-               end do
-            endif
-
-            ARRAY(ib_dst:ie_dst,jb_dst:je_dst,dst_block) = &
-               tripole_rghost(ib_src:ie_src,:)
-         endif
-
-
-      end do
       end do
 
    endif
@@ -2391,52 +1734,65 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   call MPI_WAITALL(in_bndy%nmsg_ns_snd, snd_request, snd_status, ierr)
+   call MPI_WAITALL(halo%numMsgSend, sndRequest, sndStatus, ierr)
 
-   deallocate(buf_ns_snd, buf_ns_rcv)
-   deallocate(snd_request, rcv_request, snd_status, rcv_status)
+   deallocate(sndRequest, rcvRequest, sndStatus, rcvStatus, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate2DR4: error deallocating req,status arrays')
+      return
+   endif
 
 !-----------------------------------------------------------------------
+!EOC
 
-end subroutine boundary_2d_real
+ end subroutine ice_HaloUpdate2DR4
 
 !***********************************************************************
 !BOP
-! !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloUpdate2DI4
 ! !INTERFACE:
 
- subroutine boundary_2d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloUpdate2DI4(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
-!  for 2d horizontal arrays of double precision.
+!  ice\_HaloUpdate.  This routine is the specific interface
+!  for 2d horizontal integer arrays.
 !
 ! !REVISION HISTORY:
 !  same as module
 
 ! !USER:
 
-   include 'mpif.h'   ! MPI Fortran include file
-
 ! !INPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
 
    integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
 
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
+   integer (int_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
 
 ! !INPUT/OUTPUT PARAMETERS:
 
    integer (int_kind), dimension(:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -2447,52 +1803,62 @@ end subroutine boundary_2d_real
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      i,j,k,m,n,                   &! dummy loop indices
-      ib_src,ie_src,jb_src,je_src, &! beg,end indices for bndy cells
-      ib_dst,ie_dst,jb_dst,je_dst, &!
-      nx_global,                   &! global domain size in x
-      src_block,                   &! local block number for source
-      dst_block,                   &! local block number for destination
-      bufsize,                     &! buffer size for send/recv buffers
-      xoffset, yoffset,            &! address shifts for tripole
-      isign,                       &! sign factor for tripole grids
-      bcflag,                      &! boundary condition flag
-      ierr                          ! MPI error flag
+      i,j,n,nmsg,                &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
 
    integer (int_kind), dimension(:), allocatable :: &
-      snd_request,              &! MPI request ids
-      rcv_request                ! MPI request ids
+      sndRequest,      &! MPI request ids
+      rcvRequest        ! MPI request ids
 
    integer (int_kind), dimension(:,:), allocatable :: &
-      snd_status,               &! MPI status flags
-      rcv_status                 ! MPI status flags
-
-   integer (int_kind), dimension(:,:,:,:), allocatable :: &
-      buf_ew_snd,       &! message buffer for east-west sends
-      buf_ew_rcv,       &! message buffer for east-west recvs
-      buf_ns_snd,       &! message buffer for north-south sends
-      buf_ns_rcv         ! message buffer for north-south recvs
+      sndStatus,       &! MPI status flags
+      rcvStatus         ! MPI status flags
 
    integer (int_kind) :: &
-      xavg               ! scalar for enforcing symmetry at U pts
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
 
 !-----------------------------------------------------------------------
 !
-!  allocate buffers for east-west sends and receives
+!  initialize error code and fill value
 !
 !-----------------------------------------------------------------------
 
-   allocate(buf_ew_snd(nghost, ny_block, &
-                       in_bndy%maxblocks_ew_snd, in_bndy%nmsg_ew_snd),&
-            buf_ew_rcv(nghost, ny_block, &
-                       in_bndy%maxblocks_ew_rcv, in_bndy%nmsg_ew_rcv))
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0_int_kind
+   endif
 
-   allocate(snd_request(in_bndy%nmsg_ew_snd), &
-            rcv_request(in_bndy%nmsg_ew_rcv), &
-            snd_status(MPI_STATUS_SIZE,in_bndy%nmsg_ew_snd), &
-            rcv_status(MPI_STATUS_SIZE,in_bndy%nmsg_ew_rcv))
+   nxGlobal = 0
+   if (allocated(bufTripoleI4)) then
+      nxGlobal = size(bufTripoleI4,dim=1)
+      bufTripoleI4 = fill
+   endif
 
-   if (allocated(tripole_ibuf)) nx_global = size(tripole_ibuf,dim=1)
+!-----------------------------------------------------------------------
+!
+!  allocate request and status arrays for messages
+!
+!-----------------------------------------------------------------------
+
+   allocate(sndRequest(halo%numMsgSend), &
+            rcvRequest(halo%numMsgRecv), &
+            sndStatus(MPI_STATUS_SIZE,halo%numMsgSend), &
+            rcvStatus(MPI_STATUS_SIZE,halo%numMsgRecv), stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate2DI4: error allocating req,status arrays')
+      return
+   endif
 
 !-----------------------------------------------------------------------
 !
@@ -2500,14 +1866,12 @@ end subroutine boundary_2d_real
 !
 !-----------------------------------------------------------------------
 
-   do n=1,in_bndy%nmsg_ew_rcv
+   do nmsg=1,halo%numMsgRecv
 
-      bufsize = ny_block*nghost*in_bndy%nblocks_ew_rcv(n)
-
-      call MPI_IRECV(buf_ew_rcv(1,1,1,n), bufsize, mpi_integer, &
-                     in_bndy%ew_rcv_proc(n)-1,                  &
-                     mpitag_bndy_2d + in_bndy%ew_rcv_proc(n),   &
-                     in_bndy%communicator, rcv_request(n), ierr)
+      call MPI_IRECV(bufRecvI4(:,nmsg), bufSizeRecv, MPI_INTEGER, &
+                     halo%recvTask(nmsg),                       &
+                     mpitagHalo + halo%recvTask(nmsg),      &
+                     halo%communicator, rcvRequest(nmsg), ierr)
    end do
 
 !-----------------------------------------------------------------------
@@ -2516,236 +1880,53 @@ end subroutine boundary_2d_real
 !
 !-----------------------------------------------------------------------
 
-   do n=1,in_bndy%nmsg_ew_snd
+   do nmsg=1,halo%numMsgSend
 
-      bufsize = ny_block*nghost*in_bndy%nblocks_ew_snd(n)
+      do n=1,halo%sizeSend(nmsg)
+         iSrc     = halo%sendAddr(1,n,nmsg)
+         jSrc     = halo%sendAddr(2,n,nmsg)
+         srcBlock = halo%sendAddr(3,n,nmsg)
 
-      do i=1,in_bndy%nblocks_ew_snd(n)
-         ib_src    = in_bndy%ew_src_add(1,i,n)
-         ie_src    = ib_src + nghost - 1
-         src_block = in_bndy%ew_src_block(i,n)
-         buf_ew_snd(:,:,i,n) = ARRAY(ib_src:ie_src,:,src_block)
+         bufSendI4(n,nmsg) = array(iSrc,jSrc,srcBlock)
+      end do
+      do n=halo%sizeSend(nmsg)+1,bufSizeSend
+         bufSendI4(n,nmsg) = fill  ! fill remainder of buffer
       end do
 
-      call MPI_ISEND(buf_ew_snd(1,1,1,n), bufsize, mpi_integer, &
-                     in_bndy%ew_snd_proc(n)-1, &
-                     mpitag_bndy_2d + my_task + 1, &
-                     in_bndy%communicator, snd_request(n), ierr)
+      call MPI_ISEND(bufSendI4(:,nmsg), bufSizeSend, MPI_INTEGER, &
+                     halo%sendTask(nmsg),                       &
+                     mpitagHalo + my_task,               &
+                     halo%communicator, sndRequest(nmsg), ierr)
    end do
 
 !-----------------------------------------------------------------------
 !
 !  do local copies while waiting for messages to complete
-!  also initialize ghost cells to zero
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
 !
 !-----------------------------------------------------------------------
 
-   do n=1,in_bndy%nlocal_ew
-      src_block = in_bndy%local_ew_src_block(n)
-      dst_block = in_bndy%local_ew_dst_block(n)
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
 
-      ib_src = in_bndy%local_ew_src_add(1,n)
-      ie_src = ib_src + nghost - 1
-      ib_dst = in_bndy%local_ew_dst_add(1,n)
-      ie_dst = ib_dst + nghost - 1
-
-      if (src_block /= 0) then
-         ARRAY(ib_dst:ie_dst,:,dst_block) = &
-         ARRAY(ib_src:ie_src,:,src_block)
-      else
-         ARRAY(ib_dst:ie_dst,:,dst_block) = 0
-         if (present(bc)) then
-            if (bc == 'Neumann') then
-            if (ib_dst == 1) then                       ! west boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,dst_block) = ARRAY(ie_dst+1,:,dst_block)
-               enddo
-            elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,dst_block) = ARRAY(ib_dst-1,:,dst_block)
-               enddo
-            endif
-            endif
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            array(iDst,jDst,dstBlock) = &
+            array(iSrc,jSrc,srcBlock)
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            bufTripoleI4(iDst,jDst) = &
+            array(iSrc,jSrc,srcBlock)
          endif
-      endif
-
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  wait for receives to finish and then unpack the recv buffer into
-!  ghost cells
-!
-!-----------------------------------------------------------------------
-
-   call MPI_WAITALL(in_bndy%nmsg_ew_rcv, rcv_request, rcv_status, ierr)
-
-   do n=1,in_bndy%nmsg_ew_rcv
-   do k=1,in_bndy%nblocks_ew_rcv(n)
-      dst_block = in_bndy%ew_dst_block(k,n)
-
-      ib_dst = in_bndy%ew_dst_add(1,k,n)
-      ie_dst = ib_dst + nghost - 1
-
-      ARRAY(ib_dst:ie_dst,:,dst_block) = buf_ew_rcv(:,:,k,n)
-   end do
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  wait for sends to complete and deallocate arrays
-!
-!-----------------------------------------------------------------------
-
-   call MPI_WAITALL(in_bndy%nmsg_ew_snd, snd_request, snd_status, ierr)
-
-   deallocate(buf_ew_snd, buf_ew_rcv)
-   deallocate(snd_request, rcv_request, snd_status, rcv_status)
-
-!-----------------------------------------------------------------------
-!
-!  now exchange north-south boundary info
-!
-!-----------------------------------------------------------------------
-
-   allocate(buf_ns_snd(nx_block, nghost+1, &
-                       in_bndy%maxblocks_ns_snd, in_bndy%nmsg_ns_snd),&
-            buf_ns_rcv(nx_block, nghost+1, &
-                       in_bndy%maxblocks_ns_rcv, in_bndy%nmsg_ns_rcv))
-
-   allocate(snd_request(in_bndy%nmsg_ns_snd), &
-            rcv_request(in_bndy%nmsg_ns_rcv), &
-            snd_status(MPI_STATUS_SIZE,in_bndy%nmsg_ns_snd), &
-            rcv_status(MPI_STATUS_SIZE,in_bndy%nmsg_ns_rcv))
-
-!-----------------------------------------------------------------------
-!
-!  post receives
-!
-!-----------------------------------------------------------------------
-
-   do n=1,in_bndy%nmsg_ns_rcv
-
-      bufsize = nx_block*(nghost+1)*in_bndy%nblocks_ns_rcv(n)
-
-      call MPI_IRECV(buf_ns_rcv(1,1,1,n), bufsize, mpi_integer,   &
-                     in_bndy%ns_rcv_proc(n)-1,                &
-                     mpitag_bndy_2d + in_bndy%ns_rcv_proc(n), &
-                     in_bndy%communicator, rcv_request(n), ierr)
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  fill send buffer and post sends
-!
-!-----------------------------------------------------------------------
-
-   do n=1,in_bndy%nmsg_ns_snd
-
-      bufsize = nx_block*(nghost+1)*in_bndy%nblocks_ns_snd(n)
-
-      do i=1,in_bndy%nblocks_ns_snd(n)
-         jb_src    = in_bndy%ns_src_add(2,i,n)
-         je_src    = jb_src + nghost  ! nghost+1 rows needed for tripole
-         src_block = in_bndy%ns_src_block(i,n)
-         buf_ns_snd(:,:,i,n) = ARRAY(:,jb_src:je_src,src_block)
-      end do
-
-      call MPI_ISEND(buf_ns_snd(1,1,1,n), bufsize, mpi_integer, &
-                     in_bndy%ns_snd_proc(n)-1, &
-                     mpitag_bndy_2d + my_task + 1, &
-                     in_bndy%communicator, snd_request(n), ierr)
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  do local copies while waiting for messages to complete
-!
-!-----------------------------------------------------------------------
-
-   if (allocated(tripole_ibuf)) tripole_ibuf = c0
-
-   do n=1,in_bndy%nlocal_ns
-      src_block = in_bndy%local_ns_src_block(n)
-      dst_block = in_bndy%local_ns_dst_block(n)
-
-      if (dst_block > 0) then ! straight local copy
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost - 1
-         jb_dst = in_bndy%local_ns_dst_add(2,n)
-         je_dst = jb_dst + nghost - 1
-
-         if (src_block /= 0) then
-            ARRAY(:,jb_dst:je_dst,dst_block) = &
-            ARRAY(:,jb_src:je_src,src_block)
-         else
-            ARRAY(:,jb_dst:je_dst,dst_block) = 0
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-               if (jb_dst == 1) then                       ! south boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,dst_block) = ARRAY(:,je_dst+1,dst_block)
-                  enddo
-               elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,dst_block) = ARRAY(:,jb_dst-1,dst_block)
-                  enddo
-               endif
-               endif
-            endif
-         endif
-
-      else  !north boundary tripole grid - copy into global north buffer
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost ! need nghost+1 rows for tripole
-
-         !*** determine start, end addresses of physical domain
-         !*** for both global buffer and local block
-
-!echmod - bug         ib_dst = in_bndy%local_ns_src_add(1,n)
-         ib_dst = in_bndy%local_ns_dst_add(1,n)
-         ie_dst = ib_dst + (nx_block-2*nghost) - 1
-!echmod         if (ie_dst > nx_global) ie_dst = nx_global
-         ie_dst = min(ie_dst, nx_global) !echmod
-         ib_src = nghost + 1
-         ie_src = ib_src + ie_dst - ib_dst
-!echmod - fill buffer with Neumann conditions first, then overwrite where needed
-         if (src_block == 0 .and. dst_block /= 0) then ! echmod
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-                  do m = 1, nghost + 1
-                     jb_dst = in_bndy%local_ns_dst_add(2,n)
-                     ie_src = ib_src + ie_dst - ib_dst
-                     tripole_ibuf(ib_dst:ie_dst,m) = &
-                        ARRAY(ib_src:ie_src,jb_dst-1,-dst_block)
-                  enddo
-               endif
-            endif
-         else if (src_block /= 0 .and. dst_block == -src_block) then ! echmod
-!maltrud - debug         if (src_block /= 0) then
-!echmod         if (dst_block /= 0) then
-            tripole_ibuf(ib_dst:ie_dst,:) = &
-                  ARRAY(ib_src:ie_src,jb_src:je_src,src_block)
-            if (present(bc)) then
-            if (bc == 'Neumann') then
-               do m = 1, nghost + 1
-                  do i = 1, nghost
-                     if (ib_dst > i) then
-                     if (tripole_ibuf(ib_dst-i,m) == c0) &
-                         tripole_ibuf(ib_dst-i,m) = tripole_ibuf(ib_dst,m)
-                     endif
-                     if (ie_dst < nx_global-i) then
-                     if (tripole_ibuf(ie_dst+i,m) == c0) &
-                         tripole_ibuf(ie_dst+i,m) = tripole_ibuf(ie_dst,m)
-                     endif
-                  enddo
-               enddo
-            endif
-            endif
-         endif
-
+      else if (srcBlock == 0) then
+         array(iDst,jDst,dstBlock) = fill
       endif
    end do
 
@@ -2756,122 +1937,83 @@ end subroutine boundary_2d_real
 !
 !-----------------------------------------------------------------------
 
-   call MPI_WAITALL(in_bndy%nmsg_ns_rcv, rcv_request, rcv_status, ierr)
+   call MPI_WAITALL(halo%numMsgRecv, rcvRequest, rcvStatus, ierr)
 
-   do n=1,in_bndy%nmsg_ns_rcv
-   do k=1,in_bndy%nblocks_ns_rcv(n)
-      dst_block = in_bndy%ns_dst_block(k,n)  ! dest block
+   do nmsg=1,halo%numMsgRecv
+      do n=1,halo%sizeRecv(nmsg)
+         iDst     = halo%recvAddr(1,n,nmsg)
+         jDst     = halo%recvAddr(2,n,nmsg)
+         dstBlock = halo%recvAddr(3,n,nmsg)
 
-      if (dst_block > 0) then  ! normal receive
-         jb_dst = in_bndy%ns_dst_add(2,k,n)
-         je_dst = jb_dst + nghost - 1
-
-         ARRAY(:,jb_dst:je_dst,dst_block) = buf_ns_rcv(:,1:nghost,k,n)
-      else ! northern tripole bndy: copy into global tripole buffer
-         src_block = in_bndy%ns_src_block(k,n)  ! echmod - bug fix
-
-         !*** determine start,end of physical domain for both
-         !*** global buffer and local buffer
-         ib_dst = in_bndy%ns_dst_add(1,k,n)
-         ie_dst = ib_dst + (nx_block-2*nghost) - 1
-!echmod         if (ie_dst > nx_global) ie_dst = nx_global
-         ie_dst = min(ie_dst, nx_global) !echmod
-         ib_src = nghost + 1
-         ie_src = ib_src + ie_dst - ib_dst
-         if (src_block /= 0) then
-            tripole_ibuf(ib_dst:ie_dst,:) = &
-            buf_ns_rcv(ib_src:ie_src,:,k,n)
+         if (dstBlock > 0) then
+            array(iDst,jDst,dstBlock) = bufRecvI4(n,nmsg)
+         else if (dstBlock < 0) then !tripole
+            bufTripoleI4(iDst,jDst) = bufRecvI4(n,nmsg)
          endif
-         if (present(bc)) then !echmod
-         if (bc == 'Neumann') then
-            do m = 1, nghost + 1
-               do i = 1, nghost
-                  if (ib_dst > i) then
-                  if (tripole_ibuf(ib_dst-i,m) == c0) &
-                      tripole_ibuf(ib_dst-i,m) = tripole_ibuf(ib_dst,m)
-                  endif
-                  if (ie_dst < nx_global-i) then
-                  if (tripole_ibuf(ie_dst+i,m) == c0) &
-                      tripole_ibuf(ie_dst+i,m) = tripole_ibuf(ie_dst,m)
-                  endif
-               enddo
-            enddo
-         endif
-         endif
-      endif
-   end do
+      end do
    end do
 
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
 !
 !-----------------------------------------------------------------------
 
-   if (allocated(tripole_ibuf)) then
+   if (nxGlobal > 0) then
 
-      tripole_ighost(:,:) = c0 !echmod
-
-      select case (grid_loc)
+      select case (fieldLoc)
       case (field_loc_center)   ! cell center location
-         xoffset = 1
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_ighost(:,1) = tripole_ibuf(:,nghost+1)
-      case (field_loc_NEcorner)   ! cell corner (velocity) location
-         xoffset = 0
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global - i
-            if (ib_dst == 0) ib_dst = nx_global
-            xavg = p5*(abs(tripole_ibuf(i     ,nghost+1)) + &
-                       abs(tripole_ibuf(ib_dst,nghost+1)))
-            tripole_ighost(i     ,1) = sign(xavg, &
-                                          tripole_ibuf(i,nghost+1))
-            tripole_ighost(ib_dst,1) = sign(xavg, &
-                                          tripole_ibuf(ib_dst,nghost+1))
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripoleI4(i   ,nghost+1)
+            x2 = bufTripoleI4(iDst,nghost+1)
+            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
+            bufTripoleI4(i   ,nghost+1) = sign(xavg, x1)
+            bufTripoleI4(iDst,nghost+1) = sign(xavg, x2)
          end do
-         !*** catch nx_global point
-         tripole_ighost(nx_global,1) = tripole_ibuf(nx_global,nghost+1)
-         tripole_ibuf(:,nghost+1) = tripole_ighost(:,1)
+
       case (field_loc_Eface)   ! cell center location
-         xoffset = 0
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_ighost(:,1) = tripole_ibuf(:,nghost+1)
+
+         ioffset = 1
+         joffset = 0
+
       case (field_loc_Nface)   ! cell corner (velocity) location
-         xoffset = 1
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global + 1 - i
-            xavg = p5*(abs(tripole_ibuf(i     ,nghost+1)) + &
-                       abs(tripole_ibuf(ib_dst,nghost+1)))
-            tripole_ighost(i     ,1) = sign(xavg, &
-                                          tripole_ibuf(i,nghost+1))
-            tripole_ighost(ib_dst,1) = sign(xavg, &
-                                          tripole_ibuf(ib_dst,nghost+1))
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripoleI4(i   ,nghost+1)
+            x2 = bufTripoleI4(iDst,nghost+1)
+            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
+            bufTripoleI4(i   ,nghost+1) = sign(xavg, x1)
+            bufTripoleI4(iDst,nghost+1) = sign(xavg, x2)
          end do
-         tripole_ibuf(:,nghost+1) = tripole_ighost(:,1)
-!lipscomb - added W face
-      case (field_loc_Wface)
-         xoffset = 1
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_ighost(:,1) = tripole_ibuf(:,nghost+1)
+
       case default
-         call abort_ice('Unknown location in boundary_2d')
+         call abort_ice( &
+            'ice_HaloUpdate2DI4: Unknown field location')
       end select
 
-      select case (field_type)
+      select case (fieldKind)
       case (field_type_scalar)
          isign =  1
       case (field_type_vector)
@@ -2879,154 +2021,43 @@ end subroutine boundary_2d_real
       case (field_type_angle)
          isign = -1
       case default
-         call abort_ice('Unknown field type in boundary')
+         call abort_ice( &
+            'ice_HaloUpdate2DI4: Unknown field kind')
       end select
 
-      !*** copy source (physical) cells into ghost cells
-      !*** global source addresses are:
-      !*** nx_global + xoffset - i
-      !*** ny_global + yoffset - j
-      !*** in the actual tripole buffer, the indices are:
-      !*** nx_global + xoffset - i = ib_src - i
-      !*** ny_global + yoffset - j - (ny_global - nghost) + 1 =
-      !***    nghost + yoffset +1 - j = jb_src - j
-
-      ib_src = nx_global + xoffset
-      jb_src = nghost + yoffset + 1
-
-      bcflag = 0
-      if (present(bc)) then
-         if (bc == 'Neumann') then
-            bcflag = 1
-            do j=1,nghost
-            do i=1,nx_global
-               index_check = max(ib_src-i,1)
-               if (tripole_ibuf(index_check, jb_src-j) /= c0) then !echmod
-                  tripole_ighost(i,1+j) = isign* &
-                                       tripole_ibuf(index_check, jb_src-j)
-               else
-                  tripole_ighost(i,1+j) = tripole_ibuf(i, jb_src-j)
-               endif
-            end do
-            end do
-         endif
-      endif
-
-      if (bcflag == 0) then
-         do j=1,nghost
-         do i=1,nx_global
-!maltrud debug
-!           tripole_ighost(i,1+j) = isign* &
-!                                   tripole_ibuf(ib_src-i, jb_src-j)
-            index_check = max(ib_src-i,1)
-            tripole_ighost(i,1+j) = isign* &
-                                    tripole_ibuf(index_check, jb_src-j)
-         end do
-         end do
-      endif ! bcflag = 0
-
-      !*** copy out of global ghost cell buffer into local
+      !*** copy out of global tripole buffer into local
       !*** ghost cells
 
-      do n=1,in_bndy%nlocal_ns
-         dst_block = in_bndy%local_ns_dst_block(n)
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
 
-         if (dst_block < 0) then
-            dst_block = -dst_block
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
 
-            jb_dst = in_bndy%local_ns_dst_add(2,n)
-            je_dst = jb_dst + nghost
-            ib_src = in_bndy%local_ns_dst_add(1,n)
-            !*** ib_src is glob address of 1st point in physical
-            !*** domain.  must now adjust to properly copy
-            !*** east-west ghost cell info in the north boundary
+         if (srcBlock < 0) then
 
-            if (ib_src == 1) then  ! western boundary
-               !*** impose cyclic conditions at western boundary
-               !*** then set up remaining indices to copy rest
-               !*** of domain from tripole ghost cell buffer
-               do i=1,nghost
-                  ARRAY(i,jb_dst:je_dst,dst_block) = &
-                     tripole_ighost(nx_global-nghost+i,:)
-               end do
-               ie_src = ib_src + nx_block - nghost - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = nghost + 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            else
-               ib_src = ib_src - nghost
-               ie_src = ib_src + nx_block - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            endif
-            if (ie_src == nx_global) then ! eastern boundary
-               !*** impose cyclic conditions in ghost cells
-               do i=1,nghost
-                  ARRAY(ie_dst+i,jb_dst:je_dst,dst_block) = &
-                     tripole_ighost(i,:)
-               end do
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               array(iDst,jDst,dstBlock) = isign*bufTripoleI4(iSrc,jSrc)
             endif
 
-            !*** now copy the remaining ghost cell values
-
-            ARRAY(ib_dst:ie_dst,jb_dst:je_dst,dst_block) = &
-               tripole_ighost(ib_src:ie_src,:)
          endif
-
-      end do
-
-      do n=1,in_bndy%nmsg_ns_rcv
-      do k=1,in_bndy%nblocks_ns_rcv(n)
-         dst_block = in_bndy%ns_dst_block(k,n)  ! dest block
-
-         if (dst_block < 0) then
-            dst_block = -dst_block
-
-            jb_dst = in_bndy%ns_dst_add(2,k,n)
-            je_dst = jb_dst + nghost ! last phys row incl for symmetry
-            ib_src = in_bndy%ns_dst_add(3,k,n)
-            !*** ib_src is glob address of 1st point in physical
-            !*** domain.  must now adjust to properly copy
-            !*** east-west ghost cell info in the north boundary
-
-            if (ib_src == 1) then  ! western boundary
-               !*** impose cyclic conditions at western boundary
-               !*** then set up remaining indices to copy rest
-               !*** of domain from tripole ghost cell buffer
-               do i=1,nghost
-                  ARRAY(i,jb_dst:je_dst,dst_block) = &
-                     tripole_ighost(nx_global-nghost+i,:)
-               end do
-               ie_src = ib_src + nx_block - nghost - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = nghost + 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            else
-               ib_src = ib_src - nghost
-               ie_src = ib_src + nx_block - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            endif
-            if (ie_src == nx_global) then ! eastern boundary
-               !*** impose cyclic conditions in ghost cells
-               do i=1,nghost
-                  ARRAY(ie_dst+i,jb_dst:je_dst,dst_block) = &
-                     tripole_ighost(i,:)
-               end do
-            endif
-
-            ARRAY(ib_dst:ie_dst,jb_dst:je_dst,dst_block) = &
-               tripole_ighost(ib_src:ie_src,:)
-         endif
-
-
-      end do
       end do
 
    endif
@@ -3037,954 +2068,34 @@ end subroutine boundary_2d_real
 !
 !-----------------------------------------------------------------------
 
-   call MPI_WAITALL(in_bndy%nmsg_ns_snd, snd_request, snd_status, ierr)
+   call MPI_WAITALL(halo%numMsgSend, sndRequest, sndStatus, ierr)
 
-   deallocate(buf_ns_snd, buf_ns_rcv)
-   deallocate(snd_request, rcv_request, snd_status, rcv_status)
+   deallocate(sndRequest, rcvRequest, sndStatus, rcvStatus, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate2DI4: error deallocating req,status arrays')
+      return
+   endif
 
 !-----------------------------------------------------------------------
+!EOC
 
-end subroutine boundary_2d_int
+ end subroutine ice_HaloUpdate2DI4
 
 !***********************************************************************
 !BOP
-! !IROUTINE: update_ghost_cells
+! !IROUTINE: ice_HaloUpdate3DR8
 ! !INTERFACE:
 
- subroutine boundary_3d_dbl(ARRAY, in_bndy, grid_loc, field_type, bc)
+ subroutine ice_HaloUpdate3DR8(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
 
 ! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
-!  for 2d horizontal arrays of double precision.
-!
-! !REVISION HISTORY:
-!  created Sept. 2004 by William Lipscomb based on boundary_2d_dbl above
-
-! !USER:
-
-   include 'mpif.h'   ! MPI Fortran include file
-
-! !INPUT PARAMETERS:
-
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
-
-   integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
-
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
-
-! !INPUT/OUTPUT PARAMETERS:
-
-   real (r8), dimension(:,:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-!
-!  local variables
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind) ::           &
-      i,j,k,m,n,                   &! dummy loop indices
-      narr,                        &! number of 2d arrays in ARRAY
-      ib_src,ie_src,jb_src,je_src, &! beg,end indices for bndy cells
-      ib_dst,ie_dst,jb_dst,je_dst, &!
-      nx_global,                   &! global domain size in x
-      src_block,                   &! local block number for source
-      dst_block,                   &! local block number for destination
-      bufsize,                     &! buffer size for send/recv buffers
-      xoffset, yoffset,            &! address shifts for tripole
-      isign,                       &! sign factor for tripole grids
-      bcflag,                      &! boundary condition flag
-      ierr                          ! MPI error flag
-
-   integer (int_kind), dimension(:), allocatable :: &
-      snd_request,              &! MPI request ids
-      rcv_request                ! MPI request ids
-
-   integer (int_kind), dimension(:,:), allocatable :: &
-      snd_status,               &! MPI status flags
-      rcv_status                 ! MPI status flags
-
-   real (r8), dimension(:,:,:,:,:), allocatable :: &
-      buf_ew_snd,       &! message buffer for east-west sends
-      buf_ew_rcv,       &! message buffer for east-west recvs
-      buf_ns_snd,       &! message buffer for north-south sends
-      buf_ns_rcv         ! message buffer for north-south recvs
-
-   real (r8), dimension(:), allocatable :: &
-      xavg               ! scalar for enforcing symmetry at U pts
-
-   !logical (log_kind), save :: first_call = .true.
-   !integer (int_kind), save :: bndy_3d_local, bndy_3d_recv, &
-   !                            bndy_3d_send, bndy_3d_wait, bndy_3d_final
-
-!-----------------------------------------------------------------------
-!
-!  allocate buffers for east-west sends and receives
-!
-!-----------------------------------------------------------------------
-
-   narr = size(ARRAY,dim=3)
-	
-   if (in_bndy%nmsg_ew_snd > 0) &
-      allocate(buf_ew_snd(nghost, ny_block, narr, &
-                          in_bndy%maxblocks_ew_snd, in_bndy%nmsg_ew_snd))
-
-   if (in_bndy%nmsg_ew_rcv > 0) &
-      allocate(buf_ew_rcv(nghost, ny_block, narr, &
-                          in_bndy%maxblocks_ew_rcv, in_bndy%nmsg_ew_rcv))
-
-   if (in_bndy%nmsg_ew_snd > 0) &
-      allocate(snd_request(in_bndy%nmsg_ew_snd), &
-               snd_status(MPI_STATUS_SIZE,in_bndy%nmsg_ew_snd))
-
-   if (in_bndy%nmsg_ew_rcv > 0) &
-      allocate(rcv_request(in_bndy%nmsg_ew_rcv), &
-               rcv_status(MPI_STATUS_SIZE,in_bndy%nmsg_ew_rcv))
-
-   if (allocated(tripole_dbuf)) then
-	nx_global = size(tripole_dbuf,dim=1)
-
-	! allocate temporary 3d buffers 
-	allocate (tripole_dbuf_3d  (nx_global,nghost+1,narr), &
-	          tripole_dghost_3d(nx_global,nghost+1,narr))
-    endif
-
-    if (allocated(tripole_dbuf_3d)) tripole_dbuf_3d = c0
-    if (allocated(tripole_dghost_3d)) tripole_dghost_3d = c0
-
-!-----------------------------------------------------------------------
-!
-!  post receives
-!
-!-----------------------------------------------------------------------
-
-   do n=1,in_bndy%nmsg_ew_rcv
-
-      bufsize = ny_block*nghost*narr*in_bndy%nblocks_ew_rcv(n)
-
-      call MPI_IRECV(buf_ew_rcv(1,1,1,1,n), bufsize, mpi_dbl, &
-                     in_bndy%ew_rcv_proc(n)-1,                &
-                     mpitag_bndy_3d + in_bndy%ew_rcv_proc(n), &
-                     in_bndy%communicator, rcv_request(n), ierr)
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  fill send buffer and post sends
-!
-!-----------------------------------------------------------------------
-
-   do n=1,in_bndy%nmsg_ew_snd
-
-      bufsize = ny_block*nghost*narr*in_bndy%nblocks_ew_snd(n)
-
-      do i=1,in_bndy%nblocks_ew_snd(n)
-         ib_src    = in_bndy%ew_src_add(1,i,n)
-         ie_src    = ib_src + nghost - 1
-         src_block = in_bndy%ew_src_block(i,n)
-         buf_ew_snd(:,:,:,i,n) = ARRAY(ib_src:ie_src,:,:,src_block)
-      end do
-
-      call MPI_ISEND(buf_ew_snd(1,1,1,1,n), bufsize, mpi_dbl, &
-                     in_bndy%ew_snd_proc(n)-1, &
-                     mpitag_bndy_3d + my_task + 1, &
-                     in_bndy%communicator, snd_request(n), ierr)
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  do local copies while waiting for messages to complete
-!  also initialize ghost cells to zero
-!
-!-----------------------------------------------------------------------
-
-   do n=1,in_bndy%nlocal_ew
-      src_block = in_bndy%local_ew_src_block(n)
-      dst_block = in_bndy%local_ew_dst_block(n)
-
-      ib_src = in_bndy%local_ew_src_add(1,n)
-      ie_src = ib_src + nghost - 1
-      ib_dst = in_bndy%local_ew_dst_add(1,n)
-      ie_dst = ib_dst + nghost - 1
-
-      if (src_block /= 0) then
-         ARRAY(ib_dst:ie_dst,:,:,dst_block) = &
-         ARRAY(ib_src:ie_src,:,:,src_block)
-      else
-         ARRAY(ib_dst:ie_dst,:,:,dst_block) = c0
-         if (present(bc)) then
-            if (bc == 'Neumann') then
-            if (ib_dst == 1) then                       ! west boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,:,dst_block) = ARRAY(ie_dst+1,:,:,dst_block)
-               enddo
-            elseif (ib_dst == nx_block-nghost+1) then   ! east boundary
-               do i = ib_dst, ie_dst
-                  ARRAY(i,:,:,dst_block) = ARRAY(ib_dst-1,:,:,dst_block)
-               enddo
-            endif
-            endif
-          endif
-      endif
-
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  wait for receives to finish and then unpack the recv buffer into
-!  ghost cells
-!
-!-----------------------------------------------------------------------
-
-   if (in_bndy%nmsg_ew_rcv > 0)  &
-      call MPI_WAITALL(in_bndy%nmsg_ew_rcv, rcv_request, rcv_status, ierr)
-
-   do n=1,in_bndy%nmsg_ew_rcv
-   do k=1,in_bndy%nblocks_ew_rcv(n)
-      dst_block = in_bndy%ew_dst_block(k,n)
-
-      ib_dst = in_bndy%ew_dst_add(1,k,n)
-      ie_dst = ib_dst + nghost - 1
-
-      ARRAY(ib_dst:ie_dst,:,:,dst_block) = buf_ew_rcv(:,:,:,k,n)
-   end do
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  wait for sends to complete and deallocate arrays
-!
-!-----------------------------------------------------------------------
-
-   if (in_bndy%nmsg_ew_snd > 0)  &
-      call MPI_WAITALL(in_bndy%nmsg_ew_snd, snd_request, snd_status, ierr)
-
-   if (allocated(buf_ew_snd))  deallocate (buf_ew_snd)
-   if (allocated(buf_ew_rcv))  deallocate (buf_ew_rcv)
-   if (allocated(snd_request)) deallocate (snd_request)
-   if (allocated(rcv_request)) deallocate (rcv_request)
-   if (allocated(snd_status))  deallocate (snd_status)
-   if (allocated(rcv_status))  deallocate (rcv_status)
-
-!-----------------------------------------------------------------------
-!
-!  now exchange north-south boundary info
-!
-!-----------------------------------------------------------------------
-
-   if (in_bndy%nmsg_ns_snd > 0)  &
-      allocate(buf_ns_snd(nx_block, nghost+1, narr, &
-                       in_bndy%maxblocks_ns_snd, in_bndy%nmsg_ns_snd))
-
-   if (in_bndy%nmsg_ns_rcv > 0)  &
-      allocate(buf_ns_rcv(nx_block, nghost+1, narr, &
-                       in_bndy%maxblocks_ns_rcv, in_bndy%nmsg_ns_rcv))
-
-   if (in_bndy%nmsg_ns_snd > 0)  &
-      allocate(snd_request(in_bndy%nmsg_ns_snd), &
-               snd_status(MPI_STATUS_SIZE,in_bndy%nmsg_ns_snd))
-
-   if (in_bndy%nmsg_ns_rcv > 0)  &
-      allocate(rcv_request(in_bndy%nmsg_ns_rcv), &
-               rcv_status(MPI_STATUS_SIZE,in_bndy%nmsg_ns_rcv))
-
-!-----------------------------------------------------------------------
-!
-!  post receives
-!
-!-----------------------------------------------------------------------
-
-   do n=1,in_bndy%nmsg_ns_rcv
-
-      bufsize = nx_block*(nghost+1)*narr*in_bndy%nblocks_ns_rcv(n)
-
-      call MPI_IRECV(buf_ns_rcv(1,1,1,1,n), bufsize, mpi_dbl,   &
-                     in_bndy%ns_rcv_proc(n)-1,                &
-                     mpitag_bndy_3d + in_bndy%ns_rcv_proc(n), &
-                     in_bndy%communicator, rcv_request(n), ierr)
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  fill send buffer and post sends
-!
-!-----------------------------------------------------------------------
-
-   do n=1,in_bndy%nmsg_ns_snd
-
-      bufsize = nx_block*(nghost+1)*narr*in_bndy%nblocks_ns_snd(n)
-
-      do i=1,in_bndy%nblocks_ns_snd(n)
-         jb_src    = in_bndy%ns_src_add(2,i,n)
-         je_src    = jb_src + nghost  ! nghost+1 rows needed for tripole
-         src_block = in_bndy%ns_src_block(i,n)
-         buf_ns_snd(:,:,:,i,n) = ARRAY(:,jb_src:je_src,:,src_block)
-      end do
-
-      call MPI_ISEND(buf_ns_snd(1,1,1,1,n), bufsize, mpi_dbl, &
-                     in_bndy%ns_snd_proc(n)-1, &
-                     mpitag_bndy_3d + my_task + 1, &
-                     in_bndy%communicator, snd_request(n), ierr)
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  do local copies while waiting for messages to complete
-!
-!-----------------------------------------------------------------------
-
-   do n=1,in_bndy%nlocal_ns
-
-      src_block = in_bndy%local_ns_src_block(n)
-      dst_block = in_bndy%local_ns_dst_block(n)   
-
-      if (dst_block > 0) then ! straight local copy
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost - 1
-         jb_dst = in_bndy%local_ns_dst_add(2,n)
-         je_dst = jb_dst + nghost - 1
-
-         if (src_block /= 0) then
-            ARRAY(:,jb_dst:je_dst,:,dst_block) = &
-            ARRAY(:,jb_src:je_src,:,src_block)
-         else
-            ARRAY(:,jb_dst:je_dst,:,dst_block) = c0
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-               if (jb_dst == 1) then                       ! south boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,:,dst_block) = ARRAY(:,je_dst+1,:,dst_block)
-                  enddo
-               elseif (jb_dst == ny_block-nghost+1) then   ! north boundary
-                  do j = jb_dst, je_dst
-                     ARRAY(:,j,:,dst_block) = ARRAY(:,jb_dst-1,:,dst_block)
-                  enddo
-               endif
-               endif
-            endif
-         endif
-
-      else  !north boundary tripole grid - copy into global north buffer
-
-         jb_src = in_bndy%local_ns_src_add(2,n)
-         je_src = jb_src + nghost ! need nghost+1 rows for tripole
-
-         !*** determine start, end addresses of physical domain
-         !*** for both global buffer and local block
-
-!echmod - bug         ib_dst = in_bndy%local_ns_src_add(1,n)
-         ib_dst = in_bndy%local_ns_dst_add(1,n)
-         ie_dst = ib_dst + (nx_block-2*nghost) - 1
-!echmod         if (ie_dst > nx_global) ie_dst = nx_global
-         ie_dst = min(ie_dst, nx_global) !echmod
-         ib_src = nghost + 1
-         ie_src = ib_src + ie_dst - ib_dst
-!echmod - fill buffer with Neumann conditions first, then overwrite where needed
-         if (src_block == 0 .and. dst_block /= 0) then ! echmod
-            if (present(bc)) then
-               if (bc == 'Neumann') then
-                  do m = 1, nghost + 1
-                     jb_dst = in_bndy%local_ns_dst_add(2,n)
-                     ie_src = ib_src + ie_dst - ib_dst
-                     tripole_dbuf_3d(ib_dst:ie_dst,m,:) = &
-                        ARRAY(ib_src:ie_src,jb_dst-1,:,-dst_block)
-                  enddo
-               endif
-            endif
-         else if (src_block /= 0 .and. dst_block == -src_block) then ! echmod
-!maltrud - debug         if (src_block /= 0) then
-!echmod         if (dst_block /= 0) then
-            tripole_dbuf_3d(ib_dst:ie_dst,:,:) = &
-                  ARRAY(ib_src:ie_src,jb_src:je_src,:,src_block)
-            if (present(bc)) then
-            if (bc == 'Neumann') then
-               do k = 1, narr
-               do m = 1, nghost + 1
-                  do i = 1, nghost
-                     if (ib_dst > i) then
-                     if (tripole_dbuf_3d(ib_dst-i,m,k) == c0) &
-                         tripole_dbuf_3d(ib_dst-i,m,k) = tripole_dbuf_3d(ib_dst,m,k)
-                     endif
-                     if (ie_dst < nx_global-i) then
-                     if (tripole_dbuf_3d(ie_dst+i,m,k) == c0) &
-                         tripole_dbuf_3d(ie_dst+i,m,k) = tripole_dbuf_3d(ie_dst,m,k)
-                     endif
-                  enddo
-                  enddo
-               enddo
-            endif
-            endif
-         endif
-
-      endif
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  wait for receives to finish and then unpack the recv buffer into
-!  ghost cells
-!
-!-----------------------------------------------------------------------
-
-   if (in_bndy%nmsg_ns_rcv > 0)  &
-      call MPI_WAITALL(in_bndy%nmsg_ns_rcv, rcv_request, rcv_status, ierr)
-
-   do n=1,in_bndy%nmsg_ns_rcv
-   do k=1,in_bndy%nblocks_ns_rcv(n)
-      dst_block = in_bndy%ns_dst_block(k,n)  ! dest block
-
-      if (dst_block > 0) then  ! normal receive
-         jb_dst = in_bndy%ns_dst_add(2,k,n)
-         je_dst = jb_dst + nghost - 1
-
-         ARRAY(:,jb_dst:je_dst,:,dst_block) = buf_ns_rcv(:,1:nghost,:,k,n)
-      else ! northern tripole bndy: copy into global tripole buffer
-         src_block = in_bndy%ns_src_block(k,n)  ! echmod - bug fix
-
-         !*** determine start,end of physical domain for both
-         !*** global buffer and local buffer
-         ib_dst = in_bndy%ns_dst_add(1,k,n)
-         ie_dst = ib_dst + (nx_block-2*nghost) - 1
-!echmod         if (ie_dst > nx_global) ie_dst = nx_global
-         ie_dst = min(ie_dst, nx_global) !echmod
-         ib_src = nghost + 1
-         ie_src = ib_src + ie_dst - ib_dst
-         if (src_block /= 0) then
-            tripole_dbuf_3d(ib_dst:ie_dst,:,:) = &
-            buf_ns_rcv(ib_src:ie_src,:,:,k,n)
-         endif
-         if (present(bc)) then !echmod
-         if (bc == 'Neumann') then
-           do j = 1, narr
-            do m = 1, nghost + 1
-               do i = 1, nghost
-                  if (ib_dst > i) then
-                  if (tripole_dbuf_3d(ib_dst-i,m,j) == c0) &
-                      tripole_dbuf_3d(ib_dst-i,m,j) = tripole_dbuf_3d(ib_dst,m,j)
-                  endif
-                  if (ie_dst < nx_global-i) then
-                  if (tripole_dbuf_3d(ie_dst+i,m,j) == c0) &
-                      tripole_dbuf_3d(ie_dst+i,m,j) = tripole_dbuf_3d(ie_dst,m,j)
-                  endif
-               enddo
-            enddo
-           enddo
-         endif
-         endif
-      endif
-   end do
-   end do
-
-!-----------------------------------------------------------------------
-!
-!  take care of northern boundary in tripole case
-!
-!-----------------------------------------------------------------------
-
-   if (allocated(tripole_dbuf_3d)) then
-
-      tripole_dghost_3d(:,:,:) = c0 !echmod
-      allocate(xavg(narr))
-
-      select case (grid_loc)
-      case (field_loc_center)   ! cell center location
-         xoffset = 1
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_dghost_3d(:,1,:) = tripole_dbuf_3d(:,nghost+1,:)
-      case (field_loc_NEcorner)   ! cell corner (velocity) location
-         xoffset = 0
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global - i
-            if (ib_dst == 0) ib_dst = nx_global
-            xavg(:) = p5*(abs(tripole_dbuf_3d(i     ,nghost+1,:)) + &
-                          abs(tripole_dbuf_3d(ib_dst,nghost+1,:)))
-            tripole_dghost_3d(i     ,1,:) = sign(xavg(:), &
-                                             tripole_dbuf_3d(i,nghost+1,:))
-            tripole_dghost_3d(ib_dst,1,:) = sign(xavg(:), &
-                                             tripole_dbuf_3d(ib_dst,nghost+1,:))
-         end do
-         !*** catch nx_global point
-         tripole_dghost_3d(nx_global,1,:) = tripole_dbuf_3d(nx_global,nghost+1,:)
-         tripole_dbuf_3d(:,nghost+1,:) = tripole_dghost_3d(:,1,:)
-
-      case (field_loc_Eface)   ! cell center location
-         xoffset = 0
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_dghost_3d(:,1,:) = tripole_dbuf_3d(:,nghost+1,:)
-      case (field_loc_Nface)   ! cell corner (velocity) location
-         xoffset = 1
-         yoffset = 0
-         !*** enforce symmetry
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain
-         do i = 1, nx_global/2
-            ib_dst = nx_global + 1 - i
-            xavg(:) = p5*(abs(tripole_dbuf_3d(i     ,nghost+1,:)) + &
-                          abs(tripole_dbuf_3d(ib_dst,nghost+1,:)))
-            tripole_dghost_3d(i     ,1,:) = sign(xavg(:), &
-                                             tripole_dbuf_3d(i,nghost+1,:))
-            tripole_dghost_3d(ib_dst,1,:) = sign(xavg(:), &
-                                             tripole_dbuf_3d(ib_dst,nghost+1,:))
-         end do
-         tripole_dbuf_3d(:,nghost+1,:) = tripole_dghost_3d(:,1,:)
-
-!lipscomb - added W face
-      case (field_loc_Wface)
-         xoffset = 1
-         yoffset = 1
-         !*** first row of ghost cell buffer is actually the last
-         !*** row of physical domain (mostly for symmetry enforcement)
-         tripole_dghost_3d(:,1,:) = tripole_dbuf_3d(:,nghost+1,:)
-      case default
-         call abort_ice('Unknown location in boundary_3d')
-      end select
-
-      deallocate(xavg)
-
-      select case (field_type)
-      case (field_type_scalar)
-         isign =  1
-      case (field_type_vector)
-         isign = -1
-      case (field_type_angle)
-         isign = -1
-      case default
-         call abort_ice('Unknown field type in boundary')
-      end select
-
-      !*** copy source (physical) cells into ghost cells
-      !*** global source addresses are:
-      !*** nx_global + xoffset - i
-      !*** ny_global + yoffset - j
-      !*** in the actual tripole buffer, the indices are:
-      !*** nx_global + xoffset - i = ib_src - i
-      !*** ny_global + yoffset - j - (ny_global - nghost) + 1 =
-      !***    nghost + yoffset +1 - j = jb_src - j
-
-      ib_src = nx_global + xoffset
-      jb_src = nghost + yoffset + 1
-
-      bcflag = 0
-      if (present(bc)) then
-         if (bc == 'Neumann') then
-            bcflag = 1
-            do n=1,narr
-            do j=1,nghost
-            do i=1,nx_global
-               index_check = max(ib_src-i,1)
-               if (tripole_dbuf_3d(index_check, jb_src-j,n) /= c0) then !echmod
-                  tripole_dghost_3d(i,1+j,n) = isign* &
-                                       tripole_dbuf_3d(index_check, jb_src-j,n)
-               else
-                  tripole_dghost_3d(i,1+j,n) = tripole_dbuf_3d(i, jb_src-j,n)
-               endif
-            end do
-            end do
-            end do
-         endif
-      endif
-
-      if (bcflag == 0) then
-         do j=1,nghost
-         do i=1,nx_global
-!maltrud debug
-!           tripole_dghost_3d(i,1+j,:) = isign* &
-!                                      tripole_dbuf_3d(ib_src-i, jb_src-j,:)
-            index_check = max(ib_src-i,1)
-            tripole_dghost_3d(i,1+j,:) = isign* &
-                                    tripole_dbuf_3d(index_check, jb_src-j,:)
-         end do
-         end do
-      endif ! bcflag = 0
-
-      !*** copy out of global ghost cell buffer into local
-      !*** ghost cells
-
-      do n=1,in_bndy%nlocal_ns
-         dst_block = in_bndy%local_ns_dst_block(n)
-
-         if (dst_block < 0) then
-            dst_block = -dst_block
-
-            jb_dst = in_bndy%local_ns_dst_add(2,n)
-            je_dst = jb_dst + nghost
-            ib_src = in_bndy%local_ns_dst_add(1,n)
-            !*** ib_src is glob address of 1st point in physical
-            !*** domain.  must now adjust to properly copy
-            !*** east-west ghost cell info in the north boundary
-
-            if (ib_src == 1) then  ! western boundary
-               !*** impose cyclic conditions at western boundary
-               !*** then set up remaining indices to copy rest
-               !*** of domain from tripole ghost cell buffer
-               do i=1,nghost
-                  ARRAY(i,jb_dst:je_dst,:,dst_block) = &
-                     tripole_dghost_3d(nx_global-nghost+i,:,:)
-               end do
-               ie_src = ib_src + nx_block - nghost - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = nghost + 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            else
-               ib_src = ib_src - nghost
-               ie_src = ib_src + nx_block - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            endif
-            if (ie_src == nx_global) then ! eastern boundary
-               !*** impose cyclic conditions in ghost cells
-               do i=1,nghost
-                  ARRAY(ie_dst+i,jb_dst:je_dst,:,dst_block) = &
-                     tripole_dghost_3d(i,:,:)
-               end do
-            endif
-
-            !*** now copy the remaining ghost cell values
-
-            ARRAY(ib_dst:ie_dst,jb_dst:je_dst,:,dst_block) = &
-               tripole_dghost_3d(ib_src:ie_src,:,:)
-         endif
-
-      end do
-
-      do n=1,in_bndy%nmsg_ns_rcv
-      do k=1,in_bndy%nblocks_ns_rcv(n)
-         dst_block = in_bndy%ns_dst_block(k,n)  ! dest block
-
-         if (dst_block < 0) then
-            dst_block = -dst_block
-
-            jb_dst = in_bndy%ns_dst_add(2,k,n)
-            je_dst = jb_dst + nghost ! last phys row incl for symmetry
-            ib_src = in_bndy%ns_dst_add(3,k,n)
-            !*** ib_src is glob address of 1st point in physical
-            !*** domain.  must now adjust to properly copy
-            !*** east-west ghost cell info in the north boundary
-
-            if (ib_src == 1) then  ! western boundary
-               !*** impose cyclic conditions at western boundary
-               !*** then set up remaining indices to copy rest
-               !*** of domain from tripole ghost cell buffer
-               do i=1,nghost
-                  ARRAY(i,jb_dst:je_dst,:,dst_block) = &
-                     tripole_dghost_3d(nx_global-nghost+i,:,:)
-               end do
-               ie_src = ib_src + nx_block - nghost - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = nghost + 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            else
-               ib_src = ib_src - nghost
-               ie_src = ib_src + nx_block - 1
-!echmod               if (ie_src > nx_global) ie_src = nx_global
-               ie_src = min(ie_src, nx_global) !echmod
-               ib_dst = 1
-               ie_dst = ib_dst + (ie_src - ib_src)
-            endif
-            if (ie_src == nx_global) then ! eastern boundary
-               !*** impose cyclic conditions in ghost cells
-               do i=1,nghost
-                  ARRAY(ie_dst+i,jb_dst:je_dst,:,dst_block) = &
-                     tripole_dghost_3d(i,:,:)
-               end do
-            endif
-
-            ARRAY(ib_dst:ie_dst,jb_dst:je_dst,:,dst_block) = &
-               tripole_dghost_3d(ib_src:ie_src,:,:)
-         endif
-
-      end do
-      end do
-
-      deallocate(tripole_dbuf_3d, tripole_dghost_3d)
-
-   endif   ! allocated(tripole_dbuf_3d)
-
-!-----------------------------------------------------------------------
-!
-!  wait for sends to complete and deallocate arrays
-!
-!-----------------------------------------------------------------------
-
-   if (in_bndy%nmsg_ns_snd > 0)  &
-      call MPI_WAITALL(in_bndy%nmsg_ns_snd, snd_request, snd_status, ierr)
-
-   if (allocated(buf_ns_snd))  deallocate (buf_ns_snd)
-   if (allocated(buf_ns_rcv))  deallocate (buf_ns_rcv)
-   if (allocated(snd_request)) deallocate (snd_request)
-   if (allocated(rcv_request)) deallocate (rcv_request)
-   if (allocated(snd_status))  deallocate (snd_status)
-   if (allocated(rcv_status))  deallocate (rcv_status)
-
-!-----------------------------------------------------------------------
-
- end subroutine boundary_3d_dbl
-
-
-!***********************************************************************
-!BOP
-! !IROUTINE: update_ghost_cells
-! !INTERFACE:
-
-subroutine boundary_3d_real(ARRAY, in_bndy, grid_loc, field_type, bc)
-
-! !DESCRIPTION:
-!  This routine updates ghost cells for an input array and is a
-!  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
-!  for 3d horizontal arrays of single precision.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT/OUTPUT PARAMETERS:
-
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
-
-   integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
-
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
-
-   real (r4), dimension(:,:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-!
-!  local variables
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind) ::           &
-      k,m                           ! dummy loop indices
-
-!-----------------------------------------------------------------------
-
-   m = size(ARRAY,3)
-   do k = 1, m
-      call boundary_2d_real(ARRAY(:,:,k,:),in_bndy,grid_loc,field_type, bc)
-   end do
-
-!-----------------------------------------------------------------------
-
-end subroutine boundary_3d_real
-
-!***********************************************************************
-!BOP
-! !IROUTINE: update_ghost_cells
-! !INTERFACE:
-
-subroutine boundary_3d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
-
-! !DESCRIPTION:
-!  This routine updates ghost cells for an input array and is a
-!  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
-!  for 3d horizontal arrays of integer.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT/OUTPUT PARAMETERS:
-
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
-
-   integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
-
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
-
-   integer (int_kind), dimension(:,:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-!
-!  local variables
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind) ::           &
-      k,m                           ! dummy loop indices
-
-!-----------------------------------------------------------------------
-
-   m = size(ARRAY,3)
-   do k = 1, m
-      call boundary_2d_int(ARRAY(:,:,k,:),in_bndy,grid_loc,field_type, bc)
-   end do
-
-!-----------------------------------------------------------------------
-
-end subroutine boundary_3d_int
-
-!***********************************************************************
-!BOP
-! !IROUTINE: update_ghost_cells
-! !INTERFACE:
-
-subroutine boundary_4d_dbl(ARRAY, in_bndy, grid_loc, field_type, bc)
-
-! !DESCRIPTION:
-!  This routine updates ghost cells for an input array and is a
-!  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
-!  for 4d horizontal arrays of double precision.
-!
-!lipscomb - Revised this subroutine so that it calls the faster
-!lipscomb   3d_dbl routine instead of the slower 2d_dbl routine
- 
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT/OUTPUT PARAMETERS:
-
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
-
-   integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
-
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
-
-   real (r8), dimension(:,:,:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-!
-!  local variables
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind) ::           &
-      k,l,m,n                      ! dummy loop indices
-
-!-----------------------------------------------------------------------
-
-   n = size(ARRAY,dim=4)
-   do m=1,n
-      call boundary_3d_dbl(ARRAY(:,:,:,m,:),in_bndy,grid_loc,field_type, bc)
-   end do
-
-!-----------------------------------------------------------------------
-
-end subroutine boundary_4d_dbl
-
-!***********************************************************************
-!BOP
-! !IROUTINE: update_ghost_cells
-! !INTERFACE:
-
-subroutine boundary_4d_real(ARRAY, in_bndy, grid_loc, field_type, bc)
-
-! !DESCRIPTION:
-!  This routine updates ghost cells for an input array and is a
-!  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
-!  for 3d horizontal arrays of single precision.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT/OUTPUT PARAMETERS:
-
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
-
-   integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
-
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
-
-   real (r4), dimension(:,:,:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-!
-!  local variables
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind) ::           &
-      k,l,m,n                      ! dummy loop indices
-
-!-----------------------------------------------------------------------
-
-   l = size(ARRAY,dim=3)
-   n = size(ARRAY,dim=4)
-   do k=1,l
-   do m=1,n
-      call boundary_2d_real(ARRAY(:,:,k,m,:),in_bndy,grid_loc,field_type, bc)
-   end do
-   end do
-
-!-----------------------------------------------------------------------
-
-end subroutine boundary_4d_real
-
-!***********************************************************************
-!BOP
-! !IROUTINE: update_ghost_cells
-! !INTERFACE:
-
-subroutine boundary_4d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
-
-! !DESCRIPTION:
-!  This routine updates ghost cells for an input array and is a
-!  member of a group of routines under the generic interface
-!  update\_ghost\_cells.  This routine is the specific interface
+!  ice\_HaloUpdate.  This routine is the specific interface
 !  for 3d horizontal arrays of double precision.
 !
 ! !REVISION HISTORY:
@@ -3992,21 +2103,30 @@ subroutine boundary_4d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
 
 ! !USER:
 
-! !INPUT/OUTPUT PARAMETERS:
+! !INPUT PARAMETERS:
 
-   type (bndy), intent(in) :: &
-      in_bndy                 ! boundary update structure for the array
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
 
    integer (int_kind), intent(in) :: &
-      field_type,               &! id for type of field (scalar, vector, angle)
-      grid_loc                   ! id for location on horizontal grid
-                                 !  (center, NEcorner, Nface, Eface)
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
 
-   character (char_len), intent(in), optional :: &
-      bc                         ! boundary condition type (Dirichlet, Neumann)
+   real (dbl_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
 
-   integer (int_kind), dimension(:,:,:,:,:), intent(inout) :: &
-      ARRAY              ! array containing horizontal slab to update
+! !INPUT/OUTPUT PARAMETERS:
+
+   real (dbl_kind), dimension(:,:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -4017,37 +2137,2371 @@ subroutine boundary_4d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      k,l,m,n                      ! dummy loop indices
+      i,j,k,n,nmsg,              &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      nz,                        &! size of array in 3rd dimension
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
+
+   integer (int_kind), dimension(:), allocatable :: &
+      sndRequest,      &! MPI request ids
+      rcvRequest        ! MPI request ids
+
+   integer (int_kind), dimension(:,:), allocatable :: &
+      sndStatus,       &! MPI status flags
+      rcvStatus         ! MPI status flags
+
+   real (dbl_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
+
+   real (dbl_kind), dimension(:,:), allocatable :: &
+      bufSend, bufRecv            ! 3d send,recv buffers
+
+   real (dbl_kind), dimension(:,:,:), allocatable :: &
+      bufTripole                  ! 3d tripole buffer
 
 !-----------------------------------------------------------------------
+!
+!  initialize error code and fill value
+!
+!-----------------------------------------------------------------------
 
-   l = size(ARRAY,dim=3)
-   n = size(ARRAY,dim=4)
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0.0_dbl_kind
+   endif
 
-   do k=1,l
-   do m=1,n
-      call boundary_2d_int(ARRAY(:,:,k,m,:),in_bndy,grid_loc,field_type, bc)
+   nxGlobal = 0
+   if (allocated(bufTripoleR8)) nxGlobal = size(bufTripoleR8,dim=1)
+
+!-----------------------------------------------------------------------
+!
+!  allocate request and status arrays for messages
+!
+!-----------------------------------------------------------------------
+
+   allocate(sndRequest(halo%numMsgSend), &
+            rcvRequest(halo%numMsgRecv), &
+            sndStatus(MPI_STATUS_SIZE,halo%numMsgSend), &
+            rcvStatus(MPI_STATUS_SIZE,halo%numMsgRecv), stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate3DR8: error allocating req,status arrays')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  allocate 3D buffers
+!
+!-----------------------------------------------------------------------
+
+   nz = size(array, dim=3)
+
+   allocate(bufSend(bufSizeSend*nz, halo%numMsgSend), &
+            bufRecv(bufSizeRecv*nz, halo%numMsgRecv), &
+            bufTripole(nxGlobal, nghost+1, nz), &
+            stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate3DR8: error allocating buffers')
+      return
+   endif
+
+   bufTripole = fill
+
+!-----------------------------------------------------------------------
+!
+!  post receives
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numMsgRecv
+
+      call MPI_IRECV(bufRecv(:,nmsg), bufSizeRecv*nz, mpiR8,   &
+                     halo%recvTask(nmsg),                       &
+                     mpitagHalo + halo%recvTask(nmsg),      &
+                     halo%communicator, rcvRequest(nmsg), ierr)
    end do
+
+!-----------------------------------------------------------------------
+!
+!  fill send buffer and post sends
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numMsgSend
+
+      i=0
+      do n=1,halo%sizeSend(nmsg)
+         iSrc     = halo%sendAddr(1,n,nmsg)
+         jSrc     = halo%sendAddr(2,n,nmsg)
+         srcBlock = halo%sendAddr(3,n,nmsg)
+
+         do k=1,nz
+            i = i + 1
+            bufSend(i,nmsg) = array(iSrc,jSrc,k,srcBlock)
+         end do
+      end do
+      do n=i+1,bufSizeSend*nz
+         bufSend(n,nmsg) = fill  ! fill remainder of buffer
+      end do
+
+      call MPI_ISEND(bufSend(:,nmsg), bufSizeSend*nz, mpiR8, &
+                     halo%sendTask(nmsg),                        &
+                     mpitagHalo + my_task,                &
+                     halo%communicator, sndRequest(nmsg), ierr)
    end do
+
+!-----------------------------------------------------------------------
+!
+!  do local copies while waiting for messages to complete
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            do k=1,nz
+               array(iDst,jDst,k,dstBlock) = &
+               array(iSrc,jSrc,k,srcBlock)
+            end do
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            do k=1,nz
+               bufTripole(iDst,jDst,k) = &
+               array(iSrc,jSrc,k,srcBlock)
+            end do
+         endif
+      else if (srcBlock == 0) then
+         do k=1,nz
+            array(iDst,jDst,k,dstBlock) = fill
+         end do
+      endif
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  wait for receives to finish and then unpack the recv buffer into
+!  ghost cells
+!
+!-----------------------------------------------------------------------
+
+   call MPI_WAITALL(halo%numMsgRecv, rcvRequest, rcvStatus, ierr)
+
+   do nmsg=1,halo%numMsgRecv
+      i = 0
+      do n=1,halo%sizeRecv(nmsg)
+         iDst     = halo%recvAddr(1,n,nmsg)
+         jDst     = halo%recvAddr(2,n,nmsg)
+         dstBlock = halo%recvAddr(3,n,nmsg)
+
+         if (dstBlock > 0) then
+            do k=1,nz
+               i = i + 1
+               array(iDst,jDst,k,dstBlock) = bufRecv(i,nmsg)
+            end do
+         else if (dstBlock < 0) then !tripole
+            do k=1,nz
+               i = i + 1
+               bufTripole(iDst,jDst,k) = bufRecv(i,nmsg)
+            end do
+         endif
+      end do
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
+!
+!-----------------------------------------------------------------------
+
+   if (nxGlobal > 0) then
+
+      select case (fieldLoc)
+      case (field_loc_center)   ! cell center location
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do k=1,nz
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripole(i   ,nghost+1,k)
+            x2 = bufTripole(iDst,nghost+1,k)
+            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+         end do
+         end do
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do k=1,nz
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripole(i   ,nghost+1,k)
+            x2 = bufTripole(iDst,nghost+1,k)
+            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+         end do
+         end do
+
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DR8: Unknown field location')
+      end select
+
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DR8: Unknown field kind')
+      end select
+
+      !*** copy out of global tripole buffer into local
+      !*** ghost cells
+
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
+
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
+
+         if (srcBlock < 0) then
+
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               do k=1,nz
+                  array(iDst,jDst,k,dstBlock) = isign*    &
+                                  bufTripole(iSrc,jSrc,k)
+               end do
+            endif
+
+         endif
+      end do
+
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  wait for sends to complete and deallocate arrays
+!
+!-----------------------------------------------------------------------
+
+   call MPI_WAITALL(halo%numMsgSend, sndRequest, sndStatus, ierr)
+
+   deallocate(sndRequest, rcvRequest, sndStatus, rcvStatus, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate3DR8: error deallocating req,status arrays')
+      return
+   endif
+
+   deallocate(bufSend, bufRecv, bufTripole, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate3DR8: error deallocating 3d buffers')
+      return
+   endif
 
 !-----------------------------------------------------------------------
 !EOC
 
-   end subroutine boundary_4d_int
-
+ end subroutine ice_HaloUpdate3DR8
 
 !***********************************************************************
 !BOP
-! !IROUTINE: increment_message_counter
+! !IROUTINE: ice_HaloUpdate3DR4
 ! !INTERFACE:
 
-   subroutine increment_message_counter(snd_counter, rcv_counter, &
-                                        src_proc, dst_proc)
+ subroutine ice_HaloUpdate3DR4(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
+
+! !DESCRIPTION:
+!  This routine updates ghost cells for an input array and is a
+!  member of a group of routines under the generic interface
+!  ice\_HaloUpdate.  This routine is the specific interface
+!  for 3d horizontal arrays of single precision.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !USER:
+
+! !INPUT PARAMETERS:
+
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
+
+   integer (int_kind), intent(in) :: &
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
+
+   real (real_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
+
+! !INPUT/OUTPUT PARAMETERS:
+
+   real (real_kind), dimension(:,:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) ::           &
+      i,j,k,n,nmsg,              &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      nz,                        &! size of array in 3rd dimension
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
+
+   integer (int_kind), dimension(:), allocatable :: &
+      sndRequest,      &! MPI request ids
+      rcvRequest        ! MPI request ids
+
+   integer (int_kind), dimension(:,:), allocatable :: &
+      sndStatus,       &! MPI status flags
+      rcvStatus         ! MPI status flags
+
+   real (real_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
+
+   real (real_kind), dimension(:,:), allocatable :: &
+      bufSend, bufRecv            ! 3d send,recv buffers
+
+   real (real_kind), dimension(:,:,:), allocatable :: &
+      bufTripole                  ! 3d tripole buffer
+
+!-----------------------------------------------------------------------
+!
+!  initialize error code and fill value
+!
+!-----------------------------------------------------------------------
+
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0.0_real_kind
+   endif
+
+   nxGlobal = 0
+   if (allocated(bufTripoleR4)) nxGlobal = size(bufTripoleR4,dim=1)
+
+!-----------------------------------------------------------------------
+!
+!  allocate request and status arrays for messages
+!
+!-----------------------------------------------------------------------
+
+   allocate(sndRequest(halo%numMsgSend), &
+            rcvRequest(halo%numMsgRecv), &
+            sndStatus(MPI_STATUS_SIZE,halo%numMsgSend), &
+            rcvStatus(MPI_STATUS_SIZE,halo%numMsgRecv), stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate3DR4: error allocating req,status arrays')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  allocate 3D buffers
+!
+!-----------------------------------------------------------------------
+
+   nz = size(array, dim=3)
+
+   allocate(bufSend(bufSizeSend*nz, halo%numMsgSend),  &
+            bufRecv(bufSizeRecv*nz, halo%numMsgRecv),  &
+            bufTripole(nxGlobal, nghost+1, nz), &
+            stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate3DR4: error allocating buffers')
+      return
+   endif
+
+   bufTripole = fill
+
+!-----------------------------------------------------------------------
+!
+!  post receives
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numMsgRecv
+
+      call MPI_IRECV(bufRecv(:,nmsg), bufSizeRecv*nz, mpiR4,   &
+                     halo%recvTask(nmsg),                          &
+                     mpitagHalo + halo%recvTask(nmsg),         &
+                     halo%communicator, rcvRequest(nmsg), ierr)
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  fill send buffer and post sends
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numMsgSend
+
+      i=0
+      do n=1,halo%sizeSend(nmsg)
+         iSrc     = halo%sendAddr(1,n,nmsg)
+         jSrc     = halo%sendAddr(2,n,nmsg)
+         srcBlock = halo%sendAddr(3,n,nmsg)
+
+         do k=1,nz
+            i = i + 1
+            bufSend(i,nmsg) = array(iSrc,jSrc,k,srcBlock)
+         end do
+      end do
+      do n=i+1,bufSizeSend*nz
+         bufSend(n,nmsg) = fill  ! fill remainder of buffer
+      end do
+
+      call MPI_ISEND(bufSend(:,nmsg), bufSizeSend*nz, mpiR4, &
+                     halo%sendTask(nmsg),                        &
+                     mpitagHalo + my_task,                &
+                     halo%communicator, sndRequest(nmsg), ierr)
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  do local copies while waiting for messages to complete
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            do k=1,nz
+               array(iDst,jDst,k,dstBlock) = &
+               array(iSrc,jSrc,k,srcBlock)
+            end do
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            do k=1,nz
+               bufTripole(iDst,jDst,k) = &
+               array(iSrc,jSrc,k,srcBlock)
+            end do
+         endif
+      else if (srcBlock == 0) then
+         do k=1,nz
+            array(iDst,jDst,k,dstBlock) = fill
+         end do
+      endif
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  wait for receives to finish and then unpack the recv buffer into
+!  ghost cells
+!
+!-----------------------------------------------------------------------
+
+   call MPI_WAITALL(halo%numMsgRecv, rcvRequest, rcvStatus, ierr)
+
+   do nmsg=1,halo%numMsgRecv
+      i = 0
+      do n=1,halo%sizeRecv(nmsg)
+         iDst     = halo%recvAddr(1,n,nmsg)
+         jDst     = halo%recvAddr(2,n,nmsg)
+         dstBlock = halo%recvAddr(3,n,nmsg)
+
+         if (dstBlock > 0) then
+            do k=1,nz
+               i = i + 1
+               array(iDst,jDst,k,dstBlock) = bufRecv(i,nmsg)
+            end do
+         else if (dstBlock < 0) then !tripole
+            do k=1,nz
+               i = i + 1
+               bufTripole(iDst,jDst,k) = bufRecv(i,nmsg)
+            end do
+         endif
+      end do
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
+!
+!-----------------------------------------------------------------------
+
+   if (nxGlobal > 0) then
+
+      select case (fieldLoc)
+      case (field_loc_center)   ! cell center location
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do k=1,nz
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripole(i   ,nghost+1,k)
+            x2 = bufTripole(iDst,nghost+1,k)
+            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+         end do
+         end do
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do k=1,nz
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripole(i   ,nghost+1,k)
+            x2 = bufTripole(iDst,nghost+1,k)
+            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+         end do
+         end do
+
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DR4: Unknown field location')
+      end select
+
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DR4: Unknown field kind')
+      end select
+
+      !*** copy out of global tripole buffer into local
+      !*** ghost cells
+
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
+
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
+
+         if (srcBlock < 0) then
+
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               do k=1,nz
+                  array(iDst,jDst,k,dstBlock) = isign*    &
+                                  bufTripole(iSrc,jSrc,k)
+               end do
+            endif
+
+         endif
+      end do
+
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  wait for sends to complete and deallocate arrays
+!
+!-----------------------------------------------------------------------
+
+   call MPI_WAITALL(halo%numMsgSend, sndRequest, sndStatus, ierr)
+
+   deallocate(sndRequest, rcvRequest, sndStatus, rcvStatus, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate3DR4: error deallocating req,status arrays')
+      return
+   endif
+
+   deallocate(bufSend, bufRecv, bufTripole, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate3DR4: error deallocating 3d buffers')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_HaloUpdate3DR4
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_HaloUpdate3DI4
+! !INTERFACE:
+
+ subroutine ice_HaloUpdate3DI4(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
+
+! !DESCRIPTION:
+!  This routine updates ghost cells for an input array and is a
+!  member of a group of routines under the generic interface
+!  ice\_HaloUpdate.  This routine is the specific interface
+!  for 3d horizontal arrays of double precision.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !USER:
+
+! !INPUT PARAMETERS:
+
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
+
+   integer (int_kind), intent(in) :: &
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
+
+   integer (int_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
+
+! !INPUT/OUTPUT PARAMETERS:
+
+   integer (int_kind), dimension(:,:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) ::           &
+      i,j,k,n,nmsg,              &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      nz,                        &! size of array in 3rd dimension
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
+
+   integer (int_kind), dimension(:), allocatable :: &
+      sndRequest,      &! MPI request ids
+      rcvRequest        ! MPI request ids
+
+   integer (int_kind), dimension(:,:), allocatable :: &
+      sndStatus,       &! MPI status flags
+      rcvStatus         ! MPI status flags
+
+   integer (int_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
+
+   integer (int_kind), dimension(:,:), allocatable :: &
+      bufSend, bufRecv            ! 3d send,recv buffers
+
+   integer (int_kind), dimension(:,:,:), allocatable :: &
+      bufTripole                  ! 3d tripole buffer
+
+!-----------------------------------------------------------------------
+!
+!  initialize error code and fill value
+!
+!-----------------------------------------------------------------------
+
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0_int_kind
+   endif
+
+   nxGlobal = 0
+   if (allocated(bufTripoleI4)) nxGlobal = size(bufTripoleI4,dim=1)
+
+!-----------------------------------------------------------------------
+!
+!  allocate request and status arrays for messages
+!
+!-----------------------------------------------------------------------
+
+   allocate(sndRequest(halo%numMsgSend), &
+            rcvRequest(halo%numMsgRecv), &
+            sndStatus(MPI_STATUS_SIZE,halo%numMsgSend), &
+            rcvStatus(MPI_STATUS_SIZE,halo%numMsgRecv), stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate3DI4: error allocating req,status arrays')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  allocate 3D buffers
+!
+!-----------------------------------------------------------------------
+
+   nz = size(array, dim=3)
+
+   allocate(bufSend(bufSizeSend*nz, halo%numMsgSend),  &
+            bufRecv(bufSizeRecv*nz, halo%numMsgRecv),  &
+            bufTripole(nxGlobal, nghost+1, nz), &
+            stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate3DI4: error allocating buffers')
+      return
+   endif
+
+   bufTripole = fill
+
+!-----------------------------------------------------------------------
+!
+!  post receives
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numMsgRecv
+
+      call MPI_IRECV(bufRecv(:,nmsg), bufSizeRecv*nz, MPI_INTEGER, &
+                     halo%recvTask(nmsg),                          &
+                     mpitagHalo + halo%recvTask(nmsg),         &
+                     halo%communicator, rcvRequest(nmsg), ierr)
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  fill send buffer and post sends
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numMsgSend
+
+      i=0
+      do n=1,halo%sizeSend(nmsg)
+         iSrc     = halo%sendAddr(1,n,nmsg)
+         jSrc     = halo%sendAddr(2,n,nmsg)
+         srcBlock = halo%sendAddr(3,n,nmsg)
+
+         do k=1,nz
+            i = i + 1
+            bufSend(i,nmsg) = array(iSrc,jSrc,k,srcBlock)
+         end do
+      end do
+      do n=i+1,bufSizeSend*nz
+         bufSend(n,nmsg) = fill  ! fill remainder of buffer
+      end do
+
+      call MPI_ISEND(bufSend(:,nmsg), bufSizeSend*nz, MPI_INTEGER, &
+                     halo%sendTask(nmsg),                        &
+                     mpitagHalo + my_task,                &
+                     halo%communicator, sndRequest(nmsg), ierr)
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  do local copies while waiting for messages to complete
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            do k=1,nz
+               array(iDst,jDst,k,dstBlock) = &
+               array(iSrc,jSrc,k,srcBlock)
+            end do
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            do k=1,nz
+               bufTripole(iDst,jDst,k) = &
+               array(iSrc,jSrc,k,srcBlock)
+            end do
+         endif
+      else if (srcBlock == 0) then
+         do k=1,nz
+            array(iDst,jDst,k,dstBlock) = fill
+         end do
+      endif
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  wait for receives to finish and then unpack the recv buffer into
+!  ghost cells
+!
+!-----------------------------------------------------------------------
+
+   call MPI_WAITALL(halo%numMsgRecv, rcvRequest, rcvStatus, ierr)
+
+   do nmsg=1,halo%numMsgRecv
+      i = 0
+      do n=1,halo%sizeRecv(nmsg)
+         iDst     = halo%recvAddr(1,n,nmsg)
+         jDst     = halo%recvAddr(2,n,nmsg)
+         dstBlock = halo%recvAddr(3,n,nmsg)
+
+         if (dstBlock > 0) then
+            do k=1,nz
+               i = i + 1
+               array(iDst,jDst,k,dstBlock) = bufRecv(i,nmsg)
+            end do
+         else if (dstBlock < 0) then !tripole
+            do k=1,nz
+               i = i + 1
+               bufTripole(iDst,jDst,k) = bufRecv(i,nmsg)
+            end do
+         endif
+      end do
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
+!
+!-----------------------------------------------------------------------
+
+   if (nxGlobal > 0) then
+
+      select case (fieldLoc)
+      case (field_loc_center)   ! cell center location
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do k=1,nz
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripole(i   ,nghost+1,k)
+            x2 = bufTripole(iDst,nghost+1,k)
+            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
+            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+         end do
+         end do
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do k=1,nz
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripole(i   ,nghost+1,k)
+            x2 = bufTripole(iDst,nghost+1,k)
+            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
+            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+         end do
+         end do
+
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DI4: Unknown field location')
+      end select
+
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DI4: Unknown field kind')
+      end select
+
+      !*** copy out of global tripole buffer into local
+      !*** ghost cells
+
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
+
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
+
+         if (srcBlock < 0) then
+
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               do k=1,nz
+                  array(iDst,jDst,k,dstBlock) = isign*    &
+                                  bufTripole(iSrc,jSrc,k)
+               end do
+            endif
+
+         endif
+      end do
+
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  wait for sends to complete and deallocate arrays
+!
+!-----------------------------------------------------------------------
+
+   call MPI_WAITALL(halo%numMsgSend, sndRequest, sndStatus, ierr)
+
+   deallocate(sndRequest, rcvRequest, sndStatus, rcvStatus, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate3DI4: error deallocating req,status arrays')
+      return
+   endif
+
+   deallocate(bufSend, bufRecv, bufTripole, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate3DI4: error deallocating 3d buffers')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_HaloUpdate3DI4
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_HaloUpdate4DR8
+! !INTERFACE:
+
+ subroutine ice_HaloUpdate4DR8(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
+
+! !DESCRIPTION:
+!  This routine updates ghost cells for an input array and is a
+!  member of a group of routines under the generic interface
+!  ice\_HaloUpdate.  This routine is the specific interface
+!  for 4d horizontal arrays of double precision.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !USER:
+
+! !INPUT PARAMETERS:
+
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
+
+   integer (int_kind), intent(in) :: &
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
+
+   real (dbl_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
+
+! !INPUT/OUTPUT PARAMETERS:
+
+   real (dbl_kind), dimension(:,:,:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) ::           &
+      i,j,k,l,n,nmsg,            &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      nz, nt,                    &! size of array in 3rd,4th dimensions
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
+
+   integer (int_kind), dimension(:), allocatable :: &
+      sndRequest,      &! MPI request ids
+      rcvRequest        ! MPI request ids
+
+   integer (int_kind), dimension(:,:), allocatable :: &
+      sndStatus,       &! MPI status flags
+      rcvStatus         ! MPI status flags
+
+   real (dbl_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
+
+   real (dbl_kind), dimension(:,:), allocatable :: &
+      bufSend, bufRecv            ! 4d send,recv buffers
+
+   real (dbl_kind), dimension(:,:,:,:), allocatable :: &
+      bufTripole                  ! 4d tripole buffer
+
+!-----------------------------------------------------------------------
+!
+!  initialize error code and fill value
+!
+!-----------------------------------------------------------------------
+
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0.0_dbl_kind
+   endif
+
+   nxGlobal = 0
+   if (allocated(bufTripoleR8)) nxGlobal = size(bufTripoleR8,dim=1)
+
+!-----------------------------------------------------------------------
+!
+!  allocate request and status arrays for messages
+!
+!-----------------------------------------------------------------------
+
+   allocate(sndRequest(halo%numMsgSend), &
+            rcvRequest(halo%numMsgRecv), &
+            sndStatus(MPI_STATUS_SIZE,halo%numMsgSend), &
+            rcvStatus(MPI_STATUS_SIZE,halo%numMsgRecv), stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate4DR8: error allocating req,status arrays')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  allocate 4D buffers
+!
+!-----------------------------------------------------------------------
+
+   nz = size(array, dim=3)
+   nt = size(array, dim=4)
+
+   allocate(bufSend(bufSizeSend*nz*nt, halo%numMsgSend),   &
+            bufRecv(bufSizeRecv*nz*nt, halo%numMsgRecv),   &
+            bufTripole(nxGlobal, nghost+1, nz, nt), &
+            stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate4DR8: error allocating buffers')
+      return
+   endif
+
+   bufTripole = fill
+
+!-----------------------------------------------------------------------
+!
+!  post receives
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numMsgRecv
+
+      call MPI_IRECV(bufRecv(:,nmsg), bufSizeRecv*nz*nt, mpiR8, &
+                     halo%recvTask(nmsg),                           &
+                     mpitagHalo + halo%recvTask(nmsg),          &
+                     halo%communicator, rcvRequest(nmsg), ierr)
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  fill send buffer and post sends
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numMsgSend
+
+      i=0
+      do n=1,halo%sizeSend(nmsg)
+         iSrc     = halo%sendAddr(1,n,nmsg)
+         jSrc     = halo%sendAddr(2,n,nmsg)
+         srcBlock = halo%sendAddr(3,n,nmsg)
+
+         do l=1,nt
+         do k=1,nz
+            i = i + 1
+            bufSend(i,nmsg) = array(iSrc,jSrc,k,l,srcBlock)
+         end do
+         end do
+      end do
+
+      do n=i+1,bufSizeSend*nz*nt
+         bufSend(n,nmsg) = fill  ! fill remainder of buffer
+      end do
+
+      call MPI_ISEND(bufSend(:,nmsg), bufSizeSend*nz*nt, mpiR8, &
+                     halo%sendTask(nmsg),                           &
+                     mpitagHalo + my_task,                   &
+                     halo%communicator, sndRequest(nmsg), ierr)
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  do local copies while waiting for messages to complete
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            do l=1,nt
+            do k=1,nz
+               array(iDst,jDst,k,l,dstBlock) = &
+               array(iSrc,jSrc,k,l,srcBlock)
+            end do
+            end do
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            do l=1,nt
+            do k=1,nz
+               bufTripole(iDst,jDst,k,l) = &
+               array(iSrc,jSrc,k,l,srcBlock)
+            end do
+            end do
+         endif
+      else if (srcBlock == 0) then
+         do l=1,nt
+         do k=1,nz
+            array(iDst,jDst,k,l,dstBlock) = fill
+         end do
+         end do
+      endif
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  wait for receives to finish and then unpack the recv buffer into
+!  ghost cells
+!
+!-----------------------------------------------------------------------
+
+   call MPI_WAITALL(halo%numMsgRecv, rcvRequest, rcvStatus, ierr)
+
+   do nmsg=1,halo%numMsgRecv
+      i = 0
+      do n=1,halo%sizeRecv(nmsg)
+         iDst     = halo%recvAddr(1,n,nmsg)
+         jDst     = halo%recvAddr(2,n,nmsg)
+         dstBlock = halo%recvAddr(3,n,nmsg)
+
+         if (dstBlock > 0) then
+            do l=1,nt
+            do k=1,nz
+               i = i + 1
+               array(iDst,jDst,k,l,dstBlock) = bufRecv(i,nmsg)
+            end do
+            end do
+         else if (dstBlock < 0) then !tripole
+            do l=1,nt
+            do k=1,nz
+               i = i + 1
+               bufTripole(iDst,jDst,k,l) = bufRecv(i,nmsg)
+            end do
+            end do
+         endif
+      end do
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
+!
+!-----------------------------------------------------------------------
+
+   if (nxGlobal > 0) then
+
+      select case (fieldLoc)
+      case (field_loc_center)   ! cell center location
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do l=1,nt
+         do k=1,nz
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripole(i   ,nghost+1,k,l)
+            x2 = bufTripole(iDst,nghost+1,k,l)
+            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+         end do
+         end do
+         end do
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do l=1,nt
+         do k=1,nz
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripole(i   ,nghost+1,k,l)
+            x2 = bufTripole(iDst,nghost+1,k,l)
+            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+         end do
+         end do
+         end do
+
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DR8: Unknown field location')
+      end select
+
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DR8: Unknown field kind')
+      end select
+
+      !*** copy out of global tripole buffer into local
+      !*** ghost cells
+
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
+
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
+
+         if (srcBlock < 0) then
+
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               do l=1,nt
+               do k=1,nz
+                  array(iDst,jDst,k,l,dstBlock) = isign*    &
+                                  bufTripole(iSrc,jSrc,k,l)
+               end do
+               end do
+            endif
+
+         endif
+      end do
+
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  wait for sends to complete and deallocate arrays
+!
+!-----------------------------------------------------------------------
+
+   call MPI_WAITALL(halo%numMsgSend, sndRequest, sndStatus, ierr)
+
+   deallocate(sndRequest, rcvRequest, sndStatus, rcvStatus, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate4DR8: error deallocating req,status arrays')
+      return
+   endif
+
+   deallocate(bufSend, bufRecv, bufTripole, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate4DR8: error deallocating 4d buffers')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_HaloUpdate4DR8
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_HaloUpdate4DR4
+! !INTERFACE:
+
+ subroutine ice_HaloUpdate4DR4(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
+
+! !DESCRIPTION:
+!  This routine updates ghost cells for an input array and is a
+!  member of a group of routines under the generic interface
+!  ice\_HaloUpdate.  This routine is the specific interface
+!  for 4d horizontal arrays of single precision.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !USER:
+
+! !INPUT PARAMETERS:
+
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
+
+   integer (int_kind), intent(in) :: &
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
+
+   real (real_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
+
+! !INPUT/OUTPUT PARAMETERS:
+
+   real (real_kind), dimension(:,:,:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) ::           &
+      i,j,k,l,n,nmsg,            &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      nz, nt,                    &! size of array in 3rd,4th dimensions
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
+
+   integer (int_kind), dimension(:), allocatable :: &
+      sndRequest,      &! MPI request ids
+      rcvRequest        ! MPI request ids
+
+   integer (int_kind), dimension(:,:), allocatable :: &
+      sndStatus,       &! MPI status flags
+      rcvStatus         ! MPI status flags
+
+   real (real_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
+
+   real (real_kind), dimension(:,:), allocatable :: &
+      bufSend, bufRecv            ! 4d send,recv buffers
+
+   real (real_kind), dimension(:,:,:,:), allocatable :: &
+      bufTripole                  ! 4d tripole buffer
+
+!-----------------------------------------------------------------------
+!
+!  initialize error code and fill value
+!
+!-----------------------------------------------------------------------
+
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0.0_real_kind
+   endif
+
+   nxGlobal = 0
+   if (allocated(bufTripoleR4)) nxGlobal = size(bufTripoleR4,dim=1)
+
+!-----------------------------------------------------------------------
+!
+!  allocate request and status arrays for messages
+!
+!-----------------------------------------------------------------------
+
+   allocate(sndRequest(halo%numMsgSend), &
+            rcvRequest(halo%numMsgRecv), &
+            sndStatus(MPI_STATUS_SIZE,halo%numMsgSend), &
+            rcvStatus(MPI_STATUS_SIZE,halo%numMsgRecv), stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate4DR4: error allocating req,status arrays')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  allocate 4D buffers
+!
+!-----------------------------------------------------------------------
+
+   nz = size(array, dim=3)
+   nt = size(array, dim=4)
+
+   allocate(bufSend(bufSizeSend*nz*nt, halo%numMsgSend),   &
+            bufRecv(bufSizeRecv*nz*nt, halo%numMsgRecv),   &
+            bufTripole(nxGlobal, nghost+1, nz, nt), &
+            stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate4DR4: error allocating buffers')
+      return
+   endif
+
+   bufTripole = fill
+
+!-----------------------------------------------------------------------
+!
+!  post receives
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numMsgRecv
+
+      call MPI_IRECV(bufRecv(:,nmsg), bufSizeRecv*nz*nt, mpiR4, &
+                     halo%recvTask(nmsg),                           &
+                     mpitagHalo + halo%recvTask(nmsg),          &
+                     halo%communicator, rcvRequest(nmsg), ierr)
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  fill send buffer and post sends
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numMsgSend
+
+      i=0
+      do n=1,halo%sizeSend(nmsg)
+         iSrc     = halo%sendAddr(1,n,nmsg)
+         jSrc     = halo%sendAddr(2,n,nmsg)
+         srcBlock = halo%sendAddr(3,n,nmsg)
+
+         do l=1,nt
+         do k=1,nz
+            i = i + 1
+            bufSend(i,nmsg) = array(iSrc,jSrc,k,l,srcBlock)
+         end do
+         end do
+      end do
+
+      do n=i+1,bufSizeSend*nz*nt
+         bufSend(n,nmsg) = fill  ! fill remainder of buffer
+      end do
+
+      call MPI_ISEND(bufSend(:,nmsg), bufSizeSend*nz*nt, mpiR4, &
+                     halo%sendTask(nmsg),                           &
+                     mpitagHalo + my_task,                   &
+                     halo%communicator, sndRequest(nmsg), ierr)
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  do local copies while waiting for messages to complete
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            do l=1,nt
+            do k=1,nz
+               array(iDst,jDst,k,l,dstBlock) = &
+               array(iSrc,jSrc,k,l,srcBlock)
+            end do
+            end do
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            do l=1,nt
+            do k=1,nz
+               bufTripole(iDst,jDst,k,l) = &
+               array(iSrc,jSrc,k,l,srcBlock)
+            end do
+            end do
+         endif
+      else if (srcBlock == 0) then
+         do l=1,nt
+         do k=1,nz
+            array(iDst,jDst,k,l,dstBlock) = fill
+         end do
+         end do
+      endif
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  wait for receives to finish and then unpack the recv buffer into
+!  ghost cells
+!
+!-----------------------------------------------------------------------
+
+   call MPI_WAITALL(halo%numMsgRecv, rcvRequest, rcvStatus, ierr)
+
+   do nmsg=1,halo%numMsgRecv
+      i = 0
+      do n=1,halo%sizeRecv(nmsg)
+         iDst     = halo%recvAddr(1,n,nmsg)
+         jDst     = halo%recvAddr(2,n,nmsg)
+         dstBlock = halo%recvAddr(3,n,nmsg)
+
+         if (dstBlock > 0) then
+            do l=1,nt
+            do k=1,nz
+               i = i + 1
+               array(iDst,jDst,k,l,dstBlock) = bufRecv(i,nmsg)
+            end do
+            end do
+         else if (dstBlock < 0) then !tripole
+            do l=1,nt
+            do k=1,nz
+               i = i + 1
+               bufTripole(iDst,jDst,k,l) = bufRecv(i,nmsg)
+            end do
+            end do
+         endif
+      end do
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
+!
+!-----------------------------------------------------------------------
+
+   if (nxGlobal > 0) then
+
+      select case (fieldLoc)
+      case (field_loc_center)   ! cell center location
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do l=1,nt
+         do k=1,nz
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripole(i   ,nghost+1,k,l)
+            x2 = bufTripole(iDst,nghost+1,k,l)
+            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+         end do
+         end do
+         end do
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do l=1,nt
+         do k=1,nz
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripole(i   ,nghost+1,k,l)
+            x2 = bufTripole(iDst,nghost+1,k,l)
+            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
+            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+         end do
+         end do
+         end do
+
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DR4: Unknown field location')
+      end select
+
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DR4: Unknown field kind')
+      end select
+
+      !*** copy out of global tripole buffer into local
+      !*** ghost cells
+
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
+
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
+
+         if (srcBlock < 0) then
+
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               do l=1,nt
+               do k=1,nz
+                  array(iDst,jDst,k,l,dstBlock) = isign*    &
+                                  bufTripole(iSrc,jSrc,k,l)
+               end do
+               end do
+            endif
+
+         endif
+      end do
+
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  wait for sends to complete and deallocate arrays
+!
+!-----------------------------------------------------------------------
+
+   call MPI_WAITALL(halo%numMsgSend, sndRequest, sndStatus, ierr)
+
+   deallocate(sndRequest, rcvRequest, sndStatus, rcvStatus, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate4DR4: error deallocating req,status arrays')
+      return
+   endif
+
+   deallocate(bufSend, bufRecv, bufTripole, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate4DR4: error deallocating 4d buffers')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_HaloUpdate4DR4
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_HaloUpdate4DI4
+! !INTERFACE:
+
+ subroutine ice_HaloUpdate4DI4(array, halo,                    &
+                               fieldLoc, fieldKind, &
+                               fillValue)
+
+! !DESCRIPTION:
+!  This routine updates ghost cells for an input array and is a
+!  member of a group of routines under the generic interface
+!  ice\_HaloUpdate.  This routine is the specific interface
+!  for 4d horizontal integer arrays.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !USER:
+
+! !INPUT PARAMETERS:
+
+   type (ice_halo), intent(in) :: &
+      halo                 ! precomputed halo structure containing all
+                           !  information needed for halo update
+
+   integer (int_kind), intent(in) :: &
+      fieldKind,          &! id for type of field (scalar, vector, angle)
+      fieldLoc             ! id for location on horizontal grid
+                           !  (center, NEcorner, Nface, Eface)
+
+   integer (int_kind), intent(in), optional :: &
+      fillValue            ! optional value to put in ghost cells
+                           !  where neighbor points are unknown
+                           !  (e.g. eliminated land blocks or
+                           !   closed boundaries)
+
+! !INPUT/OUTPUT PARAMETERS:
+
+   integer (int_kind), dimension(:,:,:,:,:), intent(inout) :: &
+      array                ! array containing field for which halo
+                           ! needs to be updated
+
+! !OUTPUT PARAMETERS:
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) ::           &
+      i,j,k,l,n,nmsg,            &! dummy loop indices
+      ierr,                      &! error or status flag for MPI,alloc
+      nxGlobal,                  &! global domain size in x (tripole)
+      nz, nt,                    &! size of array in 3rd,4th dimensions
+      iSrc,jSrc,                 &! source addresses for message
+      iDst,jDst,                 &! dest   addresses for message
+      srcBlock,                  &! local block number for source
+      dstBlock,                  &! local block number for destination
+      ioffset, joffset,          &! address shifts for tripole
+      isign                       ! sign factor for tripole grids
+
+   integer (int_kind), dimension(:), allocatable :: &
+      sndRequest,      &! MPI request ids
+      rcvRequest        ! MPI request ids
+
+   integer (int_kind), dimension(:,:), allocatable :: &
+      sndStatus,       &! MPI status flags
+      rcvStatus         ! MPI status flags
+
+   integer (int_kind) :: &
+      fill,            &! value to use for unknown points
+      x1,x2,xavg        ! scalars for enforcing symmetry at U pts
+
+   integer (int_kind), dimension(:,:), allocatable :: &
+      bufSend, bufRecv            ! 4d send,recv buffers
+
+   integer (int_kind), dimension(:,:,:,:), allocatable :: &
+      bufTripole                  ! 4d tripole buffer
+
+!-----------------------------------------------------------------------
+!
+!  initialize error code and fill value
+!
+!-----------------------------------------------------------------------
+
+   if (present(fillValue)) then
+      fill = fillValue
+   else
+      fill = 0_int_kind
+   endif
+
+   nxGlobal = 0
+   if (allocated(bufTripoleI4)) nxGlobal = size(bufTripoleI4,dim=1)
+
+!-----------------------------------------------------------------------
+!
+!  allocate request and status arrays for messages
+!
+!-----------------------------------------------------------------------
+
+   allocate(sndRequest(halo%numMsgSend), &
+            rcvRequest(halo%numMsgRecv), &
+            sndStatus(MPI_STATUS_SIZE,halo%numMsgSend), &
+            rcvStatus(MPI_STATUS_SIZE,halo%numMsgRecv), stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate4DI4: error allocating req,status arrays')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  allocate 4D buffers
+!
+!-----------------------------------------------------------------------
+
+   nz = size(array, dim=3)
+   nt = size(array, dim=4)
+
+   allocate(bufSend(bufSizeSend*nz*nt, halo%numMsgSend),   &
+            bufRecv(bufSizeRecv*nz*nt, halo%numMsgRecv),   &
+            bufTripole(nxGlobal, nghost+1, nz, nt), &
+            stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate4DI4: error allocating buffers')
+      return
+   endif
+
+   bufTripole = fill
+
+!-----------------------------------------------------------------------
+!
+!  post receives
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numMsgRecv
+
+      call MPI_IRECV(bufRecv(:,nmsg), bufSizeRecv*nz*nt, MPI_INTEGER, &
+                     halo%recvTask(nmsg),                             &
+                     mpitagHalo + halo%recvTask(nmsg),            &
+                     halo%communicator, rcvRequest(nmsg), ierr)
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  fill send buffer and post sends
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numMsgSend
+
+      i=0
+      do n=1,halo%sizeSend(nmsg)
+         iSrc     = halo%sendAddr(1,n,nmsg)
+         jSrc     = halo%sendAddr(2,n,nmsg)
+         srcBlock = halo%sendAddr(3,n,nmsg)
+
+         do l=1,nt
+         do k=1,nz
+            i = i + 1
+            bufSend(i,nmsg) = array(iSrc,jSrc,k,l,srcBlock)
+         end do
+         end do
+      end do
+
+      do n=i+1,bufSizeSend*nz*nt
+         bufSend(n,nmsg) = fill  ! fill remainder of buffer
+      end do
+
+      call MPI_ISEND(bufSend(:,nmsg), bufSizeSend*nz*nt, MPI_INTEGER, &
+                     halo%sendTask(nmsg),                             &
+                     mpitagHalo + my_task,                     &
+                     halo%communicator, sndRequest(nmsg), ierr)
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  do local copies while waiting for messages to complete
+!  if srcBlock is zero, that denotes an eliminated land block or a 
+!    closed boundary where ghost cell values are undefined
+!  if srcBlock is less than zero, the message is a copy out of the
+!    tripole buffer and will be treated later
+!
+!-----------------------------------------------------------------------
+
+   do nmsg=1,halo%numLocalCopies
+      iSrc     = halo%srcLocalAddr(1,nmsg)
+      jSrc     = halo%srcLocalAddr(2,nmsg)
+      srcBlock = halo%srcLocalAddr(3,nmsg)
+      iDst     = halo%dstLocalAddr(1,nmsg)
+      jDst     = halo%dstLocalAddr(2,nmsg)
+      dstBlock = halo%dstLocalAddr(3,nmsg)
+
+      if (srcBlock > 0) then
+         if (dstBlock > 0) then
+            do l=1,nt
+            do k=1,nz
+               array(iDst,jDst,k,l,dstBlock) = &
+               array(iSrc,jSrc,k,l,srcBlock)
+            end do
+            end do
+         else if (dstBlock < 0) then ! tripole copy into buffer
+            do l=1,nt
+            do k=1,nz
+               bufTripole(iDst,jDst,k,l) = &
+               array(iSrc,jSrc,k,l,srcBlock)
+            end do
+            end do
+         endif
+      else if (srcBlock == 0) then
+         do l=1,nt
+         do k=1,nz
+            array(iDst,jDst,k,l,dstBlock) = fill
+         end do
+         end do
+      endif
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  wait for receives to finish and then unpack the recv buffer into
+!  ghost cells
+!
+!-----------------------------------------------------------------------
+
+   call MPI_WAITALL(halo%numMsgRecv, rcvRequest, rcvStatus, ierr)
+
+   do nmsg=1,halo%numMsgRecv
+      i = 0
+      do n=1,halo%sizeRecv(nmsg)
+         iDst     = halo%recvAddr(1,n,nmsg)
+         jDst     = halo%recvAddr(2,n,nmsg)
+         dstBlock = halo%recvAddr(3,n,nmsg)
+
+         if (dstBlock > 0) then
+            do l=1,nt
+            do k=1,nz
+               i = i + 1
+               array(iDst,jDst,k,l,dstBlock) = bufRecv(i,nmsg)
+            end do
+            end do
+         else if (dstBlock < 0) then !tripole
+            do l=1,nt
+            do k=1,nz
+               i = i + 1
+               bufTripole(iDst,jDst,k,l) = bufRecv(i,nmsg)
+            end do
+            end do
+         endif
+      end do
+   end do
+
+!-----------------------------------------------------------------------
+!
+!  take care of northern boundary in tripole case
+!  bufTripole array contains the top haloWidth+1 rows of physical
+!    domain for entire (global) top row 
+!
+!-----------------------------------------------------------------------
+
+   if (nxGlobal > 0) then
+
+      select case (fieldLoc)
+      case (field_loc_center)   ! cell center location
+
+         ioffset = 0
+         joffset = 0
+
+      case (field_loc_NEcorner)   ! cell corner location
+
+         ioffset = 1
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do l=1,nt
+         do k=1,nz
+         do i = 1,nxGlobal/2 - 1
+            iDst = nxGlobal - i
+            x1 = bufTripole(i   ,nghost+1,k,l)
+            x2 = bufTripole(iDst,nghost+1,k,l)
+            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
+            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+         end do
+         end do
+         end do
+
+      case (field_loc_Eface)   ! cell center location
+
+         ioffset = 1
+         joffset = 0
+
+      case (field_loc_Nface)   ! cell corner (velocity) location
+
+         ioffset = 0
+         joffset = 1
+
+         !*** top row is degenerate, so must enforce symmetry
+         !***   use average of two degenerate points for value
+
+         do l=1,nt
+         do k=1,nz
+         do i = 1,nxGlobal/2
+            iDst = nxGlobal + 1 - i
+            x1 = bufTripole(i   ,nghost+1,k,l)
+            x2 = bufTripole(iDst,nghost+1,k,l)
+            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
+            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
+            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+         end do
+         end do
+         end do
+
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DI4: Unknown field location')
+      end select
+
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DI4: Unknown field kind')
+      end select
+
+      !*** copy out of global tripole buffer into local
+      !*** ghost cells
+
+      !*** look through local copies to find the copy out
+      !*** messages (srcBlock < 0)
+
+      do nmsg=1,halo%numLocalCopies
+         srcBlock = halo%srcLocalAddr(3,nmsg)
+
+         if (srcBlock < 0) then
+
+            iSrc     = halo%srcLocalAddr(1,nmsg) ! tripole buffer addr
+            jSrc     = halo%srcLocalAddr(2,nmsg)
+
+            iDst     = halo%dstLocalAddr(1,nmsg) ! local block addr
+            jDst     = halo%dstLocalAddr(2,nmsg)
+            dstBlock = halo%dstLocalAddr(3,nmsg)
+
+            !*** correct for offsets
+            iSrc = iSrc - ioffset
+            jSrc = jSrc - joffset
+            if (iSrc == 0) iSrc = nxGlobal
+
+            !*** for center and Eface, do not need to replace
+            !*** top row of physical domain, so jSrc should be
+            !*** out of range and skipped
+            !*** otherwise do the copy
+
+            if (jSrc <= nghost+1) then
+               do l=1,nt
+               do k=1,nz
+                  array(iDst,jDst,k,l,dstBlock) = isign*    &
+                                  bufTripole(iSrc,jSrc,k,l)
+               end do
+               end do
+            endif
+
+         endif
+      end do
+
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  wait for sends to complete and deallocate arrays
+!
+!-----------------------------------------------------------------------
+
+   call MPI_WAITALL(halo%numMsgSend, sndRequest, sndStatus, ierr)
+
+   deallocate(sndRequest, rcvRequest, sndStatus, rcvStatus, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate4DI4: error deallocating req,status arrays')
+      return
+   endif
+
+   deallocate(bufSend, bufRecv, bufTripole, stat=ierr)
+
+   if (ierr > 0) then
+      call abort_ice( &
+         'ice_HaloUpdate4DI4: error deallocating 4d buffers')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_HaloUpdate4DI4
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_HaloIncrementMsgCount
+! !INTERFACE:
+
+   subroutine ice_HaloIncrementMsgCount(sndCounter, rcvCounter,    &
+                                        srcProc, dstProc, msgSize)
 
 ! !DESCRIPTION:
 !  This is a utility routine to increment the arrays for counting
-!  whether messages are required.  It is used only for creating
-!  boundary structures for updating ghost cells.
+!  whether messages are required.  It checks the source and destination
+!  task to see whether the current task needs to send, receive or
+!  copy messages to fill halo regions (ghost cells).
 
 ! !REVISION HISTORY:
 !  Same as module.
@@ -4055,59 +4509,1213 @@ subroutine boundary_4d_int(ARRAY, in_bndy, grid_loc, field_type, bc)
 ! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
-      src_proc,              & ! source processor for communication
-      dst_proc                 ! destination processor for communication
+      srcProc,               &! source processor for communication
+      dstProc,               &! destination processor for communication
+      msgSize                 ! number of words for this message
 
 ! !INPUT/OUTPUT PARAMETERS:
 
    integer (int_kind), dimension(:), intent(inout) :: &
-      snd_counter,       &! array for counting messages to be sent
-      rcv_counter         ! array for counting messages to be received
+      sndCounter,       &! array for counting messages to be sent
+      rcvCounter         ! array for counting messages to be received
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
 !-----------------------------------------------------------------------
 !
-!  if destination all land (proc = 0), then no send is necessary, 
-!  so do the rest only for proc /= 0
+!  error check
 !
 !-----------------------------------------------------------------------
 
-   if (dst_proc /= 0) then
+   if (srcProc < 0 .or. dstProc < 0 .or. &
+       srcProc > size(sndCounter)   .or. &
+       dstProc > size(rcvCounter)) then
+      call abort_ice( &
+         'ice_HaloIncrementMsgCount: invalid processor number')
+      return
+   endif
 
-      !*** if the current processor is the source, must send
-      !*** data (local copy if dst_proc = src_proc)
+!-----------------------------------------------------------------------
+!
+!  if destination all land or outside closed boundary (dstProc = 0), 
+!  then no send is necessary, so do the rest only for dstProc /= 0
+!
+!-----------------------------------------------------------------------
 
-      if (src_proc == my_task + 1) snd_counter(dst_proc) = &
-                                   snd_counter(dst_proc) + 1
+   if (dstProc == 0) return
 
-      !*** if the current processor is the destination, must
-      !*** receive data (local copy if dst_proc = src_proc)
+!-----------------------------------------------------------------------
+!
+!  if the current processor is the source, must send data 
+!  local copy if dstProc = srcProc
+!
+!-----------------------------------------------------------------------
 
-      if (dst_proc == my_task + 1) then
+   if (srcProc == my_task + 1) sndCounter(dstProc) = &
+                                  sndCounter(dstProc) + msgSize
 
-         if (src_proc /= 0) then  
-            !*** the source block has ocean points so
-            !*** increment the number of messages from
-            !*** the source process
+!-----------------------------------------------------------------------
+!
+!  if the current processor is the destination, must receive data 
+!  local copy if dstProc = srcProc
+!
+!-----------------------------------------------------------------------
 
-            rcv_counter(src_proc) = rcv_counter(src_proc) + 1
+   if (dstProc == my_task + 1) then
 
-         else
-            !*** the source block has no ocean points so
-            !*** count this as a local copy in order to
-            !*** fill ghost cells with zeroes
+      if (srcProc > 0) then  
+         !*** the source block has ocean points
+         !*** count as a receive from srcProc
 
-            rcv_counter(dst_proc) = rcv_counter(dst_proc) + 1
+         rcvCounter(srcProc) = rcvCounter(srcProc) + msgSize
+
+      else
+         !*** if the source block has been dropped, create
+         !*** a local copy to fill halo with a fill value
+
+         rcvCounter(dstProc) = rcvCounter(dstProc) + msgSize
+
+      endif
+   endif
+!-----------------------------------------------------------------------
+!EOC
+
+   end subroutine ice_HaloIncrementMsgCount
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_HaloMsgCreate
+! !INTERFACE:
+
+   subroutine ice_HaloMsgCreate(halo, srcBlock, srcProc, srcLocalID, &
+                                      dstBlock, dstProc, dstLocalID, &
+                                      direction)
+
+! !DESCRIPTION:
+!  This is a utility routine to determine the required address and
+!  message information for a particular pair of blocks.
+
+! !REVISION HISTORY:
+!  Same as module.
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+      srcBlock,   dstBlock,   & ! source,destination block id
+      srcProc,    dstProc,    & ! source,destination processor location
+      srcLocalID, dstLocalID    ! source,destination local index
+
+   character (*), intent(in) :: &
+      direction              ! direction of neighbor block
+                             !  (north,south,east,west,
+                             !   and NE, NW, SE, SW)
+
+! !INPUT/OUTPUT PARAMETERS:
+
+   type (ice_halo), intent(inout) :: &
+      halo                   ! data structure containing halo info
+
+! !OUTPUT PARAMETERS:
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) :: &
+      msgIndx,               &! message counter and index into msg array
+      blockIndx,             &! block counter and index into msg array
+      bufSize,               &! size of message buffer
+      ibSrc, ieSrc, jbSrc, jeSrc, &! phys domain info for source block
+      ibDst, ieDst, jbDst, jeDst, &! phys domain info for dest   block
+      nxGlobal,              &! size of global domain in e-w direction
+      i,j,n                   ! dummy loop index
+
+   integer (int_kind), dimension(:), pointer :: &
+      iGlobal                 ! global i index for location in tripole
+
+!-----------------------------------------------------------------------
+!
+!  initialize
+!
+!-----------------------------------------------------------------------
+
+   if (allocated(bufTripoleR8)) nxGlobal = size(bufTripoleR8,dim=1)
+
+!-----------------------------------------------------------------------
+!
+!  if destination all land or outside closed boundary (dstProc = 0), 
+!  then no send is necessary, so do the rest only for dstProc /= 0
+!
+!-----------------------------------------------------------------------
+
+   if (dstProc == 0) return
+
+!-----------------------------------------------------------------------
+!
+!  get block information if either block is local
+!
+!-----------------------------------------------------------------------
+
+   if (srcProc == my_task+1 .or. dstProc == my_task+1) then
+
+      if (srcBlock >= 0 .and. dstBlock >= 0) then
+         call get_block_parameter(srcBlock, &
+                                     ilo=ibSrc, ihi=ieSrc,   &
+                                     jlo=jbSrc, jhi=jeSrc)
+      else ! tripole - need iGlobal info
+         call get_block_parameter(abs(srcBlock), &
+                                     ilo=ibSrc, ihi=ieSrc,        &
+                                     jlo=jbSrc, jhi=jeSrc,        &
+                                     i_glob=iGlobal)
+
+      endif
+
+      if (dstBlock /= 0) then
+         call get_block_parameter(abs(dstBlock), &
+                                     ilo=ibDst, ihi=ieDst,   &
+                                     jlo=jbDst, jhi=jeDst)
+      endif
+
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  if both blocks are local, create a local copy to fill halo
+!
+!-----------------------------------------------------------------------
+
+   if (srcProc == my_task+1 .and. &
+       dstProc == my_task+1) then   
+
+      !*** compute addresses based on direction
+
+      msgIndx = halo%numLocalCopies
+
+      if (msgIndx > size(halo%srcLocalAddr,dim=2) .or. &
+          msgIndx > size(halo%dstLocalAddr,dim=2)) then
+         call abort_ice( &
+            'ice_HaloMsgCreate: msg count > array size')
+         return
+      endif
+
+      select case (direction)
+      case ('east')
+
+         !*** copy easternmost physical domain of src
+         !*** into westernmost halo of dst
+
+         do j=1,jeSrc-jbSrc+1
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = ieSrc - nghost + i
+            halo%srcLocalAddr(2,msgIndx) = jbSrc + j - 1
+            halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+            halo%dstLocalAddr(1,msgIndx) = i
+            halo%dstLocalAddr(2,msgIndx) = jbDst + j - 1
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+      case ('west')
+
+         !*** copy westernmost physical domain of src
+         !*** into easternmost halo of dst
+
+         do j=1,jeSrc-jbSrc+1
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+            halo%srcLocalAddr(2,msgIndx) = jbSrc + j - 1
+            halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+            halo%dstLocalAddr(1,msgIndx) = ieDst + i
+            halo%dstLocalAddr(2,msgIndx) = jbDst + j - 1
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+      case ('north')
+
+         !*** copy northern physical domain of src
+         !*** into southern halo of dst
+
+         if (srcBlock > 0 .and. dstBlock > 0) then  ! normal north boundary
+
+            do j=1,nghost
+            do i=1,ieSrc-ibSrc+1
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+               halo%srcLocalAddr(2,msgIndx) = jeSrc - nghost + j
+               halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+               halo%dstLocalAddr(1,msgIndx) = ibDst + i - 1
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+         else if (srcBlock > 0 .and. dstBlock < 0) then
+
+            !*** tripole grid - copy info into tripole buffer
+            !*** copy physical domain of top halo+1 rows
+            !*** into global buffer at src location
+
+            !*** perform an error check to make sure the
+            !*** block has enough points to perform a tripole
+            !*** update
+
+            if (jeSrc - jbSrc + 1 < nghost + 1) then
+               call abort_ice( &
+               'ice_HaloMsgCreate: not enough points in block for tripole')
+               return
+            endif 
+
+            do j=1,nghost+1
+            do i=1,ieSrc-ibSrc+1
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+               halo%srcLocalAddr(2,msgIndx) = jeSrc-1-nghost+j
+               halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+               halo%dstLocalAddr(1,msgIndx) = iGlobal(ibSrc + i - 1)
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = -dstLocalID
+
+            end do
+            end do
+
+         else if (srcBlock < 0 .and. dstBlock > 0) then
+
+            !*** tripole grid - set up for copying out of 
+            !*** tripole buffer into ghost cell domains
+            !*** include e-w ghost cells
+
+            do j=1,nghost+1
+            do i=1,ieSrc+nghost
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = nxGlobal - iGlobal(i) + 1
+               halo%srcLocalAddr(2,msgIndx) = nghost + 3 - j
+               halo%srcLocalAddr(3,msgIndx) = -srcLocalID
+
+               halo%dstLocalAddr(1,msgIndx) = i
+               halo%dstLocalAddr(2,msgIndx) = jeSrc + j - 1
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
 
          endif
+
+      case ('south')
+
+         !*** copy southern physical domain of src
+         !*** into northern halo of dst
+
+         do j=1,nghost
+         do i=1,ieSrc-ibSrc+1
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+            halo%srcLocalAddr(2,msgIndx) = jbSrc + j - 1
+            halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+            halo%dstLocalAddr(1,msgIndx) = ibDst + i - 1
+            halo%dstLocalAddr(2,msgIndx) = jeDst + j
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+      case ('northeast')
+
+         !*** normal northeast boundary - just copy NE corner
+         !*** of physical domain into SW halo of NE nbr block
+
+         if (dstBlock > 0) then
+
+            do j=1,nghost
+            do i=1,nghost
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = ieSrc - nghost + i
+               halo%srcLocalAddr(2,msgIndx) = jeSrc - nghost + j
+               halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+               halo%dstLocalAddr(1,msgIndx) = i
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+         else
+
+            !*** tripole grid - this local copy should already
+            !*** have taken place for the north boundary
+
+         endif
+
+      case ('northwest')
+
+         !*** normal northeast boundary - just copy NW corner
+         !*** of physical domain into SE halo of NW nbr block
+
+         if (dstBlock > 0) then
+
+            do j=1,nghost
+            do i=1,nghost
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+               halo%srcLocalAddr(2,msgIndx) = jeSrc - nghost + j
+               halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+               halo%dstLocalAddr(1,msgIndx) = ieDst + i
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+         else
+
+            !*** tripole grid - this local copy should already
+            !*** have taken place for the north boundary
+
+         endif
+
+      case ('southeast')
+
+         !*** copy southeastern corner of src physical domain
+         !*** into northwestern halo of dst
+
+         do j=1,nghost
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = ieSrc - nghost + i
+            halo%srcLocalAddr(2,msgIndx) = jbSrc + j - 1
+            halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+            halo%dstLocalAddr(1,msgIndx) = i
+            halo%dstLocalAddr(2,msgIndx) = jeDst + j
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+      case ('southwest')
+
+         !*** copy southwestern corner of src physical domain
+         !*** into northeastern halo of dst
+
+         do j=1,nghost
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
+            halo%srcLocalAddr(2,msgIndx) = jbSrc + j - 1
+            halo%srcLocalAddr(3,msgIndx) = srcLocalID
+
+            halo%dstLocalAddr(1,msgIndx) = ieDst + i
+            halo%dstLocalAddr(2,msgIndx) = jeDst + j
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+      case default
+
+         call abort_ice( &
+            'ice_HaloMsgCreate: unknown direction local copy')
+         return
+
+      end select
+
+      halo%numLocalCopies = msgIndx
+
+      if (msgIndx > size(halo%srcLocalAddr,dim=2) .or. &
+          msgIndx > size(halo%dstLocalAddr,dim=2)) then
+         call abort_ice( &
+            'ice_HaloMsgCreate: msg count > array size')
+         return
       endif
+
+!-----------------------------------------------------------------------
+!
+!  if dest block is local and source block does not exist, create a 
+!  local copy to fill halo with a fill value
+!
+!-----------------------------------------------------------------------
+
+   else if (srcProc == 0 .and. dstProc == my_task+1) then   
+
+      msgIndx = halo%numLocalCopies
+
+      if (msgIndx > size(halo%srcLocalAddr,dim=2) .or. &
+          msgIndx > size(halo%dstLocalAddr,dim=2)) then
+         call abort_ice( &
+            'ice_HaloMsgCreate: msg count > array size')
+         return
+      endif
+
+      !*** compute addresses based on direction
+
+      select case (direction)
+      case ('east')
+
+         !*** copy easternmost physical domain of src
+         !*** into westernmost halo of dst
+
+         do j=1,jeSrc-jbSrc+1
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = 0
+            halo%srcLocalAddr(2,msgIndx) = 0
+            halo%srcLocalAddr(3,msgIndx) = 0
+
+            halo%dstLocalAddr(1,msgIndx) = i
+            halo%dstLocalAddr(2,msgIndx) = jbDst + j - 1
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+      case ('west')
+
+         !*** copy westernmost physical domain of src
+         !*** into easternmost halo of dst
+
+         do j=1,jeSrc-jbSrc+1
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = 0
+            halo%srcLocalAddr(2,msgIndx) = 0
+            halo%srcLocalAddr(3,msgIndx) = 0
+
+            halo%dstLocalAddr(1,msgIndx) = ieDst + i
+            halo%dstLocalAddr(2,msgIndx) = jbDst + j - 1
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+      case ('north')
+
+         !*** copy northern physical domain of src
+         !*** into southern halo of dst
+
+         if (dstBlock > 0) then  ! normal north boundary
+
+            do j=1,nghost
+            do i=1,ieSrc-ibSrc+1
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = 0
+               halo%srcLocalAddr(2,msgIndx) = 0
+               halo%srcLocalAddr(3,msgIndx) = 0
+
+               halo%dstLocalAddr(1,msgIndx) = ibDst + i - 1
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+         endif
+
+      case ('south')
+
+         !*** copy southern physical domain of src
+         !*** into northern halo of dst
+
+         do j=1,nghost
+         do i=1,ieSrc-ibSrc+1
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = 0
+            halo%srcLocalAddr(2,msgIndx) = 0
+            halo%srcLocalAddr(3,msgIndx) = 0
+
+            halo%dstLocalAddr(1,msgIndx) = ibDst + i - 1
+            halo%dstLocalAddr(2,msgIndx) = jeDst + j
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+      case ('northeast')
+
+         !*** normal northeast boundary - just copy NE corner
+         !*** of physical domain into SW halo of NE nbr block
+
+         if (dstBlock > 0) then
+
+            do j=1,nghost
+            do i=1,nghost
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = 0
+               halo%srcLocalAddr(2,msgIndx) = 0
+               halo%srcLocalAddr(3,msgIndx) = 0
+
+               halo%dstLocalAddr(1,msgIndx) = i
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+         endif
+
+      case ('northwest')
+
+         !*** normal northeast boundary - just copy NW corner
+         !*** of physical domain into SE halo of NW nbr block
+
+         if (dstBlock > 0) then
+
+            do j=1,nghost
+            do i=1,nghost
+
+               msgIndx = msgIndx + 1
+
+               halo%srcLocalAddr(1,msgIndx) = 0
+               halo%srcLocalAddr(2,msgIndx) = 0
+               halo%srcLocalAddr(3,msgIndx) = 0
+
+               halo%dstLocalAddr(1,msgIndx) = ieDst + i
+               halo%dstLocalAddr(2,msgIndx) = j
+               halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+         endif
+
+      case ('southeast')
+
+         !*** copy southeastern corner of src physical domain
+         !*** into northwestern halo of dst
+
+         do j=1,nghost
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = 0
+            halo%srcLocalAddr(2,msgIndx) = 0
+            halo%srcLocalAddr(3,msgIndx) = 0
+
+            halo%dstLocalAddr(1,msgIndx) = i
+            halo%dstLocalAddr(2,msgIndx) = jeDst + j
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+      case ('southwest')
+
+         !*** copy southwestern corner of src physical domain
+         !*** into northeastern halo of dst
+
+         do j=1,nghost
+         do i=1,nghost
+
+            msgIndx = msgIndx + 1
+
+            halo%srcLocalAddr(1,msgIndx) = 0
+            halo%srcLocalAddr(2,msgIndx) = 0
+            halo%srcLocalAddr(3,msgIndx) = 0
+
+            halo%dstLocalAddr(1,msgIndx) = ieDst + i
+            halo%dstLocalAddr(2,msgIndx) = jeDst + j
+            halo%dstLocalAddr(3,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+      case default
+
+         call abort_ice( &
+            'ice_HaloMsgCreate: unknown direction local copy')
+         return
+
+      end select
+
+      halo%numLocalCopies = msgIndx
+
+      if (msgIndx > size(halo%srcLocalAddr,dim=2) .or. &
+          msgIndx > size(halo%dstLocalAddr,dim=2)) then
+         call abort_ice( &
+            'ice_HaloMsgCreate: msg count > array size')
+         return
+      endif
+
+!-----------------------------------------------------------------------
+!
+!  if source block local and dest block remote, send a message
+!
+!-----------------------------------------------------------------------
+
+   else if (srcProc == my_task+1 .and. &
+            dstProc /= my_task+1 .and. dstProc > 0) then
+
+      !*** first check to see if a message to this processor has
+      !*** already been defined
+      !*** if not, update counters and indices
+
+      msgIndx = 0
+
+      srchSend: do n=1,halo%numMsgSend
+         if (halo%sendTask(n) == dstProc - 1) then
+            msgIndx = n
+            bufSize = halo%sizeSend(n)
+            exit srchSend
+         endif
+      end do srchSend 
+
+      if (msgIndx == 0) then
+         msgIndx = halo%numMsgSend + 1
+         halo%numMsgSend = msgIndx
+         halo%sendTask(msgIndx) = dstProc - 1
+         bufSize = 0
+      endif
+
+      !*** now compute message info based on msg direction
+
+      select case (direction)
+      case ('east')
+
+         !*** send easternmost physical domain of src
+         !*** into westernmost halo of dst
+
+         do j=1,jeSrc-jbSrc+1
+         do i=1,nghost
+
+            bufSize = bufSize + 1
+
+            halo%sendAddr(1,bufSize,msgIndx) = ieSrc - nghost + i
+            halo%sendAddr(2,bufSize,msgIndx) = jbSrc + j - 1
+            halo%sendAddr(3,bufSize,msgIndx) = srcLocalID
+
+         end do
+         end do
+
+         halo%sizeSend(msgIndx) = bufSize
+
+      case ('west')
+
+         !*** copy westernmost physical domain of src
+         !*** into easternmost halo of dst
+
+         do j=1,jeSrc-jbSrc+1
+         do i=1,nghost
+
+            bufSize = bufSize + 1
+
+            halo%sendAddr(1,bufSize,msgIndx) = ibSrc + i - 1
+            halo%sendAddr(2,bufSize,msgIndx) = jbSrc + j - 1
+            halo%sendAddr(3,bufSize,msgIndx) = srcLocalID
+
+         end do
+         end do
+
+         halo%sizeSend(msgIndx) = bufSize
+
+      case ('north')
+
+         if (dstBlock > 0) then
+
+            !*** copy northern physical domain of src
+            !*** into southern halo of dst
+
+            do j=1,nghost
+            do i=1,ieSrc-ibSrc+1
+
+               bufSize = bufSize + 1
+
+               halo%sendAddr(1,bufSize,msgIndx) = ibSrc + i - 1
+               halo%sendAddr(2,bufSize,msgIndx) = jeSrc-nghost+j
+               halo%sendAddr(3,bufSize,msgIndx) = srcLocalID
+
+            end do
+            end do
+
+            halo%sizeSend(msgIndx) = bufSize
+
+         else 
+
+            !*** tripole block - send top nghost+1 rows of phys domain
+
+            do j=1,nghost+1
+            do i=1,ieSrc-ibSrc+1
+
+               bufSize = bufSize + 1
+
+               halo%sendAddr(1,bufSize,msgIndx)=ibSrc + i - 1
+               halo%sendAddr(2,bufSize,msgIndx)=jeSrc-nghost+j-1
+               halo%sendAddr(3,bufSize,msgIndx)=srcLocalID
+
+            end do
+            end do
+
+            halo%sizeSend(msgIndx) = bufSize
+
+         endif
+
+      case ('south')
+
+         !*** copy southern physical domain of src
+         !*** into northern halo of dst
+
+         do j=1,nghost
+         do i=1,ieSrc-ibSrc+1
+
+            bufSize = bufSize + 1
+
+            halo%sendAddr(1,bufSize,msgIndx) = ibSrc + i - 1
+            halo%sendAddr(2,bufSize,msgIndx) = jbSrc + j - 1
+            halo%sendAddr(3,bufSize,msgIndx) = srcLocalID
+
+         end do
+         end do
+
+         halo%sizeSend(msgIndx) = bufSize
+
+      case ('northeast')
+
+
+         if (dstBlock > 0) then
+
+            !*** normal northeast corner
+            !*** copy northeast corner of src physical domain
+            !*** into southwestern halo of dst
+
+            do j=1,nghost
+            do i=1,nghost
+
+               bufSize = bufSize + 1
+
+               halo%sendAddr(1,bufSize,msgIndx) = ieSrc-nghost+i
+               halo%sendAddr(2,bufSize,msgIndx) = jeSrc-nghost+j
+               halo%sendAddr(3,bufSize,msgIndx) = srcLocalID
+
+            end do
+            end do
+
+            halo%sizeSend(msgIndx) = bufSize
+
+         else 
+
+            !*** tripole block - send top nghost+1 rows of phys domain
+
+            do j=1,nghost+1
+            do i=1,ieSrc-ibSrc+1
+
+               bufSize = bufSize + 1
+
+               halo%sendAddr(1,bufSize,msgIndx)=ibSrc + i - 1
+               halo%sendAddr(2,bufSize,msgIndx)=jeSrc-nghost+j-1
+               halo%sendAddr(3,bufSize,msgIndx)=srcLocalID
+
+            end do
+            end do
+
+            halo%sizeSend(msgIndx) = bufSize
+
+         endif
+
+      case ('northwest')
+
+         if (dstBlock > 0) then
+
+            !*** normal northwest corner
+            !*** copy northwest corner of src physical domain
+            !*** into southeastern halo of dst
+
+            do j=1,nghost
+            do i=1,nghost
+
+               bufSize = bufSize + 1
+
+               halo%sendAddr(1,bufSize,msgIndx) = ibSrc + i - 1
+               halo%sendAddr(2,bufSize,msgIndx) = jeSrc-nghost+j
+               halo%sendAddr(3,bufSize,msgIndx) = srcLocalID
+
+            end do
+            end do
+
+            halo%sizeSend(msgIndx) = bufSize
+
+         else 
+
+            !*** tripole block - send top nghost+1 rows of phys domain
+
+            do j=1,nghost+1
+            do i=1,ieSrc-ibSrc+1
+
+               bufSize = bufSize + 1
+
+               halo%sendAddr(1,bufSize,msgIndx)=ibSrc + i - 1
+               halo%sendAddr(2,bufSize,msgIndx)=jeSrc-nghost+j-1
+               halo%sendAddr(3,bufSize,msgIndx)=srcLocalID
+
+            end do
+            end do
+
+            halo%sizeSend(msgIndx) = bufSize
+
+         endif
+
+      case ('southeast')
+
+         !*** copy southeastern corner of src physical domain
+         !*** into northwestern halo of dst
+
+         do j=1,nghost
+         do i=1,nghost
+
+            bufSize = bufSize + 1
+
+            halo%sendAddr(1,bufSize,msgIndx) = ieSrc - nghost + i
+            halo%sendAddr(2,bufSize,msgIndx) = jbSrc + j - 1
+            halo%sendAddr(3,bufSize,msgIndx) = srcLocalID
+
+         end do
+         end do
+
+         halo%sizeSend(msgIndx) = bufSize
+
+      case ('southwest')
+
+         !*** copy southwestern corner of src physical domain
+         !*** into northeastern halo of dst
+
+         do j=1,nghost
+         do i=1,nghost
+
+            bufSize = bufSize + 1
+
+            halo%sendAddr(1,bufSize,msgIndx) = ibSrc + i - 1
+            halo%sendAddr(2,bufSize,msgIndx) = jbSrc + j - 1
+            halo%sendAddr(3,bufSize,msgIndx) = srcLocalID
+
+         end do
+         end do
+
+         halo%sizeSend(msgIndx) = bufSize
+
+      case default
+
+         !*** already checked in previous case construct
+
+      end select
+
+!-----------------------------------------------------------------------
+!
+!  if source block remote and dest block local, recv a message
+!
+!-----------------------------------------------------------------------
+
+   else if (dstProc == my_task+1 .and. &
+            srcProc /= my_task+1 .and. srcProc > 0) then
+
+      !*** first check to see if a message from this processor has
+      !*** already been defined
+      !*** if not, update counters and indices
+
+      msgIndx = 0
+
+      srchRecv: do n=1,halo%numMsgRecv
+         if (halo%recvTask(n) == srcProc - 1) then
+            msgIndx = n
+            bufSize = halo%sizeRecv(n)
+            exit srchRecv
+         endif
+      end do srchRecv 
+
+      if (msgIndx == 0) then
+         msgIndx = halo%numMsgRecv + 1
+         halo%numMsgRecv = msgIndx
+         halo%recvTask(msgIndx) = srcProc - 1
+         bufSize = 0
+      endif
+
+      !*** now compute message info based on msg direction
+
+      select case (direction)
+      case ('east')
+
+         !*** send easternmost physical domain of src
+         !*** into westernmost halo of dst
+
+         do j=1,jeSrc-jbSrc+1
+         do i=1,nghost
+
+            bufSize = bufSize + 1
+
+            halo%recvAddr(1,bufSize,msgIndx) = i
+            halo%recvAddr(2,bufSize,msgIndx) = jbDst + j - 1
+            halo%recvAddr(3,bufSize,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%sizeRecv(msgIndx) = bufSize
+
+      case ('west')
+
+         !*** copy westernmost physical domain of src
+         !*** into easternmost halo of dst
+
+         do j=1,jeSrc-jbSrc+1
+         do i=1,nghost
+
+            bufSize = bufSize + 1
+
+            halo%recvAddr(1,bufSize,msgIndx) = ieDst + i
+            halo%recvAddr(2,bufSize,msgIndx) = jbDst + j - 1
+            halo%recvAddr(3,bufSize,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%sizeRecv(msgIndx) = bufSize
+
+      case ('north')
+
+         if (dstBlock > 0) then
+
+            !*** copy northern physical domain of src
+            !*** into southern halo of dst
+
+            do j=1,nghost
+            do i=1,ieDst-ibDst+1
+
+               bufSize = bufSize + 1
+
+               halo%recvAddr(1,bufSize,msgIndx) = ibDst + i - 1
+               halo%recvAddr(2,bufSize,msgIndx) = j
+               halo%recvAddr(3,bufSize,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+            halo%sizeRecv(msgIndx) = bufSize
+
+         else
+
+            !*** tripole block - receive into tripole buffer
+
+            do j=1,nghost+1
+            do i=1,ieSrc-ibSrc+1
+
+               bufSize = bufSize + 1
+
+               halo%recvAddr(1,bufSize,msgIndx) = iGlobal(ibSrc + i - 1)
+               halo%recvAddr(2,bufSize,msgIndx) = j
+               halo%recvAddr(3,bufSize,msgIndx) = -dstLocalID
+
+            end do
+            end do
+
+            halo%sizeRecv(msgIndx) = bufSize
+
+         endif
+
+      case ('south')
+
+         !*** copy southern physical domain of src
+         !*** into northern halo of dst
+
+         do j=1,nghost
+         do i=1,ieSrc-ibSrc+1
+
+            bufSize = bufSize + 1
+
+            halo%recvAddr(1,bufSize,msgIndx) = ibDst + i - 1
+            halo%recvAddr(2,bufSize,msgIndx) = jeDst + j
+            halo%recvAddr(3,bufSize,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%sizeRecv(msgIndx) = bufSize
+
+      case ('northeast')
+
+         if (dstBlock > 0) then
+
+            !*** normal northeast neighbor
+            !*** copy northeast physical domain into
+            !*** into southwest halo of dst
+
+            do j=1,nghost
+            do i=1,nghost
+
+               bufSize = bufSize + 1
+
+               halo%recvAddr(1,bufSize,msgIndx) = i
+               halo%recvAddr(2,bufSize,msgIndx) = j
+               halo%recvAddr(3,bufSize,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+            halo%sizeRecv(msgIndx) = bufSize
+
+         else
+
+            !*** tripole block - receive into tripole buffer
+
+            do j=1,nghost+1
+            do i=1,ieSrc-ibSrc+1
+
+               bufSize = bufSize + 1
+
+               halo%recvAddr(1,bufSize,msgIndx) = iGlobal(ibSrc + i - 1)
+               halo%recvAddr(2,bufSize,msgIndx) = j
+               halo%recvAddr(3,bufSize,msgIndx) = -dstLocalID
+
+            end do
+            end do
+
+            halo%sizeRecv(msgIndx) = bufSize
+
+         endif
+
+      case ('northwest')
+
+         if (dstBlock > 0) then
+
+            !*** normal northwest neighbor
+            !*** copy northwest physical domain into
+            !*** into southeast halo of dst
+
+            do j=1,nghost
+            do i=1,nghost
+
+               bufSize = bufSize + 1
+
+               halo%recvAddr(1,bufSize,msgIndx) = ieDst + i
+               halo%recvAddr(2,bufSize,msgIndx) = j
+               halo%recvAddr(3,bufSize,msgIndx) = dstLocalID
+
+            end do
+            end do
+
+            halo%sizeRecv(msgIndx) = bufSize
+
+         else
+
+            !*** tripole block - receive into tripole buffer
+
+            do j=1,nghost+1
+            do i=1,ieSrc-ibSrc+1
+
+               bufSize = bufSize + 1
+
+               halo%recvAddr(1,bufSize,msgIndx) = iGlobal(ibSrc + i - 1)
+               halo%recvAddr(2,bufSize,msgIndx) = j
+               halo%recvAddr(3,bufSize,msgIndx) = -dstLocalID
+
+            end do
+            end do
+
+            halo%sizeRecv(msgIndx) = bufSize
+
+         endif
+
+      case ('southeast')
+
+         !*** copy southeastern corner of src physical domain
+         !*** into northwestern halo of dst
+
+         do j=1,nghost
+         do i=1,nghost
+
+            bufSize = bufSize + 1
+
+            halo%recvAddr(1,bufSize,msgIndx) = i
+            halo%recvAddr(2,bufSize,msgIndx) = jeDst + j
+            halo%recvAddr(3,bufSize,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%sizeRecv(msgIndx) = bufSize
+
+      case ('southwest')
+
+         !*** copy southwestern corner of src physical domain
+         !*** into northeastern halo of dst
+
+         do j=1,nghost
+         do i=1,nghost
+
+            bufSize = bufSize + 1
+
+            halo%recvAddr(1,bufSize,msgIndx) = ieDst + i
+            halo%recvAddr(2,bufSize,msgIndx) = jeDst + j
+            halo%recvAddr(3,bufSize,msgIndx) = dstLocalID
+
+         end do
+         end do
+
+         halo%sizeRecv(msgIndx) = bufSize
+
+      case default
+
+         !*** already checked in previous case construct
+
+      end select
+
+!-----------------------------------------------------------------------
+!
+!  if none of the cases above, no message info required for this
+!  block pair
+!
+!-----------------------------------------------------------------------
+
    endif
 
 !-----------------------------------------------------------------------
 !EOC
 
-   end subroutine increment_message_counter
+   end subroutine ice_HaloMsgCreate
 
 !***********************************************************************
 

@@ -326,8 +326,8 @@
     !-------------------------------------------------------------------
 !      call ice_timer_start(timer_bound)
 
-!      call update_ghost_cells (aice0,            bndy_info,     &
-!                               field_loc_center, field_type_scalar)
+!      call ice_HaloUpdate (aice0,            halo_info,     &
+!                           field_loc_center, field_type_scalar)
 
 !      call bound_state (aicen, trcrn,     &
 !                        vicen, vsnon,      &
@@ -342,10 +342,10 @@
     !-------------------------------------------------------------------
 
 !      call ice_timer_start(timer_bound)
-!      call update_ghost_cells (uvel,               bndy_info,     &
-!                               field_loc_NEcorner, field_type_vector)
-!      call update_ghost_cells (vvel,               bndy_info,     &
-!                               field_loc_NEcorner, field_type_vector)
+!      call ice_HaloUpdate (uvel,               halo_info,     &
+!                           field_loc_NEcorner, field_type_vector)
+!      call ice_HaloUpdate (vvel,               halo_info,     &
+!                           field_loc_NEcorner, field_type_vector)
 !      call ice_timer_stop(timer_bound)
 
 
@@ -450,10 +450,10 @@
          enddo
 
          call ice_timer_start(timer_bound)
-         call update_ghost_cells (tmin,             bndy_info,     &
-                                  field_loc_center, field_type_scalar)
-         call update_ghost_cells (tmax,             bndy_info,     &
-                                  field_loc_center, field_type_scalar)
+         call ice_HaloUpdate (tmin,             halo_info,     &
+                              field_loc_center, field_type_scalar)
+         call ice_HaloUpdate (tmax,             halo_info,     &
+                              field_loc_center, field_type_scalar)
          call ice_timer_stop(timer_bound)
 
          do iblk = 1, nblocks
@@ -749,10 +749,10 @@
       enddo
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (uee,             bndy_info,     &
-                               field_loc_Eface, field_type_scalar)
-      call update_ghost_cells (vnn,             bndy_info,     &
-                               field_loc_Nface, field_type_scalar)
+      call ice_HaloUpdate (uee,             halo_info,     &
+                           field_loc_Eface, field_type_scalar)
+      call ice_HaloUpdate (vnn,             halo_info,     &
+                           field_loc_Nface, field_type_scalar)
       call ice_timer_stop(timer_bound)
 
       do iblk = 1, nblocks

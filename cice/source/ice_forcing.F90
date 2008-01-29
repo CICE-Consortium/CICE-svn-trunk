@@ -254,7 +254,8 @@
          sss(:,:,:) = c0
 
          do k = 1,12            ! loop over 12 months
-            call ice_read (nu_forcing, k, work1, 'rda8', dbug)
+            call ice_read (nu_forcing, k, work1, 'rda8', dbug, &
+                           field_loc_center, field_type_scalar)
             do iblk = 1, nblocks
                do j = 1, ny_block
                do i = 1, nx_block
@@ -310,7 +311,8 @@
          if (my_task == master_task) &
               call ice_open (nu_forcing, sst_file, nbits)
 
-         call ice_read (nu_forcing, month, sst, 'rda8', dbug)
+         call ice_read (nu_forcing, month, sst, 'rda8', dbug, &
+                        field_loc_center, field_type_scalar)
 
          if (my_task == master_task) close(nu_forcing)
 
@@ -482,7 +484,8 @@
 ! !INTERFACE:
 !
       subroutine read_data (flag, recd, yr, ixm, ixx, ixp, &
-                            maxrec, data_file, field_data)
+                            maxrec, data_file, field_data, &
+                            field_loc, field_type)
 !
 ! !DESCRIPTION:
 !
@@ -525,6 +528,10 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
          intent(out) :: &
          field_data              ! 2 values needed for interpolation
+
+      integer (kind=int_kind), intent(in) :: &
+           field_loc, &      ! location of field on staggered grid
+           field_type        ! type of field (scalar, vector, angle)
 !
 !EOP
 !
@@ -579,7 +586,7 @@
             arg = 1
             nrec = recd + n2
             call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
-                           'rda8', dbug)
+                           'rda8', dbug, field_loc, field_type)
             if (ixx==1 .and. my_task == master_task) close(nu_forcing)
          endif                  ! ixm ne 99
 
@@ -590,7 +597,7 @@
          arg = arg + 1
          nrec = recd + ixx
          call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
-                        'rda8', dbug)
+                        'rda8', dbug, field_loc, field_type)
 
          if (ixp /= 99) then
          ! currently in latter half of data interval
@@ -613,7 +620,7 @@
             arg = arg + 1
             nrec = recd + n4
             call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
-                           'rda8', dbug)
+                           'rda8', dbug, field_loc, field_type)
          endif                  ! ixp /= 99
 
          if (my_task == master_task) close(nu_forcing)
@@ -631,7 +638,8 @@
 ! !INTERFACE:
 !
       subroutine read_data_nc (flag, recd, yr, ixm, ixx, ixp, &
-                            maxrec, data_file, fieldname, field_data)
+                            maxrec, data_file, fieldname, field_data, &
+                            field_loc, field_type)
 !
 ! !DESCRIPTION:
 !
@@ -676,6 +684,10 @@
 
       character (char_len), intent(in) :: &
          fieldname               ! field name in netCDF file
+
+      integer (kind=int_kind), intent(in) :: &
+           field_loc, &      ! location of field on staggered grid
+           field_type        ! type of field (scalar, vector, angle)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
          intent(out) :: &
@@ -733,7 +745,8 @@
             nrec = recd + n2
 
             call ice_read_nc & 
-                 (fid, nrec, fieldname, field_data(:,:,arg,:), dbug)
+                 (fid, nrec, fieldname, field_data(:,:,arg,:), dbug, &
+                  field_loc, field_type)
 
             if (ixx==1) call ice_close_nc(fid)
          endif                  ! ixm ne 99
@@ -746,7 +759,8 @@
          nrec = recd + ixx
 
          call ice_read_nc & 
-              (fid, nrec, fieldname, field_data(:,:,arg,:), dbug)
+              (fid, nrec, fieldname, field_data(:,:,arg,:), dbug, &
+               field_loc, field_type)
 
          if (ixp /= 99) then
          ! currently in latter half of data interval
@@ -771,7 +785,8 @@
             nrec = recd + n4
 
             call ice_read_nc & 
-                 (fid, nrec, fieldname, field_data(:,:,arg,:), dbug)
+                 (fid, nrec, fieldname, field_data(:,:,arg,:), dbug, &
+                  field_loc, field_type)
          endif                  ! ixp /= 99
 
          call ice_close_nc(fid)
@@ -792,7 +807,8 @@
 ! !INTERFACE:
 !
       subroutine read_clim_data (readflag, recd, ixm, ixx, ixp, &
-                                 data_file, field_data)
+                                 data_file, field_data, &
+                                 field_loc, field_type)
 !
 ! !DESCRIPTION:
 !
@@ -820,6 +836,10 @@
                             ! relative to recd
 
       character (char_len_long), intent(in) ::  data_file
+
+      integer (kind=int_kind), intent(in) :: &
+           field_loc, &      ! location of field on staggered grid
+           field_type        ! type of field (scalar, vector, angle)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
         intent(out) :: &
@@ -852,19 +872,19 @@
             arg = 1
             nrec = recd + ixm
             call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
-                           'rda8', dbug)
+                           'rda8', dbug, field_loc, field_type)
          endif
 
          arg = arg + 1
          nrec = recd + ixx
          call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
-                        'rda8', dbug)
+                        'rda8', dbug, field_loc, field_type)
 
          if (ixp /= 99) then
             arg = arg + 1
             nrec = recd + ixp
             call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
-                           'rda8', dbug)
+                           'rda8', dbug, field_loc, field_type)
          endif
 
          if (my_task == master_task) close (nu_forcing)
@@ -1506,20 +1526,26 @@
 
       if (trim(atm_data_format) == 'bin') then
          call read_data (readm, 0, fyear, ixm, month, ixp, &
-                         maxrec, fsw_file, fsw_data)
+                         maxrec, fsw_file, fsw_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (readm, 0, fyear, ixm, month, ixp, &
-                         maxrec, flw_file, cldf_data)
+                         maxrec, flw_file, cldf_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (readm, 0, fyear, ixm, month, ixp, &
-                         maxrec, rain_file, fsnow_data)
+                         maxrec, rain_file, fsnow_data, &
+                         field_loc_center, field_type_scalar)
       else
          call abort_ice ('nonbinary atm_data_format unavailable')
 !        The routine exists, for example:  
 !         call read_data_nc (readm, 0, fyear, ixm, month, ixp, &
-!                            maxrec, fsw_file, 'fsw', fsw_data)
+!                            maxrec, fsw_file, 'fsw', fsw_data, &
+!                            field_loc_center, field_type_scalar)
 !         call read_data_nc (readm, 0, fyear, ixm, month, ixp, &
-!                            maxrec, flw_file, 'cldf',cldf_data)
+!                            maxrec, flw_file, 'cldf',cldf_data, &
+!                            field_loc_center, field_type_scalar)
 !         call read_data_nc (readm, 0, fyear, ixm, month, ixp, &
-!                            maxrec, rain_file,'prec',fsnow_data)
+!                            maxrec, rain_file,'prec',fsnow_data, &
+!                            field_loc_center, field_type_scalar)
       endif
 
       ! Interpolate to current time step
@@ -1562,15 +1588,20 @@
 
       if (trim(atm_data_format) == 'bin') then
          call read_data (read6, 0, fyear, ixm, ixx, ixp, &
-                         maxrec, tair_file, Tair_data)
+                         maxrec, tair_file, Tair_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (read6, 0, fyear, ixm, ixx, ixp, &
-                         maxrec, uwind_file, uatm_data)
+                         maxrec, uwind_file, uatm_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (read6, 0, fyear, ixm, ixx, ixp, &
-                         maxrec, vwind_file, vatm_data)
+                         maxrec, vwind_file, vatm_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (read6, 0, fyear, ixm, ixx, ixp, &
-                         maxrec, rhoa_file, rhoa_data)
+                         maxrec, rhoa_file, rhoa_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (read6, 0, fyear, ixm, ixx, ixp, &
-                         maxrec, humid_file, Qa_data)
+                         maxrec, humid_file, Qa_data, &
+                         field_loc_center, field_type_scalar)
       else
          call abort_ice ('nonbinary atm_data_format unavailable')
       endif
@@ -1745,9 +1776,9 @@
 
       if (trim(atm_data_format) == 'bin') then
          call read_clim_data (readm, 0,  ixm, month, ixp, &
-              rhoa_file, rhoa_data)
+              rhoa_file, rhoa_data, field_loc_center, field_type_scalar)
          call read_clim_data (readm, 0,  ixm, month, ixp, &
-              rain_file, fsnow_data)
+              rain_file, fsnow_data, field_loc_center, field_type_scalar)
       else
          call abort_ice ('nonbinary atm_data_format unavailable')
       endif
@@ -1802,17 +1833,23 @@
 
       if (trim(atm_data_format) == 'bin') then
          call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
-                         tair_file, Tair_data)
+                         tair_file, Tair_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
-                         uwind_file, uatm_data)
+                         uwind_file, uatm_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
-                         vwind_file, vatm_data)
+                         vwind_file, vatm_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
-                         fsw_file, fsw_data)
+                         fsw_file, fsw_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
-                         flw_file, flw_data)
+                         flw_file, flw_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
-                         humid_file, Qa_data)
+                         humid_file, Qa_data, &
+                         field_loc_center, field_type_scalar)
       else
          call abort_ice ('nonbinary atm_data_format unavailable')
       endif
@@ -1979,9 +2016,9 @@
       if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
 
       call read_clim_data (readm, 0, imx, month, ipx,  &
-             flw_file, cldf_data)
+             flw_file, cldf_data, field_loc_center, field_type_scalar)
       call read_clim_data (readm, 0, imx, month, ipx,  &
-             rain_file, fsnow_data)
+             rain_file, fsnow_data, field_loc_center, field_type_scalar)
 
       call interpolate_data (cldf_data, cldf)
       call interpolate_data (fsnow_data, fsnow)  ! units mm/s = kg/m^2/s
@@ -2021,13 +2058,17 @@
 
       if (trim(atm_data_format) == 'bin') then
          call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
-                         tair_file, Tair_data)
+                         tair_file, Tair_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
-                         uwind_file, uatm_data)
+                         uwind_file, uatm_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
-                         vwind_file, vatm_data)
+                         vwind_file, vatm_data, &
+                         field_loc_center, field_type_scalar)
          call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
-                         humid_file, Qa_data)
+                         humid_file, Qa_data, &
+                         field_loc_center, field_type_scalar)
       else
          call abort_ice ('nonbinary atm_data_format unavailable')
       endif
@@ -2093,15 +2134,15 @@
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'Tair',vmin,vmax
            vmin = global_minval(uatm &
-                               ,distrb_info,field_loc_NEcorner,umask)
+                               ,distrb_info,field_loc_center,umask)
            vmax = global_maxval(uatm &
-                               ,distrb_info,field_loc_NEcorner,umask)
+                               ,distrb_info,field_loc_center,umask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'uatm',vmin,vmax
            vmin = global_minval(vatm &
-                               ,distrb_info,field_loc_NEcorner,umask)
+                               ,distrb_info,field_loc_center,umask)
            vmax = global_maxval(vatm &
-                               ,distrb_info,field_loc_NEcorner,umask)
+                               ,distrb_info,field_loc_center,umask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'vatm',vmin,vmax
            vmin = global_minval(Qa &
@@ -2361,19 +2402,26 @@
       if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
 
       call read_clim_data (readm, 0, imx, month, ipx,  &
-             flw_file, cldf_data)
+             flw_file, cldf_data, &
+             field_loc_center, field_type_scalar)
       call read_clim_data (readm, 0, imx, month, ipx,  &
-             rain_file, fsnow_data)
+             rain_file, fsnow_data, &
+             field_loc_center, field_type_scalar)
       call read_clim_data (readm, 0, imx, month, ipx,  &
-             tair_file, Tair_data)
+             tair_file, Tair_data, &
+             field_loc_center, field_type_scalar)
       call read_clim_data (readm, 0, imx, month, ipx,  &
-             humid_file, Qa_data)
+             humid_file, Qa_data, &
+             field_loc_center, field_type_scalar)
       call read_clim_data (readm, 0, imx, month, ipx,  &
-             wind_file, wind_data)
+             wind_file, wind_data, &
+             field_loc_center, field_type_scalar)
       call read_clim_data (readm, 0, imx, month, ipx,  &
-             strax_file, strax_data)
+             strax_file, strax_data, &
+             field_loc_center, field_type_vector)
       call read_clim_data (readm, 0, imx, month, ipx,  &
-             stray_file, stray_data)
+             stray_file, stray_data, &
+             field_loc_center, field_type_vector)
 
       call interpolate_data (cldf_data, cldf)
       call interpolate_data (fsnow_data, fsnow)  ! units mm/s = kg/m^2/s
@@ -2439,21 +2487,21 @@
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'Tair',vmin,vmax
            vmin = global_minval(wind &
-                               ,distrb_info,field_loc_NEcorner,umask)
+                               ,distrb_info,field_loc_center,umask)
            vmax = global_maxval(wind &
-                               ,distrb_info,field_loc_NEcorner,umask)
+                               ,distrb_info,field_loc_center,umask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'wind',vmin,vmax
            vmin = global_minval(strax &
-                               ,distrb_info,field_loc_NEcorner,umask)
+                               ,distrb_info,field_loc_center,umask)
            vmax = global_maxval(strax &
-                               ,distrb_info,field_loc_NEcorner,umask)
+                               ,distrb_info,field_loc_center,umask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'strax',vmin,vmax
            vmin = global_minval(stray &
-                               ,distrb_info,field_loc_NEcorner,umask)
+                               ,distrb_info,field_loc_center,umask)
            vmax = global_maxval(stray &
-                               ,distrb_info,field_loc_NEcorner,umask)
+                               ,distrb_info,field_loc_center,umask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'stray',vmin,vmax
            vmin = global_minval(Qa &
@@ -2572,7 +2620,8 @@
 
       if (trim(sss_data_type)=='clim') then
          call read_clim_data (readm, 0, ixm, month, ixp, &
-                              sss_file, sss_data)
+                              sss_file, sss_data, &
+                              field_loc_center, field_type_scalar)
          call interpolate_data (sss_data, sss)
 
          do iblk = 1, nblocks
@@ -2592,7 +2641,8 @@
 
       if (trim(sst_data_type)=='clim') then
          call read_clim_data (readm, 0, ixm, month, ixp, &
-                              sst_file, sst_data)
+                              sst_file, sst_data, &
+                              field_loc_center, field_type_scalar)
          call interpolate_data (sst_data, sstdat)
 
          if (restore_sst) then
@@ -2732,7 +2782,13 @@
           do m=1,12
                 
             ! Note: netCDF does single to double conversion if necessary
-            call ice_read_nc(fid, m, vname(n), work1, dbug)
+            if (n >= 4 .and. n <= 7) then
+               call ice_read_nc(fid, m, vname(n), work1, dbug, &
+                                field_loc_NEcorner, field_type_vector)
+            else
+               call ice_read_nc(fid, m, vname(n), work1, dbug, &
+                                field_loc_center, field_type_scalar)
+            endif
             ocn_frc_m(:,:,:,n,m) = work1(:,:,:)
 
           enddo               ! month loop
@@ -2750,7 +2806,13 @@
         do n=1,nfld
            do m=1,12
               nrec = nrec + 1
-              call ice_read (nu_forcing, nrec, work1, 'rda8', dbug)
+              if (n >= 4 .and. n <= 7) then
+                call ice_read (nu_forcing, nrec, work1, 'rda8', dbug, &
+                               field_loc_NEcorner, field_type_vector)
+              else
+                call ice_read (nu_forcing, nrec, work1, 'rda8', dbug, &
+                               field_loc_center, field_type_scalar)
+              endif
               ocn_frc_m(:,:,:,n,m) = work1(:,:,:)
            enddo               ! month loop
         enddo               ! field loop
@@ -2960,9 +3022,9 @@
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'ss_tlty',vmin,vmax
            vmin = global_minval(qdp &
-                               ,distrb_info,field_loc_NEcorner,umask)
+                               ,distrb_info,field_loc_center,umask)
            vmax = global_maxval(qdp &
-                               ,distrb_info,field_loc_NEcorner,umask)
+                               ,distrb_info,field_loc_center,umask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'qdp',vmin,vmax
       endif

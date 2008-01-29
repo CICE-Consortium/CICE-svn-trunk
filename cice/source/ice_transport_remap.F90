@@ -675,26 +675,26 @@
          call ice_timer_start(timer_bound)
 
          ! departure points
-         call update_ghost_cells (dpx,                bndy_info,     &
-                                  field_loc_NEcorner, field_type_vector)
-         call update_ghost_cells (dpy,                bndy_info,     &
-                                  field_loc_NEcorner, field_type_vector)
+         call ice_HaloUpdate (dpx,                halo_info, &
+                              field_loc_NEcorner, field_type_vector)
+         call ice_HaloUpdate (dpy,                halo_info, &
+                              field_loc_NEcorner, field_type_vector)
 
          ! mass field
-         call update_ghost_cells (mc,               bndy_info,     &
-                                  field_loc_center, field_type_scalar)
-         call update_ghost_cells (mx,               bndy_info,     &
-                                  field_loc_center, field_type_vector)
-         call update_ghost_cells (my,               bndy_info,     &
-                                  field_loc_center, field_type_vector)
+         call ice_HaloUpdate (mc,               halo_info, &
+                              field_loc_center, field_type_scalar)
+         call ice_HaloUpdate (mx,               halo_info, &
+                              field_loc_center, field_type_vector)
+         call ice_HaloUpdate (my,               halo_info, &
+                              field_loc_center, field_type_vector)
 
          ! tracer fields
-         call update_ghost_cells (tc,               bndy_info,     &
-                                  field_loc_center, field_type_scalar)
-         call update_ghost_cells (tx,               bndy_info,     &
-                                  field_loc_center, field_type_vector)
-         call update_ghost_cells (ty,               bndy_info,     &
-                                  field_loc_center, field_type_vector)
+         call ice_HaloUpdate (tc,               halo_info, &
+                              field_loc_center, field_type_scalar)
+         call ice_HaloUpdate (tx,               halo_info, &
+                              field_loc_center, field_type_vector)
+         call ice_HaloUpdate (ty,               halo_info, &
+                              field_loc_center, field_type_vector)
          call ice_timer_stop(timer_bound)
 
       endif  ! nghost
@@ -831,13 +831,13 @@
          if (l_stop) then
             this_block = get_block(blocks_ice(iblk),iblk)         
             write (nu_diag,*) 'istep1, my_task, iblk, cat =',     &
-                               istep1, my_task, iblk, n
+                               istep1, my_task, iblk, '0'
             write (nu_diag,*) 'Global block:', this_block%block_id
             if (istop > 0 .and. jstop > 0)     &
                  write(nu_diag,*) 'Global i and j:',              &
                                   this_block%i_glob(istop),       &
                                   this_block%j_glob(jstop) 
-            call abort_ice ('ice remap_transport: negative area')
+            call abort_ice ('ice remap_transport: negative area (open water)')
          endif
 
 
@@ -863,7 +863,7 @@
                     write(nu_diag,*) 'Global i and j:',     &
                                      this_block%i_glob(istop),     &
                                      this_block%j_glob(jstop) 
-               call abort_ice ('ice remap_transport: negative area')
+               call abort_ice ('ice remap_transport: negative area (ice)')
             endif
          enddo                  ! n
 
@@ -2837,14 +2837,16 @@
             do j = jb, je
             do i = ib, ie
                if (abs(triarea(i,j,ng)) > puny) then
-                  if (xp(i,j,nv,ng) < -p5-puny .or.    &
-                      xp(i,j,nv,ng) > p5+puny) then
+                  if (abs(xp(i,j,nv,ng)) > p5+puny) then
                      print*, ''
                      print*, 'WARNING: xp =', xp(i,j,nv,ng)
                      print*, 'm, i, j, ng, nv =', my_task, i, j, ng, nv
+!                     print*, 'yil,xdl,xcl,ydl=',yil,xdl,xcl,ydl
+!                     print*, 'yir,xdr,xcr,ydr=',yir,xdr,xcr,ydr
+!                     print*, 'ydm=',ydm
+!                      stop
                   endif
-                  if (yp(i,j,nv,ng) < -p5-puny .or.   &
-                      yp(i,j,nv,ng) > p5+puny) then
+                  if (abs(yp(i,j,nv,ng)) > p5+puny) then
                      print*, ''
                      print*, 'WARNING: yp =', yp(i,j,nv,ng)
                      print*, 'm, i, j, ng, nv =', my_task, i, j, ng, nv
@@ -3718,24 +3720,33 @@
       ! Compute ghost cell values
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (xav,              bndy_info,     &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (yav,              bndy_info,     &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (xxav,             bndy_info,     &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (xyav,             bndy_info,     &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (yyav,             bndy_info,     &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (xxxav,            bndy_info,     &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (xxyav,            bndy_info,     &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (xyyav,            bndy_info,     &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (yyyav,            bndy_info,     &
-                               field_loc_center, field_type_scalar)
+      call ice_HaloUpdate (xav,              halo_info, &
+                           field_loc_center, field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (yav,              halo_info, &
+                           field_loc_center, field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (xxav,             halo_info, &
+                           field_loc_center, field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (xyav,             halo_info, &
+                           field_loc_center, field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (yyav,             halo_info, &
+                           field_loc_center, field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (xxxav,            halo_info, &
+                           field_loc_center, field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (xxyav,            halo_info, &
+                           field_loc_center, field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (xyyav,            halo_info, &
+                           field_loc_center, field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (yyyav,            halo_info, &
+                           field_loc_center, field_type_scalar, &
+                           fillValue=c1)
       call ice_timer_stop(timer_bound)
 
       end subroutine init_remap_old
@@ -4405,10 +4416,10 @@
       enddo                     ! iblk
  
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (dpx,                bndy_info,     &
-                               field_loc_NEcorner, field_type_vector)
-      call update_ghost_cells (dpy,                bndy_info,     &
-                               field_loc_NEcorner, field_type_vector)
+      call ice_HaloUpdate (dpx,                halo_info, &
+                           field_loc_NEcorner, field_type_vector)
+      call ice_HaloUpdate (dpy,                halo_info, &
+                           field_loc_NEcorner, field_type_vector)
       call ice_timer_stop(timer_bound)
  
     !-------------------------------------------------------------------
@@ -4441,26 +4452,26 @@
       enddo
  
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (extmask,            bndy_info,   &
-                               field_loc_NEcorner, field_type_vector)
+      call ice_HaloUpdate (extmask,            halo_info, &
+                           field_loc_NEcorner, field_type_vector)
  
     !-------------------------------------------------------------------
     ! Ghost cell updates for centroids and gradients
     !-------------------------------------------------------------------
  
-      call update_ghost_cells (aic,              bndy_info,     &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (aix,              bndy_info,     &
-                               field_loc_center, field_type_vector)
-      call update_ghost_cells (aiy,              bndy_info,     &
-                               field_loc_center, field_type_vector)
+      call ice_HaloUpdate (aic,              halo_info,     &
+                           field_loc_center, field_type_scalar)
+      call ice_HaloUpdate (aix,              halo_info,     &
+                           field_loc_center, field_type_vector)
+      call ice_HaloUpdate (aiy,              halo_info,     &
+                           field_loc_center, field_type_vector)
  
-      call update_ghost_cells (trc,              bndy_info,     &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (trx,              bndy_info,     &
-                               field_loc_center, field_type_vector)
-      call update_ghost_cells (try,              bndy_info,     &
-                               field_loc_center, field_type_vector)
+      call ice_HaloUpdate (trc,              halo_info,     &
+                           field_loc_center, field_type_scalar)
+      call ice_HaloUpdate (trx,              halo_info,     &
+                           field_loc_center, field_type_vector)
+      call ice_HaloUpdate (try,              halo_info,     &
+                           field_loc_center, field_type_vector)
       call ice_timer_stop(timer_bound)
  
       do iblk = 1, nblocks
@@ -4606,7 +4617,7 @@
          if (l_stop) then
             this_block = get_block(blocks_ice(iblk),iblk)         
             write (nu_diag,*) 'istep1, my_task, iblk, cat =',     &
-                               istep1, my_task, iblk, n
+                               istep1, my_task, iblk, '0'
             write (nu_diag,*) 'Global block:', this_block%block_id
             if (istop > 0 .and. jstop > 0)     &
                  write(nu_diag,*) 'Global i and j:',     &

@@ -92,7 +92,7 @@
          node_cycles1,        &! cycle number at start for node timer
          node_cycles2          ! cycle number at stop  for node timer
 
-      real (r8) ::            &
+      real (dbl_kind) ::            &
          node_accum_time       ! accumulated time for node timer
 
       logical (log_kind), dimension(:), pointer :: &
@@ -102,7 +102,7 @@
          block_cycles1,        &! cycle number at start for block timers
          block_cycles2          ! cycle number at stop  for block timers
 
-      real (r8), dimension(:), pointer :: &
+      real (dbl_kind), dimension(:), pointer :: &
          block_accum_time       ! accumulated time for block timers
 
    end type
@@ -113,7 +113,7 @@
    integer (int_kind) ::      & 
       cycles_max               ! max clock cycles allowed by system
 
-   real (r8) ::               &
+   real (dbl_kind) ::               &
       clock_rate               ! clock rate in seconds for each cycle
 
 
@@ -699,7 +699,7 @@
       lrestart_timer     ! flag to restart timer if timer is running
                          ! when this routine is called
 
-   real (r8) :: &
+   real (dbl_kind) :: &
       local_time,       &! temp space for holding local timer results
       min_time,         &! minimum accumulated time
       max_time,         &! maximum accumulated time

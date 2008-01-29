@@ -360,20 +360,27 @@
       !-----------------------------------------------------------------
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (tarea,              bndy_info, &
-                               field_loc_center,   field_type_scalar)
-      call update_ghost_cells (uarea,              bndy_info, &
-                               field_loc_NEcorner, field_type_scalar)
-      call update_ghost_cells (uarear,             bndy_info, &
-                               field_loc_NEcorner, field_type_scalar)
-      call update_ghost_cells (tarear,             bndy_info, &
-                               field_loc_center,   field_type_scalar)
-      call update_ghost_cells (tinyarea,           bndy_info, &
-                               field_loc_center,   field_type_scalar)
-      call update_ghost_cells (dxhy,               bndy_info, &
-                               field_loc_center,   field_type_vector)
-      call update_ghost_cells (dyhx,               bndy_info, &
-                               field_loc_center,   field_type_vector)
+      call ice_HaloUpdate (tarea,              halo_info, &
+                           field_loc_center,   field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (uarea,              halo_info, &
+                           field_loc_NEcorner, field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (tarear,             halo_info, &
+                           field_loc_center,   field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (uarear,             halo_info, &
+                           field_loc_NEcorner, field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (tinyarea,           halo_info, &
+                           field_loc_center,   field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (dxhy,               halo_info, &
+                           field_loc_center,   field_type_vector, &
+                           fillValue=c1)
+      call ice_HaloUpdate (dyhx,               halo_info, &
+                           field_loc_center,   field_type_vector, &
+                           fillValue=c1)
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -422,8 +429,9 @@
       enddo
       
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (ANGLET,             bndy_info, &
-                               field_loc_center, field_type_angle)
+      call ice_HaloUpdate (ANGLET,           halo_info, &
+                           field_loc_center, field_type_angle, &
+                           fillValue=c1)
       call ice_timer_stop(timer_bound)
 
       call makemask          ! velocity mask, hemisphere masks
@@ -925,8 +933,8 @@
          ! convert lons array and scmlon to 0,360 and find index of value closest to 0
          ! and obtain single-column longitude/latitude indices to retrieve
          
-         pos_lons(:)= mod(lons(:) + 360._r8,360._r8)
-         pos_scmlon = mod(scmlon  + 360._r8,360._r8)
+         pos_lons(:)= mod(lons(:) + 360._dbl_kind,360._dbl_kind)
+         pos_scmlon = mod(scmlon  + 360._dbl_kind,360._dbl_kind)
          start(1) = (MINLOC(abs(pos_lons-pos_scmlon),dim=1))
          start(2) = (MINLOC(abs(lats    -scmlat    ),dim=1))
 
@@ -1337,8 +1345,8 @@
          this_block           ! block information for current block
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (hm,               bndy_info, &
-                               field_loc_center, field_type_scalar)
+      call ice_HaloUpdate (hm,               halo_info, &
+                           field_loc_center, field_type_scalar)
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -1361,8 +1369,8 @@
       enddo
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (uvm,                bndy_info, &
-                               field_loc_NEcorner, field_type_scalar)
+      call ice_HaloUpdate (uvm,                halo_info, &
+                           field_loc_NEcorner, field_type_scalar)
       call ice_timer_stop(timer_bound)
 
       do iblk = 1, nblocks
@@ -1499,10 +1507,12 @@
       enddo                     ! iblk
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells (TLON,             bndy_info, &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (TLAT,             bndy_info, &
-                               field_loc_center, field_type_scalar)
+      call ice_HaloUpdate (TLON,             halo_info, &
+                           field_loc_center, field_type_scalar, &
+                           fillValue=c1)
+      call ice_HaloUpdate (TLAT,             halo_info, &
+                           field_loc_center, field_type_scalar, &
+                           fillValue=c1)
       call ice_timer_stop(timer_bound)
 
       x1 = global_minval(TLON, distrb_info, field_loc_center, tmask)
@@ -1558,8 +1568,8 @@
       work1(:,:,:) = work(:,:,:)
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells(work1,            bndy_info, &
-                              field_loc_center, field_type_vector)
+      call ice_HaloUpdate (work1,            halo_info, &
+                           field_loc_center, field_type_vector)
       call ice_timer_stop(timer_bound)
 
       call to_ugrid(work1,work)
@@ -1663,8 +1673,8 @@
       work1(:,:,:) = work(:,:,:)
 
       call ice_timer_start(timer_bound)
-      call update_ghost_cells(work1,            bndy_info, &
-                              field_loc_center, field_type_scalar)
+      call ice_HaloUpdate (work1,            halo_info, &
+                           field_loc_center, field_type_scalar)
       call ice_timer_stop(timer_bound)
 
       call to_tgrid(work1,work)
@@ -1820,7 +1830,7 @@
 !
         do n=2,k
           fn = n
-          pk = ((c2*fn-1._r8)*xz*pkm1-(fn-c1)*pkm2)/fn
+          pk = ((c2*fn-1._dbl_kind)*xz*pkm1-(fn-c1)*pkm2)/fn
           pkm2 = pkm1
           pkm1 = pk
         enddo
@@ -1901,23 +1911,23 @@
 ! Local Workspace
 !-----------------------------------------
 
-      data bz/ 2.4048255577_r8, 5.5200781103_r8, 8.6537279129_r8 ,&
-         11.7915344391_r8, 14.9309177086_r8, 18.0710639679_r8    ,&
-         21.2116366299_r8, 24.3524715308_r8, 27.4934791320_r8    ,&
-         30.6346064684_r8, 33.7758202136_r8, 36.9170983537_r8    ,&
-         40.0584257646_r8, 43.1997917132_r8, 46.3411883717_r8    ,&
-         49.4826098974_r8, 52.6240518411_r8, 55.7655107550_r8    ,&
-         58.9069839261_r8, 62.0484691902_r8, 65.1899648002_r8    ,&
-         68.3314693299_r8, 71.4729816036_r8, 74.6145006437_r8    ,&
-         77.7560256304_r8, 80.8975558711_r8, 84.0390907769_r8    ,&
-         87.1806298436_r8, 90.3221726372_r8, 93.4637187819_r8    ,&
-         96.6052679510_r8, 99.7468198587_r8, 102.8883742542_r8   ,&
-         106.0299309165_r8, 109.1714896498_r8, 112.3130502805_r8 ,&
-         115.4546126537_r8, 118.5961766309_r8, 121.7377420880_r8 ,&
-         124.8793089132_r8, 128.0208770059_r8, 131.1624462752_r8 ,&
-         134.3040166383_r8, 137.4455880203_r8, 140.5871603528_r8 ,&
-         143.7287335737_r8, 146.8703076258_r8, 150.0118824570_r8 ,&
-         153.1534580192_r8, 156.2950342685_r8/  
+      data bz/ 2.4048255577_dbl_kind, 5.5200781103_dbl_kind, 8.6537279129_dbl_kind ,&
+         11.7915344391_dbl_kind, 14.9309177086_dbl_kind, 18.0710639679_dbl_kind    ,&
+         21.2116366299_dbl_kind, 24.3524715308_dbl_kind, 27.4934791320_dbl_kind    ,&
+         30.6346064684_dbl_kind, 33.7758202136_dbl_kind, 36.9170983537_dbl_kind    ,&
+         40.0584257646_dbl_kind, 43.1997917132_dbl_kind, 46.3411883717_dbl_kind    ,&
+         49.4826098974_dbl_kind, 52.6240518411_dbl_kind, 55.7655107550_dbl_kind    ,&
+         58.9069839261_dbl_kind, 62.0484691902_dbl_kind, 65.1899648002_dbl_kind    ,&
+         68.3314693299_dbl_kind, 71.4729816036_dbl_kind, 74.6145006437_dbl_kind    ,&
+         77.7560256304_dbl_kind, 80.8975558711_dbl_kind, 84.0390907769_dbl_kind    ,&
+         87.1806298436_dbl_kind, 90.3221726372_dbl_kind, 93.4637187819_dbl_kind    ,&
+         96.6052679510_dbl_kind, 99.7468198587_dbl_kind, 102.8883742542_dbl_kind   ,&
+         106.0299309165_dbl_kind, 109.1714896498_dbl_kind, 112.3130502805_dbl_kind ,&
+         115.4546126537_dbl_kind, 118.5961766309_dbl_kind, 121.7377420880_dbl_kind ,&
+         124.8793089132_dbl_kind, 128.0208770059_dbl_kind, 131.1624462752_dbl_kind ,&
+         134.3040166383_dbl_kind, 137.4455880203_dbl_kind, 140.5871603528_dbl_kind ,&
+         143.7287335737_dbl_kind, 146.8703076258_dbl_kind, 150.0118824570_dbl_kind ,&
+         153.1534580192_dbl_kind, 156.2950342685_dbl_kind/  
 !
       nn = n 
       if (n > 50) then 

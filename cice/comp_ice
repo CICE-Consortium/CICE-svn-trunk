@@ -42,7 +42,6 @@ setenv NETCDF   yes       # set to no if netcdf library is unavailable
 
 ### Set SRCDIR and EXEDIR to your own paths!
 #setenv SRCDIR $HOME/cice.v4.0/cice
-#setenv SRCDIR /net/bob4/eclare/CODE/CICE_release/CICE.v4.0/cice
 setenv SRCDIR /usr/projects/climate/eclare/CICE.v4.0/cice
 setenv EXEDIR $SYSTEM_USERDIR/rundir4
                                           if !(-d $EXEDIR) mkdir -p $EXEDIR

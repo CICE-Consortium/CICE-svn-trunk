@@ -18,6 +18,7 @@
 !          Restart module separated from history module
 ! 2006 ECH: Accepted some CCSM code into mainstream CICE
 !           Converted to free source form (F90) 
+! 2008 ECH: Rearranged order in which internal stresses are written and read
 ! 
 ! !INTERFACE:
 !
@@ -179,19 +180,18 @@
       ! internal stress
       !-----------------------------------------------------------------
       call ice_write(nu_dump,0,stressp_1,'ruf8',diag)
-      call ice_write(nu_dump,0,stressm_1,'ruf8',diag)
-      call ice_write(nu_dump,0,stress12_1,'ruf8',diag)
-
-      call ice_write(nu_dump,0,stressp_2,'ruf8',diag)
-      call ice_write(nu_dump,0,stressm_2,'ruf8',diag)
-      call ice_write(nu_dump,0,stress12_2,'ruf8',diag)
-
       call ice_write(nu_dump,0,stressp_3,'ruf8',diag)
-      call ice_write(nu_dump,0,stressm_3,'ruf8',diag)
-      call ice_write(nu_dump,0,stress12_3,'ruf8',diag)
-
+      call ice_write(nu_dump,0,stressp_2,'ruf8',diag)
       call ice_write(nu_dump,0,stressp_4,'ruf8',diag)
+
+      call ice_write(nu_dump,0,stressm_1,'ruf8',diag)
+      call ice_write(nu_dump,0,stressm_3,'ruf8',diag)
+      call ice_write(nu_dump,0,stressm_2,'ruf8',diag)
       call ice_write(nu_dump,0,stressm_4,'ruf8',diag)
+
+      call ice_write(nu_dump,0,stress12_1,'ruf8',diag)
+      call ice_write(nu_dump,0,stress12_3,'ruf8',diag)
+      call ice_write(nu_dump,0,stress12_2,'ruf8',diag)
       call ice_write(nu_dump,0,stress12_4,'ruf8',diag)
 
       !-----------------------------------------------------------------
@@ -247,7 +247,8 @@
       use ice_grid, only: tmask
       use ice_itd
       use ice_ocean, only: oceanmixed_ice
-      use ice_work, only: work1
+      use ice_work, only: work1, work_g1, work_g2
+      use ice_gather_scatter, only: scatter_global_stress
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -357,37 +358,58 @@
 
       !-----------------------------------------------------------------
       ! internal stress
+      ! The stress tensor must be read and scattered in pairs in order
+      ! to properly match corner values across a tripole grid cut.
       !-----------------------------------------------------------------
       if (my_task == master_task) write(nu_diag,*) &
            'internal stress components'
       
-      call ice_read(nu_restart,0,stressp_1,'ruf8',diag, &
-                    field_loc_center, field_type_vector)
-      call ice_read(nu_restart,0,stressm_1,'ruf8',diag, &
-                    field_loc_center, field_type_vector)
-      call ice_read(nu_restart,0,stress12_1,'ruf8',diag, &
-                    field_loc_center, field_type_vector)
+      allocate (work_g1(nx_global,ny_global), &
+                work_g2(nx_global,ny_global))
 
-      call ice_read(nu_restart,0,stressp_2,'ruf8',diag, &
-                    field_loc_center, field_type_vector)
-      call ice_read(nu_restart,0,stressm_2,'ruf8',diag, &
-                    field_loc_center, field_type_vector)
-      call ice_read(nu_restart,0,stress12_2,'ruf8',diag, &
-                    field_loc_center, field_type_vector)
+      call ice_read_global(nu_restart,0,work_g1,'ruf8',diag) ! stressp_1
+      call ice_read_global(nu_restart,0,work_g2,'ruf8',diag) ! stressp_3
+      call scatter_global_stress(stressp_1, work_g1, work_g2, &
+                                 master_task, distrb_info)
+      call scatter_global_stress(stressp_3, work_g2, work_g1, &
+                                 master_task, distrb_info)
 
-      call ice_read(nu_restart,0,stressp_3,'ruf8',diag, &
-                    field_loc_center, field_type_vector)
-      call ice_read(nu_restart,0,stressm_3,'ruf8',diag, &
-                    field_loc_center, field_type_vector)
-      call ice_read(nu_restart,0,stress12_3,'ruf8',diag, &
-                    field_loc_center, field_type_vector)
+      call ice_read_global(nu_restart,0,work_g1,'ruf8',diag) ! stressp_2
+      call ice_read_global(nu_restart,0,work_g2,'ruf8',diag) ! stressp_4
+      call scatter_global_stress(stressp_2, work_g1, work_g2, &
+                                 master_task, distrb_info)
+      call scatter_global_stress(stressp_4, work_g2, work_g1, &
+                                 master_task, distrb_info)
 
-      call ice_read(nu_restart,0,stressp_4,'ruf8',diag, &
-                    field_loc_center, field_type_vector)
-      call ice_read(nu_restart,0,stressm_4,'ruf8',diag, &
-                    field_loc_center, field_type_vector)
-      call ice_read(nu_restart,0,stress12_4,'ruf8',diag, &
-                    field_loc_center, field_type_vector)
+      call ice_read_global(nu_restart,0,work_g1,'ruf8',diag) ! stressm_1
+      call ice_read_global(nu_restart,0,work_g2,'ruf8',diag) ! stressm_3
+      call scatter_global_stress(stressm_1, work_g1, work_g2, &
+                                 master_task, distrb_info)
+      call scatter_global_stress(stressm_3, work_g2, work_g1, &
+                                 master_task, distrb_info)
+
+      call ice_read_global(nu_restart,0,work_g1,'ruf8',diag) ! stressm_2
+      call ice_read_global(nu_restart,0,work_g2,'ruf8',diag) ! stressm_4
+      call scatter_global_stress(stressm_2, work_g1, work_g2, &
+                                 master_task, distrb_info)
+      call scatter_global_stress(stressm_4, work_g2, work_g1, &
+                                 master_task, distrb_info)
+
+      call ice_read_global(nu_restart,0,work_g1,'ruf8',diag) ! stress12_1
+      call ice_read_global(nu_restart,0,work_g2,'ruf8',diag) ! stress12_3
+      call scatter_global_stress(stress12_1, work_g1, work_g2, &
+                                 master_task, distrb_info)
+      call scatter_global_stress(stress12_3, work_g2, work_g1, &
+                                 master_task, distrb_info)
+
+      call ice_read_global(nu_restart,0,work_g1,'ruf8',diag) ! stress12_2
+      call ice_read_global(nu_restart,0,work_g2,'ruf8',diag) ! stress12_4
+      call scatter_global_stress(stress12_2, work_g1, work_g2, &
+                                 master_task, distrb_info)
+      call scatter_global_stress(stress12_4, work_g2, work_g1, &
+                                 master_task, distrb_info)
+
+      deallocate (work_g1, work_g2)
 
       !-----------------------------------------------------------------
       ! ice mask for dynamics

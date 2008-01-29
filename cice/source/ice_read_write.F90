@@ -105,7 +105,7 @@
 ! If the optional variables field_loc and field_type are present \\
 ! the ghost cells are filled using values from the global array.\\
 ! This prevents them from being filled with zeroes in land cells \\
-! (subroutine update_ghost_cells need not be called).
+! (subroutine ice_HaloUpdate need not be called).
 !
 ! !REVISION HISTORY:
 !
@@ -519,7 +519,7 @@
 ! If the optional variables field_loc and field_type are present \\
 ! the ghost cells are filled using values from the global array.\\
 ! This prevents them from being filled with zeroes in land cells \\
-! (subroutine update_ghost_cells need not be called).
+! (subroutine ice_HaloUpdate need not be called).
 !
 ! !REVISION HISTORY:
 !

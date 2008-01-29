@@ -199,18 +199,18 @@
 !
 !EOP
 !
-      call update_ghost_cells (aicen,            bndy_info, &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (trcrn,            bndy_info, &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (vicen,            bndy_info, &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (vsnon,            bndy_info, &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (eicen,            bndy_info, &
-                               field_loc_center, field_type_scalar)
-      call update_ghost_cells (esnon,            bndy_info, &
-                               field_loc_center, field_type_scalar)
+         call ice_HaloUpdate (aicen,            halo_info, &
+                              field_loc_center, field_type_scalar)
+         call ice_HaloUpdate (trcrn,            halo_info, &
+                              field_loc_center, field_type_scalar)
+         call ice_HaloUpdate (vicen,            halo_info, &
+                              field_loc_center, field_type_scalar)
+         call ice_HaloUpdate (vsnon,            halo_info, &
+                              field_loc_center, field_type_scalar)
+         call ice_HaloUpdate (eicen,            halo_info, &
+                              field_loc_center, field_type_scalar)
+         call ice_HaloUpdate (esnon,            halo_info, &
+                              field_loc_center, field_type_scalar)
 
       end subroutine bound_state
 

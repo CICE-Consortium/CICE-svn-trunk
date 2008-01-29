@@ -14,6 +14,7 @@
 !
 ! author: Phil Jones, LANL
 ! Oct. 2004: Adapted from POP by William H. Lipscomb, LANL
+! Jan. 2008: Elizabeth Hunke updated to new POP infrastructure
 !
 ! !USES:
 
@@ -32,16 +33,22 @@
    type, public :: distrb  ! distribution data type
       integer (int_kind) :: &
          nprocs            ,&! number of processors in this dist
-         communicator        ! communicator to use in this dist
+         communicator      ,&! communicator to use in this dist
+         numLocalBlocks      ! number of blocks distributed to this
+                             !   local processor
 
       integer (int_kind), dimension(:), pointer :: &
-         proc              ,&! processor location for this block
-         local_block         ! block position in local array on proc
+         blockLocation     ,&! processor location for all blocks
+         blockLocalID      ,&! local  block id for all blocks
+         blockGlobalID       ! global block id for each local block
    end type
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
    public :: create_distribution, &
+             ice_distributionGet,         &
+             ice_distributionGetBlockLoc, &
+             ice_distributionGetBlockID, &
              create_local_block_ids
 
 !EOP
@@ -63,8 +70,8 @@
 !  by call the appropriate subroutine based on distribution type
 !  requested.  Currently only two distributions are supported:
 !  2-d Cartesian distribution (cartesian) and a load-balanced
-!  distribution (balanced) based on an input amount of work per
-!  block.
+!  distribution using a rake algorithm based on an input amount of work 
+!  per block.
 !
 ! !REVISION HISTORY:
 !  same as module
@@ -73,7 +80,7 @@
 
    character (*), intent(in) :: &
       dist_type             ! method for distributing blocks
-                            !  either cartesian or balanced
+                            !  either cartesian or rake
 
    integer (int_kind), intent(in) :: &
       nprocs                ! number of processors in this distribution
@@ -101,10 +108,9 @@
 
       create_distribution = create_distrb_cart(nprocs, work_per_block)
 
-   case('balanced')
+   case('rake')
 
-      create_distribution = create_distrb_balanced(nprocs, &
-                                                   work_per_block)
+      create_distribution = create_distrb_rake(nprocs, work_per_block)
 
    case default
 
@@ -163,8 +169,8 @@
 !-----------------------------------------------------------------------
 
    bcount = 0
-   do n=1,size(distribution%proc)
-      if (distribution%proc(n) == my_task+1) bcount = bcount + 1
+   do n=1,size(distribution%blockLocation)
+      if (distribution%blockLocation(n) == my_task+1) bcount = bcount + 1
    end do
 
 
@@ -178,15 +184,15 @@
 
    dbug = .false.
    if (bcount > 0) then
-      do n=1,size(distribution%proc)
-         if (distribution%proc(n) == my_task+1) then
-            block_ids(distribution%local_block(n)) = n
+      do n=1,size(distribution%blockLocation)
+         if (distribution%blockLocation(n) == my_task+1) then
+            block_ids(distribution%blockLocalID(n)) = n
 
             if (dbug) then
             write(nu_diag,*) 'block id, proc, local_block: ', &
-                             block_ids(distribution%local_block(n)), &
-                             distribution%proc(n), &
-                             distribution%local_block(n)
+                             block_ids(distribution%blockLocalID(n)), &
+                             distribution%blockLocation(n), &
+                             distribution%blockLocalID(n)
             endif
          endif
       end do
@@ -197,330 +203,6 @@
  end subroutine create_local_block_ids
 
 !***********************************************************************
-!BOP
-! !IROUTINE: create_distrb_cart
-! !INTERFACE:
-
- function create_distrb_cart(nprocs, work_per_block)
-
-! !DESCRIPTION:
-!  This function creates a distribution of blocks across processors
-!  using a 2-d Cartesian distribution.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
-
-   integer (int_kind), intent(in) :: &
-      nprocs     ! number of processors in this distribution
-
-   integer (int_kind), dimension(:), intent(in) :: &
-      work_per_block        ! amount of work per block
-
-! !OUTPUT PARAMETERS:
-
-   type (distrb) :: &
-      create_distrb_cart  ! resulting structure describing Cartesian
-                          !  distribution of blocks
-
-!EOP
-!BOC
-!----------------------------------------------------------------------
-!
-!  local variables
-!
-!----------------------------------------------------------------------
-
-   integer (int_kind) :: &
-      i, j, n               ,&! dummy loop indices
-      iblock, jblock, nblck ,&!
-      is, ie, js, je        ,&! start, end block indices for each proc
-      local_block           ,&! block location on this processor
-      nprocs_x              ,&! num of procs in x for global domain
-      nprocs_y              ,&! num of procs in y for global domain
-      nblocks_x_loc         ,&! num of blocks per processor in x
-      nblocks_y_loc           ! num of blocks per processor in y
-
-   type (distrb) :: dist  ! temp hold distribution
-
-!----------------------------------------------------------------------
-!
-!  create communicator for this distribution
-!
-!----------------------------------------------------------------------
-
-   call create_communicator(dist%communicator, nprocs)
-
-!----------------------------------------------------------------------
-!
-!  try to find best processor arrangement
-!
-!----------------------------------------------------------------------
-
-   dist%nprocs = nprocs
-
-   call proc_decomposition(dist%nprocs, nprocs_x, nprocs_y)
-
-!----------------------------------------------------------------------
-!
-!  allocate space for decomposition
-!
-!----------------------------------------------------------------------
-
-   allocate (dist%proc       (nblocks_tot), &
-             dist%local_block(nblocks_tot))
-
-!----------------------------------------------------------------------
-!
-!  distribute blocks linearly across processors in each direction
-!
-!----------------------------------------------------------------------
-
-   nblocks_x_loc = (nblocks_x-1)/nprocs_x + 1
-   nblocks_y_loc = (nblocks_y-1)/nprocs_y + 1
-	
-   do j=1,nprocs_y
-   do i=1,nprocs_x
-      n = (j-1)*nprocs_x + i
-
-      is = (i-1)*nblocks_x_loc + 1
-      ie =  i   *nblocks_x_loc
-      if (ie > nblocks_x) ie = nblocks_x
-      js = (j-1)*nblocks_y_loc + 1
-      je =  j   *nblocks_y_loc
-      if (je > nblocks_y) je = nblocks_y
-
-      local_block = 0
-      do jblock = js,je
-      do iblock = is,ie
-         nblck = (jblock - 1)*nblocks_x + iblock
-         if (work_per_block(nblck) /= 0) then
-            local_block = local_block + 1
-            dist%proc(nblck) = n
-            dist%local_block(nblck) = local_block
-         else
-            dist%proc(nblck) = 0
-            dist%local_block(nblck) = 0
-         endif
-      end do
-      end do
-   end do
-   end do
-
-!----------------------------------------------------------------------
-
-   create_distrb_cart = dist  ! return the result
-
-!----------------------------------------------------------------------
-!EOC
-
- end function create_distrb_cart
-
-!**********************************************************************
-!BOP
-! !IROUTINE: create_distrb_balanced
-! !INTERFACE:
-
- function create_distrb_balanced(nprocs, work_per_block)
-
-! !DESCRIPTION:
-!  This  function distributes blocks across processors in a
-!  load-balanced manner based on the amount of work per block.
-!  A rake algorithm is used in which the blocks are first distributed
-!  in a Cartesian distribution and then a rake is applied in each
-!  Cartesian direction.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
-
-   integer (int_kind), intent(in) :: &
-      nprocs                ! number of processors in this distribution
-
-   integer (int_kind), dimension(:), intent(in) :: &
-      work_per_block        ! amount of work per block
-
-! !OUTPUT PARAMETERS:
-
-   type (distrb) :: &
-      create_distrb_balanced  ! resulting structure describing
-                              ! load-balanced distribution of blocks
-
-!EOP
-!BOC
-!----------------------------------------------------------------------
-!
-!  local variables
-!
-!----------------------------------------------------------------------
-
-   integer (int_kind) :: &
-      i,j,k,n              ,&! dummy loop indices
-      pid                  ,&! dummy for processor id
-      local_block          ,&! local block position on processor
-      max_work             ,&! max amount of work in any block
-      nprocs_x             ,&! num of procs in x for global domain
-      nprocs_y               ! num of procs in y for global domain
-
-   integer (int_kind), dimension(:), allocatable :: &
-      priority           ,&! priority for moving blocks
-      work_tmp           ,&! work per row or column for rake algrthm
-      proc_tmp           ,&! temp processor id for rake algrthm
-      block_count          ! counter to determine local block indx
-
-   type (distrb) :: dist  ! temp hold distribution
-
-!----------------------------------------------------------------------
-!
-!  first set up as Cartesian distribution
-!  retain the Cartesian distribution if nblocks_tot = nprocs
-!  to avoid processors with no work
-!
-!----------------------------------------------------------------------
-
-   dist = create_distrb_cart(nprocs, work_per_block)
-   if (nblocks_tot == nprocs) then
-      create_distrb_balanced = dist  ! return the result
-      return
-   endif
-
-!----------------------------------------------------------------------
-!
-!  now re-distribute blocks using a rake in each direction
-!
-!----------------------------------------------------------------------
-
-   max_work = maxval(work_per_block)
-
-   call proc_decomposition(dist%nprocs, nprocs_x, nprocs_y)
-
-!----------------------------------------------------------------------
-!
-!  load-balance using a rake algorithm in the x-direction first
-!
-!----------------------------------------------------------------------
-
-   allocate(priority(nblocks_tot))
-
-   !*** set highest priority such that eastern-most blocks
-   !*** and blocks with the least amount of work are
-   !*** moved first
-
-   do j=1,nblocks_y
-   do i=1,nblocks_x
-      n=(j-1)*nblocks_x + i
-      if (work_per_block(n) > 0) then
-         priority(n) = (max_work + 1)*(nblocks_x + i) - &
-                       work_per_block(n)
-      else
-         priority(n) = 0
-      endif
-   end do
-   end do
-
-   allocate(work_tmp(nprocs_x), &
-            proc_tmp(nprocs_x))
-
-   do j=1,nprocs_y
-
-      work_tmp(:) = 0
-      do i=1,nprocs_x
-         pid = (j-1)*nprocs_x + i
-         proc_tmp(i) = pid
-         do n=1,nblocks_tot
-            if (dist%proc(n) == pid) then
-               work_tmp(i) = work_tmp(i) + work_per_block(n)
-            endif
-         end do
-      end do
-
-      call rake (work_tmp, proc_tmp, work_per_block, priority, dist)
-
-   end do
-
-   deallocate(work_tmp, proc_tmp)
-
-!----------------------------------------------------------------------
-!
-!  use a rake algorithm in the y-direction now
-!
-!----------------------------------------------------------------------
-
-   !*** set highest priority for northern-most blocks
-
-   do j=1,nblocks_y
-   do i=1,nblocks_x
-      n=(j-1)*nblocks_x + i
-      if (work_per_block(n) > 0) then
-         priority(n) = (max_work + 1)*(nblocks_y + j) - &
-                       work_per_block(n)
-      else
-         priority(n) = 0
-      endif
-   end do
-   end do
-
-   allocate(work_tmp(nprocs_y), &
-            proc_tmp(nprocs_y))
-
-   do i=1,nprocs_x
-
-      work_tmp(:) = 0
-      do j=1,nprocs_y
-         pid = (j-1)*nprocs_x + i
-         proc_tmp(j) = pid
-         do n=1,nblocks_tot
-            if (dist%proc(n) == pid) then
-               work_tmp(j) = work_tmp(j) + work_per_block(n)
-            endif
-         end do
-      end do
-
-      call rake (work_tmp, proc_tmp, work_per_block, priority, dist)
-
-   end do
-
-   deallocate(work_tmp, proc_tmp)
-   deallocate(priority)
-
-!----------------------------------------------------------------------
-!
-!  reset local_block info based on new distribution
-!
-!----------------------------------------------------------------------
-
-   allocate(proc_tmp(nprocs))
-   proc_tmp = 0
-
-   do pid=1,nprocs
-      local_block = 0
-      do n=1,nblocks_tot
-         if (dist%proc(n) == pid) then
-            local_block = local_block + 1
-            dist%local_block(n) = local_block
-            proc_tmp(pid) = proc_tmp(pid) + 1
-         endif
-      end do
-   end do
-
-   if (minval(proc_tmp) < 1) then
-      call abort_ice('ice: Load-balanced distribution failed')
-   endif
-
-   deallocate(proc_tmp)
-
-!----------------------------------------------------------------------
-
-   create_distrb_balanced = dist  ! return the result
-
-!----------------------------------------------------------------------
-!EOC
-
- end function create_distrb_balanced
-
-!**********************************************************************
 !BOP
 ! !IROUTINE: proc_decomposition
 ! !INTERFACE:
@@ -555,7 +237,7 @@
    integer (int_kind) :: &
       iguess, jguess               ! guesses for nproc_x,y
 
-   real (r4) :: &
+   real (real_kind) :: &
       square                       ! square root of nprocs
 
 !----------------------------------------------------------------------
@@ -643,10 +325,714 @@
 
 !**********************************************************************
 !BOP
-! !IROUTINE: rake
+! !IROUTINE: ice_distributionDestroy
 ! !INTERFACE:
 
- subroutine rake (proc_work, proc_id, block_work, priority, dist)
+ subroutine ice_distributionDestroy(distribution)
+
+! !DESCRIPTION:
+!  This routine destroys a defined distribution by deallocating
+!  all memory associated with the distribution.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !INPUT/OUTPUT PARAMETERS:
+
+   type (distrb), intent(inout) :: &
+      distribution          ! distribution to destroy
+
+! !OUTPUT PARAMETERS:
+
+!EOP
+!BOC
+!----------------------------------------------------------------------
+!
+!  local variables
+!
+!----------------------------------------------------------------------
+
+   integer (int_kind) :: istat  ! status flag for deallocate
+
+!----------------------------------------------------------------------
+!
+!  reset scalars
+!
+!----------------------------------------------------------------------
+
+   distribution%nprocs       = 0
+   distribution%communicator   = 0
+   distribution%numLocalBlocks = 0
+
+!----------------------------------------------------------------------
+!
+!  deallocate arrays
+!
+!----------------------------------------------------------------------
+
+   deallocate(distribution%blockLocation, stat=istat)
+   deallocate(distribution%blockLocalID , stat=istat)
+   deallocate(distribution%blockGlobalID, stat=istat)
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_distributionDestroy
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_distributionGet
+! !INTERFACE:
+
+ subroutine ice_distributionGet(distribution,&
+                            nprocs, communicator, numLocalBlocks, &
+                            blockLocation, blockLocalID, blockGlobalID)
+
+
+! !DESCRIPTION:
+!  This routine extracts information from a distribution.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !INPUT PARAMETERS:
+
+   type (distrb), intent(in) :: &
+      distribution           ! input distribution for which information
+                             !  is requested
+
+! !OUTPUT PARAMETERS:
+
+      integer (int_kind), intent(out), optional ::   &
+         nprocs          ,&! number of processors in this dist
+         communicator      ,&! communicator to use in this dist
+         numLocalBlocks      ! number of blocks distributed to this
+                             !   local processor
+
+      integer (int_kind), dimension(:), pointer, optional :: &
+         blockLocation     ,&! processor location for all blocks
+         blockLocalID      ,&! local  block id for all blocks
+         blockGlobalID       ! global block id for each local block
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  depending on which optional arguments are present, extract the
+!  requested info
+!
+!-----------------------------------------------------------------------
+
+   if (present(nprocs))       nprocs       = distribution%nprocs
+   if (present(communicator))   communicator   = distribution%communicator
+   if (present(numLocalBlocks)) numLocalBlocks = distribution%numLocalBlocks
+
+   if (present(blockLocation)) then
+      if (associated(distribution%blockLocation)) then
+         blockLocation => distribution%blockLocation
+      else
+        call abort_ice( &
+            'ice_distributionGet: blockLocation not allocated')
+         return
+      endif
+   endif
+
+   if (present(blockLocalID)) then
+      if (associated(distribution%blockLocalID)) then
+         blockLocalID = distribution%blockLocalID
+      else
+        call abort_ice( &
+            'ice_distributionGet: blockLocalID not allocated')
+         return
+      endif
+   endif
+
+   if (present(blockGlobalID)) then
+      if (associated(distribution%blockGlobalID)) then
+         blockGlobalID = distribution%blockGlobalID
+      else
+        call abort_ice( &
+            'ice_distributionGet: blockGlobalID not allocated')
+         return
+      endif
+   endif
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_distributionGet
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_distributionGetBlockLoc
+! !INTERFACE:
+
+ subroutine ice_distributionGetBlockLoc(distribution, blockID, &
+                                        processor, localID)
+
+
+! !DESCRIPTION:
+!  Given a distribution of blocks and a global block ID, return
+!  the processor and local index for the block.  A zero for both
+!  is returned in the case that the block has been eliminated from
+!  the distribution (i.e. has no active points).
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !INPUT PARAMETERS:
+
+   type (distrb), intent(in) :: &
+      distribution           ! input distribution for which information
+                             !  is requested
+
+   integer (int_kind), intent(in) :: &
+      blockID                ! global block id for which location requested
+
+! !OUTPUT PARAMETERS:
+
+   integer (int_kind), intent(out) ::  &
+      processor,            &! processor on which block resides
+      localID                ! local index for this block on this proc
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  check for valid blockID
+!
+!-----------------------------------------------------------------------
+
+   if (blockID < 0 .or. blockID > nblocks_tot) then
+     call abort_ice( &
+         'ice_distributionGetBlockLoc: invalid block id')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  extract the location from the distribution data structure
+!
+!-----------------------------------------------------------------------
+
+   processor = distribution%blockLocation(blockID)
+   localID   = distribution%blockLocalID (blockID)
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_distributionGetBlockLoc
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_distributionGetBlockID
+! !INTERFACE:
+
+ subroutine ice_distributionGetBlockID(distribution, localID, &
+                                       blockID)
+
+
+! !DESCRIPTION:
+!  Given a distribution of blocks and a local block index, return
+!  the global block id for the block.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !INPUT PARAMETERS:
+
+   type (distrb), intent(in) :: &
+      distribution           ! input distribution for which information
+                             !  is requested
+
+   integer (int_kind), intent(in) ::  &
+      localID                ! local index for this block on this proc
+
+! !OUTPUT PARAMETERS:
+
+   integer (int_kind), intent(out) :: &
+      blockID                ! global block id for this local block
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  check for valid localID
+!
+!-----------------------------------------------------------------------
+
+   if (localID < 0 .or. localID > distribution%numLocalBlocks) then
+     call abort_ice( &
+         'ice_distributionGetBlockID: invalid local id')
+      return
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  extract the global ID from the distribution data structure
+!
+!-----------------------------------------------------------------------
+
+   blockID   = distribution%blockGlobalID (localID)
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_distributionGetBlockID
+
+!***********************************************************************
+!BOP
+! !IROUTINE: create_distrb_cart
+! !INTERFACE:
+
+ function create_distrb_cart(nprocs, workPerBlock) result(newDistrb)
+
+! !DESCRIPTION:
+!  This function creates a distribution of blocks across processors
+!  using a 2-d Cartesian distribution.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+      nprocs            ! number of processors in this distribution
+
+   integer (int_kind), dimension(:), intent(in) :: &
+      workPerBlock        ! amount of work per block
+
+! !OUTPUT PARAMETERS:
+
+   type (distrb) :: &
+      newDistrb           ! resulting structure describing Cartesian
+                          !  distribution of blocks
+
+!EOP
+!BOC
+!----------------------------------------------------------------------
+!
+!  local variables
+!
+!----------------------------------------------------------------------
+
+   integer (int_kind) :: &
+      i, j,                  &! dummy loop indices
+      istat,                 &! status flag for allocation
+      iblock, jblock,        &!
+      is, ie, js, je,        &! start, end block indices for each proc
+      processor,             &! processor position in cartesian decomp
+      globalID,              &! global block ID
+      localID,               &! block location on this processor
+      nprocsX,             &! num of procs in x for global domain
+      nprocsY,             &! num of procs in y for global domain
+      numBlocksXPerProc,     &! num of blocks per processor in x
+      numBlocksYPerProc       ! num of blocks per processor in y
+
+!----------------------------------------------------------------------
+!
+!  create communicator for this distribution
+!
+!----------------------------------------------------------------------
+
+   call create_communicator(newDistrb%communicator, nprocs)
+
+!----------------------------------------------------------------------
+!
+!  try to find best processor arrangement
+!
+!----------------------------------------------------------------------
+
+   newDistrb%nprocs = nprocs
+
+   call proc_decomposition(nprocs, nprocsX, nprocsY)
+                                  
+
+!----------------------------------------------------------------------
+!
+!  allocate space for decomposition
+!
+!----------------------------------------------------------------------
+
+   allocate (newDistrb%blockLocation(nblocks_tot), &
+             newDistrb%blockLocalID (nblocks_tot), stat=istat)
+
+!----------------------------------------------------------------------
+!
+!  distribute blocks linearly across processors in each direction
+!
+!----------------------------------------------------------------------
+
+   numBlocksXPerProc = (nblocks_x-1)/nprocsX + 1
+   numBlocksYPerProc = (nblocks_y-1)/nprocsY + 1
+
+   do j=1,nprocsY
+   do i=1,nprocsX
+      processor = (j-1)*nprocsX + i    ! number the processors 
+                                         ! left to right, bot to top
+
+      is = (i-1)*numBlocksXPerProc + 1   ! starting block in i
+      ie =  i   *numBlocksXPerProc       ! ending   block in i
+      if (ie > nblocks_x) ie = nblocks_x
+      js = (j-1)*numBlocksYPerProc + 1   ! starting block in j
+      je =  j   *numBlocksYPerProc       ! ending   block in j
+      if (je > nblocks_y) je = nblocks_y
+
+      localID        = 0  ! initialize counter for local index
+      do jblock = js,je
+      do iblock = is,ie
+         globalID = (jblock - 1)*nblocks_x + iblock
+         if (workPerBlock(globalID) /= 0) then
+            localID = localID + 1
+            newDistrb%blockLocation(globalID) = processor
+            newDistrb%blockLocalID (globalID) = localID
+         else  ! no work - eliminate block from distribution
+            newDistrb%blockLocation(globalID) = 0
+            newDistrb%blockLocalID (globalID) = 0
+         endif
+      end do
+      end do
+
+      ! if this is the local processor, set number of local blocks
+      if (my_task == processor - 1) then
+         newDistrb%numLocalBlocks = localID
+      endif
+
+   end do
+   end do
+
+!----------------------------------------------------------------------
+!
+!  now store the local info
+!
+!----------------------------------------------------------------------
+
+   if (newDistrb%numLocalBlocks > 0) then
+      allocate (newDistrb%blockGlobalID(newDistrb%numLocalBlocks), &
+                stat=istat)
+
+      do j=1,nprocsY
+      do i=1,nprocsX
+         processor = (j-1)*nprocsX + i
+
+         if (processor == my_task + 1) then
+            is = (i-1)*numBlocksXPerProc + 1   ! starting block in i
+            ie =  i   *numBlocksXPerProc       ! ending   block in i
+            if (ie > nblocks_x) ie = nblocks_x
+            js = (j-1)*numBlocksYPerProc + 1   ! starting block in j
+            je =  j   *numBlocksYPerProc       ! ending   block in j
+            if (je > nblocks_y) je = nblocks_y
+
+            localID        = 0  ! initialize counter for local index
+            do jblock = js,je
+            do iblock = is,ie
+               globalID = (jblock - 1)*nblocks_x + iblock
+               if (workPerBlock(globalID) /= 0) then
+                  localID = localID + 1
+                  newDistrb%blockGlobalID (localID) = globalID
+               endif
+            end do
+            end do
+
+         endif
+
+      end do
+      end do
+
+   endif
+
+!----------------------------------------------------------------------
+!EOC
+
+ end function create_distrb_cart
+
+!**********************************************************************
+!BOP
+! !IROUTINE: create_distrb_rake
+! !INTERFACE:
+
+ function create_distrb_rake(nprocs, workPerBlock) result(newDistrb)
+
+! !DESCRIPTION:
+!  This  function distributes blocks across processors in a
+!  load-balanced manner based on the amount of work per block.
+!  A rake algorithm is used in which the blocks are first distributed
+!  in a Cartesian distribution and then a rake is applied in each
+!  Cartesian direction.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+      nprocs                ! number of processors in this distribution
+
+   integer (int_kind), dimension(:), intent(in) :: &
+      workPerBlock        ! amount of work per block
+
+! !OUTPUT PARAMETERS:
+
+   type (distrb) :: &
+      newDistrb           ! resulting structure describing
+                          ! load-balanced distribution of blocks
+
+!EOP
+!BOC
+!----------------------------------------------------------------------
+!
+!  local variables
+!
+!----------------------------------------------------------------------
+
+   integer (int_kind) ::    &
+      i,j,n              ,&! dummy loop indices
+      pid                ,&! dummy for processor id
+      istat              ,&! status flag for allocates
+      localBlock         ,&! local block position on processor
+      numOcnBlocks       ,&! number of ocean blocks
+      maxWork            ,&! max amount of work in any block
+      nprocsX          ,&! num of procs in x for global domain
+      nprocsY            ! num of procs in y for global domain
+
+   integer (int_kind), dimension(:), allocatable :: &
+      priority           ,&! priority for moving blocks
+      workTmp            ,&! work per row or column for rake algrthm
+      procTmp              ! temp processor id for rake algrthm
+
+   type (distrb) :: dist  ! temp hold distribution
+
+!----------------------------------------------------------------------
+!
+!  first set up as Cartesian distribution
+!
+!----------------------------------------------------------------------
+
+   dist = create_distrb_cart(nprocs, workPerBlock)
+                                    
+!----------------------------------------------------------------------
+!
+!  if the number of blocks is close to the number of processors,
+!  only do a 1-d rake on the entire distribution
+!
+!----------------------------------------------------------------------
+
+   numOcnBlocks = count(workPerBlock /= 0)
+
+   if (numOcnBlocks <= 2*nprocs) then
+
+      allocate(priority(nblocks_tot), stat=istat)
+
+      !*** initialize priority array
+
+      do j=1,nblocks_y
+      do i=1,nblocks_x
+         n=(j-1)*nblocks_x + i
+         if (workPerBlock(n) > 0) then
+            priority(n) = maxWork + n - workPerBlock(n)
+         else
+            priority(n) = 0
+         endif
+      end do
+      end do
+
+      allocate(workTmp(nblocks_tot), procTmp(nblocks_tot), stat=istat)
+
+      workTmp(:) = 0
+      do i=1,nprocs
+         procTmp(i) = i
+         do n=1,nblocks_tot
+            if (dist%blockLocation(n) == i) then
+               workTmp(i) = workTmp(i) + workPerBlock(n)
+            endif
+         end do
+      end do
+
+      call ice_distributionRake (workTmp, procTmp, workPerBlock, &
+                                 priority, dist)
+
+      deallocate(workTmp, procTmp, stat=istat)
+
+!----------------------------------------------------------------------
+!
+!  otherwise re-distribute blocks using a rake in each direction
+!
+!----------------------------------------------------------------------
+
+   else
+
+      maxWork = maxval(workPerBlock)
+
+      call proc_decomposition(dist%nprocs, nprocsX, nprocsY)
+
+!----------------------------------------------------------------------
+!
+!     load-balance using a rake algorithm in the x-direction first
+!
+!----------------------------------------------------------------------
+
+      allocate(priority(nblocks_tot), stat=istat)
+
+      !*** set highest priority such that eastern-most blocks
+      !*** and blocks with the least amount of work are
+      !*** moved first
+
+      do j=1,nblocks_y
+      do i=1,nblocks_x
+         n=(j-1)*nblocks_x + i
+         if (workPerBlock(n) > 0) then
+            priority(n) = (maxWork + 1)*(nblocks_x + i) - &
+                          workPerBlock(n)
+         else
+            priority(n) = 0
+         endif
+      end do
+      end do
+
+      allocate(workTmp(nprocsX), procTmp(nprocsX), stat=istat)
+
+      do j=1,nprocsY
+
+         workTmp(:) = 0
+         do i=1,nprocsX
+            pid = (j-1)*nprocsX + i
+            procTmp(i) = pid
+            do n=1,nblocks_tot
+               if (dist%blockLocation(n) == pid) then
+                  workTmp(i) = workTmp(i) + workPerBlock(n)
+               endif
+            end do
+         end do
+
+         call ice_distributionRake (workTmp, procTmp, workPerBlock, &
+                                    priority, dist)
+      end do
+   
+      deallocate(workTmp, procTmp, stat=istat)
+
+
+!----------------------------------------------------------------------
+!
+!     use a rake algorithm in the y-direction now
+!
+!----------------------------------------------------------------------
+
+      !*** set highest priority for northern-most blocks
+
+      do j=1,nblocks_y
+      do i=1,nblocks_x
+         n=(j-1)*nblocks_x + i
+         if (workPerBlock(n) > 0) then
+            priority(n) = (maxWork + 1)*(nblocks_y + j) - &
+                          workPerBlock(n)
+         else
+            priority(n) = 0
+         endif
+      end do
+      end do
+
+      allocate(workTmp(nprocsY), procTmp(nprocsY), stat=istat)
+
+      do i=1,nprocsX
+
+         workTmp(:) = 0
+         do j=1,nprocsY
+            pid = (j-1)*nprocsX + i
+            procTmp(j) = pid
+            do n=1,nblocks_tot
+               if (dist%blockLocation(n) == pid) then
+                  workTmp(j) = workTmp(j) + workPerBlock(n)
+               endif
+            end do
+         end do
+
+         call ice_distributionRake (workTmp, procTmp, workPerBlock, &
+                                    priority, dist)
+
+      end do
+
+      deallocate(workTmp, procTmp, priority, stat=istat)
+
+   endif  ! 1d or 2d rake
+
+!----------------------------------------------------------------------
+!
+!  create new distribution with info extracted from the temporary
+!  distribution
+!
+!----------------------------------------------------------------------
+
+   newDistrb%nprocs     = nprocs
+   newDistrb%communicator = dist%communicator
+
+   allocate(newDistrb%blockLocation(nblocks_tot), &
+            newDistrb%blockLocalID(nblocks_tot), stat=istat)
+
+   allocate(procTmp(nprocs), stat=istat)
+
+   procTmp = 0
+   localBlock = 0
+   do n=1,nblocks_tot
+      pid = dist%blockLocation(n)  ! processor id
+      newDistrb%blockLocation(n) = pid
+
+      if (pid > 0) then
+         procTmp(pid) = procTmp(pid) + 1
+         newDistrb%blockLocalID (n) = procTmp(pid)
+      else
+         newDistrb%blockLocalID (n) = 0
+      endif
+   end do
+
+   newDistrb%numLocalBlocks = procTmp(my_task+1)
+
+   if (minval(procTmp) < 1) then
+      call abort_ice( &
+         'create_distrb_rake: processors left with no blocks')
+      return
+   endif
+
+   deallocate(procTmp, stat=istat)
+
+   if (istat > 0) then
+      call abort_ice( &
+         'create_distrb_rake: error allocating last procTmp')
+      return
+   endif
+
+   allocate(newDistrb%blockGlobalID(newDistrb%numLocalBlocks), &
+            stat=istat)
+
+   if (istat > 0) then
+      call abort_ice( &
+         'create_distrb_rake: error allocating blockGlobalID')
+      return
+   endif
+
+   localBlock = 0
+   do n=1,nblocks_tot
+      if (newDistrb%blockLocation(n) == my_task+1) then
+         localBlock = localBlock + 1
+         newDistrb%blockGlobalID(localBlock) = n
+      endif
+   end do
+
+!----------------------------------------------------------------------
+
+   call ice_distributionDestroy(dist)
+
+!----------------------------------------------------------------------
+!EOC
+
+ end function create_distrb_rake
+
+!**********************************************************************
+!BOP
+! !IROUTINE: ice_distributionRake
+! !INTERFACE:
+
+ subroutine ice_distributionRake (procWork, procID, blockWork, &
+                                  priority, distribution)
 
 ! !DESCRIPTION:
 !  This subroutine performs a rake algorithm to distribute the work
@@ -664,18 +1050,22 @@
 ! !REVISION HISTORY:
 !  same as module
 
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in), dimension(:) :: &
+      blockWork          ,&! amount of work per block
+      procID               ! global processor number
+
 ! !INPUT/OUTPUT PARAMETERS:
 
    integer (int_kind), intent(inout), dimension(:) :: &
-      proc_work           ,&! amount of work per processor
-      priority              ! priority for moving a given block
-
-   integer (int_kind), intent(in), dimension(:) :: &
-      block_work          ,&! amount of work per block
-      proc_id               ! global processor number
+      procWork           ,&! amount of work per processor
+      priority             ! priority for moving a given block
 
    type (distrb), intent(inout) :: &
-      dist                  ! distribution to change
+      distribution         ! distribution to change
+
+! !OUTPUT PARAMETERS:
 
 !EOP
 !BOC
@@ -686,14 +1076,16 @@
 !----------------------------------------------------------------------
 
    integer (int_kind) :: &
-      i, j, n, m, np1, &
-      iproc, inext, &
-      nprocs, nblocks, &
-      last_priority, last_loc, &
-      residual, &
-      work_mean, work_max, work_diff, &
-      iter, niters, itransfer, ntransfers, &
-      min_priority
+      i, n,                  &! dummy loop indices
+      np1,                   &! n+1 corrected for cyclical wrap
+      iproc, inext,          &! processor ids for current and next 
+      nprocs, numBlocks,   &! number of blocks, processors
+      lastPriority,          &! priority for most recent block
+      minPriority,           &! minimum priority
+      lastLoc,               &! location for most recent block
+      meanWork, maxWork,     &! mean,max work per processor
+      diffWork, residual,    &! work differences and residual work
+      numTransfers            ! counter for number of block transfers
 
 !----------------------------------------------------------------------
 !
@@ -701,21 +1093,21 @@
 !
 !----------------------------------------------------------------------
 
-   nprocs  = size(proc_work)
-   nblocks = size(block_work)
+   nprocs  = size(procWork)
+   numBlocks = size(blockWork)
 
-   !*** mean work per processor
+   !*** compute mean,max work per processor
 
-   work_mean = sum(proc_work)/nprocs + 1
-   work_max  = maxval(proc_work)
-   residual = mod(work_mean,nprocs)
+   meanWork = sum(procWork)/nprocs + 1
+   maxWork  = maxval(procWork)
+   residual = mod(meanWork,nprocs)
 
-   min_priority = 1000000
+   minPriority = 1000000
    do n=1,nprocs
-      iproc = proc_id(n)
-      do i=1,nblocks
-         if (dist%proc(i) == iproc) then
-            min_priority = min(min_priority,priority(i))
+      iproc = procID(n)
+      do i=1,numBlocks
+         if (distribution%blockLocation(i) == iproc) then
+            minPriority = min(minPriority,priority(i))
          endif
       end do
    end do
@@ -726,7 +1118,7 @@
 !
 !----------------------------------------------------------------------
 
-   transfer_loop: do
+   transferLoop: do
 
 !----------------------------------------------------------------------
 !
@@ -734,44 +1126,46 @@
 !
 !----------------------------------------------------------------------
 
-      ntransfers = 0
-       do n=1,nprocs
-          if (n < nprocs) then
-             np1   = n+1
-          else
-             np1   = 1
-          endif
-         iproc = proc_id(n)
-         inext = proc_id(np1)
+      numTransfers = 0
+      do n=1,nprocs
+         if (n < nprocs) then
+            np1   = n+1
+         else
+            np1   = 1
+         endif
+         iproc = procID(n)
+         inext = procID(np1)
 
-         if (proc_work(n) > work_mean) then !*** pass work to next
-            work_diff = proc_work(n) - work_mean
+         if (procWork(n) > meanWork) then !*** pass work to next
 
-            rake1: do while (work_diff > 1)
+            diffWork = procWork(n) - meanWork
+
+            rake1: do while (diffWork > 1)
 
                !*** attempt to find a block with the required
                !*** amount of work and with the highest priority
                !*** for moving (eg boundary blocks first)
 
-               last_priority = 0
-               last_loc = 0
-               do i=1,nblocks
-                  if (dist%proc(i) == iproc) then
-                     if (priority(i) > last_priority ) then
-                        last_priority = priority(i)
-                        last_loc = i
+               lastPriority = 0
+               lastLoc = 0
+
+               do i=1,numBlocks
+                  if (distribution%blockLocation(i) == iproc) then
+                     if (priority(i) > lastPriority ) then
+                        lastPriority = priority(i)
+                        lastLoc = i
                      endif
                   endif
                end do
-               if (last_loc == 0) exit rake1 ! could not shift work
+               if (lastLoc == 0) exit rake1 ! could not shift work
 
-               ntransfers = ntransfers + 1
-               dist%proc(last_loc) = inext
-               if (np1 == 1) priority(last_loc) = min_priority
-               work_diff = work_diff - block_work(last_loc)
+               numTransfers = numTransfers + 1
+               distribution%blockLocation(lastLoc) = inext
+               if (np1 == 1) priority(lastLoc) = minPriority
+               diffWork = diffWork - blockWork(lastLoc)
 
-               proc_work(n  ) = proc_work(n  )-block_work(last_loc)
-               proc_work(np1) = proc_work(np1)+block_work(last_loc)
+               procWork(n  ) = procWork(n  )-blockWork(lastLoc)
+               procWork(np1) = procWork(np1)+blockWork(lastLoc)
             end do rake1
          endif
 
@@ -779,19 +1173,19 @@
 
 !----------------------------------------------------------------------
 !
-!     increment work_mean by one and repeat
+!     increment meanWork by one and repeat
 !
 !----------------------------------------------------------------------
 
-      work_mean = work_mean + 1
-      if (ntransfers == 0 .or. work_mean > work_max) exit transfer_loop
+      meanWork = meanWork + 1
+      if (numTransfers == 0 .or. meanWork > maxWork) exit transferLoop
 
-   end do transfer_loop
+   end do transferLoop
 
 !----------------------------------------------------------------------
 !EOC
 
-end subroutine rake
+end subroutine ice_distributionRake
 
 !***********************************************************************
 
