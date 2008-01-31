@@ -977,7 +977,8 @@
                i = indxi(ij,n)
                j = indxj(ij,n)
                if (trm(i,j,2,n) > puny)    &    ! hsno > puny
-                 trm(i,j,kt+k,n) = esnon(i,j,slyr1(n)+k-1)*workb(i,j) ! qsno
+                 trm(i,j,kt+k,n) = esnon(i,j,slyr1(n)+k-1)*workb(i,j) & ! qsno
+                                 + rhos*Lfresh
             enddo               ! ij
          enddo                  ! nslyr
 
@@ -1107,7 +1108,8 @@
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
-               esnon(i,j,slyr1(n)+k-1) = vsnon(i,j,n)*trm(i,j,kt+k,n)
+               esnon(i,j,slyr1(n)+k-1) = (trm(i,j,kt+k,n) - rhos*Lfresh) &
+                                         * vsnon(i,j,n)
             enddo               ! ij
          enddo                  ! nslyr
 
