@@ -386,9 +386,8 @@
       call broadcast_array (lonpnt(1:2),        master_task)
       call broadcast_scalar(runid,              master_task)
       call broadcast_scalar(runtype,            master_task)
-! only master_task writes to file
-!      call broadcast_scalar(nu_diag),           master_task)
-
+      if (dbug) & ! else only master_task writes to file
+      call broadcast_scalar(nu_diag,            master_task)
       ! tracers
       call broadcast_scalar(tr_iage,            master_task)
       call broadcast_scalar(restart_age,        master_task)
@@ -406,9 +405,9 @@
             open (nu_diag, file=diag_file, status='unknown')
          endif
 
-         write (nu_diag,*) '--------------------------------'
-         write (nu_diag,*) '  CICE model diagnostic output  '
-         write (nu_diag,*) '--------------------------------'
+         write(nu_diag,*) '--------------------------------'
+         write(nu_diag,*) '  CICE model diagnostic output  '
+         write(nu_diag,*) '--------------------------------'
          write(nu_diag,*) ' '
          write(nu_diag,*) ' Document ice_in namelist parameters:'
          write(nu_diag,*) ' ==================================== '
