@@ -283,11 +283,7 @@
       ! set up diagnostics output and resolve conflicts
       !-----------------------------------------------------------------
 
-      if (trim(diag_type) == 'file') then
-         call get_fileunit(nu_diag)
-      else
-         nu_diag = 6
-      endif
+      if (trim(diag_type) == 'file') call get_fileunit(nu_diag)
 
 #ifdef SEQ_MCT
       ! Note in SEQ_MCT mode the runid and runtype flag are obtained from the

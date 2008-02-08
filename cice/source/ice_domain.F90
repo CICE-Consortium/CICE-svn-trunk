@@ -132,6 +132,7 @@
    ew_boundary_type  = 'cyclic'
    ns_boundary_type  = 'open'
 
+   call get_fileunit(nu_nml)
    if (my_task == master_task) then
       open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
       if (nml_error /= 0) then
@@ -145,6 +146,7 @@
       end do
       if (nml_error == 0) close(nu_nml)
    endif
+   call release_fileunit(nu_nml)
 
    call broadcast_scalar(nml_error, master_task)
    if (nml_error /= 0) then
