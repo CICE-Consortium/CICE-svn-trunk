@@ -203,8 +203,8 @@
 !EOP
 !
       call init_communicate     ! initial setup for message passing
-      call input_data           ! namelist variables
       call init_fileunits       ! unit numbers
+      call input_data           ! namelist variables
       call init_work            ! work arrays
 
       call init_domain_blocks   ! set up block decomposition
