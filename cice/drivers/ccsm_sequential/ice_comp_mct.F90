@@ -10,36 +10,50 @@ module ice_comp_mct
 !
 ! !USES:
 
-  use shr_kind_mod,   only : r8 => shr_kind_r8
-  use shr_inputInfo_mod
-  use shr_sys_mod
-  use shr_file_mod 
-
+  use shr_kind_mod, only : r8 => shr_kind_r8
+  use shr_sys_mod,  only : shr_sys_abort, shr_sys_flush
+  use shr_file_mod, only : shr_file_getlogunit, shr_file_getloglevel,  &
+		           shr_file_setloglevel, shr_file_setlogunit
   use mct_mod
+  use esmf_mod, only : ESMF_Clock
+
   use seq_flds_mod
   use seq_flds_indices
-  use seq_cdata_mod
+  use seq_cdata_mod,   only : seq_cdata, seq_cdata_setptrs
+  use seq_infodata_mod,only : seq_infodata_type, seq_infodata_getdata,       &
+		              seq_infodata_putdata, seq_infodata_start_type_cont, &
+		              seq_infodata_start_type_brnch, seq_infodata_start_type_start
+  use seq_timemgr_mod, only : seq_timemgr_eclockgetdata, seq_timemgr_restartalarmison, &
+		              seq_timemgr_eclockdateinsync, seq_timemgr_stopalarmison
+  use perf_mod,        only : t_startf, t_stopf
 
-  use eshr_timemgr_mod
+  use ice_flux,        only : strairxt, strairyt, strocnxt, strocnyt,    &
+			      alvdr, alidr, alvdf, alidf, tref, qref, flat,     &
+			      fsens, flwout, evap, fswabs, fhocn, fswthru,      &
+		              fresh, fsalt, zlvl, uatm, vatm, potT, Tair, Qa,   &
+		              rhoa, swvdr, swvdf, swidr, swidf, flw, frain,     &
+		              fsnow, uocn, vocn, sst, ss_tltx, ss_tlty, frzmlt, &
+		              sss, tf, wind, fsw, init_flux_atm
+  use ice_state,       only : vice, aice, trcr
+  use ice_domain_size, only : nx_global, ny_global, block_size_x, block_size_y, max_blocks
+  use ice_domain,      only : nblocks, blocks_ice, halo_info
+  use ice_blocks,      only : block, get_block, nx_block, ny_block
+  use ice_grid,        only : tlon, tlat, tarea, tmask, anglet, hm, ocn_gridcell_frac, &
+ 		              grid_type, t2ugrid_vector
+  use ice_constants,   only : c0, c1, puny, tffresh, spval_dbl, rad_to_deg, radius, &
+		              field_loc_center, field_type_scalar, field_type_vector
+  use ice_communicate, only : my_task, master_task
+  use ice_calendar,    only : idate, mday, time, month, daycal, secday, &
+		              sec, dt, dyn_dt, ndyn_dt, calendar
+  use ice_timers,      only : ice_timer_stop, ice_timer_start, ice_timer_print_all, timer_total 
+  use ice_kinds_mod,   only : int_kind, dbl_kind, char_len_long 
+!  use ice_init
+  use ice_boundary,    only : ice_HaloUpdate 
+  use ice_scam,        only : scmlat, scmlon, single_column
+  use ice_fileunits,   only : nu_diag
+  use ice_dyn_evp,     only:  kdyn
+  use ice_prescribed_mod, only : prescribed_ice, ice_prescribed_run
 
-  use perf_mod
-
-  use ice_flux
-  use ice_state
-  use ice_domain_size
-  use ice_domain
-  use ice_blocks
-  use ice_grid
-  use ice_constants
-  use ice_calendar
-  use ice_timers
-  use ice_kinds_mod
-  use ice_init
-  use ice_boundary
-  use ice_prescribed_mod
-  use ice_scam
-  use ice_fileunits
-!
 ! !PUBLIC MEMBER FUNCTIONS:
   implicit none
   public :: ice_init_mct
@@ -74,7 +88,7 @@ contains
 ! !IROUTINE: ice_init_mct
 !
 ! !INTERFACE:
-  subroutine ice_init_mct( cdata_i, x2i_i, i2x_i, SyncClock, NLFilename )
+  subroutine ice_init_mct( EClock, cdata_i, x2i_i, i2x_i, NLFilename )
 !
 ! !DESCRIPTION:
 ! Initialize thermodynamic ice model and obtain relevant atmospheric model
@@ -87,9 +101,9 @@ contains
     use ice_history, only: history_dir, history_file
 !
 ! !ARGUMENTS:
+    type(ESMF_Clock)         , intent(in)    :: EClock
     type(seq_cdata)          , intent(inout) :: cdata_i
     type(mct_aVect)          , intent(inout) :: x2i_i, i2x_i
-    type(eshr_timemgr_clockType), intent(in) :: SyncClock  ! Synchronization clock
     character(len=*), optional  , intent(in) :: NLFilename ! Namelist filename
 !
 ! !LOCAL VARIABLES:
@@ -98,17 +112,19 @@ contains
     integer                               :: mpicom_ice
     type(mct_gsMap)             , pointer :: gsMap_ice
     type(mct_gGrid)             , pointer :: dom_i
-    type(shr_inputInfo_initType), pointer :: CCSMInit   ! Input init object
+    type(seq_infodata_type)     , pointer :: infodata   ! Input init object
     integer                               :: lsize
 
     character(len=256) :: drvarchdir         ! driver archive directory
+    character(len=32)  :: starttype          ! infodata start type
     integer            :: start_ymd          ! Start date (YYYYMMDD)
     integer            :: start_tod          ! start time of day (s)
     integer            :: ref_ymd            ! Reference date (YYYYMMDD)
     integer            :: ref_tod            ! reference time of day (s)
     integer            :: iyear              ! yyyy
+    integer            :: dtime              ! time step
     integer            :: shrlogunit,shrloglev ! old values
-
+    integer            :: iam,ierr
 ! !REVISION HISTORY:
 ! Author: Jacob Sewall
 !EOP
@@ -119,10 +135,18 @@ contains
     !----------------------------------------------------------------------------
 
     call seq_cdata_setptrs(cdata_i, ID=ICEID, mpicom=mpicom_ice, &
-         gsMap=gsMap_ice, dom=dom_i, CCSMInit=CCSMInit)
+         gsMap=gsMap_ice, dom=dom_i, infodata=infodata)
+
+#if (defined _MEMTRACE)
+    call MPI_comm_rank(mpicom_ice,iam,ierr)
+    if(iam == 0 ) then
+       write(6,*) 'ice_init_mct:start::'
+       call memmon_print_usage()
+    endif
+#endif
 
     !----------------------------------------------------------------------------
-    ! use CCSMInit to determine type of run
+    ! use infodata to determine type of run
     !----------------------------------------------------------------------------
 
     ! Preset single column values
@@ -131,17 +155,27 @@ contains
     scmlat = -999.
     scmlon = -999.
 
-    call shr_inputInfo_initGetData( CCSMInit, case_name=runid   ,  &  
-                                    single_column=single_column ,  &
-             	                    scmlat=scmlat,scmlon=scmlon)
+    call seq_infodata_GetData( infodata, case_name=runid   ,  &  
+       single_column=single_column ,scmlat=scmlat,scmlon=scmlon)
+    call seq_infodata_GetData( infodata, start_type=starttype)
 
-    if (      shr_inputInfo_initIsStartup(  CCSMInit ) )then
+    if (     trim(starttype) == trim(seq_infodata_start_type_start)) then
        runtype = "initial"
-    else if ( shr_inputInfo_initIsContinue( CCSMInit ) )then
+    else if (trim(starttype) == trim(seq_infodata_start_type_cont) ) then
        runtype = "continue"
-    else if ( shr_inputInfo_initIsBranch(   CCSMInit ) )then
+    else if (trim(starttype) == trim(seq_infodata_start_type_brnch)) then
        runtype = "branch"
+    else
+       write(nu_diag,*) 'ice_comp_mct ERROR: unknown starttype'
+       call shr_sys_abort()
     end if
+
+    !=============================================================
+    ! Set ice dtime to ice coupling frequency
+    !=============================================================
+
+    call seq_timemgr_EClockGetData(EClock, dtime=dtime)
+    dt = real(dtime)
 
     !=============================================================
     ! Initialize cice because grid information is needed for
@@ -161,7 +195,7 @@ contains
     call shr_file_setLogUnit (nu_diag)
    
     !----------------------------------------------------------------------------
-    ! use SyncClock to reset calendar information on initial start
+    ! use EClock to reset calendar information on initial start
     !----------------------------------------------------------------------------
 
     ! - the following logic duplicates the logic for the concurrent system - 
@@ -180,8 +214,8 @@ contains
     !   - istep0 and istep1 are set to 0 
 
     if (runtype == 'initial') then
-       call eshr_timemgr_clockGet(                                     &
-            SyncClock, start_ymd=start_ymd, start_tod=start_tod,       &
+       call seq_timemgr_EClockGetData(EClock, &
+            start_ymd=start_ymd, start_tod=start_tod,       &
             ref_ymd=ref_ymd, ref_tod=ref_tod)
 
        if (ref_ymd /= start_ymd .or. ref_tod /= start_tod) then
@@ -241,7 +275,8 @@ contains
     !----------------------------------------------------------------------------
 
     call ice_export_mct (i2x_i)  !Send initial state to driver
-    call shr_inputInfo_initPutData( CCSMInit, ice_prognostic=.true.)
+    call seq_infodata_PutData( infodata, ice_prognostic=.true., &
+      ice_nx = nx_global, ice_ny = ny_global )
     call t_stopf ('cice_mct_init')
 
     !----------------------------------------------------------------------------
@@ -251,6 +286,14 @@ contains
     call shr_file_setLogUnit (shrlogunit)
     call shr_file_setLogLevel(shrloglev)
 
+#if (defined _MEMTRACE)
+    if(iam == 0) then
+       write(6,*) 'ice_init_mct:end::'
+       call memmon_print_usage()
+       call memmon_reset_addr()
+    endif
+#endif
+
   end subroutine ice_init_mct
 
 !---------------------------------------------------------------------------
@@ -259,34 +302,27 @@ contains
 ! !IROUTINE: ice_run_mct
 !
 ! !INTERFACE:
-  subroutine ice_run_mct( cdata_i, x2i_i, i2x_i, SyncClock )
+  subroutine ice_run_mct( EClock, cdata_i, x2i_i, i2x_i )
 !
 ! !DESCRIPTION:
 ! Run thermodynamic CICE
 !
 ! !USES:
     use ice_step_mod
-    use ice_age
     use ice_history
     use ice_restart
     use ice_diagnostics
-    use ice_meltpond
-    use ice_shortwave
 
-    use eshr_timemgr_mod, only: eshr_timemgr_clockIsOnLastStep,  &
-                                eshr_timemgr_clockAlarmIsOnRes,  &
-                                eshr_timemgr_clockDateInSync,    &
-                                eshr_timeMgr_clockGet
-!
 ! !ARGUMENTS:
+    type(ESMF_Clock),intent(in)    :: EClock
     type(seq_cdata), intent(inout) :: cdata_i
     type(mct_aVect), intent(inout) :: x2i_i
     type(mct_aVect), intent(inout) :: i2x_i
-    type(eshr_timemgr_clockType), intent(IN) :: SyncClock  ! Synchronization clock
 
 ! !LOCAL VARIABLES:
     integer :: k             ! index
     logical :: rstwr         ! .true. ==> write a restart file
+    logical :: stop_now      ! .true. ==> stop at the end of this run phase
     integer :: ymd           ! Current date (YYYYMMDD)
     integer :: tod           ! Current time of day (sec)
     integer :: yr_sync       ! Sync current year
@@ -304,6 +340,12 @@ contains
 !EOP
 !---------------------------------------------------------------------------
 
+#if (defined _MEMTRACE)
+    if(my_task == 0 ) then
+       write(6,*) SubName // ':start::'
+       call memmon_print_usage()
+    endif
+#endif
     !----------------------------------------------------------------------------
     ! Reset shr logging to my log file
     !----------------------------------------------------------------------------
@@ -329,9 +371,6 @@ contains
     time = time + dt       ! determine the time and date
     call calendar(time)    ! at the end of the timestep
     
-    if ((istep == 1) .and. (trim(runtype) == 'startup') .and. &
-       (trim(shortwave) == 'dEdd')) call init_dEdd
-
     call init_mass_diags   ! diagnostics per timestep
 
     if(prescribed_ice) then  ! read prescribed ice
@@ -370,12 +409,20 @@ contains
    ! dynamics, transport, ridging
    !-----------------------------------------------------------------
 
-    if (.not.prescribed_ice) then
-       call t_startf ('cice_dyn')
-       do k = 1, ndyn_dt
-          call step_dynamics (dyn_dt) ! dynamics, transport, ridging
-       enddo
-       call t_stopf ('cice_dyn')
+    if (.not.prescribed_ice .and. kdyn>0) then
+       if (ndyn_dt > 1) then
+          call t_startf ('cice_dyn')
+          do k = 1, ndyn_dt
+             call step_dynamics (dyn_dt) ! dynamics, transport, ridging
+          enddo
+          call t_stopf ('cice_dyn')
+       else
+          if (mod(time, dyn_dt) == c0) then
+             call t_startf ('cice_dyn')
+             call step_dynamics (dyn_dt) ! dynamics, transport, ridging
+             call t_stopf ('cice_dyn')
+          endif
+       endif
     endif ! not prescribed_ice
     
     !-----------------------------------------------------------------
@@ -395,20 +442,28 @@ contains
     call t_stopf ('cice_diag')
     
     call t_startf ('cice_hist')
+#if (defined _NOIO)
+!  Not enought memory on BGL to write a history file yet! 
+!    call ice_write_hist (dt)    ! history file
+#else
     call ice_write_hist (dt)    ! history file
+#endif
+
     call t_stopf ('cice_hist')
 
-    rstwr = eshr_timemgr_clockAlarmIsOnRes( SyncClock )
+    rstwr = seq_timemgr_RestartAlarmIsOn(EClock)
     if (rstwr) then
-       call eshr_timemgr_clockGet(SyncClock, year=yr_sync, &
-          month=mon_sync, day=day_sync, CurrentTOD=tod_sync)
+       call seq_timemgr_EClockGetData(EClock, curr_ymd=ymd_sync, curr_tod=tod_sync, &
+          curr_yr=yr_sync,curr_mon=mon_sync,curr_day=day_sync)
        fname = restart_filename(yr_sync, mon_sync, day_sync, tod_sync)
        write(nu_diag,*)'ice_comp_mct: callinng dumpfile for restart filename= ',&
             fname
+#if (defined _NOIO)
+!  Not enought memory on BGL to call dumpfile  file yet! 
+!       call dumpfile(fname)
+#else
        call dumpfile(fname)
-       if (tr_iage) call write_restart_age
-       if (tr_pond) call write_restart_pond
-       if (trim(shortwave) == 'dEdd') call write_restart_dEdd
+#endif
     end if
 
     !-----------------------------------------------------------------
@@ -425,9 +480,9 @@ contains
 
     tod = sec
     ymd = idate
-    if ( .not. eshr_timemgr_clockDateInSync( SyncClock, ymd, tod ) )then
-       call eshr_timemgr_clockGet( Syncclock, CurrentYMD=ymd_sync, &
-          CurrentTOD=tod_sync )
+    if (.not. seq_timemgr_EClockDateInSync( EClock, ymd, tod )) then
+       call seq_timemgr_EClockGetData( EClock, curr_ymd=ymd_sync, &
+          curr_tod=tod_sync )
        write(nu_diag,*)' cice ymd=',ymd     ,'  cice tod= ',tod
        write(nu_diag,*)' sync ymd=',ymd_sync,'  sync tod= ',tod_sync
        call shr_sys_abort( SubName// &
@@ -438,7 +493,28 @@ contains
 
     call shr_file_setLogUnit (shrlogunit)
     call shr_file_setLogLevel(shrloglev)
+
+#if (defined _MEMTRACE)
+    if(my_task == 0 ) then
+       write(6,*) SubName // ':start::'
+       call memmon_print_usage()
+    endif
+#endif
   
+    !-------------------------------------------------------------------
+    ! stop timers and print timer info
+    !-------------------------------------------------------------------
+    ! Need to have this logic here instead of in ice_final_mct since 
+    ! the ice_final_mct.F90 will still be called even in aqua-planet mode
+    ! Could put this logic in the driver - but it seems easier here 
+
+    stop_now = seq_timemgr_StopAlarmIsOn( EClock )
+    if (stop_now) then
+       call ice_timer_stop(timer_total)        ! stop timing entire run
+       call ice_timer_print_all(stats=.false.) ! print timing information
+       call release_all_fileunits
+    end if
+    
   end subroutine ice_run_mct
 
 !---------------------------------------------------------------------------
@@ -452,9 +528,7 @@ contains
 ! !DESCRIPTION:
 ! Finalize CICE
 !
-!
 ! !USES:
-    use ice_exit
 !
 !------------------------------------------------------------------------------
 !BOP
@@ -462,25 +536,10 @@ contains
 ! !ARGUMENTS:
 !
 ! !REVISION HISTORY:
-! Author: Jacob Sewall
 !
 !EOP
 !---------------------------------------------------------------------------
 
-   !-------------------------------------------------------------------
-   ! stop timers and print timer info
-   !-------------------------------------------------------------------
-
-    call ice_timer_stop(timer_total)        ! stop timing entire run
-    call ice_timer_print_all(stats=.false.) ! print timing information
-    
-!    if (nu_diag /= 6) close (nu_diag) ! diagnostic output
-    
-    ! do *NOT* call end_run from this subroutine.  For a serial
-    ! run it is a moot point as end_run does nothing.  But for an
-    ! MPI run end_run will kill MPI before the sequential driver is
-    ! ready for that to happen.
-      
   end subroutine ice_final_mct
 
 !=================================================================================
@@ -604,9 +663,8 @@ contains
           sicthk(i,j,iblk) = vice(i,j,iblk)/(aice(i,j,iblk)+puny)
 
           ! ice fraction
-          ailohi(i,j,iblk) = aice(i,j,iblk)
+          ailohi(i,j,iblk) = min(aice(i,j,iblk), c1)
 
-          if (tmask(i,j,iblk) .and. ailohi(i,j,iblk) > c0 ) then   !??? ask Dave about this extra logic - trcr failed
           ! surface temperature
           Tsrf(i,j,iblk)  = Tffresh + trcr(i,j,1,iblk)             !Kelvin (original ???)
           
@@ -625,7 +683,6 @@ contains
                           - worky*sin(ANGLET(i,j,iblk))
           tauyo(i,j,iblk) = worky*cos(ANGLET(i,j,iblk)) &
                           + workx*sin(ANGLET(i,j,iblk))
-          endif
 
        enddo
        enddo
@@ -655,6 +712,8 @@ contains
     endif
 
     ! Fill export state i2x_i
+
+     i2x_i%rAttr(:,:) = spval_dbl
 
      n=0
      do iblk = 1, nblocks
@@ -960,7 +1019,8 @@ contains
     ! Initialize mct domain type
     ! lat/lon in degrees,  area in radians^2, mask is 1 (ocean), 0 (non-ocean)
     !
-    call mct_gGrid_init( GGrid=dom_i, CoordChars="lat:lon", OtherChars="area:aream:mask:frac", lsize=lsize )
+    call mct_gGrid_init( GGrid=dom_i, CoordChars=trim(seq_flds_dom_coord), &
+       OtherChars=trim(seq_flds_dom_other), lsize=lsize )
     !  
     allocate(data(lsize))
     !

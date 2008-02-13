@@ -688,6 +688,20 @@
             call abort_ice ('ice: ITD cleanup error')
          endif
 
+      enddo                     ! iblk
+
+      !-------------------------------------------------------------------
+      ! Ghost cell updates for state variables.
+      !-------------------------------------------------------------------
+
+      call ice_timer_start(timer_bound)
+      call bound_state (aicen, trcrn, &
+                        vicen, vsnon, &
+                        eicen, esnon)
+      call ice_timer_stop(timer_bound)
+
+      do iblk = 1, nblocks
+
       !-----------------------------------------------------------------
       ! Aggregate the updated state variables. 
       !----------------------------------------------------------------- 
@@ -824,6 +838,8 @@
          enddo               ! i
          enddo               ! j
 
+         if (icells > 0) then
+
          call ridge_ice (nx_block,             ny_block,                 &
                          dt,                   icells,                   &
                          indxi,                indxj,                    &
@@ -849,6 +865,8 @@
                                   this_block%i_glob(istop), &
                                   this_block%j_glob(jstop) 
             call abort_ice ('ice: Ridging error')
+         endif
+
          endif
 
       enddo                     ! iblk
@@ -887,6 +905,20 @@
             call abort_ice ('ice: ITD cleanup error')
          endif
 
+      enddo              ! iblk
+
+      !-------------------------------------------------------------------
+      ! Ghost cell updates for state variables.
+      !-------------------------------------------------------------------
+
+      call ice_timer_start(timer_bound)
+      call bound_state (aicen, trcrn, &
+                        vicen, vsnon, &
+                        eicen, esnon)
+      call ice_timer_stop(timer_bound)
+
+      do iblk = 1, nblocks
+
       !-----------------------------------------------------------------
       ! Aggregate the updated state variables. 
       !----------------------------------------------------------------- 
@@ -901,7 +933,7 @@
                          aice0(:,:,  iblk), tmask(:,:,    iblk),  &
                          trcr_depend) 
 
-      enddo
+      enddo              ! iblk
 
       call ice_timer_stop(timer_column)
 

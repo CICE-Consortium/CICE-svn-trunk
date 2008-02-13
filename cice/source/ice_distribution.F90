@@ -23,6 +23,7 @@
    use ice_blocks
    use ice_exit
    use ice_fileunits, only: nu_diag
+   use spacecurve_mod
 
    implicit none
    private
@@ -111,6 +112,11 @@
    case('rake')
 
       create_distribution = create_distrb_rake(nprocs, work_per_block)
+
+   case('spacecurve')
+
+      create_distribution = create_distrb_spacecurve(nprocs, &
+                                                   work_per_block)
 
    case default
 
@@ -1025,6 +1031,225 @@
 !EOC
 
  end function create_distrb_rake
+
+!**********************************************************************
+!BOP
+! !IROUTINE: create_distrb_spacecurve
+! !INTERFACE:
+
+ function create_distrb_spacecurve(nprocs,work_per_block)
+
+! !Description:
+!  This function distributes blocks across processors in a
+!  load-balanced manner using space-filling curves
+!
+! !REVISION HISTORY:
+!  added by J. Dennis 3/10/06
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+      nprocs                ! number of processors in this distribution
+
+   integer (int_kind), dimension(:), intent(in) :: &
+      work_per_block        ! amount of work per block
+
+! !OUTPUT PARAMETERS:
+
+   type (distrb) :: &
+      create_distrb_spacecurve  ! resulting structure describing
+                                ! load-balanced distribution of blocks
+!EOP
+!BOC
+!----------------------------------------------------------------------
+
+!
+!  local variables
+!
+!----------------------------------------------------------------------
+
+   integer (int_kind) :: &
+      i,j,k,n              ,&! dummy loop indices
+      pid                  ,&! dummy for processor id
+      local_block          ,&! local block position on processor
+      max_work             ,&! max amount of work in any block
+      nprocs_x             ,&! num of procs in x for global domain
+      nprocs_y               ! num of procs in y for global domain
+
+   integer (int_kind), dimension(:),allocatable :: &
+        idxT_i,idxT_j       ! Temporary indices for SFC
+
+   integer (int_kind), dimension(:,:),allocatable :: &
+        Mesh            ,&!   !arrays to hold Space-filling curve
+        Mesh2             !
+
+   integer (int_kind) :: &
+        nblocksL,nblocks, &! Number of blocks local and total
+        ii,extra,tmp1,    &! loop tempories used for
+        s1,ig              ! partitioning curve
+
+   logical, parameter :: Debug = .FALSE.
+
+   integer (int_kind), dimension(:), allocatable :: &
+      priority           ,&! priority for moving blocks
+      work_tmp           ,&! work per row or column for rake algrthm
+      proc_tmp           ,&! temp processor id for rake algrthm
+      block_count          ! counter to determine local block indx
+
+   type (distrb) :: dist  ! temp hold distribution
+
+!------------------------------------------------------
+! Space filling curves only work if:
+!
+!    nblocks_x = nblocks_y
+!       nblocks_x = 2^m 3^n 5^p where m,n,p are integers
+!------------------------------------------------------
+   if((nblocks_x /= nblocks_y) .or. (.not. IsFactorable(nblocks_x))) then
+     create_distrb_spacecurve = create_distrb_cart(nprocs, work_per_block)
+     return
+   endif
+
+   call create_communicator(dist%communicator, nprocs)
+
+   dist%nprocs = nprocs
+
+!----------------------------------------------------------------------
+!
+!  allocate space for decomposition
+!
+!----------------------------------------------------------------------
+
+   allocate (dist%blockLocation(nblocks_tot), &
+             dist%blockLocalID (nblocks_tot))
+
+   dist%blockLocation=0
+   dist%blockLocalID =0
+
+!----------------------------------------------------------------------
+!  Create the array to hold the SFC and indices into it
+!----------------------------------------------------------------------
+   allocate(Mesh(nblocks_x,nblocks_y))
+   allocate(Mesh2(nblocks_x,nblocks_y))
+   allocate(idxT_i(nblocks_tot),idxT_j(nblocks_tot))
+
+   Mesh  = 0
+   Mesh2 = 0
+
+!----------------------------------------------------------------------
+!  Generate the space-filling curve
+!----------------------------------------------------------------------
+   call GenSpaceCurve(Mesh)
+   if(Debug) then
+     if(my_task ==0) call PrintCurve(Mesh)
+   endif
+   !------------------------------------------------
+   ! create a linear array of i,j coordinates of SFC
+   !------------------------------------------------
+   idxT_i=0;idxT_j=0
+   do j=1,nblocks_y
+     do i=1,nblocks_x
+        n = (j-1)*nblocks_x + i
+        ig = Mesh(i,j)
+        if(work_per_block(n) /= 0) then
+            idxT_i(ig+1)=i;idxT_j(ig+1)=j
+        endif
+     enddo
+   enddo
+   !-----------------------------
+   ! Compress out the land blocks
+   !-----------------------------
+   ii=0
+   do i=1,nblocks_tot
+      if(IdxT_i(i) .gt. 0) then
+         ii=ii+1
+         Mesh2(idxT_i(i),idxT_j(i)) = ii
+      endif
+   enddo
+   nblocks=ii
+   if(Debug) then
+     if(my_task==0) call PrintCurve(Mesh2)
+   endif
+
+   !----------------------------------------------------
+   ! Compute the partitioning of the space-filling curve
+   !----------------------------------------------------
+   nblocksL = nblocks/nprocs
+   ! every cpu gets nblocksL blocks, but the first 'extra' get nblocksL+1
+   extra = mod(nblocks,nprocs)
+   s1 = extra*(nblocksL+1)
+   ! split curve into two curves:
+   ! 1 ... s1  s2 ... nblocks
+   !
+   !  s1 = extra*(nblocksL+1)         (count be 0)
+   !  s2 = s1+1
+   !
+   ! First region gets nblocksL+1 blocks per partition
+   ! Second region gets nblocksL blocks per partition
+   if(Debug) print *,'nprocs,extra,nblocks,nblocksL,s1: ', &
+                nprocs,extra,nblocks,nblocksL,s1
+
+   !-----------------------------------------------------------
+   ! Use the SFC to partitioning the blocks across processors
+   !-----------------------------------------------------------
+   do j=1,nblocks_y
+   do i=1,nblocks_x
+      n = (j-1)*nblocks_x + i
+      ii = Mesh2(i,j)
+      if(ii>0) then
+        if(ii<=s1) then
+           ! ------------------------------------
+           ! If on the first region of curve
+           ! all processes get nblocksL+1 blocks
+           ! ------------------------------------
+           ii=ii-1
+           tmp1 = ii/(nblocksL+1)
+           dist%blockLocation(n) = tmp1+1
+        else
+           ! ------------------------------------
+           ! If on the second region of curve
+           ! all processes get nblocksL blocks
+           ! ------------------------------------
+           ii=ii-s1-1
+           tmp1 = ii/nblocksL
+           dist%blockLocation(n) = extra + tmp1 + 1
+        endif
+      endif
+   enddo
+   enddo
+
+!----------------------------------------------------------------------
+!  Reset the dist data structure
+!----------------------------------------------------------------------
+
+   allocate(proc_tmp(nprocs))
+   proc_tmp = 0
+
+   do n=1,nblocks_tot
+      pid = dist%blockLocation(n)
+      if(pid>0) then
+        proc_tmp(pid) = proc_tmp(pid) + 1
+        dist%blockLocalID(n) = proc_tmp(pid)
+      endif
+   enddo
+
+   if(Debug) then
+      if(my_task==0) print *,'dist%blockLocation:= ',dist%blockLocation
+      print *,'IAM: ',my_task,' SpaceCurve: Number of blocks {total,local} :=', &
+                nblocks_tot,nblocks,proc_tmp(my_task+1)
+   endif
+   !---------------------------------
+   ! Deallocate temporary arrays
+   !---------------------------------
+   deallocate(proc_tmp)
+   deallocate(Mesh,Mesh2)
+   deallocate(idxT_i,idxT_j)
+!----------------------------------------------------------------------
+   create_distrb_spacecurve = dist  ! return the result
+
+!----------------------------------------------------------------------
+!EOC
+
+ end function create_distrb_spacecurve
 
 !**********************************************************************
 !BOP
