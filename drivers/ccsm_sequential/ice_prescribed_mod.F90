@@ -60,20 +60,26 @@ module ice_prescribed_mod
 
 ! !PUBLIC DATA MEMBERS:
 
-   character(len=char_len_long), public :: stream_info_file  ! file with stream info
-   logical(kind=log_kind), public :: prescribed_ice      ! true if prescribed ice
-   integer(kind=int_kind), public :: stream_year_first   ! first year in stream to use
-   integer(kind=int_kind), public :: stream_year_last    ! last year in stream to use
-   integer(kind=int_kind), public :: model_year_align    ! align stream_year_first
-                                                         ! with this model year
-   logical(kind=log_kind), public :: prescribed_ice_fill ! true if data fill required
+   logical(kind=log_kind)      , public :: prescribed_ice      ! true if prescribed ice
+   integer(kind=int_kind)      , public :: stream_year_first   ! first year in stream to use
+   integer(kind=int_kind)      , public :: stream_year_last    ! last year in stream to use
+   integer(kind=int_kind)      , public :: model_year_align    ! align stream_year_first 
+                                                               ! with this model year
+   character(len=char_len_long), public :: stream_fldVarName
+   character(len=char_len_long), public :: stream_fldFileName
+   character(len=char_len_long), public :: stream_domTvarName
+   character(len=char_len_long), public :: stream_domXvarName
+   character(len=char_len_long), public :: stream_domYvarName
+   character(len=char_len_long), public :: stream_domAreaName
+   character(len=char_len_long), public :: stream_domMaskName
+   character(len=char_len_long), public :: stream_domFileName
+   logical(kind=log_kind)      , public :: prescribed_ice_fill ! true if data fill required
 
 !EOP
 
    real(kind=dbl_kind),    allocatable :: dataXCoord(:,:)  ! input data longitudes 
    real(kind=dbl_kind),    allocatable :: dataYCoord(:,:)  ! input data latitudes
    integer(kind=int_kind), allocatable :: dataMask(:,:)    ! input data mask
-   real(kind=dbl_kind),    allocatable :: dataArea(:,:)    ! input data area
    real(kind=dbl_kind),    allocatable :: dataUB(:,:)      ! upper bound on model domain
    real(kind=dbl_kind),    allocatable :: dataLB(:,:)      ! lower bound on model domain
 
@@ -170,19 +176,30 @@ subroutine ice_prescribed_init
    character(*),parameter :: F02 = "('(ice_prescribed_init) ',a,2g20.13)"
 
 ! ech moved from ice_init.F
-   namelist /ice_prescribed_nml/ &
-     prescribed_ice, stream_info_file, stream_year_first &
-   , stream_year_last, model_year_align, prescribed_ice_fill
+   namelist /ice_prescribed_nml/  prescribed_ice, prescribed_ice_fill, &
+	stream_year_first , stream_year_last  , model_year_align, &
+        stream_fldVarName , stream_fldFileName,  &
+        stream_domTvarName, stream_domXvarName, stream_domYvarName, &
+        stream_domAreaName, stream_domMaskName, stream_domFileName
+        
 
-      ! default values for namelist
-   prescribed_ice      = .false.             ! if true, prescribe ice
-   stream_info_file  = 'csim_stream.txt'   ! file with prescribed ice stream info
-   stream_year_first = 1                   ! first year in  pice stream to use
-   stream_year_last  = 1                   ! last  year in  pice stream to use
-   model_year_align  = 1                   ! align stream_year_first with this model year
-   prescribed_ice_fill = .false.           ! true if pice data fill required
+   ! default values for namelist
+   prescribed_ice         = .false.          ! if true, prescribe ice
+   stream_year_first      = 1                ! first year in  pice stream to use
+   stream_year_last       = 1                ! last  year in  pice stream to use
+   model_year_align       = 1                ! align stream_year_first with this model year
+   stream_fldVarName      = 'ice_cov'
+   stream_fldFileName     = ' '
+   stream_domTvarName     = 'time'
+   stream_domXvarName     = 'lon'
+   stream_domYvarName     = 'lat'
+   stream_domAreaName     = 'area'
+   stream_domMaskName     = 'mask'
+   stream_domFileName     =  ' '
+   prescribed_ice_fill    = .false.           ! true if pice data fill required
 
    ! read from input file
+   call get_fileunit(nu_nml)
    if (my_task == master_task) then
       open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
       if (nml_error /= 0) then
@@ -196,6 +213,7 @@ subroutine ice_prescribed_init
       end do
       if (nml_error == 0) close(nu_nml)
    endif
+   call release_fileunit(nu_nml)
 
    call broadcast_scalar(nml_error,master_task)
 
@@ -204,21 +222,28 @@ subroutine ice_prescribed_init
    endif
 
    call broadcast_scalar(prescribed_ice,master_task)
-   call broadcast_scalar(stream_info_file,master_task)
    call broadcast_scalar(stream_year_first,master_task)
    call broadcast_scalar(stream_year_last,master_task)
    call broadcast_scalar(model_year_align,master_task)
+   call broadcast_scalar(stream_fldVarName,master_task)
+   call broadcast_scalar(stream_fldFileName,master_task)
+   call broadcast_scalar(stream_domTvarName,master_task)
+   call broadcast_scalar(stream_domXvarName,master_task)
+   call broadcast_scalar(stream_domYvarName,master_task)
+   call broadcast_scalar(stream_domAreaName,master_task)
+   call broadcast_scalar(stream_domMaskName,master_task)
+   call broadcast_scalar(stream_domFileName,master_task)
    call broadcast_scalar(prescribed_ice_fill,master_task)
 
    if (.not.prescribed_ice) return
 
    if (my_task == master_task) then
-      write(nu_diag,*) ' prescribed_ice            = ',prescribed_ice
-      write(nu_diag,*) ' stream_info_file          = ', trim(adjustl(stream_info_file))
+      write(nu_diag,*) ' prescribed_ice            = ', prescribed_ice
       write(nu_diag,*) ' stream_year_first         = ', stream_year_first
       write(nu_diag,*) ' stream_year_last          = ', stream_year_last
       write(nu_diag,*) ' model_year_align          = ', model_year_align
       write(nu_diag,*) ' prescribed_ice_fill       = ', prescribed_ice_fill
+      !TODO: add above variables
 
 ! ech moved from ice_diagnostics.F
 ! set print_global to .false. in ice_in to prevent global diagnostics
@@ -262,8 +287,39 @@ subroutine ice_prescribed_init
       !---------------------------------------------------------------------
       ! Parse info file, initialize csim_stream datatype and load with info
       !---------------------------------------------------------------------
-      call shr_stream_init(csim_stream, stream_info_file, stream_year_first, &
-   &                       stream_year_last, model_year_align)
+      csim_stream%nFiles           = 0  
+      csim_stream%file(:)%name     = 'not_set' 
+      csim_stream%file(:)%nt       = 0
+      csim_stream%file(:)%haveData = .false.
+      csim_stream%yearFirst        = stream_year_first
+      csim_stream%yearLast         = stream_year_last
+      csim_stream%yearAlign        = model_year_align
+      csim_stream%fldListFile      = ' '
+      csim_stream%fldListModel     = ' '
+      csim_stream%FilePath         = ' '
+      csim_stream%domFilePath      = ' '
+      csim_stream%k_lvd            = -1 
+      csim_stream%n_lvd            = -1 
+      csim_stream%found_lvd        = .false.
+      csim_stream%k_gvd            = -1 
+      csim_stream%n_gvd            = -1 
+      csim_stream%found_gvd        = .false.
+      
+      csim_stream%dataSource   = 'cice ifrac/sst file'
+      csim_stream%fldListFile  =  stream_fldVarName
+      csim_stream%fldListModel = 'ice_cov'
+
+      !build logic hear to determine how many names are on the input file
+      csim_stream%File(1)%name =  stream_fldFileName
+      csim_stream%nFiles       =  1 
+
+      csim_stream%domTvarName  =  stream_domTvarName
+      csim_stream%domXvarName  =  stream_domXvarName
+      csim_stream%domYvarName  =  stream_domYvarName
+      csim_stream%domAreaName  =  stream_domAreaName
+      csim_stream%domMaskName  =  stream_domMaskName
+      csim_stream%domFileName  =  stream_domFileName
+      csim_stream%init         =  .true.
 
       !---------------------------------------------------------------------
       ! Check that ice cover data exists
@@ -292,41 +348,41 @@ subroutine ice_prescribed_init
       !---------------------------------------------------------------------
       ! Get size of the input data domain and allocate arrays
       !---------------------------------------------------------------------
-
       call shr_stream_getDomainInfo(csim_stream,data_path,domain_info_fn, timeName, &
       &                             lonName, latName, maskName, areaName)
 
-      call shr_stream_getFile         (data_path,domain_info_fn)
-      call shr_ncread_varDimSizes(domain_info_fn,areaName,nlon,nlat)
-      write (nu_diag,F01) 'dimsizes for areaName', nlon,nlat 
+      call shr_ncread_varDimSizes(domain_info_fn,lonName,nlon)
+      call shr_ncread_varDimSizes(domain_info_fn,latName,nlat)
+      call shr_stream_getFile(data_path,domain_info_fn)
       call shr_sys_flush(nu_diag)
 
       allocate(dataXCoord(nlon,nlat)) 
       allocate(dataYCoord(nlon,nlat))
-      allocate(dataMask(nlon,nlat))
-      allocate(dataArea(nlon,nlat))
 
       !------------------------------------------------------------------
       ! Read in lat-lon grid info from input data file, ALL output is 2D
       !------------------------------------------------------------------
-      call shr_ncread_domain(domain_info_fn, lonName, dataXCoord, latName, &
-      &                dataYCoord, maskName, dataMask, areaName, dataArea)
+      call shr_ncread_domain(domain_info_fn, lonName, dataXCoord, latName, dataYCoord)
 
-      write (nu_diag,F02) 'min/max dataXCoord = ',minval(dataXCoord), maxval(dataXCoord)
-      write (nu_diag,F02) 'min/max dataYCoord = ',minval(dataYCoord), maxval(dataYCoord)
-      write (nu_diag,F01) 'min/max dataMask = ',minval(dataMask), maxval(dataMask)
-      write (nu_diag,F02) 'min/max dataArea = ',minval(dataArea), maxval(dataArea)
-      write (nu_diag,F02) 'min/max TLON = ',minval(work_g2),maxval(work_g2)
-      write (nu_diag,F02) 'min/max TLAT = ',minval(work_g1),maxval(work_g1)
-      write (nu_diag,F01) 'min/max csim_mask_g = ',minval(csim_mask_g), &
-                                                   maxval(csim_mask_g)
-      !------------------------------------------------------------------
-      ! Check that data domain matches csim domain
-      !------------------------------------------------------------------
-      call ice_prescribed_checkDomain(work_g2, work_g1, csim_mask_g, dataXCoord, &
-      &                               dataYCoord, dataMask, regrid)
+      write (nu_diag,F02) 'min/max dataXCoord  = ',minval(dataXCoord) ,maxval(dataXCoord)
+      write (nu_diag,F02) 'min/max dataYCoord  = ',minval(dataYCoord) ,maxval(dataYCoord)
+      write (nu_diag,F02) 'min/max TLON        = ',minval(work_g2)    ,maxval(work_g2)
+      write (nu_diag,F02) 'min/max TLAT        = ',minval(work_g1)    ,maxval(work_g1)
+      write (nu_diag,F01) 'min/max csim_mask_g = ',minval(csim_mask_g),maxval(csim_mask_g)
 
+      !------------------------------------------------------------------
+      ! Determine if need to regrid
+      !------------------------------------------------------------------
+      call ice_prescribed_checkDomain(work_g2, work_g1, dataXCoord, dataYCoord, regrid)
+
+      !------------------------------------------------------------------
+      ! If regrid, read in domain again, obtain mask array and initialize mapping
+      !------------------------------------------------------------------
       if (regrid) then
+         allocate(dataMask(nlon,nlat))
+         call shr_ncread_domain(domain_info_fn, lonName, dataXCoord, &
+      &                         latName, dataYCoord, maskName, dataMask)
+         write (nu_diag,F01) 'min/max dataMask = ',minval(dataMask), maxval(dataMask)
 
          if (prescribed_ice_fill) then
             call shr_map_mapSet(csim_fill, work_g2, work_g1, csim_mask_g, &
@@ -341,8 +397,12 @@ subroutine ice_prescribed_init
          &                             work_g2,   work_g1,  csim_mask_g, &
          &                   name='csim_map',type='remap',algo='bilinear', &
          &                   mask='dstmask',vect='scalar')
+         deallocate(dataMask)
       end if
 
+      !------------------------------------------------------------------
+      ! Allocate input and output bundles
+      !------------------------------------------------------------------
       allocate(dataInLB(nlon,nlat,nflds))      ! netCDF input data size
       allocate(dataInUB(nlon,nlat,nflds))
       allocate(dataSrcLB(nflds,nlon*nlat))     ! reformed data for mapping
@@ -368,7 +428,6 @@ subroutine ice_prescribed_init
       end if
 
       deallocate(dataXCoord,dataYCoord)
-      deallocate(dataMask,dataArea)
       deallocate(work_g1,work_g2)
       deallocate(csim_mask_g)
 
@@ -581,8 +640,7 @@ end subroutine ice_prescribed_readField
 !
 ! !INTERFACE: ------------------------------------------------------------------
 
-subroutine ice_prescribed_checkDomain(csimXCoord, csimYCoord, csimMask, &
-   &                                  dataXCoord, dataYCoord, dataMask, regrid)
+subroutine ice_prescribed_checkDomain(csimXCoord, csimYCoord, dataXCoord, dataYCoord, regrid)
 
 ! !USES:
 
@@ -592,10 +650,8 @@ subroutine ice_prescribed_checkDomain(csimXCoord, csimYCoord, csimMask, &
 
    real(kind=dbl_kind),    intent(in) :: csimXCoord(:,:) ! csim longitudes (degrees)
    real(kind=dbl_kind),    intent(in) :: csimYCoord(:,:) ! csim latitudes  (degrees)
-   integer(kind=int_kind), intent(in) :: csimMask(:,:)   ! csim land mask
    real(kind=dbl_kind),    intent(in) :: dataXCoord(:,:) ! data longitudes (degrees)
    real(kind=dbl_kind),    intent(in) :: dataYCoord(:,:) ! data latitudes  (degrees)
-   integer(kind=int_kind), intent(in) :: dataMask(:,:)   ! data land mask
    logical(kind=log_kind), intent(out):: regrid          ! true if remapping required
 
 !EOP

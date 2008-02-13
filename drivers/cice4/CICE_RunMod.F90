@@ -404,10 +404,6 @@
          fpn         , & ! pond fraction
          hpn             ! pond depth (m)
 
-! BPB 4 Jan 2007  daily mean coszen
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         coszen_mean     ! diurnal mean coszen
-
       type (block) :: &
          this_block      ! block information for current block
 
@@ -499,37 +495,8 @@
                                  icells,                           &
                                  indxi,            indxj,          &
                                  tlat  (:,:,iblk), tlon(:,:,iblk), &
-                                 coszen(:,:,iblk), dt,             &
-                                 coszen_mean)
+                                 coszen(:,:,iblk), dt)
 
-! BPB 27 December 2006
-! correct shortwave incident fluxes from diurnal means to hourly. Do this
-! by multiplying by the normalized cosine solar zenith angle (normalized
-! by diurnal mean):
-!           do ij = 1, icells
-!             i = indxi(ij)
-!             j = indxj(ij)
-!             if( coszen_mean(i,j) .gt. .01_dbl_kind ) then
-!               swvdr(i,j,iblk) = swvdr(i,j,iblk) * &
-!                      (coszen(i,j,iblk)/coszen_mean(i,j))
-!               swvdf(i,j,iblk) = swvdf(i,j,iblk) * &
-!                      (coszen(i,j,iblk)/coszen_mean(i,j))
-!               swidr(i,j,iblk) = swidr(i,j,iblk) * &
-!                      (coszen(i,j,iblk)/coszen_mean(i,j))
-!               swidf(i,j,iblk) = swidf(i,j,iblk) * &
-!                      (coszen(i,j,iblk)/coszen_mean(i,j))
-!             else
-!               swvdr(i,j,iblk) = c0
-!               swvdf(i,j,iblk) = c0
-!               swidr(i,j,iblk) = c0
-!               swidf(i,j,iblk) = c0
-!             endif
-! BPB 4 Jan 2007  update fsw for diurnal cycle
-!             fsw  (i,j,iblk) = swvdr(i,j,iblk) + swvdf(i,j,iblk) &
-!                             + swidr(i,j,iblk) + swidf(i,j,iblk)
-!             if( fsw(i,j,iblk) < c0 ) fsw(i,j,iblk) = 0.
-
-!           enddo  ! ij
          else                     ! basic (ccsm3) shortwave
             coszen(:,:,iblk) = p5 ! sun above the horizon
          endif
@@ -935,7 +902,8 @@
             enddo
             enddo
 
-            if (icells > 0) &
+            if (icells > 0) then
+
             call linear_itd (nx_block, ny_block,       &
                              icells, indxi, indxj,     &
                              nghost,   trcr_depend,    &
@@ -961,6 +929,8 @@
                                      this_block%i_glob(istop), &
                                      this_block%j_glob(jstop) 
                call abort_ice ('ice: Linear ITD error')
+            endif
+
             endif
 
          endif
@@ -1075,17 +1045,6 @@
             call abort_ice ('ice: ITD cleanup error')
          endif
 
-      !-----------------------------------------------------------------
-      ! Compute thermodynamic area and volume tendencies.
-      !-----------------------------------------------------------------
-
-         do j = 1, ny_block
-         do i = 1, nx_block
-            daidtt(i,j,iblk) = (aice(i,j,iblk) - daidtt(i,j,iblk)) / dt
-            dvidtt(i,j,iblk) = (vice(i,j,iblk) - dvidtt(i,j,iblk)) / dt
-         enddo
-         enddo
-
       enddo                     ! iblk
 
       !-------------------------------------------------------------------
@@ -1112,6 +1071,18 @@
                          eice (:,:,  iblk), esno (:,:,    iblk),  &
                          aice0(:,:,  iblk), tmask(:,:,    iblk),  &
                          trcr_depend) 
+
+      !-----------------------------------------------------------------
+      ! Compute thermodynamic area and volume tendencies.
+      !-----------------------------------------------------------------
+
+         do j = 1, ny_block
+         do i = 1, nx_block
+            daidtt(i,j,iblk) = (aice(i,j,iblk) - daidtt(i,j,iblk)) / dt
+            dvidtt(i,j,iblk) = (vice(i,j,iblk) - dvidtt(i,j,iblk)) / dt
+         enddo
+         enddo
+
       enddo                     ! iblk
 
       call ice_timer_stop(timer_column)  ! column physics
@@ -1220,7 +1191,8 @@
          enddo               ! i
          enddo               ! j
 
-         if (icells > 0) &
+         if (icells > 0) then
+
          call ridge_ice (nx_block,             ny_block,                 &
                          dt,                   icells,                   &
                          indxi,                indxj,                    &
@@ -1246,6 +1218,8 @@
                                   this_block%i_glob(istop), &
                                   this_block%j_glob(jstop) 
             call abort_ice ('ice: Ridging error')
+         endif
+
          endif
 
       enddo                     ! iblk

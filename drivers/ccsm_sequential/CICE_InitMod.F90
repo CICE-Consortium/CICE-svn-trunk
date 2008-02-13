@@ -138,7 +138,12 @@
       call init_history_dyn     ! initialize dynamic history variables
 
       write_ic = .true.        ! write initial conditions
+#if (defined _NOIO)
+! Not enought memory on BGL to write a history file yet!
+!      if(.not.prescribed_ice) call ice_write_hist(dt)
+#else
       if(.not.prescribed_ice) call ice_write_hist(dt)
+#endif
       write_ic = .false.
 
       end subroutine CICE_Init

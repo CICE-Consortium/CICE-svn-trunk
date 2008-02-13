@@ -9,7 +9,7 @@
 !  communicating between processors.
 !
 ! !REVISION HISTORY:
-!  SVN:$Id: ice_communicate.F90 52 2007-01-30 18:04:24Z eclare $
+!  SVN:$Id: ice_communicate.F90 100 2008-01-29 00:25:32Z eclare $
 !
 ! author: Phil Jones, LANL
 ! Oct. 2004: Adapted from POP version by William H. Lipscomb, LANL
@@ -32,14 +32,14 @@
 
    integer (int_kind), public :: &
       MPI_COMM_ICE,             &! MPI communicator for ice comms
-      mpi_dbl,                  &! MPI type for dbl_kind
+      mpiR8,                    &! MPI type for dbl_kind
+      mpiR4,                    &! MPI type for real_kind
       my_task,                  &! MPI task number for this task
       master_task                ! task number of master task
 
    integer (int_kind), parameter, public :: &
-      mpitag_bndy_2d        = 1,    &! MPI tags for various
-      mpitag_bndy_3d        = 2,    &! communication patterns
-      mpitag_gs             = 1000   ! 
+      mpitagHalo            = 1,    &! MPI tags for various
+      mpitag_gs             = 1000   ! communication patterns
 
 !EOP
 !BOC
@@ -82,7 +82,7 @@
 !-----------------------------------------------------------------------
 !
 !  initiate mpi environment and create communicator for internal
-!  ocean communications
+!  ice communications
 !
 !-----------------------------------------------------------------------
 
@@ -91,15 +91,8 @@
    master_task = 0
    call MPI_COMM_RANK  (MPI_COMM_ICE, my_task, ierr)
 
-!-----------------------------------------------------------------------
-!
-!  On some 64-bit machines where real_kind and dbl_kind are
-!  identical, the MPI implementation uses MPI_REAL for both.
-!  In these cases, set MPI_DBL to MPI_REAL.
-!
-!-----------------------------------------------------------------------
-
-   MPI_DBL = MPI_DOUBLE_PRECISION
+   mpiR8 = MPI_REAL8
+   mpiR4 = MPI_REAL4
 
 !-----------------------------------------------------------------------
 !EOC
@@ -152,7 +145,7 @@
 
 ! !DESCRIPTION:
 !  This routine creates a separate communicator for a subset of
-!  processors under default ocean communicator.
+!  processors under default ice communicator.
 !
 !  this routine should be called from init_domain1 when the
 !  domain configuration (e.g. nprocs_btrop) has been determined
