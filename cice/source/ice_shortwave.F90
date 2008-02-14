@@ -163,13 +163,6 @@
          fpn         , & ! pond fraction
          hpn             ! pond depth (m)
 
-! BPB 4 Jan 2007  daily mean coszen
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         coszen_mean     ! diurnal mean coszen
-
-
-      integer (kind=int_kind) :: i, j, ij, n, iblk, ilo, ihi, jlo, jhi
-
       ! Need to compute albedos before init_cpl in CCSM
 
       ilo = 1 + nghost
@@ -202,8 +195,7 @@
                                  icells,                           &
                                  indxi,            indxj,          &
                                  tlat  (:,:,iblk), tlon(:,:,iblk), &
-                                 coszen(:,:,iblk), dt,             &
-                                 coszen_mean)
+                                 coszen(:,:,iblk), dt)
 
          else                     ! basic (ccsm3) shortwave
             coszen(:,:,iblk) = p5 ! sun above the horizon
