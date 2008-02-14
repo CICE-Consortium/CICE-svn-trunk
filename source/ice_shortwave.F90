@@ -163,6 +163,8 @@
          fpn         , & ! pond fraction
          hpn             ! pond depth (m)
 
+      integer (kind=int_kind) :: i, j, ij, n, iblk, ilo, ihi, jlo, jhi
+
       ! Need to compute albedos before init_cpl in CCSM
 
       ilo = 1 + nghost
