@@ -682,7 +682,7 @@
 ! !INTERFACE:
 !
       subroutine scale_fluxes (nx_block, ny_block, &
-                               nghost,   tmask,    &
+                               tmask,              &
                                aice,     Tf,       &
                                Tair,     Qa,       &
                                strairxT, strairyT, &
@@ -704,8 +704,7 @@
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
-          nx_block, ny_block, & ! block dimensions
-          nghost                ! number of ghost cells
+          nx_block, ny_block    ! block dimensions
 
       logical (kind=log_kind), dimension (nx_block,ny_block), &
           intent(in) :: &

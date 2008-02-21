@@ -160,16 +160,14 @@
       integer (kind=int_kind), dimension (nx_block,ny_block,max_blocks) :: &
          icetmask   ! ice extent mask (T-cell)
 
+      type (block) :: &
+         this_block           ! block information for current block
+      
       call ice_timer_start(timer_dynamics) ! dynamics
 
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
 
        ! This call is needed only if dt changes during runtime.
 !echmod: automate this
@@ -206,8 +204,14 @@
       ! preparation for dynamics
       !-----------------------------------------------------------------
 
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
          call evp_prep1 (nx_block,           ny_block,           & 
-                         nghost,                                 & 
+                         ilo, ihi,           jlo, jhi,           &
                          aice    (:,:,iblk), vice    (:,:,iblk), & 
                          vsno    (:,:,iblk), tmask   (:,:,iblk), & 
                          strairxT(:,:,iblk), strairyT(:,:,iblk), & 
@@ -236,8 +240,14 @@
       ! more preparation for dynamics
       !-----------------------------------------------------------------
 
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
          call evp_prep2 (nx_block,             ny_block,             & 
-                         nghost,                                     & 
+                         ilo, ihi,             jlo, jhi,             &
                          icellt(iblk),         icellu(iblk),         & 
                          indxti      (:,iblk), indxtj      (:,iblk), & 
                          indxui      (:,iblk), indxuj      (:,iblk), & 
@@ -267,7 +277,8 @@
       !-----------------------------------------------------------------
 
          call ice_strength (nx_block, ny_block,   & 
-                            nghost, icellt(iblk), & 
+                            ilo, ihi, jlo, jhi,   &
+                            icellt(iblk),         & 
                             indxti      (:,iblk), & 
                             indxtj      (:,iblk), & 
                             aice    (:,:,  iblk), & 
@@ -526,7 +537,7 @@
 ! !INTERFACE:
 !
       subroutine evp_prep1 (nx_block,  ny_block, & 
-                            nghost,              & 
+                            ilo, ihi,  jlo, jhi, &
                             aice,      vice,     & 
                             vsno,      tmask,    & 
                             strairxT,  strairyT, & 
@@ -550,7 +561,7 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         nghost                ! number of ghost cells
+         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), & 
          intent(in) :: &
@@ -577,16 +588,10 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-         i, j, &
-         ilo,ihi,jlo,jhi     ! beginning and end of physical domain
+         i, j
 
       logical (kind=log_kind), dimension(nx_block,ny_block) :: &
          tmphm               ! temporary mask
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
 
       do j = 1, ny_block
       do i = 1, nx_block
@@ -648,7 +653,7 @@
 ! !INTERFACE:
 !
       subroutine evp_prep2 (nx_block,   ny_block,   & 
-                            nghost,                 & 
+                            ilo, ihi,  jlo, jhi,    &
                             icellt,     icellu,     & 
                             indxti,     indxtj,     & 
                             indxui,     indxuj,     & 
@@ -692,7 +697,7 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         nghost                ! number of ghost cells
+         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
 
       integer (kind=int_kind), intent(out) :: &
          icellt   , & ! no. of cells where icetmask = 1
@@ -754,8 +759,7 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-         i, j, ij, &
-         ilo,ihi,jlo,jhi   ! beginning and end of physical domain
+         i, j, ij
 
       logical (kind=log_kind), dimension(nx_block,ny_block) :: &
          iceumask_old      ! old-time iceumask
@@ -788,11 +792,6 @@
          endif                  ! icetmask
       enddo                     ! i
       enddo                     ! j
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
 
       !-----------------------------------------------------------------
       ! Identify cells where icetmask = 1

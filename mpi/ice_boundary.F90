@@ -41,9 +41,10 @@
           ice_distributionGetBlockLoc, ice_distributionGet
 
    implicit none
-   include 'mpif.h'
    private
    save
+
+   include 'mpif.h'
 
 ! !PUBLIC TYPES:
 

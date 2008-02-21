@@ -529,7 +529,8 @@
 ! !INTERFACE:
 !
       subroutine frzmlt_bottom_lateral (nx_block, ny_block, &
-                                        nghost,   dt,       &
+                                        ilo, ihi, jlo, jhi, &
+                                        dt,                 &
                                         aice,     frzmlt,   &
                                         eicen,    esnon,    &
                                         sst,      Tf,       &
@@ -545,7 +546,7 @@
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         nghost                ! number of ghost cells
+         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
 
       real (kind=dbl_kind), intent(in) :: &
          dt                  ! time step
@@ -578,7 +579,6 @@
          i, j           , & ! horizontal indices
          n              , & ! thickness category index
          k              , & ! layer index
-         ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          ij             , & ! horizontal index, combines i and j loops
          imelt              ! number of cells with ice melting
 
@@ -622,11 +622,6 @@
          fbot (i,j) = c0
       enddo
       enddo
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
 
       !-----------------------------------------------------------------
       ! Identify grid cells where ice can melt.

@@ -202,7 +202,8 @@
 
          call frzmlt_bottom_lateral                                      &
                                 (nx_block,           ny_block,           &
-                                 nghost,             dt,                 &
+                                 ilo, ihi,           jlo, jhi,           &
+                                 dt,                                     &
                                  aice  (:,:,  iblk), frzmlt(:,:,  iblk), &
                                  eicen (:,:,:,iblk), esnon (:,:,:,iblk), &
                                  sst   (:,:,  iblk), Tf    (:,:,  iblk), &
@@ -342,7 +343,8 @@
             melts_tmp = melts(:,:,iblk) - melts_old
             meltt_tmp = meltt(:,:,iblk) - meltt_old
 
-            call compute_ponds(nx_block, ny_block, nghost,              &
+            call compute_ponds(nx_block, ny_block,                      &
+                               ilo, ihi, jlo, jhi,                      &
                                meltt_tmp, melts_tmp,                    &
                                frain(:,:,iblk),                         &
                                aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
@@ -409,7 +411,7 @@
          if (prescribed_ice) then
 
          call scale_fluxes (nx_block,            ny_block,           &
-                            nghost,              tmask   (:,:,iblk), &
+                            tmask    (:,:,iblk),                     &
                             aice_init(:,:,iblk), Tf      (:,:,iblk), &
                             Tair     (:,:,iblk), Qa      (:,:,iblk), &
                             strairxT (:,:,iblk), strairyT(:,:,iblk), &
@@ -547,7 +549,7 @@
 
             call linear_itd (nx_block, ny_block,       &
                              icells, indxi, indxj,     &
-                             nghost,   trcr_depend,    &
+                             trcr_depend,    &
                              aicen_init(:,:,:,iblk),   &
                              vicen_init(:,:,:,iblk),   &
                              aicen     (:,:,:,iblk),   &
@@ -625,7 +627,8 @@
       ! Melt ice laterally.
       !-----------------------------------------------------------------
          call lateral_melt (nx_block, ny_block,     &
-                            nghost,   dt,           &
+                            ilo, ihi, jlo, jhi,     &
+                            dt,                     &
                             fresh     (:,:,  iblk), &
                             fsalt     (:,:,  iblk), &    
                             fhocn     (:,:,  iblk), &
@@ -665,7 +668,8 @@
       !-----------------------------------------------------------------
 
          call cleanup_itd (nx_block,             ny_block,             &
-                           nghost,               dt,                   &
+                           ilo, ihi,             jlo, jhi,             &
+                           dt,                                         &
                            aicen   (:,:,:,iblk), trcrn (:,:,:,:,iblk), &
                            vicen   (:,:,:,iblk), vsnon (:,:,  :,iblk), &
                            eicen   (:,:,:,iblk), esnon (:,:,  :,iblk), &
@@ -875,6 +879,10 @@
 
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk), iblk)
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
 
       !-----------------------------------------------------------------
       ! ITD cleanup: Rebin thickness categories if necessary, and remove
@@ -882,7 +890,8 @@
       !-----------------------------------------------------------------
 
          call cleanup_itd (nx_block,             ny_block,             &
-                           nghost,               dt,                   &
+                           ilo, ihi,             jlo, jhi,             &
+                           dt,                                         &
                            aicen   (:,:,:,iblk), trcrn (:,:,:,:,iblk), &
                            vicen   (:,:,:,iblk), vsnon (:,:,  :,iblk), &
                            eicen   (:,:,:,iblk), esnon (:,:,  :,iblk), &
@@ -1356,7 +1365,7 @@
       !-----------------------------------------------------------------
 
          call scale_fluxes (nx_block,            ny_block,           &
-                            nghost,              tmask   (:,:,iblk), &
+                            tmask    (:,:,iblk),                     &
                             aice     (:,:,iblk), Tf      (:,:,iblk), &
                             Tair     (:,:,iblk), Qa      (:,:,iblk), &
                             strairxT (:,:,iblk), strairyT(:,:,iblk), &
