@@ -165,12 +165,10 @@
 
       integer (kind=int_kind) :: i, j, ij, n, iblk, ilo, ihi, jlo, jhi
 
-      ! Need to compute albedos before init_cpl in CCSM
+      type (block) :: &
+         this_block      ! block information for current block
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
+      ! Need to compute albedos before init_cpl in CCSM
 
       alvdr   (:,:,:) = c0
       alidr   (:,:,:) = c0
@@ -178,6 +176,11 @@
       alidf   (:,:,:) = c0
 
       do iblk=1,nblocks
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
 
          if (trim(shortwave) == 'dEdd') then ! delta Eddington
 

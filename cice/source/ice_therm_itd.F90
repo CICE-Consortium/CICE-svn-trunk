@@ -57,7 +57,7 @@
 !
       subroutine linear_itd (nx_block,    ny_block,    & 
                              icells, indxi, indxj,     & 
-                             nghost,      trcr_depend, & 
+                             trcr_depend, & 
                              aicen_init,  vicen_init,  & 
                              aicen,       trcrn,       & 
                              vicen,       vsnon,       & 
@@ -98,7 +98,6 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         nghost            , & ! number of ghost cells
          icells                ! number of grid cells with ice
 
        integer (kind=int_kind), dimension (nx_block*ny_block), &
@@ -1201,7 +1200,8 @@
 ! !INTERFACE:
 !
       subroutine lateral_melt (nx_block,   ny_block,   &
-                               nghost,     dt,         &
+                               ilo, ihi,   jlo, jhi,   &
+                               dt,                     &
                                fresh,      fsalt,      &
                                fhocn,      fresh_hist, &
                                fsalt_hist, fhocn_hist, &
@@ -1218,7 +1218,7 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         nghost                ! number of ghost cells
+         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
 
       real (kind=dbl_kind), intent(in) :: &
          dt        ! time step (s)
@@ -1256,7 +1256,6 @@
          i, j        , & ! horizontal indices
          n           , & ! thickness category index
          k           , & ! layer index
-         ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          ij          , & ! horizontal index, combines i and j loops
          icells          ! number of cells with aice > puny
 
@@ -1267,11 +1266,6 @@
          dfhocn  , & ! change in fhocn
          dfresh  , & ! change in fresh
          dfsalt      ! change in fsalt
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
 
       do n = 1, ncat
 

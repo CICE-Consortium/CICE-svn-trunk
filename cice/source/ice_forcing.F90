@@ -370,8 +370,12 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-         iblk                 ! block index
+         iblk, &              ! block index
+         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
+      type (block) :: &
+         this_block           ! block information for current block
+      
       fyear = fyear_init + mod(nyr-1,ycycle)  ! current year
       if (trim(atm_data_type) /= 'default' .and. istep <= 1 &
                    .and. my_task == master_task) then
@@ -397,14 +401,20 @@
          return
       endif
 
-      do iblk = 1, nblocks
-
     !-------------------------------------------------------------------
     ! Convert forcing data to fields needed by ice model
     !-------------------------------------------------------------------
 
+      do iblk = 1, nblocks
+
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
          call prepare_forcing (nx_block, ny_block, &
-                               nghost,             &
+                               ilo, ihi, jlo, jhi, &
                                hm    (:,:,iblk),   &
                                Tair  (:,:,iblk),   &
                                fsw   (:,:,iblk),   &   
@@ -1125,7 +1135,8 @@
 ! !INTERFACE:
 !
       subroutine prepare_forcing (nx_block, ny_block, &
-                                  nghost,   hm,       &
+                                  ilo, ihi, jlo, jhi, &
+                                  hm,                 &
                                   Tair,     fsw,      &    
                                   cldf,     flw,      &
                                   frain,    fsnow,    &
@@ -1151,7 +1162,7 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         nghost                ! number of ghost cells
+         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
          Tair    , & ! air temperature  (K)
@@ -1192,16 +1203,10 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-         i, j, &
-         ilo,ihi,jlo,jhi    ! beginning and end of physical domain
+         i, j
 
       real (kind=dbl_kind) :: workx, worky, &
          fcc, sstk, rtea, ptem, qlwm
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
 
       do j = jlo, jhi
       do i = ilo, ihi
@@ -1958,7 +1963,7 @@
 ! !USES:
 !
       use ice_global_reductions
-      use ice_domain, only: nblocks, distrb_info
+      use ice_domain, only: nblocks, distrb_info, blocks_ice
       use ice_flux 
       use ice_grid, only: hm, tlon, tlat, tmask, umask
 !
@@ -1975,13 +1980,17 @@
           midmonth    , & ! middle day of month
           dataloc     , & ! = 1 for data located in middle of time interval
                           ! = 2 for date located at end of time interval
-          iblk            ! block index
+          iblk        , & ! block index
+          ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
       real (kind=dbl_kind) :: &
           sec6hr          , & ! number of seconds in 6 hours
           vmin, vmax
 
       logical (kind=log_kind) :: readm, read6
+
+      type (block) :: &
+         this_block           ! block information for current block
 
     !-------------------------------------------------------------------
     ! monthly data 
@@ -2094,13 +2103,20 @@
         enddo
 
       ! AOMIP
-      call compute_shortwave(nx_block,  ny_block, nghost, &
-                             TLON (:,:,iblk), &
-                             TLAT (:,:,iblk), &
-                             hm   (:,:,iblk), &
-                             Qa   (:,:,iblk), &
-                             cldf (:,:,iblk), &
-                             fsw  (:,:,iblk))
+        this_block = get_block(blocks_ice(iblk),iblk)         
+        ilo = this_block%ilo
+        ihi = this_block%ihi
+        jlo = this_block%jlo
+        jhi = this_block%jhi
+
+        call compute_shortwave(nx_block, ny_block, &
+                               ilo, ihi, jlo, jhi, &
+                               TLON (:,:,iblk), &
+                               TLAT (:,:,iblk), &
+                               hm   (:,:,iblk), &
+                               Qa   (:,:,iblk), &
+                               cldf (:,:,iblk), &
+                               fsw  (:,:,iblk))
 
       enddo  ! iblk
 
@@ -2158,7 +2174,8 @@
 
 !=======================================================================
 
-      subroutine compute_shortwave(nx_block,  ny_block, nghost, &
+      subroutine compute_shortwave(nx_block,  ny_block, &
+                                   ilo, ihi, jlo, jhi, &
                                    TLON, TLAT, hm, Qa, cldf, fsw)
 
 !---!-------------------------------------------------------------------
@@ -2167,7 +2184,7 @@
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         nghost                ! number of ghost cells
+         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
          TLON, TLAT     , & ! longitude, latitude
@@ -2189,13 +2206,7 @@
          deg2rad   
 
       integer (kind=int_kind) :: &
-         i, j, &
-         ilo,ihi,jlo,jhi    ! beginning and end of physical domain
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
+         i, j
 
       do j=jlo,jhi
        do i=ilo,ihi
@@ -2361,7 +2372,8 @@
           midmonth    , & ! middle day of month
           dataloc     , & ! = 1 for data located in middle of time interval
                           ! = 2 for date located at end of time interval
-          iblk            ! block index
+          iblk        , & ! block index
+          ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
       real (kind=dbl_kind) :: &
           sec6hr          , & ! number of seconds in 6 hours
@@ -2447,7 +2459,8 @@
         enddo
 
       ! AOMIP
-      call compute_shortwave(nx_block,  ny_block, nghost, &
+      call compute_shortwave(nx_block, ny_block, &
+                             ilo, ihi, jlo, jhi, &
                              TLON (:,:,iblk), &
                              TLAT (:,:,iblk), &
                              hm   (:,:,iblk), &

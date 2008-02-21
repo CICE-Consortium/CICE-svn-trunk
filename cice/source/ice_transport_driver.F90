@@ -38,12 +38,6 @@
                      ! 'upwind' => 1st order donor cell scheme
                      ! 'remap' => remapping scheme
 
-!lipscomb - Remove when there is again just one remapping routine
-      logical, parameter ::    &
-!         newremap = .false.    ! if true, call new remapping scheme
-         newremap = .true.    ! if true, call new remapping scheme
-                               ! if false, call old (CICE 3.14) scheme
-
       logical, parameter :: & ! if true, prescribe area flux across each edge  
          l_fixed_area = .false.
 
@@ -98,9 +92,6 @@
       use ice_exit
       use ice_timers
       use ice_transport_remap, only: init_remap
-
-!lipscomb - delete later
-      use ice_transport_remap, only: init_remap_old
 !
 !EOP
 !
@@ -112,7 +103,6 @@
       if (trim(advection)=='remap') then
 
 !lipscomb - two branches for now; consolidate later
-       if (newremap) then
 
          ! define tracer dependency arrays
          ! see comments in remapping routine
@@ -158,13 +148,6 @@
           enddo                 ! ntrace
 
           call init_remap    ! grid quantities
-
-       else      ! old remapping
-
-         call init_remap_old (ntrace,    tracer_type,  &
-                              depend,    has_dependents)
-
-       endif  ! newremap
 
       else   ! upwind
 
@@ -213,10 +196,6 @@
       use ice_calendar, only: istep1
       use ice_timers
       use ice_transport_remap, only: horizontal_remap, make_masks
-
-!lipscomb - delete later
-      use ice_transport_remap, only: horizontal_remap_old
-
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -257,6 +236,9 @@
          dimension(nx_block*ny_block,0:ncat,max_blocks) ::     &
          indxinc, indxjnc   ! compressed i/j indices
 
+      type (block) :: &
+         this_block           ! block information for current block
+      
     !-------------------------------------------------------------------
     ! If l_fixed_area is true, the area of each departure region is
     !  computed in advance (e.g., by taking the divergence of the 
@@ -299,11 +281,6 @@
       l_stop = .false.
       istop = 0
       jstop = 0
-
-      ilo = 1 + nghost
-      ihi = nx_block - 1
-      jlo = 1 + nghost
-      jhi = ny_block - 1
 
     !-------------------------------------------------------------------
     ! Compute open water area in each grid cell.
@@ -421,6 +398,11 @@
          tmax(:,:,:,:,:) = c0
 
          do iblk = 1, nblocks
+            this_block = get_block(blocks_ice(iblk),iblk)         
+            ilo = this_block%ilo
+            ihi = this_block%ihi
+            jlo = this_block%jlo
+            jhi = this_block%jhi
 
     !------------------------------------------------------------------- 
     ! Compute masks.
@@ -429,6 +411,7 @@
     !------------------------------------------------------------------- 
 
             call make_masks (nx_block,          ny_block,              &
+                             ilo, ihi,          jlo, jhi,              &
                              nghost,            has_dependents,        &
                              icellsnc(:,iblk),                         &
                              indxinc(:,:,iblk), indxjnc(:,:,iblk),     &
@@ -442,7 +425,7 @@
             do n = 1, ncat
                call local_max_min                                      &  
                             (nx_block,           ny_block,             &
-                             nghost,                                   &
+                             ilo, ihi,           jlo, jhi,             &
                              trm (:,:,:,n,iblk),                       &
                              tmin(:,:,:,n,iblk), tmax  (:,:,:,n,iblk), &
                              aimask(:,:,n,iblk), trmask(:,:,:,n,iblk))
@@ -459,7 +442,7 @@
          do iblk = 1, nblocks
             do n = 1, ncat
                call quasilocal_max_min (nx_block, ny_block,     &
-                                        nghost,     &
+                                        ilo, ihi, jlo, jhi,     &
                                         tmin(:,:,:,n,iblk),      &
                                         tmax(:,:,:,n,iblk))
             enddo
@@ -469,13 +452,6 @@
 
     !-------------------------------------------------------------------
     ! Main remapping routine: Step ice area and tracers forward in time.
-    ! Two choices: (1) Old code, based on Lipscomb and Hunke (2004)
-    !              (2) New code, incorporating Mats Bentsen's ideas
-    !                  for prescribing area fluxes across each edge
-    !-------------------------------------------------------------------
-
-      if (newremap) then
-
     !-------------------------------------------------------------------
     ! If l_fixed_area is true, compute edgearea by taking the divergence
     !  of the velocity field.  Otherwise, initialize edgearea.
@@ -493,6 +469,12 @@
          if (l_fixed_area) then
 
             do iblk = 1, nblocks
+               this_block = get_block(blocks_ice(iblk),iblk)         
+               ilo = this_block%ilo
+               ihi = this_block%ihi
+               jlo = this_block%jlo
+               jhi = this_block%jhi
+
                do j = jlo, jhi
                do i = ilo-1, ihi
                   edgearea_e(i,j,iblk) = (uvel(i,j,iblk) + uvel(i,j-1,iblk)) &
@@ -519,18 +501,6 @@
                                 tracer_type,       depend,             &
                                 has_dependents,    integral_order,     &
                                 l_dp_midpt)
-
-      else  ! standard remapping
-
-         call horizontal_remap_old (dt,                                &
-                                uvel   (:,:,:),    vvel      (:,:,:),  &
-                                aim  (:,:,:,:),    trm   (:,:,:,:,:),  &
-                                edgearea_e(:,:,:), edgearea_n(:,:,:),  &
-                                tracer_type,       depend,             &
-                                has_dependents,    integral_order,     &
-                                l_dp_midpt)
-
-      endif  ! newremap
 
     !-------------------------------------------------------------------
     ! Given new fields, recompute state variables.
@@ -642,7 +612,7 @@
             do n = 1, ncat
                call check_monotonicity      &
                                (nx_block,           ny_block,     &
-                                nghost,     &
+                                ilo, ihi, jlo, jhi,     &
                                 iblk,     &
                                 tmin(:,:,:,n,iblk), tmax(:,:,:,n,iblk),  &
                                 aim (:,:,  n,iblk), trm (:,:,:,n,iblk),  &
@@ -756,6 +726,12 @@
       call ice_timer_stop(timer_bound)
 
       do iblk = 1, nblocks
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
 
       !-----------------------------------------------------------------
       ! fill work arrays with fields to be advected
@@ -772,21 +748,24 @@
       !-----------------------------------------------------------------
 
          call upwind_field (nx_block,       ny_block,               &
-                            nghost,         dt,                     &
+                            ilo, ihi,       jlo, jhi,               &
+                            dt,                                     &
                             narr,           works(:,:,:,iblk),      &
                             uee(:,:,iblk),  vnn    (:,:,iblk),      &
                             HTE(:,:,iblk),  HTN    (:,:,iblk),      &
                             tarea(:,:,iblk))
 
          call upwind_field (nx_block,       ny_block,               &
-                            nghost,         dt,                     &
+                            ilo, ihi,       jlo, jhi,               &
+                            dt,                                     &
                             ntilyr,         eicen(:,:,:,iblk),      &
                             uee(:,:,iblk),  vnn    (:,:,iblk),      &
                             HTE(:,:,iblk),  HTN    (:,:,iblk),      &
                             tarea(:,:,iblk))
 
          call upwind_field (nx_block,       ny_block,               &
-                            nghost,         dt,                     &
+                            ilo, ihi,       jlo, jhi,               &
+                            dt,                                     &
                             ntslyr,         esnon(:,:,:,iblk),      &
                             uee(:,:,iblk),  vnn    (:,:,iblk),      &
                             HTE(:,:,iblk),  HTN    (:,:,iblk),      &
@@ -1206,7 +1185,7 @@
 ! !INTERFACE:
 !
       subroutine local_max_min (nx_block, ny_block,     &
-                                nghost,                 &
+                                ilo, ihi, jlo, jhi,     &
                                 trm,                    &
                                 tmin,     tmax,         &
                                 aimask,   trmask)
@@ -1230,7 +1209,7 @@
 !
       integer (kind=int_kind), intent(in) ::     &
            nx_block, ny_block,&! block dimensions
-           nghost              ! number of ghost cells
+           ilo,ihi,jlo,jhi     ! beginning and end of physical domain
 
       real (kind=dbl_kind), intent(in),        &
            dimension(nx_block,ny_block) ::     &
@@ -1250,8 +1229,7 @@
 !
       integer (kind=int_kind) ::     &
            i, j         ,&! horizontal indices
-           nt, nt1      ,&! tracer indices
-           ilo,ihi,jlo,jhi     ! beginning and end of physical domain
+           nt, nt1        ! tracer indices
 
       real (kind=dbl_kind), dimension(nx_block,ny_block) ::     &
            phimask        ! aimask or trmask, as appropriate
@@ -1260,11 +1238,6 @@
            phi_nw, phi_n, phi_ne ,&! field values in 8 neighbor cells
            phi_w, phi_e          ,&
            phi_sw, phi_s, phi_se
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
 
       do nt = 1, ntrace
 
@@ -1338,7 +1311,7 @@
 ! !INTERFACE:
 !
       subroutine quasilocal_max_min (nx_block, ny_block,     &
-                                     nghost,     &
+                                     ilo, ihi, jlo, jhi,     &
                                      tmin,     tmax)
 !
 ! !DESCRIPTION:
@@ -1357,7 +1330,7 @@
 !
       integer (kind=int_kind), intent(in) ::     &
          nx_block, ny_block,&! block dimensions
-         nghost              ! number of ghost cells
+         ilo,ihi,jlo,jhi     ! beginning and end of physical domain
 
       real (kind=dbl_kind), intent(inout),     &
            dimension (nx_block,ny_block,ntrace) ::     &
@@ -1368,13 +1341,7 @@
 !
       integer (kind=int_kind) ::     &
            i, j          ,&! horizontal indices
-           nt            ,&! tracer index
-           ilo,ihi,jlo,jhi ! beginning and end of physical domain
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
+           nt              ! tracer index
 
       do nt = 1, ntrace
 
@@ -1407,7 +1374,7 @@
 ! !INTERFACE:
 !
       subroutine check_monotonicity (nx_block, ny_block,     &
-                                     nghost,                 &
+                                     ilo, ihi, jlo, jhi,     &
                                      iblk,                   &
                                      tmin,     tmax,         &
                                      aim,      trm,          &
@@ -1429,7 +1396,7 @@
 !
       integer (kind=int_kind), intent(in) ::     &
            nx_block, ny_block,&! block dimensions
-           nghost            ,&! number of ghost cells
+           ilo,ihi,jlo,jhi   ,&! beginning and end of physical domain
            iblk                ! block index (diagnostic only)
 
       real (kind=dbl_kind), intent(in),         &
@@ -1455,23 +1422,13 @@
 !
       integer (kind=int_kind) ::     &
            i, j           ,&! horizontal indices
-           nt, nt1, nt2   ,&! tracer indices
-           ilo,ihi,jlo,jhi  ! beginning and end of physical domain
+           nt, nt1, nt2     ! tracer indices
 
       real (kind=dbl_kind) ::     &
            w1, w2         ! work variables
 
       logical (kind=log_kind), dimension (nx_block, ny_block) ::   &
            l_check        ! if true, check monotonicity
-
-    !-------------------------------------------------------------------
-    ! Initialize
-    !-------------------------------------------------------------------
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
 
       do nt = 1, ntrace
 
@@ -1793,7 +1750,8 @@
 ! !INTERFACE:
 !
       subroutine upwind_field (nx_block, ny_block,   &
-                               nghost,   dt,         &
+                               ilo, ihi, jlo, jhi,   &
+                               dt,                   &
                                narrays,  phi,        &
                                uee,      vnn,        &
                                HTE,      HTN,        &
@@ -1815,7 +1773,7 @@
 !
       integer (kind=int_kind), intent (in) ::     &
          nx_block, ny_block ,&! block dimensions
-         nghost             ,&! number of ghost cells
+         ilo,ihi,jlo,jhi    ,&! beginning and end of physical domain
          narrays              ! number of 2D arrays to be transported
 
       real (kind=dbl_kind), intent(in) ::         &
@@ -1837,8 +1795,7 @@
 !EOP
 !
       integer (kind=int_kind) ::     &
-         i, j, k, n         ,&! standard indices
-         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+         i, j, k, n           ! standard indices
 
       real (kind=dbl_kind) ::        &
          upwind, y1, y2, a, h   ! function
@@ -1852,11 +1809,6 @@
     !-------------------------------------------------------------------
     ! upwind transport
     !-------------------------------------------------------------------
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
 
       do n = 1, narrays
 

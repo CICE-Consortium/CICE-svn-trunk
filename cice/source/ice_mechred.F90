@@ -1853,7 +1853,8 @@
 ! !INTERFACE:
 !
       subroutine ice_strength (nx_block, ny_block, &
-                               nghost,   icells,   &
+                               ilo, ihi, jlo, jhi, &
+                               icells,             &
                                indxi,    indxj,    &
                                aice,     vice,     &
                                aice0,    aicen,    &
@@ -1865,7 +1866,7 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         nghost                ! number of ghost cells
+         ilo,ihi,jlo,jhi       ! beg and end of physical domain
 
       integer (kind=int_kind), intent(in) :: &
          icells       ! no. of cells where icetmask = 1
@@ -1909,7 +1910,6 @@
       integer (kind=int_kind) :: &
          i,j             , & ! horizontal indices
          n               , & ! thickness category index
-         ilo,ihi,jlo,jhi , & ! beg and end of physical domain
          ij                  ! horizontal index, combines i and j loops
 
       real (kind=dbl_kind) :: &
@@ -2007,11 +2007,6 @@
       !-----------------------------------------------------------------
       ! Compute ice strength as in Hibler (1979)
       !-----------------------------------------------------------------
-
-         ilo = 1 + nghost
-         ihi = nx_block - nghost
-         jlo = 1 + nghost
-         jhi = ny_block - nghost
 
          do j = jlo, jhi
          do i = ilo, ihi
