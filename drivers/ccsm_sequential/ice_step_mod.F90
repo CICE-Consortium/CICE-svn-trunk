@@ -428,8 +428,8 @@
 
       enddo                      ! iblk
 
-      call ice_timer_stop(timer_column) ! column physics
       call ice_timer_stop(timer_thermo) ! thermodynamics
+      call ice_timer_stop(timer_column) ! column physics
 
       end subroutine step_therm1
 
@@ -643,8 +643,6 @@
                             eicen     (:,:,:,iblk), &
                             esnon     (:,:,:,iblk) )
 
-         call ice_timer_stop(timer_thermo) ! thermodynamics
-
       !-----------------------------------------------------------------
       ! For the special case of a single category, adjust the area and
       ! volume (assuming that half the volume change decreases the
@@ -734,7 +732,8 @@
 
       enddo                     ! iblk
 
-!      call ice_timer_stop(timer_tmp)  ! temporary timer
+!      call ice_timer_stop(timer_tmp)     ! temporary timer
+      call ice_timer_stop(timer_thermo)  ! thermodynamics
       call ice_timer_stop(timer_column)  ! column physics
 
       end subroutine step_therm2
