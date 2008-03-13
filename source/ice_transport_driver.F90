@@ -440,6 +440,12 @@
          call ice_timer_stop(timer_bound)
 
          do iblk = 1, nblocks
+            this_block = get_block(blocks_ice(iblk),iblk)         
+            ilo = this_block%ilo
+            ihi = this_block%ihi
+            jlo = this_block%jlo
+            jhi = this_block%jhi
+
             do n = 1, ncat
                call quasilocal_max_min (nx_block, ny_block,     &
                                         ilo, ihi, jlo, jhi,     &
@@ -609,6 +615,12 @@
 
       if (l_monotonicity_check) then
          do iblk = 1, nblocks
+            this_block = get_block(blocks_ice(iblk),iblk)         
+            ilo = this_block%ilo
+            ihi = this_block%ihi
+            jlo = this_block%jlo
+            jhi = this_block%jhi
+
             do n = 1, ncat
                call check_monotonicity      &
                                (nx_block,           ny_block,     &

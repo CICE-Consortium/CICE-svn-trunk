@@ -737,7 +737,7 @@
       else
          local_time = c0
       endif
-      max_time = global_maxval(local_time)
+      max_time = global_maxval(local_time,distrb_info)
       
       if (my_task == master_task) then
         write (nu_diag,timer_format) timer_id, &
@@ -749,7 +749,7 @@
 
          !*** compute and print statistics for node timer
 
-         min_time = global_minval(local_time)
+         min_time = global_minval(local_time,distrb_info)
          mean_time = global_sum(local_time,distrb_info)/ &
                      real(all_timers(timer_id)%num_nodes,kind=dbl_kind)
          if (my_task == master_task) then
@@ -766,7 +766,7 @@
             local_time = min(local_time, &
                              all_timers(timer_id)%block_accum_time(n))
          end do
-         min_time = global_minval(local_time)
+         min_time = global_minval(local_time,distrb_info)
          if (min_time == bignum) min_time = c0
 
          !*** max block time
@@ -776,7 +776,7 @@
             local_time = max(local_time, &
                              all_timers(timer_id)%block_accum_time(n))
          end do
-         max_time = global_maxval(local_time)
+         max_time = global_maxval(local_time,distrb_info)
          if (max_time == -bignum) min_time = c0
 
          !*** mean block time

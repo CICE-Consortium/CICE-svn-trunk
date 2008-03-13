@@ -2024,7 +2024,7 @@
       !-----------------------------------------------------------------
          
          if (ntrcr >= 2) then
-            do it = 1, ntrcr
+            do it = 1, ntrcr   ! this assumes nt_Tsfc = 1
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)

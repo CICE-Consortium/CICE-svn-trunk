@@ -1,23 +1,21 @@
 #==============================================================================
 # Makefile macros for "coyote," a "clustermatic" Linux cluster at LANL
-# Note:  Use the -mp flag if precision is critical.   It slows down the 
-#        code by 25% (or more).
 #==============================================================================
 
-INCLDIR    := -I.
-SLIBS      := 
+INCLDIR    := -I. -I/usr/include
+SLIBS      := -L/usr/lib
 ULIBS      := 
 CPP        := /usr/bin/cpp
 CPPFLAGS   := -P -traditional
-CPPDEFS    := -DLINUX -DPAROPT
+CPPDEFS    := -DLINUX #-DREPRODUCIBLE
 CFLAGS     := -c -O2
 FIXEDFLAGS := -132
 FREEFLAGS  := 
 FC         := ifort
 FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl 
-#FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -g
-#FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -mp
-#FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB -g
+#FFLAGS     := -r8 -i4  -align all -w -ftz -convert big_endian -assume byterecl -g
+#FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB -traceback 
+#FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -check all
 MOD_SUFFIX := mod
 LD         := $(FC)
 LDFLAGS    := $(FFLAGS) -v
@@ -34,8 +32,10 @@ endif
 
 ifeq ($(NETCDF), yes)
    CPPDEFS :=  $(CPPDEFS) -Dncdf
-   INCLDIR := $(INCLDIR) -I/usr/projects/climate/bzhao/netcdf-3.6.1/include
-   SLIBS   := $(SLIBS) -L/usr/projects/climate/bzhao/netcdf-3.6.1/lib -lnetcdf
+#   INCLDIR := $(INCLDIR) -I/usr/projects/climate/maltrud/local/include 
+#   SLIBS   := $(SLIBS) -L/usr/projects/climate/maltrud/local/lib -lnetcdf
+   INCLDIR := $(INCLDIR) -I/scratch2/bzhao/netcdf-3.6.1/include
+   SLIBS   := $(SLIBS) -L/scratch2/bzhao/netcdf-3.6.1/lib -lnetcdf
 endif
 
 ifeq ($(USE_ESMF), yes)

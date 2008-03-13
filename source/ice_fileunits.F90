@@ -149,7 +149,7 @@ contains
          else
             !*** if inquire shows this unit in use, mark it as
             !***    in use to prevent further queries
-            ice_IOUnitsInUse(iunit) = .true.
+            ice_IOUnitsInUse(n) = .true.
          endif
       endif
    end do srch_units

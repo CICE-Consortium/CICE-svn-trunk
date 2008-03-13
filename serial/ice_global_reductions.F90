@@ -10,9 +10,11 @@
 !  reductions like global sums, minvals, maxvals, etc.
 !
 ! !REVISION HISTORY:
+!  SVN:$Id: ice_global_reductions.F90 100 2008-01-29 00:25:32Z eclare $
 !
 ! author: Phil Jones, LANL
 ! Oct. 2004: Adapted from POP version by William H. Lipscomb, LANL
+! Feb. 2008: Updated from POP version by Elizabeth C. Hunke, LANL
 !
 ! !USES:
 
@@ -83,7 +85,6 @@
 !
 !-----------------------------------------------------------------------
 
-   !integer (int_kind) :: timer_local, timer_mpi
    logical(log_kind) :: ltripole_grid  ! in lieu of use domain
 
 !EOC
@@ -103,6 +104,7 @@
 !
 ! !REVISION HISTORY:
 !  same as module
+!
 ! !INPUT PARAMETERS:
 !
    logical(log_kind), intent(in) :: tripole_flag
@@ -121,11 +123,11 @@
 ! !IROUTINE: global_sum
 ! !INTERFACE:
 
- function global_sum_dbl(X, dist, field_loc, MASK)
+ function global_sum_dbl(array, dist, field_loc, mMask, lMask) &
+          result(globalSum)
 
 ! !DESCRIPTION:
-!  computes the global sum of the _physical domain_ of a 2-d
-!  array.
+!  Computes the global sum of the physical domain of a 2-d array.
 !
 ! !REVISION HISTORY:
 !  same as module
@@ -136,26 +138,29 @@
 !  interface is identical but will handle real and integer 2-d slabs
 !  and real, integer, and double precision scalars.
 
+! !USES:
+
 ! !INPUT PARAMETERS:
 
    real (dbl_kind), dimension(:,:,:), intent(in) :: &
-      X                    ! array to be summed
+      array                ! array to be summed
 
    type (distrb), intent(in) :: &
-      dist                 ! block distribution for array X
+      dist                 ! block distribution for array 
 
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (dbl_kind), dimension(size(X,dim=1), &
-                        size(X,dim=2), &
-                        size(X,dim=3)), intent(in), optional :: &
-      MASK                 ! real multiplicative mask
+   real (dbl_kind), dimension(:,:,:), intent(in), optional :: &
+      mMask                ! optional multiplicative mask
+
+   logical (log_kind), dimension(:,:,:), intent(in), optional :: &
+      lMask                ! optional logical mask
 
 ! !OUTPUT PARAMETERS:
 
    real (dbl_kind) :: &
-      global_sum_dbl       ! resulting global sum
+      globalSum            ! resulting global sum
 
 !EOP
 !BOC
@@ -165,507 +170,172 @@
 !
 !-----------------------------------------------------------------------
 
+#ifdef REPRODUCIBLE
+   real (r16_kind) :: &
+      localSum,     &! sum of local block domain
+      globalSumTmp   ! higher precision global sum
+#else
    real (dbl_kind) :: &
-      local_block_sum      ! sum of local block domain
+      localSum       ! sum of local block domain
+#endif
 
    integer (int_kind) :: &
-      i,j,n,             &! local counters
-      ib,ie,jb,je,       &! beg,end of physical domain
-      bid                 ! block location
+      i,j,iblock,   &! local counters
+      ib,ie,jb,je,  &! beg,end of physical domain
+      blockID,      &! block location
+      numBlocks      ! number of local blocks
 
    type (block) :: &
-      this_block          ! block information for local block
+      this_block     ! holds local block information
 
 !-----------------------------------------------------------------------
 
-   global_sum_dbl = c0
+#ifdef REPRODUCIBLE
+   globalSumTmp  = 0.0_r16_kind
+#else
+   globalSum = 0.0_dbl_kind
+#endif
 
-   if (ltripole_grid .and. (field_loc == field_loc_Nface .or. &
-                            field_loc == field_loc_NEcorner)) then
-      !*** must exclude redundant points
-      do n=1,nblocks_tot
-         if (dist%blockLocation(n) /= 0) then
-            bid = dist%blockLocalID(n)
-            this_block = get_block(n,bid)
-            ib = this_block%ilo
-            ie = this_block%ihi
-            jb = this_block%jlo
-            je = this_block%jhi
-            local_block_sum = c0
-            if (this_block%jblock == nblocks_y) then
-               !*** for the topmost row, half the points are
-               !*** redundant so sum only the first half
-               if (present(MASK)) then
-                  do i=ib,ie
-                     if (this_block%i_glob(i) <= nx_global/2) &
-                        local_block_sum = &
-                        local_block_sum + X(i,je,bid)*MASK(i,je,bid)
-                  end do
-               else ! no mask
-                  do i=ib,ie
-                     if (this_block%i_glob(i) <= nx_global/2) &
-                        local_block_sum = local_block_sum + X(i,je,bid)
-                  end do
-               endif
-               je = je - 1
+   call ice_distributionGet(dist,          &
+                            numLocalBlocks = numBlocks)
+
+   do iblock=1,numBlocks
+      call ice_distributionGetBlockID(dist, iblock, blockID)
+
+      this_block = get_block(blockID, blockID)
+
+      ib = this_block%ilo
+      ie = this_block%ihi
+      jb = this_block%jlo
+      je = this_block%jhi
+
+#ifdef REPRODUCIBLE
+      localSum = 0.0_r16_kind
+#else
+      localSum = 0.0_dbl_kind
+#endif
+
+      if (present(mMask)) then
+         do j=jb,je
+         do i=ib,ie
+            localSum = &
+            localSum + array(i,j,iblock)*mMask(i,j,iblock)
+         end do
+         end do
+      else if (present(lMask)) then
+         do j=jb,je
+         do i=ib,ie
+            if (lMask(i,j,iblock)) then
+               localSum = &
+               localSum + array(i,j,iblock)
             endif
-            if (present(MASK)) then
-               do j=jb,je
+         end do
+         end do
+      else
+         do j=jb,je
+         do i=ib,ie
+            localSum = localSum + array(i,j,iblock)
+         end do
+         end do
+      endif
+
+      !*** if this block along tripole boundary and field 
+      !*** located on north face and northeast corner points
+      !*** must eliminate redundant points from global sum
+
+      if (this_block%tripole) then
+         if (field_loc == field_loc_Nface .or. &
+             field_loc == field_loc_NEcorner) then
+
+            j = je
+
+            if (present(mMask)) then
                do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*MASK(i,j,bid)
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     localSum = &
+                     localSum - array(i,j,iblock)*mMask(i,j,iblock)
+                  endif
                end do
+            else if (present(lMask)) then
+               do i=ib,ie
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     if (lMask(i,j,iblock)) &
+                     localSum = localSum - array(i,j,iblock)
+                  endif
                end do
             else
-               do j=jb,je
                do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)
-               end do
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     localSum = localSum - array(i,j,iblock)
+                  endif
                end do
             endif
-            global_sum_dbl = global_sum_dbl + local_block_sum
+
          endif
-      end do
-   else ! normal global sum
-      do n=1,nblocks_tot
-         if (dist%blockLocation(n) /= 0) then
-            bid = dist%blockLocalID(n)
-            call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
-            local_block_sum = c0
-            if (present(MASK)) then
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*MASK(i,j,bid)
-               end do
-               end do
-            else
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)
-               end do
-               end do
-            endif
-            global_sum_dbl = global_sum_dbl + local_block_sum
-         endif
-      end do
-   endif
+      endif
+
+      !*** now add block sum to global sum
+
+#ifdef REPRODUCIBLE
+      globalSumTmp = globalSumTmp + localSum
+#else
+      globalSum = globalSum + localSum
+#endif
+
+   end do
+
+#ifdef REPRODUCIBLE
+   globalSum = globalSumTmp
+#endif
 
 !-----------------------------------------------------------------------
+!EOC
 
  end function global_sum_dbl
 
 !***********************************************************************
-
- function global_sum_real(X, dist, field_loc, MASK)
-
-!-----------------------------------------------------------------------
-!
-!  computes the global sum of the _physical domain_ of a 2-d
-!  array.
-!
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
-!
-!  input vars
-!
-!-----------------------------------------------------------------------
-
-   real (real_kind), dimension(:,:,:), intent(in) :: &
-      X                    ! array to be summed
-
-   type (distrb), intent(in) :: &
-      dist                 ! block distribution for array X
-
-   integer (int_kind), intent(in) :: &
-      field_loc            ! location of field on staggered grid
-
-   real (dbl_kind), dimension(size(X,dim=1), &
-                        size(X,dim=2), &
-                        size(X,dim=3)), intent(in), optional :: &
-      MASK                 ! real multiplicative mask
-
-!-----------------------------------------------------------------------
-!
-!  output result
-!
-!-----------------------------------------------------------------------
-
-   real (real_kind) :: &
-      global_sum_real       ! resulting global sum
-
-!-----------------------------------------------------------------------
-!
-!  local variables
-!
-!-----------------------------------------------------------------------
-
-   real (dbl_kind) :: &
-      local_block_sum      ! sum of local block domain
-
-   integer (int_kind) :: &
-      i,j,n,             &! local counters
-      ib,ie,jb,je,       &! beg,end of physical domain
-      bid                 ! block location
-
-   type (block) :: &
-      this_block          ! block information for local block
-
-!-----------------------------------------------------------------------
-
-   global_sum_real = c0
-
-   if (ltripole_grid .and. (field_loc == field_loc_Nface .or. &
-                            field_loc == field_loc_NEcorner)) then
-      !*** must exclude redundant points
-      do n=1,nblocks_tot
-         if (dist%blockLocation(n) /= 0) then
-            bid = dist%blockLocalID(n)
-            this_block = get_block(n,bid)
-            ib = this_block%ilo
-            ie = this_block%ihi
-            jb = this_block%jlo
-            je = this_block%jhi
-            local_block_sum = c0
-            if (this_block%jblock == nblocks_y) then
-               !*** for the topmost row, half the points are
-               !*** redundant so sum only the first half
-               if (present(MASK)) then
-                  do i=ib,ie
-                     if (this_block%i_glob(i) <= nx_global/2) &
-                        local_block_sum = &
-                        local_block_sum + X(i,je,bid)*MASK(i,je,bid)
-                  end do
-               else ! no mask
-                  do i=ib,ie
-                     if (this_block%i_glob(i) <= nx_global/2) &
-                        local_block_sum = local_block_sum + X(i,je,bid)
-                  end do
-               endif
-               je = je - 1
-            endif
-            if (present(MASK)) then
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*MASK(i,j,bid)
-               end do
-               end do
-            else
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)
-               end do
-               end do
-            endif
-            global_sum_real = global_sum_real + local_block_sum
-         endif
-      end do
-   else ! normal global sum
-      do n=1,nblocks_tot
-         if (dist%blockLocation(n) /= 0) then
-            bid = dist%blockLocalID(n)
-            call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
-            local_block_sum = c0
-            if (present(MASK)) then
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*MASK(i,j,bid)
-               end do
-               end do
-            else
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)
-               end do
-               end do
-            endif
-            global_sum_real = global_sum_real + local_block_sum
-         endif
-      end do
-   endif
-
-!-----------------------------------------------------------------------
-
- end function global_sum_real
-
-!***********************************************************************
-
- function global_sum_int(X, dist, field_loc, MASK)
-
-!-----------------------------------------------------------------------
-!
-!  computes the global sum of the _physical domain_ of a 2-d
-!  array.
-!
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
-!
-!  input vars
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind), dimension(:,:,:), intent(in) :: &
-      X                    ! array to be summed
-
-   type (distrb), intent(in) :: &
-      dist                 ! block distribution for array X
-
-   integer (int_kind), intent(in) :: &
-      field_loc            ! location of field on staggered grid
-
-   real (dbl_kind), dimension(size(X,dim=1), &
-                        size(X,dim=2), &
-                        size(X,dim=3)), intent(in), optional :: &
-      MASK                 ! real multiplicative mask
-
-!-----------------------------------------------------------------------
-!
-!  output result
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind) :: &
-      global_sum_int       ! resulting global sum
-
-!-----------------------------------------------------------------------
-!
-!  local variables
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind) :: &
-      local_block_sum      ! sum of local block domain
-
-   integer (int_kind) :: &
-      i,j,n,             &! local counters
-      ib,ie,jb,je,       &! beg,end of physical domain
-      bid                 ! block location
-
-   type (block) :: &
-      this_block          ! block information for local block
-
-!-----------------------------------------------------------------------
-
-   global_sum_int = 0
-
-   if (ltripole_grid .and. (field_loc == field_loc_Nface .or. &
-                            field_loc == field_loc_NEcorner)) then
-      !*** must exclude redundant points
-      do n=1,nblocks_tot
-         if (dist%blockLocation(n) /= 0) then
-            bid = dist%blockLocalID(n)
-            this_block = get_block(n,bid)
-            ib = this_block%ilo
-            ie = this_block%ihi
-            jb = this_block%jlo
-            je = this_block%jhi
-            local_block_sum = c0
-            if (this_block%jblock == nblocks_y) then
-               !*** for the topmost row, half the points are
-               !*** redundant so sum only the first half
-               if (present(MASK)) then
-                  do i=ib,ie
-                     if (this_block%i_glob(i) <= nx_global/2) &
-                        local_block_sum = &
-                        local_block_sum + X(i,je,bid)*MASK(i,je,bid)
-                  end do
-               else ! no mask
-                  do i=ib,ie
-                     if (this_block%i_glob(i) <= nx_global/2) &
-                        local_block_sum = local_block_sum + X(i,je,bid)
-                  end do
-               endif
-               je = je - 1
-            endif
-            if (present(MASK)) then
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*MASK(i,j,bid)
-               end do
-               end do
-            else
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)
-               end do
-               end do
-            endif
-            global_sum_int = global_sum_int + local_block_sum
-         endif
-      end do
-   else ! normal global sum
-      do n=1,nblocks_tot
-         if (dist%blockLocation(n) /= 0) then
-            bid = dist%blockLocalID(n)
-            call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
-            local_block_sum = c0
-            if (present(MASK)) then
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*MASK(i,j,bid)
-               end do
-               end do
-            else
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)
-               end do
-               end do
-            endif
-            global_sum_int = global_sum_int + local_block_sum
-         endif
-      end do
-   endif
-
-!-----------------------------------------------------------------------
-
- end function global_sum_int
-
-!***********************************************************************
-
- function global_sum_scalar_dbl(local_scalar, dist)
-
-!-----------------------------------------------------------------------
-!
-!  this function returns the sum of scalar value across processors
-!
-!-----------------------------------------------------------------------
-
-   type (distrb), intent(in) :: &
-      dist                 ! distribution from which this is called
-
-   real (dbl_kind), intent(in) :: &
-      local_scalar                ! local scalar to be compared
-
-   real (dbl_kind) :: &
-      global_sum_scalar_dbl   ! sum of scalars across processors
-
-!-----------------------------------------------------------------------
-!
-!  no operation needed for serial execution
-!
-!-----------------------------------------------------------------------
-
-   global_sum_scalar_dbl = local_scalar
-
-!-----------------------------------------------------------------------
-
- end function global_sum_scalar_dbl
-
-!***********************************************************************
-
- function global_sum_scalar_real(local_scalar, dist)
-
-!-----------------------------------------------------------------------
-!
-!  this function returns the sum of scalar value across processors
-!
-!-----------------------------------------------------------------------
-
-   real (real_kind), intent(in) :: &
-      local_scalar                ! local scalar to be compared
-
-   type (distrb), intent(in) :: &
-      dist                 ! distribution from which this is called
-
-   real (real_kind) :: &
-      global_sum_scalar_real   ! sum of scalars across processors
-
-!-----------------------------------------------------------------------
-!
-!  no operation needed for serial execution
-!
-!-----------------------------------------------------------------------
-
-   global_sum_scalar_real = local_scalar
-
-!-----------------------------------------------------------------------
-
- end function global_sum_scalar_real
-
-!***********************************************************************
-
- function global_sum_scalar_int(local_scalar, dist)
-
-!-----------------------------------------------------------------------
-!
-!  this function returns the sum of scalar value across processors
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind), intent(in) :: &
-      local_scalar                ! local scalar to be compared
-
-   type (distrb), intent(in) :: &
-      dist                 ! distribution from which this is called
-
-   integer (int_kind) ::      &
-      global_sum_scalar_int   ! sum of scalars across processors
-
-!-----------------------------------------------------------------------
-!
-!  no operation needed for serial execution
-!
-!-----------------------------------------------------------------------
-
-   global_sum_scalar_int = local_scalar
-
-!-----------------------------------------------------------------------
-
- end function global_sum_scalar_int
-
-!EOC
-!***********************************************************************
 !BOP
-! !IROUTINE: global_sum_prod
+! !IROUTINE: global_sum
 ! !INTERFACE:
 
- function global_sum_prod_dbl (X, Y, dist, field_loc, MASK)
+ function global_sum_real(array, dist, field_loc, mMask, lMask) &
+          result(globalSum)
 
 ! !DESCRIPTION:
-!  this routine performs a global sum over the physical domain
-!  of a product of two 2-d arrays.
+!  Computes the global sum of the physical domain of a 2-d array.
 !
 ! !REVISION HISTORY:
 !  same as module
 !
 ! !REMARKS:
-!  This is actually the specific interface for the generic
-!  global_sum_prod function corresponding to double precision arrays.
-!  The generic interface is identical but will handle real and integer
-!  2-d slabs.
+!  This is actually the specific interface for the generic global_sum
+!  function corresponding to real arrays.  The generic
+!  interface is identical but will handle real and integer 2-d slabs
+!  and real, integer, and double precision scalars.
+
+! !USES:
 
 ! !INPUT PARAMETERS:
 
-   real (dbl_kind), dimension(:,:,:), intent(in) :: &
-     X,                &! first array in product to be summed
-     Y                  ! second array in product to be summed
+   real (real_kind), dimension(:,:,:), intent(in) :: &
+      array                ! array to be summed
 
    type (distrb), intent(in) :: &
-      dist                 ! block distribution for array X,Y
+      dist                 ! block distribution for array X
 
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (dbl_kind), &
-     dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
-     intent(in), optional :: &
-     MASK               ! real multiplicative mask
+   real (real_kind), dimension(:,:,:), intent(in), optional :: &
+      mMask                ! optional multiplicative mask
+
+   logical (log_kind), dimension(:,:,:), intent(in), optional :: &
+      lMask                ! optional logical mask
 
 ! !OUTPUT PARAMETERS:
 
-   real (dbl_kind) :: &
-     global_sum_prod_dbl ! resulting global sum of X*Y
+   real (real_kind) :: &
+      globalSum            ! resulting global sum
 
 !EOP
 !BOC
@@ -675,278 +345,845 @@
 !
 !-----------------------------------------------------------------------
 
+#ifdef REPRODUCIBLE
    real (dbl_kind) :: &
-      local_block_sum      ! sum of local block domain
+      localSum,     &! sum of local block domain
+      globalSumTmp   ! higher precision global sum
+#else
+   real (real_kind) :: &
+      localSum       ! sum of local block domain
+#endif
 
    integer (int_kind) :: &
-      i,j,n,             &! local counters
-      ib,ie,jb,je,       &! beg,end of physical domain
-      bid                 ! block location
+      i,j,iblock,   &! local counters
+      ib,ie,jb,je,  &! beg,end of physical domain
+      blockID,      &! block location
+      numBlocks      ! number of local blocks
 
    type (block) :: &
-      this_block          ! block information for local block
+      this_block     ! holds local block information
 
 !-----------------------------------------------------------------------
 
-   global_sum_prod_dbl = c0
+#ifdef REPRODUCIBLE
+   globalSumTmp  = 0.0_dbl_kind
+#else
+   globalSum  = 0.0_real_kind
+#endif
 
-   if (ltripole_grid .and. (field_loc == field_loc_Nface .or. &
-                            field_loc == field_loc_NEcorner)) then
-      !*** must exclude redundant points
-      do n=1,nblocks_tot
-         if (dist%blockLocation(n) /= 0) then
-            bid = dist%blockLocalID(n)
-            this_block = get_block(n,bid)
-            ib = this_block%ilo
-            ie = this_block%ihi
-            jb = this_block%jlo
-            je = this_block%jhi
-            local_block_sum = c0
-            if (this_block%jblock == nblocks_y) then
-               !*** for the topmost row, half the points are
-               !*** redundant so sum only the first half
-               if (present(MASK)) then
-                  do i=ib,ie
-                     if (this_block%i_glob(i) <= nx_global/2) &
-                        local_block_sum = local_block_sum + &
-                            X(i,je,bid)*Y(i,je,bid)*MASK(i,je,bid)
-                  end do
-               else ! no mask
-                  do i=ib,ie
-                     if (this_block%i_glob(i) <= nx_global/2) &
-                        local_block_sum = local_block_sum + &
-                                          X(i,je,bid)*Y(i,je,bid)
-                  end do
-               endif
-               je = je - 1
+   call ice_distributionGet(dist,          &
+                            numLocalBlocks = numBlocks)
+
+   do iblock=1,numBlocks
+      call ice_distributionGetBlockID(dist, iblock, blockID)
+
+      this_block = get_block(blockID, blockID)
+
+      ib = this_block%ilo
+      ie = this_block%ihi
+      jb = this_block%jlo
+      je = this_block%jhi
+
+#ifdef REPRODUCIBLE
+      localSum = 0.0_dbl_kind
+#else
+      localSum = 0.0_real_kind
+#endif
+
+      if (present(mMask)) then
+         do j=jb,je
+         do i=ib,ie
+            localSum = &
+            localSum + array(i,j,iblock)*mMask(i,j,iblock)
+         end do
+         end do
+      else if (present(lMask)) then
+         do j=jb,je
+         do i=ib,ie
+            if (lMask(i,j,iblock)) then
+               localSum = &
+               localSum + array(i,j,iblock)
             endif
-            if (present(MASK)) then
-               do j=jb,je
+         end do
+         end do
+      else
+         do j=jb,je
+         do i=ib,ie
+            localSum = localSum + array(i,j,iblock)
+         end do
+         end do
+      endif
+
+      !*** if this block along tripole boundary and field 
+      !*** located on north face and northeast corner points
+      !*** must eliminate redundant points from global sum
+
+      if (this_block%tripole) then
+         if (field_loc == field_loc_Nface .or. &
+             field_loc == field_loc_NEcorner) then
+
+            j = je
+
+            if (present(mMask)) then
                do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*Y(i,j,bid)*MASK(i,j,bid)
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     localSum = &
+                     localSum - array(i,j,iblock)*mMask(i,j,iblock)
+                  endif
                end do
+            else if (present(lMask)) then
+               do i=ib,ie
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     if (lMask(i,j,iblock)) &
+                     localSum = localSum - array(i,j,iblock)
+                  endif
                end do
             else
-               do j=jb,je
                do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*Y(i,j,bid)
-               end do
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     localSum = localSum - array(i,j,iblock)
+                  endif
                end do
             endif
-            global_sum_prod_dbl = global_sum_prod_dbl + local_block_sum
+
          endif
-      end do
-   else ! normal global sum
-      do n=1,nblocks_tot
-         if (dist%blockLocation(n) /= 0) then
-            bid = dist%blockLocalID(n)
-            call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
-            local_block_sum = c0
-            if (present(MASK)) then
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*Y(i,j,bid)*MASK(i,j,bid)
-               end do
-               end do
-            else
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*Y(i,j,bid)
-               end do
-               end do
-            endif
-            global_sum_prod_dbl = global_sum_prod_dbl + local_block_sum
-         endif
-      end do
-   endif
+      endif
+
+      !*** now add block sum to global sum
+
+#ifdef REPRODUCIBLE
+      globalSumTmp = globalSumTmp + localSum
+#else
+      globalSum = globalSum + localSum
+#endif
+
+   end do
+
+#ifdef REPRODUCIBLE
+   globalSum = globalSumTmp
+#endif
 
 !-----------------------------------------------------------------------
+!EOC
+
+ end function global_sum_real
+
+!***********************************************************************
+!BOP
+! !IROUTINE: global_sum
+! !INTERFACE:
+
+ function global_sum_int(array, dist, field_loc, mMask, lMask) &
+          result(globalSum)
+
+! !DESCRIPTION:
+!  Computes the global sum of the physical domain of a 2-d array.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+!  This is actually the specific interface for the generic global_sum
+!  function corresponding to integer arrays.  The generic
+!  interface is identical but will handle real and integer 2-d slabs
+!  and real, integer, and double precision scalars.
+
+! !USES:
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), dimension(:,:,:), intent(in) :: &
+      array                ! array to be summed
+
+   type (distrb), intent(in) :: &
+      dist                 ! block distribution for array X
+
+   integer (int_kind), intent(in) :: &
+      field_loc            ! location of field on staggered grid
+
+   integer (int_kind), dimension(:,:,:), intent(in), optional :: &
+      mMask                ! optional multiplicative mask
+
+   logical (log_kind), dimension(:,:,:), intent(in), optional :: &
+      lMask                ! optional logical mask
+
+! !OUTPUT PARAMETERS:
+
+   integer (int_kind) :: &
+      globalSum            ! resulting global sum
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) :: &
+      localSum       ! sum of all local block domains
+
+   integer (int_kind) :: &
+      i,j,iblock,   &! local counters
+      ib,ie,jb,je,  &! beg,end of physical domain
+      blockID,      &! block location
+      numBlocks      ! number of local blocks
+
+   type (block) :: &
+      this_block     ! holds local block information
+
+!-----------------------------------------------------------------------
+
+   globalSum = 0_int_kind
+
+   call ice_distributionGet(dist,          &
+                            numLocalBlocks = numBlocks)
+
+   do iblock=1,numBlocks
+      call ice_distributionGetBlockID(dist, iblock, blockID)
+
+      this_block = get_block(blockID, blockID)
+
+      ib = this_block%ilo
+      ie = this_block%ihi
+      jb = this_block%jlo
+      je = this_block%jhi
+
+      localSum = 0
+
+      if (present(mMask)) then
+         do j=jb,je
+         do i=ib,ie
+            localSum = &
+            localSum + array(i,j,iblock)*mMask(i,j,iblock)
+         end do
+         end do
+      else if (present(lMask)) then
+         do j=jb,je
+         do i=ib,ie
+            if (lMask(i,j,iblock)) then
+               localSum = &
+               localSum + array(i,j,iblock)
+            endif
+         end do
+         end do
+      else
+         do j=jb,je
+         do i=ib,ie
+            localSum = localSum + array(i,j,iblock)
+         end do
+         end do
+      endif
+
+      !*** if this block along tripole boundary and field 
+      !*** located on north face and northeast corner points
+      !*** must eliminate redundant points from global sum
+
+      if (this_block%tripole) then
+         if (field_loc == field_loc_Nface .or. &
+             field_loc == field_loc_NEcorner) then
+
+            j = je
+
+            if (present(mMask)) then
+               do i=ib,ie
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     localSum = &
+                     localSum - array(i,j,iblock)*mMask(i,j,iblock)
+                  endif
+               end do
+            else if (present(lMask)) then
+               do i=ib,ie
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     if (lMask(i,j,iblock)) &
+                     localSum = localSum - array(i,j,iblock)
+                  endif
+               end do
+            else
+               do i=ib,ie
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     localSum = localSum - array(i,j,iblock)
+                  endif
+               end do
+            endif
+
+         endif
+      endif
+
+      !*** now add block sum to global sum
+
+      globalSum = globalSum + localSum
+
+   end do
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end function global_sum_int
+
+!***********************************************************************
+!BOP
+! !IROUTINE: global_sum
+! !INTERFACE:
+
+ function global_sum_scalar_dbl(scalar, dist) &
+          result(globalSum)
+
+! !DESCRIPTION:
+!  Computes the global sum of a set of scalars distributed across
+!  a parallel machine.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+!  This is actually the specific interface for the generic global_sum
+!  function corresponding to double precision scalars.  The generic
+!  interface is identical but will handle real and integer 2-d slabs
+!  and real, integer, and double precision scalars.
+
+! !USES:
+
+! !INPUT PARAMETERS:
+
+   real (dbl_kind), intent(in) :: &
+      scalar               ! scalar to be summed
+
+   type (distrb), intent(in) :: &
+      dist                 ! block distribution 
+
+! !OUTPUT PARAMETERS:
+
+   real (dbl_kind) :: &
+      globalSum            ! resulting global sum
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  no operation needed for serial execution
+!
+!-----------------------------------------------------------------------
+
+   globalSum = scalar
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end function global_sum_scalar_dbl
+
+!***********************************************************************
+!BOP
+! !IROUTINE: global_sum
+! !INTERFACE:
+
+ function global_sum_scalar_real(scalar, dist) &
+          result(globalSum)
+
+! !DESCRIPTION:
+!  Computes the global sum of a set of scalars distributed across
+!  a parallel machine.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+!  This is actually the specific interface for the generic global_sum
+!  function corresponding to real scalars.  The generic
+!  interface is identical but will handle real and integer 2-d slabs
+!  and real, integer, and double precision scalars.
+
+! !USES:
+
+! !INPUT PARAMETERS:
+
+   real (real_kind), intent(in) :: &
+      scalar               ! scalar to be summed
+
+   type (distrb), intent(in) :: &
+      dist                 ! block distribution 
+
+! !OUTPUT PARAMETERS:
+
+   real (real_kind) :: &
+      globalSum            ! resulting global sum
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  no operation needed for serial execution
+!
+!-----------------------------------------------------------------------
+
+   globalSum = scalar
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end function global_sum_scalar_real
+
+!***********************************************************************
+!BOP
+! !IROUTINE: global_sum
+! !INTERFACE:
+
+ function global_sum_scalar_int(scalar, dist) &
+          result(globalSum)
+
+! !DESCRIPTION:
+!  Computes the global sum of a set of scalars distributed across
+!  a parallel machine.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+!  This is actually the specific interface for the generic global_sum
+!  function corresponding to integer scalars.  The generic
+!  interface is identical but will handle real and integer 2-d slabs
+!  and real, integer, and double precision scalars.
+
+! !USES:
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+      scalar               ! scalar to be summed
+
+   type (distrb), intent(in) :: &
+      dist                 ! block distribution 
+
+! !OUTPUT PARAMETERS:
+
+   integer (int_kind) :: &
+      globalSum            ! resulting global sum
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  no operation needed for serial execution
+!
+!-----------------------------------------------------------------------
+
+   globalSum = scalar
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end function global_sum_scalar_int
+
+!***********************************************************************
+!BOP
+! !IROUTINE: global_sum_prod
+! !INTERFACE:
+
+ function global_sum_prod_dbl (array1, array2, dist, field_loc, &
+                               mMask, lMask) &
+          result(globalSum)
+
+! !DESCRIPTION:
+!  Computes the global sum of the physical domain of a product of
+!  two 2-d arrays.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+!  This is actually the specific interface for the generic 
+!  global_sum_prod function corresponding to double precision arrays.
+!  The generic interface is identical but will handle real and integer 
+!  2-d slabs.
+
+! !USES:
+
+! !INPUT PARAMETERS:
+
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
+      array1, array2       ! arrays whose product is to be summed
+
+   type (distrb), intent(in) :: &
+      dist                 ! block distribution for arrays
+
+   integer (int_kind), intent(in) :: &
+      field_loc            ! location of field on staggered grid
+
+   real (dbl_kind), dimension(:,:,:), intent(in), optional :: &
+      mMask                ! optional multiplicative mask
+
+   logical (log_kind), dimension(:,:,:), intent(in), optional :: &
+      lMask                ! optional logical mask
+
+! !OUTPUT PARAMETERS:
+
+   real (dbl_kind) :: &
+      globalSum            ! resulting global sum
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+#ifdef REPRODUCIBLE
+   real (r16_kind) :: &
+      localSum,      &! sum of local block domain
+      globalSumTmp    ! higher precision for reproducibility
+#else
+   real (dbl_kind) :: &
+      localSum        ! sum of local block domain
+#endif
+
+   integer (int_kind) :: &
+      i,j,iblock,      &! local counters
+      ib,ie,jb,je,     &! beg,end of physical domain
+      blockID,         &! block location
+      numBlocks         ! number of local blocks
+
+   type (block) :: &
+      this_block          ! holds local block information
+
+!-----------------------------------------------------------------------
+
+#ifdef REPRODUCIBLE
+   globalSum  = 0.0_r16_kind
+#else
+   globalSum  = 0.0_dbl_kind
+#endif
+
+   call ice_distributionGet(dist, &
+                            numLocalBlocks = numBlocks)
+
+   do iblock=1,numBlocks
+      call ice_distributionGetBlockID(dist, iblock, blockID)
+
+      this_block = get_block(blockID, blockID)
+
+      ib = this_block%ilo
+      ie = this_block%ihi
+      jb = this_block%jlo
+      je = this_block%jhi
+
+#ifdef REPRODUCIBLE
+      localSum = 0.0_r16_kind
+#else
+      localSum = 0.0_dbl_kind
+#endif
+
+      if (present(mMask)) then
+         do j=jb,je
+         do i=ib,ie
+            localSum = &
+            localSum + array1(i,j,iblock)*array2(i,j,iblock)* &
+                       mMask(i,j,iblock)
+         end do
+         end do
+      else if (present(lMask)) then
+         do j=jb,je
+         do i=ib,ie
+            if (lMask(i,j,iblock)) then
+               localSum = &
+               localSum + array1(i,j,iblock)*array2(i,j,iblock)
+            endif
+         end do
+         end do
+      else
+         do j=jb,je
+         do i=ib,ie
+            localSum = localSum + array1(i,j,iblock)*array2(i,j,iblock)
+         end do
+         end do
+      endif
+
+      !*** if this block along tripole boundary and field 
+      !*** located on north face and northeast corner points
+      !*** must eliminate redundant points from global sum
+
+      if (this_block%tripole) then
+         if (field_loc == field_loc_Nface .or. &
+             field_loc == field_loc_NEcorner) then
+
+            j = je
+
+            if (present(mMask)) then
+               do i=ib,ie
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     localSum = &
+                     localSum - array1(i,j,iblock)*array2(i,j,iblock)* &
+                                mMask(i,j,iblock)
+                  endif
+               end do
+            else if (present(lMask)) then
+               do i=ib,ie
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     if (lMask(i,j,iblock)) &
+                        localSum = localSum - &
+                                   array1(i,j,iblock)*array2(i,j,iblock)
+                  endif
+               end do
+            else
+               do i=ib,ie
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     localSum = localSum - &
+                                array1(i,j,iblock)*array2(i,j,iblock)
+                  endif
+               end do
+            endif
+
+         endif
+      endif
+
+      !*** now add block sum to global sum
+
+#ifdef REPRODUCIBLE
+      globalSumTmp = globalSumTmp + localSum
+#else
+      globalSum = globalSum + localSum
+#endif
+
+   end do
+
+#ifdef REPRODUCIBLE
+   globalSum = globalSumTmp
+#endif
+
+!-----------------------------------------------------------------------
+!EOC
 
  end function global_sum_prod_dbl
 
 !***********************************************************************
+!BOP
+! !IROUTINE: global_sum_prod
+! !INTERFACE:
 
- function global_sum_prod_real (X, Y, dist, field_loc, MASK)
+ function global_sum_prod_real (array1, array2, dist, field_loc, &
+                                mMask, lMask) &
+          result(globalSum)
 
-!-----------------------------------------------------------------------
+! !DESCRIPTION:
+!  Computes the global sum of the physical domain of a product of
+!  two 2-d arrays.
 !
-!  this routine performs a global sum over the physical domain
-!  of a product of two 2-d arrays.
+! !REVISION HISTORY:
+!  same as module
 !
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
-!
-!  input variables
-!
-!-----------------------------------------------------------------------
+! !REMARKS:
+!  This is actually the specific interface for the generic 
+!  global_sum_prod function corresponding to single precision arrays.
+!  The generic interface is identical but will handle real and integer 
+!  2-d slabs.
+
+! !USES:
+
+! !INPUT PARAMETERS:
 
    real (real_kind), dimension(:,:,:), intent(in) :: &
-     X,                &! first array in product to be summed
-     Y                  ! second array in product to be summed
+      array1, array2       ! arrays whose product is to be summed
 
    type (distrb), intent(in) :: &
-      dist                 ! block distribution for array X,Y
+      dist                 ! block distribution for arrays
 
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (dbl_kind), &
-     dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
-     intent(in), optional :: &
-     MASK               ! real multiplicative mask
+   real (real_kind), dimension(:,:,:), intent(in), optional :: &
+      mMask                ! optional multiplicative mask
 
-!-----------------------------------------------------------------------
-!
-!  output variables
-!
-!-----------------------------------------------------------------------
+   logical (log_kind), dimension(:,:,:), intent(in), optional :: &
+      lMask                ! optional logical mask
+
+! !OUTPUT PARAMETERS:
 
    real (real_kind) :: &
-     global_sum_prod_real ! resulting global sum of X*Y
+      globalSum            ! resulting global sum
 
+!EOP
+!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
 !
 !-----------------------------------------------------------------------
 
+#ifdef REPRODUCIBLE
    real (dbl_kind) :: &
-      local_block_sum      ! sum of local block domain
+      localSum,      &! sum of local block domain
+      globalSumTmp    ! higher precision for reproducibility
+#else
+   real (real_kind) :: &
+      localSum        ! sum of local block domain
+#endif
 
    integer (int_kind) :: &
-      i,j,n,             &! local counters
-      ib,ie,jb,je,       &! beg,end of physical domain
-      bid                 ! block location
+      i,j,iblock,      &! local counters
+      ib,ie,jb,je,     &! beg,end of physical domain
+      blockID,         &! block location
+      numBlocks         ! number of local blocks
 
    type (block) :: &
-      this_block          ! block information for local block
+      this_block          ! holds local block information
 
 !-----------------------------------------------------------------------
 
-   global_sum_prod_real = c0
+#ifdef REPRODUCIBLE
+   globalSumTmp = 0.0_dbl_kind
+#else
+   globalSum = 0.0_real_kind
+#endif
 
-   if (ltripole_grid .and. (field_loc == field_loc_Nface .or. &
-                            field_loc == field_loc_NEcorner)) then
-      !*** must exclude redundant points
-      do n=1,nblocks_tot
-         if (dist%blockLocation(n) /= 0) then
-            bid = dist%blockLocalID(n)
-            this_block = get_block(n,bid)
-            ib = this_block%ilo
-            ie = this_block%ihi
-            jb = this_block%jlo
-            je = this_block%jhi
-            local_block_sum = c0
-            if (this_block%jblock == nblocks_y) then
-               !*** for the topmost row, half the points are
-               !*** redundant so sum only the first half
-               if (present(MASK)) then
-                  do i=ib,ie
-                     if (this_block%i_glob(i) <= nx_global/2) &
-                        local_block_sum = local_block_sum + &
-                            X(i,je,bid)*Y(i,je,bid)*MASK(i,je,bid)
-                  end do
-               else ! no mask
-                  do i=ib,ie
-                     if (this_block%i_glob(i) <= nx_global/2) &
-                        local_block_sum = local_block_sum + &
-                                          X(i,je,bid)*Y(i,je,bid)
-                  end do
-               endif
-               je = je - 1
+   call ice_distributionGet(dist, &
+                            numLocalBlocks = numBlocks)
+
+   do iblock=1,numBlocks
+      call ice_distributionGetBlockID(dist, iblock, blockID)
+
+      this_block = get_block(blockID, blockID)
+
+      ib = this_block%ilo
+      ie = this_block%ihi
+      jb = this_block%jlo
+      je = this_block%jhi
+
+#ifdef REPRODUCIBLE
+      localSum = 0.0_dbl_kind
+#else
+      localSum = 0.0_real_kind
+#endif
+
+      if (present(mMask)) then
+         do j=jb,je
+         do i=ib,ie
+            localSum = &
+            localSum + array1(i,j,iblock)*array2(i,j,iblock)* &
+                       mMask(i,j,iblock)
+         end do
+         end do
+      else if (present(lMask)) then
+         do j=jb,je
+         do i=ib,ie
+            if (lMask(i,j,iblock)) then
+               localSum = &
+               localSum + array1(i,j,iblock)*array2(i,j,iblock)
             endif
-            if (present(MASK)) then
-               do j=jb,je
+         end do
+         end do
+      else
+         do j=jb,je
+         do i=ib,ie
+            localSum = localSum + array1(i,j,iblock)*array2(i,j,iblock)
+         end do
+         end do
+      endif
+
+      !*** if this block along tripole boundary and field 
+      !*** located on north face and northeast corner points
+      !*** must eliminate redundant points from global sum
+
+      if (this_block%tripole) then
+         if (field_loc == field_loc_Nface .or. &
+             field_loc == field_loc_NEcorner) then
+
+            j = je
+
+            if (present(mMask)) then
                do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*Y(i,j,bid)*MASK(i,j,bid)
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     localSum = &
+                     localSum - array1(i,j,iblock)*array2(i,j,iblock)* &
+                                mMask(i,j,iblock)
+                  endif
                end do
+            else if (present(lMask)) then
+               do i=ib,ie
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     if (lMask(i,j,iblock)) &
+                        localSum = localSum - &
+                                   array1(i,j,iblock)*array2(i,j,iblock)
+                  endif
                end do
             else
-               do j=jb,je
                do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*Y(i,j,bid)
-               end do
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     localSum = localSum - &
+                                array1(i,j,iblock)*array2(i,j,iblock)
+                  endif
                end do
             endif
-            global_sum_prod_real = global_sum_prod_real + local_block_sum
+
          endif
-      end do
-   else ! normal global sum
-      do n=1,nblocks_tot
-         if (dist%blockLocation(n) /= 0) then
-            bid = dist%blockLocalID(n)
-            call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
-            local_block_sum = c0
-            if (present(MASK)) then
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*Y(i,j,bid)*MASK(i,j,bid)
-               end do
-               end do
-            else
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*Y(i,j,bid)
-               end do
-               end do
-            endif
-            global_sum_prod_real = global_sum_prod_real + local_block_sum
-         endif
-      end do
-   endif
+      endif
+
+      !*** now add block sum to global sum
+
+#ifdef REPRODUCIBLE
+      globalSumTmp = globalSumTmp + localSum
+#else
+      globalSum = globalSum + localSum
+#endif
+
+   end do
+
+#ifdef REPRODUCIBLE
+   globalSum = globalSumTmp
+#endif
 
 !-----------------------------------------------------------------------
+!EOC
 
  end function global_sum_prod_real
 
 !***********************************************************************
+!BOP
+! !IROUTINE: global_sum_prod
+! !INTERFACE:
 
- function global_sum_prod_int (X, Y, dist, field_loc, MASK)
+ function global_sum_prod_int (array1, array2, dist, field_loc, &
+                               mMask, lMask) &
+          result(globalSum)
 
-!-----------------------------------------------------------------------
+! !DESCRIPTION:
+!  Computes the global sum of the physical domain of a product of
+!  two 2-d arrays.
 !
-!  this routine performs a global sum over the physical domain
-!  of a product of two 2-d arrays.
+! !REVISION HISTORY:
+!  same as module
 !
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
-!
-!  input variables
-!
-!-----------------------------------------------------------------------
+! !REMARKS:
+!  This is actually the specific interface for the generic 
+!  global_sum_prod function corresponding to integer arrays.
+!  The generic interface is identical but will handle real and integer 
+!  2-d slabs.
+
+! !USES:
+
+! !INPUT PARAMETERS:
 
    integer (int_kind), dimension(:,:,:), intent(in) :: &
-     X,                &! first array in product to be summed
-     Y                  ! second array in product to be summed
+      array1, array2       ! arrays whose product is to be summed
 
    type (distrb), intent(in) :: &
-      dist                 ! block distribution for array X,Y
+      dist                 ! block distribution for arrays
 
    integer (int_kind), intent(in) :: &
       field_loc            ! location of field on staggered grid
 
-   real (dbl_kind), &
-     dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
-     intent(in), optional :: &
-     MASK               ! real multiplicative mask
+   integer (int_kind), dimension(:,:,:), intent(in), optional :: &
+      mMask                ! optional multiplicative mask
 
-!-----------------------------------------------------------------------
-!
-!  output variables
-!
-!-----------------------------------------------------------------------
+   logical (log_kind), dimension(:,:,:), intent(in), optional :: &
+      lMask                ! optional logical mask
+
+! !OUTPUT PARAMETERS:
 
    integer (int_kind) :: &
-     global_sum_prod_int ! resulting global sum of X*Y
+      globalSum            ! resulting global sum
 
+!EOP
+!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -954,347 +1191,397 @@
 !-----------------------------------------------------------------------
 
    integer (int_kind) :: &
-      local_block_sum      ! sum of local block domain
+      localSum          ! sum of local block domain
 
    integer (int_kind) :: &
-      i,j,n,             &! local counters
-      ib,ie,jb,je,       &! beg,end of physical domain
-      bid                 ! block location
+      i,j,iblock,      &! local counters
+      ib,ie,jb,je,     &! beg,end of physical domain
+      blockID,         &! block location
+      numBlocks         ! number of local blocks
 
    type (block) :: &
-      this_block          ! block information for local block
+      this_block          ! holds local block information
 
 !-----------------------------------------------------------------------
 
-   global_sum_prod_int = 0
+   globalSum = 0_int_kind
 
-   if (ltripole_grid .and. (field_loc == field_loc_Nface .or. &
-                            field_loc == field_loc_NEcorner)) then
-      !*** must exclude redundant points
-      do n=1,nblocks_tot
-         if (dist%blockLocation(n) /= 0) then
-            bid = dist%blockLocalID(n)
-            this_block = get_block(n,bid)
-            ib = this_block%ilo
-            ie = this_block%ihi
-            jb = this_block%jlo
-            je = this_block%jhi
-            local_block_sum = c0
-            if (this_block%jblock == nblocks_y) then
-               !*** for the topmost row, half the points are
-               !*** redundant so sum only the first half
-               if (present(MASK)) then
-                  do i=ib,ie
-                     if (this_block%i_glob(i) <= nx_global/2) &
-                        local_block_sum = local_block_sum + &
-                            X(i,je,bid)*Y(i,je,bid)*MASK(i,je,bid)
-                  end do
-               else ! no mask
-                  do i=ib,ie
-                     if (this_block%i_glob(i) <= nx_global/2) &
-                        local_block_sum = local_block_sum + &
-                                          X(i,je,bid)*Y(i,je,bid)
-                  end do
-               endif
-               je = je - 1
+   call ice_distributionGet(dist, &
+                            numLocalBlocks = numBlocks)
+
+   do iblock=1,numBlocks
+      call ice_distributionGetBlockID(dist, iblock, blockID)
+
+      this_block = get_block(blockID, blockID)
+
+      ib = this_block%ilo
+      ie = this_block%ihi
+      jb = this_block%jlo
+      je = this_block%jhi
+
+      localSum = 0
+
+      if (present(mMask)) then
+         do j=jb,je
+         do i=ib,ie
+            localSum = &
+            localSum + array1(i,j,iblock)*array2(i,j,iblock)* &
+                       mMask(i,j,iblock)
+         end do
+         end do
+      else if (present(lMask)) then
+         do j=jb,je
+         do i=ib,ie
+            if (lMask(i,j,iblock)) then
+               localSum = &
+               localSum + array1(i,j,iblock)*array2(i,j,iblock)
             endif
-            if (present(MASK)) then
-               do j=jb,je
+         end do
+         end do
+      else
+         do j=jb,je
+         do i=ib,ie
+            localSum = localSum + array1(i,j,iblock)*array2(i,j,iblock)
+         end do
+         end do
+      endif
+
+      !*** if this block along tripole boundary and field 
+      !*** located on north face and northeast corner points
+      !*** must eliminate redundant points from global sum
+
+      if (this_block%tripole) then
+         if (field_loc == field_loc_Nface .or. &
+             field_loc == field_loc_NEcorner) then
+
+            j = je
+
+            if (present(mMask)) then
                do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*Y(i,j,bid)*MASK(i,j,bid)
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     localSum = &
+                     localSum - array1(i,j,iblock)*array2(i,j,iblock)* &
+                                mMask(i,j,iblock)
+                  endif
                end do
+            else if (present(lMask)) then
+               do i=ib,ie
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     if (lMask(i,j,iblock)) &
+                        localSum = localSum - &
+                                   array1(i,j,iblock)*array2(i,j,iblock)
+                  endif
                end do
             else
-               do j=jb,je
                do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*Y(i,j,bid)
-               end do
+                  if (this_block%i_glob(i) > nx_global/2) then
+                     localSum = localSum - &
+                                array1(i,j,iblock)*array2(i,j,iblock)
+                  endif
                end do
             endif
-            global_sum_prod_int = global_sum_prod_int + local_block_sum
+
          endif
-      end do
-   else ! normal global sum
-      do n=1,nblocks_tot
-         if (dist%blockLocation(n) /= 0) then
-            bid = dist%blockLocalID(n)
-            call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
-            local_block_sum = c0
-            if (present(MASK)) then
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*Y(i,j,bid)*MASK(i,j,bid)
-               end do
-               end do
-            else
-               do j=jb,je
-               do i=ib,ie
-                  local_block_sum = &
-                  local_block_sum + X(i,j,bid)*Y(i,j,bid)
-               end do
-               end do
-            endif
-            global_sum_prod_int = global_sum_prod_int + local_block_sum
-         endif
-      end do
-   endif
+      endif
+
+      !*** now add block sum to global sum
+
+      globalSum = globalSum + localSum
+
+   end do
 
 !-----------------------------------------------------------------------
+!EOC
 
  end function global_sum_prod_int
 
-!EOC
 !***********************************************************************
 !BOP
 ! !IROUTINE: global_maxval
 ! !INTERFACE:
 
- function global_maxval_dbl (X, dist, field_loc, LMASK)
+ function global_maxval_dbl (array, dist, lMask) &
+          result(globalMaxval)
 
 ! !DESCRIPTION:
-!  This function computes the global maxval of the physical domain
-!  of a 2-d field
+!  Computes the global maximum value of the physical domain of a 2-d field
 !
 ! !REVISION HISTORY:
 !  same as module
 !
 ! !REMARKS:
 !  This is actually the specific interface for the generic global_maxval
-!  function corresponding to double precision arrays.  The generic
-!  interface is identical but will handle real and integer 2-d slabs.
+!  function corresponding to double precision arrays.  
+
+! !INPUT PARAMETERS:
+
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
+      array                ! array for which max value needed
+
+   type (distrb), intent(in) :: &
+      dist                 ! block distribution for array X
+
+   logical (log_kind), dimension(:,:,:), intent(in), optional :: &
+      lMask                ! optional logical mask
+
+! !OUTPUT PARAMETERS:
+
+   real (dbl_kind) :: &
+      globalMaxval         ! resulting maximum value of array
 
 !EOP
 !BOC
 !-----------------------------------------------------------------------
 !
-!  input vars
-!
-!-----------------------------------------------------------------------
-
-   real (dbl_kind), dimension(:,:,:), intent(in) :: &
-      X            ! array containing field for which max required
-
-   type (distrb), intent(in) :: &
-      dist                 ! block distribution for array X
-
-   integer (int_kind), intent(in) :: &
-      field_loc            ! location of field on staggered grid
-
-   logical (log_kind), &
-     dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
-     intent(in), optional :: &
-      LMASK                ! mask for excluding parts of domain
-
-!-----------------------------------------------------------------------
-!
-!  output result
-!
-!-----------------------------------------------------------------------
-
-   real (dbl_kind) :: &
-      global_maxval_dbl   ! resulting max val of global domain
-
-!-----------------------------------------------------------------------
-!
 !  local variables
 !
 !-----------------------------------------------------------------------
 
+   real (dbl_kind) ::    &
+      localMaxval       ! sum of local block domain
+
    integer (int_kind) :: &
-      i,j,n,bid,         &
-      ib, ie, jb, je      ! start,end of physical domain
+      i,j,iblock,      &! local counters
+      ib,ie,jb,je,     &! beg,end of physical domain
+      numBlocks,       &! number of local blocks
+      blockID           ! block location
+
+   type (block) :: &
+      this_block          ! holds local block information
 
 !-----------------------------------------------------------------------
 
-   global_maxval_dbl = -bignum
+   globalMaxval = -HUGE(0.0_dbl_kind)
 
-   do n=1,nblocks_tot
-      if (dist%blockLocation(n) /= 0) then
-         bid = dist%blockLocalID(n)
-         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
-         if (present(LMASK)) then
-            do j=jb,je
-            do i=ib,ie
-               if (LMASK(i,j,bid)) then
-                  global_maxval_dbl = max(global_maxval_dbl, &
-                                          X(i,j,bid))
-               endif
-            end do
-            end do
-         else
-            do j=jb,je
-            do i=ib,ie
-               global_maxval_dbl = max(global_maxval_dbl, &
-                                       X(i,j,bid))
-            end do
-            end do
-         endif
+   call ice_distributionGet(dist, &
+                            numLocalBlocks = numBlocks)
+
+   do iblock=1,numBlocks
+      call ice_distributionGetBlockID(dist, iblock, blockID)
+
+      this_block = get_block(blockID, blockID)
+
+      ib = this_block%ilo
+      ie = this_block%ihi
+      jb = this_block%jlo
+      je = this_block%jhi
+
+      localMaxval = -HUGE(0.0_dbl_kind)
+
+      if (present(lMask)) then
+         do j=jb,je
+         do i=ib,ie
+            if (lMask(i,j,iblock)) then
+               localMaxval = max(localMaxval,array(i,j,iblock))
+            endif
+         end do
+         end do
+      else
+         do j=jb,je
+         do i=ib,ie
+            localMaxval = max(localMaxval,array(i,j,iblock))
+         end do
+         end do
       endif
+
+      globalMaxval = max(globalMaxval,localMaxval)
+
    end do
 
 !-----------------------------------------------------------------------
+!EOC
 
  end function global_maxval_dbl
 
 !***********************************************************************
+!BOP
+! !IROUTINE: global_maxval
+! !INTERFACE:
 
- function global_maxval_real (X, dist, field_loc, LMASK)
+ function global_maxval_real (array, dist, lMask) &
+          result(globalMaxval)
 
-!-----------------------------------------------------------------------
+! !DESCRIPTION:
+!  Computes the global maximum value of the physical domain of a 2-d field
 !
-!  this function computes the global maxval of the physical domain
-!  of a 2-d field
+! !REVISION HISTORY:
+!  same as module
 !
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
-!
-!  input vars
-!
-!-----------------------------------------------------------------------
+! !REMARKS:
+!  This is actually the specific interface for the generic global_maxval
+!  function corresponding to single precision arrays.  
+
+! !INPUT PARAMETERS:
 
    real (real_kind), dimension(:,:,:), intent(in) :: &
-      X            ! array containing field for which max required
+      array                ! array for which max value needed
 
    type (distrb), intent(in) :: &
       dist                 ! block distribution for array X
 
-   integer (int_kind), intent(in) :: &
-      field_loc            ! location of field on staggered grid
+   logical (log_kind), dimension(:,:,:), intent(in), optional :: &
+      lMask                ! optional logical mask
 
-   logical (log_kind), &
-     dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
-     intent(in), optional :: &
-      LMASK                ! mask for excluding parts of domain
-
-!-----------------------------------------------------------------------
-!
-!  output result
-!
-!-----------------------------------------------------------------------
+! !OUTPUT PARAMETERS:
 
    real (real_kind) :: &
-      global_maxval_real   ! resulting max val of global domain
+      globalMaxval         ! resulting maximum value of array
 
+!EOP
+!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
 !
 !-----------------------------------------------------------------------
 
+   real (real_kind) ::    &
+      localMaxval       ! sum of local block domain
+
    integer (int_kind) :: &
-      i,j,n,bid,         &
-      ib, ie, jb, je      ! start,end of physical domain
+      i,j,iblock,      &! local counters
+      ib,ie,jb,je,     &! beg,end of physical domain
+      numBlocks,       &! number of local blocks
+      blockID           ! block location
+
+   type (block) :: &
+      this_block          ! holds local block information
 
 !-----------------------------------------------------------------------
 
-   global_maxval_real = -bignum
+   globalMaxval = -HUGE(0.0_real_kind)
 
-   do n=1,nblocks_tot
-      if (dist%blockLocation(n) /= 0) then
-         bid = dist%blockLocalID(n)
-         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
-         if (present(LMASK)) then
-            do j=jb,je
-            do i=ib,ie
-               if (LMASK(i,j,bid)) then
-                  global_maxval_real = max(global_maxval_real, &
-                                           X(i,j,bid))
-               endif
-            end do
-            end do
-         else
-            do j=jb,je
-            do i=ib,ie
-               global_maxval_real = max(global_maxval_real, &
-                                        X(i,j,bid))
-            end do
-            end do
-         endif
+   call ice_distributionGet(dist, &
+                            numLocalBlocks = numBlocks)
+
+   do iblock=1,numBlocks
+      call ice_distributionGetBlockID(dist, iblock, blockID)
+
+      this_block = get_block(blockID, blockID)
+
+      ib = this_block%ilo
+      ie = this_block%ihi
+      jb = this_block%jlo
+      je = this_block%jhi
+
+      localMaxval = -HUGE(0.0_real_kind)
+
+      if (present(lMask)) then
+         do j=jb,je
+         do i=ib,ie
+            if (lMask(i,j,iblock)) then
+               localMaxval = max(localMaxval,array(i,j,iblock))
+            endif
+         end do
+         end do
+      else
+         do j=jb,je
+         do i=ib,ie
+            localMaxval = max(localMaxval,array(i,j,iblock))
+         end do
+         end do
       endif
+
+      globalMaxval = max(globalMaxval,localMaxval)
+
    end do
 
 !-----------------------------------------------------------------------
+!EOC
 
  end function global_maxval_real
 
 !***********************************************************************
+!BOP
+! !IROUTINE: global_maxval
+! !INTERFACE:
 
- function global_maxval_int (X, dist, field_loc, LMASK)
+ function global_maxval_int (array, dist, lMask) &
+          result(globalMaxval)
 
-!-----------------------------------------------------------------------
+! !DESCRIPTION:
+!  Computes the global maximum value of the physical domain of a 2-d field
 !
-!  this function computes the global maxval of the physical domain
-!  of a 2-d field
+! !REVISION HISTORY:
+!  same as module
 !
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
-!
-!  input vars
-!
-!-----------------------------------------------------------------------
+! !REMARKS:
+!  This is actually the specific interface for the generic global_maxval
+!  function corresponding to integer arrays.  
+
+! !INPUT PARAMETERS:
 
    integer (int_kind), dimension(:,:,:), intent(in) :: &
-      X            ! array containing field for which max required
+      array                ! array for which max value needed
 
    type (distrb), intent(in) :: &
       dist                 ! block distribution for array X
 
-   integer (int_kind), intent(in) :: &
-      field_loc            ! location of field on staggered grid
+   logical (log_kind), dimension(:,:,:), intent(in), optional :: &
+      lMask                ! optional logical mask
 
-   logical (log_kind), &
-     dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
-     intent(in), optional :: &
-      LMASK                ! mask for excluding parts of domain
-
-!-----------------------------------------------------------------------
-!
-!  output result
-!
-!-----------------------------------------------------------------------
+! !OUTPUT PARAMETERS:
 
    integer (int_kind) :: &
-      global_maxval_int    ! resulting max val of global domain
+      globalMaxval         ! resulting maximum value of array
 
+!EOP
+!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
 !
 !-----------------------------------------------------------------------
 
+   integer (int_kind) ::    &
+      localMaxval       ! sum of local block domain
+
    integer (int_kind) :: &
-      i,j,n,bid,         &
-      ib, ie, jb, je      ! start,end of physical domain
+      i,j,iblock,      &! local counters
+      ib,ie,jb,je,     &! beg,end of physical domain
+      numBlocks,       &! number of local blocks
+      blockID           ! block location
+
+   type (block) :: &
+      this_block          ! holds local block information
 
 !-----------------------------------------------------------------------
 
-   global_maxval_int = -1000000
+   globalMaxval = -HUGE(0_int_kind)
 
-   do n=1,nblocks_tot
-      if (dist%blockLocation(n) /= 0) then
-         bid = dist%blockLocalID(n)
-         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
-         if (present(LMASK)) then
-            do j=jb,je
-            do i=ib,ie
-               if (LMASK(i,j,bid)) then
-                  global_maxval_int = max(global_maxval_int, &
-                                          X(i,j,bid))
-               endif
-            end do
-            end do
-         else
-            do j=jb,je
-            do i=ib,ie
-               global_maxval_int = max(global_maxval_int, &
-                                       X(i,j,bid))
-            end do
-            end do
-         endif
+   call ice_distributionGet(dist, &
+                            numLocalBlocks = numBlocks)
+
+   do iblock=1,numBlocks
+      call ice_distributionGetBlockID(dist, iblock, blockID)
+
+      this_block = get_block(blockID, blockID)
+
+      ib = this_block%ilo
+      ie = this_block%ihi
+      jb = this_block%jlo
+      je = this_block%jhi
+
+      localMaxval = -HUGE(0_int_kind)
+
+      if (present(lMask)) then
+         do j=jb,je
+         do i=ib,ie
+            if (lMask(i,j,iblock)) then
+               localMaxval = max(localMaxval,array(i,j,iblock))
+            endif
+         end do
+         end do
+      else
+         do j=jb,je
+         do i=ib,ie
+            localMaxval = max(localMaxval,array(i,j,iblock))
+         end do
+         end do
       endif
+
+      globalMaxval = max(globalMaxval,localMaxval)
+
    end do
 
 !-----------------------------------------------------------------------
@@ -1304,43 +1591,178 @@
 
 !***********************************************************************
 !BOP
+! !IROUTINE: global_maxval
+! !INTERFACE:
+
+ function global_maxval_scalar_dbl (scalar, dist) &
+          result(globalMaxval)
+
+! !DESCRIPTION:
+!  Computes the global maximum value of a scalar value across
+!  a distributed machine.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+!  This is actually the specific interface for the generic global_maxval
+!  function corresponding to double precision scalars.  
+
+! !INPUT PARAMETERS:
+
+   real (dbl_kind), intent(in) :: &
+      scalar               ! scalar for which max value needed
+
+   type (distrb), intent(in) :: &
+      dist                 ! block distribution 
+
+! !OUTPUT PARAMETERS:
+
+   real (dbl_kind) :: &
+      globalMaxval         ! resulting maximum value
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  no operations required for serial execution
+!
+!-----------------------------------------------------------------------
+
+   globalMaxval = scalar
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end function global_maxval_scalar_dbl
+
+!***********************************************************************
+!BOP
+! !IROUTINE: global_maxval
+! !INTERFACE:
+
+ function global_maxval_scalar_real (scalar, dist) &
+          result(globalMaxval)
+
+! !DESCRIPTION:
+!  Computes the global maximum value of a scalar value across
+!  a distributed machine.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+!  This is actually the specific interface for the generic global_maxval
+!  function corresponding to single precision scalars.  
+
+! !INPUT PARAMETERS:
+
+   real (real_kind), intent(in) :: &
+      scalar               ! scalar for which max value needed
+
+   type (distrb), intent(in) :: &
+      dist                 ! block distribution 
+
+! !OUTPUT PARAMETERS:
+
+   real (real_kind) :: &
+      globalMaxval         ! resulting maximum value
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  no operations required for serial execution
+!
+!-----------------------------------------------------------------------
+
+   globalMaxval = scalar
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end function global_maxval_scalar_real
+
+!***********************************************************************
+!BOP
+! !IROUTINE: global_maxval
+! !INTERFACE:
+
+ function global_maxval_scalar_int (scalar, dist) &
+          result(globalMaxval)
+
+! !DESCRIPTION:
+!  Computes the global maximum value of a scalar value across
+!  a distributed machine.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+!  This is actually the specific interface for the generic global_maxval
+!  function corresponding to single precision scalars.  
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+      scalar               ! scalar for which max value needed
+
+   type (distrb), intent(in) :: &
+      dist                 ! block distribution 
+
+! !OUTPUT PARAMETERS:
+
+   integer (int_kind) :: &
+      globalMaxval         ! resulting maximum value
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  no operations required for serial execution
+!
+!-----------------------------------------------------------------------
+
+   globalMaxval = scalar
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end function global_maxval_scalar_int
+
+!***********************************************************************
+!BOP
 ! !IROUTINE: global_minval
 ! !INTERFACE:
 
- function global_minval_dbl (X, dist, field_loc, LMASK)
+ function global_minval_dbl (array, dist, lMask) &
+          result(globalMinval)
 
 ! !DESCRIPTION:
-!  This function computes the global minval of the physical domain
-!  of a 2-d field
+!  Computes the global minimum value of the physical domain of a 2-d field
 !
 ! !REVISION HISTORY:
 !  same as module
 !
 ! !REMARKS:
 !  This is actually the specific interface for the generic global_minval
-!  function corresponding to double precision arrays.  The generic
-!  interface is identical but will handle real and integer 2-d slabs.
+!  function corresponding to double precision arrays.  
 
 ! !INPUT PARAMETERS:
 
    real (dbl_kind), dimension(:,:,:), intent(in) :: &
-      X            ! array containing field for which min required
+      array                ! array for which min value needed
 
    type (distrb), intent(in) :: &
       dist                 ! block distribution for array X
 
-   integer (int_kind), intent(in) :: &
-      field_loc            ! location of field on staggered grid
-
-   logical (log_kind), &
-     dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
-     intent(in), optional :: &
-      LMASK                ! mask for excluding parts of domain
+   logical (log_kind), dimension(:,:,:), intent(in), optional :: &
+      lMask                ! optional logical mask
 
 ! !OUTPUT PARAMETERS:
 
    real (dbl_kind) :: &
-      global_minval_dbl   ! resulting min val of global domain
+      globalMinval         ! resulting minimum value of array
 
 !EOP
 !BOC
@@ -1350,369 +1772,396 @@
 !
 !-----------------------------------------------------------------------
 
+   real (dbl_kind) ::    &
+      localMinval       ! sum of local block domain
+
    integer (int_kind) :: &
-      i,j,n,bid,         &
-      ib, ie, jb, je      ! start,end of physical domain
+      i,j,iblock,      &! local counters
+      ib,ie,jb,je,     &! beg,end of physical domain
+      numBlocks,       &! number of local blocks
+      blockID           ! block location
+
+   type (block) :: &
+      this_block          ! holds local block information
 
 !-----------------------------------------------------------------------
 
-   global_minval_dbl = bignum
+   globalMinval = HUGE(0.0_dbl_kind)
 
-   do n=1,nblocks_tot
-      if (dist%blockLocation(n) /= 0) then
-         bid = dist%blockLocalID(n)
-         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
-         if (present(LMASK)) then
-            do j=jb,je
-            do i=ib,ie
-               if (LMASK(i,j,bid)) then
-                  global_minval_dbl = min(global_minval_dbl, &
-                                          X(i,j,bid))
-               endif
-            end do
-            end do
-         else
-            do j=jb,je
-            do i=ib,ie
-               global_minval_dbl = min(global_minval_dbl, &
-                                       X(i,j,bid))
-            end do
-            end do
-         endif
+   call ice_distributionGet(dist, &
+                            numLocalBlocks = numBlocks)
+
+   do iblock=1,numBlocks
+      call ice_distributionGetBlockID(dist, iblock, blockID)
+
+      this_block = get_block(blockID, blockID)
+
+      ib = this_block%ilo
+      ie = this_block%ihi
+      jb = this_block%jlo
+      je = this_block%jhi
+
+      localMinval = HUGE(0.0_dbl_kind)
+
+      if (present(lMask)) then
+         do j=jb,je
+         do i=ib,ie
+            if (lMask(i,j,iblock)) then
+               localMinval = min(localMinval,array(i,j,iblock))
+            endif
+         end do
+         end do
+      else
+         do j=jb,je
+         do i=ib,ie
+            localMinval = min(localMinval,array(i,j,iblock))
+         end do
+         end do
       endif
+
+      globalMinval = min(globalMinval,localMinval)
+
    end do
 
 !-----------------------------------------------------------------------
+!EOC
 
  end function global_minval_dbl
 
 !***********************************************************************
+!BOP
+! !IROUTINE: global_minval
+! !INTERFACE:
 
- function global_minval_real (X, dist, field_loc, LMASK)
+ function global_minval_real (array, dist, lMask) &
+          result(globalMinval)
 
-!-----------------------------------------------------------------------
+! !DESCRIPTION:
+!  Computes the global minimum value of the physical domain of a 2-d field
 !
-!  this function computes the global minval of the physical domain
-!  of a 2-d field
+! !REVISION HISTORY:
+!  same as module
 !
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
-!
-!  input vars
-!
-!-----------------------------------------------------------------------
+! !REMARKS:
+!  This is actually the specific interface for the generic global_minval
+!  function corresponding to single precision arrays.  
+
+! !INPUT PARAMETERS:
 
    real (real_kind), dimension(:,:,:), intent(in) :: &
-      X            ! array containing field for which min required
+      array                ! array for which min value needed
 
    type (distrb), intent(in) :: &
       dist                 ! block distribution for array X
 
-   integer (int_kind), intent(in) :: &
-      field_loc            ! location of field on staggered grid
+   logical (log_kind), dimension(:,:,:), intent(in), optional :: &
+      lMask                ! optional logical mask
 
-   logical (log_kind), &
-     dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
-     intent(in), optional :: &
-      LMASK                ! mask for excluding parts of domain
-
-!-----------------------------------------------------------------------
-!
-!  output result
-!
-!-----------------------------------------------------------------------
+! !OUTPUT PARAMETERS:
 
    real (real_kind) :: &
-      global_minval_real   ! resulting min val of global domain
+      globalMinval         ! resulting minimum value of array
 
+!EOP
+!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
 !
 !-----------------------------------------------------------------------
 
+   real (real_kind) ::    &
+      localMinval       ! sum of local block domain
+
    integer (int_kind) :: &
-      i,j,n,bid,         &
-      ib, ie, jb, je      ! start,end of physical domain
+      i,j,iblock,      &! local counters
+      ib,ie,jb,je,     &! beg,end of physical domain
+      numBlocks,       &! number of local blocks
+      blockID           ! block location
+
+   type (block) :: &
+      this_block          ! holds local block information
 
 !-----------------------------------------------------------------------
 
-   global_minval_real = bignum
+   globalMinval = HUGE(0.0_real_kind)
 
-   do n=1,nblocks_tot
-      if (dist%blockLocation(n) /= 0) then
-         bid = dist%blockLocalID(n)
-         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
-         if (present(LMASK)) then
-            do j=jb,je
-            do i=ib,ie
-               if (LMASK(i,j,bid)) then
-                  global_minval_real = min(global_minval_real, &
-                                           X(i,j,bid))
-               endif
-            end do
-            end do
-         else
-            do j=jb,je
-            do i=ib,ie
-               global_minval_real = min(global_minval_real, &
-                                        X(i,j,bid))
-            end do
-            end do
-         endif
+   call ice_distributionGet(dist, &
+                            numLocalBlocks = numBlocks)
+
+   do iblock=1,numBlocks
+      call ice_distributionGetBlockID(dist, iblock, blockID)
+
+      this_block = get_block(blockID, blockID)
+
+      ib = this_block%ilo
+      ie = this_block%ihi
+      jb = this_block%jlo
+      je = this_block%jhi
+
+      localMinval = HUGE(0.0_real_kind)
+
+      if (present(lMask)) then
+         do j=jb,je
+         do i=ib,ie
+            if (lMask(i,j,iblock)) then
+               localMinval = min(localMinval,array(i,j,iblock))
+            endif
+         end do
+         end do
+      else
+         do j=jb,je
+         do i=ib,ie
+            localMinval = min(localMinval,array(i,j,iblock))
+         end do
+         end do
       endif
+
+      globalMinval = min(globalMinval,localMinval)
+
    end do
 
 !-----------------------------------------------------------------------
+!EOC
 
  end function global_minval_real
 
 !***********************************************************************
+!BOP
+! !IROUTINE: global_minval
+! !INTERFACE:
 
- function global_minval_int (X, dist, field_loc, LMASK)
+ function global_minval_int (array, dist, lMask) &
+          result(globalMinval)
 
-!-----------------------------------------------------------------------
+! !DESCRIPTION:
+!  Computes the global minimum value of the physical domain of a 2-d field
 !
-!  this function computes the global minval of the physical domain
-!  of a 2-d field
+! !REVISION HISTORY:
+!  same as module
 !
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
-!
-!  input vars
-!
-!-----------------------------------------------------------------------
+! !REMARKS:
+!  This is actually the specific interface for the generic global_minval
+!  function corresponding to integer arrays.  
+
+! !INPUT PARAMETERS:
 
    integer (int_kind), dimension(:,:,:), intent(in) :: &
-      X            ! array containing field for which min required
+      array                ! array for which min value needed
 
    type (distrb), intent(in) :: &
       dist                 ! block distribution for array X
 
-   integer (int_kind), intent(in) :: &
-      field_loc            ! location of field on staggered grid
+   logical (log_kind), dimension(:,:,:), intent(in), optional :: &
+      lMask                ! optional logical mask
 
-   logical (log_kind), &
-     dimension(size(X,dim=1),size(X,dim=2),size(X,dim=3)), &
-     intent(in), optional :: &
-      LMASK                ! mask for excluding parts of domain
-
-!-----------------------------------------------------------------------
-!
-!  output result
-!
-!-----------------------------------------------------------------------
+! !OUTPUT PARAMETERS:
 
    integer (int_kind) :: &
-      global_minval_int    ! resulting min val of global domain
+      globalMinval         ! resulting minimum value of array
 
+!EOP
+!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
 !
 !-----------------------------------------------------------------------
 
+   integer (int_kind) ::    &
+      localMinval       ! sum of local block domain
+
    integer (int_kind) :: &
-      i,j,n,bid,         &
-      ib, ie, jb, je      ! start,end of physical domain
+      i,j,iblock,      &! local counters
+      ib,ie,jb,je,     &! beg,end of physical domain
+      numBlocks,       &! number of local blocks
+      blockID           ! block location
+
+   type (block) :: &
+      this_block          ! holds local block information
 
 !-----------------------------------------------------------------------
 
-   global_minval_int = 1000000
+   globalMinval = HUGE(0_int_kind)
 
-   do n=1,nblocks_tot
-      if (dist%blockLocation(n) /= 0) then
-         bid = dist%blockLocalID(n)
-         call get_block_parameter(n,ilo=ib,ihi=ie,jlo=jb,jhi=je)
-         if (present(LMASK)) then
-            do j=jb,je
-            do i=ib,ie
-               if (LMASK(i,j,bid)) then
-                  global_minval_int = min(global_minval_int, &
-                                          X(i,j,bid))
-               endif
-            end do
-            end do
-         else
-            do j=jb,je
-            do i=ib,ie
-               global_minval_int = min(global_minval_int, &
-                                       X(i,j,bid))
-            end do
-            end do
-         endif
+   call ice_distributionGet(dist, &
+                            numLocalBlocks = numBlocks)
+
+   do iblock=1,numBlocks
+      call ice_distributionGetBlockID(dist, iblock, blockID)
+
+      this_block = get_block(blockID, blockID)
+
+      ib = this_block%ilo
+      ie = this_block%ihi
+      jb = this_block%jlo
+      je = this_block%jhi
+
+      localMinval = HUGE(0_int_kind)
+
+      if (present(lMask)) then
+         do j=jb,je
+         do i=ib,ie
+            if (lMask(i,j,iblock)) then
+               localMinval = min(localMinval,array(i,j,iblock))
+            endif
+         end do
+         end do
+      else
+         do j=jb,je
+         do i=ib,ie
+            localMinval = min(localMinval,array(i,j,iblock))
+         end do
+         end do
       endif
+
+      globalMinval = min(globalMinval,localMinval)
+
    end do
 
 !-----------------------------------------------------------------------
+!EOC
 
  end function global_minval_int
 
 !***********************************************************************
+!BOP
+! !IROUTINE: global_minval
+! !INTERFACE:
 
- function global_maxval_scalar_dbl (local_scalar)
+ function global_minval_scalar_dbl (scalar, dist) &
+          result(globalMinval)
 
-!-----------------------------------------------------------------------
+! !DESCRIPTION:
+!  Computes the global minimum value of a scalar value across
+!  a distributed machine.
 !
-!  this function returns the maximum scalar value across processors
+! !REVISION HISTORY:
+!  same as module
 !
-!-----------------------------------------------------------------------
+! !REMARKS:
+!  This is actually the specific interface for the generic global_minval
+!  function corresponding to double precision scalars.  
 
-   real (dbl_kind), intent(inout) :: &
-      local_scalar                ! local scalar to be compared
+! !INPUT PARAMETERS:
+
+   real (dbl_kind), intent(in) :: &
+      scalar               ! scalar for which min value needed
+
+   type (distrb), intent(in) :: &
+      dist                 ! block distribution 
+
+! !OUTPUT PARAMETERS:
 
    real (dbl_kind) :: &
-      global_maxval_scalar_dbl   ! resulting global max
+      globalMinval         ! resulting minimum value
 
+!EOP
+!BOC
 !-----------------------------------------------------------------------
 !
-!  no operations required for serial execution - return input value
-!
-!-----------------------------------------------------------------------
-
-   global_maxval_scalar_dbl = local_scalar
-
-!-----------------------------------------------------------------------
-
- end function global_maxval_scalar_dbl
-
-!***********************************************************************
-
- function global_maxval_scalar_real (local_scalar)
-
-!-----------------------------------------------------------------------
-!
-!  this function returns the maximum scalar value across processors
+!  no operations required for serial execution
 !
 !-----------------------------------------------------------------------
 
-   real (real_kind), intent(inout) :: &
-      local_scalar                ! local scalar to be compared
-
-   real (real_kind) :: &
-      global_maxval_scalar_real   ! resulting global max
+   globalMinval = scalar
 
 !-----------------------------------------------------------------------
-!
-!  no operations required for serial execution - return input value
-!
-!-----------------------------------------------------------------------
-
-   global_maxval_scalar_real = local_scalar
-
-!-----------------------------------------------------------------------
-
- end function global_maxval_scalar_real
-
-!***********************************************************************
-
- function global_maxval_scalar_int (local_scalar)
-
-!-----------------------------------------------------------------------
-!
-!  this function returns the maximum scalar value across processors
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind), intent(inout) :: &
-      local_scalar                ! local scalar to be compared
-
-   integer (int_kind) :: &
-      global_maxval_scalar_int   ! resulting global max
-
-!-----------------------------------------------------------------------
-!
-!  no operations required for serial execution - return input value
-!
-!-----------------------------------------------------------------------
-
-   global_maxval_scalar_int = local_scalar
-
-!-----------------------------------------------------------------------
-
- end function global_maxval_scalar_int
-
-!***********************************************************************
-
- function global_minval_scalar_dbl (local_scalar)
-
-!-----------------------------------------------------------------------
-!
-!  this function returns the minimum scalar value across processors
-!
-!-----------------------------------------------------------------------
-
-   real (dbl_kind), intent(inout) :: &
-      local_scalar                ! local scalar to be compared
-
-   real (dbl_kind) :: &
-      global_minval_scalar_dbl   ! resulting global min
-
-!-----------------------------------------------------------------------
-!
-!  no operations required for serial execution - return input value
-!
-!-----------------------------------------------------------------------
-
-   global_minval_scalar_dbl = local_scalar
-
-!-----------------------------------------------------------------------
+!EOC
 
  end function global_minval_scalar_dbl
 
 !***********************************************************************
+!BOP
+! !IROUTINE: global_minval
+! !INTERFACE:
 
- function global_minval_scalar_real (local_scalar)
+ function global_minval_scalar_real (scalar, dist) &
+          result(globalMinval)
 
-!-----------------------------------------------------------------------
+! !DESCRIPTION:
+!  Computes the global minimum value of a scalar value across
+!  a distributed machine.
 !
-!  this function returns the minimum scalar value across processors
+! !REVISION HISTORY:
+!  same as module
 !
-!-----------------------------------------------------------------------
+! !REMARKS:
+!  This is actually the specific interface for the generic global_minval
+!  function corresponding to single precision scalars.  
 
-   real (real_kind), intent(inout) :: &
-      local_scalar                ! local scalar to be compared
+! !INPUT PARAMETERS:
+
+   real (real_kind), intent(in) :: &
+      scalar               ! scalar for which min value needed
+
+   type (distrb), intent(in) :: &
+      dist                 ! block distribution 
+
+! !OUTPUT PARAMETERS:
 
    real (real_kind) :: &
-      global_minval_scalar_real   ! resulting global min
+      globalMinval         ! resulting minimum value
 
+!EOP
+!BOC
 !-----------------------------------------------------------------------
 !
-!  no operations required for serial execution - return input value
+!  no operations required for serial execution
 !
 !-----------------------------------------------------------------------
 
-   global_minval_scalar_real = local_scalar
+   globalMinval = scalar
 
 !-----------------------------------------------------------------------
+!EOC
 
  end function global_minval_scalar_real
 
 !***********************************************************************
+!BOP
+! !IROUTINE: global_minval
+! !INTERFACE:
 
- function global_minval_scalar_int (local_scalar)
+ function global_minval_scalar_int (scalar, dist) &
+          result(globalMinval)
 
-!-----------------------------------------------------------------------
+! !DESCRIPTION:
+!  Computes the global minimum value of a scalar value across
+!  a distributed machine.
 !
-!  this function returns the minimum scalar value across processors
+! !REVISION HISTORY:
+!  same as module
 !
-!-----------------------------------------------------------------------
+! !REMARKS:
+!  This is actually the specific interface for the generic global_minval
+!  function corresponding to single precision scalars.  
 
-   integer (int_kind), intent(inout) :: &
-      local_scalar                ! local scalar to be compared
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+      scalar               ! scalar for which min value needed
+
+   type (distrb), intent(in) :: &
+      dist                 ! block distribution 
+
+! !OUTPUT PARAMETERS:
 
    integer (int_kind) :: &
-      global_minval_scalar_int   ! resulting global min
+      globalMinval         ! resulting minimum value
 
+!EOP
+!BOC
 !-----------------------------------------------------------------------
 !
-!  no operations required for serial execution - return input value
+!  no operations required for serial execution
 !
 !-----------------------------------------------------------------------
 
-   global_minval_scalar_int = local_scalar
+   globalMinval = scalar
 
 !-----------------------------------------------------------------------
+!EOC
 
  end function global_minval_scalar_int
 

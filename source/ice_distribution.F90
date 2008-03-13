@@ -23,7 +23,7 @@
    use ice_blocks
    use ice_exit
    use ice_fileunits, only: nu_diag
-   use spacecurve_mod
+   use ice_spacecurve
 
    implicit none
    private
@@ -1071,7 +1071,7 @@
    integer (int_kind) :: &
       i,j,k,n              ,&! dummy loop indices
       pid                  ,&! dummy for processor id
-      local_block          ,&! local block position on processor
+      localID              ,&! local block position on processor
       max_work             ,&! max amount of work in any block
       nprocs_x             ,&! num of procs in x for global domain
       nprocs_y               ! num of procs in y for global domain
@@ -1229,6 +1229,21 @@
       if(pid>0) then
         proc_tmp(pid) = proc_tmp(pid) + 1
         dist%blockLocalID(n) = proc_tmp(pid)
+      endif
+   enddo
+
+   ! if this is the local processor, set number of local blocks
+   do pid = 1, nprocs
+      if (my_task == pid-1) dist%numLocalBlocks = proc_tmp(pid)
+   enddo
+   if (dist%numLocalBlocks > 0) then
+      allocate (dist%blockGlobalID(dist%numLocalBlocks))
+   endif
+   localID = 0
+   do n=1,dist%numLocalBlocks
+      if (work_per_block(n) /= 0) then
+         localID = localID + 1
+         dist%blockGlobalID(localID) = n
       endif
    enddo
 

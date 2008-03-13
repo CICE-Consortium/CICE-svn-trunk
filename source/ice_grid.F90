@@ -1515,15 +1515,15 @@
                            fillValue=c1)
       call ice_timer_stop(timer_bound)
 
-      x1 = global_minval(TLON, distrb_info, field_loc_center, tmask)
-      x2 = global_maxval(TLON, distrb_info, field_loc_center, tmask)
-      x3 = global_minval(TLAT, distrb_info, field_loc_center, tmask)
-      x4 = global_maxval(TLAT, distrb_info, field_loc_center, tmask)
+      x1 = global_minval(TLON, distrb_info, tmask)
+      x2 = global_maxval(TLON, distrb_info, tmask)
+      x3 = global_minval(TLAT, distrb_info, tmask)
+      x4 = global_maxval(TLAT, distrb_info, tmask)
 
-      y1 = global_minval(ULON, distrb_info, field_loc_NEcorner, umask)
-      y2 = global_maxval(ULON, distrb_info, field_loc_NEcorner, umask)
-      y3 = global_minval(ULAT, distrb_info, field_loc_NEcorner, umask)
-      y4 = global_maxval(ULAT, distrb_info, field_loc_NEcorner, umask)
+      y1 = global_minval(ULON, distrb_info, umask)
+      y2 = global_maxval(ULON, distrb_info, umask)
+      y3 = global_minval(ULAT, distrb_info, umask)
+      y4 = global_maxval(ULAT, distrb_info, umask)
 
       if (my_task==master_task) then
          write(nu_diag,*) ' '

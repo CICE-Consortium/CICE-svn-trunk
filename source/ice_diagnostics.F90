@@ -289,10 +289,8 @@
       endif
 
       ! maximum ice volume (= mean thickness including open water)
-      hmaxn = global_maxval(vice, distrb_info, field_loc_center, &
-                            lmask_n)
-      hmaxs = global_maxval(vice, distrb_info, field_loc_center, &
-                            lmask_s)
+      hmaxn = global_maxval(vice, distrb_info, lmask_n)
+      hmaxs = global_maxval(vice, distrb_info, lmask_s)
 
       ! maximum ice speed
       do iblk = 1, nblocks
@@ -304,10 +302,8 @@
          enddo
       enddo
 
-      umaxn = global_maxval(work1, distrb_info, field_loc_NEcorner, &
-                            lmask_n)
-      umaxs = global_maxval(work1, distrb_info, field_loc_NEcorner, &
-                            lmask_s)
+      umaxn = global_maxval(work1, distrb_info, lmask_n)
+      umaxs = global_maxval(work1, distrb_info, lmask_s)
 
       ! Write warning message if ice speed is too big
       ! (Ice speeds of ~1 m/s or more usually indicate instability)
@@ -344,10 +340,8 @@
 
       ! maximum ice strength
 
-      pmaxn = global_maxval(strength, distrb_info, field_loc_center, &
-                            lmask_n)
-      pmaxs = global_maxval(strength, distrb_info, field_loc_center, &
-                            lmask_s)
+      pmaxn = global_maxval(strength, distrb_info, lmask_n)
+      pmaxs = global_maxval(strength, distrb_info, lmask_s)
 
       pmaxn = pmaxn / c1000   ! convert to kN/m
       pmaxs = pmaxs / c1000 
@@ -983,7 +977,7 @@
             enddo               ! iblk
 
             ! find global minimum distance to diagnostic points 
-            mindis_g = global_minval(mindis)
+            mindis_g = global_minval(mindis, distrb_info)
 
             ! save indices of minimum-distance grid cell
             if (abs(mindis_g - mindis) < puny) then
@@ -996,12 +990,12 @@
             endif
 
             ! communicate to all processors
-            piloc(n) = global_maxval(piloc(n))
-            pjloc(n) = global_maxval(pjloc(n))
-            pbloc(n) = global_maxval(pbloc(n))            
-            pmloc(n) = global_maxval(pmloc(n))
-            plat(n)  = global_maxval(plat(n))
-            plon(n)  = global_maxval(plon(n))
+            piloc(n) = global_maxval(piloc(n), distrb_info)
+            pjloc(n) = global_maxval(pjloc(n), distrb_info)
+            pbloc(n) = global_maxval(pbloc(n), distrb_info)
+            pmloc(n) = global_maxval(pmloc(n), distrb_info)
+            plat(n)  = global_maxval(plat(n), distrb_info)
+            plon(n)  = global_maxval(plon(n), distrb_info)
 
             ! write to log file
             if (my_task==master_task) then
