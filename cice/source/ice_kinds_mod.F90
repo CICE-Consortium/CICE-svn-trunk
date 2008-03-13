@@ -28,11 +28,12 @@
 
       integer, parameter :: char_len  = 80, &
                             char_len_long  = 256, &
-                            int_kind  = kind(1), &
+!echmod                            int_kind  = kind(1), &
                             log_kind  = kind(.true.), &
+                            int_kind  = selected_int_kind(6), &
                             real_kind = selected_real_kind(6), &
                             dbl_kind  = selected_real_kind(13), &
-                            quad_kind = selected_real_kind(20)
+                            r16_kind  = selected_real_kind(26)
 
 !=======================================================================
 

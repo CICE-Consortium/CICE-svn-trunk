@@ -356,29 +356,15 @@
    nocn = 0
    do n=1,nblocks_tot
       this_block = get_block(n,n)
-      !do i=this_block%ib,this_block%ie
-      !	  ig = this_block%i_glob(i)
-      !   jg = this_block%j_glob(j)
-      !   if (KMTG(ig,jg) > puny .and.                       &
-      !       (ULATG(ig,jg) < shlat/rad_to_deg .or.          &
-      !        ULATG(ig,jg) > nhlat/rad_to_deg) )            & 
-      !	      nocn(n) = nocn(n) + 1
-      !end do
-      !end do
-      !do j=1,ny_block
       do j=this_block%jlo,this_block%jhi
          if (this_block%j_glob(j) > 0) then
             do i=this_block%ilo,this_block%ihi
                if (this_block%i_glob(i) > 0) then
 	          ig = this_block%i_glob(i)
                   jg = this_block%j_glob(j)
-#if (defined CCSM) || (defined SEQ_MCT)
-                  if (KMTG(ig,jg) > puny)                           &
-#else
                   if (KMTG(ig,jg) > puny .and.                      &
                      (ULATG(ig,jg) < shlat/rad_to_deg .or.          &
                       ULATG(ig,jg) > nhlat/rad_to_deg) )            & 
-#endif
 	              nocn(n) = nocn(n) + 1
                endif
             end do

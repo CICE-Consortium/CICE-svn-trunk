@@ -2125,46 +2125,33 @@
 
          if (dbug) then
            if (my_task == master_task) write (nu_diag,*) 'LY_bulk_data'
-           vmin = global_minval(fsw &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(fsw &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin = global_minval(fsw,distrb_info,tmask)
+                               
+           vmax = global_maxval(fsw,distrb_info,tmask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'fsw',vmin,vmax 
-           vmin = global_minval(cldf &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(cldf &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin = global_minval(cldf,distrb_info,tmask)
+           vmax = global_maxval(cldf,distrb_info,tmask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'cldf',vmin,vmax
-           vmin =global_minval(fsnow &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax =global_maxval(fsnow &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin =global_minval(fsnow,distrb_info,tmask)
+           vmax =global_maxval(fsnow,distrb_info,tmask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'fsnow',vmin,vmax
-           vmin = global_minval(Tair &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(Tair &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin = global_minval(Tair,distrb_info,tmask)
+           vmax = global_maxval(Tair,distrb_info,tmask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'Tair',vmin,vmax
-           vmin = global_minval(uatm &
-                               ,distrb_info,field_loc_center,umask)
-           vmax = global_maxval(uatm &
-                               ,distrb_info,field_loc_center,umask)
+           vmin = global_minval(uatm,distrb_info,umask)
+           vmax = global_maxval(uatm,distrb_info,umask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'uatm',vmin,vmax
-           vmin = global_minval(vatm &
-                               ,distrb_info,field_loc_center,umask)
-           vmax = global_maxval(vatm &
-                               ,distrb_info,field_loc_center,umask)
+           vmin = global_minval(vatm,distrb_info,umask)
+           vmax = global_maxval(vatm,distrb_info,umask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'vatm',vmin,vmax
-           vmin = global_minval(Qa &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(Qa &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin = global_minval(Qa,distrb_info,tmask)
+           vmax = global_maxval(Qa,distrb_info,tmask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'Qa',vmin,vmax
 
@@ -2475,52 +2462,36 @@
 
          if (dbug) then
            if (my_task == master_task) write (nu_diag,*) 'LY_bulk_data'
-           vmin = global_minval(fsw &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(fsw &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin = global_minval(fsw,distrb_info,tmask)
+           vmax = global_maxval(fsw,distrb_info,tmask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'fsw',vmin,vmax 
-           vmin = global_minval(cldf &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(cldf &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin = global_minval(cldf,distrb_info,tmask)
+           vmax = global_maxval(cldf,distrb_info,tmask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'cldf',vmin,vmax
-           vmin =global_minval(fsnow &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax =global_maxval(fsnow &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin =global_minval(fsnow,distrb_info,tmask)
+           vmax =global_maxval(fsnow,distrb_info,tmask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'fsnow',vmin,vmax
-           vmin = global_minval(Tair &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(Tair &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin = global_minval(Tair,distrb_info,tmask)
+           vmax = global_maxval(Tair,distrb_info,tmask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'Tair',vmin,vmax
-           vmin = global_minval(wind &
-                               ,distrb_info,field_loc_center,umask)
-           vmax = global_maxval(wind &
-                               ,distrb_info,field_loc_center,umask)
+           vmin = global_minval(wind,distrb_info,umask)
+           vmax = global_maxval(wind,distrb_info,umask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'wind',vmin,vmax
-           vmin = global_minval(strax &
-                               ,distrb_info,field_loc_center,umask)
-           vmax = global_maxval(strax &
-                               ,distrb_info,field_loc_center,umask)
+           vmin = global_minval(strax,distrb_info,umask)
+           vmax = global_maxval(strax,distrb_info,umask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'strax',vmin,vmax
-           vmin = global_minval(stray &
-                               ,distrb_info,field_loc_center,umask)
-           vmax = global_maxval(stray &
-                               ,distrb_info,field_loc_center,umask)
+           vmin = global_minval(stray,distrb_info,umask)
+           vmax = global_maxval(stray,distrb_info,umask)
            if (my_task.eq.master_task) & 
                write (nu_diag,*) 'stray',vmin,vmax
-           vmin = global_minval(Qa &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(Qa &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin = global_minval(Qa,distrb_info,tmask)
+           vmax = global_maxval(Qa,distrb_info,tmask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'Qa',vmin,vmax
 
@@ -2986,58 +2957,40 @@
       if (dbug) then
          if (my_task == master_task)  &
                write (nu_diag,*) 'ocn_data_ncar'
-           vmin = global_minval(Tf &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(Tf &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin = global_minval(Tf,distrb_info,tmask)
+           vmax = global_maxval(Tf,distrb_info,tmask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'Tf',vmin,vmax
-           vmin = global_minval(sst &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(sst &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin = global_minval(sst,distrb_info,tmask)
+           vmax = global_maxval(sst,distrb_info,tmask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'sst',vmin,vmax
-           vmin = global_minval(sss &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(sss &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin = global_minval(sss,distrb_info,tmask)
+           vmax = global_maxval(sss,distrb_info,tmask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'sss',vmin,vmax
-           vmin = global_minval(hmix &
-                               ,distrb_info,field_loc_center,tmask)
-           vmax = global_maxval(hmix &
-                               ,distrb_info,field_loc_center,tmask)
+           vmin = global_minval(hmix,distrb_info,tmask)
+           vmax = global_maxval(hmix,distrb_info,tmask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'hmix',vmin,vmax
-           vmin = global_minval(uocn &
-                               ,distrb_info,field_loc_NEcorner,umask)
-           vmax = global_maxval(uocn &
-                               ,distrb_info,field_loc_NEcorner,umask)
+           vmin = global_minval(uocn,distrb_info,umask)
+           vmax = global_maxval(uocn,distrb_info,umask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'uocn',vmin,vmax
-           vmin = global_minval(vocn &
-                               ,distrb_info,field_loc_NEcorner,umask)
-           vmax = global_maxval(vocn &
-                               ,distrb_info,field_loc_NEcorner,umask)
+           vmin = global_minval(vocn,distrb_info,umask)
+           vmax = global_maxval(vocn,distrb_info,umask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'vocn',vmin,vmax
-           vmin = global_minval(ss_tltx &
-                               ,distrb_info,field_loc_NEcorner,umask)
-           vmax = global_maxval(ss_tltx &
-                               ,distrb_info,field_loc_NEcorner,umask)
+           vmin = global_minval(ss_tltx,distrb_info,umask)
+           vmax = global_maxval(ss_tltx,distrb_info,umask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'ss_tltx',vmin,vmax
-           vmin = global_minval(ss_tlty &
-                               ,distrb_info,field_loc_NEcorner,umask)
-           vmax = global_maxval(ss_tlty &
-                               ,distrb_info,field_loc_NEcorner,umask)
+           vmin = global_minval(ss_tlty,distrb_info,umask)
+           vmax = global_maxval(ss_tlty,distrb_info,umask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'ss_tlty',vmin,vmax
-           vmin = global_minval(qdp &
-                               ,distrb_info,field_loc_center,umask)
-           vmax = global_maxval(qdp &
-                               ,distrb_info,field_loc_center,umask)
+           vmin = global_minval(qdp,distrb_info,tmask)
+           vmax = global_maxval(qdp,distrb_info,tmask)
            if (my_task.eq.master_task)  &
                write (nu_diag,*) 'qdp',vmin,vmax
       endif

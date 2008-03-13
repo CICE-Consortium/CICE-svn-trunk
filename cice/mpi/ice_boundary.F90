@@ -586,9 +586,9 @@ contains
 !-----------------------------------------------------------------------
    
    maxTmp = maxval(sendCount)
-   maxSizeSend = global_maxval(maxTmp)
+   maxSizeSend = global_maxval(maxTmp, dist)
    maxTmp = maxval(recvCount)
-   maxSizeRecv = global_maxval(maxTmp)
+   maxSizeRecv = global_maxval(maxTmp, dist)
 
    if (.not. allocated(bufSendR8)) then
 

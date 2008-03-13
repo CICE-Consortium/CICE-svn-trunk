@@ -930,6 +930,7 @@
          qi0(nilyr)   , & ! frazil ice enthalpy
          qi0av        , & ! mean value of qi0 for new ice (J kg-1)
          vsurp        , & ! volume of new ice added to each cat
+         vtmp         , & ! total volume of new and old ice
          area1        , & ! starting fractional area of existing ice
          vice1        , & ! starting volume of existing ice
          rnilyr       , & ! real(nilyr)
@@ -1099,12 +1100,13 @@
             vsurp = hsurp(m) * aicen(i,j,n)
 
             ! update ice age due to freezing (new ice age = dt)
-            if (tr_iage) trcrn(i,j,nt_iage,n)  &
-                   = (trcrn(i,j,nt_iage,n)*vicen(i,j,n) + dt*vsurp) &
-                   / (vicen(i,j,n) + vsurp)
+            vtmp = vicen(i,j,n) + vsurp
+            if (tr_iage .and. vtmp > puny) &
+                trcrn(i,j,nt_iage,n)  &
+             = (trcrn(i,j,nt_iage,n)*vicen(i,j,n) + dt*vsurp) / vtmp
 
             ! update category volumes
-            vicen(i,j,n) = vicen(i,j,n) + vsurp
+            vicen(i,j,n) = vtmp
             vlyr(m) = vsurp/rnilyr
 
          enddo                  ! ij
@@ -1148,7 +1150,8 @@
                                 / aicen(i,j,1)
          trcrn(i,j,nt_Tsfc,1) = min (trcrn(i,j,nt_Tsfc,1), c0)
 
-         if (tr_iage) trcrn(i,j,nt_iage,1) = &
+         if (tr_iage .and. vicen(i,j,1) > puny) &
+             trcrn(i,j,nt_iage,1) = &
             (trcrn(i,j,nt_iage,1)*vice1 + dt*vi0new(m))/vicen(i,j,1)
 
          vlyr(m)    = vi0new(m) / rnilyr

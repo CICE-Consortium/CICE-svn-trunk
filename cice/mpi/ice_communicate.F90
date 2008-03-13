@@ -36,6 +36,7 @@
 
    integer (int_kind), public :: &
       MPI_COMM_ICE,             &! MPI communicator for ice comms
+      mpiR16,                   &! MPI type for r16_kind
       mpiR8,                    &! MPI type for dbl_kind
       mpiR4,                    &! MPI type for real_kind
       my_task,                  &! MPI task number for this task
@@ -106,8 +107,9 @@
    master_task = 0
    call MPI_COMM_RANK  (MPI_COMM_ICE, my_task, ierr)
 
-   mpiR8 = MPI_REAL8
-   mpiR4 = MPI_REAL4
+   mpiR16 = MPI_REAL16
+   mpiR8  = MPI_REAL8
+   mpiR4  = MPI_REAL4
 
 !-----------------------------------------------------------------------
 !EOC

@@ -1,7 +1,7 @@
 !BOP
-! !MODULE: spacecurve_mod
+! !MODULE: ice_spacecurve
 
-module spacecurve_mod
+module ice_spacecurve
 
 ! !DESCRIPTION:
 !  This module contains routines necessary to 
@@ -1580,6 +1580,6 @@ contains
 
   end subroutine GenSpaceCurve 
 
-end module spacecurve_mod
+end module ice_spacecurve
 
 !|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
