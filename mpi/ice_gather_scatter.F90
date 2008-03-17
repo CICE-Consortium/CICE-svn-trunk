@@ -340,7 +340,7 @@
          do j=this_block%jlo,this_block%jhi
          do i=this_block%ilo,this_block%ihi
            ARRAY_G(this_block%i_glob(i), &
-                   this_block%j_glob(j)) = 0_real_kind
+                   this_block%j_glob(j)) = 0._real_kind
          end do
          end do
        endif
@@ -891,46 +891,34 @@
          dst_block = dst_dist%blockLocalID(n)
          this_block = get_block(n,n)
 
+         if (dst_block > 0) then
+
          ! north edge
          do j = this_block%jhi+1,ny_block
-            if (this_block%j_glob(j) /= 0) then
-               do i = 1, nx_block
-                  if (this_block%i_glob(i) /= 0) then
-                     ARRAY (i,j,dst_block) = c0
-                  endif
-               enddo
-            endif
+         do i = 1, nx_block
+            ARRAY (i,j,dst_block) = c0
+         enddo
          enddo
          ! east edge
          do j = 1, ny_block
-            if (this_block%j_glob(j) /= 0) then
-               do i = this_block%ihi+1,nx_block
-                  if (this_block%i_glob(i) /= 0) then
-                     ARRAY (i,j,dst_block) = c0
-                  endif
-               enddo
-            endif
+         do i = this_block%ihi+1,nx_block
+            ARRAY (i,j,dst_block) = c0
+         enddo
          enddo
          ! south edge
          do j = 1, this_block%jlo-1
-            if (this_block%j_glob(j) /= 0) then
-               do i = 1, nx_block
-                  if (this_block%i_glob(i) /= 0) then
-                     ARRAY (i,j,dst_block) = c0
-                  endif
-               enddo
-            endif
+         do i = 1, nx_block
+            ARRAY (i,j,dst_block) = c0
+         enddo
          enddo
          ! west edge
          do j = 1, ny_block
-            if (this_block%j_glob(j) /= 0) then
-               do i = 1, this_block%ilo-1
-                  if (this_block%i_glob(i) /= 0) then
-                     ARRAY (i,j,dst_block) = c0
-                  endif
-               enddo
-            endif
+         do i = 1, this_block%ilo-1
+            ARRAY (i,j,dst_block) = c0
          enddo
+         enddo
+
+         endif
       enddo
    endif
 
@@ -1016,7 +1004,7 @@
 !
 !-----------------------------------------------------------------------
 
-   ARRAY = 0_real_kind
+   ARRAY = 0._real_kind
 
    select case (field_loc)
    case (field_loc_center)   ! cell center location
@@ -1066,7 +1054,7 @@
        if (dst_dist%blockLocation(n) > 0 .and. &
            dst_dist%blockLocation(n)-1 /= my_task) then
 
-         msg_buffer = 0_real_kind
+         msg_buffer = 0._real_kind
          this_block = get_block(n,n)
 
          !*** if this is an interior block, then there is no
@@ -1257,46 +1245,34 @@
          dst_block = dst_dist%blockLocalID(n)
          this_block = get_block(n,n)
 
+         if (dst_block > 0) then
+
          ! north edge
          do j = this_block%jhi+1,ny_block
-            if (this_block%j_glob(j) /= 0) then
-               do i = 1, nx_block
-                  if (this_block%i_glob(i) /= 0) then
-                     ARRAY (i,j,dst_block) = 0_real_kind
-                  endif
-               enddo
-            endif
+         do i = 1, nx_block
+            ARRAY (i,j,dst_block) = 0._real_kind
+         enddo
          enddo
          ! east edge
          do j = 1, ny_block
-            if (this_block%j_glob(j) /= 0) then
-               do i = this_block%ihi+1,nx_block
-                  if (this_block%i_glob(i) /= 0) then
-                     ARRAY (i,j,dst_block) = 0_real_kind
-                  endif
-               enddo
-            endif
+         do i = this_block%ihi+1,nx_block
+            ARRAY (i,j,dst_block) = 0._real_kind
+         enddo
          enddo
          ! south edge
          do j = 1, this_block%jlo-1
-            if (this_block%j_glob(j) /= 0) then
-               do i = 1, nx_block
-                  if (this_block%i_glob(i) /= 0) then
-                     ARRAY (i,j,dst_block) = 0_real_kind
-                  endif
-               enddo
-            endif
+         do i = 1, nx_block
+            ARRAY (i,j,dst_block) = 0._real_kind
+         enddo
          enddo
          ! west edge
          do j = 1, ny_block
-            if (this_block%j_glob(j) /= 0) then
-               do i = 1, this_block%ilo-1
-                  if (this_block%i_glob(i) /= 0) then
-                     ARRAY (i,j,dst_block) = 0_real_kind
-                  endif
-               enddo
-            endif
+         do i = 1, this_block%ilo-1
+            ARRAY (i,j,dst_block) = 0._real_kind
          enddo
+         enddo
+
+         endif
       enddo
    endif
 
@@ -1623,46 +1599,34 @@
          dst_block = dst_dist%blockLocalID(n)
          this_block = get_block(n,n)
 
+         if (dst_block > 0) then
+
          ! north edge
          do j = this_block%jhi+1,ny_block
-            if (this_block%j_glob(j) /= 0) then
-               do i = 1, nx_block
-                  if (this_block%i_glob(i) /= 0) then
-                     ARRAY (i,j,dst_block) = 0
-                  endif
-               enddo
-            endif
+         do i = 1, nx_block
+            ARRAY (i,j,dst_block) = 0
+         enddo
          enddo
          ! east edge
          do j = 1, ny_block
-            if (this_block%j_glob(j) /= 0) then
-               do i = this_block%ihi+1,nx_block
-                  if (this_block%i_glob(i) /= 0) then
-                     ARRAY (i,j,dst_block) = 0
-                  endif
-               enddo
-            endif
+         do i = this_block%ihi+1,nx_block
+            ARRAY (i,j,dst_block) = 0
+         enddo
          enddo
          ! south edge
          do j = 1, this_block%jlo-1
-            if (this_block%j_glob(j) /= 0) then
-               do i = 1, nx_block
-                  if (this_block%i_glob(i) /= 0) then
-                     ARRAY (i,j,dst_block) = 0
-                  endif
-               enddo
-            endif
+         do i = 1, nx_block
+            ARRAY (i,j,dst_block) = 0
+         enddo
          enddo
          ! west edge
          do j = 1, ny_block
-            if (this_block%j_glob(j) /= 0) then
-               do i = 1, this_block%ilo-1
-                  if (this_block%i_glob(i) /= 0) then
-                     ARRAY (i,j,dst_block) = 0
-                  endif
-               enddo
-            endif
+         do i = 1, this_block%ilo-1
+            ARRAY (i,j,dst_block) = 0
          enddo
+         enddo
+
+         endif
       enddo
    endif
 
