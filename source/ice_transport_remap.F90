@@ -70,9 +70,7 @@
          p5625m = -9._dbl_kind/16._dbl_kind    ,&
          p52083 = 25._dbl_kind/48._dbl_kind
 
-!lipscomb - debugging parameters
-      logical (kind=log_kind), parameter :: verbose = .false.
-      logical (kind=log_kind), parameter :: bugcheck = .true.
+      logical (kind=log_kind), parameter :: bugcheck = .false.
 
 !=======================================================================
 ! Here is some information about how the incremental remapping scheme
@@ -1627,8 +1625,7 @@
          mpx,  mpy      ,&! coordinates of midpoint of back trajectory,
                           ! relative to cell corner
          mpxt, mpyt     ,&! midpoint coordinates relative to cell center
-         ump,  vmp      ,&! corrected velocity at midpoint
-         use, vse, usw, vsw, une, vne, unw, vnw !lipscomb - remove later
+         ump,  vmp        ! corrected velocity at midpoint
 
     !-------------------------------------------------------------------
     ! Estimate departure points.
@@ -1726,29 +1723,15 @@
     ! trajectory midpoint in the (i2,j2) reference frame.
     !-------------------------------------------------------------------
  
-!lipscomb - get rid of usw, etc.
-
-            usw = uvel(i2-1,j2-1)
-            vsw = vvel(i2-1,j2-1)
+            ump = uvel(i2-1,j2-1)*(mpxt-p5)*(mpyt-p5)     &
+                - uvel(i2,  j2-1)*(mpxt+p5)*(mpyt-p5)     &
+                + uvel(i2,  j2  )*(mpxt+p5)*(mpyt+p5)     &  
+                - uvel(i2-1,j2  )*(mpxt-p5)*(mpyt+p5)
  
-            use = uvel(i2,j2-1)
-            vse = vvel(i2,j2-1)
- 
-            une = uvel(i2,j2)
-            vne = vvel(i2,j2)
- 
-            unw = uvel(i2-1,j2)
-            vnw = vvel(i2-1,j2)
-
-            ump = usw*(mpxt-p5)*(mpyt-p5)     &
-                - use*(mpxt+p5)*(mpyt-p5)     &
-                + une*(mpxt+p5)*(mpyt+p5)     &  
-                - unw*(mpxt-p5)*(mpyt+p5)
- 
-            vmp = vsw*(mpxt-p5)*(mpyt-p5)     &
-                - vse*(mpxt+p5)*(mpyt-p5)     &
-                + vne*(mpxt+p5)*(mpyt+p5)     &
-                - vnw*(mpxt-p5)*(mpyt+p5)
+            vmp = vvel(i2-1,j2-1)*(mpxt-p5)*(mpyt-p5)     &
+                - vvel(i2,  j2-1)*(mpxt+p5)*(mpyt-p5)     &
+                + vvel(i2,  j2  )*(mpxt+p5)*(mpyt+p5)     &
+                - vvel(i2-1,j2  )*(mpxt-p5)*(mpyt+p5)
  
     !-------------------------------------------------------------------
     ! Use the midpoint velocity to estimate the coordinates of the
@@ -1865,8 +1848,9 @@
 
       real (kind=dbl_kind), dimension(nx_block,ny_block) ::   &
          dx, dy         ,&! scaled departure points
-         areafac          ! area scale factor at cell edges
-        
+         areafac_c      ,&! area scale factor at center of edge
+         areafac_l      ,&! area scale factor at left corner
+         areafac_r        ! area scale factor at right corner
 
       real (kind=dbl_kind) ::   &
          xcl, ycl       ,&! coordinates of left corner point
@@ -1892,10 +1876,12 @@
          ishift_br, jshift_br ,&! i,j indices of BR cell relative to edge
          ishift_tc, jshift_tc ,&! i,j indices of TC cell relative to edge
          ishift_bc, jshift_bc ,&! i,j indices of BC cell relative to edge
-         w1, w2           ! work variables
+         area1, area2, area3  ,&! left and right triangle areas
+         area_c               ,&! center polygon area
+         w1, w2                 ! work variables
 
-      integer (kind=int_kind), dimension (nx_block,ny_block,ngroups) ::   &
-         fluxsign         ! = 1 for positive flux, -1 for negative
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ngroups) ::   &
+         areafact         ! = 1 for positive flux, -1 for negative
 
       real (kind=dbl_kind), dimension(nx_block,ny_block) ::   &
          areasum          ! sum of triangle areas for a given edge
@@ -1948,17 +1934,19 @@
     ! In this coordinate system, the lefthand corner CL = (-0.5,0)
     !  and the righthand corner CR = (0.5, 0).
     !-------------------------------------------------------------------
-
+  
     !-------------------------------------------------------------------
     ! Initialize
     !-------------------------------------------------------------------
 
-      areafac(:,:) = c0
+      areafac_c(:,:) = c0
+      areafac_l(:,:) = c0
+      areafac_r(:,:) = c0
       do ng = 1, ngroups
          do j = 1, ny_block
          do i = 1, nx_block
             triarea (i,j,ng) = c0
-            fluxsign(i,j,ng) = 0
+            areafact(i,j,ng) = c0
             iflux   (i,j,ng) = i
             jflux   (i,j,ng) = j
          enddo
@@ -2001,7 +1989,9 @@
 
          do j = jb, je
          do i = ib, ie
-            areafac(i,j) = p25*(dxu(i-1,j)+dxu(i,j))*(dyu(i-1,j)+dyu(i,j)) 
+            areafac_l(i,j) = dxu(i-1,j)*dyu(i-1,j) 
+            areafac_r(i,j) = dxu(i,j)*dyu(i,j) 
+            areafac_c(i,j) = p5*(areafac_l(i,j) + areafac_r(i,j))
          enddo
          enddo
 
@@ -2029,11 +2019,13 @@
          ishift_bc =  0
          jshift_bc =  0
 
-         ! area scale factor
+         ! area scale factors
 
          do j = jb, je
          do i = ib, ie
-            areafac(i,j) = p25*(dxu(i,j-1)+dxu(i,j))*(dyu(i,j-1)+dyu(i,j)) 
+            areafac_l(i,j) = dxu(i,j)*dyu(i,j) 
+            areafac_r(i,j) = dxu(i,j-1)*dyu(i,j-1)
+            areafac_c(i,j) = p5 * (areafac_l(i,j) + areafac_r(i,j))
          enddo
          enddo
 
@@ -2114,6 +2106,8 @@
          xcr =  p5
          ycr =  c0
 
+         ! Departure points
+
          if (trim(edge) == 'north') then ! north edge
             xdl = xcl + dx(i-1,j)
             ydl = ycl + dy(i-1,j)
@@ -2126,25 +2120,10 @@
             ydr = ycr + dx(i,j-1)
          endif
 
-         ! Midpoint of departure points
          xdm = p5 * (xdr + xdl)
          ydm = p5 * (ydr + ydl)
 
-         ! For l_fixed_area = T, shift the midpoint so the departure
-         ! region has the prescribed area
-   
-         if (l_fixed_area) then
-            w1 = c2*edgearea(i,j)/areafac(i,j)    &
-                 + (xdr-xcl)*ydl + (xcr-xdl)*ydr
-            w2 = (xdr-xdl)**2 + (ydr-ydl)**2
-            w1 = w1/w2
-            xdm = xdm + (ydr - ydl) * w1
-            ydm = ydm - (xdr - xdl) * w1
- 
-            ! temporary diagnostic
-            w2 = sqrt( ((ydr - ydl)*w1)**2 + ((xdr - xdl)*w1)**2  ) 
-
-         endif
+         ! Intersection points
 
          xil = xcl
          yil = (xcl*(ydm-ydl) + xdm*ydl - xdl*ydm) / (xdm - xdl)
@@ -2187,7 +2166,7 @@
             yp    (i,j,3,ng) = ydl
             iflux   (i,j,ng) = i + ishift_tl
             jflux   (i,j,ng) = j + jshift_tl
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_l(i,j)
 
          elseif (yil < c0 .and. xdl < xcl .and. ydl < c0) then
 
@@ -2202,7 +2181,7 @@
             yp    (i,j,3,ng) = yil
             iflux   (i,j,ng) = i + ishift_bl
             jflux   (i,j,ng) = j + jshift_bl
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_l(i,j)
 
          elseif (yil < c0 .and. xdl < xcl .and. ydl >= c0) then
 
@@ -2217,7 +2196,7 @@
             yp    (i,j,3,ng) = yicl
             iflux   (i,j,ng) = i + ishift_tl
             jflux   (i,j,ng) = j + jshift_tl
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_l(i,j)
 
          ! BL1 (group 3)
 
@@ -2230,7 +2209,7 @@
             yp    (i,j,3,ng) = yil
             iflux   (i,j,ng) = i + ishift_bl
             jflux   (i,j,ng) = j + jshift_bl
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_l(i,j)
 
          elseif (yil > c0 .and. xdl < xcl .and. ydl < c0) then
 
@@ -2245,7 +2224,7 @@
             yp    (i,j,3,ng) = yicl
             iflux   (i,j,ng) = i + ishift_tl
             jflux   (i,j,ng) = j + jshift_tl
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_l(i,j)
 
          ! BL2 (group 1)
 
@@ -2258,7 +2237,7 @@
             yp    (i,j,3,ng) = ydl
             iflux   (i,j,ng) = i + ishift_bl
             jflux   (i,j,ng) = j + jshift_bl
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_l(i,j)
 
          endif                  ! TL and BL triangles
 
@@ -2280,7 +2259,7 @@
             yp    (i,j,3,ng) = yir
             iflux   (i,j,ng) = i + ishift_tr
             jflux   (i,j,ng) = j + jshift_tr
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_r(i,j)
 
          elseif (yir < c0 .and. xdr >= xcr .and. ydr < c0) then
 
@@ -2295,7 +2274,7 @@
             yp    (i,j,3,ng) = ydr
             iflux   (i,j,ng) = i + ishift_br
             jflux   (i,j,ng) = j + jshift_br
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_r(i,j)
 
          elseif (yir < c0 .and. xdr >= xcr  .and. ydr >= c0) then 
 
@@ -2310,7 +2289,7 @@
             yp    (i,j,3,ng) = ydr
             iflux   (i,j,ng) = i + ishift_tr
             jflux   (i,j,ng) = j + jshift_tr
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_r(i,j)
 
          ! BR1 (group 3)
 
@@ -2323,7 +2302,7 @@
             yp    (i,j,3,ng) = yicr
             iflux   (i,j,ng) = i + ishift_br
             jflux   (i,j,ng) = j + jshift_br
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_r(i,j)
 
          elseif (yir > c0 .and. xdr >= xcr .and. ydr < c0) then 
 
@@ -2338,7 +2317,7 @@
             yp    (i,j,3,ng) = yir
             iflux   (i,j,ng) = i + ishift_tr
             jflux   (i,j,ng) = j + jshift_tr
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_r(i,j)
 
          ! BR2 (group 2)
 
@@ -2351,7 +2330,7 @@
             yp    (i,j,3,ng) = yicr
             iflux   (i,j,ng) = i + ishift_br
             jflux   (i,j,ng) = j + jshift_br
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_r(i,j)
 
          endif                  ! TR and BR triangles
 
@@ -2368,6 +2347,72 @@
             xdr = xir
             ydr = yir
          endif
+
+         xdm = p5 * (xdr + xdl)
+         ydm = p5 * (ydr + ydl)
+       
+    !-------------------------------------------------------------------
+    ! For l_fixed_area = T, shift the midpoint so the departure
+    ! region has the prescribed area
+    !-------------------------------------------------------------------
+
+         if (l_fixed_area) then
+
+            ! Sum the areas of left and right triangles.
+            ! Note that yp(i,j,1,ng) = 0 for all triangles, so we can
+            !  drop those terms from the area formula.
+
+            ng = 1
+            area1 = p5 * ( (xp(i,j,2,ng)-xp(i,j,1,ng)) *   &
+                            yp(i,j,3,ng)                   &
+                         -  yp(i,j,2,ng) *                 &
+                           (xp(i,j,3,ng)-xp(i,j,1,ng)) )   &
+                         * areafact(i,j,ng) 
+
+            ng = 2
+            area2 = p5 * ( (xp(i,j,2,ng)-xp(i,j,1,ng)) *   &
+                            yp(i,j,3,ng)                   &
+                         -  yp(i,j,2,ng) *                 &
+                           (xp(i,j,3,ng)-xp(i,j,1,ng)) )   &
+                         * areafact(i,j,ng) 
+
+            ng = 3
+            area3 = p5 * ( (xp(i,j,2,ng)-xp(i,j,1,ng)) *   &
+                            yp(i,j,3,ng)                   &
+                         -  yp(i,j,2,ng) *                 &
+                           (xp(i,j,3,ng)-xp(i,j,1,ng)) )   &
+                         * areafact(i,j,ng) 
+
+            area_c  = edgearea(i,j) - area1 - area2 - area3
+
+            ! Shift the midpoint such that the area of remaining triangles = area_c
+            w1 = c2*area_c/areafac_c(i,j)    &
+                 + (xdr-xcl)*ydl + (xcr-xdl)*ydr
+            w2 = (xdr-xdl)**2 + (ydr-ydl)**2
+            w1 = w1/w2
+            xdm = xdm + (ydr - ydl) * w1
+            ydm = ydm - (xdr - xdl) * w1
+
+            ! Given shifted midpoint, compute new intersection points
+
+            mdl = (ydm - ydl) / (xdm - xdl)
+            mdr = (ydr - ydm) / (xdr - xdm)
+         
+            if (abs(mdl) > puny) then
+               xicl = xdl - ydl/mdl
+            else
+               xicl = c0
+            endif
+            yicl = c0
+
+            if (abs(mdr) > puny) then
+               xicr = xdr - ydr/mdr
+            else
+               xicr = c0
+            endif
+            yicr = c0
+
+         endif  ! l_fixed_area
 
     !-------------------------------------------------------------------
     ! Locate triangles in BC cell (H for both north and east edges) 
@@ -2387,7 +2432,7 @@
             yp    (i,j,3,ng) = ydl
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          ! TC2a (group 5)
 
@@ -2400,7 +2445,7 @@
             yp    (i,j,3,ng) = ydl
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          ! TC3a (group 6)
             ng = 6
@@ -2412,7 +2457,7 @@
             yp    (i,j,3,ng) = ydm
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          elseif (ydl >= c0 .and. ydr >= c0 .and. ydm < c0) then  ! rare
 
@@ -2427,7 +2472,7 @@
             yp    (i,j,3,ng) = ydl
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          ! TC2b (group 5)
 
@@ -2440,7 +2485,7 @@
             yp    (i,j,3,ng) = yicr
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          ! BC3b (group 6)
 
@@ -2453,7 +2498,7 @@
             yp    (i,j,3,ng) = ydm
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_c(i,j)
 
          elseif (ydl < c0 .and. ydr < c0 .and. ydm < c0) then
 
@@ -2468,7 +2513,7 @@
             yp    (i,j,3,ng) = ycr
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_c(i,j)
 
          ! BC2a (group 5)
 
@@ -2481,7 +2526,7 @@
             yp    (i,j,3,ng) = ydr
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_c(i,j)
 
          ! BC3a (group 6)
 
@@ -2494,7 +2539,7 @@
             yp    (i,j,3,ng) = ydr
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_c(i,j)
 
          elseif (ydl < c0 .and. ydr < c0 .and. ydm >= c0) then  ! rare
 
@@ -2509,7 +2554,7 @@
             yp    (i,j,3,ng) = yicl
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_c(i,j)
 
          ! BC2b (group 5)
 
@@ -2522,7 +2567,7 @@
             yp    (i,j,3,ng) = ydr
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_c(i,j)
 
          ! TC3b (group 6)
 
@@ -2535,7 +2580,7 @@
             yp    (i,j,3,ng) = ydm
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          elseif (ydl >= c0 .and. ydr < c0 .and. ydm >= c0) then
 
@@ -2550,7 +2595,7 @@
             yp    (i,j,3,ng) = ydl
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          ! BC2b (group 5)
 
@@ -2563,7 +2608,7 @@
             yp    (i,j,3,ng) = ydr
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_c(i,j)
 
          ! TC3b (group 6)
 
@@ -2576,7 +2621,7 @@
             yp    (i,j,3,ng) = ydm
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          elseif (ydl >= c0 .and. ydr < c0 .and. ydm < c0) then
 
@@ -2591,7 +2636,7 @@
             yp    (i,j,3,ng) = ydl
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          ! BC2b (group 5)
 
@@ -2604,7 +2649,7 @@
             yp    (i,j,3,ng) = ydr
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_c(i,j)
 
          ! BC3b (group 6)
 
@@ -2617,7 +2662,7 @@
             yp    (i,j,3,ng) = ydm
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_c(i,j)
 
          elseif (ydl < c0 .and. ydr >= c0 .and. ydm >= c0) then
 
@@ -2632,7 +2677,7 @@
             yp    (i,j,3,ng) = yicl
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_c(i,j)
 
          ! TC2b (group 5)
 
@@ -2645,7 +2690,7 @@
             yp    (i,j,3,ng) = yicl
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          ! TC3b (group 6)
 
@@ -2658,7 +2703,7 @@
             yp    (i,j,3,ng) = ydm
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          elseif (ydl < c0 .and. ydr >= c0 .and. ydm < c0) then
 
@@ -2673,7 +2718,7 @@
             yp    (i,j,3,ng) = yicr
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_c(i,j)
 
          ! TC2b (group 5)
 
@@ -2686,7 +2731,7 @@
             yp    (i,j,3,ng) = yicr
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            fluxsign(i,j,ng) = -1
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          ! BC3b (group 6)
 
@@ -2699,7 +2744,7 @@
             yp    (i,j,3,ng) = ydm
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            fluxsign(i,j,ng) = 1
+            areafact(i,j,ng) = areafac_c(i,j)
 
          endif                  ! TC and BC triangles
 
@@ -2708,9 +2753,9 @@
     !-------------------------------------------------------------------
     ! Compute triangle areas with appropriate sign.
     ! These are found by computing the area in scaled coordinates and
-    !  multiplying by a scale factor.
-    ! The resulting area is multiplied by fluxsign, which = 1 for
-    !  fluxes out of the cell and -1 for fluxes into the cell.
+    !  multiplying by a scale factor (areafact).
+    ! Note that the scale factor is positive for fluxes out of the cell 
+    !  and negative for fluxes into the cell.
     !
     ! Note: The triangle area formula below gives A >=0 iff the triangle
     !        points x1, x2, and x3 are taken in counterclockwise order.
@@ -2739,9 +2784,9 @@
                                      (yp(i,j,3,ng)-yp(i,j,1,ng))   &
                                    - (yp(i,j,2,ng)-yp(i,j,1,ng)) *   &
                                      (xp(i,j,3,ng)-xp(i,j,1,ng)) )   &
-                                   * areafac(i,j) * fluxsign(i,j,ng) 
+                                   * areafact(i,j,ng) 
 
-            if (abs(triarea(i,j,ng)) < eps16*areafac(i,j)) then
+            if (abs(triarea(i,j,ng)) < eps16*areafac_c(i,j)) then
                triarea(i,j,ng) = c0
             else
                icells(ng) = icells(ng) + 1 
@@ -2752,33 +2797,25 @@
 
             areasum(i,j) = areasum(i,j) + triarea(i,j,ng)
 
-!lipscomb - bug check - remove later
-
-!!            if (triarea(i,j,ng)/fluxsign(i,j,ng) < c0) then
-!!               print*, 'ATTENTION: Triangle area < 0, m, i, j, ng, A =',   &
-!!                    my_task, i, j, ng, triarea(i,j,ng)/fluxsign(i,j,ng)
-!!            endif
-
          enddo                  ! ij
       enddo                     ! ng
-
 
       if (l_fixed_area) then
        if (bugcheck) then   ! set bugcheck = F to speed up code
          do ij = 1, icellsd
             i = indxid(ij)
             j = indxjd(ij)
-            if (abs(areasum(i,j) - edgearea(i,j)) > eps13*areafac(i,j)) then
+            if (abs(areasum(i,j) - edgearea(i,j)) > eps13*areafac_c(i,j)) then
                print*, ''
                print*, 'Areas do not add up: m, i, j, edge =',   &
                         my_task, i, j, trim(edge)
                print*, 'edgearea =', edgearea(i,j)
                print*, 'areasum =', areasum(i,j)
-               print*, 'areafac =', areafac(i,j)
+               print*, 'areafac_c =', areafac_c(i,j)
                print*, ''
                print*, 'Triangle areas:'
                do ng = 1, ngroups   ! not vector friendly
-                  if (abs(triarea(i,j,ng)) > eps16*areafac(i,j)) then
+                  if (abs(triarea(i,j,ng)) > eps16*abs(areafact(i,j,ng))) then
                      print*, ng, triarea(i,j,ng)
                   endif
                enddo
@@ -2829,9 +2866,7 @@
          enddo                  ! ng
       endif
 
-!lipscomb - bug check - delete later
       if (bugcheck) then
-	
          do ng = 1, ngroups
          do nv = 1, nvert
             do j = jb, je
