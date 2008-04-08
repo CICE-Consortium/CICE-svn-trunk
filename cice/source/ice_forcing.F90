@@ -1736,7 +1736,6 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-          i, j        , &
           ixm,ixx,ixp , & ! record numbers for neighboring months
           recnum      , & ! record number
           maxrec      , & ! maximum record number
@@ -2342,7 +2341,7 @@
 ! !USES:
 !
       use ice_global_reductions
-      use ice_domain, only: nblocks, distrb_info
+      use ice_domain, only: nblocks, distrb_info, blocks_ice
       use ice_flux 
       use ice_grid, only: hm, tlon, tlat, tmask, umask
 !
@@ -2352,22 +2351,22 @@
 !
       integer (kind=int_kind) :: & 
           i, j        , &
-          imx,ixx,ipx , & ! record numbers for neighboring months
+          imx,ipx     , & ! record numbers for neighboring months
           recnum      , & ! record number
           maxrec      , & ! maximum record number
           recslot     , & ! spline slot for current record
           midmonth    , & ! middle day of month
-          dataloc     , & ! = 1 for data located in middle of time interval
-                          ! = 2 for date located at end of time interval
           iblk        , & ! block index
           ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
       real (kind=dbl_kind) :: &
-          sec6hr          , & ! number of seconds in 6 hours
           vmin, vmax
 
-      logical (kind=log_kind) :: readm, read6
+      logical (kind=log_kind) :: readm
 
+      type (block) :: &
+         this_block           ! block information for current block
+      
     !-------------------------------------------------------------------
     ! monthly data 
     !
@@ -2446,6 +2445,12 @@
         enddo
 
       ! AOMIP
+      this_block = get_block(blocks_ice(iblk),iblk)         
+      ilo = this_block%ilo
+      ihi = this_block%ihi
+      jlo = this_block%jlo
+      jhi = this_block%jhi
+
       call compute_shortwave(nx_block, ny_block, &
                              ilo, ihi, jlo, jhi, &
                              TLON (:,:,iblk), &
@@ -2659,7 +2664,7 @@
 !
 ! Reads NCAR pop ocean forcing data set 'pop_frc_gx1v3_010815.nc'
 ! 
-! List of ocean forcing fields: Note that order is important! \\
+! List of ocean forcing fields: Note that order is important!
 ! (order is determined by field list in vname).
 ! 
 ! For ocean mixed layer-----------------------------units 
@@ -2697,7 +2702,6 @@
 !EOP
 !
       integer (kind=int_kind) :: & 
-        i, j, &
         n   , & ! field index
         m   , & ! month index
         nrec, & ! record number for direct access
@@ -2711,8 +2715,7 @@
 
       integer (kind=int_kind) :: &
         fid        , & ! file id 
-        dimid      , & ! dimension id 
-        varid(nfld)    ! variable id 
+        dimid          ! dimension id 
 
       integer (kind=int_kind) :: &
         status  , & ! status flag

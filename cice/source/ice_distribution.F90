@@ -52,6 +52,14 @@
              ice_distributionGetBlockID, &
              create_local_block_ids
 
+! !PUBLIC DATA MEMBERS:
+
+   character (char_len), public :: &
+       processor_shape       ! 'square-pop' (approx) POP default config
+                             ! 'square-ice' like square-pop but better for ice
+                             ! 'slenderX1' (NPX x 1)
+                             ! 'slenderX2' (NPX x 2)
+
 !EOP
 !BOC
 !EOC
@@ -221,6 +229,10 @@
 !
 ! !REVISION HISTORY:
 !  same as module
+!
+! !USES:
+
+   use ice_domain_size
 
 ! !INPUT PARAMETERS:
 
@@ -248,7 +260,7 @@
 
 !----------------------------------------------------------------------
 !
-!  start with an initial guess that is closest to square decomp
+!  start with an initial guess
 !
 !----------------------------------------------------------------------
 
@@ -256,7 +268,19 @@
    nprocs_x = 0
    nprocs_y = 0
 
-   iguess = nint(square)
+   if (processor_shape == 'square-pop') then ! make as square as possible
+      iguess = nint(square)
+      jguess = nprocs/iguess
+   elseif (processor_shape == 'square-ice') then ! better for bipolar ice
+      jguess = nint(square)
+      iguess = nprocs/jguess
+   elseif (processor_shape == 'slenderX1') then ! 1 proc in y direction
+      jguess = 1
+      iguess = nprocs/jguess
+   else                                  ! 2 processors in y direction
+      jguess = min(2, nprocs)
+      iguess = nprocs/jguess
+   endif
 
 !----------------------------------------------------------------------
 !
@@ -265,63 +289,82 @@
 !----------------------------------------------------------------------
 
    proc_loop: do
+   if (processor_shape == 'square-pop') then
       jguess = nprocs/iguess
+   else
+      iguess = nprocs/jguess
+   endif
 
       if (iguess*jguess == nprocs) then ! valid decomp
 
-         !***
          !*** if the blocks can be evenly distributed, it is a
          !*** good decomposition
-         !***
-
          if (mod(nblocks_x,iguess) == 0 .and. &
              mod(nblocks_y,jguess) == 0) then
             nprocs_x = iguess
             nprocs_y = jguess
             exit proc_loop
 
-         !***
          !*** if the blocks can be evenly distributed in a
          !*** transposed direction, it is a good decomposition
-         !***
-
          else if (mod(nblocks_x,jguess) == 0 .and. &
                 mod(nblocks_y,iguess) == 0) then
             nprocs_x = jguess
             nprocs_y = iguess
             exit proc_loop
 
-         !***
          !*** A valid decomposition, but keep searching for
          !***  a better one
-         !***
-
          else
             if (nprocs_x == 0) then
                nprocs_x = iguess
                nprocs_y = jguess
             endif
+            if (processor_shape == 'square-pop') then
+               iguess = iguess - 1
+               if (iguess == 0) then
+                  exit proc_loop
+               else
+                  cycle proc_loop
+               endif
+            else
+               jguess = jguess - 1
+               if (jguess == 0) then
+                  exit proc_loop
+               else
+                  cycle proc_loop
+               endif
+            endif
+         endif
+
+      else ! invalid decomp - keep trying
+
+         if (processor_shape == 'square-pop') then
             iguess = iguess - 1
             if (iguess == 0) then
                exit proc_loop
             else
                cycle proc_loop
             endif
-         endif
-
-      else ! invalid decomp - keep trying
-
-         iguess = iguess - 1
-         if (iguess == 0) then
-            exit proc_loop
          else
-            cycle proc_loop
+            jguess = jguess - 1
+            if (jguess == 0) then
+               exit proc_loop
+            else
+               cycle proc_loop
+            endif
          endif
       endif
+
    end do proc_loop
 
    if (nprocs_x == 0) then
       call abort_ice('ice: Unable to find 2d processor config')
+   endif
+
+   if (my_task == master_task) then
+     write(nu_diag,'(a23,i4,a3,i4)') '  Processors (X x Y) = ', &
+                                        nprocs_x,' x ',nprocs_y
    endif
 
 !----------------------------------------------------------------------

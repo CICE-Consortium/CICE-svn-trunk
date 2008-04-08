@@ -67,7 +67,9 @@
 
 &domain_nml
     nprocs = 4
+  , processor_shape   = 'slenderX2'
   , distribution_type = 'cartesian'
+  , distribution_wght = 'latitude'
   , ew_boundary_type  = 'cyclic'
   , ns_boundary_type  = 'open'
 /

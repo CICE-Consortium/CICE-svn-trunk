@@ -624,7 +624,7 @@
       endif
    else
       call abort_ice &
-                 ('ice_timer_start: attempt to start undefined timer')
+                 ('ice_timer_stop: attempt to stop undefined timer')
                     
    endif
 
