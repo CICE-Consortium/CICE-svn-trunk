@@ -233,6 +233,15 @@
       deallocate(work_g1)
       deallocate(work_g2)
 
+      !-----------------------------------------------------------------
+      ! write additional domain information
+      !-----------------------------------------------------------------
+
+      if (my_task == master_task) then
+        write(nu_diag,'(a26,i6)') '  Block size:  nx_block = ',nx_block
+        write(nu_diag,'(a26,i6)') '               ny_block = ',ny_block
+      endif
+
       end subroutine init_grid1
 
 !=======================================================================
@@ -473,7 +482,7 @@
 !
 ! !DESCRIPTION:
 !
-! POP displaced pole grid and land mask. \\
+! POP displaced pole grid and land mask. 
 ! Grid record number, field and units are: \\
 ! (1) ULAT  (radians)    \\
 ! (2) ULON  (radians)    \\
@@ -481,7 +490,7 @@
 ! (4) HTE   (cm)         \\
 ! (5) HUS   (cm)         \\
 ! (6) HUW   (cm)         \\
-! (7) ANGLE (radians)    \\
+! (7) ANGLE (radians)   
 !
 ! Land mask record number and field is (1) KMT.
 !
@@ -587,7 +596,7 @@
 !
 ! !DESCRIPTION:
 !
-! POP displaced pole grid and land mask. \\
+! POP displaced pole grid and land mask.
 ! Grid record number, field and units are: \\
 ! (1) ULAT  (radians)    \\
 ! (2) ULON  (radians)    \\
@@ -595,7 +604,7 @@
 ! (4) HTE   (cm)         \\
 ! (5) HUS   (cm)         \\
 ! (6) HUW   (cm)         \\
-! (7) ANGLE (radians)    \\
+! (7) ANGLE (radians)
 !
 ! Land mask record number and field is (1) KMT.
 !
@@ -1674,7 +1683,7 @@
 
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (work1,            halo_info, &
-                           field_loc_center, field_type_scalar)
+                           field_loc_center, field_type_vector)
       call ice_timer_stop(timer_bound)
 
       call to_tgrid(work1,work)

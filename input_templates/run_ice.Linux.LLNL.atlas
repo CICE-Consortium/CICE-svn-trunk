@@ -1,0 +1,28 @@
+#! /bin/csh -f 
+# ------------ LLNL Peloton  : atlas ------------
+#MSUB -l walltime=00:30:00 
+#MSUB -A uhrccs           
+#MSUB -q pdebug
+##MSUB -q pbatch
+#MSUB -m b              
+#MSUB -m e             
+#MSUB -N coupled_gx1
+#MSUB -o cpl0.4.out.atlas.%j
+#MSUB -e cpl0.4.err.atlas.%j
+#MSUB -l nodes=2
+
+setenv ARCH `uname -s`                           # architecture
+set  stamp   = `date -u '+%y%m%d%H%M%S'`
+setenv ICE_LOG_FILE ice.log.${stamp}
+
+if ( $ARCH == 'Linux') then
+source /usr/global/tools/dotkit/init.csh
+#use mvapich099pgi
+use pgi706
+endif
+
+cd /p/lscratchb/hunke1/rundir4.tp1
+if ( $ARCH == 'Linux')  srun -N2 -n8 -c1 ./cice  >&! $ICE_LOG_FILE
+
+exit 0
+

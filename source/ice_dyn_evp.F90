@@ -988,6 +988,8 @@
       ! Initialize
       !-----------------------------------------------------------------
 
+      str(:,:,:) = c0
+
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
