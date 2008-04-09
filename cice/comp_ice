@@ -23,16 +23,24 @@ setenv RES gx3 ; setenv GRID 100x116
 #setenv RES gx1 ; setenv GRID 320x384
 #setenv RES tx1 ; setenv GRID 360x240
 
-### Decomposition (cartesian distribution, BPX=BPY=1).
-### If using more than one block per processor, or
-### if using a load-balanced distribution (ice_in), these 
-### parameters set the initial decomposition prior to optimization;
-### the actual decomposition may be very different!
-### nprocs in ice_in must equal NPX*NPY ###
-setenv NPX    2   # number of processors in x direction
-setenv NPY    2   # number of processors in y direction
-setenv BPX    1   # number of blocks per processor in x direction
-setenv BPY    1   # number of blocks per processor in y direction
+set NXGLOB = `echo $GRID | sed s/x.\*//`
+set NYGLOB = `echo $GRID | sed s/.\*x//`
+
+# Recommendations:
+#   NTASK equals nprocs in ice_in 
+#   use processor_shape = slenderX1 or slenderX2 in ice_in
+#   one per processor with distribution_type='cartesian' or
+#   squarish blocks with distribution_type='rake'
+# If BLCKX (BLCKY) does not divide NXGLOB (NYGLOB) evenly, padding 
+# will be used on the right (top) of the grid.
+setenv NTASK      4       # total number of processors
+setenv BLCKX     50       # x-dimension of blocks ( not including )
+setenv BLCKY     58       # y-dimension of blocks (  ghost cells  )
+
+# may need to increase MXBLCKS with rake distribution or padding
+@ a = $NXGLOB * $NYGLOB ; @ b = $BLCKX * $BLCKY * $NTASK  
+@ m = $a / $b ; setenv MXBLCKS $m
+#setenv MXBLCKS 37 # if necessary (code will print proper value)
 
 ### Specialty code
 setenv USE_ESMF no        # set to yes for ESMF runs
@@ -73,22 +81,6 @@ cd $RSTDIR
 cp $SRCDIR/input_templates/$RES/iced_$RES* .
 if !(-e ice.restart_file) cp $SRCDIR/input_templates/$RES/ice.restart_file .
 
-### Calculate processor tiling
-@ ntask = $NPX * $NPY ; setenv NTASK $ntask
-set NXGLOB = `echo $GRID | sed s/x.\*//`
-set NYGLOB = `echo $GRID | sed s/.\*x//`
-### x grid decomposition
-@ a = $NXGLOB / $NPX ; @ rem1 = $NXGLOB % $NPX ; @ b = $a + 1
-if ($rem1 == 0) setenv BLCKX $a ; if ($rem1 != 0) setenv BLCKX $b
-@ a = $BLCKX / $BPX  ; @ rem2 = $BLCKX % $BPX  ; @ b = $a + 1
-if ($rem2 == 0) setenv BLCKX $a ; if ($rem2 != 0) setenv BLCKX $b
-### y grid decomposition
-@ a = $NYGLOB / $NPY ; @ rem1 = $NYGLOB % $NPY ; @ b = $a + 1
-if ($rem1 == 0) setenv BLCKY $a ; if ($rem1 != 0) setenv BLCKY $b
-@ a = $BLCKY / $BPY  ; @ rem1 = $BLCKY % $BPY  ; @ b = $a + 1
-if ($rem1 == 0) setenv BLCKY $a ; if ($rem1 != 0) setenv BLCKY $b
-### max blocks
-@ m = $BPX * $BPY ; setenv MXBLCKS $m
 if ($NTASK == 1) then
    setenv COMMDIR serial
 else
@@ -121,8 +113,8 @@ gmake VPFILE=Filepath EXEC=$EXEDIR/cice \
 cd ..
 pwd                                         
 echo NTASK = $NTASK
-echo "global N, N procs, N blocks/proc, block_size (requested)" 
-echo "x    $NXGLOB,    $NPX,           $BPX,          $BLCKX"
-echo "y    $NYGLOB,    $NPY,           $BPY,          $BLCKY"
+echo "global N, block_size" 
+echo "x    $NXGLOB,    $BLCKX"
+echo "y    $NYGLOB,    $BLCKY"
 echo max_blocks = $MXBLCKS
 
