@@ -826,6 +826,8 @@
 !
 ! !USES:
 !
+	use ice_therm_vertical, only: heat_capacity
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -993,6 +995,31 @@
          fswint(i,j)  = fswpen(i,j) - fswthru(i,j)
 
       enddo                     ! ij
+
+      !----------------------------------------------------------------
+      ! if zero-layer model (no heat capacity), no SW is absorbed in ice
+      ! interior, so add to surface absorption
+      !----------------------------------------------------------------
+
+      if (.not. heat_capacity) then
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+        do ij = 1, icells
+           i = indxi(ij)
+           j = indxj(ij)
+
+           ! SW absorbed at snow/ice surface
+           fswsfc(i,j) = fswsfc(i,j) + fswint(i,j)
+
+           ! SW absorbed in ice interior (nilyr = 1)
+           fswint(i,j)   = c0
+           Iswabs(i,j,1) = c0
+
+        enddo                     ! ij
+
+      endif                       ! heat_capacity
 
       end subroutine absorbed_solar
 
@@ -1402,7 +1429,7 @@
              icells_DE, indxi_DE, indxj_DE, fnidr, coszen, &
              swvdr,     swvdf,    swidr,    swidf, srftyp, &
              hs,        rhosnw,   rsnw,     hi,    hp,     &
-             fi,                     alvdr,    alvdf,       &
+             fi,                  alvdr,    alvdf,       &
                                   alidr,    alidf,       &
                                   fswsfc,   fswint,      &
                                   fswthru,  Sswabs,      &
@@ -1419,6 +1446,8 @@
 ! update:  8 February 2007
 !
 ! !USES:
+!
+      use ice_therm_vertical, only: heat_capacity
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -2474,6 +2503,33 @@
             Iswabs(i,j,k) = Iswabs(i,j,k) + Iabs(ij,k)*fi(i,j)
          enddo                  ! ij
       enddo                     ! k
+
+      !----------------------------------------------------------------
+      ! if ice has zero heat capacity, no SW can be absorbed 
+      ! in the ice/snow interior, so add to surface absorption.
+      ! Note: nilyr = nslyr = 1 for this case
+      !----------------------------------------------------------------
+
+      if (.not. heat_capacity) then
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+        do ij = 1, icells_DE
+           i = indxi_DE(ij)
+           j = indxj_DE(ij)
+
+           ! SW absorbed at snow/ice surface
+           fswsfc(i,j) = fswsfc(i,j) + Iswabs(i,j,1) + Sswabs(i,j,1)
+
+           ! SW absorbed in ice interior
+           fswint(i,j)   = c0
+           Iswabs(i,j,1) = c0
+           Sswabs(i,j,1) = c0
+
+        enddo                     ! ij
+
+      endif                       ! heat_capacity
 
       end subroutine compute_dEdd
 

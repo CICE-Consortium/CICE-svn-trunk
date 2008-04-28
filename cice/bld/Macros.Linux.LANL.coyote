@@ -31,10 +31,10 @@ endif
 
 ifeq ($(NETCDF), yes)
    CPPDEFS :=  $(CPPDEFS) -Dncdf
-#   INCLDIR := $(INCLDIR) -I/usr/projects/climate/maltrud/local/include 
-#   SLIBS   := $(SLIBS) -L/usr/projects/climate/maltrud/local/lib -lnetcdf
-   INCLDIR := $(INCLDIR) -I/scratch2/bzhao/netcdf-3.6.1/include
-   SLIBS   := $(SLIBS) -L/scratch2/bzhao/netcdf-3.6.1/lib -lnetcdf
+#   INCLDIR := $(INCLDIR) -I/usr/projects/climate/maltrud/local/include_coyote
+#   SLIBS   := $(SLIBS) -L/usr/projects/climate/maltrud/local/lib_coyote -lnetcdf
+   INCLDIR := $(INCLDIR) -I/usr/projects/climate/bzhao/netcdf-3.6.1/include
+   SLIBS   := $(SLIBS) -L/usr/projects/climate/bzhao/netcdf-3.6.1/lib -lnetcdf
 endif
 
 ifeq ($(USE_ESMF), yes)

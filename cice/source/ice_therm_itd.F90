@@ -506,7 +506,7 @@
       !-----------------------------------------------------------------
 
       do n = 1, ncat
-         do ij = 1, iflag   ! remap_flag = .true.
+         do ij = 1, icells
             donor(ij,n) = 0
             daice(ij,n) = c0
             dvice(ij,n) = c0
@@ -834,16 +834,18 @@
 !
 ! !INTERFACE:
 !
-      subroutine add_new_ice (nx_block,  ny_block, &
-                              icells,              &
-                              indxi,     indxj,    &
-                              tmask,     dt,       &
-                              aicen,     trcrn,    &
-                              vicen,     eicen,    &
-                              aice0,     aice,     &
-                              frzmlt,    frazil,   &
-                              frz_onset, yday,     &
-                              Tf,        l_stop,   &
+      subroutine add_new_ice (nx_block,  ny_block,   &
+                              icells,                &
+                              indxi,     indxj,      &
+                              tmask,     dt,         &
+                              aicen,     trcrn,      &
+                              vicen,     eicen,      &
+                              aice0,     aice,       &
+                              frzmlt,    frazil,     &
+                              frz_onset, yday,       &
+                              fresh,     fresh_hist, &
+                              fsalt,     fsalt_hist, &
+                              Tf,        l_stop,     &
                               istop,     jstop)
 !
 ! !USES:
@@ -852,6 +854,7 @@
                          column_conservation_check
       use ice_state, only: nt_Tsfc, nt_iage
       use ice_age, only: tr_iage
+      use ice_flux, only: update_ocn_f
 
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -891,8 +894,12 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
-         aice0 , & ! concentration of open water
-         frazil    ! frazil ice growth        (m/step-->cm/day)
+         aice0     , & ! concentration of open water
+         frazil    , & ! frazil ice growth        (m/step-->cm/day)
+         fresh     , & ! fresh water flux to ocean (kg/m^2/s)
+         fresh_hist, & ! fresh water flux to ocean (kg/m^2/s)
+         fsalt     , & ! salt flux to ocean (kg/m^2/s)
+         fsalt_hist    ! salt flux to ocean (kg/m^2/s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout), optional :: &
@@ -1017,14 +1024,15 @@
       !       is NOT included in fluxes fresh and fsalt.
       !-----------------------------------------------------------------
 
-!!!         dfresh = -rhoi*vi0new(ij)/dt  ! if POP had not already adjusted
-                                           ! itself based on frzmlt
-!!!         dfsalt = ice_ref_salinity*p001*dfresh
+         if (update_ocn_f) then
+            dfresh = -rhoi*vi0new(ij)/dt 
+            dfsalt = ice_ref_salinity*p001*dfresh
 
-!!!         fresh(i,j)      = fresh(i,j)      + dfresh
-!!!         fresh_hist(i,j) = fresh_hist(i,j) + dfresh
-!!!         fsalt(i,j)      = fsalt(i,j)      + dfsalt
-!!!         fsalt_hist(i,j) = fsalt_hist(i,j) + dfsalt
+            fresh(i,j)      = fresh(i,j)      + dfresh
+            fresh_hist(i,j) = fresh_hist(i,j) + dfresh
+            fsalt(i,j)      = fsalt(i,j)      + dfsalt
+            fsalt_hist(i,j) = fsalt_hist(i,j) + dfsalt
+         endif
 
       !-----------------------------------------------------------------
       ! Decide how to distribute the new ice.

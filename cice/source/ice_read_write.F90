@@ -529,7 +529,7 @@
 !
       use ice_domain
       use ice_gather_scatter
-      use ice_work, only: work_g1
+      use ice_work, only: work_g1, work_g2
       use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -576,6 +576,14 @@
          allocate(work_g1(1,1))   ! to save memory
       endif
 
+#ifdef ORCA_GRID
+      if (my_task == master_task) then
+         allocate(work_g2(nx_global,ny_global))
+      else
+         allocate(work_g2(1,1))   ! to save memory
+      endif
+#endif
+
       if (my_task == master_task) then
 
         !-------------------------------------------------------------
@@ -593,9 +601,16 @@
        ! Read global array 
        !--------------------------------------------------------------
 
+#ifndef ORCA_GRID
          status = nf90_get_var( fid, varid, work_g1, &
                start=(/1,1,nrec/), & 
                count=(/nx_global,ny_global,1/) )
+#else
+         status = nf90_get_var( fid, varid, work_g2, &
+               start=(/1,1,nrec/), & 
+               count=(/nx_global+2,ny_global+1,1/) )
+	 work_g1=work_g2(2:nx_global+1,1:ny_global)
+#endif
 
       endif                     ! my_task = master_task
 
@@ -635,6 +650,9 @@
       endif
 
       deallocate(work_g1)
+#ifdef ORCA_GRID
+      deallocate(work_g2)
+#endif
 
 #else
       work = c0 ! to satisfy intent(out) attribute
@@ -663,6 +681,9 @@
 ! !USES:
 ! 
       use ice_exit
+#ifdef ORCA_GRID
+      use ice_work, only: work_g3
+#endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -698,6 +719,15 @@
          dimname            ! dimension name            
 
 !
+#ifdef ORCA_GRID
+      if (my_task == master_task) then
+          allocate(work_g3(nx_global+2,ny_global+1))
+       else
+          allocate(work_g3(1,1))   ! to save memory
+       endif
+
+      work_g3(:,:) = c0     
+#endif
       work_g(:,:) = c0
 
       if (my_task == master_task) then
@@ -717,10 +747,16 @@
        ! Read global array 
        !--------------------------------------------------------------
  
+#ifndef ORCA_GRID
          status = nf90_get_var( fid, varid, work_g, &
                start=(/1,1,nrec/), & 
                count=(/nx_global,ny_global,1/) )
-
+#else
+         status = nf90_get_var( fid, varid, work_g3, &
+               start=(/1,1,nrec/), &
+               count=(/nx_global+2,ny_global+1,1/) )
+         work_g=work_g3(2:nx_global+1,1:ny_global)
+#endif
       endif                     ! my_task = master_task
 
     !-------------------------------------------------------------------
@@ -744,6 +780,10 @@
          write(nu_diag,*) ''
 
       endif
+
+#ifdef ORCA_GRID
+      deallocate(work_g3)
+#endif
 
 #else
       work_g = c0 ! to satisfy intent(out) attribute

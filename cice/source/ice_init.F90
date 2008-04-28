@@ -79,6 +79,7 @@
       use ice_exit
       use ice_itd, only: kitd, kcatbound
       use ice_ocean, only: oceanmixed_ice
+      use ice_flux, only: Tfrzpt, update_ocn_f
       use ice_forcing, only: &
           ycycle,          fyear_init,    dbug, &
           atm_data_type,   atm_data_dir,  precip_units, &
@@ -95,6 +96,7 @@
       use ice_transport_driver, only: advection
       use ice_age, only: tr_iage, restart_age
       use ice_meltpond, only: tr_pond, restart_pond
+      use ice_therm_vertical, only: calc_Tsfc, heat_capacity
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -112,28 +114,29 @@
       !-----------------------------------------------------------------
 
       namelist /ice_nml/ &
-        year_init,      istep0,          dt,            npt, &
-        diagfreq,       days_per_year,   &       
-        print_points,   print_global,    diag_type,     diag_file, &
-        history_format, &
-        histfreq,       hist_avg,        history_dir,   history_file, &
-        histfreq_n,     dumpfreq,        dumpfreq_n,    restart_file, &
-        restart,        restart_dir,     pointer_file,  ice_ic, &
-        grid_format,    grid_type,       grid_file,     kmt_file,      &
-        kitd,           kcatbound, &
-        kdyn,           ndyn_dt,         ndte,          evp_damping, &
-        yield_curve,    advection, &
-        kstrength,      krdg_partic,     krdg_redist,   shortwave, &
-        R_ice,          R_pnd,           R_snw, &
-        albicev,        albicei,         albsnowv,      albsnowi, &
-        albedo_type,    atmbndy,         fyear_init,    ycycle , &
-        atm_data_format, &
-        atm_data_type,  atm_data_dir,    calc_strair,   precip_units, &
-        oceanmixed_ice, sss_data_type,   sst_data_type, ocn_data_format, &
-        ocn_data_dir,   oceanmixed_file, restore_sst,   trestore, &
-        latpnt,         lonpnt,          dbug,             &
+        year_init,      istep0,          dt,            npt,            &
+        diagfreq,       days_per_year,                                  &
+        print_points,   print_global,    diag_type,     diag_file,      &
+        history_format,                                                 &
+        histfreq,       hist_avg,        history_dir,   history_file,   &
+        histfreq_n,     dumpfreq,        dumpfreq_n,    restart_file,   &
+        restart,        restart_dir,     pointer_file,  ice_ic,         &
+        grid_format,    grid_type,       grid_file,     kmt_file,       &
+        kitd,           kcatbound,                                      &
+        kdyn,           ndyn_dt,         ndte,          evp_damping,    &
+        yield_curve,    advection,                                      &
+        kstrength,      krdg_partic,     krdg_redist,   shortwave,      &
+        R_ice,          R_pnd,           R_snw,                         &
+        albicev,        albicei,         albsnowv,      albsnowi,       &
+        albedo_type,    heat_capacity,   calc_Tsfc,     Tfrzpt,         &
+        update_ocn_f,   atmbndy,        fyear_init,      ycycle,        &
+        atm_data_format,                                                &
+        atm_data_type,  atm_data_dir,    calc_strair,   precip_units,   &
+        oceanmixed_ice, sss_data_type,   sst_data_type, ocn_data_format,&
+        ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
+        latpnt,         lonpnt,          dbug,                          &
 #ifndef SEQ_MCT
-        runid,          runtype, &
+        runid,          runtype,                                        &
 #endif
         incond_dir,     incond_file
 
@@ -189,6 +192,10 @@
       advection  = 'remap'   ! incremental remapping transport scheme
       shortwave = 'default'  ! or 'dEdd' (delta-Eddington)
       albedo_type = 'default'! or 'constant'
+      heat_capacity = .true. ! nonzero heat capacity (F => 0-layer thermo)
+      calc_Tsfc = .true.     ! calculate surface temperature
+      Tfrzpt    = 'linear_S' ! ocean freezing temperature, 'constant'=-1.8C
+      update_ocn_f = .false. ! include fresh water and salt fluxes for frazil
       R_ice     = 0.00_dbl_kind   ! tuning parameter for sea ice
       R_pnd     = 0.00_dbl_kind   ! tuning parameter for ponded sea ice
       R_snw     = 0.00_dbl_kind   ! tuning parameter for snow over sea ice
@@ -312,6 +319,16 @@
       if (trim(atm_data_type) == 'monthly' .and. calc_strair) &
          calc_strair = .false.
 
+      if (trim(atm_data_type) == 'hadgem' .and. & 
+             trim(precip_units) /= 'mks') then
+         if (my_task == master_task) &
+         write (nu_diag,*) &
+         'WARNING: HadGEM atmospheric data chosen with wrong precip_units'
+         write (nu_diag,*) &
+         'WARNING: Changing precip_units to mks (i.e. kg/m2 s).'
+         precip_units='mks'
+      endif
+
       call broadcast_scalar(days_per_year,      master_task)
       call broadcast_scalar(year_init,          master_task)
       call broadcast_scalar(istep0,             master_task)
@@ -354,6 +371,7 @@
       call broadcast_scalar(advection,          master_task)
       call broadcast_scalar(shortwave,          master_task)
       call broadcast_scalar(albedo_type,        master_task)
+      call broadcast_scalar(heat_capacity,      master_task)
       call broadcast_scalar(R_ice,              master_task)
       call broadcast_scalar(R_pnd,              master_task)
       call broadcast_scalar(R_snw,              master_task)
@@ -368,6 +386,9 @@
       call broadcast_scalar(atm_data_type,      master_task)
       call broadcast_scalar(atm_data_dir,       master_task)
       call broadcast_scalar(calc_strair,        master_task)
+      call broadcast_scalar(calc_Tsfc,          master_task)
+      call broadcast_scalar(Tfrzpt,             master_task)
+      call broadcast_scalar(update_ocn_f,       master_task)
       call broadcast_scalar(precip_units,       master_task)
       call broadcast_scalar(oceanmixed_ice,     master_task)
       call broadcast_scalar(ocn_data_format,    master_task)
@@ -489,6 +510,8 @@
          write(nu_diag,1000) ' albicei                   = ', albicei
          write(nu_diag,1000) ' albsnowv                  = ', albsnowv
          write(nu_diag,1000) ' albsnowi                  = ', albsnowi
+         write(nu_diag,1010) ' heat_capacity             = ', & 
+                               heat_capacity
          write(nu_diag,1030) ' atmbndy                   = ', &
                                trim(atmbndy)
 
@@ -498,6 +521,9 @@
          write(nu_diag,*)    ' atm_data_type             = ', &
                                trim(atm_data_type)
          write(nu_diag,1010) ' calc_strair               = ', calc_strair
+         write(nu_diag,1010) ' calc_Tsfc                 = ', calc_Tsfc
+         write(nu_diag,*)    ' Tfrzpt                    = ', trim(Tfrzpt)
+         write(nu_diag,1010) ' update_ocn_f              = ', update_ocn_f
          if (trim(atm_data_type) /= 'default') then
             write(nu_diag,*) ' atm_data_dir              = ', &
                                trim(atm_data_dir)
@@ -603,6 +629,7 @@
       use ice_exit
       use ice_age, only: tr_iage
       use ice_meltpond, only: tr_pond
+      use ice_therm_vertical, only: heat_capacity
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -617,17 +644,41 @@
       ! Check number of layers in ice and snow.
       !-----------------------------------------------------------------
 
-      if (nilyr < 1) then
-         write (nu_diag,*) 'nilyr =', nilyr
-         write (nu_diag,*) 'Must have at least one ice layer'
-         call abort_ice('ice_init: Not enough ice layers')
-      endif
+      if (my_task == master_task) then
+ 
+         if (nilyr < 1) then
+            write (nu_diag,*) 'nilyr =', nilyr
+            write (nu_diag,*) 'Must have at least one ice layer'
+            call abort_ice ('ice_init: Not enough ice layers')
+         endif
 
-      if (nslyr < 1) then
-         write (nu_diag,*) 'nslyr =', nslyr
-         write (nu_diag,*) 'Must have at least one snow layer'
-         call abort_ice('ice_init: Not enough snow layers')
-      endif
+         if (nslyr < 1) then
+            write (nu_diag,*) 'nslyr =', nslyr
+            write (nu_diag,*) 'Must have at least one snow layer'
+            call abort_ice('ice_init: Not enough snow layers')
+         endif
+
+         if (.not.heat_capacity) then
+
+            write (nu_diag,*) 'WARNING - Zero-layer thermodynamics'
+
+            if (nilyr > 1) then
+               write (nu_diag,*) 'nilyr =', nilyr
+               write (nu_diag,*)        &
+                    'Must have nilyr = 1 if heat_capacity = F'
+               call abort_ice('ice_init: Too many ice layers')
+            endif
+
+            if (nslyr > 1) then
+               write (nu_diag,*) 'nslyr =', nslyr
+               write (nu_diag,*)        &
+                    'Must have nslyr = 1 if heat_capacity = F'
+               call abort_ice('ice_init: Too many snow layers')
+            endif
+
+         endif   ! heat_capacity = F
+
+      endif      ! my_task
 
       !-----------------------------------------------------------------
       ! Set tracer types
@@ -722,7 +773,7 @@
 ! !USES:
 !
       use ice_state, only: nt_Tsfc
-      use ice_therm_vertical, only: Tmlt
+      use ice_therm_vertical, only: heat_capacity, calc_Tsfc, Tmlt
       use ice_itd, only: ilyr1, slyr1, hin_max
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -860,9 +911,10 @@
          enddo                  ! j
 
 
-         ! ice volume, snow volume, surface temperature, other tracers
-
          do n = 1, ncat
+
+            ! ice volume, snow volume
+
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -874,45 +926,96 @@
                vicen(i,j,n) = hinit(n) * ainit(n) ! m
                vsnon(i,j,n) =min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
 
-               ! surface temperature
-               trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) ! deg C
             enddo               ! ij
+
+
+            ! surface temperature
+
+            if (calc_Tsfc) then
+        
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) !deg C
+
+               enddo
+
+            else    ! Tsfc is not calculated by the ice model
+
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  trcrn(i,j,nt_Tsfc,n) = Tf(i,j)   ! not used
+               enddo
+
+            endif       ! calc_Tsfc
+
+            ! other tracers (none at present)
+
+
+            if (heat_capacity) then
 
             ! ice energy
 
-            do k = 1, nilyr
+               do k = 1, nilyr
+                  do ij = 1, icells
+                     i = indxi(ij)
+                     j = indxj(ij)
+
+                     ! assume linear temp profile and compute enthalpy
+                     slope = Tf(i,j) - trcrn(i,j,nt_Tsfc,n)
+                     Ti = trcrn(i,j,nt_Tsfc,n) &
+                        + slope*(real(k,kind=dbl_kind)-p5) &
+                                /real(nilyr,kind=dbl_kind)
+
+                     eicen(i,j,ilyr1(n)+k-1) = &
+                          -(rhoi * (cp_ice*(Tmlt(k)-Ti) &
+                          + Lfresh*(c1-Tmlt(k)/Ti) - cp_ocn*Tmlt(k))) &
+                          * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+
+                  enddo            ! ij
+               enddo               ! nilyr
+
+               ! snow energy
+   
+               do k = 1, nslyr
+                  do ij = 1, icells
+                     i = indxi(ij)
+                     j = indxj(ij)
+
+                     Ti = min(c0, trcrn(i,j,nt_Tsfc,n))
+                     esnon(i,j,slyr1(n)+k-1) = -rhos*(Lfresh - cp_ice*Ti) &
+                                               *vsnon(i,j,n) &
+                                               /real(nslyr,kind=dbl_kind)
+                  enddo            ! ij
+               enddo               ! nslyr
+
+            else  ! one layer with zero heat capacity
+
+               ! ice energy
+               k = 1
+
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)
-
-                  ! assume linear temp profile and compute enthalpy
-                  slope = Tf(i,j) - trcrn(i,j,nt_Tsfc,n)
-                  Ti = trcrn(i,j,nt_Tsfc,n) &
-                     + slope*(real(k,kind=dbl_kind)-p5) &
-                             /real(nilyr,kind=dbl_kind)
 
                   eicen(i,j,ilyr1(n)+k-1) = &
-                       -(rhoi * (cp_ice*(Tmlt(k)-Ti) &
-                       + Lfresh*(c1-Tmlt(k)/Ti) - cp_ocn*Tmlt(k))) &
-                       * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
-
+                          - rhoi * Lfresh * vicen(i,j,n)
+   
                enddo            ! ij
-            enddo               ! nilyr
 
-            ! snow energy
-
-            do k = 1, nslyr
+               ! snow energy
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)
+                  esnon(i,j,slyr1(n)+k-1) = & 
+                          - rhos * Lfresh * vsnon(i,j,n)
 
-                  Ti = min(c0, trcrn(i,j,nt_Tsfc,n))
-                  esnon(i,j,slyr1(n)+k-1) = -rhos*(Lfresh - cp_ice*Ti) &
-                                            *vsnon(i,j,n) &
-                                            /real(nslyr,kind=dbl_kind)
                enddo            ! ij
-            enddo               ! nslyr
-            
+
+
+            endif               ! heat_capacity
+
          enddo                  ! ncat
 
       endif                     ! ice_ic

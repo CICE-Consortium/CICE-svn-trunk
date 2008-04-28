@@ -42,6 +42,7 @@
   , albicei      = 0.36
   , albsnowv     = 0.98
   , albsnowi     = 0.70 
+  , heat_capacity= .true.
   , atmbndy      = 'default'
   , fyear_init   = 1981
   , ycycle       = 1
@@ -49,7 +50,10 @@
   , atm_data_type= 'LYq'
   , atm_data_dir = '/scratch2/eclare/DATA/gx1v3/LargeYeager/'
   , calc_strair  = .true.
+  , calc_Tsfc    = .true.
   , precip_units = 'mm_per_sec'
+  , Tfrzpt       = 'linear_S'
+  , update_ocn_f = .false.
   , oceanmixed_ice = .true.
   , ocn_data_format = 'bin'
   , sss_data_type= 'default'
@@ -67,8 +71,8 @@
 
 &domain_nml
     nprocs = 8
-  , processor_shape   = 'slenderX2'
-  , distribution_type = 'cartesian'
+  , processor_shape   = 'square-ice'
+  , distribution_type = 'rake'
   , distribution_wght = 'latitude'
   , ew_boundary_type  = 'cyclic'
   , ns_boundary_type  = 'open'
@@ -82,7 +86,19 @@
 /
 
 &icefields_nml
-    f_hi        = .true.
+    f_tmask     = .true.
+  , f_tarea     = .true.
+  , f_uarea     = .true.
+  , f_dxt       = .false.
+  , f_dyt       = .false.
+  , f_dxu       = .false.
+  , f_dyu       = .false.
+  , f_HTN       = .false.
+  , f_HTE       = .false.
+  , f_ANGLE     = .true.
+  , f_ANGLET    = .true.
+  , f_bounds    = .false.
+  , f_hi        = .true.
   , f_hs        = .true. 
   , f_Tsfc      = .true. 
   , f_aice      = .true. 
@@ -129,6 +145,9 @@
   , f_fhocn_ai  = .true. 
   , f_fswthru   = .false. 
   , f_fswthru_ai= .true. 
+  , f_fsurf_ai   = .false.
+  , f_fcondtop_ai= .false.
+  , f_fmeltt_ai  = .false. 
   , f_strairx   = .true. 
   , f_strairy   = .true. 
   , f_strtltx   = .false. 
@@ -161,4 +180,8 @@
   , f_iage      = .false.
   , f_aicen     = .false.
   , f_vicen     = .false.
+  , f_fsurfn_ai    = .false.
+  , f_fcondtopn_ai = .false.
+  , f_fmelttn_ai   = .false.
+  , f_flatn_ai     = .false.
 /

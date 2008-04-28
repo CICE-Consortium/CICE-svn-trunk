@@ -274,8 +274,9 @@
 
       if (my_task == master_task) then
          read (nu_restart) istep0,time,time_forc
-         write(nu_diag,*) 'read ',pointer_file(1:lenstr(pointer_file))
-         write(nu_diag,*) 'restart read at istep=',istep0,time,time_forc
+         write(nu_diag,*) 'Read ',pointer_file(1:lenstr(pointer_file))
+         write(nu_diag,*) 'Using restart dump=', trim(filename)
+         write(nu_diag,*) 'Restart read at istep=',istep0,time,time_forc
       endif
 
       call broadcast_scalar(istep0,master_task)

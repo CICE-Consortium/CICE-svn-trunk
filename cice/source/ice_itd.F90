@@ -64,7 +64,7 @@
          hi_min = p01    ! minimum ice thickness allowed (m)
 
       real (kind=dbl_kind) :: &
-         hin_max(0:ncat) ! category limits                (m)
+         hin_max(0:ncat) ! category limits (m)
 
       character (len=35) :: c_hi_range(ncat)
 
@@ -74,14 +74,9 @@
 ! intended to be used for particular numerical implementations
 ! of category conversions in the ice thickness distribution.
 ! hi_min is a more general purpose parameter, but is specifically
-! for maintaining stability in the thermodynamics.  Currently,
-! hi_min = 0.1 m
+! for maintaining stability in the thermodynamics.
 ! hin_max(0) = 0.1 m for the delta function itd
 ! hin_max(0) = 0.0 m for linear remapping
-!
-! similarly, there are two values of minimum snow thickness
-! (the other is defined in ice_vthermo.H since it is used only
-! for thermo.)
 !
 ! Also note that the upper limit on the thickest category
 ! is only used for the linear remapping scheme
@@ -1613,9 +1608,9 @@
                               fresh,       fresh_hist, &
                               fsalt,       fsalt_hist, &
                               fhocn,       fhocn_hist, &
-                              l_stop,                  &
-                              istop,       jstop,      &
-                              l_limit_aice_in)
+                              heat_capacity, l_stop,     &
+                              istop,         jstop,      &
+                              limit_aice_in)
 !
 ! !DESCRIPTION:
 !
@@ -1667,6 +1662,9 @@
       integer (kind=int_kind), dimension(ntrcr), intent(in) :: & 
          trcr_depend  ! tracer dependency information
 
+      logical (kind=log_kind), intent(in) :: &
+         heat_capacity   ! if false, ice and snow have zero heat capacity
+
       logical (kind=log_kind), intent(out) :: &
          l_stop    ! if true, abort on return
 
@@ -1684,8 +1682,8 @@
          fhocn_hist   ! net heat flux to ocean     (W/m^2)
 
       logical (kind=log_kind), intent(in), optional ::   &
-         l_limit_aice_in  ! if false, allow aice to be out of bounds
-                          ! may want to allow this for unit tests
+         limit_aice_in      ! if false, allow aice to be out of bounds
+                            ! may want to allow this for unit tests
 !    
 !EOP
 !
@@ -1703,16 +1701,16 @@
          dfhocn       ! zapped energy flux ( W/m^2)
 
       logical (kind=log_kind) ::   &
-         l_limit_aice  ! if true, check for aice out of bounds
+         limit_aice         ! if true, check for aice out of bounds
 
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
 
-      if (present(l_limit_aice_in)) then
-         l_limit_aice = l_limit_aice_in
+      if (present(limit_aice_in)) then
+         limit_aice = limit_aice_in
       else
-         l_limit_aice = .true.
+         limit_aice = .true.
       endif
 
       l_stop = .false.
@@ -1728,7 +1726,7 @@
                            aice,     aice0)
 
 
-      if (l_limit_aice) then  ! check for aice out of bounds
+      if (limit_aice) then  ! check for aice out of bounds
       
          do j = jlo,jhi
          do i = ilo,ihi
@@ -1752,7 +1750,7 @@
             enddo
             return
          endif                  ! l_stop
-      endif                     ! l_limit_aice
+      endif                     ! limit_aice
 
       !-----------------------------------------------------------------
       ! Identify grid cells with ice.
@@ -1791,7 +1789,7 @@
       ! Zero out ice categories with very small areas.
       !-----------------------------------------------------------------
 
-      if (l_limit_aice) then
+      if (limit_aice) then
          call zap_small_areas (nx_block, ny_block, &
                                ilo, ihi, jlo, jhi, &
                                dt,              &
@@ -1822,6 +1820,23 @@
            fhocn     (:,:) = fhocn(:,:)      + dfhocn(:,:)
       if (present(fhocn_hist)) &
            fhocn_hist(:,:) = fhocn_hist(:,:) + dfhocn(:,:)
+
+      !----------------------------------------------------------------
+      ! If using zero-layer model (no heat capacity), check that the 
+      ! energy of snow and ice is correct. 
+      !----------------------------------------------------------------
+
+      if (.not. heat_capacity) then
+
+         call zerolayer_check(nx_block,    ny_block,   &
+                              icells,  indxi,   indxj, &
+                              aicen,                   &
+                              vicen,       vsnon,      &
+                              eicen,       esnon,      &
+                              l_stop,                  &
+                              istop,       jstop)
+
+      endif
 
       end subroutine cleanup_itd
 
@@ -2147,6 +2162,175 @@
       enddo
 
       end subroutine zap_small_areas
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: zerolayer_check - check that snow and ice energy is
+!                         correct when using zero layer thermodynamics
+!
+! !INTERFACE:
+!
+      subroutine zerolayer_check (nx_block,    ny_block,   &
+                                  icells,  indxi,   indxj, &
+                                  aicen,                   &
+                                  vicen,       vsnon,      &
+                                  eicen,       esnon,      &
+                                  l_stop,                  &
+                                  istop,       jstop)
+!
+! !DESCRIPTION:
+!
+! Checks that the snow and ice energy in the zero layer thermodynamics
+! model still agrees with the snow and ice volume.
+! If there is an error, the model will abort.
+! This subroutine is only called if heat_capacity = .false.
+!
+! !REVISION HISTORY:
+!
+! author: Alison McLaren, Met Office
+!
+! !USES:
+!
+      use ice_work, only: worka, workb
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: & 
+         nx_block, ny_block, & ! block dimensions 
+         icells                ! number of grid cells with ice
+
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi, indxj      ! compressed i/j indices
+ 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),  &
+         intent(inout) :: & 
+         aicen , & ! concentration of ice 
+         vicen , & ! volume per unit area of ice          (m) 
+         vsnon     ! volume per unit area of snow         (m) 
+ 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr),  &
+         intent(in) :: & 
+         eicen     ! energy of melting for each ice layer (J/m^2) 
+ 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr),  &
+         intent(in) :: & 
+         esnon     ! energy of melting for each snow layer (J/m^2) 
+      
+      logical (kind=log_kind), intent(out) :: &
+         l_stop    ! if true, abort on return
+
+      integer (kind=int_kind), intent(out) :: &
+         istop, jstop ! indices of grid cell where model aborts
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+         i, j             , & ! horizontal indices
+         n                , & ! category index
+         ij                   ! combined horizontal index
+
+      real (kind=dbl_kind), parameter :: &
+         max_error = puny*Lfresh*rhos ! max error in zero layer energy check
+                                      ! (so max volume error = puny)
+
+      logical (kind=log_kind) :: &
+         ice_energy_correct  , & ! zero layer ice energy check
+         snow_energy_correct     ! zero layer snow energy check
+
+      !-----------------------------------------------------------------
+      ! Initialize
+      !-----------------------------------------------------------------
+
+      l_stop = .false.
+      istop = 0
+      jstop = 0
+
+      worka(:,:) = c0
+      workb(:,:) = c0
+
+      !----------------------------------------------------------------
+      ! Calculate difference between ice and snow energies and the
+      ! energy values derived from the ice and snow volumes
+      !----------------------------------------------------------------
+
+      ice_energy_correct  = .true.
+      snow_energy_correct = .true.
+
+      do n=1,ncat
+
+         do ij=1,icells
+            i=indxi(ij)
+            j=indxj(ij)
+
+            worka(i,j) = eicen(i,j,n) + rhoi * Lfresh * vicen(i,j,n)
+            workb(i,j) = esnon(i,j,n) + rhos * Lfresh * vsnon(i,j,n)
+
+            if(abs(worka(i,j)) > max_error) then
+               ice_energy_correct = .false.
+            endif
+
+            if(abs(workb(i,j)) > max_error) then
+               snow_energy_correct = .false.
+            endif
+         enddo
+
+      !----------------------------------------------------------------
+      ! If there is a problem, abort with error message
+      !----------------------------------------------------------------
+
+         if (.not. ice_energy_correct) then
+
+            do ij=1,icells
+               i=indxi(ij)
+               j=indxj(ij)
+
+               if(abs(worka(i,j)) > max_error) then
+                  write(nu_diag,*) ' '
+                  write(nu_diag,*) &
+                    'zerolayer check - wrong ice energy'
+                  write(nu_diag,*) 'i, j, n:', i,j,n
+                  write(nu_diag,*) 'eicen =', eicen(i,j,n)
+                  write(nu_diag,*) 'error=',  worka(i,j)
+                  write(nu_diag,*) 'vicen =', vicen(i,j,n)
+                  write(nu_diag,*) 'aicen =', aicen(i,j,n)
+                  l_stop = .true.
+                  istop = i
+                  jstop = j
+               endif
+            enddo
+
+         endif
+         if (l_stop) return
+
+         if (.not. snow_energy_correct) then
+
+            do ij=1,icells
+               i=indxi(ij)
+               j=indxj(ij)
+
+               if(abs(workb(i,j)) > max_error) then
+                  write(nu_diag,*) ' '
+                  write(nu_diag,*) &
+                    'zerolayer_check - wrong snow energy'
+                  write(nu_diag,*) 'i, j, n:', i,j,n
+                  write(nu_diag,*) 'esnon =', esnon(i,j,n)
+                  write(nu_diag,*) 'error=',  workb(i,j)
+                  write(nu_diag,*) 'vsnon =', vsnon(i,j,n)
+                  write(nu_diag,*) 'aicen =', aicen(i,j,n)
+                  l_stop = .true.
+                  istop = i
+                  jstop = j
+                  return
+               endif
+            enddo
+
+         endif
+
+      enddo  ! ncat
+
+      end subroutine zerolayer_check
 
 !=======================================================================
 
