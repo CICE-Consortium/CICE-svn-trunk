@@ -513,7 +513,6 @@
       character (len=char_len) ::   &
          edge             ! 'north' or 'east'
 
-
       l_stop = .false.
       istop = 0
       jstop = 0
@@ -1876,7 +1875,8 @@
          ishift_br, jshift_br ,&! i,j indices of BR cell relative to edge
          ishift_tc, jshift_tc ,&! i,j indices of TC cell relative to edge
          ishift_bc, jshift_bc ,&! i,j indices of BC cell relative to edge
-         area1, area2, area3  ,&! left and right triangle areas
+         area1, area2         ,&! temporary triangle areas
+         area3, area4         ,&! 
          area_c               ,&! center polygon area
          w1, w2                 ! work variables
 
@@ -1967,7 +1967,7 @@
 
          ib = ilo
          ie = ihi 
-         jb = ilo - nghost            ! lowest j index is a ghost cell
+         jb = jlo - nghost            ! lowest j index is a ghost cell
          je = jhi
 
          ! index shifts for neighbor cells
@@ -2131,22 +2131,19 @@
          xir = xcr
          yir = (xcr*(ydr-ydm) - xdm*ydr + xdr*ydm) / (xdr - xdm) 
          
-         mdl = (ydm - ydl) / (xdm - xdl)
-         mdr = (ydr - ydm) / (xdr - xdm)
+         md = (ydr - ydl) / (xdr - xdl)
          
-         if (abs(mdl) > puny) then
-            xicl = xdl - ydl/mdl
+         if (abs(md) > puny) then
+            xic = xdl - ydl/md
          else
-            xicl = c0
+            xic = c0
          endif
-         yicl = c0
+         yic = c0
 
-         if (abs(mdr) > puny) then
-            xicr = xdr - ydr/mdr
-         else
-            xicr = c0
-         endif
-         yicr = c0
+         xicl = xic
+         yicl = yic
+         xicr = xic
+         yicr = yic
 
     !-------------------------------------------------------------------
     ! Locate triangles in TL cell (NW for north edge, NE for east edge)
@@ -2192,8 +2189,8 @@
             yp    (i,j,1,ng) = ycl
             xp    (i,j,2,ng) = xdl
             yp    (i,j,2,ng) = ydl
-            xp    (i,j,3,ng) = xicl
-            yp    (i,j,3,ng) = yicl
+            xp    (i,j,3,ng) = xic
+            yp    (i,j,3,ng) = yic
             iflux   (i,j,ng) = i + ishift_tl
             jflux   (i,j,ng) = j + jshift_tl
             areafact(i,j,ng) = areafac_l(i,j)
@@ -2203,8 +2200,8 @@
             ng = 3
             xp    (i,j,1,ng) = xcl
             yp    (i,j,1,ng) = ycl
-            xp    (i,j,2,ng) = xicl
-            yp    (i,j,2,ng) = yicl
+            xp    (i,j,2,ng) = xic
+            yp    (i,j,2,ng) = yic
             xp    (i,j,3,ng) = xil
             yp    (i,j,3,ng) = yil
             iflux   (i,j,ng) = i + ishift_bl
@@ -2220,8 +2217,8 @@
             yp    (i,j,1,ng) = ycl
             xp    (i,j,2,ng) = xil
             yp    (i,j,2,ng) = yil
-            xp    (i,j,3,ng) = xicl
-            yp    (i,j,3,ng) = yicl
+            xp    (i,j,3,ng) = xic
+            yp    (i,j,3,ng) = yic
             iflux   (i,j,ng) = i + ishift_tl
             jflux   (i,j,ng) = j + jshift_tl
             areafact(i,j,ng) = -areafac_l(i,j)
@@ -2231,8 +2228,8 @@
             ng = 1
             xp    (i,j,1,ng) = xcl
             yp    (i,j,1,ng) = ycl
-            xp    (i,j,2,ng) = xicl
-            yp    (i,j,2,ng) = yicl
+            xp    (i,j,2,ng) = xic
+            yp    (i,j,2,ng) = yic
             xp    (i,j,3,ng) = xdl
             yp    (i,j,3,ng) = ydl
             iflux   (i,j,ng) = i + ishift_bl
@@ -2283,8 +2280,8 @@
             ng = 2
             xp    (i,j,1,ng) = xcr
             yp    (i,j,1,ng) = ycr
-            xp    (i,j,2,ng) = xicr
-            yp    (i,j,2,ng) = yicr
+            xp    (i,j,2,ng) = xic
+            yp    (i,j,2,ng) = yic
             xp    (i,j,3,ng) = xdr
             yp    (i,j,3,ng) = ydr
             iflux   (i,j,ng) = i + ishift_tr
@@ -2298,8 +2295,8 @@
             yp    (i,j,1,ng) = ycr
             xp    (i,j,2,ng) = xir
             yp    (i,j,2,ng) = yir
-            xp    (i,j,3,ng) = xicr
-            yp    (i,j,3,ng) = yicr
+            xp    (i,j,3,ng) = xic
+            yp    (i,j,3,ng) = yic
             iflux   (i,j,ng) = i + ishift_br
             jflux   (i,j,ng) = j + jshift_br
             areafact(i,j,ng) = areafac_r(i,j)
@@ -2311,8 +2308,8 @@
             ng = 3
             xp    (i,j,1,ng) = xcr
             yp    (i,j,1,ng) = ycr
-            xp    (i,j,2,ng) = xicr
-            yp    (i,j,2,ng) = yicr
+            xp    (i,j,2,ng) = xic
+            yp    (i,j,2,ng) = yic
             xp    (i,j,3,ng) = xir
             yp    (i,j,3,ng) = yir
             iflux   (i,j,ng) = i + ishift_tr
@@ -2326,8 +2323,8 @@
             yp    (i,j,1,ng) = ycr
             xp    (i,j,2,ng) = xdr
             yp    (i,j,2,ng) = ydr
-            xp    (i,j,3,ng) = xicr
-            yp    (i,j,3,ng) = yicr
+            xp    (i,j,3,ng) = xic
+            yp    (i,j,3,ng) = yic
             iflux   (i,j,ng) = i + ishift_br
             jflux   (i,j,ng) = j + jshift_br
             areafact(i,j,ng) = -areafac_r(i,j)
@@ -2348,17 +2345,14 @@
             ydr = yir
          endif
 
-         xdm = p5 * (xdr + xdl)
-         ydm = p5 * (ydr + ydl)
-       
     !-------------------------------------------------------------------
-    ! For l_fixed_area = T, shift the midpoint so the departure
+    ! For l_fixed_area = T, shift the midpoint so that the departure
     ! region has the prescribed area
     !-------------------------------------------------------------------
 
          if (l_fixed_area) then
 
-            ! Sum the areas of left and right triangles.
+            ! Sum the areas of the left and right triangles.
             ! Note that yp(i,j,1,ng) = 0 for all triangles, so we can
             !  drop those terms from the area formula.
 
@@ -2383,34 +2377,109 @@
                            (xp(i,j,3,ng)-xp(i,j,1,ng)) )   &
                          * areafact(i,j,ng) 
 
-            area_c  = edgearea(i,j) - area1 - area2 - area3
+            !-----------------------------------------------------------
+            ! Check whether the central triangles lie in one grid cell or two.
+            ! If all are in one grid cell, then adjust the area of the central
+            !  region so that the sum of all triangle areas is equal to the
+            !  prescribed value.
+            ! If two triangles are in one grid cell and one is in the other,
+            !  then compute the area of the lone triangle using an area factor
+            !  corresponding to the adjacent corner.  This is necessary to prevent
+            !  negative masses in some rare cases on curved grids.  Then adjust
+            !  the area of the remaining two-triangle region so that the sum of
+            !  all triangle areas has the prescribed value.
+            !-----------------------------------------------------------
 
-            ! Shift the midpoint such that the area of remaining triangles = area_c
-            w1 = c2*area_c/areafac_c(i,j)    &
-                 + (xdr-xcl)*ydl + (xcr-xdl)*ydr
-            w2 = (xdr-xdl)**2 + (ydr-ydl)**2
-            w1 = w1/w2
-            xdm = xdm + (ydr - ydl) * w1
-            ydm = ydm - (xdr - xdl) * w1
+            if (ydl*ydr >= c0) then   ! Both DPs lie on same side of x-axis
 
-            ! Given shifted midpoint, compute new intersection points
+               ! compute required area of central departure region
+               area_c  = edgearea(i,j) - area1 - area2 - area3
 
-            mdl = (ydm - ydl) / (xdm - xdl)
-            mdr = (ydr - ydm) / (xdr - xdm)
-         
-            if (abs(mdl) > puny) then
-               xicl = xdl - ydl/mdl
-            else
-               xicl = c0
-            endif
-            yicl = c0
+               ! shift midpoint so that the area of remaining triangles = area_c
+               w1 = c2*area_c/areafac_c(i,j)    &
+                    + (xdr-xcl)*ydl + (xcr-xdl)*ydr
+               w2 = (xdr-xdl)**2 + (ydr-ydl)**2
+               w1 = w1/w2
+               xdm = xdm + (ydr - ydl) * w1
+               ydm = ydm - (xdr - xdl) * w1
 
-            if (abs(mdr) > puny) then
-               xicr = xdr - ydr/mdr
-            else
-               xicr = c0
-            endif
-            yicr = c0
+               ! compute left and right intersection points
+               mdl = (ydm - ydl) / (xdm - xdl)
+               mdr = (ydr - ydm) / (xdr - xdm)
+
+               if (abs(mdl) > puny) then
+                  xicl = xdl - ydl/mdl
+               else
+                  xicl = c0
+               endif
+               yicl = c0
+
+               if (abs(mdr) > puny) then
+                  xicr = xdr - ydr/mdr
+               else
+                  xicr = c0
+               endif
+               yicr = c0
+
+            elseif (xic < c0) then  ! fix ICL = IC
+
+               xicl = xic
+               yicl = yic
+
+               ! compute midpoint between ICL and DR
+               xdm = p5 * (xdr + xicl)
+               ydm = p5 *  ydr
+
+               ! compute area of triangle adjacent to left corner 
+               area4 = p5 * (xcl - xic) * ydl * areafac_l(i,j)
+               area_c  = edgearea(i,j) - area1 - area2 - area3 - area4
+
+               ! shift midpoint so that area of remaining triangles = area_c
+               w1 = c2*area_c/areafac_c(i,j) + (xcr-xic)*ydr
+               w2 = (xdr-xic)**2 + ydr**2
+               w1 = w1/w2
+               xdm = xdm + ydr*w1
+               ydm = ydm - (xdr - xic) * w1
+
+               ! compute ICR
+               mdr = (ydr - ydm) / (xdr - xdm)
+               if (abs(mdr) > puny) then
+                  xicr = xdr - ydr/mdr
+               else
+                  xicr = c0
+               endif
+               yicr = c0
+
+            elseif (xic >= c0) then  ! fix ICR = IR
+
+               xicr = xic
+               yicr = yic
+
+               ! compute midpoint between ICR and DL 
+               xdm = p5 * (xicr + xdl)
+               ydm = p5 *  ydl
+
+               area4 = p5 * (xic - xcr) * ydr * areafac_r(i,j)
+               area_c  = edgearea(i,j) - area1 - area2 - area3 - area4
+
+               ! shift midpoint so that area of remaining triangles = area_c
+               w1 = c2*area_c/areafac_c(i,j) + (xic-xcl)*ydl
+               w2 = (xic-xdl)**2 + ydl**2
+               w1 = w1/w2
+               xdm = xdm - ydl*w1
+               ydm = ydm - (xic - xdl) * w1
+
+               ! compute ICL
+
+               mdl = (ydm - ydl) / (xdm - xdl)
+               if (abs(mdl) > puny) then
+                  xicl = xdl - ydl/mdl
+               else
+                  xicl = c0
+               endif
+               yicl = c0
+
+            endif   ! ydl*ydr >= c0
 
          endif  ! l_fixed_area
 
@@ -2418,6 +2487,8 @@
     ! Locate triangles in BC cell (H for both north and east edges) 
     ! and TC cell (N for north edge and E for east edge).
     !-------------------------------------------------------------------
+
+    ! Start with cases where both DPs lie in the same grid cell
 
          if (ydl >= c0 .and. ydr >= c0 .and. ydm >= c0) then
 
@@ -2582,7 +2653,12 @@
             jflux   (i,j,ng) = j + jshift_tc
             areafact(i,j,ng) = -areafac_c(i,j)
 
-         elseif (ydl >= c0 .and. ydr < c0 .and. ydm >= c0) then
+    ! Now consider cases where the two DPs lie in different grid cells
+    ! For these cases, one triangle is given the area factor associated
+    !  with the adjacent corner, to avoid rare negative masses on curved grids.
+
+         elseif (ydl >= c0 .and. ydr < c0 .and. xic >= c0  &
+                                          .and. ydm >= c0) then
 
          ! TC1b (group 4)
 
@@ -2608,7 +2684,7 @@
             yp    (i,j,3,ng) = ydr
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            areafact(i,j,ng) = areafac_c(i,j)
+            areafact(i,j,ng) = areafac_r(i,j)
 
          ! TC3b (group 6)
 
@@ -2623,7 +2699,8 @@
             jflux   (i,j,ng) = j + jshift_tc
             areafact(i,j,ng) = -areafac_c(i,j)
 
-         elseif (ydl >= c0 .and. ydr < c0 .and. ydm < c0) then
+         elseif (ydl >= c0 .and. ydr < c0 .and. xic >= c0  &
+                                          .and. ydm < c0 ) then  ! less common
 
          ! TC1b (group 4)
 
@@ -2637,6 +2714,48 @@
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
             areafact(i,j,ng) = -areafac_c(i,j)
+
+         ! BC2b (group 5)
+
+            ng = 5
+            xp    (i,j,1,ng) = xcr
+            yp    (i,j,1,ng) = ycr
+            xp    (i,j,2,ng) = xicr
+            yp    (i,j,2,ng) = yicr
+            xp    (i,j,3,ng) = xdr
+            yp    (i,j,3,ng) = ydr
+            iflux   (i,j,ng) = i + ishift_bc
+            jflux   (i,j,ng) = j + jshift_bc
+            areafact(i,j,ng) = areafac_r(i,j)
+
+         ! BC3b (group 6)
+
+            ng = 6
+            xp    (i,j,1,ng) = xicr
+            yp    (i,j,1,ng) = yicr
+            xp    (i,j,2,ng) = xicl
+            yp    (i,j,2,ng) = yicl
+            xp    (i,j,3,ng) = xdm
+            yp    (i,j,3,ng) = ydm
+            iflux   (i,j,ng) = i + ishift_bc
+            jflux   (i,j,ng) = j + jshift_bc
+            areafact(i,j,ng) = areafac_c(i,j)
+
+         elseif (ydl >= c0 .and. ydr < c0 .and. xic < c0   &
+                                          .and. ydm < c0) then
+
+         ! TC1b (group 4)
+
+            ng = 4
+            xp    (i,j,1,ng) = xcl
+            yp    (i,j,1,ng) = ycl
+            xp    (i,j,2,ng) = xicl
+            yp    (i,j,2,ng) = yicl
+            xp    (i,j,3,ng) = xdl
+            yp    (i,j,3,ng) = ydl
+            iflux   (i,j,ng) = i + ishift_tc
+            jflux   (i,j,ng) = j + jshift_tc
+            areafact(i,j,ng) = -areafac_l(i,j)
 
          ! BC2b (group 5)
 
@@ -2664,7 +2783,50 @@
             jflux   (i,j,ng) = j + jshift_bc
             areafact(i,j,ng) = areafac_c(i,j)
 
-         elseif (ydl < c0 .and. ydr >= c0 .and. ydm >= c0) then
+         elseif (ydl >= c0 .and. ydr < c0 .and. xic <  c0  &
+                                          .and. ydm >= c0) then  ! less common
+
+         ! TC1b (group 4)
+
+            ng = 4
+            xp    (i,j,1,ng) = xcl
+            yp    (i,j,1,ng) = ycl
+            xp    (i,j,2,ng) = xicl
+            yp    (i,j,2,ng) = yicl
+            xp    (i,j,3,ng) = xdl
+            yp    (i,j,3,ng) = ydl
+            iflux   (i,j,ng) = i + ishift_tc
+            jflux   (i,j,ng) = j + jshift_tc
+            areafact(i,j,ng) = -areafac_l(i,j)
+
+         ! BC2b (group 5)
+
+            ng = 5
+            xp    (i,j,1,ng) = xcr
+            yp    (i,j,1,ng) = ycr
+            xp    (i,j,2,ng) = xicr
+            yp    (i,j,2,ng) = yicr
+            xp    (i,j,3,ng) = xdr
+            yp    (i,j,3,ng) = ydr
+            iflux   (i,j,ng) = i + ishift_bc
+            jflux   (i,j,ng) = j + jshift_bc
+            areafact(i,j,ng) = areafac_c(i,j)
+
+         ! TC3b (group 6)
+
+            ng = 6
+            xp    (i,j,1,ng) = xicl
+            yp    (i,j,1,ng) = yicl
+            xp    (i,j,2,ng) = xicr
+            yp    (i,j,2,ng) = yicr
+            xp    (i,j,3,ng) = xdm
+            yp    (i,j,3,ng) = ydm
+            iflux   (i,j,ng) = i + ishift_tc
+            jflux   (i,j,ng) = j + jshift_tc
+            areafact(i,j,ng) = -areafac_c(i,j)
+
+         elseif (ydl < c0 .and. ydr >= c0 .and. xic <  c0  &
+                                          .and. ydm >= c0) then
 
          ! BC1b (group 4)
 
@@ -2677,7 +2839,7 @@
             yp    (i,j,3,ng) = yicl
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
-            areafact(i,j,ng) = areafac_c(i,j)
+            areafact(i,j,ng) = areafac_l(i,j)
 
          ! TC2b (group 5)
 
@@ -2705,7 +2867,50 @@
             jflux   (i,j,ng) = j + jshift_tc
             areafact(i,j,ng) = -areafac_c(i,j)
 
-         elseif (ydl < c0 .and. ydr >= c0 .and. ydm < c0) then
+         elseif (ydl < c0 .and. ydr >= c0 .and. xic < c0  &
+                                          .and. ydm < c0) then ! less common
+
+         ! BC1b (group 4)
+
+            ng = 4
+            xp    (i,j,1,ng) = xcl
+            yp    (i,j,1,ng) = ycl
+            xp    (i,j,2,ng) = xdl
+            yp    (i,j,2,ng) = ydl
+            xp    (i,j,3,ng) = xicl
+            yp    (i,j,3,ng) = yicl
+            iflux   (i,j,ng) = i + ishift_bc
+            jflux   (i,j,ng) = j + jshift_bc
+            areafact(i,j,ng) = areafac_l(i,j)
+
+         ! TC2b (group 5)
+
+            ng = 5
+            xp    (i,j,1,ng) = xcr
+            yp    (i,j,1,ng) = ycr
+            xp    (i,j,2,ng) = xdr
+            yp    (i,j,2,ng) = ydr
+            xp    (i,j,3,ng) = xicr
+            yp    (i,j,3,ng) = yicr
+            iflux   (i,j,ng) = i + ishift_tc
+            jflux   (i,j,ng) = j + jshift_tc
+            areafact(i,j,ng) = -areafac_c(i,j)
+
+         ! BC3b (group 6)
+
+            ng = 6
+            xp    (i,j,1,ng) = xicr
+            yp    (i,j,1,ng) = yicr
+            xp    (i,j,2,ng) = xicl
+            yp    (i,j,2,ng) = yicl
+            xp    (i,j,3,ng) = xdm
+            yp    (i,j,3,ng) = ydm
+            iflux   (i,j,ng) = i + ishift_bc
+            jflux   (i,j,ng) = j + jshift_bc
+            areafact(i,j,ng) = areafac_c(i,j)
+
+         elseif (ydl < c0 .and. ydr >= c0 .and. xic >= c0  &
+                                          .and. ydm <  c0) then
 
          ! BC1b (group 4)
 
@@ -2731,7 +2936,7 @@
             yp    (i,j,3,ng) = yicr
             iflux   (i,j,ng) = i + ishift_tc
             jflux   (i,j,ng) = j + jshift_tc
-            areafact(i,j,ng) = -areafac_c(i,j)
+            areafact(i,j,ng) = -areafac_r(i,j)
 
          ! BC3b (group 6)
 
@@ -2745,6 +2950,48 @@
             iflux   (i,j,ng) = i + ishift_bc
             jflux   (i,j,ng) = j + jshift_bc
             areafact(i,j,ng) = areafac_c(i,j)
+
+         elseif (ydl < c0 .and. ydr >= c0 .and. xic >= c0   &
+                                          .and. ydm >= c0) then  ! less common
+
+         ! BC1b (group 4)
+
+            ng = 4
+            xp    (i,j,1,ng) = xcl
+            yp    (i,j,1,ng) = ycl
+            xp    (i,j,2,ng) = xdl
+            yp    (i,j,2,ng) = ydl
+            xp    (i,j,3,ng) = xicl
+            yp    (i,j,3,ng) = yicl
+            iflux   (i,j,ng) = i + ishift_bc
+            jflux   (i,j,ng) = j + jshift_bc
+            areafact(i,j,ng) = areafac_c(i,j)
+
+         ! TC2b (group 5)
+
+            ng = 5
+            xp    (i,j,1,ng) = xcr
+            yp    (i,j,1,ng) = ycr
+            xp    (i,j,2,ng) = xdr
+            yp    (i,j,2,ng) = ydr
+            xp    (i,j,3,ng) = xicr
+            yp    (i,j,3,ng) = yicr
+            iflux   (i,j,ng) = i + ishift_tc
+            jflux   (i,j,ng) = j + jshift_tc
+            areafact(i,j,ng) = -areafac_r(i,j)
+
+         ! TC3b (group 6)
+
+            ng = 6
+            xp    (i,j,1,ng) = xicl
+            yp    (i,j,1,ng) = yicl
+            xp    (i,j,2,ng) = xicr
+            yp    (i,j,2,ng) = yicr
+            xp    (i,j,3,ng) = xdm
+            yp    (i,j,3,ng) = ydm
+            iflux   (i,j,ng) = i + ishift_tc
+            jflux   (i,j,ng) = j + jshift_tc
+            areafact(i,j,ng) = -areafac_c(i,j)
 
          endif                  ! TC and BC triangles
 
