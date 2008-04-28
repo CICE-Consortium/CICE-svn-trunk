@@ -79,6 +79,13 @@
          dxhy   , & ! 0.5*(HTE - HTE)
          dyhx       ! 0.5*(HTN - HTN)
 
+      ! Corners of grid boxes for history output
+      real (kind=dbl_kind), dimension (4,nx_block,ny_block,max_blocks):: &
+         lont_bounds, & ! longitude of gridbox corners for T point
+         latt_bounds, & ! latitude of gridbox corners for T point
+         lonu_bounds, & ! longitude of gridbox corners for U point
+         latu_bounds    ! latitude of gridbox corners for U point       
+
       ! geometric quantities used for remapping transport
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
          xav  , & ! mean T-cell value of x
@@ -447,6 +454,12 @@
 
       call Tlatlon           ! get lat, lon on the T grid
 
+      !----------------------------------------------------------------
+      ! Corner coordinates for CF compliant history files
+      !----------------------------------------------------------------
+
+      call gridbox_corners
+
       !-----------------------------------------------------------------
       ! Compute global index (used for unpacking messages from coupler)
       !-----------------------------------------------------------------
@@ -552,11 +565,15 @@
       allocate(work_g1(nx_global,ny_global))
 
       call ice_read_global(nu_grid,1,work_g1,'rda8',.true.)   ! ULAT
+      call gridbox_verts(work_g1,latt_bounds)       
       call scatter_global(ULAT, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
+
       call ice_read_global(nu_grid,2,work_g1,'rda8',.true.)   ! ULON
+      call gridbox_verts(work_g1,lont_bounds)       
       call scatter_global(ULON, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
+
       call ice_read_global(nu_grid,7,work_g1,'rda8',.true.)   ! ANGLE
       call scatter_global(ANGLE, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
@@ -674,12 +691,25 @@
 
       fieldname='ulat'
       call ice_read_global_nc(fid_grid,1,fieldname,work_g1,diag) ! ULAT
+#ifdef ORCA_GRID
+      ! Kludge: remove this code when ORCA grid files are fixed.
+      ! Extrapolate to correct ULAT along j=1.
+      if (my_task == master_task) then
+         do i = 1, nx_global
+            work_g1(i,1) = c2*work_g1(i,2) - work_g1(i,3)
+         enddo
+      endif
+#endif
+      call gridbox_verts(work_g1,latt_bounds)       
       call scatter_global(ULAT, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
+
       fieldname='ulon'
       call ice_read_global_nc(fid_grid,2,fieldname,work_g1,diag) ! ULON
+      call gridbox_verts(work_g1,lont_bounds)       
       call scatter_global(ULON, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
+
       fieldname='angle'
       call ice_read_global_nc(fid_grid,7,fieldname,work_g1,diag) ! ANGLE    
       call scatter_global(ANGLE, work_g1, master_task, distrb_info, &
@@ -1920,24 +1950,25 @@
 ! Local Workspace
 !-----------------------------------------
 
-      data bz/ 2.4048255577_dbl_kind, 5.5200781103_dbl_kind, 8.6537279129_dbl_kind ,&
-         11.7915344391_dbl_kind, 14.9309177086_dbl_kind, 18.0710639679_dbl_kind    ,&
-         21.2116366299_dbl_kind, 24.3524715308_dbl_kind, 27.4934791320_dbl_kind    ,&
-         30.6346064684_dbl_kind, 33.7758202136_dbl_kind, 36.9170983537_dbl_kind    ,&
-         40.0584257646_dbl_kind, 43.1997917132_dbl_kind, 46.3411883717_dbl_kind    ,&
-         49.4826098974_dbl_kind, 52.6240518411_dbl_kind, 55.7655107550_dbl_kind    ,&
-         58.9069839261_dbl_kind, 62.0484691902_dbl_kind, 65.1899648002_dbl_kind    ,&
-         68.3314693299_dbl_kind, 71.4729816036_dbl_kind, 74.6145006437_dbl_kind    ,&
-         77.7560256304_dbl_kind, 80.8975558711_dbl_kind, 84.0390907769_dbl_kind    ,&
-         87.1806298436_dbl_kind, 90.3221726372_dbl_kind, 93.4637187819_dbl_kind    ,&
-         96.6052679510_dbl_kind, 99.7468198587_dbl_kind, 102.8883742542_dbl_kind   ,&
-         106.0299309165_dbl_kind, 109.1714896498_dbl_kind, 112.3130502805_dbl_kind ,&
-         115.4546126537_dbl_kind, 118.5961766309_dbl_kind, 121.7377420880_dbl_kind ,&
-         124.8793089132_dbl_kind, 128.0208770059_dbl_kind, 131.1624462752_dbl_kind ,&
-         134.3040166383_dbl_kind, 137.4455880203_dbl_kind, 140.5871603528_dbl_kind ,&
-         143.7287335737_dbl_kind, 146.8703076258_dbl_kind, 150.0118824570_dbl_kind ,&
-         153.1534580192_dbl_kind, 156.2950342685_dbl_kind/  
-!
+      data bz/ &
+        2.4048255577_dbl_kind,   5.5200781103_dbl_kind,   8.6537279129_dbl_kind, &
+       11.7915344391_dbl_kind,  14.9309177086_dbl_kind,  18.0710639679_dbl_kind, &
+       21.2116366299_dbl_kind,  24.3524715308_dbl_kind,  27.4934791320_dbl_kind, &
+       30.6346064684_dbl_kind,  33.7758202136_dbl_kind,  36.9170983537_dbl_kind, &
+       40.0584257646_dbl_kind,  43.1997917132_dbl_kind,  46.3411883717_dbl_kind, &
+       49.4826098974_dbl_kind,  52.6240518411_dbl_kind,  55.7655107550_dbl_kind, &
+       58.9069839261_dbl_kind,  62.0484691902_dbl_kind,  65.1899648002_dbl_kind, &
+       68.3314693299_dbl_kind,  71.4729816036_dbl_kind,  74.6145006437_dbl_kind, &
+       77.7560256304_dbl_kind,  80.8975558711_dbl_kind,  84.0390907769_dbl_kind, &
+       87.1806298436_dbl_kind,  90.3221726372_dbl_kind,  93.4637187819_dbl_kind, &
+       96.6052679510_dbl_kind,  99.7468198587_dbl_kind, 102.8883742542_dbl_kind, &
+      106.0299309165_dbl_kind, 109.1714896498_dbl_kind, 112.3130502805_dbl_kind, &
+      115.4546126537_dbl_kind, 118.5961766309_dbl_kind, 121.7377420880_dbl_kind, &
+      124.8793089132_dbl_kind, 128.0208770059_dbl_kind, 131.1624462752_dbl_kind, &
+      134.3040166383_dbl_kind, 137.4455880203_dbl_kind, 140.5871603528_dbl_kind, &
+      143.7287335737_dbl_kind, 146.8703076258_dbl_kind, 150.0118824570_dbl_kind, &
+      153.1534580192_dbl_kind, 156.2950342685_dbl_kind/  
+
       nn = n 
       if (n > 50) then 
          bes(50) = bz(50) 
@@ -1949,6 +1980,315 @@
       bes(:nn) = bz(:nn) 
 
       end subroutine bsslzr 
+
+!=======================================================================
+! The following code is used for obtaining the coordinates of the grid
+! vertices for CF-compliant netCDF history output. Approximate!
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: gridbox_corners - get coordinates of grid box corners
+!
+! !INTERFACE:
+!
+      subroutine gridbox_corners
+!
+! !DESCRIPTION:
+!
+! NOTE:  Boundary conditions for fields on NW, SW, SE corners
+!        have not been implemented; using NE corner location for all.
+!        Extrapolations are also used: these fields are approximate!
+!
+! !REVISION HISTORY:
+!
+! authors:   A. McLaren, Met Office
+!            E. Hunke, LANL
+!
+! !USES:
+      use ice_work, only: work1, work_g2
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+          i,j,iblk,icorner,& ! index counters
+          ilo,ihi,jlo,jhi    ! beginning and end of physical domain
+
+      type (block) :: &
+         this_block           ! block information for current block
+
+      !-------------------------------------------------------------
+      ! Get coordinates of grid boxes for each block as follows:
+      ! (1) SW corner, (2) SE corner, (3) NE corner, (4) NW corner
+      !-------------------------------------------------------------
+
+      do iblk = 1, nblocks
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do j = jlo, jhi
+         do i = ilo, ihi
+
+            latu_bounds(1,i,j,iblk)=TLAT(i  ,j  ,iblk)*rad_to_deg
+            latu_bounds(2,i,j,iblk)=TLAT(i+1,j  ,iblk)*rad_to_deg
+            latu_bounds(3,i,j,iblk)=TLAT(i+1,j+1,iblk)*rad_to_deg
+            latu_bounds(4,i,j,iblk)=TLAT(i  ,j+1,iblk)*rad_to_deg         
+
+            lonu_bounds(1,i,j,iblk)=TLON(i  ,j  ,iblk)*rad_to_deg
+            lonu_bounds(2,i,j,iblk)=TLON(i+1,j  ,iblk)*rad_to_deg
+            lonu_bounds(3,i,j,iblk)=TLON(i+1,j+1,iblk)*rad_to_deg
+            lonu_bounds(4,i,j,iblk)=TLON(i  ,j+1,iblk)*rad_to_deg         
+
+         enddo
+         enddo
+      enddo
+
+      !----------------------------------------------------------------
+      ! extrapolate on global grid to get edge values
+      !----------------------------------------------------------------
+
+      if (my_task == master_task) then
+         allocate(work_g2(nx_global,ny_global))
+      else
+         allocate(work_g2(1,1))
+      endif
+
+      work1(:,:,:) = latu_bounds(2,:,:,:)
+      call gather_global(work_g2, work1, master_task, distrb_info)
+      if (my_task == master_task) then
+         do j = 1, ny_global
+            work_g2(nx_global,j) = c2*work_g2(nx_global-1,j) &
+                                    - work_g2(nx_global-2,j)
+         enddo
+      endif
+      call scatter_global(work1, work_g2, &
+                          master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+      latu_bounds(2,:,:,:) = work1(:,:,:)
+
+      work1(:,:,:) = latu_bounds(3,:,:,:)
+      call gather_global(work_g2, work1, master_task, distrb_info)
+      if (my_task == master_task) then
+         do i = 1, nx_global
+            work_g2(i,ny_global) = c2*work_g2(i,ny_global-1) &
+                                    - work_g2(i,ny_global-2)
+         enddo
+         do j = 1, ny_global
+            work_g2(nx_global,j) = c2*work_g2(nx_global-1,j) &
+                                    - work_g2(nx_global-2,j)
+         enddo
+      endif
+      call scatter_global(work1, work_g2, &
+                          master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+      latu_bounds(3,:,:,:) = work1(:,:,:)
+
+      work1(:,:,:) = latu_bounds(4,:,:,:)
+      call gather_global(work_g2, work1, master_task, distrb_info)
+      if (my_task == master_task) then
+         do i = 1, nx_global
+            work_g2(i,ny_global) = c2*work_g2(i,ny_global-1) &
+                                    - work_g2(i,ny_global-2)
+         enddo
+      endif
+      call scatter_global(work1, work_g2, &
+                          master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+      latu_bounds(4,:,:,:) = work1(:,:,:)
+
+      work1(:,:,:) = lonu_bounds(2,:,:,:)
+      call gather_global(work_g2, work1, master_task, distrb_info)
+      if (my_task == master_task) then
+         do j = 1, ny_global
+            work_g2(nx_global,j) = c2*work_g2(nx_global-1,j) &
+                                    - work_g2(nx_global-2,j)
+         enddo
+      endif
+      call scatter_global(work1, work_g2, &
+                          master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+      lonu_bounds(2,:,:,:) = work1(:,:,:)
+
+      work1(:,:,:) = lonu_bounds(3,:,:,:)
+      call gather_global(work_g2, work1, master_task, distrb_info)
+      if (my_task == master_task) then
+         do i = 1, nx_global
+            work_g2(i,ny_global) = c2*work_g2(i,ny_global-1) &
+                                    - work_g2(i,ny_global-2)
+         enddo
+         do j = 1, ny_global
+            work_g2(nx_global,j) = c2*work_g2(nx_global-1,j) &
+                                    - work_g2(nx_global-2,j)
+         enddo
+      endif
+      call scatter_global(work1, work_g2, &
+                          master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+      lonu_bounds(3,:,:,:) = work1(:,:,:)
+
+      work1(:,:,:) = lonu_bounds(4,:,:,:)
+      call gather_global(work_g2, work1, master_task, distrb_info)
+      if (my_task == master_task) then
+         do i = 1, nx_global
+            work_g2(i,ny_global) = c2*work_g2(i,ny_global-1) &
+                                    - work_g2(i,ny_global-2)
+         enddo
+      endif
+      call scatter_global(work1, work_g2, &
+                          master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+      lonu_bounds(4,:,:,:) = work1(:,:,:)
+
+      deallocate(work_g2)
+
+      !----------------------------------------------------------------
+      ! Convert longitude to Degrees East >0 for history output
+      !----------------------------------------------------------------
+
+      allocate(work_g2(nx_block,ny_block))  ! not used as global here
+      do iblk = 1, nblocks
+         do icorner = 1, 4
+            work_g2(:,:) = lont_bounds(icorner,:,:,iblk) + c360
+            where (work_g2 > c360) work_g2 = work_g2 - c360
+            where (work_g2 < c0 )  work_g2 = work_g2 + c360
+            lont_bounds(icorner,:,:,iblk) = work_g2(:,:)
+            work_g2(:,:) = lonu_bounds(icorner,:,:,iblk) + c360
+            where (work_g2 > c360) work_g2 = work_g2 - c360
+            where (work_g2 < c0 )  work_g2 = work_g2 + c360
+            lonu_bounds(icorner,:,:,iblk) = work_g2(:,:)
+         enddo
+      enddo
+      deallocate(work_g2)
+
+      end subroutine gridbox_corners
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: gridbox_verts - coordinates of grid box vertices
+!
+! !INTERFACE:
+!
+      subroutine gridbox_verts(work_g,vbounds)
+!
+! !DESCRIPTION:
+!
+! NOTE:  Boundary conditions for fields on NW, SW, SE corners
+!        have not been implemented; using NE corner location for all.
+!        Extrapolations are also used: these fields are approximate!
+!
+! !REVISION HISTORY:
+!
+! authors:   A. McLaren, Met Office
+!            E. Hunke, LANL
+!
+! !USES:
+      use ice_work, only: work_g2, work1
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      real (kind=dbl_kind), dimension(:,:), intent(in) :: work_g
+
+      real (kind=dbl_kind), &
+          dimension(4,nx_block,ny_block,max_blocks), &
+          intent(out) :: vbounds
+
+      integer (kind=int_kind) :: &
+          i,j,             & ! index counters
+          ilo,ihi,jlo,jhi    ! beginning and end of physical domain
+
+      type (block) :: &
+         this_block           ! block information for current block
+
+      if (my_task == master_task) then
+         allocate(work_g2(nx_global,ny_global))
+      else
+         allocate(work_g2(1,1))
+      endif
+
+      !-------------------------------------------------------------
+      ! Get coordinates of grid boxes for each block as follows:
+      ! (1) SW corner, (2) SE corner, (3) NE corner, (4) NW corner
+      !-------------------------------------------------------------
+
+      work_g2(:,:) = c0
+      if (my_task == master_task) then
+         do j = 2, ny_global
+         do i = 2, nx_global
+            work_g2(i,j) = work_g(i-1,j-1) * rad_to_deg
+         enddo
+         enddo
+         ! extrapolate
+         do j = 1, ny_global
+            work_g2(1,j) = c2*work_g2(2,j) - work_g2(3,j)
+         enddo
+         do i = 1, nx_global
+            work_g2(i,1) = c2*work_g2(i,2) - work_g2(i,3)
+         enddo
+      endif
+      call scatter_global(work1, work_g2, &
+                          master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+      vbounds(1,:,:,:) = work1(:,:,:)
+
+      work_g2(:,:) = c0
+      if (my_task == master_task) then
+         do j = 2, ny_global
+         do i = 1, nx_global
+            work_g2(i,j) = work_g(i,j-1) * rad_to_deg
+         enddo
+         enddo
+         ! extrapolate
+         do i = 1, nx_global
+            work_g2(i,1) = (c2*work_g2(i,2) - work_g2(i,3))
+         enddo
+      endif
+      call scatter_global(work1, work_g2, &
+                          master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+      vbounds(2,:,:,:) = work1(:,:,:)
+
+      work_g2(:,:) = c0
+      if (my_task == master_task) then
+         do j = 1, ny_global
+         do i = 1, nx_global
+            work_g2(i,j) = work_g(i,j) * rad_to_deg
+         enddo
+         enddo
+      endif
+      call scatter_global(work1, work_g2, &
+                          master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+      vbounds(3,:,:,:) = work1(:,:,:)
+
+      work_g2(:,:) = c0
+      if (my_task == master_task) then
+         do j = 1, ny_global
+         do i = 2, nx_global
+            work_g2(i,j) = work_g(i-1,j  ) * rad_to_deg         
+         enddo
+         enddo
+         ! extrapolate
+         do j = 1, ny_global
+            work_g2(1,j) = c2*work_g2(2,j) - work_g2(3,j)
+         enddo
+      endif
+      call scatter_global(work1, work_g2, &
+                          master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+      vbounds(4,:,:,:) = work1(:,:,:)
+
+      deallocate (work_g2)
+
+      end subroutine gridbox_verts
 
 !=======================================================================
 

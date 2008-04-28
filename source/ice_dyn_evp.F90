@@ -106,6 +106,13 @@
 !
 ! Elastic-viscous-plastic dynamics driver
 !
+#ifdef CICE_IN_NEMO
+! Wind stress is set during this routine from the values supplied
+! via NEMO.  These values are supplied rotated on u grid and 
+! multiplied by aice.  strairxT = 0 in this case so operations in
+! evp_prep1 are pointless but carried out to minimise code changes.
+#endif
+!
 ! !REVISION HISTORY:
 !
 ! author: Elizabeth C. Hunke, LANL
@@ -229,10 +236,21 @@
       ! convert fields from T to U grid
       !-----------------------------------------------------------------
 
-      call t2ugrid_vector(strairx)
-      call t2ugrid_vector(strairy)
       call to_ugrid(tmass,umass)
       call to_ugrid(aice, aiu)
+
+#ifdef CICE_IN_NEMO
+      !----------------------------------------------------------------
+      ! Set wind stress to values supplied via NEMO
+      ! This wind stress is rotated on u grid and multiplied by aice
+      !----------------------------------------------------------------
+       
+      strairx(:,:,:) = strax(:,:,:)
+      strairy(:,:,:) = stray(:,:,:)
+#else
+      call t2ugrid_vector(strairx)
+      call t2ugrid_vector(strairy)
+#endif
 
       do iblk = 1, nblocks
 
@@ -372,6 +390,7 @@
                indxui    (:,iblk), indxuj    (:,iblk), & 
                uvel    (:,:,iblk), vvel    (:,:,iblk), & 
                uocn    (:,:,iblk), vocn    (:,:,iblk), & 
+               aiu     (:,:,iblk),                     &
                strocnx (:,:,iblk), strocny (:,:,iblk), & 
                strocnxT(:,:,iblk), strocnyT(:,:,iblk))
 
@@ -1376,6 +1395,7 @@
                              indxui,   indxuj,   &
                              uvel,     vvel,     &
                              uocn,     vocn,     &
+                             aiu,                &
                              strocnx,  strocny,  &
                              strocnxT, strocnyT) 
 !
@@ -1405,7 +1425,8 @@
          uvel    , & ! x-component of velocity (m/s)
          vvel    , & ! y-component of velocity (m/s)
          uocn    , & ! ocean current, x-direction (m/s)
-         vocn        ! ocean current, y-direction (m/s)
+         vocn    , & ! ocean current, y-direction (m/s)
+         aiu         ! ice fraction on u-grid
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
@@ -1437,11 +1458,24 @@
       !-----------------------------------------------------------------
       ! Prepare to convert to T grid
       !-----------------------------------------------------------------
+
       do j = 1, ny_block
       do i = 1, nx_block
          strocnxT(i,j) = strocnx(i,j)
          strocnyT(i,j) = strocny(i,j)
       enddo
+      enddo
+
+      !-----------------------------------------------------------------
+      ! Scale strocnx and strocny back to grid box mean value for 
+      ! diagnostics
+      !-----------------------------------------------------------------
+      
+      do ij =1, icellu
+         i = indxui(ij)
+         j = indxuj(ij)
+         strocnx(i,j) = strocnx(i,j) * aiu(i,j)
+         strocny(i,j) = strocny(i,j) * aiu(i,j)
       enddo
 
       end subroutine evp_finish

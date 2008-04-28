@@ -41,18 +41,22 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
 
+       ! in from atmos (if .not.calc_strair)  
+         strax   , & ! wind stress components (N/m^2)
+         stray   , & ! 
+
        ! in from ocean
          uocn    , & ! ocean current, x-direction (m/s)
          vocn    , & ! ocean current, y-direction (m/s)
          ss_tltx , & ! sea surface slope, x-direction (m/m)
          ss_tlty , & ! sea surface slope, y-direction
 
-       ! out to atmosphere
-
+       ! out to atmosphere (if calc_strair)
          strairxT, & ! stress on ice by air, x-direction
          strairyT, & ! stress on ice by air, y-direction
 
        ! out to ocean          T-cell (kg/m s^2)
+       ! Note, CICE_IN_NEMO uses strocnx and strocny for coupling
          strocnxT, & ! ice-ocean stress, x-direction
          strocnyT    ! ice-ocean stress, y-direction
 
@@ -98,15 +102,13 @@
       ! Thermodynamic component
       !-----------------------------------------------------------------
 
-       ! in from atmosphere
+       ! in from atmosphere (if calc_Tsfc)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          zlvl    , & ! atm level height (m)
          uatm    , & ! wind velocity components (m/s)
          vatm    , &
          wind    , & ! wind speed (m/s)
-         strax   , & ! wind stress components (N/m^2)
-         stray   , & ! 
          potT    , & ! air potential temperature  (K)
          Tair    , & ! air temperature  (K)
          Qa      , & ! specific humidity (kg/kg)
@@ -115,7 +117,22 @@
          swvdf   , & ! sw down, visible, diffuse (W/m^2)
          swidr   , & ! sw down, near IR, direct  (W/m^2)
          swidf   , & ! sw down, near IR, diffuse (W/m^2)
-         flw     , & ! incoming longwave radiation (W/m^2)
+         flw         ! incoming longwave radiation (W/m^2)
+
+       ! in from atmosphere (if .not. Tsfc_calc)
+       ! required for coupling to HadGEM3
+       ! NOTE: when in CICE_IN_NEMO mode, these are gridbox mean fields,
+       ! not per ice area. When in standalone mode, these are per ice area.
+
+      real (kind=dbl_kind), & 
+         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         fsurfn_f   , & ! net flux to top surface, excluding fcondtop
+         fcondtopn_f, & ! downward cond flux at top surface (W m-2)
+         flatn_f        ! latent heat flux (W m-2)
+
+       ! in from atmosphere
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          frain   , & ! rainfall rate (kg/m^2 s)
          fsnow       ! snowfall rate (kg/m^2 s)
 
@@ -129,7 +146,11 @@
          qdp     , & ! deep ocean heat flux (W/m^2), negative upward
          hmix        ! mixed layer depth (m)
 
-       ! out to atmosphere
+      character (char_len) :: &
+         Tfrzpt      ! ocean freezing temperature formulation
+                     ! 'constant' (-1.8C), 'linear_S'
+
+       ! out to atmosphere (if calc_Tsfc)
        ! note Tsfc is in ice_state.F
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
@@ -141,19 +162,25 @@
          Qref    , & ! 2m atm reference spec humidity (kg/kg)
          evap        ! evaporative water flux (kg/m^2/s)
 
-      ! albedos aggregated over categories
+      ! albedos aggregated over categories (if calc_Tsfc)
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
          alvdr   , & ! visible, direct   (fraction)
          alidr   , & ! near-ir, direct   (fraction)
          alvdf   , & ! visible, diffuse  (fraction)
          alidf       ! near-ir, diffuse  (fraction)
 
-       ! out to ocean
+       ! out to ocean 
+       ! (Note CICE_IN_NEMO does not use these for coupling.  
+       !  It uses fresh_hist_gbm,fsalt_hist_gbm,fhocn_hist_gbm and
+       !  fswthru_hist_gbm)
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          fresh   , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt   , & ! salt flux to ocean (kg/m^2/s)
          fhocn   , & ! net heat flux to ocean (W/m^2)
          fswthru     ! shortwave penetrating to ocean (W/m^2)
+
+      logical (kind=log_kind) :: &
+         update_ocn_f ! if true, update fresh water and salt fluxes
 
       !-----------------------------------------------------------------
       ! quantities passed from ocean mixed layer to atmosphere
@@ -179,6 +206,8 @@
       !-----------------------------------------------------------------
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         fsurf , & ! net surface heat flux (excluding fcondtop)(W/m^2)
+         fcondtop,&! top surface conductive flux        (W/m^2)
          congel, & ! basal ice growth         (m/step-->cm/day)
          frazil, & ! frazil ice growth        (m/step-->cm/day)
          snoice, & ! snow-ice formation       (m/step-->cm/day)
@@ -190,6 +219,12 @@
          dvidtt, & ! ice volume tendency thermo. (m/s)
          mlt_onset, &! day of year that sfc melting begins
          frz_onset   ! day of year that freezing begins (congel or frazil)
+         
+      real (kind=dbl_kind), & 
+         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         fsurfn,   & ! category fsurf
+         fcondtopn,& ! category fcondtop
+         flatn       ! cagegory latent heat flux
 
        ! NOTE: The following ocean diagnostic fluxes measure
        ! the same thing as their coupler counterparts but over
@@ -202,6 +237,19 @@
          fsalt_hist, & ! salt flux to ocean (kg/m^2/s)
          fhocn_hist, & ! net heat flux to ocean (W/m^2)
          fswthru_hist  ! shortwave penetrating to ocean (W/m^2)
+
+      ! As above but these remain grid box mean values i.e. they are not
+      ! divided by aice_init at end of ice_dynamics.  These are used in
+      ! CICE_IN_NEMO for coupling and also for generating
+      ! ice diagnostics and history files as these are more accurate. 
+      ! (The others suffer from problem of incorrect values at grid boxes
+      !  that change from an ice free state to an icy state.)
+    
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         fresh_hist_gbm, & ! fresh water flux to ocean (kg/m^2/s)
+         fsalt_hist_gbm, & ! salt flux to ocean (kg/m^2/s)
+         fhocn_hist_gbm, & ! net heat flux to ocean (W/m^2)
+         fswthru_hist_gbm  ! shortwave penetrating to ocean (W/m^2)
 
       !-----------------------------------------------------------------
       ! internal
@@ -244,6 +292,9 @@
 !
       integer (kind=int_kind) :: i, j, iblk
 
+      logical (kind=log_kind), parameter ::     & 
+         l_winter = .true.   ! winter/summer default switch
+
       !-----------------------------------------------------------------
       ! fluxes received from atmosphere
       !-----------------------------------------------------------------
@@ -251,28 +302,49 @@
       rhoa  (:,:,:) = 1.3_dbl_kind    ! air density (kg/m^3)
       uatm  (:,:,:) = c5              ! wind velocity    (m/s)
       vatm  (:,:,:) = c5
-!typical summer values
-!      potT  (:,:,:) = 273.0_dbl_kind  ! air potential temp (K)
-!      Tair  (:,:,:) = 273.0_dbl_kind  ! air temperature  (K)
-!      Qa    (:,:,:) = 0.0035_dbl_kind ! specific humidity (kg/kg)
-!      swvdr (:,:,:) = 50._dbl_kind    ! shortwave radiation (W/m^2)
-!      swvdf (:,:,:) = 50._dbl_kind    ! shortwave radiation (W/m^2)
-!      swidr (:,:,:) = 50._dbl_kind    ! shortwave radiation (W/m^2)
-!      swidf (:,:,:) = 50._dbl_kind    ! shortwave radiation (W/m^2)
-!      flw   (:,:,:) = 280.0_dbl_kind  ! incoming longwave rad (W/m^2)
-!      frain (:,:,:) = c0              ! rainfall rate (kg/m2/s)
-!      fsnow (:,:,:) = c0              ! snowfall rate (kg/m2/s)
-!typical winter values
-      potT  (:,:,:) = 253.0_dbl_kind  ! air potential temp (K)
-      Tair  (:,:,:) = 253.0_dbl_kind  ! air temperature  (K)
-      Qa    (:,:,:) = 0.0006_dbl_kind ! specific humidity (kg/kg)
-      swvdr (:,:,:) = c0              ! shortwave radiation (W/m^2)
-      swvdf (:,:,:) = c0              ! shortwave radiation (W/m^2)
-      swidr (:,:,:) = c0              ! shortwave radiation (W/m^2)
-      swidf (:,:,:) = c0              ! shortwave radiation (W/m^2)
-      flw   (:,:,:) = c180            ! incoming longwave rad (W/m^2)
-      frain (:,:,:) = c0              ! rainfall rate (kg/m2/s)
-      fsnow (:,:,:) = 4.0e-6_dbl_kind ! snowfall rate (kg/m2/s)
+      strax (:,:,:) = 0.05_dbl_kind
+      stray (:,:,:) = 0.05_dbl_kind
+      if (l_winter) then
+         !typical winter values
+         potT  (:,:,:) = 253.0_dbl_kind  ! air potential temp (K)
+         Tair  (:,:,:) = 253.0_dbl_kind  ! air temperature  (K)
+         Qa    (:,:,:) = 0.0006_dbl_kind ! specific humidity (kg/kg)
+         swvdr (:,:,:) = c0              ! shortwave radiation (W/m^2)
+         swvdf (:,:,:) = c0              ! shortwave radiation (W/m^2)
+         swidr (:,:,:) = c0              ! shortwave radiation (W/m^2)
+         swidf (:,:,:) = c0              ! shortwave radiation (W/m^2)
+         flw   (:,:,:) = c180            ! incoming longwave rad (W/m^2)
+         frain (:,:,:) = c0              ! rainfall rate (kg/m2/s)
+         fsnow (:,:,:) = 4.0e-6_dbl_kind ! snowfall rate (kg/m2/s)
+         fcondtopn_f(:,:,1,:)=-50.0_dbl_kind ! conductive heat flux (W/m^2)
+         if (ncat>1) fcondtopn_f(:,:,2,:)=-17.0_dbl_kind
+         if (ncat>2) fcondtopn_f(:,:,3,:)=-12.0_dbl_kind
+         if (ncat>3) fcondtopn_f(:,:,4,:)=-9.0_dbl_kind
+         if (ncat>4) fcondtopn_f(:,:,5,:)=-7.0_dbl_kind
+         if (ncat>5) fcondtopn_f(:,:,6:ncat,:)=-3.0_dbl_kind
+         fsurfn_f=fcondtopn_f            ! surface heat flux (W/m^2)
+         flatn_f(:,:,:,:)=c0             ! latent heat flux (kg/m2/s)
+      else
+         !typical summer values
+         potT  (:,:,:) = 273.0_dbl_kind  ! air potential temp (K)
+         Tair  (:,:,:) = 273.0_dbl_kind  ! air temperature  (K)
+         Qa    (:,:,:) = 0.0035_dbl_kind ! specific humidity (kg/kg)
+         swvdr (:,:,:) = 50._dbl_kind    ! shortwave radiation (W/m^2)
+         swvdf (:,:,:) = 50._dbl_kind    ! shortwave radiation (W/m^2)
+         swidr (:,:,:) = 50._dbl_kind    ! shortwave radiation (W/m^2)
+         swidf (:,:,:) = 50._dbl_kind    ! shortwave radiation (W/m^2)
+         flw   (:,:,:) = 280.0_dbl_kind  ! incoming longwave rad (W/m^2)
+         frain (:,:,:) = c0              ! rainfall rate (kg/m2/s)
+         fsnow (:,:,:) = c0              ! snowfall rate (kg/m2/s)
+         fsurfn_f(:,:,1,:)=0.2_dbl_kind  ! surface heat flux (W/m^2)
+         if (ncat > 1) fsurfn_f(:,:,2,:)=0.15_dbl_kind
+         if (ncat > 2) fsurfn_f(:,:,3,:)=0.1_dbl_kind
+         if (ncat > 3) fsurfn_f(:,:,4,:)=0.05_dbl_kind
+         if (ncat > 4) fsurfn_f(:,:,5,:)=0.01_dbl_kind
+         if (ncat > 5) fsurfn_f(:,:,6:ncat,:)=0.01_dbl_kind
+         fcondtopn_f(:,:,:,:)=0.0_dbl_kind ! conductive heat flux (W/m^2)
+         flatn_f(:,:,:,:)=-2.0_dbl_kind   ! latent heat flux (W/m^2)
+      endif !     l_winter
 
       !-----------------------------------------------------------------
       ! fluxes received from ocean
@@ -284,9 +356,14 @@
       vocn  (:,:,:) = c0
       frzmlt(:,:,:) = c0              ! freezing/melting potential (W/m^2)
       sss   (:,:,:) = 34.0_dbl_kind   ! sea surface salinity (o/oo)
-      Tf    (:,:,:) = -depressT*sss(:,:,:)  ! freezing temp (C)
-                                            ! (derived field)  
+      if (trim(Tfrzpt) == 'constant') then
+         Tf    (:,:,:) = -1.8_dbl_kind   ! freezing temp (C)     
+      else ! default:  Tfrzpt = 'linear_S'
+         Tf    (:,:,:) = -depressT*sss(:,:,:)  ! freezing temp (C)
+      endif
+#ifndef CICE_IN_NEMO
       sst   (:,:,:) = Tf(:,:,:)       ! sea surface temp (C)
+#endif
       qdp   (:,:,:) = c0              ! deep ocean heat flux (W/m^2)
       hmix  (:,:,:) = c20             ! ocean mixed layer depth
 
@@ -444,6 +521,8 @@
 !
       use ice_state, only: aice, vice
 
+      fsurf  (:,:,:) = c0
+      fcondtop(:,:,:)= c0
       congel (:,:,:) = c0
       frazil (:,:,:) = c0
       snoice (:,:,:) = c0
@@ -455,10 +534,17 @@
       dvidtt (:,:,:) = vice(:,:,:) ! temporary initial volume
       daidtd (:,:,:) = c0
       dvidtd (:,:,:) = c0
+      fsurfn    (:,:,:,:) = c0
+      fcondtopn (:,:,:,:) = c0
+      flatn     (:,:,:,:) = c0
       fresh_hist  (:,:,:) = c0
       fsalt_hist  (:,:,:) = c0
       fhocn_hist  (:,:,:) = c0
       fswthru_hist(:,:,:) = c0
+      fresh_hist_gbm  (:,:,:) = c0
+      fsalt_hist_gbm  (:,:,:) = c0
+      fhocn_hist_gbm  (:,:,:) = c0
+      fswthru_hist_gbm(:,:,:) = c0
       
       end subroutine init_history_therm
 
@@ -524,7 +610,8 @@
                                flw,      coszn,      &
                                alvdrn,   alidrn,     &
                                alvdfn,   alidfn,     &
-                               strairxn, strairyn,   &  
+                               strairxn, strairyn,   &
+                               fsurfn,   fcondtopn,  &  
                                fsensn,   flatn,      & 
                                fswabsn,  flwoutn,    &
                                evapn,                &
@@ -534,6 +621,7 @@
                                alvdr,    alidr,      &
                                alvdf,    alidf,      &
                                strairxT, strairyT,   &  
+                               fsurf,    fcondtop,   &
                                fsens,    flat,       & 
                                fswabs,   flwout,     &
                                evap,                 & 
@@ -542,6 +630,7 @@
                                fsalt,    fsalt_hist, &
                                fhocn,    fhocn_hist, &
                                fswthru,  fswthru_hist)
+
 !
 ! !DESCRIPTION:
 !
@@ -574,6 +663,8 @@
           alidfn  , & ! near-ir diffuse albedo          (fraction)
           strairxn, & ! air/ice zonal  strss,           (N/m**2)
           strairyn, & ! air/ice merdnl strss,           (N/m**2)
+          fsurfn  , & ! net heat flux to top surface    (W/m**2)
+          fcondtopn,& ! downward cond flux at top sfc   (W/m**2)
           fsensn  , & ! sensible heat flx               (W/m**2)
           flatn   , & ! latent   heat flx               (W/m**2)
           fswabsn , & ! shortwave absorbed heat flx     (W/m**2)
@@ -585,7 +676,7 @@
           fsaltn  , & ! salt flux to ocean              (kg/m2/s)
           fhocnn  , & ! actual ocn/ice heat flx         (W/m**2)
           fswthrun    ! sw radiation through ice bot    (W/m**2)
-
+           
       ! cumulative fluxes
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
           intent(inout):: &
@@ -595,6 +686,8 @@
           alidf   , & ! near-ir diffuse albedo          (fraction)
           strairxT, & ! air/ice zonal  strss,           (N/m**2)
           strairyT, & ! air/ice merdnl strss,           (N/m**2)
+          fsurf   , & ! net heat flux to top surface    (W/m**2)
+          fcondtop, & ! downward cond flux at top sfc   (W/m**2)
           fsens   , & ! sensible heat flx               (W/m**2)
           flat    , & ! latent   heat flx               (W/m**2)
           fswabs  , & ! shortwave absorbed heat flx     (W/m**2)
@@ -609,7 +702,7 @@
           fhocn   , & ! actual ocn/ice heat flx         (W/m**2)
           fhocn_hist,&! actual ocn/ice heat flx         (W/m**2)
           fswthru , & ! sw radiation through ice bot    (W/m**2)
-          fswthru_hist! sw radiation through ice bot  (W/m**2)
+          fswthru_hist!sw radiation through ice bot  (W/m**2)
 !
 !EOP
 !
@@ -642,6 +735,8 @@
 
          strairxT (i,j)  = strairxT(i,j) + strairxn(i,j)*aicen(i,j)
          strairyT (i,j)  = strairyT(i,j) + strairyn(i,j)*aicen(i,j)
+         fsurf    (i,j)  = fsurf   (i,j) + fsurfn  (i,j)*aicen(i,j)
+         fcondtop (i,j)  = fcondtop(i,j) + fcondtopn(i,j)*aicen(i,j) 
          fsens    (i,j)  = fsens   (i,j) + fsensn  (i,j)*aicen(i,j)
          flat     (i,j)  = flat    (i,j) + flatn   (i,j)*aicen(i,j)
          fswabs   (i,j)  = fswabs  (i,j) + fswabsn (i,j)*aicen(i,j)
@@ -810,7 +905,8 @@
 !  Divide ice fluxes by ice area used by the coupler before writing out
 !  diagnostics. aice\_init is the ice area saved from coupling.  This
 !  makes the fluxes written to the history file consistent with those
-!  sent to the coupler.
+!  sent to the coupler. (Also scale fsurf and fcondtop to be 
+!  consistent.)
 !
 ! !REVISION HISTORY:
 !
@@ -839,11 +935,15 @@
                fsalt_hist  (i,j,iblk)  = fsalt_hist  (i,j,iblk) * ar
                fhocn_hist  (i,j,iblk)  = fhocn_hist  (i,j,iblk) * ar
                fswthru_hist(i,j,iblk)  = fswthru_hist(i,j,iblk) * ar
+               fsurf       (i,j,iblk)  = fsurf       (i,j,iblk) * ar
+               fcondtop    (i,j,iblk)  = fcondtop    (i,j,iblk) * ar
             else
                fresh_hist  (i,j,iblk)  = c0
                fsalt_hist  (i,j,iblk)  = c0
                fhocn_hist  (i,j,iblk)  = c0
                fswthru_hist(i,j,iblk)  = c0
+               fsurf       (i,j,iblk)  = c0
+               fcondtop    (i,j,iblk)  = c0
             endif
          enddo
          enddo

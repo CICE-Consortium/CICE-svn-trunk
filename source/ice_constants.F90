@@ -92,16 +92,29 @@
          emissivity= 0.95_dbl_kind    ,&! emissivity of snow and ice
          cp_ice    = 2106._dbl_kind   ,&! specific heat of fresh ice (J/kg/K)
          cp_ocn    = 4218._dbl_kind   ,&! specific heat of ocn    (J/kg/K)
+                                        ! freshwater value needed for enthalpy
          depressT  = 0.054_dbl_kind   ,&! Tf:brine salinity ratio (C/ppt)
          dragio    = 0.00536_dbl_kind ,&! ice-ocn drag coefficient
          albocn    = 0.06_dbl_kind      ! ocean albedo
 #endif
+
+      real (kind=dbl_kind), parameter :: &
+#ifdef HADGEM3
+         gravit    = 9.80665_dbl_kind    ,&! gravitational acceleration (m/s^2)
+         omega     = 7.292116e-5_dbl_kind,&! angular velocity of earth (rad/sec)
+         radius    = 6.371229e6_dbl_kind   ! earth radius (m)
+#else
+! CICE default parameters
+         gravit    = 9.80616_dbl_kind    ,&! gravitational acceleration (m/s^2)
+         omega     = 7.292e-5_dbl_kind   ,&! angular velocity of earth (rad/sec)
+         radius    = 6.37e6_dbl_kind       ! earth radius (m)
+#endif
+
       real (kind=dbl_kind), parameter :: &
          pi = 3.14159265358979323846_dbl_kind,&! pi
-         gravit    = 9.80616_dbl_kind ,&! gravitational acceleration (m/s^2)
          secday    = 86400.0_dbl_kind ,&! seconds in calendar day
-         omega     = 7.292e-5_dbl_kind,&! angular velocity of earth (rad/sec)
-         radius    = 6.37e6_dbl_kind  ,&! earth radius (m)
+         Tocnfrz   = -1.8_dbl_kind    ,&! freezing temp of seawater (C),
+                                        ! used as Tsfcn for open water
          rhofresh  = 1000.0_dbl_kind  ,&! density of fresh water (kg/m^3)
          zvir      = 0.606_dbl_kind   ,&! rh2o/rair - 1.0
          vonkar    = 0.4_dbl_kind     ,&! von Karman constant
@@ -130,10 +143,14 @@
          kappan = 17.6_dbl_kind,&! vis extnctn coef in ice, wvlngth<700nm (1/m)
 
          kice   = 2.03_dbl_kind  ,&! thermal conductivity of fresh ice(W/m/deg)
+         kseaice= 2.00_dbl_kind  ,&! thermal conductivity of sea ice (W/m/deg)
+                                   ! (used in zero layer thermodynamics option)
+#ifdef HADGEM3
+         ksno   = 0.31_dbl_kind  ,&! thermal conductivity of snow  (W/m/deg)
+#else
          ksno   = 0.30_dbl_kind  ,&! thermal conductivity of snow  (W/m/deg)
+#endif
          zref   = 10._dbl_kind   ,&! reference height for stability (m)
-         Tocnfrz= -34.0_dbl_kind*depressT,&! freezing temp of seawater (C),
-                                           ! used as Tsfcn for open water
          snowpatch = 0.02_dbl_kind ! parameter for fractional snow area (m)
 
       real (kind=dbl_kind), parameter :: &

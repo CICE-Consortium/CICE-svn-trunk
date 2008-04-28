@@ -359,7 +359,6 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          fsensn      , & ! surface downward sensible heat     (W/m^2)
-         flatn       , & ! surface downward latent heat       (W/m^2)
          fswabsn     , & ! shortwave absorbed by ice          (W/m^2)
          flwoutn     , & ! upward LW at surface               (W/m^2)
          evapn       , & ! flux of vapor, atmos to ice   (kg m-2 s-1)
@@ -638,12 +637,12 @@
       ! Melting does not alter the ice age.
       !-----------------------------------------------------------------
 
-         if (tr_iage) then
-             call increment_age (nx_block, ny_block,      &
-                                 dt, icells,              &
-                                 indxi, indxj,            &
-                                 trcrn(:,:,nt_iage,n,iblk))
-         endif
+            if (tr_iage) then
+               call increment_age (nx_block, ny_block,      &
+                                   dt, icells,              &
+                                   indxi, indxj,            &
+                                   trcrn(:,:,nt_iage,n,iblk))
+            endif
 
       !-----------------------------------------------------------------
       ! Vertical thermodynamics: Heat conduction, growth and melting.
@@ -656,6 +655,31 @@
 
             melts_old = melts(:,:,iblk)
             meltt_old = meltt(:,:,iblk)
+
+!lipscomb - Temporary subroutine to compute fsurfn and fcondtopn.
+!           Used for testing the option calc_Tsfc = F
+
+            if (.not. calc_Tsfc) then
+
+               call explicit_calc_Tsfc (nx_block,          ny_block,     &
+                                        my_task,           icells,       &      
+                                        indxi,             indxj,        &
+                                        trcrn(:,:,nt_Tsfc,n,iblk),       &
+                                        aicen(:,:,n,iblk),               &
+                                        vicen(:,:,n,iblk),               &
+                                        vsnon(:,:,n,iblk),               &
+                                        eicen  (:,:,il1:il2,iblk),       &
+                                        esnon  (:,:,sl1:sl2,iblk),       &
+                                        rhoa(:,:,iblk),    flw(:,:,iblk),&
+                                        potT(:,:,iblk),    Qa (:,:,iblk),&
+                                        shcoef,            lhcoef,       &
+                                        fswsfcn,           flwoutn,      &
+                                        fsensn,                          & 
+                                        flatn(:,:,n,iblk),               &
+                                        fsurfn(:,:,n,iblk),              &
+                                        fcondtopn(:,:,n,iblk))
+
+            endif
 
             call thermo_vertical                                       &
                             (nx_block,            ny_block,            &
@@ -674,7 +698,8 @@
                              fswsfcn,             fswintn,             &
                              fswthrun,                                 &
                              Sswabsn,             Iswabsn,             &
-                             fsensn,              flatn,               &
+                             fsurfn(:,:,n,iblk),  fcondtopn(:,:,n,iblk),&
+                             fsensn,              flatn(:,:,n,iblk),   &
                              fswabsn,             flwoutn,             &
                              evapn,               freshn,              &
                              fsaltn,              fhocnn,              &
@@ -729,7 +754,8 @@
                             alvdrn(:,:,n,iblk), alidrn(:,:,n,iblk),   &
                             alvdfn(:,:,n,iblk), alidfn(:,:,n,iblk),   &
                             strairxn,           strairyn,             &
-                            fsensn,             flatn,                &
+                            fsurfn(:,:,n,iblk), fcondtopn(:,:,n,iblk),&
+                            fsensn,             flatn(:,:,n,iblk),    &
                             fswabsn,            flwoutn,              &
                             evapn,                                    &
                             Trefn,              Qrefn,                &
@@ -738,6 +764,7 @@
                             alvdr   (:,:,iblk), alidr     (:,:,iblk), &
                             alvdf   (:,:,iblk), alidf     (:,:,iblk), &
                             strairxT(:,:,iblk), strairyT  (:,:,iblk), &
+                            fsurf   (:,:,iblk), fcondtop  (:,:,iblk), &
                             fsens   (:,:,iblk), flat      (:,:,iblk), &
                             fswabs  (:,:,iblk), flwout    (:,:,iblk), &
                             evap    (:,:,iblk),                       &
@@ -957,18 +984,22 @@
          call add_new_ice (nx_block,              ny_block, &
                            icells,                          &
                            indxi,                 indxj,    &
-                           tmask    (:,:,  iblk), dt,       &
-                           aicen    (:,:,:,iblk),           &
-                           trcrn    (:,:,:,:,iblk),         &
-                           vicen    (:,:,:,iblk),           &
-                           eicen    (:,:,:,iblk),           &
-                           aice0    (:,:,  iblk),           &
-                           aice     (:,:,  iblk),           &
-                           frzmlt   (:,:,  iblk),           &
-                           frazil   (:,:,  iblk),           &
-                           frz_onset(:,:,  iblk), yday,     &
-                           Tf       (:,:,  iblk), l_stop,   &
-                           istop, jstop)
+                           tmask     (:,:,  iblk), dt,      &
+                           aicen     (:,:,:,iblk),          &
+                           trcrn     (:,:,:,:,iblk),        &
+                           vicen     (:,:,:,iblk),          &
+                           eicen     (:,:,:,iblk),          &
+                           aice0     (:,:,  iblk),          &
+                           aice      (:,:,  iblk),          &
+                           frzmlt    (:,:,  iblk),          &
+                           frazil    (:,:,  iblk),          &
+                           frz_onset (:,:,  iblk), yday,    &
+                           fresh     (:,:,  iblk),          &
+                           fresh_hist(:,:,  iblk),          &
+                           fsalt     (:,:,  iblk),          &
+                           fsalt_hist(:,:,  iblk),          &
+                           Tf        (:,:,  iblk), l_stop,  &
+                           istop                 , jstop)
 
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =', &
@@ -1034,7 +1065,7 @@
                            fresh   (:,:,  iblk), fresh_hist(:,:,iblk), &
                            fsalt   (:,:,  iblk), fsalt_hist(:,:,iblk), &
                            fhocn   (:,:,  iblk), fhocn_hist(:,:,iblk), &
-                           l_stop,                                     &
+                           heat_capacity,        l_stop,               &
                            istop,                jstop)
 
          if (l_stop) then
@@ -1253,7 +1284,7 @@
                            fresh   (:,:,  iblk), fresh_hist(:,:,iblk), &
                            fsalt   (:,:,  iblk), fsalt_hist(:,:,iblk), &
                            fhocn   (:,:,  iblk), fhocn_hist(:,:,iblk), &
-                           l_stop,                                     &
+                           heat_capacity,        l_stop,               &
                            istop,                jstop)
 
          if (l_stop) then
@@ -1297,9 +1328,352 @@
 
       call ice_timer_stop(timer_column)
 
+      !----------------------------------------------------------------
+      ! Store grid box mean fluxes before scaled by aice_init
+      !----------------------------------------------------------------
+
+      fresh_hist_gbm  (:,:,:) = fresh_hist  (:,:,:)
+      fsalt_hist_gbm  (:,:,:) = fsalt_hist  (:,:,:)
+      fhocn_hist_gbm  (:,:,:) = fhocn_hist  (:,:,:)
+      fswthru_hist_gbm(:,:,:) = fswthru_hist(:,:,:)
+
       call scale_hist_fluxes    ! to match coupler fluxes
 
       end subroutine step_dynamics
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: explicit_calc_Tsfc - temporary subroutine to compute sfc fluxes
+!
+! !DESCRIPTION:
+!
+! Compute fsurfn and fcondtopn, given temperature, thickness, and 
+!  conductivity of top ice or snow layer.
+!
+! !REVISION HISTORY:
+!
+! authors William H. Lipscomb, LANL
+!
+! !INTERFACE:
+!
+      subroutine explicit_calc_Tsfc (nx_block,      ny_block, &
+                                     my_task,       icells,   &
+                                     indxi,         indxj,    &
+                                     Tsfcn,         aicen,    &
+                                     vicen,         vsnon,    &
+                                     eicen,         esnon,    &
+                                     rhoa,          flw,      &
+                                     potT,          Qa,       &
+                                     shcoef,        lhcoef,   &
+                                     fswsfcn,       flwoutn,  &
+                                     fsensn,        flatn,    &
+                                     fsurfn,        fcondtopn)
+!
+! !USES:
+!
+      use ice_therm_vertical, only: hs_min, betak, kimin
+! 
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         my_task           , & ! process ID
+         icells                ! number of cells with ice present
+
+      integer (kind=int_kind), dimension(icells), intent(in) :: &
+         indxi, indxj    ! compressed indices for ice cells
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout) :: &
+         Tsfcn     ! temperature of ice/snow top surface  (C)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         aicen , & ! concentration of ice
+         vicen , & ! volume per unit area of ice          (m)
+         vsnon     ! volume per unit area of snow         (m)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nilyr), &
+         intent(in) :: &
+         eicen     ! energy of melting for each ice layer (J/m^2)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nslyr), &
+         intent(in) :: &
+         esnon     ! energy of melting for each snow layer (J/m^2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         fswsfcn     , & ! SW absorbed at ice/snow surface (W m-2)
+         rhoa        , & ! air density (kg/m^3)
+         flw         , & ! incoming longwave radiation (W/m^2)
+         potT        , & ! air potential temperature  (K)
+         Qa          , & ! specific humidity (kg/kg)
+         shcoef      , & ! transfer coefficient for sensible heat
+         lhcoef          ! transfer coefficient for latent heat
+         
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(out) :: &
+         flwoutn     , & ! upward LW at surface (W m-2)
+         fsensn      , & ! surface downward sensible heat (W m-2)
+         flatn       , & ! surface downward latent heat (W m-2)
+         fsurfn      , & ! net flux to top surface, excluding fcondtopn
+         fcondtopn       ! conductive flux to top surface
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+         isolve    ! number of cells with temps not converged (same as icells)
+
+      integer (kind=int_kind), dimension(icells) :: &
+         indxii, indxjj,&  ! compressed indices for cells not converged
+         indxij            ! compressed 1D index for cells not converged
+
+      real (kind=dbl_kind), dimension (icells) :: &
+         Tsf         , & ! surface temperature
+         khis        , & ! 2*k/h for top ice or snow layer
+         Tis             ! temperature of top ice or snow layer
+
+      real (kind=dbl_kind), dimension (icells) :: &
+         dfsens_dT   , & ! deriv of fsens wrt Tsf (W m-2 deg-1)
+         dflat_dT    , & ! deriv of flat wrt Tsf (W m-2 deg-1)
+         dflwout_dT  , & ! deriv of flwout wrt Tsf (W m-2 deg-1)
+         dfsurf_dT       ! derivative of fsurf wrt Tsf
+
+      integer :: i, j, ij, k
+
+      real (kind=dbl_kind) ::  &
+         dTsf         , & ! change in Tsf
+         aa1, bb1, cc1, & !
+         hslyr, hilyr , & ! snow and ice layer thickness
+         qsn, qin     , & ! snow and ice layer enthalpy
+         kilyr        , & ! ice layer conductivity
+         khmax        , & ! max allowed value of kh
+         ci
+
+      logical (kind=log_kind) ::   &
+         l_snow           ! true if hsno > hs_min
+
+!lipscomb - for testing - remove later
+      if (my_task == mtest) then
+         i = itest
+         j = jtest
+         print*, ''
+         print*, 'Beginning Tsf calc, my_task, i, j =', mtest, i ,j
+      endif
+
+      ! Initialize fluxes
+
+      fsurfn   (:,:) = c0
+      fcondtopn(:,:) = c0
+      flwoutn  (:,:) = c0
+      fsensn   (:,:) = c0
+      flatn    (:,:) = c0
+
+      ! initialize surface temperature
+      do ij = 1, icells	
+         i = indxi(ij)
+         j = indxj(ij)
+         Tsf(ij) = Tsfcn(i,j)
+      enddo
+
+      !-----------------------------------------------------------------
+      ! Initialize isolve and related indices to be identical to icells
+      ! and related indices
+      !-----------------------------------------------------------------
+
+      isolve = icells
+      do ij = 1, icells	
+         indxii(ij) = indxi(ij)
+         indxjj(ij) = indxj(ij)
+         indxij(ij) = ij
+      enddo
+
+      ! Compute temperature of top layer and conductivity at upper interface.
+
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+         k = 1   ! top layer of ice or snow
+
+      ! Check if snow layer thickness hsno > hs_min
+
+         hslyr = vsnon(i,j) / aicen(i,j)
+         if (hslyr*nslyr > hs_min) then
+            l_snow = .true.
+         else
+            l_snow = .false.
+         endif
+
+      ! Temperature and heat capacity of top layer
+
+         if (l_snow) then
+
+            ! Compute enthalpy of top ice layer
+            qsn = esnon(i,j,k)*real(nslyr,kind=dbl_kind) / vsnon(i,j) 
+
+            ! Compute snow temperature from enthalpy
+            Tis(ij) = (Lfresh + qsn/rhos)/cp_ice
+            Tis(ij) = min(Tis(ij), c0)
+
+         else
+
+            ! Compute enthalpy of top ice layer
+            qin = eicen(i,j,k)*real(nilyr,kind=dbl_kind) / vicen(i,j)  
+
+            ! Compute ice temperature from enthalpy using quadratic formula
+
+            if (l_brine) then
+               aa1 = cp_ice
+               bb1 = (cp_ocn-cp_ice)*Tmlt(k) - qin/rhoi - Lfresh 
+               cc1 = Lfresh * Tmlt(k)
+               Tis(ij) =  (-bb1 - sqrt(bb1*bb1 - c4*aa1*cc1)) /  &
+                          (c2*aa1)
+               Tis(ij) = min(Tis(ij),Tmlt(k))
+            else                ! fresh ice
+               Tis(ij) = (Lfresh + qin/rhoi) / cp_ice
+               Tis(ij) = min(Tis(ij),c0)
+            endif
+
+            ! Compute heat capacity of the ice layer
+            if (l_brine) then
+               ci = cp_ice - Lfresh*Tmlt(k) /  (Tis(ij)*Tis(ij))
+            else
+               ci = cp_ice
+            endif
+         endif
+
+      ! Conductivity (k/h) at upper interface
+      ! Limit to satisfy diffusive CFL condition
+
+         if (l_snow) then
+            khis(ij) = c2*ksno / hslyr
+            khmax = rhos*cp_ice*hslyr / dt
+         else
+            k = 1
+
+            kilyr = kice + betak*salin(k)/min(-puny,Tis(ij))
+            kilyr = max (kilyr, kimin)
+
+            hilyr = vicen(i,j) / aicen(i,j) 
+            khis(ij) = c2*kilyr / hilyr
+            khmax = rhoi*ci*hilyr / dt
+         endif
+
+         khis(ij) = min(khis(ij), khmax)
+
+      enddo   ! ij
+
+!lipscomb - Remove later
+
+      if (my_task==mtest) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            if (i==itest .and. j==jtest) then
+               print*, ''
+               print*, 'kh =', khis(ij)
+               print*, 'Tis =', Tis(ij)
+               print*, ''
+               print*, 'fswsfc =', fswsfcn(i,j)
+               print*, 'flwdn =', emissivity*flw(i,j)
+               print*, 'potT =', potT(i,j) - Tffresh
+            endif
+         enddo
+      endif  ! my_task
+
+      !-----------------------------------------------------------------
+      ! Compute radiative and turbulent fluxes and their derivatives
+      ! with respect to Tsf.
+      !-----------------------------------------------------------------
+
+      call surface_fluxes (nx_block,    ny_block,           &
+                           isolve,      icells,             &
+                           indxii,      indxjj,   indxij,   &
+                           Tsf,         fswsfcn,            &
+                           rhoa,        flw,                &
+                           potT,        Qa,                 &
+                           shcoef,      lhcoef,             &
+                           flwoutn,     fsensn,             &
+                           flatn,       fsurfn,             &
+                           dflwout_dT,  dfsens_dT,          &
+                           dflat_dT,    dfsurf_dT)
+
+!lipscomb - for testing - remove later
+
+      if (my_task == mtest) then
+         i = itest
+         j = jtest
+         print*, ''
+         print*, 'Got surface fluxes'
+
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            if (i==itest .and. j==jtest) then
+               print*, ''
+               print*, 'flwout =', flwoutn(i,j)
+               print*, 'fsens =', fsensn(i,j)
+               print*, 'flat =', flatn(i,j)
+               print*, 'fsurf =', fsurfn(i,j)
+               print*, 'dfsurf_dT =', dfsurf_dT(ij)
+            endif
+         enddo
+      endif
+
+      !-----------------------------------------------------------------
+      ! Solve for the new surface temperature and fluxes
+      !-----------------------------------------------------------------
+
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+
+         dTsf = (fsurfn(i,j) - khis(ij)*(Tsf(ij) - Tis(ij))) /   &
+                (khis(ij) - dfsurf_dT(ij))
+
+         Tsf(ij) = Tsf(ij) + dTsf
+
+         if (Tsf(ij) > c0) then
+            dTsf = dTsf - Tsf(ij) 
+            Tsf(ij) = c0
+         endif
+
+         Tsfcn(i,j) = Tsf(ij)   ! for output
+
+         fsensn (i,j) = fsensn (i,j) + dTsf*dfsens_dT(ij)
+         flatn  (i,j) = flatn  (i,j) + dTsf*dflat_dT(ij)
+         flwoutn(i,j) = flwoutn(i,j) + dTsf*dflwout_dT(ij)
+         fsurfn (i,j) = fsurfn (i,j) + dTsf*dfsurf_dT(ij)
+
+         fcondtopn(i,j) = khis(ij) * (Tsf(ij) - Tis(ij))
+
+      enddo
+
+!lipscomb - for testing - remove later
+
+      if (my_task == mtest) then
+         i = itest
+         j = jtest
+         print*, ''
+         print*, 'New temp and fluxes:'
+
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            if (i==itest .and. j==jtest) then
+               print*, ''
+               print*, 'Tsf =', Tsf(ij)
+               print*, 'fct =', fcondtopn(i,j)
+               print*, ''
+               print*, 'flwout =', flwoutn(i,j)
+               print*, 'fsens =', fsensn(i,j)
+               print*, 'flat =', flatn(i,j)
+               print*, 'fsurf =', fsurfn(i,j)
+               print*, 'dfsurf_dT =', dfsurf_dT(ij)
+            endif
+         enddo
+      endif
+
+      end subroutine explicit_calc_Tsfc
 
 !=======================================================================
 

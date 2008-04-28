@@ -118,7 +118,6 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          fsensn      , & ! surface downward sensible heat     (W/m^2)
-         flatn       , & ! surface downward latent heat       (W/m^2)
          fswabsn     , & ! shortwave absorbed by ice          (W/m^2)
          flwoutn     , & ! upward LW at surface               (W/m^2)
          evapn       , & ! flux of vapor, atmos to ice   (kg m-2 s-1)
@@ -309,7 +308,8 @@
                              fswthrun(:,:,n,iblk),                     &
                              Sswabsn(:,:,sl1:sl2,iblk),                &
                              Iswabsn(:,:,il1:il2,iblk),                &
-                             fsensn,              flatn,               &
+                             fsurfn(:,:,n,iblk),  fcondtopn(:,:,n,iblk),&
+                             fsensn,              flatn(:,:,n,iblk),   &
                              fswabsn,             flwoutn,             &
                              evapn,               freshn,              &
                              fsaltn,              fhocnn,              &
@@ -365,7 +365,8 @@
                             alvdrn(:,:,n,iblk), alidrn(:,:,n,iblk),   &
                             alvdfn(:,:,n,iblk), alidfn(:,:,n,iblk),   &
                             strairxn,           strairyn,             &
-                            fsensn,             flatn,                &
+                            fsurfn(:,:,n,iblk), fcondtopn(:,:,n,iblk),&
+                            fsensn,             flatn(:,:,n,iblk),    &
                             fswabsn,            flwoutn,              &
                             evapn,                                    &
                             Trefn,              Qrefn,                &
@@ -374,6 +375,7 @@
                             alvdr   (:,:,iblk), alidr     (:,:,iblk), &
                             alvdf   (:,:,iblk), alidf     (:,:,iblk), &
                             strairxT(:,:,iblk), strairyT  (:,:,iblk), &
+                            fsurf   (:,:,iblk), fcondtop  (:,:,iblk), &
                             fsens   (:,:,iblk), flat      (:,:,iblk), &
                             fswabs  (:,:,iblk), flwout    (:,:,iblk), &
                             evap    (:,:,iblk),                       &
@@ -599,18 +601,22 @@
          call add_new_ice (nx_block,              ny_block, &
                            icells,                          &
                            indxi,                 indxj,    &
-                           tmask    (:,:,  iblk), dt,       &
-                           aicen    (:,:,:,iblk),           &
-                           trcrn    (:,:,:,:,iblk),         &
-                           vicen    (:,:,:,iblk),           &
-                           eicen    (:,:,:,iblk),           &
-                           aice0    (:,:,  iblk),           &
-                           aice     (:,:,  iblk),           &
-                           frzmlt   (:,:,  iblk),           &
-                           frazil   (:,:,  iblk),           &
-                           frz_onset(:,:,  iblk), yday,     &
-                           Tf       (:,:,  iblk), l_stop,   &
-                           istop, jstop)
+                           tmask     (:,:,  iblk), dt,      &
+                           aicen     (:,:,:,iblk),          &
+                           trcrn     (:,:,:,:,iblk),        &
+                           vicen     (:,:,:,iblk),          &
+                           eicen     (:,:,:,iblk),          &
+                           aice0     (:,:,  iblk),          &
+                           aice      (:,:,  iblk),          &
+                           frzmlt    (:,:,  iblk),          &
+                           frazil    (:,:,  iblk),          &
+                           frz_onset (:,:,  iblk), yday,    &
+                           fresh     (:,:,  iblk),          &
+                           fresh_hist(:,:,  iblk),          &
+                           fsalt     (:,:,  iblk),          &
+                           fsalt_hist(:,:,  iblk),          &
+                           Tf        (:,:,  iblk), l_stop,  &
+                           istop                 , jstop)
 
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =', &
@@ -676,7 +682,7 @@
                            fresh   (:,:,  iblk), fresh_hist(:,:,iblk), &
                            fsalt   (:,:,  iblk), fsalt_hist(:,:,iblk), &
                            fhocn   (:,:,  iblk), fhocn_hist(:,:,iblk), &
-                           l_stop,                                     &
+                           heat_capacity,        l_stop,               &
                            istop,                jstop)
 
          if (l_stop) then
@@ -1378,6 +1384,15 @@
                             alvdf    (:,:,iblk), alidf   (:,:,iblk))
 
       enddo                      ! iblk
+
+      !----------------------------------------------------------------
+      ! Store grid box mean fluxes before scaled by aice_init
+      !----------------------------------------------------------------
+
+      fresh_hist_gbm  (:,:,:) = fresh_hist  (:,:,:)
+      fsalt_hist_gbm  (:,:,:) = fsalt_hist  (:,:,:)
+      fhocn_hist_gbm  (:,:,:) = fhocn_hist  (:,:,:)
+      fswthru_hist_gbm(:,:,:) = fswthru_hist(:,:,:)
 
       call scale_hist_fluxes     ! to match coupler fluxes
       

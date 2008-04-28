@@ -35,7 +35,8 @@
 
       real (kind=dbl_kind), dimension(:,:), allocatable :: &
          work_g1, &
-         work_g2
+         work_g2, &
+         work_g3
 
       real (kind=real_kind), dimension(:,:), allocatable :: &
          work_gr

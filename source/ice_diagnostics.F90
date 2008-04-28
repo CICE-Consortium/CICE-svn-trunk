@@ -45,9 +45,9 @@
       integer (kind=int_kind), parameter :: &
          npnt = 2             ! total number of points to be printed
 
-!lipscomb - set to false for testing
+      ! Set to true to identify unstable fast-moving ice.
       logical (kind=log_kind), parameter ::  &
-         check_umax = .false.  ! if true, check for speed > umax_stab
+         check_umax = .false. ! if true, check for speed > umax_stab
 
       real (kind=dbl_kind), parameter :: &
          umax_stab   = 1.0_dbl_kind , & ! ice speed threshold for instability (m/s)
@@ -124,6 +124,7 @@
       use ice_state
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
       use ice_work, only: work1, work2
+      use ice_therm_vertical, only: calc_Tsfc
 
 #if (defined CCSM) || (defined SEQ_MCT)
       use ice_prescribed_mod, only : prescribed_ice
@@ -162,7 +163,7 @@
       real (kind=dbl_kind), dimension(npnt) :: &
          paice, pTair, pQa, pfsnow, pfrain, pfsw, pflw, & 
          pTsfc, pevap, pfswabs, pflwout, pflat, pfsens, &
-         psst,  pTf, hiavg, hsavg, pfhocn, &
+         pfsurf, pfcondtop, psst,  pTf, hiavg, hsavg, pfhocn, &
          pmeltt, pmeltb, pmeltl, psnoice, pfrazil, pcongel
 
       !-----------------------------------------------------------------
@@ -365,8 +366,7 @@
       !-----------------------------------------------------------------
       ! various fluxes
       !-----------------------------------------------------------------
-      ! evap, fsalt, fresh, fhocn, fswthru, fsens, and flwout
-      ! need to be multiplied by aice because
+      ! evap, fsens, and flwout need to be multiplied by aice because
       ! regrettably they have been divided by aice for the coupler
       !-----------------------------------------------------------------
 
@@ -380,26 +380,26 @@
          evps = evps*dt
 
          ! salt flux
-         sfsaltn = global_sum_prod(fsalt_hist, aice_init, distrb_info, &
+         sfsaltn = global_sum(fsalt_hist_gbm, distrb_info, &
                                    field_loc_center, tarean)
-         sfsalts = global_sum_prod(fsalt_hist, aice_init, distrb_info, &
+         sfsalts = global_sum(fsalt_hist_gbm, distrb_info, &
                                    field_loc_center, tareas)
          sfsaltn = sfsaltn*dt
          sfsalts = sfsalts*dt
 
          ! fresh water flux
-         sfreshn = global_sum_prod(fresh_hist, aice_init, distrb_info, &
+         sfreshn = global_sum(fresh_hist_gbm, distrb_info, &
                                    field_loc_center, tarean)
-         sfreshs = global_sum_prod(fresh_hist, aice_init, distrb_info, &
+         sfreshs = global_sum(fresh_hist, distrb_info, &
                                    field_loc_center, tareas)
          sfreshn = sfreshn*dt
          sfreshs = sfreshs*dt
 
          ! ocean heat
          ! Note: fswthru not included because it does not heat ice
-         fhocnn = global_sum_prod(fhocn_hist, aice_init, distrb_info, &
+         fhocnn = global_sum(fhocn_hist_gbm, distrb_info, &
                                   field_loc_center, tarean)
-         fhocns = global_sum_prod(fhocn_hist, aice_init, distrb_info, &
+         fhocns = global_sum(fhocn_hist, distrb_info, &
                                   field_loc_center, tareas)
 
          ! latent heat
@@ -414,16 +414,33 @@
          ! Also note: fswabs includes solar radiation absorbed in ocean,
          !  which must be subtracted here.
 
-         do iblk = 1, nblocks
-            do j = 1, ny_block
-            do i = 1, nx_block
-               work1(i,j,iblk) = &
+         if (calc_Tsfc) then
+
+            do iblk = 1, nblocks
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  work1(i,j,iblk) = &
                             (fswabs(i,j,iblk) - fswthru_hist(i,j,iblk) &
                            + flw   (i,j,iblk) + flwout      (i,j,iblk) &
                            + fsens (i,j,iblk)) * aice_init(i,j,iblk)
+               enddo
+               enddo
             enddo
+
+         else   ! fsurf is computed by atmosphere model 
+
+            do iblk = 1, nblocks
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  work1(i,j,iblk) = &
+                             (fsurf(i,j,iblk) - flat(i,j,iblk)) & 
+                              * aice_init(i,j,iblk)
+               enddo
+               enddo
             enddo
-         enddo
+
+         endif     ! calc_Tsfc
+
          fhatmn = global_sum(work1, distrb_info, &
                              field_loc_center, tarean)
          fhatms = global_sum(work1, distrb_info, &
@@ -481,18 +498,31 @@
          delmin = mtotn - totmn
          delmis = mtots - totms
 
-         ! ice mass change excluding frazil ice formation
-         delmxn = micen - totmin - frzn
-         delmxs = mices - totmis - frzs
+         ! ice mass change including frazil ice formation
+         delmxn = micen - totmin
+         delmxs = mices - totmis
+         if (.not. update_ocn_f) then
+           ! ice mass change excluding frazil ice formation
+           delmxn = delmxn - frzn
+           delmxs = delmxs - frzs
+         endif
 
          ! total water flux
          fluxn  = c0
          fluxs  = c0
          if( arean > c0) then
-            fluxn = rnn + snn + evpn - sfreshn + frzn
+           ! water associated with frazil ice included in fresh
+           fluxn = rnn + snn + evpn - sfreshn
+           if (.not. update_ocn_f) then
+             fluxn = fluxn + frzn
+           endif
          endif
          if( areas > c0) then
-            fluxs = rns + sns + evps - sfreshs + frzs
+           ! water associated with frazil ice included in fresh
+           fluxs = rns + sns + evps - sfreshs
+           if (.not. update_ocn_f) then
+             fluxs = fluxs + frzs
+           endif
          endif
 
          werrn = (fluxn-delmin)/(mtotn+c1)
@@ -515,7 +545,7 @@
          msltn = micen*ice_ref_salinity*p001
          mslts = mices*ice_ref_salinity*p001
 
-         ! change in salt mass, excluding frazil
+         ! change in salt mass
          delmsltn = delmxn*ice_ref_salinity*p001
          delmslts = delmxs*ice_ref_salinity*p001
 
@@ -558,6 +588,8 @@
                pflwout(n) = flwout(i,j,iblk)       ! outward longwave flux
                pflat(n) = flat(i,j,iblk)           ! latent heat flux
                pfsens(n) = fsens(i,j,iblk)         ! sensible heat flux
+               pfsurf(n) = fsurf(i,j,iblk)         ! total sfc heat flux
+               pfcondtop(n) = fcondtop(i,j,iblk)   ! top sfc cond flux
                pmeltt(n) = meltt(i,j,iblk)         ! top melt
                pmeltb(n) = meltb(i,j,iblk)         ! bottom melt
                pmeltl(n) = meltl(i,j,iblk)         ! lateral melt
@@ -574,33 +606,35 @@
 
             endif  ! my_task = pmloc
 
-            call broadcast_scalar(pTair   (n), pmloc(n))             
-            call broadcast_scalar(pQa     (n), pmloc(n))             
-            call broadcast_scalar(pfsnow  (n), pmloc(n))             
-            call broadcast_scalar(pfrain  (n), pmloc(n))             
-            call broadcast_scalar(pfsw    (n), pmloc(n))             
-            call broadcast_scalar(pflw    (n), pmloc(n))             
-            call broadcast_scalar(paice   (n), pmloc(n))             
-            call broadcast_scalar(hsavg   (n), pmloc(n))             
-            call broadcast_scalar(hiavg   (n), pmloc(n))             
-            call broadcast_scalar(pTsfc   (n), pmloc(n))             
-            call broadcast_scalar(pevap   (n), pmloc(n))             
-            call broadcast_scalar(pfswabs (n), pmloc(n)) 
-            call broadcast_scalar(pflwout (n), pmloc(n)) 
-            call broadcast_scalar(pflat   (n), pmloc(n)) 
-            call broadcast_scalar(pfsens  (n), pmloc(n)) 
-            call broadcast_scalar(pmeltt  (n), pmloc(n)) 
-            call broadcast_scalar(pmeltb  (n), pmloc(n)) 
-            call broadcast_scalar(pmeltl  (n), pmloc(n)) 
-            call broadcast_scalar(psnoice (n), pmloc(n)) 
-            call broadcast_scalar(pfrazil (n), pmloc(n)) 
-            call broadcast_scalar(pcongel (n), pmloc(n)) 
-            call broadcast_scalar(pdhi    (n), pmloc(n)) 
-            call broadcast_scalar(pdhs    (n), pmloc(n)) 
-            call broadcast_scalar(pde     (n), pmloc(n)) 
-            call broadcast_scalar(psst    (n), pmloc(n)) 
-            call broadcast_scalar(pTf     (n), pmloc(n)) 
-            call broadcast_scalar(pfhocn  (n), pmloc(n))
+            call broadcast_scalar(pTair    (n), pmloc(n))             
+            call broadcast_scalar(pQa      (n), pmloc(n))             
+            call broadcast_scalar(pfsnow   (n), pmloc(n))             
+            call broadcast_scalar(pfrain   (n), pmloc(n))             
+            call broadcast_scalar(pfsw     (n), pmloc(n))             
+            call broadcast_scalar(pflw     (n), pmloc(n))             
+            call broadcast_scalar(paice    (n), pmloc(n))             
+            call broadcast_scalar(hsavg    (n), pmloc(n))             
+            call broadcast_scalar(hiavg    (n), pmloc(n))             
+            call broadcast_scalar(pTsfc    (n), pmloc(n))             
+            call broadcast_scalar(pevap    (n), pmloc(n))             
+            call broadcast_scalar(pfswabs  (n), pmloc(n)) 
+            call broadcast_scalar(pflwout  (n), pmloc(n)) 
+            call broadcast_scalar(pflat    (n), pmloc(n)) 
+            call broadcast_scalar(pfsens   (n), pmloc(n)) 
+            call broadcast_scalar(pfsurf   (n), pmloc(n)) 
+            call broadcast_scalar(pfcondtop(n), pmloc(n)) 
+            call broadcast_scalar(pmeltt   (n), pmloc(n)) 
+            call broadcast_scalar(pmeltb   (n), pmloc(n)) 
+            call broadcast_scalar(pmeltl   (n), pmloc(n)) 
+            call broadcast_scalar(psnoice  (n), pmloc(n)) 
+            call broadcast_scalar(pfrazil  (n), pmloc(n)) 
+            call broadcast_scalar(pcongel  (n), pmloc(n)) 
+            call broadcast_scalar(pdhi     (n), pmloc(n)) 
+            call broadcast_scalar(pdhs     (n), pmloc(n)) 
+            call broadcast_scalar(pde      (n), pmloc(n)) 
+            call broadcast_scalar(psst     (n), pmloc(n)) 
+            call broadcast_scalar(pTf      (n), pmloc(n)) 
+            call broadcast_scalar(pfhocn   (n), pmloc(n))
             
          enddo                  ! npnt
       endif                     ! print_points
@@ -646,7 +680,11 @@
           write (nu_diag,801) 'arwt tot mass (kg)     = ',mtotn
           write (nu_diag,801) 'arwt tot mass chng(kg) = ',delmin
           write (nu_diag,801) 'arwt water flux        = ',fluxn
-          write (nu_diag,*) '(=rain+snow+evap+frzl-fresh)  '
+          if (update_ocn_f) then
+            write (nu_diag,*) '(=rain+snow+evap-fresh)  '
+          else
+            write (nu_diag,*) '(=rain+snow+evap+frzl-fresh)  '
+          endif
           write (nu_diag,801) 'water flux error       = ',werrn
 #if (defined CCSM) || (defined SEQ_MCT)
          endif                    ! prescribed_ice
@@ -699,7 +737,11 @@
          write(nu_diag,901) 'arwt tot mass (kg)     = ',mtotn,mtots
          write(nu_diag,901) 'arwt tot mass chng(kg) = ',delmin,delmis
          write(nu_diag,901) 'arwt water flux        = ',fluxn,fluxs
-         write(nu_diag,*) '(=rain+snow+evap+frzl-fresh)  '
+         if (update_ocn_f) then
+           write (nu_diag,*) '(=rain+snow+evap-fresh)  '
+         else
+           write (nu_diag,*) '(=rain+snow+evap+frzl-fresh)  '
+         endif
          write(nu_diag,901) 'water flux error       = ',werrn,werrs
 
          write(nu_diag,*) '----------------------------'
@@ -744,20 +786,29 @@
                                                        pfsnow(2)
         write(nu_diag,900) 'rainfall (m)           = ',pfrain(1), &
                                                        pfrain(2)
-        write(nu_diag,900) 'shortwave radiation sum= ',pfsw(1),pfsw(2)
-        write(nu_diag,900) 'longwave radiation     = ',pflw(1),pflw(2)
+        if (.not.calc_Tsfc) then
+           write(nu_diag,900) 'total surface heat flux= ',pfsurf(1),pfsurf(2)
+           write(nu_diag,900) 'top sfc conductive flux= ',pfcondtop(1), &
+                                                          pfcondtop(2)
+           write(nu_diag,900) 'latent heat flx        = ',pflat(1),pflat(2)
+        else
+           write(nu_diag,900) 'shortwave radiation sum= ',pfsw(1),pfsw(2)
+           write(nu_diag,900) 'longwave radiation     = ',pflw(1),pflw(2)
+        endif
         write(nu_diag,*) '----------ice----------'
         write(nu_diag,900) 'area fraction          = ',paice(1),paice(2)
         write(nu_diag,900) 'avg ice thickness (m)  = ',hiavg(1),hiavg(2)
         write(nu_diag,900) 'avg snow depth (m)     = ',hsavg(1),hsavg(2)
-        write(nu_diag,900) 'surface temperature(C) = ',pTsfc(1),pTsfc(2)
-        write(nu_diag,900) 'absorbed shortwave flx = ',pfswabs(1), &
-                                                       pfswabs(2)
-        write(nu_diag,900) 'outward longwave flx   = ',pflwout(1), &
-                                                       pflwout(2)
-        write(nu_diag,900) 'sensible heat flx      = ',pfsens(1), &
-                                                       pfsens(2)
-        write(nu_diag,900) 'latent heat flx        = ',pflat(1),pflat(2)
+        if (calc_Tsfc) then
+           write(nu_diag,900) 'surface temperature(C) = ',pTsfc(1),pTsfc(2)
+           write(nu_diag,900) 'absorbed shortwave flx = ',pfswabs(1), &
+                                                          pfswabs(2)
+           write(nu_diag,900) 'outward longwave flx   = ',pflwout(1), &
+                                                          pflwout(2)
+           write(nu_diag,900) 'sensible heat flx      = ',pfsens(1), &
+                                                          pfsens(2)
+           write(nu_diag,900) 'latent heat flx        = ',pflat(1),pflat(2)
+        endif
         write(nu_diag,900) 'subl/cond (m ice)      = ',pevap(1),pevap(2)
         write(nu_diag,900) 'top melt (m)           = ',pmeltt(1) &
                                                       ,pmeltt(2)
