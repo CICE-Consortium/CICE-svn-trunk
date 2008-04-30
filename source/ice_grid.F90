@@ -27,6 +27,7 @@
 ! !USES:
 !
       use ice_kinds_mod
+      use ice_boundary
       use ice_communicate, only: my_task, master_task
       use ice_constants
       use ice_blocks
@@ -278,7 +279,6 @@
 !
 ! !USES:
 !
-      use ice_boundary
       use ice_work, only: work_g1
       use ice_exit
       use ice_blocks, only: get_block, block
@@ -568,11 +568,15 @@
       call gridbox_verts(work_g1,latt_bounds)       
       call scatter_global(ULAT, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
+      call ice_HaloExtrapolate(ULAT, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
 
       call ice_read_global(nu_grid,2,work_g1,'rda8',.true.)   ! ULON
       call gridbox_verts(work_g1,lont_bounds)       
       call scatter_global(ULON, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
+      call ice_HaloExtrapolate(ULON, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
 
       call ice_read_global(nu_grid,7,work_g1,'rda8',.true.)   ! ANGLE
       call scatter_global(ANGLE, work_g1, master_task, distrb_info, &
@@ -691,24 +695,19 @@
 
       fieldname='ulat'
       call ice_read_global_nc(fid_grid,1,fieldname,work_g1,diag) ! ULAT
-#ifdef ORCA_GRID
-      ! Kludge: remove this code when ORCA grid files are fixed.
-      ! Extrapolate to correct ULAT along j=1.
-      if (my_task == master_task) then
-         do i = 1, nx_global
-            work_g1(i,1) = c2*work_g1(i,2) - work_g1(i,3)
-         enddo
-      endif
-#endif
       call gridbox_verts(work_g1,latt_bounds)       
       call scatter_global(ULAT, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
+      call ice_HaloExtrapolate(ULAT, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
 
       fieldname='ulon'
       call ice_read_global_nc(fid_grid,2,fieldname,work_g1,diag) ! ULON
       call gridbox_verts(work_g1,lont_bounds)       
       call scatter_global(ULON, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
+      call ice_HaloExtrapolate(ULON, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
 
       fieldname='angle'
       call ice_read_global_nc(fid_grid,7,fieldname,work_g1,diag) ! ANGLE    
@@ -836,11 +835,19 @@
       allocate(work_g1(nx_global,ny_global))
 
       call ice_read_global(nu_grid,2,work_g1,'rda8',.true.)   ! ULAT
+      call gridbox_verts(work_g1,latt_bounds)       
       call scatter_global(ULAT, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
+      call ice_HaloExtrapolate(ULAT, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
+
       call ice_read_global(nu_grid,3,work_g1,'rda8',.true.)   ! ULON
+      call gridbox_verts(work_g1,lont_bounds)       
       call scatter_global(ULON, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
+      call ice_HaloExtrapolate(ULON, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
+
       call ice_read_global(nu_grid,8,work_g1,'rda8',.true.)   ! ANGLE
       call scatter_global(ANGLE, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
@@ -884,7 +891,6 @@
 !
 ! !USES:
 !
-!     use ice_boundary
       use ice_domain_size
       use ice_scam, only : scmlat, scmlon, single_column
       use netcdf
@@ -1370,8 +1376,6 @@
 !
 ! !USES:
 !
-      use ice_boundary
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
@@ -1475,7 +1479,6 @@
 ! !USES:
 !
       use ice_domain_size
-      use ice_boundary
       use ice_global_reductions, only: global_minval, global_maxval
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1552,6 +1555,10 @@
       call ice_HaloUpdate (TLAT,             halo_info, &
                            field_loc_center, field_type_scalar, &
                            fillValue=c1)
+      call ice_HaloExtrapolate(TLON, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
+      call ice_HaloExtrapolate(TLAT, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
       call ice_timer_stop(timer_bound)
 
       x1 = global_minval(TLON, distrb_info, tmask)
@@ -1593,7 +1600,6 @@
 !
 ! !USES:
 !
-      use ice_boundary
       use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1698,7 +1704,6 @@
 !
 ! !USES:
 !
-      use ice_boundary
       use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1996,9 +2001,9 @@
 !
 ! !DESCRIPTION:
 !
-! NOTE:  Boundary conditions for fields on NW, SW, SE corners
-!        have not been implemented; using NE corner location for all.
-!        Extrapolations are also used: these fields are approximate!
+! These fields are only used for netcdf history output, and the
+! ghost cell values are not needed.
+! NOTE:  Extrapolations were used: these fields are approximate!
 !
 ! !REVISION HISTORY:
 !
@@ -2047,6 +2052,7 @@
          enddo
          enddo
       enddo
+
 
       !----------------------------------------------------------------
       ! extrapolate on global grid to get edge values

@@ -390,7 +390,7 @@
          ! fresh water flux
          sfreshn = global_sum(fresh_hist_gbm, distrb_info, &
                                    field_loc_center, tarean)
-         sfreshs = global_sum(fresh_hist, distrb_info, &
+         sfreshs = global_sum(fresh_hist_gbm, distrb_info, &
                                    field_loc_center, tareas)
          sfreshn = sfreshn*dt
          sfreshs = sfreshs*dt
@@ -399,7 +399,7 @@
          ! Note: fswthru not included because it does not heat ice
          fhocnn = global_sum(fhocn_hist_gbm, distrb_info, &
                                   field_loc_center, tarean)
-         fhocns = global_sum(fhocn_hist, distrb_info, &
+         fhocns = global_sum(fhocn_hist_gbm, distrb_info, &
                                   field_loc_center, tareas)
 
          ! latent heat

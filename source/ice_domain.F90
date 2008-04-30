@@ -58,6 +58,10 @@
    logical (log_kind), public :: &
       ltripole_grid      ! flag to signal use of tripole grid
 
+    character (char_len), public :: &
+       ew_boundary_type,    &! type of domain bndy in each logical
+       ns_boundary_type      !    direction (ew is i, ns is j)
+
 !EOP
 !BOC
 !-----------------------------------------------------------------------
@@ -72,11 +76,9 @@
        distribution_type,   &! method to use for distributing blocks
                              ! 'cartesian'
                              ! 'rake' 
-       distribution_wght,   &! method for weighting work per block 
+       distribution_wght     ! method for weighting work per block 
                              ! 'block' = POP default configuration
                              ! 'latitude' = no. ocean points * |lat|
-       ew_boundary_type,    &! type of domain bndy in each logical
-       ns_boundary_type      !    direction (ew is i, ns is j)
 
     integer (int_kind) :: &
        nprocs                ! num of processors
