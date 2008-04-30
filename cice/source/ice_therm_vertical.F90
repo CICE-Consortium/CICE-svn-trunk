@@ -44,7 +44,7 @@
 
       real (kind=dbl_kind), parameter :: &
          saltmax = 3.2_dbl_kind,  & ! max salinity at ice base (ppt)
-         hs_min = 1.0e-4_dbl_kind,&! min thickness for which Tsno computed
+         hs_min = 1.e-4_dbl_kind, & ! min snow thickness for computing Tsno (m)
          betak   = 0.13_dbl_kind, & ! constant in formula for k (W m-1 ppt-1)
          kimin   = 0.10_dbl_kind    ! min conductivity of saline ice (W m-1 deg-1)
 
@@ -66,11 +66,11 @@
          l_brine         ! if true, treat brine pocket effects
 
       logical (kind=log_kind) :: &
-         heat_capacity = .true., &! if true, ice has nonzero heat capacity
-                                  ! if false, use zero-layer thermodynamics
-         calc_Tsfc     = .true.   ! if true, calculate surface temperature
-                                  ! if false, Tsfc is computed elsewhere and
-                                  ! atmos-ice fluxes are provided to CICE
+         heat_capacity, &! if true, ice has nonzero heat capacity
+                         ! if false, use zero-layer thermodynamics
+         calc_Tsfc       ! if true, calculate surface temperature
+                         ! if false, Tsfc is computed elsewhere and
+                         ! atmos-ice fluxes are provided to CICE
 
 !=======================================================================
 
@@ -903,6 +903,7 @@
          k               ! ice layer index
 
       real (kind=dbl_kind) :: &
+         rnslyr,        & ! real(nslyr)
          aa1, bb1, cc1, & ! terms in quadratic formula
          Tmax             ! maximum allowed snow/ice temperature (deg C)
 
@@ -915,6 +916,8 @@
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
+
+      rnslyr = real(nslyr,kind=dbl_kind)
 
       do ij = 1, icells
          einit(ij) = c0
@@ -944,7 +947,7 @@
          hin(ij)    = vicen(i,j) / aicen(i,j)
          hsn(ij)    = vsnon(i,j) / aicen(i,j)
          hilyr(ij)    = hin(ij) / real(nilyr,kind=dbl_kind)
-         hslyr(ij)    = hsn(ij) / real(nslyr,kind=dbl_kind)
+         hslyr(ij)    = hsn(ij) / rnslyr
 
       enddo                     ! ij
 
@@ -969,11 +972,10 @@
       ! where 'd' denotes an error due to roundoff.
       !-----------------------------------------------------------------
 
-            if (hslyr(ij) > hs_min .and. heat_capacity) then
+            if (hslyr(ij) > hs_min/rnslyr .and. heat_capacity) then
                ! qsn, esnon < 0              
-               qsn  (ij,k) = esnon(i,j,k)*real(nslyr,kind=dbl_kind) &
-                             /vsnon(i,j) 
-               Tmax = -qsn(ij,k)*puny / &
+               qsn  (ij,k) = esnon(i,j,k)*rnslyr/vsnon(i,j) 
+               Tmax = -qsn(ij,k)*puny*rnslyr / &
                        (rhos*cp_ice*vsnon(i,j))
             else
                qsn  (ij,k) = -rhos * Lfresh
@@ -1008,8 +1010,8 @@
                i = indxi(ij)
                j = indxj(ij)
 
-               if (hslyr(ij) > hs_min) then
-                  Tmax = -qsn(ij,k)*puny / &
+               if (hslyr(ij) > hs_min/rnslyr) then
+                  Tmax = -qsn(ij,k)*puny*rnslyr / &
                            (rhos*cp_ice*vsnon(i,j))
                else
                   Tmax = puny
@@ -1417,7 +1419,8 @@
          dflat_dT  (ij) = c0
          dflwout_dT(ij) = c0  
          dt_rhoi_hlyr(ij) = dt / (rhoi*hilyr(ij))  ! hilyr > 0
-         if (hslyr(ij) > hs_min) l_snow(ij) = .true.
+         if (hslyr(ij) > hs_min/real(nslyr,kind=dbl_kind)) &
+            l_snow(ij) = .true.
       enddo                     ! ij
 
       do k = 1, nslyr
@@ -1672,7 +1675,9 @@
       ! Compute elements of tridiagonal matrix.
       !-----------------------------------------------------------------
 
-         call get_matrix_elements (nx_block, ny_block,         &
+         if (calc_Tsfc) then
+            call get_matrix_elements_calc_Tsfc &
+                                  (nx_block, ny_block,         &
                                    isolve,   icells,           &
                                    indxii,   indxjj,   indxij, &
                                    l_snow,   l_cold,           &
@@ -1683,8 +1688,22 @@
                                    Iswabs,                     &
                                    etai,     etas,             &
                                    sbdiag,   diag,             &
+                                   spdiag,   rhs)
+
+         else
+            call get_matrix_elements_know_Tsfc &
+                                  (nx_block, ny_block,         &
+                                   isolve,   icells,           &
+                                   indxii,   indxjj,   indxij, &
+                                   l_snow,   Tbot,             &
+                                   Tin_init, Tsn_init,         &
+                                   kh,       Sswabs,           &
+                                   Iswabs,                     &
+                                   etai,     etas,             &
+                                   sbdiag,   diag,             &
                                    spdiag,   rhs,              &
                                    fcondtopn)
+         endif
 
       !-----------------------------------------------------------------
       ! Solve tridiagonal matrix to obtain the new temperatures.
@@ -2299,6 +2318,7 @@
 !
 ! Compute terms in tridiagonal matrix that will be solved to find
 !  the new vertical temperature profile
+! This routine is for the case in which Tsfc is being computed.
 !
 ! !REVISION HISTORY:
 !
@@ -2306,11 +2326,13 @@
 !         C. M. Bitz, UW
 !
 !
-! revised March 2004 by William H. Lipscomb for multiple snow layers
+! March 2004 by William H. Lipscomb for multiple snow layers
+! April 2008 by E. C. Hunke, divided into two routines based on calc_Tsfc 
 !
 ! !INTERFACE:
 !
-      subroutine get_matrix_elements (nx_block, ny_block,         &
+      subroutine get_matrix_elements_calc_Tsfc &
+                                     (nx_block, ny_block,         &
                                       isolve,   icells,           &
                                       indxii,   indxjj,   indxij, &
                                       l_snow,   l_cold,           &
@@ -2321,8 +2343,7 @@
                                       Iswabs,                     &
                                       etai,     etas,             &
                                       sbdiag,   diag,             &
-                                      spdiag,   rhs,              &
-                                      fcondtopn)
+                                      spdiag,   rhs)
 !
 ! !USES:
 !
@@ -2355,6 +2376,327 @@
 
       real (kind=dbl_kind), dimension (isolve), intent(in) :: &
          dfsurf_dT       ! derivative of fsurf wrt Tsf
+
+      real (kind=dbl_kind), dimension (isolve,nilyr), &
+         intent(in) :: &
+         etai            ! dt / (rho*cp*h) for ice layers
+
+      real (kind=dbl_kind), dimension (icells,nilyr), &
+         intent(in) :: &
+         Tin_init        ! ice temp at beginning of time step
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
+         intent(in) :: &
+         Sswabs          ! SW radiation absorbed in snow layers (W m-2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
+         intent(in) :: &
+         Iswabs          ! absorbed SW flux in ice layers
+
+      real (kind=dbl_kind), dimension (icells,nslyr), &
+         intent(in) :: &
+         etas        , & ! dt / (rho*cp*h) for snow layers
+         Tsn_init        ! snow temp at beginning of time step
+                         ! Note: no absorbed SW in snow layers
+
+      real (kind=dbl_kind), dimension (icells,nslyr+nilyr+1), &
+         intent(in) :: &
+         kh              ! effective conductivity at layer interfaces
+
+      real (kind=dbl_kind), dimension (isolve,nslyr+nilyr+1), &
+         intent(inout) :: &
+         sbdiag      , & ! sub-diagonal matrix elements
+         diag        , & ! diagonal matrix elements
+         spdiag      , & ! super-diagonal matrix elements
+         rhs             ! rhs of tri-diagonal matrix eqn.
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+         i, j        , & ! horizontal indices
+         ij, m       , & ! horizontal indices, combine i and j loops
+         k, ks, ki, kr   ! vertical indices and row counters
+
+      !-----------------------------------------------------------------
+      ! Initialize matrix elements.
+      ! Note: When we do not need to solve for the surface or snow
+      !       temperature, we solve dummy equations with solution T = 0.
+      !       Ice layers are fully initialized below.
+      !-----------------------------------------------------------------
+
+      do k = 1, nslyr+1
+         do ij = 1, isolve
+            sbdiag(ij,k) = c0
+            diag  (ij,k) = c1
+            spdiag(ij,k) = c0
+            rhs   (ij,k) = c0
+         enddo
+      enddo
+            
+      !-----------------------------------------------------------------
+      ! Compute matrix elements
+      !
+      ! Four possible cases to solve:
+      !   (1) Cold surface (Tsf < 0), snow present
+      !   (2) Melting surface (Tsf = 0), snow present
+      !   (3) Cold surface (Tsf < 0), no snow
+      !   (4) Melting surface (Tsf = 0), no snow
+      !-----------------------------------------------------------------
+
+         do ij = 1, isolve
+            i = indxii(ij)
+            j = indxjj(ij)
+            m = indxij(ij)
+
+      !-----------------------------------------------------------------
+      ! Tsf equation for case of cold surface (with or without snow)
+      !-----------------------------------------------------------------
+            if (l_cold(m)) then
+               if (l_snow(m)) then
+                  k = 1
+               else                ! no snow
+                  k = 1 + nslyr
+               endif
+               kr = k
+            
+               sbdiag(ij,kr) = c0
+               diag  (ij,kr) = dfsurf_dT(ij) - kh(m,k)
+               spdiag(ij,kr) = kh(m,k)
+               rhs   (ij,kr) = dfsurf_dT(ij)*Tsf(m) - fsurfn(i,j)
+
+            endif                  ! l_cold
+
+      !-----------------------------------------------------------------
+      ! top snow layer
+      !-----------------------------------------------------------------
+!           k = 1
+!           kr = 2
+
+            if (l_snow(m)) then
+               if (l_cold(m)) then
+                  sbdiag(ij,2) = -etas(m,1) * kh(m,1)
+                  spdiag(ij,2) = -etas(m,1) * kh(m,2)
+                  diag  (ij,2) = c1 &
+                                + etas(m,1) * (kh(m,1) + kh(m,2))
+                  rhs   (ij,2) = Tsn_init(m,1) &
+                                + etas(m,1) * Sswabs(i,j,1)
+               else                ! melting surface
+                  sbdiag(ij,2) = c0
+                  spdiag(ij,2) = -etas(m,1) * kh(m,2)
+                  diag  (ij,2) = c1 &
+                                + etas(m,1) * (kh(m,1) + kh(m,2))
+                  rhs   (ij,2) = Tsn_init(m,1) &
+                                + etas(m,1)*kh(m,1)*Tsf(m) &
+                                + etas(m,1) * Sswabs(i,j,1)
+               endif               ! l_cold
+            endif                  ! l_snow
+
+         enddo                    ! ij
+
+      !-----------------------------------------------------------------
+      ! remaining snow layers
+      !-----------------------------------------------------------------
+
+      if (nslyr > 1) then
+
+         do k = 2, nslyr
+            kr = k + 1
+
+            do ij = 1, isolve
+               i = indxii(ij)
+               j = indxjj(ij)
+               m = indxij(ij)
+
+               if (l_snow(m)) then
+                  sbdiag(ij,kr) = -etas(m,k) * kh(m,k)
+                  spdiag(ij,kr) = -etas(m,k) * kh(m,k+1)
+                  diag  (ij,kr) = c1 &
+                               + etas(m,k) * (kh(m,k) + kh(m,k+1))
+                  rhs   (ij,kr) = Tsn_init(m,k) &
+                               + etas(m,k) * Sswabs(i,j,k)
+               endif
+            enddo               ! ij
+         enddo                  ! nslyr
+
+      endif                     ! nslyr > 1
+
+
+      if (nilyr > 1) then
+
+      !-----------------------------------------------------------------
+      ! top ice layer
+      !-----------------------------------------------------------------
+
+         ki = 1
+         k  = ki + nslyr
+         kr = k + 1
+
+            do ij = 1, isolve
+               i = indxii(ij)
+               j = indxjj(ij)
+               m = indxij(ij)
+
+               if (l_snow(m) .or. l_cold(m)) then
+                  sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
+                  spdiag(ij,kr) = -etai(ij,ki) * kh(m,k+1)
+                  diag  (ij,kr) = c1 &
+                                 + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+                  rhs   (ij,kr) = Tin_init(m,ki) &
+                                 + etai(ij,ki)*Iswabs(i,j,ki)
+               else    ! no snow, warm surface
+                  sbdiag(ij,kr) = c0
+                  spdiag(ij,kr) = -etai(ij,ki) * kh(m,k+1)
+                  diag  (ij,kr) = c1 &
+                                 + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+                  rhs   (ij,kr) = Tin_init(m,ki) &
+                                 + etai(ij,ki)*Iswabs(i,j,ki) &
+                                 + etai(ij,ki)*kh(m,k)*Tsf(m)
+               endif
+            
+            enddo    ! ij
+
+      !-----------------------------------------------------------------
+      ! bottom ice layer
+      !-----------------------------------------------------------------
+
+         ki = nilyr
+         k  = ki + nslyr
+         kr = k + 1
+      
+         do ij = 1, isolve
+            i = indxii(ij)
+            j = indxjj(ij)
+            m = indxij(ij)
+            sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
+            spdiag(ij,kr) = c0
+            diag  (ij,kr) = c1  &
+                           + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+            rhs   (ij,kr) = Tin_init(m,ki) &
+                           + etai(ij,ki)*Iswabs(i,j,ki) &
+                           + etai(ij,ki)*kh(m,k+1)*Tbot(i,j)
+
+         enddo                   ! ij
+      
+      else         ! nilyr = 1
+
+      !-----------------------------------------------------------------
+      ! single ice layer
+      !-----------------------------------------------------------------
+
+         ki = 1
+         k  = ki + nslyr
+         kr = k + 1
+
+            do ij = 1, isolve
+               i = indxii(ij)
+               j = indxjj(ij)
+               m = indxij(ij)
+
+               if (l_snow(m) .or. l_cold(m)) then
+                  sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
+                  spdiag(ij,kr) = c0
+                  diag  (ij,kr) = c1                                 &
+                                 + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+                  rhs   (ij,kr) = Tin_init(m,ki)                     &
+                                 + etai(ij,ki) * Iswabs(i,j,ki)      &
+                                 + etai(ij,ki) * kh(m,k+1)*Tbot(i,j)
+               else   ! no snow, warm surface
+                  sbdiag(ij,kr) = c0
+                  spdiag(ij,kr) = c0
+                  diag  (ij,kr) = c1                                 &
+                                 + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+                  rhs   (ij,kr) = Tin_init(m,ki)                     &
+                                 + etai(ij,ki) * Iswabs(i,j,ki)      &
+                                 + etai(ij,ki) * kh(m,k)*Tsf(m)      &
+                                 + etai(ij,ki) * kh(m,k+1)*Tbot(i,j)
+               endif
+            enddo                  ! ij
+ 
+      endif        ! nilyr > 1
+
+      !-----------------------------------------------------------------
+      ! interior ice layers
+      !-----------------------------------------------------------------
+
+      do ki = 2, nilyr-1
+           
+         k  = ki + nslyr
+         kr = k + 1
+         do ij = 1, isolve
+            i = indxii(ij)
+            j = indxjj(ij)
+            m = indxij(ij)
+
+            sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
+            spdiag(ij,kr) = -etai(ij,ki) * kh(m,k+1)
+            diag  (ij,kr) = c1 &
+                           + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
+            rhs   (ij,kr) = Tin_init(m,ki) &
+                           + etai(ij,ki)*Iswabs(i,j,ki)
+
+         enddo                  ! ij
+      enddo                     ! nilyr
+
+      end subroutine get_matrix_elements_calc_Tsfc
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: get_matrix_elements - compute tridiagonal matrix elements
+!
+! !DESCRIPTION:
+!
+! Compute terms in tridiagonal matrix that will be solved to find
+!  the new vertical temperature profile
+! This routine is for the case in which Tsfc is already known.
+!
+! !REVISION HISTORY:
+!
+! authors William H. Lipscomb, LANL
+!         C. M. Bitz, UW
+!
+!
+! March 2004 by William H. Lipscomb for multiple snow layers
+! April 2008 by E. C. Hunke, divided into two routines based on calc_Tsfc 
+!
+! !INTERFACE:
+!
+      subroutine get_matrix_elements_know_Tsfc &
+                                     (nx_block, ny_block,         &
+                                      isolve,   icells,           &
+                                      indxii,   indxjj,   indxij, &
+                                      l_snow,   Tbot,             &
+                                      Tin_init, Tsn_init,         &
+                                      kh,       Sswabs,           &
+                                      Iswabs,                     &
+                                      etai,     etas,             &
+                                      sbdiag,   diag,             &
+                                      spdiag,   rhs,              &
+                                      fcondtopn)
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         isolve            , & ! number of cells with temps not converged
+         icells                ! number of cells with aicen > puny
+
+      integer (kind=int_kind), dimension(icells), &
+         intent(in) :: &
+         indxii, indxjj  ! compressed indices for cells not converged
+
+      integer (kind=int_kind), dimension (icells), &
+         intent(in) :: &
+         indxij          ! compressed 1D index for cells not converged
+
+      logical (kind=log_kind), dimension (icells), &
+         intent(in) :: &
+         l_snow          ! true if snow temperatures are computed
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         Tbot            ! ice bottom surface temperature (deg C)
 
       real (kind=dbl_kind), dimension (isolve,nilyr), &
          intent(in) :: &
@@ -2426,60 +2768,6 @@
       !   (4) Melting surface (Tsf = 0), no snow
       !-----------------------------------------------------------------
 
-      if (calc_Tsfc) then
-
-         do ij = 1, isolve
-            i = indxii(ij)
-            j = indxjj(ij)
-            m = indxij(ij)
-
-      !-----------------------------------------------------------------
-      ! Tsf equation for case of cold surface (with or without snow)
-      !-----------------------------------------------------------------
-            if (l_cold(m)) then
-               if (l_snow(m)) then
-                  k = 1
-               else                ! no snow
-                  k = 1 + nslyr
-               endif
-               kr = k
-            
-               sbdiag(ij,kr) = c0
-               diag  (ij,kr) = dfsurf_dT(ij) - kh(m,k)
-               spdiag(ij,kr) = kh(m,k)
-               rhs   (ij,kr) = dfsurf_dT(ij)*Tsf(m) - fsurfn(i,j)
-
-            endif                  ! l_cold
-
-      !-----------------------------------------------------------------
-      ! top snow layer
-      !-----------------------------------------------------------------
-!           k = 1
-!           kr = 2
-
-            if (l_snow(m)) then
-               if (l_cold(m)) then
-                  sbdiag(ij,2) = -etas(m,1) * kh(m,1)
-                  spdiag(ij,2) = -etas(m,1) * kh(m,2)
-                  diag  (ij,2) = c1 &
-                                + etas(m,1) * (kh(m,1) + kh(m,2))
-                  rhs   (ij,2) = Tsn_init(m,1) &
-                                + etas(m,1) * Sswabs(i,j,1)
-               else                ! melting surface
-                  sbdiag(ij,2) = c0
-                  spdiag(ij,2) = -etas(m,1) * kh(m,2)
-                  diag  (ij,2) = c1 &
-                                + etas(m,1) * (kh(m,1) + kh(m,2))
-                  rhs   (ij,2) = Tsn_init(m,1) &
-                                + etas(m,1)*kh(m,1)*Tsf(m) &
-                                + etas(m,1) * Sswabs(i,j,1)
-               endif               ! l_cold
-            endif                  ! l_snow
-
-         enddo                    ! ij
-
-      else   ! calc_Tsfc = F
-
       !-----------------------------------------------------------------
       ! top snow layer
       !-----------------------------------------------------------------
@@ -2501,8 +2789,6 @@
                              + etas(m,1) * fcondtopn(i,j)
             endif   ! l_snow
          enddo   ! ij
-
-      endif    ! calc_Tsfc
 
       !-----------------------------------------------------------------
       ! remaining snow layers
@@ -2542,34 +2828,6 @@
          k  = ki + nslyr
          kr = k + 1
 
-         if (calc_Tsfc) then
-
-            do ij = 1, isolve
-               i = indxii(ij)
-               j = indxjj(ij)
-               m = indxij(ij)
-
-               if (l_snow(m) .or. l_cold(m)) then
-                  sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
-                  spdiag(ij,kr) = -etai(ij,ki) * kh(m,k+1)
-                  diag  (ij,kr) = c1 &
-                                 + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
-                  rhs   (ij,kr) = Tin_init(m,ki) &
-                                 + etai(ij,ki)*Iswabs(i,j,ki)
-               else    ! no snow, warm surface
-                  sbdiag(ij,kr) = c0
-                  spdiag(ij,kr) = -etai(ij,ki) * kh(m,k+1)
-                  diag  (ij,kr) = c1 &
-                                 + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
-                  rhs   (ij,kr) = Tin_init(m,ki) &
-                                 + etai(ij,ki)*Iswabs(i,j,ki) &
-                                 + etai(ij,ki)*kh(m,k)*Tsf(m)
-               endif
-            
-            enddo    ! ij
-
-         else        ! calc_Tsfc = F
-
             do ij = 1, isolve
                i = indxii(ij)
                j = indxjj(ij)
@@ -2594,8 +2852,6 @@
                endif  ! l_snow
             enddo   ! ij
 
-         endif       ! calc_Tsfc
-         
       !-----------------------------------------------------------------
       ! bottom ice layer
       !-----------------------------------------------------------------
@@ -2628,35 +2884,6 @@
          k  = ki + nslyr
          kr = k + 1
 
-         if (calc_Tsfc) then
-
-            do ij = 1, isolve
-               i = indxii(ij)
-               j = indxjj(ij)
-               m = indxij(ij)
-
-               if (l_snow(m) .or. l_cold(m)) then
-                  sbdiag(ij,kr) = -etai(ij,ki) * kh(m,k)
-                  spdiag(ij,kr) = c0
-                  diag  (ij,kr) = c1                                 &
-                                 + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
-                  rhs   (ij,kr) = Tin_init(m,ki)                     &
-                                 + etai(ij,ki) * Iswabs(i,j,ki)      &
-                                 + etai(ij,ki) * kh(m,k+1)*Tbot(i,j)
-               else   ! no snow, warm surface
-                  sbdiag(ij,kr) = c0
-                  spdiag(ij,kr) = c0
-                  diag  (ij,kr) = c1                                 &
-                                 + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
-                  rhs   (ij,kr) = Tin_init(m,ki)                     &
-                                 + etai(ij,ki) * Iswabs(i,j,ki)      &
-                                 + etai(ij,ki) * kh(m,k)*Tsf(m)      &
-                                 + etai(ij,ki) * kh(m,k+1)*Tbot(i,j)
-               endif
-            enddo                  ! ij
- 
-         else                      ! calc_Tsfc = F
-
             do ij = 1, isolve
                i = indxii(ij)
                j = indxjj(ij)
@@ -2681,8 +2908,6 @@
                                  + etai(ij,ki) * kh(m,k+1)*Tbot(i,j)
                endif
             enddo                     ! ij
-
-         endif                     ! calc_Tsfc
 
       endif        ! nilyr > 1
 
@@ -2709,7 +2934,7 @@
          enddo                  ! ij
       enddo                     ! nilyr
 
-      end subroutine get_matrix_elements
+      end subroutine get_matrix_elements_know_Tsfc
 
 !=======================================================================
 !BOP

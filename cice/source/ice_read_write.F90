@@ -569,7 +569,6 @@
       character (char_len) :: &
          dimname            ! dimension name            
 !
-
       if (my_task == master_task) then
          allocate(work_g1(nx_global,ny_global))
       else
@@ -578,7 +577,7 @@
 
 #ifdef ORCA_GRID
       if (my_task == master_task) then
-         allocate(work_g2(nx_global,ny_global))
+         allocate(work_g2(nx_global+2,ny_global+1))
       else
          allocate(work_g2(1,1))   ! to save memory
       endif
