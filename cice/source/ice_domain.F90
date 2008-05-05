@@ -460,8 +460,9 @@
      write(outstring,*) &
          'ice: no. blocks too large: decrease max to', nblocks_max
      if (my_task == master_task) then
-        write(nu_diag,*) '********WARNING*********'
+        write(nu_diag,*) ' ********WARNING***********'
         write(nu_diag,*) trim(outstring)
+        write(nu_diag,*) ' **************************'
         write(nu_diag,*) ' '
      endif
    endif

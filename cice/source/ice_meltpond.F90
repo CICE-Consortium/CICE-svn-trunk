@@ -194,7 +194,7 @@
       real (kind=dbl_kind) :: hi,hs,dTs
 
       real (kind=dbl_kind), parameter :: &
-         hi_min = p1
+         hicemin = p1
 
       Tsfcn(:,:) = trcrn(:,:,nt_Tsfc)
       volpn(:,:) = trcrn(:,:,nt_volpn)
@@ -251,7 +251,7 @@
          if ( hs .gt. puny ) apondn(i,j) = c0
 
 !        remove ponds if ice becomes very thin
-         if (hi .lt. hi_min) then
+         if (hi .lt. hicemin) then
             apondn(i,j) = c0
             hpondn(i,j) = c0
             volpn(i,j)  = c0

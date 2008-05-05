@@ -120,8 +120,8 @@
 
       ! grid dimensions for rectangular grid
       real (kind=dbl_kind), parameter ::  &
-         dxrect = 1.6e4_dbl_kind   ,&! uniform HTN (m)
-         dyrect = 1.6e4_dbl_kind     ! uniform HTE (m)
+         dxrect = 30.e5_dbl_kind   ,&! uniform HTN (cm)
+         dyrect = 30.e5_dbl_kind     ! uniform HTE (cm)
 
 !lipscomb - not sure rndex_global is stil needed
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
@@ -1138,10 +1138,9 @@
 !
       integer (kind=int_kind) :: &
          i, j, iblk, &
-         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+         imid, jmid
 
-      type (block) :: &
-         this_block           ! block information for current block
+      real (kind=dbl_kind) :: length
 
       !-----------------------------------------------------------------
       ! Calculate various geometric 2d arrays
@@ -1150,8 +1149,6 @@
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
-            ULAT (i,j,iblk) = c0              ! remember to set Coriolis !
-            ULON (i,j,iblk) = c0
             ANGLE(i,j,iblk) = c0              ! "square with the world"
          enddo
          enddo
@@ -1159,34 +1156,105 @@
 
       allocate(work_g1(nx_global,ny_global))
 
-      do j = 1, ny_global
-      do i = 1, nx_global
+      ! Weddell Sea
+      ! lower left corner of grid is 55W, 75S
+
+      if (my_task == master_task) then
+         work_g1 = c0
+         length = dxrect*cm_to_m/radius*rad_to_deg
+         work_g1(1,:) = -55._dbl_kind
+         do j = 1, ny_global
+         do i = 2, nx_global
+            work_g1(i,j) = work_g1(i-1,j) + length   ! ULON
+         enddo
+         enddo
+         work_g1(:,:) = work_g1(:,:) / rad_to_deg
+      endif
+      call scatter_global(ULON, work_g1, master_task, distrb_info, &
+                          field_loc_center, field_type_scalar)
+
+      if (my_task == master_task) then
+         work_g1 = c0
+         length = dyrect*cm_to_m/radius*rad_to_deg
+         work_g1(:,1) = -75._dbl_kind
+         do i = 1, nx_global
+         do j = 2, ny_global
+            work_g1(i,j) = work_g1(i,j-1) + length   ! ULAT
+         enddo
+         enddo
+         work_g1(:,:) = work_g1(:,:) / rad_to_deg
+      endif
+      call scatter_global(ULAT, work_g1, master_task, distrb_info, &
+                          field_loc_center, field_type_scalar)
+
+      if (my_task == master_task) then
+         do j = 1, ny_global
+         do i = 1, nx_global
             work_g1(i,j) = dxrect             ! HTN
-      enddo
-      enddo
+         enddo
+         enddo
+      endif
       call primary_grid_lengths_HTN(work_g1)  ! dxu, dxt
 
-      do j = 1, ny_global
-      do i = 1, nx_global
+      if (my_task == master_task) then
+         do j = 1, ny_global
+         do i = 1, nx_global
             work_g1(i,j) = dyrect             ! HTE
-      enddo
-      enddo
+         enddo
+         enddo
+      endif
       call primary_grid_lengths_HTE(work_g1)  ! dyu, dyt
 
       !-----------------------------------------------------------------
       ! Construct T-cell land mask
+      ! Keyed on ew_boundary_type; ns_boundary_type should be 'open'.
       !-----------------------------------------------------------------
 
       if (my_task == master_task) then
          work_g1(:,:) = c0      ! initialize hm as land
 
-!!!      do j=1,ny_global        ! open
-!!!      do i=1,nx_global        ! open
-         do j=3,ny_global-2     ! closed: NOTE ny_global > 5
-            do i=3,nx_global-2  ! closed: NOTE nx_global > 5
-               work_g1(i,j) = c1
+         if (trim(ew_boundary_type) == 'cyclic') then
+
+            do j = 3,ny_global-2      ! closed top and bottom
+            do i = 1,nx_global        ! open sides
+               work_g1(i,j) = c1    ! NOTE nx_global > 5
             enddo
-         enddo
+            enddo
+
+         elseif (trim(ew_boundary_type) == 'closed') then
+
+            do j = 3,ny_global-2      ! closed top and bottom
+            do i = 3,nx_global-2      ! closed sides
+               work_g1(i,j) = c1    ! NOTE nx_global, ny_global > 5
+            enddo
+            enddo
+
+         elseif (trim(ew_boundary_type) == 'open') then
+
+            ! land in the upper left and lower right corners,
+            ! otherwise open boundaries
+            imid = aint(real(nx_global)/c2,kind=int_kind)
+            jmid = aint(real(ny_global)/c2,kind=int_kind)
+
+            do j = 3,ny_global-2
+            do i = 3,nx_global-2
+               work_g1(i,j) = c1    ! open central domain
+            enddo
+            enddo
+
+            do j = 1, jmid+2
+            do i = 1, imid+2
+               work_g1(i,j) = c1    ! open lower left corner
+            enddo
+            enddo
+
+            do j = jmid-2, ny_global
+            do i = imid-2, nx_global
+               work_g1(i,j) = c1    ! open upper right corner
+            enddo
+            enddo
+
+         endif
       endif
 
       call scatter_global(hm, work_g1, master_task, distrb_info, &

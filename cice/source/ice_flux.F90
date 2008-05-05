@@ -294,6 +294,7 @@
 
       logical (kind=log_kind), parameter ::     & 
          l_winter = .true.   ! winter/summer default switch
+!         l_winter = .false.   ! winter/summer default switch
 
       !-----------------------------------------------------------------
       ! fluxes received from atmosphere
@@ -371,8 +372,13 @@
       ! fluxes sent to atmosphere
       !-----------------------------------------------------------------
 
+!echmod - for rectangular grid tests without thermo
+!      strairxT(:,:,:) = 0.15_dbl_kind
+!      strairyT(:,:,:) = 0.15_dbl_kind
+
       strairxT(:,:,:) = c0            ! wind stress, T grid
       strairyT(:,:,:) = c0
+!echmod
       fsens   (:,:,:) = c0
       flat    (:,:,:) = c0
       fswabs  (:,:,:) = c0

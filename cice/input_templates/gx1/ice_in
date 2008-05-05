@@ -62,6 +62,7 @@
   , oceanmixed_file= 'pop_frc.gx1v3.051202.nc'
   , restore_sst  = .false.
   , trestore     =  90
+  , restore_ice  = .false.
   , dbug         = .false.
   , latpnt(1)    =  90.
   , lonpnt(1)    =   0.

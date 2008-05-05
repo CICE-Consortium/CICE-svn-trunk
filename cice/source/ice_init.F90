@@ -97,6 +97,7 @@
       use ice_age, only: tr_iage, restart_age
       use ice_meltpond, only: tr_pond, restart_pond
       use ice_therm_vertical, only: calc_Tsfc, heat_capacity
+      use ice_restoring
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -134,7 +135,7 @@
         atm_data_type,  atm_data_dir,    calc_strair,   precip_units,   &
         oceanmixed_ice, sss_data_type,   sst_data_type, ocn_data_format,&
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
-        latpnt,         lonpnt,          dbug,                          &
+        restore_ice,    latpnt,          lonpnt,        dbug,           &
 #ifndef SEQ_MCT
         runid,          runtype,                                        &
 #endif
@@ -221,6 +222,7 @@
       oceanmixed_file = 'unknown_oceanmixed_file' ! ocean forcing data
       restore_sst     = .false.   ! restore sst if true
       trestore        = 90        ! restoring timescale, days (0 instantaneous)
+      restore_ice     = .false.   ! restore ice state on grid edges if true
       dbug      = .false.         ! true writes diagnostics for input forcing
 
       latpnt(1) =  90._dbl_kind   ! latitude of diagnostic point 1 (deg)
@@ -398,6 +400,7 @@
       call broadcast_scalar(oceanmixed_file,    master_task)
       call broadcast_scalar(restore_sst,        master_task)
       call broadcast_scalar(trestore,           master_task)
+      call broadcast_scalar(restore_ice,        master_task)
       call broadcast_scalar(dbug,               master_task)
       call broadcast_array (latpnt(1:2),        master_task)
       call broadcast_array (lonpnt(1:2),        master_task)
@@ -695,7 +698,8 @@
       !-----------------------------------------------------------------
 
          call set_state_var (nx_block,            ny_block,            &
-                             tmask(:,:,    iblk), ULAT (:,:,    iblk), &
+                             tmask(:,:,    iblk),                      &
+                             ULON (:,:,    iblk), ULAT (:,:,    iblk), &
                              Tair (:,:,    iblk), sst  (:,:,    iblk), &
                              Tf   (:,:,    iblk), trcr_depend,         &
                              aicen(:,:,  :,iblk), trcrn(:,:,:,:,iblk), &
@@ -754,7 +758,7 @@
 ! !INTERFACE:
 !
       subroutine set_state_var (nx_block, ny_block, &
-                                tmask,    ULAT, &
+                                tmask,    ULON,  ULAT, &
                                 Tair,     sst,  &
                                 Tf,       trcr_depend, &
                                 aicen,    trcrn, &
@@ -775,6 +779,7 @@
       use ice_state, only: nt_Tsfc
       use ice_therm_vertical, only: heat_capacity, calc_Tsfc, Tmlt
       use ice_itd, only: ilyr1, slyr1, hin_max
+      use ice_grid, only: grid_type
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -787,6 +792,7 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
+         ULON   , & ! latitude of velocity pts (radians)
          ULAT       ! latitude of velocity pts (radians)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
@@ -893,6 +899,24 @@
             ainit(n) = ainit(n) / (sum + puny/ncat) ! normalize
          enddo
 
+         if (trim(grid_type) == 'rectangular') then
+
+         ! place ice on left side of domain
+         icells = 0
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (tmask(i,j)) then
+               if (ULON(i,j) < -50./rad_to_deg) then
+                  icells = icells + 1
+                  indxi(icells) = i
+                  indxj(icells) = j
+               endif            ! ULON
+            endif               ! tmask
+         enddo                  ! i
+         enddo                  ! j
+
+         else
+
          ! place ice at high latitudes where ocean sfc is cold
          icells = 0
          do j = 1, ny_block
@@ -910,11 +934,11 @@
          enddo                  ! i
          enddo                  ! j
 
+         endif                  ! rectgrid
 
          do n = 1, ncat
 
             ! ice volume, snow volume
-
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -925,19 +949,15 @@
                aicen(i,j,n) = ainit(n)
                vicen(i,j,n) = hinit(n) * ainit(n) ! m
                vsnon(i,j,n) =min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
-
             enddo               ! ij
 
-
             ! surface temperature
-
             if (calc_Tsfc) then
         
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)
                   trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) !deg C
-
                enddo
 
             else    ! Tsfc is not calculated by the ice model
@@ -952,11 +972,9 @@
 
             ! other tracers (none at present)
 
-
             if (heat_capacity) then
 
-            ! ice energy
-
+               ! ice energy
                do k = 1, nilyr
                   do ij = 1, icells
                      i = indxi(ij)
@@ -972,12 +990,10 @@
                           -(rhoi * (cp_ice*(Tmlt(k)-Ti) &
                           + Lfresh*(c1-Tmlt(k)/Ti) - cp_ocn*Tmlt(k))) &
                           * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
-
                   enddo            ! ij
                enddo               ! nilyr
 
                ! snow energy
-   
                do k = 1, nslyr
                   do ij = 1, icells
                      i = indxi(ij)
@@ -998,10 +1014,8 @@
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)
-
                   eicen(i,j,ilyr1(n)+k-1) = &
                           - rhoi * Lfresh * vicen(i,j,n)
-   
                enddo            ! ij
 
                ! snow energy
@@ -1010,14 +1024,10 @@
                   j = indxj(ij)
                   esnon(i,j,slyr1(n)+k-1) = & 
                           - rhos * Lfresh * vsnon(i,j,n)
-
                enddo            ! ij
 
-
             endif               ! heat_capacity
-
          enddo                  ! ncat
-
       endif                     ! ice_ic
 
       end subroutine set_state_var
