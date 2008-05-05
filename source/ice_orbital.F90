@@ -13,7 +13,6 @@
 ! author:  Bruce P. Briegleb, NCAR 
 !
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
-! 2006: BPB  26 December Modified to compute diurnal mean coszen
 !
 ! !INTERFACE:
 !

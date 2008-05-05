@@ -62,6 +62,7 @@
   , oceanmixed_file= 'unknown_oceanmixed_file'
   , restore_sst  = .true.
   , trestore     =  180
+  , restore_ice  = .false.
   , dbug         = .false.
   , latpnt(1)    =  90.
   , lonpnt(1)    =   0.

@@ -5832,7 +5832,8 @@ contains
          endif
 
       elseif (this_block%jblock == nblocks_y) then  ! north edge
-         if (trim(ns_bndy_type) /= 'cyclic') then
+         if (trim(ns_bndy_type) /= 'cyclic' .and. &
+             trim(ns_bndy_type) /= 'tripole' ) then
             ! locate ghost cell column (avoid padding)
             ibc = ny_block + 1
             npad = 0

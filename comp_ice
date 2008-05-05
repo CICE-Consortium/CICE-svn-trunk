@@ -39,7 +39,7 @@ setenv BLCKY     58       # y-dimension of blocks (  ghost cells  )
 
 # may need to increase MXBLCKS with rake distribution or padding
 @ a = $NXGLOB * $NYGLOB ; @ b = $BLCKX * $BLCKY * $NTASK  
-@ m = $a / $b ; setenv MXBLCKS $m
+@ m = $a / $b ; setenv MXBLCKS $m ; if ($MXBLCKS == 0) setenv MXBLCKS 1
 #setenv MXBLCKS 37 # if necessary (code will print proper value)
 
 ### Specialty code
