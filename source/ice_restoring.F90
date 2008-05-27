@@ -140,13 +140,13 @@
    real (dbl_kind) :: &
      ctime                ! dt/trest
 
+   call ice_timer_start(timer_bound)
+
 !-----------------------------------------------------------------------
 !
 !  Initialize
 !
 !-----------------------------------------------------------------------
-
-!      if (restore_ice) call ice_HaloRestore !move!
 
       ! for now, use same restoring constant as for SST
       if (trestore == 0) then
@@ -341,6 +341,8 @@
       endif
 
    enddo ! iblk
+
+   call ice_timer_stop(timer_bound)
 
  end subroutine ice_HaloRestore
 

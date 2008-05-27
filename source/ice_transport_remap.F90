@@ -290,7 +290,6 @@
                           xav, yav, xxav, xyav, yyav,    &
                           xxxav, xxyav, xyyav, yyyav
       use ice_exit
-      use ice_timers
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

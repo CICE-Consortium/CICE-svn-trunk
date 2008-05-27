@@ -214,8 +214,10 @@
          call calendar(time)    ! at the end of the timestep
 
 #ifndef coupled
+         call ice_timer_start(timer_couple)  ! atm/ocn coupling
          call get_forcing_atmo     ! atmospheric forcing from data
          call get_forcing_ocn(dt)  ! ocean forcing from data
+         call ice_timer_stop(timer_couple)   ! atm/ocn coupling
 #endif
 
          if (stop_now >= 1) exit timeLoop
@@ -284,7 +286,9 @@
       ! initialize diagnostics
       !-----------------------------------------------------------------
 
+         call ice_timer_start(timer_diags)  ! diagnostics/history
          call init_mass_diags   ! diagnostics per timestep
+         call ice_timer_stop(timer_diags)   ! diagnostics/history
 
       !-----------------------------------------------------------------
       ! thermodynamics
@@ -310,18 +314,20 @@
       ! write data
       !-----------------------------------------------------------------
 
-         call ice_timer_start(timer_readwrite)  ! reading/writing
-
+         call ice_timer_start(timer_diags)  ! diagnostics
          if (mod(istep,diagfreq) == 0) call runtime_diags(dt) ! log file
+         call ice_timer_stop(timer_diags)   ! diagnostics
 
-         call ice_write_hist (dt)    ! history file
+         call ice_timer_start(timer_hist)   ! history
+         call ice_write_hist (dt)           ! history file
+         call ice_timer_stop(timer_hist)    ! history
 
+         call ice_timer_start(timer_readwrite)  ! reading/writing
          if (write_restart == 1) then
             call dumpfile ! core variables for restarting
             if (tr_iage) call write_restart_age
 !            if (tr_pond) call write_restart_ponds
          endif
-
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 
       end subroutine ice_step
@@ -532,14 +538,13 @@
             enddo               ! i
             enddo               ! j
 
-            if (calc_Tsfc) then
-
-
-               call ice_timer_start(timer_sw)
-
       !-----------------------------------------------------------------
       ! Solar radiation: albedo and absorbed shortwave
       !-----------------------------------------------------------------
+
+            call ice_timer_start(timer_sw)
+
+            if (calc_Tsfc) then
 
                if (trim(shortwave) == 'dEdd') then   ! delta Eddington
 
@@ -607,8 +612,6 @@
 
                endif
 
-               call ice_timer_stop(timer_sw)
-
             else    ! .not. calc_Tsfc
 
                ! Initialize for safety
@@ -623,6 +626,8 @@
                Sswabsn(:,:,:) = c0
 
             endif    ! calc_Tsfc
+
+            call ice_timer_stop(timer_sw)
 
             if (calc_Tsfc .or. calc_strair) then 
 
@@ -984,7 +989,6 @@
       !-----------------------------------------------------------------
 
          call ice_timer_start(timer_catconv)    ! category conversions
-
 
          if (kitd == 1) then
       !-----------------------------------------------------------------

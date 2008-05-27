@@ -1165,6 +1165,8 @@ contains
       fill,            &! value to use for unknown points
       x1,x2,xavg        ! scalars for enforcing symmetry at U pts
 
+   integer (int_kind) ::  len  ! length of messages
+
 !-----------------------------------------------------------------------
 !
 !  initialize error code and fill value
@@ -1208,9 +1210,10 @@ contains
 
    do nmsg=1,halo%numMsgRecv
 
-      call MPI_IRECV(bufRecvR8(:,nmsg), bufSizeRecv, mpiR8, &
-                     halo%recvTask(nmsg),                       &
-                     mpitagHalo + halo%recvTask(nmsg),      &
+      len = halo%SizeRecv(nmsg)
+      call MPI_IRECV(bufRecvR8(1:len,nmsg), len, mpiR8, &
+                     halo%recvTask(nmsg),               &
+                     mpitagHalo + halo%recvTask(nmsg),  &
                      halo%communicator, rcvRequest(nmsg), ierr)
    end do
 
@@ -1233,9 +1236,10 @@ contains
          bufSendR8(n,nmsg) = fill  ! fill remainder of buffer
       end do
 
-      call MPI_ISEND(bufSendR8(:,nmsg), bufSizeSend, mpiR8, &
-                     halo%sendTask(nmsg),                       &
-                     mpitagHalo + my_task,               &
+      len = halo%SizeSend(nmsg)
+      call MPI_ISEND(bufSendR8(1:len,nmsg), len, mpiR8, &
+                     halo%sendTask(nmsg),               &
+                     mpitagHalo + my_task,              &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
 
@@ -1499,6 +1503,8 @@ contains
       fill,            &! value to use for unknown points
       x1,x2,xavg        ! scalars for enforcing symmetry at U pts
 
+    integer (int_kind) :: len  ! length of messages
+
 !-----------------------------------------------------------------------
 !
 !  initialize error code and fill value
@@ -1542,9 +1548,10 @@ contains
 
    do nmsg=1,halo%numMsgRecv
 
-      call MPI_IRECV(bufRecvR4(:,nmsg), bufSizeRecv, mpiR4, &
-                     halo%recvTask(nmsg),                       &
-                     mpitagHalo + halo%recvTask(nmsg),      &
+      len = halo%SizeRecv(nmsg)
+      call MPI_IRECV(bufRecvR4(1:len,nmsg), len, mpiR4, &
+                     halo%recvTask(nmsg),               &
+                     mpitagHalo + halo%recvTask(nmsg),  &
                      halo%communicator, rcvRequest(nmsg), ierr)
    end do
 
@@ -1567,9 +1574,10 @@ contains
          bufSendR4(n,nmsg) = fill  ! fill remainder of buffer
       end do
 
-      call MPI_ISEND(bufSendR4(:,nmsg), bufSizeSend, mpiR4, &
-                     halo%sendTask(nmsg),                       &
-                     mpitagHalo + my_task,               &
+      len = halo%SizeSend(nmsg)
+      call MPI_ISEND(bufSendR4(1:len,nmsg), len, mpiR4, &
+                     halo%sendTask(nmsg),               &
+                     mpitagHalo + my_task,              &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
 
@@ -1833,6 +1841,8 @@ contains
       fill,            &! value to use for unknown points
       x1,x2,xavg        ! scalars for enforcing symmetry at U pts
 
+   integer (int_kind) :: len ! length of messages
+
 !-----------------------------------------------------------------------
 !
 !  initialize error code and fill value
@@ -1876,9 +1886,10 @@ contains
 
    do nmsg=1,halo%numMsgRecv
 
-      call MPI_IRECV(bufRecvI4(:,nmsg), bufSizeRecv, MPI_INTEGER, &
-                     halo%recvTask(nmsg),                       &
-                     mpitagHalo + halo%recvTask(nmsg),      &
+      len = halo%SizeRecv(nmsg)
+      call MPI_IRECV(bufRecvI4(1:len,nmsg), len, MPI_INTEGER, &
+                     halo%recvTask(nmsg),                     &
+                     mpitagHalo + halo%recvTask(nmsg),        &
                      halo%communicator, rcvRequest(nmsg), ierr)
    end do
 
@@ -1901,9 +1912,10 @@ contains
          bufSendI4(n,nmsg) = fill  ! fill remainder of buffer
       end do
 
-      call MPI_ISEND(bufSendI4(:,nmsg), bufSizeSend, MPI_INTEGER, &
-                     halo%sendTask(nmsg),                       &
-                     mpitagHalo + my_task,               &
+      len = halo%SizeSend(nmsg)
+      call MPI_ISEND(bufSendI4(1:len,nmsg), len, MPI_INTEGER, &
+                     halo%sendTask(nmsg),                     &
+                     mpitagHalo + my_task,                    &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
 
@@ -2174,6 +2186,8 @@ contains
    real (dbl_kind), dimension(:,:,:), allocatable :: &
       bufTripole                  ! 3d tripole buffer
 
+   integer (int_kind) :: len ! length of message 
+
 !-----------------------------------------------------------------------
 !
 !  initialize error code and fill value
@@ -2235,9 +2249,10 @@ contains
 
    do nmsg=1,halo%numMsgRecv
 
-      call MPI_IRECV(bufRecv(:,nmsg), bufSizeRecv*nz, mpiR8,   &
-                     halo%recvTask(nmsg),                       &
-                     mpitagHalo + halo%recvTask(nmsg),      &
+      len = halo%SizeRecv(nmsg)*nz
+      call MPI_IRECV(bufRecv(1:len,nmsg), len, mpiR8,   &
+                     halo%recvTask(nmsg),               &
+                     mpitagHalo + halo%recvTask(nmsg),  &
                      halo%communicator, rcvRequest(nmsg), ierr)
    end do
 
@@ -2264,9 +2279,10 @@ contains
          bufSend(n,nmsg) = fill  ! fill remainder of buffer
       end do
 
-      call MPI_ISEND(bufSend(:,nmsg), bufSizeSend*nz, mpiR8, &
-                     halo%sendTask(nmsg),                        &
-                     mpitagHalo + my_task,                &
+      len = halo%SizeSend(nmsg)*nz
+      call MPI_ISEND(bufSend(1:len,nmsg), len, mpiR8, &
+                     halo%sendTask(nmsg),             &
+                     mpitagHalo + my_task,            &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
 
@@ -2565,6 +2581,8 @@ contains
    real (real_kind), dimension(:,:,:), allocatable :: &
       bufTripole                  ! 3d tripole buffer
 
+   integer (int_kind) :: len ! length of message 
+
 !-----------------------------------------------------------------------
 !
 !  initialize error code and fill value
@@ -2626,9 +2644,10 @@ contains
 
    do nmsg=1,halo%numMsgRecv
 
-      call MPI_IRECV(bufRecv(:,nmsg), bufSizeRecv*nz, mpiR4,   &
-                     halo%recvTask(nmsg),                          &
-                     mpitagHalo + halo%recvTask(nmsg),         &
+      len = halo%SizeRecv(nmsg)*nz
+      call MPI_IRECV(bufRecv(1:len,nmsg), len, mpiR4,   &
+                     halo%recvTask(nmsg),               &
+                     mpitagHalo + halo%recvTask(nmsg),  &
                      halo%communicator, rcvRequest(nmsg), ierr)
    end do
 
@@ -2655,9 +2674,10 @@ contains
          bufSend(n,nmsg) = fill  ! fill remainder of buffer
       end do
 
-      call MPI_ISEND(bufSend(:,nmsg), bufSizeSend*nz, mpiR4, &
-                     halo%sendTask(nmsg),                        &
-                     mpitagHalo + my_task,                &
+      len = halo%SizeSend(nmsg)*nz
+      call MPI_ISEND(bufSend(1:len,nmsg), len, mpiR4, &
+                     halo%sendTask(nmsg),             &
+                     mpitagHalo + my_task,            &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
 
@@ -2956,6 +2976,8 @@ contains
    integer (int_kind), dimension(:,:,:), allocatable :: &
       bufTripole                  ! 3d tripole buffer
 
+   integer (int_kind) :: len ! length of message
+
 !-----------------------------------------------------------------------
 !
 !  initialize error code and fill value
@@ -3017,9 +3039,10 @@ contains
 
    do nmsg=1,halo%numMsgRecv
 
-      call MPI_IRECV(bufRecv(:,nmsg), bufSizeRecv*nz, MPI_INTEGER, &
-                     halo%recvTask(nmsg),                          &
-                     mpitagHalo + halo%recvTask(nmsg),         &
+      len = halo%SizeRecv(nmsg)*nz
+      call MPI_IRECV(bufRecv(1:len,nmsg), len, MPI_INTEGER, &
+                     halo%recvTask(nmsg),                   &
+                     mpitagHalo + halo%recvTask(nmsg),      &
                      halo%communicator, rcvRequest(nmsg), ierr)
    end do
 
@@ -3046,9 +3069,10 @@ contains
          bufSend(n,nmsg) = fill  ! fill remainder of buffer
       end do
 
-      call MPI_ISEND(bufSend(:,nmsg), bufSizeSend*nz, MPI_INTEGER, &
-                     halo%sendTask(nmsg),                        &
-                     mpitagHalo + my_task,                &
+      len = halo%SizeSend(nmsg)*nz
+      call MPI_ISEND(bufSend(1:len,nmsg), len, MPI_INTEGER, &
+                     halo%sendTask(nmsg),                   &
+                     mpitagHalo + my_task,                  &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
 
@@ -3347,6 +3371,8 @@ contains
    real (dbl_kind), dimension(:,:,:,:), allocatable :: &
       bufTripole                  ! 4d tripole buffer
 
+   integer (int_kind) :: len ! length of message
+
 !-----------------------------------------------------------------------
 !
 !  initialize error code and fill value
@@ -3409,9 +3435,10 @@ contains
 
    do nmsg=1,halo%numMsgRecv
 
-      call MPI_IRECV(bufRecv(:,nmsg), bufSizeRecv*nz*nt, mpiR8, &
-                     halo%recvTask(nmsg),                           &
-                     mpitagHalo + halo%recvTask(nmsg),          &
+      len = halo%SizeRecv(nmsg)*nz*nt
+      call MPI_IRECV(bufRecv(1:len,nmsg), len, mpiR8,  &
+                     halo%recvTask(nmsg),              &
+                     mpitagHalo + halo%recvTask(nmsg), &
                      halo%communicator, rcvRequest(nmsg), ierr)
    end do
 
@@ -3441,9 +3468,10 @@ contains
          bufSend(n,nmsg) = fill  ! fill remainder of buffer
       end do
 
-      call MPI_ISEND(bufSend(:,nmsg), bufSizeSend*nz*nt, mpiR8, &
-                     halo%sendTask(nmsg),                           &
-                     mpitagHalo + my_task,                   &
+      len = halo%SizeSend(nmsg)*nz*nt
+      call MPI_ISEND(bufSend(1:len,nmsg), len, mpiR8, &
+                     halo%sendTask(nmsg),             &
+                     mpitagHalo + my_task,            &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
 
@@ -3758,6 +3786,8 @@ contains
    real (real_kind), dimension(:,:,:,:), allocatable :: &
       bufTripole                  ! 4d tripole buffer
 
+   integer (int_kind) :: len ! length of message
+
 !-----------------------------------------------------------------------
 !
 !  initialize error code and fill value
@@ -3820,9 +3850,10 @@ contains
 
    do nmsg=1,halo%numMsgRecv
 
-      call MPI_IRECV(bufRecv(:,nmsg), bufSizeRecv*nz*nt, mpiR4, &
-                     halo%recvTask(nmsg),                           &
-                     mpitagHalo + halo%recvTask(nmsg),          &
+      len = halo%SizeRecv(nmsg)*nz*nt
+      call MPI_IRECV(bufRecv(1:len,nmsg), len, mpiR4,  &
+                     halo%recvTask(nmsg),              &
+                     mpitagHalo + halo%recvTask(nmsg), &
                      halo%communicator, rcvRequest(nmsg), ierr)
    end do
 
@@ -3852,9 +3883,10 @@ contains
          bufSend(n,nmsg) = fill  ! fill remainder of buffer
       end do
 
-      call MPI_ISEND(bufSend(:,nmsg), bufSizeSend*nz*nt, mpiR4, &
-                     halo%sendTask(nmsg),                           &
-                     mpitagHalo + my_task,                   &
+      len = halo%SizeSend(nmsg)*nz*nt
+      call MPI_ISEND(bufSend(1:len,nmsg), len, mpiR4, &
+                     halo%sendTask(nmsg),             &
+                     mpitagHalo + my_task,            &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
 
@@ -4169,6 +4201,8 @@ contains
    integer (int_kind), dimension(:,:,:,:), allocatable :: &
       bufTripole                  ! 4d tripole buffer
 
+   integer (int_kind) :: len  ! length of messages
+
 !-----------------------------------------------------------------------
 !
 !  initialize error code and fill value
@@ -4231,9 +4265,10 @@ contains
 
    do nmsg=1,halo%numMsgRecv
 
-      call MPI_IRECV(bufRecv(:,nmsg), bufSizeRecv*nz*nt, MPI_INTEGER, &
-                     halo%recvTask(nmsg),                             &
-                     mpitagHalo + halo%recvTask(nmsg),            &
+      len = halo%SizeRecv(nmsg)*nz*nt
+      call MPI_IRECV(bufRecv(1:len,nmsg), len, MPI_INTEGER, &
+                     halo%recvTask(nmsg),                   &
+                     mpitagHalo + halo%recvTask(nmsg),      &
                      halo%communicator, rcvRequest(nmsg), ierr)
    end do
 
@@ -4263,9 +4298,10 @@ contains
          bufSend(n,nmsg) = fill  ! fill remainder of buffer
       end do
 
-      call MPI_ISEND(bufSend(:,nmsg), bufSizeSend*nz*nt, MPI_INTEGER, &
-                     halo%sendTask(nmsg),                             &
-                     mpitagHalo + my_task,                     &
+      len = halo%SizeSend(nmsg)*nz*nt
+      call MPI_ISEND(bufSend(1:len,nmsg), len, MPI_INTEGER, &
+                     halo%sendTask(nmsg),                   &
+                     mpitagHalo + my_task,                  &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
 
@@ -5808,15 +5844,9 @@ contains
       elseif (this_block%iblock == nblocks_x) then  ! east edge
          if (trim(ew_bndy_type) /= 'cyclic') then
             ! locate ghost cell column (avoid padding)
-            ibc = nx_block + 1
-            npad = 0
+            ibc = nx_block
             do i = nx_block, 1, - 1
-               if (this_block%i_glob(i) == 0) then
-                  do j = 1, ny_block
-                     npad = npad + this_block%j_glob(j)
-                  enddo
-               endif
-               if (npad == 0) ibc = ibc - 1
+               if (this_block%i_glob(i) == 0) ibc = ibc - 1
             enddo
             do j = 1, ny_block
                ARRAY(ibc,j,iblk) = c2*ARRAY(ibc-1,j,iblk) - ARRAY(ibc-2,j,iblk)
@@ -5835,15 +5865,9 @@ contains
          if (trim(ns_bndy_type) /= 'cyclic' .and. &
              trim(ns_bndy_type) /= 'tripole' ) then
             ! locate ghost cell column (avoid padding)
-            ibc = ny_block + 1
-            npad = 0
+            ibc = ny_block
             do j = ny_block, 1, - 1
-               if (this_block%j_glob(j) == 0) then
-                  do i = 1, nx_block
-                     npad = npad + this_block%i_glob(i)
-                  enddo
-               endif
-               if (npad == 0) ibc = ibc - 1
+               if (this_block%j_glob(j) == 0) ibc = ibc - 1
             enddo
             do i = 1, nx_block
                ARRAY(i,ibc,iblk) = c2*ARRAY(i,ibc-1,iblk) - ARRAY(i,ibc-2,iblk)
