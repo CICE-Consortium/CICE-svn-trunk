@@ -39,6 +39,7 @@
       use ice_fileunits
       use ice_atmo, only: calc_strair
       use ice_exit
+      use ice_timers
 !
 !EOP
 !
@@ -631,6 +632,8 @@
                               ! adjusted at beginning and end of data
          arg                  ! value of time argument in field_data
 
+      call ice_timer_start(timer_readwrite)  ! reading/writing
+
       nbits = 64              ! double precision data
 
       if (istep1 > check_step) dbug = .true.  !! debugging
@@ -717,6 +720,8 @@
 
       endif                     ! flag
 
+      call ice_timer_stop(timer_readwrite)  ! reading/writing
+
       end subroutine read_data
 
 !=======================================================================
@@ -793,6 +798,8 @@
          arg              , & ! value of time argument in field_data
          fid                  ! file id for netCDF routines
 
+
+      call ice_timer_start(timer_readwrite)  ! reading/writing
 
       if (istep1 > check_step) dbug = .true.  !! debugging
 
@@ -883,6 +890,8 @@
 
       endif                     ! flag
 
+      call ice_timer_stop(timer_readwrite)  ! reading/writing
+
 #else
       field_data = c0 ! to satisfy intent(out) attribute
 #endif
@@ -942,6 +951,8 @@
         nrec           , & ! record number to read
         arg                ! value of time argument in field_data
 
+      call ice_timer_start(timer_readwrite)  ! reading/writing
+
       nbits = 64                ! double precision data
 
       if (istep1 > check_step) dbug = .true.  !! debugging
@@ -979,6 +990,8 @@
 
          if (my_task == master_task) close (nu_forcing)
       endif                     ! readflag
+
+      call ice_timer_stop(timer_readwrite)  ! reading/writing
 
       end subroutine read_clim_data
 

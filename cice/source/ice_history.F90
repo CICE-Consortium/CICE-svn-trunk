@@ -1225,6 +1225,7 @@
       use ice_age, only: tr_iage
       use ice_meltpond, only: tr_pond
       use ice_work, only: worka
+      use ice_timers
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1551,11 +1552,15 @@
       ! write file
       !---------------------------------------------------------------
 
+      call ice_timer_start(timer_readwrite)  ! reading/writing
+
       if (history_format == 'nc') then
         call icecdf         ! netcdf output
       else
         call icebin         ! binary output
       endif
+
+      call ice_timer_stop(timer_readwrite)  ! reading/writing
 
       !---------------------------------------------------------------
       ! reset to zero

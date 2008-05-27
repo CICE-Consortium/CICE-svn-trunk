@@ -48,8 +48,6 @@
 
 !-----------------------------------------------------------------------
 ! public timers
-!lipscombmod - Timers are defined here instead of in individual modules
-!              as in POP.  Add timers as desired.
 !-----------------------------------------------------------------------
 
    integer (int_kind), public ::      &
@@ -64,6 +62,8 @@
       timer_catconv,          &! category conversions
       timer_couple,           &! coupling
       timer_readwrite,        &! read/write
+      timer_diags,            &! diagnostics/history
+      timer_hist,             &! diagnostics/history
 #if (defined CCSM) || (defined SEQ_MCT)
       timer_cplrecv,          &! receive from coupler
       timer_rcvsnd,           &! time between receive to send
@@ -198,6 +198,8 @@
    call get_ice_timer(timer_catconv,  'Cat Conv', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_couple,   'Coupling', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_readwrite,'ReadWrite',nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_diags,    'Diags    ',nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_hist,     'History  ',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_bound,    'Bound',    nblocks,distrb_info%nprocs)
 #if (defined CCSM) || (defined SEQ_MCT)
    call get_ice_timer(timer_cplrecv,  'Cpl-recv', nblocks,distrb_info%nprocs)

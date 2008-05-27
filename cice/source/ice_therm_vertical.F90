@@ -651,7 +651,6 @@
       real (kind=dbl_kind) :: &
          deltaT    , & ! SST - Tbot >= 0
          ustar     , & ! skin friction velocity for fbot (m/s)
-         fhocn_init, & ! initial value of fhocn (W/m^2)
          wlat      , & ! lateral melt rate (m/s)
          xtmp          ! temporary variable
 
@@ -1289,12 +1288,9 @@
          intent(inout) :: &
          Iswabs          ! SW radiation absorbed in ice layers (W m-2)
 
-      ! These are input arguments if calc_Tsfc = F, else are output arguments
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(inout):: &
          fsurfn      , & ! net flux to top surface, excluding fcondtopn
-         fcondtopn       ! downward cond flux at top surface (W m-2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
+         fcondtopn   , & ! downward cond flux at top surface (W m-2)
          fsensn      , & ! surface downward sensible heat (W m-2)
          flatn       , & ! surface downward latent heat (W m-2)
          fswabsn     , & ! shortwave absorbed by ice (W m-2)
@@ -3101,7 +3097,7 @@
          hilyr       , & ! ice layer thickness (m)
          hslyr           ! snow layer thickness (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(inout):: &
          fsensn      , & ! surface downward sensible heat (W m-2)
          fswabsn     , & ! shortwave flux absorbed by ice (W/m-2) 
          flatn       , & ! surface downward latent heat (W m-2)

@@ -3780,15 +3780,9 @@ contains
       elseif (this_block%iblock == nblocks_x) then  ! east edge
          if (trim(ew_bndy_type) /= 'cyclic') then
             ! locate ghost cell column (avoid padding)
-            ibc = nx_block + 1
-            npad = 0
+            ibc = nx_block
             do i = nx_block, 1, - 1
-               if (this_block%i_glob(i) == 0) then
-                  do j = 1, ny_block
-                     npad = npad + this_block%j_glob(j)
-                  enddo
-               endif
-               if (npad == 0) ibc = ibc - 1
+               if (this_block%i_glob(i) == 0) ibc = ibc - 1
             enddo
             do j = 1, ny_block
                ARRAY(ibc,j,iblk) = c2*ARRAY(ibc-1,j,iblk) - ARRAY(ibc-2,j,iblk)
@@ -3807,15 +3801,9 @@ contains
          if (trim(ns_bndy_type) /= 'cyclic' .and. &
              trim(ns_bndy_type) /= 'tripole' ) then
             ! locate ghost cell column (avoid padding)
-            ibc = ny_block + 1
-            npad = 0
+            ibc = ny_block
             do j = ny_block, 1, - 1
-               if (this_block%j_glob(j) == 0) then
-                  do i = 1, nx_block
-                     npad = npad + this_block%i_glob(i)
-                  enddo
-               endif
-               if (npad == 0) ibc = ibc - 1
+               if (this_block%j_glob(j) == 0) ibc = ibc - 1
             enddo
             do i = 1, nx_block
                ARRAY(i,ibc,iblk) = c2*ARRAY(i,ibc-1,iblk) - ARRAY(i,ibc-2,iblk)
