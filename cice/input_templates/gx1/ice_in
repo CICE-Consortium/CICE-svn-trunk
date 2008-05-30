@@ -17,11 +17,12 @@
   , history_format = 'nc'
   , dumpfreq     = 'y'
   , dumpfreq_n   = 1
+  , runtype      = 'initial'
   , restart      = .true.
   , restart_dir  = './restart/'
   , restart_file = 'iced'
   , pointer_file = './restart/ice.restart_file'
-  , ice_ic       = 'default'
+  , ice_ic       = './restart/iced_gx1_v4.0_kcatbound0'
   , grid_format  = 'bin'
   , grid_type    = 'displaced_pole'
   , grid_file    = 'grid'

@@ -86,9 +86,9 @@
       integer (kind=int_kind), parameter :: &
          check_step = 99999999, &
          iblkp = 1, &
-         ip = 4, &
-         jp = 4, &
-         mtask = 5
+         ip = 11, &
+         jp = 189, &
+         mtask = 10
 
 !=======================================================================
 
@@ -380,26 +380,26 @@
          evps = evps*dt
 
          ! salt flux
-         sfsaltn = global_sum(fsalt_hist_gbm, distrb_info, &
+         sfsaltn = global_sum(fsalt_gbm, distrb_info, &
                                    field_loc_center, tarean)
-         sfsalts = global_sum(fsalt_hist_gbm, distrb_info, &
+         sfsalts = global_sum(fsalt_gbm, distrb_info, &
                                    field_loc_center, tareas)
          sfsaltn = sfsaltn*dt
          sfsalts = sfsalts*dt
 
          ! fresh water flux
-         sfreshn = global_sum(fresh_hist_gbm, distrb_info, &
+         sfreshn = global_sum(fresh_gbm, distrb_info, &
                                    field_loc_center, tarean)
-         sfreshs = global_sum(fresh_hist_gbm, distrb_info, &
+         sfreshs = global_sum(fresh_gbm, distrb_info, &
                                    field_loc_center, tareas)
          sfreshn = sfreshn*dt
          sfreshs = sfreshs*dt
 
          ! ocean heat
          ! Note: fswthru not included because it does not heat ice
-         fhocnn = global_sum(fhocn_hist_gbm, distrb_info, &
+         fhocnn = global_sum(fhocn_gbm, distrb_info, &
                                   field_loc_center, tarean)
-         fhocns = global_sum(fhocn_hist_gbm, distrb_info, &
+         fhocns = global_sum(fhocn_gbm, distrb_info, &
                                   field_loc_center, tareas)
 
          ! latent heat
@@ -420,8 +420,8 @@
                do j = 1, ny_block
                do i = 1, nx_block
                   work1(i,j,iblk) = &
-                            (fswabs(i,j,iblk) - fswthru_hist(i,j,iblk) &
-                           + flw   (i,j,iblk) + flwout      (i,j,iblk) &
+                            (fswabs(i,j,iblk) - fswthru   (i,j,iblk) &
+                           + flw   (i,j,iblk) + flwout    (i,j,iblk) &
                            + fsens (i,j,iblk)) * aice_init(i,j,iblk)
                enddo
                enddo
@@ -602,7 +602,7 @@
                         + esno(i,j,iblk) - pde(n)) / dt
                psst(n) = sst(i,j,iblk)             ! sea surface temperature
                pTf(n) = Tf(i,j,iblk)               ! freezing temperature
-               pfhocn(n) = -fhocn_hist(i,j,iblk)   ! ocean heat used by ice
+               pfhocn(n) = -fhocn(i,j,iblk)        ! ocean heat used by ice
 
             endif  ! my_task = pmloc
 
@@ -1177,6 +1177,10 @@
          endif
       enddo
       write(nu_diag,*) 'esno(i,j)',esdebug
+      write(nu_diag,*) ' '
+
+      write(nu_diag,*) 'uvel(i,j)',uvel(i,j,iblk)
+      write(nu_diag,*) 'vvel(i,j)',vvel(i,j,iblk)
 
       write(nu_diag,*) ' '
       write(nu_diag,*) 'atm states and fluxes'

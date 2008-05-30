@@ -225,7 +225,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine restartfile
+      subroutine restartfile (ice_ic)
 !
 ! !DESCRIPTION:
 !
@@ -251,6 +251,8 @@
       use ice_gather_scatter, only: scatter_global_stress
 !
 ! !INPUT/OUTPUT PARAMETERS:
+
+      character (*), optional :: ice_ic
 !
 !EOP
 !
@@ -263,7 +265,9 @@
       logical (kind=log_kind) :: &
          diag
 
-      if (my_task == master_task) then
+      if (present(ice_ic)) then
+         filename = ice_ic
+      elseif (my_task == master_task) then
          open(nu_rst_pointer,file=pointer_file)
          read(nu_rst_pointer,'(a)') filename0
          filename = trim(filename0)

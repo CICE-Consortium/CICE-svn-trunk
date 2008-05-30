@@ -128,8 +128,7 @@
                             istop,       jstop,      &
                             dardg1dt,    dardg2dt,   &
                             dvirdgdt,    opening,    &
-                            fresh,       fresh_hist, &
-                            fhocn,       fhocn_hist)
+                            fresh,       fhocn)
 !
 ! !USES:
 !
@@ -189,9 +188,7 @@
          dvirdgdt  , & ! rate of ice volume ridged (m/s)
          opening   , & ! rate of opening due to divergence/shear (1/s)
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
-         fresh_hist, & ! fresh water flux to ocean (kg/m^2/s)
-         fhocn     , & ! net heat flux to ocean (W/m^2)
-         fhocn_hist    ! net heat flux to ocean (W/m^2)
+         fhocn         ! net heat flux to ocean (W/m^2)
 !
 !EOP
 !
@@ -504,25 +501,11 @@
             fresh(i,j) = fresh(i,j) + msnow_mlt(ij)*dti
          enddo
       endif
-      if (present(fresh_hist)) then
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            fresh_hist(i,j) = fresh_hist(i,j) + msnow_mlt(ij)*dti
-         enddo
-      endif
       if (present(fhocn)) then
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
             fhocn(i,j) = fhocn(i,j) + esnow_mlt(ij)*dti
-         enddo
-      endif
-      if (present(fhocn_hist)) then
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            fhocn_hist(i,j) = fhocn_hist(i,j) + esnow_mlt(ij)*dti
          enddo
       endif
 

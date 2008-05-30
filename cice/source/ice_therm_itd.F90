@@ -843,8 +843,7 @@
                               aice0,     aice,       &
                               frzmlt,    frazil,     &
                               frz_onset, yday,       &
-                              fresh,     fresh_hist, &
-                              fsalt,     fsalt_hist, &
+                              fresh,     fsalt,      &
                               Tf,        l_stop,     &
                               istop,     jstop)
 !
@@ -897,9 +896,7 @@
          aice0     , & ! concentration of open water
          frazil    , & ! frazil ice growth        (m/step-->cm/day)
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
-         fresh_hist, & ! fresh water flux to ocean (kg/m^2/s)
-         fsalt     , & ! salt flux to ocean (kg/m^2/s)
-         fsalt_hist    ! salt flux to ocean (kg/m^2/s)
+         fsalt         ! salt flux to ocean (kg/m^2/s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout), optional :: &
@@ -1029,9 +1026,7 @@
             dfsalt = ice_ref_salinity*p001*dfresh
 
             fresh(i,j)      = fresh(i,j)      + dfresh
-            fresh_hist(i,j) = fresh_hist(i,j) + dfresh
             fsalt(i,j)      = fsalt(i,j)      + dfsalt
-            fsalt_hist(i,j) = fsalt_hist(i,j) + dfsalt
          endif
 
       !-----------------------------------------------------------------
@@ -1214,8 +1209,7 @@
                                ilo, ihi,   jlo, jhi,   &
                                dt,                     &
                                fresh,      fsalt,      &
-                               fhocn,      fresh_hist, &
-                               fsalt_hist, fhocn_hist, &
+                               fhocn,                  &
                                rside,      meltl,      &
                                aicen,      vicen,      &
                                vsnon,      eicen,      &
@@ -1256,9 +1250,6 @@
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt     , & ! salt flux to ocean (kg/m^2/s)
          fhocn     , & ! net heat flux to ocean (W/m^2)
-         fresh_hist, & ! fresh water flux to ocean (kg/m^2/s)
-         fsalt_hist, & ! salt flux to ocean (kg/m^2/s)
-         fhocn_hist, & ! net heat flux to ocean (W/m^2)
          meltl         ! lateral ice melt         (m/step-->cm/day)
 !
 !EOP
@@ -1315,10 +1306,8 @@
                    * rside(i,j) / dt
 
             fresh(i,j)      = fresh(i,j)      + dfresh
-            fresh_hist(i,j) = fresh_hist(i,j) + dfresh
 
             fsalt(i,j)      = fsalt(i,j)      + dfsalt
-            fsalt_hist(i,j) = fsalt_hist(i,j) + dfsalt
 
             ! history diagnostics
             meltl(i,j) = meltl(i,j) + vicen(i,j,n)*rside(i,j)
@@ -1342,7 +1331,6 @@
 
                dfhocn = eicen(i,j,ilyr1(n)+k-1)*rside(i,j) / dt
                fhocn(i,j)      = fhocn(i,j)      + dfhocn
-               fhocn_hist(i,j) = fhocn_hist(i,j) + dfhocn
 
                ! ice energy
                eicen(i,j,ilyr1(n)+k-1) = eicen(i,j,ilyr1(n)+k-1) &
@@ -1362,7 +1350,6 @@
 
                dfhocn = esnon(i,j,slyr1(n)+k-1)*rside(i,j) / dt
                fhocn(i,j)      = fhocn(i,j)      + dfhocn
-               fhocn_hist(i,j) = fhocn_hist(i,j) + dfhocn
 
                ! snow energy
                esnon(i,j,slyr1(n)+k-1) = esnon(i,j,slyr1(n)+k-1) &

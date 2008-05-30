@@ -59,7 +59,7 @@
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-      public :: CICE_Init
+      public :: CICE_Initialize, cice_init
 
 !
 !EOP
@@ -71,7 +71,46 @@
 !=======================================================================
 !BOP
 !
-! !ROUTINE: CICE_Init - initialize CICE model
+! !ROUTINE: CICE_Initialize - initialize CICE model
+!
+! !DESCRIPTION:
+!
+!  Initialize the basic state, grid and all necessary parameters for
+!  running the CICE model.  Return the initial state in routine
+!  export state.
+!  Note: This initialization driver is designed for standalone and
+!        CCSM-coupled applications, with or without ESMF.  For other
+!        applications (e.g., standalone CAM), this driver would be
+!        replaced by a different driver that calls subroutine cice_init,
+!        where most of the work is done.
+!
+! !REVISION HISTORY: same as module
+!
+! !INTERFACE:
+!
+      subroutine CICE_Initialize( mpicom_ice )
+!
+! !USES:
+!
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+         mpicom_ice ! communicator for sequential ccsm
+!EOP
+!
+   !--------------------------------------------------------------------
+   ! model initialization
+   !--------------------------------------------------------------------
+
+      call cice_init
+
+      end subroutine CICE_Initialize
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: cice_init - initialize CICE model
 !
 ! !DESCRIPTION:
 !
@@ -85,13 +124,10 @@
 !
 ! !USES:
 !
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
 !
-!     local temporary variables
-
    !--------------------------------------------------------------------
    ! CCSM-specific stuff to redirect stdin,stdout
    !--------------------------------------------------------------------
@@ -128,16 +164,12 @@
       call init_state           ! initialize the ice state
       call ice_prescribed_init
 
-      if (runtype /= 'continue') then
-         ! for non-continuation run, determine if should read restart file
-         if (trim(inic_file) /= 'default' .and. trim(inic_file) /= 'none') then
-            call restartfile(inic_file)      
-         end if
-      else	
-         ! for continuation run, always start for restart pointer file
-         call restartfile()
-         call calendar(time)       ! For restart runs, use initial time
-      end if
+      if (runtype == 'continue') then ! start from core restart file
+         call restartfile()           ! given by pointer in ice_in
+      else if (restart) then          ! ice_ic = core restart file
+         call restartfile (ice_ic)
+         call calendar(time)          ! at restart
+      endif         
 
       ! tracers
       if (tr_iage) call init_age        ! ice age tracer
@@ -148,17 +180,35 @@
       call init_history_therm   ! initialize thermo history variables
       call init_history_dyn     ! initialize dynamic history variables
 
-      write_ic = .true.        ! write initial conditions
-      if(.not.prescribed_ice) call ice_write_hist(dt)
-      write_ic = .false.
+         istep  = istep  + 1    ! update time step counters
+         istep1 = istep1 + 1
+         time = time + dt       ! determine the time and date
+         call calendar(time)    ! at the end of the first timestep
 
    !--------------------------------------------------------------------
    ! coupler communication or forcing data initialization
    !--------------------------------------------------------------------
 
+      write_ic = .true.         ! write initial conditions
+      if(.not.prescribed_ice) call ice_write_hist(dt)
+      write_ic = .false.
+
       call init_cpl             ! initialize message passing (CCSM only)
 
-      end subroutine CICE_Init
+      call from_coupler         ! get updated info from CCSM coupler
+
+      call ice_timer_start(timer_rcvsnd)   ! timing between recv-send
+
+      if (shortwave == 'dEdd') then
+         call init_orbit        ! initialize orbital parameters
+         if (trim(runtype) == 'startup') &
+         call init_dEdd         ! initialize delta-Eddington scheme
+      endif
+
+      call init_flux_atm        ! initialize atmosphere fluxes sent to coupler
+      call init_flux_ocn        ! initialize ocean fluxes sent to coupler
+
+      end subroutine cice_init
 
 !=======================================================================
 

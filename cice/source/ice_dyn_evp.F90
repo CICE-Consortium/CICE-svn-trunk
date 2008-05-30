@@ -635,9 +635,10 @@
       !-----------------------------------------------------------------
       ! prep to convert to U grid
       !-----------------------------------------------------------------
-         ! Factor of aice needed for correct treatment of free drift
-         strairx(i,j) = strairxT(i,j)*aice(i,j)
-         strairy(i,j) = strairyT(i,j)*aice(i,j)
+         ! these quantities include the factor of aice needed for 
+         ! correct treatment of free drift
+         strairx(i,j) = strairxT(i,j)
+         strairy(i,j) = strairyT(i,j)
 
       !-----------------------------------------------------------------
       ! augmented mask (land + open ocean)
@@ -1374,10 +1375,10 @@
 
       !-----------------------------------------------------------------
       ! ocean-ice stress for coupling
-      ! scale to full grid cell
+      ! here, strocn includes the factor of aice
       !-----------------------------------------------------------------
-         strocnx(i,j) = taux / aiu(i,j)
-         strocny(i,j) = tauy / aiu(i,j)
+         strocnx(i,j) = taux
+         strocny(i,j) = tauy
 
       enddo                     ! ij
 
@@ -1442,6 +1443,13 @@
 
       real (kind=dbl_kind) :: vrel
 
+      do j = 1, ny_block
+      do i = 1, nx_block
+         strocnxT(i,j) = c0
+         strocnyT(i,j) = c0
+      enddo
+      enddo
+
       ! ocean-ice stress for coupling
       do ij =1, icellu
          i = indxui(ij)
@@ -1450,32 +1458,14 @@
          vrel = dragw*sqrt((uocn(i,j) - uvel(i,j))**2 + &
                            (vocn(i,j) - vvel(i,j))**2)  ! m/s
          strocnx(i,j) = strocnx(i,j) &
-                      - vrel*(uvel(i,j)*cosw - vvel(i,j)*sinw)
+                      - vrel*(uvel(i,j)*cosw - vvel(i,j)*sinw) * aiu(i,j)
          strocny(i,j) = strocny(i,j) &
-                      - vrel*(vvel(i,j)*cosw + uvel(i,j)*sinw)
-      enddo
+                      - vrel*(vvel(i,j)*cosw + uvel(i,j)*sinw) * aiu(i,j)
 
-      !-----------------------------------------------------------------
-      ! Prepare to convert to T grid
-      !-----------------------------------------------------------------
-
-      do j = 1, ny_block
-      do i = 1, nx_block
-         strocnxT(i,j) = strocnx(i,j)
-         strocnyT(i,j) = strocny(i,j)
-      enddo
-      enddo
-
-      !-----------------------------------------------------------------
-      ! Scale strocnx and strocny back to grid box mean value for 
-      ! diagnostics
-      !-----------------------------------------------------------------
-      
-      do ij =1, icellu
-         i = indxui(ij)
-         j = indxuj(ij)
-         strocnx(i,j) = strocnx(i,j) * aiu(i,j)
-         strocny(i,j) = strocny(i,j) * aiu(i,j)
+         ! Prepare to convert to T grid
+         ! divide by aice for coupling
+         strocnxT(i,j) = strocnx(i,j) / aiu(i,j)
+         strocnyT(i,j) = strocny(i,j) / aiu(i,j)
       enddo
 
       end subroutine evp_finish

@@ -168,7 +168,7 @@
          end do
          end do
 
-       !*** fill land blocks with zeroes
+       !*** fill land blocks with special values
 
        else if (src_dist%blockLocation(n) == 0) then
 
@@ -177,7 +177,7 @@
          do j=this_block%jlo,this_block%jhi
          do i=this_block%ilo,this_block%ihi
            ARRAY_G(this_block%i_glob(i), &
-                   this_block%j_glob(j)) = c0
+                   this_block%j_glob(j)) = spval_dbl
          end do
          end do
        endif

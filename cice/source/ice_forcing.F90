@@ -1296,7 +1296,7 @@
          i, j
 
       real (kind=dbl_kind) :: workx, worky, &
-         fcc, sstk, rtea, ptem, qlwm
+         fcc, sstk, rtea, ptem, qlwm, precip_factor
 
       do j = jlo, jhi
       do i = ilo, ihi
@@ -1399,6 +1399,16 @@
       ! Compute other fields needed by model
       !-----------------------------------------------------------------
 
+      ! convert precipitation units to kg/m^2 s
+      if (trim(precip_units) == 'mm_per_month') then
+         precip_factor = c12/(secday*days_per_year) 
+      elseif (trim(precip_units) == 'mm_per_day') then
+         precip_factor = c1/secday
+      elseif (trim(precip_units) == 'mm_per_sec' .or. &
+              trim(precip_units) == 'mks') then 
+         precip_factor = c1    ! mm/sec = kg/m^2 s
+      endif
+
       do j = jlo, jhi
       do i = ilo, ihi
 
@@ -1412,29 +1422,32 @@
          swidf(i,j) = fsw(i,j)*frcidf        ! near IR diffuse
                  
         ! convert precipitation units to kg/m^2 s
-        if (trim(precip_units) == 'mm_per_month') then
-          fsnow(i,j) = fsnow(i,j)*c12/(secday*days_per_year) 
-        elseif (trim(precip_units) == 'mm_per_day') then
-          fsnow(i,j) = fsnow(i,j)/secday
-!       elseif (trim(precip_units) == 'mm_per_sec' .or.
-!               trim(precip_units) == 'mks') then
-!         no change:  mm/sec = kg/m^2 s
-        endif
+         fsnow(i,j) = fsnow(i,j) * precip_factor
 
-        ! determine whether precip is rain or snow
-        ! HadGEM forcing provides separate snowfall and rainfall rather 
-        ! than total precipitation
-        if (trim(atm_data_type) /= 'hadgem') then
+      enddo                     ! i
+      enddo                     ! j
 
+      ! determine whether precip is rain or snow
+      ! HadGEM forcing provides separate snowfall and rainfall rather 
+      ! than total precipitation
+      if (trim(atm_data_type) /= 'hadgem') then
+
+        do j = jlo, jhi
+        do i = ilo, ihi
            frain(i,j) = c0                     
            if (Tair(i,j) >= Tffresh) then
                frain(i,j) = fsnow(i,j)
                fsnow(i,j) = c0
            endif
+        enddo                     ! i
+        enddo                     ! j
 
-        endif
+      endif
 
-        if (calc_strair) then
+      if (calc_strair) then
+
+        do j = jlo, jhi
+        do i = ilo, ihi
 
             wind(i,j) = sqrt(uatm(i,j)**2 + vatm(i,j)**2)
 
@@ -1456,7 +1469,13 @@
            vatm (i,j) = worky*cos(ANGLET(i,j)) & !  are on the T-grid here
                       - workx*sin(ANGLET(i,j))
 
-        else  ! strax, stray, wind are read from files
+        enddo                     ! i
+        enddo                     ! j
+
+      else  ! strax, stray, wind are read from files
+
+        do j = jlo, jhi
+        do i = ilo, ihi
 
            workx      = strax(i,j) ! wind stress
            worky      = stray(i,j)
@@ -1465,10 +1484,10 @@
            stray(i,j) = worky*cos(ANGLET(i,j)) & !  are on the T-grid here
                       - workx*sin(ANGLET(i,j))
 
-        endif                   ! calc_strair
+        enddo                     ! i
+        enddo                     ! j
 
-      enddo                     ! i
-      enddo                     ! j
+      endif                   ! calc_strair
 
       end subroutine prepare_forcing
 
