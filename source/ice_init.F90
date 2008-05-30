@@ -34,7 +34,7 @@
       implicit none
       save
 
-      character(len=char_len) :: & 
+      character(len=char_len_long) :: & 
          ice_ic      ! method of ice cover initialization
                      ! 'default'  => latitude and sst dependent
                      ! 'none'     => no ice 
@@ -293,10 +293,21 @@
       !-----------------------------------------------------------------
 
       if (trim(diag_type) == 'file') call get_fileunit(nu_diag)
+      if (my_task == master_task) then
+         if (trim(diag_type) == 'file') then
+            write(ice_stdout,*) 'Diagnostic output will be in file ',diag_file
+            open (nu_diag, file=diag_file, status='unknown')
+         endif
+         write(nu_diag,*) '--------------------------------'
+         write(nu_diag,*) '  CICE model diagnostic output  '
+         write(nu_diag,*) '--------------------------------'
+         write(nu_diag,*) ' '
+      endif
 
       if (runtype == 'continue') restart = .true.
       if (runtype /= 'continue' .and. (restart)) then
          if (ice_ic == 'none' .or. ice_ic == 'default') then
+            if (my_task == master_task) then
             write(nu_diag,*) &
             'WARNING: runtype, restart, ice_ic are inconsistent:'
             write(nu_diag,*) runtype, restart, ice_ic
@@ -304,16 +315,19 @@
             'WARNING: Need ice_ic = <filename>.'
             write(nu_diag,*) &
             'WARNING: Initializing using ice_ic conditions'
+            endif
             restart = .false.
          endif
       endif
       if (runtype == 'initial' .and. .not.(restart)) then
          if (ice_ic /= 'none' .and. ice_ic /= 'default') then
+            if (my_task == master_task) then
             write(nu_diag,*) &
             'WARNING: runtype, restart, ice_ic are inconsistent:'
             write(nu_diag,*) runtype, restart, ice_ic
             write(nu_diag,*) &
             'WARNING: Initializing with NO ICE: '
+            endif
             ice_ic = 'none'
          endif
       endif
@@ -444,15 +458,6 @@
 
       if (my_task == master_task) then
 
-         if (trim(diag_type) == 'file') then
-            write(ice_stdout,*) 'Diagnostic output will be in file ',diag_file
-            open (nu_diag, file=diag_file, status='unknown')
-         endif
-
-         write(nu_diag,*) '--------------------------------'
-         write(nu_diag,*) '  CICE model diagnostic output  '
-         write(nu_diag,*) '--------------------------------'
-         write(nu_diag,*) ' '
          write(nu_diag,*) ' Document ice_in namelist parameters:'
          write(nu_diag,*) ' ==================================== '
          write(nu_diag,*) ' '
@@ -497,7 +502,8 @@
                                trim(restart_file)
          write(nu_diag,*)    ' pointer_file              = ', &
                                trim(pointer_file)
-         write(nu_diag,1030) ' ice_ic                    = ', ice_ic
+         write(nu_diag,*   ) ' ice_ic                    = ', &
+                               trim(ice_ic)
          write(nu_diag,*)    ' grid_type                 = ', &
                                trim(grid_type)
          if (trim(grid_type) /= 'rectangular' .or. &
