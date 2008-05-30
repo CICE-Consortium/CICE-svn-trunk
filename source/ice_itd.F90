@@ -1604,10 +1604,8 @@
                               vicen,       vsnon,      &
                               eicen,       esnon,      &
                               aice0,       aice,       &
-                              trcr_depend,             &
-                              fresh,       fresh_hist, &
-                              fsalt,       fsalt_hist, &
-                              fhocn,       fhocn_hist, &
+                              trcr_depend, fresh,      &
+                              fsalt,       fhocn,      &
                               heat_capacity, l_stop,     &
                               istop,         jstop,      &
                               limit_aice_in)
@@ -1675,11 +1673,8 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout), optional :: &
          fresh    , & ! fresh water flux to ocean (kg/m^2/s)
-         fresh_hist,& ! fresh water flux to ocean (kg/m^2/s)
          fsalt    , & ! salt flux to ocean        (kg/m^2/s)
-         fsalt_hist,& ! salt flux to ocean        (kg/m^2/s)
-         fhocn    , & ! net heat flux to ocean     (W/m^2)
-         fhocn_hist   ! net heat flux to ocean     (W/m^2)
+         fhocn        ! net heat flux to ocean     (W/m^2)
 
       logical (kind=log_kind), intent(in), optional ::   &
          limit_aice_in      ! if false, allow aice to be out of bounds
@@ -1810,16 +1805,10 @@
 
       if (present(fresh)) &
            fresh     (:,:) = fresh(:,:)      + dfresh(:,:) 
-      if (present(fresh_hist)) &
-           fresh_hist(:,:) = fresh_hist(:,:) + dfresh(:,:)
       if (present(fsalt)) &
            fsalt     (:,:) = fsalt(:,:)      + dfsalt(:,:)
-      if (present(fsalt_hist)) &
-           fsalt_hist(:,:) = fsalt_hist(:,:) + dfsalt(:,:)
       if (present(fhocn)) &
            fhocn     (:,:) = fhocn(:,:)      + dfhocn(:,:)
-      if (present(fhocn_hist)) &
-           fhocn_hist(:,:) = fhocn_hist(:,:) + dfhocn(:,:)
 
       !----------------------------------------------------------------
       ! If using zero-layer model (no heat capacity), check that the 

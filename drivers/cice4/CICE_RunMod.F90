@@ -59,9 +59,6 @@
       use ice_transport_driver
       use ice_transport_remap
       use ice_work
-#ifdef popcice
-      use ice_to_drv, only: to_drv
-#endif
 
       implicit none
       private
@@ -208,10 +205,18 @@
 
       timeLoop: do
 
+         call ice_step
+
+#ifdef USE_ESMF
+         call CICE_CoupledAccumulateExport(errorCode)
+#endif
+
          istep  = istep  + 1    ! update time step counters
          istep1 = istep1 + 1
          time = time + dt       ! determine the time and date
          call calendar(time)    ! at the end of the timestep
+
+         if (stop_now >= 1) exit timeLoop
 
 #ifndef coupled
          call ice_timer_start(timer_couple)  ! atm/ocn coupling
@@ -220,13 +225,8 @@
          call ice_timer_stop(timer_couple)   ! atm/ocn coupling
 #endif
 
-         if (stop_now >= 1) exit timeLoop
-
-         call ice_step
-
-#ifdef USE_ESMF
-         call CICE_CoupledAccumulateExport(errorCode)
-#endif
+         call init_flux_atm     ! initialize atmosphere fluxes sent to coupler
+         call init_flux_ocn     ! initialize ocean fluxes sent to coupler
 
       enddo timeLoop
 
@@ -296,10 +296,6 @@
 
          call step_therm1 (dt)  ! pre-coupler thermodynamics
 
-#ifdef popcice
-         call to_drv
-#endif
-
          call step_therm2 (dt)  ! post-coupler thermodynamics
 
       !-----------------------------------------------------------------
@@ -309,6 +305,12 @@
          do k = 1, ndyn_dt
             call step_dynamics (dyn_dt)
          enddo
+
+      !-----------------------------------------------------------------
+      ! get ready for coupling
+      !-----------------------------------------------------------------
+
+         call coupling_prep
 
       !-----------------------------------------------------------------
       ! write data
@@ -384,8 +386,8 @@
          fsaltn      , & ! flux of salt, ice to ocean      (kg/m^2/s)
          fhocnn      , & ! fbot corrected for leftover energy (W/m^2)
          fswthrun    , & ! SW through ice to ocean            (W/m^2)
-         strairxn    , & ! air/ice zonal  strss,              (N/m^2)
-         strairyn    , & ! air/ice merdnl strss,              (N/m^2)
+         strairxn    , & ! air/ice zonal  stress,             (N/m^2)
+         strairyn    , & ! air/ice meridional stress,         (N/m^2)
          Trefn       , & ! air tmp reference level                (K)
          Qrefn           ! air sp hum reference level         (kg/kg)
 
@@ -435,10 +437,7 @@
 
       call init_history_therm    ! initialize thermo history variables
 
-      if (oceanmixed_ice) &
-           call ocean_mixed_layer (dt)   ! ocean surface fluxes and sst
-
-      call init_flux_atm         ! initialize atmosphere fluxes sent to coupler
+      l_stop = .false.
 
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
@@ -772,7 +771,7 @@
                              fswabsn,             flwoutn,             &
                              evapn,               freshn,              &
                              fsaltn,              fhocnn,              &
-                             meltt   (:,:,iblk),  melts(:,:,iblk),     &
+                             meltt   (:,:,iblk),  melts   (:,:,iblk),  &
                              meltb   (:,:,iblk),                       &
                              congel  (:,:,iblk),  snoice  (:,:,iblk),  &
                              mlt_onset(:,:,iblk), frz_onset(:,:,iblk), &
@@ -838,62 +837,10 @@
                             fswabs  (:,:,iblk), flwout    (:,:,iblk), &
                             evap    (:,:,iblk),                       &
                             Tref    (:,:,iblk), Qref      (:,:,iblk), &
-                            fresh   (:,:,iblk), fresh_hist(:,:,iblk), &
-                            fsalt   (:,:,iblk), fsalt_hist(:,:,iblk), &
-                            fhocn   (:,:,iblk), fhocn_hist(:,:,iblk), &
-                            fswthru (:,:,iblk), fswthru_hist(:,:,iblk))
+                            fresh   (:,:,iblk), fsalt     (:,:,iblk), &
+                            fhocn   (:,:,iblk), fswthru   (:,:,iblk))
 
          enddo                  ! ncat
-
-      !-----------------------------------------------------------------
-      ! Update mixed layer with heat and radiation from ice.
-      !-----------------------------------------------------------------
-
-         if (oceanmixed_ice) then
-            do j = jlo, jhi
-            do i = ilo, ihi
-               if (hmix(i,j,iblk) > puny) then
-                  sst(i,j,iblk) = sst(i,j,iblk) &
-                       + (fhocn(i,j,iblk) + fswthru(i,j,iblk))*dt &
-                       / (cprho*hmix(i,j,iblk))
-               endif
-            enddo
-            enddo
-         endif
-
-      !-----------------------------------------------------------------
-      ! Divide fluxes by ice area for the coupler, which assumes fluxes
-      ! are per unit ice area.
-      !-----------------------------------------------------------------
-
-         call scale_fluxes (nx_block,            ny_block,           &
-                            tmask    (:,:,iblk),                     &
-                            aice_init(:,:,iblk), Tf      (:,:,iblk), &
-                            Tair     (:,:,iblk), Qa      (:,:,iblk), &
-                            strairxT (:,:,iblk), strairyT(:,:,iblk), &
-                            fsens    (:,:,iblk), flat    (:,:,iblk), &
-                            fswabs   (:,:,iblk), flwout  (:,:,iblk), &
-                            evap     (:,:,iblk),                     &
-                            Tref     (:,:,iblk), Qref    (:,:,iblk), &
-                            fresh    (:,:,iblk), fsalt   (:,:,iblk), &
-                            fhocn    (:,:,iblk), fswthru (:,:,iblk), &
-                            alvdr    (:,:,iblk), alidr   (:,:,iblk), &
-                            alvdf    (:,:,iblk), alidf   (:,:,iblk))
-
-         if (.not. calc_Tsfc) then
-
-       !---------------------------------------------------------------
-       ! If surface fluxes were provided, conserve these fluxes at ice 
-       ! free points by passing to ocean. 
-       !---------------------------------------------------------------
-
-            call sfcflux_to_ocn & 
-                         (nx_block,              ny_block,             &
-                          tmask   (:,:,iblk),    aice_init(:,:,iblk),  &
-                          fsurfn_f (:,:,:,iblk), flatn_f(:,:,:,iblk),  &
-                          fresh    (:,:,iblk),   fresh_hist(:,:,iblk), &
-                          fhocn    (:,:,iblk),   fhocn_hist(:,:,iblk))
-         endif                 
 
       enddo                      ! iblk
 
@@ -959,8 +906,6 @@
       call ice_timer_start(timer_column)  ! column physics
       call ice_timer_start(timer_thermo)  ! thermodynamics
 
-      call init_flux_ocn        ! initialize ocean fluxes sent to coupler
-
       l_stop = .false.
       
       do iblk = 1, nblocks
@@ -977,8 +922,6 @@
          do j = 1, ny_block
          do i = 1, nx_block
             fresh     (i,j,iblk) = fresh(i,j,iblk)       &
-                                 + frain(i,j,iblk)*aice(i,j,iblk)
-            fresh_hist(i,j,iblk) = fresh_hist(i,j,iblk)  &
                                  + frain(i,j,iblk)*aice(i,j,iblk)
          enddo
          enddo
@@ -1078,9 +1021,7 @@
                            frazil    (:,:,  iblk),          &
                            frz_onset (:,:,  iblk), yday,    &
                            fresh     (:,:,  iblk),          &
-                           fresh_hist(:,:,  iblk),          &
                            fsalt     (:,:,  iblk),          &
-                           fsalt_hist(:,:,  iblk),          &
                            Tf        (:,:,  iblk), l_stop,  &
                            istop                 , jstop)
 
@@ -1104,9 +1045,6 @@
                             fresh     (:,:,  iblk), &
                             fsalt     (:,:,  iblk), &    
                             fhocn     (:,:,  iblk), &
-                            fresh_hist(:,:,  iblk), &
-                            fsalt_hist(:,:,  iblk), &
-                            fhocn_hist(:,:,  iblk), &
                             rside     (:,:,  iblk), &
                             meltl     (:,:,  iblk), &
                             aicen     (:,:,:,iblk), &
@@ -1145,9 +1083,8 @@
                            eicen   (:,:,:,iblk), esnon (:,:,  :,iblk), &
                            aice0   (:,:,  iblk), aice      (:,:,iblk), &
                            trcr_depend,                                &
-                           fresh   (:,:,  iblk), fresh_hist(:,:,iblk), &
-                           fsalt   (:,:,  iblk), fsalt_hist(:,:,iblk), &
-                           fhocn   (:,:,  iblk), fhocn_hist(:,:,iblk), &
+                           fresh   (:,:,  iblk), fsalt     (:,:,iblk), &
+                           fhocn   (:,:,  iblk),                       &
                            heat_capacity,        l_stop,               &
                            istop,                jstop)
 
@@ -1284,6 +1221,8 @@
       call ice_timer_start(timer_column)
       call ice_timer_start(timer_ridge)
 
+      l_stop = .false.
+
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk), iblk)
          ilo = this_block%ilo
@@ -1324,8 +1263,7 @@
                          istop,                jstop,                    &   
                          dardg1dt(:,:,iblk),   dardg2dt  (:,:,iblk),     &
                          dvirdgdt(:,:,iblk),   opening   (:,:,iblk),     &
-                         fresh   (:,:,iblk),   fresh_hist(:,:,iblk),     &
-                         fhocn   (:,:,iblk),   fhocn_hist(:,:,iblk))      
+                         fresh   (:,:,iblk),   fhocn     (:,:,iblk))
 
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =', &
@@ -1364,9 +1302,8 @@
                            eicen   (:,:,:,iblk), esnon (:,:,  :,iblk), &
                            aice0   (:,:,  iblk), aice      (:,:,iblk), &
                            trcr_depend,                                &
-                           fresh   (:,:,  iblk), fresh_hist(:,:,iblk), &
-                           fsalt   (:,:,  iblk), fsalt_hist(:,:,iblk), &
-                           fhocn   (:,:,  iblk), fhocn_hist(:,:,iblk), &
+                           fresh   (:,:,  iblk), fsalt     (:,:,iblk), &
+                           fhocn   (:,:,  iblk),                       &
                            heat_capacity,        l_stop,               &
                            istop,                jstop)
 
@@ -1411,18 +1348,103 @@
 
       call ice_timer_stop(timer_column)
 
-      !----------------------------------------------------------------
-      ! Store grid box mean fluxes before scaled by aice_init
-      !----------------------------------------------------------------
-
-      fresh_hist_gbm  (:,:,:) = fresh_hist  (:,:,:)
-      fsalt_hist_gbm  (:,:,:) = fsalt_hist  (:,:,:)
-      fhocn_hist_gbm  (:,:,:) = fhocn_hist  (:,:,:)
-      fswthru_hist_gbm(:,:,:) = fswthru_hist(:,:,:)
-
-      call scale_hist_fluxes    ! to match coupler fluxes
-
       end subroutine step_dynamics
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: coupling_prep
+!
+! !DESCRIPTION:
+!
+! Prepare for coupling
+!
+! !REVISION HISTORY:
+!
+! authors: Elizabeth C. Hunke, LANL
+!
+! !INTERFACE:
+
+      subroutine coupling_prep
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      type (block) :: &
+         this_block      ! block information for current block
+
+      integer (kind=int_kind) :: & 
+         iblk        , & ! block index 
+         i,j         , & ! horizontal indices
+         ilo,ihi,jlo,jhi ! beginning and end of physical domain
+
+      call ice_timer_start(timer_column)
+
+      do iblk = 1, nblocks
+         this_block = get_block(blocks_ice(iblk), iblk)
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+      !-----------------------------------------------------------------
+      ! Update mixed layer with heat and radiation from ice.
+      !-----------------------------------------------------------------
+
+         if (oceanmixed_ice) &
+            call ocean_mixed_layer (dt)   ! ocean surface fluxes and sst
+
+      !----------------------------------------------------------------
+      ! Store grid box mean fluxes before scaling by aice_init
+      !----------------------------------------------------------------
+
+         fresh_gbm  (:,:,iblk) = fresh  (:,:,iblk)
+         fsalt_gbm  (:,:,iblk) = fsalt  (:,:,iblk)
+         fhocn_gbm  (:,:,iblk) = fhocn  (:,:,iblk)
+         fswthru_gbm(:,:,iblk) = fswthru(:,:,iblk)
+
+      !-----------------------------------------------------------------
+      ! Divide fluxes by ice area 
+      !  - the CCSM coupler assumes fluxes are per unit ice area
+      !  - also needed for global budget in diagnostics
+      !-----------------------------------------------------------------
+
+         call scale_fluxes (nx_block,            ny_block,           &
+                            tmask    (:,:,iblk),                     &
+                            aice_init(:,:,iblk), Tf      (:,:,iblk), &
+                            Tair     (:,:,iblk), Qa      (:,:,iblk), &
+                            strairxT (:,:,iblk), strairyT(:,:,iblk), &
+                            fsens    (:,:,iblk), flat    (:,:,iblk), &
+                            fswabs   (:,:,iblk), flwout  (:,:,iblk), &
+                            evap     (:,:,iblk),                     &
+                            Tref     (:,:,iblk), Qref    (:,:,iblk), &
+                            fresh    (:,:,iblk), fsalt   (:,:,iblk), &
+                            fhocn    (:,:,iblk), fswthru (:,:,iblk), &
+                            alvdr    (:,:,iblk), alidr   (:,:,iblk), &
+                            alvdf    (:,:,iblk), alidf   (:,:,iblk))
+
+         if (.not. calc_Tsfc) then
+
+       !---------------------------------------------------------------
+       ! If surface fluxes were provided, conserve these fluxes at ice 
+       ! free points by passing to ocean. 
+       !---------------------------------------------------------------
+
+            call sfcflux_to_ocn & 
+                         (nx_block,              ny_block,             &
+                          tmask   (:,:,iblk),    aice_init(:,:,iblk),  &
+                          fsurfn_f (:,:,:,iblk), flatn_f(:,:,:,iblk),  &
+                          fresh    (:,:,iblk),   fhocn    (:,:,iblk))
+         endif                 
+
+      enddo
+
+      call ice_timer_stop(timer_column)
+
+      end subroutine coupling_prep
 
 !=======================================================================
 !BOP
@@ -1612,9 +1634,7 @@
        subroutine sfcflux_to_ocn(nx_block,   ny_block,     &
                                  tmask,      aice,         &
                                  fsurfn_f,   flatn_f,      &
-                                 fresh,      fresh_hist,   &
-                                 fhocn,      fhocn_hist)
-
+                                 fresh,      fhocn)
 !
 ! !REVISION HISTORY:
 !
@@ -1642,9 +1662,7 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
           intent(inout):: &
           fresh        , & ! fresh water flux to ocean         (kg/m2/s)
-          fhocn        , & ! actual ocn/ice heat flx           (W/m**2)
-          fresh_hist   , & ! fresh water flux to ocean(history)(kg/m2/s)
-          fhocn_hist       ! actual ocn/ice heat flx(history)  (W/m**2)
+          fhocn            ! actual ocn/ice heat flx           (W/m**2)
 !
 !EOP
 !
@@ -1663,11 +1681,7 @@
             if (tmask(i,j) .and. aice(i,j) <= puny) then
                fhocn(i,j)      = fhocn(i,j)              &
                             + fsurfn_f(i,j,n) + flatn_f(i,j,n)
-               fhocn_hist(i,j) = fhocn_hist(i,j)         &
-                            + fsurfn_f(i,j,n) + flatn_f(i,j,n)
                fresh(i,j)      = fresh(i,j)              &
-                                 + flatn_f(i,j,n) * rLsub
-               fresh_hist(i,j) = fresh_hist(i,j)         &
                                  + flatn_f(i,j,n) * rLsub
             endif
          enddo   ! i

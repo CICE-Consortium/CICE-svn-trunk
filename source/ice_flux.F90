@@ -171,8 +171,7 @@
 
        ! out to ocean 
        ! (Note CICE_IN_NEMO does not use these for coupling.  
-       !  It uses fresh_hist_gbm,fsalt_hist_gbm,fhocn_hist_gbm and
-       !  fswthru_hist_gbm)
+       !  It uses fresh_gbm,fsalt_gbm,fhocn_gbm and fswthru_gbm)
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          fresh   , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt   , & ! salt flux to ocean (kg/m^2/s)
@@ -226,30 +225,18 @@
          fcondtopn,& ! category fcondtop
          flatn       ! cagegory latent heat flux
 
-       ! NOTE: The following ocean diagnostic fluxes measure
-       ! the same thing as their coupler counterparts but over
-       ! different time intervals.  The coupler variables are
-       ! computed from one to_coupler call to the next, whereas
-       ! the diagnostic variables are computed over a time step.
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
-         fresh_hist, & ! fresh water flux to ocean (kg/m^2/s)
-         fsalt_hist, & ! salt flux to ocean (kg/m^2/s)
-         fhocn_hist, & ! net heat flux to ocean (W/m^2)
-         fswthru_hist  ! shortwave penetrating to ocean (W/m^2)
-
       ! As above but these remain grid box mean values i.e. they are not
-      ! divided by aice_init at end of ice_dynamics.  These are used in
+      ! divided by aice at end of ice_dynamics.  These are used in
       ! CICE_IN_NEMO for coupling and also for generating
       ! ice diagnostics and history files as these are more accurate. 
       ! (The others suffer from problem of incorrect values at grid boxes
       !  that change from an ice free state to an icy state.)
     
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
-         fresh_hist_gbm, & ! fresh water flux to ocean (kg/m^2/s)
-         fsalt_hist_gbm, & ! salt flux to ocean (kg/m^2/s)
-         fhocn_hist_gbm, & ! net heat flux to ocean (W/m^2)
-         fswthru_hist_gbm  ! shortwave penetrating to ocean (W/m^2)
+         fresh_gbm, & ! fresh water flux to ocean (kg/m^2/s)
+         fsalt_gbm, & ! salt flux to ocean (kg/m^2/s)
+         fhocn_gbm, & ! net heat flux to ocean (W/m^2)
+         fswthru_gbm  ! shortwave penetrating to ocean (W/m^2)
 
       !-----------------------------------------------------------------
       ! internal
@@ -293,8 +280,8 @@
       integer (kind=int_kind) :: i, j, iblk
 
       logical (kind=log_kind), parameter ::     & 
-         l_winter = .true.   ! winter/summer default switch
-!         l_winter = .false.   ! winter/summer default switch
+!         l_winter = .true.   ! winter/summer default switch
+         l_winter = .false.   ! winter/summer default switch
 
       !-----------------------------------------------------------------
       ! fluxes received from atmosphere
@@ -543,14 +530,10 @@
       fsurfn    (:,:,:,:) = c0
       fcondtopn (:,:,:,:) = c0
       flatn     (:,:,:,:) = c0
-      fresh_hist  (:,:,:) = c0
-      fsalt_hist  (:,:,:) = c0
-      fhocn_hist  (:,:,:) = c0
-      fswthru_hist(:,:,:) = c0
-      fresh_hist_gbm  (:,:,:) = c0
-      fsalt_hist_gbm  (:,:,:) = c0
-      fhocn_hist_gbm  (:,:,:) = c0
-      fswthru_hist_gbm(:,:,:) = c0
+      fresh_gbm  (:,:,:) = c0
+      fsalt_gbm  (:,:,:) = c0
+      fhocn_gbm  (:,:,:) = c0
+      fswthru_gbm(:,:,:) = c0
       
       end subroutine init_history_therm
 
@@ -632,10 +615,9 @@
                                fswabs,   flwout,     &
                                evap,                 & 
                                Tref,     Qref,       &
-                               fresh,    fresh_hist, &
-                               fsalt,    fsalt_hist, &
-                               fhocn,    fhocn_hist, &
-                               fswthru,  fswthru_hist)
+                               fresh,    fsalt,      & 
+                               fhocn,    fswthru)
+                               
 
 !
 ! !DESCRIPTION:
@@ -702,13 +684,9 @@
           Tref    , & ! air tmp reference level         (K)
           Qref    , & ! air sp hum reference level      (kg/kg)
           fresh   , & ! fresh water flux to ocean       (kg/m2/s)
-          fresh_hist,&! fresh water flux to ocean       (kg/m2/s)
           fsalt   , & ! salt flux to ocean              (kg/m2/s)
-          fsalt_hist,&! salt flux to ocean              (kg/m2/s)
           fhocn   , & ! actual ocn/ice heat flx         (W/m**2)
-          fhocn_hist,&! actual ocn/ice heat flx         (W/m**2)
-          fswthru , & ! sw radiation through ice bot    (W/m**2)
-          fswthru_hist!sw radiation through ice bot  (W/m**2)
+          fswthru     ! sw radiation through ice bot    (W/m**2)
 !
 !EOP
 !
@@ -755,14 +733,9 @@
       ! ocean fluxes: update both coupler and history variables
 
          fresh     (i,j) = fresh     (i,j) + freshn(i,j)*aicen(i,j)
-         fresh_hist(i,j) = fresh_hist(i,j) + freshn(i,j)*aicen(i,j)
          fsalt     (i,j) = fsalt     (i,j) + fsaltn(i,j)*aicen(i,j)
-         fsalt_hist(i,j) = fsalt_hist(i,j) + fsaltn(i,j)*aicen(i,j)
          fhocn     (i,j) = fhocn     (i,j) + fhocnn(i,j)*aicen(i,j)
-         fhocn_hist(i,j) = fhocn_hist(i,j) + fhocnn(i,j)*aicen(i,j)
          fswthru   (i,j) = fswthru(i,j) + fswthrun(i,j)* aicen(i,j)
-         fswthru_hist(i,j) = fswthru_hist(i,j) &
-                           + fswthrun(i,j) * aicen(i,j)
 
       enddo                     ! ij
       
@@ -895,67 +868,6 @@
       enddo                     ! j
       
       end subroutine scale_fluxes
-
-!=======================================================================
-!
-!BOP
-!
-! !IROUTINE: scale_hist_fluxes - scale history fluxes
-!
-! !INTERFACE:
-!
-      subroutine scale_hist_fluxes
-!
-! !DESCRIPTION:
-!
-!  Divide ice fluxes by ice area used by the coupler before writing out
-!  diagnostics. aice\_init is the ice area saved from coupling.  This
-!  makes the fluxes written to the history file consistent with those
-!  sent to the coupler. (Also scale fsurf and fcondtop to be 
-!  consistent.)
-!
-! !REVISION HISTORY:
-!
-! author: C.M.Bitz ?
-!
-! !USES:
-!
-      use ice_domain, only: nblocks
-      use ice_grid, only: tmask
-      use ice_state, only: aice_init
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      real (kind=dbl_kind) :: ar  ! 1/aice
-
-      integer (kind=int_kind) :: i, j, iblk
-
-      do iblk = 1, nblocks
-         do j = 1, ny_block
-         do i = 1, nx_block
-            if (tmask(i,j,iblk) .and. aice_init(i,j,iblk) > c0) then
-               ar = c1/aice_init(i,j,iblk)
-               fresh_hist  (i,j,iblk)  = fresh_hist  (i,j,iblk) * ar
-               fsalt_hist  (i,j,iblk)  = fsalt_hist  (i,j,iblk) * ar
-               fhocn_hist  (i,j,iblk)  = fhocn_hist  (i,j,iblk) * ar
-               fswthru_hist(i,j,iblk)  = fswthru_hist(i,j,iblk) * ar
-               fsurf       (i,j,iblk)  = fsurf       (i,j,iblk) * ar
-               fcondtop    (i,j,iblk)  = fcondtop    (i,j,iblk) * ar
-            else
-               fresh_hist  (i,j,iblk)  = c0
-               fsalt_hist  (i,j,iblk)  = c0
-               fhocn_hist  (i,j,iblk)  = c0
-               fswthru_hist(i,j,iblk)  = c0
-               fsurf       (i,j,iblk)  = c0
-               fcondtop    (i,j,iblk)  = c0
-            endif
-         enddo
-         enddo
-      enddo
-
-      end subroutine scale_hist_fluxes
 
 !=======================================================================
 

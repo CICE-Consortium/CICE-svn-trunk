@@ -232,7 +232,7 @@
 
 #ifndef SEQ_MCT
       runid   = 'unknown'   ! run ID, only used in CCSM
-      runtype = 'unknown'   ! run type, only used in CCSM
+      runtype = 'initial'   ! run type: 'initial', 'continue'
 #endif
 
       ! extra tracers
@@ -293,6 +293,30 @@
       !-----------------------------------------------------------------
 
       if (trim(diag_type) == 'file') call get_fileunit(nu_diag)
+
+      if (runtype == 'continue') restart = .true.
+      if (runtype /= 'continue' .and. (restart)) then
+         if (ice_ic == 'none' .or. ice_ic == 'default') then
+            write(nu_diag,*) &
+            'WARNING: runtype, restart, ice_ic are inconsistent:'
+            write(nu_diag,*) runtype, restart, ice_ic
+            write(nu_diag,*) &
+            'WARNING: Need ice_ic = <filename>.'
+            write(nu_diag,*) &
+            'WARNING: Initializing using ice_ic conditions'
+            restart = .false.
+         endif
+      endif
+      if (runtype == 'initial' .and. .not.(restart)) then
+         if (ice_ic /= 'none' .and. ice_ic /= 'default') then
+            write(nu_diag,*) &
+            'WARNING: runtype, restart, ice_ic are inconsistent:'
+            write(nu_diag,*) runtype, restart, ice_ic
+            write(nu_diag,*) &
+            'WARNING: Initializing with NO ICE: '
+            ice_ic = 'none'
+         endif
+      endif
 
 #ifdef SEQ_MCT
       ! Note in SEQ_MCT mode the runid and runtype flag are obtained from the
@@ -434,10 +458,9 @@
          write(nu_diag,*) ' '
 #ifndef SEQ_MCT
          if (trim(runid) /= 'unknown') &
-          write(nu_diag,*)    ' runid                     = ', &
+         write(nu_diag,*)    ' runid                     = ', &
                                trim(runid)
-         if (trim(runtype) /= 'unknown') &
-          write(nu_diag,1030) ' runtype                   = ', &
+         write(nu_diag,1030) ' runtype                   = ', &
                                trim(runtype)
 #endif
          write(nu_diag,1020) ' days_per_year             = ', days_per_year

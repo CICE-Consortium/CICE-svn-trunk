@@ -143,12 +143,12 @@
          end do
          end do
 
-      else !*** fill land blocks with zeroes
+      else !*** fill land blocks with special values
 
          do j=this_block%jlo,this_block%jhi
          do i=this_block%ilo,this_block%ihi
             ARRAY_G(this_block%i_glob(i), &
-                    this_block%j_glob(j)) = c0
+                    this_block%j_glob(j)) = spval_dbl
          end do
          end do
 

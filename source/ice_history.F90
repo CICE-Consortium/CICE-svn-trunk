@@ -1344,21 +1344,21 @@
         aa(i,j,n_meltb, iblk)= aa(i,j,n_meltb, iblk) + meltb(i,j,iblk) 
         aa(i,j,n_meltl, iblk)= aa(i,j,n_meltl, iblk) + meltl(i,j,iblk)
         aa(i,j,n_fresh, iblk)= aa(i,j,n_fresh, iblk)  &
-                                                + fresh_hist(i,j,iblk)
+                                                + fresh(i,j,iblk)
         aa(i,j,n_fresh_ai,iblk) = aa(i,j,n_fresh_ai,iblk) &
-                                             + fresh_hist_gbm(i,j,iblk)
+                                             + fresh_gbm(i,j,iblk)
         aa(i,j,n_fsalt, iblk)   = aa(i,j,n_fsalt, iblk)   &
-                                                + fsalt_hist(i,j,iblk)
+                                                + fsalt(i,j,iblk)
         aa(i,j,n_fsalt_ai,iblk) = aa(i,j,n_fsalt_ai,iblk) &
-                                             + fsalt_hist_gbm(i,j,iblk)
+                                             + fsalt_gbm(i,j,iblk)
         aa(i,j,n_fhocn, iblk)   = aa(i,j,n_fhocn, iblk)   &
-                                                + fhocn_hist(i,j,iblk)
+                                                + fhocn(i,j,iblk)
         aa(i,j,n_fhocn_ai,iblk) = aa(i,j,n_fhocn_ai,iblk) &
-                                             + fhocn_hist_gbm(i,j,iblk)
+                                             + fhocn_gbm(i,j,iblk)
         aa(i,j,n_fswthru,iblk)  = aa(i,j,n_fswthru,iblk)  &
-                                              + fswthru_hist(i,j,iblk)
+                                              + fswthru(i,j,iblk)
         aa(i,j,n_fswthru_ai,iblk)=aa(i,j,n_fswthru_ai,iblk) &
-                                           + fswthru_hist_gbm(i,j,iblk)
+                                           + fswthru_gbm(i,j,iblk)
                
         aa(i,j,n_strairx,iblk) = aa(i,j,n_strairx,iblk)  &
                                                    + strairx(i,j,iblk)

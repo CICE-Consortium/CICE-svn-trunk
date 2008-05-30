@@ -138,11 +138,6 @@
 !BOC
 !
    !--------------------------------------------------------------------
-   !  local variables
-   !--------------------------------------------------------------------
-
-
-   !--------------------------------------------------------------------
    !  initialize return flag
    !--------------------------------------------------------------------
 
@@ -155,13 +150,6 @@
    !--------------------------------------------------------------------
 
       call cice_init
-
-   !--------------------------------------------------------------------
-   ! coupler communication or forcing data initialization
-   !--------------------------------------------------------------------
-#ifndef CICE_IN_NEMO
-      call init_forcing_atmo    ! initialize atmospheric forcing (standalone)
-#endif
 
 #ifdef USE_ESMF
    !--------------------------------------------------------------------
@@ -223,10 +211,6 @@
       call sst_sss              ! POP data for CICE initialization
 #endif
       call init_thermo_vertical ! initialize vertical thermodynamics
-      if (shortwave == 'dEdd') then
-         call init_orbit        ! initialize orbital parameters
-         call init_dEdd         ! initialize delta-Eddington scheme
-      endif
       call init_itd             ! initialize ice thickness distribution
       call calendar(time)       ! determine the initial date
 
@@ -235,7 +219,12 @@
 #endif
       call init_state           ! initialize the ice state
 
-      if (restart) call restartfile      ! start from restart file
+      if (runtype == 'continue') then ! start from core restart file
+         call restartfile()           ! given by pointer in ice_in
+      else if (restart) then          ! ice_ic = core restart file
+         call restartfile (ice_ic)    !  or 'default' or 'none'
+         call calendar(time)          ! at restart
+      endif         
 
       ! tracers
       if (tr_iage) call init_age        ! ice age tracer
@@ -246,6 +235,32 @@
       call init_history_therm   ! initialize thermo history variables
       call init_history_dyn     ! initialize dynamic history variables
 
+         istep  = istep  + 1    ! update time step counters
+         istep1 = istep1 + 1
+         time = time + dt       ! determine the time and date
+         call calendar(time)    ! at the end of the first timestep
+
+   !--------------------------------------------------------------------
+   ! coupler communication or forcing data initialization
+   !--------------------------------------------------------------------
+
+#ifndef CICE_IN_NEMO
+      call init_forcing_atmo    ! initialize atmospheric forcing (standalone)
+#endif
+
+#ifndef coupled
+      call get_forcing_atmo     ! atmospheric forcing from data
+      call get_forcing_ocn(dt)  ! ocean forcing from data
+#endif
+
+      if (shortwave == 'dEdd') then
+         call init_orbit        ! initialize orbital parameters
+         call init_dEdd         ! initialize delta-Eddington scheme
+      endif
+
+      call init_flux_atm        ! initialize atmosphere fluxes sent to coupler
+      call init_flux_ocn        ! initialize ocean fluxes sent to coupler
+
       end subroutine cice_init
 
 !=======================================================================
@@ -253,3 +268,4 @@
       end module CICE_InitMod
 
 !=======================================================================
+
