@@ -9,9 +9,13 @@ CPP        := /usr/bin/cpp
 CPPFLAGS   := -P -traditional
 CPPDEFS    := -DLINUX #-DREPRODUCIBLE
 CFLAGS     := -c -O2
+ifeq ($(COMMDIR), mpi)
+   FC         := mpif90
+else
+   FC         := ifort
+endif
 FIXEDFLAGS := -132
 FREEFLAGS  := 
-FC         := ifort
 FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl 
 #FFLAGS     := -r8 -i4  -align all -w -ftz -convert big_endian -assume byterecl -g
 #FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB -traceback 
@@ -22,19 +26,13 @@ LDFLAGS    := $(FFLAGS) -v
     CPPDEFS :=  $(CPPDEFS) -DNXGLOB=$(NXGLOB) -DNYGLOB=$(NYGLOB) \
                 -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS)
 #   CPPDEFS :=  $(CPPDEFS) -DAOMIP
-#   CPPDEFS :=  $(CPPDEFS)  -DAOMIP
-
-ifeq ($(COMMDIR), mpi)
-   INCLDIR :=  $(INCLDIR) -I$(MPI_ROOT)/include
-   SLIBS   :=  $(SLIBS) -L$(MPI_ROOT)/lib64 -lmpi
-endif
 
 ifeq ($(NETCDF), yes)
    CPPDEFS :=  $(CPPDEFS) -Dncdf
-#   INCLDIR := $(INCLDIR) -I/usr/projects/climate/maltrud/local/include_coyote
-#   SLIBS   := $(SLIBS) -L/usr/projects/climate/maltrud/local/lib_coyote -lnetcdf
-   INCLDIR := $(INCLDIR) -I/usr/projects/climate/bzhao/netcdf-3.6.1/include
-   SLIBS   := $(SLIBS) -L/usr/projects/climate/bzhao/netcdf-3.6.1/lib -lnetcdf
+   INCLDIR := $(INCLDIR) -I/usr/projects/climate/maltrud/local/include_coyote
+   SLIBS   := $(SLIBS) -L/usr/projects/climate/maltrud/local/lib_coyote -lnetcdf
+#   INCLDIR := $(INCLDIR) -I/usr/projects/climate/bzhao/netcdf-3.6.1/include
+#   SLIBS   := $(SLIBS) -L/usr/projects/climate/bzhao/netcdf-3.6.1/lib -lnetcdf
 endif
 
 ifeq ($(USE_ESMF), yes)
