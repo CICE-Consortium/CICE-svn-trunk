@@ -10,13 +10,14 @@
 !  parameters and initializes the grid and CICE state variables.
 !
 ! !REVISION HISTORY:
-!  SVN:$Id: CICE_InitMod.F90 56 2007-03-15 14:42:35Z dbailey $
+!  SVN:$Id: CICE_InitMod.F90 131 2008-05-30 16:53:40Z eclare $
 !
 !  authors Elizabeth C. Hunke, LANL
 !          William H. Lipscomb, LANL
 !          Philip W. Jones, LANL
 !
 ! 2006: Converted to free form source (F90) by Elizabeth Hunke
+! 2008: E. Hunke moved ESMF code to its own driver
 !
 ! !INTERFACE:
 !
@@ -24,9 +25,6 @@
 !
 ! !USES:
 !
-#ifdef USE_ESMF
-      use esmf_mod
-#endif
       use ice_age
       use ice_calendar
       use ice_communicate
@@ -84,7 +82,7 @@
 !  running the CICE model.  Return the initial state in routine
 !  export state.
 !  Note: This initialization driver is designed for standalone and
-!        CCSM-coupled applications, with or without ESMF.  For other
+!        CCSM-coupled applications.  For other
 !        applications (e.g., standalone CAM), this driver would be
 !        replaced by a different driver that calls subroutine cice_init,
 !        where most of the work is done.
@@ -93,77 +91,16 @@
 !
 ! !INTERFACE:
 !
-
-      subroutine CICE_Initialize(CICE_Comp,  importState, exportState, &
-                                 synchClock, errorCode)
-!
-! !USES:
-!
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-
-   !--------------------------------------------------------------------
-   ! Argument types depend on whether the model is using ESMF.
-   !--------------------------------------------------------------------
-
-#ifdef USE_ESMF
-
-      type (ESMF_GridComp), intent(inout) :: &
-           CICE_Comp            ! defined ESMF component for CICE
-
-      type (ESMF_State), intent(inout) :: &
-           importState, &       ! CICE import state
-           exportState          ! CICE export state
-
-      type (ESMF_Clock), intent(inout) :: &
-           synchClock           ! ESMF clock to check init time
-
-      integer (int_kind), intent(inout) :: &
-           errorCode            ! returns an error code if any init fails
-
-#else
-! declare as integer dummy arguments
-
-      integer (int_kind) , intent(inout), optional :: &
-           CICE_Comp  , &       ! dummy argument
-           importState, &       ! dummy argument
-           exportState, &       ! dummy argument
-           synchClock , &       ! dummy argument
-           errorCode            ! dummy argument
-
-#endif
+      subroutine CICE_Initialize
 !
 !EOP
 !BOC
 !
    !--------------------------------------------------------------------
-   !  initialize return flag
-   !--------------------------------------------------------------------
-
-#ifdef USE_ESMF
-      errorCode = ESMF_SUCCESS
-#endif
-
-   !--------------------------------------------------------------------
    ! model initialization
    !--------------------------------------------------------------------
 
       call cice_init
-
-#ifdef USE_ESMF
-   !--------------------------------------------------------------------
-   !  initialize and fill the export state with initial fields
-   !--------------------------------------------------------------------
-
-      call CICE_CoupledInit(importState, exportState, errorCode)
-
-      if (errorCode /= ESMF_Success) then
-         write(nu_diag,*) &
-              '(ice) CICE_Initialize: error filling export state'
-         return
-      endif
-#endif
 
 !
 !EOC
@@ -223,17 +160,21 @@
          call restartfile()           ! given by pointer in ice_in
       else if (restart) then          ! ice_ic = core restart file
          call restartfile (ice_ic)    !  or 'default' or 'none'
-         call calendar(time)          ! at restart
       endif         
 
       ! tracers
       if (tr_iage) call init_age        ! ice age tracer
       if (tr_pond) call init_meltponds  ! melt ponds
 
-      call init_shortwave       ! initialize radiative transfer
       call init_diags           ! initialize diagnostic output points
       call init_history_therm   ! initialize thermo history variables
       call init_history_dyn     ! initialize dynamic history variables
+
+      ! Initialize shortwave components using swdn from previous timestep 
+      ! if restarting. These components will be scaled to current forcing 
+      ! in prep_radiation.
+      if (runtype == 'continue' .or. restart) &
+         call init_shortwave    ! initialize radiative transfer
 
          istep  = istep  + 1    ! update time step counters
          istep1 = istep1 + 1
@@ -253,10 +194,8 @@
       call get_forcing_ocn(dt)  ! ocean forcing from data
 #endif
 
-      if (shortwave == 'dEdd') then
-         call init_orbit        ! initialize orbital parameters
-         call init_dEdd         ! initialize delta-Eddington scheme
-      endif
+      if (runtype == 'initial' .and. .not. restart) &
+         call init_shortwave    ! initialize radiative transfer using current swdn
 
       call init_flux_atm        ! initialize atmosphere fluxes sent to coupler
       call init_flux_ocn        ! initialize ocean fluxes sent to coupler
@@ -268,4 +207,3 @@
       end module CICE_InitMod
 
 !=======================================================================
-

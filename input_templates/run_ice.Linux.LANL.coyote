@@ -5,7 +5,6 @@
 #BSUB -n 4
 #BSUB -J cice.v4.0
 
-module load openmpi
 limit stacksize unlimited
      
 set  stamp   = `date -u '+%y%m%d%H%M%S'`

@@ -372,9 +372,9 @@
 
          ! evaporation
 
-         evpn = global_sum_prod(evap, aice_init, distrb_info, &
+         evpn = global_sum_prod(evap, aice, distrb_info, &
                                 field_loc_center, tarean)
-         evps = global_sum_prod(evap, aice_init, distrb_info, &
+         evps = global_sum_prod(evap, aice, distrb_info, &
                                 field_loc_center, tareas)
          evpn = evpn*dt
          evps = evps*dt
@@ -422,7 +422,7 @@
                   work1(i,j,iblk) = &
                             (fswabs(i,j,iblk) - fswthru   (i,j,iblk) &
                            + flw   (i,j,iblk) + flwout    (i,j,iblk) &
-                           + fsens (i,j,iblk)) * aice_init(i,j,iblk)
+                           + fsens (i,j,iblk)) * aice(i,j,iblk)
                enddo
                enddo
             enddo
@@ -434,7 +434,7 @@
                do i = 1, nx_block
                   work1(i,j,iblk) = &
                              (fsurf(i,j,iblk) - flat(i,j,iblk)) & 
-                              * aice_init(i,j,iblk)
+                              * aice(i,j,iblk)
                enddo
                enddo
             enddo

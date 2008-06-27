@@ -17,6 +17,7 @@
 !          Philip W. Jones, LANL
 !
 ! 2006: Converted to free form source (F90) by Elizabeth Hunke
+! 2008: E. Hunke moved ESMF code to its own driver
 !
 ! !INTERFACE:
 !
@@ -79,7 +80,7 @@
 !  running the CICE model.  Return the initial state in routine
 !  export state.
 !  Note: This initialization driver is designed for standalone and
-!        CCSM-coupled applications, with or without ESMF.  For other
+!        CCSM-coupled applications.  For other
 !        applications (e.g., standalone CAM), this driver would be
 !        replaced by a different driver that calls subroutine cice_init,
 !        where most of the work is done.
@@ -128,16 +129,7 @@
 !
 !EOP
 !
-   !--------------------------------------------------------------------
-   ! CCSM-specific stuff to redirect stdin,stdout
-   !--------------------------------------------------------------------
-
-      call shr_msg_chdir('ice')! change cwd
-
-   !--------------------------------------------------------------------
-   ! model initialization
-   !--------------------------------------------------------------------
-
+      call shr_msg_chdir('ice') ! change cwd
       call init_communicate     ! initial setup for message passing
       if (my_task == master_task) call shr_msg_dirio('ice')    ! redirect stdin/stdout
       call init_fileunits       ! unit numbers
@@ -156,9 +148,6 @@
       call init_evp (dt)        ! define evp dynamics parameters, variables
       call init_coupler_flux    ! initialize fluxes exchanged with coupler
       call init_thermo_vertical ! initialize vertical thermodynamics
-      if (trim(shortwave) == 'dEdd') then
-         call init_orbit        ! initialize orbital parameters
-      endif
       call init_itd             ! initialize ice thickness distribution
       call calendar(time)       ! determine the initial date
       call init_state           ! initialize the ice state
@@ -167,18 +156,26 @@
       if (runtype == 'continue') then ! start from core restart file
          call restartfile()           ! given by pointer in ice_in
       else if (restart) then          ! ice_ic = core restart file
-         call restartfile (ice_ic)
-         call calendar(time)          ! at restart
+         call restartfile (ice_ic)    !  or 'default' or 'none'
       endif         
 
       ! tracers
       if (tr_iage) call init_age        ! ice age tracer
       if (tr_pond) call init_meltponds  ! melt ponds
 
-      call init_shortwave       ! initialize radiative transfer
       call init_diags           ! initialize diagnostic output points
       call init_history_therm   ! initialize thermo history variables
       call init_history_dyn     ! initialize dynamic history variables
+
+      ! Initialize shortwave components using swdn from previous timestep 
+      ! if restarting. These components will be scaled to current forcing 
+      ! in prep_radiation.
+      if (runtype == 'continue' .or. restart) &
+         call init_shortwave    ! initialize radiative transfer
+
+      write_ic = .true.         ! write initial conditions
+      if(.not.prescribed_ice) call ice_write_hist(dt)
+      write_ic = .false.
 
          istep  = istep  + 1    ! update time step counters
          istep1 = istep1 + 1
@@ -189,21 +186,13 @@
    ! coupler communication or forcing data initialization
    !--------------------------------------------------------------------
 
-      write_ic = .true.         ! write initial conditions
-      if(.not.prescribed_ice) call ice_write_hist(dt)
-      write_ic = .false.
-
       call init_cpl             ! initialize message passing (CCSM only)
-
       call from_coupler         ! get updated info from CCSM coupler
 
       call ice_timer_start(timer_rcvsnd)   ! timing between recv-send
 
-      if (shortwave == 'dEdd') then
-         call init_orbit        ! initialize orbital parameters
-         if (trim(runtype) == 'startup') &
-         call init_dEdd         ! initialize delta-Eddington scheme
-      endif
+      if (runtype == 'initial' .and. .not. restart) &
+         call init_shortwave    ! initialize radiative transfer using current swdn
 
       call init_flux_atm        ! initialize atmosphere fluxes sent to coupler
       call init_flux_ocn        ! initialize ocean fluxes sent to coupler

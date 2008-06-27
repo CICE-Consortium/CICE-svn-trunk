@@ -77,10 +77,10 @@
 ! !DESCRIPTION:
 !  This routine determines the distribution of blocks across processors
 !  by call the appropriate subroutine based on distribution type
-!  requested.  Currently only two distributions are supported:
-!  2-d Cartesian distribution (cartesian) and a load-balanced
+!  requested.  Currently three distributions are supported:
+!  2-d Cartesian distribution (cartesian), a load-balanced
 !  distribution using a rake algorithm based on an input amount of work 
-!  per block.
+!  per block, and a space-filling-curve algorithm.
 !
 ! !REVISION HISTORY:
 !  same as module
