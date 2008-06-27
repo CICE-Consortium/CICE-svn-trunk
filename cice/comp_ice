@@ -34,8 +34,8 @@ set NYGLOB = `echo $GRID | sed s/.\*x//`
 # If BLCKX (BLCKY) does not divide NXGLOB (NYGLOB) evenly, padding 
 # will be used on the right (top) of the grid.
 setenv NTASK      4       # total number of processors
-setenv BLCKX     50       # x-dimension of blocks ( not including )
-setenv BLCKY     58       # y-dimension of blocks (  ghost cells  )
+setenv BLCKX     25       # x-dimension of blocks ( not including )
+setenv BLCKY     29       # y-dimension of blocks (  ghost cells  )
 
 # may need to increase MXBLCKS with rake distribution or padding
 @ a = $NXGLOB * $NYGLOB ; @ b = $BLCKX * $BLCKY * $NTASK  
@@ -81,17 +81,23 @@ cd $RSTDIR
 cp $SRCDIR/input_templates/$RES/iced_$RES* .
 if !(-e ice.restart_file) cp $SRCDIR/input_templates/$RES/ice.restart_file .
 
+cd $OBJDIR
+
 if ($NTASK == 1) then
    setenv COMMDIR serial
 else
    setenv COMMDIR mpi 
 endif
 
-cd $OBJDIR
+if ($USE_ESMF == 'yes') then
+  setenv DRVDIR esmf
+else
+  setenv DRVDIR cice4
+endif
 
 ### List of source code directories (in order of importance).
 cat >! Filepath << EOF
-$SRCDIR/drivers/cice4
+$SRCDIR/drivers/$DRVDIR
 $SRCDIR/source
 $SRCDIR/$COMMDIR
 $SRCDIR/$SHRDIR

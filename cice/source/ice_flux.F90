@@ -162,12 +162,17 @@
          Qref    , & ! 2m atm reference spec humidity (kg/kg)
          evap        ! evaporative water flux (kg/m^2/s)
 
-      ! albedos aggregated over categories (if calc_Tsfc)
+       ! albedos aggregated over categories (if calc_Tsfc)
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
          alvdr   , & ! visible, direct   (fraction)
          alidr   , & ! near-ir, direct   (fraction)
          alvdf   , & ! visible, diffuse  (fraction)
-         alidf       ! near-ir, diffuse  (fraction)
+         alidf   , & ! near-ir, diffuse  (fraction)
+         ! grid-box-mean versions
+         alvdr_gbm, & ! visible, direct   (fraction)
+         alidr_gbm, & ! near-ir, direct   (fraction)
+         alvdf_gbm, & ! visible, diffuse  (fraction)
+         alidf_gbm    ! near-ir, diffuse  (fraction)
 
        ! out to ocean 
        ! (Note CICE_IN_NEMO does not use these for coupling.  
@@ -177,6 +182,13 @@
          fsalt   , & ! salt flux to ocean (kg/m^2/s)
          fhocn   , & ! net heat flux to ocean (W/m^2)
          fswthru     ! shortwave penetrating to ocean (W/m^2)
+
+       ! internal
+
+       ! scaling factor for shortwave components
+      real (kind=dbl_kind), &
+         dimension (nx_block,ny_block,max_blocks) :: &
+         scale_factor
 
       logical (kind=log_kind) :: &
          update_ocn_f ! if true, update fresh water and salt fluxes
@@ -395,6 +407,7 @@
       !-----------------------------------------------------------------
 
       fsw     (:,:,:) = c0            ! shortwave radiation (W/m^2)
+      scale_factor(:,:,:) = c1        ! shortwave scaling factor 
       wind    (:,:,:) = sqrt(uatm(:,:,:)**2 &
                            + vatm(:,:,:)**2)  ! wind speed, (m/s)
 
@@ -427,11 +440,6 @@
       !-----------------------------------------------------------------
       ! initialize albedo and fluxes
       !-----------------------------------------------------------------
-
-      alvdr   (:,:,:) = c0
-      alidr   (:,:,:) = c0
-      alvdf   (:,:,:) = c0
-      alidf   (:,:,:) = c0
 
       strairxT(:,:,:) = c0      ! wind stress, T grid
       strairyT(:,:,:) = c0
@@ -597,8 +605,6 @@
                                indxi,    indxj,      &
                                aicen,                &    
                                flw,      coszn,      &
-                               alvdrn,   alidrn,     &
-                               alvdfn,   alidfn,     &
                                strairxn, strairyn,   &
                                fsurfn,   fcondtopn,  &  
                                fsensn,   flatn,      & 
@@ -607,8 +613,6 @@
                                Trefn,    Qrefn,      &
                                freshn,   fsaltn,     &
                                fhocnn,   fswthrun,   &
-                               alvdr,    alidr,      &
-                               alvdf,    alidf,      &
                                strairxT, strairyT,   &  
                                fsurf,    fcondtop,   &
                                fsens,    flat,       & 
@@ -645,10 +649,6 @@
           aicen   , & ! concentration of ice
           flw     , & ! downward longwave flux          (W/m**2)
           coszn   , & ! cosine of solar zenith angle 
-          alvdrn  , & ! visible direct albedo           (fraction)
-          alidrn  , & ! near-ir direct albedo           (fraction)
-          alvdfn  , & ! visible diffuse albedo          (fraction)
-          alidfn  , & ! near-ir diffuse albedo          (fraction)
           strairxn, & ! air/ice zonal  strss,           (N/m**2)
           strairyn, & ! air/ice merdnl strss,           (N/m**2)
           fsurfn  , & ! net heat flux to top surface    (W/m**2)
@@ -668,10 +668,6 @@
       ! cumulative fluxes
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
           intent(inout):: &
-          alvdr   , & ! visible direct albedo           (fraction)
-          alidr   , & ! near-ir direct albedo           (fraction)
-          alvdf   , & ! visible diffuse albedo          (fraction)
-          alidf   , & ! near-ir diffuse albedo          (fraction)
           strairxT, & ! air/ice zonal  strss,           (N/m**2)
           strairyT, & ! air/ice merdnl strss,           (N/m**2)
           fsurf   , & ! net heat flux to top surface    (W/m**2)
@@ -707,15 +703,7 @@
          i = indxi(ij)
          j = indxj(ij)
 
-        ! albedos
-         if (coszn(i,j) > puny) then      ! sun above the horizon
-            alvdf(i,j) = alvdf(i,j) + alvdfn(i,j)*aicen(i,j)
-            alidf(i,j) = alidf(i,j) + alidfn(i,j)*aicen(i,j)
-            alvdr(i,j) = alvdr(i,j) + alvdrn(i,j)*aicen(i,j)
-            alidr(i,j) = alidr(i,j) + alidrn(i,j)*aicen(i,j)
-         endif
-
-        ! atmo fluxes
+         ! atmo fluxes
 
          strairxT (i,j)  = strairxT(i,j) + strairxn(i,j)*aicen(i,j)
          strairyT (i,j)  = strairyT(i,j) + strairyn(i,j)*aicen(i,j)
@@ -730,12 +718,12 @@
          Tref     (i,j)  = Tref    (i,j) + Trefn   (i,j)*aicen(i,j)
          Qref     (i,j)  = Qref    (i,j) + Qrefn   (i,j)*aicen(i,j)
 
-      ! ocean fluxes: update both coupler and history variables
+         ! ocean fluxes
 
-         fresh     (i,j) = fresh     (i,j) + freshn(i,j)*aicen(i,j)
-         fsalt     (i,j) = fsalt     (i,j) + fsaltn(i,j)*aicen(i,j)
-         fhocn     (i,j) = fhocn     (i,j) + fhocnn(i,j)*aicen(i,j)
-         fswthru   (i,j) = fswthru(i,j) + fswthrun(i,j)* aicen(i,j)
+         fresh    (i,j) = fresh    (i,j) + freshn  (i,j)*aicen(i,j)
+         fsalt    (i,j) = fsalt    (i,j) + fsaltn  (i,j)*aicen(i,j)
+         fhocn    (i,j) = fhocn    (i,j) + fhocnn  (i,j)*aicen(i,j)
+         fswthru  (i,j) = fswthru  (i,j) + fswthrun(i,j)*aicen(i,j)
 
       enddo                     ! ij
       
@@ -749,9 +737,7 @@
 ! !DESCRIPTION:
 !
 !  Divide ice fluxes by ice area before sending them to the
-!  coupler, since the coupler multiplies by ice area. This
-!  is the ice area at the beginning of the timestep, i.e.
-!  the value sent to the coupler.
+!  coupler, since the coupler multiplies by ice area.
 !
 ! !INTERFACE:
 !

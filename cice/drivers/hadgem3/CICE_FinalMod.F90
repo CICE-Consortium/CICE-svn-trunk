@@ -11,22 +11,18 @@
 !  environments and frameworks.
 !
 ! !REVISION HISTORY:
-!  SVN:$Id: CICE_FinalMod.F90 56 2007-03-15 14:42:35Z dbailey $
+!  SVN:$Id: CICE_FinalMod.F90 71 2007-07-24 22:41:20Z eclare $
 !
 !  authors: Philip W. Jones, LANL
 !  2006: Converted to free source form (F90) by Elizabeth Hunke
+!  2008: E. Hunke moved ESMF code to its own driver
 !
 ! !INTERFACE:
 !
-
       module CICE_FinalMod
-
 !
 ! !USES:
 !
-#ifdef USE_ESMF
-      use esmf_mod
-#endif
       use ice_exit
       use ice_fileunits
       use ice_kinds_mod
@@ -62,45 +58,7 @@
 !
 ! !INTERFACE:
 !
-
-      subroutine CICE_Finalize(CICE_Comp,  importState, exportState, &
-                               synchClock, errorCode)
-
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-
-#ifdef USE_ESMF
-
-      type (ESMF_GridComp), intent(inout) :: &
-           CICE_Comp            ! defined ESMF component for CICE
-
-      type (ESMF_State), intent(in) :: &
-           importState          ! CICE final import state - currently ignored
-
-      type (ESMF_State), intent(out) :: &
-           exportState          ! CICE final export state - currently ignored
-
-      type (ESMF_Clock), intent(inout) :: &
-           synchClock           ! ESMF clock to check init time
-
-      integer (int_kind), intent(inout) :: &
-           errorCode            ! On input, error code from Init,Run method
-                                ! On output, status of this routine
-
-#else
-! declare as integer dummy arguments
-
-      integer (int_kind) , intent(inout), optional :: &
-           CICE_Comp  , &       ! dummy argument
-           importState, &       ! dummy argument
-           exportState, &       ! dummy argument
-           synchClock , &       ! dummy argument
-           errorCode            ! dummy argument
-
-#endif
-
+      subroutine CICE_Finalize
 !
 !EOP
 !BOC
@@ -118,7 +76,6 @@
 #ifndef coupled
       call end_run       ! quit MPI
 #endif
-
 !
 !EOC
 !

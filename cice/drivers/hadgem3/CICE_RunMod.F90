@@ -9,7 +9,7 @@
 !  Contains main driver routine for time stepping of CICE.
 !
 ! !REVISION HISTORY:
-!  SVN:$Id: CICE_RunMod.F90 56 2007-03-15 14:42:35Z dbailey $
+!  SVN:$Id: CICE_RunMod.F90 131 2008-05-30 16:53:40Z eclare $
 !
 !  authors Elizabeth C. Hunke, LANL
 !          Philip W. Jones, LANL
@@ -19,6 +19,7 @@
 ! 2006 ECH: Streamlined for efficiency 
 ! 2006 ECH: Converted to free source form (F90)
 ! 2007 BPB: Modified Delta-Eddington shortwave interface
+! 2008 ECH: moved ESMF code to its own driver
 !
 ! !INTERFACE:
 !
@@ -27,9 +28,6 @@
 !
 ! !USES:
 !
-#ifdef USE_ESMF
-      use esmf_mod
-#endif
       use ice_age
       use ice_atmo
       use ice_calendar
@@ -53,6 +51,7 @@
       use ice_orbital
       use ice_shortwave
       use ice_state
+      use ice_step_mod
       use ice_therm_itd
       use ice_therm_vertical
       use ice_timers
@@ -66,7 +65,7 @@
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-      public :: CICE_Run, step_therm1, step_therm2, step_dynamics, ice_step
+      public :: CICE_Run, ice_step, step_therm1 
 !
 !EOP
 !
@@ -98,43 +97,7 @@
 !
 ! !INTERFACE:
 !
-
-      subroutine CICE_Run(CICE_Comp,  importState, exportState, &
-                          synchClock, errorCode)
-
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-
-#ifdef USE_ESMF
-
-      type (ESMF_GridComp), intent(inout) :: &
-           CICE_Comp            ! defined ESMF component for CICE
-
-      type (ESMF_State), intent(in) :: &
-           importState          ! CICE import state (forcing data)
-
-      type (ESMF_State), intent(out) :: &
-           exportState          ! CICE export state (surface fields)
-
-      type (ESMF_Clock), intent(inout) :: &
-           synchClock           ! ESMF clock to check init time
-
-      integer (int_kind), intent(inout) :: &
-           errorCode            ! returns an error code if any init fails
-
-#else
-! declare as integer dummy arguments
-
-      integer (int_kind), intent(inout), optional :: &
-           CICE_Comp        , & ! dummy argument
-           importState      , & ! dummy argument
-           exportState      , & ! dummy argument
-           synchClock       , & ! dummy argument
-           errorCode            ! dummy argument
-
-#endif
+      subroutine CICE_Run
 
 !
 !EOP
@@ -144,9 +107,6 @@
    !  local variables
    !--------------------------------------------------------------------
 
-      real (dbl_kind) :: &
-           coupledInterval      ! time (seconds) for each coupling interval
-
       integer (kind=int_kind) :: k
 
    !--------------------------------------------------------------------
@@ -155,50 +115,6 @@
 
       call ice_timer_start(timer_step)   ! start timing entire run
 
-#ifdef ESMF  
-      errorCode = ESMF_SUCCESS
-
-   !--------------------------------------------------------------------
-   !  check clock to make sure models agree on time info
-   !--------------------------------------------------------------------
-   !
-   !   call CICE_CoupledCheckTime(synchClock, 'start', errorCode)
-   !
-   !   if (errorCode /= ESMF_SUCCESS) then
-   !      write (nu_diag,*) &
-   !         '(ice) CICE_Run: error in clock synchronization'
-   !      return
-   !   endif
-   !
-   !UNCOMMENT THESE TWO SECTIONS FOR COUPLED MODEL SIMULATIONS WITH ESMF
-   !--------------------------------------------------------------------
-   !  reset timer to stop when requested by input clock
-   !--------------------------------------------------------------------
-   !
-   ! Use appropriate ESMF Clock query functions to determine the
-   ! coupling interval in seconds.  Because this depends on how the
-   ! coupled model driver is using an ESMF clock, this is left to
-   ! the user of the coupled model.
-   !
-   !coupledInterval = ?
-   !
-   ! reset number of time steps based on coupling interval
-   !
-   !npt = nint(coupledInterval/dt)
-   !
-   !--------------------------------------------------------------------
-   !  extract data from import state
-   !--------------------------------------------------------------------
-   
-      call CICE_CoupledExtractImport(importState, errorCode)
-   
-      if (errorCode /= ESMF_SUCCESS) then
-         write(nu_diag,*) &
-              '(ice) CICE_Run: error extracting data from import state'
-         return
-      endif
-#endif
-
 #ifndef CICE_IN_NEMO
    !--------------------------------------------------------------------
    ! timestep loop
@@ -206,11 +122,8 @@
 
       timeLoop: do
 #endif
-         call ice_step
 
-#ifdef USE_ESMF
-         call CICE_CoupledAccumulateExport(errorCode)
-#endif
+         call ice_step
 
          istep  = istep  + 1    ! update time step counters
          istep1 = istep1 + 1
@@ -240,37 +153,9 @@
    !--------------------------------------------------------------------
 
       call ice_timer_stop(timer_step)   ! end timestepping loop timer     
-
-
-#ifdef USE_ESMF
-   !--------------------------------------------------------------------
-   !  check clock to make sure models agree on time info
-   !--------------------------------------------------------------------
-   !
-   !   call CICE_CoupledCheckTime(synchClock, 'stop', errorCode)
-   !
-   !   if (errorCode /= ESMF_SUCCESS) then
-   !      write(nu_diag,*)
-   !          '(ice) CICE_Run: error in stop time synchronization'
-   !      return
-   !   endif
-   !
-   !--------------------------------------------------------------------
-   !  fill the export state
-   !--------------------------------------------------------------------
-
-      call CICE_CoupledFillExport(exportState, errorCode)
-
-      if (errorCode /= ESMF_SUCCESS) then
-         write(nu_diag,*) &
-              '(ice) CICE_Run: error filling export state'
-         return
-      endif
-#endif
 !
 !EOC
 !
-
       end subroutine CICE_Run
 
 !=======================================================================
@@ -296,6 +181,12 @@
          call ice_timer_stop(timer_diags)   ! diagnostics/history
 
       !-----------------------------------------------------------------
+      ! Scale radiation fields
+      !-----------------------------------------------------------------
+
+         call prep_radiation (dt)
+
+      !-----------------------------------------------------------------
       ! thermodynamics
       !-----------------------------------------------------------------
 
@@ -310,6 +201,12 @@
          do k = 1, ndyn_dt
             call step_dynamics (dyn_dt)
          enddo
+
+      !-----------------------------------------------------------------
+      ! albedo, shortwave radiation
+      !-----------------------------------------------------------------
+
+         call step_radiation (dt)
 
       !-----------------------------------------------------------------
       ! get ready for coupling
@@ -390,7 +287,6 @@
          freshn      , & ! flux of water, ice to ocean     (kg/m^2/s)
          fsaltn      , & ! flux of salt, ice to ocean      (kg/m^2/s)
          fhocnn      , & ! fbot corrected for leftover energy (W/m^2)
-         fswthrun    , & ! SW through ice to ocean            (W/m^2)
          strairxn    , & ! air/ice zonal  stress,             (N/m^2)
          strairyn    , & ! air/ice meridional stress,         (N/m^2)
          Trefn       , & ! air tmp reference level                (K)
@@ -401,9 +297,7 @@
          Tbot        , & ! ice bottom surface temperature (deg C)
          fbot        , & ! ice-ocean heat flux at bottom surface (W/m^2)
          shcoef      , & ! transfer coefficient for sensible heat
-         lhcoef      , & ! transfer coefficient for latent heat
-         fswsfcn     , & ! SW absorbed at ice/snow surface (W m-2)
-         fswintn         ! SW absorbed in ice interior, below surface (W m-2)
+         lhcoef          ! transfer coefficient for latent heat
 
       ! Local variables to keep track of melt for ponds
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
@@ -411,22 +305,6 @@
          meltt_old, &
          melts_tmp, &
          meltt_tmp
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr) :: &
-         Iswabsn         ! SW radiation absorbed in ice layers (W m-2)
-
-      ! snow variables for Delta-Eddington shortwave
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         fsn             ! snow horizontal fraction
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr) :: &
-         rhosnwn     , & ! snow density (kg/m3)
-         rsnwn       , & ! snow grain radius (micro-meters)
-         Sswabsn         ! SW radiation absorbed in snow layers (W m-2)
-
-      ! pond variables for Delta-Eddington shortwave
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         fpn         , & ! pond fraction
-         hpn             ! pond depth (m)
 
       type (block) :: &
          this_block      ! block information for current block
@@ -514,42 +392,6 @@
                                  Tbot,               fbot,               &
                                  rside (:,:,  iblk) )
 
-
-      !-----------------------------------------------------------------
-      ! Compute cosine of solar zenith angle.
-      ! This is used by the delta-Eddington shortwave module.
-      ! Albedos are aggregated in merge_fluxes only for cells w/ coszen > 0.
-      ! For basic shortwave, simply set coszen to a constant between 0 and 1.
-      !-----------------------------------------------------------------
-
-         call ice_timer_start(timer_sw)
-
-         if (trim(shortwave) == 'dEdd') then ! delta Eddington
-
-            ! identify ice-ocean cells
-            icells = 0
-            do j = 1, ny_block
-            do i = 1, nx_block
-               if (tmask(i,j,iblk)) then
-                  icells = icells + 1
-                  indxi(icells) = i
-                  indxj(icells) = j
-               endif
-            enddo               ! i
-            enddo               ! j
-
-            call compute_coszen (nx_block,         ny_block,       &
-                                 icells,                           &
-                                 indxi,            indxj,          &
-                                 tlat  (:,:,iblk), tlon(:,:,iblk), &
-                                 coszen(:,:,iblk), dt)
-
-         else                     ! basic (ccsm3) shortwave
-            coszen(:,:,iblk) = p5 ! sun above the horizon
-         endif
-
-         call ice_timer_stop(timer_sw)
-
          do n = 1, ncat
 
       !-----------------------------------------------------------------
@@ -566,97 +408,6 @@
                endif
             enddo               ! i
             enddo               ! j
-
-      !-----------------------------------------------------------------
-      ! Solar radiation: albedo and absorbed shortwave
-      !-----------------------------------------------------------------
-
-            call ice_timer_start(timer_sw)
-
-            if (calc_Tsfc) then
-
-               if (trim(shortwave) == 'dEdd') then   ! delta Eddington
-
-      ! note that rhoswn, rsnw, fp, hp and Sswabs ARE NOT dimensioned with ncat
-      ! BPB 19 Dec 2006
-
-                  ! set snow properties
-                  call shortwave_dEdd_set_snow(nx_block, ny_block,        &
-                                 icells,                                  &
-                                 indxi,               indxj,              &
-                                 aicen(:,:,n,iblk),   vsnon(:,:,n,iblk),  &
-                                 trcrn(:,:,nt_Tsfc,n,iblk), fsn,          &
-                                 rhosnwn,             rsnwn)
-
-                  if (.not. tr_pond) then
-
-                  ! set pond properties
-                  call shortwave_dEdd_set_pond(nx_block, ny_block,         &
-                                 icells,                                   &
-                                 indxi,               indxj,               &
-                                 aicen(:,:,n,iblk),                        &
-                                 trcrn(:,:,nt_Tsfc,n,iblk),                &
-                                 fsn,                 fpn,                 &
-                                 hpn)
-
-                  else
-                  
-                     fpn(:,:) = apondn(:,:,n,iblk)
-                     hpn(:,:) = hpondn(:,:,n,iblk)
-
-                  endif
-
-                  call shortwave_dEdd(nx_block,     ny_block,            &
-                                 icells,                                 &
-                                 indxi,             indxj,               &
-                                 coszen(:,:, iblk),                      &
-                                 aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
-                                 vsnon(:,:,n,iblk), fsn,                 &
-                                 rhosnwn,           rsnwn,               &
-                                 fpn,               hpn,                 &
-                                 swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
-                                 swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                                 alvdrn(:,:,n,iblk),alvdfn(:,:,n,iblk),  &
-                                 alidrn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
-                                 fswsfcn,           fswintn,             &
-                                 fswthrun,          Sswabsn,             &
-                                 Iswabsn)
-
-               else
-                  Sswabsn(:,:,:) = c0
-
-                 call shortwave_ccsm3(nx_block,     ny_block,            &
-                                 icells,                                 &
-                                 indxi,             indxj,               &
-                                 aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
-                                 vsnon(:,:,n,iblk),                      &
-                                 trcrn(:,:,nt_Tsfc,n,iblk),              &
-                                 swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
-                                 swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                                 alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
-                                 alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
-                                 fswsfcn,           fswintn,             &
-                                 fswthrun,          Iswabsn,             &
-                                 apondn(:,:,n,iblk),hpondn(:,:,n,iblk))
-
-               endif
-
-            else    ! .not. calc_Tsfc
-
-               ! Initialise for safety
-               alvdrn(:,:,n,iblk)  = c0
-               alidrn(:,:,n,iblk)  = c0
-               alvdfn(:,:,n,iblk)  = c0
-               alidfn(:,:,n,iblk)  = c0
-               fswsfcn(:,:) = c0
-               fswintn(:,:) = c0
-               fswthrun(:,:)= c0
-               Iswabsn(:,:,:) = c0
-               Sswabsn(:,:,:) = c0
-
-            endif    ! calc_Tsfc
-
-            call ice_timer_stop(timer_sw)
 
             if (calc_Tsfc .or. calc_strair) then 
 
@@ -696,7 +447,7 @@
 
             else
 
-               ! Initialise for safety
+               ! Initialize for safety
                Trefn (:,:)  = c0
                Qrefn (:,:)  = c0
                lhcoef(:,:)  = c0
@@ -745,12 +496,12 @@
       ! Melting does not alter the ice age.
       !-----------------------------------------------------------------
 
-         if (tr_iage) then
-             call increment_age (nx_block, ny_block,      &
-                                 dt, icells,              &
-                                 indxi, indxj,            &
-                                 trcrn(:,:,nt_iage,n,iblk))
-         endif
+            if (tr_iage) then
+               call increment_age (nx_block, ny_block,      &
+                                   dt, icells,              &
+                                   indxi, indxj,            &
+                                   trcrn(:,:,nt_iage,n,iblk))
+            endif
 
       !-----------------------------------------------------------------
       ! Vertical thermodynamics: Heat conduction, growth and melting.
@@ -778,9 +529,10 @@
                              fsnow  (:,:,iblk),                        &
                              fbot,                Tbot,                &
                              lhcoef,              shcoef,              &
-                             fswsfcn,             fswintn,             &
-                             fswthrun,                                 &
-                             Sswabsn,             Iswabsn,             &
+                             fswsfcn(:,:,n,iblk), fswintn(:,:,n,iblk), &
+                             fswthrun(:,:,n,iblk),                     &
+                             Sswabsn(:,:,sl1:sl2,iblk),                &
+                             Iswabsn(:,:,il1:il2,iblk),                &
                              fsurfn(:,:,n,iblk),  fcondtopn(:,:,n,iblk),&
                              fsensn,              flatn(:,:,n,iblk),   &
                              fswabsn,             flwoutn,             &
@@ -839,8 +591,6 @@
                             indxi,              indxj,                &
                             aicen_init(:,:,n,iblk),                   &
                             flw(:,:,iblk),      coszen(:,:,iblk),     &
-                            alvdrn(:,:,n,iblk), alidrn(:,:,n,iblk),   &
-                            alvdfn(:,:,n,iblk), alidfn(:,:,n,iblk),   &
                             strairxn,           strairyn,             &
                             fsurfn(:,:,n,iblk), fcondtopn(:,:,n,iblk),&
                             fsensn,             flatn(:,:,n,iblk),    &
@@ -848,9 +598,7 @@
                             evapn,                                    &
                             Trefn,              Qrefn,                &
                             freshn,             fsaltn,               &
-                            fhocnn,             fswthrun,             &
-                            alvdr   (:,:,iblk), alidr     (:,:,iblk), &
-                            alvdf   (:,:,iblk), alidf     (:,:,iblk), &
+                            fhocnn,             fswthrun(:,:,n,iblk), &
                             strairxT(:,:,iblk), strairyT  (:,:,iblk), &
                             fsurf   (:,:,iblk), fcondtop  (:,:,iblk), &
                             fsens   (:,:,iblk), flat      (:,:,iblk), &
@@ -868,507 +616,6 @@
       call ice_timer_stop(timer_column) ! column physics
 
       end subroutine step_therm1
-
-!=======================================================================
-!BOP
-!
-! !ROUTINE: step_therm2 - step post-coupler thermodynamics
-!
-! !DESCRIPTION:
-!
-!-----------------------------------------------------------------------
-! Driver for thermodynamic changes not needed for coupling:
-! transport in thickness space, lateral growth and melting.
-!
-! NOTE: Ocean fluxes are initialized here.
-!
-! !REVISION HISTORY:
-!
-! author: William H. Lipscomb, LANL
-!
-! !INTERFACE:
-
-      subroutine step_therm2 (dt)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-      real (kind=dbl_kind), intent(in) :: &
-         dt      ! time step
-!
-!EOP
-!
-!lipscomb - delete hicen later?
-!      real (kind=dbl_kind), &
-!         dimension (nx_block,ny_block,ncat,max_blocks) :: &
-
-      integer (kind=int_kind) :: &
-         iblk        , & ! block index
-         ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
-         i, j, n
-
-      integer (kind=int_kind), save :: &
-         icells          ! number of ice/ocean cells 
-
-      integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
-         indxi, indxj    ! indirect indices for ice/ocean cells
-
-      type (block) :: &
-         this_block      ! block information for current block
-
-      logical (kind=log_kind) :: &
-         l_stop          ! if true, abort model
-
-      integer (kind=int_kind) :: &
-         istop, jstop    ! indices of grid cell where model aborts
-
-      call ice_timer_start(timer_column)  ! column physics
-      call ice_timer_start(timer_thermo)  ! thermodynamics
-
-      l_stop = .false.
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks_ice(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-      !-----------------------------------------------------------------
-      ! Let rain drain through to the ocean.
-      !-----------------------------------------------------------------
-
-         do j = 1, ny_block
-         do i = 1, nx_block
-            fresh     (i,j,iblk) = fresh(i,j,iblk)       &
-                                 + frain(i,j,iblk)*aice(i,j,iblk)
-         enddo
-         enddo
-
-      !-----------------------------------------------------------------
-      ! Given thermodynamic growth rates, transport ice between
-      ! thickness categories.
-      !-----------------------------------------------------------------
-
-         call ice_timer_start(timer_catconv)    ! category conversions
-
-         if (kitd == 1) then
-      !-----------------------------------------------------------------
-      ! Compute fractional ice area in each grid cell.
-      !-----------------------------------------------------------------
-            call aggregate_area (nx_block,          ny_block, &
-                                 aicen(:,:,:,iblk),           &
-                                 aice (:,:,  iblk), aice0(:,:,iblk))
-
-      !-----------------------------------------------------------------
-      ! Identify grid cells with ice.
-      !-----------------------------------------------------------------
-
-            icells = 0
-            do j = jlo,jhi
-            do i = ilo,ihi
-               if (aice(i,j,iblk) > puny) then
-                  icells = icells + 1
-                  indxi(icells) = i
-                  indxj(icells) = j
-               endif
-            enddo
-            enddo
-
-            if (icells > 0) then
-
-            call linear_itd (nx_block, ny_block,       &
-                             icells, indxi, indxj,     &
-                             trcr_depend,    &
-                             aicen_init(:,:,:,iblk),   &
-                             vicen_init(:,:,:,iblk),   &
-                             aicen     (:,:,:,iblk),   &
-                             trcrn     (:,:,:,:,iblk), & 
-                             vicen     (:,:,:,iblk),   &
-                             vsnon     (:,:,:,iblk),   &
-                             eicen     (:,:,:,iblk),   &
-                             esnon     (:,:,:,iblk),   &
-                             aice      (:,:,  iblk),   &
-                             aice0     (:,:,  iblk),   &
-                             l_stop,                   &
-                             istop,    jstop)
-
-            if (l_stop) then
-               write (nu_diag,*) 'istep1, my_task, iblk =', &
-                                  istep1, my_task, iblk
-               write (nu_diag,*) 'Global block:', this_block%block_id
-               if (istop > 0 .and. jstop > 0) &
-                    write(nu_diag,*) 'Global i and j:', &
-                                     this_block%i_glob(istop), &
-                                     this_block%j_glob(jstop) 
-               call abort_ice ('ice: Linear ITD error')
-            endif
-
-            endif
-
-         endif  ! kitd = 1
-
-         call ice_timer_stop(timer_catconv)    ! category conversions
-
-      !-----------------------------------------------------------------
-      ! Add frazil ice growing in leads.
-      !-----------------------------------------------------------------
-
-         ! identify ice-ocean cells
-         icells = 0
-         do j = 1, ny_block
-         do i = 1, nx_block
-            if (tmask(i,j,iblk)) then
-               icells = icells + 1
-               indxi(icells) = i
-               indxj(icells) = j
-            endif
-         enddo               ! i
-         enddo               ! j
-
-         call add_new_ice (nx_block,              ny_block, &
-                           icells,                          &
-                           indxi,                 indxj,    &
-                           tmask     (:,:,  iblk), dt,      &
-                           aicen     (:,:,:,iblk),          &
-                           trcrn     (:,:,:,:,iblk),        &
-                           vicen     (:,:,:,iblk),          &
-                           eicen     (:,:,:,iblk),          &
-                           aice0     (:,:,  iblk),          &
-                           aice      (:,:,  iblk),          &
-                           frzmlt    (:,:,  iblk),          &
-                           frazil    (:,:,  iblk),          &
-                           frz_onset (:,:,  iblk), yday,    &
-                           fresh     (:,:,  iblk),          &
-                           fsalt     (:,:,  iblk),          &
-                           Tf        (:,:,  iblk), l_stop,  &
-                           istop                 , jstop)
-
-         if (l_stop) then
-            write (nu_diag,*) 'istep1, my_task, iblk =', &
-                               istep1, my_task, iblk
-            write (nu_diag,*) 'Global block:', this_block%block_id
-            if (istop > 0 .and. jstop > 0) &
-                 write(nu_diag,*) 'Global i and j:', &
-                                  this_block%i_glob(istop), &
-                                  this_block%j_glob(jstop) 
-            call abort_ice ('ice: add_new_ice error')
-         endif
-
-      !-----------------------------------------------------------------
-      ! Melt ice laterally.
-      !-----------------------------------------------------------------
-         call lateral_melt (nx_block, ny_block,     &
-                            ilo, ihi, jlo, jhi,     &
-                            dt,                     &
-                            fresh     (:,:,  iblk), &
-                            fsalt     (:,:,  iblk), &    
-                            fhocn     (:,:,  iblk), &
-                            rside     (:,:,  iblk), &
-                            meltl     (:,:,  iblk), &
-                            aicen     (:,:,:,iblk), &
-                            vicen     (:,:,:,iblk), &
-                            vsnon     (:,:,:,iblk), &
-                            eicen     (:,:,:,iblk), &
-                            esnon     (:,:,:,iblk) )
-
-      !-----------------------------------------------------------------
-      ! For the special case of a single category, adjust the area and
-      ! volume (assuming that half the volume change decreases the
-      ! thickness, and the other half decreases the area).  
-      !-----------------------------------------------------------------
-
-!NOTE - this does not work - hicen_init is not defined - ECH
-
-!         if (ncat==1) &
-!              call reduce_area (nx_block, ny_block,     &
-!                                ilo, ihi, jlo, jhi,     &
-!                                tmask     (:,:,  iblk), &
-!                                aicen     (:,:,:,iblk), &
-!                                vicen     (:,:,:,iblk), &
-!                                hicen_init(:,:,1,iblk), &
-!                                hicen     (:,:,1,iblk)) 
-
-      !-----------------------------------------------------------------
-      ! ITD cleanup: Rebin thickness categories if necessary, and remove
-      !  categories with very small areas.
-      !-----------------------------------------------------------------
-
-         call cleanup_itd (nx_block,             ny_block,             &
-                           ilo, ihi,             jlo, jhi,             &
-                           dt,                                         &
-                           aicen   (:,:,:,iblk), trcrn (:,:,:,:,iblk), &
-                           vicen   (:,:,:,iblk), vsnon (:,:,  :,iblk), &
-                           eicen   (:,:,:,iblk), esnon (:,:,  :,iblk), &
-                           aice0   (:,:,  iblk), aice      (:,:,iblk), &
-                           trcr_depend,                                &
-                           fresh   (:,:,  iblk), fsalt     (:,:,iblk), &
-                           fhocn   (:,:,  iblk),                       &
-                           heat_capacity,        l_stop,               &
-                           istop,                jstop)
-
-         if (l_stop) then
-            write (nu_diag,*) 'istep1, my_task, iblk =', &
-                               istep1, my_task, iblk
-            write (nu_diag,*) 'Global block:', this_block%block_id
-            if (istop > 0 .and. jstop > 0) &
-                 write(nu_diag,*) 'Global i and j:', &
-                                  this_block%i_glob(istop), &
-                                  this_block%j_glob(jstop) 
-            call abort_ice ('ice: ITD cleanup error')
-         endif
-
-      enddo                     ! iblk
-
-      !-------------------------------------------------------------------
-      ! Ghost cell updates for state variables.
-      !-------------------------------------------------------------------
-
-      call ice_timer_start(timer_bound)
-      call bound_state (aicen, trcrn, &
-                        vicen, vsnon, &
-                        eicen, esnon)
-      call ice_timer_stop(timer_bound)
-
-       do iblk = 1, nblocks
-
-      !-----------------------------------------------------------------
-      ! Aggregate the updated state variables (includes ghost cells). 
-      !----------------------------------------------------------------- 
-
-         call aggregate (nx_block,          ny_block,             &
-                         aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk),  &
-                         vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
-                         eicen(:,:,:,iblk), esnon(:,:,  :,iblk),  &
-                         aice (:,:,  iblk), trcr (:,:,:,  iblk),  &
-                         vice (:,:,  iblk), vsno (:,:,    iblk),  &
-                         eice (:,:,  iblk), esno (:,:,    iblk),  &
-                         aice0(:,:,  iblk), tmask(:,:,    iblk),  &
-                         trcr_depend) 
-
-      !-----------------------------------------------------------------
-      ! Compute thermodynamic area and volume tendencies.
-      !-----------------------------------------------------------------
-
-         do j = 1, ny_block
-         do i = 1, nx_block
-            daidtt(i,j,iblk) = (aice(i,j,iblk) - daidtt(i,j,iblk)) / dt
-            dvidtt(i,j,iblk) = (vice(i,j,iblk) - dvidtt(i,j,iblk)) / dt
-         enddo
-         enddo
-
-     enddo                     ! iblk
-
-      call ice_timer_stop(timer_thermo)  ! thermodynamics
-      call ice_timer_stop(timer_column)  ! column physics
-
-      end subroutine step_therm2
-
-!=======================================================================
-!BOP
-!
-! !ROUTINE: step_dynamics - step ice dynamics, transport, and ridging
-!
-! !DESCRIPTION:
-!
-! Run one time step of dynamics, horizontal transport, and ridging.
-! NOTE: The evp and transport modules include boundary updates, so
-!       they cannot be done inside a single block loop.  Ridging
-!       and cleanup, on the other hand, are single-column operations. 
-!       They are called with argument lists inside block loops
-!       to increase modularity.
-!
-! !REVISION HISTORY:
-!
-! authors: William H. Lipscomb, LANL
-!
-! !INTERFACE:
-
-      subroutine step_dynamics (dt)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-      real (kind=dbl_kind), intent(in) :: &
-         dt      ! time step
-!
-!EOP
-!
-      type (block) :: &
-         this_block      ! block information for current block
-
-      integer (kind=int_kind) :: & 
-         iblk        , & ! block index 
-         i,j         , & ! horizontal indices
-         ilo,ihi,jlo,jhi ! beginning and end of physical domain
-
-      integer (kind=int_kind), save :: &
-         icells          ! number of cells with aicen > puny
-
-      integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
-         indxi, indxj    ! indirect indices for cells with aicen > puny
-
-      logical (kind=log_kind) :: &
-         l_stop          ! if true, abort model
-
-      integer (kind=int_kind) :: &
-         istop, jstop    ! indices of grid cell where model aborts
-
-      call init_history_dyn     ! initialize dynamic history variables
-
-      !-----------------------------------------------------------------
-      ! Elastic-viscous-plastic ice dynamics
-      !-----------------------------------------------------------------
-
-      if (kdyn == 1) call evp (dt)
-
-      !-----------------------------------------------------------------
-      ! Horizontal ice transport
-      !-----------------------------------------------------------------
-
-      if (advection == 'upwind') then
-         call transport_upwind (dt)    ! upwind
-      else
-         call transport_remap (dt)     ! incremental remapping
-      endif
-
-      !-----------------------------------------------------------------
-      ! Ridging
-      !-----------------------------------------------------------------
-
-      call ice_timer_start(timer_column)
-      call ice_timer_start(timer_ridge)
-
-      l_stop = .false.
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks_ice(iblk), iblk)
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-      !-----------------------------------------------------------------
-      ! Identify ice-ocean cells.
-      ! Note:  We can not define icells here using aice>puny because
-      !        aice has not yet been updated since the transport (and
-      !        it may be out of whack, which the ridging helps fix).-ECH
-      !-----------------------------------------------------------------
-           
-         icells = 0
-         do j = jlo, jhi
-         do i = ilo, ihi
-            if (tmask(i,j,iblk)) then
-               icells = icells + 1
-               indxi(icells) = i
-               indxj(icells) = j
-            endif
-         enddo               ! i
-         enddo               ! j
-
-         if (icells > 0) then
-
-         call ridge_ice (nx_block,             ny_block,                 &
-                         dt,                   icells,                   &
-                         indxi,                indxj,                    &
-!!                         Delt    (:,:,  iblk), divu      (:,:,  iblk), &
-                         rdg_conv(:,:,  iblk), rdg_shear (:,:,  iblk),   &
-                         aicen   (:,:,:,iblk), trcrn     (:,:,:,:,iblk), &
-                         vicen   (:,:,:,iblk), vsnon     (:,:,:,iblk),   &
-                         eicen   (:,:,:,iblk), esnon     (:,:,:,iblk),   &
-                         aice0   (:,:,  iblk),                           &
-                         trcr_depend,          l_stop,                   &
-                         istop,                jstop,                    &   
-                         dardg1dt(:,:,iblk),   dardg2dt  (:,:,iblk),     &
-                         dvirdgdt(:,:,iblk),   opening   (:,:,iblk),     &
-                         fresh   (:,:,iblk),   fhocn     (:,:,iblk))
-
-         if (l_stop) then
-            write (nu_diag,*) 'istep1, my_task, iblk =', &
-                               istep1, my_task, iblk
-            write (nu_diag,*) 'Global block:', this_block%block_id
-            if (istop > 0 .and. jstop > 0) &
-                 write(nu_diag,*) 'Global i and j:', &
-                                  this_block%i_glob(istop), &
-                                  this_block%j_glob(jstop) 
-            call abort_ice ('ice: Ridging error')
-         endif
-
-         endif
-
-      enddo                     ! iblk
-
-      call ice_timer_stop(timer_ridge)
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks_ice(iblk), iblk)
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-      !-----------------------------------------------------------------
-      ! ITD cleanup: Rebin thickness categories if necessary, and remove
-      !  categories with very small areas.
-      !-----------------------------------------------------------------
-
-         call cleanup_itd (nx_block,             ny_block,             &
-                           ilo, ihi,             jlo, jhi,             &
-                           dt,                                         &
-                           aicen   (:,:,:,iblk), trcrn (:,:,:,:,iblk), &
-                           vicen   (:,:,:,iblk), vsnon (:,:,  :,iblk), &
-                           eicen   (:,:,:,iblk), esnon (:,:,  :,iblk), &
-                           aice0   (:,:,  iblk), aice      (:,:,iblk), &
-                           trcr_depend,                                &
-                           fresh   (:,:,  iblk), fsalt     (:,:,iblk), &
-                           fhocn   (:,:,  iblk),                       &
-                           heat_capacity,        l_stop,               &
-                           istop,                jstop)
-
-         if (l_stop) then
-            write (nu_diag,*) 'istep1, my_task, iblk =', &
-                               istep1, my_task, iblk
-            write (nu_diag,*) 'Global block:', this_block%block_id
-            if (istop > 0 .and. jstop > 0) &
-                 write(nu_diag,*) 'Global i and j:', &
-                                  this_block%i_glob(istop), &
-                                  this_block%j_glob(jstop) 
-            call abort_ice ('ice: ITD cleanup error')
-         endif
-
-      enddo                     ! iblk
-
-      !-------------------------------------------------------------------
-      ! Ghost cell updates for state variables.
-      !-------------------------------------------------------------------
-
-      call ice_timer_start(timer_bound)
-      call bound_state (aicen, trcrn, &
-                        vicen, vsnon, &
-                        eicen, esnon)
-      call ice_timer_stop(timer_bound)
-
-      !-----------------------------------------------------------------
-      ! Aggregate the updated state variables (includes ghost cells). 
-      !----------------------------------------------------------------- 
- 
-      do iblk = 1, nblocks
-         call aggregate (nx_block,          ny_block,             &
-                         aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk),  &
-                         vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
-                         eicen(:,:,:,iblk), esnon(:,:,  :,iblk),  &
-                         aice (:,:,  iblk), trcr (:,:,:,  iblk),  &
-                         vice (:,:,  iblk), vsno (:,:,    iblk),  &
-                         eice (:,:,  iblk), esno (:,:,    iblk),  &
-                         aice0(:,:,  iblk), tmask(:,:,    iblk),  &
-                         trcr_depend) 
-      enddo
-
-      call ice_timer_stop(timer_column)
-
-      end subroutine step_dynamics
 
 !=======================================================================
 !BOP
@@ -1398,33 +645,64 @@
 
       integer (kind=int_kind) :: & 
          iblk        , & ! block index 
+         n           , & ! thickness category index
          i,j         , & ! horizontal indices
          ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
       call ice_timer_start(timer_column)
 
-      do iblk = 1, nblocks
-         this_block = get_block(blocks_ice(iblk), iblk)
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
       !-----------------------------------------------------------------
       ! Update mixed layer with heat and radiation from ice.
       !-----------------------------------------------------------------
 
-         if (oceanmixed_ice) &
-            call ocean_mixed_layer (dt)   ! ocean surface fluxes and sst
+      if (oceanmixed_ice) &
+         call ocean_mixed_layer (dt)   ! ocean surface fluxes and sst
+
+      do iblk = 1, nblocks
+
+      !-----------------------------------------------------------------
+      ! Aggregate albedos
+      !-----------------------------------------------------------------
+
+         do j = 1, ny_block
+         do i = 1, nx_block
+            alvdf(i,j,iblk) = c0
+            alidf(i,j,iblk) = c0
+            alvdr(i,j,iblk) = c0
+            alidr(i,j,iblk) = c0
+         enddo
+         enddo
+         do n = 1, ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            alvdf(i,j,iblk) = alvdf(i,j,iblk) &
+               + alvdfn(i,j,n,iblk)*aicen(i,j,n,iblk)
+            alidf(i,j,iblk) = alidf(i,j,iblk) &
+               + alidfn(i,j,n,iblk)*aicen(i,j,n,iblk)
+            alvdr(i,j,iblk) = alvdr(i,j,iblk) &
+               + alvdrn(i,j,n,iblk)*aicen(i,j,n,iblk)
+            alidr(i,j,iblk) = alidr(i,j,iblk) &
+               + alidrn(i,j,n,iblk)*aicen(i,j,n,iblk)
+         enddo
+         enddo
+         enddo
 
       !----------------------------------------------------------------
-      ! Store grid box mean fluxes before scaling by aice_init
+      ! Store grid box mean albedos and fluxes before scaling by aice
       !----------------------------------------------------------------
 
-         fresh_gbm  (:,:,iblk) = fresh  (:,:,iblk)
-         fsalt_gbm  (:,:,iblk) = fsalt  (:,:,iblk)
-         fhocn_gbm  (:,:,iblk) = fhocn  (:,:,iblk)
-         fswthru_gbm(:,:,iblk) = fswthru(:,:,iblk)
+         do j = 1, ny_block
+         do i = 1, nx_block
+            alvdf_gbm  (i,j,iblk) = alvdf  (i,j,iblk)
+            alidf_gbm  (i,j,iblk) = alidf  (i,j,iblk)
+            alvdr_gbm  (i,j,iblk) = alvdr  (i,j,iblk)
+            alidr_gbm  (i,j,iblk) = alidr  (i,j,iblk)
+            fresh_gbm  (i,j,iblk) = fresh  (i,j,iblk)
+            fsalt_gbm  (i,j,iblk) = fsalt  (i,j,iblk)
+            fhocn_gbm  (i,j,iblk) = fhocn  (i,j,iblk)
+            fswthru_gbm(i,j,iblk) = fswthru(i,j,iblk)
+         enddo
+         enddo
 
       !-----------------------------------------------------------------
       ! Divide fluxes by ice area 
@@ -1434,7 +712,7 @@
 
          call scale_fluxes (nx_block,            ny_block,           &
                             tmask    (:,:,iblk),                     &
-                            aice_init(:,:,iblk), Tf      (:,:,iblk), &
+                            aice     (:,:,iblk), Tf      (:,:,iblk), &
                             Tair     (:,:,iblk), Qa      (:,:,iblk), &
                             strairxT (:,:,iblk), strairyT(:,:,iblk), &
                             fsens    (:,:,iblk), flat    (:,:,iblk), &
