@@ -1189,14 +1189,6 @@
       logical (kind=log_kind) ::   &
          l_snow           ! true if hsno > hs_min
 
-!lipscomb - for testing - remove later
-      if (my_task == mtest) then
-         i = itest
-         j = jtest
-         print*, ''
-         print*, 'Beginning Tsf calc, my_task, i, j =', mtest, i ,j
-      endif
-
       ! Initialize fluxes
 
       fsurfn   (:,:) = c0
@@ -1299,24 +1291,6 @@
 
       enddo   ! ij
 
-!lipscomb - Remove later
-
-      if (my_task==mtest) then
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            if (i==itest .and. j==jtest) then
-               print*, ''
-               print*, 'kh =', khis(ij)
-               print*, 'Tis =', Tis(ij)
-               print*, ''
-               print*, 'fswsfc =', fswsfcn(i,j)
-               print*, 'flwdn =', emissivity*flw(i,j)
-               print*, 'potT =', potT(i,j) - Tffresh
-            endif
-         enddo
-      endif  ! my_task
-
       !-----------------------------------------------------------------
       ! Compute radiative and turbulent fluxes and their derivatives
       ! with respect to Tsf.
@@ -1333,28 +1307,6 @@
                            flatn,       fsurfn,             &
                            dflwout_dT,  dfsens_dT,          &
                            dflat_dT,    dfsurf_dT)
-
-!lipscomb - for testing - remove later
-
-      if (my_task == mtest) then
-         i = itest
-         j = jtest
-         print*, ''
-         print*, 'Got surface fluxes'
-
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            if (i==itest .and. j==jtest) then
-               print*, ''
-               print*, 'flwout =', flwoutn(i,j)
-               print*, 'fsens =', fsensn(i,j)
-               print*, 'flat =', flatn(i,j)
-               print*, 'fsurf =', fsurfn(i,j)
-               print*, 'dfsurf_dT =', dfsurf_dT(ij)
-            endif
-         enddo
-      endif
 
       !-----------------------------------------------------------------
       ! Solve for the new surface temperature and fluxes
@@ -1384,31 +1336,6 @@
          fcondtopn(i,j) = khis(ij) * (Tsf(ij) - Tis(ij))
 
       enddo
-
-!lipscomb - for testing - remove later
-
-      if (my_task == mtest) then
-         i = itest
-         j = jtest
-         print*, ''
-         print*, 'New temp and fluxes:'
-
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            if (i==itest .and. j==jtest) then
-               print*, ''
-               print*, 'Tsf =', Tsf(ij)
-               print*, 'fct =', fcondtopn(i,j)
-               print*, ''
-               print*, 'flwout =', flwoutn(i,j)
-               print*, 'fsens =', fsensn(i,j)
-               print*, 'flat =', flatn(i,j)
-               print*, 'fsurf =', fsurfn(i,j)
-               print*, 'dfsurf_dT =', dfsurf_dT(ij)
-            endif
-         enddo
-      endif
 
       end subroutine explicit_calc_Tsfc
 

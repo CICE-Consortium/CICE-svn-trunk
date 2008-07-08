@@ -69,7 +69,7 @@
       use ice_fileunits
       use ice_calendar, only: year_init, istep0, histfreq, histfreq_n, &
                               dumpfreq, dumpfreq_n, diagfreq, &
-                              npt, dt, ndyn_dt, days_per_year
+                              npt, dt, ndyn_dt, days_per_year, write_ic
       use ice_restart, only: &
           restart, restart_dir, restart_file, pointer_file, &
           runid, runtype
@@ -111,35 +111,39 @@
 
       !-----------------------------------------------------------------
       ! Namelist variables.
-      ! NOTE: Not all of these are used by both models.
       !-----------------------------------------------------------------
 
-      namelist /ice_nml/ &
-        year_init,      istep0,          dt,            npt,            &
-        diagfreq,       days_per_year,                                  &
-        print_points,   print_global,    diag_type,     diag_file,      &
-        history_format,                                                 &
-        histfreq,       hist_avg,        history_dir,   history_file,   &
-        histfreq_n,     dumpfreq,        dumpfreq_n,    restart_file,   &
-        restart,        restart_dir,     pointer_file,  ice_ic,         &
-        grid_format,    grid_type,       grid_file,     kmt_file,       &
-        kitd,           kcatbound,                                      &
-        kdyn,           ndyn_dt,         ndte,          evp_damping,    &
-        yield_curve,    advection,                                      &
-        kstrength,      krdg_partic,     krdg_redist,   shortwave,      &
-        R_ice,          R_pnd,           R_snw,                         &
-        albicev,        albicei,         albsnowv,      albsnowi,       &
-        albedo_type,    heat_capacity,   calc_Tsfc,     Tfrzpt,         &
-        update_ocn_f,   atmbndy,        fyear_init,      ycycle,        &
-        atm_data_format,                                                &
-        atm_data_type,  atm_data_dir,    calc_strair,   precip_units,   &
-        oceanmixed_ice, sss_data_type,   sst_data_type, ocn_data_format,&
-        ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
-        restore_ice,    latpnt,          lonpnt,        dbug,           &
+      namelist /setup_nml/ &
+        days_per_year,  year_init,      istep0,          dt,            &
+        npt,            ndyn_dt,                                        &
 #ifndef SEQ_MCT
-        runid,          runtype,                                        &
+        runtype,        runid,                                          &
 #endif
-        incond_dir,     incond_file
+        ice_ic,         restart,        restart_dir,     restart_file,  &
+        pointer_file,   dumpfreq,       dumpfreq_n,                     &
+        diagfreq,       diag_type,      diag_file,                      &
+        print_global,   print_points,   latpnt,          lonpnt,        &
+        dbug,           histfreq,       histfreq_n,      hist_avg,      &
+        history_dir,    history_file,   history_format,                 &
+        write_ic,       incond_dir,     incond_file
+
+      namelist /grid_nml/ &
+        grid_format,    grid_type,       grid_file,     kmt_file,       &
+        kcatbound
+
+      namelist /ice_nml/ &
+        kitd,           kdyn,            ndte,                          &
+        evp_damping,    yield_curve,                                    &
+        kstrength,      krdg_partic,     krdg_redist,   advection,      &
+        heat_capacity,  shortwave,       albedo_type,                   &
+        albicev,        albicei,         albsnowv,      albsnowi,       &
+        R_ice,          R_pnd,           R_snw,                         &
+        atmbndy,        fyear_init,      ycycle,        atm_data_format,&
+        atm_data_type,  atm_data_dir,    calc_strair,   calc_Tsfc,      &
+        precip_units,   Tfrzpt,          update_ocn_f,                  &
+        oceanmixed_ice, ocn_data_format, sss_data_type, sst_data_type,  &
+        ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
+        restore_ice    
 
       namelist /tracer_nml/   &
         tr_iage, restart_age, &
@@ -163,15 +167,16 @@
       histfreq='m'           ! output frequency option
       histfreq_n = 1         ! output frequency
       hist_avg = .true.      ! if true, write time-averages (not snapshots)
-      history_dir  = ' '     ! Write to executable dir for default
+      history_dir  = ' '     ! write to executable dir for default
       history_file = 'iceh'  ! history file name prefix
       history_format = 'bin' ! file format ('bin'=binary or 'nc'=netcdf)
-      incond_dir = ' '       ! Write to executable dir for default
-      incond_file = 'iceh'   ! same as history file prefix
+      write_ic = .false.     ! write out initial condition
+      incond_dir = history_dir ! write to history dir for default
+      incond_file = 'iceh_ic'! file prefix
       dumpfreq='y'           ! restart frequency option
       dumpfreq_n = 1         ! restart frequency
       restart = .false.      ! if true, read restart files for initialization
-      restart_dir  = ' '     ! Write to executable dir for default
+      restart_dir  = ' '     ! write to executable dir for default
       restart_file = 'iced'  ! restart file name prefix
       pointer_file = 'ice.restart_file'
       ice_ic       = 'default'      ! latitude and sst-dependent
@@ -247,7 +252,6 @@
 
       call get_fileunit(nu_nml)
 
-      ! primary namelist
       if (my_task == master_task) then
          open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
          if (nml_error /= 0) then
@@ -256,34 +260,21 @@
             nml_error =  1
          endif
          do while (nml_error > 0)
+            print*,'Reading setup_nml'
+            read(nu_nml, nml=setup_nml,iostat=nml_error)
+            print*,'Reading grid_nml'
+            read(nu_nml, nml=grid_nml,iostat=nml_error)
+            print*,'Reading tracer_nml'
+            read(nu_nml, nml=tracer_nml,iostat=nml_error)
+            print*,'Reading ice_nml'
             read(nu_nml, nml=ice_nml,iostat=nml_error)
-            read(nu_nml, nml=tracer_nml,iostat=nml_error)
             if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
          end do
          if (nml_error == 0) close(nu_nml)
       endif
       call broadcast_scalar(nml_error, master_task)
       if (nml_error /= 0) then
-         call abort_ice('ice: error reading ice_nml')
-      endif
-
-      ! tracer namelist
-      if (my_task == master_task) then
-         open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
-         if (nml_error /= 0) then
-            nml_error = -1
-         else
-            nml_error =  1
-         endif
-         do while (nml_error > 0)
-            read(nu_nml, nml=tracer_nml,iostat=nml_error)
-            if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
-         end do
-         if (nml_error == 0) close(nu_nml)
-      endif
-      call broadcast_scalar(nml_error, master_task)
-      if (nml_error /= 0) then
-         call abort_ice('ice: error reading tracer_nml')
+         call abort_ice('ice: error reading namelist')
       endif
 
       call release_fileunit(nu_nml)
@@ -350,11 +341,17 @@
       ocn_data_format = 'bin'
 #endif
 
-      if (histfreq == '1') hist_avg = .false. ! potential conflict
+      if (histfreq == '1') hist_avg = .false.         ! potential conflict
       if (days_per_year /= 365) shortwave = 'default' ! definite conflict
 
       chartmp = advection(1:6)
       if (chartmp /= 'upwind' .and. chartmp /= 'remap ') advection = 'remap'
+
+      if (ncat == 1 .and. kitd == 1) then
+         write (nu_diag,*) 'Remapping the ITD is not allowed for ncat=1'
+         write (nu_diag,*) 'Using the delta function ITD option instead'
+         kitd = 0
+      endif
 
       if (trim(atm_data_type) == 'monthly' .and. calc_strair) &
          calc_strair = .false.
@@ -385,6 +382,7 @@
       call broadcast_scalar(hist_avg,           master_task)
       call broadcast_scalar(history_dir,        master_task)
       call broadcast_scalar(history_file,       master_task)
+      call broadcast_scalar(write_ic,           master_task)
       call broadcast_scalar(incond_dir,         master_task)
       call broadcast_scalar(incond_file,        master_task)
       call broadcast_scalar(dumpfreq,           master_task)
@@ -492,6 +490,10 @@
                                trim(history_dir)
          write(nu_diag,*)    ' history_file              = ', &
                                trim(history_file)
+         if (write_ic) then
+            write (nu_diag,*) 'Initial condition will be written in ', &
+                               trim(incond_dir)
+         endif
          write(nu_diag,1030) ' dumpfreq                  = ', &
                                trim(dumpfreq)
          write(nu_diag,1020) ' dumpfreq_n                = ', dumpfreq_n

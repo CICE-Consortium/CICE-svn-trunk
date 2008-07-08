@@ -33,7 +33,6 @@
 
    public :: init_ice_timers,     &
              get_ice_timer,       &
-             release_ice_timer,   &
              ice_timer_clear,     &
              ice_timer_start,     &
              ice_timer_stop,      &
@@ -298,66 +297,6 @@
 !EOC
 
  end subroutine get_ice_timer
-
-!***********************************************************************
-!BOP
-! !IROUTINE: release_ice_timer
-! !INTERFACE:
-
- subroutine release_ice_timer(timer_id)
-
-! !DESCRIPTION:
-!  This routine frees up a timer which is no longer used.
-!  NOTE: This routine must be called from outside a threaded
-!  region.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
-
-   integer (int_kind), intent(in) :: &
-      timer_id                ! timer number
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-!
-!  if the timer has been defined, mark as not in use and re-initialize
-!  values. otherwise exit with an error
-!
-!-----------------------------------------------------------------------
-
-   if (all_timers(timer_id)%in_use) then
-     
-      all_timers(timer_id)%name = 'unknown_timer_name'
-
-      all_timers(timer_id)%in_use       = .false.
-      all_timers(timer_id)%node_started = .false.
-
-      all_timers(timer_id)%num_blocks   = 0
-      all_timers(timer_id)%num_nodes    = 0
-      all_timers(timer_id)%num_starts   = 0
-      all_timers(timer_id)%num_stops    = 0
-      all_timers(timer_id)%node_cycles1 = c0
-      all_timers(timer_id)%node_cycles2 = c0
-
-      all_timers(timer_id)%node_accum_time = c0
-
-      nullify(all_timers(timer_id)%block_started)
-      nullify(all_timers(timer_id)%block_cycles1)
-      nullify(all_timers(timer_id)%block_cycles2)
-      nullify(all_timers(timer_id)%block_accum_time)
-
-   else
-      call abort_ice &
-                 ('release_ice_timer: attempt to reset undefined timer')
-   endif
-
-!-----------------------------------------------------------------------
-!EOC
-
- end subroutine release_ice_timer
 
 !***********************************************************************
 !BOP

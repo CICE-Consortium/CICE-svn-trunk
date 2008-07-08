@@ -7,7 +7,7 @@ SLIBS      := -L/usr/lib
 ULIBS      := 
 CPP        := /usr/bin/cpp
 CPPFLAGS   := -P -traditional
-CPPDEFS    := -DLINUX #-DREPRODUCIBLE
+CPPDEFS    := -DLINUX
 CFLAGS     := -c -O2
 ifeq ($(COMMDIR), mpi)
    FC         := mpif90
@@ -26,6 +26,10 @@ LDFLAGS    := $(FFLAGS) -v
     CPPDEFS :=  $(CPPDEFS) -DNXGLOB=$(NXGLOB) -DNYGLOB=$(NYGLOB) \
                 -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS)
 #   CPPDEFS :=  $(CPPDEFS) -DAOMIP
+
+ifeq ($(DITTO), yes)
+   CPPDEFS :=  $(CPPDEFS) -DREPRODUCIBLE
+endif
 
 ifeq ($(NETCDF), yes)
    CPPDEFS :=  $(CPPDEFS) -Dncdf

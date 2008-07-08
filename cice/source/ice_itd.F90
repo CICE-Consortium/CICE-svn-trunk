@@ -129,12 +129,6 @@
       character(len=8) :: c_hinmax1,c_hinmax2
       character(len=2) :: c_nc
 
-      if (ncat == 1 .and. kitd == 1) then
-         write (nu_diag,*) 'Remapping the ITD is not allowed for ncat=1'
-         write (nu_diag,*) 'Use the delta function ITD option instead'
-         call abort_ice ('ice: init_itd: Linear remapping not allowed')
-      endif
-
       rncat = real(ncat, kind=dbl_kind)
       d1 = 3.0_dbl_kind / rncat
       d2 = 0.5_dbl_kind / rncat
@@ -805,7 +799,7 @@
                               ilo, ihi, jlo, jhi, &
                               tmask,              &
                               aicen,     vicen,   &
-                              hicen_old, hicen)
+                              aicen_init,vicen_init)
 !
 ! !DESCRIPTION:
 !
@@ -833,16 +827,14 @@
          intent(in) :: &
          tmask     ! land/boundary mask, thickness (T-cell)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
          aicen , & ! concentration of ice
          vicen     ! volume per unit area of ice          (m)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
-         hicen_old   ! old ice thickness for category 1 (m)
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out) :: &
-         hicen       ! new ice thickness for category 1 (m)
+         aicen_init, & ! old ice area for category 1 (m)
+         vicen_init    ! old ice volume for category 1 (m)
 !
 !EOP
 !
@@ -850,32 +842,33 @@
          i, j        ! horizontal indices
 
       real (kind=dbl_kind) :: &
-         hi0     , & ! current hi for ice fraction adjustment
-         dai0    , & ! change in aice for ice fraction adjustment
-         dhi         ! hice1 - hice1_old
-
-      hicen(:,:) = c0
+         hi0     , & ! initial hi
+         hi1     , & ! current hi
+         dhi         ! hi1 - hi0
 
       do j = jlo, jhi
       do i = ilo, ihi
          if (tmask(i,j)) then
 
-      !-----------------------------------------------------------------
-      ! make sure thickness of cat 1 is at least hin_max(0)
-      !-----------------------------------------------------------------
+            hi0 = c0
+            if (aicen_init(i,j) > c0) &
+                hi0 = vicen_init(i,j) / aicen_init(i,j)
 
-            if (hicen(i,j) <= hin_max(0) .and. hin_max(0) > c0 ) then
-               aicen(i,j,1) = vicen(i,j,1) / hin_max(0)
-               hicen(i,j) = hin_max(0)
+            hi1 = c0
+            if (aicen(i,j) > c0) &
+                hi1 = vicen(i,j) / aicen(i,j)
+
+            ! make sure thickness of cat 1 is at least hin_max(0)
+            if (hi1 <= hin_max(0) .and. hin_max(0) > c0 ) then
+               aicen(i,j) = vicen(i,j) / hin_max(0)
+               hi1 = hin_max(0)
             endif
 
-            if (aicen(i,j,1) > c0) then
-               dhi = hicen(i,j) - hicen_old(i,j)
+            if (aicen(i,j) > c0) then
+               dhi = hi1 - hi0
                if (dhi < c0) then
-                  hi0  = vicen(i,j,1) / aicen(i,j,1)
-                  dai0 = vicen(i,j,1) / (hi0-p5*dhi) &
-                       - aicen(i,j,1)
-                  aicen(i,j,1) = aicen(i,j,1) + dai0
+                  hi1  = vicen(i,j) / aicen(i,j)
+                  aicen(i,j) = c2 * vicen(i,j) / (hi1 + hi0)
                endif
             endif
 

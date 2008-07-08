@@ -32,6 +32,10 @@ ifeq ($(COMMDIR), mpi)
    SLIBS   :=  $(SLIBS) -L /usr/local/mpich-gcc-g++-lf95/lib -lmpich
 endif
 
+ifeq ($(DITTO), yes)
+   CPPDEFS :=  $(CPPDEFS) -DREPRODUCIBLE
+endif
+
 ifeq ($(USE_ESMF), yes)
    CPPDEFS :=  $(CPPDEFS) -Duse_esmf
    INCLDIR :=  $(INCLDIR) -I /net/bob1/ESMF/esmf/mod/modO/Linux.intel.64.mauve

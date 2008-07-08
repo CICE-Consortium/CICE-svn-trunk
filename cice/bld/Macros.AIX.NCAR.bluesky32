@@ -29,6 +29,10 @@ LDFLAGS    :=
                 -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS)
 #   CPPDEFS :=  $(CPPDEFS) -DAOMIP
 
+ifeq ($(DITTO), yes)
+   CPPDEFS :=  $(CPPDEFS) -DREPRODUCIBLE
+endif
+
 ifeq ($(NETCDF), yes)
    CPPDEFS :=  $(CPPDEFS) -Dncdf
    SLIBS   :=  $(SLIBS) -lnetcdf
