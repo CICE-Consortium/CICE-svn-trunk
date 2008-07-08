@@ -46,6 +46,10 @@ ifeq ($(COMMDIR), mpi)
    SLIBS   :=  $(SLIBS) -lmpi
 endif
 
+ifeq ($(DITTO), yes)
+   CPPDEFS :=  $(CPPDEFS) -DREPRODUCIBLE
+endif
+
 ifeq ($(NETCDF), yes)
    CPPDEFS := $(CPPDEFS) -Dncdf
    INCLDIR := $(INCLDIR) -I/site/netcdf350_64/include 

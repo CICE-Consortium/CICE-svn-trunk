@@ -74,7 +74,6 @@
 ! !PUBLIC MEMBER FUNCTIONS:
 
    public :: ice_HaloCreate,  &
-             ice_HaloDestroy, &
              ice_HaloUpdate,  &
              ice_HaloExtrapolate
 
@@ -1008,86 +1007,6 @@ contains
 !EOC
 
  end function ice_HaloCreate
-
-!***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloDestroy
-! !INTERFACE:
-
- subroutine ice_HaloDestroy(halo)
-
-! !DESCRIPTION:
-!  This routine destroys a halo structure by deallocating all memory
-!  associated with the halo and nullifying pointers.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT/OUTPUT PARAMETERS:
-
-   type (ice_halo), intent(inout) :: &
-      halo          ! boundary structure to be destroyed
-
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-!
-!  local status flag for deallocate
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind) :: istat
-
-!-----------------------------------------------------------------------
-!
-!  reset all scalars
-!
-!-----------------------------------------------------------------------
-
-   halo%communicator   = 0
-   halo%numMsgSend     = 0
-   halo%numMsgRecv     = 0
-   halo%numLocalCopies = 0
-
-!-----------------------------------------------------------------------
-!
-!  deallocate all pointers
-!
-!-----------------------------------------------------------------------
-
-   deallocate(halo%recvTask, halo%sendTask, &
-              halo%sizeSend, halo%sizeRecv, &
-              halo%srcLocalAddr, halo%dstLocalAddr, &
-              halo%sendAddr, halo%recvAddr,         &
-              stat = istat)
-
-   if (istat > 0) then
-      call abort_ice( &
-         'ice_HaloDestroy: error deallocating halo')
-      return
-   endif
-
-!-----------------------------------------------------------------------
-!
-!  nullify all pointers
-!
-!-----------------------------------------------------------------------
-
-   nullify(halo%recvTask)
-   nullify(halo%sendTask)
-   nullify(halo%sizeSend)
-   nullify(halo%sizeRecv)
-   nullify(halo%srcLocalAddr)
-   nullify(halo%dstLocalAddr)
-   nullify(halo%sendAddr)
-   nullify(halo%recvAddr)
-
-!-----------------------------------------------------------------------
-!EOC
-
- end subroutine ice_HaloDestroy
 
 !***********************************************************************
 !BOP

@@ -27,6 +27,10 @@ LDFLAGS    := $(FFLAGS) -v
 #   SLIBS   :=  $(SLIBS) -L$(MPI_ROOT)/lib64 -lmpi
 #endif
 
+ifeq ($(DITTO), yes)
+   CPPDEFS :=  $(CPPDEFS) -DREPRODUCIBLE
+endif
+
 ifeq ($(NETCDF), yes)
    CPPDEFS :=  $(CPPDEFS) -Dncdf
    INCLDIR := $(INCLDIR) -I/usr/local/tools/netcdf/netcdf-3.6.0-p1.pgi/include

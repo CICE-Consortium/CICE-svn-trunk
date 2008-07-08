@@ -47,6 +47,7 @@ setenv USE_ESMF no        # set to yes for ESMF runs
 setenv CAM_ICE  no        # set to yes for CAM runs (single column) 
 setenv SHRDIR   csm_share # location of CCSM shared code
 setenv NETCDF   yes       # set to no if netcdf library is unavailable
+setenv DITTO    no        # reproducible diagnostics
 
 ### Set SRCDIR and EXEDIR to your own paths!
 #setenv SRCDIR $HOME/cice.v4.0/cice

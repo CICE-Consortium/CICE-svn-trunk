@@ -1246,23 +1246,6 @@
       type (block) :: &
          this_block           ! block information for current block
 
-      ! ice vol. tendency for history, due to dynamics
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks_ice(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo,jhi
-         do i = ilo,ihi
-            dvidtd(i,j,iblk) = (vice(i,j,iblk) - dvidtd(i,j,iblk)) /dt
-            daidtd(i,j,iblk) = (aice(i,j,iblk) - daidtd(i,j,iblk)) /dt
-         enddo
-         enddo
-      enddo
-
       !---------------------------------------------------------------
       ! increment step counter
       !---------------------------------------------------------------
@@ -1605,6 +1588,8 @@
 
          endif                  ! yday
       enddo                     ! iblk
+
+      write_ic = .false.        ! write initial condition once at most
 
       end subroutine ice_write_hist
 
@@ -2478,8 +2463,8 @@
 
         ! construct filename
         if (write_ic) then
-           write(ncfile,'(a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
-              incond_file(1:lenstr(incond_file)),iyear,'-', &
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
+              incond_file(1:lenstr(incond_file)),'.',iyear,'-', &
               imonth,'-',iday,'-',sec,'.',suffix
         else
 

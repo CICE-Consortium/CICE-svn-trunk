@@ -412,16 +412,15 @@
       ! thickness, and the other half decreases the area).  
       !-----------------------------------------------------------------
 
-!NOTE - this does not work - hicen_init is not defined - ECH
-
-!         if (ncat==1) &
-!              call reduce_area (nx_block, ny_block,     &
-!                                ilo, ihi, jlo, jhi,     &
-!                                tmask     (:,:,  iblk), &
-!                                aicen     (:,:,:,iblk), &
-!                                vicen     (:,:,:,iblk), &
-!                                hicen_init(:,:,1,iblk), &
-!                                hicen     (:,:,1,iblk)) 
+!echmod: test this
+         if (ncat==1) &
+             call reduce_area (nx_block, ny_block,     &
+                               ilo, ihi, jlo, jhi,     &
+                               tmask     (:,:,  iblk), &
+                               aicen     (:,:,1,iblk), &
+                               vicen     (:,:,1,iblk), &
+                               aicen_init(:,:,1,iblk), &
+                               vicen_init(:,:,1,iblk))
 
       !-----------------------------------------------------------------
       ! ITD cleanup: Rebin thickness categories if necessary, and remove
@@ -683,11 +682,12 @@
                         eicen, esnon)
       call ice_timer_stop(timer_bound)
 
+      do iblk = 1, nblocks
+
       !-----------------------------------------------------------------
       ! Aggregate the updated state variables (includes ghost cells). 
       !----------------------------------------------------------------- 
  
-      do iblk = 1, nblocks
          call aggregate (nx_block,          ny_block,             &
                          aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk),  &
                          vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
@@ -697,6 +697,24 @@
                          eice (:,:,  iblk), esno (:,:,    iblk),  &
                          aice0(:,:,  iblk), tmask(:,:,    iblk),  &
                          trcr_depend) 
+
+      !-----------------------------------------------------------------
+      ! Compute dynamic area and volume tendencies.
+      !-----------------------------------------------------------------
+
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do j = jlo,jhi
+         do i = ilo,ihi
+            dvidtd(i,j,iblk) = (vice(i,j,iblk) - dvidtd(i,j,iblk)) /dt
+            daidtd(i,j,iblk) = (aice(i,j,iblk) - daidtd(i,j,iblk)) /dt
+         enddo
+         enddo
+
       enddo
 
       call ice_timer_stop(timer_column)

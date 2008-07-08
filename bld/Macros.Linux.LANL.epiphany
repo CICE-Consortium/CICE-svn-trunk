@@ -29,6 +29,10 @@ ifeq ($(COMMDIR), mpi)
    SLIBS   :=  $(SLIBS) -lmpich
 endif
 
+ifeq ($(DITTO), yes)
+   CPPDEFS :=  $(CPPDEFS) -DREPRODUCIBLE
+endif
+
 ifeq ($(NETCDF), yes)
    CPPDEFS := $(CPPDEFS) -Dncdf
    SLIBS   := $(SLIBS) -lnetcdf

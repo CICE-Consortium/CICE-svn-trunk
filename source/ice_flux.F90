@@ -289,11 +289,18 @@
 !
 !EOP
 !
-      integer (kind=int_kind) :: i, j, iblk
+      integer (kind=int_kind) :: i, j, n, iblk
 
       logical (kind=log_kind), parameter ::     & 
 !         l_winter = .true.   ! winter/summer default switch
          l_winter = .false.   ! winter/summer default switch
+
+      real (kind=dbl_kind) :: fcondtopn_d(6), fsurfn_d(6)
+
+      data fcondtopn_d / -50.0_dbl_kind,-17.0_dbl_kind,-12.0_dbl_kind, &
+                          -9.0_dbl_kind, -7.0_dbl_kind, -3.0_dbl_kind /
+      data fsurfn_d    /  0.20_dbl_kind, 0.15_dbl_kind, 0.10_dbl_kind, &
+                          0.05_dbl_kind, 0.01_dbl_kind, 0.01_dbl_kind /
 
       !-----------------------------------------------------------------
       ! fluxes received from atmosphere
@@ -316,14 +323,11 @@
          flw   (:,:,:) = c180            ! incoming longwave rad (W/m^2)
          frain (:,:,:) = c0              ! rainfall rate (kg/m2/s)
          fsnow (:,:,:) = 4.0e-6_dbl_kind ! snowfall rate (kg/m2/s)
-         fcondtopn_f(:,:,1,:)=-50.0_dbl_kind ! conductive heat flux (W/m^2)
-         if (ncat>1) fcondtopn_f(:,:,2,:)=-17.0_dbl_kind
-         if (ncat>2) fcondtopn_f(:,:,3,:)=-12.0_dbl_kind
-         if (ncat>3) fcondtopn_f(:,:,4,:)=-9.0_dbl_kind
-         if (ncat>4) fcondtopn_f(:,:,5,:)=-7.0_dbl_kind
-         if (ncat>5) fcondtopn_f(:,:,6:ncat,:)=-3.0_dbl_kind
-         fsurfn_f=fcondtopn_f            ! surface heat flux (W/m^2)
-         flatn_f(:,:,:,:)=c0             ! latent heat flux (kg/m2/s)
+         do n = 1, ncat                  ! conductive heat flux (W/m^2)
+            fcondtopn_f(:,:,n,:) = fcondtopn_d(n)
+         enddo
+         fsurfn_f = fcondtopn_f          ! surface heat flux (W/m^2)
+         flatn_f(:,:,:,:) = c0           ! latent heat flux (kg/m2/s)
       else
          !typical summer values
          potT  (:,:,:) = 273.0_dbl_kind  ! air potential temp (K)
@@ -336,14 +340,11 @@
          flw   (:,:,:) = 280.0_dbl_kind  ! incoming longwave rad (W/m^2)
          frain (:,:,:) = c0              ! rainfall rate (kg/m2/s)
          fsnow (:,:,:) = c0              ! snowfall rate (kg/m2/s)
-         fsurfn_f(:,:,1,:)=0.2_dbl_kind  ! surface heat flux (W/m^2)
-         if (ncat > 1) fsurfn_f(:,:,2,:)=0.15_dbl_kind
-         if (ncat > 2) fsurfn_f(:,:,3,:)=0.1_dbl_kind
-         if (ncat > 3) fsurfn_f(:,:,4,:)=0.05_dbl_kind
-         if (ncat > 4) fsurfn_f(:,:,5,:)=0.01_dbl_kind
-         if (ncat > 5) fsurfn_f(:,:,6:ncat,:)=0.01_dbl_kind
-         fcondtopn_f(:,:,:,:)=0.0_dbl_kind ! conductive heat flux (W/m^2)
-         flatn_f(:,:,:,:)=-2.0_dbl_kind   ! latent heat flux (W/m^2)
+         do n = 1, ncat                  ! surface heat flux (W/m^2)
+            fsurfn_f(:,:,n,:) = fsurfn_d(n)
+         enddo
+         fcondtopn_f(:,:,:,:) = 0.0_dbl_kind ! conductive heat flux (W/m^2)
+         flatn_f(:,:,:,:) = -2.0_dbl_kind    ! latent heat flux (W/m^2)
       endif !     l_winter
 
       !-----------------------------------------------------------------
@@ -533,8 +534,6 @@
       meltl  (:,:,:) = c0
       daidtt (:,:,:) = aice(:,:,:) ! temporary initial area
       dvidtt (:,:,:) = vice(:,:,:) ! temporary initial volume
-      daidtd (:,:,:) = c0
-      dvidtd (:,:,:) = c0
       fsurfn    (:,:,:,:) = c0
       fcondtopn (:,:,:,:) = c0
       flatn     (:,:,:,:) = c0
@@ -587,7 +586,7 @@
       dvirdgdt(:,:,:) = c0
       opening (:,:,:) = c0
       daidtd  (:,:,:) = aice(:,:,:) ! temporary initial area
-      dvidtd  (:,:,:) = vice(:,:,:) ! temporary initial area
+      dvidtd  (:,:,:) = vice(:,:,:) ! temporary initial volume
       fm      (:,:,:) = c0
       prs_sig (:,:,:) = c0
 

@@ -255,6 +255,8 @@
       call init_flux_atm        ! initialize atmosphere fluxes sent to coupler
       call init_flux_ocn        ! initialize ocean fluxes sent to coupler
 
+      call ice_write_hist(dt)   ! write initial conditions if write_ic = T
+
       end subroutine cice_init
 
 !=======================================================================
