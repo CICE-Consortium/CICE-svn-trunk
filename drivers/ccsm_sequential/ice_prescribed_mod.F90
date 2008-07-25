@@ -34,13 +34,14 @@ module ice_prescribed_mod
    use ice_kinds_mod
    use ice_fileunits
    use ice_exit,       only : abort_ice
-   use ice_domain_size, only : nx_global, ny_global, ncat, nilyr, max_blocks
+   use ice_domain_size, only : nx_global, ny_global, ncat, nilyr, nslyr, &
+                               max_blocks
    use ice_constants
    use ice_blocks,     only : nx_block, ny_block
    use ice_domain,     only : nblocks, distrb_info
    use ice_grid,       only : TLAT,TLON,hm,tmask
    use ice_calendar,   only : idate, sec
-   use ice_itd,        only : ilyr1, hin_max
+   use ice_itd,        only : ilyr1, slyr1, hin_max
    use ice_work,       only : work_g1, work_g2
 
    implicit none
@@ -97,7 +98,9 @@ module ice_prescribed_mod
    real(kind=dbl_kind), allocatable :: dataOutUB(:,:,:) ! output for model use
 
    real(kind=dbl_kind), allocatable :: ice_cov_global(:,:)      ! ice cover for model
-   real(kind=dbl_kind)              :: ice_cov(nx_block,ny_block,max_blocks) ! scattered ice cover 
+   real(kind=dbl_kind)              :: ice_cov_lb(nx_block,ny_block,max_blocks) ! scattered ice cover 
+   real(kind=dbl_kind)              :: ice_cov_ub(nx_block,ny_block,max_blocks) ! scattered ice cover 
+   real(kind=dbl_kind)              :: ice_cov(nx_block,ny_block,max_blocks)    ! scattered ice cover 
 
    logical(kind=log_kind) :: regrid                      ! true if remapping required
 
@@ -108,6 +111,8 @@ module ice_prescribed_mod
 
    character(len=char_len_long) :: fldList      ! list of fields in data stream
    character(len=char_len)      :: fldName      ! name of field in stream
+
+   logical :: read_data     ! must read in new ice coverage data slice
 
 ! ech moved from ice_constants.F
     real (kind=dbl_kind), parameter :: &
@@ -495,7 +500,7 @@ subroutine ice_prescribed_run(mDateIn, secIn)
 
    integer(kind=int_kind) :: mDateLB_old = -999
    integer(kind=int_kind) :: secLB_old = -999
-   integer(kind=int_kind) :: i,j,n,icnt  ! loop indices and counter
+   integer(kind=int_kind) :: i,j,n,icnt,iblk  ! loop indices and counter
 
    !------------------------------------------------------------------------
    ! get two time slices of monthly ice coverage data
@@ -508,8 +513,10 @@ subroutine ice_prescribed_run(mDateIn, secIn)
       &                          mDateLB, dDateLB, secLB, n_lb, fileLB, &
       &                          mDateUB, dDateUB, secUB, n_ub, fileUB)
 
+      read_data = .false.
       if (mDateLB_old /= mDateLB .or. secLB_old /= secLB) then
 
+         read_data = .true.
          call ice_prescribed_readField(fileLB, fldName, n_lb, dataInLB)
          call ice_prescribed_readField(fileUB, fldName, n_ub, dataInUB)
 
@@ -565,22 +572,48 @@ subroutine ice_prescribed_run(mDateIn, secIn)
       call shr_tInterp_getFactors(mDateLB, secLB, mDateUB, secUB, &
       &                           mDateIn, secIN, fLB, fUB)
 
-      ice_cov_global(:,:) = fLB*dataOutLB(:,:,1) + fUB*dataOutUB(:,:,1)
-
    end if    ! master_task
+   call broadcast_scalar(fLB, master_task)
+   call broadcast_scalar(fUB, master_task)
 
-  !-----------------------------------------------------------------
-  ! Scatter ice concentration to all processors
-  !-----------------------------------------------------------------
-   call scatter_global(ice_cov,   ice_cov_global, &
-      &                master_task,  distrb_info, & 
-      &                field_loc_center, field_type_scalar)
+   !-----------------------------------------------------------------
+   ! Scatter ice concentration to all processors if read data
+   !-----------------------------------------------------------------
 
-  !-----------------------------------------------------------------
-  ! Set prescribed ice state and fluxes
-  !-----------------------------------------------------------------
+   call broadcast_scalar(read_data, master_task)
+   if (read_data) then
+      if (my_task ==  master_task) then
+         ice_cov_global(:,:) = dataOutLB(:,:,1) 
+      end if
+      call scatter_global(ice_cov_lb,   ice_cov_global, &
+           &              master_task,  distrb_info, & 
+           &              field_loc_center, field_type_scalar)
 
-   call ice_prescribed_phys
+      if (my_task ==  master_task) then
+         ice_cov_global(:,:) = dataOutUB(:,:,1)
+      end if
+      call scatter_global(ice_cov_ub,   ice_cov_global, &
+           &              master_task,  distrb_info, & 
+           &              field_loc_center, field_type_scalar)
+   end if
+
+   !-----------------------------------------------------------------
+   ! Time interpolate ice concentration data
+   !-----------------------------------------------------------------
+
+   do iblk = 1,nblocks
+   do j = 1,ny_block
+   do i = 1,nx_block
+      ice_cov(i,j,iblk) = fLB*ice_cov_lb(i,j,iblk) + fUB*ice_cov_ub(i,j,iblk)
+   enddo
+   enddo
+   enddo
+
+   !-----------------------------------------------------------------
+   ! Set prescribed ice state and fluxes
+   !-----------------------------------------------------------------
+
+   call ice_prescribed_phys()
 
 end subroutine ice_prescribed_run
 
@@ -748,10 +781,10 @@ subroutine ice_prescribed_phys
 
    real(kind=dbl_kind) :: slope     ! diff in underlying ocean tmp and ice surface tmp
    real(kind=dbl_kind) :: Ti        ! ice level temperature
-   real(kind=dbl_kind) :: hi        ! ice prescribed (hemispheric) ice thickness 
-   real(kind=dbl_kind) :: hs        ! snow cover
-   real(kind=dbl_kind) :: dz        ! distance freeboard below SL (m)
-   real(kind=dbl_kind) :: dhs       ! snow to remove 
+   real(kind=dbl_kind) :: Tmlt      ! ice level melt temperature
+   real(kind=dbl_kind) :: qin_save(nilyr) 
+   real(kind=dbl_kind) :: qsn_save(nslyr)
+   real(kind=dbl_kind) :: hi        ! ice prescribed (hemispheric) ice thickness
    real(kind=dbl_kind) :: zn        ! normalized ice thickness
    real(kind=dbl_kind) :: salin(nilyr)  ! salinity (ppt) 
 
@@ -763,14 +796,13 @@ subroutine ice_prescribed_phys
    ! Initialize ice state
    !-----------------------------------------------------------------
 
-   aicen(:,:,:,:) = c0
-   vicen(:,:,:,:) = c0
-   eicen(:,:,:,:) = c0
+!  aicen(:,:,:,:) = c0
+!  vicen(:,:,:,:) = c0
+!  eicen(:,:,:,:) = c0
 
-   do nc=1,ncat
-      trcrn(:,:,1,nc,:) = Tf(:,:,:)
-!     call bound(Tsfcn(:,:,nc,:))
-   enddo
+!  do nc=1,ncat
+!     trcrn(:,:,nt_Tsfc,nc,:) = Tf(:,:,:)
+!  enddo
 
    !-----------------------------------------------------------------
    ! Set ice cover over land to zero, not sure if this should be
@@ -814,42 +846,78 @@ subroutine ice_prescribed_phys
             ! All ice in appropriate thickness category
             !----------------------------------------------------------
             do nc = 1,ncat
-               if(hin_max(nc-1) < hi .and. hi < hin_max(nc)) then
+              if(hin_max(nc-1) < hi .and. hi < hin_max(nc)) then
+                  qin_save(:) = c0
+                  qsn_save(:) = c0
+                  if (vicen(i,j,nc,iblk) > c0) then
+                     do k=1,nilyr
+                        qin_save(k) = eicen(i,j,ilyr1(nc)+k-1,iblk)         &
+                                    * real(nilyr,kind=dbl_kind)             &
+                                    / vicen(i,j,nc,iblk)
+                     enddo
+                  endif
+
+                  if (vsnon(i,j,nc,iblk) > c0) then
+                     do k=1,nslyr
+                        qsn_save(k) = esnon(i,j,slyr1(nc)+k-1,iblk)         &
+                                    * real(nslyr,kind=dbl_kind)             &
+                                    / vsnon(i,j,nc,iblk)
+                     enddo
+                  endif
+
                   aicen(i,j,nc,iblk) = ice_cov(i,j,iblk)
                   vicen(i,j,nc,iblk) = hi*aicen(i,j,nc,iblk) 
 
-                  !---------------------------------------------------------
-                  ! keep snow/ice boundary above sea level by reducing snow
-                  !---------------------------------------------------------
-                  hs = vsnon(i,j,nc,iblk)/aicen(i,j,nc,iblk)
-                  dz = hs - hi*(rhow-rhoi)/rhos
+                  ! remember enthalpy profile to compute energy
+                  do k=1,nilyr
+                     eicen(i,j,ilyr1(nc)+k-1,iblk)                          &
+                        = qin_save(k) * vicen(i,j,nc,iblk)                  &
+                        / real(nilyr,kind=dbl_kind)
+                  enddo
 
-                  if (dz > puny .and. hs > puny) then ! snow below freeboard
-                     dhs = min(dz*rhoi/rhow, hs) ! snow to remove
-                     hs = hs - dhs
-                     vsnon(i,j,nc,iblk) = hs * aicen(i,j,nc,iblk)
-                  end if
-
-                  esnon(i,j,nc,iblk) = -rLfs*vsnon(i,j,nc,iblk)
+                  do k=1,nslyr
+                     esnon(i,j,slyr1(nc)+k-1,iblk)                          &
+                        = qsn_save(k) * vsnon(i,j,nc,iblk)                  &
+                        / real(nslyr,kind=dbl_kind)
+                  enddo
 
                   !---------------------------------------------------------
                   ! make linear temp profile and compute enthalpy
                   !---------------------------------------------------------
-                  trcrn(i,j,1,nc,iblk) = min(Tair(i,j,iblk)-Tffresh,-p2)   ! deg C       
-                  slope = Tf(i,j,iblk) - trcrn(i,j,1,nc,iblk)
+
+                  if (abs(eicen(i,j,ilyr1(nc),iblk)) < puny) then
+
+                  if (aice(i,j,iblk) < puny) &
+                     trcrn(i,j,nt_Tsfc,nc,iblk) = Tf(i,j,iblk)
+
+                  slope = Tf(i,j,iblk) - trcrn(i,j,nt_Tsfc,nc,iblk)
                   do k = 1, nilyr
                      zn = (real(k,kind=dbl_kind)-p5) / real(nilyr,kind=dbl_kind)
-                     Ti = trcrn(i,j,1,nc,iblk) + slope*zn
+                     Ti = trcrn(i,j,nt_Tsfc,nc,iblk) + slope*zn
                      salin(k) = (saltmax/c2)*(c1-cos(pi*zn**(nsal/(msal+zn))))
-                     eicen(i,j,ilyr1(nc)+k-1,iblk) =                             &
-                     &    (-rLfi - rcpi*(-depressT*salin(k)-Ti)             &
-                     &     -rLfidepressT*salin(k)/Ti) *vicen(i,j,nc,iblk)/nilyr
+                     Tmlt = -salin(k)*depressT
+                     eicen(i,j,ilyr1(nc)+k-1,iblk) =                        &
+                       -(rhoi * (cp_ice*(Tmlt-Ti) &
+                       + Lfresh*(c1-Tmlt/Ti) - cp_ocn*Tmlt)) &
+                       * vicen(i,j,nc,iblk)/real(nilyr,kind=dbl_kind)
                   enddo
+
+                  do k=1,nslyr
+                     esnon(i,j,slyr1(nc)+k-1,iblk) =                       &
+                        -rhos*(Lfresh - cp_ice*trcrn(i,j,nt_Tsfc,nc,iblk)) &
+                         *vsnon(i,j,nc,iblk)
+                  enddo
+
+                  endif  ! aice < puny
                end if    ! hin_max
             enddo        ! ncat
          else
+            trcrn(i,j,nt_Tsfc,:,iblk) = Tf(i,j,iblk)
+            aicen(i,j,:,iblk) = c0
+            vicen(i,j,:,iblk) = c0
             vsnon(i,j,:,iblk) = c0
             esnon(i,j,:,iblk) = c0
+            eicen(i,j,:,iblk) = c0
          end if          ! ice_cov >= eps04
       end if             ! tmask
    enddo                 ! i

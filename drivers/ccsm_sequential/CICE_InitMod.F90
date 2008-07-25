@@ -109,35 +109,32 @@
       call init_evp (dt)        ! define evp dynamics parameters, variables
       call init_coupler_flux    ! initialize fluxes exchanged with coupler
       call init_thermo_vertical ! initialize vertical thermodynamics
-      if (trim(shortwave) == 'dEdd') then
-         call init_orbit        ! initialize orbital parameters
-      endif
       call init_itd             ! initialize ice thickness distribution
       call calendar(time)       ! determine the initial date
       call init_state           ! initialize the ice state
       call ice_prescribed_init
 
-      if (runtype /= 'continue') then
-         ! for non-continuation run, determine if should read restart file
-         if (trim(inic_file) /= 'default' .and. trim(inic_file) /= 'none') then
-            call restartfile(inic_file)      
-         end if
-      else	
-         ! for continuation run, always start for restart pointer file
-         call restartfile()
-         call calendar(time)       ! use time from restart
-      end if
+      if (runtype == 'continue') then ! start from core restart file
+         call restartfile()           ! given by pointer in ice_in
+         call calendar(time)          ! For continuation runs.
+      else if (restart) then          ! ice_ic = core restart file
+         call restartfile (ice_ic)    !  or 'default' or 'none'
+      endif
 
       ! tracers
       if (tr_iage) call init_age        ! ice age tracer
       if (tr_pond) call init_meltponds  ! melt ponds
 
-      call init_shortwave       ! initialize radiative transfer
       call init_diags           ! initialize diagnostic output points
       call init_history_therm   ! initialize thermo history variables
       call init_history_dyn     ! initialize dynamic history variables
 
-      write_ic = .true.        ! write initial conditions
+      ! Initialize shortwave components using swdn from previous timestep
+      ! if restarting. These components will be scaled to current forcing
+      ! in prep_radiation.
+      if (runtype == 'continue' .or. restart) &
+         call init_shortwave    ! initialize radiative transfer
+
 #if (defined _NOIO)
 ! Not enought memory on BGL to write a history file yet!
 !      if(.not.prescribed_ice) call ice_write_hist(dt)
