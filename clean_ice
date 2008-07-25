@@ -1,10 +1,10 @@
 #! /bin/csh -f
 
 #Change to your own paths!
-setenv SYSTEM_USERDIR /scratch/eclare
+setenv SYSTEM_USERDIR /scratch2/eclare/CICE.v4.0
 
 #setenv SRCDIR $HOME/cice.v4.0/cice
-setenv SRCDIR /net/bob4/eclare/CODE/CICE_release/CICE.v4.0/cice
+setenv SRCDIR /usr/projects/climate/eclare/CICE.v4.0/cice
 
 setenv CBLD   $SRCDIR/bld
 setenv EXEDIR $SYSTEM_USERDIR/rundir4

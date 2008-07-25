@@ -185,10 +185,10 @@
 
        ! internal
 
-       ! scaling factor for shortwave components
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,max_blocks) :: &
-         scale_factor
+         fswfac  , & ! for history
+         scale_factor! scaling factor for shortwave components
 
       logical (kind=log_kind) :: &
          update_ocn_f ! if true, update fresh water and salt fluxes

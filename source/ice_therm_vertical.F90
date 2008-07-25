@@ -1389,7 +1389,8 @@
          avg_Tsf     , & ! = 1. if Tsf averaged w/Tsf_start, else = 0.
          ferr        , & ! energy conservation error (W m-2)
          Iswabs_tmp  , &
-         Sswabs_tmp
+         Sswabs_tmp  , &
+         etai_tmp
 
       logical (kind=log_kind), dimension (icells) :: &
          converged      ! = true when local solution has converged
@@ -1459,48 +1460,33 @@
       !-----------------------------------------------------------------
 !mclaren: Should there be an if calc_Tsfc statement here then?? 
 
-      allocate(etai(icells,nilyr))
-
       do k = 1, nilyr
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
+
+            if (Tin_init(ij,k) <= (Tmlt(k) - p01)) then
 
             if (l_brine) then
                ci = cp_ice - Lfresh*Tmlt(k) /  &
                   max( Tin_init(ij,k)**2, Tmlt(k)**2 )
+               etai_tmp = dt_rhoi_hlyr(ij) / ci
+               Iswabs_tmp = min(Iswabs(i,j,k), &
+                                (Tmlt(k)-Tin_init(ij,k))/etai_tmp)
             else
                ci = cp_ice
-            endif
-            etai(ij,k) = dt_rhoi_hlyr(ij) / ci
-
-         enddo
-      enddo
-
-      do k = 1, nilyr
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
-            if (l_brine) then
+               etai_tmp = dt_rhoi_hlyr(ij) / ci
                Iswabs_tmp = min(Iswabs(i,j,k), &
-                                (Tmlt(k)-Tin_init(ij,k))/etai(ij,k))
-            else
-               Iswabs_tmp = min(Iswabs(i,j,k), &
-                                Tin_init(ij,k)/etai(ij,k))
+                                Tin_init(ij,k)/etai_tmp)
             endif
 
-            if (Tin_init(ij,k) > (Tmlt(k) - p01)) Iswabs_tmp = c0
-
-            fswsfc(i,j) = fswsfc(i,j) &
-                        + (Iswabs(i,j,k) - Iswabs_tmp)
-            fswint(i,j) = fswint(i,j) &
-                        - (Iswabs(i,j,k) - Iswabs_tmp)
+            fswsfc(i,j)   = fswsfc(i,j) + (Iswabs(i,j,k) - Iswabs_tmp)
+            fswint(i,j)   = fswint(i,j) - (Iswabs(i,j,k) - Iswabs_tmp)
             Iswabs(i,j,k) = Iswabs_tmp
+
+            endif
          enddo
       enddo
-
-      deallocate (etai)
 
       do k = 1, nslyr
          do ij = 1, icells
@@ -1508,16 +1494,16 @@
                i = indxi(ij)
                j = indxj(ij)
 
+               if (Tsn_init(ij,k) <= -p01) then
+
                Sswabs_tmp = min(Sswabs(i,j,k), &
-                    -0.9_dbl_kind*Tsn_init(ij,k)/etas(ij,k))
+                            -0.9_dbl_kind*Tsn_init(ij,k)/etas(ij,k))
 
-               if (Tsn_init(ij,k) > -p01) Sswabs_tmp = c0
-
-               fswsfc(i,j) = fswsfc(i,j) &
-                           + (Sswabs(i,j,k) - Sswabs_tmp)
-               fswint(i,j) = fswint(i,j) &
-                           - (Sswabs(i,j,k) - Sswabs_tmp)
+               fswsfc(i,j)   = fswsfc(i,j) + (Sswabs(i,j,k) - Sswabs_tmp)
+               fswint(i,j)   = fswint(i,j) - (Sswabs(i,j,k) - Sswabs_tmp)
                Sswabs(i,j,k) = Sswabs_tmp
+
+               endif
             endif
          enddo
       enddo
@@ -1586,6 +1572,30 @@
             enew     (ij) = c0
          enddo
 
+      !-----------------------------------------------------------------
+      ! Update specific heat of ice layers.
+      ! To ensure energy conservation, the specific heat is a function of
+      ! both the starting temperature and the (latest guess for) the
+      ! final temperature.
+      !-----------------------------------------------------------------
+
+         do k = 1, nilyr
+            do ij = 1, isolve
+               m = indxij(ij)
+               i = indxii(ij)
+               j = indxjj(ij)
+
+               if (l_brine) then
+                  ci = cp_ice - Lfresh*Tmlt(k) /  &
+                                (Tin(m,k)*Tin_init(m,k))
+               else
+                  ci = cp_ice
+               endif
+               etai(ij,k) = dt_rhoi_hlyr(m) / ci
+
+            enddo
+         enddo
+
          if (calc_Tsfc) then
 
       !-----------------------------------------------------------------
@@ -1641,37 +1651,10 @@
             endif
           enddo                  ! ij
 
-         endif                   ! calc_Tsfc
-
-      !-----------------------------------------------------------------
-      ! Update specific heat of ice layers.
-      ! To ensure energy conservation, the specific heat is a function of
-      ! both the starting temperature and the (latest guess for) the
-      ! final temperature.
-      !-----------------------------------------------------------------
-
-         do k = 1, nilyr
-            do ij = 1, isolve
-               m = indxij(ij)
-               i = indxii(ij)
-               j = indxjj(ij)
-
-               if (l_brine) then
-                  ci = cp_ice - Lfresh*Tmlt(k) /  &
-                                (Tin(m,k)*Tin_init(m,k))
-               else
-                  ci = cp_ice
-               endif
-               etai(ij,k) = dt_rhoi_hlyr(m) / ci
-
-            enddo
-         enddo
-
       !-----------------------------------------------------------------
       ! Compute elements of tridiagonal matrix.
       !-----------------------------------------------------------------
 
-         if (calc_Tsfc) then
             call get_matrix_elements_calc_Tsfc &
                                   (nx_block, ny_block,         &
                                    isolve,   icells,           &
@@ -1699,7 +1682,7 @@
                                    sbdiag,   diag,             &
                                    spdiag,   rhs,              &
                                    fcondtopn)
-         endif
+         endif  ! calc_Tsfc
 
       !-----------------------------------------------------------------
       ! Solve tridiagonal matrix to obtain the new temperatures.
@@ -1833,7 +1816,6 @@
                else
                   Tsn(m,k) = c0
                endif
-!lipscomb - if l_brine and calc_Tsfc?
                if (l_brine) Tsn(m,k) = min(Tsn(m,k), c0)
 
       !-----------------------------------------------------------------
@@ -1865,7 +1847,6 @@
       ! Reload Tin from matrix solution
       !-----------------------------------------------------------------
                Tin(m,k) = Tmat(ij,k+1+nslyr)
-!lipscomb - if l_brine and calc_Tsfc?
                if (l_brine) Tin(m,k) = min(Tin(m,k), Tmlt(k))
 
       !-----------------------------------------------------------------

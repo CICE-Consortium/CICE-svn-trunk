@@ -123,10 +123,8 @@
          dxrect = 30.e5_dbl_kind   ,&! uniform HTN (cm)
          dyrect = 30.e5_dbl_kind     ! uniform HTE (cm)
 
-!lipscomb - not sure rndex_global is stil needed
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          rndex_global       ! global index for local subdomain (dbl)
-
 
 !=======================================================================
 

@@ -127,7 +127,6 @@
         c4   = 4.0_dbl_kind, &
         c5   = 5.0_dbl_kind, &
         c6   = 6.0_dbl_kind, &
-        c7   = 7.0_dbl_kind, &
         c8   = 8.0_dbl_kind, &
         c9   = 9.0_dbl_kind, &
         c10  = 10.0_dbl_kind, &
@@ -136,7 +135,6 @@
         c16  = 16.0_dbl_kind, &
         c20  = 20.0_dbl_kind, &
         c25  = 25.0_dbl_kind, &
-        c90  = 90.0_dbl_kind, &
         c100 = 100.0_dbl_kind, &
         c180 = 180.0_dbl_kind, &
         c360 = 360.0_dbl_kind, &
@@ -161,11 +159,8 @@
         p055 = p111*p5, &
         p027 = p055*p5, &
         p222 = c2/c9, &
-        eps04  = 1.0e-4_dbl_kind, &
         eps11  = 1.0e-11_dbl_kind, &
-        eps12  = 1.0e-12_dbl_kind, &
         eps13  = 1.0e-13_dbl_kind, &
-        eps15  = 1.0e-15_dbl_kind, &
         eps16  = 1.0e-16_dbl_kind, &
         puny   = eps11, &
         bignum = 1.0e+30_dbl_kind, &

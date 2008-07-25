@@ -162,6 +162,10 @@
       do iblk=1,nblocks
       do j = 1, ny_block
       do i = 1, nx_block
+         alvdf(i,j,iblk) = c0
+         alidf(i,j,iblk) = c0
+         alvdr(i,j,iblk) = c0
+         alidr(i,j,iblk) = c0
          alvdr_gbm(i,j,iblk) = c0
          alidr_gbm(i,j,iblk) = c0
          alvdf_gbm(i,j,iblk) = c0
@@ -221,15 +225,6 @@
                               Iswabsn(:,:,il1:il2,iblk), &
                               apondn(:,:,n,iblk),hpondn(:,:,n,iblk))
 
-               ! Scale absorbed solar radiation for change in net shortwave
-               fswsfcn(i,j,n,iblk)  = scale_factor(i,j,iblk)*fswsfcn (i,j,n,iblk)
-               fswintn(i,j,n,iblk)  = scale_factor(i,j,iblk)*fswintn (i,j,n,iblk)
-               fswthrun(i,j,n,iblk) = scale_factor(i,j,iblk)*fswthrun(i,j,n,iblk)
-               Sswabsn(i,j,sl1:sl2,iblk) = &
-                       scale_factor(i,j,iblk)*Sswabsn(i,j,sl1:sl2,iblk)
-               Iswabsn(i,j,il1:il2,iblk) = &
-                       scale_factor(i,j,iblk)*Iswabsn(i,j,il1:il2,iblk)
-
             enddo  ! ncat
          enddo     ! nblocks
 
@@ -263,17 +258,31 @@
                i = indxi(ij)
                j = indxj(ij)
 
-               alvdf_gbm(i,j,iblk) = alvdf_gbm(i,j,iblk) &
+               alvdf(i,j,iblk) = alvdf(i,j,iblk) &
                   + alvdfn(i,j,n,iblk)*aicen(i,j,n,iblk)
-               alidf_gbm(i,j,iblk) = alidf_gbm(i,j,iblk) &
+               alidf(i,j,iblk) = alidf(i,j,iblk) &
                   + alidfn(i,j,n,iblk)*aicen(i,j,n,iblk)
-               alvdr_gbm(i,j,iblk) = alvdr_gbm(i,j,iblk) &
+               alvdr(i,j,iblk) = alvdr(i,j,iblk) &
                   + alvdrn(i,j,n,iblk)*aicen(i,j,n,iblk)
-               alidr_gbm(i,j,iblk) = alidr_gbm(i,j,iblk) &
+               alidr(i,j,iblk) = alidr(i,j,iblk) &
                   + alidrn(i,j,n,iblk)*aicen(i,j,n,iblk)
             enddo
 
          enddo  ! ncat
+
+      !----------------------------------------------------------------
+      ! Store grid box mean albedos and fluxes before scaling by aice
+      !----------------------------------------------------------------
+
+         do j = 1, ny_block
+         do i = 1, nx_block
+            alvdf_gbm  (i,j,iblk) = alvdf  (i,j,iblk)
+            alidf_gbm  (i,j,iblk) = alidf  (i,j,iblk)
+            alvdr_gbm  (i,j,iblk) = alvdr  (i,j,iblk)
+            alidr_gbm  (i,j,iblk) = alidr  (i,j,iblk)
+         enddo
+         enddo
+
       enddo     ! nblocks
 
       end subroutine init_shortwave
@@ -1170,13 +1179,19 @@
                                  fpn,               hpn,                 &
                                  swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
                                  swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                                 alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
-                                 alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
+                                 alvdrn(:,:,n,iblk),alvdfn(:,:,n,iblk),  &
+                                 alidrn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
                                  fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
                                  fswthrun(:,:,n,iblk), &
                                  Sswabsn(:,:,sl1:sl2,iblk), &
                                  Iswabsn(:,:,il1:il2,iblk))
 
+               ! Special case of night to day
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  fswsfcn(i,j,n,iblk) = max(p01, fswsfcn(i,j,n,iblk))
+               enddo
 
             enddo  ! ncat
          enddo     ! nblocks
@@ -1743,7 +1758,7 @@
          kp      , & ! k+1 or k+2 index for snow, sea ice internal absorption
          ksrf    , & ! level index for surface absorption
          ksnow   , & ! level index for snow density and grain size
-         kice        ! level starting index for sea ice (nslyr+1)
+         kii        ! level starting index for sea ice (nslyr+1)
 
       integer (kind=int_kind), parameter :: & 
          klev    = nslyr + nilyr + 1   , & ! number of radiation layers - 1
@@ -2254,7 +2269,7 @@
         enddo         ! ij ... optical properties above sea ice set
 
         ! set optical properties of sea ice
-        kice = nslyr + 1
+        kii = nslyr + 1
         do ij = 1, icells_DE
           i = indxi_DE(ij)
           j = indxj_DE(ij)
@@ -2268,20 +2283,20 @@
           ! bare or snow-covered sea ice layers
           if( srftyp(i,j) <= 1 ) then
               ! ssl
-              k = kice
+              k = kii
                 tau(k,ij) = ki_ssl(ns)*dz_ssl
                 w0(k,ij)  = wi_ssl(ns)
                 g(k,ij)   = gi_ssl(ns)
               ! dl
-              k = kice + 1
+              k = kii + 1
                 ! scale dz for dl relative to 4 even-layer-thickness 1.5m case
                 fs = real(nilyr,kind=dbl_kind)/real(4,kind=dbl_kind)
                 tau(k,ij) = ki_dl(ns)*(dz-dz_ssl)*fs
                 w0(k,ij)  = wi_dl(ns)
                 g(k,ij)   = gi_dl(ns)
               ! int above lowest layer
-              if (kice+2 <= klev-1) then
-              do k = kice+2, klev-1
+              if (kii+2 <= klev-1) then
+              do k = kii+2, klev-1
                 tau(k,ij) = ki_int(ns)*dz
                 w0(k,ij)  = wi_int(ns)
                 g(k,ij)   = gi_int(ns)
@@ -2302,16 +2317,16 @@
                 g(k,ij)   = gi_int(ns)
           ! sea ice layers under ponds
           else !if( srftyp(i,j) == 2 ) then
-              k = kice
+              k = kii
                 tau(k,ij) = ki_p_ssl(ns)*dz_ssl
                 w0(k,ij)  = wi_p_ssl(ns)
                 g(k,ij)   = gi_p_ssl(ns)
-              k = kice + 1
+              k = kii + 1
                 tau(k,ij) = ki_p_int(ns)*(dz-dz_ssl)
                 w0(k,ij)  = wi_p_int(ns)
                 g(k,ij)   = gi_p_int(ns)
-              if (kice+2 <= klev) then
-              do k = kice+2, klev
+              if (kii+2 <= klev) then
+              do k = kii+2, klev
                 tau(k,ij) = ki_p_int(ns)*dz
                 w0(k,ij)  = wi_p_int(ns)
                 g(k,ij)   = gi_p_int(ns)
@@ -2319,7 +2334,7 @@
               endif
             ! adjust pond iops if pond depth within specified range
             if( hpmin <= hp(i,j) .and. hp(i,j) <= hp0 ) then
-              k = kice
+              k = kii
                   sig_i      = ki_ssl(ns)*wi_ssl(ns)
                   sig_p      = ki_p_ssl(ns)*wi_p_ssl(ns)
                   sig        = sig_i + (sig_p-sig_i)*(hp(i,j)/hp0)
@@ -2327,7 +2342,7 @@
                   tau(k,ij) = kext*dz_ssl
                   w0(k,ij) = sig/kext
                   g(k,ij)  = gi_p_int(ns)
-              k = kice + 1
+              k = kii + 1
                   ! scale dz for dl relative to 4 even-layer-thickness 1.5m case
                   fs = real(nilyr,kind=dbl_kind)/real(4,kind=dbl_kind)
                   sig_i      = ki_dl(ns)*wi_dl(ns)*fs
@@ -2337,8 +2352,8 @@
                   tau(k,ij) = kext*(dz-dz_ssl)
                   w0(k,ij) = sig/kext
                   g(k,ij)  = gi_p_int(ns)
-              if (kice+2 <= klev) then
-              do k = kice+2, klev
+              if (kii+2 <= klev) then
+              do k = kii+2, klev
                   sig_i      = ki_int(ns)*wi_int(ns)
                   sig_p      = ki_p_int(ns)*wi_p_int(ns)
                   sig        = sig_i + (sig_p-sig_i)*(hp(i,j)/hp0)
