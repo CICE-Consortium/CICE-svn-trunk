@@ -33,7 +33,7 @@ module ice_comp_mct
 		              fresh, fsalt, zlvl, uatm, vatm, potT, Tair, Qa,   &
 		              rhoa, swvdr, swvdf, swidr, swidf, flw, frain,     &
 		              fsnow, uocn, vocn, sst, ss_tltx, ss_tlty, frzmlt, &
-		              sss, tf, wind, fsw, init_flux_atm
+		              sss, tf, wind, fsw, init_flux_atm, init_flux_ocn
   use ice_state,       only : vice, aice, trcr
   use ice_domain_size, only : nx_global, ny_global, block_size_x, block_size_y, max_blocks
   use ice_domain,      only : nblocks, blocks_ice, halo_info
@@ -44,7 +44,7 @@ module ice_comp_mct
 		              field_loc_center, field_type_scalar, field_type_vector
   use ice_communicate, only : my_task, master_task
   use ice_calendar,    only : idate, mday, time, month, daycal, secday, &
-		              sec, dt, dyn_dt, ndyn_dt, calendar
+		              sec, dt, dyn_dt, xndyn_dt, calendar
   use ice_timers,      only : ice_timer_stop, ice_timer_start, ice_timer_print_all, timer_total 
   use ice_kinds_mod,   only : int_kind, dbl_kind, char_len_long 
 !  use ice_init
@@ -53,6 +53,8 @@ module ice_comp_mct
   use ice_fileunits,   only : nu_diag
   use ice_dyn_evp,     only:  kdyn
   use ice_prescribed_mod, only : prescribed_ice, ice_prescribed_run
+  use ice_step_mod
+  use CICE_RunMod
 
 ! !PUBLIC MEMBER FUNCTIONS:
   implicit none
@@ -247,9 +249,9 @@ contains
     end if
     call calendar(time)     ! update calendar info
  
-    !----------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
     ! Initialize MCT attribute vectors and indices
-    !----------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
     call t_startf ('cice_mct_init')
 
@@ -270,18 +272,25 @@ contains
     call mct_aVect_init(i2x_i, rList=seq_flds_i2x_fields, lsize=lsize) 
     call mct_aVect_zero(i2x_i)
 
-    !----------------------------------------------------------------------------
+    !-----------------------------------------------------------------
+    ! get ready for coupling
+    !-----------------------------------------------------------------
+
+    call coupling_prep
+
+    !---------------------------------------------------------------------------
     ! send intial state to driver
-    !----------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
     call ice_export_mct (i2x_i)  !Send initial state to driver
     call seq_infodata_PutData( infodata, ice_prognostic=.true., &
       ice_nx = nx_global, ice_ny = ny_global )
+
     call t_stopf ('cice_mct_init')
 
-    !----------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
     ! Reset shr logging to original values
-    !----------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
     call shr_file_setLogUnit (shrlogunit)
     call shr_file_setLogLevel(shrloglev)
@@ -308,10 +317,13 @@ contains
 ! Run thermodynamic CICE
 !
 ! !USES:
-    use ice_step_mod
+    use ice_age
     use ice_history
     use ice_restart
     use ice_diagnostics
+    use ice_meltpond
+    use ice_restoring, only: restore_ice, ice_HaloRestore
+    use ice_shortwave, only: init_shortwave
 
 ! !ARGUMENTS:
     type(ESMF_Clock),intent(in)    :: EClock
@@ -346,9 +358,9 @@ contains
        call memmon_print_usage()
     endif
 #endif
-    !----------------------------------------------------------------------------
+    !-------------------------------------------------------------------
     ! Reset shr logging to my log file
-    !----------------------------------------------------------------------------
+    !-------------------------------------------------------------------
 
     call shr_file_getLogUnit (shrlogunit)
     call shr_file_getLogLevel(shrloglev)
@@ -371,21 +383,35 @@ contains
     time = time + dt       ! determine the time and date
     call calendar(time)    ! at the end of the timestep
     
+    if (runtype == 'initial' .and. istep == 1) &
+       call init_shortwave    ! initialize radiative transfer using current swdn
+
+    !-----------------------------------------------------------------
+    ! restoring on grid boundaries
+    !-----------------------------------------------------------------
+
+    if (restore_ice) call ice_HaloRestore
+
+    !-----------------------------------------------------------------
+    ! initialize diagnostics
+    !-----------------------------------------------------------------
+
     call init_mass_diags   ! diagnostics per timestep
 
     if(prescribed_ice) then  ! read prescribed ice
        call ice_prescribed_run(idate, sec)
     endif
     
-    call init_flux_atm
+    call init_flux_atm        ! initialize atmosphere fluxes sent to coupler
+    call init_flux_ocn        ! initialize ocean fluxes sent to coupler
 
     !-----------------------------------------------------------------
-    ! radiation1
+    ! Scale radiation fields
     !-----------------------------------------------------------------
 
-    call t_startf ('cice_rad1')
-    call step_rad1(dt)
-    call t_stopf ('cice_rad1')
+    call t_startf ('cice_prep_radiation')
+    call prep_radiation (dt)
+    call t_stopf ('cice_prep_radiation')
     
     !-----------------------------------------------------------------
     ! thermodynamics1
@@ -410,9 +436,9 @@ contains
    !-----------------------------------------------------------------
 
     if (.not.prescribed_ice .and. kdyn>0) then
-       if (ndyn_dt > 1) then
+       if (xndyn_dt > c1) then
           call t_startf ('cice_dyn')
-          do k = 1, ndyn_dt
+          do k = 1, nint(xndyn_dt)
              call step_dynamics (dyn_dt) ! dynamics, transport, ridging
           enddo
           call t_stopf ('cice_dyn')
@@ -426,13 +452,19 @@ contains
     endif ! not prescribed_ice
     
     !-----------------------------------------------------------------
-    ! radiation2
+    ! radiation
     !-----------------------------------------------------------------
 
-    call t_startf ('cice_rad2')
-    call step_rad2(dt)
-    call t_stopf ('cice_rad2')
+    call t_startf ('cice_radiation')
+    call step_radiation (dt)
+    call t_stopf ('cice_radiation')
     
+    !-----------------------------------------------------------------
+    ! get ready for coupling
+    !-----------------------------------------------------------------
+
+    call coupling_prep
+
     !-----------------------------------------------------------------
     ! write data
     !-----------------------------------------------------------------
@@ -463,6 +495,8 @@ contains
 !       call dumpfile(fname)
 #else
        call dumpfile(fname)
+       if (tr_iage) call write_restart_age
+       if (tr_pond) call write_restart_pond
 #endif
     end if
 
@@ -542,7 +576,7 @@ contains
 
   end subroutine ice_final_mct
 
-!=================================================================================
+!=============================================================================
 
   subroutine ice_SetGSMap_mct( mpicom_ice, ICEID, gsMap_ice )
 
