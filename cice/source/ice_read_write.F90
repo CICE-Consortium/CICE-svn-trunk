@@ -213,7 +213,7 @@
     !-------------------------------------------------------------------
       if (my_task==master_task .and. diag) then
          amin = minval(work_g1)
-         amax = maxval(work_g1)
+         amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
          write(nu_diag,*) ' read_global ',nu, nrec, amin, amax
       endif
 
@@ -341,7 +341,7 @@
     !-------------------------------------------------------------------
       if (my_task == master_task .and. diag) then
          amin = minval(work_g)
-         amax = maxval(work_g)
+         amax = maxval(work_g, mask = work_g /= spval_dbl)
          write(nu_diag,*) ' read_global ',nu, nrec, amin, amax
       endif
 
@@ -440,7 +440,7 @@
     !-------------------------------------------------------------------
          if (diag) then
             amin = minval(work_g1)
-            amax = maxval(work_g1)
+            amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
             write(nu_diag,*) ' write_global ', nu, nrec, amin, amax
          endif
 
@@ -629,7 +629,7 @@
             write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
          enddo
          amin = minval(work_g1)
-         amax = maxval(work_g1)
+         amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
          write(nu_diag,*) ' min and max =', amin, amax
          write(nu_diag,*) ''
 
@@ -774,7 +774,7 @@
             write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
          enddo
          amin = minval(work_g)
-         amax = maxval(work_g)
+         amax = maxval(work_g, mask = work_g /= spval_dbl)
          write(nu_diag,*) 'min and max = ', amin, amax
          write(nu_diag,*) ''
 

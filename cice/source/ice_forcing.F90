@@ -433,6 +433,7 @@
 !
 ! !USES:
 !
+      use ice_boundary, only: ice_HaloUpdate
       use ice_domain
       use ice_blocks
       use ice_flux
@@ -515,6 +516,17 @@
                                aice  (:,:,iblk) )
 
       enddo                     ! iblk
+
+      call ice_timer_start(timer_bound)
+      call ice_HaloUpdate (swvdr,             halo_info, &
+                           field_loc_center,  field_type_scalar)
+      call ice_HaloUpdate (swvdf,             halo_info, &
+                           field_loc_center,  field_type_scalar)
+      call ice_HaloUpdate (swidr,             halo_info, &
+                           field_loc_center,  field_type_scalar)
+      call ice_HaloUpdate (swidf,             halo_info, &
+                           field_loc_center,  field_type_scalar)
+      call ice_timer_stop(timer_bound)
 
       end subroutine get_forcing_atmo
 
@@ -3371,6 +3383,11 @@
         close (nu_forcing)
 
       endif
+
+!echmod - currents cause Fram outflow to be too large
+              ocn_frc_m(:,:,:,4,:) = c0
+              ocn_frc_m(:,:,:,5,:) = c0
+!echmod
 
       end subroutine ocn_data_ncar_init
 

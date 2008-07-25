@@ -81,13 +81,6 @@
 ! !DESCRIPTION:
 !
 !  This is the main driver routine for advancing CICE forward in time.
-!  Accepts forcing fields at beginning of time step and returns the
-!  model state at the end of the time step.
-!
-!  The module is divided into three parts that are called independently:
-!  step_therm1, step_therm2, and step_dynamics.  The thermodynamics is
-!  split up such that the fields needed for coupling are computed in
-!  step_therm1, and the rest of the work is done in step_therm2.
 !
 ! !REVISION HISTORY:
 !
@@ -98,7 +91,6 @@
 ! !INTERFACE:
 !
       subroutine CICE_Run
-
 !
 !EOP
 !BOC
@@ -159,9 +151,26 @@
       end subroutine CICE_Run
 
 !=======================================================================
-
+!BOP
+!
+! !ROUTINE: ice_step
+!
+! !DESCRIPTION:
+!
+!  Calls drivers for physics components, some initialization, and output
+!
+! !REVISION HISTORY:
+!
+!  author Elizabeth C. Hunke, LANL
+!         William H. Lipscomb, LANL
+!
+! !INTERFACE:
+!
       subroutine ice_step
-
+!
+!EOP
+!BOC
+!
       use ice_restoring, only: restore_ice, ice_HaloRestore
 
       integer (kind=int_kind) :: k
@@ -190,9 +199,9 @@
       ! thermodynamics
       !-----------------------------------------------------------------
 
-         call step_therm1 (dt)  ! pre-coupler thermodynamics
+         call step_therm1 (dt)  ! vertical thermodynamics
 
-         call step_therm2 (dt)  ! post-coupler thermodynamics
+         call step_therm2 (dt)  ! ice thickness distribution thermo
 
       !-----------------------------------------------------------------
       ! dynamics, transport, ridging
@@ -277,8 +286,7 @@
       integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
          indxi, indxj    ! indirect indices for cells with aicen > puny
 
-! 2D coupler variables (computed for each category, then aggregated)
-
+      ! 2D coupler variables (computed for each category, then aggregated)
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          fsensn      , & ! surface downward sensible heat     (W/m^2)
          fswabsn     , & ! shortwave absorbed by ice          (W/m^2)
@@ -472,25 +480,6 @@
             endif
 
       !-----------------------------------------------------------------
-      ! If not calculating surface temperature and fluxes, set surface 
-      ! fluxes (flatn, fsurfn, and fcondtopn) to be used in
-      ! thickness_changes
-      !-----------------------------------------------------------------
- 
-            if (.not.(calc_Tsfc)) then
-
-               call set_sfcflux(nx_block,  ny_block,  &
-                                n,         iblk,      &
-                                icells,               & 
-                                indxi,     indxj,     &
-                                aicen    (:,:,n,iblk),&
-                                flatn    (:,:,n,iblk),&
-                                fsurfn   (:,:,n,iblk),&
-                                fcondtopn(:,:,n,iblk) )
-
-            endif
-
-      !-----------------------------------------------------------------
       ! Update ice age
       ! This is further adjusted for freezing in the thermodynamics.
       ! Melting does not alter the ice age.
@@ -514,6 +503,24 @@
 
             melts_old = melts(:,:,iblk)
             meltt_old = meltt(:,:,iblk)
+
+            if (.not.(calc_Tsfc)) then
+
+               ! If not calculating surface temperature and fluxes, set 
+               ! surface fluxes (flatn, fsurfn, and fcondtopn) to be used 
+               ! in thickness_changes
+ 
+               ! hadgem routine sets fluxes to default values in ice-only mode
+               call set_sfcflux(nx_block,  ny_block,  &
+                                n,         iblk,      &
+                                icells,               & 
+                                indxi,     indxj,     &
+                                aicen    (:,:,n,iblk),&
+                                flatn    (:,:,n,iblk),&
+                                fsurfn   (:,:,n,iblk),&
+                                fcondtopn(:,:,n,iblk) )
+
+            endif
 
             call thermo_vertical                                       &
                             (nx_block,            ny_block,            &
@@ -701,6 +708,16 @@
             fsalt_gbm  (i,j,iblk) = fsalt  (i,j,iblk)
             fhocn_gbm  (i,j,iblk) = fhocn  (i,j,iblk)
             fswthru_gbm(i,j,iblk) = fswthru(i,j,iblk)
+
+      !-----------------------------------------------------------------
+      ! Save net shortwave for scaling factor in scale_factor
+      !-----------------------------------------------------------------
+            scale_factor(i,j,iblk) = &
+                       swvdr(i,j,iblk)*(c1 - alvdr_gbm(i,j,iblk)) &
+                     + swvdf(i,j,iblk)*(c1 - alvdf_gbm(i,j,iblk)) &
+                     + swidr(i,j,iblk)*(c1 - alidr_gbm(i,j,iblk)) &
+                     + swidf(i,j,iblk)*(c1 - alidf_gbm(i,j,iblk))
+
          enddo
          enddo
 
@@ -739,6 +756,11 @@
          endif                 
 
       enddo
+
+      call ice_timer_start(timer_bound)
+      call ice_HaloUpdate (scale_factor,     halo_info, &
+                           field_loc_center, field_type_scalar)
+      call ice_timer_stop(timer_bound)
 
       call ice_timer_stop(timer_column)
 
@@ -803,10 +825,8 @@
          i, j        , & ! horizontal indices
          ij              ! horizontal indices, combine i and j loops
 
-#ifdef CICE_IN_NEMO
       real (kind=dbl_kind)  :: &
          raicen          ! 1/aicen
-#endif
 
       logical (kind=log_kind) :: &
          extreme_flag    ! flag for extreme forcing values
@@ -816,35 +836,24 @@
 !
 !EOP
 !
-#ifdef CICE_IN_NEMO
+         raicen        = c1
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
 
+#ifdef CICE_IN_NEMO
 !----------------------------------------------------------------------
 ! Convert fluxes from GBM values to per ice area values when 
 ! running in NEMO environment.  (When in standalone mode, fluxes
 ! are input as per ice area.)
 !----------------------------------------------------------------------
-
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
             raicen        = c1 / aicen(i,j)
+#endif
             fsurfn(i,j)   = fsurfn_f(i,j,n,iblk)*raicen
             fcondtopn(i,j)= fcondtopn_f(i,j,n,iblk)*raicen
             flatn(i,j)    = flatn_f(i,j,n,iblk)*raicen
 
          enddo
-#else
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
-            fsurfn(i,j)   = fsurfn_f(i,j,n,iblk)
-            fcondtopn(i,j)= fcondtopn_f(i,j,n,iblk)
-            flatn(i,j)    = flatn_f(i,j,n,iblk)
-
-         enddo
-#endif
 
 !----------------------------------------------------------------
 ! Flag up any extreme fluxes

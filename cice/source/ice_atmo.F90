@@ -169,7 +169,7 @@
       !------------------------------------------------------------
 
       psimhu(xd)  = log((c1+xd*(c2+xd))*(c1+xd*xd)/c8) &
-                  - c2*atan(xd) + pi*p5 
+                  - c2*atan(xd) + pih
 !ech                  - c2*atan(xd) + 1.571_dbl_kind
 
       psixhu(xd)  =  c2 * log((c1 + xd*xd)/c2)

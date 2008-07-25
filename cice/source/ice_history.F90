@@ -81,7 +81,7 @@
          nvar = 11              , & ! number of grid fields that can be written
                                     !   excluding grid vertices
          ncat_hist = ncat       , & ! number of ice categories written <= ncat
-         avgsiz = 80 + 7*ncat_hist  ! number of fields that can be written
+         avgsiz = 81 + 7*ncat_hist  ! number of fields that can be written
 
       real (kind=real_kind) :: time_beg, time_end ! bounds for averaging
 
@@ -137,6 +137,7 @@
            f_sst       = .true., f_sss        = .true., &
            f_uocn      = .true., f_vocn       = .true., &
            f_frzmlt    = .true., &
+           f_fswfac    = .true., &
            f_fswabs    = .true., f_fswabs_ai  = .true., &
            f_albsni    = .true., &
            f_alvdr     = .true., f_alidr      = .true., &
@@ -196,6 +197,7 @@
            f_sst,       f_sss      , &
            f_uocn,      f_vocn     , &
            f_frzmlt                , &
+           f_fswfac                , &
            f_fswabs,    f_fswabs_ai, &
            f_albsni                , &
            f_alvdr,     f_alidr    , &
@@ -336,13 +338,14 @@
            n_fsurf_ai   = 78, &
            n_fcondtop_ai= 79, &
            n_fmeltt_ai  = 80, &
-           n_aicen        = 81, & ! n_aicen, n_vicen must be last in this list
-           n_vicen        = 82 + 1*ncat_hist - 1, &
-           n_volpn        = 82 + 2*ncat_hist - 1, &
-           n_fsurfn_ai    = 82 + 3*ncat_hist - 1, &
-           n_fcondtopn_ai = 82 + 4*ncat_hist - 1, &
-           n_fmelttn_ai   = 82 + 5*ncat_hist - 1, &
-           n_flatn_ai     = 82 + 6*ncat_hist - 1
+           n_fswfac     = 81, &
+           n_aicen        = 82, & ! n_aicen, n_vicen must be last in this list
+           n_vicen        = 83 + 1*ncat_hist - 1, &
+           n_volpn        = 83 + 2*ncat_hist - 1, &
+           n_fsurfn_ai    = 83 + 3*ncat_hist - 1, &
+           n_fcondtopn_ai = 83 + 4*ncat_hist - 1, &
+           n_fmelttn_ai   = 83 + 5*ncat_hist - 1, &
+           n_flatn_ai     = 83 + 6*ncat_hist - 1
 
 !=======================================================================
 
@@ -413,6 +416,7 @@
       vname(n_uocn      ) = 'uocn'
       vname(n_vocn      ) = 'vocn'
       vname(n_frzmlt    ) = 'frzmlt'
+      vname(n_fswfac    ) = 'fswfac'
       vname(n_fswabs    ) = 'fswabs'
       vname(n_fswabs_ai ) = 'fswabs_ai'
       vname(n_albsni    ) = 'albsni'  
@@ -519,6 +523,7 @@
       vdesc(n_uocn      ) = 'ocean current (x)'           
       vdesc(n_vocn      ) = 'ocean current (y)'         
       vdesc(n_frzmlt    ) = 'freeze/melt potential'    
+      vdesc(n_fswfac    ) = 'shortwave scaling factor'   
       vdesc(n_fswabs    ) = 'snow/ice/ocn absorbed solar flux (cpl)'   
       vdesc(n_fswabs_ai ) = 'snow/ice/ocn absorbed solar flux'      
       vdesc(n_albsni    ) = 'snw/ice broad band albedo'
@@ -636,6 +641,7 @@
       vunit(n_uocn      ) = 'm/s'
       vunit(n_vocn      ) = 'm/s'
       vunit(n_frzmlt    ) = 'W/m^2'
+      vunit(n_fswfac    ) = '1'
       vunit(n_fswabs    ) = 'W/m^2'
       vunit(n_fswabs_ai ) = 'W/m^2'
       vunit(n_albsni    ) = '%'
@@ -744,6 +750,7 @@
       vcomment(n_uocn      ) = 'positive is x direction on U grid'
       vcomment(n_vocn      ) = 'positive is y direction on U grid'
       vcomment(n_frzmlt    ) ='if >0, new ice forms; if <0, ice melts' 
+      vcomment(n_fswfac    ) = 'ratio of netsw new:old'   
       vcomment(n_fswabs    ) = 'positive downward'   
       vcomment(n_fswabs_ai ) = 'weighted by ice area'      
       vcomment(n_albsni    ) = 'none'
@@ -879,6 +886,7 @@
       call broadcast_scalar (f_uocn, master_task)
       call broadcast_scalar (f_vocn, master_task)
       call broadcast_scalar (f_frzmlt, master_task)
+      call broadcast_scalar (f_fswfac, master_task)
       call broadcast_scalar (f_fswabs, master_task)
       call broadcast_scalar (f_fswabs_ai, master_task)
       call broadcast_scalar (f_albsni, master_task)
@@ -986,6 +994,7 @@
       iout(n_uocn      ) = f_uocn  
       iout(n_vocn      ) = f_vocn  
       iout(n_frzmlt    ) = f_frzmlt  
+      iout(n_fswfac    ) = f_fswfac
       iout(n_fswabs    ) = f_fswabs  
       iout(n_fswabs_ai ) = f_fswabs_ai  
       iout(n_albsni    ) = f_albsni  
@@ -1294,6 +1303,7 @@
         aa(i,j,n_vocn,  iblk)= aa(i,j,n_vocn,  iblk) + vocn (i,j,iblk) 
         aa(i,j,n_frzmlt,iblk)= aa(i,j,n_frzmlt,iblk) +frzmlt(i,j,iblk) 
 
+        aa(i,j,n_fswfac,iblk)= aa(i,j,n_fswfac,iblk) +fswfac(i,j,iblk)
         aa(i,j,n_fswabs,iblk)= aa(i,j,n_fswabs,iblk) +fswabs(i,j,iblk)
         aa(i,j,n_fswabs_ai,iblk)=aa(i,j,n_fswabs_ai,iblk) &
                                                   +ai*fswabs(i,j,iblk)
@@ -2449,23 +2459,24 @@
       use ice_calendar, only: time, sec, idate, nyr, month, daymo,  &
                               mday, write_ic, histfreq, histfreq_n, &
                               year_init, new_year, new_month, new_day, &
-                              dayyr
+                              dayyr, dt
       use ice_restart, only: lenstr
 
       character (char_len_long), intent(inout) :: ncfile
       character (len=2), intent(in) :: suffix
 
-      integer (kind=int_kind) :: iyear, imonth, iday
+      integer (kind=int_kind) :: iyear, imonth, iday, isec
 
         iyear = nyr + year_init - 1 ! set year_init=1 in ice_in to get iyear=nyr
         imonth = month
         iday = mday
+        isec = sec - dt
 
         ! construct filename
         if (write_ic) then
            write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
               incond_file(1:lenstr(incond_file)),'.',iyear,'-', &
-              imonth,'-',iday,'-',sec,'.',suffix
+              imonth,'-',iday,'-',isec,'.',suffix
         else
 
          if (hist_avg) then

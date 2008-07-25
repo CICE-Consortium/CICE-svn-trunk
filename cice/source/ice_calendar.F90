@@ -66,7 +66,6 @@
          ndyn_dt  , & ! reduced timestep for dynamics: ndyn_dt=dt/dyn_dt
          stop_now     , & ! if 1, end program execution
          write_restart, & ! if 1, write restart now
-         cpl_write_history, &  ! if 1, write history on command from cpl
          diagfreq     , & ! diagnostic output frequency (10 = once per 10 dt)
          dumpfreq_n   , & ! restart output frequency (10 = once per 10 d,m,y)
          histfreq_n       ! history output frequency (10 = once per 10 h,d,m,y)

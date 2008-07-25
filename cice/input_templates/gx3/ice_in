@@ -128,6 +128,7 @@
   , f_uocn         = .true. 
   , f_vocn         = .true. 
   , f_frzmlt       = .true.
+  , f_fswfac       = .true.
   , f_fswabs       = .false. 
   , f_fswabs_ai    = .true. 
   , f_albsni       = .true. 

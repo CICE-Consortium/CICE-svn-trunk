@@ -100,10 +100,10 @@
          il1, il2    , & ! ice layer indices for eice
          sl1, sl2        ! snow layer indices for esno
 
-      integer (kind=int_kind), save :: &
+      integer (kind=int_kind) :: &
          icells          ! number of cells with aicen > puny
 
-      integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
          indxi, indxj    ! indirect indices for cells with aicen > puny
 
       real (kind=dbl_kind) :: netsw 
@@ -138,15 +138,16 @@
 
          do j = jlo, jhi
          do i = ilo, ihi
-            scale_factor(i,j,iblk) = c1
-            if (aice(i,j,iblk) > c0) then
+            if (aice(i,j,iblk) > c0 .and. scale_factor(i,j,iblk) > puny) then
                netsw = swvdr(i,j,iblk)*(c1 - alvdr_gbm(i,j,iblk)) &
                      + swvdf(i,j,iblk)*(c1 - alvdf_gbm(i,j,iblk)) &
                      + swidr(i,j,iblk)*(c1 - alidr_gbm(i,j,iblk)) &
                      + swidf(i,j,iblk)*(c1 - alidf_gbm(i,j,iblk))
-               if (fswabs(i,j,iblk) > c0) &
-                  scale_factor(i,j,iblk) = netsw / fswabs(i,j,iblk)
+               scale_factor(i,j,iblk) = netsw / scale_factor(i,j,iblk)
+            else
+               scale_factor(i,j,iblk) = c1
             endif
+            fswfac(i,j,iblk) = scale_factor(i,j,iblk) ! for history 
          enddo               ! i
          enddo               ! j
 
@@ -193,9 +194,6 @@
 
       endif    ! calc_Tsfc
 
-      call ice_HaloUpdate (scale_factor,     halo_info, &
-                           field_loc_center, field_type_scalar)
-
       call ice_timer_stop(timer_sw)     ! shortwave
       call ice_timer_stop(timer_thermo) ! thermodynamics
       call ice_timer_stop(timer_column) ! column physics
@@ -241,10 +239,10 @@
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          i, j, n
 
-      integer (kind=int_kind), save :: &
+      integer (kind=int_kind) :: &
          icells          ! number of ice/ocean cells 
 
-      integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
          indxi, indxj    ! indirect indices for ice/ocean cells
 
       type (block) :: &
@@ -536,10 +534,10 @@
          i,j         , & ! horizontal indices
          ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
-      integer (kind=int_kind), save :: &
+      integer (kind=int_kind) :: &
          icells          ! number of cells with aicen > puny
 
-      integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
          indxi, indxj    ! indirect indices for cells with aicen > puny
 
       logical (kind=log_kind) :: &
@@ -755,10 +753,10 @@
          il1, il2    , & ! ice layer indices for eice
          sl1, sl2        ! snow layer indices for esno
 
-      integer (kind=int_kind), save :: &
+      integer (kind=int_kind) :: &
          icells          ! number of cells with aicen > puny
 
-      integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
          indxi, indxj    ! indirect indices for cells with aicen > puny
 
       ! snow variables for Delta-Eddington shortwave

@@ -151,6 +151,7 @@
 
       if (runtype == 'continue') then ! start from core restart file
          call restartfile()           ! given by pointer in ice_in
+         call calendar(time)          ! update time parameters
       else if (restart) then          ! ice_ic = core restart file
          call restartfile (ice_ic)    !  or 'default' or 'none'
       endif         
