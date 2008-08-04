@@ -76,7 +76,7 @@
          cosw = c1   , & ! cos(ocean turning angle)  ! turning angle = 0
          sinw = c0   , & ! sin(ocean turning angle)  ! turning angle = 0
          a_min = p001, & ! minimum ice area
-         m_min = p01     ! minimum ice mass
+         m_min = p01     ! minimum ice mass (kg/m^2)
 
       real (kind=dbl_kind) :: &
          ecci     , & ! 1/e^2
@@ -152,7 +152,7 @@
          indxuj       ! compressed index in j-direction
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
-         tmass    , & ! total mass of ice and snow
+         tmass    , & ! total mass of ice and snow (kg/m^2)
          waterx   , & ! for ocean stress calculation, x (m/s)
          watery   , & ! for ocean stress calculation, y (m/s)
          forcex   , & ! work array: combined atm stress and ocn tilt, x
@@ -598,7 +598,7 @@
          intent(out) :: &
          strairx , & ! stress on ice by air, x-direction
          strairy , & ! stress on ice by air, y-direction
-         tmass       ! total mass of ice and snow
+         tmass       ! total mass of ice and snow (kg/m^2)
 
       integer (kind=int_kind), dimension (nx_block,ny_block), & 
          intent(out) :: &

@@ -8,7 +8,9 @@ module ice_spacecurve
 !  create space-filling curves.   
 !
 ! !REVISION HISTORY:
-!  SVN:$Id$
+!  SVN:$Id: $
+!
+! author: John Dennis, NCAR
 
 ! !USES:
    use ice_kinds_mod
@@ -931,7 +933,7 @@ contains
    function IncrementCurve(ja,jd) result(ierr)
 
 ! !DESCRIPTION:
-!   This function creates the curve which is store in the 
+!   This function creates the curve which is stored in the 
 !   the ordered array.  The curve is implemented by 
 !   incrementing the curve in the direction [jd] of axis [ja].
 !

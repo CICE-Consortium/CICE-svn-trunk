@@ -196,6 +196,7 @@
 !
 !-----------------------------------------------------------------------
 
+!   dbug = .true.
    dbug = .false.
    if (bcount > 0) then
       do n=1,size(distribution%blockLocation)
@@ -1020,7 +1021,6 @@
    allocate(procTmp(nprocs), stat=istat)
 
    procTmp = 0
-   localBlock = 0
    do n=1,nblocks_tot
       pid = dist%blockLocation(n)  ! processor id
       newDistrb%blockLocation(n) = pid
@@ -1232,7 +1232,7 @@
                 nprocs,extra,nblocks,nblocksL,s1
 
    !-----------------------------------------------------------
-   ! Use the SFC to partitioning the blocks across processors
+   ! Use the SFC to partition the blocks across processors
    !-----------------------------------------------------------
    do j=1,nblocks_y
    do i=1,nblocks_x
@@ -1269,22 +1269,25 @@
 
    do n=1,nblocks_tot
       pid = dist%blockLocation(n)
+      dist%blockLocation(n) = pid
+
       if(pid>0) then
         proc_tmp(pid) = proc_tmp(pid) + 1
         dist%blockLocalID(n) = proc_tmp(pid)
+      else
+        dist%blockLocalID(n) = 0
       endif
    enddo
 
-   ! if this is the local processor, set number of local blocks
-   do pid = 1, nprocs
-      if (my_task == pid-1) dist%numLocalBlocks = proc_tmp(pid)
-   enddo
+   dist%numLocalBlocks = proc_tmp(my_task+1)
+
    if (dist%numLocalBlocks > 0) then
       allocate (dist%blockGlobalID(dist%numLocalBlocks))
+      dist%blockGlobalID = 0
    endif
    localID = 0
-   do n=1,dist%numLocalBlocks
-      if (work_per_block(n) /= 0) then
+   do n=1,nblocks_tot
+      if (dist%blockLocation(n) == my_task+1) then
          localID = localID + 1
          dist%blockGlobalID(localID) = n
       endif
