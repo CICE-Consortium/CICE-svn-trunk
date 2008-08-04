@@ -142,6 +142,7 @@ contains
 ! !USES:
 
    use ice_fileunits, only: nu_diag
+   use ice_communicate, only: my_task, master_task
 
 ! !INPUT PARAMETERS:
 
@@ -337,8 +338,10 @@ contains
       end do
    end do
 
-   dbug = .false.
+   dbug = .true.
+!   dbug = .false.
    if (dbug) then
+      if (my_task == master_task) then
       write(nu_diag,*) 'block i,j locations'
       do n = 1, nblocks_tot
          write(nu_diag,*) 'block id, iblock, jblock:', &
@@ -346,6 +349,7 @@ contains
          all_blocks(n)%iblock,   & 
          all_blocks(n)%jblock
       enddo
+      endif
    endif
 
 !EOC

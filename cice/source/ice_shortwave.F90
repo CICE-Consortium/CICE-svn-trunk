@@ -3296,8 +3296,8 @@
                            ! in snow grain radius
          ! units for the following are 1.e-6 m (micro-meters)
          rsnw_fresh    =  100._dbl_kind, & ! freshly-fallen snow grain radius 
-         rsnw_non_melt =  500._dbl_kind, & ! nonmelt snow grain radius
-         sig_rsnw      =  250._dbl_kind, & ! assumed sigma for snow grain radius
+         rsnw_nonmelt  =  500._dbl_kind, & ! nonmelt snow grain radius
+         rsnw_sig      =  250._dbl_kind, & ! assumed sigma for snow grain radius
          rsnw_melt     = 1000._dbl_kind    ! melting snow grain radius
 
 !-----------------------------------------------------------------------
@@ -3331,16 +3331,16 @@
            ! bare ice, temperature dependence
            dTs = Timelt - Tsfc(i,j)
            fT  = -min(dTs/dT_mlt-c1,c0)
-           ! tune non_melt snow grain radius if desired: note that
+           ! tune nonmelt snow grain radius if desired: note that
            ! the sign is negative so that if R_snw is 1, then the
            ! snow grain radius is reduced and thus albedo increased.
-           rsnw_nm = rsnw_non_melt - R_snw*sig_rsnw
+           rsnw_nm = rsnw_nonmelt - R_snw*rsnw_sig
            rsnw_nm = max(rsnw_nm, rsnw_fresh)
            rsnw_nm = min(rsnw_nm, rsnw_melt) 
            do ks = 1, nslyr
              ! snow density ccsm3 constant value
              rhosnw(i,j,ks) = rhos
-             ! snow grain radius between rsnw_non_melt and rsnw_melt
+             ! snow grain radius between rsnw_nonmelt and rsnw_melt
              rsnw(i,j,ks) = rsnw_nm + (rsnw_melt-rsnw_nm)*fT
              rsnw(i,j,ks) = max(rsnw(i,j,ks), rsnw_fresh)
              rsnw(i,j,ks) = min(rsnw(i,j,ks), rsnw_melt) 

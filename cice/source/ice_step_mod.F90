@@ -192,6 +192,23 @@
          enddo                  ! ncat
       enddo                      ! iblk
 
+      else    ! .not. calc_Tsfc
+
+         ! Initialize for safety
+         do iblk = 1, max_blocks
+         do n = 1, ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            fswsfcn(i,j,n,iblk) = c0
+            fswintn(i,j,n,iblk) = c0
+            fswthrun(i,j,n,iblk) = c0
+         enddo   ! i
+         enddo   ! j
+         enddo   ! ncat
+            Iswabsn(:,:,:,iblk) = c0
+            Sswabsn(:,:,:,iblk) = c0
+         enddo   ! iblk
+
       endif    ! calc_Tsfc
 
       call ice_timer_stop(timer_sw)     ! shortwave
