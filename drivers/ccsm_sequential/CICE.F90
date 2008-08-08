@@ -39,62 +39,6 @@
 ! McLaren and Ann Keen. Numerous others have contributed to this 
 ! effort--thanks to all! 
 !=======================================================================
-#ifndef popcice
-!
-!BOP
-!
-! !MODULE: icemodel - main ice model program
-!
-! !DESCRIPTION:
-!
-! Main driver routine for CICE.  Initializes and steps through the model.
-! This program should be compiled if CICE is run as a separate executable,
-!  but not if CICE subroutines are called from another program (e.g., CAM).
-!
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
-! authors Elizabeth C. Hunke and William H. Lipscomb, LANL
-!
-! 2006: Converted to free form source (F90) by Elizabeth Hunke
-! 2008: E. Hunke moved ESMF code to its own driver
-!
-! !INTERFACE:
-!
-      program icemodel
-!
-! !USES:
-!
-      use CICE_InitMod
-      use CICE_RunMod
-      use CICE_FinalMod
-!
-!EOP
-!
-      implicit none
-
-      !-----------------------------------------------------------------
-      ! Initialize CICE
-      !-----------------------------------------------------------------
-
-      call CICE_Initialize
-
-      !-----------------------------------------------------------------
-      ! Run CICE
-      !-----------------------------------------------------------------
-
-      call CICE_Run
-
-      !-----------------------------------------------------------------
-      ! Finalize CICE 
-      !-----------------------------------------------------------------
-
-      call CICE_Finalize
-
-      end program icemodel
-
-#endif
-!=======================================================================
 !BOP
 !
 ! !ROUTINE: debug_ice - wrapper for print_state

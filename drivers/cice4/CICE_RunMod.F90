@@ -233,7 +233,7 @@
          if (write_restart == 1) then
             call dumpfile ! core variables for restarting
             if (tr_iage) call write_restart_age
-!            if (tr_pond) call write_restart_ponds
+            if (tr_pond) call write_restart_pond
          endif
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 

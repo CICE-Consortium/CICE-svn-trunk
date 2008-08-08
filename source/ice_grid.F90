@@ -49,7 +49,7 @@
          grid_file    , & !  input file for POP grid info
          kmt_file     , & !  input file for POP grid info
          grid_type        !  current options are rectangular (default),
-                          !  displaced_pole, tripole, panarctic, latlon
+                          !  displaced_pole, tripole, panarctic
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
          dxt    , & ! width of T-cell through the middle (m)
@@ -215,11 +215,6 @@
 
          if (my_task == master_task) close (nu_grid)
 
-      elseif (trim(grid_type) == 'latlon') then
-
-         work_g1(:,:) = 75._dbl_kind/rad_to_deg  ! arbitrary polar latitude
-         work_g2(:,:) = c1
-
       else   ! rectangular grid
 
          work_g1(:,:) = 75._dbl_kind/rad_to_deg  ! arbitrary polar latitude
@@ -311,11 +306,6 @@
          endif 
       elseif (trim(grid_type) == 'panarctic') then
          call panarctic_grid    ! pan-Arctic grid
-#ifdef SEQ_MCT
-      elseif (trim(grid_type) == 'latlon') then
-         call latlongrid        ! lat lon grid for sequential CCSM (CAM mode)
-         return
-#endif
       else
          call rectgrid          ! regular rectangular grid
       endif
@@ -867,247 +857,7 @@
       if (my_task == master_task) close (nu_grid)
 
       end subroutine panarctic_grid
-#ifdef SEQ_MCT
-!=======================================================================
-!BOP
-!
-! !IROUTINE: latlongrid- lat and lon grid for coupling to standalone CAM
-!
-! !INTERFACE:
-!
-      subroutine latlongrid
-!
-! !DESCRIPTION:
-!
-! Read in kmt file that matches CAM lat-lon grid and has single column 
-! functionality
-!
-! !REVISION HISTORY:
-!
-! author: Mariana Vertenstein
-! 2007: Elizabeth Hunke upgraded to netcdf90 and cice ncdf calls
-!
-! !USES:
-!
-      use ice_domain_size
-      use ice_scam, only : scmlat, scmlon, single_column
-      use netcdf
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      integer (kind=int_kind) :: &
-         i, j, iblk    
-      
-      integer (kind=int_kind) :: &
-         ni, nj, ncid, dimid, varid, ier
 
-      character (len=char_len) :: &
-         subname='latlongrid' ! subroutine name
-
-      type (block) :: &
-         this_block           ! block information for current block
-      integer (kind=int_kind) :: &
-         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
-
-      real (kind=dbl_kind) :: &
-           closelat, &        ! Single-column latitude value
-           closelon, &        ! Single-column longitude value
-           closelatidx, &     ! Single-column latitude index to retrieve
-           closelonidx        ! Single-column longitude index to retrieve
-
-      integer (kind=int_kind) :: &
-           start(2), &        ! Start index to read in
-           count(2)           ! Number of points to read in
-
-      real (kind=dbl_kind), allocatable :: &
-           lats(:),lons(:),pos_lons(:), glob_grid(:,:)  ! temporaries 
-
-      real (kind=dbl_kind) :: &
-         pos_scmlon           ! temporary
-
-      !-----------------------------------------------------------------
-      ! - kmt file is actually clm fractional land file
-      ! - Determine consistency of dimensions
-      ! - Read in lon/lat centers in degrees from kmt file
-      ! - Read in ocean from "kmt" file (1 for ocean, 0 for land)
-      !-----------------------------------------------------------------
-
-      ! Determine dimension of domain file and check for consistency
-
-         call ice_open_nc(kmt_file, ncid))
-
-         call check_ret(nf90_inq_dimid (ncid, 'ni', dimid), subname)
-         call check_ret(nf90_inq_dimension(ncid, dimid, len=ni), subname)
-         call check_ret(nf90_inq_dimid (ncid, 'nj', dimid), subname)
-         call check_ret(nf90_inq_dimension(ncid, dimid, len=nj), subname)
-
-         if (single_column) then
-            if ((nx_global /= 1).or. (ny_global /= 1)) then
-               write(nu_diag,*) 'Because you have selected the column model flag'
-               write(nu_diag,*) 'Please set nx_global=ny_global=1 in file'
-               write(nu_diag,*) 'ice_domain_size.F and recompile'
-               call abort_ice ('latlongrid: check nx_global, ny_global')
-            endif
-         else
-            if (nx_global /= ni .and. ny_global /= nj) then
-               call abort_ice ('latlongrid: ni,ny not equal to nx_global,ny_global')
-            end if
-         end if
-         
-      ! Determine start/count to read in for either single column or global lat-lon grid
-
-      if (single_column) then
-         allocate(lats(nj))
-         allocate(lons(ni))
-         allocate(pos_lons(ni))
-         allocate(glob_grid(ni,nj))
-
-         call ice_read_global_nc(ncid, 1, 'xc', glob_grid, dbug)
-         do i = 1,ni
-            lons(i) = glob_grid(i,1)
-         end do
-         call ice_read_global_nc(ncid, 1, 'yc', glob_grid, dbug)
-         do j = 1,nj
-            lats(j) = glob_grid(1,j) 
-         end do
-         
-         ! convert lons array and scmlon to 0,360 and find index of value closest to 0
-         ! and obtain single-column longitude/latitude indices to retrieve
-         
-         pos_lons(:)= mod(lons(:) + 360._dbl_kind,360._dbl_kind)
-         pos_scmlon = mod(scmlon  + 360._dbl_kind,360._dbl_kind)
-         start(1) = (MINLOC(abs(pos_lons-pos_scmlon),dim=1))
-         start(2) = (MINLOC(abs(lats    -scmlat    ),dim=1))
-
-         deallocate(lats)
-         deallocate(lons)
-         deallocate(pos_lons)
-         deallocate(glob_grid)
-      else
-          start(1)=1
-          start(2)=1
-      endif
-      count(1)=nx_global
-      count(2)=ny_global
-      
-      ! Read in domain file for either single column or for global lat-lon grid
-
-         call ice_read_nc(ncid, 1, 'xc', TLON, dbug)
-         do j = 1, ny_global
-         do i = 1, nx_global
-            ! Convert from degrees to radians
-            TLON(i,j) = pi*TLON(i,j)/180._dbl_kind 
-         end do
-         end do 
-         call ice_read_nc(ncid, 1, 'yc', TLAT, dbug)
-         do j = 1, ny_global
-         do i = 1, nx_global
-            ! Convert from degrees to radians
-            TLAT(i,j) = pi*TLAT(i,j)/180._dbl_kind 
-         end do
-         end do 
-         ! Note that area read in from domain file is in km^2 - must first convert to m^2 and 
-         ! then convert to radians^2
-         call ice_read_nc(ncid, 1, 'area', tarea, dbug)
-         do j = 1, ny_global
-         do i = 1, nx_global
-            ! Convert from km^2 to m^2
-            tarea(i,j) = tarea(i,j) * 1.e6_dbl_kind
-         end do
-         end do 
-         call ice_read_nc(ncid, 1, 'mask', hm, dbug)
-         call ice_close(ncid)
-
-      !-----------------------------------------------------------------
-      ! Calculate various geometric 2d arrays
-      ! The U grid (velocity) is not used when run with sequential CAM
-      ! because we only use thermodynamic sea ice.  However, ULAT is used
-      ! in the default initialization of CICE so we calculate it here as 
-      ! a "dummy" so that CICE will initialize with ice.  If a no ice
-      ! initialization is OK (or desired) this can be commented out and
-      ! ULAT will remain 0 as specified above.  ULAT is located at the
-      ! NE corner of the grid cell, TLAT at the center, so here ULAT is
-      ! hacked by adding half the latitudinal spacing (in radians) to
-      ! TLAT.
-      !-----------------------------------------------------------------
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks_ice(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo, jhi
-         do i = ilo, ihi
-
-            uarea(i,j,iblk)     = p25*  &
-                                 (tarea(i,j,  iblk) + tarea(i+1,j,  iblk) &
-                                + tarea(i,j+1,iblk) + tarea(i+1,j+1,iblk))
-            tarear(i,j,iblk)   = c1/tarea(i,j,iblk)
-            uarear(i,j,iblk)   = c1/uarea(i,j,iblk)
-            tinyarea(i,j,iblk) = puny*tarea(i,j,iblk)
-
-            ULAT  (i,j,iblk) = TLAT(i,j,iblk)+(pi/ny_global)  
-            ULON  (i,j,iblk) = c0
-            ANGLE (i,j,iblk) = c0                             
-
-            ANGLET(i,j,iblk) = c0                             
-            HTN   (i,j,iblk) = 1.e36_dbl_kind
-            HTE   (i,j,iblk) = 1.e36_dbl_kind
-            dxt   (i,j,iblk) = 1.e36_dbl_kind
-            dyt   (i,j,iblk) = 1.e36_dbl_kind
-            dxu   (i,j,iblk) = 1.e36_dbl_kind
-            dyu   (i,j,iblk) = 1.e36_dbl_kind
-            dxhy  (i,j,iblk) = 1.e36_dbl_kind
-            dyhx  (i,j,iblk) = 1.e36_dbl_kind
-            cyp   (i,j,iblk) = 1.e36_dbl_kind
-            cxp   (i,j,iblk) = 1.e36_dbl_kind
-            cym   (i,j,iblk) = 1.e36_dbl_kind
-            cxm   (i,j,iblk) = 1.e36_dbl_kind
-         enddo
-         enddo
-      enddo
-
-      call makemask
-
-      end subroutine latlongrid
-
-!=======================================================================
-!BOP
-!
-! !IROUTINE: check_ret
-!
-! !INTERFACE:
-      subroutine check_ret(ret, calling)
-!
-! !DESCRIPTION:
-!     Check return status from netcdf call
-!
-! !USES:
-        use netcdf
-! !ARGUMENTS:
-        implicit none
-        integer, intent(in) :: ret
-        character(len=*) :: calling
-!
-! !REVISION HISTORY:
-! author: Mariana Vertenstein
-! 2007: Elizabeth Hunke upgraded to netcdf90
-!
-!EOP
-!
-      if (ret /= NF90_NOERR) then
-         write(nu_diag,*)'netcdf error from ',trim(calling)
-         write(nu_diag,*)'netcdf strerror = ',trim(NF90_STRERROR(ret))
-         call abort_ice('ice ice_grid: netcdf check_ret error')
-      end if
-        
-      end subroutine check_ret
-
-#endif      
 !=======================================================================
 !BOP
 !

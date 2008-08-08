@@ -86,10 +86,6 @@
       real (kind=dbl_kind), parameter :: &
          Tocnfrz= -34.0_dbl_kind*depressT  ! freezing temp of seawater (C),
                                            ! used as Tsfcn for open water
-
-      real (kind=dbl_kind), parameter :: &
-         rfrac  = 0.9_dbl_kind       ! water runoff fraction for melt ponds
-
       ! weights for albedos (match those for isccp shortwave forcing)
 ! 4 Jan 2007 BPB  Following are appropriate for complete cloud
 ! in a summer polar atmosphere with 1.5m bare sea ice surface:

@@ -22,7 +22,8 @@
       use ice_constants
       use ice_fileunits
       use ice_read_write
-      use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file
+      use ice_restart, only: lenstr, restart_dir, restart_file, &
+                             pointer_file, runtype
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
 !
@@ -59,6 +60,8 @@
 !
 !EOP
 !
+      if (trim(runtype) == 'continue') restart_age = .true.
+
       if (restart_age) then
          call read_restart_age
       else

@@ -198,4 +198,5 @@
   , f_fcondtopn_ai = .false.
   , f_fmelttn_ai   = .false.
   , f_flatn_ai     = .false.
+  , f_apondn       = .false.
 /

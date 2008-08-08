@@ -1,5 +1,5 @@
 !=======================================================================
-! Copyright 2006, LANSLLC. All rights reserved.
+! Copyright 2008, LANSLLC. All rights reserved.
 ! Unless otherwise indicated, this information has been authored by an 
 ! employee or employees of the Los Alamos National Security, LLC (LANS), 
 ! operator of the Los Alamos National Laboratory under Contract No. 
@@ -28,11 +28,16 @@
 ! Cecilia Bitz, UW
 ! Bruce Briegleb, NCAR
 ! Tony Craig, NCAR
+! John Dennis, NCAR
 ! Marika Holland, NCAR
+! Bonnie Light, UW
 ! Julie Schramm, NCAR
 ! David Bailey, NCAR
 !
-! Numerous others have contributed to this effort--thanks to all! 
+! Assistance from researchers from U.K. Met Office Hadley Centre is
+! also much appreciated, especially our collaboration with Alison 
+! McLaren and Ann Keen. Numerous others have contributed to this 
+! effort--thanks to all! 
 !=======================================================================
 #ifndef popcice
 !

@@ -39,7 +39,7 @@
         ntilyr    = ncat*nilyr, & ! number of ice layers in all categories
         nslyr     =   1       , & ! number of snow layers per category
         ntslyr    = ncat*nslyr, & ! number of snow layers in all categories
-        ntrcr     =   2           ! number of tracers (defined in ice_state)
+        ntrcr     =   3           ! number of tracers (defined in ice_state)
                                   ! 1 = surface temperature
 
       integer (kind=int_kind), parameter :: &

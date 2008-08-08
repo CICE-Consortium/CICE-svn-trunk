@@ -116,9 +116,7 @@
       namelist /setup_nml/ &
         days_per_year,  year_init,      istep0,          dt,            &
         npt,            ndyn_dt,                                        &
-#ifndef SEQ_MCT
         runtype,        runid,                                          &
-#endif
         ice_ic,         restart,        restart_dir,     restart_file,  &
         pointer_file,   dumpfreq,       dumpfreq_n,                     &
         diagfreq,       diag_type,      diag_file,                      &
@@ -235,10 +233,8 @@
       latpnt(2) = -65._dbl_kind   ! latitude of diagnostic point 2 (deg)
       lonpnt(2) = -45._dbl_kind   ! longitude of point 2 (deg)
 
-#ifndef SEQ_MCT
       runid   = 'unknown'   ! run ID, only used in CCSM
       runtype = 'initial'   ! run type: 'initial', 'continue'
-#endif
 
       ! extra tracers
       tr_iage      = .false. ! ice age
@@ -322,16 +318,6 @@
             ice_ic = 'none'
          endif
       endif
-
-#ifdef SEQ_MCT
-      ! Note in SEQ_MCT mode the runid and runtype flag are obtained from the
-      ! sequential driver - not from the cice namelist 
-      if (my_task == master_task) then
-         restart = .true.
-         if (runtype == "initial") restart = .false.
-         history_file = trim(runid)//"_iceh"
-      endif
-#endif
 
 #ifndef ncdf
       ! netcdf is unavailable
@@ -459,13 +445,11 @@
          write(nu_diag,*) ' Document ice_in namelist parameters:'
          write(nu_diag,*) ' ==================================== '
          write(nu_diag,*) ' '
-#ifndef SEQ_MCT
          if (trim(runid) /= 'unknown') &
          write(nu_diag,*)    ' runid                     = ', &
                                trim(runid)
          write(nu_diag,1030) ' runtype                   = ', &
                                trim(runtype)
-#endif
          write(nu_diag,1020) ' days_per_year             = ', days_per_year
          write(nu_diag,1020) ' year_init                 = ', year_init
          write(nu_diag,1020) ' istep0                    = ', istep0
