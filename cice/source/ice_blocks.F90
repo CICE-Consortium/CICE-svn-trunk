@@ -338,8 +338,8 @@ contains
       end do
    end do
 
-   dbug = .true.
-!   dbug = .false.
+!   dbug = .true.
+   dbug = .false.
    if (dbug) then
       if (my_task == master_task) then
       write(nu_diag,*) 'block i,j locations'

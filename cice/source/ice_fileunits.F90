@@ -51,6 +51,8 @@
          nu_restart    , &  ! restart input file
          nu_dump_age   , &  ! dump file for restarting ice age tracer
          nu_restart_age, &  ! restart input file for ice age tracer
+         nu_dump_pond  , &  ! dump file for restarting melt pond tracer
+         nu_restart_pond,&  ! restart input file for melt pond tracer
          nu_rst_pointer, &  ! pointer to latest restart file
          nu_history    , &  ! binary history output file
          nu_hdr        , &  ! header file for binary history output
@@ -102,6 +104,8 @@ contains
          call get_fileunit(nu_restart)
          call get_fileunit(nu_dump_age)
          call get_fileunit(nu_restart_age)
+         call get_fileunit(nu_dump_pond)
+         call get_fileunit(nu_restart_pond)
          call get_fileunit(nu_rst_pointer)
          call get_fileunit(nu_history)
          call get_fileunit(nu_hdr)
@@ -136,6 +140,10 @@ contains
 
    logical (kind=log_kind) :: alreadyInUse
 
+#ifdef SEQ_MCT
+   iunit = shr_file_getUnit()
+#else
+
    srch_units: do n=ice_IOUnitsMinUnits, ice_IOUnitsMaxUnits
       if (.not. ice_IOUnitsInUse(n)) then   ! I found one, I found one
 
@@ -155,6 +163,8 @@ contains
    end do srch_units
 
    if (iunit > ice_IOUnitsMaxUnits) stop 'ice_IOUnitsGet: No free units'
+
+#endif
 
 !EOC
  end subroutine get_fileunit
@@ -176,6 +186,8 @@ contains
          call release_fileunit(nu_restart)
          call release_fileunit(nu_dump_age)
          call release_fileunit(nu_restart_age)
+         call release_fileunit(nu_dump_pond)
+         call release_fileunit(nu_restart_pond)
          call release_fileunit(nu_rst_pointer)
          call release_fileunit(nu_history)
          call release_fileunit(nu_hdr)
@@ -206,6 +218,9 @@ contains
 !EOP
 !BOC
 
+#ifdef SEQ_MCT
+         call shr_file_freeUnit(iunit)
+#else
 !  check for proper unit number
    if (iunit < 1 .or. iunit > ice_IOUnitsMaxUnits) then
       stop 'release_fileunit: bad unit'
@@ -213,6 +228,7 @@ contains
 
 !  mark the unit as not in use
    ice_IOUnitsInUse(iunit) = .false.  !  that was easy...
+#endif
 
 !EOC
  end subroutine release_fileunit

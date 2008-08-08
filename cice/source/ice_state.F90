@@ -121,7 +121,7 @@
       integer (kind=int_kind), parameter :: &
          nt_Tsfc  =  1, & ! ice/snow surface temperature
          nt_iage  =  2, & ! volume-weighted ice age
-         nt_volpn =  2    ! melt pond volume - not used, for now
+         nt_volpn =  3    ! melt pond volume
 
       !-----------------------------------------------------------------
       ! dynamic variables closely related to the state of the ice

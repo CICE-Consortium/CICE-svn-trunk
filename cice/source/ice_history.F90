@@ -169,7 +169,7 @@
            f_dvirdgdt  = .true., f_iage       = .false.,&
            f_hisnap    = .true., f_aisnap     = .true., &
            f_aicen     = .true., f_vicen      = .true., &
-           f_volpn     = .false., &           
+           f_apondn    = .false., &           
            f_trsig     = .true., f_icepresent = .true., &
            f_fsurf_ai  = .true., f_fcondtop_ai= .true., &
            f_fmeltt_ai = .true.,                        &
@@ -229,7 +229,7 @@
            f_dvirdgdt              , &
            f_hisnap,    f_aisnap   , &
            f_aicen,     f_vicen    , &
-           f_iage,      f_volpn    , &
+           f_iage,      f_apondn   , &
            f_trsig,     f_icepresent,&
            f_fsurf_ai,  f_fcondtop_ai,&
            f_fmeltt_ai,              &
@@ -341,7 +341,7 @@
            n_fswfac     = 81, &
            n_aicen        = 82, & ! n_aicen, n_vicen must be last in this list
            n_vicen        = 83 + 1*ncat_hist - 1, &
-           n_volpn        = 83 + 2*ncat_hist - 1, &
+           n_apondn       = 83 + 2*ncat_hist - 1, &
            n_fsurfn_ai    = 83 + 3*ncat_hist - 1, &
            n_fcondtopn_ai = 83 + 4*ncat_hist - 1, &
            n_fmelttn_ai   = 83 + 5*ncat_hist - 1, &
@@ -484,7 +484,7 @@
         write(nchar,'(i3.3)') n
         write(vname(n_aicen+n-1),'(a,a)') 'aice', trim(nchar) ! aicen
         write(vname(n_vicen+n-1),'(a,a)') 'vice', trim(nchar) ! vicen
-        write(vname(n_volpn+n-1),'(a,a)') 'volp', trim(nchar) ! volpn
+        write(vname(n_apondn+n-1),'(a,a)') 'apond', trim(nchar)! apondn
         write(vname(n_fsurfn_ai+n-1),'(a,a)')    &
                       'fsurfn_ai', trim(nchar) ! fsurfn
         write(vname(n_fcondtopn_ai+n-1),'(a,a)') & 
@@ -495,7 +495,7 @@
                       'flatn_ai', trim(nchar)   ! flatn
         vname(n_aicen+n-1)        = trim(vname(n_aicen+n-1))
         vname(n_vicen+n-1)        = trim(vname(n_vicen+n-1))
-        vname(n_volpn+n-1)        = trim(vname(n_volpn+n-1))
+        vname(n_apondn+n-1)       = trim(vname(n_apondn+n-1))
         vname(n_fsurfn_ai+n-1)    = trim(vname(n_fsurfn_ai+n-1))
         vname(n_fcondtopn_ai+n-1) = trim(vname(n_fcondtopn_ai+n-1))
         vname(n_fmelttn_ai+n-1)   = trim(vname(n_fmelttn_ai+n-1))
@@ -599,9 +599,9 @@
         write(vdesc(n_vicen+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
         vdesc(n_vicen+n-1) = trim(vdesc(n_vicen+n-1))
 
-        tmp = 'meltpond volume, category ' ! volpn
-        write(vdesc(n_volpn+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
-        vdesc(n_volpn+n-1) = trim(vdesc(n_volpn+n-1))
+        tmp = 'meltpond concentration, category ' ! apondn
+        write(vdesc(n_apondn+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
+        vdesc(n_apondn+n-1) = trim(vdesc(n_apondn+n-1))
 
         tmp = 'net surface heat flux, category ' ! fsurfn
         write(vdesc(n_fsurfn_ai+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
@@ -708,7 +708,7 @@
       do n = 1, ncat_hist
         vunit(n_aicen+n-1)        = ' ' ! aicen
         vunit(n_vicen+n-1)        = 'm' ! vicen
-        vunit(n_volpn+n-1)        = 'm' ! volpn
+        vunit(n_apondn+n-1)       = ' ' ! apondn
         vunit(n_fsurfn_ai+n-1)    = 'W/m^2' ! fsurfn
         vunit(n_fcondtopn_ai+n-1) = 'W/m^2' ! fcondtopn
         vunit(n_fmelttn_ai+n-1)   = 'W/m^2' ! fmelttn
@@ -818,7 +818,7 @@
       do n = 1, ncat_hist
         vcomment(n_aicen+n-1)        = 'Ice range:'           ! aicen
         vcomment(n_vicen+n-1)        = 'none'                 ! vicen
-        vcomment(n_volpn+n-1)        = 'none'                 ! volpn
+        vcomment(n_apondn+n-1)       = 'none'                 ! apondn
         vcomment(n_fsurfn_ai+n-1)    = 'weighted by ice area' ! fsurfn
         vcomment(n_fcondtopn_ai+n-1) = 'weighted by ice area' ! fcontopn
         vcomment(n_fmelttn_ai+n-1)   = 'weighted by ice area' ! fmelttn
@@ -946,7 +946,7 @@
       call broadcast_scalar (f_hisnap, master_task)
       call broadcast_scalar (f_aicen, master_task)
       call broadcast_scalar (f_vicen, master_task)
-      call broadcast_scalar (f_volpn, master_task)
+      call broadcast_scalar (f_apondn, master_task)
       call broadcast_scalar (f_trsig, master_task)
       call broadcast_scalar (f_icepresent, master_task)
       call broadcast_scalar (f_iage, master_task)
@@ -1061,7 +1061,7 @@
       do n = 1, ncat_hist
         iout(n_aicen+n-1)        = f_aicen
         iout(n_vicen+n-1)        = f_vicen
-        iout(n_volpn+n-1)        = f_volpn
+        iout(n_apondn+n-1)       = f_apondn
         iout(n_fsurfn_ai+n-1)    = f_fsurfn_ai
         iout(n_fcondtopn_ai+n-1) = f_fcondtopn_ai
         iout(n_fmelttn_ai+n-1)   = f_fmelttn_ai
@@ -1422,9 +1422,9 @@
                                                 + aicen(i,j,n,iblk)
                 aa(i,j,n_vicen+n-1,iblk) = aa(i,j,n_vicen+n-1,iblk)  &
                                                 + vicen(i,j,n,iblk)
-                if (tr_pond) aa(i,j,n_volpn+n-1,iblk) = &
-                                           aa(i,j,n_volpn+n-1,iblk)  &
-                                           + trcrn(i,j,nt_volpn,n,iblk)
+                if (tr_pond) aa(i,j,n_apondn+n-1,iblk) = &
+                                           aa(i,j,n_apondn+n-1,iblk)  &
+                                           + apondn(i,j,n,iblk)
                 aa(i,j,n_fsurfn_ai+n-1,iblk)    = & 
                                         aa(i,j,n_fsurfn_ai+n-1,iblk)  &
                                            + fsurfn(i,j,n,iblk)*ain

@@ -342,7 +342,7 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
          hpondn, &    ! pond depth (m)
-         apondn            ! pond fractional coverage (0 to 1)
+         apondn       ! pond fractional coverage (0 to 1)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(out) :: &
@@ -399,8 +399,7 @@
                                alvdrns,    alidrns,  &
                                alvdfns,    alidfns,  &
                                alvdrn,     alidrn,   &
-                               alvdfn,     alidfn,   &
-                               apondn,     hpondn)
+                               alvdfn,     alidfn)
       endif
 
       !-----------------------------------------------------------------
@@ -440,8 +439,7 @@
                                   alvdrns,  alidrns,  &
                                   alvdfns,  alidfns,  &
                                   alvdrn,   alidrn,   &
-                                  alvdfn,   alidfn,   &
-                                  apondn,   hpondn)
+                                  alvdfn,   alidfn)
 !
 ! !DESCRIPTION:
 !
@@ -452,8 +450,6 @@
 ! authors:  same as module
 !
 ! !USES:
-!
-      use ice_meltpond, only: tr_pond
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -472,11 +468,6 @@
          vicen   , & ! volume of ice per category
          vsnon   , & ! volume of ice per category
          Tsfcn       ! surface temperature
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), &
-         intent(in) :: &
-         hpondn, &   ! pond depth (m)
-         apondn      ! pond fractional coverage (0 to 1)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(out) :: &
@@ -575,24 +566,6 @@
          fT = min(dTs/dT_mlt-c1,c0)
          alvdfni(i,j) = alvdfni(i,j) - dalb_mlt*fT
          alidfni(i,j) = alidfni(i,j) - dalb_mlt*fT
-
-         if (tr_pond) then
-
-            albpnd(1) = wsfc(1) * (0.342 &
-                      + exp(-20.512*hpondn(i,j) - 0.830))
-            albpnd(2) = wsfc(2) * (0.020 &
-                      + exp(-14.187*hpondn(i,j) - 0.860))
-            albpnd(3) = wsfc(3) * (0.033 &
-                      + exp(-2.5800*hpondn(i,j) - 3.820))
-            albpnd(4) = wsfc(4) * 0.030
-
-            alvdfni(i,j) = (1.-apondn(i,j))*alvdfni(i,j) &
-                        + apondn(i,j) * albpnd(1)
-
-            alidfni(i,j) = (1.-apondn(i,j))*alidfni(i,j) &
-                        + apondn(i,j) * (albpnd(2)+albpnd(3)+albpnd(4))
-
-         endif ! tr_pond
 
          ! avoid negative albedos for thin, bare, melting ice
          alvdfni(i,j) = max (alvdfni(i,j), albocn)

@@ -89,9 +89,6 @@
          zref   = 10._dbl_kind   ,&! reference height for stability (m)
          snowpatch = 0.02_dbl_kind ! parameter for fractional snow area (m)
 
-      real (kind=dbl_kind), parameter :: &
-         rfrac  = 0.9_dbl_kind       ! water runoff fraction for melt ponds
-
       ! weights for albedos (match those for isccp shortwave forcing)
 ! 4 Jan 2007 BPB  Following are appropriate for complete cloud
 ! in a summer polar atmosphere with 1.5m bare sea ice surface:
