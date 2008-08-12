@@ -413,6 +413,7 @@
                             fswsfc,     fswint,   &
                             fswthru,    Iswabs)
 
+
       end subroutine shortwave_ccsm3
 
 !=======================================================================
