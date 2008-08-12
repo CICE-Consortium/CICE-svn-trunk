@@ -1,0 +1,15 @@
+#! /bin/csh -f
+#BSUB -a poe
+#BSUB -n 4
+#BSUB -R "span[ptile=4]"
+#BSUB -x
+#BSUB -o standard.%J_%I.out
+#BSUB -e standard.%J_%I.err
+#BSUB -W 1:00
+#BSUB -J cice
+#BSUB -P ******
+#BSUB -q standard
+
+cd $WORKDIR
+mpirun.lsf ./cice 
+

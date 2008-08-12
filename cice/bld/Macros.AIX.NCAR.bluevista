@@ -1,41 +1,41 @@
 #==============================================================================
-# Makefile macros for "epiphany," a LANL cluster running Linux
-# NOTE:  uncomment underflow code in ice_dyn_evp.F (-ftz does not work???)
+# Makefile macros for "bluevista"
 #==============================================================================
 
 INCLDIR    := -I. -I/usr/local/include -I/usr/include \
-              -I/usr/local/mpi/include
-SLIBS      := -L/usr/local/lib -L/usr/local/mpi/lib \
-              -L/usr/local/lf9562/lib
-              
+                  -I/usr/lpp/ppe.poe/include
+SLIBS      := -L /usr/local/lib32/r4i4
 ULIBS      := 
-CPP        := /usr/bin/cpp
-CPPFLAGS   := -P -traditional
-CPPDEFS    := -DLINUX 
+CPP        := /lib/cpp
+CPPFLAGS   := -P 
+CPPDEFS    := -DAIX
 CFLAGS     := -c -O2
-FIXEDFLAGS := -132
-FREEFLAGS  := 
-FC         := ifort
-FFLAGS     := -O -static -convert big_endian -assume byterecl -ftz
+FIXEDFLAGS := -qsuffix=f=f   -qfixed=132
+FREEFLAGS  := -qsuffix=f=f90 -qfree=f90
+
+ifeq ($(COMMDIR), mpi)
+  FC         := mpxlf90_r
+else
+  FC         := xlf90
+endif
+
+FFLAGS     := -c -O2 -qstrict -Q -qmaxmem=-1 -qrealsize=8  \
+              -qarch=auto -qtune=auto 
 MOD_SUFFIX := mod
-LD         := ifort 
-LDFLAGS    := -v -O -static -convert big_endian -assume byterecl
+LD         := $(FC)
+LDFLAGS    := 
 
     CPPDEFS :=  $(CPPDEFS) -DNXGLOB=$(NXGLOB) -DNYGLOB=$(NYGLOB) \
                 -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS)
 #   CPPDEFS :=  $(CPPDEFS) -DAOMIP
-
-ifeq ($(COMMDIR), mpi)
-   SLIBS   :=  $(SLIBS) -lmpich
-endif
 
 ifeq ($(DITTO), yes)
    CPPDEFS :=  $(CPPDEFS) -DREPRODUCIBLE
 endif
 
 ifeq ($(NETCDF), yes)
-   CPPDEFS := $(CPPDEFS) -Dncdf
-   SLIBS   := $(SLIBS) -lnetcdf
+   CPPDEFS :=  $(CPPDEFS) -Dncdf
+   SLIBS   :=  $(SLIBS) -lnetcdf
 endif
 
 ifeq ($(USE_ESMF), yes)
@@ -43,4 +43,3 @@ ifeq ($(USE_ESMF), yes)
    INCLDIR :=  $(INCLDIR) -I /net/bob1/ESMF/esmf/mod/modO/Linux.intel.64.mauve
    SLIBS   :=  $(SLIBS) -L /net/bob1/ESMF/esmf/lib/libO/Linux.intel.64.mauve -lesmf -lcprts -lrt -ldl
 endif
-

@@ -3729,8 +3729,8 @@
               qin(ij,nilyr) = hqtot / dzi(ij,nilyr)
 
          ! update ice age due to freezing (new ice age = dt)
-         if (tr_iage) &
-            iage(i,j) = (iage(i,j)*hin(ij) + dt*dhi) / (hin(ij) + dhi)
+!         if (tr_iage) &
+!            iage(i,j) = (iage(i,j)*hin(ij) + dt*dhi) / (hin(ij) + dhi)
 
          ! history diagnostics
          congel(i,j) = congel(i,j) + dhi*aicen(i,j)
@@ -4216,8 +4216,8 @@
 
          if (dhin(ij) > puny) then
             ! update ice age due to freezing (new ice age = dt)
-            if (tr_iage) &
-               iage(i,j) = (iage(i,j)*hin(ij)+dt*dhin(ij))/(hin(ij)+dhin(ij))
+!            if (tr_iage) &
+!               iage(i,j) = (iage(i,j)*hin(ij)+dt*dhin(ij))/(hin(ij)+dhin(ij))
 
             wk1 = dzi(ij,1) + dhin(ij)
             hin(ij) = hin(ij) + dhin(ij)

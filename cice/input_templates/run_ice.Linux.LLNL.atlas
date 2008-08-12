@@ -1,7 +1,7 @@
 #! /bin/csh -f 
 # ------------ LLNL Peloton  : atlas ------------
 #MSUB -l walltime=00:30:00 
-#MSUB -A uhrccs           
+#MSUB -A ******
 #MSUB -q pdebug
 ##MSUB -q pbatch
 #MSUB -m b              

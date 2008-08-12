@@ -1,0 +1,26 @@
+#! /bin/csh -f
+#===============================================================================
+#  This is a CICE batch job script for bluevista
+#===============================================================================
+
+#BSUB -n 4
+#BSUB -R "span[ptile=4]"
+#BSUB -q regular
+#BSUB -N
+#BSUB -x
+#BSUB -a poe
+#BSUB -o poe.stdout.%J
+#BSUB -e poe.stderr.%J
+#BSUB -J cice
+#BSUB -W 0:30
+#BSUB -P ******
+
+setenv LSB_PJL_TASK_GEOMETRY "{(0,1,2,3)}"
+
+set  stamp   = `date -u '+%y%m%d%H%M%S'`
+setenv ICE_LOG_FILE ice.log.${stamp}
+
+echo $ICE_LOG_FILE
+
+cd /ptmp/eclare/rundir4
+mpirun.lsf ./cice >&! $ICE_LOG_FILE

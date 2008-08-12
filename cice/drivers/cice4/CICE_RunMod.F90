@@ -548,7 +548,7 @@
       ! Melt ponds
       !-----------------------------------------------------------------
 
-         if (tr_pond) then
+         if (tr_pond .and. trim(shortwave) == 'dEdd') then
 
             melts_tmp = melts(:,:,iblk) - melts_old
             meltt_tmp = meltt(:,:,iblk) - meltt_old
