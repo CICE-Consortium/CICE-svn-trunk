@@ -2,7 +2,7 @@
 # Makefile macros for "atlas," an Peloton system at LLNL running Linux
 #==============================================================================
 
-INCLDIR    := -I. -I/usr/include
+INCLDIR    := -I. -I/usr/include  -I/usr/local/tools/mvapich-pgi/include
 SLIBS      := -L/usr/lib
 ULIBS      := 
 CPP        := /usr/bin/cpp
@@ -10,7 +10,7 @@ CPPFLAGS   := -P -traditional
 CPPDEFS    := -DLINUX #-DREPRODUCIBLE
 CFLAGS     := -c -O2 -fastsse -tp k8-64
 FIXEDFLAGS := -132
-FREEFLAGS  := 
+FREEFLAGS  := -Mfree
 FC         := mpipgf90
 FFLAGS     := -fastsse -tp k8-64 -w -Kieee -Mbyteswapio -i4 -r8
 #FFLAGS     := -fastsse -tp k8-64 -w -Kieee -Ktrap=fp,denorm,unf -Mbyteswapio -i4 -r8 -g
@@ -33,8 +33,8 @@ endif
 
 ifeq ($(NETCDF), yes)
    CPPDEFS :=  $(CPPDEFS) -Dncdf
-   INCLDIR := $(INCLDIR) -I/usr/local/tools/netcdf/netcdf-3.6.0-p1.pgi/include
-   SLIBS   := $(SLIBS) -L/usr/local/tools/netcdf/netcdf-3.6.0-p1.pgi/lib -lnetcdf 
+   INCLDIR := $(INCLDIR) -I/usr/local/tools/netcdf-pgi/include
+   SLIBS   := $(SLIBS) -L/usr/local/tools/netcdf-pgi/lib -lnetcdf 
 endif
 
 ifeq ($(USE_ESMF), yes)

@@ -82,13 +82,14 @@
          totes                ! total ice/snow energy (J)
 
       ! printing info for routine print_state
+      ! iblkp, ip, jp, mtask identify the grid cell to print
       character (char_len) :: plabel
       integer (kind=int_kind), parameter :: &
-         check_step = 99999999, &
-         iblkp = 1, &
-         ip = 11, &
-         jp = 189, &
-         mtask = 10
+         check_step = 999999999, & ! begin printing at istep1=check_step
+         iblkp = 1, &      ! block number 
+         ip = 3, &         ! i index
+         jp = 5, &         ! j index
+         mtask = 0         ! my_task
 
 !=======================================================================
 
@@ -1151,9 +1152,11 @@
             write(nu_diag,*) 'eicen, cat ',n,' layer ',k, &
                  eicen(i,j,ilyr1(n)+k-1,iblk)
             eidebug = eidebug + eicen(i,j,ilyr1(n)+k-1,iblk)
-            qi = eicen(i,j,ilyr1(n)+k-1,iblk) / & ! qi, eicen < 0 
-                (vicen(i,j,n,iblk)/real(nilyr,kind=dbl_kind))
-            write(nu_diag,*)  'qi/rhoi', qi/rhoi
+            if (aicen(i,j,n,iblk) > puny) then
+               qi = eicen(i,j,ilyr1(n)+k-1,iblk) / & ! qi, eicen < 0 
+                   (vicen(i,j,n,iblk)/real(nilyr,kind=dbl_kind))
+               write(nu_diag,*)  'qi/rhoi', qi/rhoi
+            endif
          enddo
          write(nu_diag,*) ' '
       enddo

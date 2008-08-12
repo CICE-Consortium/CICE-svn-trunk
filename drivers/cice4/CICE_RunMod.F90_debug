@@ -1,4 +1,8 @@
 !=======================================================================
+! This is a debugging version of CICE_RunMod.F90 that prints ice state 
+! and forcing information for a given grid cell.  To work properly,
+! the parameters check_step, iblkp, ip, jp and mtask must be set in
+! source/ice_diagnostics.F90. Use this file instead of CICE_RunMod.F90.
 !
 !BOP
 !
@@ -9,12 +13,16 @@
 !  Contains main driver routine for time stepping of CICE.
 !
 ! !REVISION HISTORY:
-!  SVN:$Id$
+!  SVN:$Id: CICE_RunMod.F90 143 2008-08-08 23:08:22Z eclare $
 !
 !  authors Elizabeth C. Hunke, LANL
 !          Philip W. Jones, LANL
 !          William H. Lipscomb, LANL
 !
+! 2006 ECH: moved exit timeLoop to prevent execution of unnecessary timestep
+! 2006 ECH: Streamlined for efficiency 
+! 2006 ECH: Converted to free source form (F90)
+! 2007 BPB: Modified Delta-Eddington shortwave interface
 ! 2008 ECH: moved ESMF code to its own driver
 !
 ! !INTERFACE:
@@ -24,9 +32,6 @@
 !
 ! !USES:
 !
-#ifdef USE_ESMF
-      use esmf_mod
-#endif
       use ice_age
       use ice_atmo
       use ice_calendar
@@ -89,40 +94,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine CICE_Run(CICE_Comp,  importState, exportState, &
-                          synchClock, errorCode)
-!
-! !INPUT/OUTPUT PARAMETERS:
-
-#ifdef USE_ESMF
-
-      type (ESMF_GridComp), intent(inout) :: &
-           CICE_Comp            ! defined ESMF component for CICE
-
-      type (ESMF_State), intent(in) :: &
-           importState          ! CICE import state (forcing data)
-
-      type (ESMF_State), intent(out) :: &
-           exportState          ! CICE export state (surface fields)
-
-      type (ESMF_Clock), intent(inout) :: &
-           synchClock           ! ESMF clock to check init time
-
-      integer (int_kind), intent(inout) :: &
-           errorCode            ! returns an error code if any init fails
-
-#else
-! declare as integer dummy arguments
-
-      integer (int_kind), intent(inout), optional :: &
-           CICE_Comp        , & ! dummy argument
-           importState      , & ! dummy argument
-           exportState      , & ! dummy argument
-           synchClock       , & ! dummy argument
-           errorCode            ! dummy argument
-
-#endif
-
+      subroutine CICE_Run
 !
 !EOP
 !BOC
@@ -130,9 +102,6 @@
    !--------------------------------------------------------------------
    !  local variables
    !--------------------------------------------------------------------
-
-      real (dbl_kind) :: &
-           coupledInterval      ! time (seconds) for each coupling interval
 
       integer (kind=int_kind) :: k
 
@@ -142,50 +111,6 @@
 
       call ice_timer_start(timer_step)   ! start timing entire run
 
-#ifdef ESMF  
-      errorCode = ESMF_SUCCESS
-
-   !--------------------------------------------------------------------
-   !  check clock to make sure models agree on time info
-   !--------------------------------------------------------------------
-   !
-   !   call CICE_CoupledCheckTime(synchClock, 'start', errorCode)
-   !
-   !   if (errorCode /= ESMF_SUCCESS) then
-   !      write (nu_diag,*) &
-   !         '(ice) CICE_Run: error in clock synchronization'
-   !      return
-   !   endif
-   !
-   !UNCOMMENT THESE TWO SECTIONS FOR COUPLED MODEL SIMULATIONS WITH ESMF
-   !--------------------------------------------------------------------
-   !  reset timer to stop when requested by input clock
-   !--------------------------------------------------------------------
-   !
-   ! Use appropriate ESMF Clock query functions to determine the
-   ! coupling interval in seconds.  Because this depends on how the
-   ! coupled model driver is using an ESMF clock, this is left to
-   ! the user of the coupled model.
-   !
-   !coupledInterval = ?
-   !
-   ! reset number of time steps based on coupling interval
-   !
-   !npt = nint(coupledInterval/dt)
-   !
-   !--------------------------------------------------------------------
-   !  extract data from import state
-   !--------------------------------------------------------------------
-   
-      call CICE_CoupledExtractImport(importState, errorCode)
-   
-      if (errorCode /= ESMF_SUCCESS) then
-         write(nu_diag,*) &
-              '(ice) CICE_Run: error extracting data from import state'
-         return
-      endif
-#endif
-
    !--------------------------------------------------------------------
    ! timestep loop
    !--------------------------------------------------------------------
@@ -193,10 +118,6 @@
       timeLoop: do
 
          call ice_step
-
-#ifdef USE_ESMF
-         call CICE_CoupledAccumulateExport(errorCode)
-#endif
 
          istep  = istep  + 1    ! update time step counters
          istep1 = istep1 + 1
@@ -222,37 +143,9 @@
    !--------------------------------------------------------------------
 
       call ice_timer_stop(timer_step)   ! end timestepping loop timer     
-
-
-#ifdef USE_ESMF
-   !--------------------------------------------------------------------
-   !  check clock to make sure models agree on time info
-   !--------------------------------------------------------------------
-   !
-   !   call CICE_CoupledCheckTime(synchClock, 'stop', errorCode)
-   !
-   !   if (errorCode /= ESMF_SUCCESS) then
-   !      write(nu_diag,*)
-   !          '(ice) CICE_Run: error in stop time synchronization'
-   !      return
-   !   endif
-   !
-   !--------------------------------------------------------------------
-   !  fill the export state
-   !--------------------------------------------------------------------
-
-      call CICE_CoupledFillExport(exportState, errorCode)
-
-      if (errorCode /= ESMF_SUCCESS) then
-         write(nu_diag,*) &
-              '(ice) CICE_Run: error filling export state'
-         return
-      endif
-#endif
 !
 !EOC
 !
-
       end subroutine CICE_Run
 
 !=======================================================================
@@ -280,6 +173,11 @@
 
       integer (kind=int_kind) :: k
 
+      character (len=char_len) :: plabeld
+
+      plabeld = 'beginning time step'
+      call debug_ice(plabeld)
+
       !-----------------------------------------------------------------
       ! restoring on grid boundaries
       !-----------------------------------------------------------------
@@ -300,13 +198,22 @@
 
          call prep_radiation (dt)
 
+      plabeld = 'post prep_radiation'
+      call debug_ice(plabeld)
+
       !-----------------------------------------------------------------
       ! thermodynamics
       !-----------------------------------------------------------------
 
          call step_therm1 (dt)  ! vertical thermodynamics
 
+      plabeld = 'post step_therm1'
+      call debug_ice(plabeld)
+
          call step_therm2 (dt)  ! ice thickness distribution thermo
+
+      plabeld = 'post step_therm2'
+      call debug_ice(plabeld)
 
       !-----------------------------------------------------------------
       ! dynamics, transport, ridging
@@ -316,17 +223,26 @@
             call step_dynamics (dyn_dt)
          enddo
 
+      plabeld = 'post dynamics'
+      call debug_ice(plabeld)
+
       !-----------------------------------------------------------------
       ! albedo, shortwave radiation
       !-----------------------------------------------------------------
 
          call step_radiation (dt)
 
+      plabeld = 'post step_radiation'
+      call debug_ice(plabeld)
+
       !-----------------------------------------------------------------
       ! get ready for coupling
       !-----------------------------------------------------------------
 
          call coupling_prep
+
+      plabeld = 'post coupling_prep'
+      call debug_ice(plabeld)
 
       !-----------------------------------------------------------------
       ! write data
@@ -344,7 +260,7 @@
          if (write_restart == 1) then
             call dumpfile ! core variables for restarting
             if (tr_iage) call write_restart_age
-!            if (tr_pond) call write_restart_ponds
+            if (tr_pond) call write_restart_pond
          endif
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 
@@ -590,7 +506,7 @@
                                 fsurfn   (:,:,n,iblk),&
                                 fcondtopn(:,:,n,iblk) )
 
-
+               ! more realistic values for testing the option calc_Tsfc = F
                call explicit_calc_Tsfc (nx_block,          ny_block,     &
                                         my_task,           icells,       &      
                                         indxi,             indxj,        &
@@ -912,7 +828,7 @@
          ij              ! horizontal indices, combine i and j loops
 
       real (kind=dbl_kind)  :: &
-         raicen          ! 1/aicen
+         raicen          ! 1 or 1/aicen
 
       logical (kind=log_kind) :: &
          extreme_flag    ! flag for extreme forcing values

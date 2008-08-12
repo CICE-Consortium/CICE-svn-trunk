@@ -52,7 +52,7 @@
 /
 
 &tracer_nml
-    tr_iage      = .false.
+    tr_iage      = .true.
   , restart_age  = .false.
   , tr_pond      = .false.
   , restart_pond = .false.
@@ -81,7 +81,7 @@
   , ycycle          = 1
   , atm_data_format = 'bin'
   , atm_data_type   = 'ncar'
-  , atm_data_dir    = '/scratch2/eclare/DATA/gx3v2m/atm/NCAR_bulk/'
+  , atm_data_dir    = '/scratch2/eclare/DATA/atm/gx3v2m/NCAR_bulk/'
   , calc_strair     = .true.
   , calc_Tsfc       = .true.
   , precip_units    = 'mm_per_month'
@@ -89,11 +89,11 @@
   , update_ocn_f    = .false.
   , oceanmixed_ice  = .true.
   , ocn_data_format = 'bin'
-  , sss_data_type   = 'clim'
-  , sst_data_type   = 'clim'
-  , ocn_data_dir    = '/scratch2/eclare/DATA/gx3v2m/ocn/'
+  , sss_data_type   = 'default'
+  , sst_data_type   = 'default'
+  , ocn_data_dir    = 'unknown_ocn_data_dir'
   , oceanmixed_file = 'unknown_oceanmixed_file'
-  , restore_sst     = .true.
+  , restore_sst     = .false.
   , trestore        =  180
   , restore_ice     = .false.
 /

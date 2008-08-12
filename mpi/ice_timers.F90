@@ -149,17 +149,15 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) :: &
-      n,                 &! dummy loop counters
-
-   cycles = 0
-   clock_rate = c1
+   integer (int_kind) :: n ! dummy loop index
 
 !-----------------------------------------------------------------------
 !
 !  initialize timer structures
 !
 !-----------------------------------------------------------------------
+
+   clock_rate = c1
 
    do n=1,max_timers
       all_timers(n)%name = 'unknown_timer_name'

@@ -222,8 +222,7 @@
                               alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
                               fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
                               fswthrun(:,:,n,iblk), &
-                              Iswabsn(:,:,il1:il2,iblk), &
-                              apondn(:,:,n,iblk),hpondn(:,:,n,iblk))
+                              Iswabsn(:,:,il1:il2,iblk))
 
             enddo  ! ncat
          enddo     ! nblocks
@@ -304,8 +303,7 @@
                                   alvdrn,   alidrn,   &
                                   alvdfn,   alidfn,   &
                                   fswsfc,   fswint,   &
-                                  fswthru,  Iswabs,   &
-                                  apondn,   hpondn)
+                                  fswthru,  Iswabs)
 !
 ! !DESCRIPTION:
 !
@@ -338,11 +336,6 @@
          swvdf    , & ! sw down, visible, diffuse (W/m^2)
          swidr    , & ! sw down, near IR, direct  (W/m^2)
          swidf        ! sw down, near IR, diffuse (W/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), &
-         intent(in) :: &
-         hpondn, &    ! pond depth (m)
-         apondn       ! pond fractional coverage (0 to 1)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(out) :: &

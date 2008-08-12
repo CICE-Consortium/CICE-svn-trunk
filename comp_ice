@@ -3,20 +3,16 @@
 ### Change these to your own site and user directory! 
 ### You will need to create a Makefile Macro in bld/ and a run_ice script 
 ### in input_templates/.
-#setenv SITE LANL.mauve
 setenv SITE LANL.coyote
-#setenv SITE LANL.epiphany
-#setenv SITE ORNL.jaguar
-#setenv SITE ORNL.phoenix
 #setenv SITE NAVO.kraken
-#setenv SITE NCAR.bluesky32
+#setenv SITE NCAR.bluevista
+#setenv SITE LLNL.atlas
 
 ### SYSTEM_USERDIR is predefined on ORNL machines
-#setenv SYSTEM_USERDIR /scratch/eclare
-setenv SYSTEM_USERDIR /scratch2/eclare/CICE.v4.0   # coyote
-#setenv SYSTEM_USERDIR /scratch1/eclare  # epiphany
-#setenv SYSTEM_USERDIR /scr/eclare       # kraken
-#setenv SYSTEM_USERDIR /ptmp/eclare      # bluesky32
+setenv SYSTEM_USERDIR /scratch2/eclare/CICE.v4.0  # coyote
+#setenv SYSTEM_USERDIR /scr/eclare                # kraken
+#setenv SYSTEM_USERDIR /ptmp/eclare               # bluevista
+#setenv SYSTEM_USERDIR /p/lscratchb/hunke1        # atlas
 
 ### Grid resolution
 setenv RES gx3 ; setenv GRID 100x116
@@ -50,8 +46,11 @@ setenv NETCDF   yes       # set to no if netcdf library is unavailable
 setenv DITTO    no        # reproducible diagnostics
 
 ### Set SRCDIR and EXEDIR to your own paths!
-#setenv SRCDIR $HOME/cice.v4.0/cice
-setenv SRCDIR /usr/projects/climate/eclare/CICE.v4.0/cice
+setenv SRCDIR /usr/projects/climate/eclare/CICE.v4.0/cice  # coyote
+#setenv SRCDIR $HOME/cice                                  # kraken
+#setenv SRCDIR /g/g21/hunke1/cice                          # atlas
+#setenv SRCDIR /ptmp/eclare/cice                           # bluevista
+
 setenv EXEDIR $SYSTEM_USERDIR/rundir4
                                           if !(-d $EXEDIR) mkdir -p $EXEDIR
 setenv CBLD   $SRCDIR/bld
@@ -104,14 +103,8 @@ $SRCDIR/$COMMDIR
 $SRCDIR/$SHRDIR
 EOF
 
-if ( $ARCH == 'UNICOS.ORNL.phoenix' ) then
-   ### use -h command for phoenix
-   cc -o makdep -h command $CBLD/makdep.c           || exit 2
-else if ( $ARCH == 'Linux.ORNL.jaguar' ) then
-   gcc -g -o makdep $CBLD/makdep.c                  || exit 2
-else
-   cc -o makdep $CBLD/makdep.c                      || exit 2
-endif
+cc -o makdep $CBLD/makdep.c                         || exit 2
+
 gmake VPFILE=Filepath EXEC=$EXEDIR/cice \
            NXGLOB=$NXGLOB NYGLOB=$NYGLOB \
            BLCKX=$BLCKX BLCKY=$BLCKY MXBLCKS=$MXBLCKS \

@@ -914,21 +914,20 @@
 
             else  ! .not. dEdd
 
-                  Sswabsn(:,:,sl1:sl2,iblk) = c0
+               Sswabsn(:,:,sl1:sl2,iblk) = c0
 
-                  call shortwave_ccsm3(nx_block,     ny_block,           &
-                                 icells,                                 &
-                                 indxi,             indxj,               &
-                                 aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
-                                 vsnon(:,:,n,iblk),                      &
-                                 trcrn(:,:,nt_Tsfc,n,iblk),              &
-                                 swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
-                                 swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                                 alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
-                                 alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
-                                 fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
-                                 fswthrun(:,:,n,iblk),Iswabsn(:,:,il1:il2,iblk),&
-                                 apondn(:,:,n,iblk),hpondn(:,:,n,iblk))
+               call shortwave_ccsm3(nx_block,     ny_block,           &
+                              icells,                                 &
+                              indxi,             indxj,               &
+                              aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
+                              vsnon(:,:,n,iblk),                      &
+                              trcrn(:,:,nt_Tsfc,n,iblk),              &
+                              swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
+                              swidr(:,:,  iblk), swidf(:,:,  iblk),   &
+                              alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
+                              alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
+                              fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
+                              fswthrun(:,:,n,iblk),Iswabsn(:,:,il1:il2,iblk))
 
             endif  ! dEdd
          enddo                  ! ncat
