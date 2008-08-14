@@ -103,7 +103,6 @@
       call ice_timer_start(timer_total)   ! start timing entire run
       call init_grid2           ! grid variables
 
-      call init_transport       ! initialize horizontal transport
       call init_calendar        ! initialize some calendar stuff
       call init_hist (dt)       ! initialize output history file
       call init_evp (dt)        ! define evp dynamics parameters, variables
@@ -112,6 +111,7 @@
       call init_itd             ! initialize ice thickness distribution
       call calendar(time)       ! determine the initial date
       call init_state           ! initialize the ice state
+      call init_transport       ! initialize horizontal transport
       call ice_prescribed_init
 
       if (runtype == 'continue') then ! start from core restart file

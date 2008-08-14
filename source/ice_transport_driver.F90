@@ -1473,7 +1473,7 @@
             enddo
             enddo
 
-         elseif (tracer_type(nt)==2) then ! depends on another tracer
+         elseif (tracer_type(nt)==3) then ! depends on two tracers
 
             nt1 = depend(nt)
             nt2 = depend(nt1)
@@ -1629,7 +1629,7 @@
                   works(i,j,narrays+it) = vicen(i,j,n)*trcrn(i,j,it,n)
                enddo
                enddo
-            elseif (trcr_depend(it) ==1) then
+            elseif (trcr_depend(it) ==2) then
                do j = 1, ny_block
                do i = 1, nx_block
                   works(i,j,narrays+it) = vsnon(i,j,n)*trcrn(i,j,it,n)
