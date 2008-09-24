@@ -301,12 +301,12 @@
          shcoef      , & ! transfer coefficient for sensible heat
          lhcoef          ! transfer coefficient for latent heat
 
-      ! Local variables to keep track of melt for ponds
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         melts_old, &
-         meltt_old, &
-         melts_tmp, &
-         meltt_tmp
+         melttn      , & ! top melt in category n (m)
+         meltbn      , & ! bottom melt in category n (m)
+         meltsn      , & ! snow melt in category n (m)
+         congeln     , & ! congelation ice formation in category n (m)
+         snoicen         ! snow-ice formation in category n (m)
 
       type (block) :: &
          this_block      ! block information for current block
@@ -460,9 +460,6 @@
             sl1 = slyr1(n)
             sl2 = slyrn(n)
 
-            melts_old = melts(:,:,iblk)
-            meltt_old = meltt(:,:,iblk)
-
             if (.not.(calc_Tsfc)) then
 
                ! If not calculating surface temperature and fluxes, set 
@@ -523,9 +520,9 @@
                              fswabsn,             flwoutn,             &
                              evapn,               freshn,              &
                              fsaltn,              fhocnn,              &
-                             meltt   (:,:,iblk),  melts   (:,:,iblk),  &
-                             meltb   (:,:,iblk),                       &
-                             congel  (:,:,iblk),  snoice  (:,:,iblk),  &
+                             melttn,              meltsn,              &
+                             meltbn,                                   &
+                             congeln,             snoicen,             &
                              mlt_onset(:,:,iblk), frz_onset(:,:,iblk), &
                              yday,                l_stop,              &
                              istop,               jstop)
@@ -550,12 +547,9 @@
 
          if (tr_pond .and. trim(shortwave) == 'dEdd') then
 
-            melts_tmp = melts(:,:,iblk) - melts_old
-            meltt_tmp = meltt(:,:,iblk) - meltt_old
-
             call compute_ponds(nx_block, ny_block,                      &
                                ilo, ihi, jlo, jhi,                      &
-                               meltt_tmp, melts_tmp, frain(:,:,iblk),   &
+                               melttn, meltsn, frain(:,:,iblk),   &
                                aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
                                vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk),&
                                apondn(:,:,n,iblk), hpondn(:,:,n,iblk))
@@ -586,7 +580,11 @@
                             evap    (:,:,iblk),                       &
                             Tref    (:,:,iblk), Qref      (:,:,iblk), &
                             fresh   (:,:,iblk), fsalt     (:,:,iblk), &
-                            fhocn   (:,:,iblk), fswthru   (:,:,iblk))
+                            fhocn   (:,:,iblk), fswthru   (:,:,iblk), &
+                            melttn, meltsn, meltbn, congeln, snoicen, &
+                            meltt   (:,:,iblk),  melts   (:,:,iblk),  &
+                            meltb   (:,:,iblk),                       &
+                            congel  (:,:,iblk),  snoice  (:,:,iblk))
 
          enddo                  ! ncat
 

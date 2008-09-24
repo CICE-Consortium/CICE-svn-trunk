@@ -297,6 +297,12 @@
          fsaltn (i,j) = c0
          fhocnn (i,j) = c0
 
+         meltt  (i,j) = c0
+         meltb  (i,j) = c0
+         melts  (i,j) = c0
+         congel (i,j) = c0
+         snoice (i,j) = c0
+
          Tsfcn(i,j) = trcrn(i,j,nt_Tsfc)
          if (tr_iage) iage(i,j) = trcrn(i,j,nt_iage)
       enddo
@@ -418,7 +424,7 @@
                              dt,                     &
                              yday,         icells,   &
                              indxi,        indxj,    &
-                             aicen,        efinal,   &
+                             efinal,                 &
                              hin,          hilyr,    &
                              hsn,          hslyr,    &
                              qin,          qsn,      &
@@ -3487,7 +3493,7 @@
                                     dt,                  &
                                     yday,      icells,   &
                                     indxi,     indxj,    &
-                                    aicen,     efinal,   & 
+                                    efinal,              & 
                                     hin,       hilyr,    &
                                     hsn,       hslyr,    &
                                     qin,       qsn,      &
@@ -3518,7 +3524,6 @@
          yday            ! day of the year
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         aicen       , & ! fractional concentration of ice
          fbot        , & ! ice-ocean heat flux at bottom surface (W/m^2)
          Tbot        , & ! ice bottom surface temperature (deg C)
          fsnow       , & ! snowfall rate (kg m-2 s-1)
@@ -3733,7 +3738,7 @@
 !            iage(i,j) = (iage(i,j)*hin(ij) + dt*dhi) / (hin(ij) + dhi)
 
          ! history diagnostics
-         congel(i,j) = congel(i,j) + dhi*aicen(i,j)
+         congel(i,j) = congel(i,j) + dhi
          if (dhi > puny .and. frz_onset(i,j) < puny) &
                  frz_onset(i,j) = yday
 
@@ -3770,7 +3775,7 @@
             ! history diagnostics
             if (dhs < -puny .and. mlt_onset(i,j) < puny) &
                mlt_onset(i,j) = yday
-            melts(i,j) = melts(i,j) - dhs*aicen(i,j)
+            melts(i,j) = melts(i,j) - dhs
 
          enddo                  ! ij
       enddo                     ! nslyr
@@ -3806,7 +3811,7 @@
             ! history diagnostics
             if (dhi < -puny .and. mlt_onset(i,j) < puny) &
                  mlt_onset(i,j) = yday
-            meltt(i,j) = meltt(i,j) - dhi*aicen(i,j)
+            meltt(i,j) = meltt(i,j) - dhi
 
          enddo                  ! ij
       enddo                     ! nilyr
@@ -3829,7 +3834,7 @@
             ebot_mlt(ij) = max(ebot_mlt(ij), c0)
 
             ! history diagnostics
-            meltb(i,j) = meltb(i,j) - dhi*aicen(i,j)
+            meltb(i,j) = meltb(i,j) - dhi
 
          enddo                  ! ij
       enddo                     ! nilyr
@@ -3931,7 +3936,7 @@
                       icells,             &
                       indxi,    indxj,    &
                       dt,                 &
-                      aicen,    snoice,   &
+                      snoice,             &
                       iage,               &
                       hin,      hsn,      &
                       qin,      qsn,      &
@@ -4098,7 +4103,7 @@
                             icells,             &
                             indxi,    indxj,    &
                             dt,                 &
-                            aicen,    snoice,   &
+                            snoice,             &
                             iage,               &
                             hin,      hsn,      &
                             qin,      qsn,      &
@@ -4115,9 +4120,6 @@
       integer (kind=int_kind), dimension(nx_block*ny_block), &
          intent(in) :: &
          indxi, indxj    ! compressed indices for cells with aicen > puny
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         aicen           ! fractional ice area
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -4225,7 +4227,7 @@
             dzi(ij,1) = wk1
 
             ! history diagnostic
-            snoice(i,j) = snoice(i,j) + dhin(ij)*aicen(i,j)
+            snoice(i,j) = snoice(i,j) + dhin(ij)
          endif               ! dhin > puny
 
       enddo                  ! ij
