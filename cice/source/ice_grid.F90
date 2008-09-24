@@ -42,16 +42,16 @@
 !EOP
 !
       implicit none
-      save
+!echmod      save
 
-      character (len=char_len_long) :: &
+      character (len=char_len_long), save :: &
          grid_format  , & ! file format ('bin'=binary or 'nc'=netcdf)
          grid_file    , & !  input file for POP grid info
          kmt_file     , & !  input file for POP grid info
          grid_type        !  current options are rectangular (default),
                           !  displaced_pole, tripole, panarctic
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
          dxt    , & ! width of T-cell through the middle (m)
          dyt    , & ! height of T-cell through the middle (m)
          dxu    , & ! width of U-cell through the middle (m)
@@ -72,7 +72,7 @@
          ANGLE  , & ! for conversions between POP grid and lat/lon
          ANGLET     ! ANGLE converted to T-cells
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
          cyp    , & ! 1.5*HTE - 0.5*HTE
          cxp    , & ! 1.5*HTN - 0.5*HTN
          cym    , & ! 0.5*HTE - 1.5*HTE
@@ -81,14 +81,14 @@
          dyhx       ! 0.5*(HTN - HTN)
 
       ! Corners of grid boxes for history output
-      real (kind=dbl_kind), dimension (4,nx_block,ny_block,max_blocks):: &
+      real (kind=dbl_kind), dimension (4,nx_block,ny_block,max_blocks), save :: &
          lont_bounds, & ! longitude of gridbox corners for T point
          latt_bounds, & ! latitude of gridbox corners for T point
          lonu_bounds, & ! longitude of gridbox corners for U point
          latu_bounds    ! latitude of gridbox corners for U point       
 
       ! geometric quantities used for remapping transport
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
          xav  , & ! mean T-cell value of x
          yav  , & ! mean T-cell value of y
          xxav , & ! mean T-cell value of xx
@@ -100,19 +100,19 @@
          yyyav    ! mean T-cell value of yyy
 
       real (kind=dbl_kind), &
-         dimension (2,2,nx_block,ny_block,max_blocks) :: &
+         dimension (2,2,nx_block,ny_block,max_blocks), save :: &
          mne, & ! matrices used for coordinate transformations in remapping
          mnw, & ! ne = northeast corner, nw = northwest, etc.
          mse, & 
          msw
 
       ! masks
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
          hm     , & ! land/boundary mask, thickness (T-cell)
          uvm        ! land/boundary mask, velocity (U-cell)
 
       logical (kind=log_kind), &
-         dimension (nx_block,ny_block,max_blocks) :: &
+         dimension (nx_block,ny_block,max_blocks), save :: &
          tmask  , & ! land/boundary mask, thickness (T-cell)
          umask  , & ! land/boundary mask, velocity (U-cell)
          lmask_n, & ! northern hemisphere mask
@@ -123,7 +123,7 @@
          dxrect = 30.e5_dbl_kind   ,&! uniform HTN (cm)
          dyrect = 30.e5_dbl_kind     ! uniform HTE (cm)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
          rndex_global       ! global index for local subdomain (dbl)
 
 !=======================================================================
@@ -157,11 +157,11 @@
 !
 !EOP
 !
+
       integer (kind=int_kind) :: &
          i, j, iblk, &
          fid_grid, &     ! file id for netCDF grid file
          fid_kmt         ! file id for netCDF kmt file
-
 
       character (char_len) :: &
          fieldname       ! field name in netCDF file
@@ -1301,6 +1301,8 @@
 !
 !EOP
 !
+      save 
+
       integer (kind=int_kind) :: &
            i, j, iblk       , & ! horizontal indices
            ig, jg           , & ! global horizontal indices
@@ -1755,7 +1757,6 @@
 !
 !EOP
 !
-
 !----------------------------------------
 ! Local Variables
 !----------------------------------------

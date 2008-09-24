@@ -81,7 +81,7 @@
   , ycycle          = 1
   , atm_data_format = 'bin'
   , atm_data_type   = 'LYq'
-  , atm_data_dir    = '/scratch2/eclare/DATA/gx1v3/LargeYeager/'
+  , atm_data_dir    = '/scratch2/eclare/DATA/gx1v3/LargeYeager/version2/'
   , calc_strair     = .true.
   , calc_Tsfc       = .true.
   , precip_units    = 'mm_per_sec'

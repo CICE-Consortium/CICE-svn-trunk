@@ -619,7 +619,11 @@
                                evap,                 & 
                                Tref,     Qref,       &
                                fresh,    fsalt,      & 
-                               fhocn,    fswthru)
+                               fhocn,    fswthru,    &
+                               melttn, meltsn, meltbn, congeln, snoicen, &
+                               meltt,  melts,  &
+                               meltb,                       &
+                               congel,  snoice)
                                
 
 !
@@ -662,7 +666,12 @@
           freshn  , & ! fresh water flux to ocean       (kg/m2/s)
           fsaltn  , & ! salt flux to ocean              (kg/m2/s)
           fhocnn  , & ! actual ocn/ice heat flx         (W/m**2)
-          fswthrun    ! sw radiation through ice bot    (W/m**2)
+          fswthrun, & ! sw radiation through ice bot    (W/m**2)
+          melttn  , & ! top ice melt                    (m)
+          meltbn  , & ! bottom ice melt                 (m)
+          meltsn  , & ! snow melt                       (m)
+          congeln , & ! congelation ice growth          (m)
+          snoicen     ! snow-ice growth                 (m)
            
       ! cumulative fluxes
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
@@ -681,7 +690,12 @@
           fresh   , & ! fresh water flux to ocean       (kg/m2/s)
           fsalt   , & ! salt flux to ocean              (kg/m2/s)
           fhocn   , & ! actual ocn/ice heat flx         (W/m**2)
-          fswthru     ! sw radiation through ice bot    (W/m**2)
+          fswthru , & ! sw radiation through ice bot    (W/m**2)
+          meltt   , & ! top ice melt                    (m)
+          meltb   , & ! bottom ice melt                 (m)
+          melts   , & ! snow melt                       (m)
+          congel  , & ! congelation ice growth          (m)
+          snoice      ! snow-ice growth                 (m)
 !
 !EOP
 !
@@ -723,6 +737,14 @@
          fsalt    (i,j) = fsalt    (i,j) + fsaltn  (i,j)*aicen(i,j)
          fhocn    (i,j) = fhocn    (i,j) + fhocnn  (i,j)*aicen(i,j)
          fswthru  (i,j) = fswthru  (i,j) + fswthrun(i,j)*aicen(i,j)
+
+         ! ice/snow thickness
+
+         meltt    (i,j) = meltt    (i,j) + melttn  (i,j)*aicen(i,j)
+         meltb    (i,j) = meltb    (i,j) + meltbn  (i,j)*aicen(i,j)
+         melts    (i,j) = melts    (i,j) + meltsn  (i,j)*aicen(i,j)
+         congel   (i,j) = congel   (i,j) + congeln (i,j)*aicen(i,j)
+         snoice   (i,j) = snoice   (i,j) + snoicen (i,j)*aicen(i,j)
 
       enddo                     ! ij
       
