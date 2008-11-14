@@ -81,7 +81,7 @@
          nvar = 11              , & ! number of grid fields that can be written
                                     !   excluding grid vertices
          ncat_hist = ncat       , & ! number of ice categories written <= ncat
-         avgsiz = 81 + 7*ncat_hist  ! number of fields that can be written
+         avgsiz = 85 + 7*ncat_hist  ! number of fields that can be written
 
       real (kind=real_kind) :: time_beg, time_end ! bounds for averaging
 
@@ -141,6 +141,8 @@
            f_fswabs    = .true., f_fswabs_ai  = .true., &
            f_albsni    = .true., &
            f_alvdr     = .true., f_alidr      = .true., &
+           f_albice    = .true., f_albsno     = .true., &
+           f_albpnd    = .true., f_coszen     = .true., &
            f_flat      = .true., f_flat_ai    = .true., &
            f_fsens     = .true., f_fsens_ai   = .true., &
            f_flwup     = .true., f_flwup_ai   = .true., &
@@ -201,6 +203,8 @@
            f_fswabs,    f_fswabs_ai, &
            f_albsni                , &
            f_alvdr,     f_alidr    , &
+           f_albice,    f_albsno   , &
+           f_albpnd,    f_coszen   , &
            f_flat,      f_flat_ai  , &
            f_fsens,     f_fsens_ai , &
            f_flwup,     f_flwup_ai , &
@@ -234,7 +238,7 @@
            f_fsurf_ai,  f_fcondtop_ai,&
            f_fmeltt_ai,              &
            f_fsurfn_ai,f_fcondtopn_ai,&
-           f_fmelttn_ai,f_flatn_ai
+           f_fmelttn_ai,f_flatn_ai 
 
       !---------------------------------------------------------------
       ! field indices
@@ -339,13 +343,17 @@
            n_fcondtop_ai= 79, &
            n_fmeltt_ai  = 80, &
            n_fswfac     = 81, &
-           n_aicen        = 82, & ! n_aicen, n_vicen must be last in this list
-           n_vicen        = 83 + 1*ncat_hist - 1, &
-           n_apondn       = 83 + 2*ncat_hist - 1, &
-           n_fsurfn_ai    = 83 + 3*ncat_hist - 1, &
-           n_fcondtopn_ai = 83 + 4*ncat_hist - 1, &
-           n_fmelttn_ai   = 83 + 5*ncat_hist - 1, &
-           n_flatn_ai     = 83 + 6*ncat_hist - 1
+           n_albice     = 82, &
+           n_albsno     = 83, &
+           n_albpnd     = 84, &
+           n_coszen     = 85, &
+           n_aicen        = 86, & ! n_aicen, n_vicen must be last in this list
+           n_vicen        = 87 + 1*ncat_hist - 1, &
+           n_apondn       = 87 + 2*ncat_hist - 1, &
+           n_fsurfn_ai    = 87 + 3*ncat_hist - 1, &
+           n_fcondtopn_ai = 87 + 4*ncat_hist - 1, &
+           n_fmelttn_ai   = 87 + 5*ncat_hist - 1, &
+           n_flatn_ai     = 87 + 6*ncat_hist - 1
 
 !=======================================================================
 
@@ -377,7 +385,7 @@
 !
       use ice_constants
       use ice_calendar, only: yday, days_per_year
-      use ice_flux, only: mlt_onset, frz_onset
+      use ice_flux, only: mlt_onset, frz_onset, albcnt
       use ice_restart, only: restart
       use ice_age, only: tr_iage
       use ice_exit
@@ -422,6 +430,10 @@
       vname(n_albsni    ) = 'albsni'  
       vname(n_alvdr     ) = 'alvdr'
       vname(n_alidr     ) = 'alidr'
+      vname(n_albice    ) = 'albice'
+      vname(n_albsno    ) = 'albsno'
+      vname(n_albpnd    ) = 'albpnd'
+      vname(n_coszen    ) = 'coszen'
       vname(n_flat      ) = 'flat'  
       vname(n_flat_ai   ) = 'flat_ai'  
       vname(n_fsens     ) = 'fsens'  
@@ -529,6 +541,10 @@
       vdesc(n_albsni    ) = 'snw/ice broad band albedo'
       vdesc(n_alvdr     ) = 'visible direct albedo'
       vdesc(n_alidr     ) = 'near IR direct albedo'
+      vdesc(n_albice    ) = 'bare ice albedo'
+      vdesc(n_albsno    ) = 'snow albedo'
+      vdesc(n_albpnd    ) = 'melt pond albedo'
+      vdesc(n_coszen    ) = 'cosine of the zenith angle'
       vdesc(n_flat      ) = 'latent heat flux (cpl)'      
       vdesc(n_flat_ai   ) = 'latent heat flux'
       vdesc(n_fsens     ) = 'sensible heat flux (cpl)'    
@@ -647,6 +663,10 @@
       vunit(n_albsni    ) = '%'
       vunit(n_alvdr     ) = '%'
       vunit(n_alidr     ) = '%'
+      vunit(n_albice    ) = '%'
+      vunit(n_albsno    ) = '%'
+      vunit(n_albpnd    ) = '%'
+      vunit(n_coszen    ) = 'radian'
       vunit(n_flat      ) = 'W/m^2'
       vunit(n_flat_ai   ) = 'W/m^2'
       vunit(n_fsens     ) = 'W/m^2'
@@ -753,9 +773,13 @@
       vcomment(n_fswfac    ) = 'ratio of netsw new:old'   
       vcomment(n_fswabs    ) = 'positive downward'   
       vcomment(n_fswabs_ai ) = 'weighted by ice area'      
-      vcomment(n_albsni    ) = 'none'
-      vcomment(n_alvdr     ) = 'none'
-      vcomment(n_alidr     ) = 'none'
+      vcomment(n_albsni    ) = 'scaled (divided) by aice'
+      vcomment(n_alvdr     ) = 'scaled (divided) by aice'
+      vcomment(n_alidr     ) = 'scaled (divided) by aice'
+      vcomment(n_albice    ) = 'averaged for coszen>0, weighted by aice'
+      vcomment(n_albsno    ) = 'averaged for coszen>0, weighted by aice'
+      vcomment(n_albpnd    ) = 'averaged for coszen>0, weighted by aice'
+      vcomment(n_coszen    ) = 'negative below horizon'
       vcomment(n_flat      ) = 'positive downward'
       vcomment(n_flat_ai   ) = 'weighted by ice area'
       vcomment(n_fsens     ) = 'positive downward'
@@ -892,6 +916,10 @@
       call broadcast_scalar (f_albsni, master_task)
       call broadcast_scalar (f_alvdr, master_task)
       call broadcast_scalar (f_alidr, master_task)
+      call broadcast_scalar (f_albice, master_task)
+      call broadcast_scalar (f_albsno, master_task)
+      call broadcast_scalar (f_albpnd, master_task)
+      call broadcast_scalar (f_coszen, master_task)
       call broadcast_scalar (f_flat, master_task)
       call broadcast_scalar (f_flat_ai, master_task)
       call broadcast_scalar (f_fsens, master_task)
@@ -1000,6 +1028,10 @@
       iout(n_albsni    ) = f_albsni  
       iout(n_alvdr     ) = f_alvdr
       iout(n_alidr     ) = f_alidr
+      iout(n_albice    ) = f_albice
+      iout(n_albsno    ) = f_albsno  
+      iout(n_albpnd    ) = f_albpnd  
+      iout(n_coszen    ) = f_coszen
       iout(n_flat      ) = f_flat  
       iout(n_flat_ai   ) = f_flat_ai  
       iout(n_fsens     ) = f_fsens  
@@ -1086,6 +1118,7 @@
       !-----------------------------------------------------------------
       aa(:,:,:,:) = c0
       avgct = c0
+      albcnt(:,:,:) = c0
 
       do k=1,avgsiz
          cona(k) = c1   ! multiply by 1.
@@ -1112,6 +1145,9 @@
       cona(n_albsni ) = c100              ! avg of spectral albedos to %
       cona(n_alvdr  ) = c100              ! avg of visible albedo to %
       cona(n_alidr  ) = c100              ! avg of near IR albedo to %
+      cona(n_albice ) = c100              ! avg of albedos to %
+      cona(n_albsno ) = c100              ! avg of albedos to %
+      cona(n_albpnd ) = c100              ! avg of albedos to %
       cona(n_evap   ) = mps_to_cmpdy/rhofresh   ! evap kg/m2/s to cm/day
       cona(n_evap_ai) = mps_to_cmpdy/rhofresh   ! evap kg/m2/s to cm/day
       conb(n_Tref   ) = -tffresh                ! Tref K to C
@@ -1315,6 +1351,10 @@
                                               + awtidf*alidf(i,j,iblk)
         aa(i,j,n_alvdr, iblk)= aa(i,j,n_alvdr, iblk) + alvdr(i,j,iblk)
         aa(i,j,n_alidr, iblk)= aa(i,j,n_alidr, iblk) + alidr(i,j,iblk)
+        aa(i,j,n_albice,iblk)= aa(i,j,n_albice,iblk) + albice(i,j,iblk)
+        aa(i,j,n_albsno,iblk)= aa(i,j,n_albsno,iblk) + albsno(i,j,iblk)
+        aa(i,j,n_albpnd,iblk)= aa(i,j,n_albpnd,iblk) + albpnd(i,j,iblk)
+        aa(i,j,n_coszen,iblk)= aa(i,j,n_coszen,iblk) + coszen(i,j,iblk)
         aa(i,j,n_flat,  iblk)= aa(i,j,n_flat,  iblk) + flat (i,j,iblk) 
         aa(i,j,n_flat_ai,iblk)  =aa(i,j,n_flat_ai,  iblk)  &
                                                   +  ai*flat(i,j,iblk)
@@ -1491,6 +1531,23 @@
               enddo             ! j
            enddo                ! k
 
+           ! back out albedo/zenith angle dependence
+              do j = jlo, jhi
+              do i = ilo, ihi
+                 if (tmask(i,j,iblk)) then 
+                    ravgct = c0
+                    if (albcnt(i,j,iblk) > puny) &
+                        ravgct = c1/albcnt(i,j,iblk)
+                    aa(i,j,n_albice,iblk) = &
+                    aa(i,j,n_albice,iblk)*avgct*ravgct
+                    aa(i,j,n_albsno,iblk) = &
+                    aa(i,j,n_albsno,iblk)*avgct*ravgct
+                    aa(i,j,n_albpnd,iblk) = &
+                    aa(i,j,n_albpnd,iblk)*avgct*ravgct
+                 endif
+              enddo             ! i
+              enddo             ! j
+
       !---------------------------------------------------------------
       ! snapshots
       !---------------------------------------------------------------
@@ -1560,6 +1617,7 @@
       !------------------------------------------------------------
         aa(:,:,:,:) = c0
         avgct = c0
+        albcnt(:,:,:) = c0
 
       endif  ! write_history or write_ic
 

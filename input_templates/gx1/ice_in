@@ -44,8 +44,8 @@
 
 &domain_nml
     nprocs = 8
-  , processor_shape   = 'square-ice'
-  , distribution_type = 'rake'
+  , processor_shape   = 'skinnyX1'
+  , distribution_type = 'cartesian'
   , distribution_wght = 'latitude'
   , ew_boundary_type  = 'cyclic'
   , ns_boundary_type  = 'open'
@@ -75,13 +75,13 @@
   , albsnowi        = 0.70 
   , R_ice           = 0.
   , R_pnd           = 0.
-  , R_snw           = 0.
+  , R_snw           = 1.5
   , atmbndy         = 'default'
   , fyear_init      = 1981
   , ycycle          = 1
   , atm_data_format = 'bin'
   , atm_data_type   = 'LYq'
-  , atm_data_dir    = '/scratch2/eclare/DATA/gx1v3/LargeYeager/version2/'
+  , atm_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/LargeYeager/version2/'
   , calc_strair     = .true.
   , calc_Tsfc       = .true.
   , precip_units    = 'mm_per_sec'
@@ -91,8 +91,8 @@
   , ocn_data_format = 'bin'
   , sss_data_type   = 'default'
   , sst_data_type   = 'default'
-  , ocn_data_dir    = '/scratch2/eclare/DATA/gx1v3/gx1v3/forcing/'
-  , oceanmixed_file = 'pop_frc.gx1v3.051202.nc'
+  , ocn_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/gx1v3/forcing/'
+  , oceanmixed_file = 'pop_frc.gx1v3.051202.bin'
   , restore_sst     = .false.
   , trestore        =  90
   , restore_ice     = .false.
@@ -134,6 +134,10 @@
   , f_albsni       = .true. 
   , f_alvdr        = .false.
   , f_alidr        = .false.
+  , f_albice       = .false.
+  , f_albsno       = .false.
+  , f_albpnd       = .false.
+  , f_coszen       = .false.
   , f_flat         = .false. 
   , f_flat_ai      = .true. 
   , f_fsens        = .false. 

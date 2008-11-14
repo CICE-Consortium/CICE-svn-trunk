@@ -627,6 +627,8 @@
          i,j         , & ! horizontal indices
          ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
+      real (kind=dbl_kind) :: & cszn
+
       call ice_timer_start(timer_column)
 
       !-----------------------------------------------------------------
@@ -648,6 +650,15 @@
             alidf(i,j,iblk) = c0
             alvdr(i,j,iblk) = c0
             alidr(i,j,iblk) = c0
+
+            albice(i,j,iblk) = c0
+            albsno(i,j,iblk) = c0
+            albpnd(i,j,iblk) = c0
+
+            ! for history averaging
+            cszn = c0
+            if (coszen(i,j,iblk) > puny) cszn = c1
+            albcnt(i,j,iblk) = albcnt(i,j,iblk) + cszn
          enddo
          enddo
          do n = 1, ncat
@@ -661,6 +672,15 @@
                + alvdrn(i,j,n,iblk)*aicen(i,j,n,iblk)
             alidr(i,j,iblk) = alidr(i,j,iblk) &
                + alidrn(i,j,n,iblk)*aicen(i,j,n,iblk)
+
+            if (coszen(i,j,iblk) > puny) then ! sun above horizon
+            albice(i,j,iblk) = albice(i,j,iblk) &
+               + albicen(i,j,n,iblk)*aicen(i,j,n,iblk)
+            albsno(i,j,iblk) = albsno(i,j,iblk) &
+               + albsnon(i,j,n,iblk)*aicen(i,j,n,iblk)
+            albpnd(i,j,iblk) = albpnd(i,j,iblk) &
+               + albpndn(i,j,n,iblk)*aicen(i,j,n,iblk)
+            endif
          enddo
          enddo
          enddo

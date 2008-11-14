@@ -80,6 +80,13 @@
          alvdfn      , & ! visible diffuse albedo          (fraction)
          alidfn          ! near-ir diffuse albedo          (fraction)
 
+      ! albedo components for history
+      real (kind=dbl_kind), &
+         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         albicen  , & ! bare ice 
+         albsnon  , & ! snow 
+         albpndn      ! pond 
+
       ! shortwave components
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,ntilyr,max_blocks) :: &
@@ -87,7 +94,7 @@
 
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,ntslyr,max_blocks) :: &
-         Sswabsn         ! SW radiation absorbed in ice layers (W m-2)
+         Sswabsn         ! SW radiation absorbed in snow layers (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks) :: &
          fswsfcn     , & ! SW absorbed at ice/snow surface (W m-2)
@@ -156,6 +163,8 @@
          il1, il2    , & ! ice layer indices for eice
          sl1, sl2        ! snow layer indices for esno
 
+      real (kind=dbl_kind) :: & cszn
+
       type (block) :: &
          this_block      ! block information for current block
 
@@ -222,7 +231,8 @@
                               alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
                               fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
                               fswthrun(:,:,n,iblk), &
-                              Iswabsn(:,:,il1:il2,iblk))
+                              Iswabsn(:,:,il1:il2,iblk),              &
+                              albicen(:,:,n,iblk),albsnon(:,:,n,iblk))
 
             enddo  ! ncat
          enddo     ! nblocks
@@ -265,6 +275,15 @@
                   + alvdrn(i,j,n,iblk)*aicen(i,j,n,iblk)
                alidr(i,j,iblk) = alidr(i,j,iblk) &
                   + alidrn(i,j,n,iblk)*aicen(i,j,n,iblk)
+
+               if (coszen(i,j,iblk) > puny) then ! sun above horizon
+               albice(i,j,iblk) = albice(i,j,iblk) &
+                  + albicen(i,j,n,iblk)*aicen(i,j,n,iblk)
+               albsno(i,j,iblk) = albsno(i,j,iblk) &
+                  + albsnon(i,j,n,iblk)*aicen(i,j,n,iblk)
+               albpnd(i,j,iblk) = albpnd(i,j,iblk) &
+                  + albpndn(i,j,n,iblk)*aicen(i,j,n,iblk)
+               endif
             enddo
 
          enddo  ! ncat
@@ -279,6 +298,12 @@
             alidf_gbm  (i,j,iblk) = alidf  (i,j,iblk)
             alvdr_gbm  (i,j,iblk) = alvdr  (i,j,iblk)
             alidr_gbm  (i,j,iblk) = alidr  (i,j,iblk)
+
+            ! for history averaging
+            cszn = c0
+            if (coszen(i,j,iblk) > puny) cszn = c1
+            albcnt(i,j,iblk) = albcnt(i,j,iblk) + cszn
+
          enddo
          enddo
 
@@ -303,7 +328,8 @@
                                   alvdrn,   alidrn,   &
                                   alvdfn,   alidfn,   &
                                   fswsfc,   fswint,   &
-                                  fswthru,  Iswabs)
+                                  fswthru,  Iswabs,   &
+                                  albin,    albsn)
 !
 ! !DESCRIPTION:
 !
@@ -345,7 +371,9 @@
          alidfn   , & ! near-ir, diffuse, avg  (fraction)
          fswsfc   , & ! SW absorbed at ice/snow surface (W m-2)
          fswint   , & ! SW absorbed in ice interior, below surface (W m-2)
-         fswthru      ! SW through ice to ocean (W m-2)
+         fswthru  , & ! SW through ice to ocean (W m-2)
+         albin    , & ! bare ice albedo
+         albsn        ! snow albedo
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
            intent(out) :: &
@@ -380,7 +408,8 @@
                                 alvdrns,    alidrns,  &
                                 alvdfns,    alidfns,  &
                                 alvdrn,     alidrn,   &
-                                alvdfn,     alidfn)
+                                alvdfn,     alidfn,   &
+                                albin,      albsn)
       else ! default
          call compute_albedos (nx_block,   ny_block, &
                                icells,               &
@@ -392,7 +421,8 @@
                                alvdrns,    alidrns,  &
                                alvdfns,    alidfns,  &
                                alvdrn,     alidrn,   &
-                               alvdfn,     alidfn)
+                               alvdfn,     alidfn,   &
+                               albin,      albsn)
       endif
 
       !-----------------------------------------------------------------
@@ -432,7 +462,8 @@
                                   alvdrns,  alidrns,  &
                                   alvdfns,  alidfns,  &
                                   alvdrn,   alidrn,   &
-                                  alvdfn,   alidfn)
+                                  alvdfn,   alidfn,   &
+                                  albin,    albsn)
 !
 ! !DESCRIPTION:
 !
@@ -475,7 +506,9 @@
          alvdrn   , & ! visible, direct, avg   (fraction)
          alidrn   , & ! near-ir, direct, avg   (fraction)
          alvdfn   , & ! visible, diffuse, avg  (fraction)
-         alidfn       ! near-ir, diffuse, avg  (fraction)
+         alidfn   , & ! near-ir, diffuse, avg  (fraction)
+         albin    , & ! bare ice 
+         albsn        ! snow 
 !
 !EOP
 !
@@ -504,14 +537,8 @@
          fhtan,& ! factor used in albedo dependence on ice thickness
          asnow   ! fractional area of snow cover
 
-      real (kind=dbl_kind) :: &
-         wsfc(4),albpnd(4)
-
-      data wsfc /1.00,0.78, 0.21, 0.01/
-
       integer (kind=int_kind) :: &
          ij      ! horizontal index, combines i and j loops
-
 
       fhtan = atan(ahmax*c4)
 
@@ -531,6 +558,9 @@
          alidrn(i,j) = albocn
          alvdfn(i,j) = albocn
          alidfn(i,j) = albocn
+
+         albin(i,j) = c0
+         albsn(i,j) = c0
       enddo         
       enddo         
 
@@ -599,6 +629,12 @@
          alidrn(i,j) = alidrni(i,j)*(c1-asnow) + &
                        alidrns(i,j)*asnow
 
+         ! save ice and snow albedos (for history)
+         albin(i,j) = awtvdr*alvdrni(i,j) + awtidr*alidrni(i,j) &
+                    + awtvdf*alvdfni(i,j) + awtidf*alidfni(i,j) 
+         albsn(i,j) = awtvdr*alvdrns(i,j) + awtidr*alidrns(i,j) &
+                    + awtvdf*alvdfns(i,j) + awtidf*alidfns(i,j) 
+
       enddo                     ! ij
 
       end subroutine compute_albedos
@@ -620,7 +656,8 @@
                                   alvdrns,  alidrns,  &
                                   alvdfns,  alidfns,  &
                                   alvdrn,   alidrn,   &
-                                  alvdfn,   alidfn)
+                                  alvdfn,   alidfn,   &
+                                  albin,    albsn)
 !
 ! !DESCRIPTION:
 !
@@ -662,7 +699,9 @@
          alvdrn   , & ! visible, direct, avg   (fraction)
          alidrn   , & ! near-ir, direct, avg   (fraction)
          alvdfn   , & ! visible, diffuse, avg  (fraction)
-         alidfn       ! near-ir, diffuse, avg  (fraction)
+         alidfn   , & ! near-ir, diffuse, avg  (fraction)
+         albin    , & ! bare ice 
+         albsn        ! snow 
 !
 !EOP
 !
@@ -687,6 +726,9 @@
          alidrn(i,j) = albocn
          alvdfn(i,j) = albocn
          alidfn(i,j) = albocn
+
+         albin(i,j) = c0
+         albsn(i,j) = c0
       enddo
       enddo
 
@@ -716,11 +758,11 @@
          else      ! hs < puny
             ! bare ice, temperature dependence
             if (Tsfcn(i,j) >= -c2*puny) then
-               alvdfn(i,j) = warmsnow
-               alidfn(i,j) = warmsnow
+               alvdfn(i,j) = warmice
+               alidfn(i,j) = warmice
             else
-               alvdfn(i,j) = coldsnow
-               alidfn(i,j) = coldsnow
+               alvdfn(i,j) = coldice
+               alidfn(i,j) = coldice
             endif
          endif                  ! hs > puny
 
@@ -736,6 +778,12 @@
          alidfni(i,j) = alidfn(i,j)
          alvdfns(i,j) = alvdfn(i,j)
          alidfns(i,j) = alidfn(i,j)
+
+         ! save ice and snow albedos (for history)
+         albin(i,j) = awtvdr*alvdrni(i,j) + awtidr*alidrni(i,j) &
+                    + awtvdf*alvdfni(i,j) + awtidf*alidfni(i,j) 
+         albsn(i,j) = awtvdr*alvdrns(i,j) + awtidr*alidrns(i,j) &
+                    + awtvdf*alvdfns(i,j) + awtidf*alidfns(i,j) 
 
       enddo                     ! ij
 
@@ -1016,16 +1064,6 @@
       integer (kind=int_kind), dimension(nx_block*ny_block) :: &
          indxi, indxj    ! indirect indices for cells with aicen > puny
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         alvdrni      , & 
-         alidrni      , &
-         alvdfni      , &
-         alidfni      , &
-         alvdrns      , & 
-         alidrns      , &
-         alvdfns      , &
-         alidfns
-
       ! other local variables
       ! snow variables for Delta-Eddington shortwave
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
@@ -1150,14 +1188,9 @@
                                  fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
                                  fswthrun(:,:,n,iblk), &
                                  Sswabsn(:,:,sl1:sl2,iblk), &
-                                 Iswabsn(:,:,il1:il2,iblk))
-
-               ! Special case of night to day
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  fswsfcn(i,j,n,iblk) = max(p01, fswsfcn(i,j,n,iblk))
-               enddo
+                                 Iswabsn(:,:,il1:il2,iblk), &
+                                 albicen(:,:,n,iblk),albsnon(:,:,n,iblk),&
+                                 albpndn(:,:,n,iblk))
 
             enddo  ! ncat
          enddo     ! nblocks
@@ -1184,7 +1217,8 @@
                                   alidr,    alidf,       &
                                   fswsfc,   fswint,      &
                                   fswthru,  Sswabs,      &
-                                  Iswabs)
+                                  Iswabs,   albice,      &
+                                  albsno,   albpnd)
 !
 ! !DESCRIPTION:
 !
@@ -1274,6 +1308,12 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
          intent(out) :: &
          Iswabs      ! SW absorbed in ice layer (W m-2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(out) :: &
+         albice  , & ! bare ice albedo, for history  
+         albsno  , & ! snow albedo, for history  
+         albpnd      ! pond albedo, for history  
 !      
 !EOP
 ! 
@@ -1309,14 +1349,23 @@
       data hpmin  / .005_dbl_kind /
       data hs_ssl / .040_dbl_kind /
 
-! For printing points
+      ! for printing points
       integer (kind=int_kind) :: &
          n            ! point number for prints
+      logical (kind=log_kind) :: &
+         dbug         ! true/false flag
 
       real (kind=dbl_kind) :: &
                swdn  , & ! swvdr(i,j)+swvdf(i,j)+swidr(i,j)+swidf(i,j)
                swab  , & ! fswsfc(i,j)+fswint(i,j)+fswthru(i,j)
                swalb     ! (1.-swab/(swdn+.0001))
+
+      ! for history
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         avdrl   , & ! visible, direct, albedo (fraction) 
+         avdfl   , & ! visible, diffuse, albedo (fraction) 
+         aidrl   , & ! near-ir, direct, albedo (fraction) 
+         aidfl       ! near-ir, diffuse, albedo (fraction) 
 
 !-----------------------------------------------------------------------
  
@@ -1331,6 +1380,10 @@
          alvdf(i,j)    = c0
          alidr(i,j)    = c0
          alidf(i,j)    = c0
+         avdrl(i,j)    = c0
+         avdfl(i,j)    = c0
+         aidrl(i,j)    = c0
+         aidfl(i,j)    = c0
          fswsfc(i,j)   = c0
          fswint(i,j)   = c0
          fswthru(i,j)  = c0
@@ -1339,6 +1392,9 @@
          if( swidr(i,j) + swidf(i,j) > puny ) then
             fnidr(i,j) = swidr(i,j)/(swidr(i,j)+swidf(i,j))
          endif
+         albice(i,j)    = c0
+         albsno(i,j)    = c0
+         albpnd(i,j)    = c0
       enddo
       enddo
       Sswabs(:,:,:) = c0
@@ -1377,11 +1433,27 @@
              icells_DE, indxi_DE, indxj_DE, fnidr, coszen, &
              swvdr,     swvdf,    swidr,    swidf, srftyp, &
              hs,        rhosnw,   rsnw,     hi,    hp,     &
-             fi,                     alvdr,    alvdf,       &
-                                  alidr,    alidf,       &
+             fi,                  avdrl,    avdfl,       &
+                                  aidrl,    aidfl,       &
                                   fswsfc,   fswint,      &
                                   fswthru,  Sswabs,      &
                                   Iswabs)
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      do ij = 1, icells_DE
+         i = indxi_DE(ij)
+         j = indxj_DE(ij)
+         alvdr(i,j)   = alvdr(i,j)   + avdrl(i,j) *fi(i,j)
+         alvdf(i,j)   = alvdf(i,j)   + avdfl(i,j) *fi(i,j)
+         alidr(i,j)   = alidr(i,j)   + aidrl(i,j) *fi(i,j)
+         alidf(i,j)   = alidf(i,j)   + aidfl(i,j) *fi(i,j)
+         ! for history
+         albice(i,j) = albice(i,j) &
+                     + awtvdr*avdrl(i,j) + awtidr*aidrl(i,j) &
+                     + awtvdf*avdfl(i,j) + awtidf*aidfl(i,j) 
+      enddo
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1412,11 +1484,27 @@
              icells_DE, indxi_DE, indxj_DE, fnidr, coszen, &
              swvdr,     swvdf,    swidr,    swidf, srftyp, &
              hs,        rhosnw,   rsnw,     hi,    hp,     &
-             fs,                     alvdr,    alvdf,       &
-                                  alidr,    alidf,       &
+             fs,                  avdrl,    avdfl,       &
+                                  aidrl,    aidfl,       &
                                   fswsfc,   fswint,      &
                                   fswthru,  Sswabs,      &
                                   Iswabs)
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      do ij = 1, icells_DE
+         i = indxi_DE(ij)
+         j = indxj_DE(ij)
+         alvdr(i,j)   = alvdr(i,j)   + avdrl(i,j) *fs(i,j)
+         alvdf(i,j)   = alvdf(i,j)   + avdfl(i,j) *fs(i,j)
+         alidr(i,j)   = alidr(i,j)   + aidrl(i,j) *fs(i,j)
+         alidf(i,j)   = alidf(i,j)   + aidfl(i,j) *fs(i,j)
+         ! for history
+         albsno(i,j) = albsno(i,j) &
+                     + awtvdr*avdrl(i,j) + awtidr*aidrl(i,j) &
+                     + awtvdf*avdfl(i,j) + awtidf*aidfl(i,j) 
+      enddo
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1447,13 +1535,30 @@
              icells_DE, indxi_DE, indxj_DE, fnidr, coszen, &
              swvdr,     swvdf,    swidr,    swidf, srftyp, &
              hs,        rhosnw,   rsnw,     hi,    hp,     &
-             fp,                     alvdr,    alvdf,       &
-                                  alidr,    alidf,       &
+             fp,                  avdrl,    avdfl,       &
+                                  aidrl,    aidfl,       &
                                   fswsfc,   fswint,      &
                                   fswthru,  Sswabs,      &
                                   Iswabs)
 
-      if (print_points) then
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      do ij = 1, icells_DE
+         i = indxi_DE(ij)
+         j = indxj_DE(ij)
+         alvdr(i,j)   = alvdr(i,j)   + avdrl(i,j) *fp(i,j)
+         alvdf(i,j)   = alvdf(i,j)   + avdfl(i,j) *fp(i,j)
+         alidr(i,j)   = alidr(i,j)   + aidrl(i,j) *fp(i,j)
+         alidf(i,j)   = alidf(i,j)   + aidfl(i,j) *fp(i,j)
+         ! for history
+         albpnd(i,j) = albpnd(i,j) &
+                     + awtvdr*avdrl(i,j) + awtidr*aidrl(i,j) &
+                     + awtvdf*avdfl(i,j) + awtidf*aidfl(i,j) 
+      enddo
+
+      dbug = .false.
+      if (dbug .and. print_points) then
          do n = 1, npnt
             if (my_task == pmloc(n)) then
                i = piloc(n)
@@ -2572,10 +2677,10 @@
       do ij = 1, icells_DE
          i = indxi_DE(ij)
          j = indxj_DE(ij)
-         alvdr(i,j)   = alvdr(i,j)   + avdr(ij) *fi(i,j)
-         alvdf(i,j)   = alvdf(i,j)   + avdf(ij) *fi(i,j)
-         alidr(i,j)   = alidr(i,j)   + aidr(ij) *fi(i,j)
-         alidf(i,j)   = alidf(i,j)   + aidf(ij) *fi(i,j)
+         alvdr(i,j)   = avdr(ij)
+         alvdf(i,j)   = avdf(ij)
+         alidr(i,j)   = aidr(ij)
+         alidf(i,j)   = aidf(ij)
          fswsfc(i,j)  = fswsfc(i,j)  + fsfc(ij) *fi(i,j)
          fswint(i,j)  = fswint(i,j)  + fint(ij) *fi(i,j)
          fswthru(i,j) = fswthru(i,j) + fthru(ij)*fi(i,j)
