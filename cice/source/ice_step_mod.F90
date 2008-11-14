@@ -903,14 +903,9 @@
                               fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
                               fswthrun(:,:,n,iblk),                   &
                               Sswabsn(:,:,sl1:sl2,iblk),              &
-                              Iswabsn(:,:,il1:il2,iblk))
-
-               ! Special case of night to day
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  fswsfcn(i,j,n,iblk) = max(p01, fswsfcn(i,j,n,iblk))
-               enddo
+                              Iswabsn(:,:,il1:il2,iblk), &
+                              albicen(:,:,n,iblk),      &
+                              albsnon(:,:,n,iblk),albpndn(:,:,n,iblk))
 
             else  ! .not. dEdd
 
@@ -927,7 +922,9 @@
                               alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
                               alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
                               fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
-                              fswthrun(:,:,n,iblk),Iswabsn(:,:,il1:il2,iblk))
+                              fswthrun(:,:,n,iblk), &
+                              Iswabsn(:,:,il1:il2,iblk),              &
+                              albicen(:,:,n,iblk),albsnon(:,:,n,iblk))
 
             endif  ! dEdd
          enddo                  ! ncat

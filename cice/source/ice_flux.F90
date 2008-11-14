@@ -172,7 +172,12 @@
          alvdr_gbm, & ! visible, direct   (fraction)
          alidr_gbm, & ! near-ir, direct   (fraction)
          alvdf_gbm, & ! visible, diffuse  (fraction)
-         alidf_gbm    ! near-ir, diffuse  (fraction)
+         alidf_gbm, & ! near-ir, diffuse  (fraction)
+         ! components for history
+         albice   , & ! bare ice albedo
+         albsno   , & ! snow albedo
+         albpnd   , & ! melt pond albedo
+         albcnt       ! counter for zenith angle
 
        ! out to ocean 
        ! (Note CICE_IN_NEMO does not use these for coupling.  
@@ -541,6 +546,9 @@
       fsalt_gbm  (:,:,:) = c0
       fhocn_gbm  (:,:,:) = c0
       fswthru_gbm(:,:,:) = c0
+      albice (:,:,:) = c0
+      albsno (:,:,:) = c0
+      albpnd (:,:,:) = c0
       
       end subroutine init_history_therm
 
