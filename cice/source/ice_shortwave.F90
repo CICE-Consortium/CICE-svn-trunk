@@ -109,7 +109,6 @@
 
       ! for delta Eddington
       real (kind=dbl_kind) :: &
-         dx_exp           , & ! change in argument between table values
          exp_min              ! minimum exponential value
 
 !=======================================================================
@@ -1098,7 +1097,6 @@
       real (kind=dbl_kind), parameter :: & 
          argmax = c10      ! maximum argument of exponential
 
-      dx_exp = argmax / real(nmbexp,kind=dbl_kind)
       exp_min = exp(-argmax)
 
          do iblk=1,nblocks
@@ -3117,7 +3115,7 @@
 
            if( srftyp(i,j) < 2 .and. k < kfrsnl ) mu0n = mu0
  
-           extins = max(exp_min, exp(-lm*ts/dx_exp))
+           extins = max(exp_min, exp(-lm*ts))
            ne = n(ue,extins)
  
            ! first calculation of rdif, tdif using Delta-Eddington formulas
@@ -3126,7 +3124,7 @@
            tdif_a(k,ij) = c4*ue/ne
  
            ! evaluate rdir,tdir for direct beam
-           trnlay(k,ij) = max(exp_min, exp(-ts/(mu0n*dx_exp)))
+           trnlay(k,ij) = max(exp_min, exp(-ts/(mu0n)))
            alp = alpha(ws,mu0n,gs,lm)
            gam = gamma(ws,mu0n,gs,lm)
            apg = alp + gam
@@ -3147,7 +3145,7 @@
              mu  = gauspt(ng)
              gwt = gauswt(ng)
              swt = swt + mu*gwt
-             trn = max(exp_min, exp(-ts/(mu*dx_exp)))
+             trn = max(exp_min, exp(-ts/(mu)))
              alp = alpha(ws,mu,gs,lm)
              gam = gamma(ws,mu,gs,lm)
              apg = alp + gam

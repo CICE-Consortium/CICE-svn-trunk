@@ -75,7 +75,7 @@
   , albsnowi        = 0.70 
   , R_ice           = 0.
   , R_pnd           = 0.
-  , R_snw           = 1.5
+  , R_snw           = 0.
   , atmbndy         = 'default'
   , fyear_init      = 1997
   , ycycle          = 1
