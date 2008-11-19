@@ -1394,9 +1394,10 @@
          ci          , & ! specific heat of sea ice (J kg-1 deg-1)
          avg_Tsf     , & ! = 1. if Tsf averaged w/Tsf_start, else = 0.
          ferr        , & ! energy conservation error (W m-2)
-         Iswabs_tmp  , &
-         Sswabs_tmp  , &
-         etai_tmp
+         Iswabs_tmp  , & ! energy to melt through fraction frac of layer
+         Sswabs_tmp  , & ! same for snow
+         frac        , & ! fraction of layer that can be melted through
+         dTemp           ! minimum temperature difference for absorption
 
       logical (kind=log_kind), dimension (icells) :: &
          converged      ! = true when local solution has converged
@@ -1460,37 +1461,42 @@
 
       !-----------------------------------------------------------------
       ! Check for excessive absorbed solar radiation that may result in
-      ! temperature overshoots.  Switch that radiation to fswsfc if necessary. 
+      ! temperature overshoots. Convergence is particularly difficult
+      ! if the starting temperature is already very close to the melting 
+      ! temperature and extra energy is added.   In that case, or if the
+      ! amount of energy absorbed is greater than the amount needed to
+      ! melt through a given fraction of a layer, we put the extra 
+      ! energy elsewhere.  For snow, it is absorbed at the surface, but 
+      ! for ice it is passed through to the ocean.
       ! NOTE: This option is not available if the atmosphere model
       !       has already computed fsurf.  (Unless we adjust fsurf here)
       !-----------------------------------------------------------------
 !mclaren: Should there be an if calc_Tsfc statement here then?? 
 
+      frac = c1 - puny
+      dTemp = p01
       do k = 1, nilyr
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
 
-            if (Tin_init(ij,k) <= (Tmlt(k) - p01)) then
-
-            if (l_brine) then
-               ci = cp_ice - Lfresh*Tmlt(k) /  &
-                  max( Tin_init(ij,k)**2, Tmlt(k)**2 )
-               etai_tmp = dt_rhoi_hlyr(ij) / ci
-               Iswabs_tmp = min(Iswabs(i,j,k), &
-                                (Tmlt(k)-Tin_init(ij,k))/etai_tmp)
-            else
-               ci = cp_ice
-               etai_tmp = dt_rhoi_hlyr(ij) / ci
-               Iswabs_tmp = min(Iswabs(i,j,k), &
-                                Tin_init(ij,k)/etai_tmp)
+            Iswabs_tmp = c0
+            if (Tin_init(ij,k) <= Tmlt(k) - dTemp) then
+               if (l_brine) then
+                  ci = cp_ice - Lfresh / Tin_init(ij,k)
+                  Iswabs_tmp = min(Iswabs(i,j,k), &
+                     frac*(Tmlt(k)-Tin_init(ij,k))*ci/dt_rhoi_hlyr(ij))
+               else
+                  ci = cp_ice
+                  Iswabs_tmp = min(Iswabs(i,j,k), &
+                     frac*(       -Tin_init(ij,k))*ci/dt_rhoi_hlyr(ij))
+               endif
             endif
 
-            fswsfc(i,j)   = fswsfc(i,j) + (Iswabs(i,j,k) - Iswabs_tmp)
             fswint(i,j)   = fswint(i,j) - (Iswabs(i,j,k) - Iswabs_tmp)
             Iswabs(i,j,k) = Iswabs_tmp
+            fswthrun(i,j) = fswthrun(i,j) + (Iswabs(i,j,k) - Iswabs_tmp)
 
-            endif
          enddo
       enddo
 
@@ -1500,16 +1506,16 @@
                i = indxi(ij)
                j = indxj(ij)
 
-               if (Tsn_init(ij,k) <= -p01) then
-
-               Sswabs_tmp = min(Sswabs(i,j,k), &
-                            -0.9_dbl_kind*Tsn_init(ij,k)/etas(ij,k))
+               Sswabs_tmp = c0
+               if (Tsn_init(ij,k) <= -dTemp) then
+                  Sswabs_tmp = min(Sswabs(i,j,k), &
+                          -frac*Tsn_init(ij,k)/etas(ij,k))
+               endif
 
                fswsfc(i,j)   = fswsfc(i,j) + (Sswabs(i,j,k) - Sswabs_tmp)
                fswint(i,j)   = fswint(i,j) - (Sswabs(i,j,k) - Sswabs_tmp)
                Sswabs(i,j,k) = Sswabs_tmp
 
-               endif
             endif
          enddo
       enddo
