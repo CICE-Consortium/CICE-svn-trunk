@@ -1466,8 +1466,7 @@
       ! temperature and extra energy is added.   In that case, or if the
       ! amount of energy absorbed is greater than the amount needed to
       ! melt through a given fraction of a layer, we put the extra 
-      ! energy elsewhere.  For snow, it is absorbed at the surface, but 
-      ! for ice it is passed through to the ocean.
+      ! energy into the surface.
       ! NOTE: This option is not available if the atmosphere model
       !       has already computed fsurf.  (Unless we adjust fsurf here)
       !-----------------------------------------------------------------
@@ -1493,9 +1492,9 @@
                endif
             endif
 
+            fswsfc(i,j)   = fswsfc(i,j) + (Iswabs(i,j,k) - Iswabs_tmp)
             fswint(i,j)   = fswint(i,j) - (Iswabs(i,j,k) - Iswabs_tmp)
             Iswabs(i,j,k) = Iswabs_tmp
-            fswthrun(i,j) = fswthrun(i,j) + (Iswabs(i,j,k) - Iswabs_tmp)
 
          enddo
       enddo
