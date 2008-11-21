@@ -1285,6 +1285,7 @@
 
       real (kind=dbl_kind) :: &
            ravgct           , & ! 1/avgct
+           ravgctz          , & ! 1/avgct
            ai               , & ! aice_init
            ain                  ! aicen_init
 
@@ -1535,15 +1536,15 @@
               do j = jlo, jhi
               do i = ilo, ihi
                  if (tmask(i,j,iblk)) then 
-                    ravgct = c0
+                    ravgctz = c0
                     if (albcnt(i,j,iblk) > puny) &
-                        ravgct = c1/albcnt(i,j,iblk)
+                        ravgctz = c1/albcnt(i,j,iblk)
                     aa(i,j,n_albice,iblk) = &
-                    aa(i,j,n_albice,iblk)*avgct*ravgct
+                    aa(i,j,n_albice,iblk)*avgct*ravgctz
                     aa(i,j,n_albsno,iblk) = &
-                    aa(i,j,n_albsno,iblk)*avgct*ravgct
+                    aa(i,j,n_albsno,iblk)*avgct*ravgctz
                     aa(i,j,n_albpnd,iblk) = &
-                    aa(i,j,n_albpnd,iblk)*avgct*ravgct
+                    aa(i,j,n_albpnd,iblk)*avgct*ravgctz
                  endif
               enddo             ! i
               enddo             ! j
