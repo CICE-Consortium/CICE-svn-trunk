@@ -344,7 +344,7 @@
          if (write_restart == 1) then
             call dumpfile ! core variables for restarting
             if (tr_iage) call write_restart_age
-!            if (tr_pond) call write_restart_ponds
+            if (tr_pond) call write_restart_ponds
          endif
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 
@@ -588,6 +588,7 @@
                                 fcondtopn(:,:,n,iblk) )
 
 
+               ! more realistic values for testing the option calc_Tsfc = F
                call explicit_calc_Tsfc (nx_block,          ny_block,     &
                                         my_task,           icells,       &      
                                         indxi,             indxj,        &
@@ -930,7 +931,7 @@
          ij              ! horizontal indices, combine i and j loops
 
       real (kind=dbl_kind)  :: &
-         raicen          ! 1/aicen
+         raicen          ! 1 or 1/aicen
 
       logical (kind=log_kind) :: &
          extreme_flag    ! flag for extreme forcing values
