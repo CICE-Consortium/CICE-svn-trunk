@@ -630,13 +630,13 @@
                                 aim (:,:,  n,iblk), trm (:,:,:,n,iblk),  &
                                 l_stop,     &
                                 istop,              jstop)
-            enddo               ! n
 
-            if (l_stop) then
-               write (nu_diag,*) 'istep1, my_task, iblk, cat =',     &
-                                  istep1, my_task, iblk, n
-               call abort_ice('ice remap transport: monotonicity error')
-            endif
+               if (l_stop) then
+                  write (nu_diag,*) 'istep1, my_task, iblk, cat =',     &
+                                     istep1, my_task, iblk, n
+                  call abort_ice('ice remap transport: monotonicity error')
+               endif
+            enddo               ! n
 
          enddo                  ! iblk
 

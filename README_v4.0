@@ -1,6 +1,7 @@
 
 CICE version 4.0
   August, 2008
+  updated December, 2008
 
 This directory contains files needed to run version 4.0 of CICE, the
 LANL sea ice model, in standalone mode on a 3 degree grid.  As

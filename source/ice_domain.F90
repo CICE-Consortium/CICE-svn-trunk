@@ -290,7 +290,6 @@
    integer (int_kind) :: &
       i,j,k,n            ,&! dummy loop indices
       ig,jg              ,&! global indices
-      count1, count2     ,&! dummy counters
       work_unit          ,&! size of quantized work unit
       nblocks_tmp        ,&! temporary value of nblocks
       nblocks_max          ! max blocks on proc
@@ -315,20 +314,32 @@
       nocn = 0
       do n=1,nblocks_tot
          this_block = get_block(n,n)
+         if (this_block%jblock == nblocks_y) then ! north edge
          do j = this_block%jhi-1, this_block%jhi
-         do i = 1, nx_block
-            ig = this_block%i_glob(i)
-            jg = this_block%j_glob(j)
-            if (KMTG(ig,jg) > puny) nocn(n) = nocn(n) + 1
+            if (this_block%j_glob(j) > 0) then
+               do i = 1, nx_block
+                  if (this_block%i_glob(i) > 0) then
+                     ig = this_block%i_glob(i)
+                     jg = this_block%j_glob(j)
+                     if (KMTG(ig,jg) > puny) nocn(n) = nocn(n) + 1
+                  endif
+               enddo
+            endif
          enddo
-         enddo
+         endif
+         if (this_block%jblock == 1) then ! south edge
          do j = this_block%jlo, this_block%jlo+1
-         do i = 1, nx_block
-            ig = this_block%i_glob(i)
-            jg = this_block%j_glob(j)
-            if (KMTG(ig,jg) > puny) nocn(n) = nocn(n) + 1
+            if (this_block%j_glob(j) > 0) then
+               do i = 1, nx_block
+                  if (this_block%i_glob(i) > 0) then
+                     ig = this_block%i_glob(i)
+                     jg = this_block%j_glob(j)
+                     if (KMTG(ig,jg) > puny) nocn(n) = nocn(n) + 1
+                  endif
+               enddo
+            endif
          enddo
-         enddo
+         endif
          if (nocn(n) > 0) then
             print*, 'ice: Not enough land cells along ns edge'
             call abort_ice('ice: Not enough land cells along ns edge')
@@ -341,20 +352,32 @@
       nocn = 0
       do n=1,nblocks_tot
          this_block = get_block(n,n)
+         if (this_block%iblock == nblocks_x) then ! east edge
          do j = 1, ny_block
-         do i = this_block%ihi-1, this_block%ihi
-            ig = this_block%i_glob(i)
-            jg = this_block%j_glob(j)
-            if (KMTG(ig,jg) > puny) nocn(n) = nocn(n) + 1
+            if (this_block%j_glob(j) > 0) then
+               do i = this_block%ihi-1, this_block%ihi
+                  if (this_block%i_glob(i) > 0) then
+                     ig = this_block%i_glob(i)
+                     jg = this_block%j_glob(j)
+                     if (KMTG(ig,jg) > puny) nocn(n) = nocn(n) + 1
+                  endif
+               enddo
+            endif
          enddo
-         enddo
+         endif
+         if (this_block%iblock == 1) then ! west edge
          do j = 1, ny_block
-         do i = this_block%ilo, this_block%ilo+1
-            ig = this_block%i_glob(i)
-            jg = this_block%j_glob(j)
-            if (KMTG(ig,jg) > puny) nocn(n) = nocn(n) + 1
+            if (this_block%j_glob(j) > 0) then
+               do i = this_block%ilo, this_block%ilo+1
+                  if (this_block%i_glob(i) > 0) then
+                     ig = this_block%i_glob(i)
+                     jg = this_block%j_glob(j)
+                     if (KMTG(ig,jg) > puny) nocn(n) = nocn(n) + 1
+                  endif
+               enddo
+            endif
          enddo
-         enddo
+         endif
          if (nocn(n) > 0) then
             print*, 'ice: Not enough land cells along ew edge'
             call abort_ice('ice: Not enough land cells along ew edge')

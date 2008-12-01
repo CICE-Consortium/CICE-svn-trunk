@@ -203,7 +203,7 @@
       snwmxs = global_sum(vsno, distrb_info, field_loc_center, tareas)
 
       ! total ice-snow kinetic energy
-      do iblk = 1, max_blocks
+      do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
             work1(i,j,iblk) = p5 &
@@ -233,20 +233,13 @@
       ! average ice albedo
       ! mask out cells where sun is below horizon (for delta-Eddington)
 
-      do iblk = 1, max_blocks
+      do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
             work1(i,j,iblk) = alvdr(i,j,iblk)*awtvdr &
                             + alidr(i,j,iblk)*awtidr &
                             + alvdf(i,j,iblk)*awtvdf &
                             + alidf(i,j,iblk)*awtidf
-         enddo
-         enddo
-      enddo
-
-      do iblk = 1, max_blocks
-         do j = 1, ny_block
-         do i = 1, nx_block
             if (coszen(i,j,iblk) > puny) then
                work2(i,j,iblk) = tarean(i,j,iblk)
             else
@@ -267,7 +260,7 @@
          albtotn = c0
       endif
 
-      do iblk = 1, max_blocks
+      do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
             if (coszen(i,j,iblk) > puny) then

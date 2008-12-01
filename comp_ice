@@ -9,7 +9,7 @@ setenv SITE LANL.coyote
 #setenv SITE LLNL.atlas
 
 ### SYSTEM_USERDIR is predefined on ORNL machines
-setenv SYSTEM_USERDIR /scratch2/eclare/CICE.v4.0  # coyote
+setenv SYSTEM_USERDIR /scratch1/eclare/CICE.v4.0  # coyote
 #setenv SYSTEM_USERDIR /scr/eclare                # kraken
 #setenv SYSTEM_USERDIR /ptmp/eclare               # bluevista
 #setenv SYSTEM_USERDIR /p/lscratchb/hunke1        # atlas
@@ -46,7 +46,7 @@ setenv NETCDF   yes       # set to no if netcdf library is unavailable
 setenv DITTO    no        # reproducible diagnostics
 
 ### Set SRCDIR and EXEDIR to your own paths!
-setenv SRCDIR /usr/projects/climate/eclare/CICE.v4.0/cice  # coyote
+setenv SRCDIR /usr/projects/climate/eclare/CICE.v4.0/release-4.0  # coyote
 #setenv SRCDIR $HOME/cice                                  # kraken
 #setenv SRCDIR /g/g21/hunke1/cice                          # atlas
 #setenv SRCDIR /ptmp/eclare/cice                           # bluevista

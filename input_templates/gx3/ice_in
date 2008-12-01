@@ -81,7 +81,7 @@
   , ycycle          = 1
   , atm_data_format = 'bin'
   , atm_data_type   = 'ncar'
-  , atm_data_dir    = '/scratch2/eclare/DATA/atm/gx3v2m/NCAR_bulk/'
+  , atm_data_dir    = '/usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/'
   , calc_strair     = .true.
   , calc_Tsfc       = .true.
   , precip_units    = 'mm_per_month'
@@ -134,6 +134,10 @@
   , f_albsni       = .true. 
   , f_alvdr        = .false.
   , f_alidr        = .false.
+  , f_albice       = .false.
+  , f_albsno       = .false.
+  , f_albpnd       = .false.
+  , f_coszen       = .false.
   , f_flat         = .false. 
   , f_flat_ai      = .true. 
   , f_fsens        = .false. 

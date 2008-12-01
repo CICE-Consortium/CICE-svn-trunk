@@ -81,7 +81,7 @@
   , ycycle          = 1
   , atm_data_format = 'bin'
   , atm_data_type   = 'LYq'
-  , atm_data_dir    = '/scratch2/eclare/DATA/gx1v3/LargeYeager/'
+  , atm_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/LargeYeager/version2/'
   , calc_strair     = .true.
   , calc_Tsfc       = .true.
   , precip_units    = 'mm_per_sec'
@@ -91,8 +91,8 @@
   , ocn_data_format = 'bin'
   , sss_data_type   = 'default'
   , sst_data_type   = 'default'
-  , ocn_data_dir    = '/scratch2/eclare/DATA/gx1v3/gx1v3/forcing/'
-  , oceanmixed_file = 'pop_frc.gx1v3.051202.nc'
+  , ocn_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/gx1v3/forcing/'
+  , oceanmixed_file = 'pop_frc.gx1v3.051202.bin'
   , restore_sst     = .false.
   , trestore        =  90
   , restore_ice     = .false.
@@ -134,6 +134,10 @@
   , f_albsni       = .true. 
   , f_alvdr        = .false.
   , f_alidr        = .false.
+  , f_albice       = .false.
+  , f_albsno       = .false.
+  , f_albpnd       = .false.
+  , f_coszen       = .false.
   , f_flat         = .false. 
   , f_flat_ai      = .true. 
   , f_fsens        = .false. 

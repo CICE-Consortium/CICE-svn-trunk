@@ -1522,8 +1522,8 @@
                       - sqrt(stressm_1(i,j)**2+c4*stress12_1(i,j)**2))) &
                       / prs_sig(i,j)
          else
-            sig1(i,j) = spval
-            sig2(i,j) = spval
+            sig1(i,j) = spval_dbl
+            sig2(i,j) = spval_dbl
          endif
       enddo
       enddo

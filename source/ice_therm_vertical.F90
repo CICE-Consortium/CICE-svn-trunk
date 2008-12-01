@@ -297,6 +297,12 @@
          fsaltn (i,j) = c0
          fhocnn (i,j) = c0
 
+         meltt  (i,j) = c0
+         meltb  (i,j) = c0
+         melts  (i,j) = c0
+         congel (i,j) = c0
+         snoice (i,j) = c0
+
          Tsfcn(i,j) = trcrn(i,j,nt_Tsfc)
          if (tr_iage) iage(i,j) = trcrn(i,j,nt_iage)
       enddo
@@ -418,7 +424,7 @@
                              dt,                     &
                              yday,         icells,   &
                              indxi,        indxj,    &
-                             aicen,        efinal,   &
+                             efinal,                 &
                              hin,          hilyr,    &
                              hsn,          hslyr,    &
                              qin,          qsn,      &
@@ -1388,9 +1394,10 @@
          ci          , & ! specific heat of sea ice (J kg-1 deg-1)
          avg_Tsf     , & ! = 1. if Tsf averaged w/Tsf_start, else = 0.
          ferr        , & ! energy conservation error (W m-2)
-         Iswabs_tmp  , &
-         Sswabs_tmp  , &
-         etai_tmp
+         Iswabs_tmp  , & ! energy to melt through fraction frac of layer
+         Sswabs_tmp  , & ! same for snow
+         frac        , & ! fraction of layer that can be melted through
+         dTemp           ! minimum temperature difference for absorption
 
       logical (kind=log_kind), dimension (icells) :: &
          converged      ! = true when local solution has converged
@@ -1454,37 +1461,41 @@
 
       !-----------------------------------------------------------------
       ! Check for excessive absorbed solar radiation that may result in
-      ! temperature overshoots.  Switch that radiation to fswsfc if necessary. 
+      ! temperature overshoots. Convergence is particularly difficult
+      ! if the starting temperature is already very close to the melting 
+      ! temperature and extra energy is added.   In that case, or if the
+      ! amount of energy absorbed is greater than the amount needed to
+      ! melt through a given fraction of a layer, we put the extra 
+      ! energy into the surface.
       ! NOTE: This option is not available if the atmosphere model
       !       has already computed fsurf.  (Unless we adjust fsurf here)
       !-----------------------------------------------------------------
 !mclaren: Should there be an if calc_Tsfc statement here then?? 
 
+      frac = c1 - puny
+      dTemp = p01
       do k = 1, nilyr
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
 
-            if (Tin_init(ij,k) <= (Tmlt(k) - p01)) then
-
-            if (l_brine) then
-               ci = cp_ice - Lfresh*Tmlt(k) /  &
-                  max( Tin_init(ij,k)**2, Tmlt(k)**2 )
-               etai_tmp = dt_rhoi_hlyr(ij) / ci
-               Iswabs_tmp = min(Iswabs(i,j,k), &
-                                (Tmlt(k)-Tin_init(ij,k))/etai_tmp)
-            else
-               ci = cp_ice
-               etai_tmp = dt_rhoi_hlyr(ij) / ci
-               Iswabs_tmp = min(Iswabs(i,j,k), &
-                                Tin_init(ij,k)/etai_tmp)
+            Iswabs_tmp = c0
+            if (Tin_init(ij,k) <= Tmlt(k) - dTemp) then
+               if (l_brine) then
+                  ci = cp_ice - Lfresh / Tin_init(ij,k)
+                  Iswabs_tmp = min(Iswabs(i,j,k), &
+                     frac*(Tmlt(k)-Tin_init(ij,k))*ci/dt_rhoi_hlyr(ij))
+               else
+                  ci = cp_ice
+                  Iswabs_tmp = min(Iswabs(i,j,k), &
+                     frac*(       -Tin_init(ij,k))*ci/dt_rhoi_hlyr(ij))
+               endif
             endif
 
             fswsfc(i,j)   = fswsfc(i,j) + (Iswabs(i,j,k) - Iswabs_tmp)
             fswint(i,j)   = fswint(i,j) - (Iswabs(i,j,k) - Iswabs_tmp)
             Iswabs(i,j,k) = Iswabs_tmp
 
-            endif
          enddo
       enddo
 
@@ -1494,16 +1505,16 @@
                i = indxi(ij)
                j = indxj(ij)
 
-               if (Tsn_init(ij,k) <= -p01) then
-
-               Sswabs_tmp = min(Sswabs(i,j,k), &
-                            -0.9_dbl_kind*Tsn_init(ij,k)/etas(ij,k))
+               Sswabs_tmp = c0
+               if (Tsn_init(ij,k) <= -dTemp) then
+                  Sswabs_tmp = min(Sswabs(i,j,k), &
+                          -frac*Tsn_init(ij,k)/etas(ij,k))
+               endif
 
                fswsfc(i,j)   = fswsfc(i,j) + (Sswabs(i,j,k) - Sswabs_tmp)
                fswint(i,j)   = fswint(i,j) - (Sswabs(i,j,k) - Sswabs_tmp)
                Sswabs(i,j,k) = Sswabs_tmp
 
-               endif
             endif
          enddo
       enddo
@@ -3487,7 +3498,7 @@
                                     dt,                  &
                                     yday,      icells,   &
                                     indxi,     indxj,    &
-                                    aicen,     efinal,   & 
+                                    efinal,              & 
                                     hin,       hilyr,    &
                                     hsn,       hslyr,    &
                                     qin,       qsn,      &
@@ -3518,7 +3529,6 @@
          yday            ! day of the year
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         aicen       , & ! fractional concentration of ice
          fbot        , & ! ice-ocean heat flux at bottom surface (W/m^2)
          Tbot        , & ! ice bottom surface temperature (deg C)
          fsnow       , & ! snowfall rate (kg m-2 s-1)
@@ -3733,7 +3743,7 @@
 !            iage(i,j) = (iage(i,j)*hin(ij) + dt*dhi) / (hin(ij) + dhi)
 
          ! history diagnostics
-         congel(i,j) = congel(i,j) + dhi*aicen(i,j)
+         congel(i,j) = congel(i,j) + dhi
          if (dhi > puny .and. frz_onset(i,j) < puny) &
                  frz_onset(i,j) = yday
 
@@ -3770,7 +3780,7 @@
             ! history diagnostics
             if (dhs < -puny .and. mlt_onset(i,j) < puny) &
                mlt_onset(i,j) = yday
-            melts(i,j) = melts(i,j) - dhs*aicen(i,j)
+            melts(i,j) = melts(i,j) - dhs
 
          enddo                  ! ij
       enddo                     ! nslyr
@@ -3806,7 +3816,7 @@
             ! history diagnostics
             if (dhi < -puny .and. mlt_onset(i,j) < puny) &
                  mlt_onset(i,j) = yday
-            meltt(i,j) = meltt(i,j) - dhi*aicen(i,j)
+            meltt(i,j) = meltt(i,j) - dhi
 
          enddo                  ! ij
       enddo                     ! nilyr
@@ -3829,7 +3839,7 @@
             ebot_mlt(ij) = max(ebot_mlt(ij), c0)
 
             ! history diagnostics
-            meltb(i,j) = meltb(i,j) - dhi*aicen(i,j)
+            meltb(i,j) = meltb(i,j) - dhi
 
          enddo                  ! ij
       enddo                     ! nilyr
@@ -3931,7 +3941,7 @@
                       icells,             &
                       indxi,    indxj,    &
                       dt,                 &
-                      aicen,    snoice,   &
+                      snoice,             &
                       iage,               &
                       hin,      hsn,      &
                       qin,      qsn,      &
@@ -4098,7 +4108,7 @@
                             icells,             &
                             indxi,    indxj,    &
                             dt,                 &
-                            aicen,    snoice,   &
+                            snoice,             &
                             iage,               &
                             hin,      hsn,      &
                             qin,      qsn,      &
@@ -4115,9 +4125,6 @@
       integer (kind=int_kind), dimension(nx_block*ny_block), &
          intent(in) :: &
          indxi, indxj    ! compressed indices for cells with aicen > puny
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         aicen           ! fractional ice area
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -4225,7 +4232,7 @@
             dzi(ij,1) = wk1
 
             ! history diagnostic
-            snoice(i,j) = snoice(i,j) + dhin(ij)*aicen(i,j)
+            snoice(i,j) = snoice(i,j) + dhin(ij)
          endif               ! dhin > puny
 
       enddo                  ! ij
