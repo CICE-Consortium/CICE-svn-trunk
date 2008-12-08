@@ -1008,7 +1008,7 @@
                   if (hm(i,j,iblk) > p5) then
                      latdis = abs(latpnt(n)-TLAT(i,j,iblk)*rad_to_deg)
                      londis = abs(lonpnt(n)-TLON(i,j,iblk)*rad_to_deg) &
-                            * cos(TLON(i,j,iblk))
+                            * cos(TLAT(i,j,iblk))
                      totdis = sqrt(latdis**2 + londis**2)
                      if (totdis < mindis) then
                         mindis = totdis
