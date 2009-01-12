@@ -654,7 +654,7 @@
          i,j         , & ! horizontal indices
          ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
-      real (kind=dbl_kind) :: & cszn
+      real (kind=dbl_kind) :: cszn ! counter for history averaging
 
       call ice_timer_start(timer_column)
 

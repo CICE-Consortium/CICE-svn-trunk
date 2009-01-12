@@ -44,8 +44,8 @@
 
 &domain_nml
     nprocs = 8
-  , processor_shape   = 'skinnyX1'
-  , distribution_type = 'cartesian'
+  , processor_shape   = 'square-ice'
+  , distribution_type = 'rake'
   , distribution_wght = 'latitude'
   , ew_boundary_type  = 'cyclic'
   , ns_boundary_type  = 'open'
