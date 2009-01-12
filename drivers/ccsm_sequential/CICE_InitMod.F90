@@ -105,7 +105,7 @@
 
       call init_calendar        ! initialize some calendar stuff
       call init_hist (dt)       ! initialize output history file
-      call init_evp (dt)        ! define evp dynamics parameters, variables
+      call init_evp (dyn_dt)    ! define evp dynamics parameters, variables
       call init_coupler_flux    ! initialize fluxes exchanged with coupler
       call init_thermo_vertical ! initialize vertical thermodynamics
       call init_itd             ! initialize ice thickness distribution

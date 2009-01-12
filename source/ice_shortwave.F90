@@ -162,7 +162,7 @@
          il1, il2    , & ! ice layer indices for eice
          sl1, sl2        ! snow layer indices for esno
 
-      real (kind=dbl_kind) :: & cszn
+      real (kind=dbl_kind) :: cszn ! counter for history averaging
 
       type (block) :: &
          this_block      ! block information for current block

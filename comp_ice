@@ -9,7 +9,7 @@ setenv SITE LANL.coyote
 #setenv SITE LLNL.atlas
 
 ### SYSTEM_USERDIR is predefined on ORNL machines
-setenv SYSTEM_USERDIR /scratch2/eclare/CICE.v4.0  # coyote
+setenv SYSTEM_USERDIR /scratch1/eclare/CICE.v4.0  # coyote
 #setenv SYSTEM_USERDIR /scr/eclare                # kraken
 #setenv SYSTEM_USERDIR /ptmp/eclare               # bluevista
 #setenv SYSTEM_USERDIR /p/lscratchb/hunke1        # atlas
