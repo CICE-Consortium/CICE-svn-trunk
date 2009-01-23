@@ -346,8 +346,9 @@
          do i = ilo, ihi+1
             cyp(i,j,iblk) = (c1p5*HTE(i,j,iblk) - p5*HTE(i-1,j,iblk))
             cxp(i,j,iblk) = (c1p5*HTN(i,j,iblk) - p5*HTN(i,j-1,iblk))
-            cym(i,j,iblk) = (p5*HTE(i,j,iblk) - c1p5*HTE(i-1,j,iblk))
-            cxm(i,j,iblk) = (p5*HTN(i,j,iblk) - c1p5*HTN(i,j-1,iblk))
+            ! match order of operations in cyp, cxp for tripole grids
+            cym(i,j,iblk) = -(c1p5*HTE(i-1,j,iblk)) - p5*HTE(i,j,iblk)) 
+            cxm(i,j,iblk) = -(c1p5*HTN(i,j-1,iblk)) - p5*HTN(i,j,iblk)) 
          enddo
          enddo
 
