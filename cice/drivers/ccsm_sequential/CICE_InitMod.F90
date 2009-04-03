@@ -137,9 +137,9 @@
 
 #if (defined _NOIO)
 ! Not enought memory on BGL to write a history file yet!
-!      if(.not.prescribed_ice) call ice_write_hist(dt)
+!      if(write_ic .and. .not.prescribed_ice) call ice_write_hist(dt)
 #else
-      if(.not.prescribed_ice) call ice_write_hist(dt)
+      if(write_ic .and. .not.prescribed_ice) call ice_write_hist(dt)
 #endif
       write_ic = .false.
 

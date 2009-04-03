@@ -1559,7 +1559,7 @@
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)
-               if (vicen(i,j) > puny) then
+               if (vicen(i,j) > c0) then
                   trcrn(i,j,it) = atrcrn(ij,it) / vicen(i,j)
                else
                   trcrn(i,j,it) = c0
@@ -1570,7 +1570,7 @@
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)
-               if (vsnon(i,j) > puny) then
+               if (vsnon(i,j) > c0) then
                   trcrn(i,j,it) = atrcrn(ij,it) / vsnon(i,j)
                else
                   trcrn(i,j,it) = c0

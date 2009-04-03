@@ -653,7 +653,7 @@
       vunit(n_rain      ) = 'cm/day'
       vunit(n_rain_ai   ) = 'cm/day'
       vunit(n_sst       ) = 'C'
-      vunit(n_sss       ) = 'psu'
+      vunit(n_sss       ) = 'ppt'
       vunit(n_uocn      ) = 'm/s'
       vunit(n_vocn      ) = 'm/s'
       vunit(n_frzmlt    ) = 'W/m^2'
