@@ -737,8 +737,8 @@ end subroutine create_blocks
             !*** if the block size does not divide the domain
             !*** evenly
             inbr =  nblocks_x - iBlock - 1 
-            if (inbr == 0) inbr = nblocks_x
-            jnbr = -(nblocks_y - (jnbr - nblocks_y - 1))
+            if (inbr <= 0) inbr = inbr + nblocks_x
+            jnbr = -jBlock
          case default
             call abort_ice( &
                'ice_blocksGetNbrID: unknown north boundary')
@@ -778,8 +778,8 @@ end subroutine create_blocks
             !*** if the block size does not divide the domain
             !*** evenly
             inbr =  nblocks_x - iBlock + 3
-            if (inbr > nblocks_x) inbr = 0
-            jnbr = -(nblocks_y - (jnbr - nblocks_y - 1))
+            if (inbr > nblocks_x) inbr = inbr - nblocks_x
+            jnbr = -jBlock
          case default
             call abort_ice( &
                'ice_blocksGetNbrID: unknown north boundary')
