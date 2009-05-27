@@ -241,11 +241,11 @@ contains
                case ('cyclic')
                   j_global(j,n) = j_global(j,n) + ny_global
                case ('open')
-                  j_global(j,n) = -j_global(j,n) + 1
+                  j_global(j,n) = nghost - j + 1
                case ('closed')
                   j_global(j,n) = 0
                case ('tripole')
-                  j_global(j,n) = -j_global(j,n) + 1 ! open
+                  j_global(j,n) = nghost - j + 1 ! open
                case default
                   call abort_ice(&
                            'ice: create_blocks: unknown n-s bndy type')
@@ -264,7 +264,7 @@ contains
                case ('cyclic')
                   j_global(j,n) = j_global(j,n) - ny_global
                case ('open')
-                  j_global(j,n) = j_global(j,n) - 1
+                  j_global(j,n) = 2*ny_global - j_global(j,n) + 1
                case ('closed')
                   j_global(j,n) = 0
                case ('tripole')
@@ -295,7 +295,7 @@ contains
                case ('cyclic')
                   i_global(i,n) = i_global(i,n) + nx_global
                case ('open')
-                  i_global(i,n) = -i_global(i,n) + 1
+                  i_global(i,n) = nghost - i + 1
                case ('closed')
                   i_global(i,n) = 0
                case default
@@ -316,7 +316,7 @@ contains
                case ('cyclic')
                   i_global(i,n) = i_global(i,n) - nx_global
                case ('open')
-                  i_global(i,n) = i_global(i,n) - 1
+                  i_global(i,n) = 2*nx_global - i_global(i,n) + 1
                case ('closed')
                   i_global(i,n) = 0
                case default
