@@ -569,7 +569,7 @@
 
       call ice_read_global(nu_grid,7,work_g1,'rda8',.true.)   ! ANGLE
       call scatter_global(ANGLE, work_g1, master_task, distrb_info, &
-                          field_loc_noupdate, field_type_noupdate)
+                          field_loc_NEcorner, field_type_angle)
 
       !-----------------------------------------------------------------
       ! cell dimensions
