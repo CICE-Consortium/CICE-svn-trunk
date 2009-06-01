@@ -68,7 +68,7 @@
       use ice_diagnostics
       use ice_fileunits
       use ice_calendar, only: year_init, istep0, histfreq, histfreq_n, &
-                              dumpfreq, dumpfreq_n, diagfreq, &
+                              dumpfreq, dumpfreq_n, diagfreq, nstreams, &
                               npt, dt, ndyn_dt, days_per_year, write_ic
       use ice_restart, only: &
           restart, restart_dir, restart_file, pointer_file, &
@@ -105,7 +105,8 @@
 !
       integer (kind=int_kind) :: &
         nml_error, & ! namelist i/o error flag
-        ntr           ! counter for number of tracers turned on
+        ntr      , & ! counter for number of tracers turned on
+        ns           ! loop index for history streams
 
       character (len=6) :: chartmp
 
@@ -162,8 +163,12 @@
       print_global = .true.  ! if true, print global diagnostic data
       diag_type = 'stdout'
       diag_file = 'ice_diag.d'
-      histfreq='m'           ! output frequency option
-      histfreq_n = 1         ! output frequency
+      histfreq(1) = '1'      ! output frequency option for different streams
+      histfreq(2) = 'h'      ! output frequency option for different streams
+      histfreq(3) = 'd'      ! output frequency option for different streams
+      histfreq(4) = 'm'      ! output frequency option for different streams
+      histfreq(5) = 'y'      ! output frequency option for different streams
+      histfreq_n(:) = 1      ! output frequency 
       hist_avg = .true.      ! if true, write time-averages (not snapshots)
       history_dir  = ' '     ! write to executable dir for default
       history_file = 'iceh'  ! history file name prefix
@@ -327,7 +332,6 @@
       ocn_data_format = 'bin'
 #endif
 
-      if (histfreq == '1') hist_avg = .false.         ! potential conflict
       if (days_per_year /= 365) shortwave = 'default' ! definite conflict
 
       chartmp = advection(1:6)
@@ -363,8 +367,10 @@
       call broadcast_scalar(diag_type,          master_task)
       call broadcast_scalar(diag_file,          master_task)
       call broadcast_scalar(history_format,     master_task)
-      call broadcast_scalar(histfreq,           master_task)
-      call broadcast_scalar(histfreq_n,         master_task)
+      do ns=1,max_nstrm
+         call broadcast_scalar(histfreq(ns),    master_task)
+      enddo
+      call broadcast_array(histfreq_n(:),       master_task)
       call broadcast_scalar(hist_avg,           master_task)
       call broadcast_scalar(history_dir,        master_task)
       call broadcast_scalar(history_file,       master_task)
@@ -460,16 +466,10 @@
                                print_global
          write(nu_diag,1010) ' print_points              = ', &
                                print_points
-         write(nu_diag,1030) ' histfreq                  = ', &
-                               trim(histfreq)
-         write(nu_diag,1020) ' histfreq_n                = ', histfreq_n
+         write(nu_diag,1050) ' histfreq                  = ', histfreq(:)
+         write(nu_diag,1040) ' histfreq_n                = ', histfreq_n(:)
          write(nu_diag,1010) ' hist_avg                  = ', hist_avg
-         if (hist_avg) then
-            write (nu_diag,*) 'History data will be averaged over ', &
-                               histfreq_n,' ',histfreq
-         else
-            write (nu_diag,*) 'History data will be snapshots'
-         endif
+         if (.not. hist_avg) write (nu_diag,*) 'History data will be snapshots'
          write(nu_diag,*)    ' history_dir               = ', &
                                trim(history_dir)
          write(nu_diag,*)    ' history_file              = ', &
@@ -603,6 +603,8 @@
  1010    format (a30,2x,l6)    ! logical
  1020    format (a30,2x,i6)    ! integer
  1030    format (a30,   a8)    ! character
+ 1040    format (a30,2x,6i6)   ! integer
+ 1050    format (a30,2x,6a6)   ! character
 
          write (nu_diag,*) ' '
          if (grid_type  /=  'displaced_pole' .and. &

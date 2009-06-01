@@ -23,6 +23,7 @@
 ! !USES:
 !
       use ice_constants
+      use ice_domain_size, only: max_nstrm
       use ice_exit, only: abort_ice
 !
 !EOP
@@ -49,6 +50,13 @@
       data daymo365 /   31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31/
       data daycal365/ 0,31, 59, 90,120,151,181,212,243,273,304,334,365/
 
+      ! 366-day year data (leap year)
+      integer (kind=int_kind) :: &
+         daymo366(12)         , & ! number of days in each month
+         daycal366(13)            ! day number at end of month
+      data daymo366 /   31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31/
+      data daycal366/ 0,31, 60, 91,121,152,182,213,244,274,305,335,366/
+
       integer (kind=int_kind) :: &
          istep    , & ! local step counter for time loop
          istep0   , & ! counter, number of steps taken in previous run
@@ -68,7 +76,8 @@
          write_restart, & ! if 1, write restart now
          diagfreq     , & ! diagnostic output frequency (10 = once per 10 dt)
          dumpfreq_n   , & ! restart output frequency (10 = once per 10 d,m,y)
-         histfreq_n       ! history output frequency (10 = once per 10 h,d,m,y)
+         nstreams     , & ! number of history output streams
+         histfreq_n(max_nstrm) ! history output frequency 
 
       real (kind=dbl_kind) :: &
          dt             , & ! thermodynamics timestep (s)
@@ -85,11 +94,13 @@
          new_day        , & ! new day = .true.
          new_hour       , & ! new hour = .true.
          write_ic       , & ! write initial condition now
-         write_history      ! write history now
+         write_history(max_nstrm) ! write history now
 
       character (len=1) :: &
-         histfreq       , & ! history output frequency, 'y','m','d','h','1'
-         dumpfreq           ! restart frequency, 'y','m','d'
+         histfreq(max_nstrm), & ! history output frequency, 'y','m','d','h','1'
+         dumpfreq               ! restart frequency, 'y','m','d'
+
+      character (len=char_len) :: calendar_type
 
 !=======================================================================
 
@@ -190,7 +201,7 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-         k                          , &
+         k, ileap, ns               , &
          nyrp,mdayp,hourp           , & ! previous year, day, hour
          elapsed_days               , & ! since beginning this run
          elapsed_months             , & ! since beginning this run
@@ -204,7 +215,7 @@
       new_month=.false.
       new_day=.false.
       new_hour=.false.
-      write_history=.false.
+      write_history(:)=.false.
       write_restart=0
 
       sec = mod(ttime,secday)           ! elapsed seconds into date at
@@ -229,23 +240,59 @@
       if (mday  /= mdayp)  new_day = .true.
       if (hour  /= hourp)  new_hour = .true.
 
-      if (histfreq == '1') write_history=.true.
+      ! leap years turned off, for now
+      ileap = 0 ! not a leap year
+!      if (mod(nyr+year_init-1,  4) == 0) ileap = 1
+!      if (mod(nyr+year_init-1,100) == 0) ileap = 0
+!      if (mod(nyr+year_init-1,400) == 0) ileap = 1
+
+!      if (ileap == 1) then
+!         daycal = daycal366
+!         yday = mod(tday-c1,dayyr+c1) + c1    ! day of the year
+!         do k = 1, 12
+!           if (yday > real(daycal(k),kind=dbl_kind)) month = k
+!         enddo
+!         mday = int(yday) - daycal(month)  ! day of the month
+!         idate = (nyr+year_init-1)*10000 + month*100 + mday ! date (yyyymmdd) 
+!      else
+         daycal = daycal365
+!      endif
+
+      do ns = 1, nstreams
+         if (histfreq(ns)=='1' .and. histfreq_n(ns)/=0) then
+             if (mod(istep1, histfreq_n(ns))==0) &
+                write_history(ns)=.true.
+         endif
+      enddo
 
       if (istep > 1) then
-        select case (histfreq)
-        case ("y", "Y")
-          if (new_year  .and. mod(nyr, histfreq_n)==0) &
-                write_history = .true.
-        case ("m", "M")
-          if (new_month .and. mod(elapsed_months,histfreq_n)==0) &
-                write_history = .true.
-        case ("d", "D")
-          if (new_day .and. mod(elapsed_days,histfreq_n)==0) &
-                write_history = .true.
-        case ("h", "H")
-          if (new_hour .and. mod(elapsed_hours,histfreq_n)==0) &
-                write_history = .true.
-        end select
+
+        do ns = 1, nstreams
+
+           select case (histfreq(ns))
+           case ("y", "Y")
+             if (new_year  .and. histfreq_n(ns)/=0) then
+                if (mod(nyr, histfreq_n(ns))==0) &
+                   write_history(ns) = .true.
+             endif
+           case ("m", "M")
+             if (new_month .and. histfreq_n(ns)/=0) then
+                if (mod(elapsed_months,histfreq_n(ns))==0) &
+                   write_history(ns) = .true.
+             endif
+           case ("d", "D")
+             if (new_day  .and. histfreq_n(ns)/=0) then
+                if (mod(elapsed_days,histfreq_n(ns))==0) &
+                   write_history(ns) = .true.
+             endif
+           case ("h", "H")
+             if (new_hour  .and. histfreq_n(ns)/=0) then
+                if (mod(elapsed_hours,histfreq_n(ns))==0) &
+                   write_history(ns) = .true.
+             endif
+           end select
+
+        enddo ! nstreams
 
         select case (dumpfreq)
         case ("y", "Y")
@@ -258,7 +305,8 @@
           if (new_day   .and. mod(elapsed_days, dumpfreq_n)==0) &
                 write_restart = 1
         end select
-      endif
+      
+      endif !  istep > 1
 
       if (my_task == master_task .and. mod(istep,diagfreq) == 0 &
                                  .and. stop_now /= 1) then
