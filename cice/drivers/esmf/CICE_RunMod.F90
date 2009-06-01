@@ -770,7 +770,9 @@
             ! for history averaging
             cszn = c0
             if (coszen(i,j,iblk) > puny) cszn = c1
-            albcnt(i,j,iblk) = albcnt(i,j,iblk) + cszn
+            do n = 1, nstreams
+               albcnt(i,j,iblk,n) = albcnt(i,j,iblk,n) + cszn
+            enddo
          enddo
          enddo
          do n = 1, ncat
