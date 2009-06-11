@@ -147,14 +147,14 @@
       dyn_dt = dt/real(ndyn_dt,kind=dbl_kind) ! dynamics et al timestep
 
       dayyr = real(days_per_year, kind=dbl_kind)
-      if (days_per_year.eq.360) then
-        daymo  = daymo360
-        daycal = daycal360
-      elseif (days_per_year.eq.365) then
-        daymo  = daymo365
-        daycal = daycal365
-      else
-         call abort_ice('ice: year must have 360 or 365 days')
+      if (days_per_year == 360) then
+         daymo  = daymo360
+         daycal = daycal360
+      elseif (days_per_year == 365) then
+         daymo  = daymo365
+         daycal = daycal365
+      else ! if using leap years, set days_per_year to 365
+         call abort_ice('ice: days_per_year must be 360 or 365')
       endif
 
       ! determine initial date (assumes namelist year_init, istep0 unchanged)     
@@ -254,8 +254,8 @@
 !         enddo
 !         mday = int(yday) - daycal(month)  ! day of the month
 !         idate = (nyr+year_init-1)*10000 + month*100 + mday ! date (yyyymmdd) 
-!      else
-         daycal = daycal365
+!      elseif (days_per_year == 365) then
+!         daycal = daycal365
 !      endif
 
       do ns = 1, nstreams
