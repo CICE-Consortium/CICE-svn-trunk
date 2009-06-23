@@ -2129,7 +2129,7 @@
             c_aice = TRIM(avail_hist_fields(n)%vname)
             i_aice = lenstr(c_aice)
             if (i_aice > 4 .and. c_aice(1:5) == 'aicen') then
-              read(c_aice(i_aice-2:i_aice), '(i3)') icategory
+              read(c_aice(6:9), '(i3)') icategory
               avail_hist_fields(n)%vcomment = &
                  'Ice range: '//c_hi_range(icategory)
             endif
@@ -2570,7 +2570,7 @@
             c_aice = TRIM(avail_hist_fields(n)%vname)
             i_aice = lenstr(c_aice)
             if (i_aice > 4 .and. c_aice(1:5) == 'aicen') then
-              read(c_aice(i_aice-2:i_aice), '(i3)') icategory
+              read(c_aice(6:9), '(i3)') icategory
               avail_hist_fields(n)%vcomment = &
                  'Ice range: '//c_hi_range(icategory)
             endif
