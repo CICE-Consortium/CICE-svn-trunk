@@ -549,7 +549,7 @@
 
             call compute_ponds(nx_block, ny_block,                      &
                                ilo, ihi, jlo, jhi,                      &
-                               melttn, meltsn, frain(:,:,iblk),   &
+                               melttn, meltsn, frain(:,:,iblk),         &
                                aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
                                vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk),&
                                apondn(:,:,n,iblk), hpondn(:,:,n,iblk))

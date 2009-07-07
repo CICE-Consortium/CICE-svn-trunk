@@ -105,7 +105,6 @@
 !
       integer (kind=int_kind) :: &
         nml_error, & ! namelist i/o error flag
-        ntr      , & ! counter for number of tracers turned on
         ns           ! loop index for history streams
 
       character (len=6) :: chartmp
@@ -589,14 +588,14 @@
          write(nu_diag,1010) ' tr_pond                   = ', tr_pond
          write(nu_diag,1010) ' restart_pond              = ', restart_pond
 
-         ntr = 1 ! count tracers, starting with Tsfc = 1
-         if (tr_iage) ntr = ntr + 1
-         if (tr_pond) ntr = ntr + 1
-         if (ntr /= ntrcr) &
-            write(nu_diag,*) 'WARNING: ntrcr > number of tracers requested'
-         if (ntr > ntrcr) then
-            write(nu_diag,*) 'ntrcr < number of namelist tracers'
-            call abort_ice('ntrcr < number of namelist tracers')
+         ntrcr = 1 ! count tracers, starting with Tsfc = 1
+         if (tr_iage) ntrcr = ntrcr + 1
+         if (tr_pond) ntrcr = ntrcr + 1
+         if (ntrcr < max_ntrcr) &
+            write(nu_diag,*) 'WARNING: max_ntrcr > number of tracers requested'
+         if (ntrcr > max_ntrcr) then
+            write(nu_diag,*) 'max_ntrcr < number of namelist tracers'
+            call abort_ice('max_ntrcr < number of namelist tracers')
          endif                               
 
  1000    format (a30,2x,f9.2)  ! a30 to align formatted, unformatted statements
@@ -617,6 +616,7 @@
          endif
 
       endif                     ! my_task = master_task
+      call broadcast_scalar(ntrcr, master_task)
 
       end subroutine input_data
 
@@ -718,7 +718,7 @@
                              tmask(:,:,    iblk),                      &
                              ULON (:,:,    iblk), ULAT (:,:,    iblk), &
                              Tair (:,:,    iblk), sst  (:,:,    iblk), &
-                             Tf   (:,:,    iblk), trcr_depend,         &
+                             Tf   (:,:,    iblk),                      &
                              aicen(:,:,  :,iblk), trcrn(:,:,:,:,iblk), &
                              vicen(:,:,  :,iblk), vsnon(:,:,  :,iblk), &
                              eicen(:,:,  :,iblk), esnon(:,:,  :,iblk))
@@ -732,7 +732,7 @@
          vsno(:,:,iblk) = c0
          eice(:,:,iblk) = c0
          esno(:,:,iblk) = c0
-         do it = 1, ntrcr
+         do it = 1, max_ntrcr
             trcr(:,:,it,iblk) = c0
          enddo
 
@@ -751,6 +751,7 @@
                          esno (:,:,  iblk),   &
                          aice0(:,:,  iblk),   &
                          tmask(:,:,  iblk),   &
+                         max_ntrcr,           &
                          trcr_depend)
 
          aice_init(:,:,iblk) = aice(:,:,iblk)
@@ -777,7 +778,7 @@
       subroutine set_state_var (nx_block, ny_block, &
                                 tmask,    ULON,  ULAT, &
                                 Tair,     sst,  &
-                                Tf,       trcr_depend, &
+                                Tf,       &
                                 aicen,    trcrn, &
                                 vicen,    vsnon, &
                                 eicen,    esnon) 
@@ -817,16 +818,13 @@
          Tf      , & ! freezing temperature (C) 
          sst         ! sea surface temperature (C) 
 
-      integer (kind=int_kind), dimension (ntrcr), intent(inout) :: &
-         trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
-
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(out) :: &
          aicen , & ! concentration of ice
          vicen , & ! volume per unit area of ice          (m)
          vsnon     ! volume per unit area of snow         (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &
          intent(out) :: &
          trcrn     ! ice tracers
                    ! 1: surface temperature of ice/snow (C)
@@ -876,8 +874,8 @@
             vicen(i,j,n) = c0
             vsnon(i,j,n) = c0
             trcrn(i,j,nt_Tsfc,n) = Tf(i,j)  ! surface temperature
-            if (ntrcr >= 2) then
-               do it = 2, ntrcr
+            if (max_ntrcr >= 2) then
+               do it = 2, max_ntrcr
                   trcrn(i,j,it,n) = c0
                enddo
             endif

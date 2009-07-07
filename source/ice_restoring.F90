@@ -95,7 +95,10 @@
    vsnon_rest(:,:,:,:) = vsnon(:,:,:,:)
    eicen_rest(:,:,:,:) = eicen(:,:,:,:)
    esnon_rest(:,:,:,:) = esnon(:,:,:,:)
-   trcrn_rest(:,:,:,:,:) = trcrn(:,:,:,:,:)
+   trcrn_rest(:,:,:,:,:) = trcrn(:,:,1:ntrcr,:,:)
+
+   if (my_task == master_task) &
+      write (nu_diag,*) 'ice restoring timescale = ',trestore,' days' 
 
  end subroutine ice_HaloRestore_init
 
