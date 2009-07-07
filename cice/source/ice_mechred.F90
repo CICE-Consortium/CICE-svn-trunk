@@ -117,7 +117,8 @@
 ! !INTERFACE:
 !
       subroutine ridge_ice (nx_block,    ny_block,   &
-                            dt,          icells,     &
+                            dt,          ntrcr,      &
+                            icells,                  &
                             indxi,       indxj,      &
                             rdg_conv,    rdg_shear,  &
                             aicen,       trcrn,      &
@@ -136,7 +137,8 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         icells                ! number of cells with ice present
+         icells            , & ! number of cells with ice present
+         ntrcr                 ! number of tracers in use
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
@@ -328,7 +330,7 @@
 
          call ridge_shift (nx_block,  ny_block,        &
                            icells,    indxi,    indxj, &
-                           dt,                         &
+                           ntrcr,     dt,              &
                            aicen,     trcrn,           &
                            vicen,     vsnon,           &
                            eicen,     esnon,           &
@@ -1082,7 +1084,7 @@
 !
       subroutine ridge_shift (nx_block,    ny_block,        &
                               icells,      indxi,    indxj, &
-                              dt,                           &
+                              ntrcr,       dt,              &
                               aicen,       trcrn,           &
                               vicen,       vsnon,           &
                               eicen,       esnon,           &
@@ -1103,7 +1105,8 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         icells                ! number of cells with ice present
+         icells            , & ! number of cells with ice present
+         ntrcr                 ! number of tracers in use
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
@@ -1733,7 +1736,7 @@
       do n = 1, ncat
          call compute_tracers (nx_block,        ny_block,       &
                                icells,          indxi,   indxj, &
-                               trcr_depend,                     &
+                               ntrcr,           trcr_depend,    &
                                atrcrn(:,:,n),   aicen(:,:,  n), &
                                vicen (:,:,  n), vsnon(:,:,  n), &
                                trcrn(:,:,:,n))

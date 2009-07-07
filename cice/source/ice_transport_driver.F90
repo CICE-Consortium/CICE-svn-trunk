@@ -42,16 +42,20 @@
          l_fixed_area = .false.
 
 ! NOTE: For remapping, hice, hsno, qice, and qsno are considered tracers.
+!       max_ntrace is not equal to max_ntrcr!
 !       ntrace is not equal to ntrcr!
 
       integer (kind=int_kind), parameter ::                      &
-         ntrace = 2+ntrcr+nilyr+nslyr  ! hice,hsno,qice,qsno,trcr
+         max_ntrace = 2+max_ntrcr+nilyr+nslyr  ! hice,hsno,qice,qsno,trcr
+
+      integer (kind=int_kind) ::                      &
+         ntrace              ! number of tracers in use
                           
-      integer (kind=int_kind), dimension (ntrace) ::             &
+      integer (kind=int_kind), dimension(:), allocatable ::             &
          tracer_type       ,&! = 1, 2, or 3 (see comments below)
          depend              ! tracer dependencies (see below)
 
-      logical (kind=log_kind), dimension (ntrace) ::             &
+      logical (kind=log_kind), dimension (:), allocatable ::             &
          has_dependents      ! true if a tracer has dependent tracers
 
       integer (kind=int_kind), parameter ::                      &
@@ -88,7 +92,7 @@
 !
 ! !USES:
 !
-      use ice_state, only: trcr_depend
+      use ice_state, only: trcr_depend, ntrcr
       use ice_exit
       use ice_timers
       use ice_transport_remap, only: init_remap
@@ -99,6 +103,12 @@
          k, nt, nt1     ! tracer indices
 
       call ice_timer_start(timer_advect)  ! advection 
+
+      ntrace = 2+ntrcr+nilyr+nslyr  ! hice,hsno,qice,qsno,trcr
+
+      allocate (tracer_type   (ntrace), &
+                depend        (ntrace), &
+                has_dependents(ntrace))
 
       if (trim(advection)=='remap') then
 
@@ -333,8 +343,9 @@
     !-------------------------------------------------------------------
 
          call state_to_tracers(nx_block,          ny_block,             &
-                               aice0(:,:,  iblk),                       &
-                               aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk),  &
+                               ntrcr,             ntrace,               &
+                               aice0(:,:,  iblk), aicen(:,:,:,iblk),    &
+                               trcrn(:,:,1:ntrcr,:,iblk),               &
                                vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
                                eicen(:,:,:,iblk), esnon(:,:,  :,iblk),  &
                                aim  (:,:,:,iblk), trm  (:,:,:,:,iblk))
@@ -412,7 +423,8 @@
 
             call make_masks (nx_block,          ny_block,              &
                              ilo, ihi,          jlo, jhi,              &
-                             nghost,            has_dependents,        &
+                             nghost,            ntrace,                &
+                             has_dependents,                           &
                              icellsnc(:,iblk),                         &
                              indxinc(:,:,iblk), indxjnc(:,:,iblk),     &
                              aim(:,:,:,iblk),   aimask(:,:,:,iblk),    &
@@ -499,7 +511,7 @@
 
          endif
 
-         call horizontal_remap (dt,                                    &
+         call horizontal_remap (dt,                ntrace,             &
                                 uvel      (:,:,:), vvel      (:,:,:),  &
                                 aim     (:,:,:,:), trm   (:,:,:,:,:),  &
                                 l_fixed_area,                          &
@@ -515,9 +527,10 @@
       do iblk = 1, nblocks
 
          call tracers_to_state (nx_block,          ny_block,            &
+                                ntrcr,             ntrace,              &
                                 aim  (:,:,:,iblk), trm  (:,:,:,:,iblk), &
-                                aice0(:,:,  iblk),                      &
-                                aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk), &
+                                aice0(:,:,  iblk), aicen(:,:,:,iblk),   &
+                                trcrn(:,:,1:ntrcr,:,iblk),              &
                                 vicen(:,:,:,iblk), vsnon(:,:,  :,iblk), &
                                 eicen(:,:,:,iblk), esnon(:,:,  :,iblk)) 
 
@@ -683,9 +696,9 @@
 !
 !EOP
 !
-      integer (kind=int_kind), parameter ::     &
-         narr = 1 + ncat*(3+ntrcr)   ! number of state variable arrays
-                                     ! not including eicen, esnon
+      integer (kind=int_kind) ::     &
+         narr               ! max number of state variable arrays
+                            ! not including eicen, esnon
 
       integer (kind=int_kind) ::     &
          i, j, iblk       ,&! horizontal indices
@@ -695,13 +708,18 @@
          uee, vnn           ! cell edge velocities
 
       real (kind=dbl_kind),     &
-         dimension (nx_block,ny_block,narr,max_blocks) ::      &
+         dimension (:,:,:,:), allocatable :: &
          works              ! work array
 
       type (block) ::     &
          this_block           ! block information for current block
 
       call ice_timer_start(timer_advect)  ! advection 
+
+      narr = 1 + ncat*(3+ntrcr) ! max number of state variable arrays
+                                ! not including eicen, esnon
+
+      allocate (works(nx_block,ny_block,narr,max_blocks))
 
     !-------------------------------------------------------------------
     ! Get ghost cell values of state variables.
@@ -750,8 +768,9 @@
       !-----------------------------------------------------------------
 
          call state_to_work (nx_block,             ny_block,             &
+                             ntrcr,                                      &
                              narr,                 trcr_depend,          &
-                             aicen (:,:,  :,iblk), trcrn (:,:,:,:,iblk), &
+                             aicen (:,:,  :,iblk), trcrn (:,:,1:ntrcr,:,iblk), &
                              vicen (:,:,  :,iblk), vsnon (:,:,  :,iblk), &
                              aice0 (:,:,    iblk), works (:,:,  :,iblk))
 
@@ -787,10 +806,11 @@
       ! convert work arrays back to state variables
       !-----------------------------------------------------------------
 
-         call work_to_state (nx_block,            ny_block,     &
-                             narr,                trcr_depend,     &
-                             aicen(:,:,  :,iblk), trcrn (:,:,:,:,iblk),     &
-                             vicen(:,:,  :,iblk), vsnon (:,:,  :,iblk),     &
+         call work_to_state (nx_block,            ny_block,             &
+                             ntrcr,                                     &
+                             narr,                trcr_depend,          &
+                             aicen(:,:,  :,iblk), trcrn (:,:,1:ntrcr,:,iblk), &
+                             vicen(:,:,  :,iblk), vsnon (:,:,  :,iblk), &
                              aice0(:,:,    iblk), works (:,:,  :,iblk)) 
 
       enddo                     ! iblk
@@ -809,6 +829,8 @@
 
       call ice_timer_stop(timer_advect)  ! advection 
 
+      deallocate (works)
+
       end subroutine transport_upwind
 
 !=======================================================================
@@ -823,8 +845,9 @@
 ! !INTERFACE:
 !
       subroutine state_to_tracers (nx_block, ny_block,   &
-                                   aice0,                &
-                                   aicen,    trcrn,      &
+                                   ntrcr,    ntrace,     &
+                                   aice0,    aicen,      &
+                                   trcrn,                &
                                    vicen,    vsnon,      &
                                    eicen,    esnon,      &
                                    aim,      trm)
@@ -851,7 +874,9 @@
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) ::     &
-           nx_block, ny_block  ! block dimensions
+           nx_block, ny_block, & ! block dimensions
+           ntrcr             , & ! number of tracers in use
+           ntrace                ! number of tracers in use incl. hi, hs
 
       real (kind=dbl_kind), dimension (nx_block,ny_block),     &
            intent(in) ::     &
@@ -985,9 +1010,10 @@
 ! !INTERFACE:
 !
       subroutine tracers_to_state (nx_block, ny_block,   &
+                                   ntrcr,    ntrace,     &
                                    aim,      trm,        &
-                                   aice0,                &
-                                   aicen,    trcrn,      &
+                                   aice0,    aicen,      &
+                                   trcrn,                &
                                    vicen,    vsnon,      &
                                    eicen,    esnon) 
 !
@@ -1006,7 +1032,9 @@
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) ::     &
-           nx_block, ny_block  ! block dimensions
+           nx_block, ny_block, & ! block dimensions
+           ntrcr             , & ! number of tracers in use
+           ntrace                ! number of tracers in use incl. hi, hs
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,0:ncat),     &
            intent(in) ::     &
@@ -1540,6 +1568,7 @@
 ! !INTERFACE:
 !
       subroutine state_to_work (nx_block, ny_block,        &
+                                ntrcr,                     &
                                 narr,     trcr_depend,     &
                                 aicen,    trcrn,           &
                                 vicen,    vsnon,           &
@@ -1561,7 +1590,8 @@
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) ::     &
-         nx_block, ny_block ,&! block dimensions
+         nx_block, ny_block, & ! block dimensions
+         ntrcr             , & ! number of tracers in use
          narr        ! number of 2D state variable arrays in works array
 
       integer (kind=int_kind), dimension (ntrcr), intent(in) ::     &
@@ -1654,6 +1684,7 @@
 ! !INTERFACE:
 !
       subroutine work_to_state (nx_block, ny_block,        &
+                                ntrcr,                     &
                                 narr,     trcr_depend,     &
                                 aicen,    trcrn,           &
                                 vicen,    vsnon,           &
@@ -1675,7 +1706,8 @@
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent (in) ::                       &
-         nx_block, ny_block ,&! block dimensions
+         nx_block, ny_block, & ! block dimensions
+         ntrcr             , & ! number of tracers in use
          narr        ! number of 2D state variable arrays in works array
 
       integer (kind=int_kind), dimension (ntrcr), intent(in) ::     &
@@ -1742,7 +1774,7 @@
 
          call compute_tracers (nx_block,     ny_block,               &
                                icells,       indxi,   indxj,         &
-                               trcr_depend,                          &
+                               ntrcr,        trcr_depend,            &
                                work (:,narrays+1:narrays+ntrcr),     &
                                aicen(:,:,n),                         &
                                vicen(:,:,n), vsnon(:,:,n),           &

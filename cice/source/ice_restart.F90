@@ -525,6 +525,7 @@
                          esno (:,:,  iblk),  &
                          aice0(:,:,  iblk),  &
                          tmask(:,:,  iblk),  &
+                         max_ntrcr,          &
                          trcr_depend)
 
          aice_init(:,:,iblk) = aice(:,:,iblk)

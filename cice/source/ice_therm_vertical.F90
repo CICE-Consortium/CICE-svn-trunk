@@ -32,7 +32,7 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size, only: ncat, nilyr, nslyr, ntilyr, ntslyr, ntrcr
+      use ice_domain_size, only: ncat, nilyr, nslyr, ntilyr, ntslyr, max_ntrcr
       use ice_constants
       use ice_fileunits, only: nu_diag
       use ice_age, only: tr_iage
@@ -151,7 +151,7 @@
          vicen , & ! volume per unit area of ice          (m)
          vsnon     ! volume per unit area of snow         (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr), &
          intent(inout) :: &
          trcrn
 

@@ -71,7 +71,7 @@
          esno      ! energy of melt. of snow layer    (J/m^2)
 
       real (kind=dbl_kind), &
-         dimension(nx_block,ny_block,ntrcr,max_blocks) :: &
+         dimension(nx_block,ny_block,max_ntrcr,max_blocks) :: &
          trcr      ! ice tracers
                    ! 1: surface temperature of ice/snow (C)
                    ! 2: meltpond volume                 (m)
@@ -95,14 +95,17 @@
          hpondn     ! pond depth         (m)
 
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,ntrcr,ncat,max_blocks) :: &
+         dimension (nx_block,ny_block,max_ntrcr,ncat,max_blocks) :: &
          trcrn     ! tracers
                    ! 1: surface temperature of ice/snow (C)
 
-      integer (kind=int_kind), dimension (ntrcr) :: &
+      integer (kind=int_kind), dimension (max_ntrcr) :: &
          trcr_depend   ! = 0 for ice area tracers
                        ! = 1 for ice volume tracers
                        ! = 2 for snow volume tracers
+
+      integer (kind=int_kind) :: &
+         ntrcr     ! number of tracers in use
 
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,ntilyr,max_blocks) :: &
@@ -114,7 +117,7 @@
 
       !-----------------------------------------------------------------
       ! indices for tracers
-      ! The maximum index should be no greater than ntrcr 
+      ! The maximum index should be no greater than max_ntrcr 
       ! (ice_domain_size) to prevent array out-of-bounds errors.
       !-----------------------------------------------------------------
 
@@ -185,7 +188,7 @@
          vsnon     ! volume per unit area of snow         (m)
 
       real (kind=dbl_kind), &
-         dimension(nx_block,ny_block,ntrcr,ncat,max_blocks), &
+         dimension(nx_block,ny_block,max_ntrcr,ncat,max_blocks), &
          intent(inout) :: &
          trcrn     ! ice tracers
 
