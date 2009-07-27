@@ -1724,10 +1724,10 @@
                          field_loc_center, field_type_scalar)
          call read_data (read6, 0, fyear, ixm, ixx, ixp, &
                          maxrec, uwind_file, uatm_data, &
-                         field_loc_center, field_type_scalar)
+                         field_loc_center, field_type_vector)
          call read_data (read6, 0, fyear, ixm, ixx, ixp, &
                          maxrec, vwind_file, vatm_data, &
-                         field_loc_center, field_type_scalar)
+                         field_loc_center, field_type_vector)
          call read_data (read6, 0, fyear, ixm, ixx, ixp, &
                          maxrec, rhoa_file, rhoa_data, &
                          field_loc_center, field_type_scalar)
@@ -1968,10 +1968,10 @@
                          field_loc_center, field_type_scalar)
          call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
                          uwind_file, uatm_data, &
-                         field_loc_center, field_type_scalar)
+                         field_loc_center, field_type_vector)
          call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
                          vwind_file, vatm_data, &
-                         field_loc_center, field_type_scalar)
+                         field_loc_center, field_type_vector)
          call read_data (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
                          fsw_file, fsw_data, &
                          field_loc_center, field_type_scalar)
@@ -2197,10 +2197,10 @@
                          field_loc_center, field_type_scalar)
          call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
                          uwind_file, uatm_data, &
-                         field_loc_center, field_type_scalar)
+                         field_loc_center, field_type_vector)
          call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
                          vwind_file, vatm_data, &
-                         field_loc_center, field_type_scalar)
+                         field_loc_center, field_type_vector)
          call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
                          humid_file, Qa_data, &
                          field_loc_center, field_type_scalar)
