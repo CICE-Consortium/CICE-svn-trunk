@@ -698,6 +698,18 @@ contains
 
    if (nxGlobal > 0) then
 
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate2DR8: Unknown field kind')
+      end select
+
       select case (fieldLoc)
       case (field_loc_center)   ! cell center location
 
@@ -716,9 +728,9 @@ contains
             iDst = nxGlobal - i
             x1 = bufTripoleR8(i   ,nghost+1)
             x2 = bufTripoleR8(iDst,nghost+1)
-            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
-            bufTripoleR8(i   ,nghost+1) = sign(xavg, x1)
-            bufTripoleR8(iDst,nghost+1) = sign(xavg, x2)
+            xavg = 0.5_dbl_kind*(x1 + isign*x2)
+            bufTripoleR8(i   ,nghost+1) = xavg
+            bufTripoleR8(iDst,nghost+1) = isign*xavg
          end do
 
       case (field_loc_Eface)   ! cell center location
@@ -738,26 +750,14 @@ contains
             iDst = nxGlobal + 1 - i
             x1 = bufTripoleR8(i   ,nghost+1)
             x2 = bufTripoleR8(iDst,nghost+1)
-            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
-            bufTripoleR8(i   ,nghost+1) = sign(xavg, x1)
-            bufTripoleR8(iDst,nghost+1) = sign(xavg, x2)
+            xavg = 0.5_dbl_kind*(x1 + isign*x2)
+            bufTripoleR8(i   ,nghost+1) = xavg
+            bufTripoleR8(iDst,nghost+1) = isign*xavg
          end do
 
       case default
          call abort_ice( &
             'ice_HaloUpdate2DR8: Unknown field location')
-      end select
-
-      select case (fieldKind)
-      case (field_type_scalar)
-         isign =  1
-      case (field_type_vector)
-         isign = -1
-      case (field_type_angle)
-         isign = -1
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate2DR8: Unknown field kind')
       end select
 
       !*** copy out of global tripole buffer into local
@@ -929,6 +929,18 @@ contains
 
    if (nxGlobal > 0) then
 
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate2DR4: Unknown field kind')
+      end select
+
       select case (fieldLoc)
       case (field_loc_center)   ! cell center location
 
@@ -947,9 +959,9 @@ contains
             iDst = nxGlobal - i
             x1 = bufTripoleR4(i   ,nghost+1)
             x2 = bufTripoleR4(iDst,nghost+1)
-            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
-            bufTripoleR4(i   ,nghost+1) = sign(xavg, x1)
-            bufTripoleR4(iDst,nghost+1) = sign(xavg, x2)
+            xavg = 0.5_real_kind*(x1 + isign*x2)
+            bufTripoleR4(i   ,nghost+1) = xavg
+            bufTripoleR4(iDst,nghost+1) = isign*xavg
          end do
 
       case (field_loc_Eface)   ! cell center location
@@ -969,26 +981,14 @@ contains
             iDst = nxGlobal + 1 - i
             x1 = bufTripoleR4(i   ,nghost+1)
             x2 = bufTripoleR4(iDst,nghost+1)
-            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
-            bufTripoleR4(i   ,nghost+1) = sign(xavg, x1)
-            bufTripoleR4(iDst,nghost+1) = sign(xavg, x2)
+            xavg = 0.5_real_kind*(x1 + isign*x2)
+            bufTripoleR4(i   ,nghost+1) = xavg
+            bufTripoleR4(iDst,nghost+1) = isign*xavg
          end do
 
       case default
          call abort_ice( &
             'ice_HaloUpdate2DR4: Unknown field location')
-      end select
-
-      select case (fieldKind)
-      case (field_type_scalar)
-         isign =  1
-      case (field_type_vector)
-         isign = -1
-      case (field_type_angle)
-         isign = -1
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate2DR4: Unknown field kind')
       end select
 
       !*** copy out of global tripole buffer into local
@@ -1160,6 +1160,18 @@ contains
 
    if (nxGlobal > 0) then
 
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate2DI4: Unknown field kind')
+      end select
+
       select case (fieldLoc)
       case (field_loc_center)   ! cell center location
 
@@ -1178,9 +1190,9 @@ contains
             iDst = nxGlobal - i
             x1 = bufTripoleI4(i   ,nghost+1)
             x2 = bufTripoleI4(iDst,nghost+1)
-            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
-            bufTripoleI4(i   ,nghost+1) = sign(xavg, x1)
-            bufTripoleI4(iDst,nghost+1) = sign(xavg, x2)
+            xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+            bufTripoleI4(i   ,nghost+1) = xavg
+            bufTripoleI4(iDst,nghost+1) = isign*xavg
          end do
 
       case (field_loc_Eface)   ! cell center location
@@ -1200,26 +1212,14 @@ contains
             iDst = nxGlobal + 1 - i
             x1 = bufTripoleI4(i   ,nghost+1)
             x2 = bufTripoleI4(iDst,nghost+1)
-            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
-            bufTripoleI4(i   ,nghost+1) = sign(xavg, x1)
-            bufTripoleI4(iDst,nghost+1) = sign(xavg, x2)
+            xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+            bufTripoleI4(i   ,nghost+1) = xavg
+            bufTripoleI4(iDst,nghost+1) = isign*xavg
          end do
 
       case default
          call abort_ice( &
             'ice_HaloUpdate2DI4: Unknown field location')
-      end select
-
-      select case (fieldKind)
-      case (field_type_scalar)
-         isign =  1
-      case (field_type_vector)
-         isign = -1
-      case (field_type_angle)
-         isign = -1
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate2DI4: Unknown field kind')
       end select
 
       !*** copy out of global tripole buffer into local
@@ -1404,6 +1404,18 @@ contains
 
    if (nxGlobal > 0) then
 
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DR8: Unknown field kind')
+      end select
+
       select case (fieldLoc)
       case (field_loc_center)   ! cell center location
 
@@ -1423,9 +1435,9 @@ contains
             iDst = nxGlobal - i
             x1 = bufTripole(i   ,nghost+1,k)
             x2 = bufTripole(iDst,nghost+1,k)
-            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
-            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
-            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+            xavg = 0.5_dbl_kind*(x1 + isign*x2)
+            bufTripole(i   ,nghost+1,k) = xavg
+            bufTripole(iDst,nghost+1,k) = isign*xavg
          end do
          end do
 
@@ -1447,27 +1459,15 @@ contains
             iDst = nxGlobal + 1 - i
             x1 = bufTripole(i   ,nghost+1,k)
             x2 = bufTripole(iDst,nghost+1,k)
-            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
-            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
-            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+            xavg = 0.5_dbl_kind*(x1 + isign*x2)
+            bufTripole(i   ,nghost+1,k) = xavg
+            bufTripole(iDst,nghost+1,k) = isign*xavg
          end do
          end do
 
       case default
          call abort_ice( &
             'ice_HaloUpdate3DR8: Unknown field location')
-      end select
-
-      select case (fieldKind)
-      case (field_type_scalar)
-         isign =  1
-      case (field_type_vector)
-         isign = -1
-      case (field_type_angle)
-         isign = -1
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate3DR8: Unknown field kind')
       end select
 
       !*** copy out of global tripole buffer into local
@@ -1657,6 +1657,18 @@ contains
 
    if (nxGlobal > 0) then
 
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DR4: Unknown field kind')
+      end select
+
       select case (fieldLoc)
       case (field_loc_center)   ! cell center location
 
@@ -1676,9 +1688,9 @@ contains
             iDst = nxGlobal - i
             x1 = bufTripole(i   ,nghost+1,k)
             x2 = bufTripole(iDst,nghost+1,k)
-            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
-            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
-            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+            xavg = 0.5_real_kind*(x1 + isign*x2)
+            bufTripole(i   ,nghost+1,k) = xavg
+            bufTripole(iDst,nghost+1,k) = isign*xavg
          end do
          end do
 
@@ -1700,27 +1712,15 @@ contains
             iDst = nxGlobal + 1 - i
             x1 = bufTripole(i   ,nghost+1,k)
             x2 = bufTripole(iDst,nghost+1,k)
-            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
-            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
-            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+            xavg = 0.5_real_kind*(x1 + isign*x2)
+            bufTripole(i   ,nghost+1,k) = xavg
+            bufTripole(iDst,nghost+1,k) = isign*xavg
          end do
          end do
 
       case default
          call abort_ice( &
             'ice_HaloUpdate3DR4: Unknown field location')
-      end select
-
-      select case (fieldKind)
-      case (field_type_scalar)
-         isign =  1
-      case (field_type_vector)
-         isign = -1
-      case (field_type_angle)
-         isign = -1
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate3DR4: Unknown field kind')
       end select
 
       !*** copy out of global tripole buffer into local
@@ -1910,6 +1910,18 @@ contains
 
    if (nxGlobal > 0) then
 
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate3DI4: Unknown field kind')
+      end select
+
       select case (fieldLoc)
       case (field_loc_center)   ! cell center location
 
@@ -1929,9 +1941,9 @@ contains
             iDst = nxGlobal - i
             x1 = bufTripole(i   ,nghost+1,k)
             x2 = bufTripole(iDst,nghost+1,k)
-            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
-            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
-            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+            xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+            bufTripole(i   ,nghost+1,k) = xavg
+            bufTripole(iDst,nghost+1,k) = isign*xavg
          end do
          end do
 
@@ -1953,27 +1965,15 @@ contains
             iDst = nxGlobal + 1 - i
             x1 = bufTripole(i   ,nghost+1,k)
             x2 = bufTripole(iDst,nghost+1,k)
-            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
-            bufTripole(i   ,nghost+1,k) = sign(xavg, x1)
-            bufTripole(iDst,nghost+1,k) = sign(xavg, x2)
+            xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+            bufTripole(i   ,nghost+1,k) = xavg
+            bufTripole(iDst,nghost+1,k) = isign*xavg
          end do
          end do
 
       case default
          call abort_ice( &
             'ice_HaloUpdate3DI4: Unknown field location')
-      end select
-
-      select case (fieldKind)
-      case (field_type_scalar)
-         isign =  1
-      case (field_type_vector)
-         isign = -1
-      case (field_type_angle)
-         isign = -1
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate3DI4: Unknown field kind')
       end select
 
       !*** copy out of global tripole buffer into local
@@ -2170,6 +2170,18 @@ contains
 
    if (nxGlobal > 0) then
 
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DR8: Unknown field kind')
+      end select
+
       select case (fieldLoc)
       case (field_loc_center)   ! cell center location
 
@@ -2190,9 +2202,9 @@ contains
             iDst = nxGlobal - i
             x1 = bufTripole(i   ,nghost+1,k,l)
             x2 = bufTripole(iDst,nghost+1,k,l)
-            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
-            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
-            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+            xavg = 0.5_dbl_kind*(x1 + isign*x2)
+            bufTripole(i   ,nghost+1,k,l) = xavg
+            bufTripole(iDst,nghost+1,k,l) = isign*xavg
          end do
          end do
          end do
@@ -2216,9 +2228,9 @@ contains
             iDst = nxGlobal + 1 - i
             x1 = bufTripole(i   ,nghost+1,k,l)
             x2 = bufTripole(iDst,nghost+1,k,l)
-            xavg = 0.5_dbl_kind*(abs(x1) + abs(x2))
-            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
-            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+            xavg = 0.5_dbl_kind*(x1 + isign*x2)
+            bufTripole(i   ,nghost+1,k,l) = xavg
+            bufTripole(iDst,nghost+1,k,l) = isign*xavg
          end do
          end do
          end do
@@ -2226,18 +2238,6 @@ contains
       case default
          call abort_ice( &
             'ice_HaloUpdate4DR8: Unknown field location')
-      end select
-
-      select case (fieldKind)
-      case (field_type_scalar)
-         isign =  1
-      case (field_type_vector)
-         isign = -1
-      case (field_type_angle)
-         isign = -1
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate4DR8: Unknown field kind')
       end select
 
       !*** copy out of global tripole buffer into local
@@ -2436,6 +2436,18 @@ contains
 
    if (nxGlobal > 0) then
 
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DR4: Unknown field kind')
+      end select
+
       select case (fieldLoc)
       case (field_loc_center)   ! cell center location
 
@@ -2456,9 +2468,9 @@ contains
             iDst = nxGlobal - i
             x1 = bufTripole(i   ,nghost+1,k,l)
             x2 = bufTripole(iDst,nghost+1,k,l)
-            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
-            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
-            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+            xavg = 0.5_real_kind*(x1 + isign*x2)
+            bufTripole(i   ,nghost+1,k,l) = xavg
+            bufTripole(iDst,nghost+1,k,l) = isign*xavg
          end do
          end do
          end do
@@ -2482,9 +2494,9 @@ contains
             iDst = nxGlobal + 1 - i
             x1 = bufTripole(i   ,nghost+1,k,l)
             x2 = bufTripole(iDst,nghost+1,k,l)
-            xavg = 0.5_real_kind*(abs(x1) + abs(x2))
-            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
-            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+            xavg = 0.5_real_kind*(x1 + isign*x2)
+            bufTripole(i   ,nghost+1,k,l) = xavg
+            bufTripole(iDst,nghost+1,k,l) = isign*xavg
          end do
          end do
          end do
@@ -2492,18 +2504,6 @@ contains
       case default
          call abort_ice( &
             'ice_HaloUpdate4DR4: Unknown field location')
-      end select
-
-      select case (fieldKind)
-      case (field_type_scalar)
-         isign =  1
-      case (field_type_vector)
-         isign = -1
-      case (field_type_angle)
-         isign = -1
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate4DR4: Unknown field kind')
       end select
 
       !*** copy out of global tripole buffer into local
@@ -2702,6 +2702,18 @@ contains
 
    if (nxGlobal > 0) then
 
+      select case (fieldKind)
+      case (field_type_scalar)
+         isign =  1
+      case (field_type_vector)
+         isign = -1
+      case (field_type_angle)
+         isign = -1
+      case default
+         call abort_ice( &
+            'ice_HaloUpdate4DI4: Unknown field kind')
+      end select
+
       select case (fieldLoc)
       case (field_loc_center)   ! cell center location
 
@@ -2722,9 +2734,9 @@ contains
             iDst = nxGlobal - i
             x1 = bufTripole(i   ,nghost+1,k,l)
             x2 = bufTripole(iDst,nghost+1,k,l)
-            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
-            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
-            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+            xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+            bufTripole(i   ,nghost+1,k,l) = xavg
+            bufTripole(iDst,nghost+1,k,l) = isign*xavg
          end do
          end do
          end do
@@ -2748,9 +2760,9 @@ contains
             iDst = nxGlobal + 1 - i
             x1 = bufTripole(i   ,nghost+1,k,l)
             x2 = bufTripole(iDst,nghost+1,k,l)
-            xavg = nint(0.5_dbl_kind*(abs(x1) + abs(x2)))
-            bufTripole(i   ,nghost+1,k,l) = sign(xavg, x1)
-            bufTripole(iDst,nghost+1,k,l) = sign(xavg, x2)
+            xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+            bufTripole(i   ,nghost+1,k,l) = xavg
+            bufTripole(iDst,nghost+1,k,l) = isign*xavg
          end do
          end do
          end do
@@ -2758,18 +2770,6 @@ contains
       case default
          call abort_ice( &
             'ice_HaloUpdate4DI4: Unknown field location')
-      end select
-
-      select case (fieldKind)
-      case (field_type_scalar)
-         isign =  1
-      case (field_type_vector)
-         isign = -1
-      case (field_type_angle)
-         isign = -1
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate4DI4: Unknown field kind')
       end select
 
       !*** copy out of global tripole buffer into local

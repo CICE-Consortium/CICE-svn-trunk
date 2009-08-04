@@ -1391,12 +1391,12 @@
             tmax(i,j,nt) =     &
               max (tmax(i-1,j+1,nt), tmax(i,j+1,nt), tmax(i+1,j+1,nt),     &
                    tmax(i-1,j,  nt), tmax(i,j,  nt), tmax(i+1,j,  nt),     &
-                   tmax(i-1,j-1,nt), tmax(i,j-1,nt), tmax(1+1,j-1,nt))
+                   tmax(i-1,j-1,nt), tmax(i,j-1,nt), tmax(i+1,j-1,nt))
 
             tmin(i,j,nt) =     &
               min (tmin(i-1,j+1,nt), tmin(i,j+1,nt), tmin(i+1,j+1,nt),     &
                    tmin(i-1,j,  nt), tmin(i,j,  nt), tmin(i+1,j,  nt),     &
-                   tmin(i-1,j-1,nt), tmin(i,j-1,nt), tmin(1+1,j-1,nt))
+                   tmin(i-1,j-1,nt), tmin(i,j-1,nt), tmin(i+1,j-1,nt))
 
          enddo                  ! i
          enddo                  ! j
