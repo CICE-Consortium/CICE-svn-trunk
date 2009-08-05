@@ -185,6 +185,8 @@
            f_mlt_onset = 'm', f_frz_onset  = 'm', &
            f_dardg1dt  = 'm', f_dardg2dt   = 'm', &
            f_dvirdgdt  = 'm', f_iage       = 'x',&
+           f_ardg      = 'm', f_vrdg       = 'm', &
+           f_alvl      = 'm', f_vlvl       = 'm', &
            f_hisnap    = 'm', f_aisnap     = 'm', &
            f_aicen     = 'm', f_vicen      = 'm', &
            f_apondn    = 'x',&
@@ -247,10 +249,11 @@
            f_daidtt,    f_daidtd   , &
            f_mlt_onset, f_frz_onset, &
            f_dardg1dt,  f_dardg2dt , &
-           f_dvirdgdt              , &
+           f_dvirdgdt,  f_iage     , &
+           f_ardg,      f_vrdg     , &
+           f_alvl,      f_vlvl     , &
            f_hisnap,    f_aisnap   , &
            f_aicen,     f_vicen    , &
-           f_iage,      &
            f_apondn   , &
            f_trsig,     f_icepresent,&
            f_fsurf_ai,  f_fcondtop_ai,&
@@ -325,6 +328,8 @@
            n_hisnap     , n_aisnap     , &
            n_trsig      , n_icepresent , &
            n_iage       , n_fsurf_ai   , &
+           n_ardg       , n_vrdg       , &
+           n_alvl       , n_vlvl       , &
            n_fcondtop_ai, n_fmeltt_ai
 
       ! Category dependent variables
@@ -371,6 +376,7 @@
       use ice_flux, only: mlt_onset, frz_onset, albcnt
       use ice_restart, only: restart
       use ice_age, only: tr_iage
+      use ice_mechred, only: tr_lvl
       use ice_meltpond, only: tr_pond
       use ice_exit
 !
@@ -439,6 +445,12 @@
 
       if (.not. tr_iage) f_iage = 'x'
       if (.not. tr_pond) f_apondn = 'x'
+      if (.not. tr_lvl) then
+          f_ardg = 'x'
+          f_vrdg = 'x'
+          f_alvl = 'x'
+          f_vlvl = 'x'
+      endif
 
       ! these must be output at the same frequency because of 
       ! cos(zenith angle) averaging
@@ -559,6 +571,10 @@
       call broadcast_scalar (f_flatn_ai, master_task)
 
       call broadcast_scalar (f_iage, master_task)
+      call broadcast_scalar (f_ardg, master_task)
+      call broadcast_scalar (f_vrdg, master_task)
+      call broadcast_scalar (f_alvl, master_task)
+      call broadcast_scalar (f_vlvl, master_task)
       call broadcast_scalar (f_apondn, master_task)
 
       do ns1 = 1, nstreams
@@ -1159,6 +1175,28 @@
              "sea ice age",                                        &
              "none", c1/(secday*days_per_year), c0,                &
              ns1, f_iage)
+
+      ! Level and Ridged ice       
+      if (f_alvl(1:1) /= 'x') &
+         call define_hist_field(n_alvl,"alvl","1",tstr, tcstr, &
+             "level ice area fraction",                            &
+             "none", c1, c0,                                       &
+             ns1, f_alvl)
+      if (f_vlvl(1:1) /= 'x') &
+         call define_hist_field(n_vlvl,"vlvl","m",tstr, tcstr, &
+             "level ice mean thickness",                           &
+             "none", c1, c0,                                       &
+             ns1, f_vlvl)
+      if (f_ardg(1:1) /= 'x') &
+         call define_hist_field(n_ardg,"ardg","1",tstr, tcstr, &
+             "ridged ice area fraction",                           &
+             "none", c1, c0,                                       &
+             ns1, f_ardg)
+      if (f_vrdg(1:1) /= 'x') &
+         call define_hist_field(n_vrdg,"vrdg","m",tstr, tcstr, &
+             "ridged ice mean thickness",                          &
+             "none", c1, c0,                                       &
+             ns1, f_vrdg)
        
       ! Melt ponds
       if (f_apondn(1:1) /= 'x') then
@@ -1490,6 +1528,18 @@
              call accum_hist_field(n_dardg2dt,iblk, dardg2dt(:,:,iblk))
          if (f_dvirdgdt(1:1)/= 'x') &
              call accum_hist_field(n_dvirdgdt,iblk, dvirdgdt(:,:,iblk))
+         if (f_alvl(1:1)/= 'x') &
+             call accum_hist_field(n_alvl,   iblk, &
+                                   aice(:,:,iblk) * trcr(:,:,nt_alvl,iblk))
+         if (f_vlvl(1:1)/= 'x') &
+             call accum_hist_field(n_vlvl,   iblk, &
+                                   vice(:,:,iblk) * trcr(:,:,nt_vlvl,iblk))
+         if (f_ardg(1:1)/= 'x') &
+             call accum_hist_field(n_ardg,   iblk, &
+                             aice(:,:,iblk) * (c1 - trcr(:,:,nt_alvl,iblk)))
+         if (f_vrdg(1:1)/= 'x') &
+             call accum_hist_field(n_vrdg,   iblk, &
+                             vice(:,:,iblk) * (c1 - trcr(:,:,nt_vlvl,iblk)))
 
          if (f_fsurf_ai(1:1)/= 'x') &
              call accum_hist_field(n_fsurf_ai,iblk, fsurf(:,:,iblk)*workb(:,:))

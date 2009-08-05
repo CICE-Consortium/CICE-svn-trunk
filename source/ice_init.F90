@@ -87,7 +87,7 @@
           sss_data_type,   sst_data_type, ocn_data_dir, &
           oceanmixed_file, restore_sst,   trestore 
       use ice_grid, only: grid_file, kmt_file, grid_type, grid_format
-      use ice_mechred, only: kstrength, krdg_partic, krdg_redist
+      use ice_mechred, only: kstrength, krdg_partic, krdg_redist, tr_lvl
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, &
                                shortwave, albedo_type, R_ice, R_pnd, &
@@ -95,6 +95,7 @@
       use ice_atmo, only: atmbndy, calc_strair
       use ice_transport_driver, only: advection
       use ice_age, only: tr_iage, restart_age
+      use ice_lvl, only: restart_lvl
       use ice_meltpond, only: tr_pond, restart_pond
       use ice_therm_vertical, only: calc_Tsfc, heat_capacity
       use ice_restoring
@@ -105,9 +106,11 @@
 !
       integer (kind=int_kind) :: &
         nml_error, & ! namelist i/o error flag
-        ns           ! loop index for history streams
+        n            ! loop index
 
       character (len=6) :: chartmp
+
+      logical (kind=log_kind), dimension(max_ntrcr) :: lwork
 
       !-----------------------------------------------------------------
       ! Namelist variables.
@@ -145,6 +148,7 @@
 
       namelist /tracer_nml/   &
         tr_iage, restart_age, &
+        tr_lvl, restart_lvl, &
         tr_pond, restart_pond
 
       !-----------------------------------------------------------------
@@ -243,6 +247,8 @@
       ! extra tracers
       tr_iage      = .false. ! ice age
       restart_age  = .false. ! ice age restart
+      tr_lvl       = .false. ! ridged ice 
+      restart_lvl  = .false. ! ridged ice restart
       tr_pond      = .false. ! explicit melt ponds
       restart_pond = .false. ! melt ponds restart
 
@@ -355,6 +361,31 @@
          precip_units='mks'
       endif
 
+      ! Turn on all tracers up to the largest index requested. The
+      ! alternative is to rearrange the index order in ice_state.F90 so 
+      ! that desired tracers are listed first.
+      lwork(:)        = .false.
+      lwork(nt_Tsfc)  = .true.
+      lwork(nt_iage)  = tr_iage
+      lwork(nt_alvl)  = tr_lvl
+      lwork(nt_vlvl)  = tr_lvl
+      lwork(nt_volpn) = tr_pond
+      do n = 2, max_ntrcr
+         if (lwork(n)==.true. .and. lwork(n-1)==.false.) lwork(n-1)=.true.
+      enddo
+      if (lwork(nt_iage) /= tr_iage) then
+         tr_iage = .true.
+         write(nu_diag,*) 'WARNING: Changing tr_iage to T'
+      endif        
+      if (lwork(nt_alvl) /= tr_lvl .or. lwork(nt_vlvl) /= tr_lvl) then
+         tr_lvl = .true.
+         write(nu_diag,*) 'WARNING: Changing tr_lvl to T'
+      endif        
+      if (lwork(nt_volpn) /= tr_pond) then
+         tr_pond = .true.
+         write(nu_diag,*) 'WARNING: Changing tr_pond to T'
+      endif        
+
       call broadcast_scalar(days_per_year,      master_task)
       call broadcast_scalar(year_init,          master_task)
       call broadcast_scalar(istep0,             master_task)
@@ -366,8 +397,8 @@
       call broadcast_scalar(diag_type,          master_task)
       call broadcast_scalar(diag_file,          master_task)
       call broadcast_scalar(history_format,     master_task)
-      do ns=1,max_nstrm
-         call broadcast_scalar(histfreq(ns),    master_task)
+      do n = 1, max_nstrm
+         call broadcast_scalar(histfreq(n),     master_task)
       enddo
       call broadcast_array(histfreq_n(:),       master_task)
       call broadcast_scalar(hist_avg,           master_task)
@@ -438,6 +469,8 @@
       ! tracers
       call broadcast_scalar(tr_iage,            master_task)
       call broadcast_scalar(restart_age,        master_task)
+      call broadcast_scalar(tr_lvl,             master_task)
+      call broadcast_scalar(restart_lvl,        master_task)
       call broadcast_scalar(tr_pond,            master_task)
       call broadcast_scalar(restart_pond,       master_task)
 
@@ -585,14 +618,15 @@
          ! tracers
          write(nu_diag,1010) ' tr_iage                   = ', tr_iage
          write(nu_diag,1010) ' restart_age               = ', restart_age
+         write(nu_diag,1010) ' tr_lvl                    = ', tr_lvl
+         write(nu_diag,1010) ' restart_lvl               = ', restart_lvl
          write(nu_diag,1010) ' tr_pond                   = ', tr_pond
          write(nu_diag,1010) ' restart_pond              = ', restart_pond
 
          ntrcr = 1 ! count tracers, starting with Tsfc = 1
          if (tr_iage) ntrcr = ntrcr + 1
+         if (tr_lvl)  ntrcr = ntrcr + 2 ! area and volume 
          if (tr_pond) ntrcr = ntrcr + 1
-         if (ntrcr < max_ntrcr) &
-            write(nu_diag,*) 'WARNING: max_ntrcr > number of tracers requested'
          if (ntrcr > max_ntrcr) then
             write(nu_diag,*) 'max_ntrcr < number of namelist tracers'
             call abort_ice('max_ntrcr < number of namelist tracers')
@@ -648,6 +682,7 @@
       use ice_itd
       use ice_exit
       use ice_age, only: tr_iage
+      use ice_mechred, only: tr_lvl
       use ice_meltpond, only: tr_pond
       use ice_therm_vertical, only: heat_capacity
 !
@@ -706,6 +741,8 @@
 
       trcr_depend(nt_Tsfc)  = 0   ! ice/snow surface temperature
       if (tr_iage) trcr_depend(nt_iage)  = 1   ! volume-weighted ice age
+      if (tr_lvl)  trcr_depend(nt_alvl)  = 0   ! ridged ice area
+      if (tr_lvl)  trcr_depend(nt_vlvl)  = 1   ! ridged ice volume
       if (tr_pond) trcr_depend(nt_volpn) = 0   ! melt pond volume
 
       do iblk = 1, nblocks

@@ -95,6 +95,10 @@
 !         l_conservation_check = .false.  ! if true, check conservation
                                         ! (useful for debugging)
 
+      ! in ice_lvl.F90, this causes a circular dependency
+      logical (kind=log_kind) :: & 
+         tr_lvl                  ! if .true., use level ice tracer
+
 !=======================================================================
 
       contains
@@ -1101,6 +1105,8 @@
 !
 ! !USES:
 !
+      use ice_state, only: nt_alvl, nt_vlvl
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -1452,6 +1458,20 @@
             virdg(m) = virdg(m) + virdgn(ij)
 
       !-----------------------------------------------------------------
+      ! Decrement level ice area and volume tracers
+      !-----------------------------------------------------------------
+
+            if (tr_lvl) then
+
+               ! Assume level and ridged ice both ridge, proportionally.
+               ! Subtract the level ice portion of the ridging ice from 
+               ! the level ice tracers.
+               atrcrn(m,nt_alvl,n) = atrcrn(m,nt_alvl,n) * (c1 - afrac(ij))
+               atrcrn(m,nt_vlvl,n) = atrcrn(m,nt_vlvl,n) * (c1 - afrac(ij))
+
+            endif
+
+      !-----------------------------------------------------------------
       !  Place part of the snow lost by ridging into the ocean.
       !-----------------------------------------------------------------
 
@@ -1551,7 +1571,6 @@
                enddo
             endif               ! trcr_depend
          enddo                  ! ntrcr
-
 
       !-----------------------------------------------------------------
       ! Add area, volume, and energy of new ridge to each category nr.
@@ -1727,7 +1746,6 @@
 
          enddo                  ! nr (new ridges)
       enddo                     ! n (ridging categories)
-
 
       !-----------------------------------------------------------------
       ! Compute new tracers

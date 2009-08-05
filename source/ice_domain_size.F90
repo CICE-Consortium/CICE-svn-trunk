@@ -39,7 +39,7 @@
         ntilyr    = ncat*nilyr, & ! number of ice layers in all categories
         nslyr     =   1       , & ! number of snow layers per category
         ntslyr    = ncat*nslyr, & ! number of snow layers in all categories
-        max_ntrcr =   3       , & ! number of tracers (defined in ice_state)
+        max_ntrcr =   5       , & ! number of tracers (defined in ice_state)
                                   ! 1 = surface temperature
         max_nstrm =   5           ! max number of history output streams
 
