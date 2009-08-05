@@ -45,6 +45,7 @@
       use ice_meltpond
       use ice_ocean
       use ice_orbital
+      use ice_lvl
       use ice_restoring
       use ice_shortwave
       use ice_therm_itd
@@ -159,6 +160,7 @@
 
       ! tracers
       if (tr_iage) call init_age        ! ice age tracer
+      if (tr_lvl)  call init_lvl        ! level ice tracer
       if (tr_pond) call init_meltponds  ! melt ponds
 
       call init_diags           ! initialize diagnostic output points

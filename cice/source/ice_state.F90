@@ -119,12 +119,15 @@
       ! indices for tracers
       ! The maximum index should be no greater than max_ntrcr 
       ! (ice_domain_size) to prevent array out-of-bounds errors.
+      ! nt_Tsfc MUST be 1!
       !-----------------------------------------------------------------
 
       integer (kind=int_kind), parameter :: &
          nt_Tsfc  =  1, & ! ice/snow surface temperature
          nt_iage  =  2, & ! volume-weighted ice age
-         nt_volpn =  3    ! melt pond volume
+         nt_alvl  =  3, & ! ridged ice area fraction
+         nt_vlvl  =  4, & ! ridged ice volume fraction
+         nt_volpn =  5    ! melt pond volume
 
       !-----------------------------------------------------------------
       ! dynamic variables closely related to the state of the ice

@@ -54,6 +54,8 @@
 &tracer_nml
     tr_iage      = .true.
   , restart_age  = .false.
+  , tr_lvl       = .false.
+  , restart_lvl  = .false.
   , tr_pond      = .false.
   , restart_pond = .false.
 /
@@ -196,6 +198,10 @@
   , f_trsig        = 'm'
   , f_icepresent   = 'm'
   , f_iage         = 'x'
+  , f_alvl         = 'x'
+  , f_vlvl         = 'x'
+  , f_ardg         = 'x'
+  , f_vrdg         = 'x'
   , f_aicen        = 'x'
   , f_vicen        = 'x'
   , f_fsurfn_ai    = 'x'
