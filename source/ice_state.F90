@@ -117,17 +117,14 @@
 
       !-----------------------------------------------------------------
       ! indices for tracers
-      ! The maximum index should be no greater than max_ntrcr 
-      ! (ice_domain_size) to prevent array out-of-bounds errors.
-      ! nt_Tsfc MUST be 1!
       !-----------------------------------------------------------------
 
-      integer (kind=int_kind), parameter :: &
-         nt_Tsfc  =  1, & ! ice/snow surface temperature
-         nt_iage  =  2, & ! volume-weighted ice age
-         nt_alvl  =  3, & ! ridged ice area fraction
-         nt_vlvl  =  4, & ! ridged ice volume fraction
-         nt_volpn =  5    ! melt pond volume
+      integer (kind=int_kind) :: &
+         nt_Tsfc  , & ! ice/snow surface temperature
+         nt_iage  , & ! volume-weighted ice age
+         nt_alvl  , & ! ridged ice area fraction
+         nt_vlvl  , & ! ridged ice volume fraction
+         nt_volpn     ! melt pond volume
 
       !-----------------------------------------------------------------
       ! dynamic variables closely related to the state of the ice
@@ -207,7 +204,7 @@
 !
          call ice_HaloUpdate (aicen,            halo_info, &
                               field_loc_center, field_type_scalar)
-         call ice_HaloUpdate (trcrn,            halo_info, &
+         call ice_HaloUpdate (trcrn(:,:,1:ntrcr,:,:), halo_info, &
                               field_loc_center, field_type_scalar)
          call ice_HaloUpdate (vicen,            halo_info, &
                               field_loc_center, field_type_scalar)
