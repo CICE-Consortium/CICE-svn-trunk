@@ -361,31 +361,6 @@
          precip_units='mks'
       endif
 
-      ! Turn on all tracers up to the largest index requested. The
-      ! alternative is to rearrange the index order in ice_state.F90 so 
-      ! that desired tracers are listed first.
-      lwork(:)        = .false.
-      lwork(nt_Tsfc)  = .true.
-      lwork(nt_iage)  = tr_iage
-      lwork(nt_alvl)  = tr_lvl
-      lwork(nt_vlvl)  = tr_lvl
-      lwork(nt_volpn) = tr_pond
-      do n = 2, max_ntrcr
-         if (lwork(n)==.true. .and. lwork(n-1)==.false.) lwork(n-1)=.true.
-      enddo
-      if (lwork(nt_iage) /= tr_iage) then
-         tr_iage = .true.
-         write(nu_diag,*) 'WARNING: Changing tr_iage to T'
-      endif        
-      if (lwork(nt_alvl) /= tr_lvl .or. lwork(nt_vlvl) /= tr_lvl) then
-         tr_lvl = .true.
-         write(nu_diag,*) 'WARNING: Changing tr_lvl to T'
-      endif        
-      if (lwork(nt_volpn) /= tr_pond) then
-         tr_pond = .true.
-         write(nu_diag,*) 'WARNING: Changing tr_pond to T'
-      endif        
-
       call broadcast_scalar(days_per_year,      master_task)
       call broadcast_scalar(year_init,          master_task)
       call broadcast_scalar(istep0,             master_task)
@@ -623,10 +598,26 @@
          write(nu_diag,1010) ' tr_pond                   = ', tr_pond
          write(nu_diag,1010) ' restart_pond              = ', restart_pond
 
-         ntrcr = 1 ! count tracers, starting with Tsfc = 1
-         if (tr_iage) ntrcr = ntrcr + 1
-         if (tr_lvl)  ntrcr = ntrcr + 2 ! area and volume 
-         if (tr_pond) ntrcr = ntrcr + 1
+         nt_Tsfc = 1           ! index tracers, starting with Tsfc = 1
+         ntrcr = 1             ! count tracers, starting with Tsfc = 1
+
+         if (tr_iage) then
+             nt_iage = ntrcr + 1
+             ntrcr = ntrcr + 1
+         endif
+
+         if (tr_lvl) then
+             nt_alvl = ntrcr + 1
+             ntrcr = ntrcr + 1
+             nt_vlvl = ntrcr + 1
+             ntrcr = ntrcr + 1
+         endif
+
+         if (tr_pond) then
+             nt_volpn = ntrcr + 1
+             ntrcr = ntrcr + 1
+         endif
+
          if (ntrcr > max_ntrcr) then
             write(nu_diag,*) 'max_ntrcr < number of namelist tracers'
             call abort_ice('max_ntrcr < number of namelist tracers')
@@ -650,7 +641,13 @@
          endif
 
       endif                     ! my_task = master_task
-      call broadcast_scalar(ntrcr, master_task)
+
+      call broadcast_scalar(ntrcr,    master_task)
+      call broadcast_scalar(nt_Tsfc,  master_task)
+      call broadcast_scalar(nt_iage,  master_task)
+      call broadcast_scalar(nt_alvl,  master_task)
+      call broadcast_scalar(nt_vlvl,  master_task)
+      call broadcast_scalar(nt_volpn, master_task)
 
       end subroutine input_data
 
