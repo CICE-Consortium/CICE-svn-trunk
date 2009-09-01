@@ -37,7 +37,8 @@
          iblock, jblock       ! cartesian i,j position for block
 
       logical (log_kind) :: &
-         tripole              ! flag is true if block is at tripole bndy
+         tripole,           & ! flag is true if block is at tripole bndy
+         tripoleTFlag         ! tripole boundary is a T-fold
 
       integer (int_kind), dimension(:), pointer :: &
          i_glob, j_glob     ! global domain location for each point
@@ -223,11 +224,13 @@ contains
          all_blocks(n)%jhi      = ny_block - nghost ! default value
 
          if (jblock == nblocks_y .and. &
-             ns_boundary_type == 'tripole') then
+             (ns_boundary_type == 'tripole' .or. &
+             ns_boundary_type == 'tripoleT')) then
              all_blocks(n)%tripole = .true.
          else
              all_blocks(n)%tripole = .false.
          endif
+         all_blocks(n)%tripoleTFlag = (ns_boundary_type == 'tripoleT')
 
          all_blocks_ij(iblock,jblock) = n
 
@@ -246,6 +249,8 @@ contains
                   j_global(j,n) = 0
                case ('tripole')
                   j_global(j,n) = nghost - j + 1 ! open
+               case ('tripoleT')
+                  j_global(j,n) = -j_global(j,n) + 1 ! open
                case default
                   call abort_ice(&
                            'ice: create_blocks: unknown n-s bndy type')
@@ -268,6 +273,8 @@ contains
                case ('closed')
                   j_global(j,n) = 0
                case ('tripole')
+                  j_global(j,n) = -j_global(j,n)
+               case ('tripoleT')
                   j_global(j,n) = -j_global(j,n)
                case default
                   call abort_ice(&
@@ -404,7 +411,7 @@ end subroutine create_blocks
 
    character (*), intent(in) :: &
       iBoundary,     &! determines what to do at edges of domain
-      jBoundary       !  options are - open, closed, cyclic, tripole
+      jBoundary       !  options are - open, closed, cyclic, tripole, tripoleT
 
 ! !OUTPUT PARAMETERS:
 
@@ -451,7 +458,7 @@ end subroutine create_blocks
             jnbr = 0
          case ('cyclic')
             jnbr = 1
-         case ('tripole')
+         case ('tripole':'tripoleT')
             !*** return negative j value to flag tripole
             !*** i index of main northern neighbor across the
             !*** tripole cut - may also need i+1,i-1 to get
@@ -479,6 +486,8 @@ end subroutine create_blocks
          case ('cyclic')
             jnbr = nblocks_y
          case ('tripole')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
+         case ('tripoleT')
             jnbr = 0 ! do not write into the neighbor's ghost cells
          case default
             call abort_ice( &
@@ -547,7 +556,7 @@ end subroutine create_blocks
             jnbr = 0
          case ('cyclic')
             jnbr = 1
-         case ('tripole')
+         case ('tripole':'tripoleT')
             !*** return negative j value to flag tripole
             !*** i index of main northern neighbor across the
             !*** tripole cut - may also need i+1,i-1 to get
@@ -588,7 +597,7 @@ end subroutine create_blocks
             jnbr = 0
          case ('cyclic')
             jnbr = 1
-         case ('tripole')
+         case ('tripole':'tripoleT')
             !*** return negative j value to flag tripole
             !*** i index of main northern neighbor across the
             !*** tripole cut - may also need i+1,i-1 to get
@@ -631,6 +640,8 @@ end subroutine create_blocks
             jnbr = nblocks_y
          case ('tripole')
             jnbr = 0 ! do not write into the neighbor's ghost cells
+         case ('tripoleT')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
          case default
             call abort_ice( &
                'ice_blocksGetNbrID: unknown south boundary')
@@ -662,6 +673,8 @@ end subroutine create_blocks
          case ('cyclic')
             jnbr = nblocks_y
          case ('tripole')
+            jnbr = 0 ! do not write into the neighbor's ghost cells
+         case ('tripoleT')
             jnbr = 0 ! do not write into the neighbor's ghost cells
          case default
             call abort_ice( &
@@ -729,7 +742,7 @@ end subroutine create_blocks
             jnbr = 0
          case ('cyclic')
             jnbr = jnbr - nblocks_y
-         case ('tripole')
+         case ('tripole':'tripoleT')
             !*** return negative j value to flag tripole
             !*** i index of main northern neighbor across the
             !*** tripole cut - may also need i+1,i-1 to get
@@ -770,7 +783,7 @@ end subroutine create_blocks
             jnbr = 0
          case ('cyclic')
             jnbr = jnbr + nblocks_y
-         case ('tripole')
+         case ('tripole':'tripoleT')
             !*** return negative j value to flag tripole
             !*** i index of main northern neighbor across the
             !*** tripole cut - may also need i+1,i-1 to get

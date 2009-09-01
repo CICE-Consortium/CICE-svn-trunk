@@ -295,7 +295,8 @@
 
       elseif (this_block%jblock == nblocks_y) then  ! north edge
          if (trim(ns_boundary_type) /= 'cyclic' .and. &
-             trim(ns_boundary_type) /= 'tripole' ) then
+             trim(ns_boundary_type) /= 'tripole' .and. &
+             trim(ns_boundary_type) /= 'tripoleT') then
             ! locate ghost cell row (avoid padding)
             ibc = ny_block + 1
             npad = 0

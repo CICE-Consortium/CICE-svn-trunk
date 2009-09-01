@@ -1837,6 +1837,7 @@
       use ice_itd, only: c_hi_range
       use ice_exit
       use netcdf
+#endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1844,6 +1845,7 @@
 !
 !EOP
 !
+#ifdef ncdf
       integer (kind=int_kind) :: i,j,n, &
          ncid,status,imtid,jmtid,timid,varid, &
          length,nvertexid,ivertex
