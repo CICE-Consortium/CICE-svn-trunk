@@ -113,6 +113,8 @@
 !EOP
 !BOC
 
+! This flag is apparently never used; if it were used, it might need
+! a corresponding tripoleTFlag to be defined.
    ltripole_grid = tripole_flag
 
 !EOC
@@ -184,7 +186,11 @@
       numProcs,     &! number of processor participating
       numBlocks,    &! number of local blocks
       communicator, &! communicator for this distribution
-      nreduce        ! mpi count
+      nreduce,      &! mpi count
+      maxiglob       ! maximum non-redundant value of i_global
+
+   logical (log_kind) :: &
+      Nrow           ! this field is on a N row (a velocity row)
 
    type (block) :: &
       this_block     ! holds local block information
@@ -247,33 +253,41 @@
          end do
       endif
 
-      !*** if this block along tripole boundary and field 
-      !*** located on north face and northeast corner points
+      !*** if this row along or beyond tripole boundary
       !*** must eliminate redundant points from global sum
 
       if (this_block%tripole) then
-         if (field_loc == field_loc_Nface .or. &
-             field_loc == field_loc_NEcorner) then
+         Nrow=(field_loc == field_loc_Nface .or. &
+            field_loc == field_loc_NEcorner)
+         if (Nrow .and. this_block%tripoleTFlag) then
+            maxiglob = 0 ! entire u-row on T-fold grid
+         elseif (Nrow .or. this_block%tripoleTFlag) then
+            maxiglob = nx_global/2 ! half T-row on T-fold and u-row on u-fold
+         else
+            maxiglob = -1 ! nothing to do for T-row on u-fold
+         endif
+
+         if (maxiglob > 0) then
 
             j = je
 
             if (present(mMask)) then
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      blockSum(n) = &
                      blockSum(n) - array(i,j,iblock)*mMask(i,j,iblock)
                   endif
                end do
             else if (present(lMask)) then
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      if (lMask(i,j,iblock)) &
                      blockSum(n) = blockSum(n) - array(i,j,iblock)
                   endif
                end do
             else
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      blockSum(n) = blockSum(n) - array(i,j,iblock)
                   endif
                end do
@@ -369,7 +383,11 @@
       blockID,      &! block location
       numProcs,     &! number of processor participating
       numBlocks,    &! number of local blocks
-      communicator   ! communicator for this distribution
+      communicator, &! communicator for this distribution
+      maxiglob       ! maximum non-redundant value of i_global
+
+   logical (log_kind) :: &
+      Nrow           ! this field is on a N row (a velocity row)
 
    type (block) :: &
       this_block     ! holds local block information
@@ -428,33 +446,41 @@
          end do
       endif
 
-      !*** if this block along tripole boundary and field 
-      !*** located on north face and northeast corner points
+      !*** if this row along or beyond tripole boundary
       !*** must eliminate redundant points from global sum
 
       if (this_block%tripole) then
-         if (field_loc == field_loc_Nface .or. &
-             field_loc == field_loc_NEcorner) then
+         Nrow=(field_loc == field_loc_Nface .or. &
+            field_loc == field_loc_NEcorner)
+         if (Nrow .and. this_block%tripoleTFlag) then
+            maxiglob = 0 ! entire u-row on T-fold grid
+         elseif (Nrow .or. this_block%tripoleTFlag) then
+            maxiglob = nx_global/2 ! half T-row on T-fold and u-row on u-fold
+         else
+            maxiglob = -1 ! nothing to do for T-row on u-fold
+         endif
+
+         if (maxiglob > 0) then
 
             j = je
 
             if (present(mMask)) then
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      blockSum = &
                      blockSum - array(i,j,iblock)*mMask(i,j,iblock)
                   endif
                end do
             else if (present(lMask)) then
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      if (lMask(i,j,iblock)) &
                      blockSum = blockSum - array(i,j,iblock)
                   endif
                end do
             else
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      blockSum = blockSum - array(i,j,iblock)
                   endif
                end do
@@ -556,7 +582,11 @@
       blockID,      &! block location
       numProcs,     &! number of processor participating
       numBlocks,    &! number of local blocks
-      communicator   ! communicator for this distribution
+      communicator, &! communicator for this distribution
+      maxiglob       ! maximum non-redundant value of i_global
+
+   logical (log_kind) :: &
+      Nrow           ! this field is on a N row (a velocity row)
 
    type (block) :: &
       this_block     ! holds local block information
@@ -607,33 +637,41 @@
          end do
       endif
 
-      !*** if this block along tripole boundary and field 
-      !*** located on north face and northeast corner points
+      !*** if this row along or beyond tripole boundary
       !*** must eliminate redundant points from global sum
 
       if (this_block%tripole) then
-         if (field_loc == field_loc_Nface .or. &
-             field_loc == field_loc_NEcorner) then
+         Nrow=(field_loc == field_loc_Nface .or. &
+            field_loc == field_loc_NEcorner)
+         if (Nrow .and. this_block%tripoleTFlag) then
+            maxiglob = 0 ! entire u-row on T-fold grid
+         elseif (Nrow .or. this_block%tripoleTFlag) then
+            maxiglob = nx_global/2 ! half T-row on T-fold and u-row on u-fold
+         else
+            maxiglob = -1 ! nothing to do for T-row on u-fold
+         endif
+
+         if (maxiglob > 0) then
 
             j = je
 
             if (present(mMask)) then
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      blockSum = &
                      blockSum - array(i,j,iblock)*mMask(i,j,iblock)
                   endif
                end do
             else if (present(lMask)) then
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      if (lMask(i,j,iblock)) &
                      blockSum = blockSum - array(i,j,iblock)
                   endif
                end do
             else
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      blockSum = blockSum - array(i,j,iblock)
                   endif
                end do
@@ -992,7 +1030,11 @@
       numBlocks,       &! number of local blocks
       numProcs,        &! number of processor participating
       communicator,    &! communicator for this distribution
-      nreduce           ! mpi count
+      nreduce,         &! mpi count
+      maxiglob          ! maximum non-redundant value of i_global
+
+   logical (log_kind) :: &
+      Nrow           ! this field is on a N row (a velocity row)
 
    type (block) :: &
       this_block     ! holds local block information
@@ -1056,19 +1098,27 @@
          end do
       endif
 
-      !*** if this block along tripole boundary and field 
-      !*** located on north face and northeast corner points
+      !*** if this row along or beyond tripole boundary
       !*** must eliminate redundant points from global sum
 
       if (this_block%tripole) then
-         if (field_loc == field_loc_Nface .or. &
-             field_loc == field_loc_NEcorner) then
+         Nrow=(field_loc == field_loc_Nface .or. &
+            field_loc == field_loc_NEcorner)
+         if (Nrow .and. this_block%tripoleTFlag) then
+            maxiglob = 0 ! entire u-row on T-fold grid
+         elseif (Nrow .or. this_block%tripoleTFlag) then
+            maxiglob = nx_global/2 ! half T-row on T-fold and u-row on u-fold
+         else
+            maxiglob = -1 ! nothing to do for T-row on u-fold
+         endif
+
+         if (maxiglob > 0) then
 
             j = je
 
             if (present(mMask)) then
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      blockSum(n) = &
                      blockSum(n) - array1(i,j,iblock)*array2(i,j,iblock)* &
                                 mMask(i,j,iblock)
@@ -1076,7 +1126,7 @@
                end do
             else if (present(lMask)) then
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      if (lMask(i,j,iblock)) &
                         blockSum(n) = blockSum(n) - &
                                    array1(i,j,iblock)*array2(i,j,iblock)
@@ -1084,7 +1134,7 @@
                end do
             else
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      blockSum(n) = blockSum(n) - &
                                 array1(i,j,iblock)*array2(i,j,iblock)
                   endif
@@ -1184,7 +1234,11 @@
       blockID,         &! block location
       numBlocks,       &! number of local blocks
       numProcs,        &! number of processor participating
-      communicator      ! communicator for this distribution
+      communicator,    &! communicator for this distribution
+      maxiglob          ! maximum non-redundant value of i_global
+
+   logical (log_kind) :: &
+      Nrow           ! this field is on a N row (a velocity row)
 
    type (block) :: &
       this_block          ! holds local block information
@@ -1244,19 +1298,27 @@
          end do
       endif
 
-      !*** if this block along tripole boundary and field 
-      !*** located on north face and northeast corner points
+      !*** if this row along or beyond tripole boundary
       !*** must eliminate redundant points from global sum
 
       if (this_block%tripole) then
-         if (field_loc == field_loc_Nface .or. &
-             field_loc == field_loc_NEcorner) then
+         Nrow=(field_loc == field_loc_Nface .or. &
+            field_loc == field_loc_NEcorner)
+         if (Nrow .and. this_block%tripoleTFlag) then
+            maxiglob = 0 ! entire u-row on T-fold grid
+         elseif (Nrow .or. this_block%tripoleTFlag) then
+            maxiglob = nx_global/2 ! half T-row on T-fold and u-row on u-fold
+         else
+            maxiglob = -1 ! nothing to do for T-row on u-fold
+         endif
+
+         if (maxiglob > 0) then
 
             j = je
 
             if (present(mMask)) then
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      blockSum = &
                      blockSum - array1(i,j,iblock)*array2(i,j,iblock)* &
                                 mMask(i,j,iblock)
@@ -1264,7 +1326,7 @@
                end do
             else if (present(lMask)) then
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      if (lMask(i,j,iblock)) &
                         blockSum = blockSum - &
                                    array1(i,j,iblock)*array2(i,j,iblock)
@@ -1272,7 +1334,7 @@
                end do
             else
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      blockSum = blockSum - &
                                 array1(i,j,iblock)*array2(i,j,iblock)
                   endif
@@ -1377,7 +1439,11 @@
       blockID,         &! block location
       numBlocks,       &! number of local blocks
       numProcs,        &! number of processor participating
-      communicator      ! communicator for this distribution
+      communicator,    &! communicator for this distribution
+      maxiglob          ! maximum non-redundant value of i_global
+
+   logical (log_kind) :: &
+      Nrow           ! this field is on a N row (a velocity row)
 
    type (block) :: &
       this_block          ! holds local block information
@@ -1429,19 +1495,27 @@
          end do
       endif
 
-      !*** if this block along tripole boundary and field 
-      !*** located on north face and northeast corner points
+      !*** if this row along or beyond tripole boundary
       !*** must eliminate redundant points from global sum
 
       if (this_block%tripole) then
-         if (field_loc == field_loc_Nface .or. &
-             field_loc == field_loc_NEcorner) then
+         Nrow=(field_loc == field_loc_Nface .or. &
+            field_loc == field_loc_NEcorner)
+         if (Nrow .and. this_block%tripoleTFlag) then
+            maxiglob = 0 ! entire u-row on T-fold grid
+         elseif (Nrow .or. this_block%tripoleTFlag) then
+            maxiglob = nx_global/2 ! half T-row on T-fold and u-row on u-fold
+         else
+            maxiglob = -1 ! nothing to do for T-row on u-fold
+         endif
+
+         if (maxiglob > 0) then
 
             j = je
 
             if (present(mMask)) then
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      blockSum = &
                      blockSum - array1(i,j,iblock)*array2(i,j,iblock)* &
                                 mMask(i,j,iblock)
@@ -1449,7 +1523,7 @@
                end do
             else if (present(lMask)) then
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      if (lMask(i,j,iblock)) &
                         blockSum = blockSum - &
                                    array1(i,j,iblock)*array2(i,j,iblock)
@@ -1457,7 +1531,7 @@
                end do
             else
                do i=ib,ie
-                  if (this_block%i_glob(i) > nx_global/2) then
+                  if (this_block%i_glob(i) > maxiglob) then
                      blockSum = blockSum - &
                                 array1(i,j,iblock)*array2(i,j,iblock)
                   endif

@@ -49,7 +49,11 @@
    type, public :: ice_halo
       integer (int_kind) ::  &
          communicator,     &! communicator to use for update messages
-         numLocalCopies     ! num local copies for halo update
+         numLocalCopies,   &! num local copies for halo update
+         tripoleRows        ! number of rows in tripole buffer
+
+      logical (log_kind) ::  &
+         tripoleTFlag       ! NS boundary is a tripole T-fold
 
       integer (int_kind), dimension(:,:), pointer :: &
          srcLocalAddr,     &! src addresses for each local copy
@@ -160,6 +164,7 @@ contains
       blockSizeY,                  &! size of default physical domain in Y 
       eastMsgSize, westMsgSize,    &! nominal sizes for e-w msgs
       northMsgSize, southMsgSize,  &! nominal sizes for n-s msgs
+      tripoleRows,                 &! number of rows in tripole buffer
       cornerMsgSize, msgSize        ! nominal size for corner msg
 
    integer (int_kind), dimension(:), allocatable :: &
@@ -167,7 +172,8 @@ contains
 
    logical (log_kind) :: &
       tripoleFlag,          &! flag for allocating tripole buffers
-      tripoleBlock           ! flag for identifying north tripole blocks
+      tripoleBlock,         &! flag for identifying north tripole blocks
+      tripoleTFlag           ! flag for processing tripole buffer as T-fold
 
 !-----------------------------------------------------------------------
 !
@@ -190,17 +196,20 @@ contains
    westMsgSize  = nghost*blockSizeY
    southMsgSize = nghost*blockSizeX
    cornerMsgSize = nghost*nghost
+   tripoleRows = nghost+1
 
-   if (nsBoundaryType == 'tripole') then
+   if (nsBoundaryType == 'tripole' .or. nsBoundaryType == 'tripoleT') then
       tripoleFlag = .true.
-      northMsgSize = (nghost+1)*blockSizeX
+      tripoleTFlag = (nsBoundaryType == 'tripoleT')
+      if (tripoleTflag) tripoleRows = tripoleRows+1
+      northMsgSize = tripoleRows*blockSizeX
 
       !*** allocate tripole message buffers if not already done
 
       if (.not. allocated(bufTripoleR8)) then
-         allocate (bufTripoleI4(nxGlobal, nghost+1), &
-                   bufTripoleR4(nxGlobal, nghost+1), &
-                   bufTripoleR8(nxGlobal, nghost+1), &
+         allocate (bufTripoleI4(nxGlobal, tripoleRows), &
+                   bufTripoleR4(nxGlobal, tripoleRows), &
+                   bufTripoleR8(nxGlobal, tripoleRows), &
                    stat=istat)
 
          if (istat > 0) then
@@ -212,8 +221,11 @@ contains
 
    else
       tripoleFlag = .false.
+      tripoleTFlag = .false.
       northMsgSize = nghost*blockSizeX
    endif
+   halo%tripoleTFlag = tripoleTFlag
+   halo%tripoleRows = tripoleRows
 
 !-----------------------------------------------------------------------
 !
@@ -691,8 +703,8 @@ contains
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
-!  bufTripole array contains the top nghost+1 rows of physical
-!    domain for entire (global) top row 
+!  bufTripole array contains the top nghost+1 rows (u-fold) or nghost+2 rows
+!  (T-fold) of physical domain for entire (global) top row 
 !
 !-----------------------------------------------------------------------
 
@@ -710,55 +722,111 @@ contains
             'ice_HaloUpdate2DR8: Unknown field kind')
       end select
 
-      select case (fieldLoc)
-      case (field_loc_center)   ! cell center location
+      if (halo%tripoleTFlag) then
 
-         ioffset = 0
-         joffset = 0
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = -1
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do i = 2,nxGlobal/2
+              iDst = nxGlobal - i + 2
+              x1 = bufTripoleR8(i   ,halo%tripoleRows)
+              x2 = bufTripoleR8(iDst,halo%tripoleRows)
+              xavg = 0.5_dbl_kind*(x1 + isign*x2)
+              bufTripoleR8(i   ,halo%tripoleRows) = xavg
+              bufTripoleR8(iDst,halo%tripoleRows) = isign*xavg
+           end do
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 0
+           joffset = 1
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripoleR8(i   ,halo%tripoleRows)
+              x2 = bufTripoleR8(iDst,halo%tripoleRows)
+              xavg = 0.5_dbl_kind*(x1 + isign*x2)
+              bufTripoleR8(i   ,halo%tripoleRows) = xavg
+              bufTripoleR8(iDst,halo%tripoleRows) = isign*xavg
+           end do
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = -1
+           joffset = 1
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate2DR8: Unknown field location')
+        end select
 
-      case (field_loc_NEcorner)   ! cell corner location
+      else ! tripole u-fold
 
-         ioffset = 1
-         joffset = 1
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 1
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do i = 1,nxGlobal/2 - 1
+              iDst = nxGlobal - i
+              x1 = bufTripoleR8(i   ,halo%tripoleRows)
+              x2 = bufTripoleR8(iDst,halo%tripoleRows)
+              xavg = 0.5_dbl_kind*(x1 + isign*x2)
+              bufTripoleR8(i   ,halo%tripoleRows) = xavg
+              bufTripoleR8(iDst,halo%tripoleRows) = isign*xavg
+           end do
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 1
+           joffset = 0
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = 0
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripoleR8(i   ,halo%tripoleRows)
+              x2 = bufTripoleR8(iDst,halo%tripoleRows)
+              xavg = 0.5_dbl_kind*(x1 + isign*x2)
+              bufTripoleR8(i   ,halo%tripoleRows) = xavg
+              bufTripoleR8(iDst,halo%tripoleRows) = isign*xavg
+           end do
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate2DR8: Unknown field location')
+        end select
 
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do i = 1,nxGlobal/2 - 1
-            iDst = nxGlobal - i
-            x1 = bufTripoleR8(i   ,nghost+1)
-            x2 = bufTripoleR8(iDst,nghost+1)
-            xavg = 0.5_dbl_kind*(x1 + isign*x2)
-            bufTripoleR8(i   ,nghost+1) = xavg
-            bufTripoleR8(iDst,nghost+1) = isign*xavg
-         end do
-
-      case (field_loc_Eface)   ! cell center location
-
-         ioffset = 1
-         joffset = 0
-
-      case (field_loc_Nface)   ! cell corner (velocity) location
-
-         ioffset = 0
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do i = 1,nxGlobal/2
-            iDst = nxGlobal + 1 - i
-            x1 = bufTripoleR8(i   ,nghost+1)
-            x2 = bufTripoleR8(iDst,nghost+1)
-            xavg = 0.5_dbl_kind*(x1 + isign*x2)
-            bufTripoleR8(i   ,nghost+1) = xavg
-            bufTripoleR8(iDst,nghost+1) = isign*xavg
-         end do
-
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate2DR8: Unknown field location')
-      end select
+      endif
 
       !*** copy out of global tripole buffer into local
       !*** ghost cells
@@ -782,13 +850,15 @@ contains
             iSrc = iSrc - ioffset
             jSrc = jSrc - joffset
             if (iSrc == 0) iSrc = nxGlobal
+            if (iSrc > nxGlobal) iSrc = iSrc - nxGlobal
 
-            !*** for center and Eface, do not need to replace
+            !*** for center and Eface on u-fold, and NE corner and Nface
+            !*** on T-fold, do not need to replace
             !*** top row of physical domain, so jSrc should be
             !*** out of range and skipped
             !*** otherwise do the copy
 
-            if (jSrc <= nghost+1) then
+            if (jSrc <= halo%tripoleRows .and. jSrc>0 .and. jDst>0) then
                array(iDst,jDst,dstBlock) = isign*bufTripoleR8(iSrc,jSrc)
             endif
 
@@ -922,8 +992,8 @@ contains
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
-!  bufTripole array contains the top haloWidth+1 rows of physical
-!    domain for entire (global) top row 
+!  bufTripole array contains the top nghost+1 rows (u-fold) or nghost+2 rows
+!  (T-fold) of physical domain for entire (global) top row
 !
 !-----------------------------------------------------------------------
 
@@ -941,55 +1011,111 @@ contains
             'ice_HaloUpdate2DR4: Unknown field kind')
       end select
 
-      select case (fieldLoc)
-      case (field_loc_center)   ! cell center location
+      if (halo%tripoleTFlag) then
 
-         ioffset = 0
-         joffset = 0
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = -1
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do i = 2,nxGlobal/2
+              iDst = nxGlobal - i + 2
+              x1 = bufTripoleR4(i   ,halo%tripoleRows)
+              x2 = bufTripoleR4(iDst,halo%tripoleRows)
+              xavg = 0.5_real_kind*(x1 + isign*x2)
+              bufTripoleR4(i   ,halo%tripoleRows) = xavg
+              bufTripoleR4(iDst,halo%tripoleRows) = isign*xavg
+           end do
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 0
+           joffset = 1
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripoleR4(i   ,halo%tripoleRows)
+              x2 = bufTripoleR4(iDst,halo%tripoleRows)
+              xavg = 0.5_real_kind*(x1 + isign*x2)
+              bufTripoleR4(i   ,halo%tripoleRows) = xavg
+              bufTripoleR4(iDst,halo%tripoleRows) = isign*xavg
+           end do
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = -1
+           joffset = 1
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate2DR4: Unknown field location')
+        end select        
 
-      case (field_loc_NEcorner)   ! cell corner location
+      else ! tripole u-fold
+  
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 1
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do i = 1,nxGlobal/2 - 1
+              iDst = nxGlobal - i
+              x1 = bufTripoleR4(i   ,halo%tripoleRows)
+              x2 = bufTripoleR4(iDst,halo%tripoleRows)
+              xavg = 0.5_real_kind*(x1 + isign*x2)
+              bufTripoleR4(i   ,halo%tripoleRows) = xavg
+              bufTripoleR4(iDst,halo%tripoleRows) = isign*xavg
+           end do
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 1
+           joffset = 0
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = 0
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripoleR4(i   ,halo%tripoleRows)
+              x2 = bufTripoleR4(iDst,halo%tripoleRows)
+              xavg = 0.5_real_kind*(x1 + isign*x2)
+              bufTripoleR4(i   ,halo%tripoleRows) = xavg
+              bufTripoleR4(iDst,halo%tripoleRows) = isign*xavg
+           end do
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate2DR4: Unknown field location')
+        end select
 
-         ioffset = 1
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do i = 1,nxGlobal/2 - 1
-            iDst = nxGlobal - i
-            x1 = bufTripoleR4(i   ,nghost+1)
-            x2 = bufTripoleR4(iDst,nghost+1)
-            xavg = 0.5_real_kind*(x1 + isign*x2)
-            bufTripoleR4(i   ,nghost+1) = xavg
-            bufTripoleR4(iDst,nghost+1) = isign*xavg
-         end do
-
-      case (field_loc_Eface)   ! cell center location
-
-         ioffset = 1
-         joffset = 0
-
-      case (field_loc_Nface)   ! cell corner (velocity) location
-
-         ioffset = 0
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do i = 1,nxGlobal/2
-            iDst = nxGlobal + 1 - i
-            x1 = bufTripoleR4(i   ,nghost+1)
-            x2 = bufTripoleR4(iDst,nghost+1)
-            xavg = 0.5_real_kind*(x1 + isign*x2)
-            bufTripoleR4(i   ,nghost+1) = xavg
-            bufTripoleR4(iDst,nghost+1) = isign*xavg
-         end do
-
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate2DR4: Unknown field location')
-      end select
+      endif
 
       !*** copy out of global tripole buffer into local
       !*** ghost cells
@@ -1013,13 +1139,15 @@ contains
             iSrc = iSrc - ioffset
             jSrc = jSrc - joffset
             if (iSrc == 0) iSrc = nxGlobal
+            if (iSrc > nxGlobal) iSrc = iSrc - nxGlobal
 
-            !*** for center and Eface, do not need to replace
+            !*** for center and Eface on u-fold, and NE corner and Nface
+            !*** on T-fold, do not need to replace
             !*** top row of physical domain, so jSrc should be
             !*** out of range and skipped
             !*** otherwise do the copy
 
-            if (jSrc <= nghost+1) then
+            if (jSrc <= halo%tripoleRows .and. jSrc>0 .and. jDst>0) then
                array(iDst,jDst,dstBlock) = isign*bufTripoleR4(iSrc,jSrc)
             endif
 
@@ -1153,8 +1281,8 @@ contains
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
-!  bufTripole array contains the top haloWidth+1 rows of physical
-!    domain for entire (global) top row 
+!  bufTripole array contains the top nghost+1 rows (u-fold) or nghost+2 rows
+!  (T-fold) of physical domain for entire (global) top row
 !
 !-----------------------------------------------------------------------
 
@@ -1172,55 +1300,111 @@ contains
             'ice_HaloUpdate2DI4: Unknown field kind')
       end select
 
-      select case (fieldLoc)
-      case (field_loc_center)   ! cell center location
+      if (halo%tripoleTFlag) then
 
-         ioffset = 0
-         joffset = 0
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = -1
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do i = 2,nxGlobal/2
+              iDst = nxGlobal - i + 2
+              x1 = bufTripoleI4(i   ,halo%tripoleRows)
+              x2 = bufTripoleI4(iDst,halo%tripoleRows)
+              xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+              bufTripoleI4(i   ,halo%tripoleRows) = xavg
+              bufTripoleI4(iDst,halo%tripoleRows) = isign*xavg
+           end do
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 0
+           joffset = 1
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripoleI4(i   ,halo%tripoleRows)
+              x2 = bufTripoleI4(iDst,halo%tripoleRows)
+              xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+              bufTripoleI4(i   ,halo%tripoleRows) = xavg
+              bufTripoleI4(iDst,halo%tripoleRows) = isign*xavg
+           end do
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = -1
+           joffset = 1
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate2DI4: Unknown field location')
+        end select
 
-      case (field_loc_NEcorner)   ! cell corner location
+      else ! tripole u-fold  
+  
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 1
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do i = 1,nxGlobal/2 - 1
+              iDst = nxGlobal - i
+              x1 = bufTripoleI4(i   ,halo%tripoleRows)
+              x2 = bufTripoleI4(iDst,halo%tripoleRows)
+              xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+              bufTripoleI4(i   ,halo%tripoleRows) = xavg
+              bufTripoleI4(iDst,halo%tripoleRows) = isign*xavg
+           end do
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 1
+           joffset = 0
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = 0
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripoleI4(i   ,halo%tripoleRows)
+              x2 = bufTripoleI4(iDst,halo%tripoleRows)
+              xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+              bufTripoleI4(i   ,halo%tripoleRows) = xavg
+              bufTripoleI4(iDst,halo%tripoleRows) = isign*xavg
+           end do
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate2DI4: Unknown field location')
+        end select
 
-         ioffset = 1
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do i = 1,nxGlobal/2 - 1
-            iDst = nxGlobal - i
-            x1 = bufTripoleI4(i   ,nghost+1)
-            x2 = bufTripoleI4(iDst,nghost+1)
-            xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
-            bufTripoleI4(i   ,nghost+1) = xavg
-            bufTripoleI4(iDst,nghost+1) = isign*xavg
-         end do
-
-      case (field_loc_Eface)   ! cell center location
-
-         ioffset = 1
-         joffset = 0
-
-      case (field_loc_Nface)   ! cell corner (velocity) location
-
-         ioffset = 0
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do i = 1,nxGlobal/2
-            iDst = nxGlobal + 1 - i
-            x1 = bufTripoleI4(i   ,nghost+1)
-            x2 = bufTripoleI4(iDst,nghost+1)
-            xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
-            bufTripoleI4(i   ,nghost+1) = xavg
-            bufTripoleI4(iDst,nghost+1) = isign*xavg
-         end do
-
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate2DI4: Unknown field location')
-      end select
+      endif
 
       !*** copy out of global tripole buffer into local
       !*** ghost cells
@@ -1244,13 +1428,15 @@ contains
             iSrc = iSrc - ioffset
             jSrc = jSrc - joffset
             if (iSrc == 0) iSrc = nxGlobal
+            if (iSrc > nxGlobal) iSrc = iSrc - nxGlobal
 
-            !*** for center and Eface, do not need to replace
+            !*** for center and Eface on u-fold, and NE corner and Nface
+            !*** on T-fold, do not need to replace
             !*** top row of physical domain, so jSrc should be
             !*** out of range and skipped
             !*** otherwise do the copy
 
-            if (jSrc <= nghost+1) then
+            if (jSrc <= halo%tripoleRows .and. jSrc>0 .and. jDst>0) then
                array(iDst,jDst,dstBlock) = isign*bufTripoleI4(iSrc,jSrc)
             endif
 
@@ -1353,9 +1539,9 @@ contains
    nxGlobal = 0
    if (allocated(bufTripoleR8)) then
       nxGlobal = size(bufTripoleR8,dim=1)
-      allocate(bufTripole(nxGlobal,nghost+1,nz))
+      allocate(bufTripole(nxGlobal,halo%tripoleRows,nz))
       bufTripole = fill
-   endif      
+   endif 
 
 !-----------------------------------------------------------------------
 !
@@ -1397,8 +1583,8 @@ contains
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
-!  bufTripole array contains the top haloWidth+1 rows of physical
-!    domain for entire (global) top row 
+!  bufTripole array contains the top nghost+1 rows (u-fold) or nghost+2 rows
+!  (T-fold) of physical domain for entire (global) top row
 !
 !-----------------------------------------------------------------------
 
@@ -1416,59 +1602,119 @@ contains
             'ice_HaloUpdate3DR8: Unknown field kind')
       end select
 
-      select case (fieldLoc)
-      case (field_loc_center)   ! cell center location
+      if (halo%tripoleTFlag) then
 
-         ioffset = 0
-         joffset = 0
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = -1
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
 
-      case (field_loc_NEcorner)   ! cell corner location
+           do k=1,nz
+           do i = 2,nxGlobal/2
+              iDst = nxGlobal - i + 2
+              x1 = bufTripole(i   ,halo%tripoleRows,k)
+              x2 = bufTripole(iDst,halo%tripoleRows,k)
+              xavg = 0.5_dbl_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k) = xavg
+              bufTripole(iDst,halo%tripoleRows,k) = isign*xavg
+           end do
+           end do
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 0
+           joffset = 1
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do k=1,nz
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k)
+              x2 = bufTripole(iDst,halo%tripoleRows,k)
+              xavg = 0.5_dbl_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k) = xavg
+              bufTripole(iDst,halo%tripoleRows,k) = isign*xavg
+           end do
+           end do
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = -1
+           joffset = 1
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate3DR8: Unknown field location')
+        end select 
+  
+      else ! tripole u-fold
+  
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 1
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do k=1,nz
+           do i = 1,nxGlobal/2 - 1
+              iDst = nxGlobal - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k)
+              x2 = bufTripole(iDst,halo%tripoleRows,k)
+              xavg = 0.5_dbl_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k) = xavg
+              bufTripole(iDst,halo%tripoleRows,k) = isign*xavg
+           end do
+           end do
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 1
+           joffset = 0
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = 0
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do k=1,nz
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k)
+              x2 = bufTripole(iDst,halo%tripoleRows,k)
+              xavg = 0.5_dbl_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k) = xavg
+              bufTripole(iDst,halo%tripoleRows,k) = isign*xavg
+           end do
+           end do
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate3DR8: Unknown field location')
+        end select
 
-         ioffset = 1
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do k=1,nz
-         do i = 1,nxGlobal/2 - 1
-            iDst = nxGlobal - i
-            x1 = bufTripole(i   ,nghost+1,k)
-            x2 = bufTripole(iDst,nghost+1,k)
-            xavg = 0.5_dbl_kind*(x1 + isign*x2)
-            bufTripole(i   ,nghost+1,k) = xavg
-            bufTripole(iDst,nghost+1,k) = isign*xavg
-         end do
-         end do
-
-      case (field_loc_Eface)   ! cell center location
-
-         ioffset = 1
-         joffset = 0
-
-      case (field_loc_Nface)   ! cell corner (velocity) location
-
-         ioffset = 0
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do k=1,nz
-         do i = 1,nxGlobal/2
-            iDst = nxGlobal + 1 - i
-            x1 = bufTripole(i   ,nghost+1,k)
-            x2 = bufTripole(iDst,nghost+1,k)
-            xavg = 0.5_dbl_kind*(x1 + isign*x2)
-            bufTripole(i   ,nghost+1,k) = xavg
-            bufTripole(iDst,nghost+1,k) = isign*xavg
-         end do
-         end do
-
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate3DR8: Unknown field location')
-      end select
+      endif
 
       !*** copy out of global tripole buffer into local
       !*** ghost cells
@@ -1492,13 +1738,15 @@ contains
             iSrc = iSrc - ioffset
             jSrc = jSrc - joffset
             if (iSrc == 0) iSrc = nxGlobal
+            if (iSrc > nxGlobal) iSrc = iSrc - nxGlobal
 
-            !*** for center and Eface, do not need to replace
+            !*** for center and Eface on u-fold, and NE corner and Nface
+            !*** on T-fold, do not need to replace
             !*** top row of physical domain, so jSrc should be
             !*** out of range and skipped
             !*** otherwise do the copy
 
-            if (jSrc <= nghost+1) then
+            if (jSrc <= halo%tripoleRows .and. jSrc>0 .and. jDst>0) then
                do k=1,nz
                   array(iDst,jDst,k,dstBlock) = isign*    &
                                   bufTripole(iSrc,jSrc,k)
@@ -1606,7 +1854,7 @@ contains
    nxGlobal = 0
    if (allocated(bufTripoleR4)) then
       nxGlobal = size(bufTripoleR4,dim=1)
-      allocate(bufTripole(nxGlobal,nghost+1,nz))
+      allocate(bufTripole(nxGlobal,halo%tripoleRows,nz))
       bufTripole = fill
    endif
 
@@ -1650,8 +1898,8 @@ contains
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
-!  bufTripole array contains the top haloWidth+1 rows of physical
-!    domain for entire (global) top row 
+!  bufTripole array contains the top nghost+1 rows (u-fold) or nghost+2 rows
+!  (T-fold) of physical domain for entire (global) top row
 !
 !-----------------------------------------------------------------------
 
@@ -1669,59 +1917,119 @@ contains
             'ice_HaloUpdate3DR4: Unknown field kind')
       end select
 
-      select case (fieldLoc)
-      case (field_loc_center)   ! cell center location
+      if (halo%tripoleTFlag) then
 
-         ioffset = 0
-         joffset = 0
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = -1
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
 
-      case (field_loc_NEcorner)   ! cell corner location
+           do k=1,nz
+           do i = 2,nxGlobal/2
+              iDst = nxGlobal - i + 2
+              x1 = bufTripole(i   ,halo%tripoleRows,k)
+              x2 = bufTripole(iDst,halo%tripoleRows,k)
+              xavg = 0.5_real_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k) = xavg
+              bufTripole(iDst,halo%tripoleRows,k) = isign*xavg
+           end do
+           end do
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 0
+           joffset = 1
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do k=1,nz
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k)
+              x2 = bufTripole(iDst,halo%tripoleRows,k)
+              xavg = 0.5_real_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k) = xavg
+              bufTripole(iDst,halo%tripoleRows,k) = isign*xavg
+           end do
+           end do
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = -1
+           joffset = 1
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate3DR4: Unknown field location')
+        end select  
+  
+      else ! tripole u-fold  
+  
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 1
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do k=1,nz
+           do i = 1,nxGlobal/2 - 1
+              iDst = nxGlobal - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k)
+              x2 = bufTripole(iDst,halo%tripoleRows,k)
+              xavg = 0.5_real_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k) = xavg
+              bufTripole(iDst,halo%tripoleRows,k) = isign*xavg
+           end do
+           end do
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 1
+           joffset = 0
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = 0
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do k=1,nz
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k)
+              x2 = bufTripole(iDst,halo%tripoleRows,k)
+              xavg = 0.5_real_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k) = xavg
+              bufTripole(iDst,halo%tripoleRows,k) = isign*xavg
+           end do
+           end do
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate3DR4: Unknown field location')
+        end select
 
-         ioffset = 1
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do k=1,nz
-         do i = 1,nxGlobal/2 - 1
-            iDst = nxGlobal - i
-            x1 = bufTripole(i   ,nghost+1,k)
-            x2 = bufTripole(iDst,nghost+1,k)
-            xavg = 0.5_real_kind*(x1 + isign*x2)
-            bufTripole(i   ,nghost+1,k) = xavg
-            bufTripole(iDst,nghost+1,k) = isign*xavg
-         end do
-         end do
-
-      case (field_loc_Eface)   ! cell center location
-
-         ioffset = 1
-         joffset = 0
-
-      case (field_loc_Nface)   ! cell corner (velocity) location
-
-         ioffset = 0
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do k=1,nz
-         do i = 1,nxGlobal/2
-            iDst = nxGlobal + 1 - i
-            x1 = bufTripole(i   ,nghost+1,k)
-            x2 = bufTripole(iDst,nghost+1,k)
-            xavg = 0.5_real_kind*(x1 + isign*x2)
-            bufTripole(i   ,nghost+1,k) = xavg
-            bufTripole(iDst,nghost+1,k) = isign*xavg
-         end do
-         end do
-
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate3DR4: Unknown field location')
-      end select
+      endif
 
       !*** copy out of global tripole buffer into local
       !*** ghost cells
@@ -1745,13 +2053,15 @@ contains
             iSrc = iSrc - ioffset
             jSrc = jSrc - joffset
             if (iSrc == 0) iSrc = nxGlobal
+            if (iSrc > nxGlobal) iSrc = iSrc - nxGlobal
 
-            !*** for center and Eface, do not need to replace
+            !*** for center and Eface on u-fold, and NE corner and Nface
+            !*** on T-fold, do not need to replace
             !*** top row of physical domain, so jSrc should be
             !*** out of range and skipped
             !*** otherwise do the copy
 
-            if (jSrc <= nghost+1) then
+            if (jSrc <= halo%tripoleRows .and. jSrc>0 .and. jDst>0) then
                do k=1,nz
                   array(iDst,jDst,k,dstBlock) = isign*    &
                                   bufTripole(iSrc,jSrc,k)
@@ -1859,7 +2169,7 @@ contains
    nxGlobal = 0
    if (allocated(bufTripoleI4)) then
       nxGlobal = size(bufTripoleI4,dim=1)
-      allocate(bufTripole(nxGlobal,nghost+1,nz))
+      allocate(bufTripole(nxGlobal,halo%tripoleRows,nz))
       bufTripole = fill
    endif
 
@@ -1903,13 +2213,13 @@ contains
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
-!  bufTripole array contains the top haloWidth+1 rows of physical
-!    domain for entire (global) top row 
+!  bufTripole array contains the top nghost+1 rows (u-fold) or nghost+2 rows
+!  (T-fold) of physical domain for entire (global) top row
 !
 !-----------------------------------------------------------------------
 
    if (nxGlobal > 0) then
-
+ 
       select case (fieldKind)
       case (field_type_scalar)
          isign =  1
@@ -1922,59 +2232,119 @@ contains
             'ice_HaloUpdate3DI4: Unknown field kind')
       end select
 
-      select case (fieldLoc)
-      case (field_loc_center)   ! cell center location
+      if (halo%tripoleTFlag) then
 
-         ioffset = 0
-         joffset = 0
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = -1
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
 
-      case (field_loc_NEcorner)   ! cell corner location
+           do k=1,nz
+           do i = 2,nxGlobal/2
+              iDst = nxGlobal - i + 2
+              x1 = bufTripole(i   ,halo%tripoleRows,k)
+              x2 = bufTripole(iDst,halo%tripoleRows,k)
+              xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+              bufTripole(i   ,halo%tripoleRows,k) = xavg
+              bufTripole(iDst,halo%tripoleRows,k) = isign*xavg
+           end do
+           end do
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 0
+           joffset = 1
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do k=1,nz
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k)
+              x2 = bufTripole(iDst,halo%tripoleRows,k)
+              xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+              bufTripole(i   ,halo%tripoleRows,k) = xavg
+              bufTripole(iDst,halo%tripoleRows,k) = isign*xavg
+           end do
+           end do
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = -1
+           joffset = 1
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate3DI4: Unknown field location')
+        end select
+  
+      else ! tripole u-fold  
 
-         ioffset = 1
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do k=1,nz
-         do i = 1,nxGlobal/2 - 1
-            iDst = nxGlobal - i
-            x1 = bufTripole(i   ,nghost+1,k)
-            x2 = bufTripole(iDst,nghost+1,k)
-            xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
-            bufTripole(i   ,nghost+1,k) = xavg
-            bufTripole(iDst,nghost+1,k) = isign*xavg
-         end do
-         end do
-
-      case (field_loc_Eface)   ! cell center location
-
-         ioffset = 1
-         joffset = 0
-
-      case (field_loc_Nface)   ! cell corner (velocity) location
-
-         ioffset = 0
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do k=1,nz
-         do i = 1,nxGlobal/2
-            iDst = nxGlobal + 1 - i
-            x1 = bufTripole(i   ,nghost+1,k)
-            x2 = bufTripole(iDst,nghost+1,k)
-            xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
-            bufTripole(i   ,nghost+1,k) = xavg
-            bufTripole(iDst,nghost+1,k) = isign*xavg
-         end do
-         end do
-
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate3DI4: Unknown field location')
-      end select
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 1
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do k=1,nz
+           do i = 1,nxGlobal/2 - 1
+              iDst = nxGlobal - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k)
+              x2 = bufTripole(iDst,halo%tripoleRows,k)
+              xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+              bufTripole(i   ,halo%tripoleRows,k) = xavg
+              bufTripole(iDst,halo%tripoleRows,k) = isign*xavg
+           end do
+           end do
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 1
+           joffset = 0
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = 0
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do k=1,nz
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k)
+              x2 = bufTripole(iDst,halo%tripoleRows,k)
+              xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+              bufTripole(i   ,halo%tripoleRows,k) = xavg
+              bufTripole(iDst,halo%tripoleRows,k) = isign*xavg
+           end do
+           end do
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate3DI4: Unknown field location')
+        end select
+ 
+      endif
 
       !*** copy out of global tripole buffer into local
       !*** ghost cells
@@ -1998,13 +2368,15 @@ contains
             iSrc = iSrc - ioffset
             jSrc = jSrc - joffset
             if (iSrc == 0) iSrc = nxGlobal
+            if (iSrc > nxGlobal) iSrc = iSrc - nxGlobal
 
-            !*** for center and Eface, do not need to replace
+            !*** for center and Eface on u-fold, and NE corner and Nface
+            !*** on T-fold, do not need to replace
             !*** top row of physical domain, so jSrc should be
             !*** out of range and skipped
             !*** otherwise do the copy
 
-            if (jSrc <= nghost+1) then
+            if (jSrc <= halo%tripoleRows .and. jSrc>0 .and. jDst>0) then
                do k=1,nz
                   array(iDst,jDst,k,dstBlock) = isign*    &
                                   bufTripole(iSrc,jSrc,k)
@@ -2113,7 +2485,7 @@ contains
    nxGlobal = 0
    if (allocated(bufTripoleR8)) then
       nxGlobal = size(bufTripoleR8,dim=1)
-      allocate(bufTripole(nxGlobal,nghost+1,nz,nt))
+      allocate(bufTripole(nxGlobal,halo%tripoleRows,nz,nt))
       bufTripole = fill
    endif
 
@@ -2163,13 +2535,13 @@ contains
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
-!  bufTripole array contains the top haloWidth+1 rows of physical
-!    domain for entire (global) top row 
+!  bufTripole array contains the top nghost+1 rows (u-fold) or nghost+2 rows
+!  (T-fold) of physical domain for entire (global) top row
 !
 !-----------------------------------------------------------------------
 
    if (nxGlobal > 0) then
-
+ 
       select case (fieldKind)
       case (field_type_scalar)
          isign =  1
@@ -2182,63 +2554,127 @@ contains
             'ice_HaloUpdate4DR8: Unknown field kind')
       end select
 
-      select case (fieldLoc)
-      case (field_loc_center)   ! cell center location
+      if (halo%tripoleTFlag) then
 
-         ioffset = 0
-         joffset = 0
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = -1
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
 
-      case (field_loc_NEcorner)   ! cell corner location
+           do l=1,nt
+           do k=1,nz
+           do i = 2,nxGlobal/2
+              iDst = nxGlobal - i + 2
+              x1 = bufTripole(i   ,halo%tripoleRows,k,l)
+              x2 = bufTripole(iDst,halo%tripoleRows,k,l)
+              xavg = 0.5_dbl_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k,l) = xavg
+              bufTripole(iDst,halo%tripoleRows,k,l) = isign*xavg
+           end do
+           end do
+           end do
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 0
+           joffset = 1
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
 
-         ioffset = 1
-         joffset = 1
+           do l=1,nt
+           do k=1,nz
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k,l)
+              x2 = bufTripole(iDst,halo%tripoleRows,k,l)
+              xavg = 0.5_dbl_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k,l) = xavg
+              bufTripole(iDst,halo%tripoleRows,k,l) = isign*xavg
+           end do
+           end do
+           end do
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = -1
+           joffset = 1
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate4DR8: Unknown field location')
+        end select  
+  
+      else ! tripole u-fold  
 
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do l=1,nt
-         do k=1,nz
-         do i = 1,nxGlobal/2 - 1
-            iDst = nxGlobal - i
-            x1 = bufTripole(i   ,nghost+1,k,l)
-            x2 = bufTripole(iDst,nghost+1,k,l)
-            xavg = 0.5_dbl_kind*(x1 + isign*x2)
-            bufTripole(i   ,nghost+1,k,l) = xavg
-            bufTripole(iDst,nghost+1,k,l) = isign*xavg
-         end do
-         end do
-         end do
-
-      case (field_loc_Eface)   ! cell center location
-
-         ioffset = 1
-         joffset = 0
-
-      case (field_loc_Nface)   ! cell corner (velocity) location
-
-         ioffset = 0
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do l=1,nt
-         do k=1,nz
-         do i = 1,nxGlobal/2
-            iDst = nxGlobal + 1 - i
-            x1 = bufTripole(i   ,nghost+1,k,l)
-            x2 = bufTripole(iDst,nghost+1,k,l)
-            xavg = 0.5_dbl_kind*(x1 + isign*x2)
-            bufTripole(i   ,nghost+1,k,l) = xavg
-            bufTripole(iDst,nghost+1,k,l) = isign*xavg
-         end do
-         end do
-         end do
-
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate4DR8: Unknown field location')
-      end select
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 1
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do l=1,nt
+           do k=1,nz
+           do i = 1,nxGlobal/2 - 1
+              iDst = nxGlobal - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k,l)
+              x2 = bufTripole(iDst,halo%tripoleRows,k,l)
+              xavg = 0.5_dbl_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k,l) = xavg
+              bufTripole(iDst,halo%tripoleRows,k,l) = isign*xavg
+           end do
+           end do
+           end do
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 1
+           joffset = 0
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = 0
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do l=1,nt
+           do k=1,nz
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k,l)
+              x2 = bufTripole(iDst,halo%tripoleRows,k,l)
+              xavg = 0.5_dbl_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k,l) = xavg
+              bufTripole(iDst,halo%tripoleRows,k,l) = isign*xavg
+           end do
+           end do
+           end do
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate4DR8: Unknown field location')
+        end select
+ 
+      endif
 
       !*** copy out of global tripole buffer into local
       !*** ghost cells
@@ -2262,13 +2698,15 @@ contains
             iSrc = iSrc - ioffset
             jSrc = jSrc - joffset
             if (iSrc == 0) iSrc = nxGlobal
+            if (iSrc > nxGlobal) iSrc = iSrc - nxGlobal
 
-            !*** for center and Eface, do not need to replace
+            !*** for center and Eface on u-fold, and NE corner and Nface
+            !*** on T-fold, do not need to replace
             !*** top row of physical domain, so jSrc should be
             !*** out of range and skipped
             !*** otherwise do the copy
 
-            if (jSrc <= nghost+1) then
+            if (jSrc <= halo%tripoleRows .and. jSrc>0 .and. jDst>0) then
                do l=1,nt
                do k=1,nz
                   array(iDst,jDst,k,l,dstBlock) = isign*    &
@@ -2379,7 +2817,7 @@ contains
    nxGlobal = 0
    if (allocated(bufTripoleR4)) then
       nxGlobal = size(bufTripoleR4,dim=1)
-      allocate(bufTripole(nxGlobal,nghost+1,nz,nt))
+      allocate(bufTripole(nxGlobal,halo%tripoleRows,nz,nt))
       bufTripole = fill
    endif
 
@@ -2429,13 +2867,13 @@ contains
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
-!  bufTripole array contains the top haloWidth+1 rows of physical
-!    domain for entire (global) top row 
+!  bufTripole array contains the top nghost+1 rows (u-fold) or nghost+2 rows
+!  (T-fold) of physical domain for entire (global) top row
 !
 !-----------------------------------------------------------------------
 
    if (nxGlobal > 0) then
-
+ 
       select case (fieldKind)
       case (field_type_scalar)
          isign =  1
@@ -2448,63 +2886,127 @@ contains
             'ice_HaloUpdate4DR4: Unknown field kind')
       end select
 
-      select case (fieldLoc)
-      case (field_loc_center)   ! cell center location
+      if (halo%tripoleTFlag) then
 
-         ioffset = 0
-         joffset = 0
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = -1
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
 
-      case (field_loc_NEcorner)   ! cell corner location
+           do l=1,nt
+           do k=1,nz
+           do i = 2,nxGlobal/2
+              iDst = nxGlobal - i + 2
+              x1 = bufTripole(i   ,halo%tripoleRows,k,l)
+              x2 = bufTripole(iDst,halo%tripoleRows,k,l)
+              xavg = 0.5_real_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k,l) = xavg
+              bufTripole(iDst,halo%tripoleRows,k,l) = isign*xavg
+           end do
+           end do
+           end do
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 0
+           joffset = 1
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
 
-         ioffset = 1
-         joffset = 1
+           do l=1,nt
+           do k=1,nz
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k,l)
+              x2 = bufTripole(iDst,halo%tripoleRows,k,l)
+              xavg = 0.5_real_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k,l) = xavg
+              bufTripole(iDst,halo%tripoleRows,k,l) = isign*xavg
+           end do
+           end do
+           end do
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = -1
+           joffset = 1
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate4DR4: Unknown field location')
+        end select  
+  
+      else ! tripole u-fold  
 
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do l=1,nt
-         do k=1,nz
-         do i = 1,nxGlobal/2 - 1
-            iDst = nxGlobal - i
-            x1 = bufTripole(i   ,nghost+1,k,l)
-            x2 = bufTripole(iDst,nghost+1,k,l)
-            xavg = 0.5_real_kind*(x1 + isign*x2)
-            bufTripole(i   ,nghost+1,k,l) = xavg
-            bufTripole(iDst,nghost+1,k,l) = isign*xavg
-         end do
-         end do
-         end do
-
-      case (field_loc_Eface)   ! cell center location
-
-         ioffset = 1
-         joffset = 0
-
-      case (field_loc_Nface)   ! cell corner (velocity) location
-
-         ioffset = 0
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do l=1,nt
-         do k=1,nz
-         do i = 1,nxGlobal/2
-            iDst = nxGlobal + 1 - i
-            x1 = bufTripole(i   ,nghost+1,k,l)
-            x2 = bufTripole(iDst,nghost+1,k,l)
-            xavg = 0.5_real_kind*(x1 + isign*x2)
-            bufTripole(i   ,nghost+1,k,l) = xavg
-            bufTripole(iDst,nghost+1,k,l) = isign*xavg
-         end do
-         end do
-         end do
-
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate4DR4: Unknown field location')
-      end select
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 1
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do l=1,nt
+           do k=1,nz
+           do i = 1,nxGlobal/2 - 1
+              iDst = nxGlobal - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k,l)
+              x2 = bufTripole(iDst,halo%tripoleRows,k,l)
+              xavg = 0.5_real_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k,l) = xavg
+              bufTripole(iDst,halo%tripoleRows,k,l) = isign*xavg
+           end do
+           end do
+           end do
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 1
+           joffset = 0
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = 0
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do l=1,nt
+           do k=1,nz
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k,l)
+              x2 = bufTripole(iDst,halo%tripoleRows,k,l)
+              xavg = 0.5_real_kind*(x1 + isign*x2)
+              bufTripole(i   ,halo%tripoleRows,k,l) = xavg
+              bufTripole(iDst,halo%tripoleRows,k,l) = isign*xavg
+           end do
+           end do
+           end do
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate4DR4: Unknown field location')
+        end select
+ 
+      endif
 
       !*** copy out of global tripole buffer into local
       !*** ghost cells
@@ -2528,13 +3030,15 @@ contains
             iSrc = iSrc - ioffset
             jSrc = jSrc - joffset
             if (iSrc == 0) iSrc = nxGlobal
+            if (iSrc > nxGlobal) iSrc = iSrc - nxGlobal
 
-            !*** for center and Eface, do not need to replace
+            !*** for center and Eface on u-fold, and NE corner and Nface
+            !*** on T-fold, do not need to replace
             !*** top row of physical domain, so jSrc should be
             !*** out of range and skipped
             !*** otherwise do the copy
 
-            if (jSrc <= nghost+1) then
+            if (jSrc <= halo%tripoleRows .and. jSrc>0 .and. jDst>0) then
                do l=1,nt
                do k=1,nz
                   array(iDst,jDst,k,l,dstBlock) = isign*    &
@@ -2645,7 +3149,7 @@ contains
    nxGlobal = 0
    if (allocated(bufTripoleI4)) then
       nxGlobal = size(bufTripoleI4,dim=1)
-      allocate(bufTripole(nxGlobal,nghost+1,nz,nt))
+      allocate(bufTripole(nxGlobal,halo%tripoleRows,nz,nt))
       bufTripole = fill
    endif
 
@@ -2695,8 +3199,8 @@ contains
 !-----------------------------------------------------------------------
 !
 !  take care of northern boundary in tripole case
-!  bufTripole array contains the top haloWidth+1 rows of physical
-!    domain for entire (global) top row 
+!  bufTripole array contains the top nghost+1 rows (u-fold) or nghost+2 rows
+!  (T-fold) of physical domain for entire (global) top row
 !
 !-----------------------------------------------------------------------
 
@@ -2714,63 +3218,127 @@ contains
             'ice_HaloUpdate4DI4: Unknown field kind')
       end select
 
-      select case (fieldLoc)
-      case (field_loc_center)   ! cell center location
+      if (halo%tripoleTFlag) then
 
-         ioffset = 0
-         joffset = 0
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = -1
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
 
-      case (field_loc_NEcorner)   ! cell corner location
+           do l=1,nt
+           do k=1,nz
+           do i = 2,nxGlobal/2
+              iDst = nxGlobal - i + 2
+              x1 = bufTripole(i   ,halo%tripoleRows,k,l)
+              x2 = bufTripole(iDst,halo%tripoleRows,k,l)
+              xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+              bufTripole(i   ,halo%tripoleRows,k,l) = xavg
+              bufTripole(iDst,halo%tripoleRows,k,l) = isign*xavg
+           end do
+           end do
+           end do
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 0
+           joffset = 1
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
 
-         ioffset = 1
-         joffset = 1
+           do l=1,nt
+           do k=1,nz
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k,l)
+              x2 = bufTripole(iDst,halo%tripoleRows,k,l)
+              xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+              bufTripole(i   ,halo%tripoleRows,k,l) = xavg
+              bufTripole(iDst,halo%tripoleRows,k,l) = isign*xavg
+           end do
+           end do
+           end do
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = -1
+           joffset = 1
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate4DI4: Unknown field location')
+        end select 
+  
+      else ! tripole u-fold  
 
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do l=1,nt
-         do k=1,nz
-         do i = 1,nxGlobal/2 - 1
-            iDst = nxGlobal - i
-            x1 = bufTripole(i   ,nghost+1,k,l)
-            x2 = bufTripole(iDst,nghost+1,k,l)
-            xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
-            bufTripole(i   ,nghost+1,k,l) = xavg
-            bufTripole(iDst,nghost+1,k,l) = isign*xavg
-         end do
-         end do
-         end do
-
-      case (field_loc_Eface)   ! cell center location
-
-         ioffset = 1
-         joffset = 0
-
-      case (field_loc_Nface)   ! cell corner (velocity) location
-
-         ioffset = 0
-         joffset = 1
-
-         !*** top row is degenerate, so must enforce symmetry
-         !***   use average of two degenerate points for value
-
-         do l=1,nt
-         do k=1,nz
-         do i = 1,nxGlobal/2
-            iDst = nxGlobal + 1 - i
-            x1 = bufTripole(i   ,nghost+1,k,l)
-            x2 = bufTripole(iDst,nghost+1,k,l)
-            xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
-            bufTripole(i   ,nghost+1,k,l) = xavg
-            bufTripole(iDst,nghost+1,k,l) = isign*xavg
-         end do
-         end do
-         end do
-
-      case default
-         call abort_ice( &
-            'ice_HaloUpdate4DI4: Unknown field location')
-      end select
+        select case (fieldLoc)
+        case (field_loc_center)   ! cell center location
+  
+           ioffset = 0
+           joffset = 0
+  
+        case (field_loc_NEcorner)   ! cell corner location
+  
+           ioffset = 1
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do l=1,nt
+           do k=1,nz
+           do i = 1,nxGlobal/2 - 1
+              iDst = nxGlobal - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k,l)
+              x2 = bufTripole(iDst,halo%tripoleRows,k,l)
+              xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+              bufTripole(i   ,halo%tripoleRows,k,l) = xavg
+              bufTripole(iDst,halo%tripoleRows,k,l) = isign*xavg
+           end do
+           end do
+           end do
+  
+        case (field_loc_Eface)   ! cell center location
+  
+           ioffset = 1
+           joffset = 0
+  
+        case (field_loc_Nface)   ! cell corner (velocity) location
+  
+           ioffset = 0
+           joffset = 1
+  
+           !*** top row is degenerate, so must enforce symmetry
+           !***   use average of two degenerate points for value
+  
+           do l=1,nt
+           do k=1,nz
+           do i = 1,nxGlobal/2
+              iDst = nxGlobal + 1 - i
+              x1 = bufTripole(i   ,halo%tripoleRows,k,l)
+              x2 = bufTripole(iDst,halo%tripoleRows,k,l)
+              xavg = nint(0.5_dbl_kind*(x1 + isign*x2))
+              bufTripole(i   ,halo%tripoleRows,k,l) = xavg
+              bufTripole(iDst,halo%tripoleRows,k,l) = isign*xavg
+           end do
+           end do
+           end do
+  
+        case default
+           call abort_ice( &
+              'ice_HaloUpdate4DI4: Unknown field location')
+        end select
+ 
+      endif
 
       !*** copy out of global tripole buffer into local
       !*** ghost cells
@@ -2794,13 +3362,15 @@ contains
             iSrc = iSrc - ioffset
             jSrc = jSrc - joffset
             if (iSrc == 0) iSrc = nxGlobal
+            if (iSrc > nxGlobal) iSrc = iSrc - nxGlobal
 
-            !*** for center and Eface, do not need to replace
+            !*** for center and Eface on u-fold, and NE corner and Nface
+            !*** on T-fold, do not need to replace
             !*** top row of physical domain, so jSrc should be
             !*** out of range and skipped
             !*** otherwise do the copy
 
-            if (jSrc <= nghost+1) then
+            if (jSrc <= halo%tripoleRows .and. jSrc>0 .and. jDst>0) then
                do l=1,nt
                do k=1,nz
                   array(iDst,jDst,k,l,dstBlock) = isign*    &
@@ -3136,7 +3706,7 @@ contains
             !*** block has enough points to perform a tripole
             !*** update
 
-            if (jeSrc - jbSrc + 1 < nghost + 1) then
+            if (jeSrc - jbSrc + 1 < halo%tripoleRows) then
                call abort_ice( &
                'ice_HaloMsgCreate: not enough points in block for tripole')
                return
@@ -3144,13 +3714,13 @@ contains
 
             msgIndx = halo%numLocalCopies
 
-            do j=1,nghost+1
+            do j=1,halo%tripoleRows
             do i=1,ieSrc-ibSrc+1
 
                msgIndx = msgIndx + 1
 
                halo%srcLocalAddr(1,msgIndx) = ibSrc + i - 1
-               halo%srcLocalAddr(2,msgIndx) = jeSrc-1-nghost+j
+               halo%srcLocalAddr(2,msgIndx) = jeSrc-halo%tripoleRows+j
                halo%srcLocalAddr(3,msgIndx) = srcLocalID
 
                halo%dstLocalAddr(1,msgIndx) = iGlobal(ibSrc + i - 1)
@@ -3170,7 +3740,7 @@ contains
 
             msgIndx = halo%numLocalCopies
 
-            do j=1,nghost+1
+            do j=1,halo%tripoleRows
             do i=1,ieSrc+nghost
 
                msgIndx = msgIndx + 1
@@ -3180,7 +3750,11 @@ contains
                halo%srcLocalAddr(3,msgIndx) = -srcLocalID
 
                halo%dstLocalAddr(1,msgIndx) = i
-               halo%dstLocalAddr(2,msgIndx) = jeSrc + j - 1
+               if (j.gt.nghost+1) then
+                 halo%dstLocalAddr(2,msgIndx) = -1 ! never used
+               else
+                 halo%dstLocalAddr(2,msgIndx) = jeSrc + j - 1
+               endif
                halo%dstLocalAddr(3,msgIndx) = dstLocalID
 
             end do
@@ -3729,7 +4303,8 @@ contains
 
       elseif (this_block%jblock == nblocks_y) then  ! north edge
          if (trim(ns_bndy_type) /= 'cyclic' .and. &
-             trim(ns_bndy_type) /= 'tripole' ) then
+             trim(ns_bndy_type) /= 'tripole' .and. &
+             trim(ns_bndy_type) /= 'tripoleT' ) then
             ! locate ghost cell column (avoid padding)
             ibc = ny_block
             do j = ny_block, 1, - 1

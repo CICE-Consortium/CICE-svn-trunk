@@ -177,7 +177,8 @@
 !
 !----------------------------------------------------------------------
 
-   if (trim(ns_boundary_type) == 'tripole') then
+   if (trim(ns_boundary_type) == 'tripole' &
+   .or. trim(ns_boundary_type) == 'tripoleT') then
       ltripole_grid = .true.
    else
       ltripole_grid = .false.
@@ -493,7 +494,7 @@
 !----------------------------------------------------------------------
 !
 !  Set up ghost cell updates for each distribution.
-!  Boundary types are cyclic, closed, or tripole. 
+!  Boundary types are cyclic, closed, tripole or tripoleT.
 !
 !----------------------------------------------------------------------
 
