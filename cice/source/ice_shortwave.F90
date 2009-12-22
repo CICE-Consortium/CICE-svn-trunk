@@ -513,7 +513,8 @@
 !EOP
 !
       real (kind=dbl_kind), parameter :: &
-         ahmax     = p5          , & ! thickness above which ice albedo 
+!         ahmax     = p5          , & ! thickness above which ice albedo 
+         ahmax     = 0.3_dbl_kind, & ! thickness above which ice albedo 
                                      ! is constant (m)
          dT_mlt    = c1          , & ! change in temp to give dalb_mlt 
                                      ! albedo change

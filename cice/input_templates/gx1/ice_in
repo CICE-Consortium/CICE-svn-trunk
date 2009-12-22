@@ -69,10 +69,11 @@
   , krdg_redist     = 1
   , advection       = 'remap'
   , heat_capacity   = .true.
+  , conduct         = 'bubbly'
   , shortwave       = 'default'
   , albedo_type     = 'default'
-  , albicev         = 0.78
-  , albicei         = 0.36
+  , albicev         = 0.81
+  , albicei         = 0.39
   , albsnowv        = 0.98
   , albsnowi        = 0.70 
   , R_ice           = 0.
@@ -94,7 +95,7 @@
   , sss_data_type   = 'default'
   , sst_data_type   = 'default'
   , ocn_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/gx1v3/forcing/'
-  , oceanmixed_file = 'pop_frc.gx1v3.051202.bin'
+  , oceanmixed_file = 'oceanmixed_ice_depth.nc'
   , restore_sst     = .false.
   , trestore        =  90
   , restore_ice     = .false.
