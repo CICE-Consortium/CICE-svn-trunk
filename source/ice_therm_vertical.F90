@@ -60,7 +60,8 @@
          ferrmax = 1.0e-3_dbl_kind    ! max allowed energy flux error (W m-2)
                                       ! recommend ferrmax < 0.01 W m-2
 
-      character (char_len) :: stoplabel
+      character (char_len) :: &
+         conduct         ! 'MU71' or 'bubbly'
 
       logical (kind=log_kind) :: &
          l_brine         ! if true, treat brine pocket effects
@@ -2116,15 +2117,31 @@
       enddo                     ! nslyr
 
       ! interior ice layers
-      do k = 1, nilyr
+      if (conduct == 'MU71') then
+         ! Maykut and Untersteiner 1971 form (with Wettlaufer 1991 constants)
+         do k = 1, nilyr
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do ij = 1, icells
+            do ij = 1, icells
             kilyr(ij,k) = kice + betak*salin(k)/min(-puny,Tin(ij,k))
-            kilyr(ij,k) = max (kilyr(ij,k), kimin)
-         enddo
-      enddo                     ! nilyr
+               kilyr(ij,k) = max (kilyr(ij,k), kimin)
+            enddo
+         enddo                     ! nilyr
+      else
+         ! Pringle et al JGR 2007 'bubbly brine'
+         do k = 1, nilyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               kilyr(ij,k) = (2.11_dbl_kind - 0.011_dbl_kind*Tin(ij,k) &
+                            + 0.09_dbl_kind*salin(k)/min(-puny,Tin(ij,k))) &
+                            * rhoi / 917._dbl_kind
+               kilyr(ij,k) = max (kilyr(ij,k), kimin)
+            enddo
+         enddo                     ! nilyr
+      endif ! conductivity
 
       ! top snow interface, top and bottom ice interfaces
       do ij = 1, icells

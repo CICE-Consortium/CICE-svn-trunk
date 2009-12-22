@@ -83,7 +83,7 @@
          Hstar  = c25        , & ! determines mean thickness of ridged ice (m) 
                                  ! (krdg_redist = 0) 
                                  ! Flato & Hibler (1995) have Hstar = 100 
-         mu_rdg = c4         , & ! gives e-folding scale of ridged ice (m^.5) 
+         mu_rdg = c3         , & ! gives e-folding scale of ridged ice (m^.5) 
                                  ! (krdg_redist = 1) 
          Pstar = 2.75e4_dbl_kind, & ! constant in Hibler strength formula 
                                  ! (kstrength = 0) 
@@ -91,8 +91,8 @@
                                  ! (kstrength = 0) 
 
       logical (kind=log_kind), parameter :: &
-         l_conservation_check = .true.  ! if true, check conservation
-!         l_conservation_check = .false.  ! if true, check conservation
+!         l_conservation_check = .true.  ! if true, check conservation
+         l_conservation_check = .false.  ! if true, check conservation
                                         ! (useful for debugging)
 
       ! in ice_lvl.F90, this causes a circular dependency

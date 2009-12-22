@@ -400,7 +400,8 @@
 
       if (trim(sst_data_type) == 'ncar' .or.  &
           trim(sss_data_type) == 'ncar') then
-         call ocn_data_ncar_init
+!         call ocn_data_ncar_init
+         call ocn_data_ncar_init_3D
       endif
 
       ! set ustar_scale for case of zero currents
@@ -2092,6 +2093,7 @@
       use ice_domain, only: nblocks, distrb_info, blocks_ice
       use ice_flux 
       use ice_grid, only: hm, tlon, tlat, tmask, umask
+      use ice_state, only: aice
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -2215,6 +2217,14 @@
       call interpolate_data (Qa_data, Qa)
 
       do iblk = 1, nblocks
+        !echmod
+        ! limit summer Tair values where ice is present
+        do j = 1, ny_block
+          do i = 1, nx_block
+            if (aice(i,j,iblk) > p1) Tair(i,j,iblk) = min(Tair(i,j,iblk), Tffresh+p1)
+          enddo
+        enddo
+
         call Qa_fixLY(nx_block,  ny_block, &
                                  Tair (:,:,iblk), &
                                  Qa   (:,:,iblk))
@@ -3390,6 +3400,170 @@
 !echmod
 
       end subroutine ocn_data_ncar_init
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: ocn_data_ncar_init - reads data set
+!
+! !INTERFACE:
+!
+      subroutine ocn_data_ncar_init_3D
+!
+! !DESCRIPTION:
+!
+! Reads NCAR pop ocean forcing data set 'oceanmixed_ice_depth.nc'
+! 
+! List of ocean forcing fields: Note that order is important!
+! (order is determined by field list in vname).
+! 
+! For ocean mixed layer-----------------------------units 
+! 
+! 1  sst------temperature---------------------------(C)   
+! 2  sss------salinity------------------------------(ppt) 
+! 3  hbl------depth---------------------------------(m)   
+! 4  u--------surface u current---------------------(m/s) 
+! 5  v--------surface v current---------------------(m/s) 
+! 6  dhdx-----surface tilt x direction--------------(m/m) 
+! 7  dhdy-----surface tilt y direction--------------(m/m) 
+! 8  qdp------ocean sub-mixed layer heat flux-------(W/m2)
+!
+! All fields are on the T-grid.
+!
+! !REVISION HISTORY:
+!
+! authors: Bruce Briegleb, NCAR
+!          Elizabeth Hunke, LANL
+!
+! !USES:
+!
+      use ice_domain, only: nblocks, distrb_info
+      use ice_gather_scatter
+      use ice_exit
+      use ice_work, only: work1, work2
+      use ice_read_write
+      use ice_grid, only: to_ugrid, ANGLET
+#ifdef ncdf
+      use netcdf
+#endif
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) :: & 
+        n   , & ! field index
+        m   , & ! month index
+        nrec, & ! record number for direct access
+        nbits
+
+      character(char_len) :: &
+        vname(nfld) ! variable names to search for in file
+      data vname /  &
+           'T',      'S',      'hblt',  'U',     'V', &
+           'dhdx',   'dhdy',   'qdp' /
+
+      integer (kind=int_kind) :: &
+        fid        , & ! file id 
+        dimid          ! dimension id 
+
+      integer (kind=int_kind) :: &
+        status  , & ! status flag
+        nlat    , & ! number of longitudes of data
+        nlon        ! number of latitudes  of data
+
+      if (my_task == master_task) then
+
+         write (nu_diag,*) 'WARNING: evp_prep calculates surface tilt'
+         write (nu_diag,*) 'WARNING: stress from geostrophic currents,'
+         write (nu_diag,*) 'WARNING: not data from ocean forcing file.'
+         write (nu_diag,*) 'WARNING: Alter ice_dyn_evp.F if desired.'
+
+         if (restore_sst) write (nu_diag,*)  &
+             'SST restoring timescale = ',trestore,' days' 
+
+         sst_file = trim(ocn_data_dir)//oceanmixed_file ! not just sst
+
+        !---------------------------------------------------------------
+        ! Read in ocean forcing data from an existing file
+        !---------------------------------------------------------------
+        write (nu_diag,*) 'ocean mixed layer forcing data file = ', &
+                           sst_file
+
+      endif ! master_task
+
+      if (trim(ocn_data_format) == 'nc') then
+#ifdef ncdf
+        if (my_task == master_task) then
+          call ice_open_nc(sst_file, fid)
+
+!          status = nf90_inq_dimid(fid,'nlon',dimid)
+          status = nf90_inq_dimid(fid,'ni',dimid)
+          status = nf90_inquire_dimension(fid,dimid,len=nlon)
+  
+!          status = nf90_inq_dimid(fid,'nlat',dimid)
+          status = nf90_inq_dimid(fid,'nj',dimid)
+          status = nf90_inquire_dimension(fid,dimid,len=nlat)
+
+          if( nlon .ne. nx_global ) then
+            call abort_ice ('ice: ocn frc file nlon ne nx_global')
+          endif
+          if( nlat .ne. ny_global ) then
+            call abort_ice ('ice: ocn frc file nlat ne ny_global')
+          endif
+
+        endif ! master_task
+
+        ! Read in ocean forcing data for all 12 months
+        do n=1,nfld
+          do m=1,12
+                
+            ! Note: netCDF does single to double conversion if necessary
+            call ice_read_nc(fid, m, vname(n), work1, dbug, &
+                             field_loc_center, field_type_scalar)
+
+            ! the land mask used in ocean_mixed_depth.nc does not 
+            ! match our gx1v3 mask (hm)
+            where (work1(:,:,:) < -900.) work1(:,:,:) = c0
+
+            ocn_frc_m(:,:,:,n,m) = work1(:,:,:)
+
+          enddo               ! month loop
+        enddo               ! field loop
+
+        if (my_task == master_task) status = nf90_close(fid)
+
+        ! Rotate vector quantities and shift to U-grid
+        do n=4,6,2
+          do m=1,12
+
+             work1(:,:,:) = ocn_frc_m(:,:,:,n  ,m)
+             work2(:,:,:) = ocn_frc_m(:,:,:,n+1,m)
+             ocn_frc_m(:,:,:,n  ,m) = work1(:,:,:)*cos(ANGLET(:,:,:)) &
+                                    + work2(:,:,:)*sin(ANGLET(:,:,:))
+             ocn_frc_m(:,:,:,n+1,m) = work2(:,:,:)*cos(ANGLET(:,:,:)) &
+                                    - work1(:,:,:)*sin(ANGLET(:,:,:))
+
+             work1(:,:,:) = ocn_frc_m(:,:,:,n  ,m)*cos(ANGLET(:,:,:)) &
+                          + ocn_frc_m(:,:,:,n+1,m)*sin(ANGLET(:,:,:))
+             work2(:,:,:) = ocn_frc_m(:,:,:,n+1,m)*cos(ANGLET(:,:,:)) &
+                          - ocn_frc_m(:,:,:,n  ,m)*sin(ANGLET(:,:,:))
+             call to_ugrid(work1,ocn_frc_m(:,:,:,n  ,m))
+             call to_ugrid(work2,ocn_frc_m(:,:,:,n+1,m))
+
+          enddo               ! month loop
+        enddo               ! field loop
+
+#endif
+
+      else  ! binary format
+
+        call abort_ice ('new ocean forcing is netcdf only')
+
+      endif
+
+      end subroutine ocn_data_ncar_init_3D
 
 !=======================================================================
 !

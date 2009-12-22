@@ -97,7 +97,7 @@
       use ice_age, only: tr_iage, restart_age
       use ice_lvl, only: restart_lvl
       use ice_meltpond, only: tr_pond, restart_pond
-      use ice_therm_vertical, only: calc_Tsfc, heat_capacity
+      use ice_therm_vertical, only: calc_Tsfc, heat_capacity, conduct
       use ice_restoring
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -136,7 +136,7 @@
         kitd,           kdyn,            ndte,                          &
         evp_damping,    yield_curve,                                    &
         kstrength,      krdg_partic,     krdg_redist,   advection,      &
-        heat_capacity,  shortwave,       albedo_type,                   &
+        heat_capacity,  conduct,         shortwave,     albedo_type,    &
         albicev,        albicei,         albsnowv,      albsnowi,       &
         R_ice,          R_pnd,           R_snw,                         &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
@@ -205,6 +205,7 @@
       shortwave = 'default'  ! or 'dEdd' (delta-Eddington)
       albedo_type = 'default'! or 'constant'
       heat_capacity = .true. ! nonzero heat capacity (F => 0-layer thermo)
+      conduct = 'bubbly'     ! 'MU71' or 'bubbly' (Pringle et al 2007)
       calc_Tsfc = .true.     ! calculate surface temperature
       Tfrzpt    = 'linear_S' ! ocean freezing temperature, 'constant'=-1.8C
       update_ocn_f = .false. ! include fresh water and salt fluxes for frazil
@@ -407,6 +408,7 @@
       call broadcast_scalar(shortwave,          master_task)
       call broadcast_scalar(albedo_type,        master_task)
       call broadcast_scalar(heat_capacity,      master_task)
+      call broadcast_scalar(conduct,            master_task)
       call broadcast_scalar(R_ice,              master_task)
       call broadcast_scalar(R_pnd,              master_task)
       call broadcast_scalar(R_snw,              master_task)
@@ -537,6 +539,7 @@
          write(nu_diag,1000) ' albsnowi                  = ', albsnowi
          write(nu_diag,1010) ' heat_capacity             = ', & 
                                heat_capacity
+         write(nu_diag,1030) ' conduct                   = ', conduct
          write(nu_diag,1030) ' atmbndy                   = ', &
                                trim(atmbndy)
 
