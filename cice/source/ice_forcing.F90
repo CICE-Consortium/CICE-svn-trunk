@@ -242,7 +242,6 @@
       use ice_flux, only: sss, sst, Tf, Tfrzpt
       use ice_work, only:  work1
       use ice_read_write
-      use ice_therm_vertical, only: ustar_scale
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -402,15 +401,6 @@
           trim(sss_data_type) == 'ncar') then
 !         call ocn_data_ncar_init
          call ocn_data_ncar_init_3D
-      endif
-
-      ! set ustar_scale for case of zero currents
-      ! default value of c1 (for nonzero currents) set in init_thermo_vertical
-
-      if (trim(sst_data_type) /= 'ncar' .or.  &
-          trim(sss_data_type) /= 'ncar' .or.  & 
-          trim(sst_data_type) /= 'hadgem_sst_uvocn') then
-         ustar_scale = c10            ! for zero currents
       endif
 
       end subroutine init_forcing_ocn
@@ -3562,6 +3552,11 @@
         call abort_ice ('new ocean forcing is netcdf only')
 
       endif
+
+!echmod - no currents
+!              ocn_frc_m(:,:,:,4,:) = c0
+!              ocn_frc_m(:,:,:,5,:) = c0
+!echmod
 
       end subroutine ocn_data_ncar_init_3D
 

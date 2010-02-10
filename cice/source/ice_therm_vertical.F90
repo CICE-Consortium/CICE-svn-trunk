@@ -54,7 +54,7 @@
                          ! nilyr + 1 index is for bottom surface
 
       real (kind=dbl_kind) :: &
-         ustar_scale     ! scaling for ice-ocean heat flux
+         ustar_min       ! minimum friction velocity for ice-ocean heat flux
 
       real (kind=dbl_kind), parameter, private :: &
          ferrmax = 1.0e-3_dbl_kind    ! max allowed energy flux error (W m-2)
@@ -571,8 +571,6 @@
          enddo
       endif
 
-      ustar_scale = c1           ! for nonzero currents
-
       end subroutine init_thermo_vertical
 
 !=======================================================================
@@ -666,8 +664,7 @@
       ! 0.006 = unitless param for basal heat flx ala McPhee and Maykut
 
       real (kind=dbl_kind), parameter :: &
-         cpchr = -cp_ocn*rhow*0.006_dbl_kind, &
-         ustar_min = 5.e-3_dbl_kind
+         cpchr = -cp_ocn*rhow*0.006_dbl_kind
 
 
       ! Parameters for lateral melting
@@ -721,7 +718,7 @@
 
          ! strocnx has units N/m^2 so strocnx/rho has units m^2/s^2
          ustar = sqrt (sqrt(strocnxT(i,j)**2+strocnyT(i,j)**2)/rhow)
-         ustar = max (ustar,ustar_min*ustar_scale)
+         ustar = max (ustar,ustar_min)
 
          fbot(i,j) = cpchr * deltaT * ustar ! < 0
          fbot(i,j) = max (fbot(i,j), frzmlt(i,j)) ! frzmlt < fbot < 0

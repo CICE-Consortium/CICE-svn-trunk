@@ -68,6 +68,10 @@
                           ! 1 for exponential participation function 
          krdg_redist      ! 0 for Hibler (1980) formulation 
                           ! 1 for exponential redistribution function 
+
+      real (kind=dbl_kind) :: &  
+         mu_rdg           ! gives e-folding scale of ridged ice (m^.5) 
+                          ! (krdg_redist = 1) 
  
       real (kind=dbl_kind), parameter :: & 
          Cf = 17._dbl_kind   , & ! ratio of ridging work to PE change in ridging 
@@ -83,8 +87,6 @@
          Hstar  = c25        , & ! determines mean thickness of ridged ice (m) 
                                  ! (krdg_redist = 0) 
                                  ! Flato & Hibler (1995) have Hstar = 100 
-         mu_rdg = c3         , & ! gives e-folding scale of ridged ice (m^.5) 
-                                 ! (krdg_redist = 1) 
          Pstar = 2.75e4_dbl_kind, & ! constant in Hibler strength formula 
                                  ! (kstrength = 0) 
          Cstar = c20             ! constant in Hibler strength formula 
