@@ -87,7 +87,7 @@
           sss_data_type,   sst_data_type, ocn_data_dir, &
           oceanmixed_file, restore_sst,   trestore 
       use ice_grid, only: grid_file, kmt_file, grid_type, grid_format
-      use ice_mechred, only: kstrength, krdg_partic, krdg_redist, tr_lvl
+      use ice_mechred, only: kstrength, krdg_partic, krdg_redist, tr_lvl, mu_rdg
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, &
                                shortwave, albedo_type, R_ice, R_pnd, &
@@ -97,7 +97,8 @@
       use ice_age, only: tr_iage, restart_age
       use ice_lvl, only: restart_lvl
       use ice_meltpond, only: tr_pond, restart_pond
-      use ice_therm_vertical, only: calc_Tsfc, heat_capacity, conduct
+      use ice_therm_vertical, only: calc_Tsfc, heat_capacity, conduct, &
+          ustar_min
       use ice_restoring
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -134,14 +135,14 @@
 
       namelist /ice_nml/ &
         kitd,           kdyn,            ndte,                          &
-        evp_damping,    yield_curve,                                    &
-        kstrength,      krdg_partic,     krdg_redist,   advection,      &
+        evp_damping,    yield_curve,     advection,                     &
+        kstrength,      krdg_partic,     krdg_redist,   mu_rdg,         &
         heat_capacity,  conduct,         shortwave,     albedo_type,    &
         albicev,        albicei,         albsnowv,      albsnowi,       &
         R_ice,          R_pnd,           R_snw,                         &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
         atm_data_type,  atm_data_dir,    calc_strair,   calc_Tsfc,      &
-        precip_units,   Tfrzpt,          update_ocn_f,                  &
+        precip_units,   Tfrzpt,          update_ocn_f,  ustar_min,      &
         oceanmixed_ice, ocn_data_format, sss_data_type, sst_data_type,  &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
         restore_ice    
@@ -201,6 +202,7 @@
       kstrength = 1          ! 1 = Rothrock 75 strength, 0 = Hibler 79
       krdg_partic = 1        ! 1 = new participation, 0 = Thorndike et al 75
       krdg_redist = 1        ! 1 = new redistribution, 0 = Hibler 80
+      mu_rdg = 3             ! e-folding scale of ridged ice, krdg_partic=1 (m^0.5)
       advection  = 'remap'   ! incremental remapping transport scheme
       shortwave = 'default'  ! or 'dEdd' (delta-Eddington)
       albedo_type = 'default'! or 'constant'
@@ -209,6 +211,7 @@
       calc_Tsfc = .true.     ! calculate surface temperature
       Tfrzpt    = 'linear_S' ! ocean freezing temperature, 'constant'=-1.8C
       update_ocn_f = .false. ! include fresh water and salt fluxes for frazil
+      ustar_min = 0.005      ! minimum friction velocity for ocean heat flux (m/s)
       R_ice     = 0.00_dbl_kind   ! tuning parameter for sea ice
       R_pnd     = 0.00_dbl_kind   ! tuning parameter for ponded sea ice
       R_snw     = 0.00_dbl_kind   ! tuning parameter for snow over sea ice
@@ -404,6 +407,7 @@
       call broadcast_scalar(kstrength,          master_task)
       call broadcast_scalar(krdg_partic,        master_task)
       call broadcast_scalar(krdg_redist,        master_task)
+      call broadcast_scalar(mu_rdg,             master_task)
       call broadcast_scalar(advection,          master_task)
       call broadcast_scalar(shortwave,          master_task)
       call broadcast_scalar(albedo_type,        master_task)
@@ -426,6 +430,7 @@
       call broadcast_scalar(calc_Tsfc,          master_task)
       call broadcast_scalar(Tfrzpt,             master_task)
       call broadcast_scalar(update_ocn_f,       master_task)
+      call broadcast_scalar(ustar_min,          master_task)
       call broadcast_scalar(precip_units,       master_task)
       call broadcast_scalar(oceanmixed_ice,     master_task)
       call broadcast_scalar(ocn_data_format,    master_task)
@@ -524,6 +529,7 @@
                                krdg_partic
          write(nu_diag,1020) ' krdg_redist               = ', &
                                krdg_redist
+         write(nu_diag,1000) ' mu_rdg                    = ', mu_rdg
          write(nu_diag,1030) ' advection                 = ', &
                                trim(advection)
          write(nu_diag,1030) ' shortwave                 = ', &
@@ -552,6 +558,7 @@
          write(nu_diag,1010) ' calc_Tsfc                 = ', calc_Tsfc
          write(nu_diag,*)    ' Tfrzpt                    = ', trim(Tfrzpt)
          write(nu_diag,1010) ' update_ocn_f              = ', update_ocn_f
+         write(nu_diag,1005) ' ustar_min                 = ', ustar_min
          if (trim(atm_data_type) /= 'default') then
             write(nu_diag,*) ' atm_data_dir              = ', &
                                trim(atm_data_dir)
@@ -627,6 +634,7 @@
          endif                               
 
  1000    format (a30,2x,f9.2)  ! a30 to align formatted, unformatted statements
+ 1005    format (a30,2x,f9.6)  ! float
  1010    format (a30,2x,l6)    ! logical
  1020    format (a30,2x,i6)    ! integer
  1030    format (a30,   a8)    ! character

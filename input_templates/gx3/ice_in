@@ -67,6 +67,7 @@
   , kstrength       = 1
   , krdg_partic     = 1
   , krdg_redist     = 1
+  , mu_rdg          = 3
   , advection       = 'remap'
   , heat_capacity   = .true.
   , conduct         = 'MU71'
@@ -89,6 +90,7 @@
   , calc_Tsfc       = .true.
   , precip_units    = 'mm_per_month'
   , Tfrzpt          = 'linear_S'
+  , ustar_min       = 0.0005
   , update_ocn_f    = .false.
   , oceanmixed_ice  = .true.
   , ocn_data_format = 'bin'
