@@ -70,7 +70,8 @@
          albicev , & ! visible ice albedo for h > ahmax
          albicei , & ! near-ir ice albedo for h > ahmax
          albsnowv, & ! cold snow albedo, visible
-         albsnowi    ! cold snow albedo, near IR
+         albsnowi, & ! cold snow albedo, near IR
+         ahmax       ! thickness above which ice albedo is constant (m)
 
       ! category albedos
       real (kind=dbl_kind), &
@@ -513,9 +514,6 @@
 !EOP
 !
       real (kind=dbl_kind), parameter :: &
-!         ahmax     = p5          , & ! thickness above which ice albedo 
-         ahmax     = 0.3_dbl_kind, & ! thickness above which ice albedo 
-                                     ! is constant (m)
          dT_mlt    = c1          , & ! change in temp to give dalb_mlt 
                                      ! albedo change
          dalb_mlt  = -0.075_dbl_kind, & ! albedo change per dT_mlt change
