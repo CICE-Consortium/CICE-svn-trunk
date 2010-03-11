@@ -89,7 +89,7 @@
       use ice_grid, only: grid_file, kmt_file, grid_type, grid_format
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist, tr_lvl, mu_rdg
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
-      use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, &
+      use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, ahmax, &
                                shortwave, albedo_type, R_ice, R_pnd, &
                                R_snw
       use ice_atmo, only: atmbndy, calc_strair
@@ -139,7 +139,7 @@
         kstrength,      krdg_partic,     krdg_redist,   mu_rdg,         &
         heat_capacity,  conduct,         shortwave,     albedo_type,    &
         albicev,        albicei,         albsnowv,      albsnowi,       &
-        R_ice,          R_pnd,           R_snw,                         &
+        ahmax,          R_ice,           R_pnd,         R_snw,          &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
         atm_data_type,  atm_data_dir,    calc_strair,   calc_Tsfc,      &
         precip_units,   Tfrzpt,          update_ocn_f,  ustar_min,      &
@@ -219,7 +219,8 @@
       albicei   = 0.36_dbl_kind   ! near-ir ice albedo for h > ahmax
       albsnowv  = 0.98_dbl_kind   ! cold snow albedo, visible
       albsnowi  = 0.70_dbl_kind   ! cold snow albedo, near IR
-      atmbndy   = 'default'  ! or 'constant'
+      ahmax     = 0.3_dbl_kind    ! thickness above which ice albedo is constant (m)
+      atmbndy   = 'default'       ! or 'constant'
 
       fyear_init = 1900           ! first year of forcing cycle
       ycycle = 1                  ! number of years in forcing cycle
@@ -420,6 +421,7 @@
       call broadcast_scalar(albicei,            master_task)
       call broadcast_scalar(albsnowv,           master_task)
       call broadcast_scalar(albsnowi,           master_task)
+      call broadcast_scalar(ahmax,              master_task)
       call broadcast_scalar(atmbndy,            master_task)
       call broadcast_scalar(fyear_init,         master_task)
       call broadcast_scalar(ycycle,             master_task)
@@ -543,6 +545,7 @@
          write(nu_diag,1000) ' albicei                   = ', albicei
          write(nu_diag,1000) ' albsnowv                  = ', albsnowv
          write(nu_diag,1000) ' albsnowi                  = ', albsnowi
+         write(nu_diag,1000) ' ahmax                     = ', ahmax
          write(nu_diag,1010) ' heat_capacity             = ', & 
                                heat_capacity
          write(nu_diag,1030) ' conduct                   = ', conduct
