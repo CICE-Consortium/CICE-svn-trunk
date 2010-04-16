@@ -1,13 +1,13 @@
 &setup_nml
     days_per_year  = 365
-  , year_init      = 1997
-  , istep0         = 0
+  , year_init      = 1981
+  , istep0         = 5832
   , dt             = 3600.0
-  , npt            = 744
+  , npt            = 43800
   , ndyn_dt        = 1
   , runtype        = 'initial'
-  , ice_ic         = './restart/iced_gx3_v4.0_kcatbound0'
-  , restart        = .true.
+  , ice_ic         = 'none'
+  , restart        = .false.
   , restart_dir    = './restart/'
   , restart_file   = 'iced'
   , pointer_file   = './restart/ice.restart_file'
@@ -17,11 +17,11 @@
   , diag_type      = 'stdout'
   , diag_file      = 'ice_diag.d'
   , print_global   = .false.
-  , print_points   = .false.
-  , latpnt(1)      =  90.
-  , lonpnt(1)      =   0.
-  , latpnt(2)      = -65.
-  , lonpnt(2)      = -45.
+  , print_points   = .true.
+  , latpnt(1)      =  71.35
+  , lonpnt(1)      = -156.5
+  , latpnt(2)      =  71.35
+  , lonpnt(2)      = -156.5
   , dbug           = .false.
   , histfreq       = 'm','x','x','x','x'
   , histfreq_n     =  1 , 1 , 1 , 1 , 1
@@ -36,23 +36,23 @@
 
 &grid_nml
     grid_format  = 'bin'
-  , grid_type    = 'displaced_pole'
+  , grid_type    = 'rectangular'
   , grid_file    = 'grid'
   , kmt_file     = 'kmt'
   , kcatbound    = 0
 /
 
 &domain_nml
-    nprocs = 4
-  , processor_shape   = 'slenderX2'
+    nprocs = 1
+  , processor_shape   = 'square-ice'
   , distribution_type = 'cartesian'
   , distribution_wght = 'latitude'
-  , ew_boundary_type  = 'cyclic'
+  , ew_boundary_type  = 'open'
   , ns_boundary_type  = 'open'
 /
 
 &tracer_nml
-    tr_iage      = .true.
+    tr_iage      = .false.
   , restart_age  = .false.
   , tr_lvl       = .false.
   , restart_lvl  = .false.
@@ -62,45 +62,45 @@
 
 &ice_nml
     kitd            = 1
-  , kdyn            = 1
+  , kdyn            = 0
   , ndte            = 120
   , kstrength       = 1
   , krdg_partic     = 1
   , krdg_redist     = 1
-  , mu_rdg          = 4
+  , mu_rdg          = 3
   , advection       = 'remap'
   , heat_capacity   = .true.
-  , conduct         = 'MU71'
+  , conduct         = 'bubbly'
   , shortwave       = 'default'
   , albedo_type     = 'default'
   , albicev         = 0.78
   , albicei         = 0.36
   , albsnowv        = 0.98
   , albsnowi        = 0.70 
-  , ahmax           = 0.5
+  , ahmax           = 0.3
   , R_ice           = 0.
   , R_pnd           = 0.
   , R_snw           = 0.
   , atmbndy         = 'default'
-  , fyear_init      = 1997
+  , fyear_init      = 1981
   , ycycle          = 1
-  , atm_data_format = 'bin'
-  , atm_data_type   = 'ncar'
-  , atm_data_dir    = '/usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/'
+  , atm_data_format = 'nc'
+  , atm_data_type   = 'rct'
+  , atm_data_dir    = '/usr/projects/climate/eclare/DATA/column/'
   , calc_strair     = .true.
   , calc_Tsfc       = .true.
-  , precip_units    = 'mm_per_month'
+  , precip_units    = 'mm_per_sec'
   , Tfrzpt          = 'linear_S'
-  , ustar_min       = 0.05
+  , ustar_min       = 0.0005
   , update_ocn_f    = .false.
   , oceanmixed_ice  = .true.
-  , ocn_data_format = 'bin'
+  , ocn_data_format = 'nc'
   , sss_data_type   = 'default'
   , sst_data_type   = 'default'
-  , ocn_data_dir    = 'unknown_ocn_data_dir'
-  , oceanmixed_file = 'unknown_oceanmixed_file'
+  , ocn_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/gx1v3/forcing/'
+  , oceanmixed_file = 'oceanmixed_ice_depth.nc'
   , restore_sst     = .false.
-  , trestore        =  180
+  , trestore        =  90
   , restore_ice     = .false.
 /
 
@@ -206,10 +206,10 @@
   , f_vlvl         = 'x'
   , f_ardg         = 'x'
   , f_vrdg         = 'x'
-  , f_aicen        = 'x'
-  , f_vicen        = 'x'
-  , f_Tinz         = 'x'
-  , f_Tsnz         = 'x'
+  , f_aicen        = 'm'
+  , f_vicen        = 'm'
+  , f_Tinz         = 'm'
+  , f_Tsnz         = 'm'
   , f_fsurfn_ai    = 'x'
   , f_fcondtopn_ai = 'x'
   , f_fmelttn_ai   = 'x'

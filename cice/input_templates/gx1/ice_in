@@ -208,6 +208,8 @@
   , f_vrdg         = 'x'
   , f_aicen        = 'x'
   , f_vicen        = 'x'
+  , f_Tinz         = 'x'
+  , f_Tsnz         = 'x'
   , f_fsurfn_ai    = 'x'
   , f_fcondtopn_ai = 'x'
   , f_fmelttn_ai   = 'x'

@@ -792,6 +792,123 @@
 !=======================================================================
 !BOP
 !
+! !IROUTINE: ice_read_nc_column - read one 1D field from a netCDF file
+!
+! !INTERFACE:
+!
+      subroutine ice_read_nc_column(fid,  nrec,  varname, work,  diag, &
+                             field_loc, field_type)
+!
+! !DESCRIPTION:
+!
+! Read a netCDF file. \\
+! If the optional variables field_loc and field_type are present,
+! the ghost cells are filled using values from the global array.
+! This prevents them from being filled with zeroes in land cells
+! (subroutine ice_HaloUpdate need not be called).
+!
+! !REVISION HISTORY:
+!
+! Adapted by Alison McLaren, Met Office from ice_read
+! Further adapted by E. Hunke for column modeling
+!
+! !USES:
+!
+      use ice_domain
+      use ice_gather_scatter
+      use ice_work, only: work_g1, work_g2
+      use ice_exit
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+           fid           , & ! file id
+           nrec              ! record number 
+
+      logical (kind=log_kind), intent(in) :: &
+           diag              ! if true, write diagnostic output
+
+      character (char_len), intent(in) :: & 
+           varname           ! field name in netcdf file
+
+      real (kind=dbl_kind), &
+           intent(out) :: &
+           work              ! output field (read, 8-byte)
+
+      integer (kind=int_kind), optional, intent(in) :: &
+           field_loc, &      ! location of field on staggered grid
+           field_type        ! type of field (scalar, vector, angle)
+!
+!EOP
+!
+#ifdef ncdf
+! netCDF file diagnostics:
+      integer (kind=int_kind) :: & 
+         varid,           & ! netcdf id for field
+         status,          & ! status output from netcdf routines
+         ndim, nvar,      & ! sizes of netcdf file
+         id,              & ! dimension index
+         dimlen             ! size of dimension
+
+      real (kind=dbl_kind) :: &
+         amin, amax         ! min and max values of input array
+
+      character (char_len) :: &
+         dimname            ! dimension name            
+
+      real (kind=dbl_kind), dimension(1) :: &
+           work1              ! output field (read, 8-byte)
+!
+      if (my_task == master_task) then
+
+        !-------------------------------------------------------------
+        ! Find out ID of required variable
+        !-------------------------------------------------------------
+
+         status = nf90_inq_varid(fid, trim(varname), varid)
+ 
+         if (status /= nf90_noerr) then
+           call abort_ice ( & 
+               'ice_read_nc: Cannot find variable '//trim(varname) )
+         endif
+
+       !--------------------------------------------------------------
+       ! Read global array 
+       !--------------------------------------------------------------
+
+         status = nf90_get_var( fid, varid, work1, start=(/nrec/), count=(/1/))
+         work = work1(1)
+
+      endif                     ! my_task = master_task
+
+    !-------------------------------------------------------------------
+    ! optional diagnostics
+    !-------------------------------------------------------------------
+
+      if (my_task==master_task .and. diag) then
+
+          write(nu_diag,*) & 
+            'ice_read_nc, fid= ',fid, ', nrec = ',nrec, & 
+            ', varname = ',trim(varname)
+          status = nf90_inquire(fid, nDimensions=ndim, nVariables=nvar)
+          write(nu_diag,*) 'ndim= ',ndim,', nvar= ',nvar
+          do id=1,ndim
+            status = nf90_inquire_dimension(fid,id,name=dimname,len=dimlen)
+            write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
+         enddo
+         write(nu_diag,*) ' nrec, value =', nrec, work
+         write(nu_diag,*) ''
+
+      endif
+
+#else
+      work = c0 ! to satisfy intent(out) attribute
+#endif
+      end subroutine ice_read_nc_column
+
+!=======================================================================
+!BOP
+!
 ! !IROUTINE: ice_close_nc - closes a netCDF file
 !
 ! !INTERFACE:
