@@ -6342,7 +6342,6 @@ contains
             do i = nx_block, nghost + 1, -1
                if (this_block%i_glob(i) == 0) ibc = ibc - 1
             enddo
-            ibc = ibc + 1
             do j = 1, ny_block
                ARRAY(ibc,j,iblk) = c2*ARRAY(ibc-1,j,iblk) - ARRAY(ibc-2,j,iblk)
             enddo
@@ -6366,7 +6365,6 @@ contains
             do j = ny_block, nghost + 1, -1
                if (this_block%j_glob(j) == 0) ibc = ibc - 1
             enddo
-            ibc = ibc + 1
             do i = 1, nx_block
                ARRAY(i,ibc,iblk) = c2*ARRAY(i,ibc-1,iblk) - ARRAY(i,ibc-2,iblk)
             enddo

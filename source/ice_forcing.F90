@@ -118,7 +118,7 @@
          atm_data_format, & ! 'bin'=binary or 'nc'=netcdf
          ocn_data_format, & ! 'bin'=binary or 'nc'=netcdf
          atm_data_type, & ! 'default', 'monthly', 'ncar', 'ecmwf', 
-                          ! 'LYq' or 'hadgem'
+                          ! 'LYq' or 'hadgem' or 'rct'
          sss_data_type, & ! 'default', 'clim', or 'ncar'
          sst_data_type, & ! 'default', 'clim', 'ncar', 
                           !     'hadgem_sst' or 'hadgem_sst_uvocn'
@@ -461,6 +461,8 @@
          call LY_data
       elseif (trim(atm_data_type) == 'hadgem') then
          call hadgem_data
+      elseif (trim(atm_data_type) == 'rct') then
+         call rct_data
       elseif (trim(atm_data_type) == 'monthly') then
          call monthly_data
       else    ! default values set in init_flux
@@ -1321,6 +1323,8 @@
       !-----------------------------------------------------------------
 
       if (trim(atm_data_type) == 'ncar') then
+         ! precip is in mm/month
+
          do j = jlo, jhi
          do i = ilo, ihi
 
@@ -1341,12 +1345,12 @@
                       *exp(-7.77e-4_dbl_kind*(Tffresh - Tair(i,j))**2)) &
                      * (c1 + 0.275_dbl_kind*cldf(i,j))
 
-      ! precip is in mm/month; converted to mks below
-
          enddo
          enddo
 
       elseif (trim(atm_data_type) == 'ecmwf') then
+         ! precip is in mm/month
+
          do j = jlo, jhi
          do i = ilo, ihi
 
@@ -1369,12 +1373,11 @@
                    *exp(-7.77e-4_dbl_kind*(Tffresh - Tair(i,j))**2)) &
                   * (c1 + 0.275_dbl_kind*cldf(i,j))
 
-      ! precip is in mm/month; converted to mks below
-
          enddo
          enddo
 
       elseif (trim(atm_data_type) == 'LYq') then
+         ! precip is in mm/s
 
       !-----------------------------------------------------------------
       ! longwave, Rosati and Miyakoda, JPO 18, p. 1607 (1988) - sort of 
@@ -1393,6 +1396,26 @@
                                       + c4*(sstk-ptem) )
             flw(i,j) = emissivity*stefan_boltzmann * ( sstk**4 - qlwm )
             flw(i,j) = flw(i,j) * hm(i,j) ! land mask
+         enddo
+         enddo
+
+      elseif (trim(atm_data_type) == 'rct') then   ! rectangular grid 
+         ! precip is in kg/m^2/s
+         ! NOTE direct and diffuse fsw are available but not used here
+
+         do j = jlo, jhi
+         do i = ilo, ihi
+
+      !-----------------------------------------------------------------
+      ! compute downward longwave as in Parkinson and Washington (1979)
+      ! (for now)
+      !-----------------------------------------------------------------
+
+            flw(i,j) = stefan_boltzmann*Tair(i,j)**4 &
+                     * (c1 - 0.261_dbl_kind &
+                      *exp(-7.77e-4_dbl_kind*(Tffresh - Tair(i,j))**2)) &
+                     * (c1 + 0.275_dbl_kind*cldf(i,j))
+
          enddo
          enddo
 
@@ -1740,6 +1763,176 @@
       oldrecnum = recnum
 
       end subroutine ncar_data
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: rct_data - define atmospheric data fields 
+!
+! !INTERFACE:
+!
+      subroutine rct_data
+!
+! !DESCRIPTION:
+!
+! !REVISION HISTORY:
+!
+! authors: Nicole Jeffery, LANL
+!
+! !USES:
+!
+      use ice_domain, only: nblocks, blocks_ice
+      use ice_read_write
+      use ice_flux
+!
+! !INPUT/OUTPUT PARAMETERS:
+! 
+!
+! EOP
+! 
+!local parameters
+
+    character (char_len_long) :: & 
+       met_file,   &    ! netcdf filename
+       fieldname        ! field name in netcdf file
+
+    integer (kind=int_kind) :: &
+       fid              ! file id for netCDF file 
+
+    real (kind=dbl_kind):: &
+       work             ! temporary variable
+
+    logical (kind=log_kind) :: diag
+
+    integer (kind=int_kind) :: &
+       status           ! status flag
+
+    integer (kind=int_kind) :: &
+       iblk, &          ! block index
+       ilo,jlo          ! beginning of physical domain
+
+    type (block) :: &
+       this_block       ! block information for current block
+      
+    real (kind=dbl_kind) :: & ! used to determine specific humidity
+       Temp               , & ! air temperature (K)
+       rh                 , & ! relative humidity (%)
+       Psat               , & ! saturation vapour pressure (hPa)
+       ws                     ! saturation mixing ratio
+
+    real (kind=dbl_kind), dimension(2) :: &
+       Tair_data_p            ! air temperature (K) for interpolation
+
+    real (kind=dbl_kind), parameter :: & ! coefficients for Hyland-Wexler Qa 
+       ps1 = 0.58002206d4_dbl_kind,    & ! (K) 
+       ps2 = 0.13914993d1_dbl_kind,    & !
+       ps3 = 0.48640239d-1_dbl_kind,   & ! (K^-1) 
+       ps4 = 0.41764768d-4_dbl_kind,   & ! (K^-2)
+       ps5 = 0.14452093d-7_dbl_kind,   & ! (K^-3)
+       ps6 = 0.65459673d1_dbl_kind,    & !
+       ws1 = 621.97_dbl_kind,          & ! for saturation mixing ratio 
+       Pair = 1020_dbl_kind              ! Sea level pressure (hPa) 
+       
+      ! for interpolation of hourly data                
+      integer (kind=int_kind) :: &
+          i, j        , &
+          imx,ixx,ixp , & ! record numbers for neighboring months
+          recnum      , & ! record number
+          maxrec      , & ! maximum record number
+          recslot     , & ! spline slot for current record
+          dataloc         ! = 1 for data located in middle of time interval
+                          ! = 2 for date located at end of time interval
+
+      real (kind=dbl_kind) :: &
+          sec1hr              ! number of seconds in 1 hour
+
+      logical (kind=log_kind) :: readm, read1
+                  
+      diag = .false.   ! write diagnostic information 
+   
+      do iblk = 1, nblocks
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         jlo = this_block%jlo
+
+      if (trim(atm_data_format) == 'nc') then     ! read nc file
+
+        ! hourly data beginning Jan 1, 1989, 01:00   
+        ! HARDWIRED for dt = 1 hour!
+        met_file = trim(atm_data_dir)//'hourlymet_brw1989_5yr.nc'   
+                                                 
+        call ice_open_nc(met_file,fid)
+
+        fieldname='Uatm' 
+        call ice_read_nc_column(fid,istep1,fieldname,work,diag)   
+        uatm(:,:,:) = work
+
+        fieldname='Vatm' 
+        call ice_read_nc_column(fid,istep1,fieldname,work,diag)   
+        vatm(:,:,:) = work
+
+        fieldname='Tair' 
+        call ice_read_nc_column(fid,istep1,fieldname,work,diag)   
+        Temp = work
+        Tair(:,:,:) = Temp 
+
+        if (my_task == master_task) status = nf90_close(fid)
+
+        ! hourly solar data beginning Jan 1, 1989, 01:00          
+        met_file = trim(atm_data_dir)//'hourlysolar_brw1989_5yr.nc'   
+
+        call ice_open_nc(met_file,fid)
+
+        fieldname='fsw' 
+        call ice_read_nc_column(fid,istep1,fieldname,work,diag)   
+        fsw(:,:,:) = work
+
+        if (my_task == master_task) status = nf90_close(fid)
+
+        ! hourly interpolated monthly  data beginning Jan 1, 1989, 01:00  
+        met_file = trim(atm_data_dir)//'hourlymet_rh_5yr.nc'   
+        
+        call ice_open_nc(met_file,fid)
+
+        fieldname='rh' 
+        call ice_read_nc_column(fid,istep1,fieldname,work,diag)   
+        rh = work
+     
+        fieldname='fsnow' 
+        call ice_read_nc_column(fid,istep1,fieldname,work,diag)   
+        fsnow(:,:,:) = work
+
+      !-------------------------------------------------------------------
+      ! Find specific humidity using Hyland-Wexler formulation
+      ! Hyland, R.W. and A. Wexler, Formulations for the Thermodynamic 
+      ! Properties of the saturated phases of H20 from 173.15K to 473.15K, 
+      ! ASHRAE Trans, 89(2A), 500-519, 1983
+      !-------------------------------------------------------------------
+      
+        Psat = exp(-ps1/Temp + ps2 - ps3*Temp + ps4*Temp**2 - ps5 * Temp**3  & 
+              + ps6 * log(Temp))*p01          ! saturation vapour pressure
+        ws = ws1 * Psat/(Pair - Psat)         ! saturation mixing ratio
+        Qa(:,:,:) = rh * ws * p01/(c1 + rh * ws * p01) * p001  
+                                              ! specific humidity (kg/kg)
+
+        if (my_task == master_task) status = nf90_close(fid)
+
+      endif ! atm_data_format
+
+      !flw   given cldf and Tair  calculated in prepare_forcing
+
+      !-----------------------------
+      ! fixed data
+      ! May not be needed
+      !-----------------------------
+        rhoa  (:,:,:) = 1.3_dbl_kind ! air density (kg/m^3)
+        cldf(:,:,:) =  0.25_dbl_kind ! cloud fraction
+        frain(:,:,:) = c0            ! this is available in hourlymet_rh file
+  
+      enddo ! nblocks
+
+      end subroutine rct_data
 
 !=======================================================================
 ! ECMWF atmospheric forcing

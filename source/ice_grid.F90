@@ -908,10 +908,14 @@
       ! Weddell Sea
       ! lower left corner of grid is 55W, 75S
 
+      ! Barrow AK
+      ! lower left corner of grid is 156.5W, 71.35N
+
       if (my_task == master_task) then
          work_g1 = c0
          length = dxrect*cm_to_m/radius*rad_to_deg
-         work_g1(1,:) = -55._dbl_kind
+!         work_g1(1,:) = -55._dbl_kind   ! Weddell Sea
+         work_g1(1,:) = -156.5_dbl_kind ! Barrow AK
          do j = 1, ny_global
          do i = 2, nx_global
             work_g1(i,j) = work_g1(i-1,j) + length   ! ULON
@@ -921,11 +925,14 @@
       endif
       call scatter_global(ULON, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
+      call ice_HaloExtrapolate(ULON, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
 
       if (my_task == master_task) then
          work_g1 = c0
          length = dyrect*cm_to_m/radius*rad_to_deg
-         work_g1(:,1) = -75._dbl_kind
+!         work_g1(:,1) = -75._dbl_kind ! Weddell Sea
+         work_g1(:,1) = 71.35_dbl_kind ! Barrow AK
          do i = 1, nx_global
          do j = 2, ny_global
             work_g1(i,j) = work_g1(i,j-1) + length   ! ULAT
@@ -935,6 +942,8 @@
       endif
       call scatter_global(ULAT, work_g1, master_task, distrb_info, &
                           field_loc_NEcorner, field_type_scalar)
+      call ice_HaloExtrapolate(ULAT, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
 
       if (my_task == master_task) then
          do j = 1, ny_global
@@ -970,14 +979,6 @@
             enddo
             enddo
 
-         elseif (trim(ew_boundary_type) == 'closed') then
-
-            do j = 3,ny_global-2      ! closed top and bottom
-            do i = 3,nx_global-2      ! closed sides
-               work_g1(i,j) = c1    ! NOTE nx_global, ny_global > 5
-            enddo
-            enddo
-
          elseif (trim(ew_boundary_type) == 'open') then
 
             ! land in the upper left and lower right corners,
@@ -991,6 +992,8 @@
             enddo
             enddo
 
+            if (nx_global > 5 .and. ny_global > 5) then
+
             do j = 1, jmid+2
             do i = 1, imid+2
                work_g1(i,j) = c1    ! open lower left corner
@@ -1002,6 +1005,12 @@
                work_g1(i,j) = c1    ! open upper right corner
             enddo
             enddo
+
+            endif
+
+         elseif (trim(ew_boundary_type) == 'closed') then
+
+            call abort_ice('closed boundaries not available')
 
          endif
       endif
@@ -1392,9 +1401,11 @@
 
       if (my_task==master_task) then
          write(nu_diag,*) ' '
+         if (nx_block > 5+2*nghost .and. ny_block > 5+2*nghost) then
          write(nu_diag,*) 'min/max ULON:', y1*rad_to_deg, y2*rad_to_deg
-         write(nu_diag,*) 'min/max TLON:', x1*rad_to_deg, x2*rad_to_deg
          write(nu_diag,*) 'min/max ULAT:', y3*rad_to_deg, y4*rad_to_deg
+         endif
+         write(nu_diag,*) 'min/max TLON:', x1*rad_to_deg, x2*rad_to_deg
          write(nu_diag,*) 'min/max TLAT:', x3*rad_to_deg, x4*rad_to_deg
       endif                     ! my_task
 
