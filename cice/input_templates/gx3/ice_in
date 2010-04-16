@@ -67,7 +67,7 @@
   , kstrength       = 1
   , krdg_partic     = 1
   , krdg_redist     = 1
-  , mu_rdg          = 3
+  , mu_rdg          = 4
   , advection       = 'remap'
   , heat_capacity   = .true.
   , conduct         = 'MU71'
@@ -77,7 +77,7 @@
   , albicei         = 0.36
   , albsnowv        = 0.98
   , albsnowi        = 0.70 
-  , ahmax           = 0.3
+  , ahmax           = 0.5
   , R_ice           = 0.
   , R_pnd           = 0.
   , R_snw           = 0.
@@ -91,7 +91,7 @@
   , calc_Tsfc       = .true.
   , precip_units    = 'mm_per_month'
   , Tfrzpt          = 'linear_S'
-  , ustar_min       = 0.0005
+  , ustar_min       = 0.05
   , update_ocn_f    = .false.
   , oceanmixed_ice  = .true.
   , ocn_data_format = 'bin'

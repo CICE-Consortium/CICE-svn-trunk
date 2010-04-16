@@ -74,7 +74,6 @@
          dimension(nx_block,ny_block,max_ntrcr,max_blocks) :: &
          trcr      ! ice tracers
                    ! 1: surface temperature of ice/snow (C)
-                   ! 2: meltpond volume                 (m)
 
       !-----------------------------------------------------------------
       ! state of the ice for each category
@@ -122,8 +121,8 @@
       integer (kind=int_kind) :: &
          nt_Tsfc  , & ! ice/snow surface temperature
          nt_iage  , & ! volume-weighted ice age
-         nt_alvl  , & ! ridged ice area fraction
-         nt_vlvl  , & ! ridged ice volume fraction
+         nt_alvl  , & ! level ice area fraction
+         nt_vlvl  , & ! level ice volume fraction
          nt_volpn     ! melt pond volume
 
       !-----------------------------------------------------------------
