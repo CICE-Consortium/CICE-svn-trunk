@@ -417,7 +417,7 @@
             enddo               ! i
             enddo               ! j
 
-            if (calc_Tsfc .or. calc_strair .and. icells > 0) then 
+            if ((calc_Tsfc .or. calc_strair) .and. icells > 0) then 
 
       !-----------------------------------------------------------------
       ! Atmosphere boundary layer calculation; compute coefficients

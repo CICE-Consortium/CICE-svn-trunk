@@ -4280,14 +4280,16 @@ contains
                ARRAY(1,j,iblk) = c2*ARRAY(2,j,iblk) - ARRAY(3,j,iblk)
             enddo
          endif
+      endif
 
-      elseif (this_block%iblock == nblocks_x) then  ! east edge
+      if (this_block%iblock == nblocks_x) then  ! east edge
          if (trim(ew_bndy_type) /= 'cyclic') then
             ! locate ghost cell column (avoid padding)
             ibc = nx_block
-            do i = nx_block, 1, - 1
+            do i = nx_block, nghost + 1, -1
                if (this_block%i_glob(i) == 0) ibc = ibc - 1
             enddo
+            ibc = ibc + 1
             do j = 1, ny_block
                ARRAY(ibc,j,iblk) = c2*ARRAY(ibc-1,j,iblk) - ARRAY(ibc-2,j,iblk)
             enddo
@@ -4300,16 +4302,18 @@ contains
                ARRAY(i,1,iblk) = c2*ARRAY(i,2,iblk) - ARRAY(i,3,iblk)
             enddo
          endif
+      endif
 
-      elseif (this_block%jblock == nblocks_y) then  ! north edge
+      if (this_block%jblock == nblocks_y) then  ! north edge
          if (trim(ns_bndy_type) /= 'cyclic' .and. &
              trim(ns_bndy_type) /= 'tripole' .and. &
              trim(ns_bndy_type) /= 'tripoleT' ) then
             ! locate ghost cell column (avoid padding)
             ibc = ny_block
-            do j = ny_block, 1, - 1
+            do j = ny_block, nghost + 1, -1
                if (this_block%j_glob(j) == 0) ibc = ibc - 1
             enddo
+            ibc = ibc + 1
             do i = 1, nx_block
                ARRAY(i,ibc,iblk) = c2*ARRAY(i,ibc-1,iblk) - ARRAY(i,ibc-2,iblk)
             enddo

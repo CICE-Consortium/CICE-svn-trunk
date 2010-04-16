@@ -51,8 +51,8 @@
          nu_restart    , &  ! restart input file
          nu_dump_age   , &  ! dump file for restarting ice age tracer
          nu_restart_age, &  ! restart input file for ice age tracer
-         nu_dump_lvl   , &  ! dump file for restarting ridged ice tracers
-         nu_restart_lvl, &  ! restart input file for ridged ice tracers
+         nu_dump_lvl   , &  ! dump file for restarting level ice tracers
+         nu_restart_lvl, &  ! restart input file for level ice tracers
          nu_dump_pond  , &  ! dump file for restarting melt pond tracer
          nu_restart_pond,&  ! restart input file for melt pond tracer
          nu_rst_pointer, &  ! pointer to latest restart file

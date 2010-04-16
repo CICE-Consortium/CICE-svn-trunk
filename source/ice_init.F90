@@ -252,8 +252,8 @@
       ! extra tracers
       tr_iage      = .false. ! ice age
       restart_age  = .false. ! ice age restart
-      tr_lvl       = .false. ! ridged ice 
-      restart_lvl  = .false. ! ridged ice restart
+      tr_lvl       = .false. ! level ice 
+      restart_lvl  = .false. ! level ice restart
       tr_pond      = .false. ! explicit melt ponds
       restart_pond = .false. ! melt ponds restart
 
@@ -752,8 +752,8 @@
 
       trcr_depend(nt_Tsfc)  = 0   ! ice/snow surface temperature
       if (tr_iage) trcr_depend(nt_iage)  = 1   ! volume-weighted ice age
-      if (tr_lvl)  trcr_depend(nt_alvl)  = 0   ! ridged ice area
-      if (tr_lvl)  trcr_depend(nt_vlvl)  = 1   ! ridged ice volume
+      if (tr_lvl)  trcr_depend(nt_alvl)  = 0   ! level ice area
+      if (tr_lvl)  trcr_depend(nt_vlvl)  = 1   ! level ice volume
       if (tr_pond) trcr_depend(nt_volpn) = 0   ! melt pond volume
 
       do iblk = 1, nblocks

@@ -45,11 +45,11 @@
       use ice_init
       use ice_itd
       use ice_kinds_mod
+      use ice_lvl
       use ice_mechred
       use ice_meltpond
       use ice_ocean
       use ice_orbital
-      use ice_lvl
       use ice_shortwave
       use ice_state
       use ice_step_mod
@@ -388,7 +388,7 @@
             enddo               ! i
             enddo               ! j
 
-            if (calc_Tsfc .or. calc_strair .and. icells > 0) then 
+            if ((calc_Tsfc .or. calc_strair) .and. icells > 0) then 
 
       !-----------------------------------------------------------------
       ! Atmosphere boundary layer calculation; compute coefficients
