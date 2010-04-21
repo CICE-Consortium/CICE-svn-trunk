@@ -84,7 +84,7 @@
       type, public :: ice_hist_field
           character (len=16) :: vname     ! variable name
           character (len=16) :: vunit     ! variable units
-          character (len=24) :: vcoord    ! variable coordinates
+          character (len=25) :: vcoord    ! variable coordinates
           character (len=16) :: vcellmeas ! variable cell measures
           character (len=55) :: vdesc     ! variable description
           character (len=55) :: vcomment  ! variable description
@@ -129,6 +129,7 @@
       integer (kind=int_kind), parameter :: &
          nvar = 11              , & ! number of grid fields that can be written
                                     !   excluding grid vertices
+         nvarz = 3              , & ! number of category/vertical grid fields written
          ncat_hist = ncat           ! number of ice categories written <= ncat
 
       real (kind=real_kind) :: time_beg(max_nstrm), &
@@ -145,9 +146,10 @@
          avgct(max_nstrm)   ! average sample counter
 
       logical (kind=log_kind) :: &
-         igrd(nvar)        ! true if grid field is written to output file
+         igrd (nvar), &        ! true if grid field is written to output file
+         igrdz(nvarz)          ! true if category/vertical grid field is written
 
-      character (len=24), parameter :: &
+      character (len=25), parameter :: &
          tcstr = 'area: tarea'          , & ! vcellmeas for T cell quantities
          ucstr = 'area: uarea'          , & ! vcellmeas for U cell quantities
          tstr2D  = 'TLON TLAT time'     , & ! vcoord for T cell quantities, 2D
@@ -156,14 +158,14 @@
          ustr3Dz = 'ULON ULAT VGRD time', & ! vcoord for U cell quantities, 3D
          tstr3Dc = 'TLON TLAT NCAT time', & ! vcoord for T cell quantities, 3D
          ustr3Dc = 'ULON ULAT NCAT time', & ! vcoord for U cell quantities, 3D
-         tstr4Di  = 'TLON TLAT VGRDi NCAT', & ! vcoord for T cell quantities, 4D, ice
-         ustr4Di  = 'ULON ULAT VGRDi NCAT', & ! vcoord for U cell quantities, 4D, ice
-         tstr4Ds  = 'TLON TLAT VGRDs NCAT', & ! vcoord for T cell quantities, 4D, snow
-         ustr4Ds  = 'ULON ULAT VGRDs NCAT'    ! vcoord for U cell quantities, 4D, snow
-!echmod         tstr4Di  = 'TLON TLAT VGRDi NCAT time', & ! time index is not
-!echmod         ustr4Di  = 'ULON ULAT VGRDi NCAT time'    ! used on 4D variables
-!echmod         tstr4Ds  = 'TLON TLAT VGRDs NCAT time', & ! because ferret can
-!echmod         ustr4Ds  = 'ULON ULAT VGRDs NCAT time'    ! not handle it
+!ferret         tstr4Di  = 'TLON TLAT VGRDi NCAT', & ! vcoord for T cell quantities, 4D, ice
+!ferret         ustr4Di  = 'ULON ULAT VGRDi NCAT', & ! vcoord for U cell quantities, 4D, ice
+!ferret         tstr4Ds  = 'TLON TLAT VGRDs NCAT', & ! vcoord for T cell quantities, 4D, snow
+!ferret         ustr4Ds  = 'ULON ULAT VGRDs NCAT'    ! vcoord for U cell quantities, 4D, snow
+         tstr4Di  = 'TLON TLAT VGRDi NCAT time', & ! ferret can not handle time 
+         ustr4Di  = 'ULON ULAT VGRDi NCAT time', & ! index on 4D variables.
+         tstr4Ds  = 'TLON TLAT VGRDs NCAT time', & ! Use 'ferret' lines instead
+         ustr4Ds  = 'ULON ULAT VGRDs NCAT time'    ! (below also)
 
       !---------------------------------------------------------------
       ! flags: write to output file if true or histfreq value
@@ -176,7 +178,8 @@
            f_dxu       = .true., f_dyu        = .true., &
            f_HTN       = .true., f_HTE        = .true., &
            f_ANGLE     = .true., f_ANGLET     = .true., &
-           f_bounds    = .true.
+           f_bounds    = .true., f_NCAT       = .true., &
+           f_VGRDi     = .true., f_VGRDs      = .true.
 
       character (len=max_nstrm) :: &
 !          f_example   = 'md', &
@@ -246,7 +249,8 @@
            f_dxu      , f_dyu      , &
            f_HTN      , f_HTE      , &
            f_ANGLE    , f_ANGLET   , &
-           f_bounds   , &
+           f_bounds   , f_NCAT     , &
+           f_VGRDi    , f_VGRDs    , &
 !          f_example  , &
            f_hi,        f_hs       , &
            f_Tsfc,      f_aice     , &
@@ -318,6 +322,10 @@
            n_HTE        = 9,  &
            n_ANGLE      = 10, &
            n_ANGLET     = 11, &
+
+           n_NCAT       = 1, &
+           n_VGRDi      = 2, &
+           n_VGRDs      = 3, &
 
            n_lont_bnds  = 1, &
            n_latt_bnds  = 2, &
@@ -523,6 +531,9 @@
       call broadcast_scalar (f_ANGLE, master_task)
       call broadcast_scalar (f_ANGLET, master_task)
       call broadcast_scalar (f_bounds, master_task)
+      call broadcast_scalar (f_NCAT, master_task)
+      call broadcast_scalar (f_VGRDi, master_task)
+      call broadcast_scalar (f_VGRDs, master_task)
 
 !     call broadcast_scalar (f_example, master_task)
       call broadcast_scalar (f_hi, master_task)
@@ -1287,6 +1298,11 @@
       igrd(n_ANGLE     ) = f_ANGLE
       igrd(n_ANGLET    ) = f_ANGLET
 
+      igrdz=.true.
+      igrdz(n_NCAT     ) = f_NCAT
+      igrdz(n_VGRDi    ) = f_VGRDi
+      igrdz(n_VGRDs    ) = f_VGRDs
+
       ntmp(:) = 0
       if (my_task == master_task) then
         write(nu_diag,*) ' '
@@ -1739,7 +1755,7 @@
               do i = ilo, ihi
                if (tmask(i,j,iblk)) then
                  do n=1,ncat_hist
-                    worka(i,j)  = worka(i,j) + a3Dc(i,j,n,n_fmelttn_ai(ns-n2D),iblk)
+                    worka(i,j)  = worka(i,j) + a3Dc(i,j,n,n_fmelttn_ai(ns)-n2D,iblk)
                  enddo            ! n
                endif              ! tmask
               enddo                ! i
@@ -2090,7 +2106,7 @@
       integer (kind=int_kind), dimension(4) :: dimidz
       integer (kind=int_kind), dimension(5) :: dimidcz
       integer (kind=int_kind), dimension(3) :: dimid_nverts
-      integer (kind=int_kind), dimension(2) :: dimidex
+      integer (kind=int_kind), dimension(3) :: dimidex
       real (kind=real_kind) :: ltime
       character (char_len) :: title
       character (char_len_long) :: ncfile(max_nstrm)
@@ -2107,9 +2123,6 @@
 
       ! 4 vertices in each grid cell
       INTEGER (kind=int_kind), PARAMETER :: nverts = 4
-
-      ! 3 extra dimension variables: NCAT, VGRDi, VGRDs
-      INTEGER (kind=int_kind), PARAMETER :: nextradim = 3
 
       ! 4 variables describe T, U grid boundaries:
       ! lont_bounds, latt_bounds, lonu_bounds, latu_bounds
@@ -2129,7 +2142,7 @@
       TYPE(req_attributes), dimension(nvar) :: var
       TYPE(coord_attributes), dimension(ncoord) :: coord_var
       TYPE(coord_attributes), dimension(nvar_verts) :: var_nverts
-      TYPE(coord_attributes), dimension(nextradim) :: var_nextradim
+      TYPE(coord_attributes), dimension(nvarz) :: var_nz
       CHARACTER (char_len), dimension(ncoord) :: coord_bounds
 
       if (my_task == master_task) then
@@ -2267,8 +2280,9 @@
                        'U grid center latitude',  'degrees_north')
       coord_bounds(ind) = 'latu_bounds'
 
-      var_nextradim(1) = coord_attributes('NCAT',&
-                       'category maximum thickness', 'm')
+      var_nz(1) = coord_attributes('NCAT', 'category maximum thickness', 'm')
+      var_nz(2) = coord_attributes('VGRDi', 'vertical ice levels', '1')
+      var_nz(3) = coord_attributes('VGRDs', 'vertical snow levels', '1')
 
       !-----------------------------------------------------------------
       ! define information for optional time-invariant variables
@@ -2350,19 +2364,25 @@
           endif          
         enddo
 
-        ! Extra dimensions (NCAT)
-        ! VGRD* are not included because they are just the layer indices
+        ! Extra dimensions (NCAT, NZILYR, NZSLYR)       
           dimidex(1)=cmtid
-          status = nf90_def_var(ncid, var_nextradim(1)%short_name, nf90_float, &
-                              dimidex(1), varid)
-          if (status /= nf90_noerr) call abort_ice( &
-             'Error defining short_name for '//var_nextradim(1)%short_name)
-          status = nf90_put_att(ncid,varid,'long_name',var_nextradim(1)%long_name)
-          if (status /= nf90_noerr) call abort_ice( &
-             'Error defining long_name for '//var_nextradim(1)%short_name)
-          status = nf90_put_att(ncid, varid, 'units', var_nextradim(1)%units)
-          if (status /= nf90_noerr) call abort_ice( &
-             'Error defining units for '//var_nextradim(1)%short_name)
+          dimidex(2)=kmtidi
+          dimidex(3)=kmtids
+        
+        do i = 1, nvarz
+           if (igrdz(i)) then
+             status = nf90_def_var(ncid, var_nz(i)%short_name, &
+                                   nf90_float, dimidex(i), varid)
+             if (status /= nf90_noerr) call abort_ice( &
+                'Error defining short_name for '//var_nz(i)%short_name)
+             status = nf90_put_att(ncid,varid,'long_name',var_nz(i)%long_name)
+             if (status /= nf90_noerr) call abort_ice( &
+                'Error defining long_name for '//var_nz(i)%short_name)
+             status = nf90_put_att(ncid, varid, 'units', var_nz(i)%units)
+             if (Status /= nf90_noerr) call abort_ice( &
+                'Error defining units for '//var_nz(i)%short_name)
+           endif
+        enddo
 
         ! Attributes for tmask defined separately, since it has no units
         if (igrd(n_tmask)) then
@@ -2567,8 +2587,8 @@
         do n = n3Dzcum + 1, n4Dicum
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
             status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
-!echmod                         nf90_float, dimidcz, varid)
-                         nf90_float, dimidcz(1:4), varid)
+                             nf90_float, dimidcz, varid)
+!ferret                         nf90_float, dimidcz(1:4), varid)
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining variable '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'units', &
@@ -2620,8 +2640,8 @@
         do n = n4Dicum + 1, n4Dscum
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
             status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
-!echmod                         nf90_float, dimidcz, varid)
-                         nf90_float, dimidcz(1:4), varid)
+                        nf90_float, dimidcz, varid)
+!ferret                         nf90_float, dimidcz(1:4), varid)
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining variable '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'units', &
@@ -2803,17 +2823,28 @@
           endif
         enddo
 
-        ! Extra dimensions (NCAT)
-        ! VGRD* are not included because they are just the layer indices
-        call broadcast_scalar(var_nextradim(1)%short_name,master_task)
-        if (my_task == master_task) then
-             status = nf90_inq_varid(ncid, var_nextradim(1)%short_name, varid)
+        ! Extra dimensions (NCAT, VGRD*)
+
+        do i = 1, nvarz
+          if (igrdz(i)) then
+          call broadcast_scalar(var_nz(i)%short_name,master_task)
+          if (my_task == master_task) then
+             status = nf90_inq_varid(ncid, var_nz(i)%short_name, varid)
              if (status /= nf90_noerr) call abort_ice( &
-                  'ice: Error getting varid for '//var_nextradim(1)%short_name)
-             status = nf90_put_var(ncid,varid,hin_max(1:ncat_hist))
+                  'ice: Error getting varid for '//var_nz(i)%short_name)
+             SELECT CASE (var_nz(i)%short_name)
+               CASE ('NCAT') 
+                 status = nf90_put_var(ncid,varid,hin_max(1:ncat_hist))
+               CASE ('VGRDi') ! index - needed for Met Office analysis code
+                 status = nf90_put_var(ncid,varid,(/(k, k=1,nzilyr)/))
+               CASE ('VGRDs') ! index - needed for Met Office analysis code
+                 status = nf90_put_var(ncid,varid,(/(k, k=1,nzslyr)/))
+             END SELECT
              if (status /= nf90_noerr) call abort_ice( &
-                           'ice: Error writing'//var_nextradim(1)%short_name)
-        endif
+                           'ice: Error writing'//var_nz(i)%short_name)
+          endif
+          endif
+        enddo
 
       !-----------------------------------------------------------------
       ! write grid mask, area and rotation angle
