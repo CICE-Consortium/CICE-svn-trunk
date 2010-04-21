@@ -116,6 +116,9 @@
   , f_HTE          = .false.
   , f_ANGLE        = .true.
   , f_ANGLET       = .true.
+  , f_NCAT         = .true.
+  , f_VGRDi        = .false.
+  , f_VGRDs        = .false.
   , f_bounds       = .false.
   , f_hi           = 'm'
   , f_hs           = 'm' 
