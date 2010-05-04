@@ -142,6 +142,10 @@
          a4Di(:,:,:,:,:,:), & ! field accumulations/averages, 4D categories,vertical, ice
          a4Ds(:,:,:,:,:,:)    ! field accumulations/averages, 4D categories,vertical, snow
          
+      real (kind=dbl_kind), allocatable :: &
+         Tinz4d (:,:,:,:)    , & ! array for Tin
+         Tsnz4d (:,:,:,:)        ! array for Tsn
+
       real (kind=dbl_kind) :: &
          avgct(max_nstrm)   ! average sample counter
 
@@ -1280,6 +1284,15 @@
       if (num_avail_hist_fields_4Ds > 0) &
       allocate(a4Ds(nx_block,ny_block,nzslyr,ncat_hist,num_avail_hist_fields_4Ds,max_blocks))
 
+       if (f_Tinz   (1:1) /= 'x') then
+            if (allocated(Tinz4d)) deallocate(Tinz4d)
+            allocate(Tinz4d(nx_block,ny_block,nzilyr,ncat_hist))
+       endif
+       if (f_Tsnz   (1:1) /= 'x') then
+            if (allocated(Tsnz4d)) deallocate(Tsnz4d)
+            allocate(Tsnz4d(nx_block,ny_block,nzslyr,ncat_hist))
+       endif
+
       !-----------------------------------------------------------------
       ! fill igrd array with namelist values
       !-----------------------------------------------------------------
@@ -1405,10 +1418,6 @@
 
       real (kind=dbl_kind) :: & 
            qn                   ! temporary variable for enthalpy
-
-      real (kind=dbl_kind), dimension(:,:,:,:), allocatable :: &
-           Tinz4d           , &! Tin (nx,ny,nzilyr,ncat_hist)
-           Tsnz4d              ! Tsn (nx,ny,nzslyr,ncat_hist)
 
       type (block) :: &
          this_block           ! block information for current block
@@ -1705,8 +1714,6 @@
         
          ! 4D category fields
          if (f_Tinz   (1:1) /= 'x') then
-            if (allocated(Tinz4d)) deallocate(Tinz4d)
-            allocate(Tinz4d(nx_block,ny_block,nzilyr,ncat_hist))
             Tinz4d(:,:,:,:) = c0
             do n = 1, ncat_hist
                do j = jlo, jhi
@@ -1726,8 +1733,6 @@
          endif
          
          if (f_Tsnz   (1:1) /= 'x') then
-            if (allocated(Tsnz4d)) deallocate(Tsnz4d)
-            allocate(Tsnz4d(nx_block,ny_block,nzslyr,ncat_hist))
             Tsnz4d(:,:,:,:) = c0
             do n = 1, ncat_hist
                do j = jlo, jhi
