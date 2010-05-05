@@ -195,7 +195,7 @@
       else    ! .not. calc_Tsfc
 
          ! Initialize for safety
-         do iblk = 1, max_blocks
+         do iblk = 1, nblocks
          do n = 1, ncat
          do j = 1, ny_block
          do i = 1, nx_block
@@ -326,20 +326,20 @@
 
             if (icells > 0) then
 
-            call linear_itd (nx_block, ny_block,       &
-                             icells, indxi, indxj,     &
-                             trcr_depend,    &
-                             aicen_init(:,:,:,iblk),   &
-                             vicen_init(:,:,:,iblk),   &
-                             aicen     (:,:,:,iblk),   &
-                             trcrn     (:,:,:,:,iblk), & 
-                             vicen     (:,:,:,iblk),   &
-                             vsnon     (:,:,:,iblk),   &
-                             eicen     (:,:,:,iblk),   &
-                             esnon     (:,:,:,iblk),   &
-                             aice      (:,:,  iblk),   &
-                             aice0     (:,:,  iblk),   &
-                             l_stop,                   &
+            call linear_itd (nx_block, ny_block,             &
+                             icells,   indxi, indxj,         &
+                             ntrcr,    trcr_depend(1:ntrcr), &
+                             aicen_init(:,:,:,iblk),         &
+                             vicen_init(:,:,:,iblk),         &
+                             aicen     (:,:,:,iblk),         &
+                             trcrn     (:,:,1:ntrcr,:,iblk), & 
+                             vicen     (:,:,:,iblk),         &
+                             vsnon     (:,:,:,iblk),         &
+                             eicen     (:,:,:,iblk),         &
+                             esnon     (:,:,:,iblk),         &
+                             aice      (:,:,  iblk),         &
+                             aice0     (:,:,  iblk),         &
+                             l_stop,                         &
                              istop,    jstop)
 
             if (l_stop) then
@@ -376,11 +376,11 @@
          enddo               ! j
 
          call add_new_ice (nx_block,              ny_block, &
-                           icells,                          &
+                           ntrcr,                 icells,   &
                            indxi,                 indxj,    &
                            tmask     (:,:,  iblk), dt,      &
                            aicen     (:,:,:,iblk),          &
-                           trcrn     (:,:,:,:,iblk),        &
+                           trcrn     (:,:,1:ntrcr,:,iblk),  &
                            vicen     (:,:,:,iblk),          &
                            eicen     (:,:,:,iblk),          &
                            aice0     (:,:,  iblk),          &
@@ -444,12 +444,13 @@
 
          call cleanup_itd (nx_block,             ny_block,             &
                            ilo, ihi,             jlo, jhi,             &
-                           dt,                                         &
-                           aicen   (:,:,:,iblk), trcrn (:,:,:,:,iblk), &
+                           dt,                   ntrcr,                &
+                           aicen   (:,:,:,iblk),                       &
+                           trcrn (:,:,1:ntrcr,:,iblk),                 &
                            vicen   (:,:,:,iblk), vsnon (:,:,  :,iblk), &
                            eicen   (:,:,:,iblk), esnon (:,:,  :,iblk), &
                            aice0   (:,:,  iblk), aice      (:,:,iblk), &
-                           trcr_depend,                                &
+                           trcr_depend(1:ntrcr),                       &
                            fresh   (:,:,  iblk), fsalt     (:,:,iblk), &
                            fhocn   (:,:,  iblk),                       &
                            heat_capacity,        l_stop,               &
@@ -485,14 +486,16 @@
       !----------------------------------------------------------------- 
  
          call aggregate (nx_block,          ny_block,             &
-                         aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk),  &
+                         aicen(:,:,:,iblk),                       &
+                         trcrn(:,:,1:ntrcr,:,iblk),               &
                          vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
                          eicen(:,:,:,iblk), esnon(:,:,  :,iblk),  &
-                         aice (:,:,  iblk), trcr (:,:,:,  iblk),  &
+                         aice (:,:,  iblk),                       &
+                         trcr (:,:,1:ntrcr,  iblk),               &
                          vice (:,:,  iblk), vsno (:,:,    iblk),  &
                          eice (:,:,  iblk), esno (:,:,    iblk),  &
                          aice0(:,:,  iblk), tmask(:,:,    iblk),  &
-                         trcr_depend) 
+                         ntrcr, trcr_depend(1:ntrcr)) 
 
       !-----------------------------------------------------------------
       ! Compute thermodynamic area and volume tendencies.
@@ -618,15 +621,17 @@
          if (icells > 0) then
 
          call ridge_ice (nx_block,             ny_block,                 &
-                         dt,                   icells,                   &
+                         dt,                   ntrcr,                    &
+                         icells,                                         &
                          indxi,                indxj,                    &
 !!                         Delt    (:,:,  iblk), divu      (:,:,  iblk), &
                          rdg_conv(:,:,  iblk), rdg_shear (:,:,  iblk),   &
-                         aicen   (:,:,:,iblk), trcrn     (:,:,:,:,iblk), &
+                         aicen   (:,:,:,iblk),                           &
+                         trcrn     (:,:,1:ntrcr,:,iblk),                 &
                          vicen   (:,:,:,iblk), vsnon     (:,:,:,iblk),   &
                          eicen   (:,:,:,iblk), esnon     (:,:,:,iblk),   &
                          aice0   (:,:,  iblk),                           &
-                         trcr_depend,          l_stop,                   &
+                         trcr_depend(1:ntrcr), l_stop,                   &
                          istop,                jstop,                    &   
                          dardg1dt(:,:,iblk),   dardg2dt  (:,:,iblk),     &
                          dvirdgdt(:,:,iblk),   opening   (:,:,iblk),     &
@@ -663,12 +668,13 @@
 
          call cleanup_itd (nx_block,             ny_block,             &
                            ilo, ihi,             jlo, jhi,             &
-                           dt,                                         &
-                           aicen   (:,:,:,iblk), trcrn (:,:,:,:,iblk), &
+                           dt,                   ntrcr,                &
+                           aicen   (:,:,:,iblk),                       &
+                           trcrn (:,:,1:ntrcr,:,iblk),                 &
                            vicen   (:,:,:,iblk), vsnon (:,:,  :,iblk), &
                            eicen   (:,:,:,iblk), esnon (:,:,  :,iblk), &
                            aice0   (:,:,  iblk), aice      (:,:,iblk), &
-                           trcr_depend,                                &
+                           trcr_depend(1:ntrcr),                       &
                            fresh   (:,:,  iblk), fsalt     (:,:,iblk), &
                            fhocn   (:,:,  iblk),                       &
                            heat_capacity,        l_stop,               &
@@ -704,14 +710,16 @@
       !----------------------------------------------------------------- 
  
          call aggregate (nx_block,          ny_block,             &
-                         aicen(:,:,:,iblk), trcrn(:,:,:,:,iblk),  &
+                         aicen(:,:,:,iblk),                       &
+                         trcrn(:,:,1:ntrcr,:,iblk),               &
                          vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
                          eicen(:,:,:,iblk), esnon(:,:,  :,iblk),  &
-                         aice (:,:,  iblk), trcr (:,:,:,  iblk),  &
+                         aice (:,:,  iblk),                       &
+                         trcr (:,:,1:ntrcr,  iblk),               &
                          vice (:,:,  iblk), vsno (:,:,    iblk),  &
                          eice (:,:,  iblk), esno (:,:,    iblk),  &
                          aice0(:,:,  iblk), tmask(:,:,    iblk),  &
-                         trcr_depend) 
+                         ntrcr, trcr_depend(1:ntrcr)) 
 
       !-----------------------------------------------------------------
       ! Compute dynamic area and volume tendencies.
@@ -903,14 +911,9 @@
                               fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
                               fswthrun(:,:,n,iblk),                   &
                               Sswabsn(:,:,sl1:sl2,iblk),              &
-                              Iswabsn(:,:,il1:il2,iblk))
-
-               ! Special case of night to day
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  fswsfcn(i,j,n,iblk) = max(p01, fswsfcn(i,j,n,iblk))
-               enddo
+                              Iswabsn(:,:,il1:il2,iblk),              &
+                              albicen(:,:,n,iblk),                    &
+                              albsnon(:,:,n,iblk),albpndn(:,:,n,iblk))
 
             else  ! .not. dEdd
 
@@ -927,7 +930,9 @@
                               alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
                               alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
                               fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
-                              fswthrun(:,:,n,iblk),Iswabsn(:,:,il1:il2,iblk))
+                              fswthrun(:,:,n,iblk),                   &
+                              Iswabsn(:,:,il1:il2,iblk),              &
+                              albicen(:,:,n,iblk),albsnon(:,:,n,iblk))
 
             endif  ! dEdd
          enddo                  ! ncat
@@ -936,7 +941,7 @@
       else    ! .not. calc_Tsfc
 
          ! Initialize for safety
-         do iblk = 1, max_blocks
+         do iblk = 1, nblocks
          do n = 1, ncat
          do j = 1, ny_block
          do i = 1, nx_block

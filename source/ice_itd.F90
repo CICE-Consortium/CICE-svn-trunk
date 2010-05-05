@@ -283,8 +283,8 @@
                             aice,     trcr,     &
                             vice,     vsno,     &
                             eice,     esno,     &
-                            aice0,              &
-                            tmask,    trcr_depend)
+                            aice0,    tmask,    &
+                            ntrcr,    trcr_depend)
 !
 ! !DESCRIPTION:
 !
@@ -300,7 +300,8 @@
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
-           nx_block, ny_block  ! block dimensions
+         nx_block, ny_block, & ! block dimensions
+         ntrcr                 ! number of tracers in use
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(in) :: &
@@ -474,7 +475,7 @@
 
       call compute_tracers (nx_block,     ny_block,   &
                             icells,   indxi,   indxj, &
-                            trcr_depend,              &
+                            ntrcr,    trcr_depend,    &
                             atrcr(:,:), aice(:,:),    &
                             vice (:,:),   vsno(:,:),  &
                             trcr(:,:,:))
@@ -555,7 +556,7 @@
 !
       subroutine rebin (nx_block, ny_block,        &
                         icells,   indxi,    indxj, &
-                        trcr_depend,               &
+                        ntrcr,    trcr_depend,     &
                         aicen,    trcrn,           &
                         vicen,    vsnon,           &
                         eicen,    esnon,           &
@@ -576,7 +577,8 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         icells                ! number of grid cells with ice
+         icells            , & ! number of grid cells with ice
+         ntrcr                 ! number of tracers in use
 
        integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
@@ -705,7 +707,8 @@
       !-----------------------------------------------------------------
             call shift_ice (nx_block, ny_block,    &
                             indxi,    indxj,       &
-                            icells,   trcr_depend, &
+                            icells,                &
+                            ntrcr,    trcr_depend, &
                             aicen,    trcrn,       &
                             vicen,    vsnon,       &
                             eicen,    esnon,       &
@@ -760,7 +763,8 @@
       !-----------------------------------------------------------------
             call shift_ice (nx_block, ny_block,    &
                             indxi,    indxj,       &
-                            icells,   trcr_depend, &
+                            icells,                &
+                            ntrcr,    trcr_depend, &
                             aicen,    trcrn,       &
                             vicen,    vsnon,       &
                             eicen,    esnon,       &
@@ -887,7 +891,8 @@
 !
       subroutine shift_ice (nx_block, ny_block,    &
                             indxi,    indxj,       &
-                            icells,   trcr_depend, &
+                            icells,                &
+                            ntrcr,    trcr_depend, &
                             aicen,    trcrn,       &
                             vicen,    vsnon,       &
                             eicen,    esnon,       &
@@ -913,7 +918,8 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         icells                ! number of ocean/ice cells
+         icells            , & ! number of ocean/ice cells
+         ntrcr                 ! number of tracers in use
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
@@ -1324,7 +1330,7 @@
 
          call compute_tracers (nx_block,        ny_block,       &
                                icells,          indxi,   indxj, &
-                               trcr_depend,                     &
+                               ntrcr,           trcr_depend,    &
                                atrcrn(:,:,n),   aicen(:,:,  n), &
                                vicen (:,:,  n), vsnon(:,:,  n), &
                                trcrn(:,:,:,n))
@@ -1475,7 +1481,7 @@
 !
       subroutine compute_tracers (nx_block, ny_block,       &
                                   icells,   indxi,   indxj, &
-                                  trcr_depend,              &
+                                  ntrcr,    trcr_depend,    &
                                   atrcrn,   aicen,          &
                                   vicen,    vsnon,          &
                                   trcrn)
@@ -1497,7 +1503,8 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         icells                ! number of ice/ocean grid cells
+         icells            , & ! number of ice/ocean grid cells
+         ntrcr                 ! number of tracers in use
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
@@ -1559,7 +1566,7 @@
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)
-               if (vicen(i,j) > puny) then
+               if (vicen(i,j) > c0) then
                   trcrn(i,j,it) = atrcrn(ij,it) / vicen(i,j)
                else
                   trcrn(i,j,it) = c0
@@ -1570,7 +1577,7 @@
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)
-               if (vsnon(i,j) > puny) then
+               if (vsnon(i,j) > c0) then
                   trcrn(i,j,it) = atrcrn(ij,it) / vsnon(i,j)
                else
                   trcrn(i,j,it) = c0
@@ -1592,7 +1599,7 @@
 !
       subroutine cleanup_itd (nx_block,    ny_block,   &
                               ilo, ihi,    jlo, jhi,   &
-                              dt,                      &
+                              dt,          ntrcr,      &
                               aicen,       trcrn,      &
                               vicen,       vsnon,      &
                               eicen,       esnon,      &
@@ -1622,7 +1629,8 @@
 !
       integer (kind=int_kind), intent(in) :: & 
          nx_block, ny_block, & ! block dimensions 
-         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
+         ilo,ihi,jlo,jhi   , & ! beginning and end of physical domain
+         ntrcr                 ! number of tracers in use
  
       real (kind=dbl_kind), intent(in) :: & 
          dt        ! time step 
@@ -1762,13 +1770,13 @@
       !       correctly (e.g., very fast ice growth).
       !-----------------------------------------------------------------
 
-      call rebin (nx_block,   ny_block, &
-                  icells,   indxi,    indxj, &
-                  trcr_depend, &
-                  aicen,      trcrn, &
-                  vicen,      vsnon, &
-                  eicen,      esnon, &
-                  l_stop, &
+      call rebin (nx_block,   ny_block,     &
+                  icells,     indxi, indxj, &
+                  ntrcr,      trcr_depend,  &
+                  aicen,      trcrn,        &
+                  vicen,      vsnon,        &
+                  eicen,      esnon,        &
+                  l_stop,                   &
                   istop,      jstop)
 
       if (l_stop) return
@@ -1780,7 +1788,7 @@
       if (limit_aice) then
          call zap_small_areas (nx_block, ny_block, &
                                ilo, ihi, jlo, jhi, &
-                               dt,              &
+                               dt,       ntrcr,    &
                                aice,     aice0, &
                                aicen,    trcrn, &
                                vicen,    vsnon, &
@@ -1831,7 +1839,7 @@
 !
       subroutine zap_small_areas (nx_block, ny_block, &
                                   ilo, ihi, jlo, jhi, &
-                                  dt,              &
+                                  dt,       ntrcr,    &
                                   aice,     aice0,    &
                                   aicen,    trcrn,    &
                                   vicen,    vsnon,    &
@@ -1858,7 +1866,8 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
+         ilo,ihi,jlo,jhi   , & ! beginning and end of physical domain
+         ntrcr                 ! number of tracers in use
 
       real (kind=dbl_kind), intent(in) :: &
          dt                    ! time step
@@ -1944,8 +1953,9 @@
                istop = i
                jstop = j
                return
-            elseif ((aicen(i,j,n) >= -puny .and. aicen(i,j,n) < c0) .or. &
-                    (aicen(i,j,n) > c0 .and. aicen(i,j,n) <= puny)) then
+            elseif (abs(aicen(i,j,n)) /= c0 .and. &
+                    abs(aicen(i,j,n)) <= puny) then
+                    
                icells = icells + 1
                indxi(icells) = i
                indxj(icells) = j
@@ -2021,7 +2031,7 @@
       !-----------------------------------------------------------------
          
          if (ntrcr >= 2) then
-            do it = 1, ntrcr   ! this assumes nt_Tsfc = 1
+            do it = 2, ntrcr   ! this assumes nt_Tsfc = 1
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)

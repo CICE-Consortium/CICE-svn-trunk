@@ -67,8 +67,8 @@
          Lfresh    = Lsub-Lvap        ,&! latent heat of melting of fresh ice (J/kg)
          Timelt    = 0.0_dbl_kind     ,&! melting temperature, ice top surface  (C)
          Tsmelt    = 0.0_dbl_kind     ,&! melting temperature, snow top surface (C)
-         ice_ref_salinity = 4._dbl_kind ,&! (psu)
-!        ocn_ref_salinity = 34.7_dbl_kind,&! (psu)
+         ice_ref_salinity = 4._dbl_kind ,&! (ppt)
+!        ocn_ref_salinity = 34.7_dbl_kind,&! (ppt)
 !        rho_air   = 1.2_dbl_kind     ,&! ambient air density (kg/m^3)
          spval_dbl = 1.0e30_dbl_kind    ! special value (double precision)
 
@@ -89,14 +89,14 @@
          zref   = 10._dbl_kind   ,&! reference height for stability (m)
          snowpatch = 0.02_dbl_kind ! parameter for fractional snow area (m)
 
-      ! weights for albedos (match those for isccp shortwave forcing)
+      ! weights for albedos
 ! 4 Jan 2007 BPB  Following are appropriate for complete cloud
 ! in a summer polar atmosphere with 1.5m bare sea ice surface:
 ! .636/.364 vis/nir with only 0.5% direct for each band.
       real (kind=dbl_kind), parameter :: &           ! currently used only
          awtvdr = 0.00318_dbl_kind, &! visible, direct  ! for history and
-         awtidr = 0.63282_dbl_kind, &! near IR, direct  ! diagnostics
-         awtvdf = 0.00182_dbl_kind, &! visible, diffuse
+         awtidr = 0.00182_dbl_kind, &! near IR, direct  ! diagnostics
+         awtvdf = 0.63282_dbl_kind, &! visible, diffuse
          awtidf = 0.36218_dbl_kind   ! near IR, diffuse
 
       real (kind=dbl_kind), parameter :: &

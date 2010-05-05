@@ -42,16 +42,16 @@
 !EOP
 !
       implicit none
-      save
+!echmod      save
 
-      character (len=char_len_long) :: &
+      character (len=char_len_long), save :: &
          grid_format  , & ! file format ('bin'=binary or 'nc'=netcdf)
          grid_file    , & !  input file for POP grid info
          kmt_file     , & !  input file for POP grid info
          grid_type        !  current options are rectangular (default),
                           !  displaced_pole, tripole, panarctic
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
          dxt    , & ! width of T-cell through the middle (m)
          dyt    , & ! height of T-cell through the middle (m)
          dxu    , & ! width of U-cell through the middle (m)
@@ -72,7 +72,7 @@
          ANGLE  , & ! for conversions between POP grid and lat/lon
          ANGLET     ! ANGLE converted to T-cells
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
          cyp    , & ! 1.5*HTE - 0.5*HTE
          cxp    , & ! 1.5*HTN - 0.5*HTN
          cym    , & ! 0.5*HTE - 1.5*HTE
@@ -81,14 +81,14 @@
          dyhx       ! 0.5*(HTN - HTN)
 
       ! Corners of grid boxes for history output
-      real (kind=dbl_kind), dimension (4,nx_block,ny_block,max_blocks):: &
+      real (kind=dbl_kind), dimension (4,nx_block,ny_block,max_blocks), save :: &
          lont_bounds, & ! longitude of gridbox corners for T point
          latt_bounds, & ! latitude of gridbox corners for T point
          lonu_bounds, & ! longitude of gridbox corners for U point
          latu_bounds    ! latitude of gridbox corners for U point       
 
       ! geometric quantities used for remapping transport
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
          xav  , & ! mean T-cell value of x
          yav  , & ! mean T-cell value of y
          xxav , & ! mean T-cell value of xx
@@ -100,19 +100,19 @@
          yyyav    ! mean T-cell value of yyy
 
       real (kind=dbl_kind), &
-         dimension (2,2,nx_block,ny_block,max_blocks) :: &
+         dimension (2,2,nx_block,ny_block,max_blocks), save :: &
          mne, & ! matrices used for coordinate transformations in remapping
          mnw, & ! ne = northeast corner, nw = northwest, etc.
          mse, & 
          msw
 
       ! masks
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
          hm     , & ! land/boundary mask, thickness (T-cell)
          uvm        ! land/boundary mask, velocity (U-cell)
 
       logical (kind=log_kind), &
-         dimension (nx_block,ny_block,max_blocks) :: &
+         dimension (nx_block,ny_block,max_blocks), save :: &
          tmask  , & ! land/boundary mask, thickness (T-cell)
          umask  , & ! land/boundary mask, velocity (U-cell)
          lmask_n, & ! northern hemisphere mask
@@ -123,7 +123,7 @@
          dxrect = 30.e5_dbl_kind   ,&! uniform HTN (cm)
          dyrect = 30.e5_dbl_kind     ! uniform HTE (cm)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
          rndex_global       ! global index for local subdomain (dbl)
 
 !=======================================================================
@@ -157,11 +157,11 @@
 !
 !EOP
 !
+
       integer (kind=int_kind) :: &
          i, j, iblk, &
          fid_grid, &     ! file id for netCDF grid file
          fid_kmt         ! file id for netCDF kmt file
-
 
       character (char_len) :: &
          fieldname       ! field name in netCDF file
@@ -346,8 +346,9 @@
          do i = ilo, ihi+1
             cyp(i,j,iblk) = (c1p5*HTE(i,j,iblk) - p5*HTE(i-1,j,iblk))
             cxp(i,j,iblk) = (c1p5*HTN(i,j,iblk) - p5*HTN(i,j-1,iblk))
-            cym(i,j,iblk) = (p5*HTE(i,j,iblk) - c1p5*HTE(i-1,j,iblk))
-            cxm(i,j,iblk) = (p5*HTN(i,j,iblk) - c1p5*HTN(i,j-1,iblk))
+            ! match order of operations in cyp, cxp for tripole grids
+            cym(i,j,iblk) = -(c1p5*HTE(i-1,j,iblk) - p5*HTE(i,j,iblk)) 
+            cxm(i,j,iblk) = -(c1p5*HTN(i,j-1,iblk) - p5*HTN(i,j,iblk)) 
          enddo
          enddo
 
@@ -568,7 +569,7 @@
 
       call ice_read_global(nu_grid,7,work_g1,'rda8',.true.)   ! ANGLE
       call scatter_global(ANGLE, work_g1, master_task, distrb_info, &
-                          field_loc_NEcorner, field_type_scalar)
+                          field_loc_NEcorner, field_type_angle)
 
       !-----------------------------------------------------------------
       ! cell dimensions
@@ -700,7 +701,7 @@
       fieldname='angle'
       call ice_read_global_nc(fid_grid,7,fieldname,work_g1,diag) ! ANGLE    
       call scatter_global(ANGLE, work_g1, master_task, distrb_info, &
-                          field_loc_NEcorner, field_type_scalar)
+                          field_loc_NEcorner, field_type_angle)
 
       ! fix ANGLE: roundoff error due to single precision
       where (ANGLE >  pi) ANGLE =  pi
@@ -838,7 +839,7 @@
 
       call ice_read_global(nu_grid,8,work_g1,'rda8',.true.)   ! ANGLE
       call scatter_global(ANGLE, work_g1, master_task, distrb_info, &
-                          field_loc_NEcorner, field_type_scalar)
+                          field_loc_NEcorner, field_type_angle)
 
       !-----------------------------------------------------------------
       ! cell dimensions
@@ -907,10 +908,14 @@
       ! Weddell Sea
       ! lower left corner of grid is 55W, 75S
 
+      ! Barrow AK
+      ! lower left corner of grid is 156.5W, 71.35N
+
       if (my_task == master_task) then
          work_g1 = c0
          length = dxrect*cm_to_m/radius*rad_to_deg
-         work_g1(1,:) = -55._dbl_kind
+!         work_g1(1,:) = -55._dbl_kind   ! Weddell Sea
+         work_g1(1,:) = -156.5_dbl_kind ! Barrow AK
          do j = 1, ny_global
          do i = 2, nx_global
             work_g1(i,j) = work_g1(i-1,j) + length   ! ULON
@@ -919,12 +924,15 @@
          work_g1(:,:) = work_g1(:,:) / rad_to_deg
       endif
       call scatter_global(ULON, work_g1, master_task, distrb_info, &
-                          field_loc_center, field_type_scalar)
+                          field_loc_NEcorner, field_type_scalar)
+      call ice_HaloExtrapolate(ULON, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
 
       if (my_task == master_task) then
          work_g1 = c0
          length = dyrect*cm_to_m/radius*rad_to_deg
-         work_g1(:,1) = -75._dbl_kind
+!         work_g1(:,1) = -75._dbl_kind ! Weddell Sea
+         work_g1(:,1) = 71.35_dbl_kind ! Barrow AK
          do i = 1, nx_global
          do j = 2, ny_global
             work_g1(i,j) = work_g1(i,j-1) + length   ! ULAT
@@ -933,7 +941,9 @@
          work_g1(:,:) = work_g1(:,:) / rad_to_deg
       endif
       call scatter_global(ULAT, work_g1, master_task, distrb_info, &
-                          field_loc_center, field_type_scalar)
+                          field_loc_NEcorner, field_type_scalar)
+      call ice_HaloExtrapolate(ULAT, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
 
       if (my_task == master_task) then
          do j = 1, ny_global
@@ -969,14 +979,6 @@
             enddo
             enddo
 
-         elseif (trim(ew_boundary_type) == 'closed') then
-
-            do j = 3,ny_global-2      ! closed top and bottom
-            do i = 3,nx_global-2      ! closed sides
-               work_g1(i,j) = c1    ! NOTE nx_global, ny_global > 5
-            enddo
-            enddo
-
          elseif (trim(ew_boundary_type) == 'open') then
 
             ! land in the upper left and lower right corners,
@@ -990,6 +992,8 @@
             enddo
             enddo
 
+            if (nx_global > 5 .and. ny_global > 5) then
+
             do j = 1, jmid+2
             do i = 1, imid+2
                work_g1(i,j) = c1    ! open lower left corner
@@ -1001,6 +1005,12 @@
                work_g1(i,j) = c1    ! open upper right corner
             enddo
             enddo
+
+            endif
+
+         elseif (trim(ew_boundary_type) == 'closed') then
+
+            call abort_ice('closed boundaries not available')
 
          endif
       endif
@@ -1301,6 +1311,8 @@
 !
 !EOP
 !
+      save 
+
       integer (kind=int_kind) :: &
            i, j, iblk       , & ! horizontal indices
            ig, jg           , & ! global horizontal indices
@@ -1389,9 +1401,11 @@
 
       if (my_task==master_task) then
          write(nu_diag,*) ' '
+         if (nx_block > 5+2*nghost .and. ny_block > 5+2*nghost) then
          write(nu_diag,*) 'min/max ULON:', y1*rad_to_deg, y2*rad_to_deg
-         write(nu_diag,*) 'min/max TLON:', x1*rad_to_deg, x2*rad_to_deg
          write(nu_diag,*) 'min/max ULAT:', y3*rad_to_deg, y4*rad_to_deg
+         endif
+         write(nu_diag,*) 'min/max TLON:', x1*rad_to_deg, x2*rad_to_deg
          write(nu_diag,*) 'min/max TLAT:', x3*rad_to_deg, x4*rad_to_deg
       endif                     ! my_task
 
@@ -1533,8 +1547,8 @@
       work1(:,:,:) = work(:,:,:)
 
       call ice_timer_start(timer_bound)
-      call ice_HaloUpdate (work1,            halo_info, &
-                           field_loc_center, field_type_vector)
+      call ice_HaloUpdate (work1,              halo_info, &
+                           field_loc_NEcorner, field_type_vector)
       call ice_timer_stop(timer_bound)
 
       call to_tgrid(work1,work)
@@ -1755,7 +1769,6 @@
 !
 !EOP
 !
-
 !----------------------------------------
 ! Local Variables
 !----------------------------------------

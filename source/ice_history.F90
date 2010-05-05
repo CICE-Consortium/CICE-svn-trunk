@@ -4,9 +4,20 @@
 !
 ! !MODULE: ice_history - ice model history files
 !
-
-!
 ! Output files: netCDF or binary data, Fortran unformatted dumps
+!
+! The following variables are currently hard-wired as snapshots 
+!   (instantaneous rather than time-averages):
+!   divu, shear, sig1, sig2, trsig, mlt_onset, frz_onset, hisnap, aisnap
+!
+! Options for histfreq: '1','h','d','m','y','x', where x means that
+!   output stream will not be used (recommended for efficiency).  
+! histfreq_n can be any nonnegative integer, where 0 means that the 
+!   corresponding histfreq frequency will not be used.
+! The flags (f_<field>) can be set to '1','h','d','m','y' or 'x', where
+!   n means the field will not be written.  To output the same field at
+!   more than one frequency, for instance monthy and daily, set 
+!   f_<field> = 'md'.
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
@@ -21,6 +32,8 @@
 !           Added histfreq_n and histfreq='h' options, removed histfreq='w'
 !           Converted to free source form (F90)
 !           Added option for binary output instead of netCDF
+! 2009 D Bailey and ECH: Generalized for multiple frequency output
+! 2010 Alison McLaren and ECH: Added 3D capability
 !
 ! !INTERFACE:
 !
@@ -56,66 +69,109 @@
          pointer_file      ! input pointer file for restarts
 
       !---------------------------------------------------------------
-      ! Instructions for adding a field:
+      ! Instructions for adding a field: (search for 'example')
       !     Here:
-      ! (1) Increase avgsiz
-      ! (2) Add to logical flags
-      ! (3) Add to namelist (here and also in ice_in)
-      ! (4) Assign an index number
+      ! (1) Add to frequency flags (f_<field>)
+      ! (2) Add to namelist (here and also in ice_in)
+      ! (3) Add to index list
       !     In init_hist:
-      ! (5) Add to list of fields, vname
-      ! (6) Add to field descriptions, vdesc
-      ! (7) Add to field units, vunit
-      ! (8) Add to field units, vcomment
-      ! (9) Add to broadcast list
-      ! (10) Load iout array with the logical flag
-      ! (11) Specify unit conversion factor if necessary
-      ! (12) Increment the field in ice_write_hist
+      ! (4) Add define_hist_field call with vname, vdesc, vunit,
+      !     and vcomment, vcellmeas, and conversion factor if necessary.
+      ! (5) Add flag to broadcast list
+      ! (6) Add accum_hist_field call with appropriate variable
       !---------------------------------------------------------------
 
-      !---------------------------------------------------------------
-      ! primary info for the history file
-      !---------------------------------------------------------------
+      type, public :: ice_hist_field
+          character (len=16) :: vname     ! variable name
+          character (len=16) :: vunit     ! variable units
+          character (len=25) :: vcoord    ! variable coordinates
+          character (len=16) :: vcellmeas ! variable cell measures
+          character (len=55) :: vdesc     ! variable description
+          character (len=55) :: vcomment  ! variable description
+          real (kind=dbl_kind) :: cona    ! multiplicative conversion factor
+          real (kind=dbl_kind) :: conb    ! additive conversion factor
+          character (len=1) :: vhistfreq  ! frequency of history output
+          integer (kind=int_kind) :: vhistfreq_n ! number of vhistfreq intervals
+      end type
+
+      integer (kind=int_kind), parameter :: &
+         max_avail_hist_fields = 600      ! Max number of history fields
+
+      integer (kind=int_kind) :: &
+         num_avail_hist_fields_tot  = 0, & ! Current, total number of defined fields
+         num_avail_hist_fields_2D   = 0, & ! Number of 2D fields
+         num_avail_hist_fields_3Dz  = 0, & ! Number of 3D fields (vertical)
+         num_avail_hist_fields_3Dc  = 0, & ! Number of 3D fields (categories)
+         num_avail_hist_fields_4Di  = 0, & ! Number of 4D fields (categories,vertical), ice
+         num_avail_hist_fields_4Ds  = 0    ! Number of 4D fields (categories,vertical), snow
+
+      integer (kind=int_kind) :: &        ! cumulative counts
+         n2D     , & ! num_avail_hist_fields_2D
+         n3Dccum , & ! n2D     + num_avail_hist_fields_3Dc
+         n3Dzcum , & ! n3Dccum + num_avail_hist_fields_3Dz
+         n4Dicum , & ! n3Dzcum + num_avail_hist_fields_4Di
+         n4Dscum , & ! n4Dicum + num_avail_hist_fields_4Ds
+         nzlyr       ! vertical dimension (temp variable)
+
+      ! could set nzilyr = nilyr + nslyr and write Tin+Tsn together into Tinz
+      integer (kind=int_kind), parameter :: &
+         nzilyr = nilyr         , & ! vertical dimension (allows alternative grids)
+         nzslyr = nslyr         
+
+      type (ice_hist_field), dimension(max_avail_hist_fields) :: &
+         avail_hist_fields
+
+      character (len=16) :: vname_in     ! variable name
+      character (len=55) :: vdesc_in     ! variable description
+      character (len=55) :: vcomment_in  ! variable description
 
       integer (kind=int_kind), parameter :: &
          nvar = 11              , & ! number of grid fields that can be written
                                     !   excluding grid vertices
-         ncat_hist = ncat       , & ! number of ice categories written <= ncat
-         avgsiz = 81 + 7*ncat_hist  ! number of fields that can be written
+         nvarz = 3              , & ! number of category/vertical grid fields written
+         ncat_hist = ncat           ! number of ice categories written <= ncat
 
-      real (kind=real_kind) :: time_beg, time_end ! bounds for averaging
+      real (kind=real_kind) :: time_beg(max_nstrm), &
+                               time_end(max_nstrm) ! bounds for averaging
 
-      real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,avgsiz,max_blocks) :: &
-         aa                ! field accumulations and averages
+      real (kind=dbl_kind), allocatable :: &
+         a2D (:,:,:,:)    , & ! field accumulations/averages, 2D
+         a3Dz(:,:,:,:,:)  , & ! field accumulations/averages, 3D vertical
+         a3Dc(:,:,:,:,:)  , & ! field accumulations/averages, 3D categories
+         a4Di(:,:,:,:,:,:), & ! field accumulations/averages, 4D categories,vertical, ice
+         a4Ds(:,:,:,:,:,:)    ! field accumulations/averages, 4D categories,vertical, snow
+         
+      real (kind=dbl_kind), allocatable :: &
+         Tinz4d (:,:,:,:)    , & ! array for Tin
+         Tsnz4d (:,:,:,:)        ! array for Tsn
 
       real (kind=dbl_kind) :: &
-         avgct         , & ! average sample counter
-         cona(avgsiz)  , & ! multiplicative conversion factor
-         conb(avgsiz)      ! additive conversion factor
+         avgct(max_nstrm)   ! average sample counter
 
       logical (kind=log_kind) :: &
-         iout(avgsiz)  , & ! true if time-dep field is written to output file
-         igrd(nvar)        ! true if grid field is written to output file
+         igrd (nvar), &        ! true if grid field is written to output file
+         igrdz(nvarz)          ! true if category/vertical grid field is written
 
-      character (len=16) :: &
-         vname(avgsiz) , & ! variable names
-         vunit(avgsiz) , & ! variable units
-         vcoord(avgsiz), & ! variable coordinates
-         vcellmeas(avgsiz) ! variable cell measures
-
-      character (len=16), parameter :: &
-         tstr  = 'TLON TLAT time', & ! vcoord for T cell quantities
-         ustr  = 'ULON ULAT time', & ! vcoord for U cell quantities
-         tcstr = 'area: tarea'   , & ! vcellmeas for T cell quantities
-         ucstr = 'area: uarea'       ! vcellmeas for U cell quantities
-
-      character (len=55) :: & 
-         vdesc(avgsiz) , & ! variable descriptions
-         vcomment(avgsiz)  ! variable comments
+      character (len=25), parameter :: &
+         tcstr = 'area: tarea'          , & ! vcellmeas for T cell quantities
+         ucstr = 'area: uarea'          , & ! vcellmeas for U cell quantities
+         tstr2D  = 'TLON TLAT time'     , & ! vcoord for T cell quantities, 2D
+         ustr2D  = 'ULON ULAT time'     , & ! vcoord for U cell quantities, 2D
+         tstr3Dz = 'TLON TLAT VGRD time', & ! vcoord for T cell quantities, 3D
+         ustr3Dz = 'ULON ULAT VGRD time', & ! vcoord for U cell quantities, 3D
+         tstr3Dc = 'TLON TLAT NCAT time', & ! vcoord for T cell quantities, 3D
+         ustr3Dc = 'ULON ULAT NCAT time', & ! vcoord for U cell quantities, 3D
+!ferret         tstr4Di  = 'TLON TLAT VGRDi NCAT', & ! vcoord for T cell quantities, 4D, ice
+!ferret         ustr4Di  = 'ULON ULAT VGRDi NCAT', & ! vcoord for U cell quantities, 4D, ice
+!ferret         tstr4Ds  = 'TLON TLAT VGRDs NCAT', & ! vcoord for T cell quantities, 4D, snow
+!ferret         ustr4Ds  = 'ULON ULAT VGRDs NCAT'    ! vcoord for U cell quantities, 4D, snow
+         tstr4Di  = 'TLON TLAT VGRDi NCAT time', & ! ferret can not handle time 
+         ustr4Di  = 'ULON ULAT VGRDi NCAT time', & ! index on 4D variables.
+         tstr4Ds  = 'TLON TLAT VGRDs NCAT time', & ! Use 'ferret' lines instead
+         ustr4Ds  = 'ULON ULAT VGRDs NCAT time'    ! (below also)
 
       !---------------------------------------------------------------
-      ! logical flags: write to output file if true
+      ! flags: write to output file if true or histfreq value
       !---------------------------------------------------------------
 
       logical (kind=log_kind) :: &
@@ -125,59 +181,68 @@
            f_dxu       = .true., f_dyu        = .true., &
            f_HTN       = .true., f_HTE        = .true., &
            f_ANGLE     = .true., f_ANGLET     = .true., &
-           f_bounds    = .true.
+           f_bounds    = .true., f_NCAT       = .true., &
+           f_VGRDi     = .true., f_VGRDs      = .true.
 
-      logical (kind=log_kind) :: &
-           f_hi        = .true., f_hs         = .true., &
-           f_Tsfc      = .true., f_aice       = .true., &
-           f_uvel      = .true., f_vvel       = .true., &
-           f_fswdn     = .true., f_flwdn      = .true., &
-           f_snow      = .true., f_snow_ai    = .true., &
-           f_rain      = .true., f_rain_ai    = .true., &
-           f_sst       = .true., f_sss        = .true., &
-           f_uocn      = .true., f_vocn       = .true., &
-           f_frzmlt    = .true., &
-           f_fswfac    = .true., &
-           f_fswabs    = .true., f_fswabs_ai  = .true., &
-           f_albsni    = .true., &
-           f_alvdr     = .true., f_alidr      = .true., &
-           f_flat      = .true., f_flat_ai    = .true., &
-           f_fsens     = .true., f_fsens_ai   = .true., &
-           f_flwup     = .true., f_flwup_ai   = .true., &
-           f_evap      = .true., f_evap_ai    = .true., &
-           f_Tair      = .true., &
-           f_Tref      = .true., f_Qref       = .true., &
-           f_congel    = .true., f_frazil     = .true., &
-           f_snoice    = .true., f_meltt      = .true., &
-           f_meltb     = .true., f_meltl      = .true., &
-           f_fresh     = .true., f_fresh_ai   = .true., &
-           f_fsalt     = .true., f_fsalt_ai   = .true., &
-           f_fhocn     = .true., f_fhocn_ai   = .true., &
-           f_fswthru   = .true., f_fswthru_ai = .true., &
-           f_strairx   = .true., f_strairy    = .true., &
-           f_strtltx   = .true., f_strtlty    = .true., &
-           f_strcorx   = .true., f_strcory    = .true., &
-           f_strocnx   = .true., f_strocny    = .true., &
-           f_strintx   = .true., f_strinty    = .true., &
-           f_strength  = .true., f_opening    = .true., &
-           f_divu      = .true., f_shear      = .true., &
-           f_sig1      = .true., f_sig2       = .true., &
-           f_dvidtt    = .true., f_dvidtd     = .true., &
-           f_daidtt    = .true., f_daidtd     = .true., &
-           f_mlt_onset = .true., f_frz_onset  = .true., &
-           f_dardg1dt  = .true., f_dardg2dt   = .true., &
-           f_dvirdgdt  = .true., f_iage       = .false.,&
-           f_hisnap    = .true., f_aisnap     = .true., &
-           f_aicen     = .true., f_vicen      = .true., &
-           f_apondn    = .false., &           
-           f_trsig     = .true., f_icepresent = .true., &
-           f_fsurf_ai  = .true., f_fcondtop_ai= .true., &
-           f_fmeltt_ai = .true.,                        &
-           f_fsurfn_ai = .true.,f_fcondtopn_ai= .true., &
-           f_fmelttn_ai= .true., f_flatn_ai   = .true.
+      character (len=max_nstrm) :: &
+!          f_example   = 'md', &
+           f_hi        = 'm', f_hs         = 'm', &
+           f_Tsfc      = 'm', f_aice       = 'm', &
+           f_uvel      = 'm', f_vvel       = 'm', &
+           f_fswdn     = 'm', f_flwdn      = 'm', &
+           f_snow      = 'm', f_snow_ai    = 'm', &
+           f_rain      = 'm', f_rain_ai    = 'm', &
+           f_sst       = 'm', f_sss        = 'm', &
+           f_uocn      = 'm', f_vocn       = 'm', &
+           f_frzmlt    = 'm', &
+           f_fswfac    = 'm', &
+           f_fswabs    = 'm', f_fswabs_ai  = 'm', &
+           f_albsni    = 'm', &
+           f_alvdr     = 'm', f_alidr      = 'm', &
+           f_albice    = 'm', f_albsno     = 'm', &
+           f_albpnd    = 'm', f_coszen     = 'm', &
+           f_flat      = 'm', f_flat_ai    = 'm', &
+           f_fsens     = 'm', f_fsens_ai   = 'm', &
+           f_flwup     = 'm', f_flwup_ai   = 'm', &
+           f_evap      = 'm', f_evap_ai    = 'm', &
+           f_Tair      = 'm', &
+           f_Tref      = 'm', f_Qref       = 'm', &
+           f_congel    = 'm', f_frazil     = 'm', &
+           f_snoice    = 'm', f_meltt      = 'm', &
+           f_meltb     = 'm', f_meltl      = 'm', &
+           f_fresh     = 'm', f_fresh_ai   = 'm', &
+           f_fsalt     = 'm', f_fsalt_ai   = 'm', &
+           f_fhocn     = 'm', f_fhocn_ai   = 'm', &
+           f_fswthru   = 'm', f_fswthru_ai = 'm', &
+           f_strairx   = 'm', f_strairy    = 'm', &
+           f_strtltx   = 'm', f_strtlty    = 'm', &
+           f_strcorx   = 'm', f_strcory    = 'm', &
+           f_strocnx   = 'm', f_strocny    = 'm', &
+           f_strintx   = 'm', f_strinty    = 'm', &
+           f_strength  = 'm', f_opening    = 'm', &
+           f_divu      = 'm', f_shear      = 'm', &
+           f_sig1      = 'm', f_sig2       = 'm', &
+           f_dvidtt    = 'm', f_dvidtd     = 'm', &
+           f_daidtt    = 'm', f_daidtd     = 'm', &
+           f_mlt_onset = 'm', f_frz_onset  = 'm', &
+           f_dardg1dt  = 'm', f_dardg2dt   = 'm', &
+           f_dvirdgdt  = 'm', f_iage       = 'x', &
+           f_ardg      = 'm', f_vrdg       = 'm', &
+           f_alvl      = 'm', f_vlvl       = 'm', &
+           f_hisnap    = 'm', f_aisnap     = 'm', &
+           f_aicen     = 'm', f_vicen      = 'm', &
+           f_apondn    = 'x',                     &
+           f_trsig     = 'm', f_icepresent = 'm', &
+           f_fsurf_ai  = 'm', f_fcondtop_ai= 'm', &
+           f_fmeltt_ai = 'm',                     &
+           f_fsurfn_ai = 'm' ,f_fcondtopn_ai= 'm',&
+           f_fmelttn_ai= 'm', f_flatn_ai   = 'm', &
+!          f_field3dz  = 'x',                     &
+           f_Tinz      = 'm', f_Tsnz      = 'm' 
+
 
       !---------------------------------------------------------------
-      ! namelist variables (same as logical flags)
+      ! namelist variables
       !---------------------------------------------------------------
 
       namelist / icefields_nml /     &
@@ -187,7 +252,9 @@
            f_dxu      , f_dyu      , &
            f_HTN      , f_HTE      , &
            f_ANGLE    , f_ANGLET   , &
-           f_bounds   , &
+           f_bounds   , f_NCAT     , &
+           f_VGRDi    , f_VGRDs    , &
+!          f_example  , &
            f_hi,        f_hs       , &
            f_Tsfc,      f_aice     , &
            f_uvel,      f_vvel     , &
@@ -201,6 +268,8 @@
            f_fswabs,    f_fswabs_ai, &
            f_albsni                , &
            f_alvdr,     f_alidr    , &
+           f_albice,    f_albsno   , &
+           f_albpnd,    f_coszen   , &
            f_flat,      f_flat_ai  , &
            f_fsens,     f_fsens_ai , &
            f_flwup,     f_flwup_ai , &
@@ -226,15 +295,19 @@
            f_daidtt,    f_daidtd   , &
            f_mlt_onset, f_frz_onset, &
            f_dardg1dt,  f_dardg2dt , &
-           f_dvirdgdt              , &
+           f_dvirdgdt,  f_iage     , &
+           f_ardg,      f_vrdg     , &
+           f_alvl,      f_vlvl     , &
            f_hisnap,    f_aisnap   , &
            f_aicen,     f_vicen    , &
-           f_iage,      f_apondn   , &
+           f_apondn   , &
            f_trsig,     f_icepresent,&
            f_fsurf_ai,  f_fcondtop_ai,&
            f_fmeltt_ai,              &
            f_fsurfn_ai,f_fcondtopn_ai,&
-           f_fmelttn_ai,f_flatn_ai
+           f_fmelttn_ai,f_flatn_ai, &
+!          f_field3dz,  &
+           f_Tinz,      f_Tsnz       
 
       !---------------------------------------------------------------
       ! field indices
@@ -253,99 +326,78 @@
            n_ANGLE      = 10, &
            n_ANGLET     = 11, &
 
+           n_NCAT       = 1, &
+           n_VGRDi      = 2, &
+           n_VGRDs      = 3, &
+
            n_lont_bnds  = 1, &
            n_latt_bnds  = 2, &
            n_lonu_bnds  = 3, &
-           n_latu_bnds  = 4, &
+           n_latu_bnds  = 4
 
-           n_hi         = 1,  &
-           n_hs         = 2,  &
-           n_Tsfc       = 3,  &
-           n_aice       = 4,  &
-           n_uvel       = 5,  &
-           n_vvel       = 6,  &
-           n_fswdn      = 7,  &
-           n_flwdn      = 8,  &
-           n_snow       = 9,  &
-           n_snow_ai    = 10, &
-           n_rain       = 11, &
-           n_rain_ai    = 12, &
-           n_sst        = 13, &
-           n_sss        = 14, &
-           n_uocn       = 15, &
-           n_vocn       = 16, &
-           n_frzmlt     = 17, &
-           n_fswabs     = 18, &
-           n_fswabs_ai  = 19, &
-           n_albsni     = 20, &
-           n_flat       = 21, &
-           n_flat_ai    = 22, &
-           n_fsens      = 23, &
-           n_fsens_ai   = 24, &
-           n_flwup      = 25, &
-           n_flwup_ai   = 26, &
-           n_evap       = 27, &
-           n_evap_ai    = 28, &
-           n_Tref       = 29, &
-           n_Qref       = 30, &
-           n_congel     = 31, &
-           n_frazil     = 32, &
-           n_snoice     = 33, &
-           n_meltt      = 34, &
-           n_meltb      = 35, &
-           n_meltl      = 36, &
-           n_fresh      = 37, &
-           n_fresh_ai   = 38, &
-           n_fsalt      = 39, &
-           n_fsalt_ai   = 40, &
-           n_fhocn      = 41, &
-           n_fhocn_ai   = 42, &
-           n_fswthru    = 43, &
-           n_fswthru_ai = 44, &
-           n_strairx    = 45, &
-           n_strairy    = 46, &
-           n_strtltx    = 47, &
-           n_strtlty    = 48, &
-           n_strcorx    = 49, &
-           n_strcory    = 50, &
-           n_strocnx    = 51, &
-           n_strocny    = 52, &
-           n_strintx    = 53, &
-           n_strinty    = 54, &
-           n_strength   = 55, &
-           n_divu       = 56, &
-           n_shear      = 57, &
-           n_sig1       = 58, &
-           n_sig2       = 59, &
-           n_dvidtt     = 60, &
-           n_dvidtd     = 61, &
-           n_daidtt     = 62, &
-           n_daidtd     = 63, &
-           n_mlt_onset  = 64, &
-           n_frz_onset  = 65, &
-           n_opening    = 66, &
-           n_alvdr      = 67, &
-           n_alidr      = 68, &
-           n_dardg1dt   = 69, &
-           n_dardg2dt   = 70, &
-           n_dvirdgdt   = 71, &
-           n_hisnap     = 72, &
-           n_aisnap     = 73, &
-           n_Tair       = 74, &
-           n_trsig      = 75, &
-           n_icepresent = 76, &
-           n_iage       = 77, &
-           n_fsurf_ai   = 78, &
-           n_fcondtop_ai= 79, &
-           n_fmeltt_ai  = 80, &
-           n_fswfac     = 81, &
-           n_aicen        = 82, & ! n_aicen, n_vicen must be last in this list
-           n_vicen        = 83 + 1*ncat_hist - 1, &
-           n_apondn       = 83 + 2*ncat_hist - 1, &
-           n_fsurfn_ai    = 83 + 3*ncat_hist - 1, &
-           n_fcondtopn_ai = 83 + 4*ncat_hist - 1, &
-           n_fmelttn_ai   = 83 + 5*ncat_hist - 1, &
-           n_flatn_ai     = 83 + 6*ncat_hist - 1
+      integer (kind=int_kind), dimension(max_nstrm) :: &
+!          n_example    , &
+           n_hi         , n_hs         , &
+           n_Tsfc       , n_aice       , &
+           n_uvel       , n_vvel       , &
+           n_fswdn      , n_flwdn      , &
+           n_snow       , n_snow_ai    , &
+           n_rain       , n_rain_ai    , &
+           n_sst        , n_sss        , &
+           n_uocn       , n_vocn       , &
+           n_frzmlt     , n_fswfac     , &
+           n_fswabs     , n_fswabs_ai  , &
+           n_albsni     , &
+           n_alvdr      , n_alidr      , &
+           n_albice     , n_albsno     , &
+           n_albpnd     , n_coszen     , &
+           n_flat       , n_flat_ai    , &
+           n_fsens      , n_fsens_ai   , &
+           n_flwup      , n_flwup_ai   , &
+           n_evap       , n_evap_ai    , &
+           n_Tair       , &
+           n_Tref       , n_Qref       , &
+           n_congel     , n_frazil     , &
+           n_snoice     , n_meltt      , &
+           n_meltb      , n_meltl      , &
+           n_fresh      , n_fresh_ai   , &
+           n_fsalt      , n_fsalt_ai   , &
+           n_fhocn      , n_fhocn_ai   , &
+           n_fswthru    , n_fswthru_ai , &
+           n_strairx    , n_strairy    , &
+           n_strtltx    , n_strtlty    , &
+           n_strcorx    , n_strcory    , &
+           n_strocnx    , n_strocny    , &
+           n_strintx    , n_strinty    , &
+           n_strength   , n_opening    , &
+           n_divu       , n_shear      , &
+           n_sig1       , n_sig2       , &
+           n_dvidtt     , n_dvidtd     , &
+           n_daidtt     , n_daidtd     , &
+           n_mlt_onset  , n_frz_onset  , &
+           n_dardg1dt   , n_dardg2dt   , &
+           n_dvirdgdt   , &
+           n_hisnap     , n_aisnap     , &
+           n_trsig      , n_icepresent , &
+           n_iage       , n_fsurf_ai   , &
+           n_ardg       , n_vrdg       , &
+           n_alvl       , n_vlvl       , &
+           n_fcondtop_ai, n_fmeltt_ai  , &
+           n_aicen       , &
+           n_vicen       , &
+           n_apondn      , &
+           n_fsurfn_ai   , &
+           n_fcondtopn_ai, &
+           n_fmelttn_ai  , &
+           n_flatn_ai    , &
+!          n_field3dz    , &
+           n_Tinz        , n_Tsnz
+
+      interface accum_hist_field ! generic interface
+           module procedure accum_hist_field_2D, &
+                            accum_hist_field_3D, &
+                            accum_hist_field_4D
+      end interface
 
 !=======================================================================
 
@@ -376,10 +428,13 @@
 ! !USES:
 !
       use ice_constants
-      use ice_calendar, only: yday, days_per_year
-      use ice_flux, only: mlt_onset, frz_onset
+      use ice_calendar, only: yday, days_per_year, histfreq, &
+           histfreq_n, nstreams
+      use ice_flux, only: mlt_onset, frz_onset, albcnt
       use ice_restart, only: restart
       use ice_age, only: tr_iage
+      use ice_mechred, only: tr_lvl
+      use ice_meltpond, only: tr_pond
       use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -389,441 +444,14 @@
 !
 !EOP
 !
-      integer (kind=int_kind) :: n, k
+      integer (kind=int_kind) :: n, k, ns, ns1, ns2, lenf
+      integer (kind=int_kind) :: hfreqn
+      integer (kind=int_kind), dimension(max_nstrm) :: &
+         ntmp
       integer (kind=int_kind) :: nml_error ! namelist i/o error flag
 
       character (len=3) :: nchar
-      character (len=40) :: tmp
-
-      !---------------------------------------------------------------
-      ! field names
-      !---------------------------------------------------------------
-
-      vname(n_hi        ) = 'hi'
-      vname(n_hs        ) = 'hs'
-      vname(n_Tsfc      ) = 'Tsfc'
-      vname(n_aice      ) = 'aice'
-      vname(n_uvel      ) = 'uvel'
-      vname(n_vvel      ) = 'vvel'
-      vname(n_fswdn     ) = 'fswdn'
-      vname(n_flwdn     ) = 'flwdn'
-      vname(n_snow      ) = 'snow'
-      vname(n_snow_ai   ) = 'snow_ai'
-      vname(n_rain      ) = 'rain'
-      vname(n_rain_ai   ) = 'rain_ai'
-      vname(n_sst       ) = 'sst'
-      vname(n_sss       ) = 'sss'
-      vname(n_uocn      ) = 'uocn'
-      vname(n_vocn      ) = 'vocn'
-      vname(n_frzmlt    ) = 'frzmlt'
-      vname(n_fswfac    ) = 'fswfac'
-      vname(n_fswabs    ) = 'fswabs'
-      vname(n_fswabs_ai ) = 'fswabs_ai'
-      vname(n_albsni    ) = 'albsni'  
-      vname(n_alvdr     ) = 'alvdr'
-      vname(n_alidr     ) = 'alidr'
-      vname(n_flat      ) = 'flat'  
-      vname(n_flat_ai   ) = 'flat_ai'  
-      vname(n_fsens     ) = 'fsens'  
-      vname(n_fsens_ai  ) = 'fsens_ai'  
-      vname(n_flwup     ) = 'flwup'  
-      vname(n_flwup_ai  ) = 'flwup_ai'  
-      vname(n_evap      ) = 'evap'  
-      vname(n_evap_ai   ) = 'evap_ai'  
-      vname(n_Tair      ) = 'Tair'
-      vname(n_Tref      ) = 'Tref'
-      vname(n_Qref      ) = 'Qref'
-      vname(n_congel    ) = 'congel'  
-      vname(n_frazil    ) = 'frazil'  
-      vname(n_snoice    ) = 'snoice'  
-      vname(n_meltt     ) = 'meltt'  
-      vname(n_meltb     ) = 'meltb'  
-      vname(n_meltl     ) = 'meltl'  
-      vname(n_fresh     ) = 'fresh' 
-      vname(n_fresh_ai  ) = 'fresh_ai' 
-      vname(n_fsalt     ) = 'fsalt'  
-      vname(n_fsalt_ai  ) = 'fsalt_ai'  
-      vname(n_fhocn     ) = 'fhocn'  
-      vname(n_fhocn_ai  ) = 'fhocn_ai'
-      vname(n_fswthru   ) = 'fswthru ' 
-      vname(n_fswthru_ai) = 'fswthru_ai'
-      vname(n_strairx   ) = 'strairx'
-      vname(n_strairy   ) = 'strairy'
-      vname(n_strtltx   ) = 'strtltx'
-      vname(n_strtlty   ) = 'strtlty'
-      vname(n_strcorx   ) = 'strcorx'
-      vname(n_strcory   ) = 'strcory'
-      vname(n_strocnx   ) = 'strocnx'
-      vname(n_strocny   ) = 'strocny '
-      vname(n_strintx   ) = 'strintx'
-      vname(n_strinty   ) = 'strinty'
-      vname(n_strength  ) = 'strength'
-      vname(n_opening   ) = 'opening'
-      vname(n_divu      ) = 'divu'
-      vname(n_shear     ) = 'shear'
-      vname(n_sig1      ) = 'sig1'
-      vname(n_sig2      ) = 'sig2'
-      vname(n_dvidtt    ) = 'dvidtt'
-      vname(n_dvidtd    ) = 'dvidtd' 
-      vname(n_daidtt    ) = 'daidtt'
-      vname(n_daidtd    ) = 'daidtd' 
-      vname(n_mlt_onset ) = 'mlt_onset'
-      vname(n_frz_onset ) = 'frz_onset'
-      vname(n_dardg1dt  ) = 'dardg1dt' 
-      vname(n_dardg2dt  ) = 'dardg2dt'
-      vname(n_dvirdgdt  ) = 'dvirdgdt'
-      vname(n_hisnap    ) = 'hisnap'
-      vname(n_aisnap    ) = 'aisnap'
-      vname(n_trsig     ) = 'trsig'
-      vname(n_icepresent) = 'ice_present'
-      vname(n_iage      ) = 'iage'
-      vname(n_fsurf_ai  ) = 'fsurf_ai'
-      vname(n_fcondtop_ai)= 'fcondtop_ai'
-      vname(n_fmeltt_ai ) = 'fmeltt_ai'
-      do n = 1, ncat_hist
-        write(nchar,'(i3.3)') n
-        write(vname(n_aicen+n-1),'(a,a)') 'aice', trim(nchar) ! aicen
-        write(vname(n_vicen+n-1),'(a,a)') 'vice', trim(nchar) ! vicen
-        write(vname(n_apondn+n-1),'(a,a)') 'apond', trim(nchar)! apondn
-        write(vname(n_fsurfn_ai+n-1),'(a,a)')    &
-                      'fsurfn_ai', trim(nchar) ! fsurfn
-        write(vname(n_fcondtopn_ai+n-1),'(a,a)') & 
-                      'fcondtopn_ai', trim(nchar)  ! fcondtopn
-        write(vname(n_fmelttn_ai+n-1),'(a,a)')   &
-                      'fmelttn_ai', trim(nchar) ! fmeltn
-        write(vname(n_flatn_ai+n-1),'(a,a)')     &
-                      'flatn_ai', trim(nchar)   ! flatn
-        vname(n_aicen+n-1)        = trim(vname(n_aicen+n-1))
-        vname(n_vicen+n-1)        = trim(vname(n_vicen+n-1))
-        vname(n_apondn+n-1)       = trim(vname(n_apondn+n-1))
-        vname(n_fsurfn_ai+n-1)    = trim(vname(n_fsurfn_ai+n-1))
-        vname(n_fcondtopn_ai+n-1) = trim(vname(n_fcondtopn_ai+n-1))
-        vname(n_fmelttn_ai+n-1)   = trim(vname(n_fmelttn_ai+n-1))
-        vname(n_flatn_ai+n-1)     = trim(vname(n_flatn_ai+n-1))
-      enddo
-
-      !---------------------------------------------------------------
-      ! field descriptions
-      !---------------------------------------------------------------
-
-      vdesc(n_hi        ) = 'grid cell mean ice thickness'  
-      vdesc(n_hs        ) = 'grid cell mean snow thickness'
-      vdesc(n_Tsfc      ) = 'snow/ice surface temperature'      
-      vdesc(n_aice      ) = 'ice area  (aggregate)'
-      vdesc(n_uvel      ) = 'ice velocity (x)'            
-      vdesc(n_vvel      ) = 'ice velocity (y)'        
-      vdesc(n_fswdn     ) = 'down solar flux'             
-      vdesc(n_flwdn     ) = 'down longwave flux'
-      vdesc(n_snow      ) = 'snowfall rate (cpl)'         
-      vdesc(n_snow_ai   ) = 'snowfall rate'
-      vdesc(n_rain      ) = 'rainfall rate (cpl)'         
-      vdesc(n_rain_ai   ) = 'rainfall rate'
-      vdesc(n_sst       ) = 'sea surface temperature'     
-      vdesc(n_sss       ) = 'sea surface salinity'
-      vdesc(n_uocn      ) = 'ocean current (x)'           
-      vdesc(n_vocn      ) = 'ocean current (y)'         
-      vdesc(n_frzmlt    ) = 'freeze/melt potential'    
-      vdesc(n_fswfac    ) = 'shortwave scaling factor'   
-      vdesc(n_fswabs    ) = 'snow/ice/ocn absorbed solar flux (cpl)'   
-      vdesc(n_fswabs_ai ) = 'snow/ice/ocn absorbed solar flux'      
-      vdesc(n_albsni    ) = 'snw/ice broad band albedo'
-      vdesc(n_alvdr     ) = 'visible direct albedo'
-      vdesc(n_alidr     ) = 'near IR direct albedo'
-      vdesc(n_flat      ) = 'latent heat flux (cpl)'      
-      vdesc(n_flat_ai   ) = 'latent heat flux'
-      vdesc(n_fsens     ) = 'sensible heat flux (cpl)'    
-      vdesc(n_fsens_ai  ) = 'sensible heat flux'
-      vdesc(n_flwup     ) = 'upward longwave flx (cpl)'   
-      vdesc(n_flwup_ai  ) = 'upward longwave flux'
-      vdesc(n_evap      ) = 'evaporative water flux (cpl)'
-      vdesc(n_evap_ai   ) = 'evaporative water flux'   
-      vdesc(n_Tair      ) = 'air temperature'
-      vdesc(n_Tref      ) = '2m reference temperature'
-      vdesc(n_Qref      ) = '2m reference specific humidity'
-      vdesc(n_congel    ) = 'congelation ice growth'      
-      vdesc(n_frazil    ) = 'frazil ice growth'
-      vdesc(n_snoice    ) = 'snow-ice formation'          
-      vdesc(n_meltt     ) = 'top ice melt'
-      vdesc(n_meltb     ) = 'basal ice melt'              
-      vdesc(n_meltl     ) = 'lateral ice melt'            
-      vdesc(n_fresh     ) = 'freshwtr flx ice to ocn (cpl)'
-      vdesc(n_fresh_ai  ) = 'freshwtr flx ice to ocn'
-      vdesc(n_fsalt     ) = 'salt flux ice to ocn (cpl)'  
-      vdesc(n_fsalt_ai  ) = 'salt flux ice to ocean'   
-      vdesc(n_fhocn     ) = 'heat flux ice to ocn (cpl)'  
-      vdesc(n_fhocn_ai  ) = 'heat flux ice to ocean'        
-      vdesc(n_fswthru   ) = 'SW thru ice to ocean (cpl)'  
-      vdesc(n_fswthru_ai) = 'SW flux thru ice to ocean'
-      vdesc(n_strairx   ) = 'atm/ice stress (x)'          
-      vdesc(n_strairy   ) = 'atm/ice stress (y)'
-      vdesc(n_strtltx   ) = 'sea sfc tilt stress (x)'     
-      vdesc(n_strtlty   ) = 'sea sfc tilt stress (y)'
-      vdesc(n_strcorx   ) = 'coriolis stress (x)'         
-      vdesc(n_strcory   ) = 'coriolis stress (y)'
-      vdesc(n_strocnx   ) = 'ocean/ice stress (x)'        
-      vdesc(n_strocny   ) = 'ocean/ice stress (y)' 
-      vdesc(n_strintx   ) = 'internal ice stress (x)'     
-      vdesc(n_strinty   ) = 'internal ice stress (y)'  
-      vdesc(n_strength  ) = 'compressive ice strength' 
-      vdesc(n_opening   ) = 'lead area opening rate'
-      vdesc(n_divu      ) = 'strain rate (divergence)'    
-      vdesc(n_shear     ) = 'strain rate (shear)'     
-      vdesc(n_sig1      ) = 'norm. principal stress 1'    
-      vdesc(n_sig2      ) = 'norm. principal stress 2' 
-      vdesc(n_dvidtt    ) = 'volume tendency thermo'      
-      vdesc(n_dvidtd    ) = 'volume tendency dynamics' 
-      vdesc(n_daidtt    ) = 'area tendency thermo'        
-      vdesc(n_daidtd    ) = 'area tendency dynamics' 
-      vdesc(n_mlt_onset ) = 'melt onset date'            
-      vdesc(n_frz_onset ) = 'freeze onset date'
-      vdesc(n_dardg1dt  ) = 'ice area ridging rate'       
-      vdesc(n_dardg2dt  ) = 'ridge area formation rate'
-      vdesc(n_dvirdgdt  ) = 'ice volume ridging rate'     
-      vdesc(n_hisnap    ) = 'ice volume snapshot'         
-      vdesc(n_aisnap    ) = 'ice area snapshot' 
-      vdesc(n_trsig     ) = 'internal stress tensor trace'
-      vdesc(n_icepresent) = &
-        'fraction of time-avg interval that any ice is present'
-      vdesc(n_iage      ) = 'sea ice age'
-      vdesc(n_fsurf_ai  ) = 'net surface heat flux'
-      vdesc(n_fcondtop_ai)= 'top surface conductive heat flux'
-      vdesc(n_fmeltt_ai ) = 'net surface heat flux causing melt'
-      do n = 1, ncat_hist
-        write(nchar,'(i3)') n
-
-        tmp = 'ice area, category '   ! aicen
-        write(vdesc(n_aicen+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
-        vdesc(n_aicen+n-1) = trim(vdesc(n_aicen+n-1))
-
-        tmp = 'ice volume, category ' ! vicen
-        write(vdesc(n_vicen+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
-        vdesc(n_vicen+n-1) = trim(vdesc(n_vicen+n-1))
-
-        tmp = 'meltpond concentration, category ' ! apondn
-        write(vdesc(n_apondn+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
-        vdesc(n_apondn+n-1) = trim(vdesc(n_apondn+n-1))
-
-        tmp = 'net surface heat flux, category ' ! fsurfn
-        write(vdesc(n_fsurfn_ai+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
-        vdesc(n_fsurfn_ai+n-1) = trim(vdesc(n_fsurfn_ai+n-1))
-
-        tmp = 'top sfc conductive heat flux , cat ' ! fcondtopn
-        write(vdesc(n_fcondtopn_ai+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
-        vdesc(n_fcondtopn_ai+n-1) = trim(vdesc(n_fcondtopn_ai+n-1))
-
-        tmp = 'net sfc heat flux causing melt, cat ' ! fmelttn
-        write(vdesc(n_fmelttn_ai+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
-        vdesc(n_fmelttn_ai+n-1) = trim(vdesc(n_fmelttn_ai+n-1))
-
-        tmp = 'latent heat flux, category ' ! flatn
-        write(vdesc(n_flatn_ai+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
-        vdesc(n_flatn_ai+n-1) = trim(vdesc(n_flatn_ai+n-1))
-      enddo
-
-      !---------------------------------------------------------------
-      ! field units
-      !---------------------------------------------------------------
-
-      vunit(n_hi        ) = 'm'
-      vunit(n_hs        ) = 'm'
-      vunit(n_Tsfc      ) = 'degC'
-      vunit(n_aice      ) = '1'
-      vunit(n_uvel      ) = 'm/s'
-      vunit(n_vvel      ) = 'm/s'
-      vunit(n_fswdn     ) = 'W/m^2'
-      vunit(n_flwdn     ) = 'W/m^2'
-      vunit(n_snow      ) = 'cm/day'
-      vunit(n_snow_ai   ) = 'cm/day'
-      vunit(n_rain      ) = 'cm/day'
-      vunit(n_rain_ai   ) = 'cm/day'
-      vunit(n_sst       ) = 'C'
-      vunit(n_sss       ) = 'psu'
-      vunit(n_uocn      ) = 'm/s'
-      vunit(n_vocn      ) = 'm/s'
-      vunit(n_frzmlt    ) = 'W/m^2'
-      vunit(n_fswfac    ) = '1'
-      vunit(n_fswabs    ) = 'W/m^2'
-      vunit(n_fswabs_ai ) = 'W/m^2'
-      vunit(n_albsni    ) = '%'
-      vunit(n_alvdr     ) = '%'
-      vunit(n_alidr     ) = '%'
-      vunit(n_flat      ) = 'W/m^2'
-      vunit(n_flat_ai   ) = 'W/m^2'
-      vunit(n_fsens     ) = 'W/m^2'
-      vunit(n_fsens_ai  ) = 'W/m^2'
-      vunit(n_flwup     ) = 'W/m^2'
-      vunit(n_flwup_ai  ) = 'W/m^2'
-      vunit(n_evap      ) = 'cm/day'
-      vunit(n_evap_ai   ) = 'cm/day'
-      vunit(n_Tair      ) = 'C'
-      vunit(n_Tref      ) = 'C'
-      vunit(n_Qref      ) = 'g/kg'
-      vunit(n_congel    ) = 'cm/day'
-      vunit(n_frazil    ) = 'cm/day'
-      vunit(n_snoice    ) = 'cm/day'
-      vunit(n_meltt     ) = 'cm/day'
-      vunit(n_meltb     ) = 'cm/day'
-      vunit(n_meltl     ) = 'cm/day'
-      vunit(n_fresh     ) = 'cm/day'
-      vunit(n_fresh_ai  ) = 'cm/day'
-      vunit(n_fsalt     ) = 'kg/m^2/s'
-      vunit(n_fsalt_ai  ) = 'kg/m^2/s'
-      vunit(n_fhocn     ) = 'W/m^2'
-      vunit(n_fhocn_ai  ) = 'W/m^2'
-      vunit(n_fswthru   ) = 'W/m^2'
-      vunit(n_fswthru_ai) = 'W/m^2'
-      vunit(n_strairx   ) = 'N/m^2'
-      vunit(n_strairy   ) = 'N/m^2'
-      vunit(n_strtltx   ) = 'N/m^2'
-      vunit(n_strtlty   ) = 'N/m^2'
-      vunit(n_strcorx   ) = 'N/m^2'
-      vunit(n_strcory   ) = 'N/m^2'
-      vunit(n_strocnx   ) = 'N/m^2'
-      vunit(n_strocny   ) = 'N/m^2'
-      vunit(n_strintx   ) = 'N/m^2'
-      vunit(n_strinty   ) = 'N/m^2'
-      vunit(n_strength  ) = 'N/m'
-      vunit(n_opening   ) = '%/day'
-      vunit(n_divu      ) = '%/day'
-      vunit(n_shear     ) = '%/day'
-      vunit(n_sig1      ) = ' '
-      vunit(n_sig2      ) = ' '
-      vunit(n_dvidtt    ) = 'cm/day'
-      vunit(n_dvidtd    ) = 'cm/day'
-      vunit(n_daidtt    ) = '%/day'
-      vunit(n_daidtd    ) = '%/day'
-      vunit(n_mlt_onset ) = 'day of year'
-      vunit(n_frz_onset ) = 'day of year'
-      vunit(n_dardg1dt  ) = '%/day'
-      vunit(n_dardg2dt  ) = '%/day'
-      vunit(n_dvirdgdt  ) = 'cm/day'
-      vunit(n_hisnap    ) = 'm'
-      vunit(n_aisnap    ) = ' ' 
-      vunit(n_trsig     ) = 'N/m^2'
-      vunit(n_icepresent) = '1'
-      vunit(n_iage      ) = 'years'
-      vunit(n_fsurf_ai  ) = 'W/m^2'
-      vunit(n_fcondtop_ai)= 'W/m^2'
-      vunit(n_fmeltt_ai ) = 'W/m^2'
-      do n = 1, ncat_hist
-        vunit(n_aicen+n-1)        = ' ' ! aicen
-        vunit(n_vicen+n-1)        = 'm' ! vicen
-        vunit(n_apondn+n-1)       = ' ' ! apondn
-        vunit(n_fsurfn_ai+n-1)    = 'W/m^2' ! fsurfn
-        vunit(n_fcondtopn_ai+n-1) = 'W/m^2' ! fcondtopn
-        vunit(n_fmelttn_ai+n-1)   = 'W/m^2' ! fmelttn
-        vunit(n_flatn_ai+n-1)     = 'W/m^2' ! flatn
-      enddo
-
-#if (defined CCSM) || (defined SEQ_MCT)
-      ! redefine for CCSM conventions
-      vunit(n_aice      ) = '%'
-      vunit(n_uvel      ) = 'cm/s'
-      vunit(n_vvel      ) = 'cm/s'
-      vunit(n_uocn      ) = 'cm/s'
-      vunit(n_vocn      ) = 'cm/s'
-      vunit(n_fsalt     ) = 'kg/m^2/day'
-      vunit(n_fsalt_ai  ) = 'kg/m^2/day'
-      do n = 1, ncat_hist
-        vunit(n_aicen+n-1) = '%' ! aicen
-      enddo
-#endif
-
-      !---------------------------------------------------------------
-      ! field comments
-      !---------------------------------------------------------------
-
-      vcomment(n_hi        ) = 'ice volume per unit grid cell area'
-      vcomment(n_hs        ) = 'snow volume per unit grid cell area'
-      vcomment(n_Tsfc      ) = 'averaged with Tf if no ice is present'
-      vcomment(n_aice      ) = 'none'
-      vcomment(n_uvel      ) = 'positive is x direction on U grid'
-      vcomment(n_vvel      ) = 'positive is y direction on U grid'
-      vcomment(n_fswdn     ) = 'positive downward'             
-      vcomment(n_flwdn     ) = 'positive downward'
-      vcomment(n_snow      ) = 'none'         
-      vcomment(n_snow_ai   ) = 'weighted by ice area'
-      vcomment(n_rain      ) = 'none'         
-      vcomment(n_rain_ai   ) = 'weighted by ice area'
-      vcomment(n_sst       ) = 'none'     
-      vcomment(n_sss       ) = 'none'
-      vcomment(n_uocn      ) = 'positive is x direction on U grid'
-      vcomment(n_vocn      ) = 'positive is y direction on U grid'
-      vcomment(n_frzmlt    ) ='if >0, new ice forms; if <0, ice melts' 
-      vcomment(n_fswfac    ) = 'ratio of netsw new:old'   
-      vcomment(n_fswabs    ) = 'positive downward'   
-      vcomment(n_fswabs_ai ) = 'weighted by ice area'      
-      vcomment(n_albsni    ) = 'none'
-      vcomment(n_alvdr     ) = 'none'
-      vcomment(n_alidr     ) = 'none'
-      vcomment(n_flat      ) = 'positive downward'
-      vcomment(n_flat_ai   ) = 'weighted by ice area'
-      vcomment(n_fsens     ) = 'positive downward'
-      vcomment(n_fsens_ai  ) = 'weighted by ice area'
-      vcomment(n_flwup     ) = 'positive downward'
-      vcomment(n_flwup_ai  ) = 'weighted by ice area'
-      vcomment(n_evap      ) = 'none'
-      vcomment(n_evap_ai   ) = 'weighted by ice area'
-      vcomment(n_Tair      ) = 'none'
-      vcomment(n_Tref      ) = 'none'
-      vcomment(n_Qref      ) = 'none'
-      vcomment(n_congel    ) = 'none'
-      vcomment(n_frazil    ) = 'none'
-      vcomment(n_snoice    ) = 'none'
-      vcomment(n_meltt     ) = 'none'
-      vcomment(n_meltb     ) = 'none'
-      vcomment(n_meltl     ) = 'none'
-      vcomment(n_fresh     ) = 'if positive, ocean gains fresh water'
-      vcomment(n_fresh_ai  ) = 'weighted by ice area'
-      vcomment(n_fsalt     ) = 'if positive, ocean gains salt'
-      vcomment(n_fsalt_ai  ) = 'weighted by ice area'
-      vcomment(n_fhocn     ) = 'if positive, ocean gains heat'
-      vcomment(n_fhocn_ai  ) = 'weighted by ice area'
-      vcomment(n_fswthru   ) = 'if positive, ocean gains heat'
-      vcomment(n_fswthru_ai) = 'weighted by ice area'
-      vcomment(n_strairx   ) = 'positive is x direction on U grid'
-      vcomment(n_strairy   ) = 'positive is y direction on U grid'
-      vcomment(n_strtltx   ) = 'none'
-      vcomment(n_strtlty   ) = 'none'
-      vcomment(n_strcorx   ) = 'positive is x direction on U grid'
-      vcomment(n_strcory   ) = 'positive is y direction on U grid'
-      vcomment(n_strocnx   ) = 'positive is x direction on U grid'
-      vcomment(n_strocny   ) = 'positive is y direction on U grid'
-      vcomment(n_strintx   ) = 'positive is x direction on U grid'
-      vcomment(n_strinty   ) = 'positive is y direction on U grid'
-      vcomment(n_strength  ) = 'none'
-      vcomment(n_opening   ) = 'none'
-      vcomment(n_divu      ) = 'none'
-      vcomment(n_shear     ) = 'none'
-      vcomment(n_sig1      ) = 'sig1 is instantaneous'
-      vcomment(n_sig2      ) = 'sig2 is instantaneous'
-      vcomment(n_dvidtt    ) = 'none'
-      vcomment(n_dvidtd    ) = 'none'
-      vcomment(n_daidtt    ) = 'none'
-      vcomment(n_daidtd    ) = 'none'
-      vcomment(n_mlt_onset ) = 'midyear restart gives erroneous dates'
-      vcomment(n_frz_onset ) = 'midyear restart gives erroneous dates'
-      vcomment(n_dardg1dt  ) = 'none'
-      vcomment(n_dardg2dt  ) = 'none'
-      vcomment(n_dvirdgdt  ) = 'none'
-      vcomment(n_hisnap    ) = 'none'
-      vcomment(n_aisnap    ) = 'none' 
-      vcomment(n_trsig     ) = 'ice strength approximation' 
-      vcomment(n_icepresent) = 'ice extent flag'
-      vcomment(n_iage      ) = 'none' 
-      vcomment(n_fsurf_ai  ) = & 
-        'positive downwards, excludes conductive flux, weighted by ice area'
-      vcomment(n_fcondtop_ai)= 'positive downwards, weighted by ice area'
-      vcomment(n_fmeltt_ai ) = 'always >= 0, weighted by ice area'
-      do n = 1, ncat_hist
-        vcomment(n_aicen+n-1)        = 'Ice range:'           ! aicen
-        vcomment(n_vicen+n-1)        = 'none'                 ! vicen
-        vcomment(n_apondn+n-1)       = 'none'                 ! apondn
-        vcomment(n_fsurfn_ai+n-1)    = 'weighted by ice area' ! fsurfn
-        vcomment(n_fcondtopn_ai+n-1) = 'weighted by ice area' ! fcontopn
-        vcomment(n_fmelttn_ai+n-1)   = 'weighted by ice area' ! fmelttn
-        vcomment(n_flatn_ai+n-1)     = 'weighted by ice area' ! flatn
-      enddo
+      character (len=40) :: stmp
 
       !-----------------------------------------------------------------
       ! read namelist
@@ -851,7 +479,45 @@
          call abort_ice('ice: error reading icefields_nml')
       endif
 
-      if (.not. tr_iage) f_iage = .false.
+      ! histfreq options ('1','h','d','m','y')
+      nstreams = 0
+      do ns = 1, max_nstrm
+         if (histfreq(ns) == '1' .or. histfreq(ns) == 'h' .or. &
+             histfreq(ns) == 'd' .or. histfreq(ns) == 'm' .or. &
+             histfreq(ns) == 'y') then
+                nstreams = nstreams + 1
+         else if (histfreq(ns) /= 'x') then
+             call abort_ice('ice: histfreq contains illegal element')
+         endif
+      enddo
+      if (nstreams == 0) write (nu_diag,*) 'WARNING: No history output'
+      do ns1 = 1, nstreams
+         do ns2 = 1, nstreams
+            if (histfreq(ns1) == histfreq(ns2) .and. ns1/=ns2 &
+               .and. my_task == master_task) then
+               call abort_ice('ice: histfreq elements must be unique')
+            endif
+         enddo
+      enddo
+
+      if (.not. tr_iage) f_iage = 'x'
+      if (.not. tr_pond) f_apondn = 'x'
+      if (.not. tr_lvl) then
+          f_ardg = 'x'
+          f_vrdg = 'x'
+          f_alvl = 'x'
+          f_vlvl = 'x'
+      endif
+
+      ! these must be output at the same frequency because of 
+      ! cos(zenith angle) averaging
+      if (f_albsno(1:1) /= 'x') f_albsno = f_albice
+      if (f_albpnd(1:1) /= 'x') f_albpnd = f_albice
+      if (f_coszen(1:1) /= 'x') f_coszen = f_albice
+
+      ! to prevent array-out-of-bounds when aggregating
+      if (f_fmeltt_ai(1:1) /= 'x') f_fmelttn_ai = f_fmeltt_ai
+
 #ifndef ncdf
       f_bounds = .false.
 #endif
@@ -868,7 +534,11 @@
       call broadcast_scalar (f_ANGLE, master_task)
       call broadcast_scalar (f_ANGLET, master_task)
       call broadcast_scalar (f_bounds, master_task)
+      call broadcast_scalar (f_NCAT, master_task)
+      call broadcast_scalar (f_VGRDi, master_task)
+      call broadcast_scalar (f_VGRDs, master_task)
 
+!     call broadcast_scalar (f_example, master_task)
       call broadcast_scalar (f_hi, master_task)
       call broadcast_scalar (f_hs, master_task)
       call broadcast_scalar (f_Tsfc, master_task)
@@ -892,6 +562,10 @@
       call broadcast_scalar (f_albsni, master_task)
       call broadcast_scalar (f_alvdr, master_task)
       call broadcast_scalar (f_alidr, master_task)
+      call broadcast_scalar (f_albice, master_task)
+      call broadcast_scalar (f_albsno, master_task)
+      call broadcast_scalar (f_albpnd, master_task)
+      call broadcast_scalar (f_coszen, master_task)
       call broadcast_scalar (f_flat, master_task)
       call broadcast_scalar (f_flat_ai, master_task)
       call broadcast_scalar (f_fsens, master_task)
@@ -946,10 +620,8 @@
       call broadcast_scalar (f_hisnap, master_task)
       call broadcast_scalar (f_aicen, master_task)
       call broadcast_scalar (f_vicen, master_task)
-      call broadcast_scalar (f_apondn, master_task)
       call broadcast_scalar (f_trsig, master_task)
       call broadcast_scalar (f_icepresent, master_task)
-      call broadcast_scalar (f_iage, master_task)
       call broadcast_scalar (f_fsurf_ai, master_task)
       call broadcast_scalar (f_fcondtop_ai, master_task)
       call broadcast_scalar (f_fmeltt_ai, master_task)
@@ -958,11 +630,672 @@
       call broadcast_scalar (f_fmelttn_ai, master_task)
       call broadcast_scalar (f_flatn_ai, master_task)
 
+!      call broadcast_scalar (f_field3dz, master_task)
+      call broadcast_scalar (f_Tinz, master_task)
+      call broadcast_scalar (f_Tsnz, master_task)
+
+      call broadcast_scalar (f_iage, master_task)
+      call broadcast_scalar (f_ardg, master_task)
+      call broadcast_scalar (f_vrdg, master_task)
+      call broadcast_scalar (f_alvl, master_task)
+      call broadcast_scalar (f_vlvl, master_task)
+      call broadcast_scalar (f_apondn, master_task)
+
+      ! 2D variables
+      do ns1 = 1, nstreams
+
+!!!!! begin example
+!      if (f_example(1:1) /= 'x') &
+!         call define_hist_field(n_example,"example","m",tstr2D, tcstr, & 
+!            "example: mean ice thickness",                           &
+!            "ice volume per unit grid cell area", c1, c0,            &
+!            ns1, f_example)
+!!!!! end example
+
+      if (f_hi(1:1) /= 'x') &
+         call define_hist_field(n_hi,"hi","m",tstr2D, tcstr,        & 
+            "grid cell mean ice thickness",                       &
+            "ice volume per unit grid cell area", c1, c0,         &
+            ns1, f_hi)
+
+      if (f_hs(1:1) /= 'x') &
+         call define_hist_field(n_hs,"hs","m",tstr2D, tcstr,        &
+             "grid cell mean snow thickness",                     &
+             "snow volume per unit grid cell area", c1, c0,       &
+             ns1, f_hs)
+      
+      if (f_Tsfc(1:1) /= 'x') &
+         call define_hist_field(n_Tsfc,"Tsfc","C",tstr2D, tcstr,    &
+             "snow/ice surface temperature",                      &
+             "averaged with Tf if no ice is present", c1, c0,     &
+             ns1, f_Tsfc)
+      
+      if (f_aice(1:1) /= 'x') &
+         call define_hist_field(n_aice,"aice","1",tstr2D, tcstr,    &
+             "ice area  (aggregate)",                             &
+             "none", c1, c0,                                      &
+             ns1, f_aice)
+      
+      if (f_uvel(1:1) /= 'x') &
+         call define_hist_field(n_uvel,"uvel","m/s",ustr2D, ucstr,  &
+             "ice velocity (x)",                                  &
+             "positive is x direction on U grid", c1, c0,         &
+             ns1, f_uvel)
+      
+      if (f_vvel(1:1) /= 'x') &
+         call define_hist_field(n_vvel,"vvel","m/s",ustr2D, ucstr,  &
+             "ice velocity (y)",                                  &
+             "positive is y direction on U grid", c1, c0,         &
+             ns1, f_vvel)
+      
+      if (f_fswdn(1:1) /= 'x') &
+         call define_hist_field(n_fswdn,"fswdn","W/m^2",tstr2D, tcstr, &
+             "down solar flux",                                      &
+             "positive downward", c1, c0,                            &
+             ns1, f_fswdn)
+      
+      if (f_flwdn(1:1) /= 'x') &
+         call define_hist_field(n_flwdn,"flwdn","W/m^2",tstr2D, tcstr, &
+             "down longwave flux",                                   &
+             "positive downward", c1, c0,                            &
+             ns1, f_flwdn)
+      
+      if (f_snow(1:1) /= 'x') &
+         call define_hist_field(n_snow,"snow","cm/day",tstr2D, tcstr, &
+             "snowfall rate (cpl)",                                 &
+             "none", mps_to_cmpdy/rhofresh, c0,                     &
+             ns1, f_snow)
+      
+      if (f_snow_ai(1:1) /= 'x') &
+         call define_hist_field(n_snow_ai,"snow_ai","cm/day",tstr2D, tcstr, &
+             "snowfall rate",                                             &
+             "weighted by ice area", mps_to_cmpdy/rhofresh, c0,           &
+             ns1, f_snow_ai)
+      
+      if (f_rain(1:1) /= 'x') &
+         call define_hist_field(n_rain,"rain","cm/day",tstr2D, tcstr, &
+             "rainfall rate (cpl)",                                 &
+             "none", mps_to_cmpdy/rhofresh, c0,                     &
+             ns1, f_rain)
+      
+      if (f_rain_ai(1:1) /= 'x') &
+         call define_hist_field(n_rain_ai,"rain_ai","cm/day",tstr2D, tcstr, &
+             "rainfall rate",                                             &
+             "weighted by ice area", mps_to_cmpdy/rhofresh, c0,           &
+             ns1, f_rain_ai)
+      
+      if (f_sst(1:1) /= 'x') &
+         call define_hist_field(n_sst,"sst","C",tstr2D, tcstr, &
+             "sea surface temperature",                      &
+             "none", c1, c0,                                 &
+             ns1, f_sst)
+      
+      if (f_sss(1:1) /= 'x') &
+         call define_hist_field(n_sss,"sss","ppt",tstr2D, tcstr, &
+             "sea surface salinity",                           &
+             "none", c1, c0,                                   &
+             ns1, f_sss)
+      
+      if (f_uocn(1:1) /= 'x') &
+         call define_hist_field(n_uocn,"uocn","m/s",ustr2D, ucstr, &
+             "ocean current (x)",                                &
+             "positive is x direction on U grid", c1, c0,        &
+             ns1, f_uocn)
+      
+      if (f_vocn(1:1) /= 'x') &
+         call define_hist_field(n_vocn,"vocn","m/s",ustr2D, ucstr, &
+             "ocean current (y)",                                &
+             "positive is y direction on U grid", c1, c0,        &
+             ns1, f_vocn)
+      
+      if (f_frzmlt(1:1) /= 'x') &
+         call define_hist_field(n_frzmlt,"frzmlt","W/m^2",tstr2D, tcstr, &
+             "freeze/melt potential",                                  &
+             "if >0, new ice forms; if <0, ice melts", c1, c0,         &
+             ns1, f_frzmlt)
+      
+      if (f_fswfac(1:1) /= 'x') &
+         call define_hist_field(n_fswfac,"fswfac","1",tstr2D, tcstr, &
+             "shortwave scaling factor",                           &
+             "ratio of netsw new:old", c1, c0,                     &
+             ns1, f_fswfac)
+      
+      if (f_fswabs(1:1) /= 'x') &
+         call define_hist_field(n_fswabs,"fswabs","W/m^2",tstr2D, tcstr, &
+             "snow/ice/ocn absorbed solar flux (cpl)",                 &
+             "positive downward", c1, c0,                              &
+             ns1, f_fswabs)
+      
+      if (f_fswabs_ai(1:1) /= 'x') &
+         call define_hist_field(n_fswabs_ai,"fswabs_ai","W/m^2",tstr2D, tcstr, &
+             "snow/ice/ocn absorbed solar flux",                             &
+             "weighted by ice area", c1, c0,                                 &
+             ns1, f_fswabs_ai)
+      
+      if (f_albsni(1:1) /= 'x') &
+         call define_hist_field(n_albsni,"albsni","%",tstr2D, tcstr, &
+             "snow/ice broad band albedo",                         &
+             "scaled (divided) by aice", c100, c0,                 &
+             ns1, f_albsni)
+      
+      if (f_alvdr(1:1) /= 'x') &
+         call define_hist_field(n_alvdr,"alvdr","%",tstr2D, tcstr, &
+             "visible direct albedo",                            &
+             "scaled (divided) by aice", c100, c0,               &
+             ns1, f_alvdr)
+      
+      if (f_alidr(1:1) /= 'x') &
+         call define_hist_field(n_alidr,"alidr","%",tstr2D, tcstr, &
+             "near IR direct albedo",                            &
+             "scaled (divided) by aice", c100, c0,               &
+             ns1, f_alidr)
+
+      if (f_albice(1:1) /= 'x') &
+         call define_hist_field(n_albice,"albice","%",tstr2D, tcstr, &
+             "bare ice albedo",                                    &
+             "averaged for coszen>0, weighted by aice", c100, c0,  &
+             ns1, f_albice)
+      
+      if (f_albsno(1:1) /= 'x') &
+         call define_hist_field(n_albsno,"albsno","%",tstr2D, tcstr, &
+             "snow albedo",                                        &
+             "averaged for coszen>0, weighted by aice", c100, c0,  &
+             ns1, f_albsno)
+      
+      if (f_albpnd(1:1) /= 'x') &
+         call define_hist_field(n_albpnd,"albpnd","%",tstr2D, tcstr, &
+             "melt pond albedo",                                   &
+             "averaged for coszen>0, weighted by aice", c100, c0,  &
+             ns1, f_albpnd)
+      
+      if (f_coszen(1:1) /= 'x') &
+         call define_hist_field(n_coszen,"coszen","radian",tstr2D, tcstr, &
+             "cosine of the zenith angle",                              &
+             "negative below horizon", c1, c0,                          &
+             ns1, f_coszen)
+
+      if (f_flat(1:1) /= 'x') &
+         call define_hist_field(n_flat,"flat","W/m^2",tstr2D, tcstr, &
+             "latent heat flux (cpl)",                             &
+             "positive downward", c1, c0,                          &
+             ns1, f_flat)
+      
+      if (f_flat_ai(1:1) /= 'x') &
+         call define_hist_field(n_flat_ai,"flat_ai","W/m^2",tstr2D, tcstr, &
+             "latent heat flux",                                         &
+             "weighted by ice area", c1, c0,                             &
+             ns1, f_flat_ai)
+      
+      if (f_fsens(1:1) /= 'x') &
+         call define_hist_field(n_fsens,"fsens","W/m^2",tstr2D, tcstr, &
+             "sensible heat flux (cpl)",                             &
+             "positive downward", c1, c0,                            &
+             ns1, f_fsens)
+      
+      if (f_fsens_ai(1:1) /= 'x') &
+         call define_hist_field(n_fsens_ai,"fsens_ai","W/m^2",tstr2D, tcstr, &
+             "sensible heat flux",                                         &
+             "weighted by ice area", c1, c0,                               &
+             ns1, f_fsens_ai)
+      
+      if (f_flwup(1:1) /= 'x') &
+         call define_hist_field(n_flwup,"flwup","W/m^2",tstr2D, tcstr, &
+             "upward longwave flux (cpl)",                           &
+             "positive downward", c1, c0,                            &
+             ns1, f_flwup)
+      
+      if (f_flwup_ai(1:1) /= 'x') &
+         call define_hist_field(n_flwup_ai,"flwup_ai","W/m^2",tstr2D, tcstr, &
+             "upward longwave flux",                                       &
+             "weighted by ice area", c1, c0,                               &
+             ns1, f_flwup_ai)
+      
+      if (f_evap(1:1) /= 'x') &
+         call define_hist_field(n_evap,"evap","cm/day",tstr2D, tcstr, &
+             "evaporative water flux (cpl)",                        &
+             "none", mps_to_cmpdy/rhofresh, c0,                     &
+             ns1, f_evap)
+      
+      if (f_evap_ai(1:1) /= 'x') &
+         call define_hist_field(n_evap_ai,"evap_ai","cm/day",tstr2D, tcstr, &
+             "evaporative water flux",                                    &
+             "weighted by ice area", mps_to_cmpdy/rhofresh, c0,           &
+             ns1, f_evap_ai)
+      
+      if (f_Tair(1:1) /= 'x') &
+         call define_hist_field(n_Tair,"Tair","C",tstr2D, tcstr, &
+             "air temperature",                                &
+             "none", c1, -Tffresh,                             &
+             ns1, f_Tair)
+      
+      if (f_Tref(1:1) /= 'x') &
+         call define_hist_field(n_Tref,"Tref","C",tstr2D, tcstr, &
+             "2m reference temperature",                       &
+             "none", c1, -Tffresh,                             &
+             ns1, f_Tref)
+      
+      if (f_Qref(1:1) /= 'x') &
+         call define_hist_field(n_Qref,"Qref","g/kg",tstr2D, tcstr, &
+             "2m reference specific humidity",                    &
+             "none", kg_to_g, c0,                                 &
+             ns1, f_Qref)
+      
+      if (f_congel(1:1) /= 'x') &
+         call define_hist_field(n_congel,"congel","cm/day",tstr2D, tcstr, &
+             "congelation ice growth",                                  &
+             "none", mps_to_cmpdy/dt, c0,                               &
+             ns1, f_congel)
+      
+      if (f_frazil(1:1) /= 'x') &
+         call define_hist_field(n_frazil,"frazil","cm/day",tstr2D, tcstr, &
+             "frazil ice growth",                                       &
+             "none", mps_to_cmpdy/dt, c0,                               &
+             ns1, f_frazil)
+      
+      if (f_snoice(1:1) /= 'x') &
+         call define_hist_field(n_snoice,"snoice","cm/day",tstr2D, tcstr, &
+             "snow-ice formation",                                      &
+             "none", mps_to_cmpdy/dt, c0,                               &
+             ns1, f_snoice)
+      
+      if (f_meltt(1:1) /= 'x') &
+         call define_hist_field(n_meltt,"meltt","cm/day",tstr2D, tcstr, &
+             "top ice melt",                                          &
+             "none", mps_to_cmpdy/dt, c0,                             &
+             ns1, f_meltt)
+      
+      if (f_meltb(1:1) /= 'x') &
+         call define_hist_field(n_meltb,"meltb","cm/day",tstr2D, tcstr, &
+             "basal ice melt",                                        &
+             "none", mps_to_cmpdy/dt, c0,                             &
+             ns1, f_meltb)
+      
+      if (f_meltl(1:1) /= 'x') &
+         call define_hist_field(n_meltl,"meltl","cm/day",tstr2D, tcstr, &
+             "lateral ice melt",                                      &
+             "none", mps_to_cmpdy/dt, c0,                             &
+             ns1, f_meltl)
+      
+      if (f_fresh(1:1) /= 'x') &
+         call define_hist_field(n_fresh,"fresh","cm/day",tstr2D, tcstr,   &
+             "freshwtr flx ice to ocn (cpl)",                           &
+             "if positive, ocean gains fresh water",                    &
+             mps_to_cmpdy/rhofresh, c0,                                 &
+             ns1, f_fresh)
+      
+      if (f_fresh_ai(1:1) /= 'x') &
+         call define_hist_field(n_fresh_ai,"fresh_ai","cm/day",tstr2D, tcstr, &
+             "freshwtr flx ice to ocn",                                     &
+             "weighted by ice area", mps_to_cmpdy/rhofresh, c0,             &
+             ns1, f_fresh_ai)
+      
+      if (f_fsalt(1:1) /= 'x') &
+         call define_hist_field(n_fsalt,"fsalt","kg/m^2/s",tstr2D, tcstr, &
+             "salt flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains salt", c1, c0,                   &
+             ns1, f_fsalt)
+      
+      if (f_fsalt_ai(1:1) /= 'x') &
+         call define_hist_field(n_fsalt_ai,"fsalt_ai","kg/m^2/s",tstr2D, tcstr, &
+             "salt flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fsalt_ai)
+      
+      if (f_fhocn(1:1) /= 'x') &
+         call define_hist_field(n_fhocn,"fhocn","W/m^2",tstr2D, tcstr, &
+             "heat flux ice to ocn (cpl)",                           &
+             "if positive, ocean gains heat", c1, c0,                &
+             ns1, f_fhocn)
+      
+      if (f_fhocn_ai(1:1) /= 'x') &
+         call define_hist_field(n_fhocn_ai,"fhocn_ai","W/m^2",tstr2D, tcstr, &
+             "heat flux ice to ocean",                                     &
+             "weighted by ice area", c1, c0,                               &
+             ns1, f_fhocn_ai)
+      
+      if (f_fswthru(1:1) /= 'x') &
+         call define_hist_field(n_fswthru,"fswthru","W/m^2",tstr2D, tcstr, &
+             "SW thru ice to ocean (cpl)",                               &
+             "if positive, ocean gains heat", c1, c0,                    &
+             ns1, f_fswthru)
+      
+      if (f_fswthru_ai(1:1) /= 'x') &
+         call define_hist_field(n_fswthru_ai,"fswthru_ai","W/m^2",tstr2D, tcstr,&
+             "SW flux thru ice to ocean",                                     &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fswthru_ai)
+      
+      if (f_strairx(1:1) /= 'x') &
+         call define_hist_field(n_strairx,"strairx","N/m^2",ustr2D, ucstr, &
+             "atm/ice stress (x)",                                       &
+             "positive is x direction on U grid", c1, c0,                &
+             ns1, f_strairx)
+      
+      if (f_strairy(1:1) /= 'x') &
+         call define_hist_field(n_strairy,"strairy","N/m^2",ustr2D, ucstr, &
+             "atm/ice stress (y)",                                       &
+             "positive is y direction on U grid", c1, c0,                &
+             ns1, f_strairy)
+      
+      if (f_strtltx(1:1) /= 'x') &
+         call define_hist_field(n_strtltx,"strtltx","N/m^2",ustr2D, ucstr, &
+             "sea sfc tilt stress (x)",                                  &
+             "none", c1, c0,                                             &
+             ns1, f_strtltx)
+      
+      if (f_strtlty(1:1) /= 'x') &
+         call define_hist_field(n_strtlty,"strtlty","N/m^2",ustr2D, ucstr, &
+             "sea sfc tilt stress (y)",                                  &
+             "none", c1, c0,                                             &
+             ns1, f_strtlty)
+      
+      if (f_strcorx(1:1) /= 'x') &
+         call define_hist_field(n_strcorx,"strcorx","N/m^2",ustr2D, ucstr, &
+             "coriolis stress (x)",                                      &
+             "positive is x direction on U grid", c1, c0,                &
+             ns1, f_strcorx)
+      
+      if (f_strcory(1:1) /= 'x') &
+         call define_hist_field(n_strcory,"strcory","N/m^2",ustr2D, ucstr, &
+             "coriolis stress (y)",                                      &
+             "positive is y direction on U grid", c1, c0,                &
+             ns1, f_strcory)
+      
+      if (f_strocnx(1:1) /= 'x') &
+         call define_hist_field(n_strocnx,"strocnx","N/m^2",ustr2D, ucstr, &
+             "ocean/ice stress (x)",                                     &
+             "positive is x direction on U grid", c1, c0,                &
+             ns1, f_strocnx)
+      
+      if (f_strocny(1:1) /= 'x') &
+         call define_hist_field(n_strocny,"strocny","N/m^2",ustr2D, ucstr, &
+             "ocean/ice stress (y)",                                     &
+             "positive is y direction on U grid", c1, c0,                &
+             ns1, f_strocny)
+      
+      if (f_strintx(1:1) /= 'x') &
+         call define_hist_field(n_strintx,"strintx","N/m^2",ustr2D, ucstr, &
+             "internal ice stress (x)",                                  &
+             "positive is x direction on U grid", c1, c0,                &
+             ns1, f_strintx)
+      
+      if (f_strinty(1:1) /= 'x') &
+         call define_hist_field(n_strinty,"strinty","N/m^2",ustr2D, ucstr, &
+             "internal ice stress (y)",                                  &
+             "positive is y direction on U grid", c1, c0,                &
+             ns1, f_strinty)
+      
+      if (f_strength(1:1) /= 'x') &
+         call define_hist_field(n_strength,"strength","N/m",tstr2D, tcstr, &
+             "compressive ice strength",                                 &
+             "none", c1, c0,                                             &
+             ns1, f_strength)
+      
+      if (f_opening(1:1) /= 'x') &
+         call define_hist_field(n_opening,"opening","%/day",tstr2D, tcstr, &
+             "lead area opening rate",                                   &
+             "none", secday*c100, c0,                                    &
+             ns1, f_opening)
+      
+      if (f_divu(1:1) /= 'x') &
+         call define_hist_field(n_divu,"divu","%/day",tstr2D, tcstr, &
+             "strain rate (divergence)",                           &
+             "none", secday*c100, c0,                              &
+             ns1, f_divu)
+      
+      if (f_shear(1:1) /= 'x') &
+         call define_hist_field(n_shear,"shear","%/day",tstr2D, tcstr, &
+             "strain rate (shear)",                                  &
+             "none", secday*c100, c0,                                &
+             ns1, f_shear)
+      
+      if (f_sig1(1:1) /= 'x') &
+         call define_hist_field(n_sig1,"sig1","1",ustr2D, ucstr, &
+             "norm. principal stress 1",                       &
+             "sig1 is instantaneous", c1, c0,                  &
+             ns1, f_sig1)
+      
+      if (f_sig2(1:1) /= 'x') &
+         call define_hist_field(n_sig2,"sig2","1",ustr2D, ucstr, &
+             "norm. principal stress 2",                       &
+             "sig2 is instantaneous", c1, c0,                  &
+             ns1, f_sig2)
+      
+      if (f_dvidtt(1:1) /= 'x') &
+         call define_hist_field(n_dvidtt,"dvidtt","cm/day",tstr2D, tcstr, &
+             "volume tendency thermo",                                  &
+             "none", mps_to_cmpdy, c0,                                  &
+             ns1, f_dvidtt)
+      
+      if (f_dvidtd(1:1) /= 'x') &
+         call define_hist_field(n_dvidtd,"dvidtd","cm/day",tstr2D, tcstr, &
+             "volume tendency dynamics",                                &
+             "none", mps_to_cmpdy, c0,                                  &
+             ns1, f_dvidtd)
+      
+      if (f_daidtt(1:1) /= 'x') &
+         call define_hist_field(n_daidtt,"daidtt","%/day",tstr2D, tcstr, &
+             "area tendency thermo",                                   &
+             "none", secday*c100, c0,                                  &
+             ns1, f_daidtt)
+      
+      if (f_daidtd(1:1) /= 'x') &
+         call define_hist_field(n_daidtd,"daidtd","%/day",tstr2D, tcstr, &
+             "area tendency dynamics",                                 &
+             "none", secday*c100, c0,                                  &
+             ns1, f_daidtd)
+      
+      if (f_mlt_onset(1:1) /= 'x') &
+         call define_hist_field(n_mlt_onset,"mlt_onset","day of year", &
+             tstr2D, tcstr,"melt onset date",                            &
+             "midyear restart gives erroneous dates", c1, c0,          &
+             ns1, f_mlt_onset)
+      
+      if (f_frz_onset(1:1) /= 'x') &
+         call define_hist_field(n_frz_onset,"frz_onset","day of year", &
+             tstr2D, tcstr,"freeze onset date",                          &
+             "midyear restart gives erroneous dates", c1, c0,          &
+             ns1, f_frz_onset)
+
+      if (f_dardg1dt(1:1) /= 'x') &
+         call define_hist_field(n_dardg1dt,"dardg1dt","%/day",tstr2D, tcstr, &
+             "ice area ridging rate",                                      &
+             "none", secday*c100, c0,                                      &
+             ns1, f_dardg1dt)
+      
+      if (f_dardg2dt(1:1) /= 'x') &
+         call define_hist_field(n_dardg2dt,"dardg2dt","%/day",tstr2D, tcstr, &
+             "ridge area formation rate",                                  &
+             "none", secday*c100, c0,                                      &
+             ns1, f_dardg2dt)
+      
+      if (f_dvirdgdt(1:1) /= 'x') &
+         call define_hist_field(n_dvirdgdt,"dvirdgdt","cm/day",tstr2D, tcstr, &
+             "ice volume ridging rate",                                     &
+             "none", mps_to_cmpdy, c0,                                      &
+             ns1, f_dvirdgdt)
+      
+      if (f_hisnap(1:1) /= 'x') &
+         call define_hist_field(n_hisnap,"hisnap","m",tstr2D, tcstr, &
+             "ice volume snapshot",                                &
+             "none", c1, c0,                              &
+             ns1, f_hisnap)
+      
+      if (f_aisnap(1:1) /= 'x') &
+         call define_hist_field(n_aisnap,"aisnap","1",tstr2D, tcstr, &
+             "ice area snapshot",                                  &
+             "none", c1, c0,                              &
+             ns1, f_aisnap)
+      
+      if (f_trsig(1:1) /= 'x') &
+         call define_hist_field(n_trsig,"trsig","N/m^2",tstr2D, tcstr, &
+             "internal stress tensor trace",                         &
+             "ice strength approximation", c1, c0,                   &
+             ns1, f_trsig)
+      
+      if (f_icepresent(1:1) /= 'x') &
+         call define_hist_field(n_icepresent,"ice_present","1",tstr2D, tcstr, &
+             "fraction of time-avg interval that ice is present",           &
+             "ice extent flag", c1, c0,                                     &
+             ns1, f_icepresent)
+      
+      if (f_fsurf_ai(1:1) /= 'x') &
+         call define_hist_field(n_fsurf_ai,"fsurf_ai","W/m^2",tstr2D, tcstr, &
+             "net surface heat flux",                                      &
+             "positive downward, excludes conductive flux, weighted by ice area", &
+             c1, c0, &
+             ns1, f_fsurf_ai)
+      
+      if (f_fcondtop_ai(1:1) /= 'x') &
+         call define_hist_field(n_fcondtop_ai,"fcondtop_ai","W/m^2", &
+             tstr2D, tcstr,"top surface conductive heat flux",         &
+             "positive downward, weighted by ice area", c1, c0,      &
+             ns1, f_fcondtop_ai)
+      
+      if (f_fmeltt_ai(1:1) /= 'x') &
+         call define_hist_field(n_fmeltt_ai,"fmeltt_ai","W/m^2",tstr2D, tcstr, &
+             "net surface heat flux causing melt",                           &
+             "always >= 0, weighted by ice area", c1, c0,                    &
+             ns1, f_fmeltt_ai)
+ 
+      ! Tracers !!!!!!!!!!!
+
+      ! Ice Age
+      if (f_iage(1:1) /= 'x') &
+         call define_hist_field(n_iage,"iage","years",tstr2D, tcstr, &
+             "sea ice age",                                        &
+             "none", c1/(secday*days_per_year), c0,                &
+             ns1, f_iage)
+
+      ! Level and Ridged ice       
+      if (f_alvl(1:1) /= 'x') &
+         call define_hist_field(n_alvl,"alvl","1",tstr2D, tcstr, &
+             "level ice area fraction",                            &
+             "none", c1, c0,                                       &
+             ns1, f_alvl)
+      if (f_vlvl(1:1) /= 'x') &
+         call define_hist_field(n_vlvl,"vlvl","m",tstr2D, tcstr, &
+             "level ice mean thickness",                           &
+             "none", c1, c0,                                       &
+             ns1, f_vlvl)
+      if (f_ardg(1:1) /= 'x') &
+         call define_hist_field(n_ardg,"ardg","1",tstr2D, tcstr, &
+             "ridged ice area fraction",                           &
+             "none", c1, c0,                                       &
+             ns1, f_ardg)
+      if (f_vrdg(1:1) /= 'x') &
+         call define_hist_field(n_vrdg,"vrdg","m",tstr2D, tcstr, &
+             "ridged ice mean thickness",                          &
+             "none", c1, c0,                                       &
+             ns1, f_vrdg)
+       
+       enddo ! ns1
+
+      if (allocated(a2D)) deallocate(a2D)
+      if (num_avail_hist_fields_2D > 0) &
+      allocate(a2D(nx_block,ny_block,num_avail_hist_fields_2D,max_blocks))
+
+      ! 3D (category) variables looped separately for ordering
+      do ns1 = 1, nstreams
+
+        if (f_aicen(1:1) /= 'x') &
+           call define_hist_field(n_aicen,"aicen","1",tstr3Dc, tcstr, & 
+              "ice area, categories","none", c1, c0,                  &            
+              ns1, f_aicen)
+
+        if (f_vicen(1:1) /= 'x') &
+           call define_hist_field(n_vicen,"vicen","m",tstr3Dc, tcstr, & 
+              "ice volume, categories","none", c1, c0,                &            
+              ns1, f_vicen)
+
+        if (f_fsurfn_ai(1:1) /= 'x') &
+           call define_hist_field(n_fsurfn_ai,"fsurfn_ai","W/m^2",tstr3Dc, tcstr, & 
+              "net surface heat flux, categories","weighted by ice area", c1, c0, &            
+              ns1, f_fsurfn_ai)
+
+        if (f_fcondtopn_ai(1:1) /= 'x') &
+           call define_hist_field(n_fcondtopn_ai,"fcondtopn_ai","W/m^2",tstr3Dc, tcstr, & 
+              "top sfc conductive heat flux, cat","weighted by ice area", c1, c0,       &            
+              ns1, f_fcondtopn_ai)
+
+        if (f_fmelttn_ai(1:1) /= 'x') &
+           call define_hist_field(n_fmelttn_ai,"fmelttn_ai","W/m^2",tstr3Dc, tcstr, & 
+              "net sfc heat flux causing melt, cat","weighted by ice area", c1, c0, &            
+              ns1, f_fmelttn_ai)
+
+        if (f_flatn_ai(1:1) /= 'x') &
+           call define_hist_field(n_flatn_ai,"flatn_ai","W/m^2",tstr3Dc, tcstr, & 
+              "latent heat flux, category","weighted by ice area", c1, c0,      &            
+              ns1, f_flatn_ai)
+
+        if (f_apondn(1:1) /= 'x') &
+           call define_hist_field(n_apondn,"apond","1",tstr3Dc, tcstr, & 
+              "melt pond concentration, category","none", c1, c0,      &            
+              ns1, f_apondn)
+
+      enddo ! ns1
+
+      if (allocated(a3Dc)) deallocate(a3Dc)
+      if (num_avail_hist_fields_3Dc > 0) &
+      allocate(a3Dc(nx_block,ny_block,ncat_hist,num_avail_hist_fields_3Dc,max_blocks))
+
+      ! 3D (vertical) variables looped separately for ordering
+!      do ns1 = 1, nstreams
+
+!      if (f_field3dz(1:1) /= 'x') &
+!         call define_hist_field(n_field3dz,"field3dz","1",tstr3Dz, tcstr, & 
+!            "example 3dz field",                    &
+!            "vertical profile", c1, c0,                  &
+!            ns1, f_field3dz)
+
+!      enddo ! ns1
+
+      if (allocated(a3Dz)) deallocate(a3Dz)
+      nzlyr = max(nzilyr, nzslyr)
+      if (num_avail_hist_fields_3Dz > 0) &
+      allocate(a3Dz(nx_block,ny_block,nzlyr,num_avail_hist_fields_3Dz,max_blocks))
+
+      ! 4D (categories, vertical) variables looped separately for ordering
+      do ns1 = 1, nstreams
+
+      if (f_Tinz(1:1) /= 'x') &
+         call define_hist_field(n_Tinz,"Tinz","C",tstr4Di, tcstr, & 
+            "ice internal temperatures",          &
+            "vertical profile", c1, c0,                    &
+            ns1, f_Tinz)
+
+      enddo ! ns1
+
+      do ns1 = 1, nstreams
+
+      if (f_Tsnz(1:1) /= 'x') &
+         call define_hist_field(n_Tsnz,"Tsnz","C",tstr4Ds, tcstr, & 
+            "snow internal temperatures",          &
+            "vertical profile", c1, c0,                    &
+            ns1, f_Tsnz)
+
+      enddo ! ns1
+
+      if (allocated(a4Di)) deallocate(a4Di)
+      if (num_avail_hist_fields_4Di > 0) &
+      allocate(a4Di(nx_block,ny_block,nzilyr,ncat_hist,num_avail_hist_fields_4Di,max_blocks))
+      if (allocated(a4Ds)) deallocate(a4Ds)
+      if (num_avail_hist_fields_4Ds > 0) &
+      allocate(a4Ds(nx_block,ny_block,nzslyr,ncat_hist,num_avail_hist_fields_4Ds,max_blocks))
+
+       if (f_Tinz   (1:1) /= 'x') then
+            if (allocated(Tinz4d)) deallocate(Tinz4d)
+            allocate(Tinz4d(nx_block,ny_block,nzilyr,ncat_hist))
+       endif
+       if (f_Tsnz   (1:1) /= 'x') then
+            if (allocated(Tsnz4d)) deallocate(Tsnz4d)
+            allocate(Tsnz4d(nx_block,ny_block,nzslyr,ncat_hist))
+       endif
+
       !-----------------------------------------------------------------
-      ! fill iout array with namelist values
+      ! fill igrd array with namelist values
       !-----------------------------------------------------------------
 
-      iout=.true.  ! all fields are written by default
       igrd=.true.
 
       igrd(n_tmask     ) = f_tmask
@@ -977,120 +1310,47 @@
       igrd(n_ANGLE     ) = f_ANGLE
       igrd(n_ANGLET    ) = f_ANGLET
 
-      iout(n_hi        ) = f_hi
-      iout(n_hs        ) = f_hs
-      iout(n_Tsfc      ) = f_Tsfc  
-      iout(n_aice      ) = f_aice  
-      iout(n_uvel      ) = f_uvel  
-      iout(n_vvel      ) = f_vvel  
-      iout(n_fswdn     ) = f_fswdn  
-      iout(n_flwdn     ) = f_flwdn  
-      iout(n_snow      ) = f_snow
-      iout(n_snow_ai   ) = f_snow_ai
-      iout(n_rain      ) = f_rain  
-      iout(n_rain_ai   ) = f_rain_ai  
-      iout(n_sst       ) = f_sst  
-      iout(n_sss       ) = f_sss  
-      iout(n_uocn      ) = f_uocn  
-      iout(n_vocn      ) = f_vocn  
-      iout(n_frzmlt    ) = f_frzmlt  
-      iout(n_fswfac    ) = f_fswfac
-      iout(n_fswabs    ) = f_fswabs  
-      iout(n_fswabs_ai ) = f_fswabs_ai  
-      iout(n_albsni    ) = f_albsni  
-      iout(n_alvdr     ) = f_alvdr
-      iout(n_alidr     ) = f_alidr
-      iout(n_flat      ) = f_flat  
-      iout(n_flat_ai   ) = f_flat_ai  
-      iout(n_fsens     ) = f_fsens  
-      iout(n_fsens_ai  ) = f_fsens_ai  
-      iout(n_flwup     ) = f_flwup  
-      iout(n_flwup_ai  ) = f_flwup_ai  
-      iout(n_evap      ) = f_evap  
-      iout(n_evap_ai   ) = f_evap_ai  
-      iout(n_Tair      ) = f_Tair
-      iout(n_Tref      ) = f_Tref
-      iout(n_Qref      ) = f_Qref
-      iout(n_congel    ) = f_congel  
-      iout(n_frazil    ) = f_frazil  
-      iout(n_snoice    ) = f_snoice  
-      iout(n_meltt     ) = f_meltt  
-      iout(n_meltb     ) = f_meltb  
-      iout(n_meltl     ) = f_meltl  
-      iout(n_fresh     ) = f_fresh 
-      iout(n_fresh_ai  ) = f_fresh_ai 
-      iout(n_fsalt     ) = f_fsalt  
-      iout(n_fsalt_ai  ) = f_fsalt_ai  
-      iout(n_fhocn     ) = f_fhocn  
-      iout(n_fhocn_ai  ) = f_fhocn_ai  
-      iout(n_fswthru   ) = f_fswthru  
-      iout(n_fswthru_ai) = f_fswthru_ai  
-      iout(n_strairx   ) = f_strairx  
-      iout(n_strairy   ) = f_strairy  
-      iout(n_strtltx   ) = f_strtltx  
-      iout(n_strtlty   ) = f_strtlty  
-      iout(n_strcorx   ) = f_strcorx  
-      iout(n_strcory   ) = f_strcory  
-      iout(n_strocnx   ) = f_strocnx
-      iout(n_strocny   ) = f_strocny 
-      iout(n_strintx   ) = f_strintx  
-      iout(n_strinty   ) = f_strinty  
-      iout(n_strength  ) = f_strength
-      iout(n_opening   ) = f_opening
-      iout(n_divu      ) = f_divu  
-      iout(n_shear     ) = f_shear  
-      iout(n_sig1      ) = f_sig1  
-      iout(n_sig2      ) = f_sig2  
-      iout(n_dvidtt    ) = f_dvidtt
-      iout(n_dvidtd    ) = f_dvidtd  
-      iout(n_daidtt    ) = f_daidtt
-      iout(n_daidtd    ) = f_daidtd  
-      iout(n_mlt_onset ) = f_mlt_onset  
-      iout(n_frz_onset ) = f_frz_onset  
-      iout(n_dardg1dt  ) = f_dardg1dt  
-      iout(n_dardg2dt  ) = f_dardg2dt  
-      iout(n_dvirdgdt  ) = f_dvirdgdt 
-      iout(n_hisnap    ) = f_hisnap
-      iout(n_aisnap    ) = f_aisnap
-      iout(n_trsig     ) = f_trsig
-      iout(n_icepresent) = f_icepresent
-      iout(n_iage      ) = f_iage
-      iout(n_fsurf_ai  ) = f_fsurf_ai
-      iout(n_fcondtop_ai)= f_fcondtop_ai
-      iout(n_fmeltt_ai ) = f_fmeltt_ai
-      do n = 1, ncat_hist
-        iout(n_aicen+n-1)        = f_aicen
-        iout(n_vicen+n-1)        = f_vicen
-        iout(n_apondn+n-1)       = f_apondn
-        iout(n_fsurfn_ai+n-1)    = f_fsurfn_ai
-        iout(n_fcondtopn_ai+n-1) = f_fcondtopn_ai
-        iout(n_fmelttn_ai+n-1)   = f_fmelttn_ai
-        iout(n_flatn_ai+n-1)     = f_flatn_ai
-      enddo
+      igrdz=.true.
+      igrdz(n_NCAT     ) = f_NCAT
+      igrdz(n_VGRDi    ) = f_VGRDi
+      igrdz(n_VGRDs    ) = f_VGRDs
 
+      ntmp(:) = 0
       if (my_task == master_task) then
         write(nu_diag,*) ' '
         write(nu_diag,*) 'The following variables will be ', &
                          'written to the history tape: '
-        write(nu_diag,*) ' description                           units', &
-             '     netcdf variable'
-        do n=1,avgsiz
-           if (iout(n)) write(nu_diag,100) vdesc(n), vunit(n), vname(n)
-        enddo
+        write(nu_diag,101) 'description','units','variable','frequency','x'
+        do n=1,num_avail_hist_fields_tot
+           if (avail_hist_fields(n)%vhistfreq_n /= 0) &
+           write(nu_diag,100) avail_hist_fields(n)%vdesc, &
+              avail_hist_fields(n)%vunit, avail_hist_fields(n)%vname, &
+              avail_hist_fields(n)%vhistfreq,avail_hist_fields(n)%vhistfreq_n
+           do ns = 1, nstreams
+              if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
+                 ntmp(ns)=ntmp(ns)+1
+           enddo
+        enddo ! num_avail_hist_fields_tot
         write(nu_diag,*) ' '
       endif
-  100 format (1x,a40,2x,a10,2x,a16)
+  100 format (1x,a40,2x,a16,2x,a12,1x,a1,2x,i6)
+  101 format (2x,a19,10x,a16,9x,a12,2x,a,3x,a1)
+
+      call broadcast_array(ntmp, master_task)
+      do ns = 1, nstreams
+         if (ntmp(ns)==0) histfreq_n(ns) = 0
+      enddo
 
       !-----------------------------------------------------------------
       ! initialize the history arrays
       !-----------------------------------------------------------------
-      aa(:,:,:,:) = c0
-      avgct = c0
-
-      do k=1,avgsiz
-         cona(k) = c1   ! multiply by 1.
-         conb(k) = c0   ! add 0.
-      enddo
+      a2D(:,:,:,:) = c0
+      a3Dc(:,:,:,:,:) = c0
+      a3Dz(:,:,:,:,:) = c0
+      a4Di(:,:,:,:,:,:) = c0
+      a4Ds(:,:,:,:,:,:) = c0
+      avgct(:) = c0
+      albcnt(:,:,:,:) = c0
 
       if (restart .and. yday >= c2) then
 ! restarting midyear gives erroneous onset dates
@@ -1099,105 +1359,6 @@
       else
          mlt_onset = c0
          frz_onset = c0
-      endif
-
-      !---------------------------------------------------------------
-      ! set conversion factors
-      !---------------------------------------------------------------
-
-      cona(n_snow   ) = mps_to_cmpdy/rhofresh  ! snow kg/m2/s to cm/day
-      cona(n_snow_ai) = mps_to_cmpdy/rhofresh  ! snow kg/m2/s to cm/day
-      cona(n_rain   ) = mps_to_cmpdy/rhofresh  ! rain kg/m2/s to cm/day
-      cona(n_rain_ai) = mps_to_cmpdy/rhofresh  ! rain kg/m2/s to cm/day
-      cona(n_albsni ) = c100              ! avg of spectral albedos to %
-      cona(n_alvdr  ) = c100              ! avg of visible albedo to %
-      cona(n_alidr  ) = c100              ! avg of near IR albedo to %
-      cona(n_evap   ) = mps_to_cmpdy/rhofresh   ! evap kg/m2/s to cm/day
-      cona(n_evap_ai) = mps_to_cmpdy/rhofresh   ! evap kg/m2/s to cm/day
-      conb(n_Tref   ) = -tffresh                ! Tref K to C
-      cona(n_Qref   ) = kg_to_g                 ! Qref kg/kg to g/kg
-
-      cona(n_congel ) = mps_to_cmpdy/dt  ! congel m per step to cm/day
-      cona(n_frazil ) = mps_to_cmpdy/dt  ! frazil m per step to cm/day
-      cona(n_snoice ) = mps_to_cmpdy/dt  ! snoice m per step to cm/day
-      cona(n_meltt  ) = mps_to_cmpdy/dt  ! meltt  m per step to cm/day
-      cona(n_meltb  ) = mps_to_cmpdy/dt  ! meltb  m per step to cm/day
-      cona(n_meltl  ) = mps_to_cmpdy/dt  ! meltl  m per step to cm/day
-      cona(n_fresh  ) = mps_to_cmpdy/rhofresh ! frshwtr flx kg/m2/s to cm/day
-      cona(n_fresh_ai)= mps_to_cmpdy/rhofresh ! frshwtr flx kg/m2/s to cm/day
-
-      cona(n_divu  ) = secday*c100      ! divu from 1/s to %/day
-      cona(n_shear ) = secday*c100      ! shear from 1/s to %/day
-      cona(n_opening)  = secday*c100    ! opening  frac/s to %/day
-
-      cona(n_dvidtt) = mps_to_cmpdy     ! dvidtt m/s to cm/day
-      cona(n_dvidtd) = mps_to_cmpdy     ! dvidtd m/s to cm/day
-      cona(n_daidtt) = secday*c100      ! daidtt frac/s to %/day
-      cona(n_daidtd) = secday*c100      ! daidtd frac/s to %/day
-
-      cona(n_dardg1dt) = secday*c100    ! dardg1dt frac/s to %/day
-      cona(n_dardg2dt) = secday*c100    ! dardg2dt frac/s to %/day
-      cona(n_dvirdgdt) = mps_to_cmpdy   ! dvirdgdt m/s to cm/day
-
-      cona(n_iage)   = c1/(secday*days_per_year) ! seconds to years
-
-#if (defined CCSM) || (defined SEQ_MCT)
-      ! CCSM conventions
-      cona(n_aice  ) = c100             ! aice  fraction to %
-      do n = 1, ncat_hist
-        cona(n_aicen+n-1) = c100 ! aicen fraction to %
-      enddo
-      cona(n_aisnap) = c100             ! aisnap fraction to %
-      cona(n_uvel  ) = m_to_cm          ! u m/s to cm/s
-      cona(n_vvel  ) = m_to_cm          ! v m/s to cm/s
-      cona(n_uocn  ) = m_to_cm          ! uocn m/s to cm/s
-      cona(n_vocn  ) = m_to_cm          ! vocn m/s to cm/s
-      cona(n_fsalt)    = secday         ! salt flux kg/m2/s to kg/m2/day 
-      cona(n_fsalt_ai) = secday         ! salt flux kg/m2/s to kg/m2/day 
-#endif
-
-!------------------------------------------------------------------------
-! Change coordinates and cell measures of variables printed out on u grid
-!------------------------------------------------------------------------
-
-      if (my_task == master_task) then
-        do k=1,avgsiz
-          vcoord(k) = tstr 
-          if (TRIM(vname(k)) == 'uvel') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'vvel') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'uocn') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'vocn') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'strairx') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'strairy') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'strtltx') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'strtlty') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'strcorx') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'strcory') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'strocnx') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'strocny') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'strintx') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'strinty') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'sig1') vcoord(k) = ustr
-          if (TRIM(vname(k)) == 'sig2') vcoord(k) = ustr
-
-          vcellmeas(k) = tcstr 
-          if (TRIM(vname(k)) == 'uvel') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'vvel') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'uocn') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'vocn') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'strairx') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'strairy') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'strtltx') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'strtlty') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'strcorx') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'strcory') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'strocnx') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'strocny') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'strintx') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'strinty') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'sig1') vcellmeas(k) = ucstr
-          if (TRIM(vname(k)) == 'sig2') vcellmeas(k) = ucstr
-        enddo
       endif
 
       end subroutine init_hist
@@ -1226,14 +1387,14 @@
       use ice_domain
       use ice_grid, only: tmask, lmask_n, lmask_s
       use ice_calendar, only: new_year, secday, yday, write_history, &
-                              write_ic, time
+                              write_ic, time, histfreq, nstreams
       use ice_state
       use ice_constants
-      use ice_flux
       use ice_dyn_evp
-      use ice_age, only: tr_iage
-      use ice_meltpond, only: tr_pond
-      use ice_work, only: worka
+      use ice_flux
+      use ice_therm_vertical
+      use ice_itd, only: ilyr1, slyr1
+      use ice_work, only: worka, workb
       use ice_timers
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1243,14 +1404,19 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-           i,j,k,n,nct      , &
+           i,j,k,ic,n,ns,nn, &
            iblk             , & ! block index
-           ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+           ilo,ihi,jlo,jhi  , & ! beginning and end of physical domain
+           nstrm                ! nstreams (1 if writing initial condition)
 
       real (kind=dbl_kind) :: &
            ravgct           , & ! 1/avgct
+           ravgctz          , & ! 1/avgct
            ai               , & ! aice_init
            ain                  ! aicen_init
+
+      real (kind=dbl_kind) :: & 
+           qn                   ! temporary variable for enthalpy
 
       type (block) :: &
          this_block           ! block information for current block
@@ -1259,204 +1425,349 @@
       ! increment step counter
       !---------------------------------------------------------------
 
-      if (.not. hist_avg) then  ! write snapshots
-        aa(:,:,:,:) = c0
-        avgct = c1
-      else                      ! write averages over time histfreq
-        avgct = avgct + c1
-        if (avgct == c1) time_beg = (time-dt)/int(secday)
-      endif
+      n2D     = num_avail_hist_fields_2D
+      n3Dccum = n2D     + num_avail_hist_fields_3Dc
+      n3Dzcum = n3Dccum + num_avail_hist_fields_3Dz
+      n4Dicum = n3Dzcum + num_avail_hist_fields_4Di
+      n4Dscum = n4Dicum + num_avail_hist_fields_4Ds ! should equal num_avail_hist_fields_tot
+
+      do ns = 1,nstreams
+         if (.not. hist_avg .or. histfreq(ns) == '1') then  ! write snapshots
+           do n = 1,n2D
+              if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
+                  a2D(:,:,n,:) = c0
+           enddo
+           do n = n2D + 1, n3Dccum                  
+              nn = n - n2D
+              if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
+                  a3Dc(:,:,:,nn,:) = c0
+           enddo
+           do n = n3Dccum + 1, n3Dzcum
+              nn = n - n3Dccum
+              if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
+                  a3Dz(:,:,:,nn,:) = c0
+           enddo
+           do n = n3Dzcum + 1, n4Dicum
+              nn = n - n3Dzcum
+              if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
+                  a4Di(:,:,:,:,nn,:) = c0
+           enddo
+           do n = n4Dicum + 1, n4Dscum
+              nn = n - n4Dicum
+              if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
+                  a4Ds(:,:,:,:,nn,:) = c0
+           enddo
+           avgct(ns) = c1
+         else                      ! write averages over time histfreq
+           avgct(ns) = avgct(ns) + c1
+           if (avgct(ns) == c1) time_beg(ns) = (time-dt)/int(secday)
+         endif
+      enddo
 
       !---------------------------------------------------------------
       ! increment field
       !---------------------------------------------------------------
 
       do iblk = 1, nblocks
-       this_block = get_block(blocks_ice(iblk),iblk)         
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
+         workb(:,:) = aice_init(:,:,iblk)
 
-       do j = jlo, jhi
-       do i = ilo, ihi
-       if (tmask(i,j,iblk)) then
-        ai = aice_init(i,j,iblk)
-        aa(i,j,n_hi,    iblk)= aa(i,j,n_hi,    iblk) + vice (i,j,iblk) 
-        aa(i,j,n_hs,    iblk)= aa(i,j,n_hs,    iblk) + vsno (i,j,iblk) 
-        aa(i,j,n_Tsfc,  iblk)= aa(i,j,n_Tsfc,  iblk) + trcr (i,j,nt_Tsfc,iblk)
-        aa(i,j,n_aice,  iblk)= aa(i,j,n_aice,  iblk) + aice (i,j,iblk)
-        aa(i,j,n_uvel,  iblk)= aa(i,j,n_uvel,  iblk) + uvel (i,j,iblk)
-        aa(i,j,n_vvel,  iblk)= aa(i,j,n_vvel,  iblk) + vvel (i,j,iblk)
+!        if (f_example(1:1) /= 'x') &
+!            call accum_hist_field(n_example,iblk, vice(:,:,iblk), a2D)
+         if (f_hi     (1:1) /= 'x') &
+             call accum_hist_field(n_hi,     iblk, vice(:,:,iblk), a2D)
+         if (f_hs     (1:1) /= 'x') &
+             call accum_hist_field(n_hs,     iblk, vsno(:,:,iblk), a2D)
+         if (f_Tsfc   (1:1) /= 'x') &
+             call accum_hist_field(n_Tsfc,   iblk, trcr(:,:,nt_Tsfc,iblk), a2D)
+         if (f_aice   (1:1) /= 'x') &
+             call accum_hist_field(n_aice,   iblk, aice(:,:,iblk), a2D)
+         if (f_uvel   (1:1) /= 'x') &
+             call accum_hist_field(n_uvel,   iblk, uvel(:,:,iblk), a2D)
+         if (f_vvel   (1:1) /= 'x') &
+             call accum_hist_field(n_vvel,   iblk, vvel(:,:,iblk), a2D)
 
-        aa(i,j,n_fswdn, iblk)= aa(i,j,n_fswdn, iblk) + fsw  (i,j,iblk) 
-        aa(i,j,n_flwdn, iblk)= aa(i,j,n_flwdn, iblk) + flw  (i,j,iblk) 
-        aa(i,j,n_snow,  iblk)= aa(i,j,n_snow,  iblk) + fsnow(i,j,iblk) 
-        aa(i,j,n_snow_ai,iblk)  =aa(i,j,n_snow_ai,  iblk) &
-                                                  + ai*fsnow(i,j,iblk)
-        aa(i,j,n_rain,  iblk)= aa(i,j,n_rain,  iblk) + frain(i,j,iblk) 
-        aa(i,j,n_rain_ai,iblk) = aa(i,j,n_rain_ai,  iblk) &
-                                                  + ai*frain(i,j,iblk)
-        aa(i,j,n_sst,   iblk)= aa(i,j,n_sst,   iblk) + sst  (i,j,iblk) 
-        aa(i,j,n_sss,   iblk)= aa(i,j,n_sss,   iblk) + sss  (i,j,iblk) 
-        aa(i,j,n_uocn,  iblk)= aa(i,j,n_uocn,  iblk) + uocn (i,j,iblk) 
-        aa(i,j,n_vocn,  iblk)= aa(i,j,n_vocn,  iblk) + vocn (i,j,iblk) 
-        aa(i,j,n_frzmlt,iblk)= aa(i,j,n_frzmlt,iblk) +frzmlt(i,j,iblk) 
+         if (f_fswdn  (1:1) /= 'x') &
+             call accum_hist_field(n_fswdn,  iblk, fsw(:,:,iblk), a2D)
+         if (f_flwdn  (1:1) /= 'x') &
+             call accum_hist_field(n_flwdn,  iblk, flw(:,:,iblk), a2D)
+         if (f_snow   (1:1) /= 'x') &
+             call accum_hist_field(n_snow,   iblk, fsnow(:,:,iblk), a2D)
+         if (f_snow_ai(1:1) /= 'x') &
+             call accum_hist_field(n_snow_ai,iblk, fsnow(:,:,iblk)*workb(:,:), a2D)
+         if (f_rain   (1:1) /= 'x') &
+             call accum_hist_field(n_rain,   iblk, frain(:,:,iblk), a2D)
+         if (f_rain_ai(1:1) /= 'x') &
+             call accum_hist_field(n_rain_ai,iblk, frain(:,:,iblk)*workb(:,:), a2D)
 
-        aa(i,j,n_fswfac,iblk)= aa(i,j,n_fswfac,iblk) +fswfac(i,j,iblk)
-        aa(i,j,n_fswabs,iblk)= aa(i,j,n_fswabs,iblk) +fswabs(i,j,iblk)
-        aa(i,j,n_fswabs_ai,iblk)=aa(i,j,n_fswabs_ai,iblk) &
-                                                  +ai*fswabs(i,j,iblk)
+         if (f_sst    (1:1) /= 'x') &
+             call accum_hist_field(n_sst,    iblk, sst(:,:,iblk), a2D)
+         if (f_sss    (1:1) /= 'x') &
+             call accum_hist_field(n_sss,    iblk, sss(:,:,iblk), a2D)
+         if (f_uocn   (1:1) /= 'x') &
+             call accum_hist_field(n_uocn,   iblk, uocn(:,:,iblk), a2D)
+         if (f_vocn   (1:1) /= 'x') &
+             call accum_hist_field(n_vocn,   iblk, vocn(:,:,iblk), a2D)
+         if (f_frzmlt (1:1) /= 'x') &
+             call accum_hist_field(n_frzmlt, iblk, frzmlt(:,:,iblk), a2D)
 
-        aa(i,j,n_albsni,iblk)= aa(i,j,n_albsni,iblk)  &
-                                              + awtvdr*alvdr(i,j,iblk) &
-                                              + awtidr*alidr(i,j,iblk) &
-                                              + awtvdf*alvdf(i,j,iblk) &
-                                              + awtidf*alidf(i,j,iblk)
-        aa(i,j,n_alvdr, iblk)= aa(i,j,n_alvdr, iblk) + alvdr(i,j,iblk)
-        aa(i,j,n_alidr, iblk)= aa(i,j,n_alidr, iblk) + alidr(i,j,iblk)
-        aa(i,j,n_flat,  iblk)= aa(i,j,n_flat,  iblk) + flat (i,j,iblk) 
-        aa(i,j,n_flat_ai,iblk)  =aa(i,j,n_flat_ai,  iblk)  &
-                                                  +  ai*flat(i,j,iblk)
-        aa(i,j,n_fsens, iblk)= aa(i,j,n_fsens, iblk) + fsens(i,j,iblk) 
-        aa(i,j,n_fsens_ai,iblk) =aa(i,j,n_fsens_ai, iblk)  &
-                                                  + ai*fsens(i,j,iblk)
-        aa(i,j,n_flwup, iblk)= aa(i,j,n_flwup, iblk) +flwout(i,j,iblk) 
-        aa(i,j,n_flwup_ai,iblk) =aa(i,j,n_flwup_ai, iblk)  &
-                                                  +ai*flwout(i,j,iblk)
-        aa(i,j,n_evap,  iblk)= aa(i,j,n_evap,  iblk) + evap (i,j,iblk) 
-        aa(i,j,n_evap_ai, iblk) = aa(i,j,n_evap_ai, iblk)  &
-                                                  +  ai*evap(i,j,iblk)
-        aa(i,j,n_Tair,  iblk)= aa(i,j,n_Tair,  iblk) + Tair (i,j,iblk) 
-        aa(i,j,n_Tref,  iblk)= aa(i,j,n_Tref,  iblk) + Tref (i,j,iblk) 
-        aa(i,j,n_Qref,  iblk)= aa(i,j,n_Qref,  iblk) + Qref (i,j,iblk) 
-        aa(i,j,n_congel,iblk)= aa(i,j,n_congel,iblk) +congel(i,j,iblk) 
-        aa(i,j,n_frazil,iblk)= aa(i,j,n_frazil,iblk) +frazil(i,j,iblk) 
-        aa(i,j,n_snoice,iblk)= aa(i,j,n_snoice,iblk) +snoice(i,j,iblk)
-        aa(i,j,n_meltt, iblk)= aa(i,j,n_meltt, iblk) + meltt(i,j,iblk)
-        aa(i,j,n_meltb, iblk)= aa(i,j,n_meltb, iblk) + meltb(i,j,iblk) 
-        aa(i,j,n_meltl, iblk)= aa(i,j,n_meltl, iblk) + meltl(i,j,iblk)
-        aa(i,j,n_fresh, iblk)= aa(i,j,n_fresh, iblk)  &
-                                                + fresh(i,j,iblk)
-        aa(i,j,n_fresh_ai,iblk) = aa(i,j,n_fresh_ai,iblk) &
-                                             + fresh_gbm(i,j,iblk)
-        aa(i,j,n_fsalt, iblk)   = aa(i,j,n_fsalt, iblk)   &
-                                                + fsalt(i,j,iblk)
-        aa(i,j,n_fsalt_ai,iblk) = aa(i,j,n_fsalt_ai,iblk) &
-                                             + fsalt_gbm(i,j,iblk)
-        aa(i,j,n_fhocn, iblk)   = aa(i,j,n_fhocn, iblk)   &
-                                                + fhocn(i,j,iblk)
-        aa(i,j,n_fhocn_ai,iblk) = aa(i,j,n_fhocn_ai,iblk) &
-                                             + fhocn_gbm(i,j,iblk)
-        aa(i,j,n_fswthru,iblk)  = aa(i,j,n_fswthru,iblk)  &
-                                              + fswthru(i,j,iblk)
-        aa(i,j,n_fswthru_ai,iblk)=aa(i,j,n_fswthru_ai,iblk) &
-                                           + fswthru_gbm(i,j,iblk)
+         if (f_fswfac (1:1) /= 'x') &
+             call accum_hist_field(n_fswfac, iblk, fswfac(:,:,iblk), a2D)
+         if (f_fswabs (1:1) /= 'x') &
+             call accum_hist_field(n_fswabs, iblk, fswabs(:,:,iblk), a2D)
+         if (f_fswabs_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fswabs_ai, iblk, fswabs(:,:,iblk)*workb(:,:), a2D)
+
+         if (f_albsni (1:1) /= 'x') &
+             call accum_hist_field(n_albsni, iblk, &
+                                              awtvdr*alvdr(:,:,iblk) &
+                                            + awtidr*alidr(:,:,iblk) &
+                                            + awtvdf*alvdf(:,:,iblk) &
+                                            + awtidf*alidf(:,:,iblk), a2D)
+         if (f_alvdr  (1:1) /= 'x') &
+             call accum_hist_field(n_alvdr,  iblk, alvdr(:,:,iblk), a2D)
+         if (f_alidr  (1:1) /= 'x') &
+             call accum_hist_field(n_alidr,  iblk, alidr(:,:,iblk), a2D)
+
+         if (f_albice (1:1) /= 'x') &
+             call accum_hist_field(n_albice, iblk, albice(:,:,iblk), a2D)
+         if (f_albsno (1:1) /= 'x') &
+             call accum_hist_field(n_albsno, iblk, albsno(:,:,iblk), a2D)
+         if (f_albpnd (1:1) /= 'x') &
+             call accum_hist_field(n_albpnd, iblk, albpnd(:,:,iblk), a2D)
+         if (f_coszen (1:1) /= 'x') &
+             call accum_hist_field(n_coszen, iblk, coszen(:,:,iblk), a2D)
+
+         if (f_flat   (1:1) /= 'x') &
+             call accum_hist_field(n_flat,   iblk, flat(:,:,iblk), a2D)
+         if (f_flat_ai(1:1) /= 'x') &
+             call accum_hist_field(n_flat_ai,iblk, flat(:,:,iblk)*workb(:,:), a2D)
+         if (f_fsens  (1:1) /= 'x') &
+             call accum_hist_field(n_fsens,   iblk, fsens(:,:,iblk), a2D)
+         if (f_fsens_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fsens_ai,iblk, fsens(:,:,iblk)*workb(:,:), a2D)
+         if (f_flwup  (1:1) /= 'x') &
+             call accum_hist_field(n_flwup,   iblk, flwout(:,:,iblk), a2D)
+         if (f_flwup_ai(1:1)/= 'x') &
+             call accum_hist_field(n_flwup_ai,iblk, flwout(:,:,iblk)*workb(:,:), a2D)
+         if (f_evap   (1:1) /= 'x') &
+             call accum_hist_field(n_evap,   iblk, evap(:,:,iblk), a2D)
+         if (f_evap_ai(1:1) /= 'x') &
+             call accum_hist_field(n_evap_ai,iblk, evap(:,:,iblk)*workb(:,:), a2D)
+
+         if (f_Tair   (1:1) /= 'x') &
+             call accum_hist_field(n_Tair,   iblk, Tair(:,:,iblk), a2D)
+         if (f_Tref   (1:1) /= 'x') &
+             call accum_hist_field(n_Tref,   iblk, Tref(:,:,iblk), a2D)
+         if (f_Qref   (1:1) /= 'x') &
+             call accum_hist_field(n_Qref,   iblk, Qref(:,:,iblk), a2D)
+         if (f_congel (1:1) /= 'x') &
+             call accum_hist_field(n_congel, iblk, congel(:,:,iblk), a2D)
+         if (f_frazil (1:1) /= 'x') &
+             call accum_hist_field(n_frazil, iblk, frazil(:,:,iblk), a2D)
+         if (f_snoice (1:1) /= 'x') &
+             call accum_hist_field(n_snoice, iblk, snoice(:,:,iblk), a2D)
+         if (f_meltt  (1:1) /= 'x') &
+             call accum_hist_field(n_meltt,  iblk, meltt(:,:,iblk), a2D)
+         if (f_meltb  (1:1) /= 'x') &
+             call accum_hist_field(n_meltb,  iblk, meltb(:,:,iblk), a2D)
+         if (f_meltl  (1:1) /= 'x') &
+             call accum_hist_field(n_meltl,  iblk, meltl(:,:,iblk), a2D)
+
+         if (f_fresh  (1:1) /= 'x') &
+             call accum_hist_field(n_fresh,   iblk, fresh(:,:,iblk), a2D)
+         if (f_fresh_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fresh_ai,iblk, fresh_gbm(:,:,iblk), a2D)
+         if (f_fsalt  (1:1) /= 'x') &
+             call accum_hist_field(n_fsalt,   iblk, fsalt(:,:,iblk), a2D)
+         if (f_fsalt_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fsalt_ai,iblk, fsalt_gbm(:,:,iblk), a2D)
+         if (f_fhocn  (1:1) /= 'x') &
+             call accum_hist_field(n_fhocn,   iblk, fhocn(:,:,iblk), a2D)
+         if (f_fhocn_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fhocn_ai,iblk, fhocn_gbm(:,:,iblk), a2D)
+         if (f_fswthru(1:1) /= 'x') &
+             call accum_hist_field(n_fswthru, iblk, fswthru(:,:,iblk), a2D)
+         if (f_fswthru_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fswthru_ai,iblk, fswthru_gbm(:,:,iblk), a2D)
                
-        aa(i,j,n_strairx,iblk) = aa(i,j,n_strairx,iblk)  &
-                                                   + strairx(i,j,iblk)
-        aa(i,j,n_strairy,iblk) = aa(i,j,n_strairy,iblk)  &
-                                                   + strairy(i,j,iblk)
-        aa(i,j,n_strtltx,iblk) = aa(i,j,n_strtltx,iblk)  &
-                                                   + strtltx(i,j,iblk)
-        aa(i,j,n_strtlty,iblk) = aa(i,j,n_strtlty,iblk)  &
-                                                   + strtlty(i,j,iblk)
-        aa(i,j,n_strcorx,iblk) = aa(i,j,n_strcorx,iblk)  &  
-                                         + fm(i,j,iblk)*vvel(i,j,iblk)
-        aa(i,j,n_strcory,iblk) = aa(i,j,n_strcory,iblk)  &
-                                         - fm(i,j,iblk)*uvel(i,j,iblk)
-        aa(i,j,n_strocnx,iblk) = aa(i,j,n_strocnx,iblk)  &
-                                                   + strocnx(i,j,iblk)
-        aa(i,j,n_strocny,iblk) = aa(i,j,n_strocny,iblk)  &
-                                                   + strocny(i,j,iblk)
-        aa(i,j,n_strintx,iblk) = aa(i,j,n_strintx,iblk)  &
-                                                   + strintx(i,j,iblk)
-        aa(i,j,n_strinty,iblk) = aa(i,j,n_strinty,iblk)  &
-                                                   + strinty(i,j,iblk)
-        aa(i,j,n_strength,iblk)= aa(i,j,n_strength,iblk) &
-                                                  + strength(i,j,iblk)
+         if (f_strairx(1:1) /= 'x') &
+             call accum_hist_field(n_strairx, iblk, strairx(:,:,iblk), a2D)
+         if (f_strairy(1:1) /= 'x') &
+             call accum_hist_field(n_strairy, iblk, strairy(:,:,iblk), a2D)
+         if (f_strtltx(1:1) /= 'x') &
+             call accum_hist_field(n_strtltx, iblk, strtltx(:,:,iblk), a2D)
+         if (f_strtlty(1:1) /= 'x') &
+             call accum_hist_field(n_strtlty, iblk, strtlty(:,:,iblk), a2D)
+         if (f_strcorx(1:1) /= 'x') &
+             call accum_hist_field(n_strcorx, iblk, fm(:,:,iblk)*vvel(:,:,iblk), a2D)
+         if (f_strcory(1:1) /= 'x') &
+             call accum_hist_field(n_strcory, iblk,-fm(:,:,iblk)*uvel(:,:,iblk), a2D)
+         if (f_strocnx(1:1) /= 'x') &
+             call accum_hist_field(n_strocnx, iblk, strocnx(:,:,iblk), a2D)
+         if (f_strocny(1:1) /= 'x') &
+             call accum_hist_field(n_strocny, iblk, strocny(:,:,iblk), a2D)
+         if (f_strintx(1:1) /= 'x') &
+             call accum_hist_field(n_strintx, iblk, strintx(:,:,iblk), a2D)
+         if (f_strinty(1:1) /= 'x') &
+             call accum_hist_field(n_strinty, iblk, strinty(:,:,iblk), a2D)
+         if (f_strength(1:1)/= 'x') &
+             call accum_hist_field(n_strength,iblk, strength(:,:,iblk), a2D)
 
 ! The following fields (divu, shear, sig1, and sig2) will be smeared
 !  if averaged over more than a few days.
 ! Snapshots may be more useful (see below).
 
-!         aa(i,j,n_divu    ) = aa(i,j,n_divu    ) + divu (i,j,iblk)
-!         aa(i,j,n_shear   ) = aa(i,j,n_shear   ) + shear(i,j,iblk)
-!         aa(i,j,n_sig1    ) = aa(i,j,n_sig1    ) + sig1 (i,j,iblk)
-!         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
+!        if (f_divu   (1:1) /= 'x') &
+!             call accum_hist_field(n_divu,    iblk, divu(:,:,iblk), a2D)
+!        if (f_shear  (1:1) /= 'x') &
+!             call accum_hist_field(n_shear,   iblk, shear(:,:,iblk), a2D)
+!        if (f_sig1   (1:1) /= 'x') &
+!             call accum_hist_field(n_sig1,    iblk, sig1(:,:,iblk), a2D)
+!        if (f_sig2   (1:1) /= 'x') &
+!             call accum_hist_field(n_sig2,    iblk, sig2(:,:,iblk), a2D)
+!        if (f_trsig  (1:1) /= 'x') &
+!             call accum_hist_field(n_trsig,   iblk, trsig(:,:,iblk), a2D)
 
-        aa(i,j,n_dvidtt ,iblk) = aa(i,j,n_dvidtt ,iblk)  &
-                                                   + dvidtt(i,j,iblk)
-        aa(i,j,n_dvidtd ,iblk) = aa(i,j,n_dvidtd ,iblk)  &
-                                                   + dvidtd(i,j,iblk)
-        aa(i,j,n_daidtt ,iblk) = aa(i,j,n_daidtt ,iblk)  &
-                                                   + daidtt(i,j,iblk)
-        aa(i,j,n_daidtd ,iblk) = aa(i,j,n_daidtd ,iblk)  &
-                                                   + daidtd(i,j,iblk)
-        aa(i,j,n_opening,iblk) = aa(i,j,n_opening,iblk)  &
-                                                  + opening(i,j,iblk)
-        aa(i,j,n_dardg1dt,iblk)= aa(i,j,n_dardg1dt,iblk) &
-                                                 + dardg1dt(i,j,iblk)
-        aa(i,j,n_dardg2dt,iblk)= aa(i,j,n_dardg2dt,iblk) &
-                                                 + dardg2dt(i,j,iblk)
-        aa(i,j,n_dvirdgdt,iblk)= aa(i,j,n_dvirdgdt,iblk) &
-                                                 + dvirdgdt(i,j,iblk)
-        if (aice(i,j,iblk).gt.puny)  &
-           aa(i,j,n_icepresent,iblk) = aa(i,j,n_icepresent,iblk) + c1
-        aa(i,j,n_fsurf_ai,iblk)   = aa(i,j,n_fsurf_ai,iblk) &
-                                             + fsurf(i,j,iblk)*ai
-        aa(i,j,n_fcondtop_ai,iblk)= aa(i,j,n_fcondtop_ai,iblk) &
-                                             + fcondtop(i,j,iblk)*ai
-       endif                    ! tmask
-       enddo                    ! i
-       enddo                    ! j
+         if (f_dvidtt (1:1) /= 'x') &
+             call accum_hist_field(n_dvidtt,  iblk, dvidtt(:,:,iblk), a2D)
+         if (f_dvidtd (1:1) /= 'x') &
+             call accum_hist_field(n_dvidtd,  iblk, dvidtd(:,:,iblk), a2D)
+         if (f_daidtt (1:1) /= 'x') &
+             call accum_hist_field(n_daidtt,  iblk, daidtt(:,:,iblk), a2D)
+         if (f_daidtd (1:1) /= 'x') &
+             call accum_hist_field(n_daidtd,  iblk, daidtd(:,:,iblk), a2D)
 
-       nct = min(ncat, ncat_hist)
-       do n=1,nct
-          do j=jlo,jhi
-          do i=ilo,ihi
-             if (tmask(i,j,iblk)) then
-                ain = aicen_init(i,j,n,iblk)
-                ! assume consecutive indices
-                aa(i,j,n_aicen+n-1,iblk) = aa(i,j,n_aicen+n-1,iblk)  &
-                                                + aicen(i,j,n,iblk)
-                aa(i,j,n_vicen+n-1,iblk) = aa(i,j,n_vicen+n-1,iblk)  &
-                                                + vicen(i,j,n,iblk)
-                if (tr_pond) aa(i,j,n_apondn+n-1,iblk) = &
-                                           aa(i,j,n_apondn+n-1,iblk)  &
-                                           + apondn(i,j,n,iblk)
-                aa(i,j,n_fsurfn_ai+n-1,iblk)    = & 
-                                        aa(i,j,n_fsurfn_ai+n-1,iblk)  &
-                                           + fsurfn(i,j,n,iblk)*ain
-                aa(i,j,n_fcondtopn_ai+n-1,iblk) = & 
-                                        aa(i,j,n_fcondtopn_ai+n-1,iblk)  &
-                                           + fcondtopn(i,j,n,iblk)*ain
-                ! Calculate surface heat flux that causes melt as this
-                ! is what is calculated by the atmos in HadGEM3 so 
-                ! needed for checking purposes
-                aa(i,j,n_fmelttn_ai+n-1,iblk)   = &
-                                        aa(i,j,n_fmelttn_ai+n-1,iblk) &
-                + max(fsurfn(i,j,n,iblk) - fcondtopn(i,j,n,iblk),c0)*ain
-                aa(i,j,n_flatn_ai+n-1,iblk)     = & 
-                                        aa(i,j,n_flatn_ai+n-1,iblk)  &
-                                           + flatn(i,j,n,iblk)*ain
-             endif              ! tmask
-          enddo                 ! i
-          enddo                 ! j
-       enddo                    ! n
+         if (f_opening(1:1) /= 'x') &
+             call accum_hist_field(n_opening, iblk, opening(:,:,iblk), a2D)
+         if (f_dardg1dt(1:1)/= 'x') &
+             call accum_hist_field(n_dardg1dt,iblk, dardg1dt(:,:,iblk), a2D)
+         if (f_dardg2dt(1:1)/= 'x') &
+             call accum_hist_field(n_dardg2dt,iblk, dardg2dt(:,:,iblk), a2D)
+         if (f_dvirdgdt(1:1)/= 'x') &
+             call accum_hist_field(n_dvirdgdt,iblk, dvirdgdt(:,:,iblk), a2D)
+         if (f_alvl(1:1)/= 'x') &
+             call accum_hist_field(n_alvl,   iblk, &
+                                   aice(:,:,iblk) * trcr(:,:,nt_alvl,iblk), a2D)
+         if (f_vlvl(1:1)/= 'x') &
+             call accum_hist_field(n_vlvl,   iblk, &
+                                   vice(:,:,iblk) * trcr(:,:,nt_vlvl,iblk), a2D)
+         if (f_ardg(1:1)/= 'x') &
+             call accum_hist_field(n_ardg,   iblk, &
+                             aice(:,:,iblk) * (c1 - trcr(:,:,nt_alvl,iblk)), a2D)
+         if (f_vrdg(1:1)/= 'x') &
+             call accum_hist_field(n_vrdg,   iblk, &
+                             vice(:,:,iblk) * (c1 - trcr(:,:,nt_vlvl,iblk)), a2D)
 
-       ! Calculate aggregate surface melt flux by summing category values
-       worka(:,:) = c0
-       do j = jlo, jhi
-       do i = ilo, ihi
-        if (tmask(i,j,iblk)) then
-          do n=1,nct 
-             worka(i,j)  = worka(i,j) + aa(i,j,n_fmelttn_ai+n-1,iblk)
-          enddo            ! n
-        endif              ! tmask
-      enddo                ! i
-      enddo                ! j
-      aa(:,:,n_fmeltt_ai,iblk)  = worka(:,:)
+         if (f_fsurf_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fsurf_ai,iblk, fsurf(:,:,iblk)*workb(:,:), a2D)
+         if (f_fcondtop_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fcondtop_ai, iblk, &
+                                                 fcondtop(:,:,iblk)*workb(:,:), a2D)
+
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         if (f_icepresent(1:1) /= 'x') then
+           worka(:,:) = c0
+           do j = jlo, jhi
+           do i = ilo, ihi
+              if (aice(i,j,iblk) > puny) worka(i,j) = c1
+           enddo
+           enddo
+           call accum_hist_field(n_icepresent, iblk, worka(:,:), a2D)
+         endif
+
+         ! 3D category fields
+         if (f_aicen   (1:1) /= 'x') &
+             call accum_hist_field(n_aicen-n2D, iblk, ncat_hist, &
+                                   aicen(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_vicen   (1:1) /= 'x') &
+             call accum_hist_field(n_vicen-n2D, iblk, ncat_hist, &
+                                   vicen(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_apondn   (1:1) /= 'x') &
+             call accum_hist_field(n_apondn-n2D, iblk, ncat_hist, &
+                                   apondn(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_fsurfn_ai   (1:1) /= 'x') &
+             call accum_hist_field(n_fsurfn_ai-n2D, iblk, ncat_hist, &
+                  fsurfn(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_fcondtopn_ai   (1:1) /= 'x') &
+             call accum_hist_field(n_fcondtopn_ai-n2D, iblk, ncat_hist, &
+                  fcondtopn(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_flatn_ai   (1:1) /= 'x') &
+             call accum_hist_field(n_flatn_ai-n2D, iblk, ncat_hist, &
+                  flatn(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
+         ! Calculate surface heat flux that causes melt (calculated by the 
+         ! atmos in HadGEM3 so needed for checking purposes)
+         if (f_fmelttn_ai   (1:1) /= 'x') &
+             call accum_hist_field(n_fmelttn_ai-n2D, iblk, ncat_hist, &
+                  max(fsurfn(:,:,1:ncat_hist,iblk) - fcondtopn(:,:,1:ncat_hist,iblk),c0) &
+                      *aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
+
+! example for 3D field (x,y,z)
+!         if (f_field3dz   (1:1) /= 'x') &
+!             call accum_hist_field(n_field3dz-n3Dccum, iblk, nzilyr, &
+!                                   field3dz(:,:,1:nzilyr,iblk), a3Dz)
+        
+         ! 4D category fields
+         if (f_Tinz   (1:1) /= 'x') then
+            Tinz4d(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vicen(i,j,n,iblk) > puny) then
+                     do k = 1, nzilyr
+                       qn = eicen(i,j,ilyr1(n)+k-1,iblk) & 
+                              * real(nilyr,kind=dbl_kind)/vicen(i,j,n,iblk)  
+                       Tinz4d(i,j,k,n) = calculate_Tin_from_qin(qn,Tmlt(k))
+                     enddo
+                  endif
+               enddo
+               enddo
+            enddo
+            call accum_hist_field(n_Tinz-n3Dzcum, iblk, nzilyr, ncat_hist, &
+                                  Tinz4d(:,:,1:nzilyr,1:ncat_hist), a4Di)
+         endif
+         
+         if (f_Tsnz   (1:1) /= 'x') then
+            Tsnz4d(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vsnon(i,j,n,iblk) > puny) then
+                     do k = 1, nzslyr
+                       qn = esnon(i,j,slyr1(n)+k-1,iblk) & 
+                              * real(nslyr,kind=dbl_kind)/vsnon(i,j,n,iblk)  
+                       Tsnz4d(i,j,k,n) = (Lfresh + qn/rhos)/cp_ice
+                     enddo
+                  endif
+               enddo
+               enddo
+            enddo
+            call accum_hist_field(n_Tsnz-n4Dicum, iblk, nzslyr, ncat_hist, &
+                                  Tsnz4d(:,:,1:nzslyr,1:ncat_hist), a4Ds)
+         endif
+         
+        ! Calculate aggregate surface melt flux by summing category values
+        if (f_fmeltt_ai(1:1) /= 'x') then
+         do ns = 1, nstreams
+           if (n_fmeltt_ai(ns) /= 0) then
+              worka(:,:) = c0
+              do j = jlo, jhi
+              do i = ilo, ihi
+               if (tmask(i,j,iblk)) then
+                 do n=1,ncat_hist
+                    worka(i,j)  = worka(i,j) + a3Dc(i,j,n,n_fmelttn_ai(ns)-n2D,iblk)
+                 enddo            ! n
+               endif              ! tmask
+              enddo                ! i
+              enddo                ! j
+              a2D(:,:,n_fmeltt_ai(ns),iblk) = worka(:,:)
+           endif
+         enddo
+        endif
 
       enddo                     ! iblk
 
@@ -1464,13 +1775,17 @@
       ! Write output files at prescribed intervals
       !---------------------------------------------------------------
 
-      if (write_history .or. write_ic) then
+      nstrm = nstreams
+      if (write_ic) nstrm = 1
+
+      do ns = 1, nstrm
+      if (write_history(ns) .or. write_ic) then
 
       !---------------------------------------------------------------
       ! Mask out land points and convert units 
       !---------------------------------------------------------------
 
-        ravgct = c1/avgct
+        ravgct = c1/avgct(ns)
         do iblk = 1, nblocks
            this_block = get_block(blocks_ice(iblk),iblk)         
            ilo = this_block%ilo
@@ -1478,18 +1793,117 @@
            jlo = this_block%jlo
            jhi = this_block%jhi
 
-           do k = 1, avgsiz
+           do n = 1, num_avail_hist_fields_2D
+              if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) then 
+
               do j = jlo, jhi
               do i = ilo, ihi
                  if (.not. tmask(i,j,iblk)) then ! mask out land points
-                    aa(i,j,k,iblk) = spval
+                    a2D(i,j,n,iblk) = spval
                  else                            ! convert units
-                    aa(i,j,k,iblk) = cona(k)*aa(i,j,k,iblk)*ravgct  &
-                                   + conb(k)
+                    a2D(i,j,n,iblk) = avail_hist_fields(n)%cona*a2D(i,j,n,iblk) &
+                                   * ravgct + avail_hist_fields(n)%conb
                  endif
               enddo             ! i
               enddo             ! j
-           enddo                ! k
+
+              ! back out albedo/zenith angle dependence
+              if (avail_hist_fields(n)%vname(1:6) == 'albice') then
+              do j = jlo, jhi
+              do i = ilo, ihi
+                 if (tmask(i,j,iblk)) then 
+                    ravgctz = c0
+                    if (albcnt(i,j,iblk,ns) > puny) &
+                        ravgctz = c1/albcnt(i,j,iblk,ns)
+                    if (n_albice(ns) /= 0) a2D(i,j,n_albice(ns),iblk) = &
+                       a2D(i,j,n_albice(ns),iblk)*avgct(ns)*ravgctz
+                    if (n_albsno(ns) /= 0) a2D(i,j,n_albsno(ns),iblk) = &
+                       a2D(i,j,n_albsno(ns),iblk)*avgct(ns)*ravgctz
+                    if (n_albpnd(ns) /= 0) a2D(i,j,n_albpnd(ns),iblk) = &
+                       a2D(i,j,n_albpnd(ns),iblk)*avgct(ns)*ravgctz
+                 endif
+              enddo             ! i
+              enddo             ! j
+              endif
+
+              endif
+           enddo                ! n
+
+           do n = 1, num_avail_hist_fields_3Dc
+              nn = n2D + n
+              if (avail_hist_fields(nn)%vhistfreq == histfreq(ns)) then 
+              do k = 1, ncat_hist
+              do j = jlo, jhi
+              do i = ilo, ihi
+                 if (.not. tmask(i,j,iblk)) then ! mask out land points
+                    a3Dc(i,j,k,n,iblk) = spval
+                 else                            ! convert units
+                    a3Dc(i,j,k,n,iblk) = avail_hist_fields(nn)%cona*a3Dc(i,j,k,n,iblk) &
+                                   * ravgct + avail_hist_fields(nn)%conb
+                 endif
+              enddo             ! i
+              enddo             ! j
+              enddo             ! k
+              endif
+           enddo                ! n
+
+           do n = 1, num_avail_hist_fields_3Dz
+              nn = n3Dccum + n
+              if (avail_hist_fields(nn)%vhistfreq == histfreq(ns)) then 
+              do k = 1, nzlyr
+              do j = jlo, jhi
+              do i = ilo, ihi
+                 if (.not. tmask(i,j,iblk)) then ! mask out land points
+                    a3Dz(i,j,k,n,iblk) = spval
+                 else                            ! convert units
+                    a3Dz(i,j,k,n,iblk) = avail_hist_fields(nn)%cona*a3Dz(i,j,k,n,iblk) &
+                                   * ravgct + avail_hist_fields(nn)%conb
+                 endif
+              enddo             ! i
+              enddo             ! j
+              enddo             ! k
+              endif
+           enddo                ! n
+
+           do n = 1, num_avail_hist_fields_4Di
+              nn = n3Dzcum + n
+              if (avail_hist_fields(nn)%vhistfreq == histfreq(ns)) then 
+              do k = 1, nzilyr
+              do ic = 1, ncat_hist
+              do j = jlo, jhi
+              do i = ilo, ihi
+                 if (.not. tmask(i,j,iblk)) then ! mask out land points
+                    a4Di(i,j,k,ic,n,iblk) = spval
+                 else                            ! convert units
+                    a4Di(i,j,k,ic,n,iblk) = avail_hist_fields(nn)%cona*a4Di(i,j,k,ic,n,iblk) &
+                                   * ravgct + avail_hist_fields(nn)%conb
+                 endif
+              enddo             ! i
+              enddo             ! j
+              enddo             ! ic
+              enddo             ! k
+              endif
+           enddo                ! n
+
+           do n = 1, num_avail_hist_fields_4Ds
+              nn = n3Dzcum + n
+              if (avail_hist_fields(nn)%vhistfreq == histfreq(ns)) then 
+              do k = 1, nzslyr
+              do ic = 1, ncat_hist
+              do j = jlo, jhi
+              do i = ilo, ihi
+                 if (.not. tmask(i,j,iblk)) then ! mask out land points
+                    a4Ds(i,j,k,ic,n,iblk) = spval
+                 else                            ! convert units
+                    a4Ds(i,j,k,ic,n,iblk) = avail_hist_fields(nn)%cona*a4Ds(i,j,k,ic,n,iblk) &
+                                   * ravgct + avail_hist_fields(nn)%conb
+                 endif
+              enddo             ! i
+              enddo             ! j
+              enddo             ! ic
+              enddo             ! k
+              endif
+           enddo                ! n
 
       !---------------------------------------------------------------
       ! snapshots
@@ -1508,60 +1922,102 @@
            do j = jlo, jhi
            do i = ilo, ihi
               if (.not. tmask(i,j,iblk)) then ! mask out land points
-                 aa(i,j,n_divu,iblk)      = spval
-                 aa(i,j,n_shear,iblk)     = spval
-                 aa(i,j,n_sig1,iblk )     = spval
-                 aa(i,j,n_sig2,iblk )     = spval
-                 aa(i,j,n_mlt_onset,iblk) = spval
-                 aa(i,j,n_frz_onset,iblk) = spval
-                 aa(i,j,n_hisnap,iblk)    = spval
-                 aa(i,j,n_aisnap,iblk)    = spval
-                 aa(i,j,n_trsig,iblk )    = spval
-                 aa(i,j,n_iage,iblk )     = spval
+                 if (n_divu     (ns) /= 0) a2D(i,j,n_divu(ns),     iblk) = spval
+                 if (n_shear    (ns) /= 0) a2D(i,j,n_shear(ns),    iblk) = spval
+                 if (n_sig1     (ns) /= 0) a2D(i,j,n_sig1(ns),     iblk) = spval
+                 if (n_sig2     (ns) /= 0) a2D(i,j,n_sig2(ns),     iblk) = spval
+                 if (n_mlt_onset(ns) /= 0) a2D(i,j,n_mlt_onset(ns),iblk) = spval
+                 if (n_frz_onset(ns) /= 0) a2D(i,j,n_frz_onset(ns),iblk) = spval
+                 if (n_hisnap   (ns) /= 0) a2D(i,j,n_hisnap(ns),   iblk) = spval
+                 if (n_aisnap   (ns) /= 0) a2D(i,j,n_aisnap(ns),   iblk) = spval
+                 if (n_trsig    (ns) /= 0) a2D(i,j,n_trsig(ns),    iblk) = spval
+                 if (n_iage     (ns) /= 0) a2D(i,j,n_iage(ns),     iblk) = spval
               else
-                 aa(i,j,n_divu,iblk)  = divu (i,j,iblk)*cona(n_divu)
-                 aa(i,j,n_shear,iblk) = shear(i,j,iblk)*cona(n_shear)
-                 aa(i,j,n_sig1,iblk)  = sig1 (i,j,iblk)*cona(n_sig1)
-                 aa(i,j,n_sig2,iblk)  = sig2 (i,j,iblk)*cona(n_sig2)
-                 aa(i,j,n_mlt_onset,iblk) = mlt_onset(i,j,iblk)
-                 aa(i,j,n_frz_onset,iblk) = frz_onset(i,j,iblk)
-                 aa(i,j,n_hisnap,iblk)    = vice(i,j,iblk)
-                 aa(i,j,n_aisnap,iblk)    = aice(i,j,iblk)
-                 aa(i,j,n_trsig,iblk )    = p25*(stressp_1(i,j,iblk) &
+                 if (n_divu     (ns) /= 0) a2D(i,j,n_divu(ns),iblk)      = &
+                       divu (i,j,iblk)*avail_hist_fields(n_divu(ns))%cona
+                 if (n_shear    (ns) /= 0) a2D(i,j,n_shear(ns),iblk)     = &
+                       shear(i,j,iblk)*avail_hist_fields(n_shear(ns))%cona
+                 if (n_sig1     (ns) /= 0) a2D(i,j,n_sig1(ns),iblk)      = &
+                       sig1 (i,j,iblk)*avail_hist_fields(n_sig1(ns))%cona
+                 if (n_sig2     (ns) /= 0) a2D(i,j,n_sig2(ns),iblk)      = &
+                       sig2 (i,j,iblk)*avail_hist_fields(n_sig2(ns))%cona
+                 if (n_mlt_onset(ns) /= 0) a2D(i,j,n_mlt_onset(ns),iblk) = &
+                       mlt_onset(i,j,iblk)
+                 if (n_frz_onset(ns) /= 0) a2D(i,j,n_frz_onset(ns),iblk) = &
+                       frz_onset(i,j,iblk)
+                 if (n_hisnap   (ns) /= 0) a2D(i,j,n_hisnap(ns),iblk)    = &
+                       vice(i,j,iblk)
+                 if (n_aisnap   (ns) /= 0) a2D(i,j,n_aisnap(ns),iblk)    = &
+                       aice(i,j,iblk)
+                 if (n_trsig    (ns) /= 0) a2D(i,j,n_trsig(ns),iblk )    = &
+                                       p25*(stressp_1(i,j,iblk) &
                                           + stressp_2(i,j,iblk) &
                                           + stressp_3(i,j,iblk) &
                                           + stressp_4(i,j,iblk))
-                 if (tr_iage) aa(i,j,n_iage,iblk)  = & 
-                       trcr(i,j,nt_iage,iblk)*cona(n_iage)
-            endif
+                 if (n_iage     (ns) /= 0) a2D(i,j,n_iage(ns),iblk)  = &
+                       trcr(i,j,nt_iage,iblk)*avail_hist_fields(n_iage(ns))%cona
+              endif
            enddo                ! i
            enddo                ! j
 
         enddo                   ! iblk
 
-        time_end = time/int(secday)
+        time_end(ns) = time/int(secday)
 
       !---------------------------------------------------------------
       ! write file
       !---------------------------------------------------------------
 
-      call ice_timer_start(timer_readwrite)  ! reading/writing
+        call ice_timer_start(timer_readwrite)  ! reading/writing
 
-      if (history_format == 'nc') then
-        call icecdf         ! netcdf output
-      else
-        call icebin         ! binary output
-      endif
+        if (history_format == 'nc') then
+          call icecdf(ns)         ! netcdf output
+        else
+          call icebin(ns)         ! binary output
+        endif
 
-      call ice_timer_stop(timer_readwrite)  ! reading/writing
+        call ice_timer_stop(timer_readwrite)  ! reading/writing
 
       !---------------------------------------------------------------
       ! reset to zero
       !------------------------------------------------------------
-        aa(:,:,:,:) = c0
-        avgct = c0
+        if (write_ic) then
+           a2D(:,:,:,:) = c0
+           a3Dc(:,:,:,:,:) = c0
+           a3Dz(:,:,:,:,:) = c0
+           a4Di(:,:,:,:,:,:) = c0
+           a4Ds(:,:,:,:,:,:) = c0
+           avgct(:) = c0
+           albcnt(:,:,:,:) = c0
+           write_ic = .false.        ! write initial condition once at most
+        else
+           avgct(ns) = c0
+           albcnt(:,:,:,ns) = c0
+        endif
+!        if (write_history(ns)) albcnt(:,:,:,ns) = c0
+
+        do n = 1,n2D
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a2D(:,:,n,:) = c0
+        enddo
+        do n = n2D + 1, n3Dccum   
+           nn = n - n2D               
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a3Dc(:,:,:,nn,:) = c0
+        enddo
+        do n = n3Dccum + 1, n3Dzcum
+           nn = n - n3Dccum
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a3Dz(:,:,:,nn,:) = c0
+        enddo
+        do n = n3Dzcum + 1, n4Dicum
+           nn = n - n3Dzcum
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Di(:,:,:,:,nn,:) = c0
+        enddo
+        do n = n4Dicum + 1, n4Dscum
+           nn = n - n4Dicum
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Ds(:,:,:,:,nn,:) = c0
+        enddo
 
       endif  ! write_history or write_ic
+      enddo  ! nstreams
 
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
@@ -1599,8 +2055,6 @@
          endif                  ! yday
       enddo                     ! iblk
 
-      write_ic = .false.        ! write initial condition once at most
-
       end subroutine ice_write_hist
 
 !=======================================================================
@@ -1611,7 +2065,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine icecdf
+      subroutine icecdf(ns)
 !
 ! !DESCRIPTION:
 !
@@ -1637,22 +2091,29 @@
       use ice_work, only: work_g1, work_gr, work_gr3, work1
       use ice_restart, only: lenstr, runid
       use ice_domain, only: distrb_info
-      use ice_itd, only: c_hi_range
+      use ice_itd, only: hin_max
       use ice_exit
       use netcdf
+#endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
+      integer (kind=int_kind), intent(in) :: ns
+!
 !EOP
 !
-      integer (kind=int_kind) :: i,j,n, &
-         ncid,status,imtid,jmtid,timid,varid, &
+#ifdef ncdf
+      integer (kind=int_kind) :: i,j,k,ic,n,nn, &
+         ncid,status,imtid,jmtid,kmtidi,kmtids,cmtid,timid,varid, &
          length,nvertexid,ivertex
       integer (kind=int_kind), dimension(3) :: dimid
+      integer (kind=int_kind), dimension(4) :: dimidz
+      integer (kind=int_kind), dimension(5) :: dimidcz
       integer (kind=int_kind), dimension(3) :: dimid_nverts
+      integer (kind=int_kind), dimension(3) :: dimidex
       real (kind=real_kind) :: ltime
       character (char_len) :: title
-      character (char_len_long) :: ncfile
+      character (char_len_long) :: ncfile(max_nstrm)
 
       integer (kind=int_kind) :: iyear, imonth, iday
       integer (kind=int_kind) :: icategory,ind,i_aice,boundid
@@ -1685,25 +2146,26 @@
       TYPE(req_attributes), dimension(nvar) :: var
       TYPE(coord_attributes), dimension(ncoord) :: coord_var
       TYPE(coord_attributes), dimension(nvar_verts) :: var_nverts
+      TYPE(coord_attributes), dimension(nvarz) :: var_nz
       CHARACTER (char_len), dimension(ncoord) :: coord_bounds
 
       if (my_task == master_task) then
 
         ltime=time/int(secday)
 
-        call construct_filename(ncfile,'nc')
+        call construct_filename(ncfile(ns),'nc',ns)
 
         ! add local directory path name to ncfile
         if (write_ic) then
-          ncfile = trim(incond_dir)//ncfile
+          ncfile(ns) = trim(incond_dir)//ncfile(ns)
         else
-          ncfile = trim(history_dir)//ncfile
+          ncfile(ns) = trim(history_dir)//ncfile(ns)
         endif
 
         ! create file
-        status = nf90_create(ncfile, nf90_clobber, ncid)
+        status = nf90_create(ncfile(ns), nf90_clobber, ncid)
         if (status /= nf90_noerr) call abort_ice( &
-                        'ice: Error creating history ncfile')
+           'ice: Error creating history ncfile '//ncfile(ns))
 
       !-----------------------------------------------------------------
       ! define dimensions
@@ -1722,6 +2184,18 @@
         status = nf90_def_dim(ncid,'nj',ny_global,jmtid)
         if (status /= nf90_noerr) call abort_ice( &
                       'ice: Error defining dim nj')
+
+        status = nf90_def_dim(ncid,'nc',ncat_hist,cmtid)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error defining dim nc')
+
+        status = nf90_def_dim(ncid,'nkice',nzilyr,kmtidi)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error defining dim nki')
+
+        status = nf90_def_dim(ncid,'nksnow',nzslyr,kmtids)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error defining dim nks')
 
         status = nf90_def_dim(ncid,'time',NF90_UNLIMITED,timid)
         if (status /= nf90_noerr) call abort_ice( &
@@ -1743,7 +2217,7 @@
         if (status /= nf90_noerr) call abort_ice( &
                       'ice Error: time long_name')
 
-        write(cdate,'(i8)') idate0
+        write(cdate,'(i8.8)') idate0
         write(title,'(a,a,a,a,a,a,a,a)') 'days since ', &
               cdate(1:4),'-',cdate(5:6),'-',cdate(7:8),' 00:00:00'
         status = nf90_put_att(ncid,varid,'units',title)
@@ -1780,7 +2254,7 @@
                                 'boundaries for time-averaging interval')
           if (status /= nf90_noerr) call abort_ice( &
                         'ice Error: time_bounds long_name')
-          write(cdate,'(i8)') idate0
+          write(cdate,'(i8.8)') idate0
           write(title,'(a,a,a,a,a,a,a,a)') 'days since ', &
                 cdate(1:4),'-',cdate(5:6),'-',cdate(7:8),' 00:00:00'
           status = nf90_put_att(ncid,varid,'units',title)
@@ -1809,6 +2283,10 @@
       coord_var(ind) = coord_attributes('ULAT', &
                        'U grid center latitude',  'degrees_north')
       coord_bounds(ind) = 'latu_bounds'
+
+      var_nz(1) = coord_attributes('NCAT', 'category maximum thickness', 'm')
+      var_nz(2) = coord_attributes('VGRDi', 'vertical ice levels', '1')
+      var_nz(3) = coord_attributes('VGRDs', 'vertical snow levels', '1')
 
       !-----------------------------------------------------------------
       ! define information for optional time-invariant variables
@@ -1890,6 +2368,26 @@
           endif          
         enddo
 
+        ! Extra dimensions (NCAT, NZILYR, NZSLYR)       
+          dimidex(1)=cmtid
+          dimidex(2)=kmtidi
+          dimidex(3)=kmtids
+        
+        do i = 1, nvarz
+           if (igrdz(i)) then
+             status = nf90_def_var(ncid, var_nz(i)%short_name, &
+                                   nf90_float, dimidex(i), varid)
+             if (status /= nf90_noerr) call abort_ice( &
+                'Error defining short_name for '//var_nz(i)%short_name)
+             status = nf90_put_att(ncid,varid,'long_name',var_nz(i)%long_name)
+             if (status /= nf90_noerr) call abort_ice( &
+                'Error defining long_name for '//var_nz(i)%short_name)
+             status = nf90_put_att(ncid, varid, 'units', var_nz(i)%units)
+             if (Status /= nf90_noerr) call abort_ice( &
+                'Error defining units for '//var_nz(i)%short_name)
+           endif
+        enddo
+
         ! Attributes for tmask defined separately, since it has no units
         if (igrd(n_tmask)) then
            status = nf90_def_var(ncid, 'tmask', nf90_float, dimid(1:2), varid)
@@ -1942,76 +2440,260 @@
           endif
         enddo
 
-        do n=1,avgsiz
-          if (iout(n)) then
-            status  = nf90_def_var(ncid, vname(n), nf90_float, &
-                               dimid, varid)
+        do n=1,num_avail_hist_fields_2D
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
+                         nf90_float, dimid, varid)
             if (status /= nf90_noerr) call abort_ice( &
-                 'Error defining variable '//vname(n))
-            status = nf90_put_att(ncid,varid, 'units',vunit(n))
+               'Error defining variable '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'units', &
+                        avail_hist_fields(n)%vunit)
             if (status /= nf90_noerr) call abort_ice( &
-                 'Error defining units for '//vname(n))
-            status = nf90_put_att(ncid,varid, 'long_name',vdesc(n))
-                   
+               'Error defining units for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid, 'long_name', &
+                        avail_hist_fields(n)%vdesc)
             if (status /= nf90_noerr) call abort_ice( &
-                 'Error defining long_name for '//vname(n))
-            status = nf90_put_att(ncid,varid,'coordinates', vcoord(n))
+               'Error defining long_name for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'coordinates', &
+                        avail_hist_fields(n)%vcoord)
             if (status /= nf90_noerr) call abort_ice( &
-                 'Error defining coordinates for '//vname(n))
-            status = nf90_put_att(ncid,varid,'cell_measures', vcellmeas(n))
+               'Error defining coordinates for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'cell_measures', &
+                        avail_hist_fields(n)%vcellmeas)
             if (status /= nf90_noerr) call abort_ice( &
-                 'Error defining cell measures for '//vname(n))
+               'Error defining cell measures for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'missing_value',spval)
             if (status /= nf90_noerr) call abort_ice( &
-                 'Error defining mising_value for '//vname(n))
+               'Error defining mising_value for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'_FillValue',spval)
             if (status /= nf90_noerr) call abort_ice( &
-                 'Error defining _FillValue for '//vname(n))
-      !-----------------------------------------------------------------
-      ! Append ice thickness range to aicen comments
-      !-----------------------------------------------------------------
-            c_aice = TRIM(vname(n))
-            i_aice = lenstr(c_aice)
-            if (c_aice(1:4) == 'aice' .and. i_aice > 4 ) then
-              if (i_aice == 5) then         ! categories 1-9
-                read(c_aice(i_aice:i_aice), '(i1)') icategory
-              else                          ! categories > 9
-                read(c_aice(i_aice-1:i_aice), '(i2)') icategory
-              endif
-              vcomment(n) = 'Ice range: '//c_hi_range(icategory)
-            endif
-            status = nf90_put_att(ncid,varid,'comment',vcomment(n))
-            if (status /= nf90_noerr) call abort_ice( &
-                           'Error defining comment for '//vname(n))
+               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+
       !-----------------------------------------------------------------
       ! Add cell_methods attribute to variables if averaged
       !-----------------------------------------------------------------
             if (hist_avg) then
-              if (TRIM(vname(n))/='sig1'.or.TRIM(vname(n))/='sig2') then
+              if (TRIM(avail_hist_fields(n)%vname)/='sig1' &
+              .or.TRIM(avail_hist_fields(n)%vname)/='sig2') then
                 status = nf90_put_att(ncid,varid,'cell_methods','time: mean')
                 if (status /= nf90_noerr) call abort_ice( &
-                              'Error defining cell methods for '//vname(n))
+                 'Error defining cell methods for '//avail_hist_fields(n)%vname)
               endif
             endif
 
-            if (histfreq == '1'     .or. .not. hist_avg &
-                .or. n==n_divu      .or. n==n_shear     &  ! snapshots
-                .or. n==n_sig1      .or. n==n_sig2 .or. n==n_trsig &
-                .or. n==n_mlt_onset .or. n==n_frz_onset &
-                .or. n==n_hisnap    .or. n==n_aisnap) then
-            status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
+            if (histfreq(ns) == '1' .or. .not. hist_avg         &
+                .or. n==n_divu(ns)      .or. n==n_shear(ns)     &  ! snapshots
+                .or. n==n_sig1(ns)      .or. n==n_sig2(ns)      &
+                .or. n==n_trsig(ns)                             &
+                .or. n==n_mlt_onset(ns) .or. n==n_frz_onset(ns) &
+                .or. n==n_hisnap(ns)    .or. n==n_aisnap(ns)) then
+               status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
             else
-            status = nf90_put_att(ncid,varid,'time_rep','averaged')
+               status = nf90_put_att(ncid,varid,'time_rep','averaged')
             endif
           endif
-        enddo
+        enddo  ! num_avail_hist_fields_2D
+
+        dimidz(1) = imtid
+        dimidz(2) = jmtid
+        dimidz(3) = cmtid
+        dimidz(4) = timid
+
+        do n = n2D + 1, n3Dccum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
+                         nf90_float, dimidz, varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining variable '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'units', &
+                        avail_hist_fields(n)%vunit)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining units for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid, 'long_name', &
+                        avail_hist_fields(n)%vdesc)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining long_name for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'coordinates', &
+                        avail_hist_fields(n)%vcoord)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining coordinates for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'cell_measures', &
+                        avail_hist_fields(n)%vcellmeas)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining cell measures for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'missing_value',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'_FillValue',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+
+      !-----------------------------------------------------------------
+      ! Add cell_methods attribute to variables if averaged
+      !-----------------------------------------------------------------
+            if (hist_avg) then
+                status = nf90_put_att(ncid,varid,'cell_methods','time: mean')
+                if (status /= nf90_noerr) call abort_ice( &
+                 'Error defining cell methods for '//avail_hist_fields(n)%vname)
+            endif
+
+            if (histfreq(ns) == '1' .or. .not. hist_avg) then
+               status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
+            else
+               status = nf90_put_att(ncid,varid,'time_rep','averaged')
+            endif
+          endif
+        enddo  ! num_avail_hist_fields_3Dc
+
+        dimidz(1) = imtid
+        dimidz(2) = jmtid
+        dimidz(3) = kmtidi
+        dimidz(4) = timid
+
+        do n = n3Dccum + 1, n3Dzcum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
+                         nf90_float, dimidz, varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining variable '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'units', &
+                        avail_hist_fields(n)%vunit)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining units for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid, 'long_name', &
+                        avail_hist_fields(n)%vdesc)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining long_name for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'coordinates', &
+                        avail_hist_fields(n)%vcoord)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining coordinates for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'cell_measures', &
+                        avail_hist_fields(n)%vcellmeas)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining cell measures for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'missing_value',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'_FillValue',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+
+          endif
+        enddo  ! num_avail_hist_fields_3Dz
+
+        dimidcz(1) = imtid
+        dimidcz(2) = jmtid
+        dimidcz(3) = kmtidi
+        dimidcz(4) = cmtid
+        dimidcz(5) = timid
+
+        do n = n3Dzcum + 1, n4Dicum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
+                             nf90_float, dimidcz, varid)
+!ferret                         nf90_float, dimidcz(1:4), varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining variable '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'units', &
+                        avail_hist_fields(n)%vunit)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining units for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid, 'long_name', &
+                        avail_hist_fields(n)%vdesc)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining long_name for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'coordinates', &
+                        avail_hist_fields(n)%vcoord)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining coordinates for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'cell_measures', &
+                        avail_hist_fields(n)%vcellmeas)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining cell measures for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'missing_value',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'_FillValue',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+
+      !-----------------------------------------------------------------
+      ! Add cell_methods attribute to variables if averaged
+      !-----------------------------------------------------------------
+            if (hist_avg) then
+                status = nf90_put_att(ncid,varid,'cell_methods','time: mean')
+                if (status /= nf90_noerr) call abort_ice( &
+                 'Error defining cell methods for '//avail_hist_fields(n)%vname)
+            endif
+
+            if (histfreq(ns) == '1' .or. .not. hist_avg) then
+               status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
+            else
+               status = nf90_put_att(ncid,varid,'time_rep','averaged')
+            endif
+          endif
+        enddo  ! num_avail_hist_fields_4Di
+
+        dimidcz(1) = imtid
+        dimidcz(2) = jmtid
+        dimidcz(3) = kmtids
+        dimidcz(4) = cmtid
+        dimidcz(5) = timid
+
+        do n = n4Dicum + 1, n4Dscum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
+                        nf90_float, dimidcz, varid)
+!ferret                         nf90_float, dimidcz(1:4), varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining variable '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'units', &
+                        avail_hist_fields(n)%vunit)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining units for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid, 'long_name', &
+                        avail_hist_fields(n)%vdesc)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining long_name for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'coordinates', &
+                        avail_hist_fields(n)%vcoord)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining coordinates for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'cell_measures', &
+                        avail_hist_fields(n)%vcellmeas)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining cell measures for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'missing_value',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'_FillValue',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+
+      !-----------------------------------------------------------------
+      ! Add cell_methods attribute to variables if averaged
+      !-----------------------------------------------------------------
+            if (hist_avg) then
+                status = nf90_put_att(ncid,varid,'cell_methods','time: mean')
+                if (status /= nf90_noerr) call abort_ice( &
+                 'Error defining cell methods for '//avail_hist_fields(n)%vname)
+            endif
+
+            if (histfreq(ns) == '1' .or. .not. hist_avg) then
+               status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
+            else
+               status = nf90_put_att(ncid,varid,'time_rep','averaged')
+            endif
+          endif
+        enddo  ! num_avail_hist_fields_4Ds
 
       !-----------------------------------------------------------------
       ! global attributes
       !-----------------------------------------------------------------
       ! ... the user should change these to something useful ...
       !-----------------------------------------------------------------
-#if (defined CCSM) || (defined SEQ_MCT)
+#ifdef CCSMCOUPLED
         status = nf90_put_att(ncid,nf90_global,'title',runid)
         if (status /= nf90_noerr) call abort_ice( &
                       'ice: Error in global attribute title')
@@ -2036,7 +2718,7 @@
         if (status /= nf90_noerr) call abort_ice( &
                       'ice Error: global attribute comment')
 
-        write(title,'(a,i8)') 'File written on model date ',idate
+        write(title,'(a,i8.8)') 'File written on model date ',idate
         status = nf90_put_att(ncid,nf90_global,'comment2',title)
         if (status /= nf90_noerr) call abort_ice( &
                       'ice Error: global attribute date1')
@@ -2089,10 +2771,10 @@
           status = nf90_inq_varid(ncid,'time_bounds',varid)
           if (status /= nf90_noerr) call abort_ice( &
                         'ice: Error getting time_bounds id')
-          status = nf90_put_var(ncid,varid,time_beg,start=(/1/))
+          status = nf90_put_var(ncid,varid,time_beg(ns),start=(/1/))
           if (status /= nf90_noerr) call abort_ice( &
                         'ice: Error writing time_beg')
-          status = nf90_put_var(ncid,varid,time_end,start=(/2/))
+          status = nf90_put_var(ncid,varid,time_end(ns),start=(/2/))
           if (status /= nf90_noerr) call abort_ice( &
                         'ice: Error writing time_end')
         endif
@@ -2142,6 +2824,29 @@
              status = nf90_put_var(ncid,varid,work_gr)
              if (status /= nf90_noerr) call abort_ice( &
                            'ice: Error writing'//coord_var(i)%short_name)
+          endif
+        enddo
+
+        ! Extra dimensions (NCAT, VGRD*)
+
+        do i = 1, nvarz
+          if (igrdz(i)) then
+          call broadcast_scalar(var_nz(i)%short_name,master_task)
+          if (my_task == master_task) then
+             status = nf90_inq_varid(ncid, var_nz(i)%short_name, varid)
+             if (status /= nf90_noerr) call abort_ice( &
+                  'ice: Error getting varid for '//var_nz(i)%short_name)
+             SELECT CASE (var_nz(i)%short_name)
+               CASE ('NCAT') 
+                 status = nf90_put_var(ncid,varid,hin_max(1:ncat_hist))
+               CASE ('VGRDi') ! index - needed for Met Office analysis code
+                 status = nf90_put_var(ncid,varid,(/(k, k=1,nzilyr)/))
+               CASE ('VGRDs') ! index - needed for Met Office analysis code
+                 status = nf90_put_var(ncid,varid,(/(k, k=1,nzslyr)/))
+             END SELECT
+             if (status /= nf90_noerr) call abort_ice( &
+                           'ice: Error writing'//var_nz(i)%short_name)
+          endif
           endif
         enddo
 
@@ -2200,6 +2905,8 @@
         endif
       enddo
 
+      deallocate(work_gr)
+
       !----------------------------------------------------------------
       ! Write coordinates of grid box vertices
       !----------------------------------------------------------------
@@ -2255,36 +2962,149 @@
       deallocate(work_gr3)
       endif
 
-      deallocate(work_gr)
-
       !-----------------------------------------------------------------
       ! write variable data
       !-----------------------------------------------------------------
 
       if (my_task==master_task) then
-         allocate(work_gr3(nx_global,ny_global,1))
+         allocate(work_gr(nx_global,ny_global))
       else
-         allocate(work_gr3(1,1,1))   ! to save memory
+         allocate(work_gr(1,1))     ! to save memory
       endif
+      work_gr(:,:) = c0
+      work_g1(:,:) = c0
 
-      do n=1,avgsiz
-        if (iout(n)) then
-          call gather_global(work_g1, aa(:,:,n,:), &
+      do n=1,num_avail_hist_fields_2D
+        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+          call gather_global(work_g1, a2D(:,:,n,:), &
                              master_task, distrb_info)
           if (my_task == master_task) then
-            work_gr3(:,:,1) = work_g1(:,:)
-            status  = nf90_inq_varid(ncid,vname(n),varid)
+            work_gr(:,:) = work_g1(:,:)
+            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
             if (status /= nf90_noerr) call abort_ice( &
-                          'ice: Error getting varid for '//vname(n))
-            status  = nf90_put_var(ncid,varid,work_gr3, &
-                                   count=(/nx_global,ny_global,1/))
+               'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+            status  = nf90_put_var(ncid,varid,work_gr(:,:), &
+                                   count=(/nx_global,ny_global/))
             if (status /= nf90_noerr) call abort_ice( &
-                          'ice: Error writing variable '//vname(n))
+               'ice: Error writing variable '//avail_hist_fields(n)%vname)
           endif
         endif
-      enddo
+      enddo ! num_avail_hist_fields_2D
 
-      deallocate(work_gr3)
+      work_gr(:,:) = c0
+      work_g1(:,:) = c0
+
+      do n = n2D + 1, n3Dccum
+        nn = n - n2D
+        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+          if (my_task == master_task) then
+            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+          endif
+          do k = 1, ncat_hist
+             call gather_global(work_g1, a3Dc(:,:,k,nn,:), &
+                                master_task, distrb_info)
+             work_gr(:,:) = work_g1(:,:)
+
+             if (my_task == master_task) then
+             status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
+             if (status /= nf90_noerr) call abort_ice( &
+                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+             status  = nf90_put_var(ncid,varid,work_gr(:,:), &
+                                    start=(/        1,        1,k/), &
+                                    count=(/nx_global,ny_global,1/))
+             if (status /= nf90_noerr) call abort_ice( &
+                'ice: Error writing variable '//avail_hist_fields(n)%vname)
+             endif
+          enddo ! k
+        endif
+      enddo ! num_avail_hist_fields_3Dc
+
+      work_gr(:,:) = c0
+      work_g1(:,:) = c0
+
+      do n = n3Dccum+1, n3Dzcum
+        nn = n - n3Dccum
+        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+          if (my_task == master_task) then
+            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+          endif
+          do k = 1, nzilyr
+             call gather_global(work_g1, a3Dz(:,:,k,nn,:), &
+                                master_task, distrb_info)
+             work_gr(:,:) = work_g1(:,:)
+
+             if (my_task == master_task) then
+             status  = nf90_put_var(ncid,varid,work_gr(:,:), &
+                                    start=(/        1,        1,k/), &
+                                    count=(/nx_global,ny_global,1/))
+             if (status /= nf90_noerr) call abort_ice( &
+                'ice: Error writing variable '//avail_hist_fields(n)%vname)
+           endif
+           enddo ! k
+        endif
+      enddo ! num_avail_hist_fields_3Dz
+
+      work_gr(:,:) = c0
+      work_g1(:,:) = c0
+
+      do n = n3Dzcum+1, n4Dicum
+        nn = n - n3Dzcum
+        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+          if (my_task == master_task) then
+            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+          endif
+          do ic = 1, ncat_hist
+             do k = 1, nzilyr
+                call gather_global(work_g1, a4Di(:,:,k,ic,nn,:), &
+                                master_task, distrb_info)
+                work_gr(:,:) = work_g1(:,:)
+                if (my_task == master_task) then
+                  status  = nf90_put_var(ncid,varid,work_gr(:,:), &
+                                         start=(/        1,        1,k,ic/), &
+                                         count=(/nx_global,ny_global,1, 1/))
+                  if (status /= nf90_noerr) call abort_ice( &
+                     'ice: Error writing variable '//avail_hist_fields(n)%vname)
+                endif
+             enddo ! k
+          enddo ! ic
+        endif
+      enddo ! num_avail_hist_fields_4Di
+
+      work_gr(:,:) = c0
+      work_g1(:,:) = c0
+
+      do n = n4Dicum+1, n4Dscum
+        nn = n - n4Dicum
+        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+          if (my_task == master_task) then
+            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+          endif
+          do ic = 1, ncat_hist
+             do k = 1, nzslyr
+                call gather_global(work_g1, a4Ds(:,:,k,ic,nn,:), &
+                                master_task, distrb_info)
+                work_gr(:,:) = work_g1(:,:)
+                if (my_task == master_task) then
+                  status  = nf90_put_var(ncid,varid,work_gr(:,:), &
+                                         start=(/        1,        1,k,ic/), &
+                                         count=(/nx_global,ny_global,1, 1/))
+                  if (status /= nf90_noerr) call abort_ice( &
+                     'ice: Error writing variable '//avail_hist_fields(n)%vname)
+                endif
+             enddo ! k
+          enddo ! ic
+        endif
+      enddo ! num_avail_hist_fields_4Ds
+
+      deallocate(work_gr)
       deallocate(work_g1)
 
       !-----------------------------------------------------------------
@@ -2296,7 +3116,7 @@
          if (status /= nf90_noerr) call abort_ice( &
                        'ice: Error closing netCDF history file')
          write(nu_diag,*) ' '
-         write(nu_diag,*) 'Finished writing ',trim(ncfile)
+         write(nu_diag,*) 'Finished writing ',trim(ncfile(ns))
       endif
 #endif
 
@@ -2313,7 +3133,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine icebin
+      subroutine icebin(ns)
 !
 ! !DESCRIPTION:
 !
@@ -2335,11 +3155,13 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
+      integer (kind=int_kind), intent(in) :: ns
+!
 !EOP
 !
-      integer (kind=int_kind) :: i,j,n,nrec,nbits
+      integer (kind=int_kind) :: i,j,k,n,nn,nrec,nbits
       character (char_len) :: title
-      character (char_len_long) :: ncfile, hdrfile
+      character (char_len_long) :: ncfile(max_nstrm), hdrfile
 
       integer (kind=int_kind) :: icategory,i_aice
 
@@ -2351,30 +3173,28 @@
 
       if (my_task == master_task) then
 
-        call construct_filename(ncfile,'da')
+        call construct_filename(ncfile(ns),'da',ns)
 
         ! add local directory path name to ncfile
         if (write_ic) then
-          ncfile = trim(incond_dir)//ncfile
+          ncfile(ns) = trim(incond_dir)//ncfile(ns)
         else
-          ncfile = trim(history_dir)//ncfile
+          ncfile(ns) = trim(history_dir)//ncfile(ns)
         endif
-        hdrfile = trim(ncfile)//'.hdr'
+        hdrfile = trim(ncfile(ns))//'.hdr'
 
         !-----------------------------------------------------------------
         ! create history files
         !-----------------------------------------------------------------
         nbits = 32 ! single precision
-        call ice_open(nu_history, ncfile, nbits) ! direct access
+        call ice_open(nu_history, ncfile(ns), nbits) ! direct access
         open(nu_hdr,file=hdrfile,form='formatted',status='unknown') ! ascii
-
-!echmod call ice_write(nu_history, nrec, work, rda8 or ida4, diag)
 
         title  = 'sea ice model: Community Ice Code (CICE)'
         write (nu_hdr, 999) 'source',title,' '
 
-        write (nu_hdr, 999) 'file name contains model date',trim(ncfile),' '
-#if (defined CCSM) || (defined SEQ_MCT)
+        write (nu_hdr, 999) 'file name contains model date',trim(ncfile(ns)),' '
+#ifdef CCSMCOUPLED
         write (nu_hdr, 999) 'runid',runid,' '
 #endif
         write (nu_hdr, 999) 'calendar','noleap',' '
@@ -2386,12 +3206,14 @@
 
         call date_and_time(date=current_date, time=current_time)
         write (nu_hdr,1000) current_date(1:4), current_date(5:6), &
-                                current_date(7:8), current_time(1:2), &
-                                current_time(3:4), current_time(5:8)
+                            current_date(7:8), current_time(1:2), &
+                            current_time(3:4), current_time(5:8)
         write (nu_hdr, *  ) ' '
         write (nu_hdr, *  ) 'Grid size:'
         write (nu_hdr, 998) '  ni',nx_global
         write (nu_hdr, 998) '  nj',ny_global
+        write (nu_hdr, 998) '  nk',nzilyr
+        write (nu_hdr, 998) '  nc',ncat_hist
 
         write (nu_hdr, *  ) 'Grid variables: (left column = nrec)'
         nrec = 1
@@ -2400,43 +3222,122 @@
       endif  ! my_task = master_task
       call ice_write(nu_history, nrec, tarea, 'rda4', diag)
 
-      do n=1,avgsiz
-        if (iout(n)) then
+      do n=1,num_avail_hist_fields_2D
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) then
+
           nrec = nrec + 1
           if (my_task == master_task) then
-            write (nu_hdr, 996) nrec,trim(vname(n)),trim(vdesc(n)),trim(vunit(n))
+            write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+               trim(avail_hist_fields(n)%vdesc),trim(avail_hist_fields(n)%vunit)
 
             ! Append ice thickness range to aicen comments
-            c_aice = TRIM(vname(n))
+            c_aice = TRIM(avail_hist_fields(n)%vname)
             i_aice = lenstr(c_aice)
-            if (c_aice(1:4) == 'aice' .and. i_aice > 4 ) then
-              if (i_aice == 5) then         ! categories 1-9
-                read(c_aice(i_aice:i_aice), '(i1)') icategory
-              else                          ! categories > 9
-                read(c_aice(i_aice-1:i_aice), '(i2)') icategory
-              endif
-              vcomment(n) = 'Ice range: '//c_hi_range(icategory)
+            if (i_aice > 4 .and. c_aice(1:5) == 'aicen') then
+              read(c_aice(6:9), '(i3)') icategory
+              avail_hist_fields(n)%vcomment = &
+                 'Ice range: '//c_hi_range(icategory)
             endif
-            write (nu_hdr, 995) nrec,trim(vname(n)),trim(vcomment(n))
+            write (nu_hdr, 995) nrec,trim(avail_hist_fields(n)%vname), &
+               trim(avail_hist_fields(n)%vcomment)
 
-            if (histfreq == '1'     .or. .not. hist_avg &
-                .or. n==n_divu      .or. n==n_shear     &  ! snapshots
-                .or. n==n_sig1      .or. n==n_sig2 .or. n==n_trsig &
-                .or. n==n_mlt_onset .or. n==n_frz_onset &
-                .or. n==n_hisnap    .or. n==n_aisnap) then
-               write (nu_hdr, 996) nrec,trim(vname(n)),'time_rep','instantaneous'
+            if (histfreq(ns) == '1' .or. .not. hist_avg         &
+                .or. n==n_divu(ns)      .or. n==n_shear(ns)     &  ! snapshots
+                .or. n==n_sig1(ns)      .or. n==n_sig2(ns)      &
+                .or. n==n_trsig(ns)                             &
+                .or. n==n_mlt_onset(ns) .or. n==n_frz_onset(ns) &
+                .or. n==n_hisnap(ns)    .or. n==n_aisnap(ns)) then
+               write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+                  'time_rep','instantaneous'
             else
-               write (nu_hdr, 996) nrec,trim(vname(n)),'time_rep','averaged'
+               write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+                  'time_rep','averaged'
             endif
           endif
 
-          call ice_write(nu_history, nrec, aa(:,:,n,:), 'rda4', diag)
+          call ice_write(nu_history, nrec, a2D(:,:,n,:), 'rda4', diag)
 
         endif
-      enddo
+      enddo ! num_avail_hist_fields_2D
+
+      do n = n2D + 1, n3Dccum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) then
+
+          do nn = 1, ncat_hist
+          nrec = nrec + 1
+          if (my_task == master_task) then
+            write (nu_hdr, 994) nrec,trim(avail_hist_fields(n)%vname), &
+               trim(avail_hist_fields(n)%vdesc),trim(avail_hist_fields(n)%vunit),nn
+
+            if (histfreq(ns) == '1' .or. .not. hist_avg) then
+               write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+                  'time_rep','instantaneous'
+            else
+               write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+                  'time_rep','averaged'
+            endif
+          endif
+
+          call ice_write(nu_history, nrec, a3Dc(:,:,nn,n-n2D,:), 'rda4', diag)
+          enddo ! ncat
+
+        endif
+      enddo ! num_avail_hist_fields_3Dc
+
+      do n = n3Dccum + 1, n3Dzcum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) then
+
+          do k = 1, nzilyr
+          nrec = nrec + 1
+          if (my_task == master_task) then
+            write (nu_hdr, 993) nrec,trim(avail_hist_fields(n)%vname), &
+               trim(avail_hist_fields(n)%vdesc),trim(avail_hist_fields(n)%vunit),k
+
+            if (histfreq(ns) == '1' .or. .not. hist_avg) then
+               write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+                  'time_rep','instantaneous'
+            else
+               write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+                  'time_rep','averaged'
+            endif
+          endif
+
+          call ice_write(nu_history, nrec, a3Dz(:,:,k,n-n3Dccum,:), 'rda4', diag)
+          enddo ! nzilyr
+
+        endif
+      enddo ! num_avail_hist_fields_3Dz
+
+      do n = n3Dzcum + 1, n4Dicum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) then
+
+          do nn = 1, ncat_hist
+          do k = 1, nzilyr
+          nrec = nrec + 1
+          if (my_task == master_task) then
+            write (nu_hdr, 993) nrec,trim(avail_hist_fields(n)%vname), &
+               trim(avail_hist_fields(n)%vdesc),trim(avail_hist_fields(n)%vunit),nn,k
+
+            if (histfreq(ns) == '1' .or. .not. hist_avg) then
+               write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+                  'time_rep','instantaneous'
+            else
+               write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+                  'time_rep','averaged'
+            endif
+          endif
+
+          call ice_write(nu_history, nrec, a4Di(:,:,k,nn,n-n3Dzcum,:), 'rda4', diag)
+          enddo ! nzilyr
+          enddo ! ncat_hist
+
+        endif
+      enddo ! num_avail_hist_fields_4Di
 
 995     format(i3,2x,a,' comment: ',a)
 996     format(i3,2x,a,': ',a,',',2x,a)
+993     format(i3,2x,a,': ',a,',',2x,a,2x,' cat ',i3,2x,'zlvl ',i3)
+994     format(i3,2x,a,': ',a,',',2x,a,2x,' cat ',i3)
 997     format(a,': ',es13.6)
 998     format(a,': ',i6)
 999     format(a,': ',a,2x,a)
@@ -2447,14 +3348,14 @@
         close (nu_hdr)     ! header file
         close (nu_history) ! data file
         write (nu_diag,*) ' '
-        write (nu_diag,*) 'Finished writing ',trim(ncfile)
+        write (nu_diag,*) 'Finished writing ',trim(ncfile(ns))
       endif
 
       end subroutine icebin
 
 !=======================================================================
 
-      subroutine construct_filename(ncfile,suffix)
+      subroutine construct_filename(ncfile,suffix,ns)
 
       use ice_calendar, only: time, sec, idate, nyr, month, daymo,  &
                               mday, write_ic, histfreq, histfreq_n, &
@@ -2464,8 +3365,11 @@
 
       character (char_len_long), intent(inout) :: ncfile
       character (len=2), intent(in) :: suffix
+      integer (kind=int_kind), intent(in) :: ns
 
       integer (kind=int_kind) :: iyear, imonth, iday, isec
+
+      character (char_len_long) :: tmpfile
 
         iyear = nyr + year_init - 1 ! set year_init=1 in ice_in to get iyear=nyr
         imonth = month
@@ -2480,7 +3384,7 @@
         else
 
          if (hist_avg) then
-          if (histfreq.eq.'h'.or.histfreq.eq.'H') then
+          if (histfreq(ns).eq.'h'.or.histfreq(ns).eq.'H') then
            ! do nothing
           elseif (new_year) then
            iyear = iyear - 1
@@ -2494,26 +3398,26 @@
           endif
          endif
 
-         if (histfreq == '1') then ! instantaneous, write every dt
+         if (histfreq(ns) == '1') then ! instantaneous, write every dt
            write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
             history_file(1:lenstr(history_file)),'_inst.', &
              iyear,'-',imonth,'-',iday,'-',sec,'.',suffix
 
          elseif (hist_avg) then    ! write averaged data
 
-          if (histfreq.eq.'d'.or.histfreq.eq.'D') then     ! daily
+          if (histfreq(ns).eq.'d'.or.histfreq(ns).eq.'D') then     ! daily
            write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,a)')  &
             history_file(1:lenstr(history_file)), &
              '.',iyear,'-',imonth,'-',iday,'.',suffix
-          elseif (histfreq.eq.'h'.or.histfreq.eq.'H') then ! hourly
+          elseif (histfreq(ns).eq.'h'.or.histfreq(ns).eq.'H') then ! hourly
            write(ncfile,'(a,a,i2.2,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
-            history_file(1:lenstr(history_file)),'_',histfreq_n,'h.', &
+            history_file(1:lenstr(history_file)),'_',histfreq_n(ns),'h.', &
              iyear,'-',imonth,'-',iday,'-',sec,'.',suffix
-          elseif (histfreq.eq.'m'.or.histfreq.eq.'M') then ! monthly
+          elseif (histfreq(ns).eq.'m'.or.histfreq(ns).eq.'M') then ! monthly
            write(ncfile,'(a,a,i4.4,a,i2.2,a,a)')  &
             history_file(1:lenstr(history_file)),'.', &
              iyear,'-',imonth,'.',suffix
-          elseif (histfreq.eq.'y'.or.histfreq.eq.'Y') then ! yearly
+          elseif (histfreq(ns).eq.'y'.or.histfreq(ns).eq.'Y') then ! yearly
            write(ncfile,'(a,a,i4.4,a,a)') &
             history_file(1:lenstr(history_file)),'.', iyear,'.',suffix
           endif
@@ -2526,6 +3430,304 @@
         endif
 
       end subroutine construct_filename
+
+!=======================================================================
+
+      subroutine define_hist_field(id, vname, vunit, vcoord, vcellmeas, &
+                                   vdesc, vcomment, cona, conb, &
+                                   ns1, vhistfreq)
+
+!     !DESCRIPTION:
+!     Initializes description of an available field and returns location
+!     in the available fields array for use in later calls.
+!
+!     !REVISION HISTORY:
+!     2009 Created by D. Bailey following POP
+
+!     !USES:
+      use ice_exit
+      use ice_calendar, only: histfreq, histfreq_n, nstreams
+
+!     !OUTPUT PARAMETERS:
+
+      integer (int_kind), dimension(max_nstrm), intent(out) :: &
+         id                ! location in avail_fields array for use in
+                           ! later routines
+
+!     !INPUT PARAMETERS
+
+      character (len=*), intent(in) :: &
+         vname      , & ! variable names
+         vunit      , & ! variable units
+         vcoord     , & ! variable coordinates
+         vcellmeas  , & ! variables cell measures
+         vdesc      , & ! variable descriptions
+         vcomment       ! variable comments
+
+      real (kind=dbl_kind), intent(in) :: &
+         cona       , & ! multiplicative conversion factor
+         conb           ! additive conversion factor
+
+      character (len=*), intent(in) :: &
+         vhistfreq      ! history frequency
+ 
+      integer (kind=int_kind), intent(in) :: &
+         ns1            ! stream index
+
+      integer (kind=int_kind) :: &
+         ns         , & ! loop index
+         lenf           ! length of namelist string
+
+      character (len=40) :: stmp
+
+      lenf = len(trim(vhistfreq))
+      if (ns1 == 1) id(:) = 0
+
+      do ns = 1, nstreams
+         if (vhistfreq(ns1:ns1) == histfreq(ns)) then
+
+            num_avail_hist_fields_tot = num_avail_hist_fields_tot + 1
+
+            if (vcoord(11:14) == 'time') then
+               num_avail_hist_fields_2D  = num_avail_hist_fields_2D + 1
+            elseif (vcoord(11:14) == 'NCAT' .and. vcoord(16:19) == 'time') then
+               num_avail_hist_fields_3Dc = num_avail_hist_fields_3Dc + 1
+            elseif (vcoord(11:15) == 'VGRDi' .and. vcoord(17:20) == 'time') then
+               num_avail_hist_fields_3Dz = num_avail_hist_fields_3Dz + 1
+            elseif (vcoord(11:15) == 'VGRDi' .and. vcoord(17:20) == 'NCAT') then
+               num_avail_hist_fields_4Di = num_avail_hist_fields_4Di + 1
+            elseif (vcoord(11:15) == 'VGRDs' .and. vcoord(17:20) == 'NCAT') then
+               num_avail_hist_fields_4Ds = num_avail_hist_fields_4Ds + 1
+            endif
+
+            if (num_avail_hist_fields_tot > max_avail_hist_fields) &
+               call abort_ice("Need to increase max_avail_hist_fields")
+
+            if (num_avail_hist_fields_tot /= &
+                num_avail_hist_fields_2D  + &
+                num_avail_hist_fields_3Dc + &
+                num_avail_hist_fields_3Dz + &
+                num_avail_hist_fields_4Di + &
+                num_avail_hist_fields_4Ds)  &
+               call abort_ice("num_avail_hist_fields error")
+
+            id(ns) = num_avail_hist_fields_tot
+
+            stmp = vname
+            if (lenf > 1 .and. ns1 > 1) &
+               write(stmp,'(a,a1,a1)') trim(stmp),'_',vhistfreq(ns1:ns1)
+
+            avail_hist_fields(id(ns))%vname = trim(stmp)
+            avail_hist_fields(id(ns))%vunit = trim(vunit)
+            avail_hist_fields(id(ns))%vcoord = trim(vcoord)
+            avail_hist_fields(id(ns))%vcellmeas = trim(vcellmeas)
+            avail_hist_fields(id(ns))%vdesc = trim(vdesc)
+            avail_hist_fields(id(ns))%vcomment = trim(vcomment)
+            avail_hist_fields(id(ns))%cona = cona
+            avail_hist_fields(id(ns))%conb = conb
+            avail_hist_fields(id(ns))%vhistfreq = vhistfreq(ns1:ns1)
+            avail_hist_fields(id(ns))%vhistfreq_n = histfreq_n(ns)
+
+           endif
+        enddo
+
+      end subroutine define_hist_field
+
+!=======================================================================
+
+      subroutine accum_hist_field_2D(id, iblk, field_accum, field)
+
+!     !DESCRIPTION:
+!     Accumulates a history field
+!
+!     !REVISION HISTORY:
+!     2009 Created by D. Bailey following POP
+!     2010 Generalized dimension of variables by N. Jeffery, E. Hunke
+
+      use ice_domain
+      use ice_grid, only: tmask
+      use ice_calendar, only: nstreams
+
+!     !OUTPUT PARAMETERS:
+
+      integer (int_kind), dimension(max_nstrm), intent(in) :: &
+         id                ! location in avail_fields array for use in
+                           ! later routines
+        
+      integer (kind=int_kind), intent(in) :: iblk
+
+      real (kind=dbl_kind), intent(in) :: &
+         field_accum(:,:)
+
+      real (kind=dbl_kind), intent(inout) :: &
+         field(:,:,:,:)
+
+      type (block) :: &
+         this_block           ! block information for current block
+
+      integer (kind=int_kind) :: i,j, ilo, ihi, jlo, jhi, ns, idns
+
+      !---------------------------------------------------------------
+      ! increment field
+      !---------------------------------------------------------------
+
+       do ns = 1, nstreams
+       idns = id(ns)
+       if (idns > 0) then
+
+       this_block = get_block(blocks_ice(iblk),iblk)
+       ilo = this_block%ilo
+       ihi = this_block%ihi
+       jlo = this_block%jlo
+       jhi = this_block%jhi
+
+       do j = jlo, jhi
+       do i = ilo, ihi
+          if (tmask(i,j,iblk)) then
+             field(i,j,idns, iblk) = field(i,j,idns, iblk) + field_accum(i,j)
+          endif
+       enddo
+       enddo
+
+       endif
+       enddo
+
+      end subroutine accum_hist_field_2D
+
+!=======================================================================
+
+      subroutine accum_hist_field_3D(id, iblk, ndim, field_accum, field)
+
+!     !DESCRIPTION:
+!     Accumulates a history field
+!
+!     !REVISION HISTORY:
+!     2009 Created by D. Bailey following POP
+!     2010 Generalized dimension of variables by N. Jeffery, E. Hunke
+
+      use ice_domain
+      use ice_grid, only: tmask
+      use ice_calendar, only: nstreams
+
+!     !OUTPUT PARAMETERS:
+
+      integer (int_kind), dimension(max_nstrm), intent(in) :: &
+         id                ! location in avail_fields array for use in
+                           ! later routines
+        
+      integer (kind=int_kind), intent(in) :: iblk
+
+      integer (kind=int_kind), intent(in) :: &
+         ndim              ! third dimension size
+
+      real (kind=dbl_kind), intent(in) :: &
+         field_accum(:,:,:)
+
+      real (kind=dbl_kind), intent(inout) :: &
+         field(:,:,:,:,:)
+
+      type (block) :: &
+         this_block           ! block information for current block
+
+      integer (kind=int_kind) :: i,j,k, ilo, ihi, jlo, jhi, ns, idns
+
+      !---------------------------------------------------------------
+      ! increment field
+      !---------------------------------------------------------------
+
+       do ns = 1, nstreams
+       idns = id(ns)
+       if (idns > 0) then
+
+       this_block = get_block(blocks_ice(iblk),iblk)
+       ilo = this_block%ilo
+       ihi = this_block%ihi
+       jlo = this_block%jlo
+       jhi = this_block%jhi
+
+       do k = 1, ndim
+       do j = jlo, jhi
+       do i = ilo, ihi
+          if (tmask(i,j,iblk)) then
+             field(i,j,k,idns,iblk) = field(i,j,k,idns,iblk) + field_accum(i,j,k)
+          endif
+       enddo
+       enddo
+       enddo
+
+       endif
+       enddo
+
+      end subroutine accum_hist_field_3D
+
+!=======================================================================
+
+      subroutine accum_hist_field_4D(id, iblk, ndim3, ndim4, field_accum, field)
+
+!     !DESCRIPTION:
+!     Accumulates a history field
+!
+!     !REVISION HISTORY:
+!     2009 Created by D. Bailey following POP
+!     2010 Generalized dimension of variables by N. Jeffery, E. Hunke
+
+      use ice_domain
+      use ice_grid, only: tmask
+      use ice_calendar, only: nstreams
+
+!     !OUTPUT PARAMETERS:
+
+      integer (int_kind), dimension(max_nstrm), intent(in) :: &
+         id                ! location in avail_fields array for use in
+                           ! later routines
+        
+      integer (kind=int_kind), intent(in) :: iblk
+
+      integer (kind=int_kind), intent(in) :: &
+         ndim3  , &        ! third dimension size
+         ndim4             ! fourth dimension size
+
+      real (kind=dbl_kind), intent(in) :: &
+         field_accum(:,:,:,:)
+
+      real (kind=dbl_kind), intent(inout) :: &
+         field(:,:,:,:,:,:)
+
+      type (block) :: &
+         this_block           ! block information for current block
+
+      integer (kind=int_kind) :: i,j,k,n,ilo, ihi, jlo, jhi, ns, idns
+
+      !---------------------------------------------------------------
+      ! increment field
+      !---------------------------------------------------------------
+
+       do ns = 1, nstreams
+       idns = id(ns)
+       if (idns > 0) then
+
+       this_block = get_block(blocks_ice(iblk),iblk)
+       ilo = this_block%ilo
+       ihi = this_block%ihi
+       jlo = this_block%jlo
+       jhi = this_block%jhi
+
+       do k = 1, ndim4
+       do n = 1, ndim3
+       do j = jlo, jhi
+       do i = ilo, ihi
+          if (tmask(i,j,iblk)) then
+             field(i,j,n,k,idns,iblk) = field(i,j,n,k,idns,iblk) + field_accum(i,j,n,k)
+          endif
+       enddo
+       enddo
+       enddo
+       enddo
+
+       endif
+       enddo
+
+      end subroutine accum_hist_field_4D
 
 !=======================================================================
 

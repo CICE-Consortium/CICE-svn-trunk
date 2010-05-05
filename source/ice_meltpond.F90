@@ -101,7 +101,7 @@
 !
       use ice_state, only: nt_Tsfc, nt_volpn
       use ice_calendar, only: dt
-      use ice_domain_size, only: ntrcr
+      use ice_domain_size, only: max_ntrcr
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -121,7 +121,7 @@
          apondn, &
          hpondn
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr), &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_ntrcr), &
          intent(inout) :: &
          trcrn
 

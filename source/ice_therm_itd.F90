@@ -57,7 +57,7 @@
 !
       subroutine linear_itd (nx_block,    ny_block,    & 
                              icells, indxi, indxj,     & 
-                             trcr_depend, & 
+                             ntrcr,       trcr_depend, & 
                              aicen_init,  vicen_init,  & 
                              aicen,       trcrn,       & 
                              vicen,       vsnon,       & 
@@ -98,7 +98,8 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         icells                ! number of grid cells with ice
+         icells            , & ! number of grid cells with ice
+         ntrcr                 ! number of tracers in use
 
        integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
@@ -596,7 +597,8 @@
 
       call shift_ice (nx_block, ny_block,    &
                       indxi,    indxj,       &
-                      icells,   trcr_depend, &
+                      icells,                &
+                      ntrcr,    trcr_depend, &
                       aicen,    trcrn,       &
                       vicen,    vsnon,       &
                       eicen,    esnon,       &
@@ -835,7 +837,7 @@
 ! !INTERFACE:
 !
       subroutine add_new_ice (nx_block,  ny_block,   &
-                              icells,                &
+                              ntrcr,     icells,     &
                               indxi,     indxj,      &
                               tmask,     dt,         &
                               aicen,     trcrn,      &
@@ -851,14 +853,16 @@
 !
       use ice_itd, only: hin_max, ilyr1, column_sum, &
                          column_conservation_check
-      use ice_state, only: nt_Tsfc, nt_iage
+      use ice_state, only: nt_Tsfc, nt_iage, nt_alvl, nt_vlvl
       use ice_age, only: tr_iage
+      use ice_mechred, only: tr_lvl
       use ice_flux, only: update_ocn_f
 
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
+         ntrcr             , & ! number of tracers in use
          icells                ! number of ice/ocean grid cells
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
@@ -1105,8 +1109,14 @@
             ! update ice age due to freezing (new ice age = dt)
             vtmp = vicen(i,j,n) + vsurp
             if (tr_iage .and. vtmp > puny) &
-                trcrn(i,j,nt_iage,n)  &
-             = (trcrn(i,j,nt_iage,n)*vicen(i,j,n) + dt*vsurp) / vtmp
+                trcrn(i,j,nt_iage,n) = &
+               (trcrn(i,j,nt_iage,n)*vicen(i,j,n) + dt*vsurp) / vtmp
+
+            if (tr_lvl .and. vicen(i,j,n) > puny) then
+                trcrn(i,j,nt_vlvl,n) = &
+               (trcrn(i,j,nt_vlvl,n)*vicen(i,j,n) + &
+                trcrn(i,j,nt_alvl,n)*vsurp) / vtmp
+            endif
 
             ! update category volumes
             vicen(i,j,n) = vtmp
@@ -1148,14 +1158,21 @@
          aicen(i,j,1) = aicen(i,j,1) + ai0new(m)
          aice0(i,j)   = aice0(i,j)   - ai0new(m)
          vicen(i,j,1) = vicen(i,j,1) + vi0new(m)
-         trcrn(i,j,nt_Tsfc,1) = (Tf(i,j)*ai0new(m) &
-                              + trcrn(i,j,nt_Tsfc,1)*area1) &
-                                / aicen(i,j,1)
+
+         trcrn(i,j,nt_Tsfc,1) = &
+            (trcrn(i,j,nt_Tsfc,1)*area1 + Tf(i,j)*ai0new(m))/aicen(i,j,1)
          trcrn(i,j,nt_Tsfc,1) = min (trcrn(i,j,nt_Tsfc,1), c0)
 
          if (tr_iage .and. vicen(i,j,1) > puny) &
              trcrn(i,j,nt_iage,1) = &
             (trcrn(i,j,nt_iage,1)*vice1 + dt*vi0new(m))/vicen(i,j,1)
+
+         if (tr_lvl .and. aicen(i,j,1) > puny) then
+             trcrn(i,j,nt_alvl,1) = &
+            (trcrn(i,j,nt_alvl,1)*area1 + ai0new(m))/aicen(i,j,1)
+             trcrn(i,j,nt_vlvl,1) = &
+            (trcrn(i,j,nt_vlvl,1)*vice1 + vi0new(m))/vicen(i,j,1)
+         endif
 
          vlyr(m)    = vi0new(m) / rnilyr
       enddo                     ! ij

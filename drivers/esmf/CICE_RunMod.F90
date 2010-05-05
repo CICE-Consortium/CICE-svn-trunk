@@ -344,7 +344,7 @@
          if (write_restart == 1) then
             call dumpfile ! core variables for restarting
             if (tr_iage) call write_restart_age
-!            if (tr_pond) call write_restart_ponds
+            if (tr_pond) call write_restart_pond
          endif
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 
@@ -412,12 +412,12 @@
          shcoef      , & ! transfer coefficient for sensible heat
          lhcoef          ! transfer coefficient for latent heat
 
-      ! Local variables to keep track of melt for ponds
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         melts_old, &
-         meltt_old, &
-         melts_tmp, &
-         meltt_tmp
+         melttn      , & ! top melt in category n (m)
+         meltbn      , & ! bottom melt in category n (m)
+         meltsn      , & ! snow melt in category n (m)
+         congeln     , & ! congelation ice formation in category n (m)
+         snoicen         ! snow-ice formation in category n (m)
 
       type (block) :: &
          this_block      ! block information for current block
@@ -497,7 +497,7 @@
             enddo               ! i
             enddo               ! j
 
-            if (calc_Tsfc .or. calc_strair) then 
+            if ((calc_Tsfc .or. calc_strair) .and. icells > 0) then 
 
       !-----------------------------------------------------------------
       ! Atmosphere boundary layer calculation; compute coefficients
@@ -571,9 +571,6 @@
             sl1 = slyr1(n)
             sl2 = slyrn(n)
 
-            melts_old = melts(:,:,iblk)
-            meltt_old = meltt(:,:,iblk)
-
             if (.not.(calc_Tsfc)) then
 
                ! If not calculating surface temperature and fluxes, set 
@@ -591,6 +588,7 @@
                                 fcondtopn(:,:,n,iblk) )
 
 
+               ! more realistic values for testing the option calc_Tsfc = F
                call explicit_calc_Tsfc (nx_block,          ny_block,     &
                                         my_task,           icells,       &      
                                         indxi,             indxj,        &
@@ -634,9 +632,9 @@
                              fswabsn,             flwoutn,             &
                              evapn,               freshn,              &
                              fsaltn,              fhocnn,              &
-                             meltt   (:,:,iblk),  melts   (:,:,iblk),  &
-                             meltb   (:,:,iblk),                       &
-                             congel  (:,:,iblk),  snoice  (:,:,iblk),  &
+                             melttn,              meltsn,              &
+                             meltbn,                                   &
+                             congeln,             snoicen,             &
                              mlt_onset(:,:,iblk), frz_onset(:,:,iblk), &
                              yday,                l_stop,              &
                              istop,               jstop)
@@ -661,12 +659,9 @@
 
          if (tr_pond .and. trim(shortwave) == 'dEdd') then
 
-            melts_tmp = melts(:,:,iblk) - melts_old
-            meltt_tmp = meltt(:,:,iblk) - meltt_old
-
             call compute_ponds(nx_block, ny_block,                      &
                                ilo, ihi, jlo, jhi,                      &
-                               meltt_tmp, melts_tmp, frain(:,:,iblk),   &
+                               melttn, meltsn, frain(:,:,iblk),         &
                                aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
                                vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk),&
                                apondn(:,:,n,iblk), hpondn(:,:,n,iblk))
@@ -697,7 +692,11 @@
                             evap    (:,:,iblk),                       &
                             Tref    (:,:,iblk), Qref      (:,:,iblk), &
                             fresh   (:,:,iblk), fsalt     (:,:,iblk), &
-                            fhocn   (:,:,iblk), fswthru   (:,:,iblk))
+                            fhocn   (:,:,iblk), fswthru   (:,:,iblk), &
+                            melttn, meltsn, meltbn, congeln, snoicen, &
+                            meltt   (:,:,iblk),  melts   (:,:,iblk),  &
+                            meltb   (:,:,iblk),                       &
+                            congel  (:,:,iblk),  snoice  (:,:,iblk))
 
          enddo                  ! ncat
 
@@ -740,6 +739,8 @@
          i,j         , & ! horizontal indices
          ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
+      real (kind=dbl_kind) :: cszn ! counter for history averaging
+
       call ice_timer_start(timer_column)
 
       !-----------------------------------------------------------------
@@ -761,6 +762,17 @@
             alidf(i,j,iblk) = c0
             alvdr(i,j,iblk) = c0
             alidr(i,j,iblk) = c0
+
+            albice(i,j,iblk) = c0
+            albsno(i,j,iblk) = c0
+            albpnd(i,j,iblk) = c0
+
+            ! for history averaging
+            cszn = c0
+            if (coszen(i,j,iblk) > puny) cszn = c1
+            do n = 1, nstreams
+               albcnt(i,j,iblk,n) = albcnt(i,j,iblk,n) + cszn
+            enddo
          enddo
          enddo
          do n = 1, ncat
@@ -774,6 +786,15 @@
                + alvdrn(i,j,n,iblk)*aicen(i,j,n,iblk)
             alidr(i,j,iblk) = alidr(i,j,iblk) &
                + alidrn(i,j,n,iblk)*aicen(i,j,n,iblk)
+
+            if (coszen(i,j,iblk) > puny) then ! sun above horizon
+            albice(i,j,iblk) = albice(i,j,iblk) &
+               + albicen(i,j,n,iblk)*aicen(i,j,n,iblk)
+            albsno(i,j,iblk) = albsno(i,j,iblk) &
+               + albsnon(i,j,n,iblk)*aicen(i,j,n,iblk)
+            albpnd(i,j,iblk) = albpnd(i,j,iblk) &
+               + albpndn(i,j,n,iblk)*aicen(i,j,n,iblk)
+            endif
          enddo
          enddo
          enddo
@@ -912,7 +933,7 @@
          ij              ! horizontal indices, combine i and j loops
 
       real (kind=dbl_kind)  :: &
-         raicen          ! 1/aicen
+         raicen          ! 1 or 1/aicen
 
       logical (kind=log_kind) :: &
          extreme_flag    ! flag for extreme forcing values

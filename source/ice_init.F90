@@ -68,7 +68,7 @@
       use ice_diagnostics
       use ice_fileunits
       use ice_calendar, only: year_init, istep0, histfreq, histfreq_n, &
-                              dumpfreq, dumpfreq_n, diagfreq, &
+                              dumpfreq, dumpfreq_n, diagfreq, nstreams, &
                               npt, dt, ndyn_dt, days_per_year, write_ic
       use ice_restart, only: &
           restart, restart_dir, restart_file, pointer_file, &
@@ -87,16 +87,18 @@
           sss_data_type,   sst_data_type, ocn_data_dir, &
           oceanmixed_file, restore_sst,   trestore 
       use ice_grid, only: grid_file, kmt_file, grid_type, grid_format
-      use ice_mechred, only: kstrength, krdg_partic, krdg_redist
+      use ice_mechred, only: kstrength, krdg_partic, krdg_redist, tr_lvl, mu_rdg
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
-      use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, &
+      use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, ahmax, &
                                shortwave, albedo_type, R_ice, R_pnd, &
                                R_snw
       use ice_atmo, only: atmbndy, calc_strair
       use ice_transport_driver, only: advection
       use ice_age, only: tr_iage, restart_age
+      use ice_lvl, only: restart_lvl
       use ice_meltpond, only: tr_pond, restart_pond
-      use ice_therm_vertical, only: calc_Tsfc, heat_capacity
+      use ice_therm_vertical, only: calc_Tsfc, heat_capacity, conduct, &
+          ustar_min
       use ice_restoring
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -105,9 +107,11 @@
 !
       integer (kind=int_kind) :: &
         nml_error, & ! namelist i/o error flag
-        ntr           ! counter for number of tracers turned on
+        n            ! loop index
 
       character (len=6) :: chartmp
+
+      logical (kind=log_kind), dimension(max_ntrcr) :: lwork
 
       !-----------------------------------------------------------------
       ! Namelist variables.
@@ -131,20 +135,21 @@
 
       namelist /ice_nml/ &
         kitd,           kdyn,            ndte,                          &
-        evp_damping,    yield_curve,                                    &
-        kstrength,      krdg_partic,     krdg_redist,   advection,      &
-        heat_capacity,  shortwave,       albedo_type,                   &
+        evp_damping,    yield_curve,     advection,                     &
+        kstrength,      krdg_partic,     krdg_redist,   mu_rdg,         &
+        heat_capacity,  conduct,         shortwave,     albedo_type,    &
         albicev,        albicei,         albsnowv,      albsnowi,       &
-        R_ice,          R_pnd,           R_snw,                         &
+        ahmax,          R_ice,           R_pnd,         R_snw,          &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
         atm_data_type,  atm_data_dir,    calc_strair,   calc_Tsfc,      &
-        precip_units,   Tfrzpt,          update_ocn_f,                  &
+        precip_units,   Tfrzpt,          update_ocn_f,  ustar_min,      &
         oceanmixed_ice, ocn_data_format, sss_data_type, sst_data_type,  &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
         restore_ice    
 
       namelist /tracer_nml/   &
         tr_iage, restart_age, &
+        tr_lvl, restart_lvl, &
         tr_pond, restart_pond
 
       !-----------------------------------------------------------------
@@ -162,8 +167,12 @@
       print_global = .true.  ! if true, print global diagnostic data
       diag_type = 'stdout'
       diag_file = 'ice_diag.d'
-      histfreq='m'           ! output frequency option
-      histfreq_n = 1         ! output frequency
+      histfreq(1) = '1'      ! output frequency option for different streams
+      histfreq(2) = 'h'      ! output frequency option for different streams
+      histfreq(3) = 'd'      ! output frequency option for different streams
+      histfreq(4) = 'm'      ! output frequency option for different streams
+      histfreq(5) = 'y'      ! output frequency option for different streams
+      histfreq_n(:) = 1      ! output frequency 
       hist_avg = .true.      ! if true, write time-averages (not snapshots)
       history_dir  = ' '     ! write to executable dir for default
       history_file = 'iceh'  ! history file name prefix
@@ -193,13 +202,16 @@
       kstrength = 1          ! 1 = Rothrock 75 strength, 0 = Hibler 79
       krdg_partic = 1        ! 1 = new participation, 0 = Thorndike et al 75
       krdg_redist = 1        ! 1 = new redistribution, 0 = Hibler 80
+      mu_rdg = 3             ! e-folding scale of ridged ice, krdg_partic=1 (m^0.5)
       advection  = 'remap'   ! incremental remapping transport scheme
       shortwave = 'default'  ! or 'dEdd' (delta-Eddington)
       albedo_type = 'default'! or 'constant'
       heat_capacity = .true. ! nonzero heat capacity (F => 0-layer thermo)
+      conduct = 'bubbly'     ! 'MU71' or 'bubbly' (Pringle et al 2007)
       calc_Tsfc = .true.     ! calculate surface temperature
       Tfrzpt    = 'linear_S' ! ocean freezing temperature, 'constant'=-1.8C
       update_ocn_f = .false. ! include fresh water and salt fluxes for frazil
+      ustar_min = 0.005      ! minimum friction velocity for ocean heat flux (m/s)
       R_ice     = 0.00_dbl_kind   ! tuning parameter for sea ice
       R_pnd     = 0.00_dbl_kind   ! tuning parameter for ponded sea ice
       R_snw     = 0.00_dbl_kind   ! tuning parameter for snow over sea ice
@@ -207,7 +219,8 @@
       albicei   = 0.36_dbl_kind   ! near-ir ice albedo for h > ahmax
       albsnowv  = 0.98_dbl_kind   ! cold snow albedo, visible
       albsnowi  = 0.70_dbl_kind   ! cold snow albedo, near IR
-      atmbndy   = 'default'  ! or 'constant'
+      ahmax     = 0.3_dbl_kind    ! thickness above which ice albedo is constant (m)
+      atmbndy   = 'default'       ! or 'constant'
 
       fyear_init = 1900           ! first year of forcing cycle
       ycycle = 1                  ! number of years in forcing cycle
@@ -239,6 +252,8 @@
       ! extra tracers
       tr_iage      = .false. ! ice age
       restart_age  = .false. ! ice age restart
+      tr_lvl       = .false. ! level ice 
+      restart_lvl  = .false. ! level ice restart
       tr_pond      = .false. ! explicit melt ponds
       restart_pond = .false. ! melt ponds restart
 
@@ -327,7 +342,6 @@
       ocn_data_format = 'bin'
 #endif
 
-      if (histfreq == '1') hist_avg = .false.         ! potential conflict
       if (days_per_year /= 365) shortwave = 'default' ! definite conflict
 
       chartmp = advection(1:6)
@@ -363,8 +377,10 @@
       call broadcast_scalar(diag_type,          master_task)
       call broadcast_scalar(diag_file,          master_task)
       call broadcast_scalar(history_format,     master_task)
-      call broadcast_scalar(histfreq,           master_task)
-      call broadcast_scalar(histfreq_n,         master_task)
+      do n = 1, max_nstrm
+         call broadcast_scalar(histfreq(n),     master_task)
+      enddo
+      call broadcast_array(histfreq_n(:),       master_task)
       call broadcast_scalar(hist_avg,           master_task)
       call broadcast_scalar(history_dir,        master_task)
       call broadcast_scalar(history_file,       master_task)
@@ -392,10 +408,12 @@
       call broadcast_scalar(kstrength,          master_task)
       call broadcast_scalar(krdg_partic,        master_task)
       call broadcast_scalar(krdg_redist,        master_task)
+      call broadcast_scalar(mu_rdg,             master_task)
       call broadcast_scalar(advection,          master_task)
       call broadcast_scalar(shortwave,          master_task)
       call broadcast_scalar(albedo_type,        master_task)
       call broadcast_scalar(heat_capacity,      master_task)
+      call broadcast_scalar(conduct,            master_task)
       call broadcast_scalar(R_ice,              master_task)
       call broadcast_scalar(R_pnd,              master_task)
       call broadcast_scalar(R_snw,              master_task)
@@ -403,6 +421,7 @@
       call broadcast_scalar(albicei,            master_task)
       call broadcast_scalar(albsnowv,           master_task)
       call broadcast_scalar(albsnowi,           master_task)
+      call broadcast_scalar(ahmax,              master_task)
       call broadcast_scalar(atmbndy,            master_task)
       call broadcast_scalar(fyear_init,         master_task)
       call broadcast_scalar(ycycle,             master_task)
@@ -413,6 +432,7 @@
       call broadcast_scalar(calc_Tsfc,          master_task)
       call broadcast_scalar(Tfrzpt,             master_task)
       call broadcast_scalar(update_ocn_f,       master_task)
+      call broadcast_scalar(ustar_min,          master_task)
       call broadcast_scalar(precip_units,       master_task)
       call broadcast_scalar(oceanmixed_ice,     master_task)
       call broadcast_scalar(ocn_data_format,    master_task)
@@ -433,6 +453,8 @@
       ! tracers
       call broadcast_scalar(tr_iage,            master_task)
       call broadcast_scalar(restart_age,        master_task)
+      call broadcast_scalar(tr_lvl,             master_task)
+      call broadcast_scalar(restart_lvl,        master_task)
       call broadcast_scalar(tr_pond,            master_task)
       call broadcast_scalar(restart_pond,       master_task)
 
@@ -460,16 +482,10 @@
                                print_global
          write(nu_diag,1010) ' print_points              = ', &
                                print_points
-         write(nu_diag,1030) ' histfreq                  = ', &
-                               trim(histfreq)
-         write(nu_diag,1020) ' histfreq_n                = ', histfreq_n
+         write(nu_diag,1050) ' histfreq                  = ', histfreq(:)
+         write(nu_diag,1040) ' histfreq_n                = ', histfreq_n(:)
          write(nu_diag,1010) ' hist_avg                  = ', hist_avg
-         if (hist_avg) then
-            write (nu_diag,*) 'History data will be averaged over ', &
-                               histfreq_n,' ',histfreq
-         else
-            write (nu_diag,*) 'History data will be snapshots'
-         endif
+         if (.not. hist_avg) write (nu_diag,*) 'History data will be snapshots'
          write(nu_diag,*)    ' history_dir               = ', &
                                trim(history_dir)
          write(nu_diag,*)    ' history_file              = ', &
@@ -515,6 +531,7 @@
                                krdg_partic
          write(nu_diag,1020) ' krdg_redist               = ', &
                                krdg_redist
+         write(nu_diag,1000) ' mu_rdg                    = ', mu_rdg
          write(nu_diag,1030) ' advection                 = ', &
                                trim(advection)
          write(nu_diag,1030) ' shortwave                 = ', &
@@ -528,8 +545,10 @@
          write(nu_diag,1000) ' albicei                   = ', albicei
          write(nu_diag,1000) ' albsnowv                  = ', albsnowv
          write(nu_diag,1000) ' albsnowi                  = ', albsnowi
+         write(nu_diag,1000) ' ahmax                     = ', ahmax
          write(nu_diag,1010) ' heat_capacity             = ', & 
                                heat_capacity
+         write(nu_diag,1030) ' conduct                   = ', conduct
          write(nu_diag,1030) ' atmbndy                   = ', &
                                trim(atmbndy)
 
@@ -542,6 +561,7 @@
          write(nu_diag,1010) ' calc_Tsfc                 = ', calc_Tsfc
          write(nu_diag,*)    ' Tfrzpt                    = ', trim(Tfrzpt)
          write(nu_diag,1010) ' update_ocn_f              = ', update_ocn_f
+         write(nu_diag,1005) ' ustar_min                 = ', ustar_min
          if (trim(atm_data_type) /= 'default') then
             write(nu_diag,*) ' atm_data_dir              = ', &
                                trim(atm_data_dir)
@@ -586,23 +606,43 @@
          ! tracers
          write(nu_diag,1010) ' tr_iage                   = ', tr_iage
          write(nu_diag,1010) ' restart_age               = ', restart_age
+         write(nu_diag,1010) ' tr_lvl                    = ', tr_lvl
+         write(nu_diag,1010) ' restart_lvl               = ', restart_lvl
          write(nu_diag,1010) ' tr_pond                   = ', tr_pond
          write(nu_diag,1010) ' restart_pond              = ', restart_pond
 
-         ntr = 1 ! count tracers, starting with Tsfc = 1
-         if (tr_iage) ntr = ntr + 1
-         if (tr_pond) ntr = ntr + 1
-         if (ntr /= ntrcr) &
-            write(nu_diag,*) 'WARNING: ntrcr > number of tracers requested'
-         if (ntr > ntrcr) then
-            write(nu_diag,*) 'ntrcr < number of namelist tracers'
-            call abort_ice('ntrcr < number of namelist tracers')
+         nt_Tsfc = 1           ! index tracers, starting with Tsfc = 1
+         ntrcr = 1             ! count tracers, starting with Tsfc = 1
+
+         if (tr_iage) then
+             nt_iage = ntrcr + 1
+             ntrcr = ntrcr + 1
+         endif
+
+         if (tr_lvl) then
+             nt_alvl = ntrcr + 1
+             ntrcr = ntrcr + 1
+             nt_vlvl = ntrcr + 1
+             ntrcr = ntrcr + 1
+         endif
+
+         if (tr_pond) then
+             nt_volpn = ntrcr + 1
+             ntrcr = ntrcr + 1
+         endif
+
+         if (ntrcr > max_ntrcr) then
+            write(nu_diag,*) 'max_ntrcr < number of namelist tracers'
+            call abort_ice('max_ntrcr < number of namelist tracers')
          endif                               
 
  1000    format (a30,2x,f9.2)  ! a30 to align formatted, unformatted statements
+ 1005    format (a30,2x,f9.6)  ! float
  1010    format (a30,2x,l6)    ! logical
  1020    format (a30,2x,i6)    ! integer
  1030    format (a30,   a8)    ! character
+ 1040    format (a30,2x,6i6)   ! integer
+ 1050    format (a30,2x,6a6)   ! character
 
          write (nu_diag,*) ' '
          if (grid_type  /=  'displaced_pole' .and. &
@@ -615,6 +655,13 @@
          endif
 
       endif                     ! my_task = master_task
+
+      call broadcast_scalar(ntrcr,    master_task)
+      call broadcast_scalar(nt_Tsfc,  master_task)
+      call broadcast_scalar(nt_iage,  master_task)
+      call broadcast_scalar(nt_alvl,  master_task)
+      call broadcast_scalar(nt_vlvl,  master_task)
+      call broadcast_scalar(nt_volpn, master_task)
 
       end subroutine input_data
 
@@ -646,6 +693,7 @@
       use ice_itd
       use ice_exit
       use ice_age, only: tr_iage
+      use ice_mechred, only: tr_lvl
       use ice_meltpond, only: tr_pond
       use ice_therm_vertical, only: heat_capacity
 !
@@ -704,6 +752,8 @@
 
       trcr_depend(nt_Tsfc)  = 0   ! ice/snow surface temperature
       if (tr_iage) trcr_depend(nt_iage)  = 1   ! volume-weighted ice age
+      if (tr_lvl)  trcr_depend(nt_alvl)  = 0   ! level ice area
+      if (tr_lvl)  trcr_depend(nt_vlvl)  = 1   ! level ice volume
       if (tr_pond) trcr_depend(nt_volpn) = 0   ! melt pond volume
 
       do iblk = 1, nblocks
@@ -716,7 +766,7 @@
                              tmask(:,:,    iblk),                      &
                              ULON (:,:,    iblk), ULAT (:,:,    iblk), &
                              Tair (:,:,    iblk), sst  (:,:,    iblk), &
-                             Tf   (:,:,    iblk), trcr_depend,         &
+                             Tf   (:,:,    iblk),                      &
                              aicen(:,:,  :,iblk), trcrn(:,:,:,:,iblk), &
                              vicen(:,:,  :,iblk), vsnon(:,:,  :,iblk), &
                              eicen(:,:,  :,iblk), esnon(:,:,  :,iblk))
@@ -730,7 +780,7 @@
          vsno(:,:,iblk) = c0
          eice(:,:,iblk) = c0
          esno(:,:,iblk) = c0
-         do it = 1, ntrcr
+         do it = 1, max_ntrcr
             trcr(:,:,it,iblk) = c0
          enddo
 
@@ -749,6 +799,7 @@
                          esno (:,:,  iblk),   &
                          aice0(:,:,  iblk),   &
                          tmask(:,:,  iblk),   &
+                         max_ntrcr,           &
                          trcr_depend)
 
          aice_init(:,:,iblk) = aice(:,:,iblk)
@@ -775,7 +826,7 @@
       subroutine set_state_var (nx_block, ny_block, &
                                 tmask,    ULON,  ULAT, &
                                 Tair,     sst,  &
-                                Tf,       trcr_depend, &
+                                Tf,       &
                                 aicen,    trcrn, &
                                 vicen,    vsnon, &
                                 eicen,    esnon) 
@@ -815,16 +866,13 @@
          Tf      , & ! freezing temperature (C) 
          sst         ! sea surface temperature (C) 
 
-      integer (kind=int_kind), dimension (ntrcr), intent(inout) :: &
-         trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
-
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(out) :: &
          aicen , & ! concentration of ice
          vicen , & ! volume per unit area of ice          (m)
          vsnon     ! volume per unit area of snow         (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &
          intent(out) :: &
          trcrn     ! ice tracers
                    ! 1: surface temperature of ice/snow (C)
@@ -874,8 +922,8 @@
             vicen(i,j,n) = c0
             vsnon(i,j,n) = c0
             trcrn(i,j,nt_Tsfc,n) = Tf(i,j)  ! surface temperature
-            if (ntrcr >= 2) then
-               do it = 2, ntrcr
+            if (max_ntrcr >= 2) then
+               do it = 2, max_ntrcr
                   trcrn(i,j,it,n) = c0
                enddo
             endif

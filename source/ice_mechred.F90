@@ -68,6 +68,10 @@
                           ! 1 for exponential participation function 
          krdg_redist      ! 0 for Hibler (1980) formulation 
                           ! 1 for exponential redistribution function 
+
+      real (kind=dbl_kind) :: &  
+         mu_rdg           ! gives e-folding scale of ridged ice (m^.5) 
+                          ! (krdg_redist = 1) 
  
       real (kind=dbl_kind), parameter :: & 
          Cf = 17._dbl_kind   , & ! ratio of ridging work to PE change in ridging 
@@ -83,17 +87,19 @@
          Hstar  = c25        , & ! determines mean thickness of ridged ice (m) 
                                  ! (krdg_redist = 0) 
                                  ! Flato & Hibler (1995) have Hstar = 100 
-         mu_rdg = c4         , & ! gives e-folding scale of ridged ice (m^.5) 
-                                 ! (krdg_redist = 1) 
          Pstar = 2.75e4_dbl_kind, & ! constant in Hibler strength formula 
                                  ! (kstrength = 0) 
          Cstar = c20             ! constant in Hibler strength formula 
                                  ! (kstrength = 0) 
 
       logical (kind=log_kind), parameter :: &
-         l_conservation_check = .true.  ! if true, check conservation
-!         l_conservation_check = .false.  ! if true, check conservation
+!         l_conservation_check = .true.  ! if true, check conservation
+         l_conservation_check = .false.  ! if true, check conservation
                                         ! (useful for debugging)
+
+      ! in ice_lvl.F90, this causes a circular dependency
+      logical (kind=log_kind) :: & 
+         tr_lvl                  ! if .true., use level ice tracer
 
 !=======================================================================
 
@@ -117,7 +123,8 @@
 ! !INTERFACE:
 !
       subroutine ridge_ice (nx_block,    ny_block,   &
-                            dt,          icells,     &
+                            dt,          ntrcr,      &
+                            icells,                  &
                             indxi,       indxj,      &
                             rdg_conv,    rdg_shear,  &
                             aicen,       trcrn,      &
@@ -136,7 +143,8 @@
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         icells                ! number of cells with ice present
+         icells            , & ! number of cells with ice present
+         ntrcr                 ! number of tracers in use
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
@@ -328,7 +336,7 @@
 
          call ridge_shift (nx_block,  ny_block,        &
                            icells,    indxi,    indxj, &
-                           dt,                         &
+                           ntrcr,     dt,              &
                            aicen,     trcrn,           &
                            vicen,     vsnon,           &
                            eicen,     esnon,           &
@@ -1082,7 +1090,7 @@
 !
       subroutine ridge_shift (nx_block,    ny_block,        &
                               icells,      indxi,    indxj, &
-                              dt,                           &
+                              ntrcr,       dt,              &
                               aicen,       trcrn,           &
                               vicen,       vsnon,           &
                               eicen,       esnon,           &
@@ -1099,11 +1107,14 @@
 !
 ! !USES:
 !
+      use ice_state, only: nt_alvl, nt_vlvl
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         icells                ! number of cells with ice present
+         icells            , & ! number of cells with ice present
+         ntrcr                 ! number of tracers in use
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
@@ -1449,6 +1460,20 @@
             virdg(m) = virdg(m) + virdgn(ij)
 
       !-----------------------------------------------------------------
+      ! Decrement level ice area and volume tracers
+      !-----------------------------------------------------------------
+
+            if (tr_lvl) then
+
+               ! Assume level and ridged ice both ridge, proportionally.
+               ! Subtract the level ice portion of the ridging ice from 
+               ! the level ice tracers.
+               atrcrn(m,nt_alvl,n) = atrcrn(m,nt_alvl,n) * (c1 - afrac(ij))
+               atrcrn(m,nt_vlvl,n) = atrcrn(m,nt_vlvl,n) * (c1 - afrac(ij))
+
+            endif
+
+      !-----------------------------------------------------------------
       !  Place part of the snow lost by ridging into the ocean.
       !-----------------------------------------------------------------
 
@@ -1548,7 +1573,6 @@
                enddo
             endif               ! trcr_depend
          enddo                  ! ntrcr
-
 
       !-----------------------------------------------------------------
       ! Add area, volume, and energy of new ridge to each category nr.
@@ -1725,7 +1749,6 @@
          enddo                  ! nr (new ridges)
       enddo                     ! n (ridging categories)
 
-
       !-----------------------------------------------------------------
       ! Compute new tracers
       !-----------------------------------------------------------------
@@ -1733,7 +1756,7 @@
       do n = 1, ncat
          call compute_tracers (nx_block,        ny_block,       &
                                icells,          indxi,   indxj, &
-                               trcr_depend,                     &
+                               ntrcr,           trcr_depend,    &
                                atrcrn(:,:,n),   aicen(:,:,  n), &
                                vicen (:,:,  n), vsnon(:,:,  n), &
                                trcrn(:,:,:,n))

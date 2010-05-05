@@ -95,7 +95,10 @@
    vsnon_rest(:,:,:,:) = vsnon(:,:,:,:)
    eicen_rest(:,:,:,:) = eicen(:,:,:,:)
    esnon_rest(:,:,:,:) = esnon(:,:,:,:)
-   trcrn_rest(:,:,:,:,:) = trcrn(:,:,:,:,:)
+   trcrn_rest(:,:,:,:,:) = trcrn(:,:,1:ntrcr,:,:)
+
+   if (my_task == master_task) &
+      write (nu_diag,*) 'ice restoring timescale = ',trestore,' days' 
 
  end subroutine ice_HaloRestore_init
 
@@ -292,7 +295,8 @@
 
       elseif (this_block%jblock == nblocks_y) then  ! north edge
          if (trim(ns_boundary_type) /= 'cyclic' .and. &
-             trim(ns_boundary_type) /= 'tripole' ) then
+             trim(ns_boundary_type) /= 'tripole' .and. &
+             trim(ns_boundary_type) /= 'tripoleT') then
             ! locate ghost cell row (avoid padding)
             ibc = ny_block + 1
             npad = 0

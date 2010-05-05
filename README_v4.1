@@ -1,8 +1,8 @@
 
-CICE version 4.0
-  August, 2008
+CICE version 4.1
+  May, 2010
 
-This directory contains files needed to run version 4.0 of CICE, the
+This directory contains files needed to run version 4.1 of CICE, the
 LANL sea ice model, in standalone mode on a 3 degree grid.  As
 currently configured, the model runs on 4 processors.  MPI is used for
 message passing between processors.  The grid provided here is too 
@@ -53,7 +53,7 @@ data.
 
 cice/
 
-README_v4.0             this file
+README_v4.1             this file
 clean_ice               script that cleans out compile directory
 comp_ice                script that sets up and compiles the code
 ice.log.<OS>*           sample diagnostic output files
@@ -102,8 +102,12 @@ cice/input_templates/gx3/
 global_gx3.grid         3.6 x 1.85 deg displaced pole grid, 'gx3'  
 global_gx3.kmt          3.6 x 1.85 deg land mask (N pole is in Greenland)
 ice.restart_file        pointer with restart filename
-ice_in                  namelist input parameters for the given OS
+ice_in                  namelist input parameters
 iced_gx3_v4.0_kcatbound0  restart file used for initial condition
+
+cice/input_templates/col/
+
+ice_in                  namelist input parameters for column configuration
 
 cice/mpi/               modules that require MPI calls
 
@@ -137,6 +141,7 @@ ice_history.F90         writes binary or netCDF output to history files
 ice_init.F90            initializations
 ice_itd.F90             routines for managing ice thickness distribution
 ice_kinds_mod.F90       basic definitions of reals, integers, etc.
+ice_lvl.F90             handles most work associated with level ice tracers
 ice_mechred.F90         mechanical redistribution (ridging) routines
 ice_meltpond.F90        meltpond parameterization
 ice_ocean.F90           mixed layer routines
@@ -179,9 +184,11 @@ ice.restart_file        restart pointer from cice/input_templates/gx3/
 
 --- Authors ---
 
-Please report any bugs to the authors:
-Elizabeth Hunke (eclare@lanl.gov)
-Bill Lipscomb (lipscomb@lanl.gov)
+Elizabeth Hunke 
+Bill Lipscomb
+and many others, greatly appreciated.
+
+Please report any bugs to Elizabeth Hunke (eclare@lanl.gov)
  
 Good luck!
 

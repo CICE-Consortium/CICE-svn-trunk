@@ -52,14 +52,6 @@
       private
       public :: init_remap, horizontal_remap, make_masks
 
-! NOTE: It would be better to pass in ntrace as an argument, but this slows
-!       down the code considerably, at least on mauve.
-! NOTE: For remapping, hice, hsno, qice, and qsno are considered tracers.
-!       ntrace is not equal to ntrcr!
-
-      integer (kind=int_kind), parameter ::                      &
-         ntrace = 2+ntrcr+nilyr+nslyr  ! hice,hsno,qice,qsno,trcr
-                          
       integer (kind=int_kind), parameter ::     &
          ngroups  = 6      ,&! number of groups of triangles that
                              ! contribute transports across each edge
@@ -156,11 +148,11 @@
 ! needs to know the tracers types and relationships.  This is done 
 ! as follows: 
 ! 
-! Each field in the "tm" array is assigned an index, 1:ntrace. 
-! (Note: ntrace is not the same as ntrcr, the number of tracers 
+! Each field in the "tm" array is assigned an index, 1:max_ntrace. 
+! (Note: max_ntrace is not the same as max_ntrcr, the number of tracers 
 ! in the trcrn state variable array.  For remapping purposes we 
 ! have additional tracers hi, hs, qi and qs.) 
-! For standard CICE with ntrcr = 1, nilyr = 4, and nslyr = 1, the 
+! For CICE with ntrcr = 1, nilyr = 4, and nslyr = 1, the 
 ! indexing is as follows: 
 ! 1   = hi 
 ! 2   = hs 
@@ -333,7 +325,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine horizontal_remap (dt,                            &
+      subroutine horizontal_remap (dt,                ntrace,     &
                                    uvel,              vvel,       &
                                    mm,                tm,         &
                                    l_fixed_area,                  &
@@ -382,6 +374,9 @@
 !
       real (kind=dbl_kind), intent(in) ::     &
          dt      ! time step
+
+      integer (kind=int_kind), intent(in) :: &
+         ntrace       ! number of tracers in use
 
       real (kind=dbl_kind), intent(in),       &
                 dimension(nx_block,ny_block,max_blocks) ::           &
@@ -576,10 +571,10 @@
     !  being used to compute tracer gradients.
     !------------------------------------------------------------------- 
 
-         call make_masks (nx_block,       ny_block,                  &
-                          ilo, ihi,       jlo, jhi,                  &
-                          nghost,             has_dependents,        &
-                          icellsnc(:,iblk),                          &
+         call make_masks (nx_block,           ny_block,              &
+                          ilo, ihi,           jlo, jhi,              &
+                          nghost,             ntrace,                &
+                          has_dependents,     icellsnc(:,iblk),      &
                           indxinc(:,:,iblk),  indxjnc(:,:,iblk),     &
                           mm(:,:,:,iblk),     mmask(:,:,:,iblk),     &
                           tm(:,:,:,:,iblk),   tmask(:,:,:,:,iblk))
@@ -594,7 +589,7 @@
 
          call construct_fields(nx_block,            ny_block,           &
                                ilo, ihi,            jlo, jhi,           &
-                               nghost,                                  &
+                               nghost,              ntrace,             &
                                tracer_type,         depend,             &
                                has_dependents,      icellsnc (0,iblk),  &
                                indxinc  (:,0,iblk), indxjnc(:,0,iblk),  &
@@ -617,7 +612,7 @@
 
             call construct_fields(nx_block,            ny_block,            &
                                   ilo, ihi,            jlo, jhi,            &
-                                  nghost,                                   &
+                                  nghost,              ntrace,              &
                                   tracer_type,         depend,              &
                                   has_dependents,      icellsnc (n,iblk),   &
                                   indxinc  (:,n,iblk), indxjnc(:,n,iblk),   &
@@ -652,8 +647,8 @@
                                dxu   (:,:,iblk), dyu (:,:,iblk),    &
                                HTN   (:,:,iblk), HTE (:,:,iblk),    &
                                dpx   (:,:,iblk), dpy (:,:,iblk),    &
-                               l_dp_midpt,        l_stop,           &
-                               istop,             jstop)
+                               l_dp_midpt,       l_stop,           &
+                               istop,            jstop)
 
          if (l_stop) then
             this_block = get_block(blocks_ice(iblk),iblk)         
@@ -750,7 +745,7 @@
          ! open water
 
          call transport_integrals(nx_block,          ny_block,           &
-                                  icellsng (:,iblk),                     &
+                                  ntrace,            icellsng (:,iblk),  &
                                   indxing(:,:,iblk), indxjng(:,:,iblk),  &
                                   tracer_type,       depend,             &
                                   integral_order,    triarea,            &
@@ -763,7 +758,7 @@
          do n = 1, ncat
             call transport_integrals                                     &
                                (nx_block,          ny_block,             &
-                                icellsng (:,iblk),                       &
+                                ntrace,            icellsng (:,iblk),    &
                                 indxing(:,:,iblk), indxjng(:,:,iblk),    &
                                 tracer_type,       depend,               &
                                 integral_order,    triarea,              &
@@ -800,7 +795,7 @@
 
          ! open water
          call transport_integrals(nx_block,           ny_block,          &
-                                  icellsng (:,iblk),                     &
+                                  ntrace,             icellsng (:,iblk), &
                                   indxing(:,:,iblk),  indxjng(:,:,iblk), &
                                   tracer_type,        depend,            &
                                   integral_order,     triarea,           &
@@ -811,18 +806,18 @@
 
          ! ice categories
          do n = 1, ncat
-            call transport_integrals                                   &
-                               (nx_block,           ny_block,          &
-                                icellsng (:,iblk),                     &
-                                indxing(:,:,iblk),  indxjng(:,:,iblk), &
-                                tracer_type,        depend,            &
-                                integral_order,     triarea,           &
-                                iflux,              jflux,             &
-                                xp,                 yp,                &
-                                mc  (:,:,n,iblk),   mx  (:,:,n,iblk),  &
-                                my  (:,:,n,iblk),   mflxn(:,:,n),      &
-                                tc(:,:,:,n,iblk),   tx(:,:,:,n,iblk),  &
-                                ty(:,:,:,n,iblk),   mtflxn(:,:,:,n))
+            call transport_integrals                                     &
+                               (nx_block,          ny_block,             &
+                                ntrace,            icellsng (:,iblk),    &
+                                indxing(:,:,iblk), indxjng(:,:,iblk),    &
+                                tracer_type,       depend,               &
+                                integral_order,    triarea,              &
+                                iflux,             jflux,                &
+                                xp,                yp,                   &
+                                mc(:,:,  n,iblk),  mx   (:,:,  n,iblk),  &
+                                my(:,:,  n,iblk),  mflxn(:,:,  n),       &
+                                tc(:,:,:,n,iblk),  tx   (:,:,:,n,iblk),  &
+                                ty(:,:,:,n,iblk),  mtflxn(:,:,:,n))
 
          enddo                  ! n
 
@@ -834,6 +829,7 @@
 
          call update_fields (nx_block,           ny_block,          &
                              ilo, ihi,           jlo, jhi,          &
+                             ntrace,                                &
                              tracer_type,        depend,            &
                              tarear(:,:,iblk),   l_stop,            &
                              istop,              jstop,             &
@@ -858,6 +854,7 @@
 
             call update_fields(nx_block,             ny_block,         &
                                ilo, ihi,             jlo, jhi,         &
+                               ntrace,                                 &
                                tracer_type,          depend,           &
                                tarear(:,:,iblk),     l_stop,           &
                                istop,                jstop,            &
@@ -893,7 +890,8 @@
 !
       subroutine make_masks (nx_block, ny_block,           &
                              ilo, ihi, jlo, jhi,           &
-                             nghost,   has_dependents,     &
+                             nghost,   ntrace,             &
+                             has_dependents,               &
                              icells,                       &
                              indxi,    indxj,              &
                              mm,       mmask,              &
@@ -924,7 +922,9 @@
       integer (kind=int_kind), intent(in) ::     &
            nx_block, ny_block  ,&! block dimensions
            ilo,ihi,jlo,jhi     ,&! beginning and end of physical domain
-           nghost                ! number of ghost cells
+           nghost              ,&! number of ghost cells
+           ntrace                ! number of tracers in use
+
 
       logical (kind=log_kind), dimension (ntrace), intent(in) ::     &
            has_dependents      ! true if a tracer has dependent tracers
@@ -1068,7 +1068,7 @@
 !
       subroutine construct_fields (nx_block,       ny_block,   &
                                    ilo, ihi,       jlo, jhi,   &
-                                   nghost,                     &
+                                   nghost,         ntrace,     &
                                    tracer_type,    depend,     &
                                    has_dependents, icells,     &
                                    indxi,          indxj,      &
@@ -1103,6 +1103,7 @@
          nx_block, ny_block  ,&! block dimensions
          ilo,ihi,jlo,jhi     ,&! beginning and end of physical domain
          nghost              ,&! number of ghost cells
+         ntrace              ,&! number of tracers in use
          icells                ! number of cells with mass
 
       integer (kind=int_kind), dimension (ntrace), intent(in) ::     &
@@ -1319,11 +1320,11 @@
                      w7 = c1 / (mm(i,j)*tm(i,j,nt))
                      mtxav(i,j,nt) = (w1*xav (i,j)  + w2*xxav (i,j)   &
                                     + w3*xyav (i,j) + w4*xxxav(i,j)   &
-                                    + w5*xxyav(i,j) + w6*xyyav(i,j))   &
+                                    + w5*xxyav(i,j) + w6*xyyav(i,j))  &
                                     * w7
                      mtyav(i,j,nt) = (w1*yav(i,j)   + w2*xyav (i,j)   &
                                     + w3*yyav(i,j)  + w4*xxyav(i,j)   &
-                                    + w5*xyyav(i,j) + w6*yyyav(i,j))   &
+                                    + w5*xyyav(i,j) + w6*yyyav(i,j))  &
                                     * w7
                   endif         ! tmask
 
@@ -3301,14 +3302,14 @@
 ! !INTERFACE:
 !
       subroutine transport_integrals (nx_block,       ny_block,    &
-                                      icells,                      &
+                                      ntrace,         icells,      &
                                       indxi,          indxj,       &
                                       tracer_type,    depend,      &
                                       integral_order, triarea,     &
                                       iflux,          jflux,       &
                                       xp,             yp,          &
                                       mc,             mx,          &
-                                      my,             mflx,       &
+                                      my,             mflx,        &
                                       tc,             tx,          &
                                       ty,             mtflx)
 !
@@ -3330,6 +3331,7 @@
 !
       integer (kind=int_kind), intent(in) ::   &
            nx_block, ny_block  ,&! block dimensions
+           ntrace              ,&! number of tracers in use
            integral_order   ! polynomial order for quadrature integrals 
 
       integer (kind=int_kind), dimension (ntrace), intent(in) ::     &
@@ -3636,6 +3638,7 @@
 !
       subroutine update_fields (nx_block,    ny_block,   &
                                 ilo, ihi,    jlo, jhi,   &
+                                ntrace,                  &
                                 tracer_type, depend,     &
                                 tarear,      l_stop,     &
                                 istop,       jstop,      &
@@ -3658,7 +3661,8 @@
 !
       integer (kind=int_kind), intent(in) ::   &
          nx_block, ny_block,&! block dimensions
-         ilo,ihi,jlo,jhi     ! beginning and end of physical domain
+         ilo,ihi,jlo,jhi   ,&! beginning and end of physical domain
+         ntrace              ! number of tracers in use
 
       integer (kind=int_kind), dimension (ntrace), intent(in) ::     &
          tracer_type       ,&! = 1, 2, or 3 (see comments above)
@@ -3825,7 +3829,7 @@
                   i = indxi(ij)
                   j = indxj(ij)
 
-                  if (abs(tm(i,j,nt1)) > puny) then
+                  if (abs(tm(i,j,nt1)) > c0) then
                      w1  = mtflxe(i,j,nt) - mtflxe(i-1,j,nt)   &
                          + mtflxn(i,j,nt) - mtflxn(i,j-1,nt)
                      tm(i,j,nt) = (mtold(i,j,nt) - w1*tarear(i,j))   &
@@ -3845,8 +3849,8 @@
                   i = indxi(ij)
                   j = indxj(ij)
 
-                  if (abs(tm(i,j,nt1)) > puny .and.   &
-                      abs(tm(i,j,nt2)) > puny) then
+                  if (abs(tm(i,j,nt1)) > c0 .and.   &
+                      abs(tm(i,j,nt2)) > c0) then
                      w1  = mtflxe(i,j,nt) - mtflxe(i-1,j,nt)   &
                          + mtflxn(i,j,nt) - mtflxn(i,j-1,nt)
                      tm(i,j,nt) = (mtold(i,j,nt) - w1*tarear(i,j))   &

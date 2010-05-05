@@ -47,6 +47,7 @@
       use ice_meltpond
       use ice_ocean
       use ice_orbital
+      use ice_restoring
       use ice_shortwave
       use ice_therm_itd
       use ice_therm_vertical
@@ -200,7 +201,7 @@
 
       call init_calendar        ! initialize some calendar stuff
       call init_hist (dt)       ! initialize output history file
-      call init_evp (dt)        ! define evp dynamics parameters, variables
+      call init_evp (dyn_dt)    ! define evp dynamics parameters, variables
       call init_coupler_flux    ! initialize fluxes exchanged with coupler
 #ifdef popcice
       call sst_sss              ! POP data for CICE initialization
@@ -256,7 +257,8 @@
       call init_flux_atm        ! initialize atmosphere fluxes sent to coupler
       call init_flux_ocn        ! initialize ocean fluxes sent to coupler
 
-      call ice_write_hist(dt)   ! write initial conditions if write_ic = T
+      if (restore_ice) call ice_HaloRestore_init ! restored boundary conditions
+      if (write_ic) call ice_write_hist(dt) ! write initial conditions 
 
       end subroutine cice_init
 

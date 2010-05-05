@@ -71,10 +71,9 @@
          esno      ! energy of melt. of snow layer    (J/m^2)
 
       real (kind=dbl_kind), &
-         dimension(nx_block,ny_block,ntrcr,max_blocks) :: &
+         dimension(nx_block,ny_block,max_ntrcr,max_blocks) :: &
          trcr      ! ice tracers
                    ! 1: surface temperature of ice/snow (C)
-                   ! 2: meltpond volume                 (m)
 
       !-----------------------------------------------------------------
       ! state of the ice for each category
@@ -95,14 +94,17 @@
          hpondn     ! pond depth         (m)
 
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,ntrcr,ncat,max_blocks) :: &
+         dimension (nx_block,ny_block,max_ntrcr,ncat,max_blocks) :: &
          trcrn     ! tracers
                    ! 1: surface temperature of ice/snow (C)
 
-      integer (kind=int_kind), dimension (ntrcr) :: &
+      integer (kind=int_kind), dimension (max_ntrcr) :: &
          trcr_depend   ! = 0 for ice area tracers
                        ! = 1 for ice volume tracers
                        ! = 2 for snow volume tracers
+
+      integer (kind=int_kind) :: &
+         ntrcr     ! number of tracers in use
 
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,ntilyr,max_blocks) :: &
@@ -114,14 +116,14 @@
 
       !-----------------------------------------------------------------
       ! indices for tracers
-      ! The maximum index should be no greater than ntrcr 
-      ! (ice_domain_size) to prevent array out-of-bounds errors.
       !-----------------------------------------------------------------
 
-      integer (kind=int_kind), parameter :: &
-         nt_Tsfc  =  1, & ! ice/snow surface temperature
-         nt_iage  =  2, & ! volume-weighted ice age
-         nt_volpn =  3    ! melt pond volume
+      integer (kind=int_kind) :: &
+         nt_Tsfc  , & ! ice/snow surface temperature
+         nt_iage  , & ! volume-weighted ice age
+         nt_alvl  , & ! level ice area fraction
+         nt_vlvl  , & ! level ice volume fraction
+         nt_volpn     ! melt pond volume
 
       !-----------------------------------------------------------------
       ! dynamic variables closely related to the state of the ice
@@ -185,7 +187,7 @@
          vsnon     ! volume per unit area of snow         (m)
 
       real (kind=dbl_kind), &
-         dimension(nx_block,ny_block,ntrcr,ncat,max_blocks), &
+         dimension(nx_block,ny_block,max_ntrcr,ncat,max_blocks), &
          intent(inout) :: &
          trcrn     ! ice tracers
 
@@ -201,7 +203,7 @@
 !
          call ice_HaloUpdate (aicen,            halo_info, &
                               field_loc_center, field_type_scalar)
-         call ice_HaloUpdate (trcrn,            halo_info, &
+         call ice_HaloUpdate (trcrn(:,:,1:ntrcr,:,:), halo_info, &
                               field_loc_center, field_type_scalar)
          call ice_HaloUpdate (vicen,            halo_info, &
                               field_loc_center, field_type_scalar)

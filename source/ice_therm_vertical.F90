@@ -32,7 +32,7 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size, only: ncat, nilyr, nslyr, ntilyr, ntslyr, ntrcr
+      use ice_domain_size, only: ncat, nilyr, nslyr, ntilyr, ntslyr, max_ntrcr
       use ice_constants
       use ice_fileunits, only: nu_diag
       use ice_age, only: tr_iage
@@ -54,13 +54,14 @@
                          ! nilyr + 1 index is for bottom surface
 
       real (kind=dbl_kind) :: &
-         ustar_scale     ! scaling for ice-ocean heat flux
+         ustar_min       ! minimum friction velocity for ice-ocean heat flux
 
       real (kind=dbl_kind), parameter, private :: &
          ferrmax = 1.0e-3_dbl_kind    ! max allowed energy flux error (W m-2)
                                       ! recommend ferrmax < 0.01 W m-2
 
-      character (char_len) :: stoplabel
+      character (char_len) :: &
+         conduct         ! 'MU71' or 'bubbly'
 
       logical (kind=log_kind) :: &
          l_brine         ! if true, treat brine pocket effects
@@ -71,6 +72,10 @@
          calc_Tsfc       ! if true, calculate surface temperature
                          ! if false, Tsfc is computed elsewhere and
                          ! atmos-ice fluxes are provided to CICE
+
+! !PUBLIC MEMBER FUNCTIONS:
+
+      public :: calculate_Tin_from_qin
 
 !=======================================================================
 
@@ -151,7 +156,7 @@
          vicen , & ! volume per unit area of ice          (m)
          vsnon     ! volume per unit area of snow         (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr), &
          intent(inout) :: &
          trcrn
 
@@ -297,6 +302,12 @@
          fsaltn (i,j) = c0
          fhocnn (i,j) = c0
 
+         meltt  (i,j) = c0
+         meltb  (i,j) = c0
+         melts  (i,j) = c0
+         congel (i,j) = c0
+         snoice (i,j) = c0
+
          Tsfcn(i,j) = trcrn(i,j,nt_Tsfc)
          if (tr_iage) iage(i,j) = trcrn(i,j,nt_iage)
       enddo
@@ -418,7 +429,7 @@
                              dt,                     &
                              yday,         icells,   &
                              indxi,        indxj,    &
-                             aicen,        efinal,   &
+                             efinal,                 &
                              hin,          hilyr,    &
                              hsn,          hslyr,    &
                              qin,          qsn,      &
@@ -564,8 +575,6 @@
          enddo
       endif
 
-      ustar_scale = c1           ! for nonzero currents
-
       end subroutine init_thermo_vertical
 
 !=======================================================================
@@ -659,8 +668,7 @@
       ! 0.006 = unitless param for basal heat flx ala McPhee and Maykut
 
       real (kind=dbl_kind), parameter :: &
-         cpchr = -cp_ocn*rhow*0.006_dbl_kind, &
-         ustar_min = 5.e-3_dbl_kind
+         cpchr = -cp_ocn*rhow*0.006_dbl_kind
 
 
       ! Parameters for lateral melting
@@ -714,7 +722,7 @@
 
          ! strocnx has units N/m^2 so strocnx/rho has units m^2/s^2
          ustar = sqrt (sqrt(strocnxT(i,j)**2+strocnyT(i,j)**2)/rhow)
-         ustar = max (ustar,ustar_min*ustar_scale)
+         ustar = max (ustar,ustar_min)
 
          fbot(i,j) = cpchr * deltaT * ustar ! < 0
          fbot(i,j) = max (fbot(i,j), frzmlt(i,j)) ! frzmlt < fbot < 0
@@ -1097,16 +1105,12 @@
       ! Compute ice temperatures from enthalpies using quadratic formula
       !-----------------------------------------------------------------
 
+            Tin(ij,k) = calculate_Tin_from_qin(qin(ij,k),Tmlt(k))
+
             if (l_brine) then
-               aa1 = cp_ice
-               bb1 = (cp_ocn-cp_ice)*Tmlt(k) - qin(ij,k)/rhoi - Lfresh 
-               cc1 = Lfresh * Tmlt(k)
-               Tin(ij,k) =  (-bb1 - sqrt(bb1*bb1 - c4*aa1*cc1)) /  &
-                             (c2*aa1)
                Tmax = Tmlt(k)
 
             else                ! fresh ice
-               Tin(ij,k) = (Lfresh + qin(ij,k)/rhoi) / cp_ice
                Tmax = -qin(ij,k)*puny/(rhos*cp_ice*vicen(i,j))
                          ! as above for snow
             endif
@@ -1194,6 +1198,55 @@
       enddo                     ! nilyr
 
       end subroutine init_vertical_profile
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: calculate_Tin_from_qin  - calculate internal ice temperatures
+!
+! !DESCRIPTION:
+!
+!  Compute the internal ice temperatures from enthalpy using
+!  quadratic formula
+!
+! !REVISION HISTORY:
+!
+! !INTERFACE:
+!
+      function calculate_Tin_from_qin (qin, Tmltk) &
+               result(Tin)
+!
+! !USES:
+!
+! !INPUT PARAMETERS:
+!
+      real (kind=dbl_kind), intent(in) :: &
+         qin   , &              ! enthalpy
+         Tmltk                  ! melting temperature at one level
+!
+! !OUTPUT PARAMETERS
+!
+     real (kind=dbl_kind) :: &
+         Tin                 ! internal temperature
+!
+!EOP
+!
+      real (kind=dbl_kind) :: &
+         aa1,bb1,cc1         ! quadratic solvers
+
+
+      if (l_brine) then
+         aa1 = cp_ice
+         bb1 = (cp_ocn-cp_ice)*Tmltk - qin/rhoi - Lfresh 
+         cc1 = Lfresh * Tmltk
+         Tin =  (-bb1 - sqrt(bb1*bb1 - c4*aa1*cc1)) /  &
+                         (c2*aa1)
+
+      else                ! fresh ice
+         Tin = (Lfresh + qin/rhoi) / cp_ice
+      endif
+ 
+      end function calculate_Tin_from_qin
 
 !=======================================================================
 !BOP
@@ -1388,9 +1441,10 @@
          ci          , & ! specific heat of sea ice (J kg-1 deg-1)
          avg_Tsf     , & ! = 1. if Tsf averaged w/Tsf_start, else = 0.
          ferr        , & ! energy conservation error (W m-2)
-         Iswabs_tmp  , &
-         Sswabs_tmp  , &
-         etai_tmp
+         Iswabs_tmp  , & ! energy to melt through fraction frac of layer
+         Sswabs_tmp  , & ! same for snow
+         frac        , & ! fraction of layer that can be melted through
+         dTemp           ! minimum temperature difference for absorption
 
       logical (kind=log_kind), dimension (icells) :: &
          converged      ! = true when local solution has converged
@@ -1454,37 +1508,41 @@
 
       !-----------------------------------------------------------------
       ! Check for excessive absorbed solar radiation that may result in
-      ! temperature overshoots.  Switch that radiation to fswsfc if necessary. 
+      ! temperature overshoots. Convergence is particularly difficult
+      ! if the starting temperature is already very close to the melting 
+      ! temperature and extra energy is added.   In that case, or if the
+      ! amount of energy absorbed is greater than the amount needed to
+      ! melt through a given fraction of a layer, we put the extra 
+      ! energy into the surface.
       ! NOTE: This option is not available if the atmosphere model
       !       has already computed fsurf.  (Unless we adjust fsurf here)
       !-----------------------------------------------------------------
 !mclaren: Should there be an if calc_Tsfc statement here then?? 
 
+      frac = c1 - puny
+      dTemp = p01
       do k = 1, nilyr
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
 
-            if (Tin_init(ij,k) <= (Tmlt(k) - p01)) then
-
-            if (l_brine) then
-               ci = cp_ice - Lfresh*Tmlt(k) /  &
-                  max( Tin_init(ij,k)**2, Tmlt(k)**2 )
-               etai_tmp = dt_rhoi_hlyr(ij) / ci
-               Iswabs_tmp = min(Iswabs(i,j,k), &
-                                (Tmlt(k)-Tin_init(ij,k))/etai_tmp)
-            else
-               ci = cp_ice
-               etai_tmp = dt_rhoi_hlyr(ij) / ci
-               Iswabs_tmp = min(Iswabs(i,j,k), &
-                                Tin_init(ij,k)/etai_tmp)
+            Iswabs_tmp = c0
+            if (Tin_init(ij,k) <= Tmlt(k) - dTemp) then
+               if (l_brine) then
+                  ci = cp_ice - Lfresh / Tin_init(ij,k)
+                  Iswabs_tmp = min(Iswabs(i,j,k), &
+                     frac*(Tmlt(k)-Tin_init(ij,k))*ci/dt_rhoi_hlyr(ij))
+               else
+                  ci = cp_ice
+                  Iswabs_tmp = min(Iswabs(i,j,k), &
+                     frac*(       -Tin_init(ij,k))*ci/dt_rhoi_hlyr(ij))
+               endif
             endif
 
             fswsfc(i,j)   = fswsfc(i,j) + (Iswabs(i,j,k) - Iswabs_tmp)
             fswint(i,j)   = fswint(i,j) - (Iswabs(i,j,k) - Iswabs_tmp)
             Iswabs(i,j,k) = Iswabs_tmp
 
-            endif
          enddo
       enddo
 
@@ -1494,16 +1552,16 @@
                i = indxi(ij)
                j = indxj(ij)
 
-               if (Tsn_init(ij,k) <= -p01) then
-
-               Sswabs_tmp = min(Sswabs(i,j,k), &
-                            -0.9_dbl_kind*Tsn_init(ij,k)/etas(ij,k))
+               Sswabs_tmp = c0
+               if (Tsn_init(ij,k) <= -dTemp) then
+                  Sswabs_tmp = min(Sswabs(i,j,k), &
+                          -frac*Tsn_init(ij,k)/etas(ij,k))
+               endif
 
                fswsfc(i,j)   = fswsfc(i,j) + (Sswabs(i,j,k) - Sswabs_tmp)
                fswint(i,j)   = fswint(i,j) - (Sswabs(i,j,k) - Sswabs_tmp)
                Sswabs(i,j,k) = Sswabs_tmp
 
-               endif
             endif
          enddo
       enddo
@@ -2105,15 +2163,31 @@
       enddo                     ! nslyr
 
       ! interior ice layers
-      do k = 1, nilyr
+      if (conduct == 'MU71') then
+         ! Maykut and Untersteiner 1971 form (with Wettlaufer 1991 constants)
+         do k = 1, nilyr
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do ij = 1, icells
+            do ij = 1, icells
             kilyr(ij,k) = kice + betak*salin(k)/min(-puny,Tin(ij,k))
-            kilyr(ij,k) = max (kilyr(ij,k), kimin)
-         enddo
-      enddo                     ! nilyr
+               kilyr(ij,k) = max (kilyr(ij,k), kimin)
+            enddo
+         enddo                     ! nilyr
+      else
+         ! Pringle et al JGR 2007 'bubbly brine'
+         do k = 1, nilyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               kilyr(ij,k) = (2.11_dbl_kind - 0.011_dbl_kind*Tin(ij,k) &
+                            + 0.09_dbl_kind*salin(k)/min(-puny,Tin(ij,k))) &
+                            * rhoi / 917._dbl_kind
+               kilyr(ij,k) = max (kilyr(ij,k), kimin)
+            enddo
+         enddo                     ! nilyr
+      endif ! conductivity
 
       ! top snow interface, top and bottom ice interfaces
       do ij = 1, icells
@@ -3487,7 +3561,7 @@
                                     dt,                  &
                                     yday,      icells,   &
                                     indxi,     indxj,    &
-                                    aicen,     efinal,   & 
+                                    efinal,              & 
                                     hin,       hilyr,    &
                                     hsn,       hslyr,    &
                                     qin,       qsn,      &
@@ -3518,7 +3592,6 @@
          yday            ! day of the year
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         aicen       , & ! fractional concentration of ice
          fbot        , & ! ice-ocean heat flux at bottom surface (W/m^2)
          Tbot        , & ! ice bottom surface temperature (deg C)
          fsnow       , & ! snowfall rate (kg m-2 s-1)
@@ -3733,7 +3806,7 @@
 !            iage(i,j) = (iage(i,j)*hin(ij) + dt*dhi) / (hin(ij) + dhi)
 
          ! history diagnostics
-         congel(i,j) = congel(i,j) + dhi*aicen(i,j)
+         congel(i,j) = congel(i,j) + dhi
          if (dhi > puny .and. frz_onset(i,j) < puny) &
                  frz_onset(i,j) = yday
 
@@ -3770,7 +3843,7 @@
             ! history diagnostics
             if (dhs < -puny .and. mlt_onset(i,j) < puny) &
                mlt_onset(i,j) = yday
-            melts(i,j) = melts(i,j) - dhs*aicen(i,j)
+            melts(i,j) = melts(i,j) - dhs
 
          enddo                  ! ij
       enddo                     ! nslyr
@@ -3806,7 +3879,7 @@
             ! history diagnostics
             if (dhi < -puny .and. mlt_onset(i,j) < puny) &
                  mlt_onset(i,j) = yday
-            meltt(i,j) = meltt(i,j) - dhi*aicen(i,j)
+            meltt(i,j) = meltt(i,j) - dhi
 
          enddo                  ! ij
       enddo                     ! nilyr
@@ -3829,7 +3902,7 @@
             ebot_mlt(ij) = max(ebot_mlt(ij), c0)
 
             ! history diagnostics
-            meltb(i,j) = meltb(i,j) - dhi*aicen(i,j)
+            meltb(i,j) = meltb(i,j) - dhi
 
          enddo                  ! ij
       enddo                     ! nilyr
@@ -3931,7 +4004,7 @@
                       icells,             &
                       indxi,    indxj,    &
                       dt,                 &
-                      aicen,    snoice,   &
+                      snoice,             &
                       iage,               &
                       hin,      hsn,      &
                       qin,      qsn,      &
@@ -4098,7 +4171,7 @@
                             icells,             &
                             indxi,    indxj,    &
                             dt,                 &
-                            aicen,    snoice,   &
+                            snoice,             &
                             iage,               &
                             hin,      hsn,      &
                             qin,      qsn,      &
@@ -4115,9 +4188,6 @@
       integer (kind=int_kind), dimension(nx_block*ny_block), &
          intent(in) :: &
          indxi, indxj    ! compressed indices for cells with aicen > puny
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         aicen           ! fractional ice area
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -4225,7 +4295,7 @@
             dzi(ij,1) = wk1
 
             ! history diagnostic
-            snoice(i,j) = snoice(i,j) + dhin(ij)*aicen(i,j)
+            snoice(i,j) = snoice(i,j) + dhin(ij)
          endif               ! dhin > puny
 
       enddo                  ! ij
