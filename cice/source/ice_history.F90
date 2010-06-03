@@ -1345,11 +1345,11 @@
       !-----------------------------------------------------------------
       ! initialize the history arrays
       !-----------------------------------------------------------------
-      a2D(:,:,:,:) = c0
-      a3Dc(:,:,:,:,:) = c0
-      a3Dz(:,:,:,:,:) = c0
-      a4Di(:,:,:,:,:,:) = c0
-      a4Ds(:,:,:,:,:,:) = c0
+      if (allocated(a2D))  a2D (:,:,:,:)     = c0
+      if (allocated(a3Dc)) a3Dc(:,:,:,:,:)   = c0
+      if (allocated(a3Dz)) a3Dz(:,:,:,:,:)   = c0
+      if (allocated(a4Di)) a4Di(:,:,:,:,:,:) = c0
+      if (allocated(a4Ds)) a4Ds(:,:,:,:,:,:) = c0
       avgct(:) = c0
       albcnt(:,:,:,:) = c0
 
@@ -1983,11 +1983,11 @@
       ! reset to zero
       !------------------------------------------------------------
         if (write_ic) then
-           a2D(:,:,:,:) = c0
-           a3Dc(:,:,:,:,:) = c0
-           a3Dz(:,:,:,:,:) = c0
-           a4Di(:,:,:,:,:,:) = c0
-           a4Ds(:,:,:,:,:,:) = c0
+           if (allocated(a2D))  a2D (:,:,:,:)     = c0
+           if (allocated(a3Dc)) a3Dc(:,:,:,:,:)   = c0
+           if (allocated(a3Dz)) a3Dz(:,:,:,:,:)   = c0
+           if (allocated(a4Di)) a4Di(:,:,:,:,:,:) = c0
+           if (allocated(a4Ds)) a4Ds(:,:,:,:,:,:) = c0
            avgct(:) = c0
            albcnt(:,:,:,:) = c0
            write_ic = .false.        ! write initial condition once at most
