@@ -1791,6 +1791,7 @@
 !
 ! EOP
 ! 
+#ifdef ncdf 
 !local parameters
 
     character (char_len_long) :: & 
@@ -1931,7 +1932,7 @@
         frain(:,:,:) = c0            ! this is available in hourlymet_rh file
   
       enddo ! nblocks
-
+#endif
       end subroutine rct_data
 
 !=======================================================================
