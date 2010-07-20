@@ -1790,6 +1790,7 @@
 !
 ! EOP
 ! 
+#ifdef ncdf 
 !local parameters
 
     character (char_len_long) :: & 
@@ -1824,14 +1825,14 @@
        Tair_data_p            ! air temperature (K) for interpolation
 
     real (kind=dbl_kind), parameter :: & ! coefficients for Hyland-Wexler Qa 
-       ps1 = 0.58002206d4_dbl_kind,    & ! (K) 
-       ps2 = 0.13914993d1_dbl_kind,    & !
-       ps3 = 0.48640239d-1_dbl_kind,   & ! (K^-1) 
-       ps4 = 0.41764768d-4_dbl_kind,   & ! (K^-2)
-       ps5 = 0.14452093d-7_dbl_kind,   & ! (K^-3)
-       ps6 = 0.65459673d1_dbl_kind,    & !
+       ps1 = 0.58002206e4_dbl_kind,    & ! (K) 
+       ps2 = 1.3914993_dbl_kind,       & !
+       ps3 = 0.48640239e-1_dbl_kind,   & ! (K^-1) 
+       ps4 = 0.41764768e-4_dbl_kind,   & ! (K^-2)
+       ps5 = 0.14452093e-7_dbl_kind,   & ! (K^-3)
+       ps6 = 6.5459673_dbl_kind,       & !
        ws1 = 621.97_dbl_kind,          & ! for saturation mixing ratio 
-       Pair = 1020_dbl_kind              ! Sea level pressure (hPa) 
+       Pair = 1020._dbl_kind             ! Sea level pressure (hPa) 
        
       ! for interpolation of hourly data                
       integer (kind=int_kind) :: &
@@ -1930,7 +1931,7 @@
         frain(:,:,:) = c0            ! this is available in hourlymet_rh file
   
       enddo ! nblocks
-
+#endif
       end subroutine rct_data
 
 !=======================================================================
