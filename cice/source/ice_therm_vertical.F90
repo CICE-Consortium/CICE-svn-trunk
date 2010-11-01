@@ -44,6 +44,7 @@
 
       real (kind=dbl_kind), parameter :: &
          saltmax = 3.2_dbl_kind,  & ! max salinity at ice base (ppt)
+!echmod         saltmax = c0,  & ! max salinity at ice base (ppt)
          hs_min = 1.e-4_dbl_kind, & ! min snow thickness for computing Tsno (m)
          betak   = 0.13_dbl_kind, & ! constant in formula for k (W m-1 ppt-1)
          kimin   = 0.10_dbl_kind    ! min conductivity of saline ice (W m-1 deg-1)
@@ -1415,7 +1416,8 @@
          dfsens_dT   , & ! deriv of fsens wrt Tsf (W m-2 deg-1)
          dflat_dT    , & ! deriv of flat wrt Tsf (W m-2 deg-1)
          dflwout_dT  , & ! deriv of flwout wrt Tsf (W m-2 deg-1)
-         dt_rhoi_hlyr    ! dt/(rhoi*hilyr)
+         dt_rhoi_hlyr, & ! dt/(rhoi*hilyr)
+         ferr            ! energy conservation error (W m-2)
 
       real (kind=dbl_kind), dimension (icells,nilyr) :: &
          Tin_init    , & ! Tin at beginning of time step
@@ -1440,7 +1442,6 @@
       real (kind=dbl_kind) :: &
          ci          , & ! specific heat of sea ice (J kg-1 deg-1)
          avg_Tsf     , & ! = 1. if Tsf averaged w/Tsf_start, else = 0.
-         ferr        , & ! energy conservation error (W m-2)
          Iswabs_tmp  , & ! energy to melt through fraction frac of layer
          Sswabs_tmp  , & ! same for snow
          frac        , & ! fraction of layer that can be melted through
@@ -1938,9 +1939,16 @@
       !-----------------------------------------------------------------
       ! Compute qin and increment new energy.
       !-----------------------------------------------------------------
-               qin(m,k) = -rhoi * (cp_ice*(Tmlt(k)-Tin(m,k)) &
-                                   + Lfresh*(c1-Tmlt(k)/Tin(m,k)) &
-                                   - cp_ocn*Tmlt(k))
+!echmod               qin(m,k) = -rhoi * (cp_ice*(Tmlt(k)-Tin(m,k)) &
+!echmod                                   + Lfresh*(c1-Tmlt(k)/Tin(m,k)) &
+!echmod                                   - cp_ocn*Tmlt(k))
+               if (l_brine) then
+                  qin(m,k) = -rhoi * (cp_ice*(Tmlt(k)-Tin(m,k)) &
+                                      + Lfresh*(c1-Tmlt(k)/Tin(m,k)) &
+                                      - cp_ocn*Tmlt(k))
+               else
+                  qin(m,k) = -rhoi * (-cp_ice*Tin(m,k) + Lfresh)
+               endif
                enew(ij) = enew(ij) + hilyr(m) * qin(m,k)
 
                Tin_start(m,k) = Tin(m,k) ! for next iteration
@@ -2001,11 +2009,11 @@
             fcondbot(m) = kh(m,1+nslyr+nilyr) * &
                            (Tin(m,nilyr)   - Tbot(i,j))
 
-            ferr = abs( (enew(ij)-einit(m))/dt &
-                 - (fcondtopn(i,j) - fcondbot(m) + fswint(i,j)) )
+            ferr(m) = abs( (enew(ij)-einit(m))/dt &
+                    - (fcondtopn(i,j) - fcondbot(m) + fswint(i,j)) )
 
             ! factor of 0.9 allows for roundoff errors later
-            if (ferr > 0.9_dbl_kind*ferrmax) then         ! condition (5)
+            if (ferr(m) > 0.9_dbl_kind*ferrmax) then         ! condition (5)
                converged(m) = .false.
                all_converged = .false.
             endif
@@ -2050,7 +2058,7 @@
                                  fcondtopn(i,j), fcondbot(ij), fswint(i,j)
                write(nu_diag,*) 'fswsfc, fswthrun', &
                                  fswsfc(i,j), fswthrun(i,j)
-               write(nu_diag,*) 'Flux conservation error =', ferr
+               write(nu_diag,*) 'Flux conservation error =', ferr(ij)
                write(nu_diag,*) 'Initial snow temperatures:'
                write(nu_diag,*) (Tsn_init(ij,k),k=1,nslyr)
                write(nu_diag,*) 'Initial ice temperatures:'
@@ -3785,10 +3793,18 @@
 
          ! enthalpy of new ice growing at bottom surface
          if (heat_capacity) then
-           qbot = -rhoi * (cp_ice * (Tmlt(nilyr+1)-Tbot(i,j)) &
-                         + Lfresh * (c1-Tmlt(nilyr+1)/Tbot(i,j)) &
-                         - cp_ocn * Tmlt(nilyr+1))
-           qbot = min (qbot, qbotmax)      ! in case Tbot is close to Tmlt
+!echmod           qbot = -rhoi * (cp_ice * (Tmlt(nilyr+1)-Tbot(i,j)) &
+!echmod                         + Lfresh * (c1-Tmlt(nilyr+1)/Tbot(i,j)) &
+!echmod                         - cp_ocn * Tmlt(nilyr+1))
+!echmod           qbot = min (qbot, qbotmax)      ! in case Tbot is close to Tmlt
+            if (l_brine) then
+               qbot = -rhoi * (cp_ice * (Tmlt(nilyr+1)-Tbot(i,j)) &
+                            + Lfresh * (c1-Tmlt(nilyr+1)/Tbot(i,j)) &
+                            - cp_ocn * Tmlt(nilyr+1))
+               qbot = min (qbot, qbotmax) ! in case Tbot is close to Tmlt
+            else
+               qbot = -rhoi * (-cp_ice * Tbot(i,j) + Lfresh)
+            endif
          else   ! zero layer
            qbot = -rhoi * Lfresh
          endif
