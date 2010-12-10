@@ -1887,7 +1887,7 @@
            enddo                ! n
 
            do n = 1, num_avail_hist_fields_4Ds
-              nn = n3Dzcum + n
+              nn = n4Dicum + n
               if (avail_hist_fields(nn)%vhistfreq == histfreq(ns)) then 
               do k = 1, nzslyr
               do ic = 1, ncat_hist
