@@ -552,6 +552,7 @@
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =', &
                                istep1, my_task, iblk
+            write (nu_diag,*) 'category n = ', n
             write (nu_diag,*) 'Global block:', this_block%block_id
             if (istop > 0 .and. jstop > 0) &
                  write(nu_diag,*) 'Global i and j:', &

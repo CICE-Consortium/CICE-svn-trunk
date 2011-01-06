@@ -591,7 +591,7 @@
 !      first value of the year.
 ! If no later data exists (end of fyear_final), then
 !  (1) For monthly data, get data from the beginning of fyear_init.
-!  (2) For more frequent data, let the ipx value
+!  (2) For more frequent data, let the ixp value
 !      equal the last value of the year.
 ! In other words, we assume persistence when daily or 6-hourly
 !   data is missing, and we assume periodicity when monthly data
@@ -753,7 +753,7 @@
 !      first value of the year.
 ! If no later data exists (end of fyear_final), then
 !  (1) For monthly data, get data from the beginning of fyear_init.
-!  (2) For more frequent data, let the ipx value
+!  (2) For more frequent data, let the ixp value
 !      equal the last value of the year.
 ! In other words, we assume persistence when daily or 6-hourly
 !   data is missing, and we assume periodicity when monthly data
@@ -1838,7 +1838,7 @@
       ! for interpolation of hourly data                
       integer (kind=int_kind) :: &
           i, j        , &
-          imx,ixx,ixp , & ! record numbers for neighboring months
+          ixm,ixx,ixp , & ! record numbers for neighboring months
           recnum      , & ! record number
           maxrec      , & ! maximum record number
           recslot     , & ! spline slot for current record
@@ -2285,7 +2285,7 @@
 !
       integer (kind=int_kind) :: & 
           i, j        , &
-          imx,ixx,ipx , & ! record numbers for neighboring months
+          ixm,ixx,ixp , & ! record numbers for neighboring months
           recnum      , & ! record number
           maxrec      , & ! maximum record number
           recslot     , & ! spline slot for current record
@@ -2316,10 +2316,10 @@
 
       ! Compute record numbers for surrounding months
       maxrec = 12
-      imx  = mod(month+maxrec-2,maxrec) + 1
-      ipx  = mod(month,         maxrec) + 1
-      if (mday >= midmonth) imx = 99  ! other two points will be used
-      if (mday <  midmonth) ipx = 99
+      ixm  = mod(month+maxrec-2,maxrec) + 1
+      ixp  = mod(month,         maxrec) + 1
+      if (mday >= midmonth) ixm = 99  ! other two points will be used
+      if (mday <  midmonth) ixp = 99
 
       ! Determine whether interpolation will use values 1:2 or 2:3
       ! recslot = 2 means we use values 1:2, with the current value (2)
@@ -2336,9 +2336,9 @@
       readm = .false.
       if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
 
-      call read_clim_data (readm, 0, imx, month, ipx,  &
+      call read_clim_data (readm, 0, ixm, month, ixp,  &
              flw_file, cldf_data, field_loc_center, field_type_scalar)
-      call read_clim_data (readm, 0, imx, month, ipx,  &
+      call read_clim_data (readm, 0, ixm, month, ixp,  &
              rain_file, fsnow_data, field_loc_center, field_type_scalar)
 
       call interpolate_data (cldf_data, cldf)
@@ -2361,16 +2361,16 @@
 
       ! Compute record numbers for surrounding data (2 on each side)
 
-      imx = mod(recnum+maxrec-2,maxrec) + 1
+      ixm = mod(recnum+maxrec-2,maxrec) + 1
       ixx = mod(recnum-1,       maxrec) + 1
-!     ipx = mod(recnum,         maxrec) + 1
+!     ixp = mod(recnum,         maxrec) + 1
 
       ! Compute interpolation coefficients
       ! If data is located at the end of the time interval, then the
       !  data value for the current record goes in slot 2
 
       recslot = 2
-      ipx = 99
+      ixp = 99
       call interp_coeff (recnum, recslot, sec6hr, dataloc)
 
       ! Read
@@ -2378,16 +2378,16 @@
       if (istep==1 .or. oldrecnum .ne. recnum) read6 = .true.
 
       if (trim(atm_data_format) == 'bin') then
-         call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
+         call read_data (read6, 0, fyear, ixm, ixx, ixp, maxrec, &
                          tair_file, Tair_data, &
                          field_loc_center, field_type_scalar)
-         call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
+         call read_data (read6, 0, fyear, ixm, ixx, ixp, maxrec, &
                          uwind_file, uatm_data, &
                          field_loc_center, field_type_vector)
-         call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
+         call read_data (read6, 0, fyear, ixm, ixx, ixp, maxrec, &
                          vwind_file, vatm_data, &
                          field_loc_center, field_type_vector)
-         call read_data (read6, 0, fyear, imx, ixx, ipx, maxrec, &
+         call read_data (read6, 0, fyear, ixm, ixx, ixp, maxrec, &
                          humid_file, Qa_data, &
                          field_loc_center, field_type_scalar)
       else
@@ -3118,7 +3118,7 @@
 !
       integer (kind=int_kind) :: & 
           i, j        , &
-          imx,ipx     , & ! record numbers for neighboring months
+          ixm,ixp     , & ! record numbers for neighboring months
           recnum      , & ! record number
           maxrec      , & ! maximum record number
           recslot     , & ! spline slot for current record
@@ -3146,10 +3146,10 @@
 
       ! Compute record numbers for surrounding months
       maxrec = 12
-      imx  = mod(month+maxrec-2,maxrec) + 1
-      ipx  = mod(month,         maxrec) + 1
-      if (mday >= midmonth) imx = 99  ! other two points will be used
-      if (mday <  midmonth) ipx = 99
+      ixm  = mod(month+maxrec-2,maxrec) + 1
+      ixp  = mod(month,         maxrec) + 1
+      if (mday >= midmonth) ixm = 99  ! other two points will be used
+      if (mday <  midmonth) ixp = 99
 
       ! Determine whether interpolation will use values 1:2 or 2:3
       ! recslot = 2 means we use values 1:2, with the current value (2)
@@ -3166,25 +3166,25 @@
       readm = .false.
       if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
 
-      call read_clim_data (readm, 0, imx, month, ipx,  &
+      call read_clim_data (readm, 0, ixm, month, ixp,  &
              flw_file, cldf_data, &
              field_loc_center, field_type_scalar)
-      call read_clim_data (readm, 0, imx, month, ipx,  &
+      call read_clim_data (readm, 0, ixm, month, ixp,  &
              rain_file, fsnow_data, &
              field_loc_center, field_type_scalar)
-      call read_clim_data (readm, 0, imx, month, ipx,  &
+      call read_clim_data (readm, 0, ixm, month, ixp,  &
              tair_file, Tair_data, &
              field_loc_center, field_type_scalar)
-      call read_clim_data (readm, 0, imx, month, ipx,  &
+      call read_clim_data (readm, 0, ixm, month, ixp,  &
              humid_file, Qa_data, &
              field_loc_center, field_type_scalar)
-      call read_clim_data (readm, 0, imx, month, ipx,  &
+      call read_clim_data (readm, 0, ixm, month, ixp,  &
              wind_file, wind_data, &
              field_loc_center, field_type_scalar)
-      call read_clim_data (readm, 0, imx, month, ipx,  &
+      call read_clim_data (readm, 0, ixm, month, ixp,  &
              strax_file, strax_data, &
              field_loc_center, field_type_vector)
-      call read_clim_data (readm, 0, imx, month, ipx,  &
+      call read_clim_data (readm, 0, ixm, month, ixp,  &
              stray_file, stray_data, &
              field_loc_center, field_type_vector)
 
@@ -3796,7 +3796,7 @@
 !
       integer (kind=int_kind) :: & 
           i, j, n, iblk   , &
-          imx,ipx         , & ! record numbers for neighboring months
+          ixm,ixp         , & ! record numbers for neighboring months
           maxrec          , & ! maximum record number
           recslot         , & ! spline slot for current record
           midmonth            ! middle day of month
@@ -3816,10 +3816,10 @@
 
       ! Compute record numbers for surrounding months
       maxrec = 12
-      imx  = mod(month+maxrec-2,maxrec) + 1
-      ipx  = mod(month,         maxrec) + 1
-      if (mday >= midmonth) imx = 99  ! other two points will be used
-      if (mday <  midmonth) ipx = 99
+      ixm  = mod(month+maxrec-2,maxrec) + 1
+      ixp  = mod(month,         maxrec) + 1
+      if (mday >= midmonth) ixm = 99  ! other two points will be used
+      if (mday <  midmonth) ixp = 99
 
       ! Determine whether interpolation will use values 1:2 or 2:3
       ! recslot = 2 means we use values 1:2, with the current value (2)
@@ -3835,12 +3835,12 @@
       do n = nfld, 1, -1
         do iblk = 1, nblocks
         ! use sst_data arrays as temporary work space until n=1
-        if (imx /= 99) then  ! first half of month
-          sst_data(:,:,1,iblk) = ocn_frc_m(:,:,iblk,n,imx)
+        if (ixm /= 99) then  ! first half of month
+          sst_data(:,:,1,iblk) = ocn_frc_m(:,:,iblk,n,ixm)
           sst_data(:,:,2,iblk) = ocn_frc_m(:,:,iblk,n,month)
         else                 ! second half of month
           sst_data(:,:,1,iblk) = ocn_frc_m(:,:,iblk,n,month)
-          sst_data(:,:,2,iblk) = ocn_frc_m(:,:,iblk,n,ipx)
+          sst_data(:,:,2,iblk) = ocn_frc_m(:,:,iblk,n,ixp)
         endif
         enddo
         call interpolate_data (sst_data,work1)

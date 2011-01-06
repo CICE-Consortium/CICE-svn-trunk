@@ -131,7 +131,7 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-         k                          , &
+         k
 
       istep = 0         ! local timestep number
       time=istep0*dt    ! s
