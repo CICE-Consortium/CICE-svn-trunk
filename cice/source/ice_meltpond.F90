@@ -136,14 +136,18 @@
 
       integer (kind=int_kind) :: i,j,ij,icells
 
-      real (kind=dbl_kind) :: hi, hs, dTs, Tp
+      real (kind=dbl_kind) :: &
+         hi                     , & ! ice thickness (m)
+         hs                     , & ! snow depth (m)
+         dTs                    , & ! surface temperature diff for freeze-up (C)
+         Tp                     , & ! pond freezing temperature (C)
+         rfrac                      ! water runoff fraction for melt ponds
 
       real (kind=dbl_kind), parameter :: &
-         hicemin  = p1          , & ! minimum ice thickness with ponds
-         Td       = c2          , & ! temperature difference for freeze-up
-         rfrac    = p1          , & ! water runoff fraction for melt ponds
+         hicemin  = p1          , & ! minimum ice thickness with ponds (m)
+         Td       = c2          , & ! temperature difference for freeze-up (C)
          rexp     = p01         , & ! pond contraction scaling
-         dpthhi   = 0.9_dbl_kind, & ! ratio of pond depth to ice thickness
+         dpthhi   = 0.2_dbl_kind, & ! ratio of pond depth to ice thickness
          dpthfrac = 0.8_dbl_kind    ! ratio of pond depth to pond fraction
 
       !-----------------------------------------------------------------
@@ -188,6 +192,8 @@
             !-----------------------------------------------------------
             ! Update pond volume
             !-----------------------------------------------------------
+            rfrac = 0.85_dbl_kind - 0.7_dbl_kind * aicen(i,j)
+
             volpn(i,j) = volpn(i,j) &
                        + rfrac*(meltt(i,j)*rhoi/rhofresh &
                        +        melts(i,j)*rhos/rhofresh &
@@ -205,7 +211,7 @@
             hpondn(i,j) = dpthfrac * apondn(i,j)
 
             !-----------------------------------------------------------
-            ! Limit pond depth to 90% of ice thickness
+            ! Limit pond depth
             !-----------------------------------------------------------
              hpondn(i,j) = min(hpondn(i,j), dpthhi*hi)
              volpn(i,j) = hpondn(i,j)*apondn(i,j)
