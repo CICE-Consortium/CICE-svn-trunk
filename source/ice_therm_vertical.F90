@@ -1530,7 +1530,7 @@
             Iswabs_tmp = c0
             if (Tin_init(ij,k) <= Tmlt(k) - dTemp) then
                if (l_brine) then
-                  ci = cp_ice - Lfresh / Tin_init(ij,k)
+                  ci = cp_ice - Lfresh * Tmlt(k) / (Tin_init(ij,k)**2)
                   Iswabs_tmp = min(Iswabs(i,j,k), &
                      frac*(Tmlt(k)-Tin_init(ij,k))*ci/dt_rhoi_hlyr(ij))
                else

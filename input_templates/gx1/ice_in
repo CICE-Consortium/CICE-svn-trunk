@@ -95,8 +95,8 @@
   , update_ocn_f    = .false.
   , oceanmixed_ice  = .true.
   , ocn_data_format = 'nc'
-  , sss_data_type   = 'default'
-  , sst_data_type   = 'default'
+  , sss_data_type   = 'ncar'
+  , sst_data_type   = 'ncar'
   , ocn_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/gx1v3/forcing/'
   , oceanmixed_file = 'oceanmixed_ice_depth.nc'
   , restore_sst     = .false.
