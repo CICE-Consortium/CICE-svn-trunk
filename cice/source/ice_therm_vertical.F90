@@ -2038,15 +2038,15 @@
                converged(m) = .false.
                all_converged = .false.
 
-               if (reduce_kh(m,k) == .true. .and. dqmat(m,k) < puny) then
                   ! reduce conductivity for next iteration
-                  do k = 1, nilyr
+               do k = 1, nilyr
+                  if (reduce_kh(m,k) == .true. .and. dqmat(m,k) < puny) then
                      frac = max(0.5*(c1-ferr(m)/abs(fcondtopn(i,j)-fcondbot(m))),p1)
 !                     frac = p1
                      kh(m,k+nslyr+1) = kh(m,k+nslyr+1) * frac
                      kh(m,k+nslyr)   = kh(m,k+nslyr+1)
-                  enddo
-               endif
+                  endif
+               enddo
 
             endif               ! ferr 
          enddo                  ! ij
