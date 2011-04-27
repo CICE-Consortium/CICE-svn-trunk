@@ -16,6 +16,7 @@
 !       Stripped out mpdata, retained upwind, and added block structure.
 ! 2006: Incorporated remap transport driver and renamed from
 !       ice_transport_upwind.  
+! 2011: ECH moved edgearea arrays into ice_transport_remap.F90
 !
 ! !INTERFACE:
 
@@ -249,18 +250,6 @@
       type (block) :: &
          this_block           ! block information for current block
       
-    !-------------------------------------------------------------------
-    ! If l_fixed_area is true, the area of each departure region is
-    !  computed in advance (e.g., by taking the divergence of the 
-    !  velocity field and passed to locate_triangles.  The departure 
-    !  regions are adjusted to obtain the desired area.
-    ! If false, edgearea is computed in locate_triangles and passed out.
-    !-------------------------------------------------------------------
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) ::   &
-         edgearea_e     ,&! area of departure regions for east edges
-         edgearea_n       ! area of departure regions for north edges
-
       ! variables related to optional bug checks
 
       logical (kind=log_kind), parameter ::     &
@@ -471,51 +460,11 @@
     !-------------------------------------------------------------------
     ! Main remapping routine: Step ice area and tracers forward in time.
     !-------------------------------------------------------------------
-    ! If l_fixed_area is true, compute edgearea by taking the divergence
-    !  of the velocity field.  Otherwise, initialize edgearea.
-    !-------------------------------------------------------------------
-
-         do iblk = 1, nblocks
-         do j = 1, ny_block
-         do i = 1, nx_block
-            edgearea_e(i,j,iblk) = c0
-            edgearea_n(i,j,iblk) = c0
-         enddo
-         enddo
-         enddo
-
-         if (l_fixed_area) then
-
-            do iblk = 1, nblocks
-               this_block = get_block(blocks_ice(iblk),iblk)         
-               ilo = this_block%ilo
-               ihi = this_block%ihi
-               jlo = this_block%jlo
-               jhi = this_block%jhi
-
-               do j = jlo, jhi
-               do i = ilo-1, ihi
-                  edgearea_e(i,j,iblk) = (uvel(i,j,iblk) + uvel(i,j-1,iblk)) &
-                                        * p5 * HTE(i,j,iblk) * dt
-               enddo
-               enddo
-
-               do j = jlo-1, jhi
-               do i = ilo, ihi
-                  edgearea_n(i,j,iblk) = (vvel(i,j,iblk) + vvel(i-1,j,iblk)) &
-                                        * p5 * HTN(i,j,iblk) * dt
-               enddo
-               enddo
-
-            enddo  ! iblk
-
-         endif
 
          call horizontal_remap (dt,                ntrace,             &
                                 uvel      (:,:,:), vvel      (:,:,:),  &
                                 aim     (:,:,:,:), trm   (:,:,:,:,:),  &
                                 l_fixed_area,                          &
-                                edgearea_e(:,:,:), edgearea_n(:,:,:),  &
                                 tracer_type,       depend,             &
                                 has_dependents,    integral_order,     &
                                 l_dp_midpt)
