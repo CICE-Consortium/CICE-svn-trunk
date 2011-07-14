@@ -1606,6 +1606,7 @@
                               aice0,       aice,       &
                               trcr_depend, fresh,      &
                               fsalt,       fhocn,      &
+                              faero_ocn,   tr_aero,    &
                               heat_capacity, l_stop,     &
                               istop,         jstop,      &
                               limit_aice_in)
@@ -1662,6 +1663,7 @@
          trcr_depend  ! tracer dependency information
 
       logical (kind=log_kind), intent(in) :: &
+         tr_aero,      & ! aerosol flag
          heat_capacity   ! if false, ice and snow have zero heat capacity
 
       logical (kind=log_kind), intent(out) :: &
@@ -1676,6 +1678,10 @@
          fresh    , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt    , & ! salt flux to ocean        (kg/m^2/s)
          fhocn        ! net heat flux to ocean     (W/m^2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_aero), &
+         intent(inout), optional :: &
+         faero_ocn    ! aerosol flux to ocean     (kg/m^2/s)
 
       logical (kind=log_kind), intent(in), optional ::   &
          limit_aice_in      ! if false, allow aice to be out of bounds
@@ -1695,6 +1701,9 @@
          dfresh   , & ! zapped fresh water flux (kg/m^2/s)
          dfsalt   , & ! zapped salt flux   (kg/m^2/s)
          dfhocn       ! zapped energy flux ( W/m^2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_aero) :: &
+         dfaero_ocn   ! zapped aerosol flux   (kg/m^2/s)
 
       logical (kind=log_kind) ::   &
          limit_aice         ! if true, check for aice out of bounds
@@ -1790,16 +1799,16 @@
       !-----------------------------------------------------------------
 
       if (limit_aice) then
-         call zap_small_areas (nx_block, ny_block, &
-                               ilo, ihi, jlo, jhi, &
-                               dt,       ntrcr,    &
-                               aice,     aice0, &
-                               aicen,    trcrn, &
-                               vicen,    vsnon, &
-                               eicen,    esnon, &
-                               dfresh,   dfsalt, &
-                               dfhocn,           &
-                               l_stop,           &
+         call zap_small_areas (nx_block, ny_block,  &
+                               ilo, ihi, jlo, jhi,  &
+                               dt,       ntrcr,     &
+                               aice,     aice0,     &
+                               aicen,    trcrn,     &
+                               vicen,    vsnon,     &
+                               eicen,    esnon,     &
+                               dfresh,   dfsalt,    &
+                               dfhocn,   dfaero_ocn,&
+                               tr_aero,  l_stop,    &
                                istop,    jstop)
          if (l_stop) return
       endif   ! l_limit_aice
@@ -1809,11 +1818,13 @@
     !-------------------------------------------------------------------
 
       if (present(fresh)) &
-           fresh     (:,:) = fresh(:,:)      + dfresh(:,:) 
+           fresh     (:,:)   = fresh(:,:)       + dfresh(:,:) 
       if (present(fsalt)) &
-           fsalt     (:,:) = fsalt(:,:)      + dfsalt(:,:)
+           fsalt     (:,:)   = fsalt(:,:)       + dfsalt(:,:)
       if (present(fhocn)) &
-           fhocn     (:,:) = fhocn(:,:)      + dfhocn(:,:)
+           fhocn     (:,:)   = fhocn(:,:)       + dfhocn(:,:)
+      if (present(faero_ocn)) &
+           faero_ocn (:,:,:) = faero_ocn(:,:,:) + dfaero_ocn(:,:,:)
 
       !----------------------------------------------------------------
       ! If using zero-layer model (no heat capacity), check that the 
@@ -1841,16 +1852,16 @@
 !
 ! !INTERFACE:
 !
-      subroutine zap_small_areas (nx_block, ny_block, &
-                                  ilo, ihi, jlo, jhi, &
-                                  dt,       ntrcr,    &
-                                  aice,     aice0,    &
-                                  aicen,    trcrn,    &
-                                  vicen,    vsnon,    &
-                                  eicen,    esnon,    &
-                                  dfresh,   dfsalt,   &
-                                  dfhocn,             &
-                                  l_stop,             &
+      subroutine zap_small_areas (nx_block, ny_block,   &
+                                  ilo, ihi, jlo, jhi,   &
+                                  dt,       ntrcr,      &
+                                  aice,     aice0,      &
+                                  aicen,    trcrn,      &
+                                  vicen,    vsnon,      &
+                                  eicen,    esnon,      &
+                                  dfresh,   dfsalt,     &
+                                  dfhocn,   dfaero_ocn, &
+                                  tr_aero,  l_stop,     &
                                   istop,    jstop)
 !
 ! !DESCRIPTION:
@@ -1864,7 +1875,7 @@
 !
 ! !USES:
 !
-      use ice_state, only: nt_Tsfc
+      use ice_state, only: nt_Tsfc, nt_aero
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1905,8 +1916,15 @@
          dfsalt   , & ! zapped salt flux   (kg/m^2/s)
          dfhocn       ! zapped energy flux ( W/m^2)
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_aero), &
+         intent(out) :: &
+         dfaero_ocn   ! zapped aerosol flux   (kg/m^2/s)
+
+      logical (kind=log_kind), intent(in) :: &
+         tr_aero      ! aerosol flag
+
       logical (kind=log_kind), intent(out) :: &
-         l_stop   ! if true, abort on return
+         l_stop       ! if true, abort on return
 
       integer (kind=int_kind), intent(out) :: &
          istop, jstop ! indices of grid cell where model aborts
@@ -1935,6 +1953,7 @@
       dfresh(:,:) = c0
       dfsalt(:,:) = c0
       dfhocn(:,:) = c0
+      dfaero_ocn(:,:,:) = c0
 
       !-----------------------------------------------------------------
       ! Zap categories with very small areas.
@@ -2029,6 +2048,23 @@
             trcrn(i,j,nt_Tsfc,n) = Tocnfrz
 
          enddo                  ! ij
+
+         if (tr_aero) then
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+               do it = 1, n_aero
+                  xtmp = (vsnon(i,j,n)*(trcrn(i,j,nt_aero  +4*(it-1),n)     &
+                                      + trcrn(i,j,nt_aero+1+4*(it-1),n))    &
+                       +  vicen(i,j,n)*(trcrn(i,j,nt_aero+2+4*(it-1),n)     &
+                                      + trcrn(i,j,nt_aero+3+4*(it-1),n)))/dt
+                  dfaero_ocn(i,j,it) = dfaero_ocn(i,j,it) + xtmp
+               enddo                 ! n
+            enddo                  ! ij
+         endif
 
       !-----------------------------------------------------------------
       ! Zap tracers
@@ -2138,6 +2174,24 @@
             vsnon(i,j,n) = vsnon(i,j,n) * (c1/aice(i,j))
  
          enddo                  ! ij
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         if (tr_aero) then
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+               do it = 1, n_aero
+                  xtmp = (vsnon(i,j,n)*(trcrn(i,j,nt_aero  +4*(it-1),n)     &
+                                      + trcrn(i,j,nt_aero+1+4*(it-1),n))    &
+                       +  vicen(i,j,n)*(trcrn(i,j,nt_aero+2+4*(it-1),n)     &
+                                      + trcrn(i,j,nt_aero+3+4*(it-1),n)))   &
+                       * (aice(i,j)-c1)/aice(i,j) / dt
+                  dfaero_ocn(i,j,it) = dfaero_ocn(i,j,it) + xtmp
+               enddo                 ! n
+            enddo                  ! ij
+         endif
 
       ! Note: Tracers are unchanged.
 

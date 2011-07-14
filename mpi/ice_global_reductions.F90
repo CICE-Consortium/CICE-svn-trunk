@@ -175,7 +175,6 @@
 
    real (dbl_kind), dimension(:), allocatable :: &
       blockSum,     &! sum of local block domain
-      localSum,     &! sum of all local block domains
       globalSumTmp   ! higher precision global sum
 
    integer (int_kind) :: &
@@ -1019,7 +1018,6 @@
 
    real (dbl_kind), dimension(:), allocatable :: &
       blockSum,     &! sum of local block domain
-      localSum,     &! sum of all local block domains
       globalSumTmp   ! higher precision global sum
 
    integer (int_kind) :: &

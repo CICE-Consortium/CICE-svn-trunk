@@ -115,7 +115,7 @@
          esnon     ! energy of melting for each snow layer (J/m^2)
 
       !-----------------------------------------------------------------
-      ! indices for tracers
+      ! indices and flags for tracers
       !-----------------------------------------------------------------
 
       integer (kind=int_kind) :: &
@@ -123,7 +123,14 @@
          nt_iage  , & ! volume-weighted ice age
          nt_alvl  , & ! level ice area fraction
          nt_vlvl  , & ! level ice volume fraction
-         nt_volpn     ! melt pond volume
+         nt_volpn , & ! melt pond volume
+         nt_aero      ! starting index for aerosols in ice
+
+      logical (kind=log_kind) :: &
+         tr_iage,   & ! if .true., use age tracer
+         tr_lvl,    & ! if .true., use level ice tracer
+         tr_pond,   & ! if .true., use melt pond tracer
+         tr_aero      ! if .true., use aerosol tracers
 
       !-----------------------------------------------------------------
       ! dynamic variables closely related to the state of the ice

@@ -112,6 +112,10 @@
       real (kind=dbl_kind) :: &
          exp_min              ! minimum exponential value
 
+      real (kind=dbl_kind), parameter :: &
+         hi_ssl = 0.050_dbl_kind, & ! ice surface scattering layer thickness (m)
+         hs_ssl = 0.040_dbl_kind    ! snow surface scattering layer thickness (m)
+
 !=======================================================================
 
       contains
@@ -1949,8 +1953,6 @@
          gi_p_int         ! Ice under pond asymmetry parameter
 
       real (kind=dbl_kind) :: &
-         hi_ssl       , & ! sea ice surface scattering layer thickness (m)
-         hs_ssl       , & ! snow surface scattering layer thickness (m)
          dz           , & ! snow, sea ice or pond water layer thickness
          dz_ssl       , & ! snow or sea ice surface scattering layer thickness
          fs               ! scaling factor to reduce (nilyr<4) or increase (nilyr>4) DL
@@ -2135,13 +2137,11 @@
       data gw   /    0.00_dbl_kind,   0.00_dbl_kind,   0.00_dbl_kind /
 
       ! snow data
-      data hs_ssl / 0.040_dbl_kind / ! snow surface scattering layer thickness (m)
       data rhoi   /917.0_dbl_kind /  ! snow mass density (kg/m3)
       data fr_max / 1.00_dbl_kind /  ! snow grain adjustment factor max
       data fr_min / 0.80_dbl_kind /  ! snow grain adjustment factor min
 
       ! ice data
-      data hi_ssl / 0.050_dbl_kind / ! sea ice surface scattering layer thickness (m)
       data kalg   / 0.60_dbl_kind /  ! for 0.5 m path of 75 mg Chl a / m2
 
       ! ice and pond scat coeff fractional change for +- one-sigma in albedo
@@ -3359,7 +3359,6 @@
          rsnw_nm ! actual used nonmelt snow grain radius (micro-meters)
 
       real (kind=dbl_kind), parameter :: &
-         hsmin  = .0001_dbl_kind, & ! minimum allowed snow depth (m) for DE
          hs0    = .0300_dbl_kind, & ! snow depth for transition to bare sea ice
          dT_mlt    = c1, & ! change in temp to give non-melt to melt change
                            ! in snow grain radius

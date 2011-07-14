@@ -413,13 +413,15 @@
                             fresh     (:,:,  iblk), &
                             fsalt     (:,:,  iblk), &    
                             fhocn     (:,:,  iblk), &
+                            faero_ocn (:,:,:,iblk), &
                             rside     (:,:,  iblk), &
                             meltl     (:,:,  iblk), &
                             aicen     (:,:,:,iblk), &
                             vicen     (:,:,:,iblk), &
                             vsnon     (:,:,:,iblk), &
                             eicen     (:,:,:,iblk), &
-                            esnon     (:,:,:,iblk) )
+                            esnon     (:,:,:,iblk), &
+                            trcrn     (:,:,:,:,iblk))
 
       !-----------------------------------------------------------------
       ! For the special case of a single category, adjust the area and
@@ -452,7 +454,8 @@
                            aice0   (:,:,  iblk), aice      (:,:,iblk), &
                            trcr_depend(1:ntrcr),                       &
                            fresh   (:,:,  iblk), fsalt     (:,:,iblk), &
-                           fhocn   (:,:,  iblk),                       &
+                           fhocn   (:,:,  iblk),faero_ocn(:,:,:,iblk), &
+                           tr_aero,                                    &
                            heat_capacity,        l_stop,               &
                            istop,                jstop)
 
@@ -635,7 +638,8 @@
                          istop,                jstop,                    &   
                          dardg1dt(:,:,iblk),   dardg2dt  (:,:,iblk),     &
                          dvirdgdt(:,:,iblk),   opening   (:,:,iblk),     &
-                         fresh   (:,:,iblk),   fhocn     (:,:,iblk))
+                         fresh   (:,:,iblk),   fhocn     (:,:,iblk),     &
+                         faero_ocn(:,:,:,iblk))
 
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =', &
@@ -676,7 +680,8 @@
                            aice0   (:,:,  iblk), aice      (:,:,iblk), &
                            trcr_depend(1:ntrcr),                       &
                            fresh   (:,:,  iblk), fsalt     (:,:,iblk), &
-                           fhocn   (:,:,  iblk),                       &
+                           fhocn   (:,:,  iblk),faero_ocn(:,:,:,iblk), &
+                           tr_aero,                                    &
                            heat_capacity,        l_stop,               &
                            istop,                jstop)
 

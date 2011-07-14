@@ -92,12 +92,13 @@
          xav  , & ! mean T-cell value of x
          yav  , & ! mean T-cell value of y
          xxav , & ! mean T-cell value of xx
-         xyav , & ! mean T-cell value of xy
-         yyav , & ! mean T-cell value of yy
-         xxxav, & ! mean T-cell value of xxx
-         xxyav, & ! mean T-cell value of xxy
-         xyyav, & ! mean T-cell value of xyy
-         yyyav    ! mean T-cell value of yyy
+!         xyav , & ! mean T-cell value of xy
+!         yyav , & ! mean T-cell value of yy
+         yyav     ! mean T-cell value of yy
+!         xxxav, & ! mean T-cell value of xxx
+!         xxyav, & ! mean T-cell value of xxy
+!         xyyav, & ! mean T-cell value of xyy
+!         yyyav    ! mean T-cell value of yyy
 
       real (kind=dbl_kind), &
          dimension (2,2,nx_block,ny_block,max_blocks), save :: &

@@ -1,8 +1,8 @@
 #!/bin/tcsh 
-##MSUB -q largeq
+#MSUB -A S11_Climate
 #MSUB -l walltime=01:00:00
 #MSUB -l nodes=1:ppn=4
-#MSUB -N cice.v4.0
+#MSUB -N cice
 #MSUB -m ae
 
 limit stacksize unlimited
@@ -10,7 +10,7 @@ limit stacksize unlimited
 set  stamp   = `date -u '+%y%m%d%H%M%S'`
 setenv ICE_LOG_FILE ice.log.${stamp}
 
-cd /scratch1/eclare/CICE.v4.0/rundir4
+cd /scratch1/eclare/CICE.v4.0/rundir
 mpirun -np 4 ./cice  >&! $ICE_LOG_FILE
 
 exit 0

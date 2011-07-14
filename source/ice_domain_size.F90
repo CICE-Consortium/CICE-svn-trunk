@@ -39,8 +39,12 @@
         ntilyr    = ncat*nilyr, & ! number of ice layers in all categories
         nslyr     =   1       , & ! number of snow layers per category
         ntslyr    = ncat*nslyr, & ! number of snow layers in all categories
-        max_ntrcr =   5       , & ! number of tracers (defined in ice_init)
-                                  ! 1 = surface temperature
+        max_aero  =   6       , & ! maximum number of aerosols 
+        n_aero    =   3       , & ! number of aerosols in use
+        max_ntrcr =             & ! number of tracers (defined in ice_init)
+                      1         & ! 1 = surface temperature
+                  +   1         & ! number of ice, snow tracers excl. aero
+                  + n_aero*4  , & ! number of aerosols * 4 aero layers
         max_nstrm =   5           ! max number of history output streams
 
       integer (kind=int_kind), parameter :: &

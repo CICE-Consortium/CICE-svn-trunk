@@ -853,9 +853,8 @@
 !
       use ice_itd, only: hin_max, ilyr1, column_sum, &
                          column_conservation_check
-      use ice_state, only: nt_Tsfc, nt_iage, nt_alvl, nt_vlvl
-      use ice_age, only: tr_iage
-      use ice_mechred, only: tr_lvl
+      use ice_state, only: nt_Tsfc, nt_iage, nt_alvl, nt_vlvl, nt_aero, &
+                           tr_iage, tr_lvl, tr_aero
       use ice_flux, only: update_ocn_f
 
 ! !INPUT/OUTPUT PARAMETERS:
@@ -920,7 +919,8 @@
       integer (kind=int_kind) :: &
          i, j         , & ! horizontal indices
          n            , & ! ice category index
-         k                ! ice layer index
+         k            , & ! ice layer index
+         it               ! aerosol tracer index
 
       real (kind=dbl_kind), dimension (icells) :: &
          ai0new       , & ! area of new ice added to cat 1
@@ -1118,6 +1118,15 @@
                 trcrn(i,j,nt_alvl,n)*vsurp) / vtmp
             endif
 
+            if (tr_aero) then
+               do it = 1, n_aero
+                  trcrn(i,j,nt_aero+2+4*(it-1),n) = &
+                  trcrn(i,j,nt_aero+2+4*(it-1),n)*vicen(i,j,n) / vtmp
+                  trcrn(i,j,nt_aero+3+4*(it-1),n) = &
+                  trcrn(i,j,nt_aero+3+4*(it-1),n)*vicen(i,j,n) / vtmp
+               enddo
+            endif
+
             ! update category volumes
             vicen(i,j,n) = vtmp
             vlyr(m) = vsurp/rnilyr
@@ -1163,9 +1172,20 @@
             (trcrn(i,j,nt_Tsfc,1)*area1 + Tf(i,j)*ai0new(m))/aicen(i,j,1)
          trcrn(i,j,nt_Tsfc,1) = min (trcrn(i,j,nt_Tsfc,1), c0)
 
-         if (tr_iage .and. vicen(i,j,1) > puny) &
-             trcrn(i,j,nt_iage,1) = &
-            (trcrn(i,j,nt_iage,1)*vice1 + dt*vi0new(m))/vicen(i,j,1)
+         if (vicen(i,j,1) > puny) then
+            if (tr_iage) &
+               trcrn(i,j,nt_iage,1) = &
+              (trcrn(i,j,nt_iage,1)*vice1 + dt*vi0new(m))/vicen(i,j,1)
+
+            if (tr_aero) then
+               do it = 1, n_aero
+                  trcrn(i,j,nt_aero+2+4*(it-1),1) = &
+                  trcrn(i,j,nt_aero+2+4*(it-1),1)*vice1/vicen(i,j,1)
+                  trcrn(i,j,nt_aero+3+4*(it-1),1) = &
+                  trcrn(i,j,nt_aero+3+4*(it-1),1)*vice1/vicen(i,j,1)
+               enddo
+            endif
+         endif
 
          if (tr_lvl .and. aicen(i,j,1) > puny) then
              trcrn(i,j,nt_alvl,1) = &
@@ -1226,15 +1246,16 @@
                                ilo, ihi,   jlo, jhi,   &
                                dt,                     &
                                fresh,      fsalt,      &
-                               fhocn,                  &
+                               fhocn,      faero_ocn,  &
                                rside,      meltl,      &
                                aicen,      vicen,      &
                                vsnon,      eicen,      &
-                               esnon)
+                               esnon,      trcrn)
 !
 ! !USES:
 !
       use ice_itd, only: ilyr1, slyr1
+      use ice_state, only: nt_aero, tr_aero
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1259,6 +1280,10 @@
          intent(inout) :: &
          esnon     ! energy of melting for each snow layer (J/m^2)
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &
+         intent(in) :: &
+         trcrn     ! tracer array
+
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
          rside     ! fraction of ice that melts laterally
 
@@ -1268,6 +1293,10 @@
          fsalt     , & ! salt flux to ocean (kg/m^2/s)
          fhocn     , & ! net heat flux to ocean (W/m^2)
          meltl         ! lateral ice melt         (m/step-->cm/day)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
+         intent(inout) :: &
+         faero_ocn     ! aerosol flux to ocean (kg/m^2/s)
 !
 !EOP
 !
@@ -1373,6 +1402,22 @@
                                        * (c1 - rside(i,j))
             enddo               ! ij
          enddo                  ! nslyr
+
+         if (tr_aero) then
+            do k = 1, n_aero
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  faero_ocn(i,j,k) = faero_ocn(i,j,k) + (vsnon(i,j,n) &
+                                   *(trcrn(i,j,nt_aero  +4*(k-1),n)   &
+                                   + trcrn(i,j,nt_aero+1+4*(k-1),n))  &
+                                                      +  vicen(i,j,n) &
+                                   *(trcrn(i,j,nt_aero+2+4*(k-1),n)   &
+                                   + trcrn(i,j,nt_aero+3+4*(k-1),n))) &
+                                   * rside(i,j) / dt
+               enddo
+            enddo
+         endif
 
       enddo  ! n
 

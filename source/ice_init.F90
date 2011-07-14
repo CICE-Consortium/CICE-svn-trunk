@@ -87,16 +87,18 @@
           sss_data_type,   sst_data_type, ocn_data_dir, &
           oceanmixed_file, restore_sst,   trestore 
       use ice_grid, only: grid_file, kmt_file, grid_type, grid_format
-      use ice_mechred, only: kstrength, krdg_partic, krdg_redist, tr_lvl, mu_rdg
+      use ice_mechred, only: kstrength, krdg_partic, krdg_redist, mu_rdg
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, ahmax, &
                                shortwave, albedo_type, R_ice, R_pnd, &
                                R_snw
       use ice_atmo, only: atmbndy, calc_strair
       use ice_transport_driver, only: advection
-      use ice_age, only: tr_iage, restart_age
+      use ice_state, only: tr_iage, tr_lvl, tr_pond, tr_aero
+      use ice_age, only: restart_age
       use ice_lvl, only: restart_lvl
-      use ice_meltpond, only: tr_pond, restart_pond
+      use ice_meltpond, only: restart_pond
+      use ice_aerosol, only: restart_aero
       use ice_therm_vertical, only: calc_Tsfc, heat_capacity, conduct, &
           ustar_min
       use ice_restoring
@@ -150,7 +152,8 @@
       namelist /tracer_nml/   &
         tr_iage, restart_age, &
         tr_lvl, restart_lvl, &
-        tr_pond, restart_pond
+        tr_pond, restart_pond, &
+        tr_aero, restart_aero
 
       !-----------------------------------------------------------------
       ! default values
@@ -256,6 +259,8 @@
       restart_lvl  = .false. ! level ice restart
       tr_pond      = .false. ! explicit melt ponds
       restart_pond = .false. ! melt ponds restart
+      tr_aero      = .false. ! aerosols
+      restart_aero = .false. ! aerosols restart
 
       !-----------------------------------------------------------------
       ! read from input file
@@ -457,6 +462,8 @@
       call broadcast_scalar(restart_lvl,        master_task)
       call broadcast_scalar(tr_pond,            master_task)
       call broadcast_scalar(restart_pond,       master_task)
+      call broadcast_scalar(tr_aero,            master_task)
+      call broadcast_scalar(restart_aero,       master_task)
 
       !-----------------------------------------------------------------
       ! spew
@@ -610,6 +617,8 @@
          write(nu_diag,1010) ' restart_lvl               = ', restart_lvl
          write(nu_diag,1010) ' tr_pond                   = ', tr_pond
          write(nu_diag,1010) ' restart_pond              = ', restart_pond
+         write(nu_diag,1010) ' tr_aero                   = ', tr_aero
+         write(nu_diag,1010) ' restart_aero              = ', restart_aero
 
          nt_Tsfc = 1           ! index tracers, starting with Tsfc = 1
          ntrcr = 1             ! count tracers, starting with Tsfc = 1
@@ -629,6 +638,11 @@
          if (tr_pond) then
              nt_volpn = ntrcr + 1
              ntrcr = ntrcr + 1
+         endif
+
+         if (tr_aero) then
+             nt_aero = ntrcr + 1
+             ntrcr = ntrcr + 4*n_aero ! 4 dEdd layers, n_aero species
          endif
 
          if (ntrcr > max_ntrcr) then
@@ -662,6 +676,7 @@
       call broadcast_scalar(nt_alvl,  master_task)
       call broadcast_scalar(nt_vlvl,  master_task)
       call broadcast_scalar(nt_volpn, master_task)
+      call broadcast_scalar(nt_aero,  master_task)
 
       end subroutine input_data
 
@@ -692,9 +707,6 @@
       use ice_state
       use ice_itd
       use ice_exit
-      use ice_age, only: tr_iage
-      use ice_mechred, only: tr_lvl
-      use ice_meltpond, only: tr_pond
       use ice_therm_vertical, only: heat_capacity
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -755,6 +767,14 @@
       if (tr_lvl)  trcr_depend(nt_alvl)  = 0   ! level ice area
       if (tr_lvl)  trcr_depend(nt_vlvl)  = 1   ! level ice volume
       if (tr_pond) trcr_depend(nt_volpn) = 0   ! melt pond volume
+      if (tr_aero) then ! volume-weighted aerosols
+         do it = 1, n_aero
+            trcr_depend(nt_aero+(it-1)*4  ) = 2 ! snow
+            trcr_depend(nt_aero+(it-1)*4+1) = 2 ! snow
+            trcr_depend(nt_aero+(it-1)*4+2) = 1 ! ice
+            trcr_depend(nt_aero+(it-1)*4+3) = 1 ! ice
+         enddo
+      endif
 
       do iblk = 1, nblocks
 

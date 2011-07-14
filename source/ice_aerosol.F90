@@ -1,0 +1,907 @@
+!=======================================================================
+!
+!BOP
+!
+! !MODULE: ice_aerosol - Aerosol tracer within sea ice
+!
+! !DESCRIPTION:
+!
+! !REVISION HISTORY:
+!  SVN:$$
+!
+! authors Marika Holland, NCAR
+!         David Bailey, NCAR
+!
+! !INTERFACE:
+!
+      module ice_aerosol
+!
+! !USES:
+!
+      use ice_kinds_mod
+      use ice_constants
+      use ice_fileunits
+      use ice_restart, only: lenstr, restart_dir, restart_file, &
+                             pointer_file, runtype
+      use ice_communicate, only: my_task, master_task
+      use ice_exit, only: abort_ice
+!
+!EOP
+!
+      implicit none
+
+      logical (kind=log_kind) :: & 
+         restart_aero      ! if .true., read aerosol tracer restart file
+
+!=======================================================================
+
+      contains
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: init_aerosol
+!
+! !DESCRIPTION:
+!
+!  Initialize ice aerosol tracer (call prior to reading restart data)
+! 
+! !REVISION HISTORY: same as module
+!
+! !INTERFACE:
+!
+      subroutine init_aerosol
+!
+! !USES:
+!
+      use ice_state
+!
+!EOP
+!
+      if (restart_aero) then
+         call read_restart_aero
+      else
+         trcrn(:,:,nt_aero:nt_aero+4*n_aero-1,:,:) = c0
+      endif
+
+      end subroutine init_aerosol
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: faero_default - constant values for atmospheric aerosols
+!
+! !INTERFACE:
+!
+      subroutine faero_default
+!
+! !DESCRIPTION:
+!
+! !REVISION HISTORY:
+!
+! authors: Elizabeth Hunke, LANL
+!
+! !USES:
+!
+      use ice_flux
+!
+! EOP
+! 
+      faero_atm(:,:,1,:) = 1.e-15_dbl_kind ! W/m^2 s
+      faero_atm(:,:,2,:) = 1.e-13_dbl_kind
+      faero_atm(:,:,3,:) = 1.e-11_dbl_kind
+
+      end subroutine faero_default
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: faero_data - read atmospheric aerosols
+!
+! !INTERFACE:
+!
+      subroutine faero_data
+!
+! !DESCRIPTION:
+!
+! !REVISION HISTORY:
+!
+! authors: Elizabeth Hunke, LANL
+!
+! !USES:
+!
+      use ice_domain, only: nblocks, blocks_ice
+      use ice_read_write
+      use ice_flux
+      use ice_forcing
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+! EOP
+! 
+#ifdef ncdf 
+!local parameters
+
+    real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
+       save :: &
+       aero1_data    , & ! field values at 2 temporal data points
+       aero2_data    , & ! field values at 2 temporal data points
+       aero3_data        ! field values at 2 temporal data points
+
+    character (char_len_long) :: & 
+       aero_file,   &   ! netcdf filename
+       fieldname        ! field name in netcdf file
+
+    integer (kind=int_kind) :: &
+       fid              ! file id for netCDF file 
+
+    real (kind=dbl_kind):: &
+       work             ! temporary variable
+
+    logical (kind=log_kind) :: diag
+
+    integer (kind=int_kind) :: &
+       status           ! status flag
+
+      integer (kind=int_kind) :: & 
+          i, j        , &
+          ixm,ixx,ixp , & ! record numbers for neighboring months
+          recnum      , & ! record number
+          maxrec      , & ! maximum record number
+          recslot     , & ! spline slot for current record
+          midmonth    , & ! middle day of month
+          dataloc     , & ! = 1 for data located in middle of time interval
+                          ! = 2 for date located at end of time interval
+          iblk        , & ! block index
+          ilo,ihi,jlo,jhi ! beginning and end of physical domain
+
+      logical (kind=log_kind) :: readm
+
+      type (block) :: &
+         this_block           ! block information for current block
+
+    !-------------------------------------------------------------------
+    ! monthly data 
+    !
+    ! Assume that monthly data values are located in the middle of the 
+    ! month.
+    !-------------------------------------------------------------------
+
+      midmonth = 15  ! data is given on 15th of every month
+!      midmonth = fix(p5 * real(daymo(month)))  ! exact middle
+
+      ! Compute record numbers for surrounding months
+      maxrec = 12
+      ixm  = mod(month+maxrec-2,maxrec) + 1
+      ixp  = mod(month,         maxrec) + 1
+      if (mday >= midmonth) ixm = 99  ! other two points will be used
+      if (mday <  midmonth) ixp = 99
+
+      ! Determine whether interpolation will use values 1:2 or 2:3
+      ! recslot = 2 means we use values 1:2, with the current value (2)
+      !  in the second slot
+      ! recslot = 1 means we use values 2:3, with the current value (2)
+      !  in the first slot
+      recslot = 1                             ! latter half of month
+      if (mday < midmonth) recslot = 2        ! first half of month
+
+      ! Find interpolation coefficients
+      call interp_coeff_monthly (recslot)
+
+      ! Read 2 monthly values 
+      readm = .false.
+      if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
+
+!      aero_file = trim(atm_data_dir)//'faero.nc'   
+      aero_file = '/usr/projects/climate/eclare/DATA/gx1v3/faero.nc'   
+
+      fieldname='faero_atm001'
+      call read_clim_data_nc (readm, 0,  ixm, month, ixp, &
+                              aero_file, fieldname, aero1_data, &
+                              field_loc_center, field_type_scalar)
+
+      fieldname='faero_atm002'
+      call read_clim_data_nc (readm, 0,  ixm, month, ixp, &
+                              aero_file, fieldname, aero2_data, &
+                              field_loc_center, field_type_scalar)
+
+      fieldname='faero_atm003'
+      call read_clim_data_nc (readm, 0,  ixm, month, ixp, &
+                              aero_file, fieldname, aero3_data, &
+                              field_loc_center, field_type_scalar)
+
+      call interpolate_data (aero1_data, faero_atm(:,:,1,:)) ! W/m^2 s
+      call interpolate_data (aero2_data, faero_atm(:,:,2,:))
+      call interpolate_data (aero3_data, faero_atm(:,:,3,:))
+
+      where (faero_atm(:,:,:,:) > 1.e20) faero_atm(:,:,:,:) = c0
+
+#endif
+
+      end subroutine faero_data
+
+!=======================================================================
+
+!BOP
+!
+! !ROUTINE: update_aerosol
+!
+! !DESCRIPTION:
+!
+!  Increase aerosol in ice or snow surface due to deposition
+!  and vertical cycling
+!
+! !REVISION HISTORY: same as module
+!
+! !INTERFACE:
+!
+      subroutine update_aerosol (nx_block, ny_block,  &
+                                dt,       icells,     &
+                                indxi,    indxj,      &
+                                meltt,    melts,      &
+                                meltb,    congel,     &
+                                snoice,               &
+                                fsnow,                &
+                                trcrn,                &
+                                aice_old,             &
+                                vice_old, vsno_old,   &
+                                vicen, vsnon, aicen,  &
+                                faero_atm, faero_ocn)
+!
+! !USES:
+!
+      use ice_domain_size, only: max_ntrcr, nilyr, nslyr, n_aero, max_aero
+      use ice_state, only: nt_aero 
+      use ice_shortwave, only: hi_ssl, hs_ssl
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells                ! number of cells with ice present
+
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi, indxj     ! compressed indices for cells with ice
+
+      real (kind=dbl_kind), intent(in) :: &
+         dt                    ! time step
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(in) :: &
+         meltt,    & ! thermodynamic melt/growth rates
+         melts,    &
+         meltb,    &
+         congel,   &
+         snoice,   &
+         fsnow,    &
+         vicen,    & ! ice volume (m)
+         vsnon,    & ! snow volume (m)
+         aicen,    & ! ice area fraction
+         aice_old, & ! values prior to thermodynamic changes
+         vice_old, &
+         vsno_old 
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
+         intent(in) :: &
+         faero_atm   ! aerosol deposition rate (W/m^2 s)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
+         intent(inout) :: &
+         faero_ocn   ! aerosol flux to ocean (W/m^2 s)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_ntrcr), &
+         intent(inout) :: &
+         trcrn       ! ice/snow tracer array
+!
+!  local variables
+!
+      integer (kind=int_kind) :: i, j, ij, k, n
+
+      real (kind=dbl_kind) :: &
+         dzssl,  dzssl_new,      & ! snow ssl thickness
+         dzint,  dzint_new,      & ! snow interior thickness
+         dzssli, dzssli_new,     & ! ice ssl thickness
+         dzinti, dzinti_new,     & ! ice interior thickness
+         dznew,                  & ! tracks thickness changes
+         hs, hi,                 & ! snow/ice thickness (m)
+         dhs, dhi,               & ! snow/ice thickness change (m)
+         dhs_evap, dhi_evap,     & ! snow/ice thickness change due to evap
+         dhs_melts, dhi_meltt,   & ! ... due to surface melt
+         dhs_snoice, dhi_snoice, & ! ... due to snow-ice formation
+         dhi_congel, dhi_meltb,  & ! ... due to bottom growth, melt
+         hslyr, hilyr,           & ! snow, ice layer thickness (m)
+         hslyr_old, hilyr_old,   & ! old snow, ice layer thickness (m)
+         hs_old, hi_old,         & ! old snow, ice thickness (m)
+         sloss1, sloss2,         & ! aerosol mass loss (kg/m^2)
+         ar                        ! 1/aicen(i,j)
+
+      real (kind=dbl_kind), dimension(max_aero) :: &
+         kscav, kscavsi   , & ! scavenging by melt water
+         aerotot, aerotot0, & ! for conservation check
+         focn_old             ! for conservation check
+
+      real (kind=dbl_kind), dimension(max_aero,2) :: &
+         aerosno,  aeroice, & ! kg/m^2
+         aerosno0, aeroice0   ! for diagnostic prints
+
+      data kscav   / .03_dbl_kind, .20_dbl_kind,&
+           .02_dbl_kind,.02_dbl_kind,.01_dbl_kind,.01_dbl_kind /
+      data kscavsi / .03_dbl_kind, .20_dbl_kind,&
+           .02_dbl_kind,.02_dbl_kind,.01_dbl_kind,.01_dbl_kind /
+
+      ! loop over grid cells with ice at beginning of time step
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+
+    !-------------------------------------------------------------------
+    ! initialize
+    !-------------------------------------------------------------------
+         focn_old(:) = faero_ocn(i,j,:)
+         aerosno (:,:) = c0
+         aeroice (:,:) = c0
+         aerosno0(:,:) = c0
+         aeroice0(:,:) = c0
+
+         hs_old    = vsno_old(i,j)/aice_old(i,j)
+         hi_old    = vice_old(i,j)/aice_old(i,j)
+         hslyr_old = hs_old/real(nslyr,kind=dbl_kind)
+         hilyr_old = hi_old/real(nilyr,kind=dbl_kind)
+
+         dzssl  = min(hslyr_old/c2, hs_ssl)
+         dzssli = min(hilyr_old/c2, hi_ssl)
+         dzint  = hs_old - dzssl
+         dzinti = hi_old - dzssli
+
+         if (aicen(i,j) > c0) then
+            ar = c1/aicen(i,j)
+            hs = vsnon(i,j)*ar
+            hi = vicen(i,j)*ar
+            dhs_melts  = -melts(i,j)*ar
+            dhi_snoice = snoice(i,j)*ar
+            dhs_snoice = dhi_snoice*rhoi/rhos
+            dhi_meltt  = -meltt(i,j)*ar
+            dhi_meltb  = -meltb(i,j)*ar
+            dhi_congel = congel(i,j)*ar
+         else ! ice disappeared during time step
+            hs = vsnon(i,j)/aice_old(i,j)
+            hi = vicen(i,j)/aice_old(i,j)
+            dhs_melts  = -melts(i,j)/aice_old(i,j)
+            dhi_snoice = snoice(i,j)/aice_old(i,j)
+            dhs_snoice = dhi_snoice*rhoi/rhos
+            dhi_meltt  = -meltt(i,j)/aice_old(i,j)
+            dhi_meltb  = -meltb(i,j)/aice_old(i,j)
+            dhi_congel = congel(i,j)/aice_old(i,j)
+         endif
+
+         dhs_evap = hs - (hs_old + dhs_melts - dhs_snoice &
+                                 + fsnow(i,j)/rhos*dt)
+         dhi_evap = hi - (hi_old + dhi_meltt + dhi_meltb &
+                                 + dhi_congel + dhi_snoice)
+
+         ! trcrn(nt_aero) has units kg/m^3
+         do k=1,n_aero
+            aerosno (k,:) = &
+               trcrn(i,j,nt_aero+(k-1)*4  :nt_aero+(k-1)*4+1)*vsno_old(i,j)
+            aeroice (k,:) = &
+               trcrn(i,j,nt_aero+(k-1)*4+2:nt_aero+(k-1)*4+3)*vice_old(i,j)
+            aerosno0(k,:) = aerosno(k,:)
+            aeroice0(k,:) = aeroice(k,:)
+            aerotot0(k) = aerosno(k,2) + aerosno(k,1) &
+                        + aeroice(k,2) + aeroice(k,1)
+         enddo
+
+    !-------------------------------------------------------------------
+    ! evaporation
+    !-------------------------------------------------------------------
+         dzint  = dzint  + min(dzssl  + dhs_evap, c0)
+         dzinti = dzinti + min(dzssli + dhi_evap, c0)
+         dzssl  = max(dzssl  + dhs_evap, c0)
+         dzssli = max(dzssli + dhi_evap, c0)
+
+    !-------------------------------------------------------------------
+    ! basal ice growth
+    !-------------------------------------------------------------------
+         dzinti = dzinti + dhi_congel
+
+    !-------------------------------------------------------------------
+    ! surface snow melt
+    !-------------------------------------------------------------------
+         if (-dhs_melts > puny) then
+            do k = 1, n_aero
+               sloss1 = c0
+               sloss2 = c0
+               if (dzssl > puny)  &
+                  sloss1 = kscav(k)*aerosno(k,1)  &
+                                   *min(-dhs_melts,dzssl)/dzssl
+               aerosno(k,1) = aerosno(k,1) - sloss1
+               if (dzint > puny)  &
+                  sloss2 = kscav(k)*aerosno(k,2) &
+                                   *max(-dhs_melts-dzssl,c0)/dzint
+               aerosno(k,2) = aerosno(k,2) - sloss2
+               faero_ocn(i,j,k) = faero_ocn(i,j,k) + (sloss1+sloss2)/dt
+            enddo  ! n_aero
+
+            ! update snow thickness
+            dzint=dzint+min(dzssl+dhs_melts, c0)
+            dzssl=max(dzssl+dhs_melts, c0)
+
+            if ( dzssl <= puny ) then ! ssl melts away
+               aerosno(:,2) = aerosno(:,1) + aerosno(:,2)
+               aerosno(:,1) = c0
+               dzssl = max(dzssl, c0)
+            endif
+            if (dzint <= puny ) then  ! all snow melts away
+               aeroice(:,1) = aeroice(:,1) &
+                                + aerosno(:,1) + aerosno(:,2)
+               aerosno(:,:) = c0
+               dzint = max(dzint, c0)
+            endif
+         endif
+
+    !-------------------------------------------------------------------
+    ! surface ice melt
+    !-------------------------------------------------------------------
+         if (-dhi_meltt > puny) then
+            do k = 1, n_aero
+               sloss1 = c0
+               sloss2 = c0
+               if (dzssli > puny)  &
+                  sloss1 = kscav(k)*aeroice(k,1)  &
+                                   *min(-dhi_meltt,dzssli)/dzssli
+               aeroice(k,1) = aeroice(k,1) - sloss1
+               if (dzinti > puny)  &
+                  sloss2 = kscav(k)*aeroice(k,2)  &
+                                   *max(-dhi_meltt-dzssli,c0)/dzinti
+               aeroice(k,2) = aeroice(k,2) - sloss2
+               faero_ocn(i,j,k) = faero_ocn(i,j,k) + (sloss1+sloss2)/dt
+            enddo
+
+            dzinti = dzinti + min(dzssli+dhi_meltt, c0)
+            dzssli = max(dzssli+dhi_meltt, c0)
+            if (dzssli <= puny) then   ! ssl ice melts away
+               do k = 1, n_aero
+                  aeroice(k,2) = aeroice(k,1) + aeroice(k,2)
+                  aeroice(k,1) = c0
+               enddo
+               dzssli = max(dzssli, c0)
+            endif
+            if (dzinti <= puny) then   ! all ice melts away
+               do k = 1, n_aero
+                  faero_ocn(i,j,k) = faero_ocn(i,j,k)  &
+                                   + (aeroice(k,1)+aeroice(k,2))/dt
+                  aeroice(k,:)=c0
+               enddo
+               dzinti = max(dzinti, c0)
+            endif
+         endif
+
+    !-------------------------------------------------------------------
+    ! basal ice melt.  Assume all aero lost in basal melt
+    !-------------------------------------------------------------------
+         if (-dhi_meltb > puny) then
+            do k=1,n_aero
+               sloss1=c0
+               sloss2=c0
+               if (dzssli > puny)  &
+                  sloss1 = max(-dhi_meltb-dzinti, c0)  &
+                           *aeroice(k,1)/dzssli
+               aeroice(k,1) = aeroice(k,1) - sloss1
+               if (dzinti > puny)  &
+                  sloss2 = min(-dhi_meltb, dzinti)  &
+                           *aeroice(k,2)/dzinti
+               aeroice(k,2) = aeroice(k,2) - sloss2
+               faero_ocn(i,j,k) = faero_ocn(i,j,k) + (sloss1+sloss2)/dt
+            enddo
+
+            dzssli = dzssli + min(dzinti+dhi_meltb, c0)
+            dzinti = max(dzinti+dhi_meltb, c0)           
+         endif
+
+    !-------------------------------------------------------------------
+    ! snowfall
+    !-------------------------------------------------------------------
+         if (fsnow(i,j) > c0) dzssl = dzssl + fsnow(i,j)/rhos*dt
+
+    !-------------------------------------------------------------------
+    ! snow-ice formation
+    !-------------------------------------------------------------------
+         if (dhs_snoice > puny) then
+            do k = 1, n_aero
+               sloss1 = c0
+               sloss2 = c0
+               if (dzint > puny)  &
+                  sloss2 = min(dhs_snoice, dzint)  &
+                           *aerosno(k,2)/dzint
+               aerosno(k,2) = aerosno(k,2) - sloss2
+               if (dzssl > puny)  &
+                  sloss1 = max(dhs_snoice-dzint, c0)  &
+                           *aerosno(k,1)/dzssl
+               aerosno(k,1) = aerosno(k,1) - sloss1
+               aeroice(k,1) = aeroice(k,1) &
+                                + (c1-kscavsi(k))*(sloss2+sloss1)
+               faero_ocn(i,j,k) = faero_ocn(i,j,k) &
+                                + kscavsi(k)*(sloss2+sloss1)/dt
+            enddo
+            dzssl  = dzssl - max(dhs_snoice-dzint, c0)
+            dzint  = max(dzint-dhs_snoice, c0)
+            dzssli = dzssli + dhi_snoice
+         endif
+
+    !-------------------------------------------------------------------
+    ! aerosol deposition
+    !-------------------------------------------------------------------
+         if (aicen(i,j) > c0) then
+            hs = vsnon(i,j) * ar
+         else
+            hs = c0
+         endif
+         if (hs > hsmin) then    ! should this really be hsmin or 0? 
+                                 ! should use same hsmin value as in radiation
+            do k=1,n_aero
+               aerosno(k,1) = aerosno(k,1) &
+                                + faero_atm(i,j,k)*dt*aicen(i,j)
+            enddo
+         else
+            do k=1,n_aero
+               aeroice(k,1) = aeroice(k,1) &
+                                + faero_atm(i,j,k)*dt*aicen(i,j)
+            enddo
+         endif
+
+    !-------------------------------------------------------------------
+    ! redistribute aerosol within vertical layers
+    !-------------------------------------------------------------------
+         if (aicen(i,j) > c0) then
+            hs = vsnon(i,j)  * ar     ! new snow thickness
+            hi = vicen(i,j)  * ar     ! new ice thickness
+         else
+            hs = c0
+            hi = c0
+         endif
+         if (dzssl <= puny) then   ! nothing in SSL
+            do k=1,n_aero
+               aerosno(k,2) = aerosno(k,2) + aerosno(k,1)
+               aerosno(k,1) = c0
+            enddo
+         endif
+         if (dzint <= puny) then   ! nothing in Snow Int
+            do k = 1, n_aero
+               aeroice(k,1) = aeroice(k,1) + aerosno(k,2)
+               aerosno(k,2) = c0
+            enddo
+         endif
+         if (dzssli <= puny) then  ! nothing in Ice SSL
+            do k = 1, n_aero
+               aeroice(k,2) = aeroice(k,2) + aeroice(k,1)
+               aeroice(k,1) = c0
+            enddo
+         endif
+
+         if (dzinti <= puny) then  ! nothing in Ice INT
+            do k = 1, n_aero
+               faero_ocn(i,j,k) = faero_ocn(i,j,k) &
+                                + (aeroice(k,1)+aeroice(k,2))/dt
+               aeroice(k,:)=c0
+            enddo
+         endif
+
+         hslyr      = hs/real(nslyr,kind=dbl_kind)
+         hilyr      = hi/real(nilyr,kind=dbl_kind)
+         dzssl_new  = min(hslyr/c2, hs_ssl)
+         dzssli_new = min(hilyr/c2, hi_ssl)
+         dzint_new  = hs - dzssl_new
+         dzinti_new = hi - dzssli_new
+
+         if (hs > hsmin) then
+            do k = 1, n_aero
+               dznew = min(dzssl_new-dzssl, c0)
+               sloss1 = c0
+               if (dzssl > puny) &
+                  sloss1 = dznew*aerosno(k,1)/dzssl ! not neccesarily a loss
+                  dznew = max(dzssl_new-dzssl, c0)
+               if (dzint > puny) &
+                  sloss1 = sloss1 + aerosno(k,2)*dznew/dzint
+               aerosno(k,1) = aerosno(k,1) + sloss1 
+               aerosno(k,2) = aerosno(k,2) - sloss1
+            enddo
+         else
+            aeroice(:,1) = aeroice(:,1)  &
+                             + aerosno(:,1) + aerosno(:,2)
+            aerosno(:,:) = c0
+         endif
+
+         if (vicen(i,j) > puny) then ! may want a limit on hi instead?
+            do k = 1, n_aero
+               sloss2 = c0
+               dznew = min(dzssli_new-dzssli, c0)
+               if (dzssli > puny) & 
+                  sloss2 = dznew*aeroice(k,1)/dzssli
+                  dznew = max(dzssli_new-dzssli, c0)
+               if (dzinti > puny) & 
+                  sloss2 = sloss2 + aeroice(k,2)*dznew/dzinti
+               aeroice(k,1) = aeroice(k,1) + sloss2 
+               aeroice(k,2) = aeroice(k,2) - sloss2
+            enddo
+         else
+            faero_ocn(i,j,:) = faero_ocn(i,j,:) + (aeroice(:,1)+aeroice(:,2))/dt
+            aeroice(:,:) = c0
+         endif
+
+    !-------------------------------------------------------------------
+    ! check conservation
+    !-------------------------------------------------------------------
+         do k = 1, n_aero
+            aerotot(k) = aerosno(k,2) + aerosno(k,1) &
+                       + aeroice(k,2) + aeroice(k,1)
+            if ((aerotot(k)-aerotot0(k)) &
+                 - (   faero_atm(i,j,k)*aicen(i,j) &
+                    - (faero_ocn(i,j,k)-focn_old(k)) )*dt  &
+               > 0.00001) then
+               write(nu_diag,*) 'aerosol tracer:  ',k
+               write(nu_diag,*) 'aerotot-aerotot0 ',aerotot(k)-aerotot0(k) 
+               write(nu_diag,*) 'faero_atm-faero_ocn      ', &
+               (faero_atm(i,j,k)*aicen(i,j)-(faero_ocn(i,j,k)-focn_old(k)))*dt
+            endif
+         enddo
+
+    !-------------------------------------------------------------------
+    ! reload tracers
+    !-------------------------------------------------------------------
+!echmod       if (vicen(i,j) > puny) &
+!echmod          aeroice(:,:) = aeroice(:,:)/vicen(i,j)
+!echmod       if (vsnon(i,j) > puny) &
+!echmod          aerosno(:,:) = aerosno(:,:)/vsnon(i,j)
+         if (vicen(i,j) > puny) then
+            aeroice(:,:) = aeroice(:,:)/vicen(i,j)
+         else
+            aeroice(:,:) = c0
+         endif
+         if (vsnon(i,j) > puny) then
+            aerosno(:,:) = aerosno(:,:)/vsnon(i,j)
+         else
+            aerosno(:,:) = c0
+         endif
+         do k = 1, n_aero
+            do n = 1,2
+               trcrn(i,j,nt_aero+(k-1)*4+n-1)=aerosno(k,n)
+               trcrn(i,j,nt_aero+(k-1)*4+n+1)=aeroice(k,n)
+            enddo
+!            do n=1,4
+!               if (trcrn(i,j,nt_aero+(k-1)*4+n-1) < puny) then
+!                  faero_ocn(i,j,k) = faero_ocn(i,j,k)  &
+!                                   + trcrn(i,j,nt_aero+(k-1)*4+n-1)/dt
+!                  trcrn(i,j,nt_aero+(k-1)*4+n-1) = c0
+!               endif
+!            enddo
+         enddo
+
+    !-------------------------------------------------------------------
+    ! check for negative values
+    !-------------------------------------------------------------------
+         if (trcrn(i,j,nt_aero  ) < -puny .or. &
+             trcrn(i,j,nt_aero+1) < -puny .or. &
+             trcrn(i,j,nt_aero+2) < -puny .or. &
+             trcrn(i,j,nt_aero+3) < -puny) then
+
+            write(nu_diag,*) 'MH aerosol negative in aerosol code'
+            write(nu_diag,*) 'MH INT neg in aerosol my_task = ',&
+                              my_task, &
+                              ' printing point = ',n, &
+                              ' i and j = ',i,j
+            write(nu_diag,*) 'MH Int Neg aero snowssl= '    ,aerosno0(1,1)
+            write(nu_diag,*) 'MH Int Neg aero new snowssl= ',aerosno (1,1)
+            write(nu_diag,*) 'MH Int Neg aero snowint= '    ,aerosno0(1,2)
+            write(nu_diag,*) 'MH Int Neg aero new snowint= ',aerosno (1,2)
+            write(nu_diag,*) 'MH Int Neg aero ice_ssl= '    ,aeroice0(1,1)
+            write(nu_diag,*) 'MH Int Neg aero new ice_ssl= ',aeroice (1,1)
+            write(nu_diag,*) 'MH Int Neg aero ice_int= '    ,aeroice0(1,2)
+            write(nu_diag,*) 'MH Int Neg aero new ice_int= ',aeroice (1,2)
+            write(nu_diag,*) 'MH Int Neg aero aicen= '      ,aicen   (i,j)
+            write(nu_diag,*) 'MH Int Neg aero vicen= '      ,vicen   (i,j)
+            write(nu_diag,*) 'MH Int Neg aero vsnon= '      ,vsnon   (i,j)
+            write(nu_diag,*) 'MH Int Neg aero viceold= '    ,vice_old(i,j)
+            write(nu_diag,*) 'MH Int Neg aero vsnoold= '    ,vsno_old(i,j)
+            write(nu_diag,*) 'MH Int Neg aero melts= '      ,melts   (i,j)
+            write(nu_diag,*) 'MH Int Neg aero meltt= '      ,meltt   (i,j)
+            write(nu_diag,*) 'MH Int Neg aero meltb= '      ,meltb   (i,j)
+            write(nu_diag,*) 'MH Int Neg aero congel= '     ,congel  (i,j)
+            write(nu_diag,*) 'MH Int Neg aero snoice= '     ,snoice  (i,j)
+            write(nu_diag,*) 'MH Int Neg aero evap sno?= '  ,dhs_evap
+            write(nu_diag,*) 'MH Int Neg aero evap ice?= '  ,dhi_evap
+            write(nu_diag,*) 'MH Int Neg aero fsnow= '      ,fsnow   (i,j)
+            write(nu_diag,*) 'MH Int Neg aero faero_atm= '  ,faero_atm(i,j,1)
+            write(nu_diag,*) 'MH Int Neg aero faero_ocn= '  ,faero_ocn(i,j,1)
+
+            trcrn(i,j,nt_aero  ) = max(trcrn(i,j,nt_aero  ), c0)
+            trcrn(i,j,nt_aero+1) = max(trcrn(i,j,nt_aero+1), c0)
+            trcrn(i,j,nt_aero+2) = max(trcrn(i,j,nt_aero+2), c0)
+            trcrn(i,j,nt_aero+3) = max(trcrn(i,j,nt_aero+3), c0)
+         endif
+      enddo
+
+      end subroutine update_aerosol
+
+!=======================================================================
+!---! these subroutines write/read Fortran unformatted data files ..
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: write_restart_aero - dumps all fields required for restart
+!
+! !INTERFACE:
+!
+      subroutine write_restart_aero(filename_spec)
+!
+! !DESCRIPTION:
+!
+! Dumps all values needed for restarting
+!
+! !REVISION HISTORY:
+!
+! authors Elizabeth Hunke, LANL (original version)
+!         David Bailey, NCAR
+!         Marika Holland, NCAR
+!
+! !USES:
+!
+      use ice_domain_size
+      use ice_calendar, only: sec, month, mday, nyr, istep1, &
+                              time, time_forc, idate, year_init
+      use ice_state
+      use ice_read_write
+      use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      character(len=char_len_long), intent(in), optional :: filename_spec
+
+!EOP
+!
+      integer (kind=int_kind) :: &
+          i, j, k, n, it, iblk, & ! counting indices
+          iyear, imonth, iday     ! year, month, day
+
+      character(len=char_len_long) :: filename
+
+      logical (kind=log_kind) :: diag
+
+      ! construct path/file
+      if (present(filename_spec)) then
+         filename = trim(filename_spec)
+      else
+         iyear = nyr + year_init - 1
+         imonth = month
+         iday = mday
+         
+         write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
+              restart_dir(1:lenstr(restart_dir)), &
+              restart_file(1:lenstr(restart_file)),'.aero.', &
+              iyear,'-',month,'-',mday,'-',sec
+      end if
+         
+      ! begin writing restart data
+      call ice_open(nu_dump_aero,filename,0)
+
+      if (my_task == master_task) then
+        write(nu_dump_aero) istep1,time,time_forc
+        write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
+      endif
+
+      diag = .true.
+
+      !-----------------------------------------------------------------
+
+      do k = 1, n_aero
+      do n = 1, ncat
+       call ice_write(nu_dump_aero,0,trcrn(:,:,nt_aero  +(k-1)*4,n,:),'ruf8',diag)
+       call ice_write(nu_dump_aero,0,trcrn(:,:,nt_aero+1+(k-1)*4,n,:),'ruf8',diag)
+       call ice_write(nu_dump_aero,0,trcrn(:,:,nt_aero+2+(k-1)*4,n,:),'ruf8',diag)
+       call ice_write(nu_dump_aero,0,trcrn(:,:,nt_aero+3+(k-1)*4,n,:),'ruf8',diag)
+      enddo
+      enddo
+
+      if (my_task == master_task) close(nu_dump_aero)
+
+      end subroutine write_restart_aero
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: read_restart_aero - reads all fields required for restart
+!
+! !INTERFACE:
+!
+      subroutine read_restart_aero(filename_spec)
+!
+! !DESCRIPTION:
+!
+! Reads all values needed for an ice aerosol restart
+!
+! !REVISION HISTORY:
+!
+! authors Elizabeth Hunke, LANL (original version)
+!         David Bailey, NCAR
+!         Marika Holland, NCAR
+!
+! !USES:
+!
+      use ice_domain_size
+      use ice_calendar, only: sec, month, mday, nyr, istep1, &
+                              time, time_forc, idate, year_init
+      use ice_state
+      use ice_read_write
+      use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      character(len=char_len_long), intent(in), optional :: filename_spec
+
+!EOP
+!
+      integer (kind=int_kind) :: &
+          i, j, k, n, it, iblk, & ! counting indices
+          iyear, imonth, iday     ! year, month, day
+
+      character(len=char_len_long) :: &
+         filename, filename0, string1, string2
+
+      logical (kind=log_kind) :: &
+         diag
+
+      if (my_task == master_task) then
+         ! reconstruct path/file
+         if (present(filename_spec)) then
+            filename = filename_spec
+         else
+            open(nu_rst_pointer,file=pointer_file)
+            read(nu_rst_pointer,'(a)') filename0
+            filename = trim(filename0)
+            close(nu_rst_pointer)
+
+            n = index(filename0,trim(restart_file))
+            if (n == 0) call abort_ice('aero restart: filename discrepancy')
+            string1 = trim(filename0(1:n-1))
+            string2 = trim(filename0(n+lenstr(restart_file):lenstr(filename0)))
+            write(filename,'(a,a,a,a)') &
+               string1(1:lenstr(string1)), &
+               restart_file(1:lenstr(restart_file)),'.aero', &
+               string2(1:lenstr(string2))
+         endif
+      endif ! master_task
+
+      call ice_open(nu_restart_aero,filename,0)
+
+      if (my_task == master_task) then
+        read(nu_restart_aero) istep1,time,time_forc
+        write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
+      endif
+
+      diag = .true.
+
+      !-----------------------------------------------------------------
+
+      do k = 1, n_aero
+      do n = 1, ncat
+       call ice_read(nu_restart_aero,0,trcrn(:,:,nt_aero  +(k-1)*4,n,:),'ruf8',&
+            diag,field_type=field_type_scalar,field_loc=field_loc_center)
+       call ice_read(nu_restart_aero,0,trcrn(:,:,nt_aero+1+(k-1)*4,n,:),'ruf8',&
+            diag,field_type=field_type_scalar,field_loc=field_loc_center)
+       call ice_read(nu_restart_aero,0,trcrn(:,:,nt_aero+2+(k-1)*4,n,:),'ruf8',&
+            diag,field_type=field_type_scalar,field_loc=field_loc_center)
+       call ice_read(nu_restart_aero,0,trcrn(:,:,nt_aero+3+(k-1)*4,n,:),'ruf8',&
+            diag,field_type=field_type_scalar,field_loc=field_loc_center)
+      enddo
+      enddo
+
+      if (my_task == master_task) close(nu_restart_aero)
+
+      end subroutine read_restart_aero
+
+!=======================================================================
+
+      end module ice_aerosol
+
+!=======================================================================

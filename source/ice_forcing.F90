@@ -803,7 +803,6 @@
          arg              , & ! value of time argument in field_data
          fid                  ! file id for netCDF routines
 
-
       call ice_timer_start(timer_readwrite)  ! reading/writing
 
       if (istep1 > check_step) dbug = .true.  !! debugging
@@ -999,6 +998,111 @@
       call ice_timer_stop(timer_readwrite)  ! reading/writing
 
       end subroutine read_clim_data
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: read_clim_data - read annual climatological data
+!
+! !INTERFACE:
+!
+      subroutine read_clim_data_nc (readflag, recd, ixm, ixx, ixp, &
+                                 data_file, fieldname, field_data, &
+                                 field_loc, field_type)
+!
+! !DESCRIPTION:
+!
+! Read data needed for interpolation, as in read_data.
+! Assume a one-year cycle of climatological data, so that there is
+!  no need to get data from other years or to extrapolate data beyond
+!  the forcing time period.
+!
+! !REVISION HISTORY:
+!
+! authors: same as module
+!
+! !USES:
+!
+      use ice_read_write
+      use ice_diagnostics, only: check_step
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      logical (kind=log_kind),intent(in) :: readflag
+
+      integer (kind=int_kind), intent(in) :: &
+        recd            , & ! baseline record number
+        ixm,ixx,ixp         ! record numbers of 3 data values
+                            ! relative to recd
+
+      character (char_len_long), intent(in) ::  data_file
+
+      character (char_len), intent(in) :: &
+         fieldname               ! field name in netCDF file
+
+      integer (kind=int_kind), intent(in) :: &
+           field_loc, &      ! location of field on staggered grid
+           field_type        ! type of field (scalar, vector, angle)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
+        intent(out) :: &
+        field_data         ! 2 values needed for interpolation
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+        nbits          , & ! = 32 for single precision, 64 for double
+        nrec           , & ! record number to read
+        arg            , & ! value of time argument in field_data
+        fid                ! file id for netCDF routines
+
+      call ice_timer_start(timer_readwrite)  ! reading/writing
+
+      nbits = 64                ! double precision data
+
+      if (istep1 > check_step) dbug = .true.  !! debugging
+
+      if (my_task==master_task .and. (dbug)) &
+        write(nu_diag,*) '  ', trim(data_file)
+
+      if (readflag) then
+
+      !-----------------------------------------------------------------
+      ! read data
+      !-----------------------------------------------------------------
+
+         call ice_open_nc (data_file, fid)
+
+         arg = 0
+         if (ixm /= 99) then
+            arg = 1
+            nrec = recd + ixm
+            call ice_read_nc & 
+                 (fid, nrec, fieldname, field_data(:,:,arg,:), &
+                  dbug, field_loc, field_type)
+         endif
+
+         arg = arg + 1
+         nrec = recd + ixx
+         call ice_read_nc & 
+                 (fid, nrec, fieldname, field_data(:,:,arg,:), &
+                  dbug, field_loc, field_type)
+
+         if (ixp /= 99) then
+            arg = arg + 1
+            nrec = recd + ixp
+            call ice_read_nc & 
+                 (fid, nrec, fieldname, field_data(:,:,arg,:), &
+                  dbug, field_loc, field_type)
+         endif
+
+         if (my_task == master_task) call ice_close_nc (fid)
+      endif                     ! readflag
+
+      call ice_timer_stop(timer_readwrite)  ! reading/writing
+
+      end subroutine read_clim_data_nc
 
 !=======================================================================
 !

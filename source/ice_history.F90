@@ -193,6 +193,7 @@
            f_fswdn     = 'm', f_flwdn      = 'm', &
            f_snow      = 'm', f_snow_ai    = 'm', &
            f_rain      = 'm', f_rain_ai    = 'm', &
+           f_faero_atm = 'm', f_faero_ocn  = 'm', &
            f_sst       = 'm', f_sss        = 'm', &
            f_uocn      = 'm', f_vocn       = 'm', &
            f_frzmlt    = 'm', &
@@ -231,15 +232,16 @@
            f_ardg      = 'm', f_vrdg       = 'm', &
            f_alvl      = 'm', f_vlvl       = 'm', &
            f_hisnap    = 'm', f_aisnap     = 'm', &
+           f_aero      = 'm', f_aeron      = 'm', &
            f_aicen     = 'm', f_vicen      = 'm', &
            f_apondn    = 'x',                     &
            f_trsig     = 'm', f_icepresent = 'm', &
            f_fsurf_ai  = 'm', f_fcondtop_ai= 'm', &
            f_fmeltt_ai = 'm',                     &
-           f_fsurfn_ai = 'm' ,f_fcondtopn_ai= 'm',&
+           f_fsurfn_ai = 'm' ,f_fcondtopn_ai='m', &
            f_fmelttn_ai= 'm', f_flatn_ai   = 'm', &
 !          f_field3dz  = 'x',                     &
-           f_Tinz      = 'm', f_Tsnz      = 'm' 
+           f_Tinz      = 'm', f_Tsnz       = 'm' 
 
 
       !---------------------------------------------------------------
@@ -262,6 +264,7 @@
            f_fswdn,     f_flwdn    , &
            f_snow,      f_snow_ai  , &     
            f_rain,      f_rain_ai  , &
+           f_faero_atm, f_faero_ocn, &
            f_sst,       f_sss      , &
            f_uocn,      f_vocn     , &
            f_frzmlt                , &
@@ -300,13 +303,14 @@
            f_ardg,      f_vrdg     , &
            f_alvl,      f_vlvl     , &
            f_hisnap,    f_aisnap   , &
+           f_aero,      f_aeron    , &
            f_aicen,     f_vicen    , &
-           f_apondn   , &
+           f_apondn,    &
            f_trsig,     f_icepresent,&
            f_fsurf_ai,  f_fcondtop_ai,&
-           f_fmeltt_ai,              &
+           f_fmeltt_ai, &
            f_fsurfn_ai,f_fcondtopn_ai,&
-           f_fmelttn_ai,f_flatn_ai, &
+           f_fmelttn_ai,f_flatn_ai,  &
 !          f_field3dz,  &
            f_Tinz,      f_Tsnz       
 
@@ -394,6 +398,15 @@
 !          n_field3dz    , &
            n_Tinz        , n_Tsnz
 
+      ! aerosols
+      integer(kind=int_kind), dimension(max_aero,max_nstrm) :: &
+           n_faero_atm    , &
+           n_faero_ocn    , &
+           n_aerosn1      , &
+           n_aerosn2      , &
+           n_aeroic1      , &
+           n_aeroic2
+
       interface accum_hist_field ! generic interface
            module procedure accum_hist_field_2D, &
                             accum_hist_field_3D, &
@@ -433,9 +446,7 @@
            histfreq_n, nstreams
       use ice_flux, only: mlt_onset, frz_onset, albcnt
       use ice_restart, only: restart
-      use ice_age, only: tr_iage
-      use ice_mechred, only: tr_lvl
-      use ice_meltpond, only: tr_pond
+      use ice_state, only: tr_iage, tr_lvl, tr_pond, tr_aero
       use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -504,10 +515,16 @@
       if (.not. tr_iage) f_iage = 'x'
       if (.not. tr_pond) f_apondn = 'x'
       if (.not. tr_lvl) then
-          f_ardg = 'x'
-          f_vrdg = 'x'
-          f_alvl = 'x'
-          f_vlvl = 'x'
+         f_ardg = 'x'
+         f_vrdg = 'x'
+         f_alvl = 'x'
+         f_vlvl = 'x'
+      endif
+      if (.not. tr_aero) then
+         f_faero_atm = 'x'
+         f_faero_ocn = 'x'
+         f_aero      = 'x' 
+         f_aeron     = 'x' ! NOTE not implemented
       endif
 
       ! these must be output at the same frequency because of 
@@ -552,6 +569,8 @@
       call broadcast_scalar (f_snow_ai, master_task)
       call broadcast_scalar (f_rain, master_task)
       call broadcast_scalar (f_rain_ai, master_task)
+      call broadcast_scalar (f_faero_atm, master_task)
+      call broadcast_scalar (f_faero_ocn, master_task)
       call broadcast_scalar (f_sst, master_task)
       call broadcast_scalar (f_sss, master_task)
       call broadcast_scalar (f_uocn, master_task)
@@ -640,6 +659,8 @@
       call broadcast_scalar (f_vrdg, master_task)
       call broadcast_scalar (f_alvl, master_task)
       call broadcast_scalar (f_vlvl, master_task)
+      call broadcast_scalar (f_aero, master_task)
+      call broadcast_scalar (f_aeron, master_task)
       call broadcast_scalar (f_apondn, master_task)
 
       ! 2D variables
@@ -1190,7 +1211,50 @@
              "none", c1, c0,                                       &
              ns1, f_vrdg)
        
-       enddo ! ns1
+      ! Aerosols
+      if (f_aero(1:1) /= 'x') then
+         do n=1,n_aero
+            write(nchar,'(i3.3)') n
+            write(vname_in,'(a,a)') 'aerosnossl', trim(nchar)
+            call define_hist_field(n_aerosn1(n,:),vname_in,"kg/kg",   &
+                tstr2D, tcstr,"snow ssl aerosol mass","none", c1, c0, &
+                ns1, f_aero)
+            write(vname_in,'(a,a)') 'aerosnoint', trim(nchar)
+            call define_hist_field(n_aerosn2(n,:),vname_in,"kg/kg",   &
+                tstr2D, tcstr,"snow int aerosol mass","none", c1, c0, &
+                ns1, f_aero)
+            write(vname_in,'(a,a)') 'aeroicessl', trim(nchar)
+            call define_hist_field(n_aeroic1(n,:),vname_in,"kg/kg",  &
+                tstr2D, tcstr,"ice ssl aerosol mass","none", c1, c0, &
+                ns1, f_aero)
+            write(vname_in,'(a,a)') 'aeroiceint', trim(nchar)
+            call define_hist_field(n_aeroic2(n,:),vname_in,"kg/kg",  &
+                tstr2D, tcstr,"ice int aerosol mass","none", c1, c0, &
+                ns1, f_aero)
+         enddo
+      endif
+
+      if (f_faero_atm(1:1) /= 'x') then
+         do n=1,n_aero
+            write(nchar,'(i3.3)') n
+            write(vname_in,'(a,a)') 'faero_atm', trim(nchar)
+            call define_hist_field(n_faero_atm(n,:),vname_in,"kg/m^2 s", &
+                tstr2D, tcstr,"aerosol deposition rate","none", c1, c0,  &
+                ns1, f_faero_atm)
+         enddo
+      endif
+
+      if (f_faero_ocn(1:1) /= 'x') then
+         do n=1,n_aero
+            write(nchar,'(i3.3)') n
+            write(vname_in,'(a,a)') 'faero_ocn', trim(nchar)
+            call define_hist_field(n_faero_ocn(n,:),vname_in,"kg/m^2 s", &
+                tstr2D, tcstr,"aerosol flux to ocean","none", c1, c0,    &
+                ns1, f_faero_ocn)
+         enddo
+      endif
+
+      enddo ! ns1
 
       if (allocated(a2D)) deallocate(a2D)
       if (num_avail_hist_fields_2D > 0) &
@@ -1768,6 +1832,33 @@
               a2D(:,:,n_fmeltt_ai(ns),iblk) = worka(:,:)
            endif
          enddo
+        endif
+
+        ! Aerosols
+        if (f_faero_atm(1:1) /= 'x') then
+           do n=1,n_aero
+              call accum_hist_field(n_faero_atm(n,:),iblk, &
+                                      faero_atm(:,:,n,iblk), a2D)
+           enddo
+        endif
+        if (f_faero_ocn(1:1) /= 'x') then
+           do n=1,n_aero
+              call accum_hist_field(n_faero_ocn(n,:),iblk, &
+                                      faero_ocn(:,:,n,iblk), a2D)
+                                    
+           enddo
+        endif
+        if (f_aero(1:1) /= 'x') then
+           do n=1,n_aero
+              call accum_hist_field(n_aerosn1(n,:), iblk, &
+                                 trcr(:,:,nt_aero  +4*(n-1),iblk)/rhos, a2D)
+              call accum_hist_field(n_aerosn2(n,:), iblk, &
+                                 trcr(:,:,nt_aero+1+4*(n-1),iblk)/rhos, a2D)
+              call accum_hist_field(n_aeroic1(n,:), iblk, &
+                                 trcr(:,:,nt_aero+2+4*(n-1),iblk)/rhoi, a2D)
+              call accum_hist_field(n_aeroic2(n,:), iblk, &
+                                 trcr(:,:,nt_aero+3+4*(n-1),iblk)/rhoi, a2D)
+           enddo
         endif
 
       enddo                     ! iblk

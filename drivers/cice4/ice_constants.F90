@@ -102,6 +102,7 @@
                                    ! (used in zero layer thermodynamics option)
          ksno   = 0.30_dbl_kind  ,&! thermal conductivity of snow  (W/m/deg)
          zref   = 10._dbl_kind   ,&! reference height for stability (m)
+         hsmin  = 0.0001_dbl_kind,&! minimum allowed snow depth (m) for DE
          snowpatch = 0.02_dbl_kind ! parameter for fractional snow area (m)
 
       ! weights for albedos 
