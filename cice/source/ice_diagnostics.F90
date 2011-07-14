@@ -26,6 +26,7 @@
       use ice_communicate, only: my_task, master_task
       use ice_constants
       use ice_calendar, only: diagfreq, istep1, istep
+      use ice_domain_size, only: max_aero
       use ice_fileunits
 !
 !EOP
@@ -80,6 +81,10 @@
          totmis           , & ! total ice water mass (sh)
          toten            , & ! total ice/snow energy (J)
          totes                ! total ice/snow energy (J)
+
+      real (kind=dbl_kind), dimension(max_aero) :: &
+         totaeron         , & ! total aerosol mass
+         totaeros             ! total aerosol mass
 
       ! printing info for routine print_state
       ! iblkp, ip, jp, mtask identify the grid cell to print
@@ -157,8 +162,14 @@
          sfsaltn, sfreshn, evpn, fluxn , delmxn,  delmin, &
          sfsalts, sfreshs, evps, fluxs , delmxs,  delmis, &
          delein, werrn, herrn, msltn, delmsltn, serrn, &
-         deleis, werrs, herrs, mslts, delmslts, serrs, &
-         ftmp
+         deleis, werrs, herrs, mslts, delmslts, serrs
+
+      ! aerosol diagnostics
+      real (kind=dbl_kind), dimension(max_aero) :: &
+         faeran, faeron, aerrn, &
+         faeras, faeros, aerrs, &
+         aeromx1n, aeromx1s, &
+         aerototn, aerotots
 
       ! fields at diagnostic points
       real (kind=dbl_kind), dimension(npnt) :: &
@@ -519,8 +530,8 @@
            endif
          endif
 
-         werrn = (fluxn-delmin)/(mtotn+c1)
-         werrs = (fluxs-delmis)/(mtots+c1)
+         werrn = (fluxn-delmin)/(mtotn + c1)
+         werrs = (fluxs-delmis)/(mtots + c1)
 
          ! energy change
          delein = etotn - toten
@@ -546,6 +557,45 @@
          ! salt error
          serrn = (sfsaltn + delmsltn) / (msltn + c1)
          serrs = (sfsalts + delmslts) / (mslts + c1)
+
+         ! aerosols
+         if (tr_aero) then
+         do n = 1, n_aero
+            faeran(n) = global_sum_prod(faero_atm(:,:,n,:), aice_init, &
+                                        distrb_info, field_loc_center, tarean)
+            faeras(n) = global_sum_prod(faero_atm(:,:,n,:), aice_init, &
+                                        distrb_info, field_loc_center, tareas)
+            faeran(n) = faeran(n)*dt
+            faeras(n) = faeras(n)*dt
+            faeron(n) = global_sum_prod(faero_ocn(:,:,n,:), aice, &
+                                        distrb_info, field_loc_center, tarean)
+            faeros(n) = global_sum_prod(faero_ocn(:,:,n,:), aice, &
+                                        distrb_info, field_loc_center, tareas)
+            faeron(n) = faeron(n)*dt
+            faeros(n) = faeros(n)*dt
+
+            do iblk = 1, nblocks
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  work1(i,j,iblk) = &
+                   trcr(i,j,nt_aero  +4*(n-1),iblk)*vsno(i,j,iblk) &
+                 + trcr(i,j,nt_aero+1+4*(n-1),iblk)*vsno(i,j,iblk) &
+                 + trcr(i,j,nt_aero+2+4*(n-1),iblk)*vice(i,j,iblk) &
+                 + trcr(i,j,nt_aero+3+4*(n-1),iblk)*vice(i,j,iblk)
+               enddo
+               enddo
+            enddo
+            aerototn(n) = global_sum(work1, distrb_info, field_loc_center, tarean)
+            aerotots(n) = global_sum(work1, distrb_info, field_loc_center, tareas)
+            aeromx1n(n) = global_maxval(work1, distrb_info, lmask_n)
+            aeromx1s(n) = global_maxval(work1, distrb_info, lmask_s)
+
+            aerrn(n) = (totaeron(n)-aerototn(n)+faeran(n)-faeron(n)) &
+                                 / (aerototn(n) + c1)
+            aerrs(n) = (totaeros(n)-aerotots(n)+faeras(n)-faeros(n)) &
+                                 / (aerotots(n) + c1)
+         enddo ! n_aero
+         endif ! tr_aero
 
       endif                     ! print_global
 
@@ -697,7 +747,19 @@
          write (nu_diag,801) 'arwt salt mass chng(kg)= ',delmsltn
          write (nu_diag,801) 'arwt salt flx in dt(kg)= ',sfsaltn
          write (nu_diag,801) 'arwt salt flx error    = ',serrn
+
          write (nu_diag,*) '----------------------------'
+         if (tr_aero) then
+         do n = 1, n_aero
+         write (nu_diag,*)   '  aerosol ',n
+         write (nu_diag,801) 'faero_atm (kg/m2)      = ', faeran(n)
+         write (nu_diag,801) 'faero_ocn (kg/m2)      = ', faeron(n)
+         write (nu_diag,801) 'total aero (kg/m2)     = ', aerototn(n)
+         write (nu_diag,801) 'aero error             = ', aerrn(n)
+         write (nu_diag,801) 'maximum aero (kg/m2)   = ', aeromx1n(n)
+         enddo
+         write (nu_diag,*) '----------------------------'
+         endif ! tr_aero
 
         endif                     ! print_global
 
@@ -754,7 +816,19 @@
          write(nu_diag,901) 'arwt salt flx in dt(kg)= ',sfsaltn, &
                                                         sfsalts
          write(nu_diag,901) 'arwt salt flx error    = ',serrn,serrs
+
          write(nu_diag,*) '----------------------------'
+         if (tr_aero) then
+         do n = 1, n_aero
+         write(nu_diag,*)   '  aerosol ',n
+         write(nu_diag,901) 'faero_atm (kg/m2)      = ', faeran(n), faeras(n)
+         write(nu_diag,901) 'faero_ocn (kg/m2)      = ', faeron(n), faeros(n)
+         write(nu_diag,901) 'total aero (kg/m2)     = ', aerototn(n), aerotots(n)
+         write(nu_diag,901) 'aero error             = ', aerrn(n), aerrs(n)
+         write(nu_diag,901) 'maximum aero (kg/m2)   = ', aeromx1n(n),aeromx1s(n)
+         enddo
+         write(nu_diag,*) '----------------------------'
+         endif ! tr_aero
 
         endif                    ! print_global
        endif                     ! grid_type
@@ -901,6 +975,23 @@
       
       toten = global_sum(work1, distrb_info, field_loc_center, tarean)
       totes = global_sum(work1, distrb_info, field_loc_center, tareas)
+
+      if (tr_aero) then
+         do n=1,n_aero
+            do iblk = 1, nblocks
+            do j = 1, ny_block
+            do i = 1, nx_block
+               work1(i,j,iblk) = trcr(i,j,nt_aero  +4*(n-1),iblk)*vsno(i,j,iblk) &
+                               + trcr(i,j,nt_aero+1+4*(n-1),iblk)*vsno(i,j,iblk) &
+                               + trcr(i,j,nt_aero+2+4*(n-1),iblk)*vice(i,j,iblk) &
+                               + trcr(i,j,nt_aero+3+4*(n-1),iblk)*vice(i,j,iblk)
+            enddo
+            enddo
+            enddo
+            totaeron(n)= global_sum(work1, distrb_info, field_loc_center, tarean)
+            totaeros(n)= global_sum(work1, distrb_info, field_loc_center, tareas)
+         enddo
+      endif
 
       if (print_points) then
 

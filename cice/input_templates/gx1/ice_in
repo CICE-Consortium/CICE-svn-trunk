@@ -44,8 +44,8 @@
 
 &domain_nml
     nprocs = 8
-  , processor_shape   = 'square-ice'
-  , distribution_type = 'rake'
+  , processor_shape   = 'slenderX2'
+  , distribution_type = 'cartesian'
   , distribution_wght = 'latitude'
   , ew_boundary_type  = 'cyclic'
   , ns_boundary_type  = 'open'
@@ -58,6 +58,8 @@
   , restart_lvl  = .false.
   , tr_pond      = .false.
   , restart_pond = .false.
+  , tr_aero      = .false.
+  , restart_aero = .false.
 /
 
 &ice_nml
@@ -86,7 +88,7 @@
   , ycycle          = 1
   , atm_data_format = 'bin'
   , atm_data_type   = 'LYq'
-  , atm_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/LargeYeager/version2/'
+  , atm_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/LargeYeager/v2_updated/'
   , calc_strair     = .true.
   , calc_Tsfc       = .true.
   , precip_units    = 'mm_per_sec'
@@ -209,6 +211,9 @@
   , f_vlvl         = 'x'
   , f_ardg         = 'x'
   , f_vrdg         = 'x'
+  , f_faero_atm    = 'm'
+  , f_faero_ocn    = 'm'
+  , f_aero         = 'm'
   , f_aicen        = 'x'
   , f_vicen        = 'x'
   , f_Tinz         = 'x'

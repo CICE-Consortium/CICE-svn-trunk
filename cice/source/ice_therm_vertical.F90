@@ -35,7 +35,7 @@
       use ice_domain_size, only: ncat, nilyr, nslyr, ntilyr, ntslyr, max_ntrcr
       use ice_constants
       use ice_fileunits, only: nu_diag
-      use ice_age, only: tr_iage
+      use ice_state, only: tr_iage
 !
 !EOP
 !
@@ -3836,10 +3836,6 @@
 
          ! enthalpy of new ice growing at bottom surface
          if (heat_capacity) then
-!echmod           qbot = -rhoi * (cp_ice * (Tmlt(nilyr+1)-Tbot(i,j)) &
-!echmod                         + Lfresh * (c1-Tmlt(nilyr+1)/Tbot(i,j)) &
-!echmod                         - cp_ocn * Tmlt(nilyr+1))
-!echmod           qbot = min (qbot, qbotmax)      ! in case Tbot is close to Tmlt
             if (l_brine) then
                qbot = -rhoi * (cp_ice * (Tmlt(nilyr+1)-Tbot(i,j)) &
                             + Lfresh * (c1-Tmlt(nilyr+1)/Tbot(i,j)) &
@@ -3849,7 +3845,7 @@
                qbot = -rhoi * (-cp_ice * Tbot(i,j) + Lfresh)
             endif
          else   ! zero layer
-           qbot = -rhoi * Lfresh
+            qbot = -rhoi * Lfresh
          endif
 
          dhi  = ebot_gro(ij) / qbot     ! dhi > 0

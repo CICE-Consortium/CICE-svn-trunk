@@ -32,7 +32,6 @@
       implicit none
 
       logical (kind=log_kind) :: & 
-         tr_pond,       & ! if .true., use explicit meltponds
          restart_pond     ! if .true., read meltponds restart file
 
 !=======================================================================

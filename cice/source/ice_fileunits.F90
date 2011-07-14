@@ -55,6 +55,8 @@
          nu_restart_lvl, &  ! restart input file for level ice tracers
          nu_dump_pond  , &  ! dump file for restarting melt pond tracer
          nu_restart_pond,&  ! restart input file for melt pond tracer
+         nu_dump_aero  , &  ! dump file for restarting aerosol tracer
+         nu_restart_aero,&  ! restart input file for aerosol tracer
          nu_rst_pointer, &  ! pointer to latest restart file
          nu_history    , &  ! binary history output file
          nu_hdr        , &  ! header file for binary history output
@@ -110,6 +112,8 @@ contains
          call get_fileunit(nu_restart_lvl)
          call get_fileunit(nu_dump_pond)
          call get_fileunit(nu_restart_pond)
+         call get_fileunit(nu_dump_aero)
+         call get_fileunit(nu_restart_aero)
          call get_fileunit(nu_rst_pointer)
          call get_fileunit(nu_history)
          call get_fileunit(nu_hdr)
@@ -194,6 +198,8 @@ contains
          call release_fileunit(nu_restart_lvl)
          call release_fileunit(nu_dump_pond)
          call release_fileunit(nu_restart_pond)
+         call release_fileunit(nu_dump_aero)
+         call release_fileunit(nu_restart_aero)
          call release_fileunit(nu_rst_pointer)
          call release_fileunit(nu_history)
          call release_fileunit(nu_hdr)

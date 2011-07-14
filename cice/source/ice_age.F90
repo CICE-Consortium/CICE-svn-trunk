@@ -32,7 +32,6 @@
       implicit none
 
       logical (kind=log_kind) :: & 
-         tr_iage,       & ! if .true., use age tracer
          restart_age      ! if .true., read age tracer restart file
 
 !=======================================================================

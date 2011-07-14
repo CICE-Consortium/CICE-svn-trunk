@@ -1736,7 +1736,6 @@
                                    triarea,                  &
                                    l_fixed_area, edgearea)
 !
-
 ! !DESCRIPTION:
 !
 ! Compute areas and vertices of transport triangles for north or
@@ -1748,8 +1747,6 @@
 !         John R. Baumgardner, LANL
 !
 ! !USES:
-!
-!      use ice_work, only: worka
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

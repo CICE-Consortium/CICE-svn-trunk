@@ -25,6 +25,7 @@
 !
 ! !USES:
 !
+      use ice_aerosol
       use ice_age
       use ice_calendar
       use ice_communicate
@@ -45,6 +46,7 @@
       use ice_meltpond
       use ice_ocean
       use ice_orbital
+      use ice_lvl
       use ice_restoring
       use ice_shortwave
       use ice_therm_itd
@@ -166,7 +168,9 @@
 
       ! tracers
       if (tr_iage) call init_age        ! ice age tracer
+      if (tr_lvl)  call init_lvl        ! level ice tracer
       if (tr_pond) call init_meltponds  ! melt ponds
+      if (tr_aero) call init_aerosol    ! ice aerosol
 
       call init_diags           ! initialize diagnostic output points
       call init_history_therm   ! initialize thermo history variables
@@ -194,6 +198,8 @@
 #ifndef coupled
       call get_forcing_atmo     ! atmospheric forcing from data
       call get_forcing_ocn(dt)  ! ocean forcing from data
+!      if (tr_aero) call faero_data          ! aerosols
+      if (tr_aero) call faero_default ! aerosols
 #endif
 
       if (runtype == 'initial' .and. .not. restart) &

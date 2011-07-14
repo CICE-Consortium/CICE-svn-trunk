@@ -236,6 +236,8 @@
 !
       integer (kind=int_kind) :: i, j, iblk
 
+      if (istep1 >= check_step) then
+
       do iblk = 1, nblocks
       do j = 1, ny_block
       do i = 1, nx_block
@@ -244,6 +246,8 @@
       enddo
       enddo
       enddo
+
+      endif
 
       end subroutine debug_ice
 

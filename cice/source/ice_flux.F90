@@ -136,6 +136,10 @@
          frain   , & ! rainfall rate (kg/m^2 s)
          fsnow       ! snowfall rate (kg/m^2 s)
 
+      real (kind=dbl_kind), &
+         dimension (nx_block,ny_block,max_aero,max_blocks) :: &
+         faero_atm   ! aerosol deposition rate (kg/m^2 s)
+
        ! in from ocean
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
@@ -190,6 +194,10 @@
          fsalt   , & ! salt flux to ocean (kg/m^2/s)
          fhocn   , & ! net heat flux to ocean (W/m^2)
          fswthru     ! shortwave penetrating to ocean (W/m^2)
+
+      real (kind=dbl_kind), &
+        dimension (nx_block,ny_block,max_aero,max_blocks) :: &
+         faero_ocn   ! aerosol flux to ocean  (kg/m^2/s)
 
        ! internal
 
@@ -355,6 +363,8 @@
          flatn_f(:,:,:,:) = -2.0_dbl_kind    ! latent heat flux (W/m^2)
       endif !     l_winter
 
+      faero_atm (:,:,:,:) = c0           ! aerosol deposition rate (kg/m2/s)
+
       !-----------------------------------------------------------------
       ! fluxes received from ocean
       !-----------------------------------------------------------------
@@ -496,10 +506,11 @@
       ! fluxes sent
       !-----------------------------------------------------------------
 
-      fresh  (:,:,:)  = c0
-      fsalt  (:,:,:)  = c0
-      fhocn  (:,:,:)  = c0
-      fswthru(:,:,:)  = c0
+      fresh    (:,:,:)   = c0
+      fsalt    (:,:,:)   = c0
+      fhocn    (:,:,:)   = c0
+      fswthru  (:,:,:)   = c0
+      faero_ocn(:,:,:,:) = c0
 
       end subroutine init_flux_ocn
 
@@ -784,6 +795,7 @@
                                Tref,     Qref,     &
                                fresh,    fsalt,    &
                                fhocn,    fswthru,  &
+                               faero_ocn,          &
                                alvdr,    alidr,    &
                                alvdf,    alidf)
 !
@@ -829,6 +841,10 @@
           alidr   , & ! near-ir, direct   (fraction)
           alvdf   , & ! visible, diffuse  (fraction)
           alidf       ! near-ir, diffuse  (fraction)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
+          intent(inout):: &
+          faero_ocn   ! aersol flux to ocean            (kg/m2/s)
 !
 !EOP
 !
@@ -862,6 +878,7 @@
             alidr   (i,j) = alidr   (i,j) * ar
             alvdf   (i,j) = alvdf   (i,j) * ar
             alidf   (i,j) = alidf   (i,j) * ar
+            faero_ocn(i,j,:) = faero_ocn(i,j,:) * ar
          else                   ! zero out fluxes
             strairxT(i,j) = c0
             strairyT(i,j) = c0
@@ -881,6 +898,7 @@
             alidr   (i,j) = c0
             alvdf   (i,j) = c0 
             alidf   (i,j) = c0
+            faero_ocn(i,j,:) = c0
          endif                  ! tmask and aice > 0
       enddo                     ! i
       enddo                     ! j

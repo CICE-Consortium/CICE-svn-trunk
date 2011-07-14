@@ -28,6 +28,7 @@
 !
 ! !USES:
 !
+      use ice_aerosol
       use ice_age
       use ice_atmo
       use ice_calendar
@@ -127,6 +128,8 @@
          call ice_timer_start(timer_couple)  ! atm/ocn coupling
          call get_forcing_atmo     ! atmospheric forcing from data
          call get_forcing_ocn(dt)  ! ocean forcing from data
+!         if (tr_aero) call faero_data        ! aerosols
+         if (tr_aero) call faero_default     ! aerosols
          call ice_timer_stop(timer_couple)   ! atm/ocn coupling
 #endif
 
@@ -308,7 +311,8 @@
          meltbn      , & ! bottom melt in category n (m)
          meltsn      , & ! snow melt in category n (m)
          congeln     , & ! congelation ice formation in category n (m)
-         snoicen         ! snow-ice formation in category n (m)
+         snoicen     , & ! snow-ice formation in category n (m)
+         vsnon_init      ! for aerosol mass budget
 
       type (block) :: &
          this_block      ! block information for current block
@@ -499,6 +503,8 @@
 
             endif
 
+            vsnon_init(:,:) = vsnon(:,:,n,iblk)
+
             call thermo_vertical                                       &
                             (nx_block,            ny_block,            &
                              dt,                  icells,              &
@@ -542,6 +548,28 @@
                                  TLAT(istop,jstop,iblk)*rad_to_deg, &
                                  TLON(istop,jstop,iblk)*rad_to_deg
             call abort_ice ('ice: Vertical thermo error')
+         endif
+
+      !-----------------------------------------------------------------
+      ! Aerosol update
+      !-----------------------------------------------------------------
+         if (tr_aero .and. icells > 0) then
+
+               call update_aerosol (nx_block, ny_block,                  &
+                                    dt, icells,                          &
+                                    indxi, indxj,                        &
+                                    melttn, meltsn,                      &
+                                    meltbn, congeln, snoicen,            &
+                                    fsnow(:,:,iblk),                     &
+                                    trcrn(:,:,:,n,iblk),                 &
+                                    aicen_init(:,:,n,iblk),              &
+                                    vicen_init(:,:,n,iblk),              &
+                                    vsnon_init(:,:),                     &
+                                    vicen(:,:,n,iblk),                   &
+                                    vsnon(:,:,n,iblk),                   &
+                                    aicen(:,:,n,iblk),                   &
+                                    faero_atm(:,:,:,iblk),               &
+                                    faero_ocn(:,:,:,iblk))
          endif
 
       !-----------------------------------------------------------------
@@ -734,6 +762,7 @@
                             Tref     (:,:,iblk), Qref    (:,:,iblk), &
                             fresh    (:,:,iblk), fsalt   (:,:,iblk), &
                             fhocn    (:,:,iblk), fswthru (:,:,iblk), &
+                            faero_ocn    (:,:,:,iblk),               &
                             alvdr    (:,:,iblk), alidr   (:,:,iblk), &
                             alvdf    (:,:,iblk), alidf   (:,:,iblk))
 

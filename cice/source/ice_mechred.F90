@@ -97,10 +97,6 @@
          l_conservation_check = .false.  ! if true, check conservation
                                         ! (useful for debugging)
 
-      ! in ice_lvl.F90, this causes a circular dependency
-      logical (kind=log_kind) :: & 
-         tr_lvl                  ! if .true., use level ice tracer
-
 !=======================================================================
 
       contains
@@ -135,7 +131,8 @@
                             istop,       jstop,      &
                             dardg1dt,    dardg2dt,   &
                             dvirdgdt,    opening,    &
-                            fresh,       fhocn)
+                            fresh,       fhocn,      &
+                            faero_ocn)
 !
 ! !USES:
 !
@@ -197,6 +194,10 @@
          opening   , & ! rate of opening due to divergence/shear (1/s)
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
          fhocn         ! net heat flux to ocean (W/m^2)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
+         intent(inout), optional :: &
+         faero_ocn     ! aerosol flux to ocean (kg/m^2/s)
 !
 !EOP
 !
@@ -216,6 +217,8 @@
          virdg      , & ! ice volume ridged
          aopen          ! area opening due to divergence/shear
 
+      real (kind=dbl_kind), dimension (icells,max_aero) :: &
+         maero          ! aerosol mass added to ocean (kg m-2)
 
       real (kind=dbl_kind), dimension (icells,0:ncat) :: &
          apartic          ! participation function; fraction of ridging
@@ -263,6 +266,7 @@
       do ij = 1, icells
          msnow_mlt(ij) = c0
          esnow_mlt(ij) = c0
+         maero    (ij,:) = c0
          ardg1    (ij) = c0
          ardg2    (ij) = c0
          virdg    (ij) = c0
@@ -348,6 +352,7 @@
                            ardg1,     ardg2,           &
                            virdg,     aopen,           &
                            msnow_mlt, esnow_mlt,       &
+                           maero,                      &
                            l_stop,                     &
                            istop,     jstop)
 
@@ -514,6 +519,13 @@
             i = indxi(ij)
             j = indxj(ij)
             fhocn(i,j) = fhocn(i,j) + esnow_mlt(ij)*dti
+         enddo
+      endif
+      if (present(faero_ocn)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            faero_ocn(i,j,:) = faero_ocn(i,j,:) + maero(ij,:)*dti
          enddo
       endif
 
@@ -1102,12 +1114,13 @@
                               ardg1,       ardg2,           &
                               virdg,       aopen,           &
                               msnow_mlt,   esnow_mlt,       &
+                              maero,                        &
                               l_stop,                       &
                               istop,       jstop)
 !
 ! !USES:
 !
-      use ice_state, only: nt_alvl, nt_vlvl
+      use ice_state, only: nt_alvl, nt_vlvl, nt_aero, tr_lvl, tr_aero
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1172,6 +1185,9 @@
       real (kind=dbl_kind), dimension(icells), intent(inout) :: &
          msnow_mlt, & ! mass of snow added to ocean (kg m-2)
          esnow_mlt    ! energy needed to melt snow in ocean (J m-2)
+
+      real (kind=dbl_kind), dimension(icells,max_aero), intent(inout) :: &
+         maero        ! aerosol mass added to ocean (kg m-2)
 
       logical (kind=log_kind), intent(inout) :: &
          l_stop   ! if true, abort on return
@@ -1474,10 +1490,19 @@
             endif
 
       !-----------------------------------------------------------------
-      !  Place part of the snow lost by ridging into the ocean.
+      !  Place part of the snow and tracer lost by ridging into the ocean.
       !-----------------------------------------------------------------
 
             msnow_mlt(m) = msnow_mlt(m) + rhos*vsrdgn(ij)*(c1-fsnowrdg)
+
+            if (tr_aero) then
+               do it = 1, n_aero
+                  maero(m,it) = maero(m,it) &
+                        + vsrdgn(ij)*(c1-fsnowrdg) &
+                        *(trcrn(i,j,nt_aero  +4*(it-1),n)   &
+                        + trcrn(i,j,nt_aero+1+4*(it-1),n))
+               enddo
+            endif
 
       !-----------------------------------------------------------------
       ! Compute quantities used to apportion ice among categories
