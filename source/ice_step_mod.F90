@@ -811,116 +811,43 @@
 
       if (calc_Tsfc) then
 
-      do iblk = 1, nblocks
-         this_block = get_block(blocks_ice(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
+      if (trim(shortwave) == 'dEdd') then ! delta Eddington
 
-      !-----------------------------------------------------------------
-      ! Compute cosine of solar zenith angle.
-      ! This is used by the delta-Eddington shortwave module.
-      ! For basic shortwave, simply set coszen to a constant between 0 and 1.
-      !-----------------------------------------------------------------
+         call run_dEdd
 
-         if (trim(shortwave) == 'dEdd') then ! delta Eddington
+      else  ! .not. dEdd
 
-            ! identify ice-ocean cells
-            icells = 0
-            do j = 1, ny_block
-            do i = 1, nx_block
-               if (tmask(i,j,iblk)) then
-                  icells = icells + 1
-                  indxi(icells) = i
-                  indxj(icells) = j
-               endif
-            enddo               ! i
-            enddo               ! j
+         do iblk = 1, nblocks
+            this_block = get_block(blocks_ice(iblk),iblk)         
+            ilo = this_block%ilo
+            ihi = this_block%ihi
+            jlo = this_block%jlo
+            jhi = this_block%jhi
 
-            call compute_coszen (nx_block,         ny_block,       &
-                                 icells,                           &
-                                 indxi,            indxj,          &
-                                 tlat  (:,:,iblk), tlon(:,:,iblk), &
-                                 coszen(:,:,iblk), dt)
-
-         else                     ! basic (ccsm3) shortwave
+            ! For basic shortwave, set coszen to a constant between 0 and 1.
             coszen(:,:,iblk) = p5 ! sun above the horizon
-         endif
 
-         do n = 1, ncat
+            do n = 1, ncat
 
-      !-----------------------------------------------------------------
-      ! Identify cells with nonzero ice area
-      !-----------------------------------------------------------------
-           
-            icells = 0
-            do j = jlo, jhi
-            do i = ilo, ihi
-               if (aicen(i,j,n,iblk) > puny) then
-                  icells = icells + 1
-                  indxi(icells) = i
-                  indxj(icells) = j
-               endif
-            enddo               ! i
-            enddo               ! j
+               icells = 0
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (aicen(i,j,n,iblk) > puny) then
+                     icells = icells + 1
+                     indxi(icells) = i
+                     indxj(icells) = j
+                  endif
+               enddo               ! i
+               enddo               ! j
 
       !-----------------------------------------------------------------
       ! Solar radiation: albedo and absorbed shortwave
       !-----------------------------------------------------------------
 
-            il1 = ilyr1(n)
-            il2 = ilyrn(n)
-            sl1 = slyr1(n)
-            sl2 = slyrn(n)
-
-            if (trim(shortwave) == 'dEdd') then   ! delta Eddington
-
-      ! note that rhoswn, rsnw, fp, hp and Sswabs ARE NOT dimensioned with ncat
-      ! BPB 19 Dec 2006
-
-               ! set snow properties
-               call shortwave_dEdd_set_snow(nx_block, ny_block,        &
-                              icells,                                  &
-                              indxi,               indxj,              &
-                              aicen(:,:,n,iblk),   vsnon(:,:,n,iblk),  &
-                              trcrn(:,:,nt_Tsfc,n,iblk), fsn,          &
-                              rhosnwn,             rsnwn)
-
-               if (.not. tr_pond) then
-                   ! set pond properties
-                   call shortwave_dEdd_set_pond(nx_block, ny_block,     &
-                              icells,                                   &
-                              indxi,               indxj,               &
-                              aicen(:,:,n,iblk),                        &
-                              trcrn(:,:,nt_Tsfc,n,iblk),                &
-                              fsn,                 fpn,                 &
-                              hpn)
-               else
-                  fpn(:,:) = apondn(:,:,n,iblk)
-                  hpn(:,:) = hpondn(:,:,n,iblk)
-               endif
-
-               call shortwave_dEdd(nx_block,     ny_block,            &
-                              icells,                                 &
-                              indxi,             indxj,               &
-                              coszen(:,:, iblk),                      &
-                              aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
-                              vsnon(:,:,n,iblk), fsn,                 &
-                              rhosnwn,           rsnwn,               &
-                              fpn,               hpn,                 &
-                              swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
-                              swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                              alvdrn(:,:,n,iblk),alvdfn(:,:,n,iblk),  &
-                              alidrn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
-                              fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
-                              fswthrun(:,:,n,iblk),                   &
-                              Sswabsn(:,:,sl1:sl2,iblk),              &
-                              Iswabsn(:,:,il1:il2,iblk),              &
-                              albicen(:,:,n,iblk),                    &
-                              albsnon(:,:,n,iblk),albpndn(:,:,n,iblk))
-
-            else  ! .not. dEdd
+               il1 = ilyr1(n)
+               il2 = ilyrn(n)
+               sl1 = slyr1(n)
+               sl2 = slyrn(n)
 
                Sswabsn(:,:,sl1:sl2,iblk) = c0
 
@@ -938,10 +865,10 @@
                               fswthrun(:,:,n,iblk),                   &
                               Iswabsn(:,:,il1:il2,iblk),              &
                               albicen(:,:,n,iblk),albsnon(:,:,n,iblk))
+            enddo                  ! ncat
+         enddo                     ! nblocks
 
-            endif  ! dEdd
-         enddo                  ! ncat
-      enddo                     ! nblocks
+      endif   ! shortwave
 
       else    ! .not. calc_Tsfc
 

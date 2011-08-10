@@ -190,7 +190,7 @@
       if (trim(shortwave) == 'dEdd') then ! delta Eddington
 
          call init_orbit       ! initialize orbital parameters
-         call init_dEdd        ! initialize delta Eddington
+         call run_dEdd         ! initialize delta Eddington
  
       else                     ! basic (ccsm3) shortwave
 
@@ -1027,11 +1027,11 @@
 !
 !BOP
 !
-! !IROUTINE: init_dEdd - initialize Delta-Eddington parameters
+! !IROUTINE: run_dEdd - initialize/run Delta-Eddington
 !
 ! !INTERFACE:
 !
-      subroutine init_dEdd
+      subroutine run_dEdd
 !
 ! !DESCRIPTION:
 !
@@ -1077,7 +1077,7 @@
 
       ! pond variables for Delta-Eddington shortwave
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         fpn         , & ! pond fraction
+         fpn         , & ! pond fraction of ice cover
          hpn             ! pond depth (m)
 
       integer (kind=int_kind) :: &
@@ -1091,19 +1091,12 @@
       type (block) :: &
          this_block      ! block information for current block
 
-      ! storage for approximate exponential for Delta-Eddington;
-      ! approximate exp(-x) to better than c10/nmbexp relative
-      ! error for computational efficieny by evaluating table; 
-      ! numerical error is acceptible scientifically
-      integer (kind=int_kind), parameter :: & 
-         nmbexp = 1000000  ! number of exponential values in lookup table
-
       real (kind=dbl_kind), parameter :: & 
          argmax = c10      ! maximum argument of exponential
 
       exp_min = exp(-argmax)
 
-         do iblk=1,nblocks
+         do iblk = 1, nblocks
             this_block = get_block(blocks_ice(iblk),iblk)         
             ilo = this_block%ilo
             ihi = this_block%ihi
@@ -1122,6 +1115,7 @@
             enddo               ! i
             enddo               ! j
 
+            ! cosine of the zenith angle
             call compute_coszen (nx_block,         ny_block,       &
                                  icells,                           &
                                  indxi,            indxj,          &
@@ -1150,54 +1144,50 @@
       ! BPB 19 Dec 2006
 
                ! set snow properties
-               call shortwave_dEdd_set_snow(nx_block, ny_block,           &
-                                 icells,                                  &
-                                 indxi,               indxj,              &
-                                 aicen(:,:,n,iblk),   vsnon(:,:,n,iblk),  &
-                                 trcrn(:,:,1,n,iblk), fsn,                &
-                                 rhosnwn,             rsnwn)
-
-
-               if (.not. tr_pond) then
+               call shortwave_dEdd_set_snow(nx_block, ny_block,        &
+                              icells,                                  &
+                              indxi,               indxj,              &
+                              aicen(:,:,n,iblk),   vsnon(:,:,n,iblk),  &
+                              trcrn(:,:,nt_Tsfc,n,iblk), fsn,          &
+                              rhosnwn,             rsnwn)
 
                ! set pond properties
-               call shortwave_dEdd_set_pond(nx_block, ny_block,            &
-                                 icells,                                   &
-                                 indxi,               indxj,               &
-                                 aicen(:,:,n,iblk),   trcrn(:,:,1,n,iblk), &
-                                 fsn,                 fpn,                 &
-                                 hpn)
-
+               if (tr_pond) then
+                  fpn(:,:) = apondn(:,:,n,iblk)
+                  hpn(:,:) = hpondn(:,:,n,iblk)
                else
-
-               fpn(:,:) = apondn(:,:,n,iblk)
-               hpn(:,:) = hpondn(:,:,n,iblk)
-
+                   call shortwave_dEdd_set_pond(nx_block, ny_block,     &
+                              icells,                                   &
+                              indxi,               indxj,               &
+                              aicen(:,:,n,iblk),                        &
+                              trcrn(:,:,nt_Tsfc,n,iblk),                &
+                              fsn,                 fpn,                 &
+                              hpn)
                endif
 
-               call shortwave_dEdd(nx_block,        ny_block,            &
-                                 icells,                                 &
-                                 indxi,             indxj,               &
-                                 coszen(:,:, iblk),                      &
-                                 aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
-                                 vsnon(:,:,n,iblk), fsn,                 &
-                                 rhosnwn,           rsnwn,               &
-                                 fpn,               hpn,                 &
-                                 swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
-                                 swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                                 alvdrn(:,:,n,iblk),alvdfn(:,:,n,iblk),  &
-                                 alidrn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
-                                 fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
-                                 fswthrun(:,:,n,iblk), &
-                                 Sswabsn(:,:,sl1:sl2,iblk), &
-                                 Iswabsn(:,:,il1:il2,iblk), &
-                                 albicen(:,:,n,iblk),albsnon(:,:,n,iblk),&
-                                 albpndn(:,:,n,iblk))
+               call shortwave_dEdd(nx_block,     ny_block,            &
+                              icells,                                 &
+                              indxi,             indxj,               &
+                              coszen(:,:, iblk),                      &
+                              aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
+                              vsnon(:,:,n,iblk), fsn,                 &
+                              rhosnwn,           rsnwn,               &
+                              fpn,               hpn,                 &
+                              swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
+                              swidr(:,:,  iblk), swidf(:,:,  iblk),   &
+                              alvdrn(:,:,n,iblk),alvdfn(:,:,n,iblk),  &
+                              alidrn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
+                              fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
+                              fswthrun(:,:,n,iblk),                   &
+                              Sswabsn(:,:,sl1:sl2,iblk),              &
+                              Iswabsn(:,:,il1:il2,iblk),              &
+                              albicen(:,:,n,iblk),                    &
+                              albsnon(:,:,n,iblk),albpndn(:,:,n,iblk))
 
             enddo  ! ncat
          enddo     ! nblocks
  
-      end subroutine init_dEdd
+      end subroutine run_dEdd
  
 !=======================================================================
 !BOP
