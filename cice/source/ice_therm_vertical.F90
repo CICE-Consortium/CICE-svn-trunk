@@ -1926,7 +1926,10 @@
                   dTmat(m,k) = Tin(m,k) - Tmlt(k)
 !echmod: return this energy to the ocean
                   dqmat(m,k) = rhoi * dTmat(m,k) &
-                             * (cp_ocn + Lfresh * dTmat(m,k)/Tin(m,k)**2)
+                             * (cp_ice - Lfresh * Tmlt(k)/Tin(m,k)**2)
+! use this for the case that Tmlt changes by an amount dTmlt=Tmltnew-Tmlt(k)
+!                             + rhoi * dTmlt &
+!                             * (cp_ocn - cp_ice + Lfresh/Tin(m,k))
                   Tin(m,k) = Tmlt(k)
                   reduce_kh(m,k) = .true.
                endif
