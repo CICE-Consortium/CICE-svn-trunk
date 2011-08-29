@@ -43,7 +43,7 @@
         n_aero    =   3       , & ! number of aerosols in use
         max_ntrcr =             & ! number of tracers (defined in ice_init)
                       1         & ! 1 = surface temperature
-                  +   1         & ! number of ice, snow tracers excl. aero
+                  +   2         & ! number of ice, snow tracers excl. aero
                   + n_aero*4  , & ! number of aerosols * 4 aero layers
         max_nstrm =   5           ! max number of history output streams
 

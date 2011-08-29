@@ -45,7 +45,7 @@
       use ice_itd
       use ice_kinds_mod
       use ice_mechred
-      use ice_meltpond
+      use ice_meltpond_rad
       use ice_ocean
       use ice_orbital
       use ice_lvl
@@ -224,10 +224,10 @@
       endif         
 
       ! tracers
-      if (tr_iage) call init_age        ! ice age tracer
-      if (tr_lvl)  call init_lvl        ! level ice tracer
-      if (tr_pond) call init_meltponds  ! melt ponds
-      if (tr_aero) call init_aerosol    ! ice aerosol
+      if (tr_iage) call init_age           ! ice age tracer
+      if (tr_lvl)  call init_lvl           ! level ice tracer
+      if (tr_pond) call init_meltponds_rad ! melt ponds
+      if (tr_aero) call init_aerosol       ! ice aerosol
 
       call init_diags           ! initialize diagnostic output points
       call init_history_therm   ! initialize thermo history variables

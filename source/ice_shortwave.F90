@@ -86,7 +86,8 @@
          dimension (nx_block,ny_block,ncat,max_blocks) :: &
          albicen  , & ! bare ice 
          albsnon  , & ! snow 
-         albpndn      ! pond 
+         albpndn  , & ! pond 
+         apeffn       ! effective pond area used for radiation calculation
 
       ! shortwave components
       real (kind=dbl_kind), &
@@ -288,6 +289,9 @@
                albpnd(i,j,iblk) = albpnd(i,j,iblk) &
                   + albpndn(i,j,n,iblk)*aicen(i,j,n,iblk)
                endif
+
+               apeff(i,j,iblk) = apeff(i,j,iblk) &
+                  + apeffn(i,j,n,iblk)*aicen(i,j,n,iblk)
             enddo
 
          enddo  ! ncat
@@ -1051,7 +1055,7 @@
       use ice_flux
       use ice_grid
       use ice_itd
-      use ice_meltpond
+      use ice_meltpond_rad
       use ice_orbital
       use ice_state
 !
@@ -1090,6 +1094,10 @@
 
       type (block) :: &
          this_block      ! block information for current block
+
+      real (kind=dbl_kind) :: & 
+         hs   , & ! snow depth
+         asnow    ! fractional area of snow cover
 
       real (kind=dbl_kind), parameter :: & 
          argmax = c10      ! maximum argument of exponential
@@ -1153,16 +1161,46 @@
 
                ! set pond properties
                if (tr_pond) then
-                  fpn(:,:) = apondn(:,:,n,iblk)
-                  hpn(:,:) = hpondn(:,:,n,iblk)
+                  apeffn(:,:,n,iblk) = c0 ! for history
+                  do ij = 1, icells
+                     i = indxi(ij)
+                     j = indxj(ij)
+
+                     ! fraction of ice area
+                     fpn(i,j) = trcrn(i,j,nt_apnd,n,iblk)
+                     ! snow infiltration
+                     if (aicen(i,j,n,iblk) > puny) then
+                        hs = vsnon(i,j,n,iblk) / aicen(i,j,n,iblk)
+                        if (hs >= hsmin) then
+                           asnow = min(hs/hs0, c1) ! delta-Eddington formulation
+                           fpn(i,j) = (c1 - asnow) * fpn(i,j)
+                        endif
+                     endif
+
+                     ! pond depth over fraction fpn of ice area
+                     hpn(i,j) = trcrn(i,j,nt_hpnd,n,iblk) &
+                              * trcrn(i,j,nt_apnd,n,iblk)
+!echmod - old
+!                     if (trcrn(i,j,nt_apnd,n,iblk) > puny) then
+!                        hpn(i,j) = trcrn(i,j,nt_volp,n,iblk) &
+!                                 / trcrn(i,j,nt_apnd,n,iblk)
+!                     else
+!                        fpn(i,j) = c0
+!                        hpn(i,j) = c0
+!                     endif
+!echmod - old
+                     apeffn(i,j,n,iblk) = fpn(i,j) ! for history
+                  enddo
+
                else
-                   call shortwave_dEdd_set_pond(nx_block, ny_block,     &
+                  call shortwave_dEdd_set_pond(nx_block, ny_block,      &
                               icells,                                   &
                               indxi,               indxj,               &
                               aicen(:,:,n,iblk),                        &
                               trcrn(:,:,nt_Tsfc,n,iblk),                &
                               fsn,                 fpn,                 &
                               hpn)
+                  apeffn(:,:,n,iblk) = fpn(i,j) ! for history
                endif
 
                call shortwave_dEdd(nx_block,     ny_block,            &
@@ -3294,6 +3332,10 @@
                                          Tsfc,     fs,       &
                                          rhosnw,   rsnw)
 !
+! !USES:
+!
+      use ice_meltpond_rad, only: hs0
+!
 ! !DESCRIPTION:
 !
 !   Set snow horizontal coverage, density and grain radius diagnostically 
@@ -3349,14 +3391,13 @@
          rsnw_nm ! actual used nonmelt snow grain radius (micro-meters)
 
       real (kind=dbl_kind), parameter :: &
-         hs0    = .0300_dbl_kind, & ! snow depth for transition to bare sea ice
-         dT_mlt    = c1, & ! change in temp to give non-melt to melt change
+         dT_mlt = 1.5_dbl_kind, & ! change in temp to give non-melt to melt change
                            ! in snow grain radius
          ! units for the following are 1.e-6 m (micro-meters)
          rsnw_fresh    =  100._dbl_kind, & ! freshly-fallen snow grain radius 
          rsnw_nonmelt  =  500._dbl_kind, & ! nonmelt snow grain radius
          rsnw_sig      =  250._dbl_kind, & ! assumed sigma for snow grain radius
-         rsnw_melt     = 1000._dbl_kind    ! melting snow grain radius
+         rsnw_melt     = 1500._dbl_kind    ! melting snow grain radius
 
 !-----------------------------------------------------------------------
 

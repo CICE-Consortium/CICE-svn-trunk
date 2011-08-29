@@ -83,6 +83,7 @@
   , R_ice           = 0.
   , R_pnd           = 0.
   , R_snw           = 0.
+  , hs0             = 0.03
   , atmbndy         = 'default'
   , fyear_init      = 1981
   , ycycle          = 1
@@ -223,4 +224,7 @@
   , f_fmelttn_ai   = 'x'
   , f_flatn_ai     = 'x'
   , f_apondn       = 'x'
+  , f_apond        = 'm'
+  , f_hpond        = 'm'
+  , f_apeff        = 'm'
 /

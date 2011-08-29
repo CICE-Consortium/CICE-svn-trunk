@@ -235,6 +235,8 @@
            f_aero      = 'm', f_aeron      = 'm', &
            f_aicen     = 'm', f_vicen      = 'm', &
            f_apondn    = 'x',                     &
+           f_apond     = 'x', f_hpond      = 'x', &
+           f_ipond     = 'x', f_apeff      = 'm', &
            f_trsig     = 'm', f_icepresent = 'm', &
            f_fsurf_ai  = 'm', f_fcondtop_ai= 'm', &
            f_fmeltt_ai = 'm',                     &
@@ -306,6 +308,8 @@
            f_aero,      f_aeron    , &
            f_aicen,     f_vicen    , &
            f_apondn,    &
+           f_apond,     f_hpond    , &
+           f_ipond,     f_apeff    , &
            f_trsig,     f_icepresent,&
            f_fsurf_ai,  f_fcondtop_ai,&
            f_fmeltt_ai, &
@@ -391,6 +395,10 @@
            n_aicen       , &
            n_vicen       , &
            n_apondn      , &
+           n_apond       , &
+           n_hpond       , &
+           n_ipond       , &
+           n_apeff       , &
            n_fsurfn_ai   , &
            n_fcondtopn_ai, &
            n_fmelttn_ai  , &
@@ -513,7 +521,13 @@
       enddo
 
       if (.not. tr_iage) f_iage = 'x'
-      if (.not. tr_pond) f_apondn = 'x'
+      if (.not. tr_pond) then
+          f_apondn = 'x'
+          f_apond  = 'x'
+          f_hpond  = 'x'
+          f_ipond  = 'x'
+          f_apeff  = 'x'
+      endif
       if (.not. tr_lvl) then
          f_ardg = 'x'
          f_vrdg = 'x'
@@ -662,6 +676,10 @@
       call broadcast_scalar (f_aero, master_task)
       call broadcast_scalar (f_aeron, master_task)
       call broadcast_scalar (f_apondn, master_task)
+      call broadcast_scalar (f_apond,  master_task)
+      call broadcast_scalar (f_hpond,  master_task)
+      call broadcast_scalar (f_ipond,  master_task)
+      call broadcast_scalar (f_apeff, master_task)
 
       ! 2D variables
       do ns1 = 1, nstreams
@@ -1211,6 +1229,32 @@
              "none", c1, c0,                                       &
              ns1, f_vrdg)
        
+      ! Melt ponds
+      if (f_apond(1:1) /= 'x') &
+         call define_hist_field(n_apond,"apond","1",tstr2D, tcstr, & 
+             "melt pond concentration",                            &
+             "none", c1, c0,                                       &
+             ns1, f_apond)
+
+      if (f_hpond(1:1) /= 'x') &
+         call define_hist_field(n_hpond,"hpond","m",tstr2D, tcstr, & 
+             "mean melt pond depth",                               &
+             "none", c1, c0,                                       &
+             ns1, f_hpond)
+
+! not implemented
+!      if (f_ipond(1:1) /= 'x') &
+!         call define_hist_field(n_ipond,"ipond","m",tstr2D, tcstr, & 
+!             "mean pond ice thickness",                               &
+!             "none", c1, c0,                                       &
+!             ns1, f_ipond)
+
+      if (f_apeff(1:1) /= 'x') &
+         call define_hist_field(n_apeff,"apeff","1",tstr2D, tcstr, &
+             "radiation-effective pond area fraction",         &
+             "none", c1, c0,  &
+             ns1, f_apeff)
+
       ! Aerosols
       if (f_aero(1:1) /= 'x') then
          do n=1,n_aero
@@ -1294,7 +1338,7 @@
               ns1, f_flatn_ai)
 
         if (f_apondn(1:1) /= 'x') &
-           call define_hist_field(n_apondn,"apond","1",tstr3Dc, tcstr, & 
+           call define_hist_field(n_apondn,"apondn","1",tstr3Dc, tcstr, & 
               "melt pond concentration, category","none", c1, c0,      &            
               ns1, f_apondn)
 
@@ -1723,6 +1767,21 @@
              call accum_hist_field(n_vrdg,   iblk, &
                              vice(:,:,iblk) * (c1 - trcr(:,:,nt_vlvl,iblk)), a2D)
 
+         if (f_apond(1:1)/= 'x') &
+             call accum_hist_field(n_apond, iblk, &
+                                   aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk), a2D)
+         if (f_hpond(1:1)/= 'x') &
+             call accum_hist_field(n_hpond, iblk, &
+!                                   aice(:,:,iblk) * trcr(:,:,nt_volp,iblk), a2D)
+                                   aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk) &
+                                                  * trcr(:,:,nt_hpnd,iblk), a2D)
+! not implemented
+!         if (f_ipond(1:1)/= 'x') &
+!             call accum_hist_field(n_ipond, iblk, &
+!                                   vice(:,:,iblk) * trcr(:,:,nt_vuip,iblk), a2D)
+         if (f_apeff (1:1) /= 'x') &
+             call accum_hist_field(n_apeff, iblk, apeff(:,:,iblk), a2D)
+
          if (f_fsurf_ai(1:1)/= 'x') &
              call accum_hist_field(n_fsurf_ai,iblk, fsurf(:,:,iblk)*workb(:,:), a2D)
          if (f_fcondtop_ai(1:1)/= 'x') &
@@ -1754,7 +1813,8 @@
                                    vicen(:,:,1:ncat_hist,iblk), a3Dc)
          if (f_apondn   (1:1) /= 'x') &
              call accum_hist_field(n_apondn-n2D, iblk, ncat_hist, &
-                                   apondn(:,:,1:ncat_hist,iblk), a3Dc)
+                  trcrn(:,:,nt_apnd,1:ncat_hist,iblk) &
+                   * aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
          if (f_fsurfn_ai   (1:1) /= 'x') &
              call accum_hist_field(n_fsurfn_ai-n2D, iblk, ncat_hist, &
                   fsurfn(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)

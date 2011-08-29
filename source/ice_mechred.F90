@@ -1120,7 +1120,7 @@
 !
 ! !USES:
 !
-      use ice_state, only: nt_alvl, nt_vlvl, nt_aero, tr_lvl, tr_aero
+      use ice_state, only: nt_alvl, nt_vlvl, nt_aero, tr_lvl, tr_aero, nt_apnd
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1277,6 +1277,14 @@
                   j = indxj(ij)
                   atrcrn(ij,it,n) = vsnon(i,j,n)*trcrn(i,j,it,n)
                enddo 
+            elseif (trcr_depend(it) == 2+nt_apnd) then ! pond area tracer
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  atrcrn(ij,it,n) = aicen(i,j,n) &
+                                  * trcrn(i,j,nt_apnd,n) &
+                                  * trcrn(i,j,it,n)
+               enddo
             endif
          enddo
       enddo
@@ -1596,6 +1604,18 @@
                   atrcrn(m,it,n) = atrcrn(m,it,n) &
                                    - vsrdgn(ij)*trcrn(i,j,it,n)
                enddo
+
+            elseif (trcr_depend(it) == 2+nt_apnd) then ! pond area tracer
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+               do ij = 1, iridge
+                  i = indxii(ij)
+                  j = indxjj(ij)
+                  m = indxij(ij)
+                  atrcrn(m,it,n) = atrcrn(m,it,n) &
+                                   - ardg1n(ij)*trcrn(i,j,nt_apnd,n)*trcrn(i,j,it,n)
+               enddo
             endif               ! trcr_depend
          enddo                  ! ntrcr
 
@@ -1767,6 +1787,17 @@
                      atrcrn(m,it,nr) = atrcrn(m,it,nr) &
                         + fvol(ij)*vsrdgn(ij)*fsnowrdg*trcrn(i,j,it,n)
 
+                  enddo
+               elseif (trcr_depend(it) == 2+nt_apnd) then  ! pond area tracer
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+                  do ij = 1, iridge
+                     i = indxii(ij)
+                     j = indxjj(ij)
+                     m = indxij(ij)
+                     atrcrn(m,it,nr) = atrcrn(m,it,nr) &
+                        + farea(ij)*ardg2n(ij)*trcrn(i,j,nt_apnd,n)*trcrn(i,j,it,n)
                   enddo
                endif            ! trcr_depend
             enddo               ! ntrcr
