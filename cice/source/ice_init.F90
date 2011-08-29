@@ -97,7 +97,7 @@
       use ice_state, only: tr_iage, tr_lvl, tr_pond, tr_aero
       use ice_age, only: restart_age
       use ice_lvl, only: restart_lvl
-      use ice_meltpond, only: restart_pond
+      use ice_meltpond_rad, only: restart_pond, hs0
       use ice_aerosol, only: restart_aero
       use ice_therm_vertical, only: calc_Tsfc, heat_capacity, conduct, &
           ustar_min
@@ -142,6 +142,7 @@
         heat_capacity,  conduct,         shortwave,     albedo_type,    &
         albicev,        albicei,         albsnowv,      albsnowi,       &
         ahmax,          R_ice,           R_pnd,         R_snw,          &
+        hs0,            &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
         atm_data_type,  atm_data_dir,    calc_strair,   calc_Tsfc,      &
         precip_units,   Tfrzpt,          update_ocn_f,  ustar_min,      &
@@ -218,6 +219,7 @@
       R_ice     = 0.00_dbl_kind   ! tuning parameter for sea ice
       R_pnd     = 0.00_dbl_kind   ! tuning parameter for ponded sea ice
       R_snw     = 0.00_dbl_kind   ! tuning parameter for snow over sea ice
+      hs0       = 0.03_dbl_kind   ! snow depth for transition to bare sea ice (m)
       albicev   = 0.78_dbl_kind   ! visible ice albedo for h > ahmax
       albicei   = 0.36_dbl_kind   ! near-ir ice albedo for h > ahmax
       albsnowv  = 0.98_dbl_kind   ! cold snow albedo, visible
@@ -422,6 +424,7 @@
       call broadcast_scalar(R_ice,              master_task)
       call broadcast_scalar(R_pnd,              master_task)
       call broadcast_scalar(R_snw,              master_task)
+      call broadcast_scalar(hs0,                master_task)
       call broadcast_scalar(albicev,            master_task)
       call broadcast_scalar(albicei,            master_task)
       call broadcast_scalar(albsnowv,           master_task)
@@ -548,6 +551,7 @@
          write(nu_diag,1000) ' R_ice                     = ', R_ice
          write(nu_diag,1000) ' R_pnd                     = ', R_pnd
          write(nu_diag,1000) ' R_snw                     = ', R_snw
+         write(nu_diag,1000) ' hs0                       = ', hs0
          write(nu_diag,1000) ' albicev                   = ', albicev
          write(nu_diag,1000) ' albicei                   = ', albicei
          write(nu_diag,1000) ' albsnowv                  = ', albsnowv
@@ -636,7 +640,11 @@
          endif
 
          if (tr_pond) then
-             nt_volpn = ntrcr + 1
+             nt_apnd = ntrcr + 1
+             ntrcr = ntrcr + 1
+!             nt_volp = ntrcr + 1
+!             ntrcr = ntrcr + 1
+             nt_hpnd = ntrcr + 1
              ntrcr = ntrcr + 1
          endif
 
@@ -675,7 +683,9 @@
       call broadcast_scalar(nt_iage,  master_task)
       call broadcast_scalar(nt_alvl,  master_task)
       call broadcast_scalar(nt_vlvl,  master_task)
-      call broadcast_scalar(nt_volpn, master_task)
+      call broadcast_scalar(nt_apnd,  master_task)
+!      call broadcast_scalar(nt_volp,  master_task)
+      call broadcast_scalar(nt_hpnd,  master_task)
       call broadcast_scalar(nt_aero,  master_task)
 
       end subroutine input_data
@@ -766,7 +776,11 @@
       if (tr_iage) trcr_depend(nt_iage)  = 1   ! volume-weighted ice age
       if (tr_lvl)  trcr_depend(nt_alvl)  = 0   ! level ice area
       if (tr_lvl)  trcr_depend(nt_vlvl)  = 1   ! level ice volume
-      if (tr_pond) trcr_depend(nt_volpn) = 0   ! melt pond volume
+      if (tr_pond) then
+                   trcr_depend(nt_apnd)  = 0   ! melt pond area
+                   trcr_depend(nt_hpnd)  = 2+nt_apnd   ! melt pond depth
+!                   trcr_depend(nt_volp)  = 0   ! melt pond volume
+      endif
       if (tr_aero) then ! volume-weighted aerosols
          do it = 1, n_aero
             trcr_depend(nt_aero+(it-1)*4  ) = 2 ! snow

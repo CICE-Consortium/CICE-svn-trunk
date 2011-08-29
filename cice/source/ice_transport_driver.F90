@@ -93,7 +93,7 @@
 !
 ! !USES:
 !
-      use ice_state, only: trcr_depend, ntrcr
+      use ice_state
       use ice_exit
       use ice_timers
       use ice_transport_remap, only: init_remap
@@ -129,6 +129,8 @@
                                             ! 2 for snow volume tracers
              if (trcr_depend(nt) == 0) then
                 tracer_type(k+nt) = 1
+             elseif (trcr_depend(nt) > 2 .and. trcr_depend(trcr_depend(nt)-2) > 0) then
+                tracer_type(k+nt) = 3
              else               ! trcr_depend = 1 or 2
                 tracer_type(k+nt) = 2
              endif
@@ -157,6 +159,50 @@
                 endif
              endif
           enddo                 ! ntrace
+
+          ! diagnostic output
+          if (my_task == master_task) then
+          write (nu_diag, *) 'tracer        index      depend        type has_dependents'
+             nt = 1
+                write(nu_diag,*) '   hi  ',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+             nt = 2
+                write(nu_diag,*) '   hs  ',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+          k=2
+          do nt = k+1, k+ntrcr
+             if (nt-k==nt_Tsfc) &
+                write(nu_diag,*) 'nt_Tsfc',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+             if (nt-k==nt_iage) &
+                write(nu_diag,*) 'nt_iage',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+             if (nt-k==nt_alvl) &
+                write(nu_diag,*) 'nt_alvl',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+             if (nt-k==nt_vlvl) &
+                write(nu_diag,*) 'nt_vlvl',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+             if (nt-k==nt_apnd) &
+                write(nu_diag,*) 'nt_apnd',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+             if (nt-k==nt_hpnd) &
+                write(nu_diag,*) 'nt_hpnd',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+!             if (nt-k==nt_volp) &
+!                write(nu_diag,*) 'nt_volp',nt,depend(nt),tracer_type(nt),&
+!                                              has_dependents(nt)
+          enddo
+
+             nt = k + ntrcr+1
+                write(nu_diag,*) ' qice  ',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+
+             nt = nt + nilyr
+                write(nu_diag,*) ' qsno  ',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+
+          endif ! master_task
 
           call init_remap    ! grid quantities
 

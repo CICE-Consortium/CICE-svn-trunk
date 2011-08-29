@@ -854,6 +854,7 @@
       use ice_itd, only: hin_max, ilyr1, column_sum, &
                          column_conservation_check
       use ice_state, only: nt_Tsfc, nt_iage, nt_alvl, nt_vlvl, nt_aero, &
+                           nt_apnd, tr_pond, &
                            tr_iage, tr_lvl, tr_aero
       use ice_flux, only: update_ocn_f
 
@@ -1176,6 +1177,11 @@
             if (tr_iage) &
                trcrn(i,j,nt_iage,1) = &
               (trcrn(i,j,nt_iage,1)*vice1 + dt*vi0new(m))/vicen(i,j,1)
+
+            if (tr_pond) then
+               trcrn(i,j,nt_apnd,1) = &
+               trcrn(i,j,nt_apnd,1)*area1/aicen(i,j,1)
+            endif
 
             if (tr_aero) then
                do it = 1, n_aero

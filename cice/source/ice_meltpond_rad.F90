@@ -2,9 +2,15 @@
 !
 !BOP
 !
-! !MODULE: ice_meltpond - Meltpond parameterization
+! !MODULE: ice_meltpond_rad - Meltpond parameterization
 !
 ! !DESCRIPTION:
+!
+! This meltpond parameterization was developed for use with the delta-
+! Eddington radiation scheme, and only affects the radiation budget in
+! the model.  That is, although the pond volume is tracked, that liquid
+! water is not used elsewhere in the model for mass budgets or other
+! physical processes.
 !
 ! !REVISION HISTORY:
 !  SVN:$$
@@ -14,7 +20,7 @@
 !
 ! !INTERFACE:
 !
-      module ice_meltpond
+      module ice_meltpond_rad
 !
 ! !USES:
 !
@@ -34,6 +40,9 @@
       logical (kind=log_kind) :: & 
          restart_pond     ! if .true., read meltponds restart file
 
+      real (kind=dbl_kind) :: &
+         hs0              ! snow depth for transition to bare sea ice (m)
+
 !=======================================================================
 
       contains
@@ -51,7 +60,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine init_meltponds
+      subroutine init_meltponds_rad
 !
 ! !USES:
 !
@@ -68,14 +77,14 @@
       if (trim(runtype) == 'continue') restart_pond = .true.
 
       if (restart_pond) then
-         call read_restart_pond
+         call read_restart_pond_rad
       else
-         trcrn(:,:,nt_volpn,:,:) = c0
-         apondn(:,:,:,:) = c0
-         hpondn(:,:,:,:) = c0
+         trcrn(:,:,nt_apnd,:,:) = c0
+         trcrn(:,:,nt_hpnd,:,:) = c0
+!         trcrn(:,:,nt_volp,:,:) = c0
       endif
 
-      end subroutine init_meltponds
+      end subroutine init_meltponds_rad
 
 !=======================================================================
 !BOP
@@ -84,11 +93,11 @@
 !
 ! !INTERFACE:
 !
-      subroutine compute_ponds(nx_block,ny_block,          &
-                               ilo, ihi, jlo, jhi,         &
-                               meltt, melts,  frain,       &
-                               aicen, vicen,  vsnon,       &
-                               trcrn, apondn, hpondn)
+      subroutine compute_ponds_rad(nx_block,ny_block,          &
+                                   ilo, ihi, jlo, jhi,         &
+                                   rfrac, meltt, melts,  frain,&
+                                   aicen, vicen,  vsnon,       &
+                                   trcrn)
 !
 ! !DESCRIPTION:
 !
@@ -98,9 +107,11 @@
 !
 ! !USES:
 !
-      use ice_state, only: nt_Tsfc, nt_volpn
+!      use ice_state, only: nt_Tsfc, nt_volp, nt_apnd, nt_hpnd
+      use ice_state, only: nt_Tsfc, nt_apnd, nt_hpnd
       use ice_calendar, only: dt
       use ice_domain_size, only: max_ntrcr
+      use ice_itd, only: hi_min
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -108,17 +119,13 @@
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(in) :: &
+         rfrac, &    ! water fraction retained for melt ponds
          meltt, &
          melts, &
          frain, &
          aicen, &
          vicen, &
          vsnon
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block), &
-         intent(inout) :: &
-         apondn, &
-         hpondn
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_ntrcr), &
          intent(inout) :: &
@@ -140,20 +147,23 @@
          hs                     , & ! snow depth (m)
          dTs                    , & ! surface temperature diff for freeze-up (C)
          Tp                     , & ! pond freezing temperature (C)
-         rfrac                      ! water runoff fraction for melt ponds
+         asnow                  , & ! area fraction of snow on ice
+         apondn, &
+         hpondn   
 
       real (kind=dbl_kind), parameter :: &
-         hicemin  = p1          , & ! minimum ice thickness with ponds (m)
+         hicemin  = hi_min      , & ! minimum ice thickness with ponds (m)
          Td       = c2          , & ! temperature difference for freeze-up (C)
          rexp     = p01         , & ! pond contraction scaling
-         dpthhi   = 0.2_dbl_kind, & ! ratio of pond depth to ice thickness
+         dpthhi   = 0.9_dbl_kind, & ! ratio of pond depth to ice thickness
          dpthfrac = 0.8_dbl_kind    ! ratio of pond depth to pond fraction
 
       !-----------------------------------------------------------------
       ! Initialize 
       !-----------------------------------------------------------------
       Tsfcn(:,:) = trcrn(:,:,nt_Tsfc)
-      volpn(:,:) = trcrn(:,:,nt_volpn)
+      volpn(:,:) = trcrn(:,:,nt_hpnd) * trcrn(:,:,nt_apnd) * aicen(:,:)
+!      volpn(:,:) = trcrn(:,:,nt_volp) * aicen(:,:)
 
       !-----------------------------------------------------------------
       ! Identify grid cells where ice can melt
@@ -182,8 +192,8 @@
          !--------------------------------------------------------------
          ! Remove ponds on thin ice
          !--------------------------------------------------------------
-            apondn(i,j) = c0
-            hpondn(i,j) = c0
+            apondn = c0
+            hpondn = c0
             volpn (i,j) = c0
 
          else
@@ -191,12 +201,11 @@
             !-----------------------------------------------------------
             ! Update pond volume
             !-----------------------------------------------------------
-            rfrac = 0.85_dbl_kind - 0.7_dbl_kind * aicen(i,j)
-
             volpn(i,j) = volpn(i,j) &
-                       + rfrac*(meltt(i,j)*rhoi/rhofresh &
-                       +        melts(i,j)*rhos/rhofresh &
-                       +        frain(i,j)*  dt/rhofresh)
+                       + rfrac(i,j)/rhofresh*(meltt(i,j)*rhoi &
+                       +                      melts(i,j)*rhos &
+                       +                      frain(i,j)*  dt)&
+                       * aicen(i,j)
 
             !-----------------------------------------------------------
             ! Shrink pond volume under freezing conditions
@@ -206,32 +215,45 @@
             volpn(i,j) = volpn(i,j) * exp(rexp*dTs/Tp)
             volpn(i,j) = max(volpn(i,j), c0)
 
-            apondn(i,j) = min (sqrt(volpn(i,j)/dpthfrac), c1)
-            hpondn(i,j) = dpthfrac * apondn(i,j)
+            ! fraction of ice covered by ponds
+            apondn = min (sqrt(volpn(i,j)/(dpthfrac*aicen(i,j))), c1)
+            hpondn = dpthfrac * apondn
+            ! fraction of grid cell covered by ponds
+            apondn = apondn * aicen(i,j)
 
             !-----------------------------------------------------------
             ! Limit pond depth
             !-----------------------------------------------------------
-             hpondn(i,j) = min(hpondn(i,j), dpthhi*hi)
-             volpn(i,j) = hpondn(i,j)*apondn(i,j)
-!             apondn(i,j) = min(volpn(i,j)/hpondn(i,j), c1)
+             hpondn = min(hpondn, dpthhi*hi)
+             volpn(i,j) = hpondn*apondn
 
             !-----------------------------------------------------------
             ! If surface is freezing or has snow, do not change albedo
             !-----------------------------------------------------------
-!            if (Tsfcn(i,j) < Tp) apondn(i,j) = c0
-            if (hs > puny) apondn(i,j) = c0
+!            if (Tsfcn(i,j) < Tp) apondn = c0
+!            if (hs > puny) apondn = c0
+
+            !-----------------------------------------------------------
+            ! reduce pond area if there is snow, preserving volume
+            !-----------------------------------------------------------
+!echmod - do this in ice_shortwave.F90
+!            if (hs >= hsmin) then
+!               asnow = min(hs/hs0, c1) ! delta-Eddington formulation
+!               apondn = (c1 - asnow) * apondn
+!            endif
 
             !-----------------------------------------------------------
             ! Reload tracer array
             !-----------------------------------------------------------
-            trcrn(i,j,nt_volpn) = volpn(i,j)
+            trcrn(i,j,nt_apnd) = apondn / aicen(i,j)
+            trcrn(i,j,nt_hpnd) = hpondn
+!            trcrn(i,j,nt_volp) = volpn(i,j) / aicen(i,j)
 
          endif
 
       enddo
 
-      end subroutine compute_ponds
+      end subroutine compute_ponds_rad
 
 !=======================================================================
 !
@@ -241,7 +263,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine write_restart_pond(filename_spec)
+      subroutine write_restart_pond_rad(filename_spec)
 !
 ! !DESCRIPTION:
 !
@@ -283,7 +305,8 @@
          
          write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
               restart_dir(1:lenstr(restart_dir)), &
-              restart_file(1:lenstr(restart_file)),'.volpn.', &
+!              restart_file(1:lenstr(restart_file)),'.volpn.', &
+              restart_file(1:lenstr(restart_file)),'.pond.', &
               iyear,'-',month,'-',mday,'-',sec
       end if
          
@@ -298,14 +321,14 @@
       diag = .true.
 
       do n = 1, ncat
-         call ice_write(nu_dump_pond,0,trcrn(:,:,nt_volpn,n,:),'ruf8',diag)
-         call ice_write(nu_dump_pond,0,apondn(:,:,n,:),'ruf8',diag)
-         call ice_write(nu_dump_pond,0,hpondn(:,:,n,:),'ruf8',diag)
+         call ice_write(nu_dump_pond,0,trcrn(:,:,nt_apnd,n,:),'ruf8',diag)
+!         call ice_write(nu_dump_pond,0,trcrn(:,:,nt_volp,n,:),'ruf8',diag)
+         call ice_write(nu_dump_pond,0,trcrn(:,:,nt_hpnd,n,:),'ruf8',diag)
       enddo
 
       if (my_task == master_task) close(nu_dump_pond)
 
-      end subroutine write_restart_pond
+      end subroutine write_restart_pond_rad
 
 !=======================================================================
 !BOP
@@ -314,7 +337,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine read_restart_pond(filename_spec)
+      subroutine read_restart_pond_rad(filename_spec)
 !
 ! !DESCRIPTION:
 !
@@ -356,12 +379,14 @@
 
          ! reconstruct path/file
          n = index(filename0,trim(restart_file))
-         if (n == 0) call abort_ice('volpn restart: filename discrepancy')
+!         if (n == 0) call abort_ice('volpn restart: filename discrepancy')
+         if (n == 0) call abort_ice('pond restart: filename discrepancy')
          string1 = trim(filename0(1:n-1))
          string2 = trim(filename0(n+lenstr(restart_file):lenstr(filename0)))
          write(filename,'(a,a,a,a)') &
             string1(1:lenstr(string1)), &
-            restart_file(1:lenstr(restart_file)),'.volpn', &
+!            restart_file(1:lenstr(restart_file)),'.volpn', &
+            restart_file(1:lenstr(restart_file)),'.pond', &
             string2(1:lenstr(string2))
       endif ! master_task
 
@@ -375,17 +400,17 @@
       diag = .true.
 
       do n = 1, ncat
-         call ice_read(nu_restart_pond,0,trcrn(:,:,nt_volpn,n,:),'ruf8',diag)
-         call ice_read(nu_restart_pond,0,apondn(:,:,n,:),'ruf8',diag)
-         call ice_read(nu_restart_pond,0,hpondn(:,:,n,:),'ruf8',diag)
+         call ice_read(nu_restart_pond,0,trcrn(:,:,nt_apnd,n,:),'ruf8',diag)
+!         call ice_read(nu_restart_pond,0,trcrn(:,:,nt_volp,n,:),'ruf8',diag)
+         call ice_read(nu_restart_pond,0,trcrn(:,:,nt_hpnd,n,:),'ruf8',diag)
       enddo
 
       if (my_task == master_task) close(nu_restart_pond)
 
-      end subroutine read_restart_pond
+      end subroutine read_restart_pond_rad
 
 !=======================================================================
 
-      end module ice_meltpond
+      end module ice_meltpond_rad
 
 !=======================================================================

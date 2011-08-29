@@ -47,7 +47,7 @@
       use ice_kinds_mod
       use ice_lvl
       use ice_mechred
-      use ice_meltpond
+      use ice_meltpond_rad
       use ice_ocean
       use ice_orbital
       use ice_shortwave
@@ -349,7 +349,7 @@
             call dumpfile ! core variables for restarting
             if (tr_iage) call write_restart_age
             if (tr_lvl)  call write_restart_lvl
-            if (tr_pond) call write_restart_pond
+            if (tr_pond) call write_restart_pond_rad
          endif
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 
@@ -423,7 +423,11 @@
          meltsn      , & ! snow melt in category n (m)
          congeln     , & ! congelation ice formation in category n (m)
          snoicen     , & ! snow-ice formation in category n (m)
-         vsnon_init      ! for aerosol mass budget
+         vsnon_init  , & ! for aerosol mass budget
+         rfrac           ! water fraction retained for melt ponds
+
+      real (kind=dbl_kind) :: &
+         pond            ! flux of water retained in ponds (kg/m^2/s)
 
       type (block) :: &
          this_block      ! block information for current block
@@ -689,14 +693,17 @@
       !-----------------------------------------------------------------
 
          if (tr_pond .and. trim(shortwave) == 'dEdd') then
+            call ice_timer_start(timer_ponds)
 
-            call compute_ponds(nx_block, ny_block,                      &
-                               ilo, ihi, jlo, jhi,                      &
-                               melttn, meltsn, frain(:,:,iblk),         &
-                               aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
-                               vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk),&
-                               apondn(:,:,n,iblk), hpondn(:,:,n,iblk))
+            rfrac(:,:) = 0.15_dbl_kind + 0.7_dbl_kind * aicen(:,:,n,iblk)
 
+            call compute_ponds_rad(nx_block, ny_block,                      &
+                                   ilo, ihi, jlo, jhi,                      &
+                                   rfrac, melttn, meltsn, frain(:,:,iblk),  &
+                                   aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
+                                   vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk))
+
+            call ice_timer_stop(timer_ponds)
          endif
 
       !-----------------------------------------------------------------
@@ -797,6 +804,7 @@
             albice(i,j,iblk) = c0
             albsno(i,j,iblk) = c0
             albpnd(i,j,iblk) = c0
+            apeff (i,j,iblk) = c0
 
             ! for history averaging
             cszn = c0
@@ -826,6 +834,9 @@
             albpnd(i,j,iblk) = albpnd(i,j,iblk) &
                + albpndn(i,j,n,iblk)*aicen(i,j,n,iblk)
             endif
+
+            apeff(i,j,iblk) = apeff(i,j,iblk) &       ! for history
+               + apeffn(i,j,n,iblk)*aicen(i,j,n,iblk)
          enddo
          enddo
          enddo

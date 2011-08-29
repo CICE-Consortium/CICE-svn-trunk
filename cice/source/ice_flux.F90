@@ -180,7 +180,8 @@
          ! components for history
          albice   , & ! bare ice albedo
          albsno   , & ! snow albedo
-         albpnd       ! melt pond albedo
+         albpnd   , & ! melt pond albedo
+         apeff        ! effective pond area used for radiation calculation
 
       real (kind=dbl_kind), &
          dimension(nx_block,ny_block,max_blocks,max_nstrm) :: &

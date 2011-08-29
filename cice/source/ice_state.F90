@@ -89,11 +89,6 @@
          vsnon     ! volume per unit area of snow         (m)
 
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,ncat,max_blocks) :: &
-         apondn , & ! concentration of ponds
-         hpondn     ! pond depth         (m)
-
-      real (kind=dbl_kind), &
          dimension (nx_block,ny_block,max_ntrcr,ncat,max_blocks) :: &
          trcrn     ! tracers
                    ! 1: surface temperature of ice/snow (C)
@@ -123,7 +118,9 @@
          nt_iage  , & ! volume-weighted ice age
          nt_alvl  , & ! level ice area fraction
          nt_vlvl  , & ! level ice volume fraction
-         nt_volpn , & ! melt pond volume
+!         nt_volp  , & ! melt pond volume
+         nt_hpnd  , & ! melt pond depth
+         nt_apnd  , & ! melt pond area fraction
          nt_aero      ! starting index for aerosols in ice
 
       logical (kind=log_kind) :: &
