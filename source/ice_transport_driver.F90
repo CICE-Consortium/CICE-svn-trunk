@@ -129,8 +129,10 @@
                                             ! 2 for snow volume tracers
              if (trcr_depend(nt) == 0) then
                 tracer_type(k+nt) = 1
-             elseif (trcr_depend(nt) > 2 .and. trcr_depend(trcr_depend(nt)-2) > 0) then
-                tracer_type(k+nt) = 3
+             elseif (trcr_depend(nt) > 2) then
+                if (trcr_depend(trcr_depend(nt)-2) > 0) then
+                   tracer_type(k+nt) = 3
+                endif
              else               ! trcr_depend = 1 or 2
                 tracer_type(k+nt) = 2
              endif
