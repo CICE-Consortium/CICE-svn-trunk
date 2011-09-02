@@ -53,7 +53,7 @@
          ntrace              ! number of tracers in use
                           
       integer (kind=int_kind), dimension(:), allocatable ::             &
-         tracer_type       ,&! = 1, 2, or 3 (see comments below)
+         tracer_type       ,&! = 1, 2, or 3 (depends on 0, 1 or 2 other tracers)
          depend              ! tracer dependencies (see below)
 
       logical (kind=log_kind), dimension (:), allocatable ::             &
@@ -127,14 +127,13 @@
              depend(k+nt) = trcr_depend(nt) ! 0 for ice area tracers
                                             ! 1 for ice volume tracers
                                             ! 2 for snow volume tracers
+             tracer_type(k+nt) = 2          ! depends on 1 other tracer
              if (trcr_depend(nt) == 0) then
-                tracer_type(k+nt) = 1
+                tracer_type(k+nt) = 1       ! depends on no other tracers
              elseif (trcr_depend(nt) > 2) then
                 if (trcr_depend(trcr_depend(nt)-2) > 0) then
-                   tracer_type(k+nt) = 3
+                   tracer_type(k+nt) = 3    ! depends on 2 other tracers
                 endif
-             else               ! trcr_depend = 1 or 2
-                tracer_type(k+nt) = 2
              endif
           enddo
 
