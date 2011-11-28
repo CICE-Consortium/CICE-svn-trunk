@@ -3535,8 +3535,8 @@
               imonth,'-',iday,'-',isec,'.',suffix
         else
 
-         if (hist_avg) then
-          if (histfreq(ns).eq.'h'.or.histfreq(ns).eq.'H') then
+         if (hist_avg .and. histfreq(ns) /= '1') then
+          if (histfreq(ns) == 'h'.or.histfreq(ns) == 'H') then
            ! do nothing
           elseif (new_year) then
            iyear = iyear - 1
@@ -3557,19 +3557,19 @@
 
          elseif (hist_avg) then    ! write averaged data
 
-          if (histfreq(ns).eq.'d'.or.histfreq(ns).eq.'D') then     ! daily
+          if (histfreq(ns) == 'd'.or.histfreq(ns) == 'D') then     ! daily
            write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,a)')  &
             history_file(1:lenstr(history_file)), &
              '.',iyear,'-',imonth,'-',iday,'.',suffix
-          elseif (histfreq(ns).eq.'h'.or.histfreq(ns).eq.'H') then ! hourly
+          elseif (histfreq(ns) == 'h'.or.histfreq(ns) == 'H') then ! hourly
            write(ncfile,'(a,a,i2.2,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
             history_file(1:lenstr(history_file)),'_',histfreq_n(ns),'h.', &
              iyear,'-',imonth,'-',iday,'-',sec,'.',suffix
-          elseif (histfreq(ns).eq.'m'.or.histfreq(ns).eq.'M') then ! monthly
+          elseif (histfreq(ns) == 'm'.or.histfreq(ns) == 'M') then ! monthly
            write(ncfile,'(a,a,i4.4,a,i2.2,a,a)')  &
             history_file(1:lenstr(history_file)),'.', &
              iyear,'-',imonth,'.',suffix
-          elseif (histfreq(ns).eq.'y'.or.histfreq(ns).eq.'Y') then ! yearly
+          elseif (histfreq(ns) == 'y'.or.histfreq(ns) == 'Y') then ! yearly
            write(ncfile,'(a,a,i4.4,a,a)') &
             history_file(1:lenstr(history_file)),'.', iyear,'.',suffix
           endif
