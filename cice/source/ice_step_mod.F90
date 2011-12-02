@@ -301,14 +301,14 @@
 
          call ice_timer_start(timer_catconv)    ! category conversions
 
-         if (kitd == 1) then
       !-----------------------------------------------------------------
       ! Compute fractional ice area in each grid cell.
       !-----------------------------------------------------------------
-            call aggregate_area (nx_block,          ny_block, &
-                                 aicen(:,:,:,iblk),           &
-                                 aice (:,:,  iblk), aice0(:,:,iblk))
+         call aggregate_area (nx_block,          ny_block, &
+                              aicen(:,:,:,iblk),           &
+                              aice (:,:,  iblk), aice0(:,:,iblk))
 
+         if (kitd == 1) then
       !-----------------------------------------------------------------
       ! Identify grid cells with ice.
       !-----------------------------------------------------------------
@@ -467,7 +467,7 @@
                  write(nu_diag,*) 'Global i and j:', &
                                   this_block%i_glob(istop), &
                                   this_block%j_glob(jstop) 
-            call abort_ice ('ice: ITD cleanup error')
+            call abort_ice ('ice: ITD cleanup error in step_therm2')
          endif
 
       enddo                     ! iblk
@@ -693,7 +693,7 @@
                  write(nu_diag,*) 'Global i and j:', &
                                   this_block%i_glob(istop), &
                                   this_block%j_glob(jstop) 
-            call abort_ice ('ice: ITD cleanup error')
+            call abort_ice ('ice: ITD cleanup error in step_dynamics')
          endif
 
       enddo                     ! iblk

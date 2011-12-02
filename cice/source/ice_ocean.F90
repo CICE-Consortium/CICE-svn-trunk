@@ -138,7 +138,7 @@
 
          if (trim(atmbndy) == 'constant') then
             call atmo_boundary_const (nx_block,  ny_block,   &
-                                      'ice',     icells,     &
+                                      'ocn',     icells,     &
                                       indxi,     indxj,      &
                                       uatm       (:,:,iblk), &   
                                       vatm       (:,:,iblk), &   
@@ -146,8 +146,14 @@
                                       rhoa       (:,:,iblk), &
                                       strairx_ocn(:,:,iblk), & 
                                       strairy_ocn(:,:,iblk), & 
+                                      sst        (:,:,iblk), &    
+                                      potT       (:,:,iblk), &
+                                      Qa         (:,:,iblk), &     
+                                      delt       (:,:),      &    
+                                      delq       (:,:),      &
                                       lhcoef     (:,:),      &
                                       shcoef     (:,:) )
+
          else ! default
             call atmo_boundary_layer (nx_block,  ny_block,   &
                                       'ocn',     icells,     &

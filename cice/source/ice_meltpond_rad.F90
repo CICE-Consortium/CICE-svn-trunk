@@ -152,7 +152,6 @@
          hpondn   
 
       real (kind=dbl_kind), parameter :: &
-         hicemin  = hi_min      , & ! minimum ice thickness with ponds (m)
          Td       = c2          , & ! temperature difference for freeze-up (C)
          rexp     = p01         , & ! pond contraction scaling
          dpthhi   = 0.9_dbl_kind, & ! ratio of pond depth to ice thickness
@@ -187,7 +186,7 @@
          hi = vicen(i,j)/aicen(i,j)
          hs = vsnon(i,j)/aicen(i,j)
 
-         if (hi < hicemin) then
+         if (hi < hi_min) then
 
          !--------------------------------------------------------------
          ! Remove ponds on thin ice

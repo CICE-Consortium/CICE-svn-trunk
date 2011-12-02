@@ -445,6 +445,9 @@
                                     uatm(:,:,iblk), vatm(:,:,iblk), &
                                     wind(:,:,iblk), rhoa(:,:,iblk), &
                                     strairxn,       strairyn,       &
+                                    trcrn(:,:,nt_Tsfc,n,iblk),      &
+                                    potT(:,:,iblk), Qa  (:,:,iblk), &
+                                    worka,          workb,          &
                                     lhcoef,         shcoef)
                else ! default
                    call atmo_boundary_layer & 
@@ -801,7 +804,8 @@
                             fhocn    (:,:,iblk), fswthru (:,:,iblk), &
                             faero_ocn    (:,:,:,iblk),               &
                             alvdr    (:,:,iblk), alidr   (:,:,iblk), &
-                            alvdf    (:,:,iblk), alidf   (:,:,iblk))
+                            alvdf    (:,:,iblk), alidf   (:,:,iblk), &
+                            fsurf    (:,:,iblk), fcondtop(:,:,iblk) )
 
          if (.not. calc_Tsfc) then
 
@@ -894,7 +898,7 @@
          extreme_flag    ! flag for extreme forcing values
 
       logical (kind=log_kind), parameter :: & 
-         extreme_test=.true. ! test and write out extreme forcing data
+         extreme_test=.false. ! test and write out extreme forcing data
 !
 !EOP
 !

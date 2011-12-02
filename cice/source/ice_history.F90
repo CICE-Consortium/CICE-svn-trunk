@@ -1495,8 +1495,9 @@
       use ice_blocks
       use ice_domain
       use ice_grid, only: tmask, lmask_n, lmask_s
-      use ice_calendar, only: new_year, secday, yday, write_history, &
-                              write_ic, time, histfreq, nstreams
+      use ice_calendar, only: new_year, secday, write_history, &
+                              write_ic, time, histfreq, nstreams, month, &
+                              new_month
       use ice_state
       use ice_constants
       use ice_dyn_evp
@@ -2190,8 +2191,7 @@
             enddo
          endif                  ! new_year
 
-         if ((yday >= 181._dbl_kind) .and. &
-             (yday <  181._dbl_kind+dt/secday)) then
+         if ( (month .eq. 7) .and. new_month ) then 
 
             do j=jlo,jhi
             do i=ilo,ihi
@@ -2204,7 +2204,7 @@
             enddo
             enddo
 
-         endif                  ! yday
+         endif                  ! 1st of July
       enddo                     ! iblk
 
       end subroutine ice_write_hist
@@ -2239,7 +2239,7 @@
       use ice_calendar, only: time, sec, idate, idate0, nyr, month, &
                               mday, write_ic, histfreq, histfreq_n, &
                               year_init, new_year, new_month, new_day, &
-                              dayyr, daymo, days_per_year
+                              dayyr, daymo, days_per_year, use_leap_years
       use ice_work, only: work_g1, work_gr, work_gr3, work1
       use ice_restart, only: lenstr, runid
       use ice_domain, only: distrb_info
@@ -2380,10 +2380,16 @@
            status = nf90_put_att(ncid,varid,'calendar','360_day')
            if (status /= nf90_noerr) call abort_ice( &
                          'ice Error: time calendar')
-        else
-           status = nf90_put_att(ncid,varid,'calendar','noleap')
+        elseif (days_per_year == 365 .and. .not.use_leap_years ) then
+           status = nf90_put_att(ncid,varid,'calendar','NoLeap')
            if (status /= nf90_noerr) call abort_ice( &
                          'ice Error: time calendar')
+        elseif (use_leap_years) then
+           status = nf90_put_att(ncid,varid,'calendar','Gregorian')
+           if (status /= nf90_noerr) call abort_ice( &
+                         'ice Error: time calendar')
+        else
+           call abort_ice( 'ice Error: invalid calendar settings')
         endif
 
         if (hist_avg) then
@@ -2865,7 +2871,11 @@
         if (status /= nf90_noerr) call abort_ice( &
                       'ice Error: global attribute source')
 
-        write(title,'(a,i3,a)') 'All years have exactly ',int(dayyr),' days'
+        if (use_leap_years) then
+          write(title,'(a,i3,a)') 'This year has ',int(dayyr),' days'
+        else
+          write(title,'(a,i3,a)') 'All years have exactly ',int(dayyr),' days'
+        endif
         status = nf90_put_att(ncid,nf90_global,'comment',title)
         if (status /= nf90_noerr) call abort_ice( &
                       'ice Error: global attribute comment')
@@ -3303,7 +3313,7 @@
       use ice_grid
       use ice_restart, only: lenstr, runid
       use ice_itd, only: c_hi_range
-      use ice_calendar, only: write_ic, dayyr, histfreq
+      use ice_calendar, only: write_ic, dayyr, histfreq, use_leap_years
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -3349,8 +3359,13 @@
 #ifdef CCSMCOUPLED
         write (nu_hdr, 999) 'runid',runid,' '
 #endif
-        write (nu_hdr, 999) 'calendar','noleap',' '
-        write (title,'(a,i3,a)') 'All years have exactly ',int(dayyr),' days'
+        if (use_leap_years) then
+           write (nu_hdr, 999) 'calendar','Gregorian',' '
+           write (title,'(a,i3,a)') 'This year has ',int(dayyr),' days'
+        else
+           write (nu_hdr, 999) 'calendar','noleap',' '
+           write (title,'(a,i3,a)') 'All years have exactly ',int(dayyr),' days'
+        end if
         write (nu_hdr, 999) 'comment',title,' '
         write (nu_hdr, 999) 'conventions','CICE',' '
         write (nu_hdr, 997) 'missing_value',spval

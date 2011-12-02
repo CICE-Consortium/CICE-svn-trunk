@@ -48,6 +48,9 @@
       use ice_communicate, only: my_task, master_task
       use ice_domain_size
       use ice_constants
+#ifdef CICE_IN_NEMO
+      use ice_atmo, only: calc_strair
+#endif
 !
 !EOP
 !
@@ -108,9 +111,10 @@
 !
 #ifdef CICE_IN_NEMO
 ! Wind stress is set during this routine from the values supplied
-! via NEMO.  These values are supplied rotated on u grid and 
-! multiplied by aice.  strairxT = 0 in this case so operations in
-! evp_prep1 are pointless but carried out to minimise code changes.
+! via NEMO (unless calc_strair is true).  These values are supplied 
+! rotated on u grid and multiplied by aice.  strairxT = 0 in this 
+! case so operations in evp_prep1 are pointless but carried out to 
+! minimise code changes.
 #endif
 !
 ! !REVISION HISTORY:
@@ -244,12 +248,15 @@
       ! Set wind stress to values supplied via NEMO
       ! This wind stress is rotated on u grid and multiplied by aice
       !----------------------------------------------------------------
-       
-      strairx(:,:,:) = strax(:,:,:)
-      strairy(:,:,:) = stray(:,:,:)
-#else
+      if (.not. calc_strair) then       
+         strairx(:,:,:) = strax(:,:,:)
+         strairy(:,:,:) = stray(:,:,:)
+      else
+#endif
       call t2ugrid_vector(strairx)
       call t2ugrid_vector(strairy)
+#ifdef CICE_IN_NEMO
+      endif      
 #endif
 
       do iblk = 1, nblocks
