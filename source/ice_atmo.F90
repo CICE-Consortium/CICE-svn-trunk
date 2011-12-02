@@ -385,6 +385,9 @@
                                       uatm,     vatm,     &  
                                       wind,     rhoa,     &
                                       strx,     stry,     &   
+                                      Tsf,      potT,     &
+                                      Qa,                 &
+                                      delt,     delq,     &
                                       lhcoef,   shcoef)
 
 ! !DESCRIPTION:
@@ -412,6 +415,9 @@
          sfctype      ! ice or ocean
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         Tsf      , & ! surface temperature of ice or ocean
+         potT     , & ! air potential temperature  (K)
+         Qa       , & ! specific humidity (kg/kg)
          uatm     , & ! x-direction wind speed (m/s)
          vatm     , & ! y-direction wind speed (m/s)
          wind     , & ! wind speed (m/s)
@@ -422,6 +428,8 @@
          stry         ! y surface stress (N)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
+         delt     , & ! potential T difference   (K)
+         delq     , & ! humidity difference      (kg/kg)
          shcoef   , & ! transfer coefficient for sensible heat
          lhcoef       ! transfer coefficient for latent heat
 !
@@ -432,6 +440,9 @@
          ij      ! combined ij index
 
       real (kind=dbl_kind) :: &
+         TsfK, & ! surface temperature in Kelvin (K)
+         qsat, & ! the saturation humidity of air (kg/m^3)
+         ssq , & ! sat surface humidity     (kg/kg)
          tau, &  ! stress at zlvl
          Lheat   ! Lvap or Lsub, depending on surface type
 
@@ -441,6 +452,8 @@
 
       do j = 1, ny_block
       do i = 1, nx_block
+         delt(i,j) = c0
+         delq(i,j) = c0
          shcoef(i,j) = c0
          lhcoef(i,j) = c0
       enddo
@@ -492,6 +505,17 @@
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
+
+      !------------------------------------------------------------
+      ! potential temperature and specific humidity differences
+      !------------------------------------------------------------
+
+         TsfK     = Tsf(i,j) + Tffresh    ! surface temp (K)
+         qsat     = qqqocn * exp(-TTTocn/TsfK) ! sat humidity (kg/m^3)
+         ssq      = qsat / rhoa(i,j)      ! sat surf hum (kg/kg)
+
+         delt(i,j)= potT(i,j) - TsfK      ! pot temp diff (K)
+         delq(i,j)= Qa(i,j) - ssq         ! spec hum dif (kg/kg)
 
       !------------------------------------------------------------
       ! coefficients for turbulent flux calculation

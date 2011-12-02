@@ -1,5 +1,6 @@
 &setup_nml
     days_per_year  = 365
+  , use_leap_years = .false.
   , year_init      = 1981
   , istep0         = 5832
   , dt             = 3600.0
@@ -13,6 +14,7 @@
   , pointer_file   = './restart/ice.restart_file'
   , dumpfreq       = 'y'
   , dumpfreq_n     = 1
+  , dump_last      = .false.
   , diagfreq       = 24
   , diag_type      = 'stdout'
   , diag_file      = 'ice_diag.d'

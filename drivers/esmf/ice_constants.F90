@@ -132,10 +132,12 @@
         c16  = 16.0_dbl_kind, &
         c20  = 20.0_dbl_kind, &
         c25  = 25.0_dbl_kind, &
+	c30  = 30.0_dbl_kind, &
         c100 = 100.0_dbl_kind, &
         c180 = 180.0_dbl_kind, &
         c360 = 360.0_dbl_kind, &
         c365 = 365.0_dbl_kind, &
+	c400 = 400.0_dbl_kind, &
         c3600= 3600.0_dbl_kind, &
         c1000= 1000.0_dbl_kind, &
         p001 = 0.001_dbl_kind, &
@@ -163,6 +165,10 @@
         bignum = 1.0e+30_dbl_kind, &
         pih    = p5*pi, &
         pi2    = c2*pi
+	days_per_4c = 146097.0_dbl_kind, &
+	days_per_c  = 36524.0_dbl_kind,  &
+	days_per_4y = 1461.0_dbl_kind,   &
+	days_per_y  = 365.0_dbl_kind
 
       !-----------------------------------------------------------------
       ! location of fields for staggered grids

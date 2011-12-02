@@ -45,6 +45,19 @@ endif
 @ m = $a / $b ; setenv MXBLCKS $m ; if ($MXBLCKS == 0) setenv MXBLCKS 1
 #setenv MXBLCKS 37 # if necessary (code will print proper value)
 
+### Layers and categories
+setenv NICELYR 4          # number of vertical layers in the ice
+setenv NSNWLYR 1          # number of vertical layers in the snow
+setenv NICECAT 5          # number of ice thickness categories
+
+### Tracers               # match ice_in tracer_nml to conserve memory
+setenv TRAGE   1          # set to 1 for ice age tracer
+setenv TRLVL   0          # set to 1 for level and deformed ice tracers
+setenv TRPND   0          # set to 1 for melt pond tracers
+setenv NTRAERO 0          # number of aerosol tracers 
+                          # (up to max_aero in ice_domain_size.F90) 
+                          # CESM uses 3 aerosol tracers
+
 ### Specialty code
 setenv USE_ESMF no        # set to yes for ESMF runs
 setenv CAM_ICE  no        # set to yes for CAM runs (single column) 

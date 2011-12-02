@@ -25,7 +25,10 @@ LD         := $(FC)
 LDFLAGS    := $(FFLAGS) -v
 
     CPPDEFS :=  $(CPPDEFS) -DNXGLOB=$(NXGLOB) -DNYGLOB=$(NYGLOB) \
-                -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS)
+                -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS) \
+                -DNICELYR=$(NICELYR) -DNSNWLYR=$(NSNWLYR) -DNICECAT=$(NICECAT) \
+                -DTRAGE=$(TRAGE) -DTRLVL=$(TRLVL) -DTRPND=$(TRPND) \
+                -DNTRAERO=$(NTRAERO)
 #   CPPDEFS :=  $(CPPDEFS) -DAOMIP
 
 ifeq ($(DITTO), yes)

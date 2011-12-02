@@ -60,8 +60,8 @@
          slyr1 (ncat), & ! array position of top snow layer in each cat
          slyrn (ncat)    ! array position of bottom snow layer in each cat
 
-      real (kind=dbl_kind), parameter :: &
-         hi_min = p01    ! minimum ice thickness allowed (m)
+      real (kind=dbl_kind) :: &
+         hi_min          ! minimum ice thickness allowed (m)
 
       real (kind=dbl_kind) :: &
          hin_max(0:ncat) ! category limits (m)
@@ -133,8 +133,11 @@
       d1 = 3.0_dbl_kind / rncat
       d2 = 0.5_dbl_kind / rncat
 
+      hi_min = p01    ! minimum ice thickness allowed (m) for thermo
+                      ! note hi_min is reset to 0.1 for kitd=0, below
+
       !-----------------------------------------------------------------
-      ! Choose category boundaries based on one of three options.
+      ! Choose category boundaries based on one of four options.
       !
       ! The first formula (kcatbound = 0) was used in Lipscomb (2001) 
       !  and in CICE versions 3.0 and 3.1.
@@ -157,9 +160,16 @@
       ! For ncat = 5,  boundaries are         30, 70, 120, 200, >200 cm.
       ! For ncat = 6,  boundaries are     15, 30, 70, 120, 200, >200 cm.
       ! For ncat = 7,  boundaries are 10, 15, 30, 70, 120, 200, >200 cm.
+      !
+      ! kcatbound=-1 is available only for 1-category runs, with
+      ! boundaries 0 and 100 m.
       !-----------------------------------------------------------------
 
-      if (kcatbound == 0) then   ! original scheme
+      if (kcatbound == -1) then ! single category
+         hin_max(0) = c0
+         hin_max(1) = c100
+
+      elseif (kcatbound == 0) then   ! original scheme
 
          if (kitd == 1) then
             ! linear remapping itd category limits
@@ -170,6 +180,7 @@
             hin_max(0) = c0     ! minimum ice thickness, m
          else
             ! delta function itd category limits
+            hi_min = p1    ! minimum ice thickness allowed (m) for thermo
             cc1 = max(1.1_dbl_kind/rncat,c1*hi_min)
             cc2 = c25*cc1
             cc3 = 2.25_dbl_kind
@@ -225,7 +236,7 @@
             hin_max(n) = wmo7(n)
          enddo
        else
-         write (nu_diag,*) 'kcatbound=3 (WMO) must have ncat=5, 6 or 7'
+         write (nu_diag,*) 'kcatbound=2 (WMO) must have ncat=5, 6 or 7'
          stop
        endif
 

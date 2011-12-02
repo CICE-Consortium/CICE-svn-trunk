@@ -69,7 +69,8 @@
       use ice_fileunits
       use ice_calendar, only: year_init, istep0, histfreq, histfreq_n, &
                               dumpfreq, dumpfreq_n, diagfreq, nstreams, &
-                              npt, dt, ndyn_dt, days_per_year, write_ic
+                              npt, dt, ndyn_dt, days_per_year, use_leap_years, &
+                              write_ic, dump_last
       use ice_restart, only: &
           restart, restart_dir, restart_file, pointer_file, &
           runid, runtype
@@ -120,11 +121,11 @@
       !-----------------------------------------------------------------
 
       namelist /setup_nml/ &
-        days_per_year,  year_init,      istep0,          dt,            &
-        npt,            ndyn_dt,                                        &
+        days_per_year,  use_leap_years, year_init,       istep0,        &
+        dt,             npt,            ndyn_dt,                        &
         runtype,        runid,                                          &
         ice_ic,         restart,        restart_dir,     restart_file,  &
-        pointer_file,   dumpfreq,       dumpfreq_n,                     &
+        pointer_file,   dumpfreq,       dumpfreq_n,      dump_last,     &
         diagfreq,       diag_type,      diag_file,                      &
         print_global,   print_points,   latpnt,          lonpnt,        &
         dbug,           histfreq,       histfreq_n,      hist_avg,      &
@@ -161,6 +162,7 @@
       !-----------------------------------------------------------------
 
       days_per_year = 365    ! number of days in a year
+      use_leap_years= .false.! if true, use leap years (Feb 29)
       year_init = 0          ! initial year
       istep0 = 0             ! no. of steps taken in previous integrations,
                              ! real (dumped) or imagined (to set calendar)
@@ -186,6 +188,7 @@
       incond_file = 'iceh_ic'! file prefix
       dumpfreq='y'           ! restart frequency option
       dumpfreq_n = 1         ! restart frequency
+      dump_last = .false.    ! write restart on last time step
       restart = .false.      ! if true, read restart files for initialization
       restart_dir  = ' '     ! write to executable dir for default
       restart_file = 'iced'  ! restart file name prefix
@@ -197,7 +200,7 @@
       kmt_file     = 'unknown_kmt_file'
 
       kitd = 1           ! type of itd conversions (0 = delta, 1 = linear)
-      kcatbound = 1      ! category boundary formula (0 = old, 1 = new)
+      kcatbound = 1      ! category boundary formula (0 = old, 1 = new, etc)
       kdyn = 1           ! type of dynamics (1 = evp)
       ndyn_dt = 1        ! dynamic time steps per thermodynamic time step
       ndte = 120         ! subcycles per dynamics timestep:  ndte=dyn_dt/dte
@@ -355,9 +358,21 @@
       if (chartmp /= 'upwind' .and. chartmp /= 'remap ') advection = 'remap'
 
       if (ncat == 1 .and. kitd == 1) then
-         write (nu_diag,*) 'Remapping the ITD is not allowed for ncat=1'
-         write (nu_diag,*) 'Using the delta function ITD option instead'
-         kitd = 0
+         write (nu_diag,*) 'Remapping the ITD is not allowed for ncat=1.'
+         write (nu_diag,*) 'Use kitd = 0 (delta function ITD) with kcatbound = 0'
+         write (nu_diag,*) 'or for column configurations use kcatbound = -1'
+         call abort_ice('ncat=1 and kitd=1')
+      endif
+
+      if (ncat /= 1 .and. kcatbound == -1) then
+         if (my_task == master_task) then
+            write (nu_diag,*) &
+               'WARNING: ITD required for ncat > 1'
+            write (nu_diag,*) &
+               'WARNING: Setting kitd and kcatbound to default values'
+         endif
+         kitd = 1
+         kcatbound = 0
       endif
 
       if (trim(atm_data_type) == 'monthly' .and. calc_strair) &
@@ -374,6 +389,7 @@
       endif
 
       call broadcast_scalar(days_per_year,      master_task)
+      call broadcast_scalar(use_leap_years,     master_task)
       call broadcast_scalar(year_init,          master_task)
       call broadcast_scalar(istep0,             master_task)
       call broadcast_scalar(dt,                 master_task)
@@ -396,6 +412,7 @@
       call broadcast_scalar(incond_file,        master_task)
       call broadcast_scalar(dumpfreq,           master_task)
       call broadcast_scalar(dumpfreq_n,         master_task)
+      call broadcast_scalar(dump_last,          master_task)
       call broadcast_scalar(restart_file,       master_task)
       call broadcast_scalar(restart,            master_task)
       call broadcast_scalar(restart_dir,        master_task)
@@ -483,6 +500,7 @@
          write(nu_diag,1030) ' runtype                   = ', &
                                trim(runtype)
          write(nu_diag,1020) ' days_per_year             = ', days_per_year
+         write(nu_diag,1010) ' use_leap_years            = ', use_leap_years
          write(nu_diag,1020) ' year_init                 = ', year_init
          write(nu_diag,1020) ' istep0                    = ', istep0
          write(nu_diag,1000) ' dt                        = ', dt
@@ -507,6 +525,7 @@
          write(nu_diag,1030) ' dumpfreq                  = ', &
                                trim(dumpfreq)
          write(nu_diag,1020) ' dumpfreq_n                = ', dumpfreq_n
+         write(nu_diag,1010) ' dump_last                 = ', dump_last
          write(nu_diag,1010) ' restart                   = ', restart
          write(nu_diag,*)    ' restart_dir               = ', &
                                trim(restart_dir)

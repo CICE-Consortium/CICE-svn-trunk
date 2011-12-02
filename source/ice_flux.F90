@@ -798,7 +798,8 @@
                                fhocn,    fswthru,  &
                                faero_ocn,          &
                                alvdr,    alidr,    &
-                               alvdf,    alidf)
+                               alvdf,    alidf,    &
+                               fsurf,    fcondtop )
 !
 ! !REVISION HISTORY:
 !
@@ -846,6 +847,12 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
           intent(inout):: &
           faero_ocn   ! aersol flux to ocean            (kg/m2/s)
+
+      ! For hadgem drivers. Assumes either both fields are passed or neither
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+          intent(inout), optional :: &
+          fsurf   , & ! surface heat flux               (W/m**2)
+          fcondtop    ! top surface conductive flux     (W/m**2)
 !
 !EOP
 !
@@ -903,6 +910,27 @@
          endif                  ! tmask and aice > 0
       enddo                     ! i
       enddo                     ! j
+
+      ! Scale fluxes for history output
+      if (present(fsurf) .and. present(fcondtop) ) then 
+     
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+        do j = 1, ny_block
+        do i = 1, nx_block
+           if (tmask(i,j) .and. aice(i,j) > c0) then
+              ar = c1 / aice(i,j)
+              fsurf   (i,j) = fsurf   (i,j) * ar
+              fcondtop(i,j) = fcondtop(i,j) * ar
+           else                   ! zero out fluxes
+              fsurf   (i,j) = c0
+              fcondtop(i,j) = c0
+           endif                  ! tmask and aice > 0
+        enddo                     ! i
+        enddo                     ! j
+      
+      endif                       ! present(fsurf & fcondtop)
       
       end subroutine scale_fluxes
 

@@ -415,6 +415,9 @@
                                     uatm(:,:,iblk), vatm(:,:,iblk), &
                                     wind(:,:,iblk), rhoa(:,:,iblk), &
                                     strairxn,       strairyn,       &
+                                    trcrn(:,:,nt_Tsfc,n,iblk),      &
+                                    potT(:,:,iblk), Qa  (:,:,iblk), &
+                                    worka,          workb,          &
                                     lhcoef,         shcoef)
                else ! default
                    call atmo_boundary_layer & 

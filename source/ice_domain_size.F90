@@ -34,16 +34,19 @@
       integer (kind=int_kind), parameter :: &
         nx_global = NXGLOB    , & ! i-axis size
         ny_global = NYGLOB    , & ! j-axis size
-        ncat      =   5       , & ! number of categories
-        nilyr     =   4       , & ! number of ice layers per category
+        ncat      = NICECAT   , & ! number of categories
+        nilyr     = NICELYR   , & ! number of ice layers per category
         ntilyr    = ncat*nilyr, & ! number of ice layers in all categories
-        nslyr     =   1       , & ! number of snow layers per category
+        nslyr     = NSNWLYR   , & ! number of snow layers per category
         ntslyr    = ncat*nslyr, & ! number of snow layers in all categories
         max_aero  =   6       , & ! maximum number of aerosols 
-        n_aero    =   3       , & ! number of aerosols in use
-        max_ntrcr =             & ! number of tracers (defined in ice_init)
-                      1         & ! 1 = surface temperature
-                  +   2         & ! number of ice, snow tracers excl. aero
+        n_aero    = NTRAERO   , & ! number of aerosols in use
+                                  ! number of tracers (defined in ice_init)
+        max_ntrcr =   1         & ! 1 = surface temperature              
+                              !!!!! optional tracers:
+                  + TRAGE       & ! age
+                  + TRLVL*2     & ! level/deformed ice
+                  + TRPND       & ! ponds
                   + n_aero*4  , & ! number of aerosols * 4 aero layers
         max_nstrm =   5           ! max number of history output streams
 
