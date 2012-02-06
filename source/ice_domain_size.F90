@@ -46,7 +46,7 @@
                               !!!!! optional tracers:
                   + TRAGE       & ! age
                   + TRLVL*2     & ! level/deformed ice
-                  + TRPND       & ! ponds
+                  + TRPND*3     & ! ponds
                   + n_aero*4  , & ! number of aerosols * 4 aero layers
         max_nstrm =   5           ! max number of history output streams
 

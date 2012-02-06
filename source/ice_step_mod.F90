@@ -40,7 +40,8 @@
       use ice_itd
       use ice_kinds_mod
       use ice_mechred
-      use ice_meltpond_rad
+      use ice_meltpond_cesm
+      use ice_meltpond_lvl
       use ice_ocean
       use ice_orbital
       use ice_shortwave
@@ -788,19 +789,6 @@
 
       integer (kind=int_kind), dimension(nx_block*ny_block) :: &
          indxi, indxj    ! indirect indices for cells with aicen > puny
-
-      ! snow variables for Delta-Eddington shortwave
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         fsn             ! snow horizontal fraction
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr) :: &
-         rhosnwn     , & ! snow density (kg/m3)
-         rsnwn           ! snow grain radius (micrometers)
-
-      ! pond variables for Delta-Eddington shortwave
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         fpn         , & ! pond fraction
-         hpn             ! pond depth (m)
 
       type (block) :: &
          this_block      ! block information for current block

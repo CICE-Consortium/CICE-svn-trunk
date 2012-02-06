@@ -118,15 +118,17 @@
          nt_iage  , & ! volume-weighted ice age
          nt_alvl  , & ! level ice area fraction
          nt_vlvl  , & ! level ice volume fraction
-!         nt_volp  , & ! melt pond volume
-         nt_hpnd  , & ! melt pond depth
          nt_apnd  , & ! melt pond area fraction
+         nt_hpnd  , & ! melt pond depth
+         nt_ipnd  , & ! melt pond refrozen lid thickness
          nt_aero      ! starting index for aerosols in ice
 
       logical (kind=log_kind) :: &
          tr_iage,   & ! if .true., use age tracer
          tr_lvl,    & ! if .true., use level ice tracer
          tr_pond,   & ! if .true., use melt pond tracer
+         tr_pond_cesm,& ! if .true., use cesm pond tracer
+         tr_pond_lvl, & ! if .true., use level-ice pond tracer
          tr_aero      ! if .true., use aerosol tracers
 
       !-----------------------------------------------------------------

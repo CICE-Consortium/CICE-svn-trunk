@@ -145,6 +145,7 @@
       use ice_flux
       use ice_grid
       use ice_itd
+      use ice_meltpond_lvl
       use ice_orbital
       use ice_state
 !
@@ -1045,6 +1046,7 @@
 ! !REVISION HISTORY:
 !
 ! author:  Bruce P. Briegleb, NCAR
+! 2011 ECH modified for melt pond tracers
 !
 ! !USES:
 !
@@ -1055,7 +1057,8 @@
       use ice_flux
       use ice_grid
       use ice_itd
-      use ice_meltpond_rad
+      use ice_meltpond_cesm
+      use ice_meltpond_lvl
       use ice_orbital
       use ice_state
 !
@@ -1074,7 +1077,8 @@
       ! other local variables
       ! snow variables for Delta-Eddington shortwave
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         fsn             ! snow horizontal fraction
+         fsn         , & ! snow horizontal fraction
+         hsn             ! snow depth (m)
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr) :: &
          rhosnwn     , & ! snow density (kg/m3)
          rsnwn           ! snow grain radius (micrometers)
@@ -1082,7 +1086,7 @@
       ! pond variables for Delta-Eddington shortwave
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          fpn         , & ! pond fraction of ice cover
-         hpn             ! pond depth (m)
+         hpn             ! actual pond depth (m)
 
       integer (kind=int_kind) :: &
          i, j, ij    , & ! horizontal indices
@@ -1092,12 +1096,19 @@
          il1, il2    , & ! ice layer indices for eice
          sl1, sl2        ! snow layer indices for esno
 
+      real (kind=dbl_kind) :: &
+         ipn         , & ! refrozen pond ice thickness (m), mean over ice fraction
+         hp          , & ! pond depth
+         hs          , & ! snow depth
+         asnow       , & ! fractional area of snow cover
+         rp          , & ! volume fraction of retained melt water to total liquid content
+         hmx         , & ! maximum available snow infiltration equivalent depth
+         dhs         , & ! local difference in snow depth on sea ice and pond ice
+         spn         , & ! snow depth on refrozen pond (m)
+         tmp             ! 0 or 1
+
       type (block) :: &
          this_block      ! block information for current block
-
-      real (kind=dbl_kind) :: & 
-         hs   , & ! snow depth
-         asnow    ! fractional area of snow cover
 
       real (kind=dbl_kind), parameter :: & 
          argmax = c10      ! maximum argument of exponential
@@ -1156,11 +1167,11 @@
                               icells,                                  &
                               indxi,               indxj,              &
                               aicen(:,:,n,iblk),   vsnon(:,:,n,iblk),  &
-                              trcrn(:,:,nt_Tsfc,n,iblk), fsn,          &
+                              trcrn(:,:,nt_Tsfc,n,iblk), fsn, hsn,     &
                               rhosnwn,             rsnwn)
 
                ! set pond properties
-               if (tr_pond) then
+               if (tr_pond_cesm) then
                   apeffn(:,:,n,iblk) = c0 ! for history
                   do ij = 1, icells
                      i = indxi(ij)
@@ -1168,35 +1179,24 @@
 
                      ! fraction of ice area
                      fpn(i,j) = trcrn(i,j,nt_apnd,n,iblk)
+                     ! pond depth over fraction fpn 
+                     hpn(i,j) = trcrn(i,j,nt_hpnd,n,iblk)
                      ! snow infiltration
-                     if (aicen(i,j,n,iblk) > puny) then
-                        hs = vsnon(i,j,n,iblk) / aicen(i,j,n,iblk)
-                        if (hs >= hsmin) then
-                           asnow = min(hs/hs0, c1) ! delta-Eddington formulation
-                           fpn(i,j) = (c1 - asnow) * fpn(i,j)
-                        endif
+                     if (hsn(i,j) >= hsmin .and. hs0 > puny) then
+                        asnow = min(hsn(i,j)/hs0, c1) ! delta-Eddington formulation
+                        fpn(i,j) = (c1 - asnow) * fpn(i,j)
+                        hpn(i,j) = pndaspect * fpn(i,j)
                      endif
-
-                     ! pond depth over fraction fpn of ice area
-                     hpn(i,j) = trcrn(i,j,nt_hpnd,n,iblk) &
-                              * trcrn(i,j,nt_apnd,n,iblk)
-!echmod - old
-!                     if (trcrn(i,j,nt_apnd,n,iblk) > puny) then
-!                        hpn(i,j) = trcrn(i,j,nt_volp,n,iblk) &
-!                                 / trcrn(i,j,nt_apnd,n,iblk)
-!                     else
-!                        fpn(i,j) = c0
-!                        hpn(i,j) = c0
-!                     endif
-!echmod - old
                      apeffn(i,j,n,iblk) = fpn(i,j) ! for history
                   enddo
 
+               elseif (tr_pond_lvl) then
+                  apeffn(:,:,n,iblk) = c0 ! for history
+                  !!!!! PLACEHOLDER !!!!!
                else
                   call shortwave_dEdd_set_pond(nx_block, ny_block,      &
                               icells,                                   &
                               indxi,               indxj,               &
-                              aicen(:,:,n,iblk),                        &
                               trcrn(:,:,nt_Tsfc,n,iblk),                &
                               fsn,                 fpn,                 &
                               hpn)
@@ -1208,7 +1208,7 @@
                               indxi,             indxj,               &
                               coszen(:,:, iblk),                      &
                               aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
-                              vsnon(:,:,n,iblk), fsn,                 &
+                              hsn,               fsn,                 &
                               rhosnwn,           rsnwn,               &
                               fpn,               hpn,                 &
                               swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
@@ -1238,7 +1238,7 @@
                                   icells,   indxi,       &
                                   indxj,    coszen,      &
                                   aice,     vice,        &
-                                  vsno,     fs,          & 
+                                  hs,       fs,          & 
                                   rhosnw,   rsnw,        &
                                   fp,       hp,          &
                                   swvdr,    swvdf,       &
@@ -1304,7 +1304,7 @@
          coszen  , & ! cosine of solar zenith angle 
          aice    , & ! concentration of ice 
          vice    , & ! volume of ice 
-         vsno    , & ! volume of snow 
+         hs      , & ! snow depth
          fs          ! horizontal coverage of snow
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
@@ -1353,7 +1353,7 @@
          fnidr        ! fraction of direct to total down surface flux in nir
 
       real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
-         hs       , & ! snow thickness (all snow layers, m)
+         hstmp       , & ! snow thickness (all snow layers, m)
          hi       , & ! ice thickness (all sea ice layers, m)
          fi           ! snow/bare ice fractional coverage (0 to 1)
 
@@ -1402,7 +1402,7 @@
       do j = 1, ny_block
       do i = 1, nx_block
          ! zero storage albedos and fluxes for accumulation over surface types:
-         hs(i,j)       = c0
+         hstmp(i,j)    = c0
          hi(i,j)       = c0
          fi(i,j)       = c0
          srftyp(i,j)   =  0
@@ -1442,7 +1442,7 @@
          i = indxi(ij)
          j = indxj(ij)
          ! sea ice points with sun above horizon
-         if (aice(i,j) > puny .and. coszen(i,j) > puny) then
+         if (coszen(i,j) > puny) then
             ! evaluate sea ice thickness and fraction
             hi(i,j)  = vice(i,j) / aice(i,j)
             fi(i,j)  = c1 - fs(i,j) - fp(i,j)
@@ -1454,7 +1454,7 @@
               ! bare ice
               srftyp(i,j) = 0
             endif               ! fi > 0
-         endif                  ! aice > 0 and coszen > 0
+         endif                  ! coszen > 0
       enddo                     ! ij
 
       ! calculate bare sea ice
@@ -1462,7 +1462,7 @@
             (nx_block,ny_block,                            &
              icells_DE, indxi_DE, indxj_DE, fnidr, coszen, &
              swvdr,     swvdf,    swidr,    swidf, srftyp, &
-             hs,        rhosnw,   rsnw,     hi,    hp,     &
+             hstmp,     rhosnw,   rsnw,     hi,    hp,     &
              fi,                  avdrl,    avdfl,       &
                                   aidrl,    aidfl,       &
                                   fswsfc,   fswint,      &
@@ -1494,9 +1494,7 @@
          i = indxi(ij)
          j = indxj(ij)
          ! sea ice points with sun above horizon
-         if (aice(i,j) > puny .and. coszen(i,j) > puny) then
-            ! evaluate snow thickness
-            hs(i,j)  = vsno(i,j) / aice(i,j)
+         if (coszen(i,j) > puny) then
             ! snow-covered sea ice points
             if(fs(i,j) > c0) then
               icells_DE = icells_DE + 1
@@ -1505,7 +1503,7 @@
               ! snow-covered ice
               srftyp(i,j) = 1
             endif               ! fs > 0
-         endif                  ! aice > 0 and coszen > 0
+         endif                  ! coszen > 0
       enddo                     ! ij
 
       ! calculate snow covered sea ice
@@ -1546,7 +1544,7 @@
          j = indxj(ij)
          hi(i,j) = c0
          ! sea ice points with sun above horizon
-         if (aice(i,j) > puny .and. coszen(i,j) > puny) then
+         if (coszen(i,j) > puny) then
             hi(i,j)  = vice(i,j) / aice(i,j)
             ! if non-zero pond fraction and sufficient pond depth
             if( fp(i,j) > puny .and. hp(i,j) > hpmin ) then
@@ -1556,7 +1554,7 @@
                ! ponded ice
                srftyp(i,j)   = 2
             endif               
-         endif                  ! aice > puny, coszen > puny
+         endif                  ! coszen > puny
       enddo                     ! ij
 
       ! calculate ponded ice
@@ -3329,12 +3327,12 @@
                                          icells,             &
                                          indxi,    indxj,    &
                                          aice,     vsno,     &
-                                         Tsfc,     fs,       &
+                                         Tsfc,     fs,  hs,  &
                                          rhosnw,   rsnw)
 !
 ! !USES:
 !
-      use ice_meltpond_rad, only: hs0
+      use ice_meltpond_cesm, only: hs0
 !
 ! !DESCRIPTION:
 !
@@ -3366,7 +3364,8 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(out) :: &
-         fs         ! horizontal coverage of snow
+         fs     , & ! horizontal coverage of snow
+         hs         ! snow depth
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
          intent(out) :: &
@@ -3385,14 +3384,13 @@
          ks           ! snow vertical index
 
       real (kind=dbl_kind) :: &
-         hs  , & ! snow depth (m)
          fT  , & ! piecewise linear function of surface temperature
          dTs , & ! difference of Tsfc and Timelt
          rsnw_nm ! actual used nonmelt snow grain radius (micro-meters)
 
       real (kind=dbl_kind), parameter :: &
          dT_mlt = 1.5_dbl_kind, & ! change in temp to give non-melt to melt change
-                           ! in snow grain radius
+                                  ! in snow grain radius
          ! units for the following are 1.e-6 m (micro-meters)
          rsnw_fresh    =  100._dbl_kind, & ! freshly-fallen snow grain radius 
          rsnw_nonmelt  =  500._dbl_kind, & ! nonmelt snow grain radius
@@ -3402,6 +3400,7 @@
 !-----------------------------------------------------------------------
 
       fs(:,:)       = c0
+      hs(:,:)       = c0
       do ks = 1, nslyr
       do j = 1, ny_block
       do i = 1, nx_block
@@ -3417,16 +3416,15 @@
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
+
          ! set snow horizontal fraction
-         if( aice(i,j) > puny ) then
-           hs = vsno(i,j) / aice(i,j)
-           if( hs < hsmin ) then
-             fs(i,j) = c0
-           else if( hs <= hs0 ) then
-             fs(i,j) = hs/hs0
-           else
-             fs(i,j) = c1
-           endif
+         hs(i,j) = vsno(i,j) / aice(i,j)
+
+         if (hs(i,j) >= hsmin) then
+            fs(i,j) = c1
+            if (hs0 > puny) fs(i,j) = min(hs(i,j)/hs0, c1)
+         endif
+
            ! bare ice, temperature dependence
            dTs = Timelt - Tsfc(i,j)
            fT  = -min(dTs/dT_mlt-c1,c0)
@@ -3444,7 +3442,6 @@
              rsnw(i,j,ks) = max(rsnw(i,j,ks), rsnw_fresh)
              rsnw(i,j,ks) = min(rsnw(i,j,ks), rsnw_melt) 
            enddo        ! ks
-         endif         ! aice(i,j) > puny
       enddo          ! ij
 
       end subroutine shortwave_dEdd_set_snow
@@ -3460,7 +3457,7 @@
       subroutine shortwave_dEdd_set_pond(nx_block, ny_block, &
                                          icells,             &
                                          indxi,    indxj,    &
-                                         aice,     Tsfc,     &
+                                         Tsfc,               &
                                          fs,       fp,       &
                                          hp)
 !
@@ -3488,7 +3485,6 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
-         aice   , & ! concentration of ice
          Tsfc   , & ! surface temperature
          fs         ! horizontal coverage of snow
 
@@ -3531,14 +3527,12 @@
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
-         if (aice(i,j) > puny) then
-           ! bare ice, temperature dependence
-           dTs = Timelt - Tsfc(i,j)
-           fT  = -min(dTs/dT_mlt-c1,c0)
-           ! pond
-           fp(i,j) = 0.3_dbl_kind*fT*(c1-fs(i,j))
-           hp(i,j) = 0.3_dbl_kind*fT*(c1-fs(i,j))
-         endif
+         ! bare ice, temperature dependence
+         dTs = Timelt - Tsfc(i,j)
+         fT  = -min(dTs/dT_mlt-c1,c0)
+         ! pond
+         fp(i,j) = 0.3_dbl_kind*fT*(c1-fs(i,j))
+         hp(i,j) = 0.3_dbl_kind*fT*(c1-fs(i,j))
       enddo          ! ij
 
       end subroutine shortwave_dEdd_set_pond

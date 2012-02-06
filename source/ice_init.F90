@@ -95,10 +95,13 @@
                                R_snw
       use ice_atmo, only: atmbndy, calc_strair
       use ice_transport_driver, only: advection
-      use ice_state, only: tr_iage, tr_lvl, tr_pond, tr_aero
+      use ice_state, only: tr_iage, tr_lvl, tr_pond, &
+                           tr_pond_cesm, tr_pond_lvl, tr_aero
       use ice_age, only: restart_age
       use ice_lvl, only: restart_lvl
-      use ice_meltpond_rad, only: restart_pond, hs0
+      use ice_meltpond_cesm, only: restart_pond_cesm, hs0
+      use ice_meltpond_lvl, only: restart_pond_lvl, dpscale, frzpnd, snowinfil, &
+                                  rfracmin, rfracmax, pndaspect, hs1
       use ice_aerosol, only: restart_aero
       use ice_therm_vertical, only: calc_Tsfc, heat_capacity, conduct, &
           ustar_min
@@ -143,7 +146,8 @@
         heat_capacity,  conduct,         shortwave,     albedo_type,    &
         albicev,        albicei,         albsnowv,      albsnowi,       &
         ahmax,          R_ice,           R_pnd,         R_snw,          &
-        hs0,            &
+        hs0,            dpscale,         frzpnd,        snowinfil,      &
+        rfracmin,       rfracmax,        pndaspect,     hs1,            &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
         atm_data_type,  atm_data_dir,    calc_strair,   calc_Tsfc,      &
         precip_units,   Tfrzpt,          update_ocn_f,  ustar_min,      &
@@ -154,7 +158,8 @@
       namelist /tracer_nml/   &
         tr_iage, restart_age, &
         tr_lvl, restart_lvl, &
-        tr_pond, restart_pond, &
+        tr_pond_cesm, restart_pond_cesm, &
+        tr_pond_lvl, restart_pond_lvl, &
         tr_aero, restart_aero
 
       !-----------------------------------------------------------------
@@ -221,8 +226,15 @@
       ustar_min = 0.005      ! minimum friction velocity for ocean heat flux (m/s)
       R_ice     = 0.00_dbl_kind   ! tuning parameter for sea ice
       R_pnd     = 0.00_dbl_kind   ! tuning parameter for ponded sea ice
-      R_snw     = 0.00_dbl_kind   ! tuning parameter for snow over sea ice
+      R_snw     = 1.50_dbl_kind   ! tuning parameter for snow over sea ice
       hs0       = 0.03_dbl_kind   ! snow depth for transition to bare sea ice (m)
+      hs1       = 0.03_dbl_kind   ! snow depth for transition to bare pond ice (m)
+      dpscale   = c1              ! alter e-folding time scale for flushing 
+      frzpnd    = 'cesm'          ! melt pond refreezing parameterization
+      snowinfil = .true.          ! snow infiltration by melt water
+      rfracmin  = 0.15_dbl_kind   ! minimum retained fraction of meltwater
+      rfracmax  = 0.85_dbl_kind   ! maximum retained fraction of meltwater
+      pndaspect = 0.8_dbl_kind    ! ratio of pond depth to area fraction
       albicev   = 0.78_dbl_kind   ! visible ice albedo for h > ahmax
       albicei   = 0.36_dbl_kind   ! near-ir ice albedo for h > ahmax
       albsnowv  = 0.98_dbl_kind   ! cold snow albedo, visible
@@ -262,8 +274,10 @@
       restart_age  = .false. ! ice age restart
       tr_lvl       = .false. ! level ice 
       restart_lvl  = .false. ! level ice restart
-      tr_pond      = .false. ! explicit melt ponds
-      restart_pond = .false. ! melt ponds restart
+      tr_pond_cesm = .false. ! CESM melt ponds
+      restart_pond_cesm = .false. ! melt ponds restart
+      tr_pond_lvl  = .false. ! level-ice melt ponds
+      restart_pond_lvl  = .false. ! melt ponds restart
       tr_aero      = .false. ! aerosols
       restart_aero = .false. ! aerosols restart
 
@@ -316,8 +330,8 @@
          write(nu_diag,*) ' '
       endif
 
-      if (runtype == 'continue') restart = .true.
-      if (runtype /= 'continue' .and. (restart)) then
+      if (trim(runtype) == 'continue') restart = .true.
+      if (trim(runtype) /= 'continue' .and. (restart)) then
          if (ice_ic == 'none' .or. ice_ic == 'default') then
             if (my_task == master_task) then
             write(nu_diag,*) &
@@ -331,7 +345,7 @@
             restart = .false.
          endif
       endif
-      if (runtype == 'initial' .and. .not.(restart)) then
+      if (trim(runtype) == 'initial' .and. .not.(restart)) then
          if (ice_ic /= 'none' .and. ice_ic /= 'default') then
             if (my_task == master_task) then
             write(nu_diag,*) &
@@ -374,6 +388,61 @@
          kitd = 1
          kcatbound = 0
       endif
+
+      tr_pond = .false. ! explicit melt ponds
+      if (tr_pond_cesm .or. tr_pond_lvl) tr_pond = .true.
+
+!temporary!
+      if (tr_pond_lvl) then
+         if (my_task == master_task) &
+            write (nu_diag,*) 'ABORTING: lvlpond scheme not available'
+         call abort_ice('ice: tr_pond_lvl not available')
+      endif
+!temporary!
+
+      if (tr_pond_lvl .and. tr_pond_cesm) then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'WARNING: Must use only one melt pond scheme'
+            write (nu_diag,*) 'WARNING: Setting tr_pond_lvl=T, tr_pond_cesm=F'
+         endif
+         tr_pond_cesm = .false.
+      endif
+
+      if (tr_pond_lvl .and. .not. tr_lvl) then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'WARNING: tr_pond_lvl=T but tr_lvl=F'
+            write (nu_diag,*) 'WARNING: Setting tr_lvl=T'
+         endif
+         tr_lvl = .true.
+      endif
+
+      if (tr_pond_lvl .and. abs(hs0) > puny) then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'WARNING: tr_pond_lvl=T and hs0/=0'
+            write (nu_diag,*) 'WARNING: Setting hs0=0'
+         endif
+         hs0 = c0
+      endif
+
+      if (tr_pond_cesm .and. trim(frzpnd) /= 'cesm') then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'WARNING: tr_pond_cesm=T'
+            write (nu_diag,*) 'WARNING: frzpnd, dpscale, snowinfil not used'
+         endif
+         frzpnd = 'cesm'
+      endif
+
+      if (trim(shortwave) /= 'dEdd' .and. tr_pond) then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'WARNING: Must use dEdd shortwave'
+            write (nu_diag,*) 'WARNING: with tr_pond.'
+            write (nu_diag,*) 'WARNING: Setting shortwave = dEdd'
+         endif
+         shortwave = 'dEdd'
+      endif
+
+      rfracmin = min(max(rfracmin,c0),c1)
+      rfracmax = min(max(rfracmax,c0),c1)
 
       if (trim(atm_data_type) == 'monthly' .and. calc_strair) &
          calc_strair = .false.
@@ -442,6 +511,13 @@
       call broadcast_scalar(R_pnd,              master_task)
       call broadcast_scalar(R_snw,              master_task)
       call broadcast_scalar(hs0,                master_task)
+      call broadcast_scalar(hs1,                master_task)
+      call broadcast_scalar(dpscale,            master_task)
+      call broadcast_scalar(frzpnd,             master_task)
+      call broadcast_scalar(snowinfil,          master_task)
+      call broadcast_scalar(rfracmin,           master_task)
+      call broadcast_scalar(rfracmax,           master_task)
+      call broadcast_scalar(pndaspect,          master_task)
       call broadcast_scalar(albicev,            master_task)
       call broadcast_scalar(albicei,            master_task)
       call broadcast_scalar(albsnowv,           master_task)
@@ -480,8 +556,11 @@
       call broadcast_scalar(restart_age,        master_task)
       call broadcast_scalar(tr_lvl,             master_task)
       call broadcast_scalar(restart_lvl,        master_task)
+      call broadcast_scalar(tr_pond_cesm,       master_task)
+      call broadcast_scalar(restart_pond_cesm,  master_task)
+      call broadcast_scalar(tr_pond_lvl,        master_task)
+      call broadcast_scalar(restart_pond_lvl,   master_task)
       call broadcast_scalar(tr_pond,            master_task)
-      call broadcast_scalar(restart_pond,       master_task)
       call broadcast_scalar(tr_aero,            master_task)
       call broadcast_scalar(restart_aero,       master_task)
 
@@ -571,6 +650,13 @@
          write(nu_diag,1000) ' R_pnd                     = ', R_pnd
          write(nu_diag,1000) ' R_snw                     = ', R_snw
          write(nu_diag,1000) ' hs0                       = ', hs0
+         write(nu_diag,1000) ' hs1                       = ', hs1
+         write(nu_diag,1000) ' dpscale                   = ', dpscale
+         write(nu_diag,1030) ' frzpnd                    = ', trim(frzpnd)
+         write(nu_diag,1010) ' snowinfil                 = ', snowinfil
+         write(nu_diag,1000) ' rfracmin                  = ', rfracmin
+         write(nu_diag,1000) ' rfracmax                  = ', rfracmax
+         write(nu_diag,1000) ' pndaspect                 = ', pndaspect
          write(nu_diag,1000) ' albicev                   = ', albicev
          write(nu_diag,1000) ' albicei                   = ', albicei
          write(nu_diag,1000) ' albsnowv                  = ', albsnowv
@@ -638,8 +724,10 @@
          write(nu_diag,1010) ' restart_age               = ', restart_age
          write(nu_diag,1010) ' tr_lvl                    = ', tr_lvl
          write(nu_diag,1010) ' restart_lvl               = ', restart_lvl
-         write(nu_diag,1010) ' tr_pond                   = ', tr_pond
-         write(nu_diag,1010) ' restart_pond              = ', restart_pond
+         write(nu_diag,1010) ' tr_pond_cesm              = ', tr_pond_cesm
+         write(nu_diag,1010) ' restart_pond_cesm         = ', restart_pond_cesm
+         write(nu_diag,1010) ' tr_pond_lvl               = ', tr_pond_lvl
+         write(nu_diag,1010) ' restart_pond_lvl          = ', restart_pond_lvl
          write(nu_diag,1010) ' tr_aero                   = ', tr_aero
          write(nu_diag,1010) ' restart_aero              = ', restart_aero
 
@@ -658,13 +746,15 @@
              ntrcr = ntrcr + 1
          endif
 
-         if (tr_pond) then
+         if (tr_pond) then            ! all explicit melt pond schemes
              nt_apnd = ntrcr + 1
              ntrcr = ntrcr + 1
-!             nt_volp = ntrcr + 1
-!             ntrcr = ntrcr + 1
              nt_hpnd = ntrcr + 1
              ntrcr = ntrcr + 1
+             if (tr_pond_lvl) then
+                 nt_ipnd = ntrcr + 1  ! refrozen pond ice lid thickness
+                 ntrcr = ntrcr + 1    ! on level-ice ponds (if frzpnd='hlid')
+             endif
          endif
 
          if (tr_aero) then
@@ -703,8 +793,8 @@
       call broadcast_scalar(nt_alvl,  master_task)
       call broadcast_scalar(nt_vlvl,  master_task)
       call broadcast_scalar(nt_apnd,  master_task)
-!      call broadcast_scalar(nt_volp,  master_task)
       call broadcast_scalar(nt_hpnd,  master_task)
+      call broadcast_scalar(nt_ipnd,  master_task)
       call broadcast_scalar(nt_aero,  master_task)
 
       end subroutine input_data
@@ -795,10 +885,14 @@
       if (tr_iage) trcr_depend(nt_iage)  = 1   ! volume-weighted ice age
       if (tr_lvl)  trcr_depend(nt_alvl)  = 0   ! level ice area
       if (tr_lvl)  trcr_depend(nt_vlvl)  = 1   ! level ice volume
-      if (tr_pond) then
-                   trcr_depend(nt_apnd)  = 0   ! melt pond area
+      if (tr_pond_cesm) then
+                   trcr_depend(nt_apnd)  = 0           ! melt pond area
                    trcr_depend(nt_hpnd)  = 2+nt_apnd   ! melt pond depth
-!                   trcr_depend(nt_volp)  = 0   ! melt pond volume
+      endif
+      if (tr_pond_lvl) then
+                   trcr_depend(nt_apnd)  = 2+nt_alvl   ! melt pond area
+                   trcr_depend(nt_hpnd)  = 2+nt_apnd   ! melt pond depth
+                   trcr_depend(nt_ipnd)  = 2+nt_apnd   ! refrozen pond lid
       endif
       if (tr_aero) then ! volume-weighted aerosols
          do it = 1, n_aero
