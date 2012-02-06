@@ -1120,7 +1120,8 @@
 !
 ! !USES:
 !
-      use ice_state, only: nt_alvl, nt_vlvl, nt_aero, tr_lvl, tr_aero, nt_apnd
+      use ice_state, only: nt_alvl, nt_vlvl, nt_aero, tr_lvl, tr_aero, &
+                           nt_apnd, nt_hpnd, nt_ipnd, tr_pond_cesm, tr_pond_lvl
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1277,11 +1278,30 @@
                   j = indxj(ij)
                   atrcrn(ij,it,n) = vsnon(i,j,n)*trcrn(i,j,it,n)
                enddo 
-            elseif (trcr_depend(it) == 2+nt_apnd) then ! pond area tracer
+            elseif (trcr_depend(it) == 2+nt_alvl) then ! level ice tracer
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)
                   atrcrn(ij,it,n) = aicen(i,j,n) &
+                                  * trcrn(i,j,nt_alvl,n) &
+                                  * trcrn(i,j,it,n)
+               enddo
+            elseif (trcr_depend(it) == 2+nt_apnd .and. &
+                    tr_pond_cesm) then ! CESM pond area tracer
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  atrcrn(ij,it,n) = aicen(i,j,n) &
+                                  * trcrn(i,j,nt_apnd,n) &
+                                  * trcrn(i,j,it,n)
+               enddo
+            elseif (trcr_depend(it) == 2+nt_apnd .and. &
+                    tr_pond_lvl) then ! level-ice pond area tracer
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  atrcrn(ij,it,n) = aicen(i,j,n) &
+                                  * trcrn(i,j,nt_alvl,n) &
                                   * trcrn(i,j,nt_apnd,n) &
                                   * trcrn(i,j,it,n)
                enddo
@@ -1498,6 +1518,25 @@
             endif
 
       !-----------------------------------------------------------------
+      ! Decrement meltpond tracers
+      ! NOTE need to put this water in the ocean if ponds are 'real'
+      !-----------------------------------------------------------------
+
+            if (tr_pond_cesm) then
+
+               atrcrn(m,nt_apnd,n) = atrcrn(m,nt_apnd,n) * (c1 - afrac(ij))
+               atrcrn(m,nt_hpnd,n) = atrcrn(m,nt_hpnd,n) * (c1 - afrac(ij))
+
+            elseif (tr_pond_lvl) then
+               ! must reduce hpnd, ipnd tracers to compensate for loss of
+               ! level ice (the portion of tracer on ridging ice)
+               atrcrn(m,nt_apnd,n) = atrcrn(m,nt_apnd,n) * (c1 - afrac(ij))
+               atrcrn(m,nt_hpnd,n) = atrcrn(m,nt_hpnd,n) * (c1 - afrac(ij))
+               atrcrn(m,nt_ipnd,n) = atrcrn(m,nt_ipnd,n) * (c1 - afrac(ij))
+
+            endif
+
+      !-----------------------------------------------------------------
       !  Place part of the snow and tracer lost by ridging into the ocean.
       !-----------------------------------------------------------------
 
@@ -1605,7 +1644,20 @@
                                    - vsrdgn(ij)*trcrn(i,j,it,n)
                enddo
 
-            elseif (trcr_depend(it) == 2+nt_apnd) then ! pond area tracer
+            elseif (trcr_depend(it) == 2+nt_alvl) then ! level ice tracer
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+               do ij = 1, iridge
+                  i = indxii(ij)
+                  j = indxjj(ij)
+                  m = indxij(ij)
+                  atrcrn(m,it,n) = atrcrn(m,it,n) &
+                                   - ardg1n(ij)*trcrn(i,j,nt_alvl,n)*trcrn(i,j,it,n)
+               enddo
+
+            elseif (trcr_depend(it) == 2+nt_apnd .and. &
+                    tr_pond_cesm) then ! CESM pond area tracer
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -1615,6 +1667,21 @@
                   m = indxij(ij)
                   atrcrn(m,it,n) = atrcrn(m,it,n) &
                                    - ardg1n(ij)*trcrn(i,j,nt_apnd,n)*trcrn(i,j,it,n)
+               enddo
+            elseif (trcr_depend(it) == 2+nt_apnd .and. &
+                    tr_pond_lvl) then ! level-ice pond area tracer
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+               do ij = 1, iridge
+                  i = indxii(ij)
+                  j = indxjj(ij)
+                  m = indxij(ij)
+                  atrcrn(m,it,n) = atrcrn(m,it,n) &
+                                   - ardg1n(ij) &
+                                   * trcrn(i,j,nt_alvl,n) &
+                                   * trcrn(i,j,nt_apnd,n) &
+                                   * trcrn(i,j,it,n)
                enddo
             endif               ! trcr_depend
          enddo                  ! ntrcr
@@ -1788,7 +1855,7 @@
                         + fvol(ij)*vsrdgn(ij)*fsnowrdg*trcrn(i,j,it,n)
 
                   enddo
-               elseif (trcr_depend(it) == 2+nt_apnd) then  ! pond area tracer
+               elseif (trcr_depend(it) == 2+nt_alvl) then  ! level ice tracer
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -1797,7 +1864,38 @@
                      j = indxjj(ij)
                      m = indxij(ij)
                      atrcrn(m,it,nr) = atrcrn(m,it,nr) &
-                        + farea(ij)*ardg2n(ij)*trcrn(i,j,nt_apnd,n)*trcrn(i,j,it,n)
+                                + farea(ij) * ardg2n(ij) &
+                                            * trcrn(i,j,nt_alvl,n) &
+                                            * trcrn(i,j,it,n)
+                  enddo
+               elseif (trcr_depend(it) == 2+nt_apnd .and. &
+                       tr_pond_cesm) then  ! CESM pond area tracer
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+                  do ij = 1, iridge
+                     i = indxii(ij)
+                     j = indxjj(ij)
+                     m = indxij(ij)
+                     atrcrn(m,it,nr) = atrcrn(m,it,nr) &
+                                + farea(ij) * ardg2n(ij) &
+                                            * trcrn(i,j,nt_apnd,n) &
+                                            * trcrn(i,j,it,n)
+                  enddo
+               elseif (trcr_depend(it) == 2+nt_apnd .and. &
+                       tr_pond_lvl) then  ! level-ice pond area tracer
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+                  do ij = 1, iridge
+                     i = indxii(ij)
+                     j = indxjj(ij)
+                     m = indxij(ij)
+                     atrcrn(m,it,nr) = atrcrn(m,it,nr) &
+                                + farea(ij) * ardg2n(ij) &
+                                            * trcrn(i,j,nt_alvl,n) &
+                                            * trcrn(i,j,nt_apnd,n) &
+                                            * trcrn(i,j,it,n)
                   enddo
                endif            ! trcr_depend
             enddo               ! ntrcr

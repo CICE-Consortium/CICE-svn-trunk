@@ -190,9 +190,9 @@
              if (nt-k==nt_hpnd) &
                 write(nu_diag,*) 'nt_hpnd',nt,depend(nt),tracer_type(nt),&
                                               has_dependents(nt)
-!             if (nt-k==nt_volp) &
-!                write(nu_diag,*) 'nt_volp',nt,depend(nt),tracer_type(nt),&
-!                                              has_dependents(nt)
+             if (nt-k==nt_ipnd) &
+                write(nu_diag,*) 'nt_ipnd',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
           enddo
 
              nt = k + ntrcr+1
@@ -1582,6 +1582,7 @@
 ! !USES:
 !
       use ice_itd, only: ilyr1, slyr1
+      use ice_state, only: nt_alvl, nt_apnd, tr_pond_cesm, tr_pond_lvl
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1659,6 +1660,33 @@
                do j = 1, ny_block
                do i = 1, nx_block
                   works(i,j,narrays+it) = vsnon(i,j,n)*trcrn(i,j,it,n)
+               enddo
+               enddo
+            elseif (trcr_depend(it) == 2+nt_alvl) then
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  works(i,j,narrays+it) = aicen(i,j,n) &
+                                        * trcrn(i,j,nt_alvl,n) &
+                                        * trcrn(i,j,it,n)
+               enddo
+               enddo
+            elseif (trcr_depend(it) == 2+nt_apnd .and. &
+                    tr_pond_cesm) then
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  works(i,j,narrays+it) = aicen(i,j,n) &
+                                        * trcrn(i,j,nt_apnd,n) &
+                                        * trcrn(i,j,it,n)
+               enddo
+               enddo
+            elseif (trcr_depend(it) == 2+nt_apnd .and. &
+                    tr_pond_lvl) then
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  works(i,j,narrays+it) = aicen(i,j,n) &
+                                        * trcrn(i,j,nt_alvl,n) &
+                                        * trcrn(i,j,nt_apnd,n) &
+                                        * trcrn(i,j,it,n)
                enddo
                enddo
             endif

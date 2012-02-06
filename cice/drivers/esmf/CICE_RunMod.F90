@@ -47,7 +47,8 @@
       use ice_kinds_mod
       use ice_lvl
       use ice_mechred
-      use ice_meltpond_rad
+      use ice_meltpond_cesm
+      use ice_meltpond_lvl
       use ice_ocean
       use ice_orbital
       use ice_shortwave
@@ -347,9 +348,10 @@
          call ice_timer_start(timer_readwrite)  ! reading/writing
          if (write_restart == 1) then
             call dumpfile ! core variables for restarting
-            if (tr_iage) call write_restart_age
-            if (tr_lvl)  call write_restart_lvl
-            if (tr_pond) call write_restart_pond_rad
+            if (tr_iage)      call write_restart_age
+            if (tr_lvl)       call write_restart_lvl
+            if (tr_pond_cesm) call write_restart_pond_cesm
+            if (tr_pond_lvl)  call write_restart_pond_lvl
          endif
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 
@@ -695,16 +697,32 @@
       ! Melt ponds
       !-----------------------------------------------------------------
 
-         if (tr_pond .and. trim(shortwave) == 'dEdd') then
+         if (tr_pond) then
             call ice_timer_start(timer_ponds)
 
-            rfrac(:,:) = 0.15_dbl_kind + 0.7_dbl_kind * aicen(:,:,n,iblk)
+            if (tr_pond_cesm) then
+!               rfrac(:,:) = 0.15_dbl_kind + 0.7_dbl_kind * aicen(:,:,n,iblk)
+               rfrac(:,:) = rfracmin + (rfracmax-rfracmin) * aicen(:,:,n,iblk) 
+              call compute_ponds_cesm(nx_block, ny_block,                      &
+                                       ilo, ihi, jlo, jhi,                      &
+                                       rfrac, melttn, meltsn, frain(:,:,iblk),  &
+                                       aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
+                                       vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk))
 
-            call compute_ponds_rad(nx_block, ny_block,                      &
-                                   ilo, ihi, jlo, jhi,                      &
-                                   rfrac, melttn, meltsn, frain(:,:,iblk),  &
-                                   aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
-                                   vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk))
+            elseif (tr_pond_lvl) then
+               rfrac(:,:) = rfracmin + (rfracmax-rfracmin) * aicen(:,:,n,iblk)
+               call compute_ponds_lvl(nx_block, ny_block,                      &
+                                      ilo, ihi, jlo, jhi,                      &
+                                      rfrac, melttn, meltsn,                   &
+                                      frain (:,:,iblk),   Tair  (:,:,iblk),    &
+                                      fsurfn(:,:,n,iblk),                      &
+                                      dhsn  (:,:,n,iblk), ffracn(:,:,n,iblk),  &
+                                      aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
+                                      vsnon (:,:,n,iblk),                      &
+                                      trcrn (:,:,:,n,iblk),                    &
+                                      eicen (:,:,ilyr1(n):ilyr1(n)+nilyr-1,iblk),&
+                                      salin (1:nilyr), Tmlt(1:nilyr))
+            endif
 
             call ice_timer_stop(timer_ponds)
          endif

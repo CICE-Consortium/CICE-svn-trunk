@@ -211,6 +211,7 @@
            f_Tref      = 'm', f_Qref       = 'm', &
            f_congel    = 'm', f_frazil     = 'm', &
            f_snoice    = 'm', f_meltt      = 'm', &
+           f_melts     = 'm', &
            f_meltb     = 'm', f_meltl      = 'm', &
            f_fresh     = 'm', f_fresh_ai   = 'm', &
            f_fsalt     = 'm', f_fsalt_ai   = 'm', &
@@ -235,8 +236,10 @@
            f_aero      = 'm', f_aeron      = 'm', &
            f_aicen     = 'm', f_vicen      = 'm', &
            f_apondn    = 'x',                     &
-           f_apond     = 'x', f_hpond      = 'x', &
-           f_ipond     = 'x', f_apeff      = 'm', &
+           f_apond     = 'x', f_apond_ai   = 'x', &
+           f_hpond     = 'x', f_hpond_ai   = 'x', &
+           f_ipond     = 'x', f_ipond_ai   = 'x', &
+           f_apeff     = 'x',                     &
            f_trsig     = 'm', f_icepresent = 'm', &
            f_fsurf_ai  = 'm', f_fcondtop_ai= 'm', &
            f_fmeltt_ai = 'm',                     &
@@ -284,6 +287,7 @@
            f_Tref,      f_Qref     , &
            f_congel,    f_frazil   , &
            f_snoice,    f_meltt    , &
+           f_melts,                  &
            f_meltb,     f_meltl    , &
            f_fresh,     f_fresh_ai , &  
            f_fsalt,     f_fsalt_ai , &
@@ -307,9 +311,11 @@
            f_hisnap,    f_aisnap   , &
            f_aero,      f_aeron    , &
            f_aicen,     f_vicen    , &
-           f_apondn,    &
-           f_apond,     f_hpond    , &
-           f_ipond,     f_apeff    , &
+           f_apondn,                 &
+           f_apond,     f_apond_ai , &  
+           f_hpond,     f_hpond_ai , &  
+           f_ipond,     f_ipond_ai , &  
+           f_apeff,                  &
            f_trsig,     f_icepresent,&
            f_fsurf_ai,  f_fcondtop_ai,&
            f_fmeltt_ai, &
@@ -368,6 +374,7 @@
            n_Tref       , n_Qref       , &
            n_congel     , n_frazil     , &
            n_snoice     , n_meltt      , &
+           n_melts      , &
            n_meltb      , n_meltl      , &
            n_fresh      , n_fresh_ai   , &
            n_fsalt      , n_fsalt_ai   , &
@@ -395,9 +402,9 @@
            n_aicen       , &
            n_vicen       , &
            n_apondn      , &
-           n_apond       , &
-           n_hpond       , &
-           n_ipond       , &
+           n_apond       , n_apond_ai, &
+           n_hpond       , n_hpond_ai, &
+           n_ipond       , n_ipond_ai, &
            n_apeff       , &
            n_fsurfn_ai   , &
            n_fcondtopn_ai, &
@@ -522,11 +529,14 @@
 
       if (.not. tr_iage) f_iage = 'x'
       if (.not. tr_pond) then
-          f_apondn = 'x'
-          f_apond  = 'x'
-          f_hpond  = 'x'
-          f_ipond  = 'x'
-          f_apeff  = 'x'
+          f_apondn    = 'x'
+          f_apond     = 'x'
+          f_hpond     = 'x'
+          f_ipond     = 'x'
+          f_apond_ai  = 'x'
+          f_hpond_ai  = 'x'
+          f_ipond_ai  = 'x'
+          f_apeff     = 'x'
       endif
       if (.not. tr_lvl) then
          f_ardg = 'x'
@@ -615,6 +625,7 @@
       call broadcast_scalar (f_frazil, master_task)
       call broadcast_scalar (f_snoice, master_task)
       call broadcast_scalar (f_meltt, master_task)
+      call broadcast_scalar (f_melts, master_task)
       call broadcast_scalar (f_meltb, master_task)
       call broadcast_scalar (f_meltl, master_task)
       call broadcast_scalar (f_fresh, master_task)
@@ -676,9 +687,12 @@
       call broadcast_scalar (f_aero, master_task)
       call broadcast_scalar (f_aeron, master_task)
       call broadcast_scalar (f_apondn, master_task)
-      call broadcast_scalar (f_apond,  master_task)
-      call broadcast_scalar (f_hpond,  master_task)
-      call broadcast_scalar (f_ipond,  master_task)
+      call broadcast_scalar (f_apond, master_task)
+      call broadcast_scalar (f_hpond, master_task)
+      call broadcast_scalar (f_ipond, master_task)
+      call broadcast_scalar (f_apond_ai, master_task)
+      call broadcast_scalar (f_hpond_ai, master_task)
+      call broadcast_scalar (f_ipond_ai, master_task)
       call broadcast_scalar (f_apeff, master_task)
 
       ! 2D variables
@@ -943,6 +957,12 @@
              "top ice melt",                                          &
              "none", mps_to_cmpdy/dt, c0,                             &
              ns1, f_meltt)
+      
+      if (f_melts(1:1) /= 'x') &
+         call define_hist_field(n_melts,"melts","cm/day",tstr2D, tcstr, &
+             "top snow melt",                                          &
+             "none", mps_to_cmpdy/dt, c0,                             &
+             ns1, f_melts)
       
       if (f_meltb(1:1) /= 'x') &
          call define_hist_field(n_meltb,"meltb","cm/day",tstr2D, tcstr, &
@@ -1236,18 +1256,35 @@
              "none", c1, c0,                                       &
              ns1, f_apond)
 
+      if (f_apond_ai(1:1) /= 'x') &
+         call define_hist_field(n_apond_ai,"apond_ai","1",tstr2D, tcstr, & 
+             "melt pond concentration fraction of sea ice",        &
+             "weighted by ice area", c1, c0,                                       &
+             ns1, f_apond)
+
       if (f_hpond(1:1) /= 'x') &
          call define_hist_field(n_hpond,"hpond","m",tstr2D, tcstr, & 
              "mean melt pond depth",                               &
              "none", c1, c0,                                       &
              ns1, f_hpond)
 
-! not implemented
-!      if (f_ipond(1:1) /= 'x') &
-!         call define_hist_field(n_ipond,"ipond","m",tstr2D, tcstr, & 
-!             "mean pond ice thickness",                               &
-!             "none", c1, c0,                                       &
-!             ns1, f_ipond)
+      if (f_hpond_ai(1:1) /= 'x') &
+         call define_hist_field(n_hpond_ai,"hpond_ai","m",tstr2D, tcstr, & 
+             "mean melt pond depth fraction of sea ice",           &
+             "weighted by ice area", c1, c0,                                       &
+             ns1, f_hpond)
+
+      if (f_ipond(1:1) /= 'x') &
+         call define_hist_field(n_ipond,"ipond","m",tstr2D, tcstr, & 
+             "mean pond ice thickness",                               &
+             "none", c1, c0,                                       &
+             ns1, f_ipond)
+
+      if (f_ipond_ai(1:1) /= 'x') &
+         call define_hist_field(n_ipond_ai,"ipond_ai","m",tstr2D, tcstr, & 
+             "mean pond ice thickness fraction sea ice",           &
+             "weighted by ice area", c1, c0,                                       &
+             ns1, f_ipond_ai)
 
       if (f_apeff(1:1) /= 'x') &
          call define_hist_field(n_apeff,"apeff","1",tstr2D, tcstr, &
@@ -1678,6 +1715,8 @@
              call accum_hist_field(n_snoice, iblk, snoice(:,:,iblk), a2D)
          if (f_meltt  (1:1) /= 'x') &
              call accum_hist_field(n_meltt,  iblk, meltt(:,:,iblk), a2D)
+         if (f_melts  (1:1) /= 'x') &
+              call accum_hist_field(n_melts,  iblk, melts(:,:,iblk), a2D)
          if (f_meltb  (1:1) /= 'x') &
              call accum_hist_field(n_meltb,  iblk, meltb(:,:,iblk), a2D)
          if (f_meltl  (1:1) /= 'x') &
@@ -1768,18 +1807,49 @@
              call accum_hist_field(n_vrdg,   iblk, &
                              vice(:,:,iblk) * (c1 - trcr(:,:,nt_vlvl,iblk)), a2D)
 
+         if (tr_pond_cesm) then
          if (f_apond(1:1)/= 'x') &
              call accum_hist_field(n_apond, iblk, &
+                                   trcr(:,:,nt_apnd,iblk), a2D)
+         if (f_apond_ai(1:1)/= 'x') &
+             call accum_hist_field(n_apond_ai, iblk, &
                                    aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk), a2D)
          if (f_hpond(1:1)/= 'x') &
              call accum_hist_field(n_hpond, iblk, &
-!                                   aice(:,:,iblk) * trcr(:,:,nt_volp,iblk), a2D)
+                                   trcr(:,:,nt_apnd,iblk) &
+                                 * trcr(:,:,nt_hpnd,iblk), a2D)
+         if (f_hpond_ai(1:1)/= 'x') &
+             call accum_hist_field(n_hpond_ai, iblk, &
                                    aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk) &
                                                   * trcr(:,:,nt_hpnd,iblk), a2D)
-! not implemented
-!         if (f_ipond(1:1)/= 'x') &
-!             call accum_hist_field(n_ipond, iblk, &
-!                                   vice(:,:,iblk) * trcr(:,:,nt_vuip,iblk), a2D)
+
+         elseif (tr_pond_lvl) then
+         if (f_apond(1:1)/= 'x') &
+             call accum_hist_field(n_apond, iblk, &
+                            trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk), a2D)
+         if (f_apond_ai(1:1)/= 'x') &
+             call accum_hist_field(n_apond_ai, iblk, &
+                            aice(:,:,iblk) &
+                          * trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk), a2D)
+         if (f_hpond(1:1)/= 'x') &
+             call accum_hist_field(n_hpond, iblk, &
+                            trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk) &
+                                                   * trcr(:,:,nt_hpnd,iblk), a2D)
+         if (f_hpond_ai(1:1)/= 'x') &
+             call accum_hist_field(n_hpond_ai, iblk, &
+                            aice(:,:,iblk) &
+                          * trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk) &
+                                                   * trcr(:,:,nt_hpnd,iblk), a2D)
+         if (f_ipond(1:1)/= 'x') &
+             call accum_hist_field(n_ipond, iblk, &
+                            trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk) &
+                                                   * trcr(:,:,nt_ipnd,iblk), a2D)
+         if (f_ipond_ai(1:1)/= 'x') &
+             call accum_hist_field(n_ipond_ai, iblk, &
+                            aice(:,:,iblk) &
+                          * trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk) &
+                                                   * trcr(:,:,nt_ipnd,iblk), a2D)
+         endif
          if (f_apeff (1:1) /= 'x') &
              call accum_hist_field(n_apeff, iblk, apeff(:,:,iblk), a2D)
 

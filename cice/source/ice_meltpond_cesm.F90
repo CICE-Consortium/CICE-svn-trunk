@@ -2,7 +2,7 @@
 !
 !BOP
 !
-! !MODULE: ice_meltpond_rad - Meltpond parameterization
+! !MODULE: ice_meltpond_cesm - CESM meltpond parameterization
 !
 ! !DESCRIPTION:
 !
@@ -17,10 +17,11 @@
 !
 ! authors David A. Bailey (NCAR)
 !         Marika M. Holland (NCAR)
+!         Elizabeth C. Hunke (LANL)
 !
 ! !INTERFACE:
 !
-      module ice_meltpond_rad
+      module ice_meltpond_cesm
 !
 ! !USES:
 !
@@ -38,10 +39,10 @@
       implicit none
 
       logical (kind=log_kind) :: & 
-         restart_pond     ! if .true., read meltponds restart file
+         restart_pond_cesm ! if .true., read meltponds restart file
 
       real (kind=dbl_kind) :: &
-         hs0              ! snow depth for transition to bare sea ice (m)
+         hs0               ! snow depth for transition to bare sea ice (m)
 
 !=======================================================================
 
@@ -60,7 +61,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine init_meltponds_rad
+      subroutine init_meltponds_cesm
 !
 ! !USES:
 !
@@ -74,17 +75,16 @@
 !
 !EOP
 !
-      if (trim(runtype) == 'continue') restart_pond = .true.
+      if (trim(runtype) == 'continue') restart_pond_cesm = .true.
 
-      if (restart_pond) then
-         call read_restart_pond_rad
+      if (restart_pond_cesm) then
+         call read_restart_pond_cesm
       else
          trcrn(:,:,nt_apnd,:,:) = c0
          trcrn(:,:,nt_hpnd,:,:) = c0
-!         trcrn(:,:,nt_volp,:,:) = c0
       endif
 
-      end subroutine init_meltponds_rad
+      end subroutine init_meltponds_cesm
 
 !=======================================================================
 !BOP
@@ -93,7 +93,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine compute_ponds_rad(nx_block,ny_block,          &
+      subroutine compute_ponds_cesm(nx_block,ny_block,          &
                                    ilo, ihi, jlo, jhi,         &
                                    rfrac, meltt, melts,  frain,&
                                    aicen, vicen,  vsnon,       &
@@ -107,11 +107,11 @@
 !
 ! !USES:
 !
-!      use ice_state, only: nt_Tsfc, nt_volp, nt_apnd, nt_hpnd
       use ice_state, only: nt_Tsfc, nt_apnd, nt_hpnd
       use ice_calendar, only: dt
       use ice_domain_size, only: max_ntrcr
       use ice_itd, only: hi_min
+      use ice_meltpond_lvl, only: pndaspect
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -154,15 +154,13 @@
       real (kind=dbl_kind), parameter :: &
          Td       = c2          , & ! temperature difference for freeze-up (C)
          rexp     = p01         , & ! pond contraction scaling
-         dpthhi   = 0.9_dbl_kind, & ! ratio of pond depth to ice thickness
-         dpthfrac = 0.8_dbl_kind    ! ratio of pond depth to pond fraction
+         dpthhi   = 0.9_dbl_kind    ! ratio of pond depth to ice thickness
 
       !-----------------------------------------------------------------
       ! Initialize 
       !-----------------------------------------------------------------
       Tsfcn(:,:) = trcrn(:,:,nt_Tsfc)
       volpn(:,:) = trcrn(:,:,nt_hpnd) * trcrn(:,:,nt_apnd) * aicen(:,:)
-!      volpn(:,:) = trcrn(:,:,nt_volp) * aicen(:,:)
 
       !-----------------------------------------------------------------
       ! Identify grid cells where ice can melt
@@ -215,8 +213,8 @@
             volpn(i,j) = max(volpn(i,j), c0)
 
             ! fraction of ice covered by ponds
-            apondn = min (sqrt(volpn(i,j)/(dpthfrac*aicen(i,j))), c1)
-            hpondn = dpthfrac * apondn
+            apondn = min (sqrt(volpn(i,j)/(pndaspect*aicen(i,j))), c1)
+            hpondn = pndaspect * apondn
             ! fraction of grid cell covered by ponds
             apondn = apondn * aicen(i,j)
 
@@ -224,35 +222,18 @@
             ! Limit pond depth
             !-----------------------------------------------------------
              hpondn = min(hpondn, dpthhi*hi)
-             volpn(i,j) = hpondn*apondn
-
-            !-----------------------------------------------------------
-            ! If surface is freezing or has snow, do not change albedo
-            !-----------------------------------------------------------
-!            if (Tsfcn(i,j) < Tp) apondn = c0
-!            if (hs > puny) apondn = c0
-
-            !-----------------------------------------------------------
-            ! reduce pond area if there is snow, preserving volume
-            !-----------------------------------------------------------
-!echmod - do this in ice_shortwave.F90
-!            if (hs >= hsmin) then
-!               asnow = min(hs/hs0, c1) ! delta-Eddington formulation
-!               apondn = (c1 - asnow) * apondn
-!            endif
-
-            !-----------------------------------------------------------
-            ! Reload tracer array
-            !-----------------------------------------------------------
-            trcrn(i,j,nt_apnd) = apondn / aicen(i,j)
-            trcrn(i,j,nt_hpnd) = hpondn
-!            trcrn(i,j,nt_volp) = volpn(i,j) / aicen(i,j)
 
          endif
 
+         !-----------------------------------------------------------
+         ! Reload tracer array
+         !-----------------------------------------------------------
+         trcrn(i,j,nt_apnd) = apondn / aicen(i,j)
+         trcrn(i,j,nt_hpnd) = hpondn
+
       enddo
 
-      end subroutine compute_ponds_rad
+      end subroutine compute_ponds_cesm
 
 !=======================================================================
 !
@@ -262,7 +243,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine write_restart_pond_rad(filename_spec)
+      subroutine write_restart_pond_cesm(filename_spec)
 !
 ! !DESCRIPTION:
 !
@@ -304,8 +285,7 @@
          
          write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
               restart_dir(1:lenstr(restart_dir)), &
-!              restart_file(1:lenstr(restart_file)),'.volpn.', &
-              restart_file(1:lenstr(restart_file)),'.pond.', &
+              restart_file(1:lenstr(restart_file)),'.cesmpond.', &
               iyear,'-',month,'-',mday,'-',sec
       end if
          
@@ -321,13 +301,12 @@
 
       do n = 1, ncat
          call ice_write(nu_dump_pond,0,trcrn(:,:,nt_apnd,n,:),'ruf8',diag)
-!         call ice_write(nu_dump_pond,0,trcrn(:,:,nt_volp,n,:),'ruf8',diag)
          call ice_write(nu_dump_pond,0,trcrn(:,:,nt_hpnd,n,:),'ruf8',diag)
       enddo
 
       if (my_task == master_task) close(nu_dump_pond)
 
-      end subroutine write_restart_pond_rad
+      end subroutine write_restart_pond_cesm
 
 !=======================================================================
 !BOP
@@ -336,7 +315,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine read_restart_pond_rad(filename_spec)
+      subroutine read_restart_pond_cesm(filename_spec)
 !
 ! !DESCRIPTION:
 !
@@ -378,14 +357,12 @@
 
          ! reconstruct path/file
          n = index(filename0,trim(restart_file))
-!         if (n == 0) call abort_ice('volpn restart: filename discrepancy')
-         if (n == 0) call abort_ice('pond restart: filename discrepancy')
+         if (n == 0) call abort_ice('cesm pond restart: filename discrepancy')
          string1 = trim(filename0(1:n-1))
          string2 = trim(filename0(n+lenstr(restart_file):lenstr(filename0)))
          write(filename,'(a,a,a,a)') &
             string1(1:lenstr(string1)), &
-!            restart_file(1:lenstr(restart_file)),'.volpn', &
-            restart_file(1:lenstr(restart_file)),'.pond', &
+            restart_file(1:lenstr(restart_file)),'.cesmpond', &
             string2(1:lenstr(string2))
       endif ! master_task
 
@@ -400,16 +377,15 @@
 
       do n = 1, ncat
          call ice_read(nu_restart_pond,0,trcrn(:,:,nt_apnd,n,:),'ruf8',diag)
-!         call ice_read(nu_restart_pond,0,trcrn(:,:,nt_volp,n,:),'ruf8',diag)
          call ice_read(nu_restart_pond,0,trcrn(:,:,nt_hpnd,n,:),'ruf8',diag)
       enddo
 
       if (my_task == master_task) close(nu_restart_pond)
 
-      end subroutine read_restart_pond_rad
+      end subroutine read_restart_pond_cesm
 
 !=======================================================================
 
-      end module ice_meltpond_rad
+      end module ice_meltpond_cesm
 
 !=======================================================================

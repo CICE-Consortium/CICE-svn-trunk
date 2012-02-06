@@ -58,8 +58,10 @@
   , restart_age  = .false.
   , tr_lvl       = .false.
   , restart_lvl  = .false.
-  , tr_pond      = .false.
-  , restart_pond = .false.
+  , tr_pond_cesm = .false.
+  , restart_pond_cesm = .false.
+  , tr_pond_lvl  = .false.
+  , restart_pond_lvl  = .false.
   , tr_aero      = .false.
   , restart_aero = .false.
 /
@@ -84,8 +86,15 @@
   , ahmax           = 0.3
   , R_ice           = 0.
   , R_pnd           = 0.
-  , R_snw           = 0.
+  , R_snw           = 1.5
   , hs0             = 0.03
+  , hs1             = 0.03
+  , dpscale         = 1.e-3
+  , frzpnd          = 'hlid'
+  , snowinfil       = .true.
+  , rfracmin        = 0.15
+  , rfracmax        = 0.85
+  , pndaspect       = 0.8
   , atmbndy         = 'default'
   , fyear_init      = 1981
   , ycycle          = 1
@@ -167,6 +176,7 @@
   , f_frazil       = 'm' 
   , f_snoice       = 'm' 
   , f_meltt        = 'm'
+  , f_melts        = 'm'
   , f_meltb        = 'm'
   , f_meltl        = 'm'
   , f_fresh        = 'x'
@@ -214,9 +224,9 @@
   , f_vlvl         = 'x'
   , f_ardg         = 'x'
   , f_vrdg         = 'x'
-  , f_faero_atm    = 'm'
-  , f_faero_ocn    = 'm'
-  , f_aero         = 'm'
+  , f_faero_atm    = 'x'
+  , f_faero_ocn    = 'x'
+  , f_aero         = 'x'
   , f_aicen        = 'x'
   , f_vicen        = 'x'
   , f_Tinz         = 'x'
@@ -226,7 +236,11 @@
   , f_fmelttn_ai   = 'x'
   , f_flatn_ai     = 'x'
   , f_apondn       = 'x'
-  , f_apond        = 'm'
-  , f_hpond        = 'm'
-  , f_apeff        = 'm'
+  , f_apond        = 'x'
+  , f_hpond        = 'x'
+  , f_ipond        = 'x'
+  , f_apond_ai     = 'x'
+  , f_hpond_ai     = 'x'
+  , f_ipond_ai     = 'x'
+  , f_apeff        = 'x'
 /

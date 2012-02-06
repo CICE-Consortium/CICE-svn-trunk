@@ -201,6 +201,7 @@
          fieldid           ! field identifier
 
       logical (kind=log_kind), parameter :: &
+         print_diags = .false.        , & ! if true, prints when remap_flag=F
          l_conservation_check = .false.   ! if true, check conservation
                                           ! (useful for debugging)
 
@@ -325,6 +326,7 @@
                 hicen(ij,n) >= hbnew(ij,n)) then
                remap_flag(ij) = .false.
 
+               if (print_diags) then
                   write(nu_diag,*) my_task,':',i,j, &
                        'ITD: hicen(n) > hbnew(n)'
                   write(nu_diag,*) 'cat ',n
@@ -332,11 +334,13 @@
                        'hicen(n) =', hicen(ij,n)
                   write(nu_diag,*) my_task,':',i,j, &
                        'hbnew(n) =', hbnew(ij,n)
+               endif
 
             elseif (aicen(i,j,n+1) > puny .and. &
                     hicen(ij,n+1) <= hbnew(ij,n)) then
                remap_flag(ij) = .false.
 
+               if (print_diags) then
                   write(nu_diag,*) my_task,':',i,j, &
                        'ITD: hicen(n+1) < hbnew(n)'
                   write(nu_diag,*) 'cat ',n
@@ -344,6 +348,7 @@
                        'hicen(n+1) =', hicen(ij,n+1)
                   write(nu_diag,*) my_task,':',i,j, &
                        'hbnew(n) =', hbnew(ij,n)
+               endif
             endif
 
       !-----------------------------------------------------------------
@@ -357,6 +362,7 @@
             if (hbnew(ij,n) > hin_max(n+1)) then
                remap_flag(ij) = .false.
 
+               if (print_diags) then
                   write(nu_diag,*) my_task,':',i,j, &
                        'ITD hbnew(n) > hin_max(n+1)'
                   write(nu_diag,*) 'cat ',n
@@ -364,11 +370,13 @@
                        'hbnew(n) =', hbnew(ij,n)
                   write(nu_diag,*) my_task,':',i,j, &
                        'hin_max(n+1) =', hin_max(n+1)
+               endif
             endif
 
             if (hbnew(ij,n) < hin_max(n-1)) then
                remap_flag(ij) = .false.
 
+               if (print_diags) then
                   write(nu_diag,*) my_task,':',i,j, &
                        'ITD: hbnew(n) < hin_max(n-1)'
                   write(nu_diag,*) 'cat ',n
@@ -376,6 +384,7 @@
                        'hbnew(n) =', hbnew(ij,n)
                   write(nu_diag,*) my_task,':',i,j, &
                        'hin_max(n-1) =', hin_max(n-1)
+               endif
             endif
 
          enddo                  ! ij
@@ -854,7 +863,7 @@
       use ice_itd, only: hin_max, ilyr1, column_sum, &
                          column_conservation_check
       use ice_state, only: nt_Tsfc, nt_iage, nt_alvl, nt_vlvl, nt_aero, &
-                           nt_apnd, tr_pond, &
+                           nt_apnd, tr_pond_cesm, tr_pond_lvl, &
                            tr_iage, tr_lvl, tr_aero
       use ice_flux, only: update_ocn_f
 
@@ -942,6 +951,7 @@
          vtmp         , & ! total volume of new and old ice
          area1        , & ! starting fractional area of existing ice
          vice1        , & ! starting volume of existing ice
+         alvl         , & ! starting level ice area
          rnilyr       , & ! real(nilyr)
          dfresh       , & ! change in fresh
          dfsalt           ! change in fsalt
@@ -1178,11 +1188,6 @@
                trcrn(i,j,nt_iage,1) = &
               (trcrn(i,j,nt_iage,1)*vice1 + dt*vi0new(m))/vicen(i,j,1)
 
-            if (tr_pond) then
-               trcrn(i,j,nt_apnd,1) = &
-               trcrn(i,j,nt_apnd,1)*area1/aicen(i,j,1)
-            endif
-
             if (tr_aero) then
                do it = 1, n_aero
                   trcrn(i,j,nt_aero+2+4*(it-1),1) = &
@@ -1191,13 +1196,23 @@
                   trcrn(i,j,nt_aero+3+4*(it-1),1)*vice1/vicen(i,j,1)
                enddo
             endif
-         endif
 
-         if (tr_lvl .and. aicen(i,j,1) > puny) then
-             trcrn(i,j,nt_alvl,1) = &
-            (trcrn(i,j,nt_alvl,1)*area1 + ai0new(m))/aicen(i,j,1)
-             trcrn(i,j,nt_vlvl,1) = &
-            (trcrn(i,j,nt_vlvl,1)*vice1 + vi0new(m))/vicen(i,j,1)
+            if (tr_lvl) then
+                alvl = trcrn(i,j,nt_alvl,1) !echmod
+                trcrn(i,j,nt_alvl,1) = &
+               (trcrn(i,j,nt_alvl,1)*area1 + ai0new(m))/aicen(i,j,1)
+                trcrn(i,j,nt_vlvl,1) = &
+               (trcrn(i,j,nt_vlvl,1)*vice1 + vi0new(m))/vicen(i,j,1)
+            endif
+
+            if (tr_pond_cesm) then
+               trcrn(i,j,nt_apnd,1) = &
+               trcrn(i,j,nt_apnd,1)*area1/aicen(i,j,1)
+            elseif (tr_pond_lvl .and. trcrn(i,j,nt_alvl,1) > puny) then
+               trcrn(i,j,nt_apnd,1) = &
+               trcrn(i,j,nt_apnd,1) * alvl*area1 &
+                                    / (trcrn(i,j,nt_alvl,1)*aicen(i,j,1))
+            endif
          endif
 
          vlyr(m)    = vi0new(m) / rnilyr

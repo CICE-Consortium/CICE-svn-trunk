@@ -2043,7 +2043,7 @@
 
                   ! reduce conductivity for next iteration
                do k = 1, nilyr
-                  if (reduce_kh(m,k) .and. dqmat(m,k) < puny) then
+                  if (reduce_kh(m,k) .and. dqmat(m,k) > c0) then
                      frac = max(0.5*(c1-ferr(m)/abs(fcondtopn(i,j)-fcondbot(m))),p1)
 !                     frac = p1
                      kh(m,k+nslyr+1) = kh(m,k+nslyr+1) * frac
