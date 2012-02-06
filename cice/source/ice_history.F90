@@ -1252,43 +1252,43 @@
       ! Melt ponds
       if (f_apond(1:1) /= 'x') &
          call define_hist_field(n_apond,"apond","1",tstr2D, tcstr, & 
-             "melt pond concentration",                            &
+             "melt pond fraction of sea ice",                      &
              "none", c1, c0,                                       &
              ns1, f_apond)
 
       if (f_apond_ai(1:1) /= 'x') &
          call define_hist_field(n_apond_ai,"apond_ai","1",tstr2D, tcstr, & 
-             "melt pond concentration fraction of sea ice",        &
-             "weighted by ice area", c1, c0,                                       &
+             "melt pond fraction of grid cell",                    &
+             "weighted by ice area", c1, c0,                       &
              ns1, f_apond)
 
       if (f_hpond(1:1) /= 'x') &
          call define_hist_field(n_hpond,"hpond","m",tstr2D, tcstr, & 
-             "mean melt pond depth",                               &
+             "mean melt pond depth over sea ice",                  &
              "none", c1, c0,                                       &
              ns1, f_hpond)
 
       if (f_hpond_ai(1:1) /= 'x') &
          call define_hist_field(n_hpond_ai,"hpond_ai","m",tstr2D, tcstr, & 
-             "mean melt pond depth fraction of sea ice",           &
-             "weighted by ice area", c1, c0,                                       &
+             "mean melt pond depth over grid cell",                &
+             "weighted by ice area", c1, c0,                       &
              ns1, f_hpond)
 
       if (f_ipond(1:1) /= 'x') &
          call define_hist_field(n_ipond,"ipond","m",tstr2D, tcstr, & 
-             "mean pond ice thickness",                               &
+             "mean pond ice thickness over sea ice",               &
              "none", c1, c0,                                       &
              ns1, f_ipond)
 
       if (f_ipond_ai(1:1) /= 'x') &
          call define_hist_field(n_ipond_ai,"ipond_ai","m",tstr2D, tcstr, & 
-             "mean pond ice thickness fraction sea ice",           &
-             "weighted by ice area", c1, c0,                                       &
+             "mean pond ice thickness over grid cell",             &
+             "weighted by ice area", c1, c0,                       &
              ns1, f_ipond_ai)
 
       if (f_apeff(1:1) /= 'x') &
          call define_hist_field(n_apeff,"apeff","1",tstr2D, tcstr, &
-             "radiation-effective pond area fraction",         &
+             "radiation-effective pond area fraction of sea ice",  &
              "none", c1, c0,  &
              ns1, f_apeff)
 
