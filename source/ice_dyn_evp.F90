@@ -398,6 +398,8 @@
                uvel    (:,:,iblk), vvel    (:,:,iblk), & 
                uocn    (:,:,iblk), vocn    (:,:,iblk), & 
                aiu     (:,:,iblk),                     &
+               strintx (:,:,iblk), strinty (:,:,iblk), &  ! echmod
+               strairx (:,:,iblk), strairy (:,:,iblk), &  ! echmod
                strocnx (:,:,iblk), strocny (:,:,iblk), & 
                strocnxT(:,:,iblk), strocnyT(:,:,iblk))
 
@@ -1404,6 +1406,8 @@
                              uvel,     vvel,     &
                              uocn,     vocn,     &
                              aiu,                &
+                             strintx,  strinty,& ! echmod - HB87
+                             strairx,  strairy,& ! echmod - HB87
                              strocnx,  strocny,  &
                              strocnxT, strocnyT) 
 !
@@ -1434,7 +1438,11 @@
          vvel    , & ! y-component of velocity (m/s)
          uocn    , & ! ocean current, x-direction (m/s)
          vocn    , & ! ocean current, y-direction (m/s)
-         aiu         ! ice fraction on u-grid
+         aiu     , & ! ice fraction on u-grid
+         strintx , & ! divergence of internal ice stress, x (N/m^2)
+         strinty , & ! divergence of internal ice stress, y (N/m^2)
+         strairx , & ! stress on ice by air, x-direction
+         strairy     ! stress on ice by air, y-direction
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
@@ -1464,10 +1472,23 @@
 
          vrel = dragw*sqrt((uocn(i,j) - uvel(i,j))**2 + &
                            (vocn(i,j) - vvel(i,j))**2)  ! m/s
-         strocnx(i,j) = strocnx(i,j) &
-                      - vrel*(uvel(i,j)*cosw - vvel(i,j)*sinw) * aiu(i,j)
-         strocny(i,j) = strocny(i,j) &
-                      - vrel*(vvel(i,j)*cosw + uvel(i,j)*sinw) * aiu(i,j)
+
+!        strocnx(i,j) = strocnx(i,j) &
+!                     - vrel*(uvel(i,j)*cosw - vvel(i,j)*sinw) * aiu(i,j)
+!        strocny(i,j) = strocny(i,j) &
+!                     - vrel*(vvel(i,j)*cosw + uvel(i,j)*sinw) * aiu(i,j)
+
+         ! update strocnx to most recent iterate and complete the term       
+         vrel = vrel * aiu(i,j)
+         strocnx(i,j) = vrel*((uocn(i,j)*cosw - vocn(i,j)*sinw) &
+                            - (uvel(i,j)*cosw - vvel(i,j)*sinw))
+         strocny(i,j) = vrel*((vocn(i,j)*cosw + uocn(i,j)*sinw) &
+                            - (vvel(i,j)*cosw + uvel(i,j)*sinw))
+
+         ! Hibler/Bryan stress
+         ! the sign is reversed later, therefore negative here
+!         strocnx(i,j) = -(strairx(i,j) + strintx(i,j))
+!         strocny(i,j) = -(strairy(i,j) + strinty(i,j))
 
          ! Prepare to convert to T grid
          ! divide by aice for coupling
