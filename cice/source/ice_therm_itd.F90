@@ -1208,10 +1208,12 @@
             if (tr_pond_cesm) then
                trcrn(i,j,nt_apnd,1) = &
                trcrn(i,j,nt_apnd,1)*area1/aicen(i,j,1)
-            elseif (tr_pond_lvl .and. trcrn(i,j,nt_alvl,1) > puny) then
-               trcrn(i,j,nt_apnd,1) = &
-               trcrn(i,j,nt_apnd,1) * alvl*area1 &
-                                    / (trcrn(i,j,nt_alvl,1)*aicen(i,j,1))
+            elseif (tr_pond_lvl) then
+               if (trcrn(i,j,nt_alvl,1) > puny) then
+                  trcrn(i,j,nt_apnd,1) = &
+                  trcrn(i,j,nt_apnd,1) * alvl*area1 &
+                                       / (trcrn(i,j,nt_alvl,1)*aicen(i,j,1))
+               endif
             endif
          endif
 

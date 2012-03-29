@@ -2079,7 +2079,7 @@
       dfaero_ocn(:,:,:) = c0
 
       !-----------------------------------------------------------------
-      ! Zap categories with very small areas.
+      ! I. Zap categories with very small areas.
       !-----------------------------------------------------------------
 
       do n = 1, ncat
@@ -2108,6 +2108,27 @@
             endif
          enddo
          enddo
+
+      !-----------------------------------------------------------------
+      ! Account for tracers important for conservation
+      !-----------------------------------------------------------------
+
+         if (tr_aero) then
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+               do it = 1, n_aero
+                  xtmp = (vsnon(i,j,n)*(trcrn(i,j,nt_aero  +4*(it-1),n)     &
+                                      + trcrn(i,j,nt_aero+1+4*(it-1),n))    &
+                       +  vicen(i,j,n)*(trcrn(i,j,nt_aero+2+4*(it-1),n)     &
+                                      + trcrn(i,j,nt_aero+3+4*(it-1),n)))/dt
+                  dfaero_ocn(i,j,it) = dfaero_ocn(i,j,it) + xtmp
+               enddo                 ! n
+            enddo                  ! ij
+         endif
 
       !-----------------------------------------------------------------
       ! Zap ice energy and use ocean heat to melt ice
@@ -2172,23 +2193,6 @@
 
          enddo                  ! ij
 
-         if (tr_aero) then
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-               do it = 1, n_aero
-                  xtmp = (vsnon(i,j,n)*(trcrn(i,j,nt_aero  +4*(it-1),n)     &
-                                      + trcrn(i,j,nt_aero+1+4*(it-1),n))    &
-                       +  vicen(i,j,n)*(trcrn(i,j,nt_aero+2+4*(it-1),n)     &
-                                      + trcrn(i,j,nt_aero+3+4*(it-1),n)))/dt
-                  dfaero_ocn(i,j,it) = dfaero_ocn(i,j,it) + xtmp
-               enddo                 ! n
-            enddo                  ! ij
-         endif
-
       !-----------------------------------------------------------------
       ! Zap tracers
       !-----------------------------------------------------------------
@@ -2206,8 +2210,8 @@
       enddo                     ! n
 
       !-----------------------------------------------------------------
-      ! Count cells with excess ice (aice > c1) due to roundoff errors.
-      ! Zap a little ice in each category so that aice = c1.
+      ! II. Count cells with excess ice (aice > c1) due to roundoff errors.
+      !     Zap a little ice in each category so that aice = c1.
       !-----------------------------------------------------------------
 
       icells = 0
@@ -2230,6 +2234,28 @@
       enddo
 
       do n = 1, ncat
+
+      !-----------------------------------------------------------------
+      ! Account for tracers important for conservation
+      !-----------------------------------------------------------------
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         if (tr_aero) then
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+               do it = 1, n_aero
+                  xtmp = (vsnon(i,j,n)*(trcrn(i,j,nt_aero  +4*(it-1),n)     &
+                                      + trcrn(i,j,nt_aero+1+4*(it-1),n))    &
+                       +  vicen(i,j,n)*(trcrn(i,j,nt_aero+2+4*(it-1),n)     &
+                                      + trcrn(i,j,nt_aero+3+4*(it-1),n)))   &
+                       * (aice(i,j)-c1)/aice(i,j) / dt
+                  dfaero_ocn(i,j,it) = dfaero_ocn(i,j,it) + xtmp
+               enddo                 ! n
+            enddo                  ! ij
+         endif
 
       !----------------------------------------------------------------- 
       ! Zap ice energy and use ocean heat to melt ice 
@@ -2297,24 +2323,6 @@
             vsnon(i,j,n) = vsnon(i,j,n) * (c1/aice(i,j))
  
          enddo                  ! ij
-
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-         if (tr_aero) then
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-               do it = 1, n_aero
-                  xtmp = (vsnon(i,j,n)*(trcrn(i,j,nt_aero  +4*(it-1),n)     &
-                                      + trcrn(i,j,nt_aero+1+4*(it-1),n))    &
-                       +  vicen(i,j,n)*(trcrn(i,j,nt_aero+2+4*(it-1),n)     &
-                                      + trcrn(i,j,nt_aero+3+4*(it-1),n)))   &
-                       * (aice(i,j)-c1)/aice(i,j) / dt
-                  dfaero_ocn(i,j,it) = dfaero_ocn(i,j,it) + xtmp
-               enddo                 ! n
-            enddo                  ! ij
-         endif
 
       ! Note: Tracers are unchanged.
 

@@ -1094,6 +1094,15 @@
 ! Remove area, volume, and energy from each ridging category
 ! and add to thicker ice categories.
 !
+! Tracers:  Ridging conserves ice volume and therefore conserves volume
+! tracers. It does not conserve ice area, and therefore a portion of area 
+! tracers are lost (corresponding to the net closing).  Area tracers on 
+! ice that participates in ridging are carried onto the resulting ridged
+! ice (except the portion that are lost due to closing).  Therefore, 
+! tracers must be decremented if they are lost to the ocean during ridging
+! (e.g. snow, ponds) or if they are being carried only on the level ice 
+! area. 
+!
 ! !REVISION HISTORY:
 !
 ! author: William H. Lipscomb, LANL
