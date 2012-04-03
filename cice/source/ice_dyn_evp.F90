@@ -241,7 +241,7 @@
       !-----------------------------------------------------------------
 
       call to_ugrid(tmass,umass)
-      call to_ugrid(aice, aiu)
+      call to_ugrid(aice_init, aiu)
 
 #ifdef CICE_IN_NEMO
       !----------------------------------------------------------------

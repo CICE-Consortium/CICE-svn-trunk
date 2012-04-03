@@ -80,6 +80,19 @@
          dvirdgdt, & ! rate of ice volume ridged (m/s)
          opening     ! rate of opening due to divergence/shear (1/s)
 
+      real (kind=dbl_kind), & 
+         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+       ! ridging diagnostics in categories
+         dardg1ndt, & ! rate of area loss by ridging ice (1/s)
+         dardg2ndt, & ! rate of area gain by new ridges (1/s)
+         dvirdgndt, & ! rate of ice volume ridged (m/s)
+         aparticn,  & ! participation function
+         krdgn,     & ! mean ridge thickness/thickness of ridging ice
+         ardgn,     & ! fractional area of ridged ice
+         vrdgn,     & ! volume of ridged ice
+         aredistn,  & ! redistribution function: fraction of new ridge area
+         vredistn     ! redistribution function: fraction of new ridge volume
+
        ! restart
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
@@ -612,6 +625,15 @@
       dvidtd  (:,:,:) = vice(:,:,:) ! temporary initial volume
       fm      (:,:,:) = c0
       prs_sig (:,:,:) = c0
+      ardgn   (:,:,:,:) = c0
+      vrdgn   (:,:,:,:) = c0
+      krdgn   (:,:,:,:) = c1
+      aparticn(:,:,:,:) = c0
+      aredistn(:,:,:,:) = c0
+      vredistn(:,:,:,:) = c0
+      dardg1ndt(:,:,:,:) = c0
+      dardg2ndt(:,:,:,:) = c0
+      dvirdgndt(:,:,:,:) = c0
 
       end subroutine init_history_dyn
 

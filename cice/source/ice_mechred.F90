@@ -132,7 +132,11 @@
                             dardg1dt,    dardg2dt,   &
                             dvirdgdt,    opening,    &
                             fresh,       fhocn,      &
-                            faero_ocn)
+                            aparticn,    krdgn,      &
+                            aredistn,    vredistn,   &
+                            dardg1ndt,   dardg2ndt,  &
+                            dvirdgndt,   faero_ocn)
+                            
 !
 ! !USES:
 !
@@ -195,6 +199,16 @@
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
          fhocn         ! net heat flux to ocean (W/m^2)
 
+      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+         intent(out), optional :: &
+         dardg1ndt , & ! rate of fractional area loss by ridging ice (1/s)
+         dardg2ndt , & ! rate of fractional area gain by new ridges (1/s)
+         dvirdgndt , & ! rate of ice volume ridged (m/s)
+         aparticn  , & ! participation function
+         krdgn     , & ! mean ridge thickness/thickness of ridging ice
+         aredistn  , & ! redistribution function: fraction of new ridge area
+         vredistn      ! redistribution function: fraction of new ridge volume
+
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
          intent(inout), optional :: &
          faero_ocn     ! aerosol flux to ocean (kg/m^2/s)
@@ -228,7 +242,10 @@
          hrmin        , & ! minimum ridge thickness
          hrmax        , & ! maximum ridge thickness (krdg_redist = 0)
          hrexp        , & ! ridge e-folding thickness (krdg_redist = 1) 
-         krdg             ! mean ridge thickness/thickness of ridging ice
+         krdg         , & ! mean ridge thickness/thickness of ridging ice
+         ardg1n       , & ! area of ice ridged
+         ardg2n       , & ! area of new ridges
+         virdgn           ! ridging ice volume
 
       real (kind=dbl_kind), dimension (icells) :: &
          vice_init, vice_final, & ! ice volume summed over categories
@@ -270,6 +287,9 @@
          ardg1    (ij) = c0
          ardg2    (ij) = c0
          virdg    (ij) = c0
+         ardg1n   (ij,:) = c0
+         ardg2n   (ij,:) = c0
+         virdgn   (ij,:) = c0
 !         aopen    (ij) = c0
       enddo
 
@@ -332,7 +352,8 @@
                          aice0,                      &
                          aksum,     apartic,         &
                          hrmin,     hrmax,           &
-                         hrexp,     krdg)
+                         hrexp,     krdg,            &
+                         aparticn,  krdgn)
 
       !-----------------------------------------------------------------
       ! Redistribute area, volume, and energy.
@@ -351,10 +372,13 @@
                            closing_net, opning,        &
                            ardg1,     ardg2,           &
                            virdg,     aopen,           &
+                           ardg1n,    ardg2n,          &
+                           virdgn,                     &
                            msnow_mlt, esnow_mlt,       &
                            maero,                      &
                            l_stop,                     &
-                           istop,     jstop)
+                           istop,     jstop,           &
+                           aredistn,  vredistn)
 
          if (l_stop) return
 
@@ -500,6 +524,33 @@
             i = indxi(ij)
             j = indxj(ij)
             opening(i,j) = aopen(ij)*dti
+         enddo
+      endif
+      if (present(dardg1ndt)) then
+         do n = 1, ncat
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            dardg1ndt(i,j,n) = ardg1n(ij,n)*dti
+         enddo
+         enddo
+      endif
+      if (present(dardg2ndt)) then
+         do n = 1, ncat
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            dardg2ndt(i,j,n) = ardg2n(ij,n)*dti
+         enddo
+         enddo
+      endif
+      if (present(dvirdgndt)) then
+         do n = 1, ncat
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            dvirdgndt(i,j,n) = virdgn(ij,n)*dti
+         enddo
          enddo
       endif
 
@@ -780,7 +831,8 @@
                             aice0,                        &
                             aksum,       apartic,         &
                             hrmin,       hrmax,           &
-                            hrexp,       krdg)
+                            hrexp,       krdg,            &
+                            aparticn,    krdgn)
 !
 ! !USES:
 !
@@ -793,7 +845,6 @@
       integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
          indxi, indxj     ! compressed indices for cells with ice
-
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(in) :: &
@@ -817,6 +868,13 @@
          hrmax        , & ! maximum ridge thickness (krdg_redist = 0)
          hrexp        , & ! ridge e-folding thickness (krdg_redist = 1) 
          krdg             ! mean ridge thickness/thickness of ridging ice
+
+      ! diagnostic, category values
+      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+         intent(out), optional :: &
+         aparticn  , & ! participation function
+         krdgn         ! mean ridge thickness/thickness of ridging ice
+
 !
 !EOP
 !
@@ -1082,6 +1140,32 @@
          enddo
       enddo
 
+      ! diagnostics
+      if (present(aparticn)) then
+      do n = 1, ncat
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+               aparticn(i,j,n) = apartic(ij,n)
+         enddo
+      enddo
+      endif
+      if (present(krdgn)) then
+      do n = 1, ncat
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+               krdgn(i,j,n) = krdg(ij,n)
+         enddo
+      enddo
+      endif
+
       end subroutine ridge_itd
 
 !=======================================================================
@@ -1122,10 +1206,13 @@
                               closing_net, opning,          &
                               ardg1,       ardg2,           &
                               virdg,       aopen,           &
+                              ardg1nn,     ardg2nn,         &
+                              virdgnn,                      &
                               msnow_mlt,   esnow_mlt,       &
                               maero,                        &
                               l_stop,                       &
-                              istop,       jstop)
+                              istop,       jstop,           &
+                              aredistn,    vredistn)
 !
 ! !USES:
 !
@@ -1192,6 +1279,11 @@
          virdg      , & ! ice volume ridged (m)
          aopen          ! area opened due to divergence/shear
 
+      real (kind=dbl_kind), dimension(icells,ncat), intent(inout) :: &
+         ardg1nn    , & ! area of ice ridged
+         ardg2nn    , & ! area of new ridges
+         virdgnn        ! ridging ice volume
+
       real (kind=dbl_kind), dimension(icells), intent(inout) :: &
          msnow_mlt, & ! mass of snow added to ocean (kg m-2)
          esnow_mlt    ! energy needed to melt snow in ocean (J m-2)
@@ -1204,6 +1296,11 @@
 
       integer (kind=int_kind), intent(inout) :: &
          istop, jstop ! indices of grid cell where model aborts
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
+         intent(inout), optional :: &
+         aredistn  , & ! redistribution function: fraction of new ridge area
+         vredistn      ! redistribution function: fraction of new ridge volume
 !
 !EOP
 !
@@ -1512,6 +1609,10 @@
             ardg2(m) = ardg2(m) + ardg2n(ij)
             virdg(m) = virdg(m) + virdgn(ij)
 
+            ardg1nn(m,n) = ardg1n(ij)
+            ardg2nn(m,n) = ardg2n(ij)
+            virdgnn(m,n) = virdgn(ij)
+
       !-----------------------------------------------------------------
       ! Decrement level ice area and volume tracers
       !-----------------------------------------------------------------
@@ -1770,6 +1871,22 @@
                   enddo
 
                endif            ! nr < ncat
+
+               ! diagnostics
+               if (present(aredistn)) then
+               do ij = 1, iridge
+                  i = indxii(ij)
+                  j = indxjj(ij)
+                  aredistn(i,j,nr) = farea(ij)
+               enddo
+               endif
+               if (present(vredistn)) then
+               do ij = 1, iridge
+                  i = indxii(ij)
+                  j = indxjj(ij)
+                  vredistn(i,j,nr) = fvol (ij)
+               enddo
+               endif
 
             endif               ! krdg_redist
 
