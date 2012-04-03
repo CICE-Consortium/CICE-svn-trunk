@@ -234,7 +234,12 @@
            f_alvl      = 'm', f_vlvl       = 'm', &
            f_hisnap    = 'm', f_aisnap     = 'm', &
            f_aero      = 'm', f_aeron      = 'm', &
-           f_aicen     = 'm', f_vicen      = 'm', &
+           f_aicen     = 'x', f_vicen      = 'x', &
+           f_ardgn     = 'x', f_vrdgn      = 'x', &
+           f_dardg1ndt = 'x', f_dardg2ndt  = 'x', &
+           f_dvirdgndt = 'x', &
+           f_aparticn  = 'x', f_krdgn      = 'x', &
+           f_aredistn  = 'x', f_vredistn   = 'x', &
            f_apondn    = 'x',                     &
            f_apond     = 'x', f_apond_ai   = 'x', &
            f_hpond     = 'x', f_hpond_ai   = 'x', &
@@ -243,10 +248,10 @@
            f_trsig     = 'm', f_icepresent = 'm', &
            f_fsurf_ai  = 'm', f_fcondtop_ai= 'm', &
            f_fmeltt_ai = 'm',                     &
-           f_fsurfn_ai = 'm' ,f_fcondtopn_ai='m', &
-           f_fmelttn_ai= 'm', f_flatn_ai   = 'm', &
+           f_fsurfn_ai = 'x' ,f_fcondtopn_ai='x', &
+           f_fmelttn_ai= 'x', f_flatn_ai   = 'x', &
 !          f_field3dz  = 'x',                     &
-           f_Tinz      = 'm', f_Tsnz       = 'm' 
+           f_Tinz      = 'x', f_Tsnz       = 'x' 
 
 
       !---------------------------------------------------------------
@@ -311,6 +316,11 @@
            f_hisnap,    f_aisnap   , &
            f_aero,      f_aeron    , &
            f_aicen,     f_vicen    , &
+           f_ardgn,     f_vrdgn    , &
+           f_dardg1ndt, f_dardg2ndt, &
+           f_dvirdgndt, &
+           f_aparticn,  f_krdgn    , &
+           f_aredistn,  f_vredistn , &
            f_apondn,                 &
            f_apond,     f_apond_ai , &  
            f_hpond,     f_hpond_ai , &  
@@ -399,8 +409,12 @@
            n_ardg       , n_vrdg       , &
            n_alvl       , n_vlvl       , &
            n_fcondtop_ai, n_fmeltt_ai  , &
-           n_aicen       , &
-           n_vicen       , &
+           n_aicen      , n_vicen      , &
+           n_ardgn      , n_vrdgn      , &
+           n_dardg1ndt  , n_dardg2ndt  , &
+           n_dvirdgndt  , &
+           n_krdgn      , n_aparticn   , &
+           n_aredistn   , n_vredistn   , &
            n_apondn      , &
            n_apond       , n_apond_ai, &
            n_hpond       , n_hpond_ai, &
@@ -543,6 +557,8 @@
          f_vrdg = 'x'
          f_alvl = 'x'
          f_vlvl = 'x'
+         f_ardgn = 'x'
+         f_vrdgn = 'x'
       endif
       if (.not. tr_aero) then
          f_faero_atm = 'x'
@@ -665,6 +681,15 @@
       call broadcast_scalar (f_hisnap, master_task)
       call broadcast_scalar (f_aicen, master_task)
       call broadcast_scalar (f_vicen, master_task)
+      call broadcast_scalar (f_ardgn, master_task)
+      call broadcast_scalar (f_vrdgn, master_task)
+      call broadcast_scalar (f_dardg1ndt, master_task)
+      call broadcast_scalar (f_dardg2ndt, master_task)
+      call broadcast_scalar (f_dvirdgndt, master_task)
+      call broadcast_scalar (f_krdgn, master_task)
+      call broadcast_scalar (f_aparticn, master_task)
+      call broadcast_scalar (f_aredistn, master_task)
+      call broadcast_scalar (f_vredistn, master_task)
       call broadcast_scalar (f_trsig, master_task)
       call broadcast_scalar (f_icepresent, master_task)
       call broadcast_scalar (f_fsurf_ai, master_task)
@@ -1374,6 +1399,60 @@
               "latent heat flux, category","weighted by ice area", c1, c0,      &            
               ns1, f_flatn_ai)
 
+       if (f_ardgn(1:1) /= 'x') &
+           call define_hist_field(n_ardgn,"ardgn","1",tstr3Dc, tcstr, &
+             "ridged ice area fraction, category",                 &
+             "none", c1, c0,                                       &
+             ns1, f_ardgn)
+
+       if (f_vrdgn(1:1) /= 'x') &
+           call define_hist_field(n_vrdgn,"vrdgn","m",tstr3Dc, tcstr, &
+             "ridged ice mean thickness, category",                &
+             "none", c1, c0,                                       &
+             ns1, f_vrdgn)
+
+       if (f_dardg1ndt(1:1) /= 'x') &
+           call define_hist_field(n_dardg1ndt,"dardg1ndt","%/day",tstr3Dc, tcstr, &
+             "ice area ridging rate, category",                            &
+             "none", secday*c100, c0,                                      &
+             ns1, f_dardg1ndt)
+
+       if (f_dardg2ndt(1:1) /= 'x') &
+           call define_hist_field(n_dardg2ndt,"dardg2ndt","%/day",tstr3Dc, tcstr, &
+             "ridge area formation rate, category",                        &
+             "none", secday*c100, c0,                                      &
+             ns1, f_dardg2ndt)
+
+       if (f_dvirdgndt(1:1) /= 'x') &
+          call define_hist_field(n_dvirdgndt,"dvirdgndt","cm/day",tstr3Dc, tcstr, &
+             "ice volume ridging rate, category",                          &
+             "none", mps_to_cmpdy, c0,                                     &
+             ns1, f_dvirdgndt)
+
+       if (f_krdgn(1:1) /= 'x') &
+           call define_hist_field(n_krdgn,"krdgn","1",tstr3Dc, tcstr, &
+             "ridging thickness factor, category",                    &
+             "mean ridge thickness/thickness of ridging ice", c1, c0, &
+             ns1, f_krdgn)
+
+       if (f_aparticn(1:1) /= 'x') &
+           call define_hist_field(n_aparticn,"aparticn","1",tstr3Dc, tcstr, &
+             "ridging ice participation function, category",       &
+             "fraction of new ridge area added to cat", c1, c0,    &
+             ns1, f_aparticn)
+
+       if (f_aredistn(1:1) /= 'x') &
+           call define_hist_field(n_aredistn,"aredistn","1",tstr3Dc, tcstr, &
+             "ridging ice area redistribution function, category",   &
+             "fraction of new ridge volume added to cat", c1, c0,    &
+             ns1, f_aredistn)
+
+       if (f_vredistn(1:1) /= 'x') &
+           call define_hist_field(n_vredistn,"vredistn","1",tstr3Dc, tcstr, &
+             "ridging ice volume redistribution function, category",       &
+             "none", c1, c0,                                       &
+             ns1, f_vredistn)
+
         if (f_apondn(1:1) /= 'x') &
            call define_hist_field(n_apondn,"apondn","1",tstr3Dc, tcstr, & 
               "melt pond concentration, category","none", c1, c0,      &            
@@ -1882,6 +1961,35 @@
          if (f_vicen   (1:1) /= 'x') &
              call accum_hist_field(n_vicen-n2D, iblk, ncat_hist, &
                                    vicen(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_ardgn(1:1)/= 'x') &
+             call accum_hist_field(n_ardgn-n2D, iblk, ncat_hist, &
+                                   aicen(:,:,1:ncat_hist,iblk) &
+                                 * (c1 - trcrn(:,:,nt_alvl,1:ncat_hist,iblk)), a3Dc)
+         if (f_vrdgn(1:1)/= 'x') &
+             call accum_hist_field(n_vrdgn-n2D, iblk, ncat_hist, &
+                                   vicen(:,:,1:ncat_hist,iblk) &
+                                 * (c1 - trcrn(:,:,nt_vlvl,1:ncat_hist,iblk)), a3Dc)
+         if (f_dardg1ndt(1:1)/= 'x') &
+             call accum_hist_field(n_dardg1ndt-n2D, iblk, ncat_hist, &
+                                   dardg1ndt(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_dardg2ndt(1:1)/= 'x') &
+             call accum_hist_field(n_dardg2ndt-n2D, iblk, ncat_hist, &
+                                   dardg2ndt(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_dvirdgndt(1:1)/= 'x') &
+             call accum_hist_field(n_dvirdgndt-n2D, iblk, ncat_hist, &
+                                   dvirdgndt(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_krdgn(1:1)/= 'x') &
+             call accum_hist_field(n_krdgn-n2D, iblk, ncat_hist, &
+                                   krdgn(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_aparticn(1:1)/= 'x') &
+             call accum_hist_field(n_aparticn-n2D, iblk, ncat_hist, &
+                                   aparticn(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_aredistn(1:1)/= 'x') &
+             call accum_hist_field(n_aredistn-n2D, iblk, ncat_hist, &
+                                   aredistn(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_vredistn(1:1)/= 'x') &
+             call accum_hist_field(n_vredistn-n2D, iblk, ncat_hist, &
+                                   vredistn(:,:,1:ncat_hist,iblk), a3Dc)
          if (f_apondn   (1:1) /= 'x') &
              call accum_hist_field(n_apondn-n2D, iblk, ncat_hist, &
                   trcrn(:,:,nt_apnd,1:ncat_hist,iblk) &

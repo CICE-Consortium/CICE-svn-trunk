@@ -640,7 +640,11 @@
                          dardg1dt(:,:,iblk),   dardg2dt  (:,:,iblk),     &
                          dvirdgdt(:,:,iblk),   opening   (:,:,iblk),     &
                          fresh   (:,:,iblk),   fhocn     (:,:,iblk),     &
-                         faero_ocn(:,:,:,iblk))
+                         aparticn(:,:,:,iblk), krdgn     (:,:,:,iblk),   &
+                         aredistn(:,:,:,iblk), vredistn  (:,:,:,iblk),   &
+                         dardg1ndt(:,:,:,iblk),dardg2ndt (:,:,:,iblk),   &
+                         dvirdgndt(:,:,:,iblk),faero_ocn(:,:,:,iblk))
+                         
 
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =', &
