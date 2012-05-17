@@ -397,7 +397,7 @@
                indxui    (:,iblk), indxuj    (:,iblk), & 
                uvel    (:,:,iblk), vvel    (:,:,iblk), & 
                uocn    (:,:,iblk), vocn    (:,:,iblk), & 
-               aiu     (:,:,iblk),                     &
+               aiu     (:,:,iblk), fm      (:,:,iblk), & 
                strintx (:,:,iblk), strinty (:,:,iblk), &  ! echmod
                strairx (:,:,iblk), strairy (:,:,iblk), &  ! echmod
                strocnx (:,:,iblk), strocny (:,:,iblk), & 
@@ -888,8 +888,8 @@
          fm(i,j) = fcor(i,j)*umass(i,j)   ! Coriolis * mass
 
          ! for ocean stress
-         waterx(i,j) = uocn(i,j)*cosw - vocn(i,j)*sinw
-         watery(i,j) = vocn(i,j)*cosw + uocn(i,j)*sinw
+         waterx(i,j) = uocn(i,j)*cosw - vocn(i,j)*sinw*sign(c1,fm(i,j))
+         watery(i,j) = vocn(i,j)*cosw + uocn(i,j)*sinw*sign(c1,fm(i,j))
 
          ! combine tilt with wind stress
 #ifndef coupled
@@ -1363,8 +1363,9 @@
          tauy = vrel*watery(i,j) ! ocn stress term
 
          ! alpha, beta are defined in Hunke and Dukowicz (1997), section 3.2
-         cca = umassdtei(i,j) + vrel * cosw      ! alpha, kg/m^2 s
-         ccb = fm(i,j)        + vrel * sinw      ! beta,  kg/m^2 s
+         cca = umassdtei(i,j) + vrel * cosw                  ! alpha, kg/m^2 s
+         ccb = fm(i,j)        + vrel * sinw*sign(c1,fm(i,j)) ! beta,  kg/m^2 s
+
          ab2 = cca**2 + ccb**2
 
          ! divergence of the internal stress tensor
@@ -1405,7 +1406,7 @@
                              indxui,   indxuj,   &
                              uvel,     vvel,     &
                              uocn,     vocn,     &
-                             aiu,                &
+                             aiu,      fm,       &
                              strintx,  strinty,& ! echmod - HB87
                              strairx,  strairy,& ! echmod - HB87
                              strocnx,  strocny,  &
@@ -1439,6 +1440,7 @@
          uocn    , & ! ocean current, x-direction (m/s)
          vocn    , & ! ocean current, y-direction (m/s)
          aiu     , & ! ice fraction on u-grid
+         fm      , & ! Coriolis param. * mass in U-cell (kg/s)
          strintx , & ! divergence of internal ice stress, x (N/m^2)
          strinty , & ! divergence of internal ice stress, y (N/m^2)
          strairx , & ! stress on ice by air, x-direction
@@ -1480,10 +1482,10 @@
 
          ! update strocnx to most recent iterate and complete the term       
          vrel = vrel * aiu(i,j)
-         strocnx(i,j) = vrel*((uocn(i,j)*cosw - vocn(i,j)*sinw) &
-                            - (uvel(i,j)*cosw - vvel(i,j)*sinw))
-         strocny(i,j) = vrel*((vocn(i,j)*cosw + uocn(i,j)*sinw) &
-                            - (vvel(i,j)*cosw + uvel(i,j)*sinw))
+         strocnx(i,j) = vrel*((uocn(i,j) - uvel(i,j))*cosw &
+                            - (vocn(i,j) - vvel(i,j))*sinw*sign(c1,fm(i,j)))
+         strocny(i,j) = vrel*((vocn(i,j) - vvel(i,j))*cosw &
+                            + (uocn(i,j) - uvel(i,j))*sinw*sign(c1,fm(i,j)))
 
          ! Hibler/Bryan stress
          ! the sign is reversed later, therefore negative here
