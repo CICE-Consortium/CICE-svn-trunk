@@ -211,15 +211,15 @@
       elseif (this_block%iblock == nblocks_x) then  ! east edge
          if (trim(ew_boundary_type) /= 'cyclic') then
             ! locate ghost cell column (avoid padding)
-            ibc = nx_block + 1
-            npad = 0
-            do i = nx_block, 1, - 1
+            ibc = nx_block
+            do i = nx_block, 1, -1
+               npad = 0
                if (this_block%i_glob(i) == 0) then
                   do j = 1, ny_block
                      npad = npad + this_block%j_glob(j)
                   enddo
                endif
-               if (npad == 0) ibc = ibc - 1
+               if (npad /= 0) ibc = ibc - 1
             enddo
 
             do n = 1, ncat
@@ -298,15 +298,15 @@
              trim(ns_boundary_type) /= 'tripole' .and. &
              trim(ns_boundary_type) /= 'tripoleT') then
             ! locate ghost cell row (avoid padding)
-            ibc = ny_block + 1
-            npad = 0
-            do j = ny_block, 1, - 1
+            ibc = ny_block
+            do j = ny_block, 1, -1
+               npad = 0
                if (this_block%j_glob(j) == 0) then
                   do i = 1, nx_block
                      npad = npad + this_block%i_glob(i)
                   enddo
                endif
-               if (npad == 0) ibc = ibc - 1
+               if (npad /= 0) ibc = ibc - 1
             enddo
 
             do n = 1, ncat
