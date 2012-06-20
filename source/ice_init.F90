@@ -734,11 +734,14 @@
          nt_Tsfc = 1           ! index tracers, starting with Tsfc = 1
          ntrcr = 1             ! count tracers, starting with Tsfc = 1
 
+         nt_iage = 0
          if (tr_iage) then
              nt_iage = ntrcr + 1
              ntrcr = ntrcr + 1
          endif
 
+         nt_alvl = 0
+         nt_vlvl = 0
          if (tr_lvl) then
              nt_alvl = ntrcr + 1
              ntrcr = ntrcr + 1
@@ -746,6 +749,9 @@
              ntrcr = ntrcr + 1
          endif
 
+         nt_apnd = 0
+         nt_hpnd = 0
+         nt_ipnd = 0
          if (tr_pond) then            ! all explicit melt pond schemes
              nt_apnd = ntrcr + 1
              ntrcr = ntrcr + 1
@@ -757,6 +763,7 @@
              endif
          endif
 
+         nt_aero = 0
          if (tr_aero) then
              nt_aero = ntrcr + 1
              ntrcr = ntrcr + 4*n_aero ! 4 dEdd layers, n_aero species

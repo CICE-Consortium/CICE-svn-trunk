@@ -1614,39 +1614,6 @@
             virdgnn(m,n) = virdgn(ij)
 
       !-----------------------------------------------------------------
-      ! Decrement level ice area and volume tracers
-      !-----------------------------------------------------------------
-
-            if (tr_lvl) then
-
-               ! Assume level and ridged ice both ridge, proportionally.
-               ! Subtract the level ice portion of the ridging ice from 
-               ! the level ice tracers.
-               atrcrn(m,nt_alvl,n) = atrcrn(m,nt_alvl,n) * (c1 - afrac(ij))
-               atrcrn(m,nt_vlvl,n) = atrcrn(m,nt_vlvl,n) * (c1 - afrac(ij))
-
-            endif
-
-      !-----------------------------------------------------------------
-      ! Decrement meltpond tracers
-      ! NOTE need to put this water in the ocean if ponds are 'real'
-      !-----------------------------------------------------------------
-
-            if (tr_pond_cesm) then
-
-               atrcrn(m,nt_apnd,n) = atrcrn(m,nt_apnd,n) * (c1 - afrac(ij))
-               atrcrn(m,nt_hpnd,n) = atrcrn(m,nt_hpnd,n) * (c1 - afrac(ij))
-
-            elseif (tr_pond_lvl) then
-               ! must reduce hpnd, ipnd tracers to compensate for loss of
-               ! level ice (the portion of tracer on ridging ice)
-               atrcrn(m,nt_apnd,n) = atrcrn(m,nt_apnd,n) * (c1 - afrac(ij))
-               atrcrn(m,nt_hpnd,n) = atrcrn(m,nt_hpnd,n) * (c1 - afrac(ij))
-               atrcrn(m,nt_ipnd,n) = atrcrn(m,nt_ipnd,n) * (c1 - afrac(ij))
-
-            endif
-
-      !-----------------------------------------------------------------
       !  Place part of the snow and tracer lost by ridging into the ocean.
       !-----------------------------------------------------------------
 
@@ -1942,10 +1909,14 @@
       !       (trcr_depend = 0) is not conserved by ridging.
       !       However, ridging conserves the global sum of volume
       !       tracers (trcr_depend = 1 or 2).
+      ! Tracers associated with level ice, or that are otherwise lost
+      ! from ridging ice, are not transferred.
+      ! We assume that all pond water is lost from ridging ice.
       !-----------------------------------------------------------------
 
             do it = 1, ntrcr
                if (trcr_depend(it) == 0) then  ! ice area tracer
+                  if (it /= nt_alvl) then
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -1957,7 +1928,9 @@
                                 + farea(ij)*ardg2n(ij)*trcrn(i,j,it,n)
 
                   enddo
+                  endif
                elseif (trcr_depend(it) == 1) then ! ice volume tracer
+                  if (it /= nt_vlvl) then
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -1969,6 +1942,7 @@
                                  + fvol(ij)*virdgn(ij)*trcrn(i,j,it,n)
 
                   enddo
+                  endif
                elseif (trcr_depend(it) == 2) then ! snow volume tracer
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1979,49 +1953,6 @@
                      m = indxij(ij)
                      atrcrn(m,it,nr) = atrcrn(m,it,nr) &
                         + fvol(ij)*vsrdgn(ij)*fsnowrdg*trcrn(i,j,it,n)
-
-                  enddo
-               elseif (trcr_depend(it) == 2+nt_alvl) then  ! level ice tracer
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-                  do ij = 1, iridge
-                     i = indxii(ij)
-                     j = indxjj(ij)
-                     m = indxij(ij)
-                     atrcrn(m,it,nr) = atrcrn(m,it,nr) &
-                                + farea(ij) * ardg2n(ij) &
-                                            * trcrn(i,j,nt_alvl,n) &
-                                            * trcrn(i,j,it,n)
-                  enddo
-               elseif (trcr_depend(it) == 2+nt_apnd .and. &
-                       tr_pond_cesm) then  ! CESM pond area tracer
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-                  do ij = 1, iridge
-                     i = indxii(ij)
-                     j = indxjj(ij)
-                     m = indxij(ij)
-                     atrcrn(m,it,nr) = atrcrn(m,it,nr) &
-                                + farea(ij) * ardg2n(ij) &
-                                            * trcrn(i,j,nt_apnd,n) &
-                                            * trcrn(i,j,it,n)
-                  enddo
-               elseif (trcr_depend(it) == 2+nt_apnd .and. &
-                       tr_pond_lvl) then  ! level-ice pond area tracer
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-                  do ij = 1, iridge
-                     i = indxii(ij)
-                     j = indxjj(ij)
-                     m = indxij(ij)
-                     atrcrn(m,it,nr) = atrcrn(m,it,nr) &
-                                + farea(ij) * ardg2n(ij) &
-                                            * trcrn(i,j,nt_alvl,n) &
-                                            * trcrn(i,j,nt_apnd,n) &
-                                            * trcrn(i,j,it,n)
                   enddo
                endif            ! trcr_depend
             enddo               ! ntrcr
