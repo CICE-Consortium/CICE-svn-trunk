@@ -291,7 +291,7 @@
                   + albpndn(i,j,n,iblk)*aicen(i,j,n,iblk)
                endif
 
-               apeff(i,j,iblk) = apeff(i,j,iblk) &
+               apeff_ai(i,j,iblk) = apeff_ai(i,j,iblk) &
                   + apeffn(i,j,n,iblk)*aicen(i,j,n,iblk)
             enddo
 
@@ -1059,6 +1059,7 @@
       use ice_itd
       use ice_meltpond_cesm
       use ice_meltpond_lvl
+      use ice_meltpond_topo
       use ice_orbital
       use ice_state
 !
@@ -1193,6 +1194,27 @@
                elseif (tr_pond_lvl) then
                   apeffn(:,:,n,iblk) = c0 ! for history
                   !!!!! PLACEHOLDER !!!!!
+
+               elseif (tr_pond_topo) then
+                  apeffn(:,:,n,iblk) = c0 ! for history
+                  do ij = 1, icells
+                     i = indxi(ij)
+                     j = indxj(ij)
+                     ! Lid effective if thicker than 3cm
+                     if (trcrn(i,j,nt_apnd,n,iblk)*aicen(i,j,n,iblk) > puny .and. &
+                               trcrn (i,j,nt_ipnd,n,iblk) < 0.03_dbl_kind) then
+                        fpn(i,j) = trcrn(i,j,nt_apnd,n,iblk)
+                     else
+                        fpn(i,j) = c0
+                     endif
+                     if (trcrn(i,j,nt_apnd,n,iblk) > puny) then
+                        hpn(i,j) = trcrn(i,j,nt_hpnd,n,iblk) 
+                     else
+                        fpn(i,j) = c0
+                        hpn(i,j) = c0
+                     endif
+                     apeffn(i,j,n,iblk) = fpn(i,j)
+                  enddo
                else
                   call shortwave_dEdd_set_pond(nx_block, ny_block,      &
                               icells,                                   &
@@ -3329,7 +3351,6 @@
                                          aice,     vsno,     &
                                          Tsfc,     fs,  hs,  &
                                          rhosnw,   rsnw)
-!
 ! !USES:
 !
       use ice_meltpond_cesm, only: hs0

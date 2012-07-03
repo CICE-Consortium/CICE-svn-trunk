@@ -229,7 +229,7 @@
            f_daidtt    = 'm', f_daidtd     = 'm', &
            f_mlt_onset = 'm', f_frz_onset  = 'm', &
            f_dardg1dt  = 'm', f_dardg2dt   = 'm', &
-           f_dvirdgdt  = 'm', f_iage       = 'x', &
+           f_dvirdgdt  = 'm', f_iage       = 'm', &
            f_ardg      = 'm', f_vrdg       = 'm', &
            f_alvl      = 'm', f_vlvl       = 'm', &
            f_hisnap    = 'm', f_aisnap     = 'm', &
@@ -240,11 +240,12 @@
            f_dvirdgndt = 'x', &
            f_aparticn  = 'x', f_krdgn      = 'x', &
            f_aredistn  = 'x', f_vredistn   = 'x', &
-           f_apondn    = 'x',                     &
+           f_apondn    = 'm', f_apeffn     = 'm', &
+           f_hpondn    = 'm',                     &
            f_apond     = 'x', f_apond_ai   = 'x', &
            f_hpond     = 'x', f_hpond_ai   = 'x', &
            f_ipond     = 'x', f_ipond_ai   = 'x', &
-           f_apeff     = 'x',                     &
+           f_apeff     = 'x', f_apeff_ai   = 'x', &
            f_trsig     = 'm', f_icepresent = 'm', &
            f_fsurf_ai  = 'm', f_fcondtop_ai= 'm', &
            f_fmeltt_ai = 'm',                     &
@@ -321,11 +322,12 @@
            f_dvirdgndt, &
            f_aparticn,  f_krdgn    , &
            f_aredistn,  f_vredistn , &
-           f_apondn,                 &
+           f_apondn,    f_apeffn   , &
+           f_hpondn,                 &
            f_apond,     f_apond_ai , &  
            f_hpond,     f_hpond_ai , &  
            f_ipond,     f_ipond_ai , &  
-           f_apeff,                  &
+           f_apeff,     f_apeff_ai , &
            f_trsig,     f_icepresent,&
            f_fsurf_ai,  f_fcondtop_ai,&
            f_fmeltt_ai, &
@@ -415,11 +417,12 @@
            n_dvirdgndt  , &
            n_krdgn      , n_aparticn   , &
            n_aredistn   , n_vredistn   , &
-           n_apondn      , &
+           n_apondn      , n_apeffn    , & 
+           n_hpondn      , &
            n_apond       , n_apond_ai, &
            n_hpond       , n_hpond_ai, &
            n_ipond       , n_ipond_ai, &
-           n_apeff       , &
+           n_apeff       , n_apeff_ai, &
            n_fsurfn_ai   , &
            n_fcondtopn_ai, &
            n_fmelttn_ai  , &
@@ -544,6 +547,8 @@
       if (.not. tr_iage) f_iage = 'x'
       if (.not. tr_pond) then
           f_apondn    = 'x'
+          f_hpondn    = 'x'
+          f_apeffn    = 'x'
           f_apond     = 'x'
           f_hpond     = 'x'
           f_ipond     = 'x'
@@ -551,6 +556,7 @@
           f_hpond_ai  = 'x'
           f_ipond_ai  = 'x'
           f_apeff     = 'x'
+          f_apeff_ai  = 'x'
       endif
       if (.not. tr_lvl) then
          f_ardg = 'x'
@@ -569,6 +575,7 @@
 
       ! these must be output at the same frequency because of 
       ! cos(zenith angle) averaging
+      if (f_albice(1:1) /= 'x' .and. f_albice /= f_albsni) f_albice = f_albsni
       if (f_albsno(1:1) /= 'x') f_albsno = f_albice
       if (f_albpnd(1:1) /= 'x') f_albpnd = f_albice
       if (f_coszen(1:1) /= 'x') f_coszen = f_albice
@@ -712,13 +719,16 @@
       call broadcast_scalar (f_aero, master_task)
       call broadcast_scalar (f_aeron, master_task)
       call broadcast_scalar (f_apondn, master_task)
+      call broadcast_scalar (f_hpondn, master_task)
+      call broadcast_scalar (f_apeffn, master_task)
       call broadcast_scalar (f_apond, master_task)
       call broadcast_scalar (f_hpond, master_task)
       call broadcast_scalar (f_ipond, master_task)
+      call broadcast_scalar (f_apeff, master_task)
       call broadcast_scalar (f_apond_ai, master_task)
       call broadcast_scalar (f_hpond_ai, master_task)
       call broadcast_scalar (f_ipond_ai, master_task)
-      call broadcast_scalar (f_apeff, master_task)
+      call broadcast_scalar (f_apeff_ai, master_task)
 
       ! 2D variables
       do ns1 = 1, nstreams
@@ -851,10 +861,16 @@
              "weighted by ice area", c1, c0,                                 &
              ns1, f_fswabs_ai)
       
+!      if (f_albsni(1:1) /= 'x') &
+!         call define_hist_field(n_albsni,"albsni","%",tstr2D, tcstr, &
+!             "snow/ice broad band albedo",                         &
+!             "scaled (divided) by aice", c100, c0,                 &
+!             ns1, f_albsni)
+      
       if (f_albsni(1:1) /= 'x') &
          call define_hist_field(n_albsni,"albsni","%",tstr2D, tcstr, &
              "snow/ice broad band albedo",                         &
-             "scaled (divided) by aice", c100, c0,                 &
+             "averaged for coszen>0, weighted by aice", c100, c0,  &
              ns1, f_albsni)
       
       if (f_alvdr(1:1) /= 'x') &
@@ -1317,6 +1333,12 @@
              "none", c1, c0,  &
              ns1, f_apeff)
 
+      if (f_apeff_ai(1:1) /= 'x') &
+         call define_hist_field(n_apeff_ai,"apeff_ai","1",tstr2D, tcstr, &
+             "radiation-effective pond area fraction over grid cell",  &
+             "weighted by ice area", c1, c0,                       &
+             ns1, f_apeff_ai)
+
       ! Aerosols
       if (f_aero(1:1) /= 'x') then
          do n=1,n_aero
@@ -1381,22 +1403,22 @@
 
         if (f_fsurfn_ai(1:1) /= 'x') &
            call define_hist_field(n_fsurfn_ai,"fsurfn_ai","W/m^2",tstr3Dc, tcstr, & 
-              "net surface heat flux, categories","weighted by ice area", c1, c0, &            
+              "net surface heat flux, categories","weighted by ice area", c1, c0, &
               ns1, f_fsurfn_ai)
 
         if (f_fcondtopn_ai(1:1) /= 'x') &
-           call define_hist_field(n_fcondtopn_ai,"fcondtopn_ai","W/m^2",tstr3Dc, tcstr, & 
-              "top sfc conductive heat flux, cat","weighted by ice area", c1, c0,       &            
+           call define_hist_field(n_fcondtopn_ai,"fcondtopn_ai","W/m^2",tstr3Dc, tcstr, &
+              "top sfc conductive heat flux, cat","weighted by ice area", c1, c0,       &
               ns1, f_fcondtopn_ai)
 
         if (f_fmelttn_ai(1:1) /= 'x') &
            call define_hist_field(n_fmelttn_ai,"fmelttn_ai","W/m^2",tstr3Dc, tcstr, & 
-              "net sfc heat flux causing melt, cat","weighted by ice area", c1, c0, &            
+              "net sfc heat flux causing melt, cat","weighted by ice area", c1, c0, &
               ns1, f_fmelttn_ai)
 
         if (f_flatn_ai(1:1) /= 'x') &
            call define_hist_field(n_flatn_ai,"flatn_ai","W/m^2",tstr3Dc, tcstr, & 
-              "latent heat flux, category","weighted by ice area", c1, c0,      &            
+              "latent heat flux, category","weighted by ice area", c1, c0,      &
               ns1, f_flatn_ai)
 
        if (f_ardgn(1:1) /= 'x') &
@@ -1455,8 +1477,19 @@
 
         if (f_apondn(1:1) /= 'x') &
            call define_hist_field(n_apondn,"apondn","1",tstr3Dc, tcstr, & 
-              "melt pond concentration, category","none", c1, c0,      &            
+              "melt pond fraction, category","none", c1, c0,      &            
               ns1, f_apondn)
+
+        if (f_hpondn(1:1) /= 'x') &
+           call define_hist_field(n_hpondn,"hpondn","m",tstr3Dc, tcstr, &
+              "melt pond depth, category","none", c1, c0,       &
+              ns1, f_hpondn)
+
+        if (f_apeffn(1:1) /= 'x') &
+           call define_hist_field(n_apeffn,"apeffn","1",tstr3Dc, tcstr, &
+             "effective melt pond fraction, category",   &
+             "none", c1, c0,                                  &
+             ns1, f_apeffn)
 
       enddo ! ns1
 
@@ -1620,6 +1653,7 @@
       use ice_flux
       use ice_therm_vertical
       use ice_itd, only: ilyr1, slyr1
+      use ice_shortwave, only: apeffn
       use ice_work, only: worka, workb
       use ice_timers
 !
@@ -1745,10 +1779,14 @@
 
          if (f_albsni (1:1) /= 'x') &
              call accum_hist_field(n_albsni, iblk, &
-                                              awtvdr*alvdr(:,:,iblk) &
-                                            + awtidr*alidr(:,:,iblk) &
-                                            + awtvdf*alvdf(:,:,iblk) &
-                                            + awtidf*alidf(:,:,iblk), a2D)
+                                  (awtvdr*alvdr(:,:,iblk) &
+                                 + awtidr*alidr(:,:,iblk) &
+                                 + awtvdf*alvdf(:,:,iblk) &
+                                 + awtidf*alidf(:,:,iblk))*aice(:,:,iblk), a2D)
+!                                              awtvdr*alvdr(:,:,iblk) &
+!                                            + awtidr*alidr(:,:,iblk) &
+!                                            + awtvdf*alvdf(:,:,iblk) &
+!                                            + awtidf*alidf(:,:,iblk), a2D)
          if (f_alvdr  (1:1) /= 'x') &
              call accum_hist_field(n_alvdr,  iblk, alvdr(:,:,iblk), a2D)
          if (f_alidr  (1:1) /= 'x') &
@@ -1928,21 +1966,56 @@
                             aice(:,:,iblk) &
                           * trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk) &
                                                    * trcr(:,:,nt_ipnd,iblk), a2D)
-         endif
-         if (f_apeff (1:1) /= 'x') &
-             call accum_hist_field(n_apeff, iblk, apeff(:,:,iblk), a2D)
 
-         if (f_fsurf_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fsurf_ai,iblk, fsurf(:,:,iblk)*workb(:,:), a2D)
-         if (f_fcondtop_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fcondtop_ai, iblk, &
-                                                 fcondtop(:,:,iblk)*workb(:,:), a2D)
+         elseif (tr_pond_topo) then
+
+         if (f_apond(1:1)/= 'x') &
+             call accum_hist_field(n_apond, iblk, &
+                                   trcr(:,:,nt_apnd,iblk), a2D)
+         if (f_apond_ai(1:1)/= 'x') &
+             call accum_hist_field(n_apond_ai, iblk, &
+                                   aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk), a2D)
+         if (f_hpond(1:1)/= 'x') &
+             call accum_hist_field(n_hpond, iblk, &
+                                   trcr(:,:,nt_apnd,iblk) &
+                                 * trcr(:,:,nt_hpnd,iblk), a2D)
+         if (f_hpond_ai(1:1)/= 'x') &
+             call accum_hist_field(n_hpond_ai, iblk, &
+                                   aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk) &
+                                                  * trcr(:,:,nt_hpnd,iblk), a2D)
+         if (f_ipond(1:1)/= 'x') &
+             call accum_hist_field(n_ipond, iblk, &
+                                   trcr(:,:,nt_apnd,iblk) &
+                                 * trcr(:,:,nt_ipnd,iblk), a2D)
+         if (f_ipond_ai(1:1)/= 'x') &
+             call accum_hist_field(n_ipond_ai, iblk, &
+                                   aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk) &
+                                                  * trcr(:,:,nt_ipnd,iblk), a2D)
+         endif
 
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
          jlo = this_block%jlo
          jhi = this_block%jhi
+
+         if (f_apeff (1:1) /= 'x') then
+             worka(:,:) = c0
+             do j = jlo, jhi
+             do i = ilo, ihi
+                if (aice(i,j,iblk) > puny) worka(i,j) = apeff_ai(i,j,iblk)/aice(i,j,iblk)
+             enddo
+             enddo
+             call accum_hist_field(n_apeff, iblk, worka(:,:), a2D)
+         endif
+         if (f_apeff_ai(1:1) /= 'x') &
+             call accum_hist_field(n_apeff_ai, iblk, apeff_ai(:,:,iblk), a2D)
+
+         if (f_fsurf_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fsurf_ai,iblk, fsurf(:,:,iblk)*workb(:,:), a2D)
+         if (f_fcondtop_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fcondtop_ai, iblk, &
+                                                 fcondtop(:,:,iblk)*workb(:,:), a2D)
 
          if (f_icepresent(1:1) /= 'x') then
            worka(:,:) = c0
@@ -1992,8 +2065,15 @@
                                    vredistn(:,:,1:ncat_hist,iblk), a3Dc)
          if (f_apondn   (1:1) /= 'x') &
              call accum_hist_field(n_apondn-n2D, iblk, ncat_hist, &
-                  trcrn(:,:,nt_apnd,1:ncat_hist,iblk) &
-                   * aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
+                  trcrn(:,:,nt_apnd,1:ncat_hist,iblk), a3Dc)
+         if (f_apeffn (1:1) /= 'x') &
+             call accum_hist_field(n_apeffn-n2D,  iblk, ncat_hist, &
+                  apeffn(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_hpondn   (1:1) /= 'x') &
+             call accum_hist_field(n_hpondn-n2D, iblk, ncat_hist, &
+                    trcrn(:,:,nt_apnd,1:ncat_hist,iblk) &
+                  * trcrn(:,:,nt_hpnd,1:ncat_hist,iblk), a3Dc)
+
          if (f_fsurfn_ai   (1:1) /= 'x') &
              call accum_hist_field(n_fsurfn_ai-n2D, iblk, ncat_hist, &
                   fsurfn(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
@@ -2139,19 +2219,26 @@
               enddo             ! j
 
               ! back out albedo/zenith angle dependence
-              if (avail_hist_fields(n)%vname(1:6) == 'albice') then
+              if (avail_hist_fields(n)%vname(1:6) == 'albice' .or. &
+                  avail_hist_fields(n)%vname(1:6) == 'albsni') then
               do j = jlo, jhi
               do i = ilo, ihi
                  if (tmask(i,j,iblk)) then 
                     ravgctz = c0
                     if (albcnt(i,j,iblk,ns) > puny) &
                         ravgctz = c1/albcnt(i,j,iblk,ns)
-                    if (n_albice(ns) /= 0) a2D(i,j,n_albice(ns),iblk) = &
+                    if (f_albice (1:1) /= 'x' .and. n_albice(ns) /= 0) &
+                       a2D(i,j,n_albice(ns),iblk) = &
                        a2D(i,j,n_albice(ns),iblk)*avgct(ns)*ravgctz
-                    if (n_albsno(ns) /= 0) a2D(i,j,n_albsno(ns),iblk) = &
+                    if (f_albsno (1:1) /= 'x' .and. n_albsno(ns) /= 0) &
+                       a2D(i,j,n_albsno(ns),iblk) = &
                        a2D(i,j,n_albsno(ns),iblk)*avgct(ns)*ravgctz
-                    if (n_albpnd(ns) /= 0) a2D(i,j,n_albpnd(ns),iblk) = &
+                    if (f_albpnd (1:1) /= 'x' .and. n_albpnd(ns) /= 0) &
+                       a2D(i,j,n_albpnd(ns),iblk) = &
                        a2D(i,j,n_albpnd(ns),iblk)*avgct(ns)*ravgctz
+                    if (f_albsni (1:1) /= 'x' .and. n_albsni(ns) /= 0) &
+                       a2D(i,j,n_albsni(ns),iblk) = &
+                       a2D(i,j,n_albsni(ns),iblk)*avgct(ns)*ravgctz
                  endif
               enddo             ! i
               enddo             ! j

@@ -47,6 +47,7 @@
       use ice_mechred
       use ice_meltpond_cesm
       use ice_meltpond_lvl
+      use ice_meltpond_topo
       use ice_ocean
       use ice_orbital
       use ice_lvl
@@ -229,6 +230,7 @@
       if (tr_lvl)       call init_lvl            ! level ice tracer
       if (tr_pond_cesm) call init_meltponds_cesm ! CESM melt ponds
       if (tr_pond_lvl)  call init_meltponds_lvl  ! level-ice melt ponds
+      if (tr_pond_topo) call init_meltponds_topo ! topographic melt ponds
       if (tr_aero)      call init_aerosol        ! ice aerosol
 
       call init_diags           ! initialize diagnostic output points

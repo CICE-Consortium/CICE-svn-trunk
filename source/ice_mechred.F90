@@ -131,6 +131,7 @@
                             istop,       jstop,      &
                             dardg1dt,    dardg2dt,   &
                             dvirdgdt,    opening,    &
+                            fpond,                   &
                             fresh,       fhocn,      &
                             aparticn,    krdgn,      &
                             aredistn,    vredistn,   &
@@ -196,6 +197,7 @@
          dardg2dt  , & ! rate of fractional area gain by new ridges (1/s)
          dvirdgdt  , & ! rate of ice volume ridged (m/s)
          opening   , & ! rate of opening due to divergence/shear (1/s)
+         fpond     , & ! fresh water flux to ponds (kg/m^2/s)
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
          fhocn         ! net heat flux to ocean (W/m^2)
 
@@ -220,6 +222,7 @@
          aksum      , & ! ratio of area removed to area ridged
          msnow_mlt  , & ! mass of snow added to ocean (kg m-2)
          esnow_mlt  , & ! energy needed to melt snow in ocean (J m-2)
+         mpond      , & ! mass of pond added to ocean (kg m-2)
          closing_net, & ! net rate at which area is removed    (1/s)
                         ! (ridging ice area - area of new ridges) / dt
          divu_adv   , & ! divu as implied by transport scheme  (1/s)
@@ -284,6 +287,7 @@
          msnow_mlt(ij) = c0
          esnow_mlt(ij) = c0
          maero    (ij,:) = c0
+         mpond    (ij) = c0
          ardg1    (ij) = c0
          ardg2    (ij) = c0
          virdg    (ij) = c0
@@ -375,7 +379,7 @@
                            ardg1n,    ardg2n,          &
                            virdgn,                     &
                            msnow_mlt, esnow_mlt,       &
-                           maero,                      &
+                           maero,     mpond,           &
                            l_stop,                     &
                            istop,     jstop,           &
                            aredistn,  vredistn)
@@ -577,6 +581,13 @@
             i = indxi(ij)
             j = indxj(ij)
             faero_ocn(i,j,:) = faero_ocn(i,j,:) + maero(ij,:)*dti
+         enddo
+      endif
+      if (present(fpond)) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            fpond(i,j) = fpond(i,j) - mpond(ij) ! units change later
          enddo
       endif
 
@@ -1209,7 +1220,7 @@
                               ardg1nn,     ardg2nn,         &
                               virdgnn,                      &
                               msnow_mlt,   esnow_mlt,       &
-                              maero,                        &
+                              maero,       mpond,           &
                               l_stop,                       &
                               istop,       jstop,           &
                               aredistn,    vredistn)
@@ -1217,7 +1228,8 @@
 ! !USES:
 !
       use ice_state, only: nt_alvl, nt_vlvl, nt_aero, tr_lvl, tr_aero, &
-                           nt_apnd, nt_hpnd, nt_ipnd, tr_pond_cesm, tr_pond_lvl
+                           nt_apnd, nt_hpnd, nt_ipnd, tr_pond, &
+                           tr_pond_cesm, tr_pond_lvl, tr_pond_topo
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1286,7 +1298,8 @@
 
       real (kind=dbl_kind), dimension(icells), intent(inout) :: &
          msnow_mlt, & ! mass of snow added to ocean (kg m-2)
-         esnow_mlt    ! energy needed to melt snow in ocean (J m-2)
+         esnow_mlt, & ! energy needed to melt snow in ocean (J m-2)
+         mpond        ! mass of pond added to ocean (kg m-2)
 
       real (kind=dbl_kind), dimension(icells,max_aero), intent(inout) :: &
          maero        ! aerosol mass added to ocean (kg m-2)
@@ -1393,7 +1406,7 @@
                                   * trcrn(i,j,it,n)
                enddo
             elseif (trcr_depend(it) == 2+nt_apnd .and. &
-                    tr_pond_cesm) then ! CESM pond area tracer
+                   (tr_pond_cesm .or. tr_pond_topo)) then ! CESM or topo pond area tracer
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)
@@ -1628,6 +1641,12 @@
                enddo
             endif
 
+            if (tr_pond_topo) then
+               mpond(m) = mpond(m) + ardg1n(ij) &
+                                   * trcrn(i,j,nt_apnd,n) &
+                                   * trcrn(i,j,nt_hpnd,n)
+            endif
+
       !-----------------------------------------------------------------
       ! Compute quantities used to apportion ice among categories
       ! in the nr loop below
@@ -1734,7 +1753,7 @@
                enddo
 
             elseif (trcr_depend(it) == 2+nt_apnd .and. &
-                    tr_pond_cesm) then ! CESM pond area tracer
+                   (tr_pond_cesm .or. tr_pond_topo)) then ! CESM or topo pond area tracer
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu

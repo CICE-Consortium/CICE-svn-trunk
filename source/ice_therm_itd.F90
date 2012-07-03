@@ -63,7 +63,7 @@
                              vicen,       vsnon,       & 
                              eicen,       esnon,       & 
                              aice,        aice0,       & 
-                             l_stop,                   & 
+                             fpond,       l_stop,      &
                              istop,       jstop)
 
 ! See Lipscomb, W. H.  Remapping the thickness distribution in sea
@@ -93,6 +93,7 @@
 !
       use ice_itd, only: hin_max, hi_min, aggregate_area, shift_ice, & 
                          column_sum, column_conservation_check 
+      use ice_state, only: tr_pond_topo, nt_apnd, nt_hpnd
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -135,6 +136,10 @@
          intent(inout) :: &
          aice  , & ! concentration of ice
          aice0     ! concentration of open water
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(inout) :: &
+         fpond     ! fresh water flux to ponds (kg/m^2/s)
 
       logical (kind=log_kind), intent(out) :: &
          l_stop    ! if true, abort on return
@@ -487,6 +492,13 @@
                   hicen(m,1) = hicen(m,1) &
                                * aicen(i,j,1) / (aicen(i,j,1)-da0)
                   aicen(i,j,1) = aicen(i,j,1) - da0
+
+                  if (tr_pond_topo) then
+                     fpond(i,j) = fpond(i,j) - (da0 &
+                                     * trcrn(i,j,nt_apnd,1) & 
+                                     * trcrn(i,j,nt_hpnd,1))
+                  endif
+
                endif            ! etamax > 0
 
             else                ! dh0 >= 0
@@ -631,8 +643,16 @@
          m = indxij(ij)
          if (hi_min > c0 .and. &
               aicen(i,j,1) > puny .and. hicen(m,1) < hi_min) then
-            aicen(i,j,1) = aicen(i,j,1) * hicen(m,1)/hi_min
+
+            da0 = aicen(i,j,1) * (c1 - hicen(m,1)/hi_min)
+            aicen(i,j,1) = aicen(i,j,1) - da0
             hicen(m,1) = hi_min
+
+            if (tr_pond_topo) then
+               fpond(i,j) = fpond(i,j) - (da0 &
+                                       * trcrn(i,j,nt_apnd,1) & 
+                                       * trcrn(i,j,nt_hpnd,1))
+            endif
          endif
       enddo                     ! ij
 
@@ -863,7 +883,7 @@
       use ice_itd, only: hin_max, ilyr1, column_sum, &
                          column_conservation_check
       use ice_state, only: nt_Tsfc, nt_iage, nt_alvl, nt_vlvl, nt_aero, &
-                           nt_apnd, tr_pond_cesm, tr_pond_lvl, &
+                           nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
                            tr_iage, tr_lvl, tr_aero
       use ice_flux, only: update_ocn_f
 
@@ -1205,10 +1225,10 @@
                (trcrn(i,j,nt_vlvl,1)*vice1 + vi0new(m))/vicen(i,j,1)
             endif
 
-            if (tr_pond_cesm) then
+            if (tr_pond_cesm .or. tr_pond_topo) then
                trcrn(i,j,nt_apnd,1) = &
                trcrn(i,j,nt_apnd,1)*area1/aicen(i,j,1)
-            elseif (tr_pond_lvl) then
+            elseif (tr_pond_lvl .and. trcrn(i,j,nt_alvl,1) > puny) then
                if (trcrn(i,j,nt_alvl,1) > puny) then
                   trcrn(i,j,nt_apnd,1) = &
                   trcrn(i,j,nt_apnd,1) * alvl*area1 &
@@ -1267,7 +1287,7 @@
 !
       subroutine lateral_melt (nx_block,   ny_block,   &
                                ilo, ihi,   jlo, jhi,   &
-                               dt,                     &
+                               dt,         fpond,      &
                                fresh,      fsalt,      &
                                fhocn,      faero_ocn,  &
                                rside,      meltl,      &
@@ -1278,7 +1298,7 @@
 ! !USES:
 !
       use ice_itd, only: ilyr1, slyr1
-      use ice_state, only: nt_aero, tr_aero
+      use ice_state, only: nt_aero, tr_aero, tr_pond_topo, nt_apnd, nt_hpnd
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1312,6 +1332,7 @@
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(inout) :: &
+         fpond     , & ! fresh water flux to ponds (kg/m^2/s)
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt     , & ! salt flux to ocean (kg/m^2/s)
          fhocn     , & ! net heat flux to ocean (W/m^2)
@@ -1335,6 +1356,7 @@
 
       real (kind=dbl_kind) :: &
          dfhocn  , & ! change in fhocn
+         dfpond  , & ! change in fpond
          dfresh  , & ! change in fresh
          dfsalt      ! change in fsalt
 
@@ -1367,7 +1389,7 @@
             j = indxj(ij)
 
             ! fluxes to coupler
-            ! dfresh > 0, dfsalt > 0
+            ! dfresh > 0, dfsalt > 0, dfpond > 0
 
             dfresh = (rhos*vsnon(i,j,n) + rhoi*vicen(i,j,n)) &
                    * rside(i,j) / dt
@@ -1377,6 +1399,14 @@
             fresh(i,j)      = fresh(i,j)      + dfresh
 
             fsalt(i,j)      = fsalt(i,j)      + dfsalt
+
+            if (tr_pond_topo) then
+               dfpond = aicen(i,j,n) &
+                      * trcrn(i,j,nt_apnd,n) & 
+                      * trcrn(i,j,nt_hpnd,n) &
+                      * rside(i,j)
+               fpond(i,j) = fpond(i,j) - dfpond
+            endif
 
             ! history diagnostics
             meltl(i,j) = meltl(i,j) + vicen(i,j,n)*rside(i,j)

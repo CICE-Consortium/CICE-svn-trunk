@@ -152,8 +152,8 @@
          umaxs,   hmaxs,   shmaxs,    areas,   snwmxs, extents, &
          etotn,   mtotn,   micen,     msnwn,   pmaxn,  ketotn, &
          etots,   mtots,   mices,     msnws,   pmaxs,  ketots, &
-         urmsn,   albtotn, arean_alb, &
-         urmss,   albtots, areas_alb
+         urmsn,   albtotn, arean_alb, mpndn,   ptotn,  spondn, &
+         urmss,   albtots, areas_alb, mpnds,   ptots,  sponds 
 
       ! hemispheric flux quantities
       real (kind=dbl_kind) :: &
@@ -212,6 +212,27 @@
       ! total snow volume
       snwmxn = global_sum(vsno, distrb_info, field_loc_center, tarean)
       snwmxs = global_sum(vsno, distrb_info, field_loc_center, tareas)
+
+      ! total pond volume
+      ptotn = c0
+      ptots = c0
+      if (tr_pond_topo) then
+         do iblk = 1, nblocks
+         do j = 1, ny_block
+         do i = 1, nx_block
+            work1(i,j,iblk) = c0
+            do n = 1, ncat
+               work1(i,j,iblk) = work1(i,j,iblk)  &
+                               + aicen(i,j,n,iblk) &
+                               * trcrn(i,j,nt_apnd,n,iblk) & 
+                               * trcrn(i,j,nt_hpnd,n,iblk)
+            enddo
+         enddo
+         enddo
+         enddo
+         ptotn = global_sum(work1, distrb_info, field_loc_center, tarean)
+         ptots = global_sum(work1, distrb_info, field_loc_center, tareas)
+      endif
 
       ! total ice-snow kinetic energy
       do iblk = 1, nblocks
@@ -400,6 +421,18 @@
          sfreshn = sfreshn*dt
          sfreshs = sfreshs*dt
 
+         ! pond water flux
+         spondn = c0
+         sponds = c0
+         if (tr_pond_topo) then
+         spondn = global_sum(fpond, distrb_info, &
+                                   field_loc_center, tarean)
+         sponds = global_sum(fpond, distrb_info, &
+                                   field_loc_center, tareas)
+         spondn = spondn*dt
+         sponds = sponds*dt
+         endif
+
          ! ocean heat
          ! Note: fswthru not included because it does not heat ice
          fhocnn = global_sum(fhocn_gbm, distrb_info, &
@@ -490,14 +523,17 @@
          frzn = frzn*dt
          frzs = frzs*dt
 
-         ! ice and snow mass
+         ! ice, snow, pond mass
          micen = rhoi*shmaxn
          msnwn = rhos*snwmxn
          mices = rhoi*shmaxs
          msnws = rhos*snwmxs
+         mpndn = rhofresh*ptotn
+         mpnds = rhofresh*ptots
 
-         mtotn = micen + msnwn
-         mtots = mices + msnws
+         ! total ice, snow and pond mass
+         mtotn = micen + msnwn + mpndn
+         mtots = mices + msnws + mpnds
   
          ! mass change since beginning of time step
          delmin = mtotn - totmn
@@ -517,14 +553,14 @@
          fluxs  = c0
          if( arean > c0) then
            ! water associated with frazil ice included in fresh
-           fluxn = rnn + snn + evpn - sfreshn
+           fluxn = rnn + snn + evpn - sfreshn 
            if (.not. update_ocn_f) then
              fluxn = fluxn + frzn
            endif
          endif
          if( areas > c0) then
            ! water associated with frazil ice included in fresh
-           fluxs = rns + sns + evps - sfreshs
+           fluxs = rns + sns + evps - sfreshs 
            if (.not. update_ocn_f) then
              fluxs = fluxs + frzs
            endif
@@ -716,10 +752,14 @@
           write (nu_diag,801) 'arwt snow h2o kg in dt = ',snn
           write (nu_diag,801) 'arwt evap h2o kg in dt = ',evpn
           write (nu_diag,801) 'arwt frzl h2o kg in dt = ',frzn
+          if (tr_pond_topo) &
+          write (nu_diag,801) 'arwt fpnd h2o kg in dt = ',spondn
           write (nu_diag,801) 'arwt frsh h2o kg in dt = ',sfreshn
          
           write (nu_diag,801) 'arwt ice mass (kg)     = ',micen
           write (nu_diag,801) 'arwt snw mass (kg)     = ',msnwn
+          if (tr_pond_topo) &
+          write (nu_diag,801) 'arwt pnd mass (kg)     = ',mpndn
 
           write (nu_diag,801) 'arwt tot mass (kg)     = ',mtotn
           write (nu_diag,801) 'arwt tot mass chng(kg) = ',delmin
@@ -785,10 +825,14 @@
          write(nu_diag,901) 'arwt snow h2o kg in dt = ',snn,sns
          write(nu_diag,901) 'arwt evap h2o kg in dt = ',evpn,evps
          write(nu_diag,901) 'arwt frzl h2o kg in dt = ',frzn,frzs
+         if (tr_pond_topo) &
+         write(nu_diag,901) 'arwt fpnd h2o kg in dt = ',spondn,sponds
          write(nu_diag,901) 'arwt frsh h2o kg in dt = ',sfreshn,sfreshs
 
          write(nu_diag,901) 'arwt ice mass (kg)     = ',micen,mices
          write(nu_diag,901) 'arwt snw mass (kg)     = ',msnwn,msnws
+         if (tr_pond_topo) &
+         write(nu_diag,901) 'arwt pnd mass (kg)     = ',mpndn,mpnds
  
          write(nu_diag,901) 'arwt tot mass (kg)     = ',mtotn,mtots
          write(nu_diag,901) 'arwt tot mass chng(kg) = ',delmin,delmis
@@ -945,7 +989,7 @@
       integer (kind=int_kind) :: n, k, ii, jj, i, j, iblk
 
       real (kind=dbl_kind) :: &
-         shmaxn, snwmxn,  shmaxs, snwmxs
+         shmaxn, snwmxn,  shmaxs, snwmxs, totpn, totps
 
       ! total ice volume
       shmaxn = global_sum(vice, distrb_info, field_loc_center, tarean)
@@ -991,6 +1035,30 @@
             totaeron(n)= global_sum(work1, distrb_info, field_loc_center, tarean)
             totaeros(n)= global_sum(work1, distrb_info, field_loc_center, tareas)
          enddo
+      endif
+
+      if (tr_pond_topo) then
+         totpn = c0
+         totps = c0
+         do iblk = 1, nblocks
+         do j = 1, ny_block
+         do i = 1, nx_block
+            work1(i,j,iblk) = c0
+            do n = 1, ncat
+               work1(i,j,iblk) = work1(i,j,iblk)  &
+                               + aicen(i,j,n,iblk) &
+                               * trcrn(i,j,nt_apnd,n,iblk) & 
+                               * trcrn(i,j,nt_hpnd,n,iblk)
+            enddo
+         enddo
+         enddo
+         enddo
+         totpn = global_sum(work1, distrb_info, field_loc_center, tarean)
+         totps = global_sum(work1, distrb_info, field_loc_center, tareas)
+
+         ! north/south ice+snow+pond mass
+         totmn = totmn + totpn*rhofresh
+         totms = totms + totps*rhofresh
       endif
 
       if (print_points) then

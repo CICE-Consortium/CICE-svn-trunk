@@ -9,7 +9,7 @@
 !  Contains main driver routine for time stepping of CICE.
 !
 ! !REVISION HISTORY:
-!  SVN:$Id: CICE_RunMod.F90 152 2008-09-24 20:48:59Z eclare $
+!  SVN:$Id: CICE_RunMod.F90 429 2012-02-06 19:37:38Z eclare $
 !
 !  authors Elizabeth C. Hunke, LANL
 !          Philip W. Jones, LANL
@@ -23,11 +23,11 @@
 !
 ! !INTERFACE:
 !
-
       module CICE_RunMod
 !
 ! !USES:
 !
+      use ice_aerosol
       use ice_age
       use ice_atmo
       use ice_calendar
@@ -47,7 +47,9 @@
       use ice_kinds_mod
       use ice_lvl
       use ice_mechred
-      use ice_meltpond
+      use ice_meltpond_cesm
+      use ice_meltpond_lvl
+      use ice_meltpond_topo
       use ice_ocean
       use ice_orbital
       use ice_shortwave
@@ -127,6 +129,8 @@
          call ice_timer_start(timer_couple)  ! atm/ocn coupling
          call get_forcing_atmo     ! atmospheric forcing from data
          call get_forcing_ocn(dt)  ! ocean forcing from data
+!         if (tr_aero) call faero_data        ! aerosols
+         if (tr_aero) call faero_default     ! aerosols
          call ice_timer_stop(timer_couple)   ! atm/ocn coupling
 #endif
 
@@ -256,9 +260,11 @@
          call ice_timer_start(timer_readwrite)  ! reading/writing
          if (write_restart == 1) then
             call dumpfile ! core variables for restarting
-            if (tr_iage) call write_restart_age
-            if (tr_lvl)  call write_restart_lvl
-            if (tr_pond) call write_restart_pond
+            if (tr_iage)      call write_restart_age
+            if (tr_lvl)       call write_restart_lvl
+            if (tr_pond_cesm) call write_restart_pond_cesm
+            if (tr_pond_lvl)  call write_restart_pond_lvl
+            if (tr_pond_topo) call write_restart_pond_topo
          endif
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 
@@ -331,7 +337,12 @@
          meltbn      , & ! bottom melt in category n (m)
          meltsn      , & ! snow melt in category n (m)
          congeln     , & ! congelation ice formation in category n (m)
-         snoicen         ! snow-ice formation in category n (m)
+         snoicen     , & ! snow-ice formation in category n (m)
+         vsnon_init  , & ! for aerosol mass budget
+         rfrac           ! water fraction retained for melt ponds
+
+      real (kind=dbl_kind) :: &
+         pond            ! water retained in ponds (m)
 
       type (block) :: &
          this_block      ! block information for current block
@@ -430,6 +441,9 @@
                                     uatm(:,:,iblk), vatm(:,:,iblk), &
                                     wind(:,:,iblk), rhoa(:,:,iblk), &
                                     strairxn,       strairyn,       &
+                                    trcrn(:,:,nt_Tsfc,n,iblk),      &
+                                    potT(:,:,iblk), Qa  (:,:,iblk), &
+                                    worka,          workb,          &
                                     lhcoef,         shcoef)
                else ! default
                    call atmo_boundary_layer & 
@@ -522,6 +536,8 @@
 
             endif
 
+            vsnon_init(:,:) = vsnon(:,:,n,iblk)
+
             call thermo_vertical                                       &
                             (nx_block,            ny_block,            &
                              dt,                  icells,              &
@@ -555,6 +571,7 @@
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =', &
                                istep1, my_task, iblk
+            write (nu_diag,*) 'category n = ', n
             write (nu_diag,*) 'Global block:', this_block%block_id
             if (istop > 0 .and. jstop > 0) &
                  write(nu_diag,*) 'Global i and j:', &
@@ -567,18 +584,88 @@
          endif
 
       !-----------------------------------------------------------------
+      ! Aerosol update
+      !-----------------------------------------------------------------
+         if (tr_aero .and. icells > 0) then
+
+               call update_aerosol (nx_block, ny_block,                  &
+                                    dt, icells,                          &
+                                    indxi, indxj,                        &
+                                    melttn, meltsn,                      &
+                                    meltbn, congeln, snoicen,            &
+                                    fsnow(:,:,iblk),                     &
+                                    trcrn(:,:,:,n,iblk),                 &
+                                    aicen_init(:,:,n,iblk),              &
+                                    vicen_init(:,:,n,iblk),              &
+                                    vsnon_init(:,:),                     &
+                                    vicen(:,:,n,iblk),                   &
+                                    vsnon(:,:,n,iblk),                   &
+                                    aicen(:,:,n,iblk),                   &
+                                    faero_atm(:,:,:,iblk),               &
+                                    faero_ocn(:,:,:,iblk))
+         endif
+
+      !-----------------------------------------------------------------
       ! Melt ponds
+      ! If using tr_pond_cesm, the full calculation is performed here.
+      ! If using tr_pond_topo, the rest of the calculation is done after
+      ! the surface fluxes are merged, below.
       !-----------------------------------------------------------------
 
-         if (tr_pond .and. trim(shortwave) == 'dEdd') then
+         if (tr_pond) then
+            call ice_timer_start(timer_ponds)
 
-            call compute_ponds(nx_block, ny_block,                      &
-                               ilo, ihi, jlo, jhi,                      &
-                               melttn, meltsn, frain(:,:,iblk),         &
-                               aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
-                               vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk),&
-                               apondn(:,:,n,iblk), hpondn(:,:,n,iblk))
+            if (tr_pond_cesm) then
+!               rfrac(:,:) = 0.15_dbl_kind + 0.7_dbl_kind * aicen(:,:,n,iblk)
+               rfrac(:,:) = rfracmin + (rfracmax-rfracmin) * aicen(:,:,n,iblk) 
+              call compute_ponds_cesm(nx_block, ny_block,                      &
+                                       ilo, ihi, jlo, jhi,                      &
+                                       rfrac, melttn, meltsn, frain(:,:,iblk),  &
+                                       aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
+                                       vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk))
 
+            elseif (tr_pond_lvl) then
+               rfrac(:,:) = rfracmin + (rfracmax-rfracmin) * aicen(:,:,n,iblk)
+               call compute_ponds_lvl(nx_block, ny_block,                      &
+                                      ilo, ihi, jlo, jhi,                      &
+                                      rfrac, melttn, meltsn,                   &
+                                      frain (:,:,iblk),   Tair  (:,:,iblk),    &
+                                      fsurfn(:,:,n,iblk),                      &
+                                      dhsn  (:,:,n,iblk), ffracn(:,:,n,iblk),  &
+                                      aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
+                                      vsnon (:,:,n,iblk),                      &
+                                      trcrn (:,:,:,n,iblk),                    &
+                                      eicen (:,:,ilyr1(n):ilyr1(n)+nilyr-1,iblk),&
+                                      salin (1:nilyr), Tmlt(1:nilyr))
+
+            elseif (tr_pond_topo .and. icells > 0) then
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+
+                  ! collect liquid water in ponds
+                  ! assume salt still runs off
+
+                  rfrac(i,j) = rfracmin + (rfracmax-rfracmin) * aicen(i,j,n,iblk)
+                  pond = rfrac(i,j)/rhofresh * (melttn(i,j)*rhoi &
+                       +                        meltsn(i,j)*rhos &
+                       +                        frain (i,j,iblk)*dt)
+
+                  ! if pond does not exist, create new pond over full ice area
+                  ! otherwise increase pond depth without changing pond area
+                  if (trcrn(i,j,nt_apnd,n,iblk) < puny) then
+                      trcrn(i,j,nt_hpnd,n,iblk) = c0
+                      trcrn(i,j,nt_apnd,n,iblk) = c1
+                  endif 
+                  trcrn(i,j,nt_hpnd,n,iblk) = (pond &
+                  + trcrn(i,j,nt_hpnd,n,iblk)*trcrn(i,j,nt_apnd,n,iblk)) &
+                                            / trcrn(i,j,nt_apnd,n,iblk)
+                  fpond(i,j,iblk) = fpond(i,j,iblk) &
+                                  + pond * aicen(i,j,n,iblk) ! m
+               enddo
+            endif
+
+            call ice_timer_stop(timer_ponds)
          endif
 
       !-----------------------------------------------------------------
@@ -612,6 +699,23 @@
                             congel  (:,:,iblk),  snoice  (:,:,iblk))
 
          enddo                  ! ncat
+
+      !-----------------------------------------------------------------
+      ! Calculate ponds from the topographic scheme
+      !-----------------------------------------------------------------
+            if (tr_pond_topo) then
+               call ice_timer_start(timer_ponds)
+               call compute_ponds_topo(nx_block, ny_block,                &
+                                    ilo, ihi, jlo, jhi,                   &
+                                    aice (:,:,  iblk), aicen(:,:,:,iblk), &
+                                    vice (:,:,  iblk), vicen(:,:,:,iblk), &
+                                    vsno (:,:,  iblk), vsnon(:,:,:,iblk), &
+                                    eicen(:,:,:,iblk), esnon(:,:,:,iblk), &
+                                    trcrn(:,:,:,:,iblk),                  &
+                                    potT(:,:,  iblk),  meltt(:,:,iblk),   &
+                                    fsurf(:,:,iblk),   fpond(:,:,iblk))
+               call ice_timer_stop(timer_ponds)
+            endif
 
       enddo                      ! iblk
 
@@ -679,6 +783,7 @@
             albice(i,j,iblk) = c0
             albsno(i,j,iblk) = c0
             albpnd(i,j,iblk) = c0
+            apeff_ai(i,j,iblk) = c0
 
             ! for history averaging
             cszn = c0
@@ -708,16 +813,27 @@
             albpnd(i,j,iblk) = albpnd(i,j,iblk) &
                + albpndn(i,j,n,iblk)*aicen(i,j,n,iblk)
             endif
+
+            apeff_ai(i,j,iblk) = apeff_ai(i,j,iblk) &       ! for history
+               + apeffn(i,j,n,iblk)*aicen(i,j,n,iblk)
          enddo
          enddo
          enddo
+
+         do j = 1, ny_block
+         do i = 1, nx_block
+
+      !-----------------------------------------------------------------
+      ! reduce fresh by fpond for coupling
+      !-----------------------------------------------------------------
+
+            fpond(i,j,iblk) = fpond(i,j,iblk) * rhofresh/dt
+            fresh(i,j,iblk) = fresh(i,j,iblk) - fpond(i,j,iblk)
 
       !----------------------------------------------------------------
       ! Store grid box mean albedos and fluxes before scaling by aice
       !----------------------------------------------------------------
 
-         do j = 1, ny_block
-         do i = 1, nx_block
             alvdf_gbm  (i,j,iblk) = alvdf  (i,j,iblk)
             alidf_gbm  (i,j,iblk) = alidf  (i,j,iblk)
             alvdr_gbm  (i,j,iblk) = alvdr  (i,j,iblk)
@@ -756,6 +872,7 @@
                             Tref     (:,:,iblk), Qref    (:,:,iblk), &
                             fresh    (:,:,iblk), fsalt   (:,:,iblk), &
                             fhocn    (:,:,iblk), fswthru (:,:,iblk), &
+                            faero_ocn    (:,:,:,iblk),               &
                             alvdr    (:,:,iblk), alidr   (:,:,iblk), &
                             alvdf    (:,:,iblk), alidf   (:,:,iblk))
 

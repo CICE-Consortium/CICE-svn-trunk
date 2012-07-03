@@ -23,7 +23,6 @@
 !
 ! !INTERFACE:
 !
-
       module CICE_RunMod
 !
 ! !USES:
@@ -50,6 +49,7 @@
       use ice_mechred
       use ice_meltpond_cesm
       use ice_meltpond_lvl
+      use ice_meltpond_topo
       use ice_ocean
       use ice_orbital
       use ice_shortwave
@@ -241,6 +241,7 @@
             if (tr_lvl)       call write_restart_lvl
             if (tr_pond_cesm) call write_restart_pond_cesm
             if (tr_pond_lvl)  call write_restart_pond_lvl
+            if (tr_pond_topo) call write_restart_pond_topo
          endif
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 
@@ -318,7 +319,7 @@
          rfrac           ! water fraction retained for melt ponds
 
       real (kind=dbl_kind) :: &
-         pond            ! flux of water retained in ponds (kg/m^2/s)
+         pond            ! water retained in ponds (m)
 
       type (block) :: &
          this_block      ! block information for current block
@@ -583,6 +584,9 @@
 
       !-----------------------------------------------------------------
       ! Melt ponds
+      ! If using tr_pond_cesm, the full calculation is performed here.
+      ! If using tr_pond_topo, the rest of the calculation is done after
+      ! the surface fluxes are merged, below.
       !-----------------------------------------------------------------
 
          if (tr_pond) then
@@ -610,6 +614,32 @@
                                       trcrn (:,:,:,n,iblk),                    &
                                       eicen (:,:,ilyr1(n):ilyr1(n)+nilyr-1,iblk),&
                                       salin (1:nilyr), Tmlt(1:nilyr))
+
+            elseif (tr_pond_topo .and. icells > 0) then
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+
+                  ! collect liquid water in ponds
+                  ! assume salt still runs off
+
+                  rfrac(i,j) = rfracmin + (rfracmax-rfracmin) * aicen(i,j,n,iblk)
+                  pond = rfrac(i,j)/rhofresh * (melttn(i,j)*rhoi &
+                       +                        meltsn(i,j)*rhos &
+                       +                        frain (i,j,iblk)*dt)
+
+                  ! if pond does not exist, create new pond over full ice area
+                  ! otherwise increase pond depth without changing pond area
+                  if (trcrn(i,j,nt_apnd,n,iblk) < puny) then
+                      trcrn(i,j,nt_hpnd,n,iblk) = c0
+                      trcrn(i,j,nt_apnd,n,iblk) = c1
+                  endif 
+                  trcrn(i,j,nt_hpnd,n,iblk) = (pond &
+                  + trcrn(i,j,nt_hpnd,n,iblk)*trcrn(i,j,nt_apnd,n,iblk)) &
+                                            / trcrn(i,j,nt_apnd,n,iblk)
+                  fpond(i,j,iblk) = fpond(i,j,iblk) &
+                                  + pond * aicen(i,j,n,iblk) ! m
+               enddo
             endif
 
             call ice_timer_stop(timer_ponds)
@@ -646,6 +676,23 @@
                             congel  (:,:,iblk),  snoice  (:,:,iblk))
 
          enddo                  ! ncat
+
+      !-----------------------------------------------------------------
+      ! Calculate ponds from the topographic scheme
+      !-----------------------------------------------------------------
+            if (tr_pond_topo) then
+               call ice_timer_start(timer_ponds)
+               call compute_ponds_topo(nx_block, ny_block,                &
+                                    ilo, ihi, jlo, jhi,                   &
+                                    aice (:,:,  iblk), aicen(:,:,:,iblk), &
+                                    vice (:,:,  iblk), vicen(:,:,:,iblk), &
+                                    vsno (:,:,  iblk), vsnon(:,:,:,iblk), &
+                                    eicen(:,:,:,iblk), esnon(:,:,:,iblk), &
+                                    trcrn(:,:,:,:,iblk),                  &
+                                    potT(:,:,  iblk),  meltt(:,:,iblk),   &
+                                    fsurf(:,:,iblk),   fpond(:,:,iblk))
+               call ice_timer_stop(timer_ponds)
+            endif
 
       enddo                      ! iblk
 
@@ -713,7 +760,7 @@
             albice(i,j,iblk) = c0
             albsno(i,j,iblk) = c0
             albpnd(i,j,iblk) = c0
-            apeff (i,j,iblk) = c0
+            apeff_ai(i,j,iblk) = c0
 
             ! for history averaging
             cszn = c0
@@ -744,18 +791,26 @@
                + albpndn(i,j,n,iblk)*aicen(i,j,n,iblk)
             endif
 
-            apeff(i,j,iblk) = apeff(i,j,iblk) &       ! for history
+            apeff_ai(i,j,iblk) = apeff_ai(i,j,iblk) &       ! for history
                + apeffn(i,j,n,iblk)*aicen(i,j,n,iblk)
          enddo
          enddo
          enddo
 
+         do j = 1, ny_block
+         do i = 1, nx_block
+
+      !-----------------------------------------------------------------
+      ! reduce fresh by fpond for coupling
+      !-----------------------------------------------------------------
+
+            fpond(i,j,iblk) = fpond(i,j,iblk) * rhofresh/dt
+            fresh(i,j,iblk) = fresh(i,j,iblk) - fpond(i,j,iblk)
+
       !----------------------------------------------------------------
       ! Store grid box mean albedos and fluxes before scaling by aice
       !----------------------------------------------------------------
 
-         do j = 1, ny_block
-         do i = 1, nx_block
             alvdf_gbm  (i,j,iblk) = alvdf  (i,j,iblk)
             alidf_gbm  (i,j,iblk) = alidf  (i,j,iblk)
             alvdr_gbm  (i,j,iblk) = alvdr  (i,j,iblk)
