@@ -86,7 +86,7 @@
           atm_data_type,   atm_data_dir,  precip_units, &
           atm_data_format, ocn_data_format, &
           sss_data_type,   sst_data_type, ocn_data_dir, &
-          oceanmixed_file, restore_sst,   trestore 
+          oceanmixed_file, restore_sst,   trestore
       use ice_grid, only: grid_file, kmt_file, grid_type, grid_format
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist, mu_rdg
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
@@ -96,12 +96,13 @@
       use ice_atmo, only: atmbndy, calc_strair
       use ice_transport_driver, only: advection
       use ice_state, only: tr_iage, tr_lvl, tr_pond, &
-                           tr_pond_cesm, tr_pond_lvl, tr_aero
+                           tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_aero
       use ice_age, only: restart_age
       use ice_lvl, only: restart_lvl
       use ice_meltpond_cesm, only: restart_pond_cesm, hs0
       use ice_meltpond_lvl, only: restart_pond_lvl, dpscale, frzpnd, snowinfil, &
                                   rfracmin, rfracmax, pndaspect, hs1
+      use ice_meltpond_topo, only: restart_pond_topo
       use ice_aerosol, only: restart_aero
       use ice_therm_vertical, only: calc_Tsfc, heat_capacity, conduct, &
           ustar_min
@@ -118,6 +119,8 @@
       character (len=6) :: chartmp
 
       logical (kind=log_kind), dimension(max_ntrcr) :: lwork
+
+      real (kind=real_kind) :: rpcesm, rplvl, rptopo 
 
       !-----------------------------------------------------------------
       ! Namelist variables.
@@ -153,13 +156,14 @@
         precip_units,   Tfrzpt,          update_ocn_f,  ustar_min,      &
         oceanmixed_ice, ocn_data_format, sss_data_type, sst_data_type,  &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
-        restore_ice    
+        restore_ice
 
       namelist /tracer_nml/   &
         tr_iage, restart_age, &
         tr_lvl, restart_lvl, &
         tr_pond_cesm, restart_pond_cesm, &
         tr_pond_lvl, restart_pond_lvl, &
+        tr_pond_topo, restart_pond_topo, &
         tr_aero, restart_aero
 
       !-----------------------------------------------------------------
@@ -235,6 +239,7 @@
       rfracmin  = 0.15_dbl_kind   ! minimum retained fraction of meltwater
       rfracmax  = 0.85_dbl_kind   ! maximum retained fraction of meltwater
       pndaspect = 0.8_dbl_kind    ! ratio of pond depth to area fraction
+      hs0       = 0.03_dbl_kind   ! snow depth for transition to bare sea ice (m)
       albicev   = 0.78_dbl_kind   ! visible ice albedo for h > ahmax
       albicei   = 0.36_dbl_kind   ! near-ir ice albedo for h > ahmax
       albsnowv  = 0.98_dbl_kind   ! cold snow albedo, visible
@@ -278,6 +283,8 @@
       restart_pond_cesm = .false. ! melt ponds restart
       tr_pond_lvl  = .false. ! level-ice melt ponds
       restart_pond_lvl  = .false. ! melt ponds restart
+      tr_pond_topo = .false. ! explicit melt ponds (topographic)
+      restart_pond_topo = .false. ! melt ponds restart
       tr_aero      = .false. ! aerosols
       restart_aero = .false. ! aerosols restart
 
@@ -389,8 +396,15 @@
          kcatbound = 0
       endif
 
+      rpcesm = c0
+      rplvl  = c0
+      rptopo = c0
+      if (tr_pond_cesm) rpcesm = c1
+      if (tr_pond_lvl ) rplvl  = c1
+      if (tr_pond_topo) rptopo = c1
+
       tr_pond = .false. ! explicit melt ponds
-      if (tr_pond_cesm .or. tr_pond_lvl) tr_pond = .true.
+      if (rpcesm + rplvl + rptopo > puny) tr_pond = .true.
 
 !temporary!
       if (tr_pond_lvl) then
@@ -400,12 +414,11 @@
       endif
 !temporary!
 
-      if (tr_pond_lvl .and. tr_pond_cesm) then
+      if (rpcesm + rplvl + rptopo > c1 + puny) then
          if (my_task == master_task) then
             write (nu_diag,*) 'WARNING: Must use only one melt pond scheme'
-            write (nu_diag,*) 'WARNING: Setting tr_pond_lvl=T, tr_pond_cesm=F'
+            call abort_ice('ice: multiple melt pond schemes')
          endif
-         tr_pond_cesm = .false.
       endif
 
       if (tr_pond_lvl .and. .not. tr_lvl) then
@@ -560,6 +573,8 @@
       call broadcast_scalar(restart_pond_cesm,  master_task)
       call broadcast_scalar(tr_pond_lvl,        master_task)
       call broadcast_scalar(restart_pond_lvl,   master_task)
+      call broadcast_scalar(tr_pond_topo,       master_task)
+      call broadcast_scalar(restart_pond_topo,  master_task)
       call broadcast_scalar(tr_pond,            master_task)
       call broadcast_scalar(tr_aero,            master_task)
       call broadcast_scalar(restart_aero,       master_task)
@@ -728,6 +743,8 @@
          write(nu_diag,1010) ' restart_pond_cesm         = ', restart_pond_cesm
          write(nu_diag,1010) ' tr_pond_lvl               = ', tr_pond_lvl
          write(nu_diag,1010) ' restart_pond_lvl          = ', restart_pond_lvl
+         write(nu_diag,1010) ' tr_pond_topo              = ', tr_pond_topo
+         write(nu_diag,1010) ' restart_pond_topo         = ', restart_pond_topo
          write(nu_diag,1010) ' tr_aero                   = ', tr_aero
          write(nu_diag,1010) ' restart_aero              = ', restart_aero
 
@@ -761,6 +778,10 @@
                  nt_ipnd = ntrcr + 1  ! refrozen pond ice lid thickness
                  ntrcr = ntrcr + 1    ! on level-ice ponds (if frzpnd='hlid')
              endif
+             if (tr_pond_topo) then
+                 nt_ipnd = ntrcr + 1  ! refrozen pond ice lid thickness
+                 ntrcr = ntrcr + 1    ! 
+             endif
          endif
 
          nt_aero = 0
@@ -771,6 +792,7 @@
 
          if (ntrcr > max_ntrcr) then
             write(nu_diag,*) 'max_ntrcr < number of namelist tracers'
+            write(nu_diag,*) 'max_ntrcr = ',max_ntrcr,' ntrcr = ',ntrcr
             call abort_ice('max_ntrcr < number of namelist tracers')
          endif                               
 
@@ -898,6 +920,11 @@
       endif
       if (tr_pond_lvl) then
                    trcr_depend(nt_apnd)  = 2+nt_alvl   ! melt pond area
+                   trcr_depend(nt_hpnd)  = 2+nt_apnd   ! melt pond depth
+                   trcr_depend(nt_ipnd)  = 2+nt_apnd   ! refrozen pond lid
+      endif
+      if (tr_pond_topo) then
+                   trcr_depend(nt_apnd)  = 0   ! melt pond area
                    trcr_depend(nt_hpnd)  = 2+nt_apnd   ! melt pond depth
                    trcr_depend(nt_ipnd)  = 2+nt_apnd   ! refrozen pond lid
       endif

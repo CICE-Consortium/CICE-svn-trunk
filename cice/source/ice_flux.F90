@@ -194,7 +194,7 @@
          albice   , & ! bare ice albedo
          albsno   , & ! snow albedo
          albpnd   , & ! melt pond albedo
-         apeff        ! effective pond area used for radiation calculation
+         apeff_ai     ! effective pond area used for radiation calculation
 
       real (kind=dbl_kind), &
          dimension(nx_block,ny_block,max_blocks,max_nstrm) :: &
@@ -204,6 +204,7 @@
        ! (Note CICE_IN_NEMO does not use these for coupling.  
        !  It uses fresh_gbm,fsalt_gbm,fhocn_gbm and fswthru_gbm)
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         fpond   , & ! fresh water flux to ponds (kg/m2/s)
          fresh   , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt   , & ! salt flux to ocean (kg/m^2/s)
          fhocn   , & ! net heat flux to ocean (W/m^2)
@@ -570,6 +571,7 @@
       fsurfn    (:,:,:,:) = c0
       fcondtopn (:,:,:,:) = c0
       flatn     (:,:,:,:) = c0
+      fpond      (:,:,:) = c0
       fresh_gbm  (:,:,:) = c0
       fsalt_gbm  (:,:,:) = c0
       fhocn_gbm  (:,:,:) = c0

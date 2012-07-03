@@ -308,7 +308,7 @@
 !
 ! !USES:
 !
-    use ice_state, only: nt_apnd, tr_pond_cesm, tr_pond_lvl, nt_alvl
+    use ice_state, only: nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo, nt_alvl
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -462,7 +462,7 @@
                enddo            ! ij
 
             elseif (trcr_depend(it) == 2+nt_apnd .and. &
-                    tr_pond_cesm) then ! CESM pond area tracer
+                   (tr_pond_cesm .or. tr_pond_topo)) then ! CESM or topo pond area tracer
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -965,7 +965,7 @@
 ! !USES:
 !
       use ice_work, only: worka, workb
-      use ice_state, only: nt_apnd, tr_pond_cesm, tr_pond_lvl, nt_alvl
+      use ice_state, only: nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo, nt_alvl
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1094,7 +1094,7 @@
                                   * trcrn(i,j,it,n)
                enddo
             elseif (trcr_depend(it) == 2+nt_apnd .and. &
-                    tr_pond_cesm) then ! CESM pond area tracer
+                   (tr_pond_cesm .or. tr_pond_topo)) then ! CESM or topo pond area tracer
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)
@@ -1337,7 +1337,7 @@
                elseif (trcr_depend(it) == 2+nt_alvl) then
                   datrcr = daice(m,n)*trcrn(i,j,nt_alvl,nd)*trcrn(i,j,it,nd)
                elseif (trcr_depend(it) == 2+nt_apnd .and. &
-                       tr_pond_cesm) then
+                      (tr_pond_cesm .or. tr_pond_topo)) then
                   datrcr = daice(m,n)*trcrn(i,j,nt_apnd,nd)*trcrn(i,j,it,nd)
                elseif (trcr_depend(it) == 2+nt_apnd .and. &
                        tr_pond_lvl) then
@@ -1586,7 +1586,8 @@
 !          
 ! !USES:
 !
-      use ice_state, only: nt_Tsfc, nt_apnd, tr_pond_cesm, tr_pond_lvl, nt_alvl
+      use ice_state, only: nt_Tsfc, nt_alvl, &
+          nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1685,7 +1686,7 @@
             enddo
 
          elseif (trcr_depend(it) == 2+nt_apnd .and. &
-                 tr_pond_cesm) then ! CESM pond area tracer
+                (tr_pond_cesm .or. tr_pond_topo)) then ! CESM or topo pond area tracer
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)
@@ -1727,11 +1728,13 @@
                               vicen,       vsnon,      &
                               eicen,       esnon,      &
                               aice0,       aice,       &
-                              trcr_depend, fresh,      &
+                              trcr_depend, fpond,      &
+                              fresh,                   &
                               fsalt,       fhocn,      &
                               faero_ocn,   tr_aero,    &
-                              heat_capacity, l_stop,     &
-                              istop,         jstop,      &
+                              tr_pond_topo,            &
+                              heat_capacity, l_stop,   &
+                              istop,         jstop,    &
                               limit_aice_in)
 !
 ! !DESCRIPTION:
@@ -1787,6 +1790,7 @@
 
       logical (kind=log_kind), intent(in) :: &
          tr_aero,      & ! aerosol flag
+         tr_pond_topo, & ! topo pond flag
          heat_capacity   ! if false, ice and snow have zero heat capacity
 
       logical (kind=log_kind), intent(out) :: &
@@ -1798,6 +1802,7 @@
       ! ice-ocean fluxes (required for strict conservation)
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout), optional :: &
+         fpond    , & ! fresh water flux to ponds (kg/m^2/s)
          fresh    , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt    , & ! salt flux to ocean        (kg/m^2/s)
          fhocn        ! net heat flux to ocean     (W/m^2)
@@ -1821,6 +1826,7 @@
          indxi, indxj      ! compressed i/j indices
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         dfpond   , & ! zapped pond water flux (kg/m^2/s)
          dfresh   , & ! zapped fresh water flux (kg/m^2/s)
          dfsalt   , & ! zapped salt flux   (kg/m^2/s)
          dfhocn       ! zapped energy flux ( W/m^2)
@@ -1845,6 +1851,7 @@
       istop = 0
       jstop = 0
 
+      dfpond(:,:) = c0
       dfresh(:,:) = c0
       dfsalt(:,:) = c0
       dfhocn(:,:) = c0
@@ -1929,9 +1936,11 @@
                                aicen,    trcrn,     &
                                vicen,    vsnon,     &
                                eicen,    esnon,     &
+                               dfpond,              &
                                dfresh,   dfsalt,    &
                                dfhocn,   dfaero_ocn,&
-                               tr_aero,  l_stop,    &
+                               tr_aero,  tr_pond_topo, &
+                               l_stop,    &
                                istop,    jstop)
          if (l_stop) return
       endif   ! l_limit_aice
@@ -1940,6 +1949,8 @@
     ! Update ice-ocean fluxes for strict conservation
     !-------------------------------------------------------------------
 
+      if (present(fpond)) &
+           fpond     (:,:)   = fpond(:,:)       + dfpond(:,:) 
       if (present(fresh)) &
            fresh     (:,:)   = fresh(:,:)       + dfresh(:,:) 
       if (present(fsalt)) &
@@ -1982,9 +1993,11 @@
                                   aicen,    trcrn,      &
                                   vicen,    vsnon,      &
                                   eicen,    esnon,      &
+                                  dfpond,               &
                                   dfresh,   dfsalt,     &
                                   dfhocn,   dfaero_ocn, &
-                                  tr_aero,  l_stop,     &
+                                  tr_aero,  tr_pond_topo, &
+                                  l_stop,     &
                                   istop,    jstop)
 !
 ! !DESCRIPTION:
@@ -1998,7 +2011,7 @@
 !
 ! !USES:
 !
-      use ice_state, only: nt_Tsfc, nt_aero
+      use ice_state, only: nt_Tsfc, nt_aero, nt_apnd, nt_hpnd 
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -2035,6 +2048,7 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(out) :: &
+         dfpond   , & ! zapped pond water flux (kg/m^2/s)
          dfresh   , & ! zapped fresh water flux (kg/m^2/s)
          dfsalt   , & ! zapped salt flux   (kg/m^2/s)
          dfhocn       ! zapped energy flux ( W/m^2)
@@ -2044,7 +2058,8 @@
          dfaero_ocn   ! zapped aerosol flux   (kg/m^2/s)
 
       logical (kind=log_kind), intent(in) :: &
-         tr_aero      ! aerosol flag
+         tr_aero, &   ! aerosol flag
+         tr_pond_topo ! pond flag
 
       logical (kind=log_kind), intent(out) :: &
          l_stop       ! if true, abort on return
@@ -2073,6 +2088,7 @@
       istop = 0
       jstop = 0
 
+      dfpond(:,:) = c0
       dfresh(:,:) = c0
       dfsalt(:,:) = c0
       dfhocn(:,:) = c0
@@ -2112,6 +2128,19 @@
       !-----------------------------------------------------------------
       ! Account for tracers important for conservation
       !-----------------------------------------------------------------
+
+         if (tr_pond_topo) then
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+               xtmp = aicen(i,j,n) / dt &
+                    * trcrn(i,j,nt_apnd,n) * trcrn(i,j,nt_hpnd,n)
+               dfpond(i,j) = dfpond(i,j) - xtmp
+            enddo                  ! ij
+         endif
 
          if (tr_aero) then
 !DIR$ CONCURRENT !Cray
@@ -2239,10 +2268,24 @@
       ! Account for tracers important for conservation
       !-----------------------------------------------------------------
 
+         if (tr_pond_topo) then
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+               xtmp = aicen(i,j,n) &
+                    * trcrn(i,j,nt_apnd,n) * trcrn(i,j,nt_hpnd,n) &
+                    * (aice(i,j)-c1)/aice(i,j) / dt
+               dfpond(i,j) = dfpond(i,j) - xtmp
+            enddo                  ! ij
+         endif
+
          if (tr_aero) then
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)

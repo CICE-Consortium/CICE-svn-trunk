@@ -129,6 +129,7 @@
          tr_pond,   & ! if .true., use melt pond tracer
          tr_pond_cesm,& ! if .true., use cesm pond tracer
          tr_pond_lvl, & ! if .true., use level-ice pond tracer
+         tr_pond_topo,& ! if .true., use explicit topography-based ponds
          tr_aero      ! if .true., use aerosol tracers
 
       !-----------------------------------------------------------------

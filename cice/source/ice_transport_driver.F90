@@ -1582,7 +1582,7 @@
 ! !USES:
 !
       use ice_itd, only: ilyr1, slyr1
-      use ice_state, only: nt_alvl, nt_apnd, tr_pond_cesm, tr_pond_lvl
+      use ice_state, only: nt_alvl, nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1671,7 +1671,7 @@
                enddo
                enddo
             elseif (trcr_depend(it) == 2+nt_apnd .and. &
-                    tr_pond_cesm) then
+                    tr_pond_cesm .or. tr_pond_topo) then
                do j = 1, ny_block
                do i = 1, nx_block
                   works(i,j,narrays+it) = aicen(i,j,n) &

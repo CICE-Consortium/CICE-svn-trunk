@@ -42,6 +42,7 @@
       use ice_mechred
       use ice_meltpond_cesm
       use ice_meltpond_lvl
+      use ice_meltpond_topo
       use ice_ocean
       use ice_orbital
       use ice_shortwave
@@ -248,10 +249,6 @@
 !
 !EOP
 !
-!lipscomb - delete hicen later?
-!      real (kind=dbl_kind), &
-!         dimension (nx_block,ny_block,ncat,max_blocks) :: &
-
       integer (kind=int_kind) :: &
          iblk        , & ! block index
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
@@ -340,6 +337,7 @@
                              esnon     (:,:,:,iblk),         &
                              aice      (:,:,  iblk),         &
                              aice0     (:,:,  iblk),         &
+                             fpond     (:,:,  iblk),         &
                              l_stop,                         &
                              istop,    jstop)
 
@@ -411,6 +409,7 @@
          call lateral_melt (nx_block, ny_block,     &
                             ilo, ihi, jlo, jhi,     &
                             dt,                     &
+                            fpond     (:,:,  iblk), &
                             fresh     (:,:,  iblk), &
                             fsalt     (:,:,  iblk), &    
                             fhocn     (:,:,  iblk), &
@@ -453,10 +452,10 @@
                            vicen   (:,:,:,iblk), vsnon (:,:,  :,iblk), &
                            eicen   (:,:,:,iblk), esnon (:,:,  :,iblk), &
                            aice0   (:,:,  iblk), aice      (:,:,iblk), &
-                           trcr_depend(1:ntrcr),                       &
+                           trcr_depend(1:ntrcr), fpond     (:,:,iblk), &
                            fresh   (:,:,  iblk), fsalt     (:,:,iblk), &
                            fhocn   (:,:,  iblk),faero_ocn(:,:,:,iblk), &
-                           tr_aero,                                    &
+                           tr_aero,             tr_pond_topo,          &
                            heat_capacity,        l_stop,               &
                            istop,                jstop)
 
@@ -639,6 +638,7 @@
                          istop,                jstop,                    &   
                          dardg1dt(:,:,iblk),   dardg2dt  (:,:,iblk),     &
                          dvirdgdt(:,:,iblk),   opening   (:,:,iblk),     &
+                         fpond   (:,:,iblk),                             &
                          fresh   (:,:,iblk),   fhocn     (:,:,iblk),     &
                          aparticn(:,:,:,iblk), krdgn     (:,:,:,iblk),   &
                          aredistn(:,:,:,iblk), vredistn  (:,:,:,iblk),   &
@@ -683,10 +683,10 @@
                            vicen   (:,:,:,iblk), vsnon (:,:,  :,iblk), &
                            eicen   (:,:,:,iblk), esnon (:,:,  :,iblk), &
                            aice0   (:,:,  iblk), aice      (:,:,iblk), &
-                           trcr_depend(1:ntrcr),                       &
+                           trcr_depend(1:ntrcr), fpond     (:,:,iblk), &
                            fresh   (:,:,  iblk), fsalt     (:,:,iblk), &
                            fhocn   (:,:,  iblk),faero_ocn(:,:,:,iblk), &
-                           tr_aero,                                    &
+                           tr_aero,             tr_pond_topo,          &
                            heat_capacity,        l_stop,               &
                            istop,                jstop)
 
