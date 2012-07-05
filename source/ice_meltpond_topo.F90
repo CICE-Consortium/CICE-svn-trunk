@@ -677,6 +677,7 @@
          if (apondn(n) > puny) then
              hpondn(n) = volpn(n) / apondn(n)
          else
+            dvolp = dvolp + volpn(n)
             hpondn(n) = c0
             volpn(n) = c0
             apondn(n) = c0
