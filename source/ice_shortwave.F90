@@ -1029,7 +1029,6 @@
 ! End ccsm3 shortwave method
 !=======================================================================
 ! Begin Delta-Eddington shortwave method
-!
 !BOP
 !
 ! !IROUTINE: run_dEdd - initialize/run Delta-Eddington
@@ -1112,7 +1111,8 @@
          this_block      ! block information for current block
 
       real (kind=dbl_kind), parameter :: & 
-         argmax = c10      ! maximum argument of exponential
+         argmax = c10, & ! maximum argument of exponential
+         ipnd_crit = p01 ! critical lid depth for meltpond_topo 
 
       exp_min = exp(-argmax)
 
@@ -1200,9 +1200,9 @@
                   do ij = 1, icells
                      i = indxi(ij)
                      j = indxj(ij)
-                     ! Lid effective if thicker than 3cm
+                     ! Lid effective if thicker than ipnd_crit (1 cm) 
                      if (trcrn(i,j,nt_apnd,n,iblk)*aicen(i,j,n,iblk) > puny .and. &
-                               trcrn (i,j,nt_ipnd,n,iblk) < 0.03_dbl_kind) then
+                         trcrn(i,j,nt_ipnd,n,iblk) < ipnd_crit) then
                         fpn(i,j) = trcrn(i,j,nt_apnd,n,iblk)
                      else
                         fpn(i,j) = c0
