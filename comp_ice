@@ -4,6 +4,7 @@
 ### You will need to create a Makefile Macro in bld/ and a run_ice script 
 ### in input_templates/.
 setenv SITE LANL.conejo
+#setenv SITE LANL.mustang
 #setenv SITE NAVO.kraken
 #setenv SITE NCAR.bluevista
 #setenv SITE LLNL.atlas
