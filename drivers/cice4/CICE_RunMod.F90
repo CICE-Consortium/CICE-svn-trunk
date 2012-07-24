@@ -526,7 +526,7 @@
                              esnon  (:,:,sl1:sl2,iblk),                &
                              flw    (:,:,iblk),   potT (:,:,iblk),     &
                              Qa     (:,:,iblk),   rhoa (:,:,iblk),     &
-                             fsnow  (:,:,iblk),                        &
+                             fsnow  (:,:,iblk),   fpond (:,:,iblk),    &
                              fbot,                Tbot,                &
                              lhcoef,              shcoef,              &
                              fswsfcn(:,:,n,iblk), fswintn(:,:,n,iblk), &

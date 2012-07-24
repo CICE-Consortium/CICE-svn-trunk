@@ -35,7 +35,7 @@
       use ice_domain_size, only: ncat, nilyr, nslyr, ntilyr, ntslyr, max_ntrcr
       use ice_constants
       use ice_fileunits, only: nu_diag
-      use ice_state, only: tr_iage
+      use ice_state, only: tr_iage, tr_pond_topo, nt_apnd, nt_hpnd
 !
 !EOP
 !
@@ -109,7 +109,7 @@
                                   eicen,       esnon,     &
                                   flw,         potT,      &
                                   Qa,          rhoa,      &
-                                  fsnow,                  &
+                                  fsnow,       fpond,     &
                                   fbot,        Tbot,      &
                                   lhcoef,      shcoef,    &
                                   fswsfc,      fswint,    &
@@ -184,7 +184,8 @@
          intent(inout) :: &
          fswsfc  , & ! SW absorbed at ice/snow surface (W m-2)
          fswint  , & ! SW absorbed in ice interior, below surface (W m-2)
-         fswthrun    ! SW through ice to ocean         (W/m^2)
+         fswthrun, & ! SW through ice to ocean         (W/m^2)
+         fpond       ! fresh water flux to ponds (kg/m^2/s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
          intent(inout) :: &
@@ -477,6 +478,12 @@
          freshn(i,j) = evapn(i,j) - &
                        (rhoi*dhi + rhos*(dhs-hsn_new(ij))) / dt
          fsaltn(i,j) = -rhoi*dhi*ice_ref_salinity*p001/dt
+
+         if (hin(ij) == c0) then
+            if (tr_pond_topo) &
+            fpond(i,j) = fpond(i,j) - aicen(i,j) &
+                       * trcrn(i,j,nt_apnd) * trcrn(i,j,nt_hpnd)
+         endif
 
       enddo                     ! ij
 
@@ -4726,8 +4733,6 @@
       enddo                     ! nslyr
 
       end subroutine update_state_vthermo
-
-
 
 !=======================================================================
 

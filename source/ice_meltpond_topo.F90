@@ -41,7 +41,6 @@
       use ice_fileunits
       use ice_itd, only: ilyr1, slyr1
       use ice_kinds_mod
-      use ice_meltpond_cesm, only: hs0
       use ice_read_write
       use ice_restart, only: lenstr, restart_dir, restart_file, &
                              pointer_file, runtype
@@ -543,9 +542,7 @@
             reduced_aicen(n) = c1 ! n=ncat
             if (n < ncat) reduced_aicen(n) = aicen(n) &
                                  * (-0.024_dbl_kind*hicen(n) + 0.832_dbl_kind) 
-            if (hs0 > puny) &
-               asnon(n) = min(hsnon(n)/hs0, c1)*reduced_aicen(n) ! delta-Eddington formulation
-            if (asnon(n) > puny) hsnon(n) = vsnon(n) / asnon(n)
+            asnon(n) = reduced_aicen(n) 
          endif
 
 ! This choice for alfa and beta ignores hydrostatic equilibium of categories.
@@ -671,9 +668,30 @@
       ! snow in melt ponds is not melted
       !------------------------------------------------------------------------
 
-      do n=1,m_index
+      ! Calculate pond volume for lower categories
+      do n=1,m_index-1
          volpn(n) = apondn(n) * hpondn(n) &
                   - (rhos/rhow) * asnon(n) * min(hsnon(n), hpondn(n))
+      enddo
+
+      ! Calculate pond volume for highest category = remaining pond volume
+      if (m_index == 1) volpn(m_index) = volp
+      if (m_index > 1) then
+        if (volp > sum(volpn(1:m_index-1))) then
+          volpn(m_index) = volp - sum(volpn(1:m_index-1))
+        else
+          volpn(m_index) = c0
+          hpondn(m_index) = c0
+          apondn(m_index) = c0
+          ! If remaining pond volume is negative reduce pond volume of 
+          ! lower category
+          if (volp+puny < sum(volpn(1:m_index-1))) & 
+            volpn(m_index-1) = volpn(m_index-1) - sum(volpn(1:m_index-1)) + &
+                               volp
+        endif
+      endif
+
+      do n=1,m_index
          if (apondn(n) > puny) then
              hpondn(n) = volpn(n) / apondn(n)
          else
@@ -683,7 +701,6 @@
             apondn(n) = c0
          end if
       enddo
-      volp  = sum(volpn(1:m_index))
       do n = m_index+1, ncat
          hpondn(n) = c0
          apondn(n) = c0

@@ -2136,7 +2136,7 @@
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)
-               xtmp = aicen(i,j,n) / dt &
+                 xtmp = aicen(i,j,n) &
                     * trcrn(i,j,nt_apnd,n) * trcrn(i,j,nt_hpnd,n)
                dfpond(i,j) = dfpond(i,j) - xtmp
             enddo                  ! ij
@@ -2277,7 +2277,7 @@
                j = indxj(ij)
                xtmp = aicen(i,j,n) &
                     * trcrn(i,j,nt_apnd,n) * trcrn(i,j,nt_hpnd,n) &
-                    * (aice(i,j)-c1)/aice(i,j) / dt
+                    * (aice(i,j)-c1)/aice(i,j)
                dfpond(i,j) = dfpond(i,j) - xtmp
             enddo                  ! ij
          endif
