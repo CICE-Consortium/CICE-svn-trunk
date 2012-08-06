@@ -72,7 +72,7 @@
                               npt, dt, ndyn_dt, days_per_year, use_leap_years, &
                               write_ic, dump_last
       use ice_restart, only: &
-          restart, restart_dir, restart_file, pointer_file, &
+          restart, restart_ext, restart_dir, restart_file, pointer_file, &
           runid, runtype
       use ice_history, only: hist_avg, &
                              history_format, history_dir, history_file, &
@@ -131,6 +131,7 @@
         dt,             npt,            ndyn_dt,                        &
         runtype,        runid,                                          &
         ice_ic,         restart,        restart_dir,     restart_file,  &
+        restart_ext,                                                    &
         pointer_file,   dumpfreq,       dumpfreq_n,      dump_last,     &
         diagfreq,       diag_type,      diag_file,                      &
         print_global,   print_points,   latpnt,          lonpnt,        &
@@ -201,6 +202,7 @@
       restart = .false.      ! if true, read restart files for initialization
       restart_dir  = ' '     ! write to executable dir for default
       restart_file = 'iced'  ! restart file name prefix
+      restart_ext  = .false. ! if true, read/write ghost cells
       pointer_file = 'ice.restart_file'
       ice_ic       = 'default'      ! latitude and sst-dependent
       grid_format  = 'bin'          ! file format ('bin'=binary or 'nc'=netcdf)
@@ -379,9 +381,11 @@
       if (chartmp /= 'upwind' .and. chartmp /= 'remap ') advection = 'remap'
 
       if (ncat == 1 .and. kitd == 1) then
+         if (my_task == master_task) then
          write (nu_diag,*) 'Remapping the ITD is not allowed for ncat=1.'
          write (nu_diag,*) 'Use kitd = 0 (delta function ITD) with kcatbound = 0'
          write (nu_diag,*) 'or for column configurations use kcatbound = -1'
+         endif
          call abort_ice('ncat=1 and kitd=1')
       endif
 
@@ -498,6 +502,7 @@
       call broadcast_scalar(restart_file,       master_task)
       call broadcast_scalar(restart,            master_task)
       call broadcast_scalar(restart_dir,        master_task)
+      call broadcast_scalar(restart_ext,        master_task)
       call broadcast_scalar(pointer_file,       master_task)
       call broadcast_scalar(ice_ic,             master_task)
       call broadcast_scalar(grid_format,        master_task)
@@ -623,6 +628,7 @@
          write(nu_diag,1010) ' restart                   = ', restart
          write(nu_diag,*)    ' restart_dir               = ', &
                                trim(restart_dir)
+         write(nu_diag,*)    ' restart_ext               = ', restart_ext
          write(nu_diag,*)    ' restart_file              = ', &
                                trim(restart_file)
          write(nu_diag,*)    ' pointer_file              = ', &
@@ -862,10 +868,17 @@
 !EOP
 !
       integer (kind=int_kind) :: &
+         ilo, ihi    , & ! physical domain indices
+         jlo, jhi    , & ! physical domain indices
+         iglob(nx_block), & ! global indices
+         jglob(ny_block), & ! global indices
          i, j        , & ! horizontal indices
          it          , & ! tracer index
          iblk            ! block index
 
+      type (block) :: &
+         this_block           ! block information for current block
+      
       !-----------------------------------------------------------------
       ! Check number of layers in ice and snow.
       !-----------------------------------------------------------------
@@ -943,7 +956,17 @@
       ! Set state variables
       !-----------------------------------------------------------------
 
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+         iglob = this_block%i_glob
+         jglob = this_block%j_glob
+
          call set_state_var (nx_block,            ny_block,            &
+                             ilo, ihi,            jlo, jhi,            &
+                             iglob,               jglob,               &
                              tmask(:,:,    iblk),                      &
                              ULON (:,:,    iblk), ULAT (:,:,    iblk), &
                              Tair (:,:,    iblk), sst  (:,:,    iblk), &
@@ -1005,6 +1028,8 @@
 ! !INTERFACE:
 !
       subroutine set_state_var (nx_block, ny_block, &
+                                ilo, ihi, jlo, jhi, &
+                                iglob,    jglob,    &
                                 tmask,    ULON,  ULAT, &
                                 Tair,     sst,  &
                                 Tf,       &
@@ -1023,15 +1048,21 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nghost
       use ice_state, only: nt_Tsfc
       use ice_therm_vertical, only: heat_capacity, calc_Tsfc, Tmlt
       use ice_itd, only: ilyr1, slyr1, hin_max
       use ice_grid, only: grid_type
+      use ice_forcing, only: atm_data_type
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
-         nx_block, ny_block  ! block dimensions
+         nx_block, ny_block, & ! block dimensions
+         ilo, ihi          , & ! physical domain indices
+         jlo, jhi          , & !
+         iglob(nx_block)   , & ! global indices
+         jglob(ny_block)       !
 
       logical (kind=log_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
@@ -1089,7 +1120,6 @@
          edge_init_nh =  70._dbl_kind, & ! initial ice edge, N.Hem. (deg) 
          edge_init_sh = -60._dbl_kind    ! initial ice edge, S.Hem. (deg)
 
-
       indxi(:) = 0
       indxj(:) = 0
 
@@ -1123,6 +1153,20 @@
       !       extend to the prescribed edges.
       !-----------------------------------------------------------------
 
+         if (trim(atm_data_type) == 'box') then
+
+            hbar = c2  ! initial ice thickness
+            do n = 1, ncat
+               hinit(n) = c0
+               ainit(n) = c0
+               if (hbar > hin_max(n-1) .and. hbar < hin_max(n)) then
+                  hinit(n) = hbar
+                  ainit(n) = 0.50 !echmod symm
+               endif
+            enddo
+
+         else
+
       ! initial category areas in cells with ice
          hbar = c3  ! initial ice thickness with greatest area
                     ! Note: the resulting average ice thickness 
@@ -1143,12 +1187,14 @@
             ainit(n) = ainit(n) / (sum + puny/ncat) ! normalize
          enddo
 
+         endif ! atm_data_type
+
          if (trim(grid_type) == 'rectangular') then
 
          ! place ice on left side of domain
          icells = 0
-         do j = 1, ny_block
-         do i = 1, nx_block
+         do j = jlo, jhi
+         do i = ilo, ihi
             if (tmask(i,j)) then
                if (ULON(i,j) < -50./rad_to_deg) then
                   icells = icells + 1
@@ -1163,8 +1209,8 @@
 
          ! place ice at high latitudes where ocean sfc is cold
          icells = 0
-         do j = 1, ny_block
-         do i = 1, nx_block
+         do j = jlo, jhi
+         do i = ilo, ihi
             if (tmask(i,j)) then
                ! place ice in high latitudes where ocean sfc is cold
                if ( (sst (i,j) <= Tf(i,j)+p2) .and. &
@@ -1191,7 +1237,31 @@
                j = indxj(ij)
 
                aicen(i,j,n) = ainit(n)
-               vicen(i,j,n) = hinit(n) * ainit(n) ! m
+
+               if (trim(atm_data_type) == 'box') then
+                  if (hinit(n) > c0) then
+!                  ! constant slope from 0 to 1 in x direction
+!                     aicen(i,j,n) = (real(iglob(i), kind=dbl_kind)-p5) &
+!                                  / (real(nx_global,kind=dbl_kind))
+!                  ! constant slope from 0 to 0.5 in x direction
+!                     aicen(i,j,n) = (real(iglob(i), kind=dbl_kind)-p5) &
+!                                  / (real(nx_global,kind=dbl_kind)) * p5
+                  ! quadratic
+!                     aicen(i,j,n) = max(c0,(real(iglob(i), kind=dbl_kind)-p5) &
+!                                         / (real(nx_global,kind=dbl_kind)) &
+!                                         * (real(jglob(j), kind=dbl_kind)-p5) &
+!                                         / (real(ny_global,kind=dbl_kind)) * p5)
+                     aicen(i,j,n) = max(c0,(real(nx_global, kind=dbl_kind) &
+                                         -  real(iglob(i), kind=dbl_kind)-p5) &
+                                         / (real(nx_global,kind=dbl_kind)) &
+                                         * (real(ny_global, kind=dbl_kind) &
+                                         -  real(jglob(j), kind=dbl_kind)-p5) &
+                                         / (real(ny_global,kind=dbl_kind)) * p5)
+                  endif
+                  vicen(i,j,n) = hinit(n) * aicen(i,j,n) ! m
+               else
+                  vicen(i,j,n) = hinit(n) * ainit(n) ! m
+               endif
                vsnon(i,j,n) =min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
             enddo               ! ij
 

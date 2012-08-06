@@ -29,6 +29,7 @@
       use ice_exit
       use ice_fileunits
       use ice_forcing, only: trestore, trest
+      use ice_restart, only: restart_ext
       use ice_state
       use ice_timers
 !
@@ -73,6 +74,16 @@
 !  same as module
 
 ! !USES:
+
+   if (ew_boundary_type == 'open' .and. &
+       ns_boundary_type == 'open' .and. restart_ext == .false.) then
+      if (my_task == master_task) write (nu_diag,*) &
+            'WARNING: Setting restart_ext = T for open boundaries'
+      restore_ice = .true.
+      restart_ext = .true.
+   endif
+
+   if (.not. restore_ice) return
 
    allocate (aicen_rest(nx_block,ny_block,ncat,max_blocks), &
              vicen_rest(nx_block,ny_block,ncat,max_blocks), &

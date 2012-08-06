@@ -350,6 +350,146 @@
 !=======================================================================
 !BOP
 !
+! !IROUTINE: ice_read - read and scatter an unformatted file incl ghost cells
+!
+! !INTERFACE:
+!
+      subroutine ice_read_ext(nu,  nrec,  work, atype, diag, &
+                          field_loc, field_type, &
+                          ignore_eof, hit_eof)
+!
+! !DESCRIPTION:
+!
+! Read an unformatted file and scatter to processors, incl ghost cells.  \\
+! work is a real array, atype indicates the format of the data.
+! (subroutine ice_HaloUpdate need not be called).
+!
+! !REVISION HISTORY:
+!
+! author: Tony Craig, NCAR
+!
+! !USES:
+!
+      use ice_domain
+      use ice_gather_scatter
+      use ice_work, only: work_g1, work_gr, work_gi4, work_gi8
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+           nu            , & ! unit number
+           nrec              ! record number (0 for sequential access)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
+           intent(out) :: &
+           work              ! output array (real, 8-byte)
+
+      character (len=4), intent(in) :: &
+           atype             ! format for input array
+                             ! (real/integer, 4-byte/8-byte)
+
+      logical (kind=log_kind), intent(in) :: &
+           diag              ! if true, write diagnostic output
+
+      integer (kind=int_kind), optional, intent(in) :: &
+           field_loc, &      ! location of field on staggered grid
+           field_type        ! type of field (scalar, vector, angle)
+
+      logical (kind=log_kind), optional, intent(in)  :: ignore_eof
+      logical (kind=log_kind), optional, intent(out) :: hit_eof
+!
+!EOP
+!
+      integer (kind=int_kind) :: i, j, ios, nx, ny
+
+      real (kind=dbl_kind) :: &
+         amin, amax         ! min and max values of input array
+
+      logical (kind=log_kind) :: ignore_eof_use
+
+      nx = nx_global + 2*nghost
+      ny = ny_global + 2*nghost
+
+      if (my_task == master_task) then
+         allocate(work_g1(nx,ny))
+      else
+         allocate(work_g1(1,1))   ! to save memory
+      endif
+
+      if (my_task == master_task) then
+
+    !-------------------------------------------------------------------
+    ! Read global array according to format atype
+    !-------------------------------------------------------------------
+         if (present(hit_eof)) hit_eof = .false.
+
+         if (atype == 'ida4') then
+            allocate(work_gi4(nx,ny))
+            read(nu,rec=nrec) work_gi4
+            work_g1 = real(work_gi4,kind=dbl_kind)
+            deallocate(work_gi4)
+         elseif (atype == 'ida8') then
+            allocate(work_gi8(nx,ny))
+            read(nu,rec=nrec) work_gi8
+            work_g1 = real(work_gi8,kind=dbl_kind)
+            deallocate(work_gi8)
+         elseif (atype == 'rda4') then
+            allocate(work_gr(nx,ny))
+            read(nu,rec=nrec) work_gr
+            work_g1 = work_gr
+            deallocate(work_gr)
+         elseif (atype == 'rda8') then
+            read(nu,rec=nrec) work_g1
+         elseif (atype == 'ruf8') then
+            if (present(ignore_eof)) then
+               ignore_eof_use = ignore_eof
+            else
+               ignore_eof_use = .false.
+            endif
+            if (ignore_eof_use) then
+             ! Read line from file, checking for end-of-file
+               read(nu, iostat=ios) ((work_g1(i,j),i=1,nx), &
+                                                   j=1,ny)
+               if (present(hit_eof)) hit_eof = ios < 0
+            else
+               read(nu) ((work_g1(i,j),i=1,nx),j=1,ny)
+            endif
+         else
+            write(nu_diag,*) ' ERROR: reading unknown atype ',atype
+         endif
+      endif                     ! my_task = master_task
+
+      if (present(hit_eof)) then
+         call broadcast_scalar(hit_eof,master_task)
+         if (hit_eof) then
+            deallocate(work_g1)
+            return
+         endif
+      endif
+
+    !-------------------------------------------------------------------
+    ! optional diagnostics
+    !-------------------------------------------------------------------
+      if (my_task==master_task .and. diag) then
+         amin = minval(work_g1)
+         amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
+         write(nu_diag,*) ' read_global ',nu, nrec, amin, amax
+      endif
+
+    !-------------------------------------------------------------------
+    ! Scatter data to individual processors.
+    ! NOTE: Ghost cells are always updated
+    !-------------------------------------------------------------------
+
+      call scatter_global_ext(work, work_g1, master_task, distrb_info)
+
+      deallocate(work_g1)
+
+      end subroutine ice_read_ext
+
+!=======================================================================
+!BOP
+!
 ! !IROUTINE: ice_write - writes an unformatted file
 !
 ! !INTERFACE:
@@ -449,6 +589,112 @@
       deallocate(work_g1)
 
       end subroutine ice_write
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: ice_write - writes an unformatted file incl ghost cells
+!
+! !INTERFACE:
+!
+      subroutine ice_write_ext(nu, nrec, work, atype, diag)
+!
+! !DESCRIPTION:
+!
+! Writes an unformatted file, including ghost cells \\
+! work is a real array, atype indicates the format of the data
+!
+! !REVISION HISTORY:
+!
+! author: Tony Craig, NCAR
+!
+! !USES:
+!
+      use ice_gather_scatter
+      use ice_domain
+      use ice_work, only: work_g1, work_gr, work_gi4, work_gi8
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+           nu            , & ! unit number
+           nrec              ! record number (0 for sequential access)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
+           intent(in) :: &
+           work              ! input array (real, 8-byte)
+
+      character (len=4) :: &
+           atype             ! format for output array
+                             ! (real/integer, 4-byte/8-byte)
+
+      logical (kind=log_kind) :: &
+           diag              ! if true, write diagnostic output
+!
+!EOP
+!
+      integer (kind=int_kind) :: i, j, nx, ny
+
+      real (kind=dbl_kind) :: &
+         amin, amax     ! min and max values of ouput array
+
+    !-------------------------------------------------------------------
+    ! Gather data from individual processors
+    !-------------------------------------------------------------------
+
+      nx = nx_global + 2*nghost
+      ny = ny_global + 2*nghost
+
+      if (my_task == master_task) then
+         allocate(work_g1(nx,ny))
+      else
+         allocate(work_g1(1,1)) ! to save memory
+      endif
+
+      call gather_global_ext(work_g1, work, master_task, distrb_info)
+
+      if (my_task == master_task) then
+
+    !-------------------------------------------------------------------
+    ! Write global array according to format atype
+    !-------------------------------------------------------------------
+         if (atype == 'ida4') then
+            allocate(work_gi4(nx,ny))
+            work_gi4 = nint(work_g1)
+            write(nu,rec=nrec) work_gi4
+            deallocate(work_gi4)
+         elseif (atype == 'ida8') then
+            allocate(work_gi8(nx,ny))
+            work_gi8 = nint(work_g1)
+            write(nu,rec=nrec) work_gi8           
+            deallocate(work_gi8)
+         elseif (atype == 'rda4') then
+            allocate(work_gr(nx,ny))
+            work_gr = work_g1
+            write(nu,rec=nrec) work_gr
+            deallocate(work_gr)
+         elseif (atype == 'rda8') then
+            write(nu,rec=nrec) work_g1
+         elseif (atype == 'ruf8') then
+            write(nu) ((work_g1(i,j),i=1,nx),j=1,ny)
+         else
+            write(nu_diag,*) ' ERROR: writing unknown atype ',atype
+         endif
+
+    !-------------------------------------------------------------------
+    ! diagnostics
+    !-------------------------------------------------------------------
+         if (diag) then
+            amin = minval(work_g1)
+            amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
+            write(nu_diag,*) ' write_global ', nu, nrec, amin, amax
+         endif
+
+      endif                     ! my_task = master_task
+
+      deallocate(work_g1)
+
+      end subroutine ice_write_ext
 
 !=======================================================================
 !

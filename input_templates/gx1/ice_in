@@ -9,6 +9,7 @@
   , runtype        = 'initial'
   , ice_ic         = './restart/iced_gx1_v4.0_kcatbound0'
   , restart        = .true.
+  , restart_ext    = .false.
   , restart_dir    = './restart/'
   , restart_file   = 'iced'
   , pointer_file   = './restart/ice.restart_file'
