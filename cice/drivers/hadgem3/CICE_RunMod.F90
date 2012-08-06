@@ -241,7 +241,11 @@
 
          call ice_timer_start(timer_readwrite)  ! reading/writing
          if (write_restart == 1) then
-            call dumpfile ! core variables for restarting
+            if (restart_ext) then
+               call dumpfile_ext ! core variables for restarting
+            else
+               call dumpfile     ! core variables for restarting
+            endif
             if (tr_iage)      call write_restart_age
             if (tr_lvl)       call write_restart_lvl
             if (tr_pond_cesm) call write_restart_pond_cesm

@@ -35,7 +35,9 @@
 ! !PUBLIC MEMBER FUNCTIONS:
 
    public :: gather_global,      &
+             gather_global_ext,  &
              scatter_global,     &
+             scatter_global_ext, &
              scatter_global_stress
 
 !EOP
@@ -333,6 +335,175 @@
  end subroutine gather_global_int
 
 !EOC
+!***********************************************************************
+!BOP
+! !IROUTINE: gather_global
+! !INTERFACE:
+
+ subroutine gather_global_ext(ARRAY_G, ARRAY, dst_task, src_dist)
+
+! !DESCRIPTION:
+!  This subroutine gathers a distributed array to a global-sized
+!  array on the processor dst_task, including ghost cells.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+     dst_task   ! task to which array should be gathered
+
+   type (distrb), intent(in) :: &
+     src_dist   ! distribution of blocks in the source array
+
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
+     ARRAY      ! array containing horizontal slab of distributed field
+
+! !OUTPUT PARAMETERS:
+
+   real (dbl_kind), dimension(:,:), intent(inout) :: &
+     ARRAY_G    ! array containing global horizontal field on dst_task
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) :: &
+     i,j,n          ,&! dummy loop counters
+     nx, ny         ,&! global dimensions
+     src_block        ! local block index in source distribution
+
+   type (block) :: &
+     this_block  ! block info for current block
+
+   nx = nx_global + 2*nghost
+   ny = ny_global + 2*nghost
+   ARRAY_G = c0
+
+!-----------------------------------------------------------------------
+!
+!  copy local array into block decomposition
+!
+!-----------------------------------------------------------------------
+
+   do n=1,nblocks_tot
+
+      this_block = get_block(n,n)
+
+      !*** copy local blocks
+
+      if (src_dist%blockLocation(n) /= 0) then
+
+         do j=this_block%jlo,this_block%jhi
+         do i=this_block%ilo,this_block%ihi
+            ARRAY_G(this_block%i_glob(i)+nghost, &
+                    this_block%j_glob(j)+nghost) = &
+                  ARRAY(i,j,src_dist%blockLocalID(n))
+         end do
+         end do
+
+         ! fill ghost cells
+         if (this_block%jblock == 1) then
+            ! south block
+            do j=1, nghost
+            do i=this_block%ilo,this_block%ihi
+              ARRAY_G(this_block%i_glob(i)+nghost,j) = &
+              ARRAY  (i,j,src_dist%blockLocalID(n))
+            end do
+            end do
+            if (this_block%jblock == 1) then
+               ! southwest corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(i,j) = &
+                 ARRAY  (i,j,src_dist%blockLocalID(n))
+               end do
+               end do
+            endif
+         endif
+         if (this_block%jblock == nblocks_y) then
+            ! north block
+            do j=1, nghost
+            do i=this_block%ilo,this_block%ihi
+              ARRAY_G(this_block%i_glob(i)+nghost, &
+                      ny_global + nghost + j) = &
+              ARRAY  (i,this_block%jhi+nghost-j+1,src_dist%blockLocalID(n))
+            end do
+            end do
+            if (this_block%jblock == nblocks_y) then
+               ! northeast corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(nx-i+1, ny-j+1) = &
+                 ARRAY  (this_block%ihi+nghost-i+1, &
+                         this_block%jhi+nghost-j+1, &
+                         src_dist%blockLocalID(n))
+               end do
+               end do
+            endif
+         endif
+         if (this_block%iblock == 1) then
+            ! west block
+            do j=this_block%jlo,this_block%jhi
+            do i=1, nghost
+              ARRAY_G(i,this_block%j_glob(j)+nghost) = &
+              ARRAY  (i,j,src_dist%blockLocalID(n))
+            end do
+            end do
+            if (this_block%jblock == nblocks_y) then
+               ! northwest corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(i,                   ny-j+1) = &
+                 ARRAY  (i,this_block%jhi+nghost-j+1,src_dist%blockLocalID(n))
+               end do
+               end do
+            endif
+         endif
+         if (this_block%iblock == nblocks_x) then
+            ! east block
+            do j=this_block%jlo,this_block%jhi
+            do i=1, nghost
+              ARRAY_G(nx_global + nghost + i, &
+                      this_block%j_glob(j)+nghost) = &
+              ARRAY  (this_block%ihi+nghost-i+1,j,src_dist%blockLocalID(n))
+            end do
+            end do
+            if (this_block%jblock == 1) then
+               ! southeast corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(                   nx-i+1,j) = &
+                 ARRAY  (this_block%ihi+nghost-i+1,j,src_dist%blockLocalID(n))
+               end do
+               end do
+            endif
+         endif
+
+      else !*** fill land blocks with special values
+
+         do j=this_block%jlo,this_block%jhi
+         do i=this_block%ilo,this_block%ihi
+            ARRAY_G(this_block%i_glob(i)+nghost, &
+                    this_block%j_glob(j)+nghost) = spval_dbl
+         end do
+         end do
+
+      endif
+
+   end do
+
+!-----------------------------------------------------------------------
+
+ end subroutine gather_global_ext
+
 !***********************************************************************
 !BOP
 ! !IROUTINE: scatter_global
@@ -1077,6 +1248,186 @@
  end subroutine scatter_global_int
 
 !EOC
+!***********************************************************************
+!BOP
+! !IROUTINE: scatter_global
+! !INTERFACE:
+
+ subroutine scatter_global_ext(ARRAY, ARRAY_G, src_task, dst_dist)
+
+! !DESCRIPTION:
+!  This subroutine scatters a global-sized array on the processor
+!  src\_task to a distribution of blocks given by dst\_dist.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+!  This is the specific interface for double precision arrays
+!  corresponding to the generic interface scatter_global.  It is shown
+!  to provide information on the generic interface (the generic
+!  interface is identical, but chooses a specific interface based
+!  on the data type of the input argument).
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+     src_task       ! task from which array should be scattered
+
+   type (distrb), intent(in) :: &
+     dst_dist       ! distribution of resulting blocks
+
+   real (dbl_kind), dimension(:,:), intent(in) :: &
+     ARRAY_G        ! array containing global field on src_task
+
+! !OUTPUT PARAMETERS:
+
+   real (dbl_kind), dimension(:,:,:), intent(inout) :: &
+     ARRAY          ! array containing distributed field
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) :: &
+     i,j,n,bid,          &! dummy loop indices
+     iblk, jblk,         &! source addresses
+     iglb, jglb,         &! global indices
+     xoffset, yoffset,   &! offsets for tripole boundary conditions
+     yoffset2,           &!
+     isign,              &! sign factor for tripole boundary conditions
+     dst_block            ! local block index in dest distribution
+
+   type (block) :: &
+     this_block  ! block info for current block
+
+!-----------------------------------------------------------------------
+!
+!  initialize return array to zero 
+!
+!-----------------------------------------------------------------------
+
+   ARRAY = c0
+
+!-----------------------------------------------------------------------
+!
+!  copy blocks of global array into local block distribution
+!
+!-----------------------------------------------------------------------
+
+   do n=1,nblocks_tot
+
+      if (dst_dist%blockLocation(n) /= 0) then
+
+         this_block = get_block(n,n)
+         dst_block  = dst_dist%blockLocalID(n)
+
+         ! interior
+         do j = 1, ny_block
+         do i = 1, nx_block
+            ARRAY(i,j,dst_block) = ARRAY_G(this_block%i_glob(i)+nghost,&
+                                           this_block%j_glob(j)+nghost)
+         end do
+         end do
+
+         if (this_block%jblock == 1) then
+            ! south edge
+            do j = 1, nghost
+            do i = this_block%ilo,this_block%ihi
+               ARRAY(i,j,dst_block) = ARRAY_G(this_block%i_glob(i)+nghost,j)
+            enddo
+               do i = 1, nghost
+               ! southwest corner
+                  iblk = i
+                  jblk = j
+                  iglb = this_block%i_glob(this_block%ilo)+i-1
+                  jglb = j
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               ! southeast corner
+                  iblk = this_block%ihi+i
+                  iglb = this_block%i_glob(this_block%ihi)+nghost+i
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               enddo
+            enddo
+         endif
+         if (this_block%jblock == nblocks_y) then
+            ! north edge
+            do j = 1, nghost
+            do i = this_block%ilo,this_block%ihi
+               ARRAY(i,this_block%jhi+j,dst_block) = ARRAY_G(this_block%i_glob(i)+nghost,&
+                                                             ny_global+nghost+j)
+            enddo
+               do i = 1, nghost
+               ! northwest corner
+                  iblk = i
+                  jblk = this_block%jhi+j
+                  iglb = this_block%i_glob(this_block%ilo)+i-1
+                  jglb = ny_global+nghost+j
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               ! northeast corner
+                  iblk = this_block%ihi+i
+                  iglb = this_block%i_glob(this_block%ihi)+nghost+i
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               enddo
+            enddo
+         endif
+         if (this_block%iblock == 1) then
+            ! west edge
+            do j = this_block%jlo,this_block%jhi
+            do i = 1, nghost
+               ARRAY(i,j,dst_block) = ARRAY_G(i,this_block%j_glob(j)+nghost)
+            enddo
+            enddo
+               do j = 1, nghost
+               do i = 1, nghost
+               ! northwest corner
+                  iblk = i
+                  jblk = this_block%jhi+j
+                  iglb = i
+                  jglb = this_block%j_glob(this_block%jhi)+nghost+j
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               ! southwest corner
+                  jblk = j
+                  jglb = this_block%j_glob(this_block%jlo)+j-1
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               enddo
+               enddo
+         endif
+         if (this_block%iblock == nblocks_x) then
+            ! east edge
+            do j = this_block%jlo,this_block%jhi
+            do i = 1, nghost
+               ARRAY(this_block%ihi+i,j,dst_block) = ARRAY_G(nx_global+nghost+i, &
+                                                             this_block%j_glob(j)+nghost)
+            enddo
+            enddo
+               do j = 1, nghost
+               do i = 1, nghost
+               ! northeast corner
+                  iblk = this_block%ihi+i
+                  jblk = this_block%jhi+j
+                  iglb = nx_global+nghost+i
+                  jglb = this_block%j_glob(this_block%jhi)+nghost+j
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               ! southeast corner
+                  jblk = j
+                  jglb = this_block%j_glob(this_block%jlo)+j-1
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               enddo
+               enddo
+         endif
+
+      endif ! dst block not land
+   end do  ! block loop
+
+!-----------------------------------------------------------------------
+
+ end subroutine scatter_global_ext
+
 !***********************************************************************
 !BOP
 ! !IROUTINE: scatter_global_stress

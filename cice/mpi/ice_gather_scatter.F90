@@ -38,7 +38,9 @@
 ! !PUBLIC MEMBER FUNCTIONS:
 
    public :: gather_global,      &
+             gather_global_ext,  &
              scatter_global,     &
+             scatter_global_ext, &
              scatter_global_stress
 
 !EOP
@@ -569,6 +571,329 @@
  end subroutine gather_global_int
 
 !EOC
+!***********************************************************************
+!BOP
+! !IROUTINE: gather_global
+! !INTERFACE:
+
+ subroutine gather_global_ext(ARRAY_G, ARRAY, dst_task, src_dist)
+
+! !DESCRIPTION:
+!  This subroutine gathers a distributed array to a global-sized
+!  array on the processor dst_task, including ghost cells.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+!
+! !USES:
+
+   include 'mpif.h'
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+     dst_task   ! task to which array should be gathered
+
+   type (distrb), intent(in) :: &
+     src_dist   ! distribution of blocks in the source array
+
+   real (dbl_kind), dimension(:,:,:), intent(in) :: &
+     ARRAY      ! array containing horizontal slab of distributed field
+
+! !OUTPUT PARAMETERS:
+
+   real (dbl_kind), dimension(:,:), intent(inout) :: &
+     ARRAY_G    ! array containing global horizontal field on dst_task
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) :: &
+     i,j,n          ,&! dummy loop counters
+     nx, ny         ,&! global dimensions
+     nsends         ,&! number of actual sends
+     src_block      ,&! block locator for send
+     ierr             ! MPI error flag
+
+   integer (int_kind), dimension(MPI_STATUS_SIZE) :: &
+     status
+
+   integer (int_kind), dimension(:), allocatable :: &
+     snd_request
+
+   integer (int_kind), dimension(:,:), allocatable :: &
+     snd_status
+
+   real (dbl_kind), dimension(:,:), allocatable :: &
+     msg_buffer
+
+   type (block) :: &
+     this_block  ! block info for current block
+
+   nx = nx_global + 2*nghost
+   ny = ny_global + 2*nghost
+   ARRAY_G = c0
+
+!-----------------------------------------------------------------------
+!
+!  if this task is the dst_task, copy local blocks into the global 
+!  array and post receives for non-local blocks.
+!
+!-----------------------------------------------------------------------
+
+   if (my_task == dst_task) then
+
+     do n=1,nblocks_tot
+
+       !*** copy local blocks
+
+       if (src_dist%blockLocation(n) == my_task+1) then
+
+         this_block = get_block(n,n)
+
+         ! interior
+         do j=this_block%jlo,this_block%jhi
+         do i=this_block%ilo,this_block%ihi
+           ARRAY_G(this_block%i_glob(i)+nghost, &
+                   this_block%j_glob(j)+nghost) = &
+           ARRAY  (i,j,src_dist%blockLocalID(n))
+         end do
+         end do
+
+         ! fill ghost cells
+         if (this_block%jblock == 1) then
+            ! south block
+            do j=1, nghost
+            do i=this_block%ilo,this_block%ihi
+              ARRAY_G(this_block%i_glob(i)+nghost,j) = &
+              ARRAY  (i,j,src_dist%blockLocalID(n))
+            end do
+            end do
+            if (this_block%jblock == 1) then
+               ! southwest corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(i,j) = &
+                 ARRAY  (i,j,src_dist%blockLocalID(n))
+               end do
+               end do
+            endif
+         endif
+         if (this_block%jblock == nblocks_y) then
+            ! north block
+            do j=1, nghost
+            do i=this_block%ilo,this_block%ihi
+              ARRAY_G(this_block%i_glob(i)+nghost, &
+                      ny_global + nghost + j) = &
+              ARRAY  (i,this_block%jhi+nghost-j+1,src_dist%blockLocalID(n))
+            end do
+            end do
+            if (this_block%jblock == nblocks_y) then
+               ! northeast corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(nx-i+1, ny-j+1) = &
+                 ARRAY  (this_block%ihi+nghost-i+1, &
+                         this_block%jhi+nghost-j+1, &
+                         src_dist%blockLocalID(n))
+               end do
+               end do
+            endif
+         endif
+         if (this_block%iblock == 1) then
+            ! west block
+            do j=this_block%jlo,this_block%jhi
+            do i=1, nghost
+              ARRAY_G(i,this_block%j_glob(j)+nghost) = &
+              ARRAY  (i,j,src_dist%blockLocalID(n))
+            end do
+            end do
+            if (this_block%jblock == nblocks_y) then
+               ! northwest corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(i,                   ny-j+1) = &
+                 ARRAY  (i,this_block%jhi+nghost-j+1,src_dist%blockLocalID(n))
+               end do
+               end do
+            endif
+         endif
+         if (this_block%iblock == nblocks_x) then
+            ! east block
+            do j=this_block%jlo,this_block%jhi
+            do i=1, nghost
+              ARRAY_G(nx_global + nghost + i, &
+                      this_block%j_glob(j)+nghost) = &
+              ARRAY  (this_block%ihi+nghost-i+1,j,src_dist%blockLocalID(n))
+            end do
+            end do
+            if (this_block%jblock == 1) then
+               ! southeast corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(                   nx-i+1,j) = &
+                 ARRAY  (this_block%ihi+nghost-i+1,j,src_dist%blockLocalID(n))
+               end do
+               end do
+            endif
+         endif
+
+       !*** fill land blocks with special values
+
+       else if (src_dist%blockLocation(n) == 0) then
+
+         this_block = get_block(n,n)
+
+         do j=this_block%jlo,this_block%jhi
+         do i=this_block%ilo,this_block%ihi
+           ARRAY_G(this_block%i_glob(i)+nghost, &
+                   this_block%j_glob(j)+nghost) = spval_dbl
+         end do
+         end do
+       endif
+
+     end do
+
+     !*** receive blocks to fill up the rest
+
+     allocate (msg_buffer(nx_block,ny_block))
+
+     do n=1,nblocks_tot
+       if (src_dist%blockLocation(n) > 0 .and. &
+           src_dist%blockLocation(n) /= my_task+1) then
+
+         this_block = get_block(n,n)
+
+         call MPI_RECV(msg_buffer, size(msg_buffer), &
+                       mpiR8, src_dist%blockLocation(n)-1, 3*mpitag_gs+n, &
+                       MPI_COMM_ICE, status, ierr)
+
+         ! block interior
+         do j=this_block%jlo,this_block%jhi
+         do i=this_block%ilo,this_block%ihi
+           ARRAY_G(this_block%i_glob(i)+nghost, &
+                   this_block%j_glob(j)+nghost) = msg_buffer(i,j)
+         end do
+         end do
+         if (this_block%jblock == 1) then
+            ! south block
+            do j=1, nghost
+            do i=this_block%ilo,this_block%ihi
+              ARRAY_G   (this_block%i_glob(i)+nghost,j) = &
+              msg_buffer(i,j)
+            end do
+            end do
+            if (this_block%jblock == 1) then
+               ! southwest corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(i,j) = msg_buffer(i,j)
+               end do
+               end do
+            endif
+         endif
+         if (this_block%jblock == nblocks_y) then
+            ! north block
+            do j=1, nghost
+            do i=this_block%ilo,this_block%ihi
+              ARRAY_G   (this_block%i_glob(i)+nghost, &
+                         ny_global + nghost + j) = &
+              msg_buffer(i, this_block%jhi+j)
+            end do
+            end do
+            if (this_block%jblock == nblocks_y) then
+               ! northeast corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G   (nx-i+1, ny-j+1) = &
+                 msg_buffer(this_block%ihi+nghost-i+1,&
+                            this_block%jhi+nghost-j+1)
+               end do
+               end do
+            endif
+         endif
+         if (this_block%iblock == 1) then
+            ! west block
+            do j=this_block%jlo,this_block%jhi
+            do i=1, nghost
+              ARRAY_G   (i, this_block%j_glob(j)+nghost) = &
+              msg_buffer(i, j)
+            end do
+            end do
+            if (this_block%jblock == nblocks_y) then
+               ! northwest corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G   (i, ny-j+1) = &
+                 msg_buffer(i, this_block%jhi+nghost-j+1)
+               end do
+               end do
+            endif
+         endif
+         if (this_block%iblock == nblocks_x) then
+            ! east block
+            do j=this_block%jlo,this_block%jhi
+            do i=1, nghost
+              ARRAY_G   (nx_global+nghost+i, &
+                         this_block%j_glob(j)+nghost) = &
+              msg_buffer(this_block%ihi+i, j)
+            end do
+            end do
+            if (this_block%jblock == 1) then
+               ! southeast corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G   (nx-i+1, j) = &
+                 msg_buffer(this_block%ihi+nghost-i+1, j)
+               end do
+               end do
+            endif
+         endif
+       endif
+     end do
+
+     deallocate(msg_buffer)
+
+!-----------------------------------------------------------------------
+!
+!  otherwise send data to dst_task
+!
+!-----------------------------------------------------------------------
+
+   else
+
+     allocate(snd_request(nblocks_tot), &
+              snd_status (MPI_STATUS_SIZE, nblocks_tot))
+
+     nsends = 0
+     do n=1,nblocks_tot
+       if (src_dist%blockLocation(n) == my_task+1) then
+
+         nsends = nsends + 1
+         src_block = src_dist%blockLocalID(n)
+         call MPI_ISEND(ARRAY(1,1,src_block), nx_block*ny_block, &
+                     mpiR8, dst_task, 3*mpitag_gs+n, &
+                     MPI_COMM_ICE, snd_request(nsends), ierr)
+       endif
+     end do
+
+     if (nsends > 0) &
+       call MPI_WAITALL(nsends, snd_request, snd_status, ierr)
+     deallocate(snd_request, snd_status)
+
+   endif
+
+!-----------------------------------------------------------------------
+
+ end subroutine gather_global_ext
+
 !***********************************************************************
 !BOP
 ! !IROUTINE: scatter_global
@@ -1728,6 +2053,347 @@
  end subroutine scatter_global_int
 
 !EOC
+!***********************************************************************
+!BOP
+! !IROUTINE: scatter_global
+! !INTERFACE:
+
+ subroutine scatter_global_ext(ARRAY, ARRAY_G, src_task, dst_dist)
+
+! !DESCRIPTION:
+!  This subroutine scatters a global-sized array to a distributed array.
+!
+! !REVISION HISTORY:
+!  same as module
+!
+! !REMARKS:
+!  This is the specific interface for double precision arrays 
+!  corresponding to the generic interface scatter_global.
+
+! !USES:
+
+   include 'mpif.h'
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+     src_task       ! task from which array should be scattered
+
+   type (distrb), intent(in) :: &
+     dst_dist       ! distribution of resulting blocks
+
+   real (dbl_kind), dimension(:,:), intent(in) :: &
+     ARRAY_G        ! array containing global field on src_task
+
+! !OUTPUT PARAMETERS:
+
+   real (dbl_kind), dimension(:,:,:), intent(inout) :: &
+     ARRAY          ! array containing distributed field
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) :: &
+     i,j,n,bid,          &! dummy loop indices
+     iblk, jblk,         &! block indices
+     iglb, jglb,         &! global indices
+     nrecvs,             &! actual number of messages received
+     isrc, jsrc,         &! source addresses
+     dst_block,          &! location of block in dst array
+     ierr                 ! MPI error flag
+
+   type (block) :: &
+     this_block  ! block info for current block
+
+   integer (int_kind), dimension(MPI_STATUS_SIZE) :: &
+     status
+
+   integer (int_kind), dimension(:), allocatable :: &
+     rcv_request     ! request array for receives
+
+   integer (int_kind), dimension(:,:), allocatable :: &
+     rcv_status      ! status array for receives
+
+   real (dbl_kind), dimension(:,:), allocatable :: &
+     msg_buffer      ! buffer for sending blocks
+
+!-----------------------------------------------------------------------
+!
+!  initialize return array to zero
+!
+!-----------------------------------------------------------------------
+
+   ARRAY = c0
+
+!-----------------------------------------------------------------------
+!
+!  if this task is the src_task, copy blocks of global array into 
+!  message buffer and send to other processors. also copy local blocks
+!
+!-----------------------------------------------------------------------
+
+   if (my_task == src_task) then
+
+     !*** send non-local blocks away
+
+     allocate (msg_buffer(nx_block,ny_block))
+
+     do n=1,nblocks_tot
+       if (dst_dist%blockLocation(n) > 0 .and. &
+           dst_dist%blockLocation(n)-1 /= my_task) then
+
+         msg_buffer = c0
+         this_block = get_block(n,n)
+
+         ! interior
+         do j = 1, ny_block
+         do i = 1, nx_block
+            msg_buffer(i,j) = ARRAY_G(this_block%i_glob(i)+nghost,&
+                                      this_block%j_glob(j)+nghost)
+         end do
+         end do
+
+         if (this_block%jblock == 1) then
+            ! south edge
+            do j = 1, nghost
+            do i = this_block%ilo,this_block%ihi
+               msg_buffer(i,j) = ARRAY_G(this_block%i_glob(i)+nghost,j)
+            enddo
+               do i = 1, nghost
+               ! southwest corner
+                  iblk = i
+                  jblk = j
+                  iglb = this_block%i_glob(this_block%ilo)+i-1
+                  jglb = j
+                  msg_buffer(iblk,jblk) = ARRAY_G(iglb,jglb)
+               ! southeast corner
+                  iblk = this_block%ihi+i
+                  iglb = this_block%i_glob(this_block%ihi)+nghost+i
+                  msg_buffer(iblk,jblk) = ARRAY_G(iglb,jglb)
+               enddo
+            enddo
+         endif
+         if (this_block%jblock == nblocks_y) then
+            ! north edge
+            do j = 1, nghost
+            do i = this_block%ilo,this_block%ihi
+               msg_buffer(i,this_block%jhi+j) = ARRAY_G(this_block%i_glob(i)+nghost,&
+                                                        ny_global+nghost+j)
+            enddo
+               do i = 1, nghost
+               ! northwest corner
+                  iblk = i
+                  jblk = this_block%jhi+j
+                  iglb = this_block%i_glob(this_block%ilo)+i-1
+                  jglb = ny_global+nghost+j
+                  msg_buffer(iblk,jblk) = ARRAY_G(iglb,jglb)
+               ! northeast corner
+                  iblk = this_block%ihi+i
+                  iglb = this_block%i_glob(this_block%ihi)+nghost+i
+                  msg_buffer(iblk,jblk) = ARRAY_G(iglb,jglb)
+               enddo
+            enddo
+         endif
+         if (this_block%iblock == 1) then
+            ! west edge
+            do j = this_block%jlo,this_block%jhi
+            do i = 1, nghost
+               msg_buffer(i,j) = ARRAY_G(i,this_block%j_glob(j)+nghost)
+            enddo
+            enddo
+               do j = 1, nghost
+               do i = 1, nghost
+               ! northwest corner
+                  iblk = i
+                  jblk = this_block%jhi+j
+                  iglb = i
+                  jglb = this_block%j_glob(this_block%jhi)+nghost+j
+                  msg_buffer(iblk,jblk) = ARRAY_G(iglb,jglb)
+               ! southwest corner
+                  jblk = j
+                  jglb = this_block%j_glob(this_block%jlo)+j-1
+                  msg_buffer(iblk,jblk) = ARRAY_G(iglb,jglb)
+               enddo
+               enddo
+         endif
+         if (this_block%iblock == nblocks_x) then
+            ! east edge
+            do j = this_block%jlo,this_block%jhi
+            do i = 1, nghost
+               msg_buffer(this_block%ihi+i,j) = ARRAY_G(nx_global+nghost+i, &
+                                                        this_block%j_glob(j)+nghost)
+            enddo
+            enddo
+               do j = 1, nghost
+               do i = 1, nghost
+               ! northeast corner
+                  iblk = this_block%ihi+i
+                  jblk = this_block%jhi+j
+                  iglb = nx_global+nghost+i
+                  jglb = this_block%j_glob(this_block%jhi)+nghost+j
+                  msg_buffer(iblk,jblk) = ARRAY_G(iglb,jglb)
+               ! southeast corner
+                  jblk = j
+                  jglb = this_block%j_glob(this_block%jlo)+j-1
+                  msg_buffer(iblk,jblk) = ARRAY_G(iglb,jglb)
+               enddo
+               enddo
+         endif
+
+         call MPI_SEND(msg_buffer, nx_block*ny_block, &
+                       mpiR8, dst_dist%blockLocation(n)-1, 3*mpitag_gs+n, &
+                       MPI_COMM_ICE, status, ierr)
+
+       endif
+     end do
+
+     deallocate(msg_buffer)
+
+     !*** copy any local blocks
+
+     do n=1,nblocks_tot
+       if (dst_dist%blockLocation(n) == my_task+1) then
+         dst_block = dst_dist%blockLocalID(n)
+         this_block = get_block(n,n)
+
+         ! interior
+         do j = 1, ny_block
+         do i = 1, nx_block
+            ARRAY(i,j,dst_block) = ARRAY_G(this_block%i_glob(i)+nghost,&
+                                           this_block%j_glob(j)+nghost)
+         end do
+         end do
+
+         if (this_block%jblock == 1) then
+            ! south edge
+            do j = 1, nghost
+            do i = this_block%ilo,this_block%ihi
+               ARRAY(i,j,dst_block) = ARRAY_G(this_block%i_glob(i)+nghost,j)
+            enddo
+               do i = 1, nghost
+               ! southwest corner
+                  iblk = i
+                  jblk = j
+                  iglb = this_block%i_glob(this_block%ilo)+i-1
+                  jglb = j
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               ! southeast corner
+                  iblk = this_block%ihi+i
+                  iglb = this_block%i_glob(this_block%ihi)+nghost+i
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               enddo
+            enddo
+         endif
+         if (this_block%jblock == nblocks_y) then
+            ! north edge
+            do j = 1, nghost
+            do i = this_block%ilo,this_block%ihi
+               ARRAY(i,this_block%jhi+j,dst_block) = ARRAY_G(this_block%i_glob(i)+nghost,&
+                                                             ny_global+nghost+j)
+            enddo
+               do i = 1, nghost
+               ! northwest corner
+                  iblk = i
+                  jblk = this_block%jhi+j
+                  iglb = this_block%i_glob(this_block%ilo)+i-1
+                  jglb = ny_global+nghost+j
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               ! northeast corner
+                  iblk = this_block%ihi+i
+                  iglb = this_block%i_glob(this_block%ihi)+nghost+i
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               enddo
+            enddo
+         endif
+         if (this_block%iblock == 1) then
+            ! west edge
+            do j = this_block%jlo,this_block%jhi
+            do i = 1, nghost
+               ARRAY(i,j,dst_block) = ARRAY_G(i,this_block%j_glob(j)+nghost)
+            enddo
+            enddo
+               do j = 1, nghost
+               do i = 1, nghost
+               ! northwest corner
+                  iblk = i
+                  jblk = this_block%jhi+j
+                  iglb = i
+                  jglb = this_block%j_glob(this_block%jhi)+nghost+j
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               ! southwest corner
+                  jblk = j
+                  jglb = this_block%j_glob(this_block%jlo)+j-1
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               enddo
+               enddo
+         endif
+         if (this_block%iblock == nblocks_x) then
+            ! east edge
+            do j = this_block%jlo,this_block%jhi
+            do i = 1, nghost
+               ARRAY(this_block%ihi+i,j,dst_block) = ARRAY_G(nx_global+nghost+i, &
+                                                             this_block%j_glob(j)+nghost)
+            enddo
+            enddo
+               do j = 1, nghost
+               do i = 1, nghost
+               ! northeast corner
+                  iblk = this_block%ihi+i
+                  jblk = this_block%jhi+j
+                  iglb = nx_global+nghost+i
+                  jglb = this_block%j_glob(this_block%jhi)+nghost+j
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               ! southeast corner
+                  jblk = j
+                  jglb = this_block%j_glob(this_block%jlo)+j-1
+                  ARRAY(iblk,jblk,dst_block) = ARRAY_G(iglb,jglb)
+               enddo
+               enddo
+         endif
+
+       endif
+     end do
+
+!-----------------------------------------------------------------------
+!
+!  otherwise receive data from src_task
+!
+!-----------------------------------------------------------------------
+
+   else
+
+     allocate (rcv_request(nblocks_tot), &
+               rcv_status(MPI_STATUS_SIZE, nblocks_tot))
+
+     rcv_request = 0
+     rcv_status  = 0
+
+     nrecvs = 0
+     do n=1,nblocks_tot
+       if (dst_dist%blockLocation(n) == my_task+1) then
+         nrecvs = nrecvs + 1
+         dst_block = dst_dist%blockLocalID(n)
+         call MPI_IRECV(ARRAY(1,1,dst_block), nx_block*ny_block, &
+                       mpiR8, src_task, 3*mpitag_gs+n, &
+                       MPI_COMM_ICE, rcv_request(nrecvs), ierr)
+       endif
+     end do
+
+     if (nrecvs > 0) &
+       call MPI_WAITALL(nrecvs, rcv_request, rcv_status, ierr)
+
+     deallocate(rcv_request, rcv_status)
+   endif
+
+!-----------------------------------------------------------------------
+
+ end subroutine scatter_global_ext
+
 !***********************************************************************
 !BOP
 ! !IROUTINE: scatter_global_stress

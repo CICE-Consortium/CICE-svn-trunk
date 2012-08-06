@@ -405,13 +405,8 @@
       ! fluxes sent to atmosphere
       !-----------------------------------------------------------------
 
-!echmod - for rectangular grid tests without thermo
-!      strairxT(:,:,:) = 0.15_dbl_kind
-!      strairyT(:,:,:) = 0.15_dbl_kind
-
       strairxT(:,:,:) = c0            ! wind stress, T grid
       strairyT(:,:,:) = c0
-!echmod
       fsens   (:,:,:) = c0
       flat    (:,:,:) = c0
       fswabs  (:,:,:) = c0
@@ -477,6 +472,10 @@
 
       strairxT(:,:,:) = c0      ! wind stress, T grid
       strairyT(:,:,:) = c0
+!echmod - for rectangular grid tests without thermo
+!      strairxT(:,:,:) = 0.15_dbl_kind
+!      strairyT(:,:,:) = 0.15_dbl_kind
+
       fsens   (:,:,:) = c0
       flat    (:,:,:) = c0
       fswabs  (:,:,:) = c0

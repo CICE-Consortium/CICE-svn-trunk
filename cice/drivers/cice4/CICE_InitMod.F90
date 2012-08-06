@@ -153,12 +153,22 @@
       call init_forcing_ocn(dt) ! initialize sss and sst from data
       call init_state           ! initialize the ice state
       call init_transport       ! initialize horizontal transport
+      call ice_HaloRestore_init ! restored boundary conditions
 
-      if (runtype == 'continue') then ! start from core restart file
-         call restartfile()           ! given by pointer in ice_in
-         call calendar(time)          ! update time parameters
-      else if (restart) then          ! ice_ic = core restart file
-         call restartfile (ice_ic)    !  or 'default' or 'none'
+      if (restart_ext) then           ! read extended grid
+         if (runtype == 'continue') then ! start from core restart file
+            call restartfile_ext()       ! given by pointer in ice_in
+            call calendar(time)          ! update time parameters
+         else if (restart) then          ! ice_ic = core restart file
+            call restartfile_ext(ice_ic) !  or 'default' or 'none'
+         endif         
+      else                            ! read physical grid
+         if (runtype == 'continue') then ! start from core restart file
+            call restartfile()           ! given by pointer in ice_in
+            call calendar(time)          ! update time parameters
+         else if (restart) then          ! ice_ic = core restart file
+            call restartfile (ice_ic)    !  or 'default' or 'none'
+         endif         
       endif         
 
       ! tracers
@@ -203,7 +213,6 @@
       call init_flux_atm        ! initialize atmosphere fluxes sent to coupler
       call init_flux_ocn        ! initialize ocean fluxes sent to coupler
 
-      if (restore_ice) call ice_HaloRestore_init ! restored boundary conditions
       if (write_ic) call ice_write_hist(dt) ! write initial conditions 
 
       end subroutine cice_init
