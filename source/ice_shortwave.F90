@@ -1193,7 +1193,67 @@
 
                elseif (tr_pond_lvl) then
                   apeffn(:,:,n,iblk) = c0 ! for history
-                  !!!!! PLACEHOLDER !!!!!
+                  do ij = 1, icells
+                     i = indxi(ij)
+                     j = indxj(ij)
+
+                     fpn(i,j) = c0  ! fraction of ice covered in pond
+                     hpn(i,j) = c0  ! pond depth over fpn
+                                    ! refrozen pond lid thickness avg over ice
+                     ! allow snow to cover pond ice
+                     ipn = trcrn(i,j,nt_alvl,n,iblk) * trcrn(i,j,nt_apnd,n,iblk) &
+                                                     * trcrn(i,j,nt_ipnd,n,iblk)
+                     dhs = dhsn(i,j,n,iblk) ! snow depth difference, sea ice - pond
+                     if (ipn > puny .and. &
+                         dhs < puny .and. fsnow(i,j,iblk)*dt > hsmin) &
+                         dhs =  hsn(i,j) - fsnow(i,j,iblk)*dt ! initialize dhs>0
+                     spn = hsn(i,j) - dhs   ! snow depth on pond ice
+                     if (ipn*spn < puny) dhs = c0
+                     dhsn(i,j,n,iblk) = dhs ! save: constant until reset to 0
+
+                     ! not using ipn assumes that lid ice is perfectly clear
+!                     if (ipn <= 0.3_dbl_kind) then
+
+                        ! fraction of ice area
+                        fpn(i,j) = trcrn(i,j,nt_apnd,n,iblk) &
+                                 * trcrn(i,j,nt_alvl,n,iblk) 
+                        ! pond depth over fraction fpn
+                        hpn(i,j) = trcrn(i,j,nt_hpnd,n,iblk)
+
+                        ! reduce effective pond area absorbing surface heat flux
+                        ! due to flux already having been used to melt pond ice
+                        fpn(i,j) = (c1 - ffracn(i,j,n,iblk)) * fpn(i,j)
+
+                        ! taper pond area with snow on pond ice
+                        if (dhs > puny .and. spn >= puny .and. hs1 > puny) then
+                           asnow = min(spn/hs1, c1)
+                           fpn(i,j) = (c1 - asnow) * fpn(i,j)
+                        endif 
+
+                        ! infiltrate snow
+                        hp = hpn(i,j)
+                        if (snowinfil .and. hp > puny) then
+                           hs = hsn(i,j)
+                           rp = rhofresh*hp/(rhofresh*hp + rhos*hs)
+                           if (rp < p15) then
+                              fpn(i,j) = c0
+                              hpn(i,j) = c0
+                           else
+                              hmx = hs*(rhofresh - rhos)/rhofresh
+                              tmp = max(c0, sign(c1, hp-hmx)) ! 1 if hp>=hmx, else 0
+                              hp = (rhofresh*hp + rhos*hs*tmp) &
+                                 / (rhofresh    - rhos*(c1-tmp))
+                              hsn(i,j) = hs - hp*fpn(i,j)*(c1-tmp)
+                              hpn(i,j) = hp * tmp
+                              fpn(i,j) = fpn(i,j) * tmp
+                           endif
+                           fsn(i,j) = min(fsn(i,j), c1-fpn(i,j))
+
+                        endif ! snowinfil
+
+!                     endif    ! masking by lid ice
+                     apeffn(i,j,n,iblk) = fpn(i,j) ! for history
+                  enddo ! ij
 
                elseif (tr_pond_topo) then
                   apeffn(:,:,n,iblk) = c0 ! for history

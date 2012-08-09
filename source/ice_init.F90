@@ -410,14 +410,6 @@
       tr_pond = .false. ! explicit melt ponds
       if (rpcesm + rplvl + rptopo > puny) tr_pond = .true.
 
-!temporary!
-      if (tr_pond_lvl) then
-         if (my_task == master_task) &
-            write (nu_diag,*) 'ABORTING: lvlpond scheme not available'
-         call abort_ice('ice: tr_pond_lvl not available')
-      endif
-!temporary!
-
       if (rpcesm + rplvl + rptopo > c1 + puny) then
          if (my_task == master_task) then
             write (nu_diag,*) 'WARNING: Must use only one melt pond scheme'
