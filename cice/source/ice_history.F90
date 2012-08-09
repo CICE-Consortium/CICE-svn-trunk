@@ -552,10 +552,10 @@
           f_apond     = 'x'
           f_hpond     = 'x'
           f_ipond     = 'x'
+          f_apeff     = 'x'
           f_apond_ai  = 'x'
           f_hpond_ai  = 'x'
           f_ipond_ai  = 'x'
-          f_apeff     = 'x'
           f_apeff_ai  = 'x'
       endif
       if (.not. tr_lvl) then
@@ -578,7 +578,7 @@
       if (f_albice(1:1) /= 'x' .and. f_albice /= f_albsni) f_albice = f_albsni
       if (f_albsno(1:1) /= 'x') f_albsno = f_albice
       if (f_albpnd(1:1) /= 'x') f_albpnd = f_albice
-      if (f_coszen(1:1) /= 'x') f_coszen = f_albice
+      if (f_coszen(1:1) /= 'x') f_coszen = f_albsni
 
       ! to prevent array-out-of-bounds when aggregating
       if (f_fmeltt_ai(1:1) /= 'x') f_fmelttn_ai = f_fmeltt_ai
@@ -2003,7 +2003,8 @@
              worka(:,:) = c0
              do j = jlo, jhi
              do i = ilo, ihi
-                if (aice(i,j,iblk) > puny) worka(i,j) = apeff_ai(i,j,iblk)/aice(i,j,iblk)
+                if (aice(i,j,iblk) > puny) worka(i,j) = apeff_ai(i,j,iblk) &
+                                                      / aice(i,j,iblk)
              enddo
              enddo
              call accum_hist_field(n_apeff, iblk, worka(:,:), a2D)
