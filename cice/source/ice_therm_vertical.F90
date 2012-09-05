@@ -466,6 +466,7 @@
       !-----------------------------------------------------------------
       ! Compute fluxes of water and salt from ice to ocean.
       ! evapn < 0 => sublimation, evapn > 0 => condensation
+      ! aerosol flux is accounted for in ice_aerosol.F90
       !-----------------------------------------------------------------
 
       do ij = 1, icells
@@ -473,10 +474,10 @@
          j = indxj(ij)
             
          dhi = hin(ij) - worki(ij)
-         dhs = hsn(ij) - works(ij)
+         dhs = hsn(ij) - works(ij) - hsn_new(ij)
                
          freshn(i,j) = evapn(i,j) - &
-                       (rhoi*dhi + rhos*(dhs-hsn_new(ij))) / dt
+                       (rhoi*dhi + rhos*dhs) / dt
          fsaltn(i,j) = -rhoi*dhi*ice_ref_salinity*p001/dt
 
          if (hin(ij) == c0) then
@@ -4565,14 +4566,6 @@
          i = indxi(ij)
          j = indxj(ij)
 
-         einp = (fsurfn(i,j) - flatn(i,j) + fswint(i,j) - fhocnn(i,j) &
-               - fsnow(i,j)*Lfresh) * dt
-         ferr = abs(efinal(ij)-einit(ij)-einp) / dt
-         if (ferr > ferrmax) then
-            l_stop = .true.
-            istop = i
-            jstop = j
-
       !-----------------------------------------------------------------
       ! Note that fsurf - flat = fsw + flw + fsens; i.e., the latent
       ! heat is not included in the energy input, since (efinal - einit)
@@ -4580,9 +4573,13 @@
       ! heat lost by the ice is equal to that gained by the vapor.
       !-----------------------------------------------------------------
 
-!         einp = (fsurfn(i,j) - flatn(i,j) + fswint(i,j) - fhocnn(i,j) &
-!                -fsnow(i,j)*Lfresh) * dt
-!         ferr = abs(efinal(ij)-einit(ij)-einp) / dt
+         einp = (fsurfn(i,j) - flatn(i,j) + fswint(i,j) - fhocnn(i,j) &
+               - fsnow(i,j)*Lfresh) * dt
+         ferr = abs(efinal(ij)-einit(ij)-einp) / dt
+         if (ferr > ferrmax) then
+            l_stop = .true.
+            istop = i
+            jstop = j
 
          write(nu_diag,*) 'Thermo energy conservation error'
          write(nu_diag,*) 'istep1, my_task, i, j:', &

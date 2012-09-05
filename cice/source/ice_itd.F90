@@ -2136,7 +2136,7 @@
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)
-                 xtmp = aicen(i,j,n) &
+               xtmp = aicen(i,j,n) &
                     * trcrn(i,j,nt_apnd,n) * trcrn(i,j,nt_hpnd,n)
                dfpond(i,j) = dfpond(i,j) - xtmp
             enddo                  ! ij
@@ -2296,7 +2296,7 @@
                                       + trcrn(i,j,nt_aero+3+4*(it-1),n)))   &
                        * (aice(i,j)-c1)/aice(i,j) / dt
                   dfaero_ocn(i,j,it) = dfaero_ocn(i,j,it) + xtmp
-               enddo                 ! n
+               enddo               ! it
             enddo                  ! ij
          endif
 

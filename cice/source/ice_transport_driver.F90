@@ -178,6 +178,9 @@
              if (nt-k==nt_iage) &
                 write(nu_diag,*) 'nt_iage',nt,depend(nt),tracer_type(nt),&
                                               has_dependents(nt)
+             if (nt-k==nt_FY) &
+                write(nu_diag,*) 'nt_FY',  nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
              if (nt-k==nt_alvl) &
                 write(nu_diag,*) 'nt_alvl',nt,depend(nt),tracer_type(nt),&
                                               has_dependents(nt)

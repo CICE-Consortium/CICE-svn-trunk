@@ -116,6 +116,7 @@
       integer (kind=int_kind) :: &
          nt_Tsfc  , & ! ice/snow surface temperature
          nt_iage  , & ! volume-weighted ice age
+         nt_FY    , & ! area-weighted first-year ice area
          nt_alvl  , & ! level ice area fraction
          nt_vlvl  , & ! level ice volume fraction
          nt_apnd  , & ! melt pond area fraction
@@ -125,6 +126,7 @@
 
       logical (kind=log_kind) :: &
          tr_iage,   & ! if .true., use age tracer
+         tr_FY,     & ! if .true., use first-year area tracer
          tr_lvl,    & ! if .true., use level ice tracer
          tr_pond,   & ! if .true., use melt pond tracer
          tr_pond_cesm,& ! if .true., use cesm pond tracer

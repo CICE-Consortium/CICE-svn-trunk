@@ -882,9 +882,9 @@
 !
       use ice_itd, only: hin_max, ilyr1, column_sum, &
                          column_conservation_check
-      use ice_state, only: nt_Tsfc, nt_iage, nt_alvl, nt_vlvl, nt_aero, &
+      use ice_state, only: nt_Tsfc, nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_aero, &
                            nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
-                           tr_iage, tr_lvl, tr_aero
+                           tr_iage, tr_FY, tr_lvl, tr_aero
       use ice_flux, only: update_ocn_f
 
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1203,6 +1203,12 @@
             (trcrn(i,j,nt_Tsfc,1)*area1 + Tf(i,j)*ai0new(m))/aicen(i,j,1)
          trcrn(i,j,nt_Tsfc,1) = min (trcrn(i,j,nt_Tsfc,1), c0)
 
+         if (tr_FY) then
+            trcrn(i,j,nt_FY,1) = &
+           (trcrn(i,j,nt_FY,1)*area1 + ai0new(m))/aicen(i,j,1)
+            trcrn(i,j,nt_FY,1) = min(trcrn(i,j,nt_FY,1), c1)
+         endif
+
          if (vicen(i,j,1) > puny) then
             if (tr_iage) &
                trcrn(i,j,nt_iage,1) = &
@@ -1228,7 +1234,7 @@
             if (tr_pond_cesm .or. tr_pond_topo) then
                trcrn(i,j,nt_apnd,1) = &
                trcrn(i,j,nt_apnd,1)*area1/aicen(i,j,1)
-            elseif (tr_pond_lvl .and. trcrn(i,j,nt_alvl,1) > puny) then
+            elseif (tr_pond_lvl) then
                if (trcrn(i,j,nt_alvl,1) > puny) then
                   trcrn(i,j,nt_apnd,1) = &
                   trcrn(i,j,nt_apnd,1) * alvl*area1 &

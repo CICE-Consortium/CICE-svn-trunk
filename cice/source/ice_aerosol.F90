@@ -637,8 +637,8 @@
                        + aeroice(k,2) + aeroice(k,1)
             if ((aerotot(k)-aerotot0(k)) &
                  - (   faero_atm(i,j,k)*aicen(i,j) &
-                    - (faero_ocn(i,j,k)-focn_old(k)) )*dt  &
-               > 0.00001) then
+                    - (faero_ocn(i,j,k)-focn_old(k)) )*dt  > puny) then
+               
                write(nu_diag,*) 'aerosol tracer:  ',k
                write(nu_diag,*) 'aerotot-aerotot0 ',aerotot(k)-aerotot0(k) 
                write(nu_diag,*) 'faero_atm-faero_ocn      ', &
@@ -649,32 +649,15 @@
     !-------------------------------------------------------------------
     ! reload tracers
     !-------------------------------------------------------------------
-!echmod       if (vicen(i,j) > puny) &
-!echmod          aeroice(:,:) = aeroice(:,:)/vicen(i,j)
-!echmod       if (vsnon(i,j) > puny) &
-!echmod          aerosno(:,:) = aerosno(:,:)/vsnon(i,j)
-         if (vicen(i,j) > puny) then
+         if (vicen(i,j) > puny) &
             aeroice(:,:) = aeroice(:,:)/vicen(i,j)
-         else
-            aeroice(:,:) = c0
-         endif
-         if (vsnon(i,j) > puny) then
+         if (vsnon(i,j) > puny) &
             aerosno(:,:) = aerosno(:,:)/vsnon(i,j)
-         else
-            aerosno(:,:) = c0
-         endif
          do k = 1, n_aero
             do n = 1,2
                trcrn(i,j,nt_aero+(k-1)*4+n-1)=aerosno(k,n)
                trcrn(i,j,nt_aero+(k-1)*4+n+1)=aeroice(k,n)
             enddo
-!            do n=1,4
-!               if (trcrn(i,j,nt_aero+(k-1)*4+n-1) < puny) then
-!                  faero_ocn(i,j,k) = faero_ocn(i,j,k)  &
-!                                   + trcrn(i,j,nt_aero+(k-1)*4+n-1)/dt
-!                  trcrn(i,j,nt_aero+(k-1)*4+n-1) = c0
-!               endif
-!            enddo
          enddo
 
     !-------------------------------------------------------------------

@@ -19,7 +19,7 @@ FREEFLAGS  :=
 FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl 
 #FFLAGS     := -r8 -i4  -align all -w -ftz -convert big_endian -assume byterecl -g
 #FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB -traceback 
-#FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB 
+#FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB -g
 MOD_SUFFIX := mod
 LD         := $(FC)
 LDFLAGS    := $(FFLAGS) -v
@@ -27,7 +27,7 @@ LDFLAGS    := $(FFLAGS) -v
     CPPDEFS :=  $(CPPDEFS) -DNXGLOB=$(NXGLOB) -DNYGLOB=$(NYGLOB) \
                 -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS) \
                 -DNICELYR=$(NICELYR) -DNSNWLYR=$(NSNWLYR) -DNICECAT=$(NICECAT) \
-                -DTRAGE=$(TRAGE) -DTRLVL=$(TRLVL) -DTRPND=$(TRPND) \
+                -DTRAGE=$(TRAGE) -DTRFY=$(TRFY) -DTRLVL=$(TRLVL) -DTRPND=$(TRPND) \
                 -DNTRAERO=$(NTRAERO)
 #   CPPDEFS :=  $(CPPDEFS) -DAOMIP
 

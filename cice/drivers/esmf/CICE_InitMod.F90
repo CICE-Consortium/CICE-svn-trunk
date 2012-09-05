@@ -36,6 +36,7 @@
       use ice_dyn_evp
       use ice_exit
       use ice_fileunits
+      use ice_firstyear
       use ice_flux
       use ice_forcing
       use ice_grid
@@ -237,6 +238,7 @@
 
       ! tracers
       if (tr_iage)      call init_age            ! ice age tracer
+      if (tr_FY)        call init_FY             ! first-year area tracer
       if (tr_lvl)       call init_lvl            ! level ice tracer
       if (tr_pond_cesm) call init_meltponds_cesm ! CESM melt ponds
       if (tr_pond_lvl)  call init_meltponds_lvl  ! level-ice melt ponds

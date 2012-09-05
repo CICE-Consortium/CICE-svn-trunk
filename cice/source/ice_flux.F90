@@ -869,7 +869,7 @@
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
           intent(inout):: &
-          faero_ocn   ! aersol flux to ocean            (kg/m2/s)
+          faero_ocn   ! aerosol flux to ocean            (kg/m2/s)
 
       ! For hadgem drivers. Assumes either both fields are passed or neither
       real (kind=dbl_kind), dimension(nx_block,ny_block), &

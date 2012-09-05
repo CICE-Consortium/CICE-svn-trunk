@@ -95,9 +95,10 @@
                                R_snw
       use ice_atmo, only: atmbndy, calc_strair
       use ice_transport_driver, only: advection
-      use ice_state, only: tr_iage, tr_lvl, tr_pond, &
+      use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_aero
       use ice_age, only: restart_age
+      use ice_firstyear, only: restart_FY
       use ice_lvl, only: restart_lvl
       use ice_meltpond_cesm, only: restart_pond_cesm, hs0
       use ice_meltpond_lvl, only: restart_pond_lvl, dpscale, frzpnd, snowinfil, &
@@ -161,6 +162,7 @@
 
       namelist /tracer_nml/   &
         tr_iage, restart_age, &
+        tr_FY, restart_FY, &
         tr_lvl, restart_lvl, &
         tr_pond_cesm, restart_pond_cesm, &
         tr_pond_lvl, restart_pond_lvl, &
@@ -279,6 +281,8 @@
       ! extra tracers
       tr_iage      = .false. ! ice age
       restart_age  = .false. ! ice age restart
+      tr_FY        = .false. ! ice age
+      restart_FY   = .false. ! ice age restart
       tr_lvl       = .false. ! level ice 
       restart_lvl  = .false. ! level ice restart
       tr_pond_cesm = .false. ! CESM melt ponds
@@ -450,6 +454,16 @@
          shortwave = 'dEdd'
       endif
 
+      if (tr_aero .and. n_aero==0) then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'WARNING: aerosols activated but'
+            write (nu_diag,*) 'WARNING: not allocated in tracer array.'
+            write (nu_diag,*) 'WARNING: Activate in compilation script.'
+         endif
+         call abort_ice('ice: aerosol tracer conflict: comp_ice, ice_in')
+      endif
+
+
       rfracmin = min(max(rfracmin,c0),c1)
       rfracmax = min(max(rfracmax,c0),c1)
 
@@ -564,6 +578,8 @@
       ! tracers
       call broadcast_scalar(tr_iage,            master_task)
       call broadcast_scalar(restart_age,        master_task)
+      call broadcast_scalar(tr_FY,              master_task)
+      call broadcast_scalar(restart_FY,         master_task)
       call broadcast_scalar(tr_lvl,             master_task)
       call broadcast_scalar(restart_lvl,        master_task)
       call broadcast_scalar(tr_pond_cesm,       master_task)
@@ -735,6 +751,8 @@
          ! tracers
          write(nu_diag,1010) ' tr_iage                   = ', tr_iage
          write(nu_diag,1010) ' restart_age               = ', restart_age
+         write(nu_diag,1010) ' tr_FY                     = ', tr_FY
+         write(nu_diag,1010) ' restart_FY                = ', restart_FY
          write(nu_diag,1010) ' tr_lvl                    = ', tr_lvl
          write(nu_diag,1010) ' restart_lvl               = ', restart_lvl
          write(nu_diag,1010) ' tr_pond_cesm              = ', tr_pond_cesm
@@ -752,6 +770,12 @@
          nt_iage = 0
          if (tr_iage) then
              nt_iage = ntrcr + 1
+             ntrcr = ntrcr + 1
+         endif
+
+         nt_FY = 0
+         if (tr_FY) then
+             nt_FY = ntrcr + 1
              ntrcr = ntrcr + 1
          endif
 
@@ -807,7 +831,6 @@
              grid_type  /=  'tripole'        .and. &
              grid_type  /=  'column'         .and. &
              grid_type  /=  'rectangular'    .and. &
-             grid_type  /=  'panarctic'      .and. &
              grid_type  /=  'latlon' ) then 
             call abort_ice('ice_init: unknown grid_type')
          endif
@@ -817,6 +840,7 @@
       call broadcast_scalar(ntrcr,    master_task)
       call broadcast_scalar(nt_Tsfc,  master_task)
       call broadcast_scalar(nt_iage,  master_task)
+      call broadcast_scalar(nt_FY,    master_task)
       call broadcast_scalar(nt_alvl,  master_task)
       call broadcast_scalar(nt_vlvl,  master_task)
       call broadcast_scalar(nt_apnd,  master_task)
@@ -917,6 +941,7 @@
 
       trcr_depend(nt_Tsfc)  = 0   ! ice/snow surface temperature
       if (tr_iage) trcr_depend(nt_iage)  = 1   ! volume-weighted ice age
+      if (tr_FY)   trcr_depend(nt_FY)    = 0   ! area-weighted first-year ice area
       if (tr_lvl)  trcr_depend(nt_alvl)  = 0   ! level ice area
       if (tr_lvl)  trcr_depend(nt_vlvl)  = 1   ! level ice volume
       if (tr_pond_cesm) then
@@ -929,7 +954,7 @@
                    trcr_depend(nt_ipnd)  = 2+nt_apnd   ! refrozen pond lid
       endif
       if (tr_pond_topo) then
-                   trcr_depend(nt_apnd)  = 0   ! melt pond area
+                   trcr_depend(nt_apnd)  = 0           ! melt pond area
                    trcr_depend(nt_hpnd)  = 2+nt_apnd   ! melt pond depth
                    trcr_depend(nt_ipnd)  = 2+nt_apnd   ! refrozen pond lid
       endif

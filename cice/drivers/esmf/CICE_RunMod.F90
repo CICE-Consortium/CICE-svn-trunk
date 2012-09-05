@@ -36,6 +36,7 @@
       use ice_dyn_evp
       use ice_exit
       use ice_fileunits
+      use ice_firstyear
       use ice_flux
       use ice_forcing
       use ice_grid
@@ -353,6 +354,7 @@
                call dumpfile     ! core variables for restarting
             endif
             if (tr_iage)      call write_restart_age
+            if (tr_FY)        call write_restart_FY
             if (tr_lvl)       call write_restart_lvl
             if (tr_pond_cesm) call write_restart_pond_cesm
             if (tr_pond_lvl)  call write_restart_pond_lvl
@@ -580,6 +582,14 @@
                                    dt, icells,              &
                                    indxi, indxj,            &
                                    trcrn(:,:,nt_iage,n,iblk))
+            endif
+            if (tr_FY) then
+               call update_FYarea (nx_block, ny_block,      &
+                                   dt, icells,              &
+                                   indxi, indxj,            &
+                                   lmask_n(:,:,iblk),       &
+                                   lmask_s(:,:,iblk),       &
+                                   trcrn(:,:,nt_FY,n,iblk))
             endif
 
       !-----------------------------------------------------------------
@@ -965,7 +975,7 @@
                             Tref     (:,:,iblk), Qref    (:,:,iblk), &
                             fresh    (:,:,iblk), fsalt   (:,:,iblk), &
                             fhocn    (:,:,iblk), fswthru (:,:,iblk), &
-                            faero_ocn    (:,:,:,iblk),               &
+                            faero_ocn(:,:,:,iblk),                   &
                             alvdr    (:,:,iblk), alidr   (:,:,iblk), &
                             alvdf    (:,:,iblk), alidf   (:,:,iblk))
 

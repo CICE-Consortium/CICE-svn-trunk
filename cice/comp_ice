@@ -53,6 +53,7 @@ setenv NICECAT 5          # number of ice thickness categories
 
 ### Tracers               # match ice_in tracer_nml to conserve memory
 setenv TRAGE   1          # set to 1 for ice age tracer
+setenv TRFY    1          # set to 1 for first-year ice area tracer
 setenv TRLVL   0          # set to 1 for level and deformed ice tracers
 setenv TRPND   0          # set to 1 for melt pond tracers
 setenv NTRAERO 0          # number of aerosol tracers 
