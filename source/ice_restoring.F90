@@ -76,7 +76,7 @@
 ! !USES:
 
    if (ew_boundary_type == 'open' .and. &
-       ns_boundary_type == 'open' .and. restart_ext == .false.) then
+       ns_boundary_type == 'open' .and. .not.(restart_ext)) then
       if (my_task == master_task) write (nu_diag,*) &
             'WARNING: Setting restart_ext = T for open boundaries'
       restore_ice = .true.

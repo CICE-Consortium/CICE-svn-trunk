@@ -230,6 +230,7 @@
            f_mlt_onset = 'm', f_frz_onset  = 'm', &
            f_dardg1dt  = 'm', f_dardg2dt   = 'm', &
            f_dvirdgdt  = 'm', f_iage       = 'm', &
+           f_FY        = 'm', &
            f_ardg      = 'm', f_vrdg       = 'm', &
            f_alvl      = 'm', f_vlvl       = 'm', &
            f_hisnap    = 'm', f_aisnap     = 'm', &
@@ -312,6 +313,7 @@
            f_mlt_onset, f_frz_onset, &
            f_dardg1dt,  f_dardg2dt , &
            f_dvirdgdt,  f_iage     , &
+           f_FY,                     &
            f_ardg,      f_vrdg     , &
            f_alvl,      f_vlvl     , &
            f_hisnap,    f_aisnap   , &
@@ -407,7 +409,8 @@
            n_dvirdgdt   , &
            n_hisnap     , n_aisnap     , &
            n_trsig      , n_icepresent , &
-           n_iage       , n_fsurf_ai   , &
+           n_iage       , n_FY         , &
+           n_fsurf_ai   , &
            n_ardg       , n_vrdg       , &
            n_alvl       , n_vlvl       , &
            n_fcondtop_ai, n_fmeltt_ai  , &
@@ -478,7 +481,7 @@
            histfreq_n, nstreams
       use ice_flux, only: mlt_onset, frz_onset, albcnt
       use ice_restart, only: restart
-      use ice_state, only: tr_iage, tr_lvl, tr_pond, tr_aero
+      use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero
       use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -545,6 +548,7 @@
       enddo
 
       if (.not. tr_iage) f_iage = 'x'
+      if (.not. tr_FY)   f_FY   = 'x'
       if (.not. tr_pond) then
           f_apondn    = 'x'
           f_hpondn    = 'x'
@@ -712,6 +716,7 @@
       call broadcast_scalar (f_Tsnz, master_task)
 
       call broadcast_scalar (f_iage, master_task)
+      call broadcast_scalar (f_FY, master_task)
       call broadcast_scalar (f_ardg, master_task)
       call broadcast_scalar (f_vrdg, master_task)
       call broadcast_scalar (f_alvl, master_task)
@@ -1268,6 +1273,13 @@
              "none", c1/(secday*days_per_year), c0,                &
              ns1, f_iage)
 
+      ! First Year Ice Area
+      if (f_FY(1:1) /= 'x') &
+         call define_hist_field(n_FY,"FYarea"," ",tstr2D, tcstr, &
+             "first-year ice area",                            &
+             "weighted by ice area", c1, c0,                   &
+              ns1, f_FY)
+
       ! Level and Ridged ice       
       if (f_alvl(1:1) /= 'x') &
          call define_hist_field(n_alvl,"alvl","1",tstr2D, tcstr, &
@@ -1276,8 +1288,8 @@
              ns1, f_alvl)
       if (f_vlvl(1:1) /= 'x') &
          call define_hist_field(n_vlvl,"vlvl","m",tstr2D, tcstr, &
-             "level ice mean thickness",                           &
-             "none", c1, c0,                                       &
+             "level ice volume",                           &
+             "grid cell mean level ice thickness", c1, c0, &
              ns1, f_vlvl)
       if (f_ardg(1:1) /= 'x') &
          call define_hist_field(n_ardg,"ardg","1",tstr2D, tcstr, &
@@ -1286,8 +1298,8 @@
              ns1, f_ardg)
       if (f_vrdg(1:1) /= 'x') &
          call define_hist_field(n_vrdg,"vrdg","m",tstr2D, tcstr, &
-             "ridged ice mean thickness",                          &
-             "none", c1, c0,                                       &
+             "ridged ice volume",                          &
+             "grid cell mean level ridged thickness", c1, c0, &
              ns1, f_vrdg)
        
       ! Melt ponds
@@ -1429,8 +1441,8 @@
 
        if (f_vrdgn(1:1) /= 'x') &
            call define_hist_field(n_vrdgn,"vrdgn","m",tstr3Dc, tcstr, &
-             "ridged ice mean thickness, category",                &
-             "none", c1, c0,                                       &
+             "ridged ice volume, category",                &
+             "grid cell mean ridged ice thickness", c1, c0, &
              ns1, f_vrdgn)
 
        if (f_dardg1ndt(1:1) /= 'x') &
@@ -2351,6 +2363,7 @@
                  if (n_aisnap   (ns) /= 0) a2D(i,j,n_aisnap(ns),   iblk) = spval
                  if (n_trsig    (ns) /= 0) a2D(i,j,n_trsig(ns),    iblk) = spval
                  if (n_iage     (ns) /= 0) a2D(i,j,n_iage(ns),     iblk) = spval
+                 if (n_FY       (ns) /= 0) a2D(i,j,n_FY(ns),       iblk) = spval
               else
                  if (n_divu     (ns) /= 0) a2D(i,j,n_divu(ns),iblk)      = &
                        divu (i,j,iblk)*avail_hist_fields(n_divu(ns))%cona
@@ -2375,6 +2388,8 @@
                                           + stressp_4(i,j,iblk))
                  if (n_iage     (ns) /= 0) a2D(i,j,n_iage(ns),iblk)  = &
                        trcr(i,j,nt_iage,iblk)*avail_hist_fields(n_iage(ns))%cona
+                 if (n_FY       (ns) /= 0) a2D(i,j,n_FY(ns),iblk)  = &
+                       trcr(i,j,nt_FY,iblk)*avail_hist_fields(n_FY(ns))%cona
               endif
            enddo                ! i
            enddo                ! j

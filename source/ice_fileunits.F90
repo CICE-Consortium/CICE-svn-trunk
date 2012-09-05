@@ -51,6 +51,8 @@
          nu_restart    , &  ! restart input file
          nu_dump_age   , &  ! dump file for restarting ice age tracer
          nu_restart_age, &  ! restart input file for ice age tracer
+         nu_dump_FY    , &  ! dump file for restarting first-year area tracer
+         nu_restart_FY , &  ! restart input file for first-year area tracer
          nu_dump_lvl   , &  ! dump file for restarting level ice tracers
          nu_restart_lvl, &  ! restart input file for level ice tracers
          nu_dump_pond  , &  ! dump file for restarting melt pond tracer
@@ -108,6 +110,8 @@ contains
          call get_fileunit(nu_restart)
          call get_fileunit(nu_dump_age)
          call get_fileunit(nu_restart_age)
+         call get_fileunit(nu_dump_FY)
+         call get_fileunit(nu_restart_FY)
          call get_fileunit(nu_dump_lvl)
          call get_fileunit(nu_restart_lvl)
          call get_fileunit(nu_dump_pond)
@@ -194,6 +198,8 @@ contains
          call release_fileunit(nu_restart)
          call release_fileunit(nu_dump_age)
          call release_fileunit(nu_restart_age)
+         call release_fileunit(nu_dump_FY)
+         call release_fileunit(nu_restart_FY)
          call release_fileunit(nu_dump_lvl)
          call release_fileunit(nu_restart_lvl)
          call release_fileunit(nu_dump_pond)

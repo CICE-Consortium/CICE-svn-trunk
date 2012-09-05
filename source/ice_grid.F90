@@ -49,7 +49,7 @@
          grid_file    , & !  input file for POP grid info
          kmt_file     , & !  input file for POP grid info
          grid_type        !  current options are rectangular (default),
-                          !  displaced_pole, tripole, panarctic
+                          !  displaced_pole, tripole
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
          dxt    , & ! width of T-cell through the middle (m)
@@ -207,15 +207,6 @@
 
          endif
 
-      elseif (trim(grid_type) == 'panarctic') then
-
-         call ice_open(nu_grid,grid_file,64) ! ULAT, KMT
-
-         call ice_read_global(nu_grid,1,work_g2,'ida8',.true.)  ! KMT
-         call ice_read_global(nu_grid,2,work_g1,'rda8',.true.)  ! ULAT
-
-         if (my_task == master_task) close (nu_grid)
-
       else   ! rectangular grid
 
          work_g1(:,:) = 75._dbl_kind/rad_to_deg  ! arbitrary polar latitude
@@ -305,8 +296,6 @@
          else
             call popgrid        ! read POP grid lengths directly
          endif 
-      elseif (trim(grid_type) == 'panarctic') then
-         call panarctic_grid    ! pan-Arctic grid
       else
          call rectgrid          ! regular rectangular grid
       endif
@@ -731,134 +720,6 @@
 
 #endif
       end subroutine popgrid_nc
-
-!=======================================================================
-!BOP
-!
-! !IROUTINE: panarctic_grid - read and set Pan-Arctic grid and land mask
-!
-! !INTERFACE:
-!
-      subroutine panarctic_grid
-!
-! !DESCRIPTION:
-!
-! Pan-Arctic grid and mask developed by Wieslaw Maslowski
-!
-! !REVISION HISTORY:
-!
-! authors: Wieslaw Maslowki, Naval Postgraduate School (based on popgrid)
-!          William H. Lipscomb, LANL
-!
-! !USES:
-!
-      use ice_domain_size
-      use ice_work, only: work1, work_g1
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      !-----------------------------------------------------------------
-      ! 
-      ! PIPS rotated spherical grid and land mask
-      !      rec no.         field         units
-      !      -------         -----         -----
-      !   land mask
-      !         1             KMT         
-      !   grid
-      !         2            ULAT         radians
-      !         3            ULON         radians
-      !         4             HTN           cm
-      !         5             HTE           cm
-      !         6             HUS           cm
-      !         7             HUW           cm
-      !         8            ANGLE        radians
-      !
-      ! NOTE: There is no separate kmt file.  Land mask is part of grid file.
-      !-----------------------------------------------------------------
-
-      integer (kind=int_kind) :: &
-         i, j, iblk, &
-         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
-
-      logical (kind=log_kind) :: diag
-
-      type (block) :: &
-         this_block           ! block information for current block
-
-      call ice_open(nu_grid,grid_file,64)
-
-      diag = .true.       ! write diagnostic info
-
-      if (my_task == master_task) &
-           write (nu_diag,*) '** Reading pan-Arctic grid **'
-
-      !-----------------------------------------------------------------
-      ! topography
-      !-----------------------------------------------------------------
-
-      call ice_read(nu_grid,1,work1,'ida8',diag, &
-                    field_loc=field_loc_center, & 
-                    field_type=field_type_scalar)
-
-      hm(:,:,:) = c0
-      do iblk = 1, nblocks
-         this_block = get_block(blocks_ice(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo, jhi
-         do i = ilo, ihi
-            hm(i,j,iblk) = work1(i,j,iblk)
-            if (hm(i,j,iblk) >= c1) hm(i,j,iblk) = c1
-         enddo
-         enddo
-      enddo                     ! iblk
-
-      !-----------------------------------------------------------------
-      ! lat, lon, angle
-      !-----------------------------------------------------------------
-
-      allocate(work_g1(nx_global,ny_global))
-
-      call ice_read_global(nu_grid,2,work_g1,'rda8',.true.)   ! ULAT
-      call gridbox_verts(work_g1,latt_bounds)       
-      call scatter_global(ULAT, work_g1, master_task, distrb_info, &
-                          field_loc_NEcorner, field_type_scalar)
-      call ice_HaloExtrapolate(ULAT, distrb_info, &
-                               ew_boundary_type, ns_boundary_type)
-
-      call ice_read_global(nu_grid,3,work_g1,'rda8',.true.)   ! ULON
-      call gridbox_verts(work_g1,lont_bounds)       
-      call scatter_global(ULON, work_g1, master_task, distrb_info, &
-                          field_loc_NEcorner, field_type_scalar)
-      call ice_HaloExtrapolate(ULON, distrb_info, &
-                               ew_boundary_type, ns_boundary_type)
-
-      call ice_read_global(nu_grid,8,work_g1,'rda8',.true.)   ! ANGLE
-      call scatter_global(ANGLE, work_g1, master_task, distrb_info, &
-                          field_loc_NEcorner, field_type_angle)
-
-      !-----------------------------------------------------------------
-      ! cell dimensions
-      ! calculate derived quantities from global arrays to preserve 
-      ! information on boundaries
-      !-----------------------------------------------------------------
-
-      call ice_read_global(nu_grid,4,work_g1,'rda8',.true.)   ! HTN
-      call primary_grid_lengths_HTN(work_g1)                  ! dxu, dxt
-
-      call ice_read_global(nu_grid,5,work_g1,'rda8',.true.)   ! HTE
-      call primary_grid_lengths_HTE(work_g1)                  ! dyu, dyt
-
-      deallocate(work_g1)
-
-      if (my_task == master_task) close (nu_grid)
-
-      end subroutine panarctic_grid
 
 !=======================================================================
 !BOP

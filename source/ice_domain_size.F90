@@ -45,6 +45,7 @@
         max_ntrcr =   1         & ! 1 = surface temperature              
                               !!!!! optional tracers:
                   + TRAGE       & ! age
+                  + TRFY        & ! first-year area
                   + TRLVL*2     & ! level/deformed ice
                   + TRPND*3     & ! ponds
                   + n_aero*4  , & ! number of aerosols * 4 aero layers

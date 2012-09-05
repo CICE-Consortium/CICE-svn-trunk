@@ -57,6 +57,8 @@
 &tracer_nml
     tr_iage      = .false.
   , restart_age  = .false.
+  , tr_FY        = .false.
+  , restart_FY   = .false.
   , tr_lvl       = .false.
   , restart_lvl  = .false.
   , tr_pond_cesm = .false.
@@ -223,6 +225,7 @@
   , f_trsig        = 'm'
   , f_icepresent   = 'm'
   , f_iage         = 'x'
+  , f_FY           = 'x'
   , f_alvl         = 'x'
   , f_vlvl         = 'x'
   , f_ardg         = 'x'

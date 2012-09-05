@@ -724,86 +724,6 @@
       !-----------------------------------------------------------------
 
       if (my_task == master_task) then
-       if (grid_type == 'panarctic') then   ! Arctic only
-        write (nu_diag,799) 'Arctic diagnostics'
-        write (nu_diag,801) 'total ice area  (km^2) = ',arean
-        write (nu_diag,801) 'total ice extent(km^2) = ',extentn
-        write (nu_diag,801) 'total ice volume (m^3) = ',shmaxn
-        write (nu_diag,801) 'total snw volume (m^3) = ',snwmxn
-        write (nu_diag,801) 'tot kinetic energy (J) = ',ketotn
-        write (nu_diag,800) 'rms ice speed    (m/s) = ',urmsn
-        write (nu_diag,800) 'average albedo         = ',albtotn
-        write (nu_diag,800) 'max ice volume     (m) = ',hmaxn
-        write (nu_diag,800) 'max ice speed    (m/s) = ',umaxn
-        write (nu_diag,900) 'max strength    (kN/m) = ',pmaxn
-
-        if (print_global) then  ! global diags for conservations checks
-
-#if (defined CCSM) || (defined SEQ_MCT)
-        if (prescribed_ice) then
-          write (nu_diag,*) '----------------------------'
-          write (nu_diag,*)   'This is the prescribed ice option.'
-          write (nu_diag,*)   'Heat and water will not be conserved.'   
-        else
-#endif
-
-          write (nu_diag,*) '----------------------------'
-          write (nu_diag,801) 'arwt rain h2o kg in dt = ',rnn
-          write (nu_diag,801) 'arwt snow h2o kg in dt = ',snn
-          write (nu_diag,801) 'arwt evap h2o kg in dt = ',evpn
-          write (nu_diag,801) 'arwt frzl h2o kg in dt = ',frzn
-          if (tr_pond_topo) &
-          write (nu_diag,801) 'arwt fpnd h2o kg in dt = ',spondn
-          write (nu_diag,801) 'arwt frsh h2o kg in dt = ',sfreshn
-         
-          write (nu_diag,801) 'arwt ice mass (kg)     = ',micen
-          write (nu_diag,801) 'arwt snw mass (kg)     = ',msnwn
-          if (tr_pond_topo) &
-          write (nu_diag,801) 'arwt pnd mass (kg)     = ',mpndn
-
-          write (nu_diag,801) 'arwt tot mass (kg)     = ',mtotn
-          write (nu_diag,801) 'arwt tot mass chng(kg) = ',delmin
-          write (nu_diag,801) 'arwt water flux        = ',fluxn
-          if (update_ocn_f) then
-            write (nu_diag,*) '(=rain+snow+evap-fresh)  '
-          else
-            write (nu_diag,*) '(=rain+snow+evap+frzl-fresh)  '
-          endif
-          write (nu_diag,801) 'water flux error       = ',werrn
-#if (defined CCSM) || (defined SEQ_MCT)
-         endif                    ! prescribed_ice
-#endif       
-         write (nu_diag,*) '----------------------------'
-         write (nu_diag,801) 'arwt atm heat flux (W) = ',fhatmn
-         write (nu_diag,801) 'arwt ocn heat flux (W) = ',fhocnn
-         write (nu_diag,801) 'arwt frzl heat flux(W) = ',fhfrzn
-         write (nu_diag,801) 'arwt tot energy    (J) = ',etotn
-         write (nu_diag,801) 'arwt net heat      (J) = ',hnetn
-         write (nu_diag,801) 'arwt tot energy chng(J)= ',delein
-         write (nu_diag,801) 'arwt heat error        = ',herrn
-       
-         write (nu_diag,*) '----------------------------'
-         write (nu_diag,801) 'arwt salt mass (kg)    = ',msltn
-         write (nu_diag,801) 'arwt salt mass chng(kg)= ',delmsltn
-         write (nu_diag,801) 'arwt salt flx in dt(kg)= ',sfsaltn
-         write (nu_diag,801) 'arwt salt flx error    = ',serrn
-
-         write (nu_diag,*) '----------------------------'
-         if (tr_aero) then
-         do n = 1, n_aero
-         write (nu_diag,*)   '  aerosol ',n
-         write (nu_diag,801) 'faero_atm (kg/m2)      = ', faeran(n)
-         write (nu_diag,801) 'faero_ocn (kg/m2)      = ', faeron(n)
-         write (nu_diag,801) 'total aero (kg/m2)     = ', aerototn(n)
-         write (nu_diag,801) 'aero error             = ', aerrn(n)
-         write (nu_diag,801) 'maximum aero (kg/m2)   = ', aeromx1n(n)
-         enddo
-         write (nu_diag,*) '----------------------------'
-         endif ! tr_aero
-
-        endif                     ! print_global
-
-       else  ! global grid
 
         write(nu_diag,899) 'Arctic','Antarctic'
 
@@ -875,7 +795,6 @@
          endif ! tr_aero
 
         endif                    ! print_global
-       endif                     ! grid_type
 
        call flush_fileunit(nu_diag)
 
