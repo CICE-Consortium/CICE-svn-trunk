@@ -923,6 +923,7 @@
 
       if (maxval(Tin) <= -c2) then
 
+         ! Assur 1958
          do k = 1,nilyr
             Sbr = - 1.2_dbl_kind                 &
                   -21.8_dbl_kind     * Tin(k)    &
@@ -933,6 +934,7 @@
        
       else
 
+         ! Notz 2005 thesis eq. 3.2
          do k = 1,nilyr
             Sbr = -17.6_dbl_kind    * Tin(k)    &
                   - 0.389_dbl_kind  * Tin(k)**2 &

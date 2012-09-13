@@ -192,55 +192,28 @@
       if (trim(shortwave) == 'dEdd') then ! delta Eddington
 
          call init_orbit       ! initialize orbital parameters
-         call run_dEdd         ! initialize delta Eddington
+         do iblk=1,nblocks
+         call run_dEdd(iblk)         ! initialize delta Eddington
+         enddo
  
       else                     ! basic (ccsm3) shortwave
 
-         coszen(:,:,:) = p5 ! sun above the horizon
-
          do iblk=1,nblocks
-            this_block = get_block(blocks_ice(iblk),iblk)         
-            ilo = this_block%ilo
-            ihi = this_block%ihi
-            jlo = this_block%jlo
-            jhi = this_block%jhi
-
-            do n = 1, ncat
-
-               icells = 0
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (aicen(i,j,n,iblk) > puny) then
-                     icells = icells + 1
-                     indxi(icells) = i
-                     indxj(icells) = j
-                  endif
-               enddo               ! i
-               enddo               ! j
-
-               il1 = ilyr1(n)
-               il2 = ilyrn(n)
-               sl1 = slyr1(n)
-               sl2 = slyrn(n)
-
-               Sswabsn(:,:,sl1:sl2,iblk) = c0
-
-               call shortwave_ccsm3(nx_block,     ny_block,           &
-                              icells,                                 &
-                              indxi,             indxj,               &
-                              aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
-                              vsnon(:,:,n,iblk),                      &
-                              trcrn(:,:,nt_Tsfc,n,iblk),              &
+               call shortwave_ccsm3(iblk,                             &
+                              nx_block,     ny_block,                 &
+                              aicen(:,:,:,iblk), vicen(:,:,:,iblk),   &
+                              vsnon(:,:,:,iblk),                      &
+                              trcrn(:,:,nt_Tsfc,:,iblk),              &
                               swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
                               swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                              alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
-                              alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
-                              fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
-                              fswthrun(:,:,n,iblk), &
-                              Iswabsn(:,:,il1:il2,iblk),              &
-                              albicen(:,:,n,iblk),albsnon(:,:,n,iblk))
-
-            enddo  ! ncat
+                              alvdrn(:,:,:,iblk),alidrn(:,:,:,iblk),  &
+                              alvdfn(:,:,:,iblk),alidfn(:,:,:,iblk),  &
+                              fswsfcn(:,:,:,iblk),fswintn(:,:,:,iblk),&
+                              fswthrun(:,:,:,iblk),                   &
+                              Iswabsn(:,:,:,iblk),                    &
+                              Sswabsn(:,:,:,iblk),                    &
+                              albicen(:,:,:,iblk),albsnon(:,:,:,iblk),&
+                              coszen(:,:,iblk))
          enddo     ! nblocks
 
       endif
@@ -328,9 +301,8 @@
 !
 ! !INTERFACE:
 !
-      subroutine shortwave_ccsm3 (nx_block, ny_block, &
-                                  icells,             &
-                                  indxi,    indxj,    &
+      subroutine shortwave_ccsm3 (iblk,               &
+                                  nx_block, ny_block, &
                                   aicen,    vicen,    &
                                   vsnon,    Tsfcn,    &
                                   swvdr,    swvdf,    &
@@ -338,8 +310,10 @@
                                   alvdrn,   alidrn,   &
                                   alvdfn,   alidfn,   &
                                   fswsfc,   fswint,   &
-                                  fswthru,  Iswabs,   &
-                                  albin,    albsn)
+                                  fswthru,            &
+                                  Iswabs,   SSwabs,   &
+                                  albin,    albsn,    &
+                                  coszen)
 !
 ! !DESCRIPTION:
 !
@@ -351,29 +325,30 @@
 !
 ! !USES:
 !
+      use ice_domain, only: blocks_ice
+      use ice_itd, only: ilyr1, slyr1, ilyrn, slyrn
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
-         nx_block, ny_block, & ! block dimensions
-         icells              ! number of ice-covered grid cells
+         iblk        , & ! block index
+         nx_block, ny_block ! block dimensions
 
-      integer (kind=int_kind), dimension (nx_block*ny_block), &
-         intent(in) :: &
-         indxi    , & ! indices for ice-covered cells
-         indxj
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(in) :: &
          aicen    , & ! concentration of ice per category
          vicen    , & ! volume of ice per category
          vsnon    , & ! volume of ice per category
-         Tsfcn    , & ! surface temperature
+         Tsfcn        ! surface temperature
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
          swvdr    , & ! sw down, visible, direct  (W/m^2)
          swvdf    , & ! sw down, visible, diffuse (W/m^2)
          swidr    , & ! sw down, near IR, direct  (W/m^2)
          swidf        ! sw down, near IR, diffuse (W/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(out) :: &
          alvdrn   , & ! visible, direct, avg   (fraction)
          alidrn   , & ! near-ir, direct, avg   (fraction)
@@ -385,12 +360,35 @@
          albin    , & ! bare ice albedo
          albsn        ! snow albedo
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(out) :: &
+         coszen       ! cosine(zenith angle)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
            intent(out) :: &
          Iswabs       ! SW absorbed in particular layer (W m-2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), &
+           intent(out) :: &
+         Sswabs       ! SW absorbed in particular layer (W m-2)
 !
 !EOP
 !
+      integer (kind=int_kind) :: &
+         i, j           , & ! horizontal indices
+         icells         , & ! number of ice-covered grid cells
+         ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
+         n           , & ! thickness category index
+         il1, il2    , & ! ice layer indices for eice
+         sl1, sl2        ! snow layer indices for esno
+
+      integer (kind=int_kind), dimension (nx_block*ny_block) :: &
+         indxi    , & ! indices for ice-covered cells
+         indxj
+
+      type (block) :: &
+         this_block      ! block information for current block
+
       ! ice and snow albedo for each category
 
       real (kind=dbl_kind), dimension (nx_block,ny_block):: &
@@ -403,6 +401,39 @@
          alvdfns, & ! visible, diffuse, snow  (fraction)
          alidfns    ! near-ir, diffuse, snow  (fraction)
 
+            ! For basic shortwave, set coszen to a constant between 0 and 1.
+            coszen(:,:) = p5 ! sun above the horizon
+
+            this_block = get_block(blocks_ice(iblk),iblk)         
+            ilo = this_block%ilo
+            ihi = this_block%ihi
+            jlo = this_block%jlo
+            jhi = this_block%jhi
+
+            do n = 1, ncat
+
+               icells = 0
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (aicen(i,j,n) > puny) then
+                     icells = icells + 1
+                     indxi(icells) = i
+                     indxj(icells) = j
+                  endif
+               enddo               ! i
+               enddo               ! j
+
+      !-----------------------------------------------------------------
+      ! Solar radiation: albedo and absorbed shortwave
+      !-----------------------------------------------------------------
+
+               il1 = ilyr1(n)
+               il2 = ilyrn(n)
+               sl1 = slyr1(n)
+               sl2 = slyrn(n)
+
+               Sswabs(:,:,sl1:sl2) = c0
+
       !-----------------------------------------------------------------
       ! Compute albedos for ice and snow.
       !-----------------------------------------------------------------
@@ -411,28 +442,37 @@
          call constant_albedos (nx_block,   ny_block, &
                                 icells,               &
                                 indxi,      indxj,    &
-                                aicen,                &
-                                vsnon,      Tsfcn,    &
+                                aicen(:,:,n),         &
+                                vsnon(:,:,n),         &
+                                Tsfcn(:,:,n),         &
                                 alvdrni,    alidrni,  &
                                 alvdfni,    alidfni,  &
                                 alvdrns,    alidrns,  &
                                 alvdfns,    alidfns,  &
-                                alvdrn,     alidrn,   &
-                                alvdfn,     alidfn,   &
-                                albin,      albsn)
+                                alvdrn(:,:,n),        &
+                                alidrn(:,:,n),        &
+                                alvdfn(:,:,n),        &
+                                alidfn(:,:,n),        &
+                                albin(:,:,n),         &
+                                albsn(:,:,n))
       else ! default
          call compute_albedos (nx_block,   ny_block, &
                                icells,               &
                                indxi,      indxj,    &
-                               aicen,      vicen,    &
-                               vsnon,      Tsfcn,    &
+                               aicen(:,:,n),         &
+                               vicen(:,:,n),         &
+                               vsnon(:,:,n),         &
+                               Tsfcn(:,:,n),         &
                                alvdrni,    alidrni,  &
                                alvdfni,    alidfni,  &
                                alvdrns,    alidrns,  &
                                alvdfns,    alidfns,  &
-                               alvdrn,     alidrn,   &
-                               alvdfn,     alidfn,   &
-                               albin,      albsn)
+                               alvdrn(:,:,n),        &
+                               alidrn(:,:,n),        &
+                               alvdfn(:,:,n),        &
+                               alidfn(:,:,n),        &
+                               albin(:,:,n),         &
+                               albsn(:,:,n))
       endif
 
       !-----------------------------------------------------------------
@@ -442,16 +482,21 @@
       call absorbed_solar  (nx_block,   ny_block, &
                             icells,               &
                             indxi,      indxj,    &
-                            aicen,                &
-                            vicen,      vsnon,    &
+                            aicen(:,:,n),         &
+                            vicen(:,:,n),         &
+                            vsnon(:,:,n),         &
                             swvdr,      swvdf,    &
                             swidr,      swidf,    &
                             alvdrni,    alvdfni,  &
                             alidrni,    alidfni,  &
                             alvdrns,    alvdfns,  &
                             alidrns,    alidfns,  &
-                            fswsfc,     fswint,   &
-                            fswthru,    Iswabs)
+                            fswsfc(:,:,n),        &
+                            fswint(:,:,n),        &
+                            fswthru(:,:,n),       &
+                            Iswabs(:,:,il1:il2))
+
+            enddo                  ! ncat
 
       end subroutine shortwave_ccsm3
 
@@ -1035,7 +1080,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine run_dEdd
+      subroutine run_dEdd (iblk)
 !
 ! !DESCRIPTION:
 !
@@ -1064,6 +1109,9 @@
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
+      integer (kind=int_kind), intent(in) :: &
+         iblk    ! block index
+!
 !EOP
 !
 !     local temporary variables
@@ -1090,7 +1138,6 @@
 
       integer (kind=int_kind) :: &
          i, j, ij    , & ! horizontal indices
-         iblk        , & ! block index
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          n           , & ! thickness category index
          il1, il2    , & ! ice layer indices for eice
@@ -1116,7 +1163,6 @@
 
       exp_min = exp(-argmax)
 
-         do iblk = 1, nblocks
             this_block = get_block(blocks_ice(iblk),iblk)         
             ilo = this_block%ilo
             ihi = this_block%ihi
@@ -1305,7 +1351,6 @@
                               albsnon(:,:,n,iblk),albpndn(:,:,n,iblk))
 
             enddo  ! ncat
-         enddo     ! nblocks
  
       end subroutine run_dEdd
  

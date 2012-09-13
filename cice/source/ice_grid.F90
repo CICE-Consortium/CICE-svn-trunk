@@ -160,7 +160,7 @@
 !
 
       integer (kind=int_kind) :: &
-         i, j, iblk, &
+         i, j, &
          fid_grid, &     ! file id for netCDF grid file
          fid_kmt         ! file id for netCDF kmt file
 
