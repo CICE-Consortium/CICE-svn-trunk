@@ -59,8 +59,8 @@
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-      public :: step_therm2, step_dynamics, &
-                prep_radiation, step_radiation
+      public :: step_therm1, step_therm2, step_dynamics, &
+                prep_radiation, step_radiation, post_thermo
 !
 !EOP
 !
@@ -83,7 +83,7 @@
 !
 ! !INTERFACE:
 
-      subroutine prep_radiation (dt)
+      subroutine prep_radiation (dt, iblk)
 !
 ! !USES:
 !
@@ -91,12 +91,14 @@
 !
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
+
+      integer (kind=int_kind), intent(in) :: &
+         iblk    ! block index
 !
 !EOP
 !
       integer (kind=int_kind) :: &
          i, j, ij    , & ! horizontal indices
-         iblk        , & ! block index
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          n           , & ! thickness category index
          il1, il2    , & ! ice layer indices for eice
@@ -113,21 +115,11 @@
       type (block) :: &
          this_block      ! block information for current block
 
-      logical (kind=log_kind) :: &
-         l_stop          ! if true, abort the model
-
       integer (kind=int_kind) :: &
          istop, jstop    ! indices of grid cell where model aborts 
 
-      call ice_timer_start(timer_column)  ! column physics
-      call ice_timer_start(timer_thermo)  ! thermodynamics
       call ice_timer_start(timer_sw)      ! shortwave
 
-      l_stop = .false.
-
-      if (calc_Tsfc) then
-
-      do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
@@ -192,32 +184,515 @@
                        scale_factor(i,j,iblk)*Iswabsn(i,j,il1:il2,iblk)
             enddo
          enddo                  ! ncat
-      enddo                      ! iblk
 
-      else    ! .not. calc_Tsfc
+      call ice_timer_stop(timer_sw)     ! shortwave
 
-         ! Initialize for safety
-         do iblk = 1, nblocks
+      end subroutine prep_radiation
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: step_therm1 - step pre-coupler thermodynamics
+!
+! !DESCRIPTION:
+!
+! Driver for updating ice and snow internal temperatures and
+! computing thermodynamic growth rates and coupler fluxes.
+!
+! !REVISION HISTORY:
+!
+! authors: William H. Lipscomb, LANL
+!
+! !INTERFACE:
+
+      subroutine step_therm1 (dt, iblk)
+!
+! !USES:
+!
+      use ice_aerosol
+      use ice_age
+      use ice_firstyear
+      use ice_work, only: worka, workb
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      real (kind=dbl_kind), intent(in) :: &
+         dt      ! time step
+
+      integer (kind=int_kind), intent(in) :: &
+         iblk    ! block index
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+         i, j, ij    , & ! horizontal indices
+         ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
+         n           , & ! thickness category index
+         il1, il2    , & ! ice layer indices for eice
+         sl1, sl2        ! snow layer indices for esno
+
+      integer (kind=int_kind), save :: &
+         icells          ! number of cells with aicen > puny
+
+      integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
+         indxi, indxj    ! indirect indices for cells with aicen > puny
+
+      ! 2D coupler variables (computed for each category, then aggregated)
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         fsensn      , & ! surface downward sensible heat     (W/m^2)
+         fswabsn     , & ! shortwave absorbed by ice          (W/m^2)
+         flwoutn     , & ! upward LW at surface               (W/m^2)
+         evapn       , & ! flux of vapor, atmos to ice   (kg m-2 s-1)
+         freshn      , & ! flux of water, ice to ocean     (kg/m^2/s)
+         fsaltn      , & ! flux of salt, ice to ocean      (kg/m^2/s)
+         fhocnn      , & ! fbot corrected for leftover energy (W/m^2)
+         strairxn    , & ! air/ice zonal  stress,             (N/m^2)
+         strairyn    , & ! air/ice meridional stress,         (N/m^2)
+         Trefn       , & ! air tmp reference level                (K)
+         Qrefn           ! air sp hum reference level         (kg/kg)
+
+      ! other local variables
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         Tbot        , & ! ice bottom surface temperature (deg C)
+         fbot        , & ! ice-ocean heat flux at bottom surface (W/m^2)
+         shcoef      , & ! transfer coefficient for sensible heat
+         lhcoef          ! transfer coefficient for latent heat
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         melttn      , & ! top melt in category n (m)
+         meltbn      , & ! bottom melt in category n (m)
+         meltsn      , & ! snow melt in category n (m)
+         congeln     , & ! congelation ice formation in category n (m)
+         snoicen     , & ! snow-ice formation in category n (m)
+         vsnon_init  , & ! for aerosol mass budget
+         rfrac           ! water fraction retained for melt ponds
+
+      real (kind=dbl_kind) :: &
+         raice       , & ! 1/aice
+         pond            ! water retained in ponds (m)
+
+      type (block) :: &
+         this_block      ! block information for current block
+
+      logical (kind=log_kind) :: &
+         l_stop          ! if true, abort the model
+
+      integer (kind=int_kind) :: &
+         istop, jstop    ! indices of grid cell where model aborts 
+
+      l_stop = .false.
+
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do j = 1, ny_block
+         do i = 1, nx_block
+            ! initialize thermo history fields
+            fsurf  (i,j,iblk) = c0
+            fcondtop(i,j,iblk)= c0
+            congel (i,j,iblk) = c0
+            frazil (i,j,iblk) = c0
+            snoice (i,j,iblk) = c0
+            meltt  (i,j,iblk) = c0
+            melts  (i,j,iblk) = c0
+            meltb  (i,j,iblk) = c0
+            meltl  (i,j,iblk) = c0
+            daidtt (i,j,iblk) = aice(i,j,iblk) ! temporary initial area
+            dvidtt (i,j,iblk) = vice(i,j,iblk) ! temporary initial volume
+            fpond      (i,j,iblk) = c0
+            fresh_gbm  (i,j,iblk) = c0
+            fsalt_gbm  (i,j,iblk) = c0
+            fhocn_gbm  (i,j,iblk) = c0
+            fswthru_gbm(i,j,iblk) = c0
+            albice (i,j,iblk) = c0
+            albsno (i,j,iblk) = c0
+            albpnd (i,j,iblk) = c0
+      
+      !-----------------------------------------------------------------
+      ! Save the ice area passed to the coupler (so that history fields
+      !  can be made consistent with coupler fields).
+      ! Save the initial ice area and volume in each category.
+      !-----------------------------------------------------------------
+
+            aice_init (i,j,  iblk) = aice (i,j,  iblk)
+         enddo
+         enddo
+
          do n = 1, ncat
          do j = 1, ny_block
          do i = 1, nx_block
-            fswsfcn(i,j,n,iblk) = c0
-            fswintn(i,j,n,iblk) = c0
-            fswthrun(i,j,n,iblk) = c0
-         enddo   ! i
-         enddo   ! j
-         enddo   ! ncat
-            Iswabsn(:,:,:,iblk) = c0
-            Sswabsn(:,:,:,iblk) = c0
-         enddo   ! iblk
+            aicen_init(i,j,n,iblk) = aicen(i,j,n,iblk)
+            vicen_init(i,j,n,iblk) = vicen(i,j,n,iblk)
 
-      endif    ! calc_Tsfc
+            ! a few more history fields
+            fsurfn   (i,j,n,iblk) = c0
+            fcondtopn(i,j,n,iblk) = c0
+            flatn    (i,j,n,iblk) = c0
+         enddo
+         enddo
+         enddo
 
-      call ice_timer_stop(timer_sw)     ! shortwave
-      call ice_timer_stop(timer_thermo) ! thermodynamics
-      call ice_timer_stop(timer_column) ! column physics
+#ifdef CICE_IN_NEMO
+       !---------------------------------------------------------------
+       ! Scale frain and fsnow by ice concentration as these fields
+       ! are supplied by NEMO multiplied by ice concentration
+       !---------------------------------------------------------------
+ 
+         do j = 1, ny_block
+         do i = 1, nx_block
 
-      end subroutine prep_radiation
+            if (aice_init(i,j,iblk) > puny) then
+               raice           = c1 / aice_init(i,j,iblk)
+               frain(i,j,iblk) = frain(i,j,iblk)*raice
+               fsnow(i,j,iblk) = fsnow(i,j,iblk)*raice
+            else
+               frain(i,j,iblk) = c0
+               fsnow(i,j,iblk) = c0
+            endif
+
+         enddo
+         enddo
+#endif
+
+      !-----------------------------------------------------------------
+      ! Adjust frzmlt to account for ice-ocean heat fluxes since last
+      !  call to coupler.
+      ! Compute lateral and bottom heat fluxes.
+      !-----------------------------------------------------------------
+
+         call frzmlt_bottom_lateral                                      &
+                                (nx_block,           ny_block,           &
+                                 ilo, ihi,           jlo, jhi,           &
+                                 dt,                                     &
+                                 aice  (:,:,  iblk), frzmlt(:,:,  iblk), &
+                                 eicen (:,:,:,iblk), esnon (:,:,:,iblk), &
+                                 sst   (:,:,  iblk), Tf    (:,:,  iblk), &
+                                 strocnxT(:,:,iblk), strocnyT(:,:,iblk), &
+                                 Tbot,               fbot,               &
+                                 rside (:,:,  iblk) )
+
+         do n = 1, ncat
+
+      !-----------------------------------------------------------------
+      ! Identify cells with nonzero ice area
+      !-----------------------------------------------------------------
+           
+            icells = 0
+            do j = jlo, jhi
+            do i = ilo, ihi
+               if (aicen(i,j,n,iblk) > puny) then
+                  icells = icells + 1
+                  indxi(icells) = i
+                  indxj(icells) = j
+               endif
+            enddo               ! i
+            enddo               ! j
+
+            if ((calc_Tsfc .or. calc_strair) .and. icells > 0) then 
+
+      !-----------------------------------------------------------------
+      ! Atmosphere boundary layer calculation; compute coefficients
+      ! for sensible and latent heat fluxes.
+      !
+      ! NOTE: The wind stress is computed here for later use if 
+      !       calc_strair = .true.   Otherwise, the wind stress
+      !       components are set to the data values.
+      !-----------------------------------------------------------------
+
+               if (trim(atmbndy) == 'constant') then
+                   call atmo_boundary_const &
+                                   (nx_block,      ny_block,        &
+                                    'ice',          icells,         &
+                                    indxi,          indxj,          &
+                                    uatm(:,:,iblk), vatm(:,:,iblk), &
+                                    wind(:,:,iblk), rhoa(:,:,iblk), &
+                                    strairxn,       strairyn,       &
+                                    trcrn(:,:,nt_Tsfc,n,iblk),      &
+                                    potT(:,:,iblk), Qa  (:,:,iblk), &
+                                    worka,          workb,          &
+                                    lhcoef,         shcoef)
+               else ! default
+                   call atmo_boundary_layer & 
+                                  (nx_block,       ny_block,       &
+                                   'ice',          icells,         &
+                                   indxi,          indxj,          &
+                                   trcrn(:,:,nt_Tsfc,n,iblk),      &
+                                   potT(:,:,iblk),                 &
+                                   uatm(:,:,iblk), vatm(:,:,iblk), &
+                                   wind(:,:,iblk), zlvl(:,:,iblk), &
+                                   Qa  (:,:,iblk), rhoa(:,:,iblk), &
+                                   strairxn,       strairyn,       &
+                                   Trefn,          Qrefn,          &
+                                   worka,          workb,          &
+                                   lhcoef,         shcoef)
+               endif ! atmbndy
+
+            else
+
+               ! Initialize for safety
+               Trefn (:,:)  = c0
+               Qrefn (:,:)  = c0
+               lhcoef(:,:)  = c0
+               shcoef(:,:)  = c0
+
+            endif   ! calc_Tsfc or calc_strair
+
+            if (.not.(calc_strair)) then
+#ifndef CICE_IN_NEMO
+               ! Set to data values (on T points)
+               strairxn(:,:) = strax(:,:,iblk)
+               strairyn(:,:) = stray(:,:,iblk)
+#else
+               ! NEMO wind stress is supplied on u grid, multipied 
+               ! by ice concentration and set directly in evp, so
+               ! strairxT/yT = 0. Zero u-components here for safety.
+               strairxn(:,:) = c0
+               strairyn(:,:) = c0
+#endif
+            endif
+
+      !-----------------------------------------------------------------
+      ! Update ice age
+      ! This is further adjusted for freezing in the thermodynamics.
+      ! Melting does not alter the ice age.
+      !-----------------------------------------------------------------
+
+            if (tr_iage) then
+               call increment_age (nx_block, ny_block,      &
+                                   dt, icells,              &
+                                   indxi, indxj,            &
+                                   trcrn(:,:,nt_iage,n,iblk))
+            endif
+            if (tr_FY) then
+               call update_FYarea (nx_block, ny_block,      &
+                                   dt, icells,              &
+                                   indxi, indxj,            &
+                                   lmask_n(:,:,iblk),       &
+                                   lmask_s(:,:,iblk),       &
+                                   trcrn(:,:,nt_FY,n,iblk))
+            endif
+
+      !-----------------------------------------------------------------
+      ! Vertical thermodynamics: Heat conduction, growth and melting.
+      !----------------------------------------------------------------- 
+
+            il1 = ilyr1(n)
+            il2 = ilyrn(n)
+            sl1 = slyr1(n)
+            sl2 = slyrn(n)
+
+            if (.not.(calc_Tsfc)) then
+
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  fswsfcn(i,j,n,iblk) = c0
+                  fswintn(i,j,n,iblk) = c0
+                  fswthrun(i,j,n,iblk) = c0
+                  Iswabsn(i,j,il1:il2,iblk) = c0
+                  Sswabsn(i,j,sl1:sl2,iblk) = c0
+               enddo   ! i
+               enddo   ! j
+
+               ! If not calculating surface temperature and fluxes, set 
+               ! surface fluxes (flatn, fsurfn, and fcondtopn) to be used 
+               ! in thickness_changes
+ 
+               ! hadgem routine sets fluxes to default values in ice-only mode
+               call set_sfcflux(nx_block,  ny_block,  &
+                                n,         iblk,      &
+                                icells,               & 
+                                indxi,     indxj,     &
+                                aicen    (:,:,n,iblk),&
+                                flatn    (:,:,n,iblk),&
+                                fsurfn   (:,:,n,iblk),&
+                                fcondtopn(:,:,n,iblk) )
+            endif
+
+            vsnon_init(:,:) = vsnon(:,:,n,iblk)
+
+            call thermo_vertical                                       &
+                            (nx_block,            ny_block,            &
+                             dt,                  icells,              &
+                             indxi,               indxj,               &
+                             aicen(:,:,n,iblk),                        &
+                             trcrn(:,:,:,n,iblk),                      &
+                             vicen(:,:,n,iblk),   vsnon(:,:,n,iblk),   &
+                             eicen  (:,:,il1:il2,iblk),                &
+                             esnon  (:,:,sl1:sl2,iblk),                &
+                             flw    (:,:,iblk),   potT (:,:,iblk),     &
+                             Qa     (:,:,iblk),   rhoa (:,:,iblk),     &
+                             fsnow  (:,:,iblk),   fpond (:,:,iblk),    &
+                             fbot,                Tbot,                &
+                             lhcoef,              shcoef,              &
+                             fswsfcn(:,:,n,iblk), fswintn(:,:,n,iblk), &
+                             fswthrun(:,:,n,iblk),                     &
+                             Sswabsn(:,:,sl1:sl2,iblk),                &
+                             Iswabsn(:,:,il1:il2,iblk),                &
+                             fsurfn(:,:,n,iblk),  fcondtopn(:,:,n,iblk),&
+                             fsensn,              flatn(:,:,n,iblk),   &
+                             fswabsn,             flwoutn,             &
+                             evapn,               freshn,              &
+                             fsaltn,              fhocnn,              &
+                             melttn,              meltsn,              &
+                             meltbn,                                   &
+                             congeln,             snoicen,             &
+                             mlt_onset(:,:,iblk), frz_onset(:,:,iblk), &
+                             yday,                l_stop,              &
+                             istop,               jstop)
+
+         if (l_stop) then
+            write (nu_diag,*) 'istep1, my_task, iblk =', &
+                               istep1, my_task, iblk
+            write (nu_diag,*) 'category n = ', n
+            write (nu_diag,*) 'Global block:', this_block%block_id
+            if (istop > 0 .and. jstop > 0) &
+                 write(nu_diag,*) 'Global i and j:', &
+                                  this_block%i_glob(istop), &
+                                  this_block%j_glob(jstop) 
+                 write(nu_diag,*) 'Lat, Lon:', &
+                                 TLAT(istop,jstop,iblk)*rad_to_deg, &
+                                 TLON(istop,jstop,iblk)*rad_to_deg
+            call abort_ice ('ice: Vertical thermo error')
+         endif
+
+      !-----------------------------------------------------------------
+      ! Aerosol update
+      !-----------------------------------------------------------------
+         if (tr_aero .and. icells > 0) then
+
+               call update_aerosol (nx_block, ny_block,                  &
+                                    dt, icells,                          &
+                                    indxi, indxj,                        &
+                                    melttn, meltsn,                      &
+                                    meltbn, congeln, snoicen,            &
+                                    fsnow(:,:,iblk),                     &
+                                    trcrn(:,:,:,n,iblk),                 &
+                                    aicen_init(:,:,n,iblk),              &
+                                    vicen_init(:,:,n,iblk),              &
+                                    vsnon_init(:,:),                     &
+                                    vicen(:,:,n,iblk),                   &
+                                    vsnon(:,:,n,iblk),                   &
+                                    aicen(:,:,n,iblk),                   &
+                                    faero_atm(:,:,:,iblk),               &
+                                    faero_ocn(:,:,:,iblk))
+         endif
+
+      !-----------------------------------------------------------------
+      ! Melt ponds
+      ! If using tr_pond_cesm, the full calculation is performed here.
+      ! If using tr_pond_topo, the rest of the calculation is done after
+      ! the surface fluxes are merged, below.
+      !-----------------------------------------------------------------
+
+         if (tr_pond) then
+            call ice_timer_start(timer_ponds)
+
+            if (tr_pond_cesm) then
+!               rfrac(:,:) = 0.15_dbl_kind + 0.7_dbl_kind * aicen(:,:,n,iblk)
+               rfrac(:,:) = rfracmin + (rfracmax-rfracmin) * aicen(:,:,n,iblk) 
+              call compute_ponds_cesm(nx_block, ny_block,                      &
+                                       ilo, ihi, jlo, jhi,                      &
+                                       rfrac, melttn, meltsn, frain(:,:,iblk),  &
+                                       aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
+                                       vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk))
+
+            elseif (tr_pond_lvl) then
+               rfrac(:,:) = rfracmin + (rfracmax-rfracmin) * aicen(:,:,n,iblk)
+               call compute_ponds_lvl(nx_block, ny_block,                      &
+                                      ilo, ihi, jlo, jhi,                      &
+                                      rfrac, melttn, meltsn,                   &
+                                      frain (:,:,iblk),   Tair  (:,:,iblk),    &
+                                      fsurfn(:,:,n,iblk),                      &
+                                      dhsn  (:,:,n,iblk), ffracn(:,:,n,iblk),  &
+                                      aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
+                                      vsnon (:,:,n,iblk),                      &
+                                      trcrn (:,:,:,n,iblk),                    &
+                                      eicen (:,:,ilyr1(n):ilyr1(n)+nilyr-1,iblk),&
+                                      salin (1:nilyr), Tmlt(1:nilyr))
+
+            elseif (tr_pond_topo .and. icells > 0) then
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+
+                  ! collect liquid water in ponds
+                  ! assume salt still runs off
+
+                  rfrac(i,j) = rfracmin + (rfracmax-rfracmin) * aicen(i,j,n,iblk)
+                  pond = rfrac(i,j)/rhofresh * (melttn(i,j)*rhoi &
+                       +                        meltsn(i,j)*rhos &
+                       +                        frain (i,j,iblk)*dt)
+
+                  ! if pond does not exist, create new pond over full ice area
+                  ! otherwise increase pond depth without changing pond area
+                  if (trcrn(i,j,nt_apnd,n,iblk) < puny) then
+                      trcrn(i,j,nt_hpnd,n,iblk) = c0
+                      trcrn(i,j,nt_apnd,n,iblk) = c1
+                  endif 
+                  trcrn(i,j,nt_hpnd,n,iblk) = (pond &
+                  + trcrn(i,j,nt_hpnd,n,iblk)*trcrn(i,j,nt_apnd,n,iblk)) &
+                                            / trcrn(i,j,nt_apnd,n,iblk)
+                  fpond(i,j,iblk) = fpond(i,j,iblk) &
+                                  + pond * aicen(i,j,n,iblk) ! m
+               enddo
+            endif
+
+            call ice_timer_stop(timer_ponds)
+         endif
+
+      !-----------------------------------------------------------------
+      ! Increment area-weighted fluxes.
+      !-----------------------------------------------------------------
+
+         call merge_fluxes (nx_block,           ny_block,             &
+                            icells,                                   &
+                            indxi,              indxj,                &
+                            aicen_init(:,:,n,iblk),                   &
+                            flw(:,:,iblk),      coszen(:,:,iblk),     &
+                            strairxn,           strairyn,             &
+                            fsurfn(:,:,n,iblk), fcondtopn(:,:,n,iblk),&
+                            fsensn,             flatn(:,:,n,iblk),    &
+                            fswabsn,            flwoutn,              &
+                            evapn,                                    &
+                            Trefn,              Qrefn,                &
+                            freshn,             fsaltn,               &
+                            fhocnn,             fswthrun(:,:,n,iblk), &
+                            strairxT(:,:,iblk), strairyT  (:,:,iblk), &
+                            fsurf   (:,:,iblk), fcondtop  (:,:,iblk), &
+                            fsens   (:,:,iblk), flat      (:,:,iblk), &
+                            fswabs  (:,:,iblk), flwout    (:,:,iblk), &
+                            evap    (:,:,iblk),                       &
+                            Tref    (:,:,iblk), Qref      (:,:,iblk), &
+                            fresh   (:,:,iblk), fsalt     (:,:,iblk), &
+                            fhocn   (:,:,iblk), fswthru   (:,:,iblk), &
+                            melttn, meltsn, meltbn, congeln, snoicen, &
+                            meltt   (:,:,iblk),  melts   (:,:,iblk),  &
+                            meltb   (:,:,iblk),                       &
+                            congel  (:,:,iblk),  snoice  (:,:,iblk))
+
+         enddo                  ! ncat
+
+      !-----------------------------------------------------------------
+      ! Calculate ponds from the topographic scheme
+      !-----------------------------------------------------------------
+            if (tr_pond_topo) then
+               call ice_timer_start(timer_ponds)
+               call compute_ponds_topo(nx_block, ny_block,                &
+                                    ilo, ihi, jlo, jhi,                   &
+                                    aice (:,:,  iblk), aicen(:,:,:,iblk), &
+                                    vice (:,:,  iblk), vicen(:,:,:,iblk), &
+                                    vsno (:,:,  iblk), vsnon(:,:,:,iblk), &
+                                    eicen(:,:,:,iblk), esnon(:,:,:,iblk), &
+                                    trcrn(:,:,:,:,iblk),                  &
+                                    potT(:,:,  iblk),  meltt(:,:,iblk),   &
+                                    fsurf(:,:,iblk),   fpond(:,:,iblk))
+               call ice_timer_stop(timer_ponds)
+            endif
+
+      end subroutine step_therm1
 
 !=======================================================================
 !BOP
@@ -238,7 +713,7 @@
 !
 ! !INTERFACE:
 
-      subroutine step_therm2 (dt)
+      subroutine step_therm2 (dt, iblk)
 !
 ! !USES:
 !
@@ -246,11 +721,13 @@
 !
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
+
+      integer (kind=int_kind), intent(in) :: &
+         iblk    ! block index
 !
 !EOP
 !
       integer (kind=int_kind) :: &
-         iblk        , & ! block index
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          i, j, n
 
@@ -269,12 +746,8 @@
       integer (kind=int_kind) :: &
          istop, jstop    ! indices of grid cell where model aborts
 
-      call ice_timer_start(timer_column)  ! column physics
-      call ice_timer_start(timer_thermo)  ! thermodynamics
-
       l_stop = .false.
       
-      do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
@@ -470,7 +943,32 @@
             call abort_ice ('ice: ITD cleanup error in step_therm2')
          endif
 
-      enddo                     ! iblk
+      end subroutine step_therm2
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: post_thermo: finalize thermo updates
+!
+! !DESCRIPTION:
+!
+! !REVISION HISTORY:
+!
+! authors: Elizabeth Hunke, LANL
+!
+! !INTERFACE:
+
+      subroutine post_thermo
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) :: & 
+         iblk        , & ! block index 
+         i,j             ! horizontal indices
 
       !-------------------------------------------------------------------
       ! Ghost cell updates for state variables.
@@ -511,12 +1009,9 @@
          enddo
          enddo
 
-      enddo                     ! iblk
+      enddo ! iblk
 
-      call ice_timer_stop(timer_thermo)  ! thermodynamics
-      call ice_timer_stop(timer_column)  ! column physics
-
-      end subroutine step_therm2
+      end subroutine post_thermo
 
 !=======================================================================
 !BOP
@@ -557,18 +1052,6 @@
          i,j         , & ! horizontal indices
          ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
-      integer (kind=int_kind) :: &
-         icells          ! number of cells with aicen > puny
-
-      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
-         indxi, indxj    ! indirect indices for cells with aicen > puny
-
-      logical (kind=log_kind) :: &
-         l_stop          ! if true, abort model
-
-      integer (kind=int_kind) :: &
-         istop, jstop    ! indices of grid cell where model aborts
-
       call init_history_dyn     ! initialize dynamic history variables
 
       !-----------------------------------------------------------------
@@ -594,9 +1077,112 @@
       call ice_timer_start(timer_column)
       call ice_timer_start(timer_ridge)
 
-      l_stop = .false.
+      do iblk = 1, nblocks
+         call step_ridge (dt, iblk)
+      enddo                     ! iblk
+
+      call ice_timer_stop(timer_ridge)
+
+      !-------------------------------------------------------------------
+      ! Ghost cell updates for state variables.
+      !-------------------------------------------------------------------
+
+      call ice_timer_start(timer_bound)
+      call bound_state (aicen, trcrn, &
+                        vicen, vsnon, &
+                        eicen, esnon)
+      call ice_timer_stop(timer_bound)
 
       do iblk = 1, nblocks
+
+      !-----------------------------------------------------------------
+      ! Aggregate the updated state variables (includes ghost cells). 
+      !----------------------------------------------------------------- 
+ 
+         call aggregate (nx_block,          ny_block,             &
+                         aicen(:,:,:,iblk),                       &
+                         trcrn(:,:,1:ntrcr,:,iblk),               &
+                         vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
+                         eicen(:,:,:,iblk), esnon(:,:,  :,iblk),  &
+                         aice (:,:,  iblk),                       &
+                         trcr (:,:,1:ntrcr,  iblk),               &
+                         vice (:,:,  iblk), vsno (:,:,    iblk),  &
+                         eice (:,:,  iblk), esno (:,:,    iblk),  &
+                         aice0(:,:,  iblk), tmask(:,:,    iblk),  &
+                         ntrcr, trcr_depend(1:ntrcr)) 
+
+      !-----------------------------------------------------------------
+      ! Compute dynamic area and volume tendencies.
+      !-----------------------------------------------------------------
+
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do j = jlo,jhi
+         do i = ilo,ihi
+            dvidtd(i,j,iblk) = (vice(i,j,iblk) - dvidtd(i,j,iblk)) /dt
+            daidtd(i,j,iblk) = (aice(i,j,iblk) - daidtd(i,j,iblk)) /dt
+         enddo
+         enddo
+
+      enddo
+
+      call ice_timer_stop(timer_column)
+
+      end subroutine step_dynamics
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: step_ridge
+!
+! !DESCRIPTION:
+!
+! Computes sea ice mechanical deformation
+!
+! !REVISION HISTORY:
+!
+! authors: William H. Lipscomb, LANL
+!          Elizabeth C. Hunke, LANL
+!
+! !INTERFACE:
+
+      subroutine step_ridge (dt, iblk)
+
+! !INPUT/OUTPUT PARAMETERS:
+!
+      real (kind=dbl_kind), intent(in) :: &
+         dt      ! time step
+
+      integer (kind=int_kind), intent(in) :: &
+         iblk            ! block index
+!
+!EOP
+!
+      type (block) :: &
+         this_block      ! block information for current block
+
+      integer (kind=int_kind) :: & 
+         i,j         , & ! horizontal indices
+         ilo,ihi,jlo,jhi ! beginning and end of physical domain
+
+      integer (kind=int_kind) :: &
+         icells          ! number of cells with aicen > puny
+
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
+         indxi, indxj    ! indirect indices for cells with aicen > puny
+
+      logical (kind=log_kind) :: &
+         l_stop          ! if true, abort model
+
+      integer (kind=int_kind) :: &
+         istop, jstop    ! indices of grid cell where model aborts
+
+         l_stop = .false.
+
          this_block = get_block(blocks_ice(iblk), iblk)
          ilo = this_block%ilo
          ihi = this_block%ihi
@@ -659,17 +1245,6 @@
 
          endif
 
-      enddo                     ! iblk
-
-      call ice_timer_stop(timer_ridge)
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks_ice(iblk), iblk)
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
       !-----------------------------------------------------------------
       ! ITD cleanup: Rebin thickness categories if necessary, and remove
       !  categories with very small areas.
@@ -679,7 +1254,7 @@
                            ilo, ihi,             jlo, jhi,             &
                            dt,                   ntrcr,                &
                            aicen   (:,:,:,iblk),                       &
-                           trcrn (:,:,1:ntrcr,:,iblk),                 &
+                           trcrn   (:,:,1:ntrcr,:,iblk),               &
                            vicen   (:,:,:,iblk), vsnon (:,:,  :,iblk), &
                            eicen   (:,:,:,iblk), esnon (:,:,  :,iblk), &
                            aice0   (:,:,  iblk), aice      (:,:,iblk), &
@@ -698,61 +1273,10 @@
                  write(nu_diag,*) 'Global i and j:', &
                                   this_block%i_glob(istop), &
                                   this_block%j_glob(jstop) 
-            call abort_ice ('ice: ITD cleanup error in step_dynamics')
+            call abort_ice ('ice: ITD cleanup error in step_ridge')
          endif
 
-      enddo                     ! iblk
-
-      !-------------------------------------------------------------------
-      ! Ghost cell updates for state variables.
-      !-------------------------------------------------------------------
-
-      call ice_timer_start(timer_bound)
-      call bound_state (aicen, trcrn, &
-                        vicen, vsnon, &
-                        eicen, esnon)
-      call ice_timer_stop(timer_bound)
-
-      do iblk = 1, nblocks
-
-      !-----------------------------------------------------------------
-      ! Aggregate the updated state variables (includes ghost cells). 
-      !----------------------------------------------------------------- 
- 
-         call aggregate (nx_block,          ny_block,             &
-                         aicen(:,:,:,iblk),                       &
-                         trcrn(:,:,1:ntrcr,:,iblk),               &
-                         vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
-                         eicen(:,:,:,iblk), esnon(:,:,  :,iblk),  &
-                         aice (:,:,  iblk),                       &
-                         trcr (:,:,1:ntrcr,  iblk),               &
-                         vice (:,:,  iblk), vsno (:,:,    iblk),  &
-                         eice (:,:,  iblk), esno (:,:,    iblk),  &
-                         aice0(:,:,  iblk), tmask(:,:,    iblk),  &
-                         ntrcr, trcr_depend(1:ntrcr)) 
-
-      !-----------------------------------------------------------------
-      ! Compute dynamic area and volume tendencies.
-      !-----------------------------------------------------------------
-
-         this_block = get_block(blocks_ice(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo,jhi
-         do i = ilo,ihi
-            dvidtd(i,j,iblk) = (vice(i,j,iblk) - dvidtd(i,j,iblk)) /dt
-            daidtd(i,j,iblk) = (aice(i,j,iblk) - daidtd(i,j,iblk)) /dt
-         enddo
-         enddo
-
-      enddo
-
-      call ice_timer_stop(timer_column)
-
-      end subroutine step_dynamics
+      end subroutine step_ridge
 
 !=======================================================================
 !BOP
@@ -771,123 +1295,69 @@
 !
 ! !INTERFACE:
 
-      subroutine step_radiation (dt)
+      subroutine step_radiation (dt, iblk)
 
 ! !INPUT/OUTPUT PARAMETERS:
 !
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
+
+      integer (kind=int_kind), intent(in) :: &
+         iblk            ! block index
 !
 !EOP
 !
       integer (kind=int_kind) :: &
          i, j, ij    , & ! horizontal indices
-         iblk        , & ! block index
-         ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
-         n           , & ! thickness category index
-         il1, il2    , & ! ice layer indices for eice
-         sl1, sl2        ! snow layer indices for esno
+         n               ! thickness category index
 
       integer (kind=int_kind) :: &
          icells          ! number of cells with aicen > puny
 
-      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
-         indxi, indxj    ! indirect indices for cells with aicen > puny
-
-      type (block) :: &
-         this_block      ! block information for current block
-
-      call ice_timer_start(timer_column)  ! column physics
-      call ice_timer_start(timer_thermo)  ! thermodynamics
       call ice_timer_start(timer_sw)      ! shortwave
 
-      if (calc_Tsfc) then
+      ! Initialize
+      do n = 1, ncat
+      do j = 1, ny_block
+      do i = 1, nx_block
+         alvdrn(i,j,n,iblk) = c0
+         alidrn(i,j,n,iblk) = c0
+         alvdfn(i,j,n,iblk) = c0
+         alidfn(i,j,n,iblk) = c0
+         fswsfcn(i,j,n,iblk) = c0
+         fswintn(i,j,n,iblk) = c0
+         fswthrun(i,j,n,iblk) = c0
+      enddo   ! i
+      enddo   ! j
+      enddo   ! ncat
+      Iswabsn(:,:,:,iblk) = c0
+      Sswabsn(:,:,:,iblk) = c0
 
       if (trim(shortwave) == 'dEdd') then ! delta Eddington
 
-         call run_dEdd
+         call run_dEdd (iblk)
 
       else  ! .not. dEdd
 
-         do iblk = 1, nblocks
-            this_block = get_block(blocks_ice(iblk),iblk)         
-            ilo = this_block%ilo
-            ihi = this_block%ihi
-            jlo = this_block%jlo
-            jhi = this_block%jhi
-
-            ! For basic shortwave, set coszen to a constant between 0 and 1.
-            coszen(:,:,iblk) = p5 ! sun above the horizon
-
-            do n = 1, ncat
-
-               icells = 0
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (aicen(i,j,n,iblk) > puny) then
-                     icells = icells + 1
-                     indxi(icells) = i
-                     indxj(icells) = j
-                  endif
-               enddo               ! i
-               enddo               ! j
-
-      !-----------------------------------------------------------------
-      ! Solar radiation: albedo and absorbed shortwave
-      !-----------------------------------------------------------------
-
-               il1 = ilyr1(n)
-               il2 = ilyrn(n)
-               sl1 = slyr1(n)
-               sl2 = slyrn(n)
-
-               Sswabsn(:,:,sl1:sl2,iblk) = c0
-
-               call shortwave_ccsm3(nx_block,     ny_block,           &
-                              icells,                                 &
-                              indxi,             indxj,               &
-                              aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
-                              vsnon(:,:,n,iblk),                      &
-                              trcrn(:,:,nt_Tsfc,n,iblk),              &
+         call shortwave_ccsm3(iblk,                                   &
+                              nx_block,     ny_block,                 &
+                              aicen(:,:,:,iblk), vicen(:,:,:,iblk),   &
+                              vsnon(:,:,:,iblk),                      &
+                              trcrn(:,:,nt_Tsfc,:,iblk),              &
                               swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
                               swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                              alvdrn(:,:,n,iblk),alidrn(:,:,n,iblk),  &
-                              alvdfn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
-                              fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
-                              fswthrun(:,:,n,iblk),                   &
-                              Iswabsn(:,:,il1:il2,iblk),              &
-                              albicen(:,:,n,iblk),albsnon(:,:,n,iblk))
-            enddo                  ! ncat
-         enddo                     ! nblocks
+                              alvdrn(:,:,:,iblk),alidrn(:,:,:,iblk),  &
+                              alvdfn(:,:,:,iblk),alidfn(:,:,:,iblk),  &
+                              fswsfcn(:,:,:,iblk),fswintn(:,:,:,iblk),&
+                              fswthrun(:,:,:,iblk),                   &
+                              Iswabsn(:,:,:,iblk),                    &
+                              Sswabsn(:,:,:,iblk),                    &
+                              albicen(:,:,:,iblk),albsnon(:,:,:,iblk),&
+                              coszen(:,:,iblk))
 
       endif   ! shortwave
 
-      else    ! .not. calc_Tsfc
-
-         ! Initialize for safety
-         do iblk = 1, nblocks
-         do n = 1, ncat
-         do j = 1, ny_block
-         do i = 1, nx_block
-            alvdrn(i,j,n,iblk) = c0
-            alidrn(i,j,n,iblk) = c0
-            alvdfn(i,j,n,iblk) = c0
-            alidfn(i,j,n,iblk) = c0
-            fswsfcn(i,j,n,iblk) = c0
-            fswintn(i,j,n,iblk) = c0
-            fswthrun(i,j,n,iblk) = c0
-         enddo   ! i
-         enddo   ! j
-         enddo   ! ncat
-            Iswabsn(:,:,:,iblk) = c0
-            Sswabsn(:,:,:,iblk) = c0
-         enddo   ! iblk
-
-      endif    ! calc_Tsfc
-
       call ice_timer_stop(timer_sw)     ! shortwave
-      call ice_timer_stop(timer_thermo) ! thermodynamics
-      call ice_timer_stop(timer_column) ! column physics
 
       end subroutine step_radiation
 

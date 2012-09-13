@@ -637,7 +637,6 @@
                call check_monotonicity      &
                                (nx_block,           ny_block,     &
                                 ilo, ihi, jlo, jhi,     &
-                                iblk,     &
                                 tmin(:,:,:,n,iblk), tmax(:,:,:,n,iblk),  &
                                 aim (:,:,  n,iblk), trm (:,:,:,n,iblk),  &
                                 l_stop,     &
@@ -1414,7 +1413,6 @@
 !
       subroutine check_monotonicity (nx_block, ny_block,     &
                                      ilo, ihi, jlo, jhi,     &
-                                     iblk,                   &
                                      tmin,     tmax,         &
                                      aim,      trm,          &
                                      l_stop,                 &
@@ -1435,8 +1433,7 @@
 !
       integer (kind=int_kind), intent(in) ::     &
            nx_block, ny_block,&! block dimensions
-           ilo,ihi,jlo,jhi   ,&! beginning and end of physical domain
-           iblk                ! block index (diagnostic only)
+           ilo,ihi,jlo,jhi     ! beginning and end of physical domain
 
       real (kind=dbl_kind), intent(in),         &
            dimension (nx_block,ny_block) ::     &

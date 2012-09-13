@@ -61,7 +61,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine ocean_mixed_layer (dt)
+      subroutine ocean_mixed_layer (dt, iblk)
 !
 ! !USES:
 !
@@ -76,6 +76,9 @@
 !
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
+
+      integer (kind=int_kind), intent(in) :: &
+         iblk    ! block index
 !
 !EOP
 !
@@ -89,7 +92,6 @@
       integer (kind=int_kind) :: &
          i, j           , & ! horizontal indices
          ij             , & ! combined ij index
-         iblk           , & ! block index
          ilo,ihi,jlo,jhi    ! beginning and end of physical domain
 
       real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
@@ -106,8 +108,6 @@
 
       type (block) :: &
          this_block           ! block information for current block
-
-      do iblk = 1, nblocks
 
       !-----------------------------------------------------------------
       ! Identify ocean cells.
@@ -235,7 +235,6 @@
          if (sst(i,j,iblk) <= Tf(i,j,iblk)) sst(i,j,iblk) = Tf(i,j,iblk)
 
       enddo                     ! ij
-      enddo                     ! iblk
 
       end subroutine ocean_mixed_layer
 

@@ -958,6 +958,163 @@
       end subroutine scale_fluxes
 
 !=======================================================================
+!BOP
+!
+! !ROUTINE: set_sfcflux - set surface fluxes from forcing fields
+!
+! !DESCRIPTION:
+!
+! If model is not calculating surface temperature, set the surface
+! flux values using values read in from forcing data or supplied via
+! coupling (stored in ice_flux).
+!
+! If CICE is running in NEMO environment, convert fluxes from GBM values 
+! to per unit ice area values. If model is not running in NEMO environment, 
+! the forcing is supplied as per unit ice area values.
+!
+! !REVISION HISTORY:
+!
+! authors Alison McLaren, Met Office
+!
+! !INTERFACE:
+!
+      subroutine set_sfcflux (nx_block,  ny_block, &
+                              n,         iblk,     &
+                              icells,              & 
+                              indxi,     indxj,    &
+                              aicen,               &
+                              flatn,               &
+                              fsurfn,              &
+                              fcondtopn)
+!
+! !USES:
+!
+      use ice_fileunits, only: nu_diag
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         n,                  & ! thickness category index
+         iblk,               & ! block index
+         icells                ! number of cells with aicen > puny
+
+      integer (kind=int_kind), dimension(nx_block*ny_block), &
+         intent(in) :: &
+         indxi, indxj    ! compressed indices for cells with aicen > puny
+
+      ! ice state variables
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         aicen           ! concentration of ice
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
+         flatn       , & ! latent heat flux   (W/m^2) 
+         fsurfn      , & ! net flux to top surface, not including fcondtopn
+         fcondtopn       ! downward cond flux at top surface (W m-2)
+
+      integer (kind=int_kind) :: &
+         i, j        , & ! horizontal indices
+         ij              ! horizontal indices, combine i and j loops
+
+      real (kind=dbl_kind)  :: &
+         raicen          ! 1 or 1/aicen
+
+      logical (kind=log_kind) :: &
+         extreme_flag    ! flag for extreme forcing values
+
+      logical (kind=log_kind), parameter :: & 
+         extreme_test=.true. ! test and write out extreme forcing data
+!
+!EOP
+!
+         raicen        = c1
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+#ifdef CICE_IN_NEMO
+!----------------------------------------------------------------------
+! Convert fluxes from GBM values to per ice area values when 
+! running in NEMO environment.  (When in standalone mode, fluxes
+! are input as per ice area.)
+!----------------------------------------------------------------------
+            raicen        = c1 / aicen(i,j)
+#endif
+            fsurfn(i,j)   = fsurfn_f(i,j,n,iblk)*raicen
+            fcondtopn(i,j)= fcondtopn_f(i,j,n,iblk)*raicen
+            flatn(i,j)    = flatn_f(i,j,n,iblk)*raicen
+
+         enddo
+
+!----------------------------------------------------------------
+! Flag up any extreme fluxes
+!---------------------------------------------------------------
+
+         if (extreme_test) then
+            extreme_flag = .false.
+
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)         
+
+               if (fcondtopn(i,j) < -100.0_dbl_kind & 
+                     .or. fcondtopn(i,j) > 20.0_dbl_kind) then
+                  extreme_flag = .true.
+               endif
+
+               if (fsurfn(i,j) < -100.0_dbl_kind & 
+                    .or. fsurfn(i,j) > 80.0_dbl_kind) then
+                  extreme_flag = .true.
+               endif
+
+               if (flatn(i,j) < -20.0_dbl_kind & 
+                     .or. flatn(i,j) > 20.0_dbl_kind) then
+                  extreme_flag = .true.
+               endif
+
+            enddo  ! ij
+
+            if (extreme_flag) then
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)         
+
+                  if (fcondtopn(i,j) < -100.0_dbl_kind & 
+                       .or. fcondtopn(i,j) > 20.0_dbl_kind) then
+                     write(nu_diag,*) & 
+                       'Extreme forcing: -100 > fcondtopn > 20'
+                     write(nu_diag,*) & 
+                       'i,j,n,iblk,aicen,fcondtopn = ', & 
+                       i,j,n,iblk,aicen(i,j),fcondtopn(i,j)
+                  endif
+
+                  if (fsurfn(i,j) < -100.0_dbl_kind & 
+                       .or. fsurfn(i,j) > 80.0_dbl_kind) then
+                     write(nu_diag,*) & 
+                       'Extreme forcing: -100 > fsurfn > 40'
+                     write(nu_diag,*) & 
+                       'i,j,n,iblk,aicen,fsurfn = ', & 
+                        i,j,n,iblk,aicen(i,j),fsurfn(i,j)
+                  endif
+
+                  if (flatn(i,j) < -20.0_dbl_kind & 
+                       .or. flatn(i,j) > 20.0_dbl_kind) then
+                     write(nu_diag,*) & 
+                       'Extreme forcing: -20 > flatn > 20'
+                     write(nu_diag,*) & 
+                       'i,j,n,iblk,aicen,flatn = ', & 
+                        i,j,n,iblk,aicen(i,j),flatn(i,j)
+                  endif
+
+               enddo  ! ij
+      
+            endif  ! extreme_flag
+         endif     ! extreme_test    
+
+      end subroutine set_sfcflux 
+
+!=======================================================================
 
       end module ice_flux
 
