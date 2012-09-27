@@ -130,7 +130,7 @@
       use ice_state
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
       use ice_work, only: work1, work2
-      use ice_therm_vertical, only: calc_Tsfc
+      use ice_therm_shared, only: calc_Tsfc
 
 #if (defined CCSM) || (defined SEQ_MCT)
       use ice_prescribed_mod, only : prescribed_ice

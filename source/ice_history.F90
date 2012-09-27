@@ -579,10 +579,11 @@
 
       ! these must be output at the same frequency because of 
       ! cos(zenith angle) averaging
-      if (f_albice(1:1) /= 'x' .and. f_albice /= f_albsni) f_albice = f_albsni
+      if (f_albice(1:1) /= 'x' .and. f_albsni(1:1) /= 'x') f_albice = f_albsni
       if (f_albsno(1:1) /= 'x') f_albsno = f_albice
       if (f_albpnd(1:1) /= 'x') f_albpnd = f_albice
-      if (f_coszen(1:1) /= 'x') f_coszen = f_albsni
+      if (f_coszen(1:1) /= 'x' .and. f_albice(1:1) /= 'x') f_coszen = f_albice
+      if (f_coszen(1:1) /= 'x' .and. f_albsni(1:1) /= 'x') f_coszen = f_albsni
 
       ! to prevent array-out-of-bounds when aggregating
       if (f_fmeltt_ai(1:1) /= 'x') f_fmelttn_ai = f_fmeltt_ai
@@ -2232,8 +2233,7 @@
               enddo             ! j
 
               ! back out albedo/zenith angle dependence
-              if (avail_hist_fields(n)%vname(1:6) == 'albice' .or. &
-                  avail_hist_fields(n)%vname(1:6) == 'albsni') then
+              if (avail_hist_fields(n)%vname(1:6) == 'albice') then
               do j = jlo, jhi
               do i = ilo, ihi
                  if (tmask(i,j,iblk)) then 
@@ -2249,6 +2249,17 @@
                     if (f_albpnd (1:1) /= 'x' .and. n_albpnd(ns) /= 0) &
                        a2D(i,j,n_albpnd(ns),iblk) = &
                        a2D(i,j,n_albpnd(ns),iblk)*avgct(ns)*ravgctz
+                 endif
+              enddo             ! i
+              enddo             ! j
+              endif
+              if (avail_hist_fields(n)%vname(1:6) == 'albsni') then
+              do j = jlo, jhi
+              do i = ilo, ihi
+                 if (tmask(i,j,iblk)) then 
+                    ravgctz = c0
+                    if (albcnt(i,j,iblk,ns) > puny) &
+                        ravgctz = c1/albcnt(i,j,iblk,ns)
                     if (f_albsni (1:1) /= 'x' .and. n_albsni(ns) /= 0) &
                        a2D(i,j,n_albsni(ns),iblk) = &
                        a2D(i,j,n_albsni(ns),iblk)*avgct(ns)*ravgctz

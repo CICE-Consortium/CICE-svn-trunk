@@ -874,7 +874,7 @@
 !
 ! !USES:
 !
-	use ice_therm_vertical, only: heat_capacity
+	use ice_therm_shared, only: heat_capacity
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1806,7 +1806,7 @@
 !
 ! !USES:
 !
-      use ice_therm_vertical, only: heat_capacity
+      use ice_therm_shared, only: heat_capacity
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
