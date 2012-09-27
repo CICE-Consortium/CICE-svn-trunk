@@ -105,8 +105,9 @@
                                   rfracmin, rfracmax, pndaspect, hs1
       use ice_meltpond_topo, only: restart_pond_topo
       use ice_aerosol, only: restart_aero
-      use ice_therm_vertical, only: calc_Tsfc, heat_capacity, conduct, &
-          ustar_min
+      use ice_therm_shared, only: ktherm, calc_Tsfc, heat_capacity, conduct
+      use ice_therm_vertical, only: ustar_min
+          
       use ice_restoring
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -148,7 +149,7 @@
         kitd,           kdyn,            ndte,                          &
         evp_damping,    yield_curve,     advection,                     &
         kstrength,      krdg_partic,     krdg_redist,   mu_rdg,         &
-        heat_capacity,  conduct,         shortwave,     albedo_type,    &
+        ktherm,         conduct,         shortwave,     albedo_type,    &
         albicev,        albicei,         albsnowv,      albsnowi,       &
         ahmax,          R_ice,           R_pnd,         R_snw,          &
         hs0,            dpscale,         frzpnd,        snowinfil,      &
@@ -226,7 +227,7 @@
       advection  = 'remap'   ! incremental remapping transport scheme
       shortwave = 'default'  ! or 'dEdd' (delta-Eddington)
       albedo_type = 'default'! or 'constant'
-      heat_capacity = .true. ! nonzero heat capacity (F => 0-layer thermo)
+      ktherm = 1             ! 0 = 0-layer, 1 = BL99, 2 = mushy thermo
       conduct = 'bubbly'     ! 'MU71' or 'bubbly' (Pringle et al 2007)
       calc_Tsfc = .true.     ! calculate surface temperature
       Tfrzpt    = 'linear_S' ! ocean freezing temperature, 'constant'=-1.8C
@@ -529,7 +530,7 @@
       call broadcast_scalar(advection,          master_task)
       call broadcast_scalar(shortwave,          master_task)
       call broadcast_scalar(albedo_type,        master_task)
-      call broadcast_scalar(heat_capacity,      master_task)
+      call broadcast_scalar(ktherm,             master_task)
       call broadcast_scalar(conduct,            master_task)
       call broadcast_scalar(R_ice,              master_task)
       call broadcast_scalar(R_pnd,              master_task)
@@ -691,8 +692,7 @@
          write(nu_diag,1000) ' albsnowv                  = ', albsnowv
          write(nu_diag,1000) ' albsnowi                  = ', albsnowi
          write(nu_diag,1000) ' ahmax                     = ', ahmax
-         write(nu_diag,1010) ' heat_capacity             = ', & 
-                               heat_capacity
+         write(nu_diag,1020) ' ktherm                    = ', ktherm
          write(nu_diag,1030) ' conduct                   = ', conduct
          write(nu_diag,1030) ' atmbndy                   = ', &
                                trim(atmbndy)
@@ -877,7 +877,7 @@
       use ice_state
       use ice_itd
       use ice_exit
-      use ice_therm_vertical, only: heat_capacity
+      use ice_therm_shared, only: ktherm, heat_capacity
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -894,7 +894,7 @@
 
       type (block) :: &
          this_block           ! block information for current block
-      
+
       !-----------------------------------------------------------------
       ! Check number of layers in ice and snow.
       !-----------------------------------------------------------------
@@ -1067,7 +1067,7 @@
 !
       use ice_blocks, only: nghost
       use ice_state, only: nt_Tsfc
-      use ice_therm_vertical, only: heat_capacity, calc_Tsfc, Tmlt
+      use ice_therm_shared, only: heat_capacity, calc_Tsfc, Tmlt
       use ice_itd, only: ilyr1, slyr1, hin_max
       use ice_grid, only: grid_type
       use ice_forcing, only: atm_data_type

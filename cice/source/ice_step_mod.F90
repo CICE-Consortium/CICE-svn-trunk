@@ -115,9 +115,6 @@
       type (block) :: &
          this_block      ! block information for current block
 
-      integer (kind=int_kind) :: &
-         istop, jstop    ! indices of grid cell where model aborts 
-
       call ice_timer_start(timer_sw)      ! shortwave
 
          this_block = get_block(blocks_ice(iblk),iblk)         

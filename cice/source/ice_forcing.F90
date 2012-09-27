@@ -2698,7 +2698,7 @@
 !
 ! !USES:
 !
-      use ice_therm_vertical, only: calc_Tsfc 
+      use ice_therm_shared, only: calc_Tsfc 
       use ice_ocean, only: oceanmixed_ice
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -2885,7 +2885,7 @@
       use ice_flux
       use ice_state, only: aice,aicen
       use ice_ocean, only: oceanmixed_ice
-      use ice_therm_vertical, only: calc_Tsfc
+      use ice_therm_shared, only: calc_Tsfc
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

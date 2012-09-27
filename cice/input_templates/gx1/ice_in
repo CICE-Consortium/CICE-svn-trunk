@@ -80,7 +80,7 @@
   , krdg_redist     = 1
   , mu_rdg          = 3
   , advection       = 'remap'
-  , heat_capacity   = .true.
+  , ktherm          = 1
   , conduct         = 'bubbly'
   , shortwave       = 'default'
   , albedo_type     = 'default'
