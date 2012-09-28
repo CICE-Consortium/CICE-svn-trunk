@@ -54,6 +54,9 @@
                          ! if false, Tsfc is computed elsewhere and
                          ! atmos-ice fluxes are provided to CICE
 
+      real (kind=dbl_kind), parameter :: &
+         hfrazilmin = 0.05_dbl_kind ! min thickness of new frazil ice (m)
+
 !=======================================================================
 
       end module ice_therm_shared
