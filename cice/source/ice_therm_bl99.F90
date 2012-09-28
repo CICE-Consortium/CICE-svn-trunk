@@ -23,7 +23,7 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size, only: nilyr, nslyr, ntilyr, ntslyr, max_ntrcr
+      use ice_domain_size, only: nilyr, nslyr, ntilyr, ntslyr, max_ntrcr, n_aero
       use ice_constants
       use ice_fileunits, only: nu_diag
       use ice_therm_shared
@@ -41,6 +41,769 @@
 !=======================================================================
 
       contains
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: set_state_var - initialize single-category state variables
+!
+! !INTERFACE:
+!
+      subroutine set_state_var (nx_block, ny_block, &
+                                ilo, ihi, jlo, jhi, &
+                                iglob,    jglob,    &
+                                ice_ic,   tmask,    &
+                                ULON,     ULAT, &
+                                Tair,     sst,  &
+                                Tf,       &
+                                aicen,    trcrn, &
+                                vicen,    vsnon, &
+                                eicen,    esnon) 
+!
+! !DESCRIPTION:
+!
+! Initialize state in each ice thickness category
+!
+! !REVISION HISTORY:
+!
+! authors: C. M. Bitz
+!          William H. Lipscomb, LANL
+!
+! !USES:
+!
+      use ice_kinds_mod
+      use ice_blocks, only: nghost
+      use ice_domain_size
+      use ice_state, only: nt_Tsfc
+      use ice_itd, only: ilyr1, slyr1, hin_max
+      use ice_grid, only: grid_type
+      use ice_forcing, only: atm_data_type
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         ilo, ihi          , & ! physical domain indices
+         jlo, jhi          , & !
+         iglob(nx_block)   , & ! global indices
+         jglob(ny_block)       !
+
+      character(len=char_len_long), intent(in) :: & 
+         ice_ic      ! method of ice cover initialization
+
+      logical (kind=log_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         tmask      ! true for ice/ocean cells
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         ULON   , & ! latitude of velocity pts (radians)
+         ULAT       ! latitude of velocity pts (radians)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         Tair    , & ! air temperature  (K)
+         Tf      , & ! freezing temperature (C) 
+         sst         ! sea surface temperature (C) 
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
+         intent(out) :: &
+         aicen , & ! concentration of ice
+         vicen , & ! volume per unit area of ice          (m)
+         vsnon     ! volume per unit area of snow         (m)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &
+         intent(out) :: &
+         trcrn     ! ice tracers
+                   ! 1: surface temperature of ice/snow (C)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
+         intent(out) :: &
+         eicen     ! energy of melting for each ice layer  (J/m^2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), &
+         intent(out) :: &
+         esnon     ! energy of melting for each ice layer  (J/m^2)
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+         i, j        , & ! horizontal indices
+         ij          , & ! horizontal index, combines i and j loops
+         k           , & ! ice layer index
+         n           , & ! thickness category index
+         it          , & ! tracer index
+         icells          ! number of cells initialized with ice
+
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
+         indxi, indxj    ! compressed indices for cells with aicen > puny
+
+      real (kind=dbl_kind) :: &
+         slope, Ti, sum, hbar, &
+         ainit(ncat), &
+         hinit(ncat)
+
+      real (kind=dbl_kind), parameter :: &
+         hsno_init = 0.20_dbl_kind   , & ! initial snow thickness (m)
+         edge_init_nh =  70._dbl_kind, & ! initial ice edge, N.Hem. (deg) 
+         edge_init_sh = -60._dbl_kind    ! initial ice edge, S.Hem. (deg)
+
+      indxi(:) = 0
+      indxj(:) = 0
+
+      ! Initialize state variables.
+      ! If restarting, these values are overwritten.
+
+      do n = 1, ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            aicen(i,j,n) = c0
+            vicen(i,j,n) = c0
+            vsnon(i,j,n) = c0
+            trcrn(i,j,nt_Tsfc,n) = Tf(i,j)  ! surface temperature
+            if (max_ntrcr >= 2) then
+               do it = 2, max_ntrcr
+                  trcrn(i,j,it,n) = c0
+               enddo
+            endif
+         enddo
+         enddo
+      enddo
+      eicen(:,:,:) = c0
+      esnon(:,:,:) = c0
+
+      if (trim(ice_ic) == 'default') then
+
+      !-----------------------------------------------------------------
+      ! Place ice where ocean surface is cold.
+      ! Note: If SST is not read from a file, then the ocean is assumed
+      !       to be at its freezing point everywhere, and ice will
+      !       extend to the prescribed edges.
+      !-----------------------------------------------------------------
+
+         if (trim(atm_data_type) == 'box') then
+
+            hbar = c2  ! initial ice thickness
+            do n = 1, ncat
+               hinit(n) = c0
+               ainit(n) = c0
+               if (hbar > hin_max(n-1) .and. hbar < hin_max(n)) then
+                  hinit(n) = hbar
+                  ainit(n) = 0.50 !echmod symm
+               endif
+            enddo
+
+         else
+
+      ! initial category areas in cells with ice
+         hbar = c3  ! initial ice thickness with greatest area
+                    ! Note: the resulting average ice thickness 
+                    ! tends to be less than hbar due to the
+                    ! nonlinear distribution of ice thicknesses 
+         sum = c0
+         do n = 1, ncat
+            if (n < ncat) then
+               hinit(n) = p5*(hin_max(n-1) + hin_max(n)) ! m
+            else                ! n=ncat
+               hinit(n) = (hin_max(n-1) + c1) ! m
+            endif
+            ! parabola, max at h=hbar, zero at h=0, 2*hbar
+            ainit(n) = max(c0, (c2*hbar*hinit(n) - hinit(n)**2))
+            sum = sum + ainit(n)
+         enddo
+         do n = 1, ncat
+            ainit(n) = ainit(n) / (sum + puny/ncat) ! normalize
+         enddo
+
+         endif ! atm_data_type
+
+         if (trim(grid_type) == 'rectangular') then
+
+         ! place ice on left side of domain
+         icells = 0
+         do j = jlo, jhi
+         do i = ilo, ihi
+            if (tmask(i,j)) then
+               if (ULON(i,j) < -50./rad_to_deg) then
+                  icells = icells + 1
+                  indxi(icells) = i
+                  indxj(icells) = j
+               endif            ! ULON
+            endif               ! tmask
+         enddo                  ! i
+         enddo                  ! j
+
+         else
+
+         ! place ice at high latitudes where ocean sfc is cold
+         icells = 0
+         do j = jlo, jhi
+         do i = ilo, ihi
+            if (tmask(i,j)) then
+               ! place ice in high latitudes where ocean sfc is cold
+               if ( (sst (i,j) <= Tf(i,j)+p2) .and. &
+                    (ULAT(i,j) < edge_init_sh/rad_to_deg .or. &
+                     ULAT(i,j) > edge_init_nh/rad_to_deg) ) then
+                  icells = icells + 1
+                  indxi(icells) = i
+                  indxj(icells) = j
+               endif            ! cold surface
+            endif               ! tmask
+         enddo                  ! i
+         enddo                  ! j
+
+         endif                  ! rectgrid
+
+         do n = 1, ncat
+
+            ! ice volume, snow volume
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+
+               aicen(i,j,n) = ainit(n)
+
+               if (trim(atm_data_type) == 'box') then
+                  if (hinit(n) > c0) then
+!                  ! constant slope from 0 to 1 in x direction
+!                     aicen(i,j,n) = (real(iglob(i), kind=dbl_kind)-p5) &
+!                                  / (real(nx_global,kind=dbl_kind))
+!                  ! constant slope from 0 to 0.5 in x direction
+!                     aicen(i,j,n) = (real(iglob(i), kind=dbl_kind)-p5) &
+!                                  / (real(nx_global,kind=dbl_kind)) * p5
+                  ! quadratic
+!                     aicen(i,j,n) = max(c0,(real(iglob(i), kind=dbl_kind)-p5) &
+!                                         / (real(nx_global,kind=dbl_kind)) &
+!                                         * (real(jglob(j), kind=dbl_kind)-p5) &
+!                                         / (real(ny_global,kind=dbl_kind)) * p5)
+                     aicen(i,j,n) = max(c0,(real(nx_global, kind=dbl_kind) &
+                                         -  real(iglob(i), kind=dbl_kind)-p5) &
+                                         / (real(nx_global,kind=dbl_kind)) &
+                                         * (real(ny_global, kind=dbl_kind) &
+                                         -  real(jglob(j), kind=dbl_kind)-p5) &
+                                         / (real(ny_global,kind=dbl_kind)) * p5)
+                  endif
+                  vicen(i,j,n) = hinit(n) * aicen(i,j,n) ! m
+               else
+                  vicen(i,j,n) = hinit(n) * ainit(n) ! m
+               endif
+               vsnon(i,j,n) =min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
+            enddo               ! ij
+
+            ! surface temperature
+            if (calc_Tsfc) then
+        
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) !deg C
+               enddo
+
+            else    ! Tsfc is not calculated by the ice model
+
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  trcrn(i,j,nt_Tsfc,n) = Tf(i,j)   ! not used
+               enddo
+
+            endif       ! calc_Tsfc
+
+            ! other tracers (none at present)
+
+            if (heat_capacity) then
+
+               ! ice energy
+               do k = 1, nilyr
+                  do ij = 1, icells
+                     i = indxi(ij)
+                     j = indxj(ij)
+
+                     ! assume linear temp profile and compute enthalpy
+                     slope = Tf(i,j) - trcrn(i,j,nt_Tsfc,n)
+                     Ti = trcrn(i,j,nt_Tsfc,n) &
+                        + slope*(real(k,kind=dbl_kind)-p5) &
+                                /real(nilyr,kind=dbl_kind)
+
+                     eicen(i,j,ilyr1(n)+k-1) = &
+                          -(rhoi * (cp_ice*(Tmlt(k)-Ti) &
+                          + Lfresh*(c1-Tmlt(k)/Ti) - cp_ocn*Tmlt(k))) &
+                          * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+                  enddo            ! ij
+               enddo               ! nilyr
+
+               ! snow energy
+               do k = 1, nslyr
+                  do ij = 1, icells
+                     i = indxi(ij)
+                     j = indxj(ij)
+
+                     Ti = min(c0, trcrn(i,j,nt_Tsfc,n))
+                     esnon(i,j,slyr1(n)+k-1) = -rhos*(Lfresh - cp_ice*Ti) &
+                                               *vsnon(i,j,n) &
+                                               /real(nslyr,kind=dbl_kind)
+                  enddo            ! ij
+               enddo               ! nslyr
+
+            else  ! one layer with zero heat capacity
+
+               ! ice energy
+               k = 1
+
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  eicen(i,j,ilyr1(n)+k-1) = &
+                          - rhoi * Lfresh * vicen(i,j,n)
+               enddo            ! ij
+
+               ! snow energy
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  esnon(i,j,slyr1(n)+k-1) = & 
+                          - rhos * Lfresh * vsnon(i,j,n)
+               enddo            ! ij
+
+            endif               ! heat_capacity
+         enddo                  ! ncat
+      endif                     ! ice_ic
+
+      end subroutine set_state_var
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: add_new_ice - add frazil ice to ice thickness distribution
+!
+! !DESCRIPTION:
+!
+! Given the volume of new ice grown in open water, compute its area
+! and thickness and add it to the appropriate category or categories.
+!
+! NOTE: Usually all the new ice is added to category 1.  An exception is
+!       made if there is no open water or if the new ice is too thick
+!       for category 1, in which case ice is distributed evenly over the
+!       entire cell.  Subroutine rebin should be called in case the ice
+!       thickness lies outside category bounds after new ice formation.
+!
+! !REVISION HISTORY:
+!
+! authors William H. Lipscomb, LANL
+!         Elizabeth C. Hunke, LANL
+!
+! !INTERFACE:
+!
+      subroutine add_new_ice (nx_block,  ny_block,   &
+                              ntrcr,     icells,     &
+                              indxi,     indxj,      &
+                              tmask,     dt,         &
+                              aicen,     trcrn,      &
+                              vicen,     eicen,      &
+                              aice0,     aice,       &
+                              frzmlt,    frazil,     &
+                              frz_onset, yday,       &
+                              fresh,     fsalt,      &
+                              Tf,        l_stop,     &
+                              istop,     jstop)
+!
+! !USES:
+!
+      use ice_itd, only: hin_max, ilyr1, column_sum, &
+                         column_conservation_check
+      use ice_state, only: nt_Tsfc, nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_aero, &
+                           nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
+                           tr_iage, tr_FY, tr_lvl, tr_aero
+      use ice_flux, only: update_ocn_f
+
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         ntrcr             , & ! number of tracers in use
+         icells                ! number of ice/ocean grid cells
+
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi,  indxj          ! compressed i/j indices
+
+      logical (kind=log_kind), dimension (nx_block,ny_block), &
+          intent(in) :: &
+         tmask     ! land/boundary mask, thickness (T-cell)
+
+      real (kind=dbl_kind), intent(in) :: &
+         dt        ! time step (s)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         aice  , & ! total concentration of ice
+         frzmlt, & ! freezing/melting potential (W/m^2)
+         Tf        ! freezing temperature (C)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
+         intent(inout) :: &
+         aicen , & ! concentration of ice
+         vicen     ! volume per unit area of ice          (m)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
+         intent(inout) :: &
+         trcrn     ! ice tracers
+                   ! 1: surface temperature
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
+         intent(inout) :: &
+         eicen     ! energy of melting for each ice layer (J/m^2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout) :: &
+         aice0     , & ! concentration of open water
+         frazil    , & ! frazil ice growth        (m/step-->cm/day)
+         fresh     , & ! fresh water flux to ocean (kg/m^2/s)
+         fsalt         ! salt flux to ocean (kg/m^2/s)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout), optional :: &
+         frz_onset ! day of year that freezing begins (congel or frazil)
+
+      real (kind=dbl_kind), intent(in), optional :: &
+         yday      ! day of year
+
+      logical (kind=log_kind), intent(out) :: &
+         l_stop    ! if true, abort on return
+
+      integer (kind=int_kind), intent(out) :: &
+         istop, jstop    ! indices of grid cell where model aborts
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+         i, j         , & ! horizontal indices
+         n            , & ! ice category index
+         k            , & ! ice layer index
+         it               ! aerosol tracer index
+
+      real (kind=dbl_kind), dimension (icells) :: &
+         ai0new       , & ! area of new ice added to cat 1
+         vi0new       , & ! volume of new ice added to cat 1
+         hsurp        , & ! thickness of new ice added to each cat
+         vlyr             ! ice layer volume
+
+      real (kind=dbl_kind), dimension (icells) :: &
+         vice_init, vice_final  ! ice volume summed over categories
+
+      real (kind=dbl_kind) :: &
+         fnew         , & ! heat flx to open water for new ice (W/m^2)
+         hi0new       , & ! thickness of new ice
+         hi0max       , & ! max allowed thickness of new ice
+         qi0(nilyr)   , & ! frazil ice enthalpy
+         qi0av        , & ! mean value of qi0 for new ice (J kg-1)
+         vsurp        , & ! volume of new ice added to each cat
+         vtmp         , & ! total volume of new and old ice
+         area1        , & ! starting fractional area of existing ice
+         vice1        , & ! starting volume of existing ice
+         alvl         , & ! starting level ice area
+         rnilyr       , & ! real(nilyr)
+         dfresh       , & ! change in fresh
+         dfsalt           ! change in fsalt
+
+      integer (kind=int_kind) :: &
+         jcells, kcells     , & ! grid cell counters
+         ij, m                  ! combined i/j horizontal indices
+
+      integer (kind=int_kind), dimension (icells) :: &
+         indxij2,  indxij3  , & ! compressed i/j indices
+         indxi2, indxj2     , &
+         indxi3, indxj3
+
+      character (len=char_len) :: &
+         fieldid           ! field identifier
+
+      l_stop = .false.
+      istop = 0
+      jstop = 0
+
+      jcells = 0
+      kcells = 0
+
+      if (ncat > 1) then
+         hi0max = hin_max(1)*0.9_dbl_kind  ! not too close to boundary
+      else
+         hi0max = bignum                   ! big number
+      endif
+
+      ! initial ice volume in each grid cell
+      call column_sum (nx_block, ny_block,       &
+                       icells,   indxi,   indxj, &
+                       ncat,                     &
+                       vicen,    vice_init)
+
+      !-----------------------------------------------------------------
+      ! Compute average enthalpy of new ice.
+      !
+      ! POP assumes new ice is fresh.  Otherwise, it would be better
+      ! to do something like this:
+      !  qi0(i,j,k) = -rhoi * (cp_ice*(Tmlt(k)-Tf(i,j))
+      !             + Lfresh*(1.-Tmlt(k)/Tf(i,j)) - cp_ocn*Tmlt(k))
+      !-----------------------------------------------------------------
+
+      rnilyr = real(nilyr,kind=dbl_kind)
+      qi0av = c0
+      do k = 1, nilyr
+         qi0(k) = -rhoi*Lfresh  ! note sign convention, qi < 0
+         qi0av  = qi0av + qi0(k)
+      enddo
+      qi0av = qi0av/rnilyr
+
+      !-----------------------------------------------------------------
+      ! Compute the volume, area, and thickness of new ice.
+      !-----------------------------------------------------------------
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+
+         fnew = max (frzmlt(i,j), c0)   ! fnew > 0 iff frzmlt > 0
+         vi0new(ij) = -fnew*dt / qi0av ! note sign convention, qi < 0
+
+         ! increment ice volume
+         vice_init(ij) = vice_init(ij) + vi0new(ij)
+
+         ! history diagnostics
+         frazil(i,j) = vi0new(ij)
+
+         if (present(frz_onset) .and. present(yday)) then
+            if (frazil(i,j) > puny .and. frz_onset(i,j) < puny) &
+                 frz_onset(i,j) = yday
+         endif
+
+      !-----------------------------------------------------------------
+      ! Update fresh water and salt fluxes.
+      !
+      ! NOTE: POP assumes fresh water and salt flux due to frzmlt > 0
+      !       is NOT included in fluxes fresh and fsalt.
+      !-----------------------------------------------------------------
+
+         if (update_ocn_f) then
+            dfresh = -rhoi*vi0new(ij)/dt 
+            dfsalt = ice_ref_salinity*p001*dfresh
+
+            fresh(i,j)      = fresh(i,j)      + dfresh
+            fsalt(i,j)      = fsalt(i,j)      + dfsalt
+         endif
+
+      !-----------------------------------------------------------------
+      ! Decide how to distribute the new ice.
+      !-----------------------------------------------------------------
+
+         hsurp(ij)  = c0
+         ai0new(ij) = c0
+
+         if (vi0new(ij) > c0) then
+
+            ! new ice area and thickness
+            ! hin_max(0) < new ice thickness < hin_max(1)
+            if (aice0(i,j) > puny) then
+               hi0new = max(vi0new(ij)/aice0(i,j), hfrazilmin)
+               if (hi0new > hi0max .and. aice0(i,j)+puny < c1) then
+                  ! distribute excess volume over all categories (below)
+                  hi0new = hi0max
+                  ai0new(ij) = aice0(i,j)
+                  vsurp       = vi0new(ij) - ai0new(ij)*hi0new
+                  hsurp(ij)  = vsurp / aice(i,j)
+                  vi0new(ij) = ai0new(ij)*hi0new
+               else
+                  ! put ice in a single category, with hsurp = 0
+                  ai0new(ij) = vi0new(ij)/hi0new
+               endif
+            else                ! aice0 < puny
+               hsurp(ij) = vi0new(ij)/aice(i,j) ! new thickness in each cat
+               vi0new(ij) = c0
+            endif               ! aice0 > puny
+         endif                  ! vi0new > puny
+
+      !-----------------------------------------------------------------
+      ! Identify grid cells receiving new ice.
+      !-----------------------------------------------------------------
+
+         i = indxi(ij)
+         j = indxj(ij)
+
+         if (vi0new(ij) > c0) then  ! add ice to category 1
+            jcells = jcells + 1
+            indxi2(jcells) = i
+            indxj2(jcells) = j
+            indxij2(jcells) = ij
+         endif
+
+         if (hsurp(ij) > c0) then   ! add ice to all categories
+            kcells = kcells + 1
+            indxi3(kcells) = i
+            indxj3(kcells) = j
+            indxij3(kcells) = ij
+         endif
+
+      enddo                     ! ij
+
+      !-----------------------------------------------------------------
+      ! Distribute excess ice volume among ice categories by increasing
+      ! ice thickness, leaving ice area unchanged.
+      !
+      ! NOTE: If new ice contains globally conserved tracers
+      !       (e.g., isotopes from seawater), code must be added here.
+      !-----------------------------------------------------------------
+
+      do n = 1, ncat
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, kcells
+            i = indxi3(ij)
+            j = indxj3(ij)
+            m = indxij3(ij)
+
+            vsurp = hsurp(m) * aicen(i,j,n)
+
+            ! update ice age due to freezing (new ice age = dt)
+            vtmp = vicen(i,j,n) + vsurp
+            if (tr_iage .and. vtmp > puny) &
+                trcrn(i,j,nt_iage,n) = &
+               (trcrn(i,j,nt_iage,n)*vicen(i,j,n) + dt*vsurp) / vtmp
+
+            if (tr_lvl .and. vicen(i,j,n) > puny) then
+                trcrn(i,j,nt_vlvl,n) = &
+               (trcrn(i,j,nt_vlvl,n)*vicen(i,j,n) + &
+                trcrn(i,j,nt_alvl,n)*vsurp) / vtmp
+            endif
+
+            if (tr_aero) then
+               do it = 1, n_aero
+                  trcrn(i,j,nt_aero+2+4*(it-1),n) = &
+                  trcrn(i,j,nt_aero+2+4*(it-1),n)*vicen(i,j,n) / vtmp
+                  trcrn(i,j,nt_aero+3+4*(it-1),n) = &
+                  trcrn(i,j,nt_aero+3+4*(it-1),n)*vicen(i,j,n) / vtmp
+               enddo
+            endif
+
+            ! update category volumes
+            vicen(i,j,n) = vtmp
+            vlyr(m) = vsurp/rnilyr
+
+         enddo                  ! ij
+
+         do k = 1, nilyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, kcells
+               i = indxi3(ij)
+               j = indxj3(ij)
+               m = indxij3(ij)
+
+               eicen(i,j,ilyr1(n)+k-1) = &
+                    eicen(i,j,ilyr1(n)+k-1) + qi0(k)*vlyr(m)
+            enddo               ! ij
+         enddo                  ! k
+
+      enddo                     ! n
+
+      !-----------------------------------------------------------------
+      ! Combine new ice grown in open water with category 1 ice.
+      ! Assume that vsnon and esnon are unchanged.
+      !-----------------------------------------------------------------
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      do ij = 1, jcells
+         i = indxi2(ij)
+         j = indxj2(ij)
+         m = indxij2(ij)
+
+         area1 = aicen(i,j,1)   ! save
+         vice1 = vicen(i,j,1)   ! save
+         aicen(i,j,1) = aicen(i,j,1) + ai0new(m)
+         aice0(i,j)   = aice0(i,j)   - ai0new(m)
+         vicen(i,j,1) = vicen(i,j,1) + vi0new(m)
+
+         trcrn(i,j,nt_Tsfc,1) = &
+            (trcrn(i,j,nt_Tsfc,1)*area1 + Tf(i,j)*ai0new(m))/aicen(i,j,1)
+         trcrn(i,j,nt_Tsfc,1) = min (trcrn(i,j,nt_Tsfc,1), c0)
+
+         if (tr_FY) then
+            trcrn(i,j,nt_FY,1) = &
+           (trcrn(i,j,nt_FY,1)*area1 + ai0new(m))/aicen(i,j,1)
+            trcrn(i,j,nt_FY,1) = min(trcrn(i,j,nt_FY,1), c1)
+         endif
+
+         if (vicen(i,j,1) > puny) then
+            if (tr_iage) &
+               trcrn(i,j,nt_iage,1) = &
+              (trcrn(i,j,nt_iage,1)*vice1 + dt*vi0new(m))/vicen(i,j,1)
+
+            if (tr_aero) then
+               do it = 1, n_aero
+                  trcrn(i,j,nt_aero+2+4*(it-1),1) = &
+                  trcrn(i,j,nt_aero+2+4*(it-1),1)*vice1/vicen(i,j,1)
+                  trcrn(i,j,nt_aero+3+4*(it-1),1) = &
+                  trcrn(i,j,nt_aero+3+4*(it-1),1)*vice1/vicen(i,j,1)
+               enddo
+            endif
+
+            if (tr_lvl) then
+                alvl = trcrn(i,j,nt_alvl,1) !echmod
+                trcrn(i,j,nt_alvl,1) = &
+               (trcrn(i,j,nt_alvl,1)*area1 + ai0new(m))/aicen(i,j,1)
+                trcrn(i,j,nt_vlvl,1) = &
+               (trcrn(i,j,nt_vlvl,1)*vice1 + vi0new(m))/vicen(i,j,1)
+            endif
+
+            if (tr_pond_cesm .or. tr_pond_topo) then
+               trcrn(i,j,nt_apnd,1) = &
+               trcrn(i,j,nt_apnd,1)*area1/aicen(i,j,1)
+            elseif (tr_pond_lvl) then
+               if (trcrn(i,j,nt_alvl,1) > puny) then
+                  trcrn(i,j,nt_apnd,1) = &
+                  trcrn(i,j,nt_apnd,1) * alvl*area1 &
+                                       / (trcrn(i,j,nt_alvl,1)*aicen(i,j,1))
+               endif
+            endif
+         endif
+
+         vlyr(m)    = vi0new(m) / rnilyr
+      enddo                     ! ij
+
+      do k = 1, nilyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, jcells
+            i = indxi2(ij)
+            j = indxj2(ij)
+            m = indxij2(ij)
+            eicen(i,j,k) = eicen(i,j,k) + qi0(k)*vlyr(m)
+         enddo
+      enddo
+
+      call column_sum (nx_block, ny_block,       &
+                       icells,   indxi,   indxj, &
+                       ncat,                     &
+                       vicen,    vice_final)
+
+      fieldid = 'vice, add_new_ice'
+      call column_conservation_check (nx_block,  ny_block,      &
+                                      icells,   indxi,   indxj, &
+                                      fieldid,                  &
+                                      vice_init, vice_final,    &
+                                      puny,      l_stop,        &
+                                      istop,     jstop)
+      if (l_stop) return
+
+      end subroutine add_new_ice
 
 !=======================================================================
 !BOP
