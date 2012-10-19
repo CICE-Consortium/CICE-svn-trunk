@@ -3333,9 +3333,6 @@
 
       enddo  ! iblk
 
-      ! Save record number
-      oldrecnum = recnum
-
          if (dbug) then
            if (my_task == master_task) write (nu_diag,*) 'LY_bulk_data'
            vmin = global_minval(fsw,distrb_info,tmask)

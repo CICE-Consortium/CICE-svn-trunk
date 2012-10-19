@@ -72,7 +72,6 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_blocks, only: nghost
       use ice_domain_size
       use ice_state, only: nt_Tsfc
       use ice_itd, only: ilyr1, slyr1, hin_max
