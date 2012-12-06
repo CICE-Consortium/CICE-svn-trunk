@@ -1972,7 +1972,6 @@
                      m = indxij(ij)
                      atrcrn(m,it,nr) = atrcrn(m,it,nr) &
                         + fvol(ij)*vsrdgn(ij)*fsnowrdg*trcrn(i,j,it,n)
-
                   enddo
                endif            ! trcr_depend
             enddo               ! ntrcr
