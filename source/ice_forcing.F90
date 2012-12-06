@@ -35,7 +35,7 @@
       use ice_constants
       use ice_calendar, only: istep, istep1, time, time_forc, year_init, &
                               sec, mday, month, nyr, yday, daycal, dayyr, &
-                              daymo, days_per_year
+                              daymo, days_per_year, istep0
       use ice_fileunits
       use ice_atmo, only: calc_strair
       use ice_exit
@@ -68,6 +68,9 @@
            rain_file, &
             sst_file, &
             sss_file, &
+            qdp_file, &
+           uwat_file, &
+           vwat_file, &
            pslv_file, &
          sublim_file, &
            snow_file  
@@ -82,6 +85,9 @@
 
       integer (kind=int_kind) :: &
            oldrecnum = 0  , & ! old record number (save between steps)
+           oldrecnum_6hr =  0 , & ! old record number (save between steps)
+           oldrecnum_12hr = 0 , & ! old record number (save between steps)
+           oldrecnum_24hr = 0 , & ! old record number (save between steps)
            oldrecslot = 1     ! old record slot (save between steps)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
@@ -104,6 +110,7 @@
             flw_data, &
             sst_data, &
             sss_data, & 
+            qdp_data, &
            uocn_data, &
            vocn_data, &
          sublim_data, &
@@ -122,6 +129,8 @@
          sss_data_type, & ! 'default', 'clim', or 'ncar'
          sst_data_type, & ! 'default', 'clim', 'ncar', 
                           !     'hadgem_sst' or 'hadgem_sst_uvocn'
+         qdp_data_type, & ! 'default', 'clim'
+         uwat_data_type, & ! 'default', 'clim'
          precip_units     ! 'mm_per_month', 'mm_per_sec', 'mks'
  
       character(char_len_long) :: & 
@@ -208,6 +217,10 @@
          call hadgem_files(fyear)
       elseif (trim(atm_data_type) == 'monthly') then
          call monthly_files(fyear)
+      elseif (trim(atm_data_type) == 'cpom') then
+         call cpom_files(fyear)
+      elseif (trim(atm_data_type) == 'dfs') then
+         call dfs_files(fyear)
       endif
 
       end subroutine init_forcing_atmo
@@ -239,7 +252,7 @@
 ! !USES:
 !
       use ice_domain, only: nblocks
-      use ice_flux, only: sss, sst, Tf, Tfrzpt
+      use ice_flux, only: sss, sst, qdp, uocn, vocn, Tf, Tfrzpt
       use ice_work, only:  work1
       use ice_read_write
 !
@@ -271,8 +284,9 @@
       if (trim(sss_data_type) == 'clim') then
 
 !         sss_file = trim(ocn_data_dir)//'sss_Lev.mm'
-            sss_file = trim(ocn_data_dir)//'sss.mm.100x116.da' ! gx3 only
+!            sss_file = trim(ocn_data_dir)//'sss.mm.100x116.da' ! gx3 only
 !!!         sss_file = trim(ocn_data_dir)//'sss_12.r'
+             sss_file = trim(ocn_data_dir)//'sss_phc_clim'
 
          if (my_task == master_task) then
             write (nu_diag,*) ' '
@@ -317,6 +331,76 @@
       endif                     ! sss_data_type
 
     !-------------------------------------------------------------------
+    ! Deep Ocean Heat Flux (qdp)
+    ! initialize to annual climatology created from monthly data
+    !-------------------------------------------------------------------
+
+      if (trim(qdp_data_type) == 'clim') then
+
+                   qdp_file = trim(ocn_data_dir)//'qdp_phc_clim'
+
+         if (my_task == master_task) then
+            write (nu_diag,*) ' '
+            write (nu_diag,*) 'qdp climatology computed from:'
+            write (nu_diag,*) trim(qdp_file)
+         endif
+
+         if (my_task == master_task) &
+              call ice_open (nu_forcing, qdp_file, nbits)
+
+         call ice_read (nu_forcing, month, qdp, 'rda8', dbug, &
+                        field_loc_center, field_type_scalar)
+
+         ! close file
+         if (my_task == master_task) close(nu_forcing)
+
+      endif                     ! sss_data_type
+
+    !-------------------------------------------------------------------
+    ! Ocean Current
+    ! initialize to annual climatology created from monthly data
+    !-------------------------------------------------------------------
+
+      if (trim(uwat_data_type) == 'clim') then
+
+                   uwat_file = trim(ocn_data_dir)//'uwat_phc_clim'
+
+         if (my_task == master_task) then
+            write (nu_diag,*) ' '
+            write (nu_diag,*) 'uwat climatology computed from:'
+            write (nu_diag,*) trim(uwat_file)
+         endif
+
+         if (my_task == master_task) &
+              call ice_open (nu_forcing, uwat_file, nbits)
+
+         call ice_read (nu_forcing, month, uocn, 'rda8', dbug, &
+                        field_loc_center, field_type_scalar)
+
+         ! close file
+         if (my_task == master_task) close(nu_forcing)
+                   vwat_file = trim(ocn_data_dir)//'vwat_phc_clim'
+
+         if (my_task == master_task) then
+            write (nu_diag,*) ' '
+            write (nu_diag,*) 'vwat climatology computed from:'
+            write (nu_diag,*) trim(vwat_file)
+         endif
+
+         if (my_task == master_task) &
+              call ice_open (nu_forcing, uwat_file, nbits)
+
+         call ice_read (nu_forcing, month, vocn, 'rda8', dbug, &
+                        field_loc_center, field_type_scalar)
+
+         ! close file
+         if (my_task == master_task) close(nu_forcing)
+
+
+      endif                     ! uwat_data_type
+
+
+    !-------------------------------------------------------------------
     ! Sea surface temperature (SST)
     ! initialize to data for current month
     !-------------------------------------------------------------------
@@ -335,7 +419,8 @@
             sst_file = trim(ocn_data_dir)//'sst_clim_hurrell.dat'
          else                   ! gx3
 !            sst_file = trim(ocn_data_dir)//'sst_Lev.mm'
-            sst_file = trim(ocn_data_dir)//'sst.mm.100x116.da'
+!            sst_file = trim(ocn_data_dir)//'sst.mm.100x116.da'
+                 sst_file = trim(ocn_data_dir)//'sst_phc_clim'
 !!!            sst_file = trim(ocn_data_dir)//'sst_12.r'
          endif
 
@@ -465,6 +550,10 @@
          call rct_data
       elseif (trim(atm_data_type) == 'monthly') then
          call monthly_data
+      elseif (trim(atm_data_type) == 'cpom') then
+         call cpom_data
+      elseif (trim(atm_data_type) == 'dfs') then
+         call dfs_data
       else    ! default values set in init_flux
          return
       endif
@@ -849,7 +938,8 @@
                  (fid, nrec, fieldname, field_data(:,:,arg,:), dbug, &
                   field_loc, field_type)
 
-            if (ixx==1) call ice_close_nc(fid)
+!            if (ixx==1) call ice_close_nc(fid)
+            call ice_close_nc(fid)
          endif                  ! ixm ne 99
 
          ! always read ixx data from data file for current year
@@ -1314,16 +1404,59 @@
 
       character (char_len_long) :: tmpname
 
-      integer (kind=int_kind) :: i
+      integer (kind=int_kind) :: i, i1, i2, i3, i4, i5, i6, yr_in
 
       if (trim(atm_data_type) == 'ecmwf') then ! NPS/ECMWF naming convention
          i = index(data_file,'.r') - 5
          tmpname = data_file
          write(data_file,'(a,i4.4,a)') tmpname(1:i), yr, '.r'
+      elseif (trim(atm_data_type) == 'dfs') then ! DFS
+         i = index(data_file,'.nc') - 5
+         tmpname = data_file
+         write(data_file,'(a,i4.4,a)') tmpname(1:i), yr, '.nc'
       elseif (trim(atm_data_type) == 'hadgem') then ! netcdf
          i = index(data_file,'.nc') - 5
          tmpname = data_file
          write(data_file,'(a,i4.4,a)') tmpname(1:i), yr, '.nc'
+      else if (trim(atm_data_type) == 'cpom') then ! CPOM ucl grid names
+
+         ! spin up uses 1980 data repeated
+         yr_in = max(yr, 1980_int_kind)
+
+         i1 = index(data_file,'_6h.fr')
+         i2 = index(data_file,'_12h.fr')
+         i3 = index(data_file,'_24h.fr')
+         i4 = index(data_file,'poles_qa_')
+         i5 = index(data_file,'poles_2t_')
+         i6 = index(data_file,'_24h_pm.fr')
+
+         ! poles Qa data stops at 1998
+         if (i4 .ne. 0 .or. i5 .ne. 0) then
+            yr_in = min(yr_in, 1998_int_kind)
+         endif
+
+         if (i1 .ne. 0 .and. i2 .eq. 0 .and. i3 .eq. 0) then  ! 6hr file
+            tmpname = data_file
+            write(data_file,'(a,i4.4,a)') &
+                 tmpname(1:i1-5), yr_in, '_6h.fr'
+
+         else if (i1 .eq. 0 .and. i2 .ne. 0 .and. i3 .eq. 0) then  ! 12hr file
+            tmpname = data_file
+            write(data_file,'(a,i4.4,a)') &
+                 tmpname(1:i2-5), yr_in, '_12h.fr'
+
+         else if (i1 .eq. 0 .and. i2 .eq. 0 .and. i3 .ne. 0) then  ! 24hr file
+            tmpname = data_file
+            write(data_file,'(a,i4.4,a)') &
+                 tmpname(1:i3-5), yr_in, '_24h.fr'
+
+         else if (i5 .ne. 0 .and. i6 .ne. 0) then  ! 24hr poles t file
+
+            tmpname = data_file
+            write(data_file,'(a,i4.4,a)') &
+                 tmpname(1:i6-5), yr_in, '_24h_pm.fr'
+
+        endif
       else                                     ! LANL/NCAR naming convention
          i = index(data_file,'.dat') - 5
          tmpname = data_file
@@ -1581,6 +1714,8 @@
 
             wind(i,j) = sqrt(uatm(i,j)**2 + vatm(i,j)**2)
 
+           if (trim(atm_data_type) /= 'dfs') then
+
       !-----------------------------------------------------------------
       ! Rotate zonal/meridional vectors to local coordinates.
       ! Velocity comes in on T grid, but is oriented geographically ---
@@ -1598,6 +1733,8 @@
                       + worky*sin(ANGLET(i,j))   ! note uatm, vatm, wind
            vatm (i,j) = worky*cos(ANGLET(i,j)) & !  are on the T-grid here
                       - workx*sin(ANGLET(i,j))
+   
+           endif ! not dfs
 
         enddo                     ! i
         enddo                     ! j
@@ -2583,6 +2720,633 @@
 
       end subroutine LY_data
 
+
+!=======================================================================
+! DFS netcdf atmospheric forcing
+!=======================================================================
+!BOP
+!
+! !IROUTINE: dfs_files - construct filenames for dfs atmospheric data
+!
+! !INTERFACE:
+!
+      subroutine dfs_files (yr)
+!
+! !DESCRIPTION:
+!
+! Construct filenames based on naming conventions used by Wieslaw Maslowski
+!  for reading (mostly) ECMWF atmospheric data.
+! Edit for other directory structures or filenames.
+! Note: The year number in these filenames does not matter, because
+!       subroutine file\_year will insert the correct year.
+!
+!
+! !REVISION HISTORY:
+!
+! authors: Adrian Turner, UCL
+!
+! !USES:
+!
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+           yr                   ! current forcing year
+!
+!EOP
+!
+      fsw_file = &
+           trim(atm_data_dir)//'qsw_y2000.nc'
+      call file_year(fsw_file,yr)
+
+
+      flw_file = &
+           trim(atm_data_dir)//'qlw_y2000.nc'
+      call file_year(flw_file,yr)
+
+      rain_file = &
+           trim(atm_data_dir)//'precip_y2000.nc'
+      call file_year(rain_file,yr)
+
+      snow_file = &
+           trim(atm_data_dir)//'snow_y2000.nc'
+      call file_year(snow_file,yr)
+
+      uwind_file = &
+           trim(atm_data_dir)//'u10_y2000.nc'
+      call file_year(uwind_file,yr)
+
+      vwind_file = &
+           trim(atm_data_dir)//'v10_y2000.nc'
+      call file_year(vwind_file,yr)
+
+      tair_file = &
+           trim(atm_data_dir)//'t2_y2000.nc'
+      call file_year(tair_file,yr)
+
+      humid_file = &
+           trim(atm_data_dir)//'q2_y2000.nc'
+      call file_year(humid_file,yr)
+
+      if (my_task == master_task) then
+         write (nu_diag,*) ' '
+         write (nu_diag,*) 'Forcing data year = ', fyear
+         write (nu_diag,*) 'Atmospheric data files:'
+         write (nu_diag,*) trim(fsw_file)
+         write (nu_diag,*) trim(flw_file)
+         write (nu_diag,*) trim(rain_file)
+         write (nu_diag,*) trim(snow_file)
+         write (nu_diag,*) trim(uwind_file)
+         write (nu_diag,*) trim(vwind_file)
+         write (nu_diag,*) trim(tair_file)
+         write (nu_diag,*) trim(humid_file)
+      endif                     ! master_task
+
+      end subroutine dfs_files
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: dfs_data - read DFS atmospheric data
+!
+! !INTERFACE:
+!
+      subroutine dfs_data
+!
+! !DESCRIPTION:
+!
+! Read DFS atmospheric data.
+!
+! !REVISION HISTORY:
+!
+! authors: Adrian Turner, UCL
+!
+! !USES:
+!
+      use ice_flux
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+          ixm,ixx,ixp , & ! record numbers for neighboring months
+          recnum      , & ! record number
+          maxrec      , & ! maximum record number
+          recslot     , & ! spline slot for current record
+          dataloc     , & ! = 1 for data located in middle of time interval
+                          ! = 2 for date located at end of time interval
+          midmonth        ! middle day of month
+
+      logical (kind=log_kind) :: read6, readd, readm
+
+      real (kind=dbl_kind) :: &
+          sec6hr              ! number of seconds in 6 hours
+
+      character (char_len) :: &
+            fieldname    ! field name in netcdf file
+
+    !-------------------------------------------------------------------
+    ! 6-hourly data
+    !
+    ! Assume that the 6-hourly value is located at the end of the
+    !  6-hour period.  This is the convention for NCEP reanalysis data.
+    !  E.g. record 1 gives conditions at 6 am GMT on 1 January.
+    !-------------------------------------------------------------------
+
+      dataloc = 2               ! data located at end of interval
+      sec6hr = secday/c4        ! seconds in 6 hours
+      maxrec = 1460             ! 365*4
+
+      ! current record number
+      recnum = 4*int(yday) - 3 + int(real(sec,kind=dbl_kind)/sec6hr)
+
+      ! Compute record numbers for surrounding data
+
+      ixm = mod(recnum+maxrec-2,maxrec) + 1
+      ixx = mod(recnum-1,       maxrec) + 1
+!      ixp = mod(recnum,         maxrec) + 1
+
+      ! Compute interpolation coefficients
+      ! If data is located at the end of the time interval, then the
+      !  data value for the current record always goes in slot 2.
+
+      recslot = 2
+      ixp = 99
+      call interp_coeff (recnum, recslot, sec6hr, dataloc)
+
+      ! Read
+      read6 = .false.
+      if (istep==1 .or. oldrecnum /= recnum) read6 = .true.
+
+      fieldname = 't2'
+      call read_data_nc (read6, 0, fyear, ixm, ixx, ixp, &
+                         maxrec, tair_file, fieldname, Tair_data,&
+                         field_loc_center, field_type_scalar)
+      fieldname = 'u10'
+      call read_data_nc (read6, 0, fyear, ixm, ixx, ixp, &
+                         maxrec, uwind_file, fieldname, uatm_data,&
+                         field_loc_center, field_type_vector)
+      fieldname = 'v10'
+      call read_data_nc (read6, 0, fyear, ixm, ixx, ixp, &
+                         maxrec, vwind_file, fieldname, vatm_data,&
+                         field_loc_center, field_type_vector)
+      fieldname = 'q2'
+      call read_data_nc (read6, 0, fyear, ixm, ixx, ixp, &
+                         maxrec, humid_file, fieldname, Qa_data,&
+                         field_loc_center, field_type_scalar)
+
+      ! Interpolate
+      call interpolate_data (Tair_data, Tair)
+      call interpolate_data (uatm_data, uatm)
+      call interpolate_data (vatm_data, vatm)
+      call interpolate_data (Qa_data,   Qa)
+
+      ! Save record number for next time step
+      oldrecnum = recnum
+
+    !-------------------------------------------------------------------
+    ! Daily data
+    !
+    ! Assume that the daily value is located in the middle of the
+    !  24-hour period.
+    !-------------------------------------------------------------------
+
+      dataloc = 1          ! data located in middle of interval
+      maxrec = 365         ! days in a year (no leap years)
+
+      ! current record number
+      recnum = int(yday)   ! current record number
+
+      ! Compute record numbers for surrounding data
+
+      ixm = mod(recnum+maxrec-2,maxrec) + 1
+      ixx = mod(recnum-1,       maxrec) + 1
+      ixp = mod(recnum,         maxrec) + 1
+
+      ! Compute interpolation coefficients
+      ! If data is located at the end of the time interval, then the
+      !  data value for the current record goes in slot 2
+
+      ! Determine whether interpolation will use values 1:2 or 2:3
+      ! recslot = 2 means we use values 1:2, with the current value (2)
+      !  in the second slot
+      ! recslot = 1 means we use values 2:3, with the current value (2)
+      !  in the first slot
+      if (real(sec,kind=dbl_kind) < p5*secday-puny) then  ! first half of day
+         recslot = 2
+         ixp = 99
+      else                             ! second half of day
+         recslot = 1
+         ixm = 99
+      endif
+
+      call interp_coeff (recnum, recslot, secday, dataloc)
+
+      ! Read new data at midpoint of day
+
+      readd = .false.
+      if (istep==1 .or. (recslot==1 .and. oldrecslot==2)) &
+           readd = .true.
+
+      fieldname = 'qsw'
+      call read_data_nc (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                         fsw_file, fieldname, fsw_data,&
+                         field_loc_center, field_type_scalar)
+      fieldname = 'qlw'
+      call read_data_nc (readd, 0, fyear, ixm, ixx, ixp, maxrec, &
+                         flw_file, fieldname, flw_data,&
+                         field_loc_center, field_type_scalar)
+
+      ! Interpolate
+      call interpolate_data ( fsw_data, fsw)
+      call interpolate_data ( flw_data, flw)
+
+      ! Save recslot for next time step
+      oldrecslot = recslot
+
+    !-------------------------------------------------------------------
+    ! monthly data
+    !
+    ! Assume that monthly data values are located in the middle of the
+    ! month.
+    !-------------------------------------------------------------------
+
+      midmonth = 15  ! data is given on 15th of every month
+!      midmonth = fix(p5 * real(daymo(month)))  ! exact middle
+
+      ! Compute record numbers for surrounding months
+      maxrec = 12
+      ixm  = mod(month+maxrec-2,maxrec) + 1
+      ixp  = mod(month,         maxrec) + 1
+      if (mday >= midmonth) ixm = 99  ! other two points will be used
+      if (mday <  midmonth) ixp = 99
+
+      ! Determine whether interpolation will use values 1:2 or 2:3
+      ! recslot = 2 means we use values 1:2, with the current value (2)
+      !  in the second slot
+      ! recslot = 1 means we use values 2:3, with the current value (2)
+      !  in the first slot
+      recslot = 1                             ! latter half of month
+      if (mday < midmonth) recslot = 2        ! first half of month
+
+      ! Find interpolation coefficients
+      call interp_coeff_monthly (recslot)
+
+      ! Read 2 monthly values
+      readm = .false.
+      if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
+
+      fieldname = 'snow'
+      call read_data_nc (readm, 0, fyear, ixm, month, ixp, maxrec, &
+                         snow_file, fieldname, fsnow_data,&
+                         field_loc_center, field_type_scalar)
+      fieldname = 'precip'
+      call read_data_nc (readm, 0, fyear, ixm, month, ixp, maxrec, &
+                         rain_file, fieldname, frain_data,&
+                         field_loc_center, field_type_scalar)
+
+
+      call interpolate_data (frain_data, frain)
+      call interpolate_data (fsnow_data, fsnow)  ! units mm/s = kg/m^2/s
+
+
+      end subroutine dfs_data
+
+
+!=======================================================================
+
+!=======================================================================
+! CPOM Forcing
+!=======================================================================
+!BOP
+!
+! !IROUTINE: cpom_files - construct filenames for cpom forcing data
+!
+! !INTERFACE:
+!
+      subroutine cpom_files (yr)
+!
+! !DESCRIPTION:
+!
+! Construct filenames based on naming conventions used by Wieslaw Maslowski
+!  for reading (mostly) ECMWF atmospheric data.
+! Edit for other directory structures or filenames.
+! Note: The year number in these filenames does not matter, because
+!       subroutine file\_year will insert the correct year.
+!
+!
+! !REVISION HISTORY:
+!
+! authors: William H. Lipscomb, LANL (based on ncar_files)
+!          Adrian Turner CPOM, UCL 4/8/06
+!
+! !USES:
+!
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+           yr                   ! current forcing year
+!
+!EOP
+!
+      character(len=4) :: stryear
+      integer (kind=int_kind) :: yr_in
+
+      yr_in = max(yr, 1980_int_kind)
+
+      write(stryear,'(i4)') yr_in
+
+      fsw_file =   trim(atm_data_dir)//'era40_swdn_'//stryear//'_24h.fr'
+
+      flw_file =   trim(atm_data_dir)//'era40_lwdn_'//stryear//'_24h.fr'
+
+      rain_file =  trim(atm_data_dir) &
+           //'era40_snowfall_'//stryear//'_24h.fr'
+
+      uwind_file = trim(atm_data_dir)//'era40_u10m_'//stryear//'_6h.fr'
+
+      vwind_file = trim(atm_data_dir)//'era40_v10m_'//stryear//'_6h.fr'
+
+      tair_file =  trim(atm_data_dir) &
+           //'poles_2t_'//stryear//'_24h_pm.fr'
+
+      humid_file = trim(atm_data_dir)//'poles_qa_'//stryear//'_24h.fr'
+
+      if (my_task == master_task) then
+         write (nu_diag,*) ' '
+         write (nu_diag,*) 'Forcing data year = ', fyear
+         write (nu_diag,*) 'Atmospheric data files:'
+         write (nu_diag,*) trim(fsw_file)
+         write (nu_diag,*) trim(flw_file)
+         write (nu_diag,*) trim(rain_file)
+         write (nu_diag,*) trim(uwind_file)
+         write (nu_diag,*) trim(vwind_file)
+         write (nu_diag,*) trim(tair_file)
+         write (nu_diag,*) trim(humid_file)
+         write (nu_diag,*) trim(rhoa_file)
+      endif                     ! master_task
+
+      end subroutine cpom_files
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: cpom_data - read CPOM bulk atmospheric data
+!
+! !INTERFACE:
+!
+      subroutine cpom_data
+!
+! !DESCRIPTION:
+!
+! !REVISION HISTORY:
+!
+! authors: same as module
+!
+! !USES:
+!
+      use ice_flux
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+           i, j,         &
+           ixm,ixx,ixp,  & ! record numbers for neighboring months
+           recnum,       & ! record number
+           maxrec,       & ! maximum record number
+           recslot,      & ! spline slot for current record
+           dataloc         ! = 1 for data located in middle of time interval
+                           ! = 2 for date located at end of time interval
+
+      real(kind=dbl_kind) :: &
+           sec6hr,       & ! secs in 6hr period
+           sec12hr         ! secs in 12hr period
+
+      logical (kind=log_kind) :: read6, read12, read24, read24m
+      logical (kind=log_kind) :: verbose = .false.
+
+    !-------------------------------------------------------------------
+    ! 6-hourly data - ERA40 analysis data
+    !
+    ! Assume that the 6-hourly value is located at the start of the
+    !  6-hour period.  This is the convention for ERA40 data.
+    !-------------------------------------------------------------------
+
+      dataloc = 3               ! data located at start of interval
+      sec6hr = secday/c4        ! seconds in 6 hours
+      maxrec = 1460             ! 365*4
+
+      ! current record number
+      recnum = 4*int(yday) - 3 + int(real(sec)/sec6hr)
+
+      ! Compute record numbers for surrounding data
+
+!      ixm = mod(recnum+maxrec-2,maxrec) + 1
+      ixx = mod(recnum-1,       maxrec) + 1
+      ixp = mod(recnum,         maxrec) + 1
+
+      ! Compute interpolation coefficients
+      ! If data is located at the start of the time interval, then the
+      !  data value for the current record always goes in slot 1.
+
+      recslot = 1
+      ixm = 99
+      call interp_coeff (recnum, recslot, sec6hr, dataloc)
+
+      ! Read
+      read6 = .false.
+      if (istep==istep0+1 .or. oldrecnum_6hr /= recnum) read6 = .true.
+
+      call read_data (read6, 0, fyear, ixm, ixx, ixp, &
+                      maxrec, uwind_file, uatm_data,  &
+                      field_loc_center, field_type_vector)
+
+      call read_data (read6, 0, fyear, ixm, ixx, ixp, &
+                      maxrec, vwind_file, vatm_data,  &
+                      field_loc_center, field_type_vector)
+
+    !call read_data (readm, 0, fyear, ixm, month, ixp, &
+    !                     maxrec, fsw_file, fsw_data, &
+    !                     field_loc_center, field_type_scalar)
+
+
+      ! Interpolate
+      call interpolate_data (uatm_data, uatm)
+      call interpolate_data (vatm_data, vatm)
+
+      ! Save record number for next time step
+      oldrecnum_6hr = recnum
+
+      if (verbose) write(*,*) 'cdata: 06hrs: ', read6, recnum, ixm, ixx, ixp, fyear
+
+    !-------------------------------------------------------------------
+    ! 12-hourly data - POLES 2t temperature data
+    !
+    ! Assume that the 12-hourly value is located at the start of the
+    !  12-hour period.  This is the convention for POLES 2t data.
+    !-------------------------------------------------------------------
+
+
+      !dataloc = 3               ! data located at start of interval
+      !sec12hr = secday/c2       ! seconds in 12 hours
+      !maxrec = 730              ! 365*2
+
+      ! current record number
+      !recnum = 2*int(yday) - 1 + int(real(sec)/sec12hr)
+
+      ! Compute record numbers for surrounding data
+
+!      ixm = mod(recnum+maxrec-2,maxrec) + 1
+      !ixx = mod(recnum-1,       maxrec) + 1
+      !ixp = mod(recnum,         maxrec) + 1
+
+      ! Compute interpolation coefficients
+      ! If data is located at the start of the time interval, then the
+      !  data value for the current record always goes in slot 1.
+
+      !recslot = 1
+      !ixm = 99
+      !call interp_coeff (recnum, recslot, sec12hr, dataloc)
+
+      ! Read
+      !read12 = .false.
+      !if (istep==istep0+1 .or. oldrecnum_12hr /= recnum) read12 = .true.
+
+      !call read_data (read12, 0, fyear, ixm, ixx, ixp,
+      !&                maxrec, tair_file, Tair_data, &
+    !                     field_loc_center, field_type_scalar)
+
+      ! Interpolate
+      !call interpolate_data (Tair_data, Tair)
+
+      ! Save record number for next time step
+      !oldrecnum_12hr = recnum
+
+      !print*, 'cdata: 12hrs: ', read12, recnum, ixm, ixx, ixp, fyear
+
+    !-------------------------------------------------------------------
+    ! 24-hourly data - ERA-40 forecast files
+    !
+    ! Assume that the 24-hourly value is located at the start of the
+    !  24-hour period.  This is the convention for ERA-40 forecast files
+    !-------------------------------------------------------------------
+      dataloc = 3               ! data located at start of interval
+      maxrec = 365              ! 365*2
+
+      ! current record number
+      recnum = int(yday)
+
+      ! Compute record numbers for surrounding data
+
+!      ixm = mod(recnum+maxrec-2,maxrec) + 1
+      ixx = mod(recnum-1,       maxrec) + 1
+      ixp = mod(recnum,         maxrec) + 1
+
+      ! Compute interpolation coefficients
+      ! If data is located at the start of the time interval, then the
+      !  data value for the current record always goes in slot 1.
+
+      recslot = 1
+      ixm = 99
+      call interp_coeff (recnum, recslot, secday, dataloc)
+
+      ! Read
+      read24 = .false.
+      if (istep==istep0+1 .or. oldrecnum_24hr /= recnum) read24 = .true.
+
+      call read_data (read24, 0, fyear, ixm, ixx, ixp, &
+                      maxrec, fsw_file, fsw_data, &
+                         field_loc_center, field_type_scalar)
+      call read_data (read24, 0, fyear, ixm, ixx, ixp, &
+                      maxrec, flw_file, flw_data, &
+                         field_loc_center, field_type_scalar)
+      call read_data (read24, 0, fyear, ixm, ixx, ixp, &
+                      maxrec, rain_file, fsnow_data, &
+                         field_loc_center, field_type_scalar)
+
+      ! Interpolate to current time step
+      call interpolate_data (fsw_data,   fsw)
+      call interpolate_data (flw_data,   flw)
+      call interpolate_data (fsnow_data, fsnow)
+
+      ! Save record number for next time step
+      oldrecnum_24hr = recnum
+
+      if (verbose) write(*,*) 'cdata: 24hrs: ', read24, recnum, ixm, ixx, ixp, fyear
+
+    !-------------------------------------------------------------------
+    ! Daily data - POLES Qa files
+    !
+    ! Assume that the daily value is located in the middle of the
+    !  24-hour period.
+    !-------------------------------------------------------------------
+
+
+      dataloc = 1          ! data located in middle of interval
+      maxrec = 365         ! days in a year (no leap years)
+
+      ! current record number
+      recnum = int(yday)   ! current record number
+
+      ! Compute record numbers for surrounding data
+
+      ixm = mod(recnum+maxrec-2,maxrec) + 1
+      ixx = mod(recnum-1,       maxrec) + 1
+      ixp = mod(recnum,         maxrec) + 1
+
+      ! Compute interpolation coefficients
+      ! If data is located at the end of the time interval, then the
+      !  data value for the current record goes in slot 2
+
+      ! Determine whether interpolation will use values 1:2 or 2:3
+      ! recslot = 2 means we use values 1:2, with the current value (2)
+      !  in the second slot
+      ! recslot = 1 means we use values 2:3, with the current value (2)
+      !  in the first slot
+      if (real(sec) < p5*secday-puny) then  ! first half of day
+         recslot = 2
+         ixp = 99
+      else                             ! second half of day
+         recslot = 1
+         ixm = 99
+      endif
+
+      call interp_coeff (recnum, recslot, secday, dataloc)
+
+      ! Read new data at midpoint of day
+
+      read24m = .false.
+      if (istep==istep0+1 .or. (recslot==1 .and. oldrecslot==2)) &
+           read24m = .true.
+
+      call read_data (read24m, 0, fyear, ixm, ixx, ixp, maxrec, &
+                      humid_file, Qa_data, &
+                         field_loc_center, field_type_scalar)
+      call read_data (read24m, 0, fyear, ixm, ixx, ixp, maxrec, &
+                      tair_file , Tair_data, &
+                         field_loc_center, field_type_scalar)
+
+      ! Interpolate
+      call interpolate_data (  Qa_data  , Qa    )
+      call interpolate_data (  Tair_data, Tair  )
+
+
+      ! Save recslot for next time step
+      oldrecslot = recslot
+
+      if (verbose) write(*,*) 'cdata: 24hrm: ', read24m, recnum, ixm, ixx, ixp, fyear
+
+      end subroutine cpom_data
+
+!=======================================================================
+
 !=======================================================================
 
       subroutine compute_shortwave(nx_block,  ny_block, &
@@ -3397,7 +4161,7 @@
 !
       use ice_domain, only: nblocks
       use ice_ocean
-      use ice_flux, only: Tf, sss, sst, uocn, vocn, ss_tltx, ss_tlty, Tfrzpt
+      use ice_flux, only: Tf, sss, sst, qdp, uocn, vocn, ss_tltx, ss_tlty, Tfrzpt
       use ice_grid, only: t2ugrid_vector
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -3420,6 +4184,16 @@
       logical (kind=log_kind) :: readm
 
       if (my_task == master_task .and. istep == 1) then
+         if (trim(qdp_data_type)=='clim') then
+            write (nu_diag,*) ' '
+            write (nu_diag,*) 'qdp data interpolated to timestep:'
+            write (nu_diag,*) trim(qdp_file)
+         endif
+         if (trim(uwat_data_type)=='clim') then
+            write (nu_diag,*) ' '
+            write (nu_diag,*) 'ocean current data interpolated to timestep:'
+            write (nu_diag,*) trim(uwat_file)
+         endif
          if (trim(sss_data_type)=='clim') then
             write (nu_diag,*) ' '
             write (nu_diag,*) 'SSS data interpolated to timestep:'
@@ -3516,6 +4290,34 @@
             enddo
          enddo
          endif
+      endif
+
+    !-------------------------------------------------------------------
+    ! Read two monthly qdp values and interpolate.
+    ! Restore toward interpolated value.
+    !-------------------------------------------------------------------
+
+      if (trim(qdp_data_type)=='clim') then
+         call read_clim_data (readm, 0, ixm, month, ixp, &
+                              qdp_file, qdp_data, &
+                              field_loc_center, field_type_scalar)
+         call interpolate_data (qdp_data, qdp)
+      endif
+    !-------------------------------------------------------------------
+    ! Read two monthly uwat values and interpolate.
+    ! Restore toward interpolated value.
+    !-------------------------------------------------------------------
+
+      if (trim(uwat_data_type)=='clim') then
+         call read_clim_data (readm, 0, ixm, month, ixp, &
+                              uwat_file, uocn_data, &
+                              field_loc_center, field_type_scalar)
+         call interpolate_data (uocn_data, uocn)
+         call read_clim_data (readm, 0, ixm, month, ixp, &
+                              vwat_file, vocn_data, &
+                              field_loc_center, field_type_scalar)
+         call interpolate_data (vocn_data, vocn)
+
       endif
 
       end subroutine ocn_data_clim

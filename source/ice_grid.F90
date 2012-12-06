@@ -175,7 +175,8 @@
       allocate(work_g2(nx_global,ny_global))
 
       if (trim(grid_type) == 'displaced_pole' .or. &
-          trim(grid_type) == 'tripole'      ) then
+          trim(grid_type) == 'tripole'        .or. &
+          trim(grid_type) == 'cpom_grid') then
 
          if (trim(grid_format) == 'nc') then
 
@@ -296,6 +297,8 @@
          else
             call popgrid        ! read POP grid lengths directly
          endif 
+      elseif (trim(grid_type) == 'cpom_grid') then
+         call cpomgrid          ! cpom model orca1 type grid
       else
          call rectgrid          ! regular rectangular grid
       endif
@@ -394,6 +397,10 @@
       !-----------------------------------------------------------------
       ANGLET = c0
 
+      if (trim(grid_type) == 'cpom_grid') then
+         ANGLET(:,:,:) = ANGLE(:,:,:)
+      else
+
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -422,6 +429,7 @@
          enddo
          enddo
       enddo
+      endif
       
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (ANGLET,           halo_info, &
@@ -883,6 +891,117 @@
       deallocate(work_g1)
 
       end subroutine rectgrid
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: cpomgrid - read and set cpom ORCA1 like grid - AKT, 09/08/06
+!                      grid and land mask
+!
+! !INTERFACE:
+!
+      subroutine cpomgrid
+!
+! !DESCRIPTION:
+!
+! CPOM displaced pole grid and land mask. \\
+! Grid record number, field and units are: \\
+! (1) ULAT  (degrees)    \\
+! (2) ULON  (degrees)    \\
+! (3) HTN   (m)          \\
+! (4) HTE   (m)          \\
+! (7) ANGLE (radians)    \\
+!
+! Land mask record number and field is (1) KMT.
+!
+! !REVISION HISTORY:
+!
+! author: Adrian K. Turner, CPOM, UCL
+!
+! !USES:
+!
+      use ice_work, only: work1, work_g1
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+           i, j, iblk,           &
+           ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+
+      logical (kind=log_kind) :: diag
+
+      type (block) :: &
+           this_block           ! block information for current block
+
+      call ice_open(nu_grid,grid_file,64)
+      call ice_open(nu_kmt,kmt_file,32)
+
+      diag = .true.       ! write diagnostic info
+
+      ! topography
+      call ice_read(nu_kmt,1,work1,'ida4',diag)
+
+      hm(:,:,:) = c0
+      do iblk = 1, nblocks
+         this_block = get_block(blocks_ice(iblk),iblk)
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do j = jlo, jhi
+         do i = ilo, ihi
+            hm(i,j,iblk) = work1(i,j,iblk)
+            if (hm(i,j,iblk) >= c1) hm(i,j,iblk) = c1
+
+         enddo
+         enddo
+      enddo
+
+      allocate(work_g1(nx_global,ny_global))
+
+      ! lat, lon, cell dimensions, angles
+      call ice_read_global(nu_grid,1,work_g1, 'rda8',diag)
+      call scatter_global(ULAT, work_g1, master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+
+      call ice_read_global(nu_grid,2,work_g1, 'rda8',diag)
+      call scatter_global(ULON, work_g1, master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+
+      call ice_read_global(nu_grid,3,work_g1,  'rda8',diag)
+      work_g1 = work_g1 * m_to_cm
+      call primary_grid_lengths_HTN(work_g1)  ! dxu, dxt
+
+      call ice_read_global(nu_grid,4,work_g1,  'rda8',diag)
+      work_g1 = work_g1 * m_to_cm
+      call primary_grid_lengths_HTE(work_g1)  ! dyu, dyt
+
+      call ice_read_global(nu_grid,7,work_g1,'rda8',diag)
+      call scatter_global(ANGLE, work_g1, master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+
+      ! fix units
+      ULAT  = ULAT  / rad_to_deg
+      ULON  = ULON  / rad_to_deg
+
+      deallocate(work_g1)
+
+
+      if (my_task == master_task) then
+         close (nu_grid)
+         close (nu_kmt)
+      endif
+
+      write(nu_diag,*) "min/max HTN: ", minval(HTN), maxval(HTN)
+      write(nu_diag,*) "min/max HTE: ", minval(HTE), maxval(HTE)
+
+      end subroutine cpomgrid
+
+!=======================================================================
 
 !=======================================================================
 !BOP
