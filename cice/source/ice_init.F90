@@ -86,8 +86,7 @@
           atm_data_type,   atm_data_dir,  precip_units, &
           atm_data_format, ocn_data_format, &
           sss_data_type,   sst_data_type, ocn_data_dir, &
-          oceanmixed_file, restore_sst,   trestore, &
-          qdp_data_type, uwat_data_type ! UCL
+          oceanmixed_file, restore_sst,   trestore
       use ice_grid, only: grid_file, kmt_file, grid_type, grid_format
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist, mu_rdg
       use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
@@ -160,7 +159,7 @@
         precip_units,   Tfrzpt,          update_ocn_f,  ustar_min,      &
         oceanmixed_ice, ocn_data_format, sss_data_type, sst_data_type,  &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
-        restore_ice, qdp_data_type, uwat_data_type ! UCL   
+        restore_ice
 
       namelist /tracer_nml/   &
         tr_iage, restart_age, &
@@ -265,8 +264,6 @@
       ocn_data_format = 'bin'     ! file format ('bin'=binary or 'nc'=netcdf)
       sss_data_type   = 'default'
       sst_data_type   = 'default'
-      qdp_data_type   = 'default' ! UCL
-      uwat_data_type  = 'default' ! UCL
       ocn_data_dir    = ' '
       oceanmixed_file = 'unknown_oceanmixed_file' ! ocean forcing data
       restore_sst     = .false.   ! restore sst if true
@@ -567,9 +564,7 @@
       call broadcast_scalar(ocn_data_format,    master_task)
       call broadcast_scalar(sss_data_type,      master_task)
       call broadcast_scalar(sst_data_type,      master_task)
-      call broadcast_scalar(qdp_data_type,      master_task)
-      call broadcast_scalar(uwat_data_type,     master_task) ! UCL
-      call broadcast_scalar(ocn_data_dir,       master_task) ! UCL
+      call broadcast_scalar(ocn_data_dir,       master_task)
       call broadcast_scalar(oceanmixed_file,    master_task)
       call broadcast_scalar(restore_sst,        master_task)
       call broadcast_scalar(trestore,           master_task)
@@ -725,10 +720,6 @@
                                trim(sss_data_type)
          write(nu_diag,*)    ' sst_data_type             = ', &
                                trim(sst_data_type)
-         write(nu_diag,*)    ' qdp_data_type             = ', &  ! UCL
-                               trim(qdp_data_type)
-         write(nu_diag,*)    ' uwat_data_type            = ', &  ! UCL
-                                trim(uwat_data_type)
          if (trim(sss_data_type) /= 'default' .or. &
              trim(sst_data_type) /= 'default') then
             write(nu_diag,*) ' ocn_data_dir              = ', &
@@ -840,7 +831,6 @@
              grid_type  /=  'tripole'        .and. &
              grid_type  /=  'column'         .and. &
              grid_type  /=  'rectangular'    .and. &
-             grid_type  /=  'cpom_grid'      .and. & ! UCL
              grid_type  /=  'latlon' ) then 
             call abort_ice('ice_init: unknown grid_type')
          endif
