@@ -189,6 +189,7 @@
 
          call ice_timer_start(timer_diags)  ! diagnostics/history
          call init_mass_diags   ! diagnostics per timestep
+         call init_history_therm
          call ice_timer_stop(timer_diags)   ! diagnostics/history
 
          call ice_timer_start(timer_column)  ! column physics
