@@ -157,6 +157,7 @@
         c1000= 1000.0_dbl_kind, &
         p001 = 0.001_dbl_kind, &
         p01  = 0.01_dbl_kind, &
+        p025 = 0.025_dbl_kind, &
         p1   = 0.1_dbl_kind, &
         p2   = 0.2_dbl_kind, &
         p4   = 0.4_dbl_kind, &
@@ -179,6 +180,7 @@
         puny   = eps11, &
         bignum = 1.0e+30_dbl_kind, &
         pih    = p5*pi, &
+        piq    = p5*pih, &
         pi2    = c2*pi, &
 	days_per_4c = 146097.0_dbl_kind, &
 	days_per_c  = 36524.0_dbl_kind,  &

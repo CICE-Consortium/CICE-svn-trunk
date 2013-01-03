@@ -215,7 +215,7 @@
 
       kitd = 1           ! type of itd conversions (0 = delta, 1 = linear)
       kcatbound = 1      ! category boundary formula (0 = old, 1 = new, etc)
-      kdyn = 1           ! type of dynamics (1 = evp)
+      kdyn = 1           ! type of dynamics (1 = evp, 2 = eap)
       ndyn_dt = 1        ! dynamic time steps per thermodynamic time step
       ndte = 120         ! subcycles per dynamics timestep:  ndte=dyn_dt/dte
       evp_damping = .false.  ! if true, use damping procedure in evp dynamics
@@ -831,6 +831,7 @@
              grid_type  /=  'tripole'        .and. &
              grid_type  /=  'column'         .and. &
              grid_type  /=  'rectangular'    .and. &
+             grid_type  /=  'cpom_grid'      .and. &
              grid_type  /=  'latlon' ) then 
             call abort_ice('ice_init: unknown grid_type')
          endif

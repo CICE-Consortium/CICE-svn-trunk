@@ -253,7 +253,15 @@
            f_fsurfn_ai = 'x' ,f_fcondtopn_ai='x', &
            f_fmelttn_ai= 'x', f_flatn_ai   = 'x', &
 !          f_field3dz  = 'x',                     &
-           f_Tinz      = 'x', f_Tsnz       = 'x' 
+           f_Tinz      = 'x', f_Tsnz       = 'x' , &	   
+           f_a11       = 'x', f_a12        = 'x' , & 
+           f_e11       = 'x', f_e12        = 'x' , & 
+           f_e22       = 'x',			  & 
+           f_s11       = 'x', f_s12        = 'x', & 
+           f_s22       = 'x',		          & 
+           f_yieldstress11       = 'x', 	  & 
+           f_yieldstress12       = 'x',           & 
+           f_yieldstress22       = 'x'
 
 
       !---------------------------------------------------------------
@@ -336,7 +344,15 @@
            f_fsurfn_ai,f_fcondtopn_ai,&
            f_fmelttn_ai,f_flatn_ai,  &
 !          f_field3dz,  &
-           f_Tinz,      f_Tsnz       
+           f_Tinz,      f_Tsnz 	   , &	      
+           f_a11, 	f_a12 	   , &
+           f_e11, 	f_e12	   , &
+           f_e22                   , &
+           f_s11, 	f_s12	   , &
+           f_s22                   , &
+           f_yieldstress11         , &	
+           f_yieldstress12	   , &
+           f_yieldstress22
 
       !---------------------------------------------------------------
       ! field indices
@@ -431,7 +447,14 @@
            n_fmelttn_ai  , &
            n_flatn_ai    , &
 !          n_field3dz    , &
-           n_Tinz        , n_Tsnz
+           n_Tinz        , n_Tsnz	, &
+	   n_a11	 , n_a12	, &
+	   n_e11	 , n_e12 	, &
+	   n_e22	 , &
+	   n_s11	 , n_s12	, &
+	   n_s22	 , &
+	   n_yieldstress11, n_yieldstress12,  &
+	   n_yieldstress22
 
       ! aerosols
       integer(kind=int_kind), dimension(max_aero,max_nstrm) :: &
@@ -479,6 +502,7 @@
       use ice_constants
       use ice_calendar, only: yday, days_per_year, histfreq, &
            histfreq_n, nstreams
+      use ice_dyn_evp, only: kdyn
       use ice_flux, only: mlt_onset, frz_onset, albcnt
       use ice_restart, only: restart
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero
@@ -575,6 +599,19 @@
          f_faero_ocn = 'x'
          f_aero      = 'x' 
          f_aeron     = 'x' ! NOTE not implemented
+      endif
+      if (kdyn /= 2) then
+           f_a11       = 'x'
+           f_a12       = 'x'
+           f_e11       = 'x'
+           f_e12       = 'x'
+           f_e22       = 'x'
+           f_s11       = 'x'
+           f_s12       = 'x'
+           f_s22       = 'x'
+           f_yieldstress11 = 'x'
+           f_yieldstress12 = 'x'
+           f_yieldstress22 = 'x'
       endif
 
       ! these must be output at the same frequency because of 
@@ -735,6 +772,19 @@
       call broadcast_scalar (f_hpond_ai, master_task)
       call broadcast_scalar (f_ipond_ai, master_task)
       call broadcast_scalar (f_apeff_ai, master_task)
+
+      call broadcast_scalar (f_a11, master_task)
+      call broadcast_scalar (f_a12, master_task)
+      call broadcast_scalar (f_e11, master_task)
+      call broadcast_scalar (f_e12, master_task)
+      call broadcast_scalar (f_e22, master_task)
+      call broadcast_scalar (f_s11, master_task)
+      call broadcast_scalar (f_s12, master_task) 
+      call broadcast_scalar (f_s22, master_task)
+      call broadcast_scalar (f_yieldstress11, master_task)
+      call broadcast_scalar (f_yieldstress12, master_task)
+      call broadcast_scalar (f_yieldstress22, master_task)
+
 
       ! 2D variables
       do ns1 = 1, nstreams
@@ -1265,6 +1315,72 @@
              "always >= 0, weighted by ice area", c1, c0,                    &
              ns1, f_fmeltt_ai)
  
+      if (f_a11(1:1) /= 'x') &
+         call define_hist_field(n_a11,"a11"," ",tstr2D, tcstr, &
+            "a11: component a11 of the structure tensor",                           &
+            "none", c1, c0,            &
+            ns1, f_a11)
+
+      if (f_a12(1:1) /= 'x') &
+         call define_hist_field(n_a12,"a12"," ",tstr2D, tcstr, &
+            "a12: component a12 of the structure tensor",                           &
+            "none", c1, c0,            &
+            ns1, f_a12)
+
+      if (f_e11(1:1) /= 'x') &
+         call define_hist_field(n_e11,"e11","1/s",tstr2D, tcstr, &
+            "e11: component e11 of the strain rate tensor",                           &
+            "none", c1, c0,            &
+            ns1, f_e11)
+
+      if (f_e12(1:1) /= 'x') &
+         call define_hist_field(n_e12,"e12","1/s",tstr2D, tcstr, &
+            "e12: component e12 of the strain rate tensor",                           &
+            "none", c1, c0,            &
+            ns1, f_e12)
+
+      if (f_e22(1:1) /= 'x') &
+         call define_hist_field(n_e22,"e22","1/s",tstr2D, tcstr, &
+            "e22: component e22 of the strain rate tensor",                           &
+            "none", c1, c0,            &
+            ns1, f_e22)
+
+      if (f_s11(1:1) /= 'x') &
+         call define_hist_field(n_s11,"s11","kg/s^2",tstr2D, tcstr, &
+            "s11: component s11 of the stress tensor",                           &
+            "none", c1, c0,            &
+            ns1, f_s11)
+
+      if (f_s12(1:1) /= 'x') &
+         call define_hist_field(n_s12,"s12","kg/s^2",tstr2D, tcstr, &
+            "s12: component s12 of the stress tensor",                           &
+            "none", c1, c0,            &
+            ns1, f_s12)
+
+      if (f_s22(1:1) /= 'x') &
+         call define_hist_field(n_s22,"s22","kg/s^2",tstr2D, tcstr, &
+            "s22: component s12 of the stress tensor",                           &
+            "none", c1, c0,            &
+            ns1, f_s22)
+
+      if (f_yieldstress11(1:1) /= 'x') &
+         call define_hist_field(n_yieldstress11,"yieldstress11","kg/s^2",tstr2D, tcstr, &
+            "yieldstress11: component 11 of the yieldstress tensor",                    &
+            "none", c1, c0,            &
+            ns1, f_yieldstress11)
+
+      if (f_yieldstress12(1:1) /= 'x') &
+         call define_hist_field(n_yieldstress12,"yieldstress12","kg/s^2",tstr2D, tcstr, &
+            "yieldstress12: component 12 of the yieldstress tensor",                    &
+            "none", c1, c0,            &
+            ns1, f_yieldstress12)
+
+      if (f_yieldstress22(1:1) /= 'x') &
+         call define_hist_field(n_yieldstress22,"yieldstress22","kg/s^2",tstr2D, tcstr, &
+            "yieldstress22: component 12 of the yieldstress tensor",                    &
+            "none", c1, c0,            &
+            ns1, f_yieldstress22)
+
       ! Tracers !!!!!!!!!!!
 
       ! Ice Age
@@ -1305,7 +1421,7 @@
        
       ! Melt ponds
       if (f_apond(1:1) /= 'x') &
-         call define_hist_field(n_apond,"apond","1",tstr2D, tcstr, & 
+         call define_hist_field(n_apond,"apond","1",tstr2D, tcstr, &
              "melt pond fraction of sea ice",                      &
              "none", c1, c0,                                       &
              ns1, f_apond)
@@ -1317,7 +1433,7 @@
              ns1, f_apond)
 
       if (f_hpond(1:1) /= 'x') &
-         call define_hist_field(n_hpond,"hpond","m",tstr2D, tcstr, & 
+         call define_hist_field(n_hpond,"hpond","m",tstr2D, tcstr, &
              "mean melt pond depth over sea ice",                  &
              "none", c1, c0,                                       &
              ns1, f_hpond)
@@ -1329,7 +1445,7 @@
              ns1, f_hpond)
 
       if (f_ipond(1:1) /= 'x') &
-         call define_hist_field(n_ipond,"ipond","m",tstr2D, tcstr, & 
+         call define_hist_field(n_ipond,"ipond","m",tstr2D, tcstr, &
              "mean pond ice thickness over sea ice",               &
              "none", c1, c0,                                       &
              ns1, f_ipond)
@@ -1416,7 +1532,7 @@
 
         if (f_fsurfn_ai(1:1) /= 'x') &
            call define_hist_field(n_fsurfn_ai,"fsurfn_ai","W/m^2",tstr3Dc, tcstr, & 
-              "net surface heat flux, categories","weighted by ice area", c1, c0, &
+              "net surface heat flux, categories","weighted by ice area", c1, c0, &            
               ns1, f_fsurfn_ai)
 
         if (f_fcondtopn_ai(1:1) /= 'x') &
@@ -1426,12 +1542,12 @@
 
         if (f_fmelttn_ai(1:1) /= 'x') &
            call define_hist_field(n_fmelttn_ai,"fmelttn_ai","W/m^2",tstr3Dc, tcstr, & 
-              "net sfc heat flux causing melt, cat","weighted by ice area", c1, c0, &
+              "net sfc heat flux causing melt, cat","weighted by ice area", c1, c0, &            
               ns1, f_fmelttn_ai)
 
         if (f_flatn_ai(1:1) /= 'x') &
            call define_hist_field(n_flatn_ai,"flatn_ai","W/m^2",tstr3Dc, tcstr, & 
-              "latent heat flux, category","weighted by ice area", c1, c0,      &
+              "latent heat flux, category","weighted by ice area", c1, c0,      &            
               ns1, f_flatn_ai)
 
        if (f_ardgn(1:1) /= 'x') &
@@ -1489,7 +1605,7 @@
              ns1, f_vredistn)
 
         if (f_apondn(1:1) /= 'x') &
-           call define_hist_field(n_apondn,"apondn","1",tstr3Dc, tcstr, & 
+           call define_hist_field(n_apondn,"apondn","1",tstr3Dc, tcstr, &
               "melt pond fraction, category","none", c1, c0,      &            
               ns1, f_apondn)
 
@@ -1662,6 +1778,7 @@
                               new_month
       use ice_state
       use ice_constants
+      use ice_dyn_eap
       use ice_dyn_evp
       use ice_flux
       use ice_therm_vertical
@@ -2375,6 +2492,18 @@
                  if (n_trsig    (ns) /= 0) a2D(i,j,n_trsig(ns),    iblk) = spval
                  if (n_iage     (ns) /= 0) a2D(i,j,n_iage(ns),     iblk) = spval
                  if (n_FY       (ns) /= 0) a2D(i,j,n_FY(ns),       iblk) = spval
+
+                 if (n_a11      (ns) /= 0) a2D(i,j,n_a11(ns),      iblk) = spval
+                 if (n_a12      (ns) /= 0) a2D(i,j,n_a12(ns),      iblk) = spval
+                 if (n_e11      (ns) /= 0) a2D(i,j,n_e11(ns),      iblk) = spval
+                 if (n_e12      (ns) /= 0) a2D(i,j,n_e12(ns),      iblk) = spval
+                 if (n_e22      (ns) /= 0) a2D(i,j,n_e22(ns),      iblk) = spval
+                 if (n_s11      (ns) /= 0) a2D(i,j,n_s11(ns),      iblk) = spval
+                 if (n_s12      (ns) /= 0) a2D(i,j,n_s12(ns),      iblk) = spval
+                 if (n_s22      (ns) /= 0) a2D(i,j,n_s22(ns),      iblk) = spval
+                 if (n_yieldstress11 (ns) /= 0) a2D(i,j,n_yieldstress11(ns),iblk) = spval
+                 if (n_yieldstress12 (ns) /= 0) a2D(i,j,n_yieldstress12(ns),iblk) = spval
+                 if (n_yieldstress22 (ns) /= 0) a2D(i,j,n_yieldstress22(ns),iblk) = spval
               else
                  if (n_divu     (ns) /= 0) a2D(i,j,n_divu(ns),iblk)      = &
                        divu (i,j,iblk)*avail_hist_fields(n_divu(ns))%cona
@@ -2392,15 +2521,45 @@
                        vice(i,j,iblk)
                  if (n_aisnap   (ns) /= 0) a2D(i,j,n_aisnap(ns),iblk)    = &
                        aice(i,j,iblk)
-                 if (n_trsig    (ns) /= 0) a2D(i,j,n_trsig(ns),iblk )    = &
+
+                 if (kdyn == 2) then  ! for EAP dynamics different time of output
+                    if (n_trsig    (ns) /= 0) a2D(i,j,n_trsig(ns),iblk ) = &
+                                        prs_sig(i,j,iblk)
+                 else
+                    if (n_trsig    (ns) /= 0) a2D(i,j,n_trsig(ns),iblk ) = &
                                        p25*(stressp_1(i,j,iblk) &
                                           + stressp_2(i,j,iblk) &
                                           + stressp_3(i,j,iblk) &
                                           + stressp_4(i,j,iblk))
+                 endif
+
                  if (n_iage     (ns) /= 0) a2D(i,j,n_iage(ns),iblk)  = &
                        trcr(i,j,nt_iage,iblk)*avail_hist_fields(n_iage(ns))%cona
                  if (n_FY       (ns) /= 0) a2D(i,j,n_FY(ns),iblk)  = &
                        trcr(i,j,nt_FY,iblk)*avail_hist_fields(n_FY(ns))%cona
+
+                 if (n_a11     (ns) /= 0) a2D(i,j,n_a11(ns),iblk)      = &
+                       a11 (i,j,iblk)*avail_hist_fields(n_a11(ns))%cona
+                 if (n_a12     (ns) /= 0) a2D(i,j,n_a12(ns),iblk)      = &
+                       a12 (i,j,iblk)*avail_hist_fields(n_a12(ns))%cona
+                 if (n_e11     (ns) /= 0) a2D(i,j,n_e11(ns),iblk)      = &
+                       e11 (i,j,iblk)*avail_hist_fields(n_e11(ns))%cona
+                 if (n_e12     (ns) /= 0) a2D(i,j,n_e12(ns),iblk)      = &
+                       e12 (i,j,iblk)*avail_hist_fields(n_e12(ns))%cona
+                 if (n_e22     (ns) /= 0) a2D(i,j,n_e22(ns),iblk)      = &
+                       e22 (i,j,iblk)*avail_hist_fields(n_e22(ns))%cona
+                 if (n_s11     (ns) /= 0) a2D(i,j,n_s11(ns),iblk)      = &
+                       s11 (i,j,iblk)*avail_hist_fields(n_s11(ns))%cona
+                 if (n_s12     (ns) /= 0) a2D(i,j,n_s12(ns),iblk)      = &
+                       s12 (i,j,iblk)*avail_hist_fields(n_s12(ns))%cona
+                 if (n_s22     (ns) /= 0) a2D(i,j,n_s22(ns),iblk)      = &
+                       s22 (i,j,iblk)*avail_hist_fields(n_s22(ns))%cona
+                 if (n_yieldstress11     (ns) /= 0) a2D(i,j,n_yieldstress11(ns),iblk)      = &
+                       yieldstress11 (i,j,iblk)*avail_hist_fields(n_yieldstress11(ns))%cona
+                 if (n_yieldstress12     (ns) /= 0) a2D(i,j,n_yieldstress12(ns),iblk)      = &
+                       yieldstress12 (i,j,iblk)*avail_hist_fields(n_yieldstress12(ns))%cona
+                 if (n_yieldstress22     (ns) /= 0) a2D(i,j,n_yieldstress22(ns),iblk)      = &
+                       yieldstress22 (i,j,iblk)*avail_hist_fields(n_yieldstress22(ns))%cona
               endif
            enddo                ! i
            enddo                ! j

@@ -31,6 +31,7 @@
       use ice_communicate
       use ice_diagnostics
       use ice_domain
+      use ice_dyn_eap
       use ice_dyn_evp
       use ice_exit
       use ice_fileunits
@@ -142,7 +143,11 @@
 
       call init_calendar        ! initialize some calendar stuff
       call init_hist (dt)       ! initialize output history file
-      call init_evp (dyn_dt)    ! define evp dynamics parameters, variables
+      if (kdyn == 2) then
+         call init_eap (dyn_dt) ! define eap dynmaics parameters, variables
+      else                      ! for both kdyn = 0 or 1
+         call init_evp (dyn_dt) ! define evp dynamics parameters, variables
+      endif
       call init_coupler_flux    ! initialize fluxes exchanged with coupler
 #ifdef popcice
       call sst_sss              ! POP data for CICE initialization
