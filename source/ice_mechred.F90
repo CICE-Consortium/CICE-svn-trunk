@@ -782,6 +782,9 @@
       !  The GROSS closing rate is equal to the first two terms (open
       !  water closing and thin ice ridging) without the third term
       !  (thick, newly ridged ice).
+      !
+      ! rdg_conv is calculated differently in EAP (update_ice_rdg) and 
+      ! represents closing_net directly.  In that case, rdg_shear=0.
       !-----------------------------------------------------------------
 
          closing_net(ij) = Cs*rdg_shear(i,j) + rdg_conv(i,j)

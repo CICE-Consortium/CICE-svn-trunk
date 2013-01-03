@@ -60,7 +60,7 @@
       ! namelist parameters
 
       integer (kind=int_kind) :: &
-         kdyn     , & ! type of dynamics ( 1 = evp )
+         kdyn     , & ! type of dynamics ( 1 = evp, 2 = eap )
          ndte         ! number of subcycles:  ndte=dt/dte
 
       logical (kind=log_kind) :: &

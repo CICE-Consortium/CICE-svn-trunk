@@ -5,15 +5,9 @@
 ### in input_templates/.
 setenv SITE LANL.conejo
 #setenv SITE LANL.mustang
-#setenv SITE NAVO.kraken
-#setenv SITE NCAR.bluevista
-#setenv SITE LLNL.atlas
 
 ### SYSTEM_USERDIR is predefined on ORNL machines
-setenv SYSTEM_USERDIR /scratch2/eclare/CICE.v4.1  # conejo
-#setenv SYSTEM_USERDIR /scr/eclare                # kraken
-#setenv SYSTEM_USERDIR /ptmp/eclare               # bluevista
-#setenv SYSTEM_USERDIR /p/lscratchb/hunke1        # atlas
+setenv SYSTEM_USERDIR /scratch/eclare/CICE.v4.1  # conejo
 
 ### Grid resolution
 setenv RES gx3 ; setenv GRID 100x116
@@ -69,10 +63,6 @@ setenv DITTO    no        # reproducible diagnostics
 
 ### Set SRCDIR and EXEDIR to your own paths!
 setenv SRCDIR /usr/projects/climate/eclare/CICE.v4.1/cice  # conejo
-#setenv SRCDIR $HOME/cice                                  # kraken
-#setenv SRCDIR /g/g21/hunke1/cice                          # atlas
-#setenv SRCDIR /ptmp/eclare/cice                           # bluevista
-
 setenv EXEDIR $SYSTEM_USERDIR/rundir4
                                           if !(-d $EXEDIR) mkdir -p $EXEDIR
 setenv CBLD   $SRCDIR/bld
@@ -96,6 +86,7 @@ cd $EXEDIR
 if !($RES == 'col') then
 if !(-e grid)    cp $SRCDIR/input_templates/$RES/global_$RES.grid grid
 if !(-e kmt)     cp $SRCDIR/input_templates/$RES/global_$RES.kmt kmt
+if !(-e eap_stresses) cp $SRCDIR/input_templates/eap_stresses eap_stresses
 endif
 if !(-e ice_in)  cp $SRCDIR/input_templates/$RES/ice_in .
 if !(-e run_ice) cp $SRCDIR/input_templates/run_ice.$ARCH run_ice

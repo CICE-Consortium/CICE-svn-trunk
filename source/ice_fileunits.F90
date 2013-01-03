@@ -47,6 +47,7 @@
          nu_kmt        , &  ! land mask file
          nu_nml        , &  ! namelist input file
          nu_forcing    , &  ! forcing data file
+         nu_eap        , &  ! input file for eap dynamics
          nu_dump       , &  ! dump file for restarting
          nu_restart    , &  ! restart input file
          nu_dump_age   , &  ! dump file for restarting ice age tracer
@@ -59,6 +60,8 @@
          nu_restart_pond,&  ! restart input file for melt pond tracer
          nu_dump_aero  , &  ! dump file for restarting aerosol tracer
          nu_restart_aero,&  ! restart input file for aerosol tracer
+         nu_dump_eap   , &  ! dump file for restarting eap dynamics
+         nu_restart_eap, &  ! restart input file for eap dynamics
          nu_rst_pointer, &  ! pointer to latest restart file
          nu_history    , &  ! binary history output file
          nu_hdr        , &  ! header file for binary history output
@@ -66,6 +69,9 @@
 
       character (6), parameter :: &
          nml_filename = 'ice_in' ! namelist input file name
+
+      character (12), parameter :: &
+         eap_filename = 'eap_stresses' ! eap dynmaics input file name
 
       integer (kind=int_kind), parameter :: &
          ice_stdin  =  5, & ! reserved unit for standard input
@@ -118,6 +124,8 @@ contains
          call get_fileunit(nu_restart_pond)
          call get_fileunit(nu_dump_aero)
          call get_fileunit(nu_restart_aero)
+         call get_fileunit(nu_dump_eap)
+         call get_fileunit(nu_restart_eap)
          call get_fileunit(nu_rst_pointer)
          call get_fileunit(nu_history)
          call get_fileunit(nu_hdr)
@@ -206,6 +214,8 @@ contains
          call release_fileunit(nu_restart_pond)
          call release_fileunit(nu_dump_aero)
          call release_fileunit(nu_restart_aero)
+         call release_fileunit(nu_dump_eap)
+         call release_fileunit(nu_restart_eap)
          call release_fileunit(nu_rst_pointer)
          call release_fileunit(nu_history)
          call release_fileunit(nu_hdr)

@@ -34,6 +34,7 @@
       use ice_communicate
       use ice_diagnostics
       use ice_domain
+      use ice_dyn_eap
       use ice_dyn_evp
       use ice_exit
       use ice_fileunits
@@ -278,6 +279,7 @@
             if (tr_pond_cesm) call write_restart_pond_cesm
             if (tr_pond_lvl)  call write_restart_pond_lvl
             if (tr_pond_topo) call write_restart_pond_topo
+            if (kdyn == 2)    call write_restart_eap
          endif
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 
