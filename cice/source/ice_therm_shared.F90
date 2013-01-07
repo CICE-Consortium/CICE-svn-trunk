@@ -19,7 +19,7 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size, only: ncat, nilyr, nslyr, ntilyr, ntslyr, max_ntrcr
+      use ice_domain_size, only: ncat, nilyr, nslyr, max_ntrcr
 !
 !EOP
 !
@@ -50,12 +50,68 @@
       logical (kind=log_kind) :: &
          heat_capacity, &! if true, ice has nonzero heat capacity
                          ! if false, use zero-layer thermodynamics
-         calc_Tsfc       ! if true, calculate surface temperature
+         calc_Tsfc,     &! if true, calculate surface temperature
                          ! if false, Tsfc is computed elsewhere and
                          ! atmos-ice fluxes are provided to CICE
+         read_Sin,      &! if true, update salinity profile from file
+         solve_Sin       ! if true, update salinity profile from solve_S_dt
 
       real (kind=dbl_kind), parameter :: &
          hfrazilmin = 0.05_dbl_kind ! min thickness of new frazil ice (m)
+
+!=======================================================================
+
+      contains
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: calculate_Tin_from_qin  - calculate internal ice temperatures
+!
+! !DESCRIPTION:
+!
+!  Compute the internal ice temperatures from enthalpy using
+!  quadratic formula
+!
+! !REVISION HISTORY:
+!
+! !INTERFACE:
+!
+      function calculate_Tin_from_qin (qin, Tmltk) &
+               result(Tin)
+!
+! !USES:
+!
+      use ice_constants
+!
+! !INPUT PARAMETERS:
+!
+      real (kind=dbl_kind), intent(in) :: &
+         qin   , &              ! enthalpy
+         Tmltk                  ! melting temperature at one level
+!
+! !OUTPUT PARAMETERS
+!
+     real (kind=dbl_kind) :: &
+         Tin                 ! internal temperature
+!
+!EOP
+!
+      real (kind=dbl_kind) :: &
+         aa1,bb1,cc1         ! quadratic solvers
+
+      if (l_brine) then
+         aa1 = cp_ice
+         bb1 = (cp_ocn-cp_ice)*Tmltk - qin/rhoi - Lfresh 
+         cc1 = Lfresh * Tmltk
+         Tin =  min((-bb1 - sqrt(bb1*bb1 - c4*aa1*cc1)) /  &
+                         (c2*aa1),Tmltk)
+
+      else                ! fresh ice
+         Tin = (Lfresh + qin/rhoi) / cp_ice
+      endif
+ 
+      end function calculate_Tin_from_qin
 
 !=======================================================================
 

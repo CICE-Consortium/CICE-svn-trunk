@@ -22,7 +22,7 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size, only: nilyr, nslyr, ntilyr, ntslyr, max_ntrcr
+      use ice_domain_size, only: nilyr, nslyr, max_ntrcr
       use ice_constants
       use ice_fileunits, only: nu_diag
       use ice_therm_bl99, only: surface_fluxes

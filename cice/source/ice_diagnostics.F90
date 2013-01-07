@@ -67,7 +67,7 @@
       real (kind=dbl_kind), dimension(npnt) :: &
          pdhi             , & ! change in mean ice thickness (m)
          pdhs             , & ! change in mean snow thickness (m)
-         pde              , & ! change in ice and snow energy (J m-2)
+         pde              , & ! change in ice and snow energy (W m-2)
          plat, plon           ! latitude, longitude of points
 
       integer (kind=int_kind), dimension(npnt) :: &
@@ -95,6 +95,17 @@
          ip = 3, &         ! i index
          jp = 5, &         ! j index
          mtask = 0         ! my_task
+
+      ! specific point diagnostic points
+      !integer, parameter :: igex = 147
+      !integer, parameter :: jgex = 341
+      integer, parameter :: igex = 10
+      integer, parameter :: jgex = 10
+      integer :: ilex
+      integer :: jlex
+      integer :: iblklex
+      integer :: my_task_lex
+      integer, parameter :: nlex = 1
 
 !=======================================================================
 
@@ -131,6 +142,7 @@
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
       use ice_work, only: work1, work2
       use ice_therm_shared, only: calc_Tsfc
+      use ice_zbgc_public, only: rhosi
 
 #if (defined CCSM) || (defined SEQ_MCT)
       use ice_prescribed_mod, only : prescribed_ice
@@ -144,12 +156,12 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-         i, j, k, n, ii,jj, iblk
+         i, j, k, n, nn, ii,jj, iblk
 
       ! hemispheric state quantities
       real (kind=dbl_kind) :: &
-         umaxn,   hmaxn,   shmaxn,    arean,   snwmxn, extentn, &
-         umaxs,   hmaxs,   shmaxs,    areas,   snwmxs, extents, &
+         umaxn,   hmaxn,   shmaxn,    arean,   snwmxn, extentn, shmaxnt, &
+         umaxs,   hmaxs,   shmaxs,    areas,   snwmxs, extents, shmaxst, &
          etotn,   mtotn,   micen,     msnwn,   pmaxn,  ketotn, &
          etots,   mtots,   mices,     msnws,   pmaxs,  ketots, &
          urmsn,   albtotn, arean_alb, mpndn,   ptotn,  spondn, &
@@ -175,8 +187,10 @@
       real (kind=dbl_kind), dimension(npnt) :: &
          paice, pTair, pQa, pfsnow, pfrain, pfsw, pflw, & 
          pTsfc, pevap, pfswabs, pflwout, pflat, pfsens, &
-         pfsurf, pfcondtop, psst,  pTf, hiavg, hsavg, pfhocn, &
-         pmeltt, pmeltb, pmeltl, psnoice, pfrazil, pcongel
+         pfsurf, pfcondtop, psst, psss, pTf, hiavg, hsavg, hbavg, hbioavg, &
+         pfhocn, &
+         pmeltt, pmeltb, pmeltl, psnoice, pdsnow, pfrazil, pcongel, &
+         phin1, phin2
 
       !-----------------------------------------------------------------
       ! state of the ice
@@ -376,14 +390,8 @@
       if (print_global) then
 
          ! total ice/snow internal energy
-         do iblk = 1, nblocks
-            do j = 1, ny_block
-            do i = 1, nx_block
-               work1(i,j,iblk) = esno(i,j,iblk) + eice(i,j,iblk)
-            enddo
-            enddo
-         enddo
-
+         call total_energy (work1)
+      
          etotn = global_sum(work1, distrb_info, &
                             field_loc_center, tarean)
          etots = global_sum(work1, distrb_info, &
@@ -404,6 +412,16 @@
                                 field_loc_center, tareas)
          evpn = evpn*dt
          evps = evps*dt
+
+         ! total ice volume from brine height tracer
+         shmaxnt = c0
+         shmaxst = c0
+         if (hbrine) then
+         shmaxnt = global_sum(vice(:,:,:)*trcr(:,:,nt_fbri,:), distrb_info, &
+                                   field_loc_center, tarean)
+         shmaxst = global_sum(vice(:,:,:)*trcr(:,:,nt_fbri,:), distrb_info, &
+                                   field_loc_center, tareas)
+         endif
 
          ! salt flux
          sfsaltn = global_sum(fsalt_gbm, distrb_info, &
@@ -642,6 +660,8 @@
       ! NOTE these are computed for the last timestep only (not avg)
       !-----------------------------------------------------------------
 
+         call total_energy (work1)
+
          do n = 1, npnt
             if (my_task == pmloc(n)) then
                i = piloc(n)
@@ -658,9 +678,19 @@
                
                hiavg(n) = c0                       ! avg snow/ice thickness
                hsavg(n) = c0
+               hbavg(n) = c0                       ! avg freeboard height
+               hbioavg(n) = c0                     ! avg bio thickness
+               phin1(n) = c0                       ! cat 1 ice thickness
+               phin2(n) = c0                       ! cat 2 ice thickness
                if (paice(n) /= c0) then
                   hiavg(n) = vice(i,j,iblk)/paice(n)
+                  if (aicen(i,j,1,iblk) /= c0) &
+                  phin1(n) = vicen(i,j,1,iblk)/aicen(i,j,1,iblk) 
+                  if (aicen(i,j,2,iblk) /= c0) &
+                  phin2(n) = vicen(i,j,2,iblk)/aicen(i,j,2,iblk)
                   hsavg(n) = vsno(i,j,iblk)/paice(n)
+                  hbioavg(n) = trcr(i,j,nt_fbri,iblk)* hiavg(n) !/paice(n)  
+                  hbavg(n) = hbioavg(n) - rhosi/rhow*hiavg(n) - rhos/rhow*hsavg(n) 
                endif
                pTsfc(n) = trcr(i,j,nt_Tsfc,iblk)   ! ice/snow sfc temperature
                pevap(n) = evap(i,j,iblk)*dt/rhoi   ! sublimation/condensation
@@ -674,13 +704,14 @@
                pmeltb(n) = meltb(i,j,iblk)         ! bottom melt
                pmeltl(n) = meltl(i,j,iblk)         ! lateral melt
                psnoice(n) = snoice(i,j,iblk)       ! snow ice
+               pdsnow(n) = dsnow(i,j,iblk)         ! snow change
                pfrazil(n) = frazil(i,j,iblk)       ! frazil ice
                pcongel(n) = congel(i,j,iblk)       ! congelation ice
                pdhi(n) = vice(i,j,iblk) - pdhi(n)  ! ice thickness change
                pdhs(n) = vsno(i,j,iblk) - pdhs(n)  ! snow thickness change
-               pde(n) = -(eice(i,j,iblk) &         ! ice/snow energy change 
-                        + esno(i,j,iblk) - pde(n)) / dt
+               pde(n) =-(work1(i,j,iblk)- pde(n))/dt ! ice/snow energy change 
                psst(n) = sst(i,j,iblk)             ! sea surface temperature
+               psss(n) = sss(i,j,iblk)             ! sea surface salinity
                pTf(n) = Tf(i,j,iblk)               ! freezing temperature
                pfhocn(n) = -fhocn(i,j,iblk)        ! ocean heat used by ice
 
@@ -694,7 +725,11 @@
             call broadcast_scalar(pflw     (n), pmloc(n))             
             call broadcast_scalar(paice    (n), pmloc(n))             
             call broadcast_scalar(hsavg    (n), pmloc(n))             
-            call broadcast_scalar(hiavg    (n), pmloc(n))             
+            call broadcast_scalar(hiavg    (n), pmloc(n))              
+            call broadcast_scalar(phin1    (n), pmloc(n))                
+            call broadcast_scalar(phin2    (n), pmloc(n))              
+            call broadcast_scalar(hbavg    (n), pmloc(n))              
+            call broadcast_scalar(hbioavg  (n), pmloc(n))             
             call broadcast_scalar(pTsfc    (n), pmloc(n))             
             call broadcast_scalar(pevap    (n), pmloc(n))             
             call broadcast_scalar(pfswabs  (n), pmloc(n)) 
@@ -707,12 +742,14 @@
             call broadcast_scalar(pmeltb   (n), pmloc(n)) 
             call broadcast_scalar(pmeltl   (n), pmloc(n)) 
             call broadcast_scalar(psnoice  (n), pmloc(n)) 
+            call broadcast_scalar(pdsnow   (n), pmloc(n)) 
             call broadcast_scalar(pfrazil  (n), pmloc(n)) 
             call broadcast_scalar(pcongel  (n), pmloc(n)) 
             call broadcast_scalar(pdhi     (n), pmloc(n)) 
             call broadcast_scalar(pdhs     (n), pmloc(n)) 
             call broadcast_scalar(pde      (n), pmloc(n)) 
             call broadcast_scalar(psst     (n), pmloc(n)) 
+            call broadcast_scalar(psss     (n), pmloc(n)) 
             call broadcast_scalar(pTf      (n), pmloc(n)) 
             call broadcast_scalar(pfhocn   (n), pmloc(n))
             
@@ -774,6 +811,7 @@
          write(nu_diag,901) 'arwt heat error        = ',herrn,herrs
 
          write(nu_diag,*) '----------------------------'
+         write(nu_diag,901) 'total ice vol tr (m^3) = ',shmaxnt, shmaxst
          write(nu_diag,901) 'arwt salt mass (kg)    = ',msltn,mslts
          write(nu_diag,901) 'arwt salt mass chng(kg)= ',delmsltn, &
                                                         delmslts
@@ -828,8 +866,13 @@
         endif
         write(nu_diag,*) '----------ice----------'
         write(nu_diag,900) 'area fraction          = ',paice(1),paice(2)
+        write(nu_diag,900) 'cat 1 ice thickness (m)= ',phin1(1),phin1(2)
+        write(nu_diag,900) 'cat 2 ice thickness (m)= ',phin2(1),phin2(2)
         write(nu_diag,900) 'avg ice thickness (m)  = ',hiavg(1),hiavg(2)
         write(nu_diag,900) 'avg snow depth (m)     = ',hsavg(1),hsavg(2)
+        write(nu_diag,900) 'avg freeboard height(m)= ',hbavg(1),hbavg(2)
+        write(nu_diag,900) 'avg bio thickness (m)  = ',hbioavg(1),hbioavg(2)
+
         if (calc_Tsfc) then
            write(nu_diag,900) 'surface temperature(C) = ',pTsfc(1),pTsfc(2)
            write(nu_diag,900) 'absorbed shortwave flx = ',pfswabs(1), &
@@ -853,11 +896,14 @@
                                                        pcongel(2)
         write(nu_diag,900) 'snow-ice (m)           = ',psnoice(1), &
                                                        psnoice(2)
+        write(nu_diag,900) 'snow change (m)        = ',pdsnow(1), &
+                                                       pdsnow(2)
         write(nu_diag,900) 'effective dhi (m)      = ',pdhi(1),pdhi(2)
         write(nu_diag,900) 'effective dhs (m)      = ',pdhs(1),pdhs(2)
         write(nu_diag,900) 'intnl enrgy chng(W/m^2)= ',pde (1),pde (2)
         write(nu_diag,*) '----------ocn----------'
         write(nu_diag,900) 'sst (C)                = ',psst(1),psst(2)
+        write(nu_diag,900) 'sss (ppt)              = ',psss(1),psss(2)
         write(nu_diag,900) 'freezing temp (C)      = ',pTf(1),pTf(2)
         write(nu_diag,900) 'heat used (W/m^2)      = ',pfhocn(1), &
                                                        pfhocn(2)
@@ -927,15 +973,7 @@
       totms = totmis + rhos*snwmxs
 
       ! north/south ice+snow energy
-      ! total ice/snow energy
-      do iblk = 1, nblocks
-      do j=1,ny_block
-      do i=1,nx_block
-         work1(i,j,iblk) = esno(i,j,iblk) + eice(i,j,iblk)
-      enddo
-      enddo
-      enddo
-      
+      call total_energy (work1)
       toten = global_sum(work1, distrb_info, field_loc_center, tarean)
       totes = global_sum(work1, distrb_info, field_loc_center, tareas)
 
@@ -991,7 +1029,7 @@
 
                pdhi(n) = vice(i,j,iblk)
                pdhs(n) = vsno(i,j,iblk)
-               pde(n)  = esno(i,j,iblk) + eice(i,j,iblk)
+               pde(n) = work1(i,j,iblk)
             endif
 
          enddo  ! npnt
@@ -999,6 +1037,105 @@
       endif                     ! print_points
 
       end subroutine init_mass_diags
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: total_energy
+!
+! !INTERFACE:
+!
+      subroutine total_energy (work)
+!
+! !DESCRIPTION:
+!
+! Computes total energy of ice and snow in a grid cell.
+!
+! !REVISION HISTORY:
+!
+! authors: E. C. Hunke, LANL
+!
+! !USES:
+!
+      use ice_blocks, only: nx_block, ny_block
+      use ice_domain, only: nblocks
+      use ice_domain_size
+      use ice_grid, only: tmask
+      use ice_state, only: vicen, vsnon, trcrn, nt_qice, nt_qsno
+!
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks),  &
+         intent(out) :: &
+         work      ! total energy
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+        icells                ! number of ocean/ice cells
+
+      integer (kind=int_kind), dimension (nx_block*ny_block) :: &
+        indxi, &              ! compressed indices in i/j directions
+        indxj
+
+      integer (kind=int_kind) :: &
+        i, j, k, n, iblk, ij
+
+      do iblk = 1, nblocks
+
+      !-----------------------------------------------------------------
+      ! Initialize
+      !-----------------------------------------------------------------
+
+      icells = 0
+      do j = 1, ny_block
+      do i = 1, nx_block
+         if (tmask(i,j,iblk)) then
+            icells = icells + 1
+            indxi(icells) = i
+            indxj(icells) = j
+         endif                  ! tmask
+      enddo
+      enddo
+
+      work(:,:,iblk) = c0
+
+      !-----------------------------------------------------------------
+      ! Aggregate
+      !-----------------------------------------------------------------
+
+         do n = 1, ncat
+            do k = 1, nilyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  work(i,j,iblk) = work(i,j,iblk) &
+                                 + trcrn(i,j,nt_qice+k-1,n,iblk) &
+                                 * vicen(i,j,n,iblk) / real(nilyr,kind=dbl_kind)
+               enddo            ! ij
+            enddo               ! k
+
+            do k = 1, nslyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  work(i,j,iblk) = work(i,j,iblk) &
+                                 + trcrn(i,j,nt_qsno+k-1,n,iblk) &
+                                 * vsnon(i,j,n,iblk) / real(nslyr,kind=dbl_kind)
+               enddo            ! ij
+            enddo               ! k
+      enddo                     ! n
+
+      enddo                     ! iblk
+
+      end subroutine total_energy
 
 !=======================================================================
 !BOP
@@ -1171,7 +1308,7 @@
       use ice_domain
       use ice_domain_size
       use ice_state
-      use ice_itd
+    !  use ice_itd
       use ice_flux
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1220,29 +1357,25 @@
       eidebug = c0
       do n = 1,ncat
          do k = 1,nilyr
-            write(nu_diag,*) 'eicen, cat ',n,' layer ',k, &
-                 eicen(i,j,ilyr1(n)+k-1,iblk)
-            eidebug = eidebug + eicen(i,j,ilyr1(n)+k-1,iblk)
+            qi = trcrn(i,j,nt_qice+k-1,n,iblk)
+            write(nu_diag,*) 'qice, cat ',n,' layer ',k, qi
+            eidebug = eidebug + qi
             if (aicen(i,j,n,iblk) > puny) then
-               qi = eicen(i,j,ilyr1(n)+k-1,iblk) / & ! qi, eicen < 0 
-                   (vicen(i,j,n,iblk)/real(nilyr,kind=dbl_kind))
                write(nu_diag,*)  'qi/rhoi', qi/rhoi
             endif
          enddo
          write(nu_diag,*) ' '
       enddo
-      write(nu_diag,*) 'eice(i,j)',eidebug
+      write(nu_diag,*) 'qice(i,j)',eidebug
       write(nu_diag,*) ' '
 
       esdebug = c0
       do n = 1,ncat
          if (vsnon(i,j,n,iblk) > puny) then
             do k = 1,nslyr
-               write(nu_diag,*) 'esnon, cat ',n,' layer ',k, &
-                  esnon(i,j,slyr1(n)+k-1,iblk)
-               esdebug = esdebug + esnon(i,j,slyr1(n)+k-1,iblk)
-               qs = esnon(i,j,slyr1(n)+k-1,iblk) / &  ! qs, esnon < 0
-                   (vsnon(i,j,n,iblk)/real(nslyr,kind=dbl_kind))
+               qs = trcrn(i,j,nt_qsno+k-1,n,iblk)
+               write(nu_diag,*) 'qsnow, cat ',n,' layer ',k, qs
+               esdebug = esdebug + qs
                Tsnow = (Lfresh + qs/rhos) / cp_ice
                write(nu_diag,*) 'qs/rhos', qs/rhos
                write(nu_diag,*) 'Tsnow', Tsnow
@@ -1250,7 +1383,7 @@
             write(nu_diag,*) ' '
          endif
       enddo
-      write(nu_diag,*) 'esno(i,j)',esdebug
+      write(nu_diag,*) 'qsnow(i,j)',esdebug
       write(nu_diag,*) ' '
 
       write(nu_diag,*) 'uvel(i,j)',uvel(i,j,iblk)
@@ -1292,6 +1425,95 @@
       write(nu_diag,*) ' '
 
       end subroutine print_state
+
+!=======================================================================
+
+    subroutine get_global_location(il, jl, iblkl, my_task_l)
+
+      use ice_communicate, only: my_task
+      use ice_blocks
+      use ice_domain, only: blocks_ice
+      use ice_exit, only: abort_ice
+
+      integer, intent(in) :: il
+      integer, intent(in) :: jl
+      integer, intent(in) :: iblkl
+      integer, intent(in) :: my_task_l
+
+      type(block) :: this_block
+
+      integer :: ig
+      integer :: jg
+
+      ig = -1
+      jg = -1
+
+      write(*,*) "Get global location", my_task
+
+      if (my_task == my_task_l) then
+      
+         this_block = get_block(blocks_ice(iblkl),iblkl)      
+   
+         ig = this_block%i_glob(il)
+         jg = this_block%j_glob(jl)
+
+         write(nu_diag,*) "Global specific point: ", ig, jg
+         
+      endif
+
+      !call abort_ice("")
+
+    end subroutine get_global_location
+
+!=======================================================================
+
+    subroutine get_local_location()
+
+      use ice_communicate, only: my_task
+      use ice_blocks
+      use ice_domain, only: blocks_ice, nblocks
+      use ice_exit, only: abort_ice
+
+      type(block) :: this_block
+      integer :: ilo, ihi, jlo, jhi
+      integer :: i, j, iblk
+
+      integer :: ig_test, jg_test
+
+      ilex = -1
+      jlex = -1
+      iblklex = -1
+      my_task_lex = -1
+
+      do iblk = 1, nblocks
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do i = ilo, ihi
+         do j = jlo, jhi
+            ig_test = this_block%i_glob(i)
+            jg_test = this_block%j_glob(j)
+            if (ig_test == igex .and. jg_test == jgex) then
+               ! found local point
+               ilex = i
+               jlex = j
+               iblklex = iblk
+               my_task_lex = my_task
+               write(nu_diag,*)  "local specific point: ", ilex, jlex, iblklex, my_task_lex
+            endif
+         enddo ! j
+         enddo ! i
+
+      enddo ! iblk
+
+      !write(nu_diag,*)  my_task, ilex, jlex, iblklex, my_task_lex
+     
+      !call abort_ice("")
+
+    end subroutine get_local_location
 
 !=======================================================================
 

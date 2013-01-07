@@ -102,22 +102,28 @@
          num_avail_hist_fields_2D   = 0, & ! Number of 2D fields
          num_avail_hist_fields_3Dz  = 0, & ! Number of 3D fields (vertical)
          num_avail_hist_fields_3Dc  = 0, & ! Number of 3D fields (categories)
+         num_avail_hist_fields_3Db  = 0, & ! Number of 3D fields (vertical biology)
          num_avail_hist_fields_4Di  = 0, & ! Number of 4D fields (categories,vertical), ice
-         num_avail_hist_fields_4Ds  = 0    ! Number of 4D fields (categories,vertical), snow
+         num_avail_hist_fields_4Ds  = 0, & ! Number of 4D fields (categories,vertical), snow
+         num_avail_hist_fields_4Db  = 0    ! Number of 4D fields (categories,vertical), ice-biology
 
       integer (kind=int_kind) :: &        ! cumulative counts
          n2D     , & ! num_avail_hist_fields_2D
          n3Dccum , & ! n2D     + num_avail_hist_fields_3Dc
          n3Dzcum , & ! n3Dccum + num_avail_hist_fields_3Dz
-         n4Dicum , & ! n3Dzcum + num_avail_hist_fields_4Di
+         n3Dbcum , & ! n3Dzcum + num_avail_hist_fields_3Db
+         n4Dicum , & ! n3Dbcum + num_avail_hist_fields_4Di
          n4Dscum , & ! n4Dicum + num_avail_hist_fields_4Ds
-         nzlyr       ! vertical dimension (temp variable)
+         n4Dbcum , & ! n4Dscum + num_avail_hist_fields_4Db
+         nzlyr   , & ! vertical dimension (temp variable)
+         nzlyrb      ! vertical dimension of biology grid (temp variable)
 
       ! for now, ice and snow have same dimensions in netcdf
       ! could set nzilyr = nilyr + nslyr and write Tin+Tsn together into Tinz
       integer (kind=int_kind), parameter :: &
          nzilyr = nilyr         , & ! vertical dimension (allows alternative grids)
-         nzslyr = nslyr         
+         nzslyr = nslyr         , &
+         nzblyr = nblyr+2
 
       type (ice_hist_field), dimension(max_avail_hist_fields) :: &
          avail_hist_fields
@@ -129,7 +135,7 @@
       integer (kind=int_kind), parameter :: &
          nvar = 11              , & ! number of grid fields that can be written
                                     !   excluding grid vertices
-         nvarz = 3              , & ! number of category/vertical grid fields written
+         nvarz = 4              , & ! number of category/vertical grid fields written
          ncat_hist = ncat           ! number of ice categories written <= ncat
 
       real (kind=real_kind) :: time_beg(max_nstrm), &
@@ -138,13 +144,16 @@
       real (kind=dbl_kind), allocatable :: &
          a2D (:,:,:,:)    , & ! field accumulations/averages, 2D
          a3Dz(:,:,:,:,:)  , & ! field accumulations/averages, 3D vertical
+         a3Db(:,:,:,:,:)  , & ! field accumulations/averages, 3D vertical biology
          a3Dc(:,:,:,:,:)  , & ! field accumulations/averages, 3D categories
          a4Di(:,:,:,:,:,:), & ! field accumulations/averages, 4D categories,vertical, ice
-         a4Ds(:,:,:,:,:,:)    ! field accumulations/averages, 4D categories,vertical, snow
+         a4Ds(:,:,:,:,:,:), & ! field accumulations/averages, 4D categories,vertical, snow
+         a4Db(:,:,:,:,:,:)    ! field accumulations/averages, 4D categories,vertical, bio
          
       real (kind=dbl_kind), allocatable :: &
          Tinz4d (:,:,:,:)    , & ! array for Tin
-         Tsnz4d (:,:,:,:)        ! array for Tsn
+         Tsnz4d (:,:,:,:)    , & ! array for Tsn
+         Sinz4d (:,:,:,:)        ! array for Sin
 
       real (kind=dbl_kind) :: &
          avgct(max_nstrm)   ! average sample counter
@@ -162,14 +171,23 @@
          ustr3Dz = 'ULON ULAT VGRD time', & ! vcoord for U cell quantities, 3D
          tstr3Dc = 'TLON TLAT NCAT time', & ! vcoord for T cell quantities, 3D
          ustr3Dc = 'ULON ULAT NCAT time', & ! vcoord for U cell quantities, 3D
-!ferret         tstr4Di  = 'TLON TLAT VGRDi NCAT', & ! vcoord for T cell quantities, 4D, ice
-!ferret         ustr4Di  = 'ULON ULAT VGRDi NCAT', & ! vcoord for U cell quantities, 4D, ice
-!ferret         tstr4Ds  = 'TLON TLAT VGRDs NCAT', & ! vcoord for T cell quantities, 4D, snow
-!ferret         ustr4Ds  = 'ULON ULAT VGRDs NCAT'    ! vcoord for U cell quantities, 4D, snow
-         tstr4Di  = 'TLON TLAT VGRDi NCAT time', & ! ferret can not handle time 
-         ustr4Di  = 'ULON ULAT VGRDi NCAT time', & ! index on 4D variables.
-         tstr4Ds  = 'TLON TLAT VGRDs NCAT time', & ! Use 'ferret' lines instead
-         ustr4Ds  = 'ULON ULAT VGRDs NCAT time'    ! (below also)
+         tstr3Db = 'TLON TLAT VGRDb time', & ! vcoord for T cell quantities, 3D
+         ustr3Db = 'ULON ULAT VGRDb time', & ! vcoord for U cell quantities, 3D
+
+!ferret
+         tstr4Di  = 'TLON TLAT VGRDi NCAT', & ! vcoord for T cell quantities, 4D, ice
+         ustr4Di  = 'ULON ULAT VGRDi NCAT', & ! vcoord for U cell quantities, 4D, ice
+         tstr4Ds  = 'TLON TLAT VGRDs NCAT', & ! vcoord for T cell quantities, 4D, snow
+         ustr4Ds  = 'ULON ULAT VGRDs NCAT', & ! vcoord for U cell quantities, 4D, snow
+         tstr4Db  = 'TLON TLAT VGRDb NCAT', & ! vcoord for T cell quantities, 4D, bio
+         ustr4Db  = 'ULON ULAT VGRDb NCAT'    ! vcoord for U cell quantities, 4D, bio
+!ferret
+!         tstr4Di  = 'TLON TLAT VGRDi NCAT time', & ! ferret can not handle time 
+!         ustr4Di  = 'ULON ULAT VGRDi NCAT time', & ! index on 4D variables.
+!         tstr4Ds  = 'TLON TLAT VGRDs NCAT time', & ! Use 'ferret' lines instead
+!         ustr4Ds  = 'ULON ULAT VGRDs NCAT time', & ! (below also)
+!         tstr4Db  = 'TLON TLAT VGRDb NCAT time', & 
+!         ustr4Db  = 'ULON ULAT VGRDb NCAT time'    
 
       !---------------------------------------------------------------
       ! flags: write to output file if true or histfreq value
@@ -183,7 +201,8 @@
            f_HTN       = .true., f_HTE        = .true., &
            f_ANGLE     = .true., f_ANGLET     = .true., &
            f_bounds    = .true., f_NCAT       = .true., &
-           f_VGRDi     = .true., f_VGRDs      = .true.
+           f_VGRDi     = .true., f_VGRDs      = .true., &
+           f_VGRDb     = .true.
 
       character (len=max_nstrm) :: &
 !          f_example   = 'md', &
@@ -210,11 +229,22 @@
            f_Tair      = 'm', &
            f_Tref      = 'm', f_Qref       = 'm', &
            f_congel    = 'm', f_frazil     = 'm', &
-           f_snoice    = 'm', f_meltt      = 'm', &
+           f_snoice    = 'm', f_dsnow = 'm', f_meltt      = 'm', &
            f_melts     = 'm', &
            f_meltb     = 'm', f_meltl      = 'm', &
            f_fresh     = 'm', f_fresh_ai   = 'm', &
            f_fsalt     = 'm', f_fsalt_ai   = 'm', &
+           f_fsice     = 'm', f_fsice_ai   = 'm', &
+           f_fsice_g   = 'm', f_fsice_g_ai = 'm', &
+           f_fNO     = 'm', f_fNO_ai   = 'm', &
+           f_fNO_g   = 'm', f_fNO_g_ai = 'm', &
+           f_fNH     = 'm', f_fNH_ai   = 'm', &
+           f_fNH_g   = 'm', f_fNH_g_ai = 'm', &
+           f_fN     = 'm', f_fN_ai   = 'm', &
+           f_fN_g   = 'm', f_fN_g_ai = 'm', &
+           f_fSil     = 'm', f_fSil_ai   = 'm', &
+           f_fSil_g   = 'm', f_fSil_g_ai = 'm', &
+           f_fsicen_g  = 'm',                     &
            f_fhocn     = 'm', f_fhocn_ai   = 'm', &
            f_fswthru   = 'm', f_fswthru_ai = 'm', &
            f_strairx   = 'm', f_strairy    = 'm', &
@@ -253,7 +283,30 @@
            f_fsurfn_ai = 'x' ,f_fcondtopn_ai='x', &
            f_fmelttn_ai= 'x', f_flatn_ai   = 'x', &
 !          f_field3dz  = 'x',                     &
-           f_Tinz      = 'x', f_Tsnz       = 'x' , &	   
+           f_Tinz      = 'x', f_Sinz       = 'x', &
+           f_Tsnz      = 'x', &
+           f_bgc_N_sk  = 'x',    f_bgc_C_sk= 'x', &
+           f_bgc_chl_sk= 'x', f_bgc_Nit_sk = 'x', &
+           f_bgc_Am_sk = 'x',  f_bgc_Sil_sk= 'x', &
+           f_bgc_DMSPp_sk = 'x', f_bgc_DMSPd_sk = 'x', &
+           f_bgc_DMS_sk = 'x', & 
+           f_bgc_Nit_ml = 'x',  f_bgc_Am_ml = 'x', & 
+           f_bgc_Sil_ml = 'x', &  
+           f_bgc_DMSP_ml = 'x', f_bgc_DMS_ml = 'x', & 
+           f_upNO      = 'x',   f_upNH        = 'x',   & 
+           f_zTin       = 'x',      &
+           f_zphi       = 'x',    &
+           f_iDi       = 'x',  f_iki           = 'x',    &
+           f_bgc_NO       = 'x',    &
+           f_bgc_N     = 'x',  f_bgc_NH       = 'x',    &
+           f_bgc_C     = 'x',  f_bgc_chl      = 'x',    &
+           f_bgc_DMSPp = 'x',  f_bgc_DMSPd    = 'x',    &
+           f_bgc_DMS   = 'x',  f_bgc_Sil      = 'x',   &
+           f_bgc_PON   = 'x',  f_bgc_S        = 'x',   &
+           f_fbri = 'x',          &
+           f_growN     = 'x', f_zfswin      = 'x', &
+           f_Stot = 'x', f_chlnet = 'x',  &
+           f_PPnet = 'x', f_NOnet = 'x', &
            f_a11       = 'x', f_a12        = 'x' , & 
            f_e11       = 'x', f_e12        = 'x' , & 
            f_e22       = 'x',			  & 
@@ -263,6 +316,8 @@
            f_yieldstress12       = 'x',           & 
            f_yieldstress22       = 'x'
 
+!echmod:  commented out Tsf_ice for now.  Calculate it from q when needed.
+         !  f_Tsf_ice = 'm'
 
       !---------------------------------------------------------------
       ! namelist variables
@@ -277,6 +332,7 @@
            f_ANGLE    , f_ANGLET   , &
            f_bounds   , f_NCAT     , &
            f_VGRDi    , f_VGRDs    , &
+           f_VGRDb    , &
 !          f_example  , &
            f_hi,        f_hs       , &
            f_Tsfc,      f_aice     , &
@@ -301,11 +357,22 @@
            f_Tair                  , &
            f_Tref,      f_Qref     , &
            f_congel,    f_frazil   , &
-           f_snoice,    f_meltt    , &
+           f_snoice,  f_dsnow,   f_meltt    , &
            f_melts,                  &
            f_meltb,     f_meltl    , &
            f_fresh,     f_fresh_ai , &  
-           f_fsalt,     f_fsalt_ai , &
+           f_fsalt,     f_fsalt_ai , &  
+           f_fsice,     f_fsice_ai , &   
+           f_fsice_g,   f_fsice_g_ai , &  
+           f_fsicen_g, &
+           f_fNO,       f_fNO_ai , &
+           f_fNO_g,     f_fNO_g_ai, &
+           f_fNH,       f_fNH_ai, &
+           f_fNH_g,     f_fNH_g_ai, &
+           f_fN,        f_fN_ai, &
+           f_fN_g,      f_fN_g_ai, &
+           f_fSil,      f_fSil_ai, &
+           f_fSil_g,    f_fSil_g_ai, &
            f_fhocn,     f_fhocn_ai , &
            f_fswthru,   f_fswthru_ai,&
            f_strairx,   f_strairy  , &
@@ -344,7 +411,27 @@
            f_fsurfn_ai,f_fcondtopn_ai,&
            f_fmelttn_ai,f_flatn_ai,  &
 !          f_field3dz,  &
-           f_Tinz,      f_Tsnz 	   , &	      
+           f_Tinz,      f_Sinz,      &
+           f_Tsnz,  &
+           f_bgc_N_sk,    f_bgc_C_sk,   f_bgc_chl_sk, & 
+           f_bgc_Nit_sk,  f_bgc_Am_sk,  f_bgc_Sil_sk, &
+           f_bgc_DMSPp_sk, f_bgc_DMSPd_sk, f_bgc_DMS_sk, & 
+           f_bgc_Nit_ml,  f_bgc_Am_ml,  f_bgc_Sil_ml, &  
+           f_bgc_DMSP_ml, f_bgc_DMS_ml, &
+           f_upNO,  f_upNH, &       
+           f_zTin                  , &
+           f_zphi      , &
+           f_iDi,       f_iki       , &
+           f_bgc_NO   , f_bgc_N    , & 
+           f_bgc_NH  , &
+           f_bgc_C    , f_bgc_chl  , &
+           f_bgc_Sil  , f_bgc_DMSPp, &
+           f_bgc_DMSPd , f_bgc_DMS , &
+           f_bgc_PON  , f_bgc_S, &
+           f_fbri, &
+           f_growN,    f_zfswin, &
+           f_Stot,    f_chlnet, &
+           f_PPnet, f_NOnet, &
            f_a11, 	f_a12 	   , &
            f_e11, 	f_e12	   , &
            f_e22                   , &
@@ -353,6 +440,7 @@
            f_yieldstress11         , &	
            f_yieldstress12	   , &
            f_yieldstress22
+!           f_Tsf_ice
 
       !---------------------------------------------------------------
       ! field indices
@@ -374,6 +462,7 @@
            n_NCAT       = 1, &
            n_VGRDi      = 2, &
            n_VGRDs      = 3, &
+           n_VGRDb      = 4, &
 
            n_lont_bnds  = 1, &
            n_latt_bnds  = 2, &
@@ -403,11 +492,22 @@
            n_Tair       , &
            n_Tref       , n_Qref       , &
            n_congel     , n_frazil     , &
-           n_snoice     , n_meltt      , &
+           n_snoice, n_dsnow     , n_meltt      , &
            n_melts      , &
            n_meltb      , n_meltl      , &
            n_fresh      , n_fresh_ai   , &
            n_fsalt      , n_fsalt_ai   , &
+           n_fsice      , n_fsice_ai   , &
+           n_fsice_g    , n_fsice_g_ai   , &
+           n_fsicen_g, & 
+           n_fNO        , n_fNO_ai , &
+           n_fNO_g      , n_fNO_g_ai, &
+           n_fNH        , n_fNH_ai, &
+           n_fNH_g      , n_fNH_g_ai, &
+           n_fN         , n_fN_ai, &
+           n_fN_g       , n_fN_g_ai, &
+           n_fSil       , n_fSil_ai, &
+           n_fSil_g     , n_fSil_g_ai, &
            n_fhocn      , n_fhocn_ai   , &
            n_fswthru    , n_fswthru_ai , &
            n_strairx    , n_strairy    , &
@@ -429,7 +529,21 @@
            n_fsurf_ai   , &
            n_ardg       , n_vrdg       , &
            n_alvl       , n_vlvl       , &
-           n_fcondtop_ai, n_fmeltt_ai  , &
+           n_fcondtop_ai, n_fmeltt_ai  , &   
+           n_bgc_N_sk , &
+           n_bgc_C_sk, &
+           n_bgc_chl_sk, &
+           n_bgc_Nit_sk, &
+           n_bgc_Am_sk, &
+           n_bgc_Sil_sk, &
+           n_bgc_Nit_ml, &
+           n_bgc_Am_ml, &
+           n_bgc_Sil_ml, &
+           n_bgc_DMSPp_sk, &
+           n_bgc_DMSPd_sk, &
+           n_bgc_DMS_sk , &
+           n_bgc_DMSP_ml, &
+           n_bgc_DMS_ml, &
            n_aicen      , n_vicen      , &
            n_ardgn      , n_vrdgn      , &
            n_dardg1ndt  , n_dardg2ndt  , &
@@ -447,7 +561,32 @@
            n_fmelttn_ai  , &
            n_flatn_ai    , &
 !          n_field3dz    , &
-           n_Tinz        , n_Tsnz	, &
+           n_Tinz        , n_Sinz      , &
+           n_Tsnz, &
+           n_upNO,  &
+           n_upNH,  &
+           n_zTin         , & 
+           n_zphi, &
+           n_iDi, &
+           n_iki, &
+           n_bgc_NO, &
+           n_bgc_N, &
+           n_bgc_NH, &
+           n_bgc_C, &
+           n_bgc_chl, &
+           n_bgc_DMSPp, &
+           n_bgc_DMSPd, &
+           n_bgc_DMS, &
+           n_bgc_Sil, &
+           n_bgc_PON, &
+           n_bgc_S,  &
+           n_fbri, &
+           n_growN, &
+           n_zfswin, &
+           n_Stot, &
+           n_chlnet, &
+           n_PPnet, &
+           n_NOnet, &
 	   n_a11	 , n_a12	, &
 	   n_e11	 , n_e12 	, &
 	   n_e22	 , &
@@ -455,6 +594,7 @@
 	   n_s22	 , &
 	   n_yieldstress11, n_yieldstress12,  &
 	   n_yieldstress22
+!           n_Tsf_ice
 
       ! aerosols
       integer(kind=int_kind), dimension(max_aero,max_nstrm) :: &
@@ -505,7 +645,17 @@
       use ice_dyn_evp, only: kdyn
       use ice_flux, only: mlt_onset, frz_onset, albcnt
       use ice_restart, only: restart
-      use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero
+      use ice_zbgc_public, only: tr_bgc_N_sk, tr_bgc_C_sk, tr_bgc_chl_sk, &
+                         tr_bgc_Nit_sk, tr_bgc_Am_sk, tr_bgc_Sil_sk, &
+                         tr_bgc_DMSPp_sk, tr_bgc_DMSPd_sk, tr_bgc_DMS_sk, &
+                         tr_bgc_NO, tr_bgc_NH, tr_bgc_N, tr_bgc_C, &
+                         tr_bgc_chl, tr_bgc_Sil, tr_bgc_DMSPp, tr_bgc_DMSPd,&
+                         tr_bgc_DMS, tr_bgc_PON,  &
+                         nlt_bgc_N, &
+                         nlt_bgc_NO, nlt_bgc_C, nlt_bgc_chl, &
+                         nlt_bgc_NH, nlt_bgc_Sil, nlt_bgc_DMSPp, &
+                         nlt_bgc_DMSPd, nlt_bgc_DMS, nlt_bgc_PON , tr_bgc_S
+      use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero, hbrine
       use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -600,6 +750,34 @@
          f_aero      = 'x' 
          f_aeron     = 'x' ! NOTE not implemented
       endif
+
+      if (.not. tr_bgc_N_sk)  f_bgc_N_sk = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_C_sk = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_chl_sk = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_Nit_sk = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_Am_sk = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_Sil_sk = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_DMSPp_sk = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_DMSPd_sk = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_DMS_sk = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_Nit_ml = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_Am_ml = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_Sil_ml = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_DMSP_ml = 'x'
+      if (.not. tr_bgc_N_sk)  f_bgc_DMS_ml = 'x'
+      if (.not. tr_bgc_NO)    f_bgc_NO  = 'x'
+      if (.not. tr_bgc_NH)    f_bgc_NH  = 'x'
+      if (.not. tr_bgc_N)     f_bgc_N  = 'x'
+      if (.not. tr_bgc_C)     f_bgc_C  = 'x'
+      if (.not. tr_bgc_chl)   f_bgc_chl  = 'x'
+      if (.not. tr_bgc_Sil)   f_bgc_Sil  = 'x'
+      if (.not. tr_bgc_DMSPp) f_bgc_DMSPp  = 'x'
+      if (.not. tr_bgc_DMSPd) f_bgc_DMSPd  = 'x'
+      if (.not. tr_bgc_DMS)   f_bgc_DMS  = 'x'
+      if (.not. tr_bgc_PON)   f_bgc_PON  = 'x'
+      if (.not. tr_bgc_S)     f_bgc_S  = 'x'
+      if (.not. hbrine)       f_fbri = 'x'
+
       if (kdyn /= 2) then
            f_a11       = 'x'
            f_a12       = 'x'
@@ -644,6 +822,7 @@
       call broadcast_scalar (f_NCAT, master_task)
       call broadcast_scalar (f_VGRDi, master_task)
       call broadcast_scalar (f_VGRDs, master_task)
+      call broadcast_scalar (f_VGRDb, master_task)
 
 !     call broadcast_scalar (f_example, master_task)
       call broadcast_scalar (f_hi, master_task)
@@ -689,6 +868,7 @@
       call broadcast_scalar (f_congel, master_task)
       call broadcast_scalar (f_frazil, master_task)
       call broadcast_scalar (f_snoice, master_task)
+      call broadcast_scalar (f_dsnow, master_task)
       call broadcast_scalar (f_meltt, master_task)
       call broadcast_scalar (f_melts, master_task)
       call broadcast_scalar (f_meltb, master_task)
@@ -697,6 +877,27 @@
       call broadcast_scalar (f_fresh_ai, master_task)
       call broadcast_scalar (f_fsalt, master_task)
       call broadcast_scalar (f_fsalt_ai, master_task)
+      call broadcast_scalar (f_fsice, master_task)
+      call broadcast_scalar (f_fsice_ai, master_task)
+      call broadcast_scalar (f_fsice_g, master_task)
+      call broadcast_scalar (f_fsice_g_ai, master_task)
+      call broadcast_scalar (f_fNO, master_task)
+      call broadcast_scalar (f_fNO_ai, master_task)
+      call broadcast_scalar (f_fNO_g, master_task)
+      call broadcast_scalar (f_fNO_g_ai, master_task)
+      call broadcast_scalar (f_fNH, master_task)
+      call broadcast_scalar (f_fNH_ai, master_task)
+      call broadcast_scalar (f_fNH_g, master_task)
+      call broadcast_scalar (f_fNH_g_ai, master_task)
+      call broadcast_scalar (f_fN,  master_task)
+      call broadcast_scalar (f_fN_ai, master_task)
+      call broadcast_scalar (f_fN_g, master_task)
+      call broadcast_scalar (f_fN_g_ai, master_task)
+      call broadcast_scalar (f_fSil, master_task)
+      call broadcast_scalar (f_fSil_ai, master_task)
+      call broadcast_scalar (f_fSil_g, master_task)
+      call broadcast_scalar (f_fSil_g_ai, master_task)
+      call broadcast_scalar (f_fsicen_g, master_task)
       call broadcast_scalar (f_fhocn, master_task)
       call broadcast_scalar (f_fhocn_ai, master_task)
       call broadcast_scalar (f_fswthru, master_task)
@@ -751,8 +952,49 @@
 
 !      call broadcast_scalar (f_field3dz, master_task)
       call broadcast_scalar (f_Tinz, master_task)
+      call broadcast_scalar (f_Sinz, master_task)
       call broadcast_scalar (f_Tsnz, master_task)
 
+      call broadcast_scalar (f_bgc_N_sk, master_task)
+      call broadcast_scalar (f_bgc_C_sk, master_task)
+      call broadcast_scalar (f_bgc_chl_sk, master_task)
+      call broadcast_scalar (f_bgc_Nit_sk, master_task)
+      call broadcast_scalar (f_bgc_Am_sk, master_task)
+      call broadcast_scalar (f_bgc_Sil_sk, master_task)
+      call broadcast_scalar (f_bgc_DMSPp_sk, master_task)
+      call broadcast_scalar (f_bgc_DMSPd_sk, master_task)
+      call broadcast_scalar (f_bgc_DMS_sk, master_task)
+      call broadcast_scalar (f_bgc_Nit_ml, master_task)
+      call broadcast_scalar (f_bgc_Am_ml, master_task)
+      call broadcast_scalar (f_bgc_Sil_ml, master_task)
+      call broadcast_scalar (f_bgc_DMSP_ml, master_task)
+      call broadcast_scalar (f_bgc_DMS_ml, master_task)
+
+      call broadcast_scalar (f_zTin, master_task)
+      call broadcast_scalar (f_zphi, master_task)
+      call broadcast_scalar (f_iDi, master_task)
+      call broadcast_scalar (f_iki, master_task)
+      call broadcast_scalar (f_bgc_NO, master_task)
+      call broadcast_scalar (f_bgc_NH, master_task)
+      call broadcast_scalar (f_bgc_N, master_task)
+      call broadcast_scalar (f_bgc_C, master_task)
+      call broadcast_scalar (f_bgc_chl, master_task)
+      call broadcast_scalar (f_bgc_Sil, master_task)
+      call broadcast_scalar (f_bgc_DMSPp, master_task)
+      call broadcast_scalar (f_bgc_DMSPd, master_task)
+      call broadcast_scalar (f_bgc_DMS, master_task)
+      call broadcast_scalar (f_bgc_PON, master_task)
+      call broadcast_scalar (f_bgc_S, master_task)
+      call broadcast_scalar (f_fbri, master_task)
+      call broadcast_scalar (f_growN, master_task)
+      call broadcast_scalar (f_zfswin, master_task)
+      call broadcast_scalar (f_Stot, master_task)
+      call broadcast_scalar (f_chlnet, master_task)
+      call broadcast_scalar (f_PPnet, master_task)
+      call broadcast_scalar (f_NOnet, master_task)
+!      call broadcast_scalar (f_Tsf_ice, master_task)
+      call broadcast_scalar (f_upNO, master_task)
+      call broadcast_scalar (f_upNH, master_task)
       call broadcast_scalar (f_iage, master_task)
       call broadcast_scalar (f_FY, master_task)
       call broadcast_scalar (f_ardg, master_task)
@@ -808,6 +1050,7 @@
              "grid cell mean snow thickness",                     &
              "snow volume per unit grid cell area", c1, c0,       &
              ns1, f_hs)
+
       
       if (f_Tsfc(1:1) /= 'x') &
          call define_hist_field(n_Tsfc,"Tsfc","C",tstr2D, tcstr,    &
@@ -1048,6 +1291,12 @@
              "snow-ice formation",                                      &
              "none", mps_to_cmpdy/dt, c0,                               &
              ns1, f_snoice)
+           
+      if (f_dsnow(1:1) /= 'x') &
+         call define_hist_field(n_dsnow,"dsnow","cm/day",tstr2D, tcstr, &
+             "snow formation",                                      &
+             "none", mps_to_cmpdy/dt, c0,                               &
+             ns1, f_dsnow)
       
       if (f_meltt(1:1) /= 'x') &
          call define_hist_field(n_meltt,"meltt","cm/day",tstr2D, tcstr, &
@@ -1098,6 +1347,156 @@
              "weighted by ice area", c1, c0,                                  &
              ns1, f_fsalt_ai)
       
+      if (f_fsice(1:1) /= 'x') &
+         call define_hist_field(n_fsice,"fsice","kg/m^2/s",tstr2D, tcstr, &
+             "prognostic salt flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains salt", c1, c0,                   &
+             ns1, f_fsice)
+      
+      if (f_fsice_ai(1:1) /= 'x') &
+         call define_hist_field(n_fsice_ai,"fsice_ai","kg/m^2/s",tstr2D, tcstr, &
+             "prognostic salt flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fsice_ai)
+      
+      if (f_fsice_g(1:1) /= 'x') &
+         call define_hist_field(n_fsice_g,"fsice_g","kg/m^2/s",tstr2D, tcstr, &
+             "Gravity drainage salt flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains salt", c1, c0,                   &
+             ns1, f_fsice_g)
+      
+      if (f_fsice_g_ai(1:1) /= 'x') &
+         call define_hist_field(n_fsice_g_ai,"fsice_g_ai","kg/m^2/s",tstr2D, tcstr, &
+             "Gravity drainage salt flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fsice_g_ai)
+      
+      if (f_fNO(1:1) /= 'x') &
+         call define_hist_field(n_fNO,"fNO","mmol/m^2/s",tstr2D, tcstr, &
+             "nitrate flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains nitrate", c1, c0,                   &
+             ns1, f_fNO)
+      
+      if (f_fNO_ai(1:1) /= 'x') &
+         call define_hist_field(n_fNO_ai,"fNO_ai","mmol/m^2/s",tstr2D, tcstr, &
+             "nitrate flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fNO_ai)
+      
+      if (f_fNO_g(1:1) /= 'x') &
+         call define_hist_field(n_fNO_g,"fNO_g","kg/m^2/s",tstr2D, tcstr, &
+             "Gravity drainage nitrate flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains nitrate", c1, c0,                   &
+             ns1, f_fNO_g)
+      
+      if (f_fNO_g_ai(1:1) /= 'x') &
+         call define_hist_field(n_fNO_g_ai,"fNO_g_ai","kg/m^2/s",tstr2D, tcstr, &
+             "Gravity drainage nitrate flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fNO_g_ai)
+            
+      if (f_fNH(1:1) /= 'x') &
+         call define_hist_field(n_fNH,"fNH","mmol/m^2/s",tstr2D, tcstr, &
+             "ammonium flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains ammonium", c1, c0,                   &
+             ns1, f_fNH)
+      
+      if (f_fNH_ai(1:1) /= 'x') &
+         call define_hist_field(n_fNH_ai,"fNH_ai","mmol/m^2/s",tstr2D, tcstr, &
+             "ammonium flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fNH_ai)
+      
+      if (f_fNH_g(1:1) /= 'x') &
+         call define_hist_field(n_fNH_g,"fNH_g","kg/m^2/s",tstr2D, tcstr, &
+             "Gravity drainage ammonium flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains ammonium", c1, c0,                   &
+             ns1, f_fNH_g)
+      
+      if (f_fNH_g_ai(1:1) /= 'x') &
+         call define_hist_field(n_fNH_g_ai,"fNH_g_ai","kg/m^2/s",tstr2D, tcstr, &
+             "Gravity drainage ammonium flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fNH_g_ai)
+                    
+      if (f_fN(1:1) /= 'x') &
+         call define_hist_field(n_fN,"fN","mmol/m^2/s",tstr2D, tcstr, &
+             "algal N flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains algal N", c1, c0,                   &
+             ns1, f_fN)
+      
+      if (f_fN_ai(1:1) /= 'x') &
+         call define_hist_field(n_fN_ai,"fN_ai","mmol/m^2/s",tstr2D, tcstr, &
+             "algal N flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fN_ai)
+      
+      if (f_fN_g(1:1) /= 'x') &
+         call define_hist_field(n_fN_g,"fN_g","kg/m^2/s",tstr2D, tcstr, &
+             "Gravity drainage algal N flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains algal N", c1, c0,                   &
+             ns1, f_fN_g)
+      
+      if (f_fN_g_ai(1:1) /= 'x') &
+         call define_hist_field(n_fN_g_ai,"fN_g_ai","kg/m^2/s",tstr2D, tcstr, &
+             "Gravity drainage algal N flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fN_g_ai)
+              
+      if (f_fSil(1:1) /= 'x') &
+         call define_hist_field(n_fSil,"fSil","mmol/m^2/s",tstr2D, tcstr, &
+             "silicate flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains silicate", c1, c0,                   &
+             ns1, f_fSil)
+      
+      if (f_fSil_ai(1:1) /= 'x') &
+         call define_hist_field(n_fSil_ai,"fSil_ai","mmol/m^2/s",tstr2D, tcstr, &
+             "silicate flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fSil_ai)
+      
+      if (f_fSil_g(1:1) /= 'x') &
+         call define_hist_field(n_fSil_g,"fSil_g","kg/m^2/s",tstr2D, tcstr, &
+             "Gravity drainage silicate flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains silicate", c1, c0,                   &
+             ns1, f_fSil_g)
+      
+      if (f_fSil_g_ai(1:1) /= 'x') &
+         call define_hist_field(n_fSil_g_ai,"fSil_g_ai","kg/m^2/s",tstr2D, tcstr, &
+             "Gravity drainage silicate flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fSil_g_ai)
+            
+      if (f_Stot(1:1) /= 'x') &
+         call define_hist_field(n_Stot,"S_tot","g/m^2",tstr2D, tcstr,        &
+             "Total Salt content",                     &
+             "In ice volume*fbri", c1, c0,       &
+             ns1, f_Stot)
+     
+      if (f_chlnet(1:1) /= 'x') &
+         call define_hist_field(n_chlnet,"chl_net","mg chl/m^2",tstr2D, tcstr,        &
+             "Net Chlorophyll",                     &
+             "In ice volume*fbri ", c1, c0,       &
+             ns1, f_chlnet)
+
+      if (f_PPnet(1:1) /= 'x') &
+         call define_hist_field(n_PPnet,"PP_net","mg C/d/m^2",tstr2D, tcstr,        &
+             "Net Primary Production",                     &
+             "In ice volume*fbri ", secday, c0,       &
+             ns1, f_PPnet)
+
+      if (f_NOnet(1:1) /= 'x') &
+         call define_hist_field(n_NOnet,"NO_net","mmol NO/m^2",tstr2D, tcstr,        &
+             "Net Nitrate",                     &
+             "In ice volume*fbri ", c1, c0,       &
+             ns1, f_NOnet)
+
+!      if (f_Tsf_ice(1:1) /= 'x') &
+!         call define_hist_field(n_Tsf_ice,"Tsf_ice","C",tstr2D, tcstr,        &
+!             "Ice surface temperature",                     &
+!             "Averaged over categories ", c1, c0,       &
+!             ns1, f_Tsf_ice)
+
       if (f_fhocn(1:1) /= 'x') &
          call define_hist_field(n_fhocn,"fhocn","W/m^2",tstr2D, tcstr, &
              "heat flux ice to ocn (cpl)",                           &
@@ -1383,6 +1782,81 @@
 
       ! Tracers !!!!!!!!!!!
 
+     !!! Biogeochemistry (skeletal layer tracers)
+      if (f_bgc_N_sk(1:1) /= 'x') &
+         call define_hist_field(n_bgc_N_sk,"algal_N","mmol/m^2",tstr2D, tcstr, &
+             "ice bottom algae (nitrogen)",                                        &
+             "skeletal layer: bottom 2-3 cm", c1, c0,                &
+             ns1, f_bgc_N_sk)
+      if (f_bgc_C_sk(1:1) /= 'x') &
+         call define_hist_field(n_bgc_C_sk,"algal_C","mmol/m^2",tstr2D, tcstr, &
+             "ice bottom algae (carbon)",                                        &
+             "skeletal layer: bottom 2-3 cm", c1, c0,                &
+             ns1, f_bgc_C_sk)
+      if (f_bgc_chl_sk(1:1) /= 'x') &
+         call define_hist_field(n_bgc_chl_sk,"algal_chl","mmol/m^2?",tstr2D, tcstr, &
+             "ice bottom algae (chlorophyll)",                                        &
+             "skeletal layer: bottom 2-3 cm", c1, c0,                &
+             ns1, f_bgc_chl_sk)
+      if (f_bgc_Nit_sk(1:1) /= 'x') &
+         call define_hist_field(n_bgc_Nit_sk,"skl_Nit","mmol/m^2",tstr2D, tcstr, &
+             "skeletal nutrient (nitrate)",                                        &
+             "skeletal layer: bottom 2-3 cm", c1, c0,                &
+             ns1, f_bgc_Nit_sk)
+      if (f_bgc_Am_sk(1:1) /= 'x') &
+         call define_hist_field(n_bgc_Am_sk,"skl_Am","mmol/m^2",tstr2D, tcstr, &
+             "skeletal nutrient (ammonia/um)",                                        &
+             "skeletal layer: bottom 2-3 cm", c1, c0,                &
+             ns1, f_bgc_Am_sk)
+      if (f_bgc_Sil_sk(1:1) /= 'x') &
+         call define_hist_field(n_bgc_Sil_sk,"skl_Sil","mmol/m^2",tstr2D, tcstr, &
+             "skeletal nutrient (silicate)",                                        &
+             "skelelal layer: bottom 2-3 cm", c1, c0,                &
+             ns1, f_bgc_Sil_sk)
+      if (f_bgc_Nit_ml(1:1) /= 'x') &
+         call define_hist_field(n_bgc_Nit_ml,"ml_Nit","mmol/m^3",tstr2D, tcstr, &
+             "mixed layer nutrient (nitrate)",                                        &
+             "upper ocean", c1, c0,                &
+             ns1, f_bgc_Nit_ml)
+      if (f_bgc_Am_ml(1:1) /= 'x') &
+         call define_hist_field(n_bgc_Am_ml,"ml_Am","mmol/m^3",tstr2D, tcstr, &
+             "mixed layer nutrient (ammonia/um)",                                        &
+             "upper ocean", c1, c0,                &
+             ns1, f_bgc_Am_ml)
+      if (f_bgc_Sil_ml(1:1) /= 'x') &
+         call define_hist_field(n_bgc_Sil_ml,"ml_Sil","mmol/m^3",tstr2D, tcstr, &
+             "mixed layer nutrient (silicate)",                                        &
+             "upper ocean", c1, c0,                &
+             ns1, f_bgc_Sil_ml)
+      if (f_bgc_DMSPp_sk(1:1) /= 'x') &
+         call define_hist_field(n_bgc_DMSPp_sk,"skl_DMSPp","mmol/m^2",tstr2D, tcstr, &
+             "particulate S in algae (DMSPp)",                                        &
+             "skeletal layer: bottom 2-3 cm", c1, c0,                &
+             ns1, f_bgc_DMSPp_sk)
+      if (f_bgc_DMSPd_sk(1:1) /= 'x') &
+         call define_hist_field(n_bgc_DMSPd_sk,"skl_DMSPd","mmol/m^2",tstr2D, tcstr, &
+             "dissolved skl precursor (DSMPd)",                                        &
+             "skeletal layer: bottom 2-3 cm", c1, c0,                &
+             ns1, f_bgc_DMSPd_sk)
+      if (f_bgc_DMS_sk(1:1) /= 'x') &
+         call define_hist_field(n_bgc_DMS_sk,"skl_DMS","mmol/m^2",tstr2D, tcstr, &
+             "dissolved skl trace gas (DMS)",                                        &
+             "skeletal layer: bottom 2-3 cm", c1, c0,                &
+             ns1, f_bgc_DMS_sk)
+      if (f_bgc_DMSP_ml(1:1) /= 'x') &
+         call define_hist_field(n_bgc_DMSP_ml,"ml_DMSP","mmol/m^3",tstr2D, tcstr, &
+             "mixed layer precursor (DMSP)",                                        &
+             "upper ocean", c1, c0,                &
+             ns1, f_bgc_DMSP_ml)
+
+      if (f_bgc_DMS_ml(1:1) /= 'x') &
+         call define_hist_field(n_bgc_DMS_ml,"ml_DMS","mmol/m^3",tstr2D, tcstr, &
+             "mixed layer trace gas (DMS)",                                        &
+             "upper ocean", c1, c0,                &
+             ns1, f_bgc_DMS_ml)  
+
+      ! Tracers
+
       ! Ice Age
       if (f_iage(1:1) /= 'x') &
          call define_hist_field(n_iage,"iage","years",tstr2D, tcstr, &
@@ -1534,7 +2008,13 @@
            call define_hist_field(n_fsurfn_ai,"fsurfn_ai","W/m^2",tstr3Dc, tcstr, & 
               "net surface heat flux, categories","weighted by ice area", c1, c0, &            
               ns1, f_fsurfn_ai)
-
+   
+         if (f_fsicen_g(1:1) /= 'x') &
+         call define_hist_field(n_fsicen_g,"fsicen_g","kg/m^2/s",tstr3Dc, tcstr, &
+             "salt flux from gravity drainage to ocn",                              &
+             "if positive, ocean gains salt", c1, c0,                   &
+             ns1, f_fsicen_g)
+      
         if (f_fcondtopn_ai(1:1) /= 'x') &
            call define_hist_field(n_fcondtopn_ai,"fcondtopn_ai","W/m^2",tstr3Dc, tcstr, &
               "top sfc conductive heat flux, cat","weighted by ice area", c1, c0,       &
@@ -1620,6 +2100,12 @@
              "none", c1, c0,                                  &
              ns1, f_apeffn)
 
+        if (f_fbri(1:1) /= 'x') &
+         call define_hist_field(n_fbri,"fbri","1",tstr3Dc, tcstr,        &
+             "ice vol frac. with dynamic sal, cat",                     &
+             "none", c1, c0,       &
+             ns1, f_fbri)
+
       enddo ! ns1
 
       if (allocated(a3Dc)) deallocate(a3Dc)
@@ -1635,21 +2121,54 @@
 !            "vertical profile", c1, c0,                  &
 !            ns1, f_field3dz)
 
-!      enddo ! ns1
+!      enddo ! ns1 
 
       if (allocated(a3Dz)) deallocate(a3Dz)
       nzlyr = max(nzilyr, nzslyr)
+ 
       if (num_avail_hist_fields_3Dz > 0) &
       allocate(a3Dz(nx_block,ny_block,nzlyr,num_avail_hist_fields_3Dz,max_blocks))
+
+
+     ! !! 3D (vertical) ice biology variables !
+
+      do ns1 = 1, nstreams
+      
+       if (f_upNO(1:1) /= 'x') &
+         call define_hist_field(n_upNO,"upNO","mmol/m^3/d",tstr3Db, tcstr, &
+             "Algal NO uptake rate",                           &
+             "Positive flux is NO to N pool", secday, c0, &
+             ns1, f_upNO)
+
+       if (f_upNH(1:1) /= 'x') &
+         call define_hist_field(n_upNH,"upNH","mmol/m^3/d",tstr3Db, tcstr, &
+             "Algal NH uptake rate",                           &
+             "Positive flux is NH to N pool", secday, c0,&
+             ns1, f_upNH)
+      enddo   !ns1
+
+
+      if (allocated(a3Db)) deallocate(a3Db)
+      nzlyrb = nzblyr
+ 
+      if (num_avail_hist_fields_3Db > 0) &
+      allocate(a3Db(nx_block,ny_block,nzlyrb,num_avail_hist_fields_3Db,max_blocks))
 
       ! 4D (categories, vertical) variables looped separately for ordering
       do ns1 = 1, nstreams
 
       if (f_Tinz(1:1) /= 'x') &
          call define_hist_field(n_Tinz,"Tinz","C",tstr4Di, tcstr, & 
-            "ice internal temperatures",          &
+            "ice internal temperatures on CICE grid",          &
             "vertical profile", c1, c0,                    &
             ns1, f_Tinz)
+
+
+      if (f_Sinz(1:1) /= 'x') &
+         call define_hist_field(n_Sinz,"Sinz","ppt",tstr4Di, tcstr, & 
+            "ice internal bulk salinity",          &
+            "vertical profile", c1, c0,                    &
+            ns1, f_Sinz)
 
       enddo ! ns1
 
@@ -1661,7 +2180,134 @@
             "vertical profile", c1, c0,                    &
             ns1, f_Tsnz)
 
-      enddo ! ns1
+      enddo
+
+       if (f_Tinz   (1:1) /= 'x') then
+            if (allocated(Tinz4d)) deallocate(Tinz4d)
+            allocate(Tinz4d(nx_block,ny_block,nzilyr,ncat_hist))
+       endif
+
+     
+       if (f_Sinz   (1:1) /= 'x')  then
+            if (allocated(Sinz4d)) deallocate(Sinz4d)
+            allocate(Sinz4d(nx_block,ny_block,nzilyr,ncat_hist))
+       endif
+
+      
+       if (f_Tsnz   (1:1) /= 'x') then
+            if (allocated(Tsnz4d)) deallocate(Tsnz4d)
+            allocate(Tsnz4d(nx_block,ny_block,nzslyr,ncat_hist))
+       endif
+       if (f_Sinz   (1:1) /= 'x') then
+            if (allocated(Sinz4d)) deallocate(Sinz4d)
+            allocate(Sinz4d(nx_block,ny_block,nzilyr,ncat_hist))
+       endif
+
+      
+       ! (biology vertical grid)
+
+      do ns1 = 1, nstreams
+      
+      ! if (f_upNO(1:1) /= 'x') &
+      !   call define_hist_field(n_upNO,"upNO","mmol/m^3/d",tstr4Db, tcstr, &
+      !       "Algal NO uptake rate",                           &
+      !       "Positive flux is NO to N pool", secday, c0, &
+      !       ns1, f_upNO)     
+
+      ! if (f_upNH(1:1) /= 'x') &
+      !   call define_hist_field(n_upNH,"upNH","mmol/m^3/d",tstr4Db, tcstr, &
+      !       "Algal NH uptake rate",                           &
+      !       "Positive flux is NH to N pool", secday, c0,&
+      !       ns1, f_upNH)
+     
+       if (f_zTin(1:1) /= 'x') &
+            call define_hist_field(n_zTin,"zTinb","C",tstr4Db, tcstr, &
+                "ice internal temperatures on bio grid", "interpolated to bio grid", c1, c0,  &
+                ns1, f_zTin)
+      
+      
+       if (f_zphi(1:1) /= 'x') &
+            call define_hist_field(n_zphi,"zphin","%",tstr4Db, tcstr, &
+                "porosity", "brine volume fraction", c100, c0, &
+                ns1, f_zphi)
+         
+       if (f_iDi(1:1) /= 'x') &
+             call define_hist_field(n_iDi,"iDin","m^2/d",tstr4Db, tcstr, &
+                "interface diffusivity", "on bio interface grid", secday, c0, &
+                ns1, f_iDi)
+      
+       if (f_iki(1:1) /= 'x') &
+            call define_hist_field(n_iki,"ikin","mm^2",tstr4Db, tcstr, &
+                "permeability", "on bio interface grid", 1.0e6_dbl_kind, c0,&
+                ns1, f_iki)
+
+       if (f_bgc_NO(1:1) /= 'x') &
+            call define_hist_field(n_bgc_NO,"bgc_NO","mmol/m^3",tstr4Db, tcstr, &
+                "bulk nitrate ", "on bio grid", c1, c0,     &
+                ns1, f_bgc_NO)
+ 
+       if (f_bgc_NH(1:1) /= 'x') &
+            call define_hist_field(n_bgc_NH,"bgc_NH","mmol/m^3",tstr4Db, tcstr, &
+                "bulk ammonia/um ", "on bio grid", c1, c0,  &
+                ns1, f_bgc_NH)
+
+       if (f_bgc_N(1:1) /= 'x') &
+            call define_hist_field(n_bgc_N,"bgc_N","mmol/m^3",tstr4Db, tcstr, &
+                "bulk algal N conc. ", "on bio grid", c1, c0, &
+                ns1, f_bgc_N)
+     
+       if (f_bgc_C(1:1) /= 'x') &
+            call define_hist_field(n_bgc_C,"bgc_C","mmol/m^3",tstr4Db, tcstr, &
+                "bulk algal carbon ", "on bio grid", c1, c0, &
+                ns1, f_bgc_C)
+
+       if (f_bgc_chl(1:1) /= 'x') &
+            call define_hist_field(n_bgc_chl,"bgc_chl","mg/m^3",tstr4Db, tcstr, &
+                "bulk algal chlorophyll ", "on bio grid", c1, c0,&
+                ns1, f_bgc_chl)
+      
+       if (f_bgc_Sil(1:1) /= 'x') &
+            call define_hist_field(n_bgc_Sil,"bgc_Sil","mmol/m^3",tstr4Db, tcstr, &
+                "bulk silicate ", "on bio grid", c1, c0, &
+                ns1, f_bgc_Sil)
+      
+       if (f_bgc_DMSPp(1:1) /= 'x') &
+            call define_hist_field(n_bgc_DMSPp,"bgc_DMSPp","mmol/m^3",tstr4Db, tcstr, &
+                "bulk algal DMSP ", "on bio grid", c1, c0,&
+                ns1, f_bgc_DMSPp)
+      
+       if (f_bgc_DMSPd(1:1) /= 'x') &
+            call define_hist_field(n_bgc_DMSPd,"bgc_DMSPd","mmol/m^3",tstr4Db, tcstr, &
+                "bulk dissolved DMSP ", "on bio grid", c1, c0, &
+                ns1, f_bgc_DMSPd)
+  
+       if (f_bgc_DMS(1:1) /= 'x') &
+            call define_hist_field(n_bgc_DMS,"bgc_DMS","mmol/m^3",tstr4Db, tcstr, &
+                "bulk DMS gas ", "on bio grid", c1, c0, &
+                ns1, f_bgc_DMS)
+     
+       if (f_bgc_PON(1:1) /= 'x') &
+            call define_hist_field(n_bgc_PON,"bgc_PON","mmol/m^3",tstr4Db, tcstr, &
+                "other bulk nitrogen pool ", "on bio grid valid for (2:nblyr+1)", c1, c0, &
+                ns1, f_bgc_PON)
+ 
+       if (f_bgc_S(1:1) /= 'x') &
+            call define_hist_field(n_bgc_S,"bgc_S","ppt",tstr4Db, tcstr, &
+                "bulk salinity", "on bio grid valid for (2:nblyr+1)", c1, c0, &
+                ns1, f_bgc_S)
+     
+       if (f_growN(1:1) /= 'x') &
+            call define_hist_field(n_growN,"growN","d^-1",tstr4Db, tcstr, &
+                "Specific algal growth rate", "on bio grid valid for (2:nblyr+1)", secday , c0,  &
+                ns1, f_growN)
+      
+       if (f_zfswin(1:1) /= 'x') &
+            call define_hist_field(n_zfswin,"zfswin","W/m^2",tstr4Db, tcstr, &
+                "internal ice PAR", "on bio grid", c1, c0, &
+                ns1, f_zfswin)
+    
+
+      enddo  !ns1
 
       if (allocated(a4Di)) deallocate(a4Di)
       if (num_avail_hist_fields_4Di > 0) &
@@ -1669,15 +2315,10 @@
       if (allocated(a4Ds)) deallocate(a4Ds)
       if (num_avail_hist_fields_4Ds > 0) &
       allocate(a4Ds(nx_block,ny_block,nzslyr,ncat_hist,num_avail_hist_fields_4Ds,max_blocks))
+      if (allocated(a4Db)) deallocate(a4Db)
+      if (num_avail_hist_fields_4Db > 0) &
+      allocate(a4Db(nx_block,ny_block,nzblyr,ncat_hist,num_avail_hist_fields_4Db,max_blocks))
 
-       if (f_Tinz   (1:1) /= 'x') then
-            if (allocated(Tinz4d)) deallocate(Tinz4d)
-            allocate(Tinz4d(nx_block,ny_block,nzilyr,ncat_hist))
-       endif
-       if (f_Tsnz   (1:1) /= 'x') then
-            if (allocated(Tsnz4d)) deallocate(Tsnz4d)
-            allocate(Tsnz4d(nx_block,ny_block,nzslyr,ncat_hist))
-       endif
 
       !-----------------------------------------------------------------
       ! fill igrd array with namelist values
@@ -1701,6 +2342,7 @@
       igrdz(n_NCAT     ) = f_NCAT
       igrdz(n_VGRDi    ) = f_VGRDi
       igrdz(n_VGRDs    ) = f_VGRDs
+      igrdz(n_VGRDb    ) = f_VGRDb
 
       ntmp(:) = 0
       if (my_task == master_task) then
@@ -1734,8 +2376,10 @@
       if (allocated(a2D))  a2D (:,:,:,:)     = c0
       if (allocated(a3Dc)) a3Dc(:,:,:,:,:)   = c0
       if (allocated(a3Dz)) a3Dz(:,:,:,:,:)   = c0
+      if (allocated(a3Db)) a3Db(:,:,:,:,:)   = c0
       if (allocated(a4Di)) a4Di(:,:,:,:,:,:) = c0
       if (allocated(a4Ds)) a4Ds(:,:,:,:,:,:) = c0
+      if (allocated(a4Db)) a4Db(:,:,:,:,:,:) = c0
       avgct(:) = c0
       albcnt(:,:,:,:) = c0
 
@@ -1781,11 +2425,20 @@
       use ice_dyn_eap
       use ice_dyn_evp
       use ice_flux
-      use ice_therm_vertical
-      use ice_itd, only: ilyr1, slyr1
+      use ice_therm_shared, only: calculate_Tin_from_qin, Tmlt, ktherm
+!      use ice_therm_vertical
+      use ice_therm_mushy, only: temperature_mush, temperature_snow
       use ice_shortwave, only: apeffn
-      use ice_work, only: worka, workb
       use ice_timers
+      use ice_zbgc_public, only:  &
+                         nit, sil, amm, dmsp, dms, algalN, R_C2N, &
+                         R_chl2N, nlt_bgc_N, &
+                         nlt_bgc_NO, nlt_bgc_C, nlt_bgc_chl, &
+                         nlt_bgc_NH, nlt_bgc_Sil, nlt_bgc_DMSPp, &
+                         nlt_bgc_DMSPd, nlt_bgc_DMS, nlt_bgc_PON , &
+                         S_tot, chl_net, PP_net, NO_net, &
+                         zTin, zfswin, iki, iDi, zphi
+      use ice_work, only: worka, workb, workz, workzn
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1806,7 +2459,8 @@
            ain                  ! aicen_init
 
       real (kind=dbl_kind) :: & 
-           qn                   ! temporary variable for enthalpy
+           qn                , & ! temporary variable for enthalpy
+           Tmlts                 !  temporary variable for melting temperature
 
       type (block) :: &
          this_block           ! block information for current block
@@ -1818,8 +2472,10 @@
       n2D     = num_avail_hist_fields_2D
       n3Dccum = n2D     + num_avail_hist_fields_3Dc
       n3Dzcum = n3Dccum + num_avail_hist_fields_3Dz
-      n4Dicum = n3Dzcum + num_avail_hist_fields_4Di
-      n4Dscum = n4Dicum + num_avail_hist_fields_4Ds ! should equal num_avail_hist_fields_tot
+      n3Dbcum = n3Dzcum + num_avail_hist_fields_3Db
+      n4Dicum = n3Dbcum + num_avail_hist_fields_4Di
+      n4Dscum = n4Dicum + num_avail_hist_fields_4Ds 
+      n4Dbcum = n4Dscum + num_avail_hist_fields_4Db ! should equal num_avail_hist_fields_tot
 
       do ns = 1,nstreams
          if (.not. hist_avg .or. histfreq(ns) == '1') then  ! write snapshots
@@ -1837,8 +2493,13 @@
               if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
                   a3Dz(:,:,:,nn,:) = c0
            enddo
-           do n = n3Dzcum + 1, n4Dicum
+           do n = n3Dzcum + 1, n3Dbcum
               nn = n - n3Dzcum
+              if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
+                  a3Db(:,:,:,nn,:) = c0
+           enddo
+           do n = n3Dbcum + 1, n4Dicum
+              nn = n - n3Dbcum
               if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
                   a4Di(:,:,:,:,nn,:) = c0
            enddo
@@ -1846,6 +2507,11 @@
               nn = n - n4Dicum
               if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
                   a4Ds(:,:,:,:,nn,:) = c0
+           enddo
+           do n = n4Dscum + 1, n4Dbcum
+              nn = n - n4Dscum
+              if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
+                  a4Db(:,:,:,:,nn,:) = c0
            enddo
            avgct(ns) = c1
          else                      ! write averages over time histfreq
@@ -1960,6 +2626,8 @@
              call accum_hist_field(n_frazil, iblk, frazil(:,:,iblk), a2D)
          if (f_snoice (1:1) /= 'x') &
              call accum_hist_field(n_snoice, iblk, snoice(:,:,iblk), a2D)
+         if (f_dsnow (1:1) /= 'x') &
+             call accum_hist_field(n_dsnow, iblk, dsnow(:,:,iblk), a2D)
          if (f_meltt  (1:1) /= 'x') &
              call accum_hist_field(n_meltt,  iblk, meltt(:,:,iblk), a2D)
          if (f_melts  (1:1) /= 'x') &
@@ -1977,6 +2645,63 @@
              call accum_hist_field(n_fsalt,   iblk, fsalt(:,:,iblk), a2D)
          if (f_fsalt_ai(1:1)/= 'x') &
              call accum_hist_field(n_fsalt_ai,iblk, fsalt_gbm(:,:,iblk), a2D)
+
+         if (f_fsice  (1:1) /= 'x') &
+             call accum_hist_field(n_fsice,   iblk, fsice(:,:,iblk), a2D)
+         if (f_fsice_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fsice_ai,iblk, fsice_gbm(:,:,iblk), a2D)
+         if (f_fsice_g  (1:1) /= 'x') &
+             call accum_hist_field(n_fsice_g,   iblk, fsice_g(:,:,iblk), a2D)
+         if (f_fsice_g_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fsice_g_ai,iblk, fsice_g_gbm(:,:,iblk), a2D)
+
+         if (f_fNO  (1:1) /= 'x') &
+             call accum_hist_field(n_fNO,   iblk, flux_bio(:,:,nlt_bgc_NO,iblk), a2D)
+         if (f_fNO_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fNO_ai,iblk, flux_bio_gbm(:,:,nlt_bgc_NO,iblk), a2D)
+         if (f_fNO_g  (1:1) /= 'x') &
+             call accum_hist_field(n_fNO_g,   iblk, flux_bio_g(:,:,nlt_bgc_NO,iblk), a2D)
+         if (f_fNO_g_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fNO_g_ai,iblk, flux_bio_g_gbm(:,:,nlt_bgc_NO,iblk), a2D)
+
+         if (f_fNH  (1:1) /= 'x') &
+             call accum_hist_field(n_fNH,   iblk, flux_bio(:,:,nlt_bgc_NH,iblk), a2D)
+         if (f_fNH_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fNH_ai,iblk, flux_bio_gbm(:,:,nlt_bgc_NH,iblk), a2D)
+         if (f_fNH_g  (1:1) /= 'x') &
+             call accum_hist_field(n_fNH_g,   iblk, flux_bio_g(:,:,nlt_bgc_NH,iblk), a2D)
+         if (f_fNH_g_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fNH_g_ai,iblk, flux_bio_g_gbm(:,:,nlt_bgc_NH,iblk), a2D)
+
+         if (f_fN  (1:1) /= 'x') &
+             call accum_hist_field(n_fN,   iblk, flux_bio(:,:,nlt_bgc_N,iblk), a2D)
+         if (f_fN_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fN_ai,iblk, flux_bio_gbm(:,:,nlt_bgc_N,iblk), a2D)
+         if (f_fN_g  (1:1) /= 'x') &
+             call accum_hist_field(n_fN_g,   iblk, flux_bio_g(:,:,nlt_bgc_N,iblk), a2D)
+         if (f_fN_g_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fN_g_ai,iblk, flux_bio_g_gbm(:,:,nlt_bgc_N,iblk), a2D)
+
+
+         if (f_fSil  (1:1) /= 'x') &
+             call accum_hist_field(n_fSil,   iblk, flux_bio(:,:,nlt_bgc_Sil,iblk), a2D)
+         if (f_fSil_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fSil_ai,iblk, flux_bio_gbm(:,:,nlt_bgc_Sil,iblk), a2D)
+         if (f_fSil_g  (1:1) /= 'x') &
+             call accum_hist_field(n_fSil_g,   iblk, flux_bio_g(:,:,nlt_bgc_Sil,iblk), a2D)
+         if (f_fSil_g_ai(1:1)/= 'x') &
+             call accum_hist_field(n_fSil_g_ai,iblk, flux_bio_g_gbm(:,:,nlt_bgc_Sil,iblk), a2D)
+
+         if (f_Stot  (1:1) /= 'x') &
+             call accum_hist_field(n_Stot,   iblk, S_tot(:,:,iblk), a2D)
+         if (f_chlnet  (1:1) /= 'x') &
+             call accum_hist_field(n_chlnet, iblk, chl_net(:,:,iblk), a2D)
+         if (f_PPnet  (1:1) /= 'x') &
+             call accum_hist_field(n_PPnet,   iblk, PP_net(:,:,iblk), a2D)
+         if (f_NOnet  (1:1) /= 'x') &
+             call accum_hist_field(n_NOnet,   iblk, NO_net(:,:,iblk), a2D)
+!         if (f_Tsf_ice  (1:1) /= 'x') &
+!             call accum_hist_field(n_Tsf_ice,   iblk, Tsf_ice(:,:,iblk), a2D)
          if (f_fhocn  (1:1) /= 'x') &
              call accum_hist_field(n_fhocn,   iblk, fhocn(:,:,iblk), a2D)
          if (f_fhocn_ai(1:1)/= 'x') &
@@ -2121,8 +2846,54 @@
              call accum_hist_field(n_ipond_ai, iblk, &
                                    aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk) &
                                                   * trcr(:,:,nt_ipnd,iblk), a2D)
-         endif
+         endif ! ponds
 
+         ! BGC
+         if (f_bgc_N_sk(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_N_sk,iblk, &
+                        trcr(:,:,nt_bgc_N_sk,iblk), a2D)
+  
+         if (f_bgc_C_sk(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_C_sk,iblk, &
+                        trcr(:,:,nt_bgc_C_sk,iblk), a2D)  
+         if (f_bgc_chl_sk(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_chl_sk,iblk, &
+                        trcr(:,:,nt_bgc_chl_sk,iblk), a2D)  
+         if (f_bgc_Nit_sk(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_Nit_sk,iblk, &
+                        trcr(:,:,nt_bgc_Nit_sk,iblk), a2D)  
+         if (f_bgc_Am_sk(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_Am_sk,iblk, &
+                        trcr(:,:,nt_bgc_Am_sk,iblk), a2D)  
+         if (f_bgc_Sil_sk(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_Sil_sk,iblk, &
+                        trcr(:,:,nt_bgc_Sil_sk,iblk), a2D)  
+         if (f_bgc_DMSPp_sk(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_DMSPp_sk,iblk, &
+                        trcr(:,:,nt_bgc_DMSPp_sk,iblk), a2D)  
+
+        if (f_bgc_DMSPd_sk(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_DMSPd_sk,iblk, &
+                        trcr(:,:,nt_bgc_DMSPd_sk,iblk), a2D)  
+         if (f_bgc_DMS_sk(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_DMS_sk,iblk, &
+                        trcr(:,:,nt_bgc_DMS_sk,iblk), a2D)  
+         if (f_bgc_Nit_ml(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_Nit_ml,iblk, &
+                        trcr(:,:,nt_bgc_Nit_ml,iblk), a2D)  
+         if (f_bgc_Am_ml(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_Am_ml,iblk, &
+                        trcr(:,:,nt_bgc_Am_ml,iblk), a2D)  
+         if (f_bgc_Sil_ml(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_Sil_ml,iblk, &
+                        trcr(:,:,nt_bgc_Sil_ml,iblk), a2D)  
+         if (f_bgc_DMSP_ml(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_DMSP_ml,iblk, &
+                        trcr(:,:,nt_bgc_DMSP_ml,iblk), a2D)  
+         if (f_bgc_DMS_ml(1:1)/= 'x') &
+             call accum_hist_field(n_bgc_DMS_ml,iblk, &
+                        trcr(:,:,nt_bgc_DMS_ml,iblk), a2D)  
+ 
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
@@ -2208,6 +2979,9 @@
          if (f_fsurfn_ai   (1:1) /= 'x') &
              call accum_hist_field(n_fsurfn_ai-n2D, iblk, ncat_hist, &
                   fsurfn(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_fsicen_g  (1:1) /= 'x') &
+             call accum_hist_field(n_fsicen_g-n2D, iblk, ncat_hist, &
+                  fsicen_g(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
          if (f_fcondtopn_ai   (1:1) /= 'x') &
              call accum_hist_field(n_fcondtopn_ai-n2D, iblk, ncat_hist, &
                   fcondtopn(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
@@ -2220,51 +2994,418 @@
              call accum_hist_field(n_fmelttn_ai-n2D, iblk, ncat_hist, &
                   max(fsurfn(:,:,1:ncat_hist,iblk) - fcondtopn(:,:,1:ncat_hist,iblk),c0) &
                       *aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_fbri   (1:1) /= 'x') &
+             call accum_hist_field(n_fbri-n2D, iblk, ncat_hist, &
+                                   trcrn(:,:,nt_fbri,1:ncat_hist,iblk), a3Dc)
 
 ! example for 3D field (x,y,z)
 !         if (f_field3dz   (1:1) /= 'x') &
 !             call accum_hist_field(n_field3dz-n3Dccum, iblk, nzilyr, &
 !                                   field3dz(:,:,1:nzilyr,iblk), a3Dz)
         
+        if (f_upNO (1:1) /= 'x') then
+            workz(:,:,:) = c0
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vice(i,j,iblk) > puny) then
+                  workz(i,j,1) = upNO(i,j,1,iblk)
+                  workz(i,j,2:nblyr+1) = upNO(i,j,1:nblyr,iblk)
+                  workz(i,j,nblyr+2) = upNO(i,j,nblyr,iblk)
+                  endif
+                enddo !i
+               enddo  !j
+             call accum_hist_field(n_upNO- n3Dccum, iblk, nzblyr, &
+                                   workz(:,:,1:nzblyr), a3Db)
+        endif        
+          if (f_upNH (1:1) /= 'x') then
+            workz(:,:,:) = c0
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vice(i,j,iblk) > puny) then
+                  workz(i,j,1) = upNH(i,j,1,iblk)
+                  workz(i,j,2:nblyr+1) = upNH(i,j,1:nblyr,iblk)
+                  workz(i,j,nblyr+2) = upNH(i,j,nblyr,iblk)
+                  endif
+                enddo !i
+               enddo  !j
+             call accum_hist_field(n_upNH- n3Dccum, iblk, nzblyr, &
+                                   workz(:,:,1:nzblyr), a3Db)
+        endif        
+        
+
          ! 4D category fields
          if (f_Tinz   (1:1) /= 'x') then
             Tinz4d(:,:,:,:) = c0
+            if (ktherm == 2) then
+               do n = 1, ncat_hist
+                  do j = jlo, jhi
+                  do i = ilo, ihi
+                     do k = 1, nzilyr
+                        Tinz4d(i,j,k,n) = temperature_mush( &
+                             trcrn(i,j,nt_qice+k-1,n,iblk), trcrn(i,j,nt_sice+k-1,n,iblk))
+                     enddo
+                  enddo
+                  enddo
+               enddo
+            else
+               do n = 1, ncat_hist
+                  do j = jlo, jhi
+                  do i = ilo, ihi
+                     do k = 1, nzilyr
+                        qn = trcrn(i,j,nt_qice+k-1,n,iblk)
+                        Tinz4d(i,j,k,n) = calculate_Tin_from_qin(qn,Tmlt(k))
+
+!                       Tmlts = trcrn(i,j,nt_sice+k-1,n,iblk)*(-mlt_a +  &
+!                               mlt_b*SQRT(trcrn(i,j,nt_sice+k-1,n,iblk)) - &
+!                               mlt_c*trcrn(i,j,nt_sice+k-1,n,iblk)) 
+!                                !-trcrn(i,j,nt_sice+k-1,n,iblk)* depressT
+!                       Tinz4d(i,j,k,n) =  calculate_Tin_from_qin(qn,Tmlts)
+                     enddo
+                  enddo
+                  enddo
+               enddo
+            endif
+            call accum_hist_field(n_Tinz-n3Dbcum, iblk, nzilyr, ncat_hist, &
+                                  Tinz4d(:,:,1:nzilyr,1:ncat_hist), a4Di)
+         endif
+         if (f_Sinz   (1:1) /= 'x') then
+            Sinz4d(:,:,:,:) = c0
             do n = 1, ncat_hist
                do j = jlo, jhi
                do i = ilo, ihi
                   if (vicen(i,j,n,iblk) > puny) then
-                     do k = 1, nzilyr
-                       qn = eicen(i,j,ilyr1(n)+k-1,iblk) & 
-                              * real(nilyr,kind=dbl_kind)/vicen(i,j,n,iblk)  
-                       Tinz4d(i,j,k,n) = calculate_Tin_from_qin(qn,Tmlt(k))
-                     enddo
+                       Sinz4d(i,j,1:nzilyr,n) = trcrn(i,j,nt_sice:nt_sice+nzilyr-1,n,iblk) 
                   endif
                enddo
                enddo
             enddo
-            call accum_hist_field(n_Tinz-n3Dzcum, iblk, nzilyr, ncat_hist, &
-                                  Tinz4d(:,:,1:nzilyr,1:ncat_hist), a4Di)
+            call accum_hist_field(n_Sinz-n3Dbcum, iblk, nzilyr, ncat_hist, &
+                                  Sinz4d(:,:,1:nzilyr,1:ncat_hist), a4Di)
          endif
          
-         if (f_Tsnz   (1:1) /= 'x') then
-            Tsnz4d(:,:,:,:) = c0
+         if (f_Sinz   (1:1) /= 'x') then
+            Sinz4d(:,:,:,:) = c0
             do n = 1, ncat_hist
                do j = jlo, jhi
                do i = ilo, ihi
-                  if (vsnon(i,j,n,iblk) > puny) then
-                     do k = 1, nzslyr
-                       qn = esnon(i,j,slyr1(n)+k-1,iblk) & 
-                              * real(nslyr,kind=dbl_kind)/vsnon(i,j,n,iblk)  
-                       Tsnz4d(i,j,k,n) = (Lfresh + qn/rhos)/cp_ice
-                     enddo
-                  endif
+                  do k = 1, nzilyr
+                     Sinz4d(i,j,k,n) = trcrn(i,j,nt_sice+k-1,n,iblk)
+                  enddo
                enddo
                enddo
             enddo
+            call accum_hist_field(n_Sinz-n3Dzcum, iblk, nzilyr, ncat_hist, &
+                                  Sinz4d(:,:,1:nzilyr,1:ncat_hist), a4Di)
+         endif
+
+         if (f_Tsnz   (1:1) /= 'x') then
+            Tsnz4d(:,:,:,:) = c0
+            if (ktherm == 2) then
+               do n = 1, ncat_hist
+                  do j = jlo, jhi
+                  do i = ilo, ihi
+                     do k = 1, nzslyr
+                        qn = trcrn(i,j,nt_qsno+k-1,n,iblk)
+                        Tsnz4d(i,j,k,n) = temperature_snow(trcrn(i,j,nt_qsno+k-1,n,iblk))
+                     enddo
+                  enddo
+                  enddo
+               enddo
+            else
+               do n = 1, ncat_hist
+                  do j = jlo, jhi
+                  do i = ilo, ihi
+                     do k = 1, nzslyr
+                        qn = trcrn(i,j,nt_qsno+k-1,n,iblk)
+                        Tsnz4d(i,j,k,n) = (Lfresh + qn/rhos)/cp_ice
+                     enddo
+                  enddo
+                  enddo
+               enddo
+            endif
             call accum_hist_field(n_Tsnz-n4Dicum, iblk, nzslyr, ncat_hist, &
                                   Tsnz4d(:,:,1:nzslyr,1:ncat_hist), a4Ds)
          endif
          
+        if (f_bgc_N   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vicen(i,j,n,iblk) > puny) then
+                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_N,n,iblk) !*aicen_init(i,j,n,iblk)
+                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_N:nt_bgc_N+nblyr-1,n,iblk)
+                    workzn(i,j,nblyr+2,n) = algalN(i,j,iblk) !*aicen_init(i,j,n,iblk)
+                  endif
+                enddo !i
+               enddo  !j
+               
+            enddo     !n
+            call accum_hist_field(n_bgc_N-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+         endif
+         
+        if (f_bgc_C   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vicen(i,j,n,iblk) > puny) then
+                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_C,n,iblk) 
+                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_C:nt_bgc_C+nblyr-1,n,iblk) 
+                    workzn(i,j,nblyr+2,n) = R_C2N*algalN(i,j,iblk)
+                  
+                  endif
+                enddo !i
+               enddo  !j
+            enddo
+            call accum_hist_field(n_bgc_C-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+         endif
+         
+
+        if (f_bgc_chl   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vicen(i,j,n,iblk) > puny) then
+                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_chl,n,iblk)
+                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_chl:nt_bgc_chl+nblyr-1,n,iblk) 
+                    workzn(i,j,nblyr+2,n) = R_chl2N*algalN(i,j,iblk) 
+                  endif
+                enddo !i
+               enddo  !j
+               
+            enddo
+            call accum_hist_field(n_bgc_chl-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+         endif
+         
+
+        if (f_bgc_NO   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vicen(i,j,n,iblk) > puny) then
+                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_NO,n,iblk)    
+                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_NO:nt_bgc_NO+nblyr-1,n,iblk)   
+                    workzn(i,j,nblyr+2,n) = nit(i,j,iblk)     
+                  endif
+                enddo !i
+               enddo  !j
+            enddo
+            call accum_hist_field(n_bgc_NO-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+         endif
+
+        if (f_bgc_NH   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vicen(i,j,n,iblk) > puny) then
+                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_NH,n,iblk) 
+                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_NH:nt_bgc_NH+nblyr-1,n,iblk)
+                    workzn(i,j,nblyr+2,n) = amm(i,j,iblk)
+                  endif
+                enddo !i
+               enddo  !j
+               
+            enddo
+            call accum_hist_field(n_bgc_NH-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+         endif
+
+        if (f_bgc_Sil   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vicen(i,j,n,iblk) > puny) then
+                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_Sil,n,iblk)
+                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_Sil:nt_bgc_Sil+nblyr-1,n,iblk) 
+                    workzn(i,j,nblyr+2,n) = sil(i,j,iblk) 
+                  endif
+                enddo !i
+               enddo  !j
+            enddo
+            call accum_hist_field(n_bgc_Sil-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+         endif
+  
+        if (f_bgc_DMSPd   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vicen(i,j,n,iblk) > puny) then
+                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_DMSPd,n,iblk) 
+                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_DMSPd:nt_bgc_DMSPd+nblyr-1,n,iblk)
+                    workzn(i,j,nblyr+2,n) = dmsp(i,j,iblk)
+                  endif
+                enddo !i
+               enddo  !j
+            enddo
+            call accum_hist_field(n_bgc_DMSPd-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+         endif       
+
+        if (f_bgc_DMSPp   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vicen(i,j,n,iblk) > puny) then
+                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_DMSPp,n,iblk) 
+                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_DMSPp:nt_bgc_DMSPp+nblyr-1,n,iblk)
+                    workzn(i,j,nblyr+2,n) = dmsp(i,j,iblk)
+                  endif
+                enddo !i
+               enddo  !j
+            enddo
+            call accum_hist_field(n_bgc_DMSPp-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+         endif
+
+       if (f_bgc_DMS   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vicen(i,j,n,iblk) > puny) then
+                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_DMS,n,iblk) 
+                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_DMS:nt_bgc_DMS+nblyr-1,n,iblk)
+                    workzn(i,j,nblyr+2,n) = dms(i,j,iblk) 
+                  endif
+                enddo !i
+               enddo  !j
+            enddo
+            call accum_hist_field(n_bgc_DMS-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+         endif
+
+
+       if (f_bgc_PON   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vicen(i,j,n,iblk) > puny) then
+                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_PON,n,iblk) 
+                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_PON:nt_bgc_PON+nblyr-1,n,iblk) 
+                    workzn(i,j,nblyr+2,n) = nit(i,j,iblk) 
+                  endif
+                enddo !i
+               enddo  !j
+            enddo
+            call accum_hist_field(n_bgc_PON-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+         endif
+
+       if (f_bgc_S   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (vicen(i,j,n,iblk) > puny) then
+                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_S,n,iblk)     
+                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_S:nt_bgc_S+nblyr-1,n,iblk)
+                    workzn(i,j,nblyr+2,n) = sss(i,j,iblk)    
+                  endif
+                enddo !i
+               enddo  !j
+            enddo
+            call accum_hist_field(n_bgc_S-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+         endif
+
+       if (f_zTin  (1:1) /= 'x')  &
+            call accum_hist_field(n_zTin-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  zTin(:,:,1:nzblyr,1:ncat_hist,iblk), a4Db)
+
+       if (f_zfswin   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                if (aicen(i,j,n,iblk) > c0) then
+                   workzn(i,j,1:nblyr+1,n) = zfswin(i,j,1:nblyr+1,n,iblk)
+                   workzn(i,j,nzblyr,n)   = zfswin(i,j,nblyr+1,n,iblk)
+                endif
+               enddo  !j
+               enddo  !i          
+            enddo
+            call accum_hist_field(n_zfswin-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+       endif
+
+       if (f_iDi   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+              do k = 1,nzblyr-1
+               do j = jlo, jhi
+               do i = ilo, ihi
+                if (aicen(i,j,n,iblk) > c0) then
+                   workzn(i,j,k,n) = iDi(i,j,k,n,iblk)*(vicen(i,j,n,iblk)/aicen(i,j,n,iblk))**2
+                   workzn(i,j,nzblyr,n)   = workzn(i,j,nzblyr-1,n)     
+                endif
+               enddo  !j
+               enddo  !i
+              enddo   !k        
+            enddo
+            call accum_hist_field(n_iDi-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+       endif
+       if (f_iki   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                if (aicen(i,j,n,iblk) > c0) then
+                   workzn(i,j,1:nblyr+1,n) = iki(i,j,1:nblyr+1,n,iblk)
+                   workzn(i,j,nzblyr,n)   = iki(i,j,nblyr+1,n,iblk) 
+                endif
+               enddo  !j
+               enddo  !i      
+            enddo  !n
+            call accum_hist_field(n_iki-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+       endif
+
+       if (f_growN   (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (aicen(i,j,n,iblk) > puny) then
+                    workzn(i,j,1,n) = growN(i,j,1,n,iblk) 
+                    workzn(i,j,2:nblyr+1,n) = growN(i,j,1:nblyr,n,iblk)
+                    workzn(i,j,nblyr+2,n) = growN(i,j,nblyr,n,iblk) 
+                  endif
+              enddo!j
+              enddo!i 
+            enddo  !n
+            call accum_hist_field(n_growN-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+       endif
+
+       if (f_zphi  (1:1) /= 'x') then
+            workzn(:,:,:,:) = c0
+            do n = 1, ncat_hist
+               do j = jlo, jhi
+               do i = ilo, ihi
+                if (aicen(i,j,n,iblk) > c0) then
+                   workzn(i,j,1:nzblyr,n) = zphi(i,j,1:nzblyr,n,iblk)
+                endif
+               enddo  !j
+               enddo  !i
+            enddo     !n
+            call accum_hist_field(n_zphi-n4Dscum, iblk, nzblyr, ncat_hist, &
+                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
+         endif
+
         ! Calculate aggregate surface melt flux by summing category values
         if (f_fmeltt_ai(1:1) /= 'x') then
          do ns = 1, nstreams
@@ -2423,9 +3564,26 @@
               enddo             ! k
               endif
            enddo                ! n
+           do n = 1, num_avail_hist_fields_3Db
+              nn = n3Dzcum + n
+              if (avail_hist_fields(nn)%vhistfreq == histfreq(ns)) then 
+              do k = 1, nzblyr
+              do j = jlo, jhi
+              do i = ilo, ihi
+                 if (.not. tmask(i,j,iblk)) then ! mask out land points
+                    a3Db(i,j,k,n,iblk) = spval
+                 else                            ! convert units
+                    a3Db(i,j,k,n,iblk) = avail_hist_fields(nn)%cona*a3Db(i,j,k,n,iblk) &
+                                   * ravgct + avail_hist_fields(nn)%conb
+                 endif
+              enddo             ! i
+              enddo             ! j
+              enddo             ! k
+              endif
+           enddo                ! n
 
            do n = 1, num_avail_hist_fields_4Di
-              nn = n3Dzcum + n
+              nn = n3Dbcum + n
               if (avail_hist_fields(nn)%vhistfreq == histfreq(ns)) then 
               do k = 1, nzilyr
               do ic = 1, ncat_hist
@@ -2455,6 +3613,25 @@
                     a4Ds(i,j,k,ic,n,iblk) = spval
                  else                            ! convert units
                     a4Ds(i,j,k,ic,n,iblk) = avail_hist_fields(nn)%cona*a4Ds(i,j,k,ic,n,iblk) &
+                                   * ravgct + avail_hist_fields(nn)%conb
+                 endif
+              enddo             ! i
+              enddo             ! j
+              enddo             ! ic
+              enddo             ! k
+              endif
+           enddo                ! n
+           do n = 1, num_avail_hist_fields_4Db
+              nn = n4Dscum + n
+              if (avail_hist_fields(nn)%vhistfreq == histfreq(ns)) then 
+              do k = 1, nzblyr
+              do ic = 1, ncat_hist
+              do j = jlo, jhi
+              do i = ilo, ihi
+                 if (.not. tmask(i,j,iblk)) then ! mask out land points
+                    a4Db(i,j,k,ic,n,iblk) = spval
+                 else                            ! convert units
+                    a4Db(i,j,k,ic,n,iblk) = avail_hist_fields(nn)%cona*a4Db(i,j,k,ic,n,iblk) &
                                    * ravgct + avail_hist_fields(nn)%conb
                  endif
               enddo             ! i
@@ -2589,8 +3766,10 @@
            if (allocated(a2D))  a2D (:,:,:,:)     = c0
            if (allocated(a3Dc)) a3Dc(:,:,:,:,:)   = c0
            if (allocated(a3Dz)) a3Dz(:,:,:,:,:)   = c0
+           if (allocated(a3Db)) a3Db(:,:,:,:,:)   = c0
            if (allocated(a4Di)) a4Di(:,:,:,:,:,:) = c0
            if (allocated(a4Ds)) a4Ds(:,:,:,:,:,:) = c0
+           if (allocated(a4Db)) a4Db(:,:,:,:,:,:) = c0
            avgct(:) = c0
            albcnt(:,:,:,:) = c0
            write_ic = .false.        ! write initial condition once at most
@@ -2611,13 +3790,21 @@
            nn = n - n3Dccum
            if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a3Dz(:,:,:,nn,:) = c0
         enddo
-        do n = n3Dzcum + 1, n4Dicum
+        do n = n3Dzcum + 1, n3Dbcum
            nn = n - n3Dzcum
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a3Db(:,:,:,nn,:) = c0
+        enddo
+        do n = n3Dbcum + 1, n4Dicum
+           nn = n - n3Dbcum
            if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Di(:,:,:,:,nn,:) = c0
         enddo
         do n = n4Dicum + 1, n4Dscum
            nn = n - n4Dicum
            if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Ds(:,:,:,:,nn,:) = c0
+        enddo
+        do n = n4Dscum + 1, n4Dbcum
+           nn = n - n4Dscum
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Db(:,:,:,:,nn,:) = c0
         enddo
 
       endif  ! write_history or write_ic
@@ -2707,13 +3894,13 @@
 !
 #ifdef ncdf
       integer (kind=int_kind) :: i,j,k,ic,n,nn, &
-         ncid,status,imtid,jmtid,kmtidi,kmtids,cmtid,timid,varid, &
+         ncid,status,imtid,jmtid,kmtidi,kmtids,kmtidb, cmtid,timid,varid, &
          length,nvertexid,ivertex
       integer (kind=int_kind), dimension(3) :: dimid
       integer (kind=int_kind), dimension(4) :: dimidz
       integer (kind=int_kind), dimension(5) :: dimidcz
       integer (kind=int_kind), dimension(3) :: dimid_nverts
-      integer (kind=int_kind), dimension(3) :: dimidex
+      integer (kind=int_kind), dimension(4) :: dimidex
       real (kind=real_kind) :: ltime
       character (char_len) :: title
       character (char_len_long) :: ncfile(max_nstrm)
@@ -2799,6 +3986,10 @@
         status = nf90_def_dim(ncid,'nksnow',nzslyr,kmtids)
         if (status /= nf90_noerr) call abort_ice( &
                       'ice: Error defining dim nks')
+
+        status = nf90_def_dim(ncid,'nkbio',nzblyr,kmtidb)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error defining dim nkb')
 
         status = nf90_def_dim(ncid,'time',NF90_UNLIMITED,timid)
         if (status /= nf90_noerr) call abort_ice( &
@@ -2896,6 +4087,7 @@
       var_nz(1) = coord_attributes('NCAT', 'category maximum thickness', 'm')
       var_nz(2) = coord_attributes('VGRDi', 'vertical ice levels', '1')
       var_nz(3) = coord_attributes('VGRDs', 'vertical snow levels', '1')
+      var_nz(4) = coord_attributes('VGRDb', 'vertical ice-bio levels', '1')
 
       !-----------------------------------------------------------------
       ! define information for optional time-invariant variables
@@ -2977,10 +4169,11 @@
           endif          
         enddo
 
-        ! Extra dimensions (NCAT, NZILYR, NZSLYR)       
+        ! Extra dimensions (NCAT, NZILYR, NZSLYR, NZBLYR)       
           dimidex(1)=cmtid
           dimidex(2)=kmtidi
           dimidex(3)=kmtids
+          dimidex(4)=kmtidb
         
         do i = 1, nvarz
            if (igrdz(i)) then
@@ -3190,6 +4383,43 @@
 
           endif
         enddo  ! num_avail_hist_fields_3Dz
+        
+        dimidz(1) = imtid
+        dimidz(2) = jmtid
+        dimidz(3) = kmtidb
+        dimidz(4) = timid
+
+        do n = n3Dzcum + 1, n3Dbcum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
+                         nf90_float, dimidz, varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining variable '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'units', &
+                        avail_hist_fields(n)%vunit)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining units for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid, 'long_name', &
+                        avail_hist_fields(n)%vdesc)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining long_name for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'coordinates', &
+                        avail_hist_fields(n)%vcoord)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining coordinates for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'cell_measures', &
+                        avail_hist_fields(n)%vcellmeas)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining cell measures for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'missing_value',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'_FillValue',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+
+          endif
+        enddo  ! num_avail_hist_fields_3Db
 
         dimidcz(1) = imtid
         dimidcz(2) = jmtid
@@ -3197,11 +4427,11 @@
         dimidcz(4) = cmtid
         dimidcz(5) = timid
 
-        do n = n3Dzcum + 1, n4Dicum
+        do n = n3Dbcum + 1, n4Dicum
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
             status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
-                             nf90_float, dimidcz, varid)
-!ferret                         nf90_float, dimidcz(1:4), varid)
+!                             nf90_float, dimidcz, varid)
+                             nf90_float, dimidcz(1:4), varid) ! ferret    
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining variable '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'units', &
@@ -3253,8 +4483,8 @@
         do n = n4Dicum + 1, n4Dscum
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
             status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
-                        nf90_float, dimidcz, varid)
-!ferret                         nf90_float, dimidcz(1:4), varid)
+!                             nf90_float, dimidcz, varid)
+                             nf90_float, dimidcz(1:4), varid) ! ferret    
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining variable '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'units', &
@@ -3296,6 +4526,59 @@
             endif
           endif
         enddo  ! num_avail_hist_fields_4Ds
+
+        dimidcz(1) = imtid
+        dimidcz(2) = jmtid
+        dimidcz(3) = kmtidb
+        dimidcz(4) = cmtid
+        dimidcz(5) = timid
+
+        do n = n4Dscum + 1, n4Dbcum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
+!                             nf90_float, dimidcz, varid)
+                             nf90_float, dimidcz(1:4), varid) ! ferret    
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining variable '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'units', &
+                        avail_hist_fields(n)%vunit)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining units for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid, 'long_name', &
+                        avail_hist_fields(n)%vdesc)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining long_name for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'coordinates', &
+                        avail_hist_fields(n)%vcoord)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining coordinates for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'cell_measures', &
+                        avail_hist_fields(n)%vcellmeas)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining cell measures for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'missing_value',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+            status = nf90_put_att(ncid,varid,'_FillValue',spval)
+            if (status /= nf90_noerr) call abort_ice( &
+               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+
+      !-----------------------------------------------------------------
+      ! Add cell_methods attribute to variables if averaged
+      !-----------------------------------------------------------------
+            if (hist_avg) then
+                status = nf90_put_att(ncid,varid,'cell_methods','time: mean')
+                if (status /= nf90_noerr) call abort_ice( &
+                 'Error defining cell methods for '//avail_hist_fields(n)%vname)
+            endif
+
+            if (histfreq(ns) == '1' .or. .not. hist_avg) then
+               status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
+            else
+               status = nf90_put_att(ncid,varid,'time_rep','averaged')
+            endif
+          endif
+        enddo  ! num_avail_hist_fields_4Db
 
       !-----------------------------------------------------------------
       ! global attributes
@@ -3664,8 +4947,35 @@
       work_gr(:,:) = c0
       work_g1(:,:) = c0
 
-      do n = n3Dzcum+1, n4Dicum
+     do n = n3Dzcum+1, n3Dbcum
         nn = n - n3Dzcum
+        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+          if (my_task == master_task) then
+            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+          endif
+          do k = 1, nzblyr
+             call gather_global(work_g1, a3Db(:,:,k,nn,:), &
+                                master_task, distrb_info)
+             work_gr(:,:) = work_g1(:,:)
+
+             if (my_task == master_task) then
+             status  = nf90_put_var(ncid,varid,work_gr(:,:), &
+                                    start=(/        1,        1,k/), &
+                                    count=(/nx_global,ny_global,1/))
+             if (status /= nf90_noerr) call abort_ice( &
+                'ice: Error writing variable '//avail_hist_fields(n)%vname)
+           endif
+           enddo ! k
+        endif
+      enddo ! num_avail_hist_fields_3Db
+
+      work_gr(:,:) = c0
+      work_g1(:,:) = c0
+
+      do n = n3Dbcum+1, n4Dicum
+        nn = n - n3Dbcum
         if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
           if (my_task == master_task) then
             status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
@@ -3716,6 +5026,34 @@
           enddo ! ic
         endif
       enddo ! num_avail_hist_fields_4Ds
+
+      work_gr(:,:) = c0
+      work_g1(:,:) = c0
+
+      do n = n4Dscum+1, n4Dbcum
+        nn = n - n4Dscum
+        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+          if (my_task == master_task) then
+            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
+            if (status /= nf90_noerr) call abort_ice( &
+               'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+          endif
+          do ic = 1, ncat_hist
+             do k = 1, nzblyr
+                call gather_global(work_g1, a4Db(:,:,k,ic,nn,:), &
+                                master_task, distrb_info)
+                work_gr(:,:) = work_g1(:,:)
+                if (my_task == master_task) then
+                  status  = nf90_put_var(ncid,varid,work_gr(:,:), &
+                                         start=(/        1,        1,k,ic/), &
+                                         count=(/nx_global,ny_global,1, 1/))
+                  if (status /= nf90_noerr) call abort_ice( &
+                     'ice: Error writing variable '//avail_hist_fields(n)%vname)
+                endif
+             enddo ! k
+          enddo ! ic
+        endif
+      enddo ! num_avail_hist_fields_4Db
 
       deallocate(work_gr)
       deallocate(work_g1)
@@ -4112,10 +5450,14 @@
                num_avail_hist_fields_3Dc = num_avail_hist_fields_3Dc + 1
             elseif (vcoord(11:15) == 'VGRDi' .and. vcoord(17:20) == 'time') then
                num_avail_hist_fields_3Dz = num_avail_hist_fields_3Dz + 1
+            elseif (vcoord(11:15) == 'VGRDb' .and. vcoord(17:20) == 'time') then
+               num_avail_hist_fields_3Db = num_avail_hist_fields_3Db + 1
             elseif (vcoord(11:15) == 'VGRDi' .and. vcoord(17:20) == 'NCAT') then
                num_avail_hist_fields_4Di = num_avail_hist_fields_4Di + 1
             elseif (vcoord(11:15) == 'VGRDs' .and. vcoord(17:20) == 'NCAT') then
                num_avail_hist_fields_4Ds = num_avail_hist_fields_4Ds + 1
+            elseif (vcoord(11:15) == 'VGRDb' .and. vcoord(17:20) == 'NCAT') then
+               num_avail_hist_fields_4Db = num_avail_hist_fields_4Db + 1
             endif
 
             if (num_avail_hist_fields_tot > max_avail_hist_fields) &
@@ -4125,8 +5467,10 @@
                 num_avail_hist_fields_2D  + &
                 num_avail_hist_fields_3Dc + &
                 num_avail_hist_fields_3Dz + &
+                num_avail_hist_fields_3Db + &
                 num_avail_hist_fields_4Di + &
-                num_avail_hist_fields_4Ds)  &
+                num_avail_hist_fields_4Ds + &
+                num_avail_hist_fields_4Db)  &
                call abort_ice("num_avail_hist_fields error")
 
             id(ns) = num_avail_hist_fields_tot

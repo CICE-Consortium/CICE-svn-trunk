@@ -36,19 +36,29 @@
         ny_global = NYGLOB    , & ! j-axis size
         ncat      = NICECAT   , & ! number of categories
         nilyr     = NICELYR   , & ! number of ice layers per category
-        ntilyr    = ncat*nilyr, & ! number of ice layers in all categories
         nslyr     = NSNWLYR   , & ! number of snow layers per category
-        ntslyr    = ncat*nslyr, & ! number of snow layers in all categories
         max_aero  =   6       , & ! maximum number of aerosols 
         n_aero    = NTRAERO   , & ! number of aerosols in use
+
+        nblyr     = NBGCLYR   , & ! number of biology layers per category
+        nblyr_hist = nblyr+2  , & ! number of ice layer plus boundary points
+        nltrcr    = 6         , & ! number of layer bgc tracers  
+                                  ! number of biology layer tracers      
+        nbltrcr   = 1         , & ! 4 basic bio;  1 nitrate only 
+
                                   ! number of tracers (defined in ice_init)
         max_ntrcr =   1         & ! 1 = surface temperature              
+                  + nilyr       & ! ice salinity
+                  + nilyr       & ! ice enthalpy
+                  + nslyr       & ! snow enthalpy
                               !!!!! optional tracers:
+                  + TRBRI       & ! brine height
                   + TRAGE       & ! age
                   + TRFY        & ! first-year area
                   + TRLVL*2     & ! level/deformed ice
                   + TRPND*3     & ! ponds
-                  + n_aero*4  , & ! number of aerosols * 4 aero layers
+                  + n_aero*4    & ! number of aerosols * 4 aero layers
+                  + nltrcr*nblyr,&! bgc in layers
         max_nstrm =   5           ! max number of history output streams
 
       integer (kind=int_kind), parameter :: &

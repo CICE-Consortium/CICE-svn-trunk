@@ -15,14 +15,11 @@
 ! aicen(i,j,n)         aice(i,j)           ---
 ! vicen(i,j,n)         vice(i,j)           m
 ! vsnon(i,j,n)         vsno(i,j)           m
-! eicen(i,j,k)         eice(i,j)           J/m^2
-! esnon(i,j,k)         esno(i,j)           J/m^2
 ! trcrn(i,j,it,n)      trcr(i,j,it)        
 !
 ! Area is dimensionless because aice is the fractional area
 ! (normalized so that the sum over all categories, including open
-! water, is 1.0).  That is why vice/vsno have units of m instead of
-! m^3, and eice/esno have units of J/m^2 instead of J.
+! water, is 1.0).  That is why vice/vsno have units of m instead of m^3.
 !
 ! Variable names follow these rules:
 !
@@ -66,9 +63,7 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
          aice  , & ! concentration of ice
          vice  , & ! volume per unit area of ice          (m)
-         vsno  , & ! volume per unit area of snow         (m)
-         eice  , & ! energy of melt. of ice           (J/m^2)
-         esno      ! energy of melt. of snow layer    (J/m^2)
+         vsno      ! volume per unit area of snow         (m)
 
       real (kind=dbl_kind), &
          dimension(nx_block,ny_block,max_ntrcr,max_blocks) :: &
@@ -101,20 +96,20 @@
       integer (kind=int_kind) :: &
          ntrcr     ! number of tracers in use
 
-      real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,ntilyr,max_blocks) :: &
-         eicen     ! energy of melting for each ice layer  (J/m^2)
-
-      real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,ntslyr,max_blocks) :: &
-         esnon     ! energy of melting for each snow layer (J/m^2)
-
       !-----------------------------------------------------------------
       ! indices and flags for tracers
       !-----------------------------------------------------------------
 
+      integer (kind=int_kind) ::                      &
+         ntraceb     , &    ! number of bio layer tracers in use                   &
+         ntrace_start       ! index of first bio tracer
+      
       integer (kind=int_kind) :: &
-         nt_Tsfc  , & ! ice/snow surface temperature
+         nt_Tsfc  , & ! ice/snow temperature
+         nt_qice  , & ! volume-weighted ice enthalpy (in layers)
+         nt_qsno  , & ! volume-weighted snow enthalpy (in layers)
+         nt_sice  , & ! volume-weighted ice bulk salinity (CICE grid layers)
+         nt_fbri  , & ! volume fraction of ice with dynamic salt (hinS/vicen*aicen)
          nt_iage  , & ! volume-weighted ice age
          nt_FY    , & ! area-weighted first-year ice area
          nt_alvl  , & ! level ice area fraction
@@ -122,7 +117,32 @@
          nt_apnd  , & ! melt pond area fraction
          nt_hpnd  , & ! melt pond depth
          nt_ipnd  , & ! melt pond refrozen lid thickness
-         nt_aero      ! starting index for aerosols in ice
+         nt_aero  , & ! starting index for aerosols in ice
+         nt_bgc_N_sk,   & ! algae (skeletal layer)
+         nt_bgc_C_sk,   & ! 
+         nt_bgc_chl_sk, & ! 
+         nt_bgc_Nit_sk, & ! nutrients (skeletal layer) 
+         nt_bgc_Am_sk,  & ! 
+         nt_bgc_Sil_sk, & !
+         nt_bgc_DMSPp_sk, & ! trace gases (skeletal layer)
+         nt_bgc_DMSPd_sk, & ! 
+         nt_bgc_DMS_sk, & ! 
+         nt_bgc_Nit_ml, & ! nutrients (ocean mixed layer) 
+         nt_bgc_Am_ml,  & ! 
+         nt_bgc_Sil_ml, & !
+         nt_bgc_DMSP_ml, & ! trace gases (ocean mixed layer)
+         nt_bgc_DMS_ml, & !  
+         nt_bgc_N,   & ! algae: bulk quantities are tracers (volume preserved)
+         nt_bgc_C,   & ! 
+         nt_bgc_chl, & ! 
+         nt_bgc_NO,  & ! nutrients  
+         nt_bgc_NH,  & ! 
+         nt_bgc_Sil, & !
+         nt_bgc_DMSPp, & ! trace gases (skeletal layer)
+         nt_bgc_DMSPd, & ! 
+         nt_bgc_DMS, & ! 
+         nt_bgc_PON, & ! zooplankton and detritus  
+         nt_bgc_S      ! Bulk salinity in fraction ice with dynamic salinity (Bio grid) 
 
       logical (kind=log_kind) :: &
          tr_iage,   & ! if .true., use age tracer
@@ -157,6 +177,9 @@
          aicen_init  , & ! initial ice concentration, for linear ITD
          vicen_init      ! initial ice volume (m), for linear ITD
 
+       logical (kind=log_kind) :: &
+         hbrine          ! if .true., brine height differs from ice thickness
+
 !=======================================================================
 
       contains
@@ -169,8 +192,7 @@
 ! !INTERFACE:
 !
       subroutine bound_state (aicen, trcrn, &
-                              vicen, vsnon, &
-                              eicen, esnon)
+                              vicen, vsnon)
 !
 ! !DESCRIPTION:
 !
@@ -199,14 +221,6 @@
          dimension(nx_block,ny_block,max_ntrcr,ncat,max_blocks), &
          intent(inout) :: &
          trcrn     ! ice tracers
-
-      real (kind=dbl_kind), &
-         dimension(nx_block,ny_block,ntilyr,max_blocks),intent(inout) :: &
-         eicen     ! energy of melting for each ice layer  (J/m^2)
-
-      real (kind=dbl_kind), &
-         dimension(nx_block,ny_block,ntslyr,max_blocks),intent(inout) :: &
-         esnon     ! energy of melting for each snow layer (J/m^2)
 !
 !EOP
 !
@@ -217,10 +231,6 @@
          call ice_HaloUpdate (vicen,            halo_info, &
                               field_loc_center, field_type_scalar)
          call ice_HaloUpdate (vsnon,            halo_info, &
-                              field_loc_center, field_type_scalar)
-         call ice_HaloUpdate (eicen,            halo_info, &
-                              field_loc_center, field_type_scalar)
-         call ice_HaloUpdate (esnon,            halo_info, &
                               field_loc_center, field_type_scalar)
 
       end subroutine bound_state

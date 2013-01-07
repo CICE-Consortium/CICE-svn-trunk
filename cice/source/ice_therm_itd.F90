@@ -58,7 +58,6 @@
                              aicen_init,  vicen_init,  & 
                              aicen,       trcrn,       & 
                              vicen,       vsnon,       & 
-                             eicen,       esnon,       & 
                              aice,        aice0,       & 
                              fpond,       l_stop,      &
                              istop,       jstop)
@@ -88,9 +87,12 @@
 !
 ! !USES:
 !
+      use ice_calendar, only: istep1
       use ice_itd, only: hin_max, hi_min, aggregate_area, shift_ice, & 
-                         column_sum, column_conservation_check 
-      use ice_state, only: tr_pond_topo, nt_apnd, nt_hpnd
+                         column_sum, column_conservation_check
+      use ice_state, only: nt_qice, nt_qsno, nt_fbri, nt_bgc_S, nt_sice, &
+                           tr_pond_topo, nt_apnd, nt_hpnd, hbrine
+      use ice_zbgc_public, only: tr_bgc_S
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -120,14 +122,6 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
          intent(inout) :: &
          trcrn     ! ice tracers
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
-         intent(inout) :: &
-         eicen     ! energy of melting for each ice layer (J/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), &
-         intent(inout) :: &
-         esnon     ! energy of melting for each snow layer (J/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
@@ -185,10 +179,20 @@
          daice        , & ! ice area transferred across boundary
          dvice            ! ice volume transferred across boundary
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
+         eicen, &     ! energy of melting for each ice layer (J/m^2)
+         esnon, &     ! energy of melting for each snow layer (J/m^2)
+         vbrin, &     ! ice volume with defined by brine height (m)
+         Shin , &     ! Bulk salt in h ice (ppt*m)
+         Shbrn        ! Bulk salt in h brine (ppt*m)
+
       real (kind=dbl_kind), dimension(icells) :: &
          vice_init, vice_final, & ! ice volume summed over categories
          vsno_init, vsno_final, & ! snow volume summed over categories
          eice_init, eice_final, & ! ice energy summed over categories
+         vbri_init, vbri_final, & ! ice volume define by hbri summed over categories
+         Shi_init, Shi_final, & ! ice bulk salinity summed over categories
+         Shbr_init, Shbr_final, & ! ice bulk salinity in hbri summed over categories
          esno_init, esno_final    ! snow energy summed over categories
 
       ! NOTE: Third index of donor, daice, dvice should be ncat-1,
@@ -227,22 +231,96 @@
       !-----------------------------------------------------------------
 
       if (l_conservation_check) then
+
+      eicen(:,:,:) = c0
+      esnon(:,:,:) = c0
+      vbrin(:,:,:) = c0
+      Shin(:,:,:) = c0
+      Shbrn(:,:,:) = c0
+
+      do n = 1, ncat
+      do k = 1, nilyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         eicen(i,j,n) = eicen(i,j,n) + trcrn(i,j,nt_qice+k-1,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+      do k = 1, nslyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         esnon(i,j,n) = esnon(i,j,n) + trcrn(i,j,nt_qsno+k-1,n) &
+                      * vsnon(i,j,n)/real(nslyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+
+     
+      do j = 1, ny_block
+      do i = 1, nx_block
+         vbrin(i,j,n) =  vicen(i,j,n)
+         if (hbrine) vbrin(i,j,n) = vbrin(i,j,n)*trcrn(i,j,nt_fbri,n)
+      enddo
+      enddo    
+
+      do k = 1, nilyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         Shin(i,j,n) = Shin(i,j,n) + trcrn(i,j,nt_sice+k-1,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+
+      if (tr_bgc_S) then
+      do k = 1, nblyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+               Shbrn(i,j,n) = Shbrn(i,j,n) + trcrn(i,j,nt_bgc_S+k-1,n) &
+                      *  vbrin(i,j,n)/real(nblyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+      endif
+      enddo  !ncat
+
+
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
                           ncat,                     &
                           vicen,    vice_init)
+
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
                           ncat,                     &
                           vsnon,    vsno_init)
+
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
-                          ntilyr,                   &
+                          ncat,                     &
                           eicen,    eice_init)
+
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
-                          ntslyr,                   &
+                          ncat,                     &
                           esnon,    esno_init)
+
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          vbrin,    vbri_init)
+
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          Shin,    Shi_init)
+
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          Shbrn,    Shbr_init)
+
       endif
 
       !-----------------------------------------------------------------
@@ -268,8 +346,7 @@
             j = indxj(ij)
 
             if (aicen_init(i,j,n) > puny) then
-               hicen_init (ij,n) = vicen_init(i,j,n) /  &
-                                    aicen_init(i,j,n) 
+               hicen_init (ij,n) = vicen_init(i,j,n) / aicen_init(i,j,n)
             else
                hicen_init(ij,n) = c0
             endif               ! aicen_init > puny
@@ -332,9 +409,9 @@
                   write(nu_diag,*) my_task,':',i,j, &
                        'ITD: hicen(n) > hbnew(n)'
                   write(nu_diag,*) 'cat ',n
-                  write(nu_diag,*) my_task,':',i,j, &
+                  write(nu_diag,*) istep1, my_task,':',i,j, &
                        'hicen(n) =', hicen(ij,n)
-                  write(nu_diag,*) my_task,':',i,j, &
+                  write(nu_diag,*) istep1, my_task,':',i,j, &
                        'hbnew(n) =', hbnew(ij,n)
                endif
 
@@ -346,9 +423,9 @@
                   write(nu_diag,*) my_task,':',i,j, &
                        'ITD: hicen(n+1) < hbnew(n)'
                   write(nu_diag,*) 'cat ',n
-                  write(nu_diag,*) my_task,':',i,j, &
+                  write(nu_diag,*) istep1, my_task,':',i,j, &
                        'hicen(n+1) =', hicen(ij,n+1)
-                  write(nu_diag,*) my_task,':',i,j, &
+                  write(nu_diag,*) istep1, my_task,':',i,j, &
                        'hbnew(n) =', hbnew(ij,n)
                endif
             endif
@@ -368,9 +445,9 @@
                   write(nu_diag,*) my_task,':',i,j, &
                        'ITD hbnew(n) > hin_max(n+1)'
                   write(nu_diag,*) 'cat ',n
-                  write(nu_diag,*) my_task,':',i,j, &
+                  write(nu_diag,*) istep1, my_task,':',i,j, &
                        'hbnew(n) =', hbnew(ij,n)
-                  write(nu_diag,*) my_task,':',i,j, &
+                  write(nu_diag,*) istep1, my_task,':',i,j, &
                        'hin_max(n+1) =', hin_max(n+1)
                endif
             endif
@@ -382,9 +459,9 @@
                   write(nu_diag,*) my_task,':',i,j, &
                        'ITD: hbnew(n) < hin_max(n-1)'
                   write(nu_diag,*) 'cat ',n
-                  write(nu_diag,*) my_task,':',i,j, &
+                  write(nu_diag,*) istep1, my_task,':',i,j, &
                        'hbnew(n) =', hbnew(ij,n)
-                  write(nu_diag,*) my_task,':',i,j, &
+                  write(nu_diag,*) istep1, my_task,':',i,j, &
                        'hin_max(n-1) =', hin_max(n-1)
                endif
             endif
@@ -619,7 +696,6 @@
                       ntrcr,    trcr_depend, &
                       aicen,    trcrn,       &
                       vicen,    vsnon,       &
-                      eicen,    esnon,       &
                       hicen,    donor,       &
                       daice,    dvice,       &
                       l_stop,                &
@@ -639,7 +715,7 @@
          j = indxjj(ij)
          m = indxij(ij)
          if (hi_min > c0 .and. &
-              aicen(i,j,1) > puny .and. hicen(m,1) < hi_min) then
+            aicen(i,j,1) > puny .and. hicen(m,1) < hi_min) then
 
             da0 = aicen(i,j,1) * (c1 - hicen(m,1)/hi_min)
             aicen(i,j,1) = aicen(i,j,1) - da0
@@ -667,6 +743,58 @@
       !-----------------------------------------------------------------
 
       if (l_conservation_check) then
+
+      eicen(:,:,:) = c0
+      esnon(:,:,:) = c0
+      vbrin(:,:,:) = c0
+      Shin(:,:,:) = c0
+      Shbrn(:,:,:) = c0
+
+      do n = 1, ncat
+      do k = 1, nilyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         eicen(i,j,n) = eicen(i,j,n) + trcrn(i,j,nt_qice+k-1,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+      do k = 1, nslyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         esnon(i,j,n) = esnon(i,j,n) + trcrn(i,j,nt_qsno+k-1,n) &
+                      * vsnon(i,j,n)/real(nslyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+
+      do j = 1, ny_block
+      do i = 1, nx_block
+         vbrin(i,j,n) =  vicen(i,j,n)
+         if (hbrine) vbrin(i,j,n) = vbrin(i,j,n)*trcrn(i,j,nt_fbri,n)
+      enddo
+      enddo
+
+      do k = 1, nilyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         Shin(i,j,n) = Shin(i,j,n) + trcrn(i,j,nt_sice+k-1,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+
+      if (tr_bgc_S) then
+      do k = 1, nblyr
+      do j = 1, ny_block
+      do i = 1, nx_block 
+         Shbrn(i,j,n) = Shbrn(i,j,n) + trcrn(i,j,nt_bgc_S+k-1,n) &
+                      * vbrin(i,j,n)/real(nblyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+      endif
+      enddo
 
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
@@ -696,7 +824,7 @@
 
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
-                          ntilyr,                   &
+                          ncat,                     &
                           eicen,    eice_final)
          fieldid = 'eice, ITD remap'
          call column_conservation_check (nx_block,   ny_block,     &
@@ -710,7 +838,7 @@
 
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
-                          ntslyr,                   &
+                          ncat,                     &
                           esnon,    esno_final)
          fieldid = 'esno, ITD remap'
          call column_conservation_check (nx_block,   ny_block,     &
@@ -722,8 +850,46 @@
                                          istop,     jstop)
          if (l_stop) return
 
-      endif                     ! conservation check
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          Shin,    Shi_final)
+         fieldid = 'Shin, ITD remap'
+         call column_conservation_check (nx_block,  ny_block,      &
+                                         icells,   indxi,   indxj, &
+                                         fieldid,                  &
+                                         Shi_init, Shi_final,    &
+                                         puny,      l_stop,        &
+                                         istop,     jstop)
+         if (l_stop) return         
 
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          Shbrn,    Shbr_final)
+         fieldid = 'Shbri, ITD remap'
+         call column_conservation_check (nx_block,  ny_block,      &
+                                         icells,   indxi,   indxj, &
+                                         fieldid,                  &
+                                         Shbr_init, Shbr_final,    &
+                                         puny*c10,  l_stop,        &
+                                         istop,     jstop)
+         if (l_stop) return
+
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          vbrin,    vbri_final)
+         fieldid = 'vbrin, ITD remap'
+         call column_conservation_check (nx_block,  ny_block,      &
+                                         icells,   indxi,   indxj, &
+                                         fieldid,                  &
+                                         vbri_init, vbri_final,    &
+                                         puny*c10,      l_stop,        &
+                                         istop,     jstop)
+         if (l_stop) return         
+      endif                     ! conservation check
+     
       end subroutine linear_itd
 
 !=======================================================================
@@ -842,6 +1008,90 @@
 !=======================================================================
 !BOP
 !
+! !ROUTINE: update_vertical_tracers
+!
+! !DESCRIPTION:
+!
+! Given some added new ice to the base of the existing ice, recalculate vertical tracer
+! so that new grid cells are all the same size. 
+!
+! !REVISION HISTORY:
+!
+! author: A. K. Turner, LANL
+!
+! !INTERFACE:
+!
+      subroutine update_vertical_tracers(trc, h1, h2, trc0)
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+        real(kind=dbl_kind), dimension(1:nilyr), intent(inout) :: trc ! vertical tracer
+        real(kind=dbl_kind), intent(in) :: h1 ! old thickness
+        real(kind=dbl_kind), intent(in) :: h2 ! new thickness
+        real(kind=dbl_kind), intent(in) :: trc0 ! tracer value of added ice on ice bottom
+!
+!EOP
+!
+        real(kind=dbl_kind), dimension(1:nilyr) :: trc2 ! temporary array for updated tracer
+
+        ! vertical indexes for old and new grid
+        integer :: k1, k2
+
+        real(kind=dbl_kind) :: z1a, z1b ! upper and lower boundary of old cell/added new ice at bottom
+        real(kind=dbl_kind) :: z2a, z2b ! upper and lower boundary of new cell
+        real(kind=dbl_kind) :: overlap  ! overlap between old and new cell
+        real(kind=dbl_kind) :: rnilyr
+
+        rnilyr = real(nilyr,dbl_kind)
+
+        ! loop over new grid cells
+        do k2 = 1, nilyr
+
+           ! initialize new tracer
+           trc2(k2) = c0
+
+           ! calculate upper and lower boundary of new cell
+           z2a = ((k2 - 1) * h2) / rnilyr
+           z2b = (k2       * h2) / rnilyr
+
+           ! loop over old grid cells
+           do k1 = 1, nilyr
+
+              ! calculate upper and lower boundary of old cell
+              z1a = ((k1 - 1) * h1) / rnilyr
+              z1b = (k1       * h1) / rnilyr
+              
+              ! calculate overlap between old and new cell
+              overlap = max(min(z1b, z2b) - max(z1a, z2a), c0)
+
+              ! aggregate old grid cell contribution to new cell
+              trc2(k2) = trc2(k2) + overlap * trc(k1)
+
+           enddo ! k1
+
+           ! calculate upper and lower boundary of added new ice at bottom
+           z1a = h1
+           z1b = h2
+           
+           ! calculate overlap between added ice and new cell
+           overlap = max(min(z1b, z2b) - max(z1a, z2a), c0)
+           ! aggregate added ice contribution to new cell
+           trc2(k2) = trc2(k2) + overlap * trc0
+           ! renormalize new grid cell
+           trc2(k2) = (rnilyr * trc2(k2)) / h2
+
+        enddo ! k2
+
+        ! update vertical tracer array with the adjusted tracer
+        trc = trc2
+
+      end subroutine update_vertical_tracers
+
+!=======================================================================
+!BOP
+!
 ! !ROUTINE: lateral_melt - melt ice laterally
 !
 ! !DESCRIPTION:
@@ -863,19 +1113,21 @@
                                fhocn,      faero_ocn,  &
                                rside,      meltl,      &
                                aicen,      vicen,      &
-                               vsnon,      eicen,      &
-                               esnon,      trcrn)
+                               vsnon,      trcrn,      &
+                               fsice, flux_bio, nbltrcr)
 !
 ! !USES:
 !
-      use ice_itd, only: ilyr1, slyr1
-      use ice_state, only: nt_aero, tr_aero, tr_pond_topo, nt_apnd, nt_hpnd
+      use ice_state, only: nt_qice, nt_qsno, &
+                           nt_aero, tr_aero, tr_pond_topo, nt_apnd, nt_hpnd
+      use ice_zbgc_public, only: lateral_melt_bgc
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
+         ilo,ihi,jlo,jhi , &      ! beginning and end of physical domain
+         nbltrcr               ! number of biology tracers
 
       real (kind=dbl_kind), intent(in) :: &
          dt        ! time step (s)
@@ -885,14 +1137,6 @@
          aicen   , & ! concentration of ice
          vicen   , & ! volume per unit area of ice          (m)
          vsnon       ! volume per unit area of snow         (m)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
-         intent(inout) :: &
-         eicen     ! energy of melting for each ice layer (J/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), &
-         intent(inout) :: &
-         esnon     ! energy of melting for each snow layer (J/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &
          intent(in) :: &
@@ -907,7 +1151,12 @@
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt     , & ! salt flux to ocean (kg/m^2/s)
          fhocn     , & ! net heat flux to ocean (W/m^2)
-         meltl         ! lateral ice melt         (m/step-->cm/day)
+         meltl     , &    ! lateral ice melt         (m/step-->cm/day)
+         fsice       ! salt flux from layer Salinity (kg/m^2/s)
+  
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nbltrcr), &
+         intent(inout) :: &
+         flux_bio  ! biology tracer flux from layer bgc (mmol/m^2/s)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
          intent(inout) :: &
@@ -966,9 +1215,7 @@
                    * rside(i,j) / dt
             dfsalt = rhoi*vicen(i,j,n)*ice_ref_salinity*p001 &
                    * rside(i,j) / dt
-
             fresh(i,j)      = fresh(i,j)      + dfresh
-
             fsalt(i,j)      = fsalt(i,j)      + dfsalt
 
             if (tr_pond_topo) then
@@ -986,7 +1233,6 @@
             aicen(i,j,n) = aicen(i,j,n) * (c1 - rside(i,j))
             vicen(i,j,n) = vicen(i,j,n) * (c1 - rside(i,j))
             vsnon(i,j,n) = vsnon(i,j,n) * (c1 - rside(i,j))
-
          enddo                  ! ij
 
          do k = 1, nilyr
@@ -997,14 +1243,11 @@
                i = indxi(ij)
                j = indxj(ij)
 
+               ! enthalpy tracers do not change (e/v constant)
                ! heat flux to coupler for ice melt (dfhocn < 0)
-
-               dfhocn = eicen(i,j,ilyr1(n)+k-1)*rside(i,j) / dt
+               dfhocn = trcrn(i,j,nt_qice+k-1,n)*rside(i,j) / dt &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
                fhocn(i,j)      = fhocn(i,j)      + dfhocn
-
-               ! ice energy
-               eicen(i,j,ilyr1(n)+k-1) = eicen(i,j,ilyr1(n)+k-1) &
-                                       * (c1 - rside(i,j))
             enddo               ! ij
          enddo                  ! nilyr
 
@@ -1018,12 +1261,9 @@
 
                ! heat flux to coupler for snow melt (dfhocn < 0)
 
-               dfhocn = esnon(i,j,slyr1(n)+k-1)*rside(i,j) / dt
+               dfhocn = trcrn(i,j,nt_qsno+k-1,n)*rside(i,j) / dt &
+                      * vsnon(i,j,n)/real(nslyr,kind=dbl_kind)
                fhocn(i,j)      = fhocn(i,j)      + dfhocn
-
-               ! snow energy
-               esnon(i,j,slyr1(n)+k-1) = esnon(i,j,slyr1(n)+k-1) &
-                                       * (c1 - rside(i,j))
             enddo               ! ij
          enddo                  ! nslyr
 
@@ -1043,6 +1283,16 @@
             enddo
          endif
 
+      !-----------------------------------------------------------------
+      ! Biogeochemistry
+      !-----------------------------------------------------------------
+
+         call lateral_melt_bgc(nx_block,       ny_block,    &
+                               icells,         dt,          &
+                               indxi,          indxj,       &
+                               rside,          vicen(:,:,n),&
+                               trcrn(:,:,:,n), fsice,       &
+                               flux_bio,       nbltrcr)
       enddo  ! n
 
       end subroutine lateral_melt

@@ -48,9 +48,7 @@
       real (kind=dbl_kind), dimension (:,:,:,:), allocatable :: &
          aicen_rest , & ! concentration of ice
          vicen_rest , & ! volume per unit area of ice          (m)
-         vsnon_rest , & ! volume per unit area of snow         (m)
-         eicen_rest , & ! energy of melting for each ice layer  (J/m^2)
-         esnon_rest     ! energy of melting for each snow layer (J/m^2)
+         vsnon_rest     ! volume per unit area of snow         (m)
 
       real (kind=dbl_kind), dimension (:,:,:,:,:), allocatable :: &
          trcrn_rest     ! tracers
@@ -88,8 +86,6 @@
    allocate (aicen_rest(nx_block,ny_block,ncat,max_blocks), &
              vicen_rest(nx_block,ny_block,ncat,max_blocks), &
              vsnon_rest(nx_block,ny_block,ncat,max_blocks), &
-             eicen_rest(nx_block,ny_block,ntilyr,max_blocks), &
-             esnon_rest(nx_block,ny_block,ntslyr,max_blocks), &
              trcrn_rest(nx_block,ny_block,ntrcr,ncat,max_blocks))
 
    ! initialize to the default initial ice state
@@ -97,15 +93,12 @@
 
       call ice_timer_start(timer_bound)
       call bound_state (aicen, trcrn, &
-                        vicen, vsnon, &
-                        eicen, esnon)
+                        vicen, vsnon)
       call ice_timer_stop(timer_bound)
 
    aicen_rest(:,:,:,:) = aicen(:,:,:,:)
    vicen_rest(:,:,:,:) = vicen(:,:,:,:)
    vsnon_rest(:,:,:,:) = vsnon(:,:,:,:)
-   eicen_rest(:,:,:,:) = eicen(:,:,:,:)
-   esnon_rest(:,:,:,:) = esnon(:,:,:,:)
    trcrn_rest(:,:,:,:,:) = trcrn(:,:,1:ntrcr,:,:)
 
    if (my_task == master_task) &
@@ -201,22 +194,6 @@
             enddo
             enddo
             enddo
-            do n = 1, ntilyr
-            do j = 1, ny_block
-            do i = 1, ilo
-               eicen(i,j,n,iblk) = eicen(i,j,n,iblk) &
-                  + (eicen_rest(i,j,n,iblk)-eicen(i,j,n,iblk))*ctime
-            enddo
-            enddo
-            enddo
-            do n = 1, ntslyr
-            do j = 1, ny_block
-            do i = 1, ilo
-               esnon(i,j,n,iblk) = esnon(i,j,n,iblk) &
-                  + (esnon_rest(i,j,n,iblk)-esnon(i,j,n,iblk))*ctime
-            enddo
-            enddo
-            enddo
          endif
 
       elseif (this_block%iblock == nblocks_x) then  ! east edge
@@ -249,22 +226,6 @@
             enddo
             enddo
             enddo
-            do n = 1, ntilyr
-            do j = 1, ny_block
-            do i = ihi, ibc
-               eicen(i,j,n,iblk) = eicen(i,j,n,iblk) &
-                  + (eicen_rest(i,j,n,iblk)-eicen(i,j,n,iblk))*ctime
-            enddo
-            enddo
-            enddo
-            do n = 1, ntslyr
-            do j = 1, ny_block
-            do i = ihi, ibc
-               esnon(i,j,n,iblk) = esnon(i,j,n,iblk) &
-                  + (esnon_rest(i,j,n,iblk)-esnon(i,j,n,iblk))*ctime
-            enddo
-            enddo
-            enddo
          endif
       endif
 
@@ -283,22 +244,6 @@
                   trcrn(i,j,nt,n,iblk) = trcrn(i,j,nt,n,iblk) &
                      + (trcrn_rest(i,j,nt,n,iblk)-trcrn(i,j,nt,n,iblk))*ctime
                enddo
-            enddo
-            enddo
-            enddo
-            do n = 1, ntilyr
-            do j = 1, jlo
-            do i = 1, nx_block
-               eicen(i,j,n,iblk) = eicen(i,j,n,iblk) &
-                  + (eicen_rest(i,j,n,iblk)-eicen(i,j,n,iblk))*ctime
-            enddo
-            enddo
-            enddo
-            do n = 1, ntslyr
-            do j = 1, jlo
-            do i = 1, nx_block
-               esnon(i,j,n,iblk) = esnon(i,j,n,iblk) &
-                  + (esnon_rest(i,j,n,iblk)-esnon(i,j,n,iblk))*ctime
             enddo
             enddo
             enddo
@@ -333,22 +278,6 @@
                   trcrn(i,j,nt,n,iblk) = trcrn(i,j,nt,n,iblk) &
                      + (trcrn_rest(i,j,nt,n,iblk)-trcrn(i,j,nt,n,iblk))*ctime
                enddo
-            enddo
-            enddo
-            enddo
-            do n = 1, ntilyr
-            do j = jhi, ibc
-            do i = 1, nx_block
-               eicen(i,j,n,iblk) = eicen(i,j,n,iblk) &
-                  + (eicen_rest(i,j,n,iblk)-eicen(i,j,n,iblk))*ctime
-            enddo
-            enddo
-            enddo
-            do n = 1, ntslyr
-            do j = jhi, ibc
-            do i = 1, nx_block
-               esnon(i,j,n,iblk) = esnon(i,j,n,iblk) &
-                  + (esnon_rest(i,j,n,iblk)-esnon(i,j,n,iblk))*ctime
             enddo
             enddo
             enddo

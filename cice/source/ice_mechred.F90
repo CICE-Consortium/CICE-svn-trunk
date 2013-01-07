@@ -49,7 +49,7 @@
       use ice_domain_size
       use ice_constants
       use ice_fileunits
-      use ice_itd, only: hin_max, ilyr1, slyr1, column_sum, &
+      use ice_itd, only: hin_max, column_sum, &
                          column_conservation_check, compute_tracers
 !
 !EOP
@@ -95,7 +95,7 @@
       logical (kind=log_kind), parameter :: &
 !         l_conservation_check = .true.  ! if true, check conservation
          l_conservation_check = .false.  ! if true, check conservation
-                                        ! (useful for debugging)
+                                         ! (useful for debugging)
 
 !=======================================================================
 
@@ -125,7 +125,6 @@
                             rdg_conv,    rdg_shear,  &
                             aicen,       trcrn,      &
                             vicen,       vsnon,      &
-                            eicen,       esnon,      &
                             aice0,                   &
                             trcr_depend, l_stop,     &
                             istop,       jstop,      &
@@ -133,13 +132,16 @@
                             dvirdgdt,    opening,    &
                             fpond,                   &
                             fresh,       fhocn,      &
+                            fsicen,      faero_ocn,  &
                             aparticn,    krdgn,      &
                             aredistn,    vredistn,   &
                             dardg1ndt,   dardg2ndt,  &
-                            dvirdgndt,   faero_ocn)
-                            
+                            dvirdgndt)
 !
 ! !USES:
+!                            
+      use ice_state, only: nt_qice, nt_qsno, hbrine, nt_fbri, nt_bgc_S, nt_sice
+      use ice_zbgc_public, only: tr_bgc_S
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -163,19 +165,12 @@
          intent(inout) :: &
          aicen , & ! concentration of ice
          vicen , & ! volume per unit area of ice          (m)
-         vsnon     ! volume per unit area of snow         (m)
+         vsnon , & ! volume per unit area of snow         (m)
+         fsicen    !  total salt water flux to ocean (kg/m^2/s)
  
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
          intent(inout) :: & 
          trcrn     ! ice tracers 
- 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
-         intent(inout) :: & 
-         eicen     ! energy of melting for each ice layer (J/m^2)
- 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), &
-         intent(inout) :: & 
-         esnon     ! energy of melting for each snow layer (J/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: & 
@@ -217,6 +212,16 @@
 !
 !EOP
 !
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
+         eicen     ! energy of melting for each ice layer (J/m^2)
+ 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
+         esnon , &    ! energy of melting for each snow layer (J/m^2)
+         vbrin, &     ! ice volume with defined by brine height (m)
+         Shin, &      ! Bulk salt in h ice (ppt*m)
+         Shbrn, &     ! Bulk salt in h brine (ppt*m)
+         hinS, SinS   ! save initial brine height, salt content
+
       real (kind=dbl_kind), dimension (icells) :: &
          asum       , & ! sum of ice and open water area
          aksum      , & ! ratio of area removed to area ridged
@@ -254,6 +259,9 @@
          vice_init, vice_final, & ! ice volume summed over categories
          vsno_init, vsno_final, & ! snow volume summed over categories
          eice_init, eice_final, & ! ice energy summed over layers
+         vbri_init, vbri_final, & ! ice volume in fbri*vicen summed over categories
+         Shi_init, Shi_final, & ! ice bulk salinity summed over categories
+         Shbr_init, Shbr_final, & ! ice bulk salinity in hbri summed over categories
          esno_init, esno_final    ! snow energy summed over layers
 
       integer (kind=int_kind), parameter :: &
@@ -263,7 +271,8 @@
          i,j          , & ! horizontal indices
          n            , & ! thickness category index
          niter        , & ! iteration counter
-         ij               ! horizontal index, combines i and j loops
+         ij           , & ! horizontal index, combines i and j loops
+         k                ! vertical index
 
       real (kind=dbl_kind) :: &
          dti              ! 1 / dt
@@ -319,7 +328,63 @@
       ! Compute initial values of conserved quantities. 
       !-----------------------------------------------------------------
 
+      hinS(:,:,:) = c0
+
       if (l_conservation_check) then
+
+      eicen(:,:,:) = c0
+      esnon(:,:,:) = c0
+      vbrin(:,:,:) = c0
+      Shin(:,:,:) = c0
+      Shbrn(:,:,:) = c0
+      SinS(:,:,:) = c0
+
+      do n = 1, ncat
+      do j = 1, ny_block
+      do i = 1, nx_block     
+        vbrin(i,j,n) = vicen(i,j,n)
+        if (hbrine) vbrin(i,j,n) =  trcrn(i,j,nt_fbri,n) * vicen(i,j,n)
+      enddo
+      enddo     
+
+      do k = 1, nilyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         eicen(i,j,n) = eicen(i,j,n) + trcrn(i,j,nt_qice+k-1,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+      do k = 1, nslyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         esnon(i,j,n) = esnon(i,j,n) + trcrn(i,j,nt_qsno+k-1,n) &
+                      * vsnon(i,j,n)/real(nslyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+
+
+      do k = 1, nilyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         Shin(i,j,n) = Shin(i,j,n) + trcrn(i,j,nt_sice+k-1,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+
+      if (tr_bgc_S) then
+      do k = 1, nblyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         Shbrn(i,j,n) = Shbrn(i,j,n) + trcrn(i,j,nt_bgc_S+k-1,n) &
+                      * vbrin(i,j,n)/real(nblyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+      endif
+      enddo
 
          call column_sum (nx_block,   ny_block,     &
                           icells,   indxi,   indxj, &
@@ -333,14 +398,28 @@
 
          call column_sum (nx_block,   ny_block,     &
                           icells,   indxi,   indxj, &
-                          ntilyr,                   &
+                          ncat,                     &
                           eicen,      eice_init)
 
          call column_sum (nx_block,   ny_block,     &
                           icells,   indxi,   indxj, &
-                          ntslyr,                   &
+                          ncat,                     &
                           esnon,      esno_init)
 
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          vbrin,    vbri_init)
+
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          Shin,    Shi_init)
+
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          Shbrn,    Shbr_init)
       endif            
 
       do niter = 1, nitermax
@@ -368,7 +447,6 @@
                            ntrcr,     dt,              &
                            aicen,     trcrn,           &
                            vicen,     vsnon,           &
-                           eicen,     esnon,           &
                            aice0,     trcr_depend,     &
                            aksum,     apartic,         &
                            hrmin,     hrmax,           &
@@ -380,7 +458,7 @@
                            virdgn,                     &
                            msnow_mlt, esnow_mlt,       &
                            maero,     mpond,           &
-                           l_stop,                     &
+                           fsicen,    l_stop,          &
                            istop,     jstop,           &
                            aredistn,  vredistn)
 
@@ -421,7 +499,7 @@
             l_stop = .true.
             return
          endif
-            
+
       enddo                     ! niter
 
       !-----------------------------------------------------------------
@@ -430,6 +508,61 @@
       !-----------------------------------------------------------------
 
       if (l_conservation_check) then
+
+      eicen(:,:,:) = c0
+      esnon(:,:,:) = c0
+      Shin(:,:,:) = c0
+      Shbrn(:,:,:) = c0
+      vbrin(:,:,:) = c0
+
+      do n = 1, ncat
+      do k = 1, nilyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         eicen(i,j,n) = eicen(i,j,n) + trcrn(i,j,nt_qice+k-1,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+      do k = 1, nslyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         esnon(i,j,n) = esnon(i,j,n) + trcrn(i,j,nt_qsno+k-1,n) &
+                      * vsnon(i,j,n)/real(nslyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+
+     
+      do j = 1, ny_block
+      do i = 1, nx_block
+         vbrin(i,j,n) =  vicen(i,j,n)
+         if (hbrine)  vbrin(i,j,n) =  trcrn(i,j,nt_fbri,n) * vbrin(i,j,n)
+      enddo
+      enddo
+      
+
+      do k = 1, nilyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         Shin(i,j,n) = Shin(i,j,n) + trcrn(i,j,nt_sice+k-1,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+
+
+      if (tr_bgc_S) then
+      do k = 1, nblyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         Shbrn(i,j,n) = Shbrn(i,j,n) + trcrn(i,j,nt_bgc_S+k-1,n) &
+                      * vbrin(i,j,n)/real(nblyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+      endif
+      enddo
 
          call column_sum (nx_block,   ny_block,     &
                           icells,   indxi,   indxj, &
@@ -443,13 +576,28 @@
 
          call column_sum (nx_block,   ny_block,     &
                           icells,   indxi,   indxj, &
-                          ntilyr,                   &
+                          ncat,                     &
                           eicen,      eice_final)
 
          call column_sum (nx_block,   ny_block,     &
                           icells,   indxi,   indxj, &
-                          ntslyr,                   &
+                          ncat,                     &
                           esnon,      esno_final)
+
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          Shin,    Shi_final)
+
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          Shbrn,    Shbr_final)
+
+         call column_sum (nx_block, ny_block,       &
+                          icells,   indxi,   indxj, &
+                          ncat,                     &
+                          vbrin,    vbri_final)
 
          do ij = 1, icells
             vsno_final(ij) = vsno_final(ij) + msnow_mlt(ij)/rhos
@@ -492,8 +640,34 @@
                                          puny*Lfresh*rhos,          &
                                          l_stop,                    &
                                          istop,     jstop)
+         if (l_stop) return         
+
+         fieldid = 'Shin, ridging'
+         call column_conservation_check (nx_block,  ny_block,      &
+                                         icells,   indxi,   indxj, &
+                                         fieldid,                  &
+                                         Shi_init, Shi_final,    &
+                                         puny,      l_stop,        &
+                                         istop,     jstop)
+         if (l_stop) return         
+
+         fieldid = 'Shbri, ridging'
+         call column_conservation_check (nx_block,  ny_block,      &
+                                         icells,   indxi,   indxj, &
+                                         fieldid,                  &
+                                         Shbr_init, Shbr_final,    &
+                                         puny*c10,  l_stop,        &
+                                         istop,     jstop)
          if (l_stop) return
-         
+
+         fieldid = 'vbrin, ridging'
+         call column_conservation_check (nx_block,  ny_block,      &
+                                         icells,   indxi,   indxj, &
+                                         fieldid,                  &
+                                         vbri_init, vbri_final,    &
+                                         puny*c10,      l_stop,        &
+                                         istop,     jstop)
+         if (l_stop) return         
       endif                     ! l_conservation_check            
 
       !-----------------------------------------------------------------
@@ -1212,7 +1386,6 @@
                               ntrcr,       dt,              &
                               aicen,       trcrn,           &
                               vicen,       vsnon,           &
-                              eicen,       esnon,           &
                               aice0,       trcr_depend,     &   
                               aksum,       apartic,         &
                               hrmin,       hrmax,           &
@@ -1224,15 +1397,17 @@
                               virdgnn,                      &
                               msnow_mlt,   esnow_mlt,       &
                               maero,       mpond,           &
-                              l_stop,                       &
+                              fsicen,      l_stop,          &
                               istop,       jstop,           &
                               aredistn,    vredistn)
 !
 ! !USES:
 !
-      use ice_state, only: nt_alvl, nt_vlvl, nt_aero, tr_lvl, tr_aero, &
+      use ice_state, only: nt_qsno, &
+                           nt_alvl, nt_vlvl, nt_aero, tr_lvl, tr_aero, &
                            nt_apnd, nt_hpnd, nt_ipnd, tr_pond, &
-                           tr_pond_cesm, tr_pond_lvl, tr_pond_topo
+                           tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
+                           nt_bgc_S, nt_fbri
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1253,25 +1428,18 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
-         aice0     ! concentration of open water
+         aice0      ! concentration of open water
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(inout) :: &
          aicen , & ! concentration of ice
          vicen , & ! volume per unit area of ice          (m)
-         vsnon     ! volume per unit area of snow         (m)
+         vsnon , & ! volume per unit area of snow         (m)
+         fsicen    ! Total flux of salt to ocean (kg/m^2/s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
          intent(inout) :: &
          trcrn     ! ice tracers
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
-         intent(inout) :: &
-         eicen     ! energy of melting for each ice layer (J/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), &
-         intent(inout) :: &
-         esnon     ! energy of melting for each snow layer (J/m^2)
 
       real (kind=dbl_kind), dimension (icells), intent(in) :: &
          aksum             ! ratio of area removed to area ridged
@@ -1332,16 +1500,18 @@
          indxii, indxjj  , & ! compressed indices
          indxij              ! compressed indices
 
+      integer (kind=int_kind), dimension (icells) :: &
+         rndxii, rndxjj  , & ! more compressed indices
+         rndxij             
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
+         vbrine             !  brine volume
+
       real (kind=dbl_kind), dimension (icells,ncat) :: &
          aicen_init    , & ! ice area before ridging
          vicen_init    , & ! ice volume before ridging
+         vbrine_init    , & ! brine volume before ridging
          vsnon_init        ! snow volume before ridging
-
-      real (kind=dbl_kind), dimension (icells,ntilyr) :: &
-         eicen_init        ! ice energy before ridging
-
-      real (kind=dbl_kind), dimension (icells,ntslyr) :: &
-         esnon_init        ! snow energy before ridging
 
       real (kind=dbl_kind), dimension(icells,ntrcr,ncat) :: &
          atrcrn            ! aicen*trcrn
@@ -1356,16 +1526,14 @@
          ardg1n        , & ! area of ice ridged
          ardg2n        , & ! area of new ridges
          virdgn        , & ! ridging ice volume
-         vsrdgn        , & ! ridging snow volume
+         vbrdgn        , & ! ridging brine volume
+         vsrdgn        , & ! ridging snow volume 
          dhr           , & ! hrmax - hrmin
          dhr2          , & ! hrmax^2 - hrmin^2
          farea         , & ! fraction of new ridge area going to nr
          fvol              ! fraction of new ridge volume going to nr
 
-      real (kind=dbl_kind), dimension (icells,nilyr) :: &
-         eirdgn            ! ridging ice energy
-
-      real (kind=dbl_kind), dimension (icells,nslyr) :: &
+      real (kind=dbl_kind) :: &
          esrdgn            ! ridging snow energy
 
       real (kind=dbl_kind) :: &
@@ -1399,7 +1567,15 @@
                   i = indxi(ij)
                   j = indxj(ij)
                   atrcrn(ij,it,n) = vsnon(i,j,n)*trcrn(i,j,it,n)
-               enddo 
+               enddo
+            elseif (trcr_depend(it) == 2+nt_fbri) then ! brine tracer
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  atrcrn(ij,it,n) = vicen(i,j,n) &
+                                  * trcrn(i,j,nt_fbri,n) &
+                                  * trcrn(i,j,it,n)
+               enddo
             elseif (trcr_depend(it) == 2+nt_alvl) then ! level ice tracer
                do ij = 1, icells
                   i = indxi(ij)
@@ -1531,22 +1707,6 @@
          enddo
       enddo
 
-      do n = 1, ntilyr
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            eicen_init(ij,n) = eicen(i,j,n)
-         enddo
-      enddo
-
-      do n = 1, ntslyr
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-            esnon_init(ij,n) = esnon(i,j,n)
-         enddo
-      enddo
-
       !-----------------------------------------------------------------
       ! Compute the area, volume, and energy of ice ridging in each
       !  category, along with the area of the resulting ridge.
@@ -1559,6 +1719,7 @@
       !-----------------------------------------------------------------
 
          iridge = 0
+
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
@@ -1614,7 +1775,7 @@
             vsrdgn(ij) = vsnon_init(m,n) * afrac(ij)
 
             aicen(i,j,n) = aicen(i,j,n) - ardg1n(ij)
-            vicen(i,j,n) = vicen(i,j,n) - virdgn(ij)
+            vicen(i,j,n) = vicen(i,j,n) - virdgn(ij)           
             vsnon(i,j,n) = vsnon(i,j,n) - vsrdgn(ij)
 
       !-----------------------------------------------------------------
@@ -1661,26 +1822,6 @@
          enddo                  ! ij
 
       !-----------------------------------------------------------------
-      ! Subtract ice energy from ridging category n.
-      !-----------------------------------------------------------------
-
-         do k = 1, nilyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, iridge
-               i = indxii(ij)
-               j = indxjj(ij)
-               m = indxij(ij)
-
-               eirdgn(ij,k) = eicen_init(m,ilyr1(n)+k-1) * afrac(ij)
-               eicen(i,j,ilyr1(n)+k-1) = eicen (i,j,ilyr1(n)+k-1) &
-                                       - eirdgn(ij,k)
-            enddo
-         enddo
-
-      !-----------------------------------------------------------------
-      ! Subtract snow energy from ridging category n.
       ! Increment energy needed to melt snow in ocean.
       ! Note that esnow_mlt < 0; the ocean must cool to melt snow.
       !-----------------------------------------------------------------
@@ -1693,12 +1834,8 @@
                i = indxii(ij)
                j = indxjj(ij)
                m = indxij(ij)
-
-               esrdgn(ij,k) = esnon_init(m,slyr1(n)+k-1) * afrac(ij)
-               esnon(i,j,slyr1(n)+k-1) = esnon (i,j,slyr1(n)+k-1) &
-                                       - esrdgn(ij,k)
-               esnow_mlt(m) = esnow_mlt(m) &
-                              + esrdgn(ij,k)*(c1-fsnowrdg)
+               esrdgn = vsrdgn(ij) * trcrn(i,j,nt_qsno+k-1,n)
+               esnow_mlt(m) = esnow_mlt(m) + esrdgn*(c1-fsnowrdg)
            enddo
          enddo
 
@@ -1715,7 +1852,7 @@
                   i = indxii(ij)
                   j = indxjj(ij)
                   m = indxij(ij)
-                  atrcrn(m,it,n) = atrcrn(m,it,n) &
+                  atrcrn(m,it,n) = atrcrn(m,it,n) &        
                                    - ardg1n(ij)*trcrn(i,j,it,n)
                enddo
 
@@ -1767,6 +1904,7 @@
                   atrcrn(m,it,n) = atrcrn(m,it,n) &
                                    - ardg1n(ij)*trcrn(i,j,nt_apnd,n)*trcrn(i,j,it,n)
                enddo
+
             elseif (trcr_depend(it) == 2+nt_apnd .and. &
                     tr_pond_lvl) then ! level-ice pond area tracer
 !DIR$ CONCURRENT !Cray
@@ -1781,6 +1919,18 @@
                                    * trcrn(i,j,nt_alvl,n) &
                                    * trcrn(i,j,nt_apnd,n) &
                                    * trcrn(i,j,it,n)
+               enddo
+
+            elseif (trcr_depend(it) == 2+nt_fbri) then ! brine tracer
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+               do ij = 1, iridge
+                  i = indxii(ij)
+                  j = indxjj(ij)
+                  m = indxij(ij)
+                  atrcrn(m,it,n) = atrcrn(m,it,n) &
+                                   - virdgn(ij)*trcrn(i,j,it,n)*trcrn(i,j,nt_fbri,n)  
                enddo
             endif               ! trcr_depend
          enddo                  ! ntrcr
@@ -1889,6 +2039,7 @@
             do ij = 1, iridge
                i = indxii(ij)
                j = indxjj(ij)
+               m = indxij(ij)
                aicen(i,j,nr) = aicen(i,j,nr) + farea(ij)*ardg2n(ij)
                vicen(i,j,nr) = vicen(i,j,nr) + fvol(ij) *virdgn(ij)
                vsnon(i,j,nr) = vsnon(i,j,nr) &
@@ -1896,39 +2047,10 @@
             enddo
 
       !-----------------------------------------------------------------
-      ! Transfer ice energy to category nr
-      !-----------------------------------------------------------------
-            do k = 1, nilyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-               do ij = 1, iridge
-                  i = indxii(ij)
-                  j = indxjj(ij)
-                  eicen(i,j,ilyr1(nr)+k-1) = eicen(i,j,ilyr1(nr)+k-1) &
-                                           + fvol(ij)*eirdgn(ij,k)
-               enddo            ! ij
-            enddo               ! k
-
-      !-----------------------------------------------------------------
-      ! Transfer snow energy to category nr
-      !-----------------------------------------------------------------
-            do k = 1, nslyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-               do ij = 1, iridge
-                  i = indxii(ij)
-                  j = indxjj(ij)
-                  esnon(i,j,slyr1(nr)+k-1) = esnon(i,j,slyr1(nr)+k-1) &
-                                    + fvol(ij)*esrdgn(ij,k)*fsnowrdg
-               enddo            ! ij
-            enddo               ! k
-
-      !-----------------------------------------------------------------
       ! Transfer area-weighted and volume-weighted tracers to category nr.
       ! Note: The global sum aicen*trcrn of ice area tracers 
       !       (trcr_depend = 0) is not conserved by ridging.
+      ! Is this the problem???
       !       However, ridging conserves the global sum of volume
       !       tracers (trcr_depend = 1 or 2).
       ! Tracers associated with level ice, or that are otherwise lost
@@ -1948,7 +2070,6 @@
                      m = indxij(ij)
                      atrcrn(m,it,nr) = atrcrn(m,it,nr) &
                                 + farea(ij)*ardg2n(ij)*trcrn(i,j,it,n)
-
                   enddo
                   endif
                elseif (trcr_depend(it) == 1) then ! ice volume tracer
@@ -1962,7 +2083,6 @@
                      m = indxij(ij)
                      atrcrn(m,it,nr) = atrcrn(m,it,nr) &
                                  + fvol(ij)*virdgn(ij)*trcrn(i,j,it,n)
-
                   enddo
                   endif
                elseif (trcr_depend(it) == 2) then ! snow volume tracer
@@ -1975,6 +2095,17 @@
                      m = indxij(ij)
                      atrcrn(m,it,nr) = atrcrn(m,it,nr) &
                         + fvol(ij)*vsrdgn(ij)*fsnowrdg*trcrn(i,j,it,n)
+                  enddo
+               elseif (trcr_depend(it) == 2+nt_fbri) then  ! brine tracer
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+                  do ij = 1, iridge
+                     i = indxii(ij)
+                     j = indxjj(ij)
+                     m = indxij(ij)
+                     atrcrn(m,it,nr) = atrcrn(m,it,nr) & ! 
+                         + fvol(ij)*virdgn(ij)*trcrn(i,j,nt_fbri,n)*trcrn(i,j,it,n)
                   enddo
                endif            ! trcr_depend
             enddo               ! ntrcr

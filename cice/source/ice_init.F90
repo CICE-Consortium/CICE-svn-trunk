@@ -28,6 +28,7 @@
       use ice_communicate, only: my_task, master_task
       use ice_domain_size
       use ice_constants
+      use ice_state
 !
 !EOP
 !
@@ -107,7 +108,9 @@
       use ice_aerosol, only: restart_aero
       use ice_therm_shared, only: ktherm, calc_Tsfc, heat_capacity, conduct
       use ice_therm_vertical, only: ustar_min
-          
+      use ice_therm_mushy, only: a_rapid_mode, Rac_rapid_mode, aspect_rapid_mode, &
+                                 dSdt_slow_mode, phi_c_slow_mode, &
+                                 phi_i_mushy
       use ice_restoring
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -170,6 +173,14 @@
         tr_pond_topo, restart_pond_topo, &
         tr_aero, restart_aero
 
+      namelist /mushy_nml/ &
+        a_rapid_mode      , &
+        Rac_rapid_mode    , &
+        aspect_rapid_mode , &
+        dSdt_slow_mode    , &
+        phi_c_slow_mode   , &
+        phi_i_mushy
+
       !-----------------------------------------------------------------
       ! default values
       !-----------------------------------------------------------------
@@ -193,9 +204,9 @@
       histfreq(5) = 'y'      ! output frequency option for different streams
       histfreq_n(:) = 1      ! output frequency 
       hist_avg = .true.      ! if true, write time-averages (not snapshots)
-      history_dir  = ' '     ! write to executable dir for default
+      history_dir  = './'    ! write to executable dir for default
       history_file = 'iceh'  ! history file name prefix
-      history_format = 'bin' ! file format ('bin'=binary or 'nc'=netcdf)
+      history_format = 'nc'  ! file format ('bin'=binary or 'nc'=netcdf)
       write_ic = .false.     ! write out initial condition
       incond_dir = history_dir ! write to history dir for default
       incond_file = 'iceh_ic'! file prefix
@@ -225,7 +236,7 @@
       krdg_redist = 1        ! 1 = new redistribution, 0 = Hibler 80
       mu_rdg = 3             ! e-folding scale of ridged ice, krdg_partic=1 (m^0.5)
       advection  = 'remap'   ! incremental remapping transport scheme
-      shortwave = 'default'  ! or 'dEdd' (delta-Eddington)
+      shortwave = 'default'  ! 'default' or 'dEdd' (delta-Eddington)
       albedo_type = 'default'! or 'constant'
       ktherm = 1             ! 0 = 0-layer, 1 = BL99, 2 = mushy thermo
       conduct = 'bubbly'     ! 'MU71' or 'bubbly' (Pringle et al 2007)
@@ -277,7 +288,7 @@
       lonpnt(2) = -45._dbl_kind   ! longitude of point 2 (deg)
 
       runid   = 'unknown'   ! run ID, only used in CCSM
-      runtype = 'initial'   ! run type: 'initial', 'continue'
+      runtype = 'initial'   ! run type: 'initial', 'continue', 'bering'
 
       ! extra tracers
       tr_iage      = .false. ! ice age
@@ -295,6 +306,14 @@
       tr_aero      = .false. ! aerosols
       restart_aero = .false. ! aerosols restart
 
+      ! mushy layer gravity drainage physics
+      a_rapid_mode      =  0.5e-3_dbl_kind ! channel radius for rapid drainage mode (m)
+      Rac_rapid_mode    =    10.0_dbl_kind ! critical Rayleigh number for rapid drainage mode
+      aspect_rapid_mode =     1.0_dbl_kind ! aspect ratio for rapid drainage mode (larger is wider)
+      dSdt_slow_mode    = -1.5e-7_dbl_kind ! slow mode drainage strength (m s-1 K-1)
+      phi_c_slow_mode   =    0.05_dbl_kind ! critical liquid fraction porosity cutoff for slow mode
+      phi_i_mushy       =    0.85_dbl_kind ! liquid fraction of congelation ice
+
       !-----------------------------------------------------------------
       ! read from input file
       !-----------------------------------------------------------------
@@ -307,7 +326,8 @@
             nml_error = -1
          else
             nml_error =  1
-         endif
+         endif 
+
          do while (nml_error > 0)
             print*,'Reading setup_nml'
             read(nu_nml, nml=setup_nml,iostat=nml_error)
@@ -315,6 +335,8 @@
             read(nu_nml, nml=grid_nml,iostat=nml_error)
             print*,'Reading tracer_nml'
             read(nu_nml, nml=tracer_nml,iostat=nml_error)
+            print*,'Reading mushy_nml'
+            read(nu_nml, nml=mushy_nml,iostat=nml_error)
             print*,'Reading ice_nml'
             read(nu_nml, nml=ice_nml,iostat=nml_error)
             if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
@@ -325,7 +347,6 @@
       if (nml_error /= 0) then
          call abort_ice('ice: error reading namelist')
       endif
-
       call release_fileunit(nu_nml)
 
       !-----------------------------------------------------------------
@@ -344,8 +365,8 @@
          write(nu_diag,*) ' '
       endif
 
-      if (trim(runtype) == 'continue') restart = .true.
-      if (trim(runtype) /= 'continue' .and. (restart)) then
+      if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') restart = .true.
+      if (trim(runtype) /= 'continue' .and. trim(runtype) /= 'bering' .and. (restart)) then
          if (ice_ic == 'none' .or. ice_ic == 'default') then
             if (my_task == master_task) then
             write(nu_diag,*) &
@@ -377,7 +398,7 @@
       history_format  = 'bin'
       grid_format     = 'bin'
       atm_data_format = 'bin'
-      ocn_data_format = 'bin'
+      ocn_data_format = 'bin' 
 #endif
 
       if (days_per_year /= 365) shortwave = 'default' ! definite conflict
@@ -390,8 +411,8 @@
          write (nu_diag,*) 'Remapping the ITD is not allowed for ncat=1.'
          write (nu_diag,*) 'Use kitd = 0 (delta function ITD) with kcatbound = 0'
          write (nu_diag,*) 'or for column configurations use kcatbound = -1'
+         call abort_ice('Error: kitd incompatability: ncat=1 and kitd=1')
          endif
-         call abort_ice('ncat=1 and kitd=1')
       endif
 
       if (ncat /= 1 .and. kcatbound == -1) then
@@ -495,8 +516,8 @@
       call broadcast_scalar(history_format,     master_task)
       do n = 1, max_nstrm
          call broadcast_scalar(histfreq(n),     master_task)
-      enddo
-      call broadcast_array(histfreq_n(:),       master_task)
+      enddo  
+      call broadcast_array(histfreq_n,          master_task)
       call broadcast_scalar(hist_avg,           master_task)
       call broadcast_scalar(history_dir,        master_task)
       call broadcast_scalar(history_file,       master_task)
@@ -574,6 +595,7 @@
       call broadcast_array (lonpnt(1:2),        master_task)
       call broadcast_scalar(runid,              master_task)
       call broadcast_scalar(runtype,            master_task)
+
       if (dbug) & ! else only master_task writes to file
       call broadcast_scalar(nu_diag,            master_task)
       ! tracers
@@ -592,6 +614,12 @@
       call broadcast_scalar(tr_pond,            master_task)
       call broadcast_scalar(tr_aero,            master_task)
       call broadcast_scalar(restart_aero,       master_task)
+      call broadcast_scalar(a_rapid_mode,       master_task)
+      call broadcast_scalar(Rac_rapid_mode,     master_task)
+      call broadcast_scalar(aspect_rapid_mode,  master_task)
+      call broadcast_scalar(dSdt_slow_mode,     master_task)
+      call broadcast_scalar(phi_c_slow_mode,    master_task)
+      call broadcast_scalar(phi_i_mushy,        master_task)
 
       !-----------------------------------------------------------------
       ! spew
@@ -653,7 +681,6 @@
             write(nu_diag,*) ' kmt_file                  = ', &
                                trim(kmt_file)
          endif
-
          write(nu_diag,1020) ' kitd                      = ', kitd
          write(nu_diag,1020) ' kcatbound                 = ', &
                                kcatbound
@@ -730,7 +757,7 @@
             write(nu_diag,*) ' oceanmixed_file           = ', &
                                trim(oceanmixed_file)
          endif
-
+ 
 #ifdef coupled
          if( oceanmixed_ice ) then
             write (nu_diag,*) 'WARNING WARNING WARNING WARNING '
@@ -764,18 +791,34 @@
          write(nu_diag,1010) ' tr_aero                   = ', tr_aero
          write(nu_diag,1010) ' restart_aero              = ', restart_aero
 
+         write(nu_diag,1010) ' a_rapid_mode              = ', a_rapid_mode
+         write(nu_diag,1010) ' Rac_rapid_mode            = ', Rac_rapid_mode
+         write(nu_diag,1010) ' aspect_rapid_mode         = ', aspect_rapid_mode
+         write(nu_diag,1010) ' dSdt_slow_mode            = ', dSdt_slow_mode
+         write(nu_diag,1010) ' phi_c_slow_mode           = ', phi_c_slow_mode
+         write(nu_diag,1010) ' phi_i_mushy               = ', phi_i_mushy
+
          nt_Tsfc = 1           ! index tracers, starting with Tsfc = 1
          ntrcr = 1             ! count tracers, starting with Tsfc = 1
 
+         nt_qice = ntrcr + 1
+         ntrcr = ntrcr + nilyr ! qice in nilyr layers
+
+         nt_qsno = ntrcr + 1
+         ntrcr = ntrcr + nslyr ! qsno in nslyr layers
+
+         nt_sice = ntrcr + 1
+         ntrcr = ntrcr + nilyr ! sice in nilyr layers
+
          nt_iage = 0
          if (tr_iage) then
-             nt_iage = ntrcr + 1
+             nt_iage = ntrcr + 1   ! chronological ice age
              ntrcr = ntrcr + 1
          endif
 
          nt_FY = 0
          if (tr_FY) then
-             nt_FY = ntrcr + 1
+             nt_FY = ntrcr + 1     ! area of first year ice
              ntrcr = ntrcr + 1
          endif
 
@@ -811,12 +854,22 @@
              nt_aero = ntrcr + 1
              ntrcr = ntrcr + 4*n_aero ! 4 dEdd layers, n_aero species
          endif
-
+              
          if (ntrcr > max_ntrcr) then
             write(nu_diag,*) 'max_ntrcr < number of namelist tracers'
             write(nu_diag,*) 'max_ntrcr = ',max_ntrcr,' ntrcr = ',ntrcr
             call abort_ice('max_ntrcr < number of namelist tracers')
          endif                               
+
+         write(nu_diag,*) ' '
+         write(nu_diag,1020) 'ntrcr = ', ntrcr
+         write(nu_diag,*) ' '
+         write(nu_diag,1020)'nt_sice = ', nt_sice
+         write(nu_diag,1020)'nt_qice = ', nt_qice
+         write(nu_diag,1020)'nt_qsno = ', nt_qsno
+         write(nu_diag,*)' '
+         write(nu_diag,1020)'nilyr', nilyr
+         write(nu_diag,*)' '
 
  1000    format (a30,2x,f9.2)  ! a30 to align formatted, unformatted statements
  1005    format (a30,2x,f9.6)  ! float
@@ -840,6 +893,9 @@
 
       call broadcast_scalar(ntrcr,    master_task)
       call broadcast_scalar(nt_Tsfc,  master_task)
+      call broadcast_scalar(nt_sice,  master_task)
+      call broadcast_scalar(nt_qice,  master_task)
+      call broadcast_scalar(nt_qsno,  master_task)
       call broadcast_scalar(nt_iage,  master_task)
       call broadcast_scalar(nt_FY,    master_task)
       call broadcast_scalar(nt_alvl,  master_task)
@@ -873,13 +929,12 @@
 !
       use ice_blocks
       use ice_domain
-      use ice_flux, only: sst, Tf, Tair
+      use ice_flux, only: sst, Tf, Tair, salinz, Tmltz
       use ice_grid
       use ice_state
       use ice_itd
       use ice_exit
       use ice_therm_shared, only: ktherm, heat_capacity
-      use ice_therm_vertical, only: set_state_var
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -890,7 +945,7 @@
          jlo, jhi    , & ! physical domain indices
          iglob(nx_block), & ! global indices
          jglob(ny_block), & ! global indices
-         i, j        , & ! horizontal indices
+         i, j, k     , & ! horizontal, vertical indices
          it          , & ! tracer index
          iblk            ! block index
 
@@ -941,7 +996,14 @@
       ! Set tracer types
       !-----------------------------------------------------------------
 
-      trcr_depend(nt_Tsfc)  = 0   ! ice/snow surface temperature
+      trcr_depend(nt_Tsfc) = 0 ! ice/snow surface temperature
+      do k = 1, nilyr
+         trcr_depend(nt_sice + k - 1) = 1 ! volume-weighted ice salinity
+         trcr_depend(nt_qice + k - 1) = 1 ! volume-weighted ice enthalpy
+      enddo
+      do k = 1, nslyr
+         trcr_depend(nt_qsno + k - 1) = 2 ! volume-weighted snow enthalpy
+      enddo
       if (tr_iage) trcr_depend(nt_iage)  = 1   ! volume-weighted ice age
       if (tr_FY)   trcr_depend(nt_FY)    = 0   ! area-weighted first-year ice area
       if (tr_lvl)  trcr_depend(nt_alvl)  = 0   ! level ice area
@@ -990,9 +1052,9 @@
                              ULON (:,:,    iblk), ULAT (:,:,    iblk), &
                              Tair (:,:,    iblk), sst  (:,:,    iblk), &
                              Tf   (:,:,    iblk),                      &
+                             salinz(:,:,:, iblk), Tmltz(:,:,:,  iblk), &
                              aicen(:,:,  :,iblk), trcrn(:,:,:,:,iblk), &
-                             vicen(:,:,  :,iblk), vsnon(:,:,  :,iblk), &
-                             eicen(:,:,  :,iblk), esnon(:,:,  :,iblk))
+                             vicen(:,:,  :,iblk), vsnon(:,:,  :,iblk))
 
       !-----------------------------------------------------------------
       ! compute aggregate ice state and open water area
@@ -1001,29 +1063,23 @@
          aice(:,:,iblk) = c0
          vice(:,:,iblk) = c0
          vsno(:,:,iblk) = c0
-         eice(:,:,iblk) = c0
-         esno(:,:,iblk) = c0
          do it = 1, max_ntrcr
             trcr(:,:,it,iblk) = c0
          enddo
 
          call aggregate (nx_block, ny_block,  &
                          aicen(:,:,:,iblk),   &
-                         trcrn(:,:,:,:,iblk), &
+                         trcrn(:,:,1:ntrcr,:,iblk), &
                          vicen(:,:,:,iblk),   &
                          vsnon(:,:,:,iblk),   &
-                         eicen(:,:,:,iblk),   &
-                         esnon(:,:,:,iblk),   &
                          aice (:,:,  iblk),   &
-                         trcr (:,:,:,iblk),   &
+                         trcr (:,:,1:ntrcr,iblk),   &
                          vice (:,:,  iblk),   &
                          vsno (:,:,  iblk),   &
-                         eice (:,:,  iblk),   &
-                         esno (:,:,  iblk),   &
                          aice0(:,:,  iblk),   &
                          tmask(:,:,  iblk),   &
-                         max_ntrcr,           &
-                         trcr_depend)
+                         ntrcr,               &
+                         trcr_depend(1:ntrcr))
 
          aice_init(:,:,iblk) = aice(:,:,iblk)
 
@@ -1034,10 +1090,397 @@
       !-----------------------------------------------------------------
 
       call bound_state (aicen, trcrn, &
-                        vicen, vsnon, &
-                        eicen, esnon)
+                        vicen, vsnon)
 
       end subroutine init_state
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: set_state_var - initialize single-category state variables
+!
+! !INTERFACE:
+!
+      subroutine set_state_var (nx_block, ny_block, &
+                                ilo, ihi, jlo, jhi, &
+                                iglob,    jglob,    &
+                                ice_ic,   tmask,    &
+                                ULON,     ULAT, &
+                                Tair,     sst,  &
+                                Tf,       &
+                                salinz,   Tmltz, &
+                                aicen,    trcrn, &
+                                vicen,    vsnon)
+!
+! !DESCRIPTION:
+!
+! Initialize state in each ice thickness category
+!
+! !REVISION HISTORY:
+!
+! authors: C. M. Bitz
+!          William H. Lipscomb, LANL
+!
+! !USES:
+!
+      use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_fbri
+      use ice_itd, only: hin_max
+      use ice_therm_vertical, only: phi_init
+      use ice_therm_mushy, only: &
+           enthalpy_mush, &
+           liquidus_temperature_mush, &
+           temperature_mush
+      use ice_therm_shared, only: heat_capacity, calc_Tsfc, ktherm
+      use ice_grid, only: grid_type
+      use ice_forcing, only: atm_data_type
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         ilo, ihi          , & ! physical domain indices
+         jlo, jhi          , & !
+         iglob(nx_block)   , & ! global indices
+         jglob(ny_block)       !
+
+      character(len=char_len_long), intent(in) :: & 
+         ice_ic      ! method of ice cover initialization
+
+      logical (kind=log_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         tmask      ! true for ice/ocean cells
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         ULON   , & ! latitude of velocity pts (radians)
+         ULAT       ! latitude of velocity pts (radians)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         Tair    , & ! air temperature  (K)
+         Tf      , & ! freezing temperature (C) 
+         sst         ! sea surface temperature (C) 
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
+         intent(in) :: &
+         salinz  , & ! initial salinity profile
+         Tmltz       ! initial melting temperature profile
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
+         intent(out) :: &
+         aicen , & ! concentration of ice
+         vicen , & ! volume per unit area of ice          (m)
+         vsnon     ! volume per unit area of snow         (m)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &
+         intent(out) :: &
+         trcrn     ! ice tracers
+                   ! 1: surface temperature of ice/snow (C)
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+         i, j        , & ! horizontal indices
+         ij          , & ! horizontal index, combines i and j loops
+         k           , & ! ice layer index
+         n           , & ! thickness category index
+         it          , & ! tracer index
+         icells          ! number of cells initialized with ice
+
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
+         indxi, indxj    ! compressed indices for cells with aicen > puny
+
+      real (kind=dbl_kind) :: &
+         slope, Ti, sum, hbar, &
+         ainit(ncat), &
+         hinit(ncat)
+
+      real (kind=dbl_kind), parameter :: &
+#if (defined notz_experiment || defined notz_fieldwork || defined flushing_notz || defined snowice_maksym || defined pond_barrow)
+         hsno_init = 0.0_dbl_kind   , & ! initial snow thickness (m)
+#else 
+         hsno_init = 0.20_dbl_kind   , & ! initial snow thickness (m)
+#endif
+         edge_init_nh =  70._dbl_kind, & ! initial ice edge, N.Hem. (deg) 
+         edge_init_sh = -60._dbl_kind    ! initial ice edge, S.Hem. (deg)
+
+      indxi(:) = 0
+      indxj(:) = 0
+
+      ! Initialize state variables.
+      ! If restarting, these values are overwritten.
+
+      do n = 1, ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            aicen(i,j,n) = c0
+            vicen(i,j,n) = c0
+            vsnon(i,j,n) = c0
+            trcrn(i,j,nt_Tsfc,n) = Tf(i,j)  ! surface temperature 
+            if (max_ntrcr >= 2) then
+               do it = 2, max_ntrcr
+                  trcrn(i,j,it,n) = c0
+               enddo
+            endif
+            trcrn(i,j,nt_fbri,n) = c1       ! all ice has dynamic salinity
+            do k = 1, nilyr
+               trcrn(i,j,nt_sice+k-1,n) = salinz(i,j,k)
+            enddo
+            do k = 1, nslyr
+               trcrn(i,j,nt_qsno+k-1,n) = -rhos * Lfresh
+            enddo
+         enddo
+         enddo
+      enddo
+
+      if (trim(ice_ic) == 'default') then
+
+      !-----------------------------------------------------------------
+      ! Place ice where ocean surface is cold.
+      ! Note: If SST is not read from a file, then the ocean is assumed
+      !       to be at its freezing point everywhere, and ice will
+      !       extend to the prescribed edges.
+      !-----------------------------------------------------------------
+
+         if (trim(atm_data_type) == 'box') then
+
+            hbar = c2  ! initial ice thickness
+            do n = 1, ncat
+               hinit(n) = c0
+               ainit(n) = c0
+               if (hbar > hin_max(n-1) .and. hbar < hin_max(n)) then
+                  hinit(n) = hbar
+                  ainit(n) = 0.50 !echmod symm
+               endif
+            enddo
+
+         else
+
+      ! initial category areas in cells with ice
+         hbar = c3  ! initial ice thickness with greatest area
+                    ! Note: the resulting average ice thickness 
+                    ! tends to be less than hbar due to the
+                    ! nonlinear distribution of ice thicknesses 
+         sum = c0
+         do n = 1, ncat
+            if (n < ncat) then
+               hinit(n) = p5*(hin_max(n-1) + hin_max(n)) ! m
+            else                ! n=ncat
+               hinit(n) = (hin_max(n-1) + c1) ! m
+            endif
+            ! parabola, max at h=hbar, zero at h=0, 2*hbar
+            ainit(n) = max(c0, (c2*hbar*hinit(n) - hinit(n)**2))
+            sum = sum + ainit(n)
+         enddo
+         do n = 1, ncat
+            ainit(n) = ainit(n) / (sum + puny/ncat) ! normalize
+         enddo
+
+         endif ! atm_data_type
+
+         if (trim(grid_type) == 'rectangular') then
+
+#ifdef oned
+         ! oned model - only middle grid cell to have ice
+         icells = 1
+         indxi(icells) = 4
+         indxj(icells) = 4
+         ainit(:) = c1
+#if (defined notz_fieldwork || defined notz_experiment || defined snowice_maksym || defined pond_barrow)
+         hinit(:) = 0.01_dbl_kind
+#elif defined flushing_notz
+         hinit(:) = 0.9_dbl_kind
+#else
+         hinit(:) = c1
+#endif
+#endif
+            
+         ! place ice on left side of domain
+         icells = 0
+         do j = jlo, jhi
+         do i = ilo, ihi
+            if (tmask(i,j)) then
+               if (ULON(i,j) < -50./rad_to_deg) then
+                  icells = icells + 1
+                  indxi(icells) = i
+                  indxj(icells) = j
+               endif            ! ULON
+            endif               ! tmask
+         enddo                  ! i
+         enddo                  ! j
+
+         else
+
+         ! place ice at high latitudes where ocean sfc is cold
+         icells = 0
+         do j = jlo, jhi
+         do i = ilo, ihi
+            if (tmask(i,j)) then
+               ! place ice in high latitudes where ocean sfc is cold
+               if ( (sst (i,j) <= Tf(i,j)+p2) .and. &
+                    (ULAT(i,j) < edge_init_sh/rad_to_deg .or. &
+                     ULAT(i,j) > edge_init_nh/rad_to_deg) ) then
+                  icells = icells + 1
+                  indxi(icells) = i
+                  indxj(icells) = j
+               endif            ! cold surface
+            endif               ! tmask
+         enddo                  ! i
+         enddo                  ! j
+
+         endif                  ! rectgrid
+
+         do n = 1, ncat
+
+            ! ice volume, snow volume
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+
+               aicen(i,j,n) = ainit(n)
+
+               if (trim(atm_data_type) == 'box') then
+                  if (hinit(n) > c0) then
+!                  ! constant slope from 0 to 1 in x direction
+!                     aicen(i,j,n) = (real(iglob(i), kind=dbl_kind)-p5) &
+!                                  / (real(nx_global,kind=dbl_kind))
+!                  ! constant slope from 0 to 0.5 in x direction
+!                     aicen(i,j,n) = (real(iglob(i), kind=dbl_kind)-p5) &
+!                                  / (real(nx_global,kind=dbl_kind)) * p5
+                  ! quadratic
+!                     aicen(i,j,n) = max(c0,(real(iglob(i), kind=dbl_kind)-p5) &
+!                                         / (real(nx_global,kind=dbl_kind)) &
+!                                         * (real(jglob(j), kind=dbl_kind)-p5) &
+!                                         / (real(ny_global,kind=dbl_kind)) * p5)
+                     aicen(i,j,n) = max(c0,(real(nx_global, kind=dbl_kind) &
+                                         -  real(iglob(i), kind=dbl_kind)-p5) &
+                                         / (real(nx_global,kind=dbl_kind)) &
+                                         * (real(ny_global, kind=dbl_kind) &
+                                         -  real(jglob(j), kind=dbl_kind)-p5) &
+                                         / (real(ny_global,kind=dbl_kind)) * p5)
+                  endif
+                  vicen(i,j,n) = hinit(n) * aicen(i,j,n) ! m
+               else
+                  vicen(i,j,n) = hinit(n) * ainit(n) ! m
+               endif
+               vsnon(i,j,n) = min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
+               trcrn(i,j,nt_fbri,n) = c1
+            enddo               ! ij
+
+            ! surface temperature
+            if (calc_Tsfc) then
+        
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+
+                  if (ktherm == 2) then
+#if defined notz_experiment
+                     trcrn(i,j,nt_Tsfc,n) = -10.0_dbl_kind
+#elif (defined notz_fieldwork || defined snowice_maksym || defined pond_barrow)
+                     trcrn(i,j,nt_Tsfc,n) = liquidus_temperature_mush(salinz(i,j,1) / phi_init)
+#elif defined flushing_notz
+                     trcrn(i,j,nt_Tsfc,n) = liquidus_temperature_mush(salinz(i,j,1))
+#else
+                     trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) !deg C
+#endif
+                  else
+
+                     trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) !deg C
+
+                  endif
+
+               enddo
+
+            else    ! Tsfc is not calculated by the ice model
+
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  trcrn(i,j,nt_Tsfc,n) = Tf(i,j)   ! not used
+               enddo
+
+            endif       ! calc_Tsfc
+
+            ! other tracers
+
+            if (heat_capacity) then
+
+               ! ice enthalpy, salinity 
+               do k = 1, nilyr
+                  do ij = 1, icells
+                     i = indxi(ij)
+                     j = indxj(ij)
+
+                     ! assume linear temp profile and compute enthalpy
+#if defined notz_experiment
+
+                     slope = Tf(i,j) - trcrn(i,j,nt_Tsfc,n)
+                     Ti = trcrn(i,j,nt_Tsfc,n) &
+                        + slope*(real(k,kind=dbl_kind)-p5) &
+                                /real(nilyr,kind=dbl_kind)
+
+#elif (defined notz_fieldwork || defined snowice_maksym || defined pond_barrow)
+                     Ti = liquidus_temperature_mush(salinz(i,j,k) / phi_init)
+#else
+                     slope = Tf(i,j) - trcrn(i,j,nt_Tsfc,n)
+                     Ti = trcrn(i,j,nt_Tsfc,n) &
+                        + slope*(real(k,kind=dbl_kind)-p5) &
+                                /real(nilyr,kind=dbl_kind)
+#endif
+
+                     if (ktherm == 2) then
+                        ! enthalpy
+                        trcrn(i,j,nt_qice+k-1,n) = &
+                             enthalpy_mush(Ti, salinz(i,j,k))
+                     else
+                        trcrn(i,j,nt_qice+k-1,n) = &
+                            -(rhoi * (cp_ice*(Tmltz(i,j,k)-Ti) &
+                            + Lfresh*(c1-Tmltz(i,j,k)/Ti) - cp_ocn*Tmltz(i,j,k)))
+                     endif
+
+                     ! salinity
+                     trcrn(i,j,nt_sice+k-1,n) = salinz(i,j,k)
+                  enddo            ! ij
+               enddo               ! nilyr
+
+               ! snow enthalpy
+               do k = 1, nslyr
+                  do ij = 1, icells
+                     i = indxi(ij)
+                     j = indxj(ij)
+                     Ti = min(c0, trcrn(i,j,nt_Tsfc,n))
+                     trcrn(i,j,nt_qsno+k-1,n) = -rhos*(Lfresh - cp_ice*Ti)
+                     
+                  enddo            ! ij
+               enddo               ! nslyr
+
+            else  ! one layer with zero heat capacity
+
+               ! ice energy
+               k = 1
+
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  trcrn(i,j,nt_qice+k-1,n) = -rhoi * Lfresh 
+                  trcrn(i,j,nt_sice+k-1,n) = salinz(i,j,k)
+               enddo            ! ij
+
+               ! snow energy
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  trcrn(i,j,nt_qsno+k-1,n) = -rhos * Lfresh 
+               enddo            ! ij
+
+            endif               ! heat_capacity
+         enddo                  ! ncat
+      endif                     ! ice_ic
+
+      end subroutine set_state_var
 
 !=======================================================================
 
