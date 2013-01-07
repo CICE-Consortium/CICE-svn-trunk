@@ -59,7 +59,8 @@
 !
 !EOP
 !
-      if (trim(runtype) == 'continue') restart_age = .true.
+      if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') &
+           restart_age = .true.
 
       if (restart_age) then
          call read_restart_age

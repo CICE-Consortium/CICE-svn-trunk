@@ -89,7 +89,8 @@
 !
 !EOP
 !
-      if (trim(runtype) == 'continue') restart_pond_lvl = .true.
+      if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') &
+           restart_pond_lvl = .true.
 
       if (restart_pond_lvl) then
          call read_restart_pond_lvl
@@ -115,8 +116,7 @@
                                    frain, Tair,  fsurfn,&
                                    dhs,   ffrac,        &
                                    aicen, vicen, vsnon, &
-                                   trcrn,               &
-                                   eicen, salin, Tmlt)
+                                   trcrn)
 !
 ! !DESCRIPTION:
 !
@@ -126,10 +126,11 @@
 !
 ! !USES:
 !
-      use ice_state, only: nt_Tsfc, nt_apnd, nt_hpnd, nt_ipnd, nt_alvl
+      use ice_state, only: nt_Tsfc, nt_apnd, nt_hpnd, nt_ipnd, nt_alvl, nt_qice, nt_sice
       use ice_calendar, only: dt, istep
       use ice_domain_size, only: max_ntrcr
       use ice_itd, only: hi_min
+      use ice_therm_shared, only: ktherm
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -147,13 +148,6 @@
          vicen, &
          vsnon
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nilyr), intent(in) :: &
-         eicen     ! energy of melting for each ice layer (J/m2)
-
-      real (kind=dbl_kind), dimension(nilyr), intent(in) :: &
-         salin, &  ! salinity (ppt)   
-         Tmlt      ! melting temperature 
-    
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_ntrcr), &
          intent(inout) :: &
          trcrn
@@ -169,10 +163,17 @@
          volpn, &
          Tsfcn
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr) :: &
+         qicen, &  ! ice layer enthalpy (J m-3)
+         sicen     ! salinity (ppt)   
+
+      real (kind=dbl_kind), dimension (nilyr) :: &
+         Tmlt      ! melting temperature 
+
       integer (kind=int_kind), dimension (nx_block*ny_block) :: &
          indxi, indxj     ! compressed indices for cells with ice melting
 
-      integer (kind=int_kind) :: i,j,ij,icells
+      integer (kind=int_kind) :: i,j,ij,icells,k
 
       real (kind=dbl_kind) :: &
          hi                     , & ! ice thickness (m)
@@ -205,6 +206,14 @@
          volpn(i,j) = trcrn(i,j,nt_hpnd) &
                     * aicen(i,j) * trcrn(i,j,nt_alvl) * trcrn(i,j,nt_apnd)
          ffrac(i,j) = c0
+      enddo
+      enddo
+      do k = 1, nilyr
+      do j = 1, ny_block
+      do i = 1, nx_block
+         qicen(i,j,k) = trcrn(i,j,nt_qice+k-1) 
+         sicen(i,j,k) = trcrn(i,j,nt_sice+k-1) 
+      enddo
       enddo
       enddo
 
@@ -345,13 +354,15 @@
             !-----------------------------------------------------------
             ! drainage due to permeability (flushing)
             ! setting dpscale = 0 turns this off
+            ! NOTE this uses the initial salinity and melting T profiles
             !-----------------------------------------------------------
 
-            if (hpondn > c0 .and. dpscale > puny) then
+            if (ktherm /= 2 .and. hpondn > c0 .and. dpscale > puny) then
                draft = (rhos*hs + rhoi*hi)/rhow + hpondn
                deltah = hpondn + hi - draft
                pressure_head = gravit * rhow * max(deltah, c0)
-               call brine_permeability(eicen(i,j,:), vicen(i,j), salin, Tmlt, perm)
+               Tmlt(:) = sicen(i,j,:) * depressT
+               call brine_permeability(qicen(i,j,:), vicen(i,j), sicen(i,j,:), Tmlt, perm)
                drain = perm*pressure_head*dt / (viscosity*hi) * dpscale
                deltah = min(drain, hpondn)
                dvn = -deltah*apondn
@@ -389,16 +400,16 @@
 !
 ! !INTERFACE:
 !
-      subroutine brine_permeability(eicen, vicen, salin, Tmlt, perm)
+      subroutine brine_permeability(qicen, vicen, salin, Tmlt, perm)
 !
 ! !USES:
 !
-      use ice_therm_vertical, only: calculate_Tin_from_qin
+      use ice_therm_shared, only: calculate_Tin_from_qin
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
       real (kind=dbl_kind), dimension(nilyr), intent(in) :: &
-         eicen, &  ! energy of melting for each ice layer (J/m2)
+         qicen, &  ! enthalpy for each ice layer (J m-3)
          salin, &  ! salinity (ppt)   
          Tmlt      ! melting temperature (C)
     
@@ -411,8 +422,7 @@
 !EOP
 !
       real (kind=dbl_kind) ::   &
-         Sbr, &    ! brine salinity
-         qin       ! enthalpy
+         Sbr       ! brine salinity
 
       real (kind=dbl_kind), dimension(nilyr) ::   &
          Tin, &    ! ice temperature (C)
@@ -425,8 +435,7 @@
       !-----------------------------------------------------------------
 
       do k = 1,nilyr
-         qin    = eicen(k)*real(nilyr,kind=dbl_kind) / vicen
-         Tin(k) = calculate_Tin_from_qin(qin,Tmlt(k))
+         Tin(k) = calculate_Tin_from_qin(qicen(k),Tmlt(k))
       enddo
 
       !-----------------------------------------------------------------

@@ -234,6 +234,10 @@
          ! if sst is below freezing, reset sst to Tf
          if (sst(i,j,iblk) <= Tf(i,j,iblk)) sst(i,j,iblk) = Tf(i,j,iblk)
 
+#if (defined pond_barrow || defined snowice_maksym)
+         frzmlt = c0
+#endif
+
       enddo                     ! ij
 
       end subroutine ocean_mixed_layer

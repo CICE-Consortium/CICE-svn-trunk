@@ -38,17 +38,32 @@
          work_g2, &
          work_g3
 
+      real (kind=dbl_kind), dimension(:,:,:), allocatable :: &
+         work_g4
+
+      real (kind=dbl_kind), dimension(:,:,:,:), allocatable :: &
+         work_g5
+
       real (kind=real_kind), dimension(:,:), allocatable :: &
          work_gr
 
       real (kind=real_kind), dimension(:,:,:), allocatable :: &
          work_gr3
+ 
+      real (kind=real_kind), dimension(:,:,:,:), allocatable :: &
+         work_gr4
 
       integer(kind=int_kind), dimension(:,:), allocatable :: &
          work_gi4
 
       integer(selected_int_kind(13)), dimension(:,:), allocatable :: &
          work_gi8
+ 
+      integer(kind=int_kind), dimension(:,:,:), allocatable :: &
+         work_gi5
+
+      integer(selected_int_kind(13)), dimension(:,:,:), allocatable :: &
+         work_gi9
 
       ! all blocks
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
@@ -61,6 +76,16 @@
          workb, &
          workc, &
          workd
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist) :: &
+         workz 
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist,ncat) :: &
+         workzn 
+
+      ! vertical
+      real (kind=dbl_kind), dimension(:), allocatable :: &
+         work_z
 
 !=======================================================================
 

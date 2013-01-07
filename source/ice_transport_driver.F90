@@ -42,12 +42,8 @@
       logical, parameter :: & ! if true, prescribe area flux across each edge  
          l_fixed_area = .false.
 
-! NOTE: For remapping, hice, hsno, qice, and qsno are considered tracers.
-!       max_ntrace is not equal to max_ntrcr!
+! NOTE: For remapping, hice and hsno are considered tracers.
 !       ntrace is not equal to ntrcr!
-
-      integer (kind=int_kind), parameter ::                      &
-         max_ntrace = 2+max_ntrcr+nilyr+nslyr  ! hice,hsno,qice,qsno,trcr
 
       integer (kind=int_kind) ::                      &
          ntrace              ! number of tracers in use
@@ -105,7 +101,11 @@
 
       call ice_timer_start(timer_advect)  ! advection 
 
-      ntrace = 2+ntrcr+nilyr+nslyr  ! hice,hsno,qice,qsno,trcr
+      ntrace = 2 + ntrcr ! hice,hsno,trcr
+
+      if (allocated(tracer_type)) deallocate(tracer_type)
+      if (allocated(depend)) deallocate(depend)
+      if (allocated(has_dependents)) deallocate(has_dependents)
 
       allocate (tracer_type   (ntrace), &
                 depend        (ntrace), &
@@ -137,16 +137,6 @@
              endif
           enddo
 
-          k = k + ntrcr
-          
-          depend(k+1:k+nilyr) = 1 ! qice depends on hice
-          tracer_type(k+1:k+nilyr) = 2 
-
-          k = k + nilyr
-
-          depend(k+1:k+nslyr) = 2 ! qsno depends on hsno
-          tracer_type(k+1:k+nslyr) = 2 
-
           has_dependents = .false.
           do nt = 1, ntrace
              if (depend(nt) > 0) then
@@ -175,6 +165,18 @@
              if (nt-k==nt_Tsfc) &
                 write(nu_diag,*) 'nt_Tsfc',nt,depend(nt),tracer_type(nt),&
                                               has_dependents(nt)
+             if (nt-k==nt_qice) &
+                write(nu_diag,*) 'nt_qice',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+             if (nt-k==nt_qsno) &
+                write(nu_diag,*) 'nt_qsno',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+             if (nt-k==nt_sice) &
+                write(nu_diag,*) 'nt_sice',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+             if (nt-k==nt_fbri) &
+                write(nu_diag,*) 'nt_fbri',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
              if (nt-k==nt_iage) &
                 write(nu_diag,*) 'nt_iage',nt,depend(nt),tracer_type(nt),&
                                               has_dependents(nt)
@@ -196,15 +198,16 @@
              if (nt-k==nt_ipnd) &
                 write(nu_diag,*) 'nt_ipnd',nt,depend(nt),tracer_type(nt),&
                                               has_dependents(nt)
+             if (nt-k==nt_bgc_N_sk) &
+                write(nu_diag,*) 'nt_bgc_sk',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+             if (nt-k==nt_bgc_NO) &
+                write(nu_diag,*) 'nt_bgc_NO',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
+             if (nt-k==nt_bgc_S) &
+                write(nu_diag,*) 'nt_bgcS',nt,depend(nt),tracer_type(nt),&
+                                              has_dependents(nt)
           enddo
-
-             nt = k + ntrcr+1
-                write(nu_diag,*) ' qice  ',nt,depend(nt),tracer_type(nt),&
-                                              has_dependents(nt)
-
-             nt = nt + nilyr
-                write(nu_diag,*) ' qsno  ',nt,depend(nt),tracer_type(nt),&
-                                              has_dependents(nt)
 
           endif ! master_task
 
@@ -356,8 +359,7 @@
 !                           field_loc_center, field_type_scalar)
 
 !      call bound_state (aicen, trcrn,     &
-!                        vicen, vsnon,      &
-!                        eicen, esnon)
+!                        vicen, vsnon)
 
 !      call ice_timer_stop(timer_bound)
 
@@ -386,7 +388,6 @@
                                aice0(:,:,  iblk), aicen(:,:,:,iblk),    &
                                trcrn(:,:,1:ntrcr,:,iblk),               &
                                vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
-                               eicen(:,:,:,iblk), esnon(:,:,  :,iblk),  &
                                aim  (:,:,:,iblk), trm  (:,:,:,:,iblk))
 
       enddo
@@ -510,7 +511,7 @@
     !-------------------------------------------------------------------
     ! Main remapping routine: Step ice area and tracers forward in time.
     !-------------------------------------------------------------------
-
+   
          call horizontal_remap (dt,                ntrace,             &
                                 uvel      (:,:,:), vvel      (:,:,:),  &
                                 aim     (:,:,:,:), trm   (:,:,:,:,:),  &
@@ -518,7 +519,7 @@
                                 tracer_type,       depend,             &
                                 has_dependents,    integral_order,     &
                                 l_dp_midpt)
-
+         
     !-------------------------------------------------------------------
     ! Given new fields, recompute state variables.
     !-------------------------------------------------------------------
@@ -530,8 +531,7 @@
                                 aim  (:,:,:,iblk), trm  (:,:,:,:,iblk), &
                                 aice0(:,:,  iblk), aicen(:,:,:,iblk),   &
                                 trcrn(:,:,1:ntrcr,:,iblk),              &
-                                vicen(:,:,:,iblk), vsnon(:,:,  :,iblk), &
-                                eicen(:,:,:,iblk), esnon(:,:,  :,iblk)) 
+                                vicen(:,:,:,iblk), vsnon(:,:,  :,iblk))
 
       enddo                     ! iblk
 
@@ -542,8 +542,7 @@
       call ice_timer_start(timer_bound)
 
       call bound_state (aicen, trcrn,     &
-                        vicen, vsnon,      &
-                        eicen, esnon)
+                        vicen, vsnon)
 
       call ice_timer_stop(timer_bound)
 
@@ -589,7 +588,6 @@
                endif            ! tracer_type
             enddo               ! nt
          enddo                  ! n
-
 
          if (my_task == master_task) then
             call global_conservation (l_stop,     &
@@ -657,7 +655,7 @@
       endif                     ! l_monotonicity_check
 
       call ice_timer_stop(timer_advect)  ! advection 
-
+           
       end subroutine transport_remap
 
 !=======================================================================
@@ -696,7 +694,6 @@
 !
       integer (kind=int_kind) ::     &
          narr               ! max number of state variable arrays
-                            ! not including eicen, esnon
 
       integer (kind=int_kind) ::     &
          i, j, iblk       ,&! horizontal indices
@@ -715,7 +712,6 @@
       call ice_timer_start(timer_advect)  ! advection 
 
       narr = 1 + ncat*(3+ntrcr) ! max number of state variable arrays
-                                ! not including eicen, esnon
 
       allocate (works(nx_block,ny_block,narr,max_blocks))
 
@@ -724,8 +720,7 @@
     ! (Assume velocities are already known for ghost cells, also.)
     !-------------------------------------------------------------------
 !      call bound_state (aicen, trcrn,     &
-!                        vicen, vsnon,     &
-!                        eicen, esnon)
+!                        vicen, vsnon)
 
     !-------------------------------------------------------------------
     ! Average corner velocities to edges.
@@ -784,22 +779,6 @@
                             HTE(:,:,iblk),  HTN    (:,:,iblk),      &
                             tarea(:,:,iblk))
 
-         call upwind_field (nx_block,       ny_block,               &
-                            ilo, ihi,       jlo, jhi,               &
-                            dt,                                     &
-                            ntilyr,         eicen(:,:,:,iblk),      &
-                            uee(:,:,iblk),  vnn    (:,:,iblk),      &
-                            HTE(:,:,iblk),  HTN    (:,:,iblk),      &
-                            tarea(:,:,iblk))
-
-         call upwind_field (nx_block,       ny_block,               &
-                            ilo, ihi,       jlo, jhi,               &
-                            dt,                                     &
-                            ntslyr,         esnon(:,:,:,iblk),      &
-                            uee(:,:,iblk),  vnn    (:,:,iblk),      &
-                            HTE(:,:,iblk),  HTN    (:,:,iblk),      &
-                            tarea(:,:,iblk))
-
       !-----------------------------------------------------------------
       ! convert work arrays back to state variables
       !-----------------------------------------------------------------
@@ -820,8 +799,7 @@
       call ice_timer_start(timer_bound)
 
       call bound_state (aicen, trcrn,     &
-                        vicen, vsnon,      &
-                        eicen, esnon)
+                        vicen, vsnon)
 
       call ice_timer_stop(timer_bound)
 
@@ -847,7 +825,6 @@
                                    aice0,    aicen,      &
                                    trcrn,                &
                                    vicen,    vsnon,      &
-                                   eicen,    esnon,      &
                                    aim,      trm)
 !
 ! !DESCRIPTION:
@@ -866,8 +843,7 @@
 !
 ! !USES:
 !
-      use ice_work, only: worka, workb
-      use ice_itd, only: ilyr1, slyr1
+      use ice_state, only: nt_qsno
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -889,14 +865,6 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat),     &
            intent(in) ::     &
            trcrn     ! ice area tracers
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr),     &
-           intent(in) ::     &
-           eicen     ! energy of melting for each ice layer (J/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr),     &
-           intent(in) ::     &
-           esnon     ! energy of melting for each snow layer (J/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,0:ncat),     &
             intent(out)::     &
@@ -957,45 +925,26 @@
             i = indxi(ij,n)
             j = indxj(ij,n)
             w1 = c1 / aim(i,j,n)
-            worka(i,j) = c1 / vicen(i,j,n)
             trm(i,j,1,n) = vicen(i,j,n) * w1 ! hice
             trm(i,j,2,n) = vsnon(i,j,n) * w1 ! hsno
-            if (trm(i,j,2,n) > puny) then
-               workb(i,j) = c1 / vsnon(i,j,n)
-            else
-               workb(i,j) = c0
-            endif
          enddo
          kt = 2
 
          do it = 1, ntrcr
-            do ij = 1, icells(n)
-               i = indxi(ij,n)
-               j = indxj(ij,n)
-               trm(i,j,kt+it,n) = trcrn(i,j,it,n) ! ice area tracers
-            enddo
+            if (it >= nt_qsno .and. it < nt_qsno+nslyr) then
+               do ij = 1, icells(n)
+                  i = indxi(ij,n)
+                  j = indxj(ij,n)
+                  trm(i,j,kt+it,n) = trcrn(i,j,it,n) + rhos*Lfresh ! snow enthalpy
+               enddo
+            else
+               do ij = 1, icells(n)
+                  i = indxi(ij,n)
+                  j = indxj(ij,n)
+                  trm(i,j,kt+it,n) = trcrn(i,j,it,n) ! other tracers
+               enddo
+            endif
          enddo
-         kt = kt + ntrcr
-
-         do k =1, nilyr
-            do ij = 1, icells(n)
-               i = indxi(ij,n)
-               j = indxj(ij,n)
-               trm(i,j,kt+k,n) = eicen(i,j,ilyr1(n)+k-1)*worka(i,j) ! qice
-            enddo               ! ij
-         enddo                  ! ilyr
-         kt = kt + nilyr
-
-         do k = 1, nslyr
-            do ij = 1, icells(n)
-               i = indxi(ij,n)
-               j = indxj(ij,n)
-               if (trm(i,j,2,n) > puny)    &    ! hsno > puny
-                 trm(i,j,kt+k,n) = esnon(i,j,slyr1(n)+k-1)*workb(i,j) & ! qsno
-                                 + rhos*Lfresh
-            enddo               ! ij
-         enddo                  ! nslyr
-
       enddo                     ! ncat
  
       end subroutine state_to_tracers
@@ -1012,8 +961,7 @@
                                    aim,      trm,        &
                                    aice0,    aicen,      &
                                    trcrn,                &
-                                   vicen,    vsnon,      &
-                                   eicen,    esnon) 
+                                   vicen,    vsnon)
 !
 ! !DESCRIPTION:
 !
@@ -1025,7 +973,7 @@
 !
 ! !USES:
 !
-      use ice_itd, only: ilyr1, slyr1
+      use ice_state, only: nt_qsno
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1055,14 +1003,6 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat),  &
            intent(inout) ::     &
            trcrn     ! tracers
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr),     &
-           intent(inout) ::     &
-           eicen ! energy of melting for each ice layer (J/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr),     &
-           intent(inout) ::     &
-           esnon ! energy of melting for each snow layer (J/m^2)
 !
 !EOP
 !
@@ -1104,32 +1044,20 @@
          kt = 2
 
          do it = 1, ntrcr
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-               trcrn(i,j,it,n) = trm(i,j,kt+it,n)  ! ice tracers
-            enddo               ! ij
-         enddo                  ! ntrcr
-         kt = kt + ntrcr
-
-         do k = 1, nilyr
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-               eicen(i,j,ilyr1(n)+k-1) = vicen(i,j,n)*trm(i,j,kt+k,n) 
-            enddo               ! ij
-         enddo                  ! nilyr
-         kt = kt + nilyr
-
-         do k = 1, nslyr
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-               esnon(i,j,slyr1(n)+k-1) = (trm(i,j,kt+k,n) - rhos*Lfresh) &
-                                         * vsnon(i,j,n)
-            enddo               ! ij
-         enddo                  ! nslyr
-
+            if (it >= nt_qsno .and. it < nt_qsno+nslyr) then
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  trcrn(i,j,it,n) = trm(i,j,kt+it,n) - rhos*Lfresh ! snow enthalpy
+               enddo
+               else
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  trcrn(i,j,it,n) = trm(i,j,kt+it,n)  ! other tracers
+               enddo
+            endif
+         enddo
       enddo                     ! ncat
 
       end subroutine tracers_to_state
@@ -1581,8 +1509,8 @@
 !
 ! !USES:
 !
-      use ice_itd, only: ilyr1, slyr1
-      use ice_state, only: nt_alvl, nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo
+      use ice_state, only: nt_alvl, nt_apnd, nt_fbri, &
+                           tr_pond_cesm, tr_pond_lvl, tr_pond_topo
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1689,6 +1617,14 @@
                                         * trcrn(i,j,it,n)
                enddo
                enddo
+            elseif (trcr_depend(it) == 2+nt_fbri) then
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  works(i,j,narrays+it) = vicen(i,j,n) &
+                                        * trcrn(i,j,nt_fbri,n) &
+                                        * trcrn(i,j,it,n)
+               enddo
+               enddo
             endif
          enddo
          narrays = narrays + ntrcr
@@ -1725,7 +1661,8 @@
 !
 ! !USES:
 !
-      use ice_itd, only: ilyr1, slyr1, compute_tracers
+      use ice_itd, only: compute_tracers
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

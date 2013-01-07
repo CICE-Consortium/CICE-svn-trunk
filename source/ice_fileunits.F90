@@ -60,12 +60,17 @@
          nu_restart_pond,&  ! restart input file for melt pond tracer
          nu_dump_aero  , &  ! dump file for restarting aerosol tracer
          nu_restart_aero,&  ! restart input file for aerosol tracer
+         nu_dump_bgc   , &  ! dump file for restarting bgc
+         nu_restart_bgc, &  ! restart input file for bgc
+         nu_dump_S     , &  ! dump file for restarting zsalinity
+         nu_restart_S  , &  ! restart input file for zsalinity
          nu_dump_eap   , &  ! dump file for restarting eap dynamics
          nu_restart_eap, &  ! restart input file for eap dynamics
          nu_rst_pointer, &  ! pointer to latest restart file
          nu_history    , &  ! binary history output file
          nu_hdr        , &  ! header file for binary history output
-         nu_diag            ! diagnostics output file
+         nu_diag       , &  ! diagnostics output file
+         nu_jfnkdiag        ! diagnostics for JFNK failure
 
       character (6), parameter :: &
          nml_filename = 'ice_in' ! namelist input file name
@@ -85,17 +90,18 @@
 
       logical (kind=log_kind), dimension(ice_IOUnitsMaxUnits) :: &
          ice_IOUnitsInUse   ! flag=.true. if unit currently open
+
 !EOC
 !=======================================================================
 
-contains
+      contains
 
 !=======================================================================
 !BOP
 ! !IROUTINE: init_fileunits
 ! !INTERFACE:
 
- subroutine init_fileunits
+      subroutine init_fileunits
 
 ! !DESCRIPTION:
 !  This routine grabs needed unit numbers. 
@@ -124,20 +130,25 @@ contains
          call get_fileunit(nu_restart_pond)
          call get_fileunit(nu_dump_aero)
          call get_fileunit(nu_restart_aero)
+         call get_fileunit(nu_dump_bgc)
+         call get_fileunit(nu_restart_bgc)
+         call get_fileunit(nu_dump_S)
+         call get_fileunit(nu_restart_S)
          call get_fileunit(nu_dump_eap)
          call get_fileunit(nu_restart_eap)
          call get_fileunit(nu_rst_pointer)
          call get_fileunit(nu_history)
          call get_fileunit(nu_hdr)
+         call get_fileunit(nu_jfnkdiag)
 
- end subroutine init_fileunits
+      end subroutine init_fileunits
 
 !=======================================================================
 !BOP
 ! !IROUTINE: get_fileunit
 ! !INTERFACE:
 
- subroutine get_fileunit(iunit)
+      subroutine get_fileunit(iunit)
 
 ! !DESCRIPTION:
 !  This routine returns the next available I/O unit and marks it as
@@ -187,14 +198,14 @@ contains
 #endif
 
 !EOC
- end subroutine get_fileunit
+      end subroutine get_fileunit
 
 !=======================================================================
 !BOP
 ! !IROUTINE: release_all_fileunits
 ! !INTERFACE:
 
- subroutine release_all_fileunits
+      subroutine release_all_fileunits
 
 ! !DESCRIPTION:
 !  This routine releases unit numbers at the end of a run. 
@@ -214,21 +225,26 @@ contains
          call release_fileunit(nu_restart_pond)
          call release_fileunit(nu_dump_aero)
          call release_fileunit(nu_restart_aero)
+         call release_fileunit(nu_dump_bgc)
+         call release_fileunit(nu_restart_bgc)
+         call release_fileunit(nu_dump_S)
+         call release_fileunit(nu_restart_S)
          call release_fileunit(nu_dump_eap)
          call release_fileunit(nu_restart_eap)
          call release_fileunit(nu_rst_pointer)
          call release_fileunit(nu_history)
          call release_fileunit(nu_hdr)
+         call release_fileunit(nu_jfnkdiag)
          if (nu_diag /= ice_stdout) call release_fileunit(nu_diag)
 
- end subroutine release_all_fileunits
+      end subroutine release_all_fileunits
 
 !=======================================================================
 !BOP
 ! !IROUTINE: release_fileunit
 ! !INTERFACE:
 
- subroutine release_fileunit(iunit)
+      subroutine release_fileunit(iunit)
 
 ! !DESCRIPTION:
 !  This routine releases an I/O unit (marks it as available).
@@ -259,14 +275,14 @@ contains
 #endif
 
 !EOC
- end subroutine release_fileunit
+      end subroutine release_fileunit
 
 !=======================================================================
 !BOP
 ! !IROUTINE: flush_fileunit
 ! !INTERFACE:
 
- subroutine flush_fileunit(iunit)
+      subroutine flush_fileunit(iunit)
 
 ! !DESCRIPTION:
 !  This routine enables a user to flush the output from an IO unit
@@ -310,7 +326,7 @@ contains
 #endif
 
 !EOC
- end subroutine flush_fileunit
+      end subroutine flush_fileunit
 
 !=======================================================================
 

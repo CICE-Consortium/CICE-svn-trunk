@@ -91,17 +91,20 @@
 
       ! shortwave components
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,ntilyr,max_blocks) :: &
+         dimension (nx_block,ny_block,nilyr,ncat,max_blocks) :: &
          Iswabsn         ! SW radiation absorbed in ice layers (W m-2)
 
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,ntslyr,max_blocks) :: &
+         dimension (nx_block,ny_block,nslyr,ncat,max_blocks) :: &
          Sswabsn         ! SW radiation absorbed in snow layers (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks) :: &
          fswsfcn     , & ! SW absorbed at ice/snow surface (W m-2)
          fswthrun    , & ! SW through ice to ocean            (W/m^2)
          fswintn         ! SW absorbed in ice interior, below surface (W m-2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1,ncat,max_blocks) :: &
+         fswthruln       ! visible SW  at ice interior (W m-2)
 
       ! melt pond tuning parameters, set in namelist
       real (kind=dbl_kind) :: &
@@ -165,9 +168,7 @@
          i, j, ij    , & ! horizontal indices
          iblk        , & ! block index
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
-         n           , & ! thickness category index
-         il1, il2    , & ! ice layer indices for eice
-         sl1, sl2        ! snow layer indices for esno
+         n               ! thickness category index
 
       real (kind=dbl_kind) :: cszn ! counter for history averaging
 
@@ -210,8 +211,9 @@
                               alvdfn(:,:,:,iblk),alidfn(:,:,:,iblk),  &
                               fswsfcn(:,:,:,iblk),fswintn(:,:,:,iblk),&
                               fswthrun(:,:,:,iblk),                   &
-                              Iswabsn(:,:,:,iblk),                    &
-                              Sswabsn(:,:,:,iblk),                    &
+                              fswthruln(:,:,:,:,iblk),                &
+                              Iswabsn(:,:,:,:,iblk),                  &
+                              Sswabsn(:,:,:,:,iblk),                  &
                               albicen(:,:,:,iblk),albsnon(:,:,:,iblk),&
                               coszen(:,:,iblk))
          enddo     ! nblocks
@@ -311,6 +313,7 @@
                                   alvdfn,   alidfn,   &
                                   fswsfc,   fswint,   &
                                   fswthru,            &
+                                  fswthrul,           &
                                   Iswabs,   SSwabs,   &
                                   albin,    albsn,    &
                                   coszen)
@@ -326,7 +329,6 @@
 ! !USES:
 !
       use ice_domain, only: blocks_ice
-      use ice_itd, only: ilyr1, slyr1, ilyrn, slyrn
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -360,15 +362,19 @@
          albin    , & ! bare ice albedo
          albsn        ! snow albedo
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1,ncat), &
+           intent(out) :: &
+         fswthrul       ! SW through  each ice  layer (W m-2)!
+
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(out) :: &
          coszen       ! cosine(zenith angle)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr,ncat), &
            intent(out) :: &
          Iswabs       ! SW absorbed in particular layer (W m-2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr,ncat), &
            intent(out) :: &
          Sswabs       ! SW absorbed in particular layer (W m-2)
 !
@@ -378,9 +384,7 @@
          i, j           , & ! horizontal indices
          icells         , & ! number of ice-covered grid cells
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
-         n           , & ! thickness category index
-         il1, il2    , & ! ice layer indices for eice
-         sl1, sl2        ! snow layer indices for esno
+         n                  ! thickness category index
 
       integer (kind=int_kind), dimension (nx_block*ny_block) :: &
          indxi    , & ! indices for ice-covered cells
@@ -400,6 +404,10 @@
          alidrns, & ! near-ir, direct, snow   (fraction)
          alvdfns, & ! visible, diffuse, snow  (fraction)
          alidfns    ! near-ir, diffuse, snow  (fraction)
+
+      !-----------------------------------------------------------------
+      ! Solar radiation: albedo and absorbed shortwave
+      !-----------------------------------------------------------------
 
             ! For basic shortwave, set coszen to a constant between 0 and 1.
             coszen(:,:) = p5 ! sun above the horizon
@@ -423,16 +431,7 @@
                enddo               ! i
                enddo               ! j
 
-      !-----------------------------------------------------------------
-      ! Solar radiation: albedo and absorbed shortwave
-      !-----------------------------------------------------------------
-
-               il1 = ilyr1(n)
-               il2 = ilyrn(n)
-               sl1 = slyr1(n)
-               sl2 = slyrn(n)
-
-               Sswabs(:,:,sl1:sl2) = c0
+               Sswabs(:,:,:,n) = c0
 
       !-----------------------------------------------------------------
       ! Compute albedos for ice and snow.
@@ -494,7 +493,8 @@
                             fswsfc(:,:,n),        &
                             fswint(:,:,n),        &
                             fswthru(:,:,n),       &
-                            Iswabs(:,:,il1:il2))
+                            fswthrul(:,:,:,n),    &
+                            Iswabs(:,:,:,n))
 
             enddo                  ! ncat
 
@@ -785,7 +785,6 @@
       enddo
       enddo
 
-
       !-----------------------------------------------------------------
       ! Compute albedo for each thickness category.
       !-----------------------------------------------------------------
@@ -870,7 +869,8 @@
                                  alvdrns,  alvdfns,  &
                                  alidrns,  alidfns,  &
                                  fswsfc,   fswint,   &
-                                 fswthru,  Iswabs)
+                                 fswthru,  fswthrul, &
+                                 Iswabs)
 !
 ! !USES:
 !
@@ -912,6 +912,11 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
          intent(out) :: &
          Iswabs          ! SW absorbed in particular layer (W m-2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1), &
+         intent(out) :: &
+         fswthrul        ! visible SW through each layer (W m-2)
+
 !
 !EOP
 !
@@ -1026,6 +1031,13 @@
             ! bottom of layer k = top of layer k+1
             trantop(i,j) = tranbot(i,j)
 
+            ! bgc layer model
+            if (k == 1) then   ! surface flux
+               fswthrul(i,j,k) = fswpen(i,j)
+               fswthrul(i,j,k+1) = fswpen(i,j) * tranbot(i,j)
+            else
+               fswthrul(i,j,k+1) = fswpen(i,j) * tranbot(i,j)
+            endif
          enddo                  ! ij
       enddo                     ! nilyr
 
@@ -1041,7 +1053,6 @@
 
          ! SW absorbed in ice interior
          fswint(i,j)  = fswpen(i,j) - fswthru(i,j)
-
       enddo                     ! ij
 
       !----------------------------------------------------------------
@@ -1139,9 +1150,7 @@
       integer (kind=int_kind) :: &
          i, j, ij    , & ! horizontal indices
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
-         n           , & ! thickness category index
-         il1, il2    , & ! ice layer indices for eice
-         sl1, sl2        ! snow layer indices for esno
+         n               ! thickness category index
 
       real (kind=dbl_kind) :: &
          ipn         , & ! refrozen pond ice thickness (m), mean over ice fraction
@@ -1200,11 +1209,6 @@
                   endif
                enddo               ! i
                enddo               ! j
-
-               il1 = ilyr1(n)
-               il2 = ilyrn(n)
-               sl1 = slyr1(n)
-               sl2 = slyrn(n)
 
       ! note that rhoswn, rsnw, fp, hp and Sswabs ARE NOT dimensioned with ncat
       ! BPB 19 Dec 2006
@@ -1329,6 +1333,8 @@
                               fsn,                 fpn,                 &
                               hpn)
                   apeffn(:,:,n,iblk) = fpn(i,j) ! for history
+                  fpn = c0
+                  hpn = c0
                endif
 
                call shortwave_dEdd(nx_block,     ny_block,            &
@@ -1345,10 +1351,11 @@
                               alidrn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
                               fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
                               fswthrun(:,:,n,iblk),                   &
-                              Sswabsn(:,:,sl1:sl2,iblk),              &
-                              Iswabsn(:,:,il1:il2,iblk),              &
+                              Sswabsn(:,:,:,n,iblk),                  &
+                              Iswabsn(:,:,:,n,iblk),                  &
                               albicen(:,:,n,iblk),                    &
-                              albsnon(:,:,n,iblk),albpndn(:,:,n,iblk))
+                              albsnon(:,:,n,iblk),albpndn(:,:,n,iblk),&
+                              fswthruln(:,:,:,n,iblk))
 
             enddo  ! ncat
  
@@ -1375,7 +1382,8 @@
                                   fswsfc,   fswint,      &
                                   fswthru,  Sswabs,      &
                                   Iswabs,   albice,      &
-                                  albsno,   albpnd)
+                                  albsno,   albpnd,      &
+                                  fswthrul)
 !
 ! !DESCRIPTION:
 !
@@ -1457,6 +1465,10 @@
          fswsfc  , & ! SW absorbed at snow/bare ice/pondedi ice surface (W m-2)
          fswint  , & ! SW interior absorption (below surface, above ocean,W m-2)
          fswthru     ! SW through snow/bare ice/ponded ice into ocean (W m-2)
+ 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1), &
+         intent(out) :: &
+         fswthrul     ! visible SW through  ice layers (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
          intent(out) :: &
@@ -1554,6 +1566,7 @@
          albpnd(i,j)    = c0
       enddo
       enddo
+      fswthrul(:,:,:) = c0
       Sswabs(:,:,:) = c0
       Iswabs(:,:,:) = c0
 
@@ -1594,7 +1607,7 @@
                                   aidrl,    aidfl,       &
                                   fswsfc,   fswint,      &
                                   fswthru,  Sswabs,      &
-                                  Iswabs)
+                                  Iswabs, fswthrul)
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1643,7 +1656,7 @@
                                   aidrl,    aidfl,       &
                                   fswsfc,   fswint,      &
                                   fswthru,  Sswabs,      &
-                                  Iswabs)
+                                  Iswabs, fswthrul)
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1694,7 +1707,7 @@
                                   aidrl,    aidfl,       &
                                   fswsfc,   fswint,      &
                                   fswthru,  Sswabs,      &
-                                  Iswabs)
+                                  Iswabs, fswthrul)
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1792,7 +1805,7 @@
                                   alidr,    alidf,       &
                                   fswsfc,   fswint,      &
                                   fswthru,  Sswabs,      &
-                                  Iswabs)
+                                  Iswabs, fswthrul)
 !
 ! !DESCRIPTION:
 !
@@ -1857,6 +1870,10 @@
          fswsfc  , & ! SW absorbed at snow/bare ice/pondedi ice surface (W m-2)
          fswint  , & ! SW interior absorption (below surface, above ocean,W m-2)
          fswthru     ! SW through snow/bare ice/ponded ice into ocean (W m-2)
+ 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1), &
+         intent(inout) :: &
+         fswthrul      ! visible SW through each ice layer (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
          intent(inout) :: &
@@ -2011,6 +2028,9 @@
 
       real (kind=dbl_kind), dimension(icells_DE,nilyr) :: & 
          Iabs        ! shortwave absorbed in ice layer (W m-2)
+ 
+      real (kind=dbl_kind), dimension(icells_DE,nilyr+1) :: & 
+         fthrul      ! shortwave through to ice layers (W m-2)
 
       real (kind=dbl_kind), dimension (icells_DE,nspint) :: &
          wghtns              ! spectral weights
@@ -2319,7 +2339,8 @@
          fsfc(ij)   = c0
          fint(ij)   = c0
          fthru(ij)  = c0
-      enddo                ! ij
+      enddo              ! ij
+      fthrul(:,:) = c0                
       Sabs(:,:) = c0
       Iabs(:,:) = c0
  
@@ -2675,6 +2696,12 @@
               ksrf = nslyr + 2 
             endif
  
+            ! for layer biology: save visible only
+            do k = nslyr+2, klevp ! Start at DL layer of ice after SSL scattering
+               fthrul(ij,k-nslyr-1) = ((fdirdn(k,ij)-fdirup(k,ij))*swvdr(i,j) &
+                                    +  (fdifdn(k,ij)-fdifup(k,ij))*swvdf(i,j))
+            enddo
+
             fsfc(ij)  = fsfc(ij) + &
               ((fdirdn(0,ij)-fdirup(0,ij))*swvdr(i,j) + &
                (fdifdn(0,ij)-fdifup(0,ij))*swvdf(i,j)) - &
@@ -2856,6 +2883,12 @@
             i = indxi_DE(ij)
             j = indxj_DE(ij)
             Iswabs(i,j,k) = Iswabs(i,j,k) + Iabs(ij,k)*fi(i,j)
+
+            ! bgc layer 
+            fswthrul(i,j,k) = fswthrul(i,j,k) + fthrul(ij,k)* fi(i,j)
+            if (k == nilyr) then
+              fswthrul(i,j,k+1) = fswthrul(i,j,k+1) + fthrul(ij,k+1)*fi(i,j)
+            endif
          enddo                  ! ij
       enddo                     ! k
 

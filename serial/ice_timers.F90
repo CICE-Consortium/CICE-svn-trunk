@@ -62,7 +62,15 @@
       timer_readwrite,        &! read/write
       timer_diags,            &! diagnostics/history
       timer_hist,             &! diagnostics/history
-      timer_bound              ! boundary updates
+      timer_bound,            &! boundary updates
+      timer_vert,             &!
+      timer_bgc,              &! biogeochemistry
+      timer_diags_bgc,        &! diagnostics bgc
+      timer_bgc1,             &
+      timer_bgc2,             &
+      timer_bgc3,             &
+      timer_bgc4,             &
+      timer_bgc5
 !      timer_tmp                ! for temporary timings
 
 !-----------------------------------------------------------------------
@@ -209,6 +217,14 @@
    call get_ice_timer(timer_diags,    'Diags    ',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_hist,     'History  ',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_bound,    'Bound',    nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_vert,     'vert',     nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_bgc,      'BGC',      nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_diags_bgc, 'BGC Diags',nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_bgc1,'bgc1',nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_bgc2,'bgc2',nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_bgc3,'bgc3',nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_bgc4,'bgc4',nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_bgc5,'bgc5',nblocks,distrb_info%nprocs)
 !   call get_ice_timer(timer_tmp,      '         ',nblocks,distrb_info%nprocs)
 
 !-----------------------------------------------------------------------

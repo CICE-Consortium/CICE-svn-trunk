@@ -153,14 +153,7 @@
 ! Each field in the "tm" array is assigned an index, 1:ntrace. 
 ! (Note: ntrace is not the same as ntrcr, the number of tracers 
 ! in the trcrn state variable array.  For remapping purposes we 
-! have additional tracers hi, hs, qi and qs.) 
-! For CICE with ntrcr = 1, nilyr = 4, and nslyr = 1, the 
-! indexing is as follows: 
-! 1   = hi 
-! 2   = hs 
-! 3   = Ts 
-! 4-7 = qi 
-! 8   = qs 
+! have additional tracers hi and hs.) 
 ! 
 ! The tracer types (1,2,3) are contained in the "tracer_type" array. 
 ! For standard CICE: 
@@ -453,19 +446,19 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,0:ncat) :: &
          mmask            ! = 1. if mass is present, = 0. otherwise
 
-      real (kind=dbl_kind),      &
-         dimension (nx_block,ny_block,ntrace,ncat,max_blocks) ::     &
+      real (kind=dbl_kind), &
+         dimension (nx_block,ny_block,ntrace,ncat,max_blocks) :: &
          tc             ,&! tracer values at geometric center of cell
          tx, ty           ! limited derivative of tracer wrt x and y
 
-      real (kind=dbl_kind),      &
+      real (kind=dbl_kind), &
          dimension (nx_block,ny_block,ntrace,ncat) ::     &
          tmask            ! = 1. if tracer is present, = 0. otherwise
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,0:ncat) ::     &
          mflxe, mflxn     ! mass transports across E and N cell edges
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrace,ncat) ::     &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrace,ncat) :: &
          mtflxe, mtflxn   ! mass*tracer transports across E and N cell edges
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ngroups) ::     &
@@ -537,7 +530,6 @@
     !-------------------------------------------------------------------
 
          ! open water
-
          call construct_fields(nx_block,            ny_block,           &
                                ilo, ihi,            jlo, jhi,           &
                                nghost,              ntrace,             &
@@ -555,7 +547,6 @@
                                mmask (:,:,0) )
 
          ! ice categories
-
          do n = 1, ncat
 
             call construct_fields(nx_block,            ny_block,            &
@@ -578,7 +569,6 @@
                                   tmask(:,:,:,n) )
 
          enddo                  ! n
-
        
     !-------------------------------------------------------------------
     ! Given velocity field at cell corners, compute departure points
@@ -715,7 +705,6 @@
     !-------------------------------------------------------------------
 
          ! open water
-
          call transport_integrals(nx_block,          ny_block,           &
                                   ntrace,            icellsng (:,iblk),  &
                                   indxing(:,:), indxjng(:,:),  &
@@ -798,7 +787,6 @@
     !-------------------------------------------------------------------
 
          ! open water
-
          call update_fields (nx_block,           ny_block,          &
                              ilo, ihi,           jlo, jhi,          &
                              ntrace,                                &
@@ -819,7 +807,6 @@
                                   this_block%j_glob(jstop) 
             call abort_ice ('ice remap_transport: negative area (open water)')
          endif
-
 
          ! ice categories
          do n = 1, ncat
@@ -3705,8 +3692,6 @@
                             * tm(i,j,nt2) * tm(i,j,nt1) * tm(i,j,nt)
                enddo            ! i
                enddo            ! j
-
- 
             endif               ! depend(nt) = 0
          enddo                  ! nt
       endif                     ! present(tm)
@@ -3782,7 +3767,6 @@
                   tm(i,j,nt) = (mtold(i,j,nt) - w1*tarear(i,j))   &
                                 / mm(i,j)
                enddo            ! ij
-
 
             elseif (tracer_type(nt)==2) then ! depends on another tracer
                nt1 = depend(nt)

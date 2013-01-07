@@ -19,6 +19,7 @@
 ! 2006 ECH: Accepted some CCSM code into mainstream CICE
 !           Converted to free source form (F90) 
 ! 2008 ECH: Rearranged order in which internal stresses are written and read
+! 2010 ECH: Changed eice, esno to qice, qsno
 ! 2012 ECH: Added routines for reading/writing extended grid
 ! 
 ! !INTERFACE:
@@ -45,7 +46,7 @@
 
       character (len=char_len) :: &
          restart_file  , & ! output file for restart dump
-         runtype           ! initial, continue, hybrid or branch
+         runtype           ! initial, continue, hybrid, branch or bering
 
       character (len=char_len_long) :: &
          restart_dir   , & ! directory name for restart dump
@@ -149,15 +150,19 @@
          call ice_write(nu_dump,0,vicen(:,:,n,:),'ruf8',diag)
          call ice_write(nu_dump,0,vsnon(:,:,n,:),'ruf8',diag)
          call ice_write(nu_dump,0,trcrn(:,:,nt_Tsfc,n,:),'ruf8',diag)
-      enddo
 
-      do k=1,ntilyr
-         call ice_write(nu_dump,0,eicen(:,:,k,:),'ruf8',diag)
-      enddo
+         do k=1,nilyr
+            call ice_write(nu_dump,0,trcrn(:,:,nt_sice+k-1,n,:),'ruf8',diag)
+         enddo
 
-      do k=1,ntslyr
-         call ice_write(nu_dump,0,esnon(:,:,k,:),'ruf8',diag)
-      enddo
+         do k=1,nilyr
+            call ice_write(nu_dump,0,trcrn(:,:,nt_qice+k-1,n,:),'ruf8',diag)
+         enddo
+
+         do k=1,nslyr
+            call ice_write(nu_dump,0,trcrn(:,:,nt_qsno+k-1,n,:),'ruf8',diag)
+         enddo
+      enddo ! ncat
 
       !-----------------------------------------------------------------
       ! velocity
@@ -246,11 +251,12 @@
       use ice_boundary
       use ice_domain_size
       use ice_domain
-      use ice_calendar, only: istep0, istep1, time, time_forc, calendar
+      use ice_calendar, only: istep0, istep1, time, time_forc, calendar, npt
+      use ice_dyn_evp, only: kdyn
       use ice_flux
       use ice_state
       use ice_grid, only: tmask
-      use ice_itd
+      use ice_itd, only: aggregate
       use ice_ocean, only: oceanmixed_ice
       use ice_work, only: work1, work_g1, work_g2
       use ice_gather_scatter, only: scatter_global_stress
@@ -316,21 +322,28 @@
                        field_loc_center, field_type_scalar)
          call ice_read(nu_restart,0,trcrn(:,:,nt_Tsfc,n,:),'ruf8',diag, &
                        field_loc_center, field_type_scalar)
-      enddo
 
-      if (my_task == master_task) &
-           write(nu_diag,*) 'min/max eicen for each layer'
-      do k=1,ntilyr
-         call ice_read(nu_restart,0,eicen(:,:,k,:),'ruf8',diag, &
-                       field_loc_center, field_type_scalar)
-      enddo
+         if (my_task == master_task) &
+              write(nu_diag,*) 'cat ',n, 'min/max sice for each layer'
+         do k=1,nilyr
+            call ice_read(nu_restart,0,trcrn(:,:,nt_sice+k-1,n,:),'ruf8',diag, &
+                          field_loc_center, field_type_scalar)
+         enddo
 
-      if (my_task == master_task) &
-           write(nu_diag,*) 'min/max esnon for each layer'
-      do k=1,ntslyr
-         call ice_read(nu_restart,0,esnon(:,:,k,:),'ruf8',diag, &
-                       field_loc_center, field_type_scalar)
-      enddo
+         if (my_task == master_task) &
+              write(nu_diag,*) 'cat ',n, 'min/max qice for each layer'
+         do k=1,nilyr
+            call ice_read(nu_restart,0,trcrn(:,:,nt_qice+k-1,n,:),'ruf8',diag, &
+                          field_loc_center, field_type_scalar)
+         enddo
+
+         if (my_task == master_task) &
+              write(nu_diag,*) 'cat ',n, 'min/max qsno for each layer'
+         do k=1,nslyr
+            call ice_read(nu_restart,0,trcrn(:,:,nt_qsno+k-1,n,:),'ruf8',diag, &
+                          field_loc_center, field_type_scalar)
+         enddo
+      enddo ! ncat
 
       !-----------------------------------------------------------------
       ! velocity
@@ -506,10 +519,6 @@
       !-----------------------------------------------------------------
 !!!      call cleanup_itd
 
-
-!echmod
-!      call restartfile_cesm
-
       !-----------------------------------------------------------------
       ! compute aggregate ice state and open water area
       !-----------------------------------------------------------------
@@ -521,14 +530,10 @@
                          trcrn(:,:,:,:,iblk),&
                          vicen(:,:,:,iblk),  &
                          vsnon(:,:,:,iblk),  &
-                         eicen(:,:,:,iblk),  &
-                         esnon(:,:,:,iblk),  &
                          aice (:,:,  iblk),  &
                          trcr (:,:,:,iblk),  &
                          vice (:,:,  iblk),  &
                          vsno (:,:,  iblk),  &
-                         eice (:,:,  iblk),  &
-                         esno (:,:,  iblk),  &
                          aice0(:,:,  iblk),  &
                          tmask(:,:,  iblk),  &
                          max_ntrcr,          &
@@ -537,6 +542,11 @@
          aice_init(:,:,iblk) = aice(:,:,iblk)
 
       enddo
+
+      ! if runtype is bering then need to correct npt for istep0
+      if (trim(runtype) == 'bering') then
+         npt = npt - istep0
+      endif
 
       end subroutine restartfile
 
@@ -630,14 +640,18 @@
          call ice_write_ext(nu_dump,0,vicen(:,:,n,:),'ruf8',diag)
          call ice_write_ext(nu_dump,0,vsnon(:,:,n,:),'ruf8',diag)
          call ice_write_ext(nu_dump,0,trcrn(:,:,nt_Tsfc,n,:),'ruf8',diag)
-      enddo
 
-      do k=1,ntilyr
-         call ice_write_ext(nu_dump,0,eicen(:,:,k,:),'ruf8',diag)
-      enddo
+         do k=1,nilyr
+            call ice_write_ext(nu_dump,0,trcrn(:,:,nt_sice+k-1,n,:),'ruf8',diag)
+         enddo
 
-      do k=1,ntslyr
-         call ice_write_ext(nu_dump,0,esnon(:,:,k,:),'ruf8',diag)
+         do k=1,nilyr
+            call ice_write_ext(nu_dump,0,trcrn(:,:,nt_qice+k-1,n,:),'ruf8',diag)
+         enddo
+
+         do k=1,nslyr
+            call ice_write_ext(nu_dump,0,trcrn(:,:,nt_qsno+k-1,n,:),'ruf8',diag)
+         enddo
       enddo
 
       !-----------------------------------------------------------------
@@ -805,20 +819,27 @@
                        field_loc_center, field_type_scalar)
          call ice_read_ext(nu_restart,0,trcrn(:,:,nt_Tsfc,n,:),'ruf8',diag, &
                        field_loc_center, field_type_scalar)
-      enddo
 
-      if (my_task == master_task) &
-           write(nu_diag,*) 'min/max eicen for each layer'
-      do k=1,ntilyr
-         call ice_read_ext(nu_restart,0,eicen(:,:,k,:),'ruf8',diag, &
-                       field_loc_center, field_type_scalar)
-      enddo
+         if (my_task == master_task) &
+              write(nu_diag,*) 'cat ',n, 'min/max sice for each layer'
+         do k=1,nilyr
+            call ice_read_ext(nu_restart,0,trcrn(:,:,nt_sice+k-1,n,:),'ruf8',diag, &
+                          field_loc_center, field_type_scalar)
+         enddo
 
-      if (my_task == master_task) &
-           write(nu_diag,*) 'min/max esnon for each layer'
-      do k=1,ntslyr
-         call ice_read_ext(nu_restart,0,esnon(:,:,k,:),'ruf8',diag, &
-                       field_loc_center, field_type_scalar)
+         if (my_task == master_task) &
+              write(nu_diag,*) 'cat ',n, 'min/max qice for each layer'
+         do k=1,nilyr
+            call ice_read_ext(nu_restart,0,trcrn(:,:,nt_qice+k-1,n,:),'ruf8',diag, &
+                          field_loc_center, field_type_scalar)
+         enddo
+
+         if (my_task == master_task) &
+              write(nu_diag,*) 'cat ',n, 'min/max qsno for each layer'
+         do k=1,nslyr
+            call ice_read_ext(nu_restart,0,trcrn(:,:,nt_qsno+k-1,n,:),'ruf8',diag, &
+                          field_loc_center, field_type_scalar)
+         enddo
       enddo
 
       !-----------------------------------------------------------------
@@ -949,14 +970,10 @@
                          trcrn(:,:,:,:,iblk),&
                          vicen(:,:,:,iblk),  &
                          vsnon(:,:,:,iblk),  &
-                         eicen(:,:,:,iblk),  &
-                         esnon(:,:,:,iblk),  &
                          aice (:,:,  iblk),  &
                          trcr (:,:,:,iblk),  &
                          vice (:,:,  iblk),  &
                          vsno (:,:,  iblk),  &
-                         eice (:,:,  iblk),  &
-                         esno (:,:,  iblk),  &
                          aice0(:,:,  iblk),  &
                          tmask(:,:,  iblk),  &
                          max_ntrcr,          &

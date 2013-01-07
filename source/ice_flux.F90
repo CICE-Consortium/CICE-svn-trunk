@@ -29,6 +29,9 @@
       use ice_blocks
       use ice_domain_size
       use ice_constants
+      use ice_zbgc_public, only: fsicen, fsicen_g, flux_bio, flux_bio_g,  &
+                          flux_bio_gbm, flux_bio_g_gbm, fsice, fsice_g, &
+                          upNO, upNH, growN, growNp
 !
 !EOP
 !
@@ -224,6 +227,17 @@
       logical (kind=log_kind) :: &
          update_ocn_f ! if true, update fresh water and salt fluxes
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         melttn      , & ! top melt in category n (m)
+         meltbn      , & ! bottom melt in category n (m)
+         congeln     , & ! congelation ice formation in category n (m)
+         snoicen         ! snow-ice formation in category n (m)
+
+      ! for biogeochemistry
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         hin_old     , & ! old ice thickness
+         dsnown          ! change in snow thickness in category n (m)
+
       !-----------------------------------------------------------------
       ! quantities passed from ocean mixed layer to atmosphere
       ! (for running with CAM)
@@ -257,6 +271,7 @@
          melts , & ! snow melt                (m/step-->cm/day)
          meltb , & ! basal ice melt           (m/step-->cm/day)
          meltl , & ! lateral ice melt         (m/step-->cm/day)
+         dsnow,  & ! change in snow thickness (m/step-->cm/day)
          daidtt, & ! ice area tendency thermo.   (s^-1)
          dvidtt, & ! ice volume tendency thermo. (m/s)
          mlt_onset, &! day of year that sfc melting begins
@@ -279,7 +294,9 @@
          fresh_gbm, & ! fresh water flux to ocean (kg/m^2/s)
          fsalt_gbm, & ! salt flux to ocean (kg/m^2/s)
          fhocn_gbm, & ! net heat flux to ocean (W/m^2)
-         fswthru_gbm  ! shortwave penetrating to ocean (W/m^2)
+         fswthru_gbm, &  ! shortwave penetrating to ocean (W/m^2)
+         fsice_gbm, & ! salt flux to ocean from salinity model (kg/m^2/s)
+         fsice_g_gbm  ! gravity drainage salt flux to ocean (kg/m^2/s)
 
       !-----------------------------------------------------------------
       ! internal
@@ -291,6 +308,10 @@
          coszen  , & ! cosine solar zenith angle, < 0 for sun below horizon 
          rdg_conv, & ! convergence term for ridging (1/s)
          rdg_shear   ! shear term for ridging (1/s)
+ 
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nilyr+1,max_blocks) :: &
+         salinz    ,&   ! initial salinity  profile (ppt)   
+         Tmltz          ! initial melting temperature (^oC)
 
 !=======================================================================
 
@@ -323,8 +344,8 @@
       integer (kind=int_kind) :: i, j, n, iblk
 
       logical (kind=log_kind), parameter ::     & 
-!         l_winter = .true.   ! winter/summer default switch
-         l_winter = .false.   ! winter/summer default switch
+         l_winter = .false. , &  ! winter/summer default switch
+         l_spring = .false.      ! spring example
 
       real (kind=dbl_kind) :: fcondtopn_d(6), fsurfn_d(6)
 
@@ -342,7 +363,23 @@
       vatm  (:,:,:) = c5
       strax (:,:,:) = 0.05_dbl_kind
       stray (:,:,:) = 0.05_dbl_kind
-      if (l_winter) then
+      if (l_spring) then
+         !typical spring values
+         potT  (:,:,:) = 263.15_dbl_kind  ! air potential temp (K)
+         Tair  (:,:,:) = 263.15_dbl_kind  ! air temperature  (K)
+         Qa    (:,:,:) = 0.001_dbl_kind ! specific humidity (kg/kg)
+         swvdr (:,:,:) = 25._dbl_kind    !25 shortwave radiation (W/m^2)
+         swvdf (:,:,:) = 25._dbl_kind    !25 shortwave radiation (W/m^2)
+         swidr (:,:,:) = 25._dbl_kind    !25 shortwave radiation (W/m^2)
+         swidf (:,:,:) = 25._dbl_kind    !25 shortwave radiation (W/m^2)
+         flw   (:,:,:) = 230.0_dbl_kind  ! incoming longwave rad (W/m^2)
+         fsnow (:,:,:) = c0              ! snowfall rate (kg/m2/s)
+         do n = 1, ncat                  ! surface heat flux (W/m^2)
+            fsurfn_f(:,:,n,:) = fsurfn_d(n)
+         enddo
+         fcondtopn_f(:,:,:,:) = 0.0_dbl_kind ! conductive heat flux (W/m^2)
+         flatn_f(:,:,:,:) = -1.0_dbl_kind    ! latent heat flux (W/m^2)
+      elseif (l_winter) then
          !typical winter values
          potT  (:,:,:) = 253.0_dbl_kind  ! air potential temp (K)
          Tair  (:,:,:) = 253.0_dbl_kind  ! air temperature  (K)
@@ -389,12 +426,19 @@
       uocn  (:,:,:) = c0              ! surface ocean currents (m/s)
       vocn  (:,:,:) = c0
       frzmlt(:,:,:) = c0              ! freezing/melting potential (W/m^2)
-      sss   (:,:,:) = 34.0_dbl_kind   ! sea surface salinity (o/oo)
+#if defined flushing_notz
+      Tf    (:,:,:) = -1.8_dbl_kind
+!echmod: using ice_therm_mushy causes circular dependency
+!      sss   (:,:,:) = liquidus_brine_salinity_mush(-1.8_dbl_kind)
+      sss   (:,:,:) = -1.8_dbl_kind/(-1.8_dbl_kind*p001 + (c1/-18.48_dbl_kind))
+#else
+      sss   (:,:,:) = 34.0_dbl_kind   ! sea surface salinity (ppt)
       if (trim(Tfrzpt) == 'constant') then
-         Tf    (:,:,:) = -1.8_dbl_kind   ! freezing temp (C)     
+         Tf    (:,:,:) = -1.8_dbl_kind   ! freezing temp (C)
       else ! default:  Tfrzpt = 'linear_S'
          Tf    (:,:,:) = -depressT*sss(:,:,:)  ! freezing temp (C)
       endif
+#endif
 #ifndef CICE_IN_NEMO
       sst   (:,:,:) = Tf(:,:,:)       ! sea surface temp (C)
 #endif
@@ -430,6 +474,14 @@
       fsalt   (:,:,:) = c0
       fhocn   (:,:,:) = c0
       fswthru (:,:,:) = c0
+ 
+      flux_bio (:,:,:,:) = c0 ! bgc
+      flux_bio_g (:,:,:,:) = c0
+
+      upNO  (:,:,:,:) = c0
+      upNH  (:,:,:,:) = c0
+      growNp(:,:,:,:) = c0
+      growN (:,:,:,:,:) = c0
 
       !-----------------------------------------------------------------
       ! derived or computed fields
@@ -525,6 +577,15 @@
       fhocn    (:,:,:)   = c0
       fswthru  (:,:,:)   = c0
       faero_ocn(:,:,:,:) = c0
+ 
+      fsice(:,:,:)  = c0      ! salt flux
+      fsice_g(:,:,:)  = c0    ! salt flux
+
+      flux_bio (:,:,:,:) = c0  ! bgc
+      flux_bio_g (:,:,:,:) = c0 
+
+      upNO  (:,:,:,:) = c0
+      upNH  (:,:,:,:) = c0
 
       end subroutine init_flux_ocn
 
@@ -561,6 +622,7 @@
       congel (:,:,:) = c0
       frazil (:,:,:) = c0
       snoice (:,:,:) = c0
+      dsnow  (:,:,:) = c0
       meltt  (:,:,:) = c0
       melts  (:,:,:) = c0
       meltb  (:,:,:) = c0
@@ -578,7 +640,12 @@
       albice (:,:,:) = c0
       albsno (:,:,:) = c0
       albpnd (:,:,:) = c0
+      fsice_gbm  (:,:,:) = c0
+      fsice_g_gbm  (:,:,:) = c0
       
+      fsicen(:,:,:,:) = c0    ! salt flux per category into ocean (kg/m^2/s)
+      fsicen_g(:,:,:,:) = c0  
+
       end subroutine init_history_therm
 
 !=======================================================================
@@ -809,7 +876,7 @@
 ! !INTERFACE:
 !
       subroutine scale_fluxes (nx_block, ny_block, &
-                               tmask,              &
+                               tmask,    nbltrcr,  &
                                aice,     Tf,       &
                                Tair,     Qa,       &
                                strairxT, strairyT, &
@@ -822,7 +889,9 @@
                                faero_ocn,          &
                                alvdr,    alidr,    &
                                alvdf,    alidf,    &
-                               fsurf,    fcondtop )
+                               fsice,    fsice_g,  &
+                               flux_bio, flux_bio_g,&
+                               fsurf,    fcondtop)
 !
 ! !REVISION HISTORY:
 !
@@ -833,7 +902,8 @@
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
-          nx_block, ny_block    ! block dimensions
+          nx_block, ny_block, &    ! block dimensions
+          nbltrcr                  ! number of biology tracers
 
       logical (kind=log_kind), dimension (nx_block,ny_block), &
           intent(in) :: &
@@ -865,11 +935,19 @@
           alvdr   , & ! visible, direct   (fraction)
           alidr   , & ! near-ir, direct   (fraction)
           alvdf   , & ! visible, diffuse  (fraction)
-          alidf       ! near-ir, diffuse  (fraction)
+          alidf   , &    ! near-ir, diffuse  (fraction)
+          fsice   , & ! salt flux to ocean with prognositic salinity (kg/m2/s)
+          fsice_g     ! Gravity drainage salt flux to ocean (kg/m2/s)
+
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nbltrcr), &
+          intent(inout):: &
+          flux_bio   , & ! tracer flux to ocean from biology (mmol/m2/s)
+          flux_bio_g  ! Gravity drainage tracer flux to ocean (mmol/m2/s)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
           intent(inout):: &
-          faero_ocn   ! aerosol flux to ocean            (kg/m2/s)
+          faero_ocn   ! aersol flux to ocean            (kg/m2/s)
 
       ! For hadgem drivers. Assumes either both fields are passed or neither
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
@@ -883,7 +961,6 @@
 
       integer (kind=int_kind) :: &
           i, j    ! horizontal indices
-
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -909,6 +986,10 @@
             alidr   (i,j) = alidr   (i,j) * ar
             alvdf   (i,j) = alvdf   (i,j) * ar
             alidf   (i,j) = alidf   (i,j) * ar
+            fsice   (i,j) = fsice   (i,j) * ar
+            fsice_g (i,j) = fsice_g (i,j) * ar
+            flux_bio   (i,j,:) = flux_bio   (i,j,:) * ar
+            flux_bio_g (i,j,:) = flux_bio_g (i,j,:) * ar
             faero_ocn(i,j,:) = faero_ocn(i,j,:) * ar
          else                   ! zero out fluxes
             strairxT(i,j) = c0
@@ -930,6 +1011,10 @@
             alvdf   (i,j) = c0 
             alidf   (i,j) = c0
             faero_ocn(i,j,:) = c0
+            fsice   (i,j) = c0
+            fsice_g (i,j) = c0
+            flux_bio   (i,j,:) = c0
+            flux_bio_g (i,j,:) = c0
          endif                  ! tmask and aice > 0
       enddo                     ! i
       enddo                     ! j

@@ -39,13 +39,12 @@
       use ice_exit, only : abort_ice     
       use ice_flux
       use ice_fileunits
-      use ice_itd, only: ilyr1, slyr1
       use ice_kinds_mod
       use ice_read_write
       use ice_restart, only: lenstr, restart_dir, restart_file, &
                              pointer_file, runtype
       use ice_state
-      use ice_therm_vertical
+      use ice_therm_shared
       use ice_blocks
 !
 !EOP
@@ -87,7 +86,8 @@
 !
 !EOP
 !
-      if (trim(runtype) == 'continue') restart_pond_topo = .true.
+      if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') &
+           restart_pond_topo = .true.
       if (restart_pond_topo) then
          call read_restart_pond_topo
       else
@@ -110,7 +110,6 @@
                                     aice,    aicen, &
                                     vice,    vicen, &
                                     vsno,    vsnon, &
-                                    eicen,   esnon, &
                                     trcrn,          &
                                     potT,    meltt, &
                                     fsurf,   fpond)
@@ -148,14 +147,6 @@
          intent(inout) :: &
          vicen      ! ice volume, per category (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
-         intent(inout) :: &
-         eicen      ! ice enthalpy, per category
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), &
-         intent(inout) :: &
-         esnon      ! snow enthalpy, per category
-
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &
          intent(inout) :: &
          trcrn      ! ice tracer array
@@ -173,6 +164,10 @@
          Tsfcn, & ! ice/snow surface temperature (C)
          volpn, & ! pond volume per unit area, per category (m)
          vuin     ! water-equivalent volume of ice lid on melt pond ('upper ice', m)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,nilyr) :: &
+         qicen, & ! ice layer enthalpy (J m-3)
+         sicen    ! salinity (ppt)   
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
          apondn,& ! pond area fraction, per category
@@ -197,9 +192,6 @@
 
       integer (kind=int_kind), dimension (ncat) :: &
          kcells          ! cells where ice lid combines with vice
-
-      real (kind=dbl_kind), dimension (nx_block*ny_block,nilyr) :: &
-         qin             ! ice layer enthalpy (J m-3)
 
       real (kind=dbl_kind), dimension (nx_block*ny_block,nilyr+1) :: &
          zi1         , & ! depth of ice layer boundaries (m)
@@ -248,6 +240,16 @@
          indxjj(:,n) = 0
          kcells  (n) = 0
       enddo
+      do n = 1, ncat
+         do k = 1, nilyr
+            do j = jlo, jhi
+            do i = ilo, ihi
+               qicen(i,j,n,k) = trcrn(i,j,nt_qice+k-1,n) 
+               sicen(i,j,n,k) = trcrn(i,j,nt_sice+k-1,n) 
+            enddo
+            enddo
+         enddo
+      enddo
 
       ! The freezing temperature for meltponds is assumed slightly below 0C,
       ! as if meltponds had a little salt in them.  The salt budget is not
@@ -287,7 +289,8 @@
          ! calculate pond area and depth
          !--------------------------------------------------------------
          call pond_area(aice(i,j),vice(i,j),vsno(i,j), &
-                   aicen(i,j,:), vicen(i,j,:), vsnon(i,j,:), eicen(i,j,:), &
+                   aicen(i,j,:), vicen(i,j,:), vsnon(i,j,:), &
+                   qicen(i,j,:,:), sicen(i,j,:,:), &
                    volpn(i,j,:), volp(i,j), &
                    apondn(i,j,:),hpondn(i,j,:), dvn)
 
@@ -442,7 +445,7 @@
 ! !INTERFACE:
 !
       subroutine pond_area(aice,vice,vsno, &
-                           aicen, vicen, vsnon, eicen, &
+                           aicen, vicen, vsnon, qicen, sicen, &
                            volpn, volp,  &
                            apondn,hpondn,dvolp)
 !
@@ -456,8 +459,9 @@
       real (kind=dbl_kind), dimension(ncat), intent(in) :: &
          aicen, vicen, vsnon
 
-      real (kind=dbl_kind), dimension(ntilyr), intent(in) :: &
-         eicen
+      real (kind=dbl_kind), dimension(ncat,nilyr), intent(in) :: &
+         qicen, &
+         sicen
 
       real (kind=dbl_kind), dimension(ncat), intent(inout) :: &
          volpn
@@ -638,7 +642,7 @@
       if (pressure_head > c0) then
       do n = 1, ncat-1
          if (hicen(n) /= c0) then
-            call permeability_phi(eicen(ilyr1(n):ilyr1(n)+nilyr-1),vicen(n),perm)
+            call permeability_phi(qicen(n,:),sicen(n,:),vicen(n),perm)
             if (perm > c0) permflag = 1
             drain = perm*apondn(n)*pressure_head*dt / (viscosity*hicen(n))
             dvolp = dvolp + min(drain, volp)
@@ -881,14 +885,15 @@
 !
 ! !INTERFACE:
 !
-      subroutine permeability_phi(eicen, vicen, perm)
+      subroutine permeability_phi(qicen, sicen, vicen, perm)
 !
 ! !USES:
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
       real (kind=dbl_kind), dimension(nilyr), intent(in) :: &
-         eicen     ! energy of melting for each ice layer (J/m2)
+         qicen, &  ! energy of melting for each ice layer (J/m2)
+         sicen     ! salinity (ppt)   
     
       real (kind=dbl_kind), intent(in) :: &
          vicen     ! ice volume
@@ -899,8 +904,8 @@
 !EOP
 !
       real (kind=dbl_kind) ::   &
-         Sbr, &    ! brine salinity
-         qin       ! enthalpy
+         Tmlt, &   ! melting temperature 
+         Sbr       ! brine salinity
 
       real (kind=dbl_kind), dimension(nilyr) ::   &
          Tin, &    ! ice temperature
@@ -913,8 +918,8 @@
       !-----------------------------------------------------------------
 
       do k = 1,nilyr
-         qin    = eicen(k)*real(nilyr,kind=dbl_kind) / vicen
-         Tin(k) = calculate_Tin_from_qin(qin,Tmlt(k))
+         Tmlt = sicen(k) * depressT
+         Tin(k) = calculate_Tin_from_qin(qicen(k),Tmlt)
       enddo
 
       !-----------------------------------------------------------------
@@ -929,7 +934,7 @@
                   -21.8_dbl_kind     * Tin(k)    &
                   - 0.919_dbl_kind   * Tin(k)**2 &
                   - 0.01878_dbl_kind * Tin(k)**3
-            phi(k) = salin(k)/Sbr ! liquid fraction
+            phi(k) = sicen(k)/Sbr ! liquid fraction
          enddo ! k
        
       else
@@ -939,7 +944,7 @@
             Sbr = -17.6_dbl_kind    * Tin(k)    &
                   - 0.389_dbl_kind  * Tin(k)**2 &
                   - 0.00362_dbl_kind* Tin(k)**3
-            phi(k) = salin(k)/Sbr ! liquid fraction
+            phi(k) = sicen(k)/Sbr ! liquid fraction
          enddo
 
       endif

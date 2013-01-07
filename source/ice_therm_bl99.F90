@@ -23,7 +23,7 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size, only: nilyr, nslyr, ntilyr, ntslyr, max_ntrcr, n_aero
+      use ice_domain_size, only: nilyr, nslyr, max_ntrcr, n_aero
       use ice_constants
       use ice_fileunits, only: nu_diag
       use ice_therm_shared
@@ -41,336 +41,6 @@
 !=======================================================================
 
       contains
-
-!=======================================================================
-!BOP
-!
-! !IROUTINE: set_state_var - initialize single-category state variables
-!
-! !INTERFACE:
-!
-      subroutine set_state_var (nx_block, ny_block, &
-                                ilo, ihi, jlo, jhi, &
-                                iglob,    jglob,    &
-                                ice_ic,   tmask,    &
-                                ULON,     ULAT, &
-                                Tair,     sst,  &
-                                Tf,       &
-                                aicen,    trcrn, &
-                                vicen,    vsnon, &
-                                eicen,    esnon) 
-!
-! !DESCRIPTION:
-!
-! Initialize state in each ice thickness category
-!
-! !REVISION HISTORY:
-!
-! authors: C. M. Bitz
-!          William H. Lipscomb, LANL
-!
-! !USES:
-!
-      use ice_kinds_mod
-      use ice_domain_size
-      use ice_state, only: nt_Tsfc
-      use ice_itd, only: ilyr1, slyr1, hin_max
-      use ice_grid, only: grid_type
-      use ice_forcing, only: atm_data_type
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-      integer (kind=int_kind), intent(in) :: &
-         nx_block, ny_block, & ! block dimensions
-         ilo, ihi          , & ! physical domain indices
-         jlo, jhi          , & !
-         iglob(nx_block)   , & ! global indices
-         jglob(ny_block)       !
-
-      character(len=char_len_long), intent(in) :: & 
-         ice_ic      ! method of ice cover initialization
-
-      logical (kind=log_kind), dimension (nx_block,ny_block), &
-         intent(in) :: &
-         tmask      ! true for ice/ocean cells
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), &
-         intent(in) :: &
-         ULON   , & ! latitude of velocity pts (radians)
-         ULAT       ! latitude of velocity pts (radians)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         Tair    , & ! air temperature  (K)
-         Tf      , & ! freezing temperature (C) 
-         sst         ! sea surface temperature (C) 
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
-         intent(out) :: &
-         aicen , & ! concentration of ice
-         vicen , & ! volume per unit area of ice          (m)
-         vsnon     ! volume per unit area of snow         (m)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &
-         intent(out) :: &
-         trcrn     ! ice tracers
-                   ! 1: surface temperature of ice/snow (C)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
-         intent(out) :: &
-         eicen     ! energy of melting for each ice layer  (J/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), &
-         intent(out) :: &
-         esnon     ! energy of melting for each ice layer  (J/m^2)
-!
-!EOP
-!
-      integer (kind=int_kind) :: &
-         i, j        , & ! horizontal indices
-         ij          , & ! horizontal index, combines i and j loops
-         k           , & ! ice layer index
-         n           , & ! thickness category index
-         it          , & ! tracer index
-         icells          ! number of cells initialized with ice
-
-      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
-         indxi, indxj    ! compressed indices for cells with aicen > puny
-
-      real (kind=dbl_kind) :: &
-         slope, Ti, sum, hbar, &
-         ainit(ncat), &
-         hinit(ncat)
-
-      real (kind=dbl_kind), parameter :: &
-         hsno_init = 0.20_dbl_kind   , & ! initial snow thickness (m)
-         edge_init_nh =  70._dbl_kind, & ! initial ice edge, N.Hem. (deg) 
-         edge_init_sh = -60._dbl_kind    ! initial ice edge, S.Hem. (deg)
-
-      indxi(:) = 0
-      indxj(:) = 0
-
-      ! Initialize state variables.
-      ! If restarting, these values are overwritten.
-
-      do n = 1, ncat
-         do j = 1, ny_block
-         do i = 1, nx_block
-            aicen(i,j,n) = c0
-            vicen(i,j,n) = c0
-            vsnon(i,j,n) = c0
-            trcrn(i,j,nt_Tsfc,n) = Tf(i,j)  ! surface temperature
-            if (max_ntrcr >= 2) then
-               do it = 2, max_ntrcr
-                  trcrn(i,j,it,n) = c0
-               enddo
-            endif
-         enddo
-         enddo
-      enddo
-      eicen(:,:,:) = c0
-      esnon(:,:,:) = c0
-
-      if (trim(ice_ic) == 'default') then
-
-      !-----------------------------------------------------------------
-      ! Place ice where ocean surface is cold.
-      ! Note: If SST is not read from a file, then the ocean is assumed
-      !       to be at its freezing point everywhere, and ice will
-      !       extend to the prescribed edges.
-      !-----------------------------------------------------------------
-
-         if (trim(atm_data_type) == 'box') then
-
-            hbar = c2  ! initial ice thickness
-            do n = 1, ncat
-               hinit(n) = c0
-               ainit(n) = c0
-               if (hbar > hin_max(n-1) .and. hbar < hin_max(n)) then
-                  hinit(n) = hbar
-                  ainit(n) = 0.50 !echmod symm
-               endif
-            enddo
-
-         else
-
-      ! initial category areas in cells with ice
-         hbar = c3  ! initial ice thickness with greatest area
-                    ! Note: the resulting average ice thickness 
-                    ! tends to be less than hbar due to the
-                    ! nonlinear distribution of ice thicknesses 
-         sum = c0
-         do n = 1, ncat
-            if (n < ncat) then
-               hinit(n) = p5*(hin_max(n-1) + hin_max(n)) ! m
-            else                ! n=ncat
-               hinit(n) = (hin_max(n-1) + c1) ! m
-            endif
-            ! parabola, max at h=hbar, zero at h=0, 2*hbar
-            ainit(n) = max(c0, (c2*hbar*hinit(n) - hinit(n)**2))
-            sum = sum + ainit(n)
-         enddo
-         do n = 1, ncat
-            ainit(n) = ainit(n) / (sum + puny/ncat) ! normalize
-         enddo
-
-         endif ! atm_data_type
-
-         if (trim(grid_type) == 'rectangular') then
-
-         ! place ice on left side of domain
-         icells = 0
-         do j = jlo, jhi
-         do i = ilo, ihi
-            if (tmask(i,j)) then
-               if (ULON(i,j) < -50./rad_to_deg) then
-                  icells = icells + 1
-                  indxi(icells) = i
-                  indxj(icells) = j
-               endif            ! ULON
-            endif               ! tmask
-         enddo                  ! i
-         enddo                  ! j
-
-         else
-
-         ! place ice at high latitudes where ocean sfc is cold
-         icells = 0
-         do j = jlo, jhi
-         do i = ilo, ihi
-            if (tmask(i,j)) then
-               ! place ice in high latitudes where ocean sfc is cold
-               if ( (sst (i,j) <= Tf(i,j)+p2) .and. &
-                    (ULAT(i,j) < edge_init_sh/rad_to_deg .or. &
-                     ULAT(i,j) > edge_init_nh/rad_to_deg) ) then
-                  icells = icells + 1
-                  indxi(icells) = i
-                  indxj(icells) = j
-               endif            ! cold surface
-            endif               ! tmask
-         enddo                  ! i
-         enddo                  ! j
-
-         endif                  ! rectgrid
-
-         do n = 1, ncat
-
-            ! ice volume, snow volume
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-
-               aicen(i,j,n) = ainit(n)
-
-               if (trim(atm_data_type) == 'box') then
-                  if (hinit(n) > c0) then
-!                  ! constant slope from 0 to 1 in x direction
-!                     aicen(i,j,n) = (real(iglob(i), kind=dbl_kind)-p5) &
-!                                  / (real(nx_global,kind=dbl_kind))
-!                  ! constant slope from 0 to 0.5 in x direction
-!                     aicen(i,j,n) = (real(iglob(i), kind=dbl_kind)-p5) &
-!                                  / (real(nx_global,kind=dbl_kind)) * p5
-                  ! quadratic
-!                     aicen(i,j,n) = max(c0,(real(iglob(i), kind=dbl_kind)-p5) &
-!                                         / (real(nx_global,kind=dbl_kind)) &
-!                                         * (real(jglob(j), kind=dbl_kind)-p5) &
-!                                         / (real(ny_global,kind=dbl_kind)) * p5)
-                     aicen(i,j,n) = max(c0,(real(nx_global, kind=dbl_kind) &
-                                         -  real(iglob(i), kind=dbl_kind)-p5) &
-                                         / (real(nx_global,kind=dbl_kind)) &
-                                         * (real(ny_global, kind=dbl_kind) &
-                                         -  real(jglob(j), kind=dbl_kind)-p5) &
-                                         / (real(ny_global,kind=dbl_kind)) * p5)
-                  endif
-                  vicen(i,j,n) = hinit(n) * aicen(i,j,n) ! m
-               else
-                  vicen(i,j,n) = hinit(n) * ainit(n) ! m
-               endif
-               vsnon(i,j,n) =min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
-            enddo               ! ij
-
-            ! surface temperature
-            if (calc_Tsfc) then
-        
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) !deg C
-               enddo
-
-            else    ! Tsfc is not calculated by the ice model
-
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  trcrn(i,j,nt_Tsfc,n) = Tf(i,j)   ! not used
-               enddo
-
-            endif       ! calc_Tsfc
-
-            ! other tracers (none at present)
-
-            if (heat_capacity) then
-
-               ! ice energy
-               do k = 1, nilyr
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
-
-                     ! assume linear temp profile and compute enthalpy
-                     slope = Tf(i,j) - trcrn(i,j,nt_Tsfc,n)
-                     Ti = trcrn(i,j,nt_Tsfc,n) &
-                        + slope*(real(k,kind=dbl_kind)-p5) &
-                                /real(nilyr,kind=dbl_kind)
-
-                     eicen(i,j,ilyr1(n)+k-1) = &
-                          -(rhoi * (cp_ice*(Tmlt(k)-Ti) &
-                          + Lfresh*(c1-Tmlt(k)/Ti) - cp_ocn*Tmlt(k))) &
-                          * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
-                  enddo            ! ij
-               enddo               ! nilyr
-
-               ! snow energy
-               do k = 1, nslyr
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
-
-                     Ti = min(c0, trcrn(i,j,nt_Tsfc,n))
-                     esnon(i,j,slyr1(n)+k-1) = -rhos*(Lfresh - cp_ice*Ti) &
-                                               *vsnon(i,j,n) &
-                                               /real(nslyr,kind=dbl_kind)
-                  enddo            ! ij
-               enddo               ! nslyr
-
-            else  ! one layer with zero heat capacity
-
-               ! ice energy
-               k = 1
-
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  eicen(i,j,ilyr1(n)+k-1) = &
-                          - rhoi * Lfresh * vicen(i,j,n)
-               enddo            ! ij
-
-               ! snow energy
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  esnon(i,j,slyr1(n)+k-1) = & 
-                          - rhos * Lfresh * vsnon(i,j,n)
-               enddo            ! ij
-
-            endif               ! heat_capacity
-         enddo                  ! ncat
-      endif                     ! ice_ic
-
-      end subroutine set_state_var
 
 !=======================================================================
 !BOP
@@ -395,27 +65,35 @@
 !
 ! !INTERFACE:
 !
-      subroutine add_new_ice (nx_block,  ny_block,   &
+      subroutine add_new_ice_bl99 (nx_block,  ny_block,   &
                               ntrcr,     icells,     &
                               indxi,     indxj,      &
                               tmask,     dt,         &
                               aicen,     trcrn,      &
-                              vicen,     eicen,      &
+                              vicen,                 &
                               aice0,     aice,       &
                               frzmlt,    frazil,     &
                               frz_onset, yday,       &
+                              update_ocn_f,          &
                               fresh,     fsalt,      &
-                              Tf,        l_stop,     &
-                              istop,     jstop)
+                              Tf,        sss,        &
+                              salinz,    l_stop,     &
+                              istop,     jstop,      &
+                              fsice, &
+                              flux_bio,  nbltrcr, &
+                              ocean_bio)
 !
 ! !USES:
 !
-      use ice_itd, only: hin_max, ilyr1, column_sum, &
+      use ice_itd, only: hin_max, column_sum, &
                          column_conservation_check
       use ice_state, only: nt_Tsfc, nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_aero, &
+                           nt_sice, nt_qice, &
                            nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
                            tr_iage, tr_FY, tr_lvl, tr_aero
-      use ice_flux, only: update_ocn_f
+      use ice_therm_shared, only: solve_Sin
+      use ice_zbgc, only: add_new_ice_bgc
+      use ice_zbgc_public, only: initbio_frac, rhosi
 
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -438,7 +116,8 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
          aice  , & ! total concentration of ice
          frzmlt, & ! freezing/melting potential (W/m^2)
-         Tf        ! freezing temperature (C)
+         Tf    , & ! freezing temperature (C)
+         sss       ! sea surface salinity (ppt)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(inout) :: &
@@ -449,10 +128,6 @@
          intent(inout) :: &
          trcrn     ! ice tracers
                    ! 1: surface temperature
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), &
-         intent(inout) :: &
-         eicen     ! energy of melting for each ice layer (J/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
@@ -468,11 +143,33 @@
       real (kind=dbl_kind), intent(in), optional :: &
          yday      ! day of year
 
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nilyr+1), intent(in) :: &
+         salinz     ! initial salinity profile
+      
+      logical (kind=log_kind), intent(in) :: &
+         update_ocn_f ! if true, update fresh water and salt fluxes
+
       logical (kind=log_kind), intent(out) :: &
          l_stop    ! if true, abort on return
 
       integer (kind=int_kind), intent(out) :: &
          istop, jstop    ! indices of grid cell where model aborts
+
+      ! BGC
+      integer (kind=int_kind), intent(in) :: &
+         nbltrcr         ! number of biology tracers
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout) :: &
+         fsice      ! salt flux to ocean from prognostic S (kg/m^2/s)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
+         intent(inout) :: &
+         flux_bio   ! tracer flux to ocean from biology (mmol/m^2/s) 
+        
+       real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
+         intent(in) :: &
+         ocean_bio   ! ocean concentration of biological tracer
 !
 !EOP
 !
@@ -485,22 +182,23 @@
       real (kind=dbl_kind), dimension (icells) :: &
          ai0new       , & ! area of new ice added to cat 1
          vi0new       , & ! volume of new ice added to cat 1
-         hsurp        , & ! thickness of new ice added to each cat
-         vlyr             ! ice layer volume
+         hsurp            ! thickness of new ice added to each cat
 
       real (kind=dbl_kind), dimension (icells) :: &
+         vice1        , & ! starting volume of existing ice
          vice_init, vice_final  ! ice volume summed over categories
+
+      real (kind=dbl_kind), dimension (icells,nilyr) :: &
+         qi0              ! frazil ice enthalpy
 
       real (kind=dbl_kind) :: &
          fnew         , & ! heat flx to open water for new ice (W/m^2)
          hi0new       , & ! thickness of new ice
          hi0max       , & ! max allowed thickness of new ice
-         qi0(nilyr)   , & ! frazil ice enthalpy
          qi0av        , & ! mean value of qi0 for new ice (J kg-1)
          vsurp        , & ! volume of new ice added to each cat
          vtmp         , & ! total volume of new and old ice
          area1        , & ! starting fractional area of existing ice
-         vice1        , & ! starting volume of existing ice
          alvl         , & ! starting level ice area
          rnilyr       , & ! real(nilyr)
          dfresh       , & ! change in fresh
@@ -511,12 +209,20 @@
          ij, m                  ! combined i/j horizontal indices
 
       integer (kind=int_kind), dimension (icells) :: &
-         indxij2,  indxij3  , & ! compressed i/j indices
+         indxij2,indxij3    , & ! compressed i/j indices
          indxi2, indxj2     , &
          indxi3, indxj3
 
       character (len=char_len) :: &
          fieldid           ! field identifier
+
+      ! BGC
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
+         aicen_init, &    ! fractional area of ice
+         vicen_init       ! volume per unit area of ice (m)
+
+      real (kind=dbl_kind), dimension (icells) :: &
+         vi0_init         ! volume of new ice
 
       l_stop = .false.
       istop = 0
@@ -537,6 +243,10 @@
                        ncat,                     &
                        vicen,    vice_init)
 
+      ! for bgc
+      aicen_init(:,:,:) = aicen(:,:,:)
+      vicen_init(:,:,:) = vicen(:,:,:)
+
       !-----------------------------------------------------------------
       ! Compute average enthalpy of new ice.
       !
@@ -544,19 +254,11 @@
       ! to do something like this:
       !  qi0(i,j,k) = -rhoi * (cp_ice*(Tmlt(k)-Tf(i,j))
       !             + Lfresh*(1.-Tmlt(k)/Tf(i,j)) - cp_ocn*Tmlt(k))
+      !
+      ! Compute the volume, area, and thickness of new ice.
       !-----------------------------------------------------------------
 
       rnilyr = real(nilyr,kind=dbl_kind)
-      qi0av = c0
-      do k = 1, nilyr
-         qi0(k) = -rhoi*Lfresh  ! note sign convention, qi < 0
-         qi0av  = qi0av + qi0(k)
-      enddo
-      qi0av = qi0av/rnilyr
-
-      !-----------------------------------------------------------------
-      ! Compute the volume, area, and thickness of new ice.
-      !-----------------------------------------------------------------
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -565,8 +267,16 @@
          i = indxi(ij)
          j = indxj(ij)
 
+         qi0av = c0
+         do k = 1, nilyr
+          qi0(ij,k) = -rhoi*Lfresh  ! note sign convention, qi < 0
+          qi0av  = qi0av + qi0(ij,k)
+         enddo
+         qi0av = qi0av/rnilyr
+
          fnew = max (frzmlt(i,j), c0)   ! fnew > 0 iff frzmlt > 0
          vi0new(ij) = -fnew*dt / qi0av ! note sign convention, qi < 0
+         vi0_init(ij) = vi0new(ij) ! for bgc
 
          ! increment ice volume
          vice_init(ij) = vice_init(ij) + vi0new(ij)
@@ -592,6 +302,14 @@
 
             fresh(i,j)      = fresh(i,j)      + dfresh
             fsalt(i,j)      = fsalt(i,j)      + dfsalt
+
+            ! bgc
+            fsice(i,j)      = fsice(i,j)  &
+                  - rhosi*vi0new(ij)/dt*p001*sss(i,j)*salt_loss
+            do k = 1, nbltrcr  ! only correct for dissolved tracers
+               flux_bio(i,j,k) = flux_bio(i,j,k) &
+                  - vi0new(ij)/dt*ocean_bio(i,j,k)*initbio_frac
+            enddo
          endif
 
       !-----------------------------------------------------------------
@@ -611,7 +329,7 @@
                   ! distribute excess volume over all categories (below)
                   hi0new = hi0max
                   ai0new(ij) = aice0(i,j)
-                  vsurp       = vi0new(ij) - ai0new(ij)*hi0new
+                  vsurp      = vi0new(ij) - ai0new(ij)*hi0new
                   hsurp(ij)  = vsurp / aice(i,j)
                   vi0new(ij) = ai0new(ij)*hi0new
                else
@@ -690,8 +408,6 @@
 
             ! update category volumes
             vicen(i,j,n) = vtmp
-            vlyr(m) = vsurp/rnilyr
-
          enddo                  ! ij
 
          do k = 1, nilyr
@@ -703,8 +419,19 @@
                j = indxj3(ij)
                m = indxij3(ij)
 
-               eicen(i,j,ilyr1(n)+k-1) = &
-                    eicen(i,j,ilyr1(n)+k-1) + qi0(k)*vlyr(m)
+               ! factor of nilyr cancels out
+               vsurp = hsurp(m) * aicen(i,j,n)  ! note - save this above?
+               vtmp = vicen(i,j,n) - vsurp      ! vicen is the new volume
+               if (vicen(i,j,n) > c0) then
+                  ! enthalpy
+                  trcrn(i,j,nt_qice+k-1,n) = &
+                 (trcrn(i,j,nt_qice+k-1,n)*vtmp + qi0(ij,k)*vsurp) / vicen(i,j,n)
+                  if (.not. solve_Sin) then !bgc
+                     ! Otherwise this is done for nt_bgc_S and mapped to nt_sice
+                     trcrn(i,j,nt_sice+k-1,n) = &
+                    (trcrn(i,j,nt_sice+k-1,n)*vtmp + salinz(i,j,k)*vsurp) / vicen(i,j,n) 
+                  endif
+               endif
             enddo               ! ij
          enddo                  ! k
 
@@ -723,14 +450,17 @@
          j = indxj2(ij)
          m = indxij2(ij)
 
-         area1 = aicen(i,j,1)   ! save
-         vice1 = vicen(i,j,1)   ! save
+         area1        = aicen(i,j,1)   ! save
+         vice1(ij)    = vicen(i,j,1)   ! save
          aicen(i,j,1) = aicen(i,j,1) + ai0new(m)
          aice0(i,j)   = aice0(i,j)   - ai0new(m)
          vicen(i,j,1) = vicen(i,j,1) + vi0new(m)
 
          trcrn(i,j,nt_Tsfc,1) = &
             (trcrn(i,j,nt_Tsfc,1)*area1 + Tf(i,j)*ai0new(m))/aicen(i,j,1)
+!bgc    ! But Tf(i,j) is not consistent with salinz(1) and qi0(1)
+!bgc    ! trcrn(i,j,nt_Tsfc,1) = &
+!bgc    !     (trcrn(i,j,nt_Tsfc,1)*area1 + Ti0(ij)*ai0new(m))/aicen(i,j,1)
          trcrn(i,j,nt_Tsfc,1) = min (trcrn(i,j,nt_Tsfc,1), c0)
 
          if (tr_FY) then
@@ -742,14 +472,14 @@
          if (vicen(i,j,1) > puny) then
             if (tr_iage) &
                trcrn(i,j,nt_iage,1) = &
-              (trcrn(i,j,nt_iage,1)*vice1 + dt*vi0new(m))/vicen(i,j,1)
+              (trcrn(i,j,nt_iage,1)*vice1(ij) + dt*vi0new(m))/vicen(i,j,1)
 
             if (tr_aero) then
                do it = 1, n_aero
                   trcrn(i,j,nt_aero+2+4*(it-1),1) = &
-                  trcrn(i,j,nt_aero+2+4*(it-1),1)*vice1/vicen(i,j,1)
+                  trcrn(i,j,nt_aero+2+4*(it-1),1)*vice1(ij)/vicen(i,j,1)
                   trcrn(i,j,nt_aero+3+4*(it-1),1) = &
-                  trcrn(i,j,nt_aero+3+4*(it-1),1)*vice1/vicen(i,j,1)
+                  trcrn(i,j,nt_aero+3+4*(it-1),1)*vice1(ij)/vicen(i,j,1)
                enddo
             endif
 
@@ -758,7 +488,7 @@
                 trcrn(i,j,nt_alvl,1) = &
                (trcrn(i,j,nt_alvl,1)*area1 + ai0new(m))/aicen(i,j,1)
                 trcrn(i,j,nt_vlvl,1) = &
-               (trcrn(i,j,nt_vlvl,1)*vice1 + vi0new(m))/vicen(i,j,1)
+               (trcrn(i,j,nt_vlvl,1)*vice1(ij) + vi0new(m))/vicen(i,j,1)
             endif
 
             if (tr_pond_cesm .or. tr_pond_topo) then
@@ -772,8 +502,6 @@
                endif
             endif
          endif
-
-         vlyr(m)    = vi0new(m) / rnilyr
       enddo                     ! ij
 
       do k = 1, nilyr
@@ -784,9 +512,22 @@
             i = indxi2(ij)
             j = indxj2(ij)
             m = indxij2(ij)
-            eicen(i,j,k) = eicen(i,j,k) + qi0(k)*vlyr(m)
-         enddo
-      enddo
+
+            if (vicen(i,j,1) > c0) then
+            ! factor of nilyr cancels out
+               ! enthalpy
+               trcrn(i,j,nt_qice+k-1,1) = &
+              (trcrn(i,j,nt_qice+k-1,1)*vice1(ij) &
+                             + qi0(ij,k)*vi0new(m))/vicen(i,j,1) 
+              
+               ! salinity
+              if (.NOT. solve_Sin) & !bgc
+               trcrn(i,j,nt_sice+k-1,1) = &
+              (trcrn(i,j,nt_sice+k-1,1)*vice1(ij) &
+                            + salinz(i,j,k)*vi0new(m))/vicen(i,j,1)
+            endif    !vicen
+         enddo       !ij
+      enddo          !k
 
       call column_sum (nx_block, ny_block,       &
                        icells,   indxi,   indxj, &
@@ -802,7 +543,22 @@
                                       istop,     jstop)
       if (l_stop) return
 
-      end subroutine add_new_ice
+      !-----------------------------------------------------------------
+      ! Biogeochemistry
+      !-----------------------------------------------------------------     
+      call add_new_ice_bgc (nx_block,  ny_block,             &
+                           icells,     jcells,     kcells,   &
+                           indxi,      indxj,                &
+                           indxi2,     indxj2,     indxij2,  &
+                           indxi3,     indxj3,     indxij3,  &
+                           aicen_init, vicen_init, vi0_init, &
+                           aicen,      vicen,      vi0new,   &
+                           ntrcr,      trcrn,      nbltrcr,  &
+                           sss,        ocean_bio,            &
+                           hsurp,      &
+                           l_stop,     istop,      jstop)
+
+      end subroutine add_new_ice_bl99
 
 !=======================================================================
 !BOP
@@ -843,13 +599,15 @@
                                       hilyr,    hslyr,    &
                                       qin,      Tin,      &
                                       qsn,      Tsn,      &
+                                      Sin,                &
                                       Tsf,      Tbot,     &
                                       fsensn,   flatn,    &
                                       fswabsn,  flwoutn,  &
                                       fsurfn,             &
                                       fcondtopn,fcondbot, &
                                       einit,    l_stop,   &
-                                      istop,    jstop)
+                                      istop,    jstop,    &
+                                      hin,      einex)
 !
 ! !USES:
 !
@@ -884,10 +642,14 @@
          fswint      , & ! SW absorbed in ice interior below surface (W m-2)
          fswthrun        ! SW through ice to ocean         (W m-2)
 
+      real (kind=dbl_kind), dimension (icells), intent(inout) :: &
+         einex           ! excess energy from dqmat to ocean
+
       real (kind=dbl_kind), dimension (icells), intent(in) :: &
          hilyr       , & ! ice layer thickness (m)
          hslyr       , & ! snow layer thickness (m)
-         einit           ! initial energy of melting (J m-2)
+         einit       , & ! initial energy of melting (J m-2)
+         hin             ! initial ice thickness
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
          intent(inout) :: &
@@ -915,7 +677,8 @@
       real (kind=dbl_kind), dimension (icells,nilyr), &
          intent(inout) :: &
          qin         , & ! ice layer enthalpy (J m-3)
-         Tin             ! internal ice layer temperatures
+         Tin         , & ! internal ice layer temperatures
+         Sin             ! internal ice layer salinities
 
       real (kind=dbl_kind), dimension (icells,nslyr), &
          intent(inout) :: &
@@ -978,7 +741,8 @@
          Tin_init    , & ! Tin at beginning of time step
          Tin_start   , & ! Tin at start of iteration
          dTmat       , & ! Tin - matrix solution before limiting
-         dqmat           ! associated enthalpy difference
+         dqmat       , & ! associated enthalpy difference
+         Tmlts           ! melting temp, -depressT * salinity
 
       real (kind=dbl_kind), dimension (icells,nslyr) :: &
          Tsn_init    , & ! Tsn at beginning of time step
@@ -1031,6 +795,7 @@
          dfsens_dT (ij) = c0
          dflat_dT  (ij) = c0
          dflwout_dT(ij) = c0  
+         einex    (ij) = c0
          dt_rhoi_hlyr(ij) = dt / (rhoi*hilyr(ij))  ! hilyr > 0
          if (hslyr(ij) > hs_min/real(nslyr,kind=dbl_kind)) &
             l_snow(ij) = .true.
@@ -1050,8 +815,9 @@
 
       do k = 1, nilyr
          do ij = 1, icells
-            Tin_init (ij,k) = Tin(ij,k)   ! beginning of time step
-            Tin_start(ij,k) = Tin(ij,k)   ! beginning of iteration
+            Tin_init (ij,k) =  Tin(ij,k)   ! beginning of time step
+            Tin_start(ij,k) =  Tin(ij,k)   ! beginning of iteration
+            Tmlts    (ij,k) = -Sin(ij,k) * depressT
          enddo
       enddo
 
@@ -1066,7 +832,7 @@
                          l_snow,   icells,           &
                          indxi,    indxj,    indxij, &
                          hilyr,    hslyr,            &
-                         Tin,      kh )
+                         Tin,      kh,       Sin)
 
       !-----------------------------------------------------------------
       ! Check for excessive absorbed solar radiation that may result in
@@ -1089,11 +855,11 @@
             j = indxj(ij)
 
             Iswabs_tmp = c0 ! all Iswabs is moved into fswsfc
-            if (Tin_init(ij,k) <= Tmlt(k) - dTemp) then
+            if (Tin_init(ij,k) <= Tmlts(ij,k) - dTemp) then
                if (l_brine) then
-                  ci = cp_ice - Lfresh * Tmlt(k) / (Tin_init(ij,k)**2)
+                  ci = cp_ice - Lfresh * Tmlts(ij,k) / (Tin_init(ij,k)**2)
                   Iswabs_tmp = min(Iswabs(i,j,k), &
-                     frac*(Tmlt(k)-Tin_init(ij,k))*ci/dt_rhoi_hlyr(ij))
+                     frac*(Tmlts(ij,k)-Tin_init(ij,k))*ci/dt_rhoi_hlyr(ij))
                else
                   ci = cp_ice
                   Iswabs_tmp = min(Iswabs(i,j,k), &
@@ -1196,6 +962,7 @@
             dfsurf_dT(ij) = c0
             avg_Tsi  (ij) = c0
             enew     (ij) = c0
+            einex    (m) = c0
          enddo
 
       !-----------------------------------------------------------------
@@ -1212,7 +979,7 @@
                j = indxjj(ij)
 
                if (l_brine) then
-                  ci = cp_ice - Lfresh*Tmlt(k) /  &
+                  ci = cp_ice - Lfresh*Tmlts(m,k) /  &
                                 (Tin(m,k)*Tin_init(m,k))
                else
                   ci = cp_ice
@@ -1475,17 +1242,18 @@
       !-----------------------------------------------------------------
       ! Reload Tin from matrix solution
       !-----------------------------------------------------------------
+
                Tin(m,k) = Tmat(ij,k+1+nslyr)
 
-               if (l_brine .and. Tin(m,k) > Tmlt(k) - puny) then
-                  dTmat(m,k) = Tin(m,k) - Tmlt(k)
+               if (l_brine .and. Tin(m,k) > Tmlts(m,k) - puny) then
+                  dTmat(m,k) = Tin(m,k) - Tmlts(m,k)
 !echmod: return this energy to the ocean
                   dqmat(m,k) = rhoi * dTmat(m,k) &
-                             * (cp_ice - Lfresh * Tmlt(k)/Tin(m,k)**2)
+                             * (cp_ice - Lfresh * Tmlts(m,k)/Tin(m,k)**2)
 ! use this for the case that Tmlt changes by an amount dTmlt=Tmltnew-Tmlt(k)
 !                             + rhoi * dTmlt &
 !                             * (cp_ocn - cp_ice + Lfresh/Tin(m,k))
-                  Tin(m,k) = Tmlt(k)
+                  Tin(m,k) = Tmlts(m,k)
                   reduce_kh(m,k) = .true.
                endif
 
@@ -1521,13 +1289,14 @@
       ! Compute qin and increment new energy.
       !-----------------------------------------------------------------
                if (l_brine) then
-                  qin(m,k) = -rhoi * (cp_ice*(Tmlt(k)-Tin(m,k)) &
-                                      + Lfresh*(c1-Tmlt(k)/Tin(m,k)) &
-                                      - cp_ocn*Tmlt(k))
+                  qin(m,k) = -rhoi * (cp_ice*(Tmlts(m,k)-Tin(m,k)) &
+                                      + Lfresh*(c1-Tmlts(m,k)/Tin(m,k)) &
+                                      - cp_ocn*Tmlts(m,k))
                else
                   qin(m,k) = -rhoi * (-cp_ice*Tin(m,k) + Lfresh)
                endif
                enew(ij) = enew(ij) + hilyr(m) * (qin(m,k) + dqmat(m,k))
+               einex(m) = einex(m) + hilyr(m) * dqmat(m,k)
 
                Tin_start(m,k) = Tin(m,k) ! for next iteration
 
@@ -1586,6 +1355,9 @@
 
             fcondbot(m) = kh(m,1+nslyr+nilyr) * &
                           (Tin(m,nilyr) - Tbot(i,j))
+
+            ! Flux extra energy out of the ice
+            fcondbot(m) = fcondbot(m) + einex(m)/dt    
 
             ferr(m) = abs( (enew(ij)-einit(m))/dt &
                     - (fcondtopn(i,j) - fcondbot(m) + fswint(i,j)) )
@@ -1653,6 +1425,10 @@
                write(nu_diag,*) (Tsn_init(ij,k),k=1,nslyr)
                write(nu_diag,*) 'Initial ice temperatures:'
                write(nu_diag,*) (Tin_init(ij,k),k=1,nilyr)
+               write(nu_diag,*) 'Matrix ice temperature diff:'
+               write(nu_diag,*) (dTmat(ij,k),k=1,nilyr)
+               write(nu_diag,*) 'dqmat*hilyr/dt:'
+               write(nu_diag,*) (hilyr(ij)*dqmat(ij,k)/dt,k=1,nilyr)
                write(nu_diag,*) 'Final snow temperatures:'
                write(nu_diag,*) (Tsn(ij,k),k=1,nslyr)
                write(nu_diag,*) 'Matrix ice temperature diff:'
@@ -1662,12 +1438,14 @@
                write(nu_diag,*) 'Final ice temperatures:'
                write(nu_diag,*) (Tin(ij,k),k=1,nilyr)
                write(nu_diag,*) 'Ice melting temperatures:'
-               write(nu_diag,*) (Tmlt(k),k=1,nilyr)
+               write(nu_diag,*) (Tmlts(ij,k),k=1,nilyr)
                write(nu_diag,*) 'Ice bottom temperature:', Tbot(i,j)
                write(nu_diag,*) 'dT initial:'
-               write(nu_diag,*) (Tmlt(k)-Tin_init(ij,k),k=1,nilyr)
+               write(nu_diag,*) (Tmlts(ij,k)-Tin_init(ij,k),k=1,nilyr)
                write(nu_diag,*) 'dT final:'
-               write(nu_diag,*) (Tmlt(k)-Tin(ij,k),k=1,nilyr)
+               write(nu_diag,*) (Tmlts(ij,k)-Tin(ij,k),k=1,nilyr)
+               write(nu_diag,*) 'Sin'
+               write(nu_diag,*) (Sin(ij,k),k=1,nilyr)
                l_stop = .true.
                istop = i
                jstop = j
@@ -1717,7 +1495,7 @@
                                l_snow,   icells,           &
                                indxi,    indxj,    indxij, &
                                hilyr,    hslyr,            &
-                               Tin,      kh)
+                               Tin,      kh,       Sin)
 !
 ! !USES:
 !
@@ -1745,7 +1523,8 @@
 
       real (kind=dbl_kind), dimension (icells,nilyr), &
          intent(in) :: &
-         Tin             ! internal ice layer temperatures
+         Tin         , & ! internal ice layer temperatures
+         Sin             ! internal ice layer salinities
 
       real (kind=dbl_kind), dimension (icells,nilyr+nslyr+1), &
          intent(out) :: &
@@ -1779,7 +1558,7 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             do ij = 1, icells
-            kilyr(ij,k) = kice + betak*salin(k)/min(-puny,Tin(ij,k))
+               kilyr(ij,k) = kice + betak*Sin(ij,k)/min(-puny,Tin(ij,k))
                kilyr(ij,k) = max (kilyr(ij,k), kimin)
             enddo
          enddo                     ! nilyr
@@ -1791,7 +1570,7 @@
 !ocl novrec      !Fujitsu
             do ij = 1, icells
                kilyr(ij,k) = (2.11_dbl_kind - 0.011_dbl_kind*Tin(ij,k) &
-                            + 0.09_dbl_kind*salin(k)/min(-puny,Tin(ij,k))) &
+                            + 0.09_dbl_kind*Sin(ij,k)/min(-puny,Tin(ij,k))) &
                             * rhoi / 917._dbl_kind
                kilyr(ij,k) = max (kilyr(ij,k), kimin)
             enddo
@@ -2118,12 +1897,11 @@
                   k = 1 + nslyr
                endif
                kr = k
-            
+
                sbdiag(ij,kr) = c0
                diag  (ij,kr) = dfsurf_dT(ij) - kh(m,k)
                spdiag(ij,kr) = kh(m,k)
                rhs   (ij,kr) = dfsurf_dT(ij)*Tsf(m) - fsurfn(i,j)
-
             endif                  ! l_cold
 
       !-----------------------------------------------------------------
@@ -2212,7 +1990,6 @@
                                  + etai(ij,ki)*Iswabs(i,j,ki) &
                                  + etai(ij,ki)*kh(m,k)*Tsf(m)
                endif
-            
             enddo    ! ij
 
       !-----------------------------------------------------------------
@@ -2234,7 +2011,6 @@
             rhs   (ij,kr) = Tin_init(m,ki) &
                            + etai(ij,ki)*Iswabs(i,j,ki) &
                            + etai(ij,ki)*kh(m,k+1)*Tbot(i,j)
-
          enddo                   ! ij
       
       else         ! nilyr = 1
@@ -2293,7 +2069,6 @@
                            + etai(ij,ki) * (kh(m,k) + kh(m,k+1))
             rhs   (ij,kr) = Tin_init(m,ki) &
                            + etai(ij,ki)*Iswabs(i,j,ki)
-
          enddo                  ! ij
       enddo                     ! nilyr
 
