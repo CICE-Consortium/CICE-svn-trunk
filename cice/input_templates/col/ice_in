@@ -5,7 +5,7 @@
   , istep0         = 5832
   , dt             = 3600.0
   , npt            = 43800
-  , ndyn_dt        = 1
+  , ndtd           = 1
   , runtype        = 'initial'
   , ice_ic         = 'none'
   , restart        = .false.

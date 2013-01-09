@@ -154,9 +154,9 @@
       call init_hist (dt)       ! initialize output history file
 
       if (kdyn == 2) then
-         call init_eap (dyn_dt) ! define eap dynmaics parameters, variables
+         call init_eap (dt_dyn) ! define eap dynamics parameters, variables
       else                      ! for both kdyn = 0 or 1
-         call init_evp (dyn_dt) ! define evp dynamics parameters, variables
+         call init_evp (dt_dyn) ! define evp dynamics parameters, variables
       endif
 
       call init_coupler_flux    ! initialize fluxes exchanged with coupler

@@ -119,8 +119,8 @@
 ! !INTERFACE:
 !
       subroutine ridge_ice (nx_block,    ny_block,   &
-                            dt,          ntrcr,      &
-                            icells,                  &
+                            dt,          ndtd,       &
+                            ntrcr,       icells,     &
                             indxi,       indxj,      &
                             rdg_conv,    rdg_shear,  &
                             aicen,       trcrn,      &
@@ -148,6 +148,7 @@
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells            , & ! number of cells with ice present
+         ndtd              , & ! number of dynamics subcycles
          ntrcr                 ! number of tracers in use
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
@@ -735,6 +736,9 @@
       !-----------------------------------------------------------------
       ! Update fresh water and heat fluxes due to snow melt.
       !-----------------------------------------------------------------
+
+      ! use thermodynamic time step (ndtd*dt here) to average properly
+      dti = c1/(ndtd*dt)
 
       if (present(fresh)) then
          do ij = 1, icells

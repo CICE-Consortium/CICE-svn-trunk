@@ -5,7 +5,7 @@
   , istep0         = 0
   , dt             = 3600.0
   , npt            = 744
-  , ndyn_dt        = 1
+  , ndtd           = 1
   , runtype        = 'initial'
   , ice_ic         = './restart/iced_gx3_v5.0'
   , restart        = .true.

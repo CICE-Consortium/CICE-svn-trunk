@@ -74,7 +74,7 @@
          idate0   , & ! initial date (yyyymmdd)
          sec      , & ! elapsed seconds into date
          npt      , & ! total number of time steps (dt)
-         ndyn_dt  , & ! reduced timestep for dynamics: ndyn_dt=dt/dyn_dt
+         ndtd     , & ! number of dynamics subcycles: dt_dyn=dt/ndtd
          stop_now     , & ! if 1, end program execution
          write_restart, & ! if 1, write restart now
          diagfreq     , & ! diagnostic output frequency (10 = once per 10 dt)
@@ -84,7 +84,7 @@
 
       real (kind=dbl_kind) :: &
          dt             , & ! thermodynamics timestep (s)
-         dyn_dt         , & ! dynamics/transport/ridging timestep (s)
+         dt_dyn         , & ! dynamics/transport/ridging timestep (s)
          time           , & ! total elapsed time (s)
          time_forc      , & ! time of last forcing update (s)
          yday           , & ! day of the year
@@ -152,7 +152,7 @@
       istep1 = istep0   ! number of steps at current timestep
                         ! real (dumped) or imagined (use to set calendar)
       stop_now = 0      ! end program execution if stop_now=1
-      dyn_dt = dt/real(ndyn_dt,kind=dbl_kind) ! dynamics et al timestep
+      dt_dyn = dt/real(ndtd,kind=dbl_kind) ! dynamics et al timestep
 
       ! Check that the number of days per year is set correctly when using
       ! leap years. If not, set days_per_year correctly and warn the user.
