@@ -1048,7 +1048,7 @@
 !
 ! !INTERFACE:
 
-      subroutine step_dynamics (dt)
+      subroutine step_dynamics (dt, ndtd)
 
       use ice_state, only: nt_qsno, trcrn, vsnon, aicen
       use ice_domain_size, only: nslyr
@@ -1060,6 +1060,9 @@
 !
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
+
+      integer (kind=int_kind), intent(in) :: &
+         ndtd    ! number of dynamics subcycles
 !
 !EOP
 !
@@ -1098,7 +1101,7 @@
       call ice_timer_start(timer_ridge)
 
       do iblk = 1, nblocks
-         call step_ridge (dt, iblk)
+         call step_ridge (dt, ndtd, iblk)
       enddo                     ! iblk
 
       call ice_timer_stop(timer_ridge)
@@ -1167,7 +1170,7 @@
 !
 ! !INTERFACE:
 
-      subroutine step_ridge (dt, iblk)
+      subroutine step_ridge (dt, ndtd, iblk)
 
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1175,10 +1178,14 @@
          dt      ! time step
 
       integer (kind=int_kind), intent(in) :: &
+         ndtd, & ! number of dynamics subcycles
          iblk            ! block index
 !
 !EOP
 !
+      real (kind=dbl_kind) :: &
+         dtt      ! thermo time step
+
       type (block) :: &
          this_block      ! block information for current block
 
@@ -1227,8 +1234,8 @@
          if (icells > 0) then
 
          call ridge_ice (nx_block,             ny_block,                 &
-                         dt,                   ntrcr,                    &
-                         icells,                                         &
+                         dt,                   ndtd,                     &
+                         ntrcr,                icells,                   &
                          indxi,                indxj,                    &
                          rdg_conv(:,:,  iblk), rdg_shear (:,:,  iblk),   &
                          aicen   (:,:,:,iblk),                           &
@@ -1265,9 +1272,10 @@
       !  categories with very small areas.
       !-----------------------------------------------------------------
 
+         dtt = dt * ndtd  ! for proper averaging over thermo timestep
          call cleanup_itd (nx_block,             ny_block,             &
                            ilo, ihi,             jlo, jhi,             &
-                           dt,                   ntrcr,                &
+                           dtt,                  ntrcr,                &
                            aicen   (:,:,:,iblk),                       &
                            trcrn (:,:,1:ntrcr,:,iblk),                 &
                            vicen   (:,:,:,iblk), vsnon (:,:,  :,iblk), &

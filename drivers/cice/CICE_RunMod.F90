@@ -235,8 +235,8 @@
       ! dynamics, transport, ridging
       !-----------------------------------------------------------------
 
-         do k = 1, ndyn_dt
-            call step_dynamics (dyn_dt)
+         do k = 1, ndtd
+            call step_dynamics (dt_dyn, ndtd)
          enddo
 
       !-----------------------------------------------------------------
