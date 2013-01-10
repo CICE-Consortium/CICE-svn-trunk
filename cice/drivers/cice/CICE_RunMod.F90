@@ -282,7 +282,7 @@
          call ice_timer_stop(timer_diags_bgc)
 
          call ice_timer_start(timer_hist)   ! history
-         call ice_write_hist (dt)           ! history file
+         call accum_hist (dt)               ! history file
          call ice_timer_stop(timer_hist)    ! history
 
          call ice_timer_start(timer_readwrite)  ! reading/writing
