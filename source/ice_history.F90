@@ -49,6 +49,7 @@
       use ice_fileunits
       use ice_history_shared
       use ice_history_write
+      use ice_history_pond
 !
 !EOP
 !
@@ -167,19 +168,6 @@
 
       if (.not. tr_iage) f_iage = 'x'
       if (.not. tr_FY)   f_FY   = 'x'
-      if (.not. tr_pond) then
-          f_apondn    = 'x'
-          f_hpondn    = 'x'
-          f_apeffn    = 'x'
-          f_apond     = 'x'
-          f_hpond     = 'x'
-          f_ipond     = 'x'
-          f_apeff     = 'x'
-          f_apond_ai  = 'x'
-          f_hpond_ai  = 'x'
-          f_ipond_ai  = 'x'
-          f_apeff_ai  = 'x'
-      endif
       if (.not. tr_lvl) then
          f_ardg = 'x'
          f_vrdg = 'x'
@@ -447,17 +435,6 @@
       call broadcast_scalar (f_vlvl, master_task)
       call broadcast_scalar (f_aero, master_task)
       call broadcast_scalar (f_aeron, master_task)
-      call broadcast_scalar (f_apondn, master_task)
-      call broadcast_scalar (f_hpondn, master_task)
-      call broadcast_scalar (f_apeffn, master_task)
-      call broadcast_scalar (f_apond, master_task)
-      call broadcast_scalar (f_hpond, master_task)
-      call broadcast_scalar (f_ipond, master_task)
-      call broadcast_scalar (f_apeff, master_task)
-      call broadcast_scalar (f_apond_ai, master_task)
-      call broadcast_scalar (f_hpond_ai, master_task)
-      call broadcast_scalar (f_ipond_ai, master_task)
-      call broadcast_scalar (f_apeff_ai, master_task)
 
       call broadcast_scalar (f_a11, master_task)
       call broadcast_scalar (f_a12, master_task)
@@ -1336,55 +1313,6 @@
              "ridged ice volume",                          &
              "grid cell mean level ridged thickness", c1, c0, &
              ns1, f_vrdg)
-       
-      ! Melt ponds
-      if (f_apond(1:1) /= 'x') &
-         call define_hist_field(n_apond,"apond","1",tstr2D, tcstr, &
-             "melt pond fraction of sea ice",                      &
-             "none", c1, c0,                                       &
-             ns1, f_apond)
-
-      if (f_apond_ai(1:1) /= 'x') &
-         call define_hist_field(n_apond_ai,"apond_ai","1",tstr2D, tcstr, & 
-             "melt pond fraction of grid cell",                    &
-             "weighted by ice area", c1, c0,                       &
-             ns1, f_apond)
-
-      if (f_hpond(1:1) /= 'x') &
-         call define_hist_field(n_hpond,"hpond","m",tstr2D, tcstr, &
-             "mean melt pond depth over sea ice",                  &
-             "none", c1, c0,                                       &
-             ns1, f_hpond)
-
-      if (f_hpond_ai(1:1) /= 'x') &
-         call define_hist_field(n_hpond_ai,"hpond_ai","m",tstr2D, tcstr, & 
-             "mean melt pond depth over grid cell",                &
-             "weighted by ice area", c1, c0,                       &
-             ns1, f_hpond)
-
-      if (f_ipond(1:1) /= 'x') &
-         call define_hist_field(n_ipond,"ipond","m",tstr2D, tcstr, &
-             "mean pond ice thickness over sea ice",               &
-             "none", c1, c0,                                       &
-             ns1, f_ipond)
-
-      if (f_ipond_ai(1:1) /= 'x') &
-         call define_hist_field(n_ipond_ai,"ipond_ai","m",tstr2D, tcstr, & 
-             "mean pond ice thickness over grid cell",             &
-             "weighted by ice area", c1, c0,                       &
-             ns1, f_ipond_ai)
-
-      if (f_apeff(1:1) /= 'x') &
-         call define_hist_field(n_apeff,"apeff","1",tstr2D, tcstr, &
-             "radiation-effective pond area fraction of sea ice",  &
-             "none", c1, c0,  &
-             ns1, f_apeff)
-
-      if (f_apeff_ai(1:1) /= 'x') &
-         call define_hist_field(n_apeff_ai,"apeff_ai","1",tstr2D, tcstr, &
-             "radiation-effective pond area fraction over grid cell",  &
-             "weighted by ice area", c1, c0,                       &
-             ns1, f_apeff_ai)
 
       ! Aerosols
       if (f_aero(1:1) /= 'x') then
@@ -1430,10 +1358,6 @@
       endif
 
       enddo ! ns1
-
-      if (allocated(a2D)) deallocate(a2D)
-      if (num_avail_hist_fields_2D > 0) &
-      allocate(a2D(nx_block,ny_block,num_avail_hist_fields_2D,max_blocks))
 
       ! 3D (category) variables looped separately for ordering
       do ns1 = 1, nstreams
@@ -1528,22 +1452,6 @@
              "none", c1, c0,                                       &
              ns1, f_vredistn)
 
-        if (f_apondn(1:1) /= 'x') &
-           call define_hist_field(n_apondn,"apondn","1",tstr3Dc, tcstr, &
-              "melt pond fraction, category","none", c1, c0,      &            
-              ns1, f_apondn)
-
-        if (f_hpondn(1:1) /= 'x') &
-           call define_hist_field(n_hpondn,"hpondn","m",tstr3Dc, tcstr, &
-              "melt pond depth, category","none", c1, c0,       &
-              ns1, f_hpondn)
-
-        if (f_apeffn(1:1) /= 'x') &
-           call define_hist_field(n_apeffn,"apeffn","1",tstr3Dc, tcstr, &
-             "effective melt pond fraction, category",   &
-             "none", c1, c0,                                  &
-             ns1, f_apeffn)
-
         if (f_fbri(1:1) /= 'x') &
          call define_hist_field(n_fbri,"fbri","1",tstr3Dc, tcstr,        &
              "ice vol frac. with dynamic sal, cat",                     &
@@ -1551,10 +1459,6 @@
              ns1, f_fbri)
 
       enddo ! ns1
-
-      if (allocated(a3Dc)) deallocate(a3Dc)
-      if (num_avail_hist_fields_3Dc > 0) &
-      allocate(a3Dc(nx_block,ny_block,ncat_hist,num_avail_hist_fields_3Dc,max_blocks))
 
       ! 3D (vertical) variables looped separately for ordering
 !      do ns1 = 1, nstreams
@@ -1566,13 +1470,6 @@
 !            ns1, f_field3dz)
 
 !      enddo ! ns1 
-
-      if (allocated(a3Dz)) deallocate(a3Dz)
-      nzlyr = max(nzilyr, nzslyr)
- 
-      if (num_avail_hist_fields_3Dz > 0) &
-      allocate(a3Dz(nx_block,ny_block,nzlyr,num_avail_hist_fields_3Dz,max_blocks))
-
 
      ! !! 3D (vertical) ice biology variables !
 
@@ -1591,12 +1488,6 @@
              ns1, f_upNH)
       enddo   !ns1
 
-
-      if (allocated(a3Db)) deallocate(a3Db)
-      nzlyrb = nzblyr
- 
-      if (num_avail_hist_fields_3Db > 0) &
-      allocate(a3Db(nx_block,ny_block,nzlyrb,num_avail_hist_fields_3Db,max_blocks))
 
       ! 4D (categories, vertical) variables looped separately for ordering
       do ns1 = 1, nstreams
@@ -1753,16 +1644,11 @@
 
       enddo  !ns1
 
-      if (allocated(a4Di)) deallocate(a4Di)
-      if (num_avail_hist_fields_4Di > 0) &
-      allocate(a4Di(nx_block,ny_block,nzilyr,ncat_hist,num_avail_hist_fields_4Di,max_blocks))
-      if (allocated(a4Ds)) deallocate(a4Ds)
-      if (num_avail_hist_fields_4Ds > 0) &
-      allocate(a4Ds(nx_block,ny_block,nzslyr,ncat_hist,num_avail_hist_fields_4Ds,max_blocks))
-      if (allocated(a4Db)) deallocate(a4Db)
-      if (num_avail_hist_fields_4Db > 0) &
-      allocate(a4Db(nx_block,ny_block,nzblyr,ncat_hist,num_avail_hist_fields_4Db,max_blocks))
-
+      !-----------------------------------------------------------------
+      ! other history variables
+      !-----------------------------------------------------------------
+      ! melt ponds
+      if (tr_pond) call init_hist_pond
 
       !-----------------------------------------------------------------
       ! fill igrd array with namelist values
@@ -1787,6 +1673,10 @@
       igrdz(n_VGRDi    ) = f_VGRDi
       igrdz(n_VGRDs    ) = f_VGRDs
       igrdz(n_VGRDb    ) = f_VGRDb
+
+      !-----------------------------------------------------------------
+      ! diagnostic output
+      !-----------------------------------------------------------------
 
       ntmp(:) = 0
       if (my_task == master_task) then
@@ -1817,6 +1707,35 @@
       !-----------------------------------------------------------------
       ! initialize the history arrays
       !-----------------------------------------------------------------
+
+      if (allocated(a2D)) deallocate(a2D)
+      if (num_avail_hist_fields_2D > 0) &
+      allocate(a2D(nx_block,ny_block,num_avail_hist_fields_2D,max_blocks))
+
+      if (allocated(a3Dc)) deallocate(a3Dc)
+      if (num_avail_hist_fields_3Dc > 0) &
+      allocate(a3Dc(nx_block,ny_block,ncat_hist,num_avail_hist_fields_3Dc,max_blocks))
+
+      nzlyr = max(nzilyr, nzslyr)
+      if (allocated(a3Dz)) deallocate(a3Dz)
+      if (num_avail_hist_fields_3Dz > 0) &
+      allocate(a3Dz(nx_block,ny_block,nzlyr,num_avail_hist_fields_3Dz,max_blocks))
+
+      nzlyrb = nzblyr
+      if (allocated(a3Db)) deallocate(a3Db)
+      if (num_avail_hist_fields_3Db > 0) &
+      allocate(a3Db(nx_block,ny_block,nzlyrb,num_avail_hist_fields_3Db,max_blocks))
+
+      if (allocated(a4Di)) deallocate(a4Di)
+      if (num_avail_hist_fields_4Di > 0) &
+      allocate(a4Di(nx_block,ny_block,nzilyr,ncat_hist,num_avail_hist_fields_4Di,max_blocks))
+      if (allocated(a4Ds)) deallocate(a4Ds)
+      if (num_avail_hist_fields_4Ds > 0) &
+      allocate(a4Ds(nx_block,ny_block,nzslyr,ncat_hist,num_avail_hist_fields_4Ds,max_blocks))
+      if (allocated(a4Db)) deallocate(a4Db)
+      if (num_avail_hist_fields_4Db > 0) &
+      allocate(a4Db(nx_block,ny_block,nzblyr,ncat_hist,num_avail_hist_fields_4Db,max_blocks))
+
       if (allocated(a2D))  a2D (:,:,:,:)     = c0
       if (allocated(a3Dc)) a3Dc(:,:,:,:,:)   = c0
       if (allocated(a3Dz)) a3Dz(:,:,:,:,:)   = c0
@@ -2223,74 +2142,6 @@
              call accum_hist_field(n_vrdg,   iblk, &
                              vice(:,:,iblk) * (c1 - trcr(:,:,nt_vlvl,iblk)), a2D)
 
-         if (tr_pond_cesm) then
-         if (f_apond(1:1)/= 'x') &
-             call accum_hist_field(n_apond, iblk, &
-                                   trcr(:,:,nt_apnd,iblk), a2D)
-         if (f_apond_ai(1:1)/= 'x') &
-             call accum_hist_field(n_apond_ai, iblk, &
-                                   aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk), a2D)
-         if (f_hpond(1:1)/= 'x') &
-             call accum_hist_field(n_hpond, iblk, &
-                                   trcr(:,:,nt_apnd,iblk) &
-                                 * trcr(:,:,nt_hpnd,iblk), a2D)
-         if (f_hpond_ai(1:1)/= 'x') &
-             call accum_hist_field(n_hpond_ai, iblk, &
-                                   aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk) &
-                                                  * trcr(:,:,nt_hpnd,iblk), a2D)
-
-         elseif (tr_pond_lvl) then
-         if (f_apond(1:1)/= 'x') &
-             call accum_hist_field(n_apond, iblk, &
-                            trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk), a2D)
-         if (f_apond_ai(1:1)/= 'x') &
-             call accum_hist_field(n_apond_ai, iblk, &
-                            aice(:,:,iblk) &
-                          * trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk), a2D)
-         if (f_hpond(1:1)/= 'x') &
-             call accum_hist_field(n_hpond, iblk, &
-                            trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk) &
-                                                   * trcr(:,:,nt_hpnd,iblk), a2D)
-         if (f_hpond_ai(1:1)/= 'x') &
-             call accum_hist_field(n_hpond_ai, iblk, &
-                            aice(:,:,iblk) &
-                          * trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk) &
-                                                   * trcr(:,:,nt_hpnd,iblk), a2D)
-         if (f_ipond(1:1)/= 'x') &
-             call accum_hist_field(n_ipond, iblk, &
-                            trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk) &
-                                                   * trcr(:,:,nt_ipnd,iblk), a2D)
-         if (f_ipond_ai(1:1)/= 'x') &
-             call accum_hist_field(n_ipond_ai, iblk, &
-                            aice(:,:,iblk) &
-                          * trcr(:,:,nt_alvl,iblk) * trcr(:,:,nt_apnd,iblk) &
-                                                   * trcr(:,:,nt_ipnd,iblk), a2D)
-
-         elseif (tr_pond_topo) then
-
-         if (f_apond(1:1)/= 'x') &
-             call accum_hist_field(n_apond, iblk, &
-                                   trcr(:,:,nt_apnd,iblk), a2D)
-         if (f_apond_ai(1:1)/= 'x') &
-             call accum_hist_field(n_apond_ai, iblk, &
-                                   aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk), a2D)
-         if (f_hpond(1:1)/= 'x') &
-             call accum_hist_field(n_hpond, iblk, &
-                                   trcr(:,:,nt_apnd,iblk) &
-                                 * trcr(:,:,nt_hpnd,iblk), a2D)
-         if (f_hpond_ai(1:1)/= 'x') &
-             call accum_hist_field(n_hpond_ai, iblk, &
-                                   aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk) &
-                                                  * trcr(:,:,nt_hpnd,iblk), a2D)
-         if (f_ipond(1:1)/= 'x') &
-             call accum_hist_field(n_ipond, iblk, &
-                                   trcr(:,:,nt_apnd,iblk) &
-                                 * trcr(:,:,nt_ipnd,iblk), a2D)
-         if (f_ipond_ai(1:1)/= 'x') &
-             call accum_hist_field(n_ipond_ai, iblk, &
-                                   aice(:,:,iblk) * trcr(:,:,nt_apnd,iblk) &
-                                                  * trcr(:,:,nt_ipnd,iblk), a2D)
-         endif ! ponds
 
          ! BGC
          if (f_bgc_N_sk(1:1)/= 'x') &
@@ -2344,19 +2195,6 @@
          jlo = this_block%jlo
          jhi = this_block%jhi
 
-         if (f_apeff (1:1) /= 'x') then
-             worka(:,:) = c0
-             do j = jlo, jhi
-             do i = ilo, ihi
-                if (aice(i,j,iblk) > puny) worka(i,j) = apeff_ai(i,j,iblk) &
-                                                      / aice(i,j,iblk)
-             enddo
-             enddo
-             call accum_hist_field(n_apeff, iblk, worka(:,:), a2D)
-         endif
-         if (f_apeff_ai(1:1) /= 'x') &
-             call accum_hist_field(n_apeff_ai, iblk, apeff_ai(:,:,iblk), a2D)
-
          if (f_fsurf_ai(1:1)/= 'x') &
              call accum_hist_field(n_fsurf_ai,iblk, fsurf(:,:,iblk)*workb(:,:), a2D)
          if (f_fcondtop_ai(1:1)/= 'x') &
@@ -2409,16 +2247,6 @@
          if (f_vredistn(1:1)/= 'x') &
              call accum_hist_field(n_vredistn-n2D, iblk, ncat_hist, &
                                    vredistn(:,:,1:ncat_hist,iblk), a3Dc)
-         if (f_apondn   (1:1) /= 'x') &
-             call accum_hist_field(n_apondn-n2D, iblk, ncat_hist, &
-                  trcrn(:,:,nt_apnd,1:ncat_hist,iblk), a3Dc)
-         if (f_apeffn (1:1) /= 'x') &
-             call accum_hist_field(n_apeffn-n2D,  iblk, ncat_hist, &
-                  apeffn(:,:,1:ncat_hist,iblk), a3Dc)
-         if (f_hpondn   (1:1) /= 'x') &
-             call accum_hist_field(n_hpondn-n2D, iblk, ncat_hist, &
-                    trcrn(:,:,nt_apnd,1:ncat_hist,iblk) &
-                  * trcrn(:,:,nt_hpnd,1:ncat_hist,iblk), a3Dc)
 
          if (f_fsurfn_ai   (1:1) /= 'x') &
              call accum_hist_field(n_fsurfn_ai-n2D, iblk, ncat_hist, &
@@ -2895,6 +2723,12 @@
                                  trcr(:,:,nt_aero+3+4*(n-1),iblk)/rhoi, a2D)
            enddo
         endif
+
+      !---------------------------------------------------------------
+      ! accumulate other history output
+      !---------------------------------------------------------------
+         ! melt ponds
+         if (tr_pond) call accum_hist_pond (iblk)
 
       enddo                     ! iblk
 
