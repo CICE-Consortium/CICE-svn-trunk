@@ -271,12 +271,6 @@
            f_dvirdgndt = 'x', &
            f_aparticn  = 'x', f_krdgn      = 'x', &
            f_aredistn  = 'x', f_vredistn   = 'x', &
-           f_apondn    = 'm', f_apeffn     = 'm', &
-           f_hpondn    = 'm',                     &
-           f_apond     = 'x', f_apond_ai   = 'x', &
-           f_hpond     = 'x', f_hpond_ai   = 'x', &
-           f_ipond     = 'x', f_ipond_ai   = 'x', &
-           f_apeff     = 'x', f_apeff_ai   = 'x', &
            f_trsig     = 'm', f_icepresent = 'm', &
            f_fsurf_ai  = 'm', f_fcondtop_ai= 'm', &
            f_fmeltt_ai = 'm',                     &
@@ -315,9 +309,6 @@
            f_yieldstress11       = 'x', 	  & 
            f_yieldstress12       = 'x',           & 
            f_yieldstress22       = 'x'
-
-!echmod:  commented out Tsf_ice for now.  Calculate it from q when needed.
-         !  f_Tsf_ice = 'm'
 
       !---------------------------------------------------------------
       ! namelist variables
@@ -399,12 +390,6 @@
            f_dvirdgndt, &
            f_aparticn,  f_krdgn    , &
            f_aredistn,  f_vredistn , &
-           f_apondn,    f_apeffn   , &
-           f_hpondn,                 &
-           f_apond,     f_apond_ai , &  
-           f_hpond,     f_hpond_ai , &  
-           f_ipond,     f_ipond_ai , &  
-           f_apeff,     f_apeff_ai , &
            f_trsig,     f_icepresent,&
            f_fsurf_ai,  f_fcondtop_ai,&
            f_fmeltt_ai, &
@@ -440,7 +425,6 @@
            f_yieldstress11         , &	
            f_yieldstress12	   , &
            f_yieldstress22
-!           f_Tsf_ice
 
       !---------------------------------------------------------------
       ! field indices
@@ -550,12 +534,6 @@
            n_dvirdgndt  , &
            n_krdgn      , n_aparticn   , &
            n_aredistn   , n_vredistn   , &
-           n_apondn      , n_apeffn    , & 
-           n_hpondn      , &
-           n_apond       , n_apond_ai, &
-           n_hpond       , n_hpond_ai, &
-           n_ipond       , n_ipond_ai, &
-           n_apeff       , n_apeff_ai, &
            n_fsurfn_ai   , &
            n_fcondtopn_ai, &
            n_fmelttn_ai  , &
@@ -594,7 +572,6 @@
 	   n_s22	 , &
 	   n_yieldstress11, n_yieldstress12,  &
 	   n_yieldstress22
-!           n_Tsf_ice
 
       ! aerosols
       integer(kind=int_kind), dimension(max_aero,max_nstrm) :: &
