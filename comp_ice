@@ -113,12 +113,18 @@ else
 endif
 
 setenv DRVDIR cice
+if ($NETCDF == 'yes') then
+  setenv IODIR io_netcdf
+else
+  setenv IODIR io_binary
+endif
 
 ### List of source code directories (in order of importance).
 cat >! Filepath << EOF
 $SRCDIR/drivers/$DRVDIR
 $SRCDIR/source
 $SRCDIR/$COMMDIR
+$SRCDIR/$IODIR
 $SRCDIR/$SHRDIR
 EOF
 
