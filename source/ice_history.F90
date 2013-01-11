@@ -49,6 +49,7 @@
       use ice_fileunits
       use ice_history_shared
       use ice_history_write
+      use ice_history_mechred
       use ice_history_pond
 !
 !EOP
@@ -168,14 +169,6 @@
 
       if (.not. tr_iage) f_iage = 'x'
       if (.not. tr_FY)   f_FY   = 'x'
-      if (.not. tr_lvl) then
-         f_ardg = 'x'
-         f_vrdg = 'x'
-         f_alvl = 'x'
-         f_vlvl = 'x'
-         f_ardgn = 'x'
-         f_vrdgn = 'x'
-      endif
       if (.not. tr_aero) then
          f_faero_atm = 'x'
          f_faero_ocn = 'x'
@@ -345,7 +338,6 @@
       call broadcast_scalar (f_strintx, master_task)
       call broadcast_scalar (f_strinty, master_task)
       call broadcast_scalar (f_strength, master_task)
-      call broadcast_scalar (f_opening, master_task)
       call broadcast_scalar (f_divu, master_task)
       call broadcast_scalar (f_shear, master_task)
       call broadcast_scalar (f_sig1, master_task)
@@ -356,22 +348,10 @@
       call broadcast_scalar (f_daidtd, master_task)
       call broadcast_scalar (f_mlt_onset, master_task)
       call broadcast_scalar (f_frz_onset, master_task)
-      call broadcast_scalar (f_dardg1dt, master_task)
-      call broadcast_scalar (f_dardg2dt, master_task)
-      call broadcast_scalar (f_dvirdgdt, master_task)
       call broadcast_scalar (f_aisnap, master_task)
       call broadcast_scalar (f_hisnap, master_task)
       call broadcast_scalar (f_aicen, master_task)
       call broadcast_scalar (f_vicen, master_task)
-      call broadcast_scalar (f_ardgn, master_task)
-      call broadcast_scalar (f_vrdgn, master_task)
-      call broadcast_scalar (f_dardg1ndt, master_task)
-      call broadcast_scalar (f_dardg2ndt, master_task)
-      call broadcast_scalar (f_dvirdgndt, master_task)
-      call broadcast_scalar (f_krdgn, master_task)
-      call broadcast_scalar (f_aparticn, master_task)
-      call broadcast_scalar (f_aredistn, master_task)
-      call broadcast_scalar (f_vredistn, master_task)
       call broadcast_scalar (f_trsig, master_task)
       call broadcast_scalar (f_icepresent, master_task)
       call broadcast_scalar (f_fsurf_ai, master_task)
@@ -429,10 +409,6 @@
       call broadcast_scalar (f_upNH, master_task)
       call broadcast_scalar (f_iage, master_task)
       call broadcast_scalar (f_FY, master_task)
-      call broadcast_scalar (f_ardg, master_task)
-      call broadcast_scalar (f_vrdg, master_task)
-      call broadcast_scalar (f_alvl, master_task)
-      call broadcast_scalar (f_vlvl, master_task)
       call broadcast_scalar (f_aero, master_task)
       call broadcast_scalar (f_aeron, master_task)
 
@@ -1008,12 +984,6 @@
              "none", c1, c0,                                             &
              ns1, f_strength)
       
-      if (f_opening(1:1) /= 'x') &
-         call define_hist_field(n_opening,"opening","%/day",tstr2D, tcstr, &
-             "lead area opening rate",                                   &
-             "none", secday*c100, c0,                                    &
-             ns1, f_opening)
-      
       if (f_divu(1:1) /= 'x') &
          call define_hist_field(n_divu,"divu","%/day",tstr2D, tcstr, &
              "strain rate (divergence)",                           &
@@ -1074,24 +1044,6 @@
              "midyear restart gives erroneous dates", c1, c0,          &
              ns1, f_frz_onset)
 
-      if (f_dardg1dt(1:1) /= 'x') &
-         call define_hist_field(n_dardg1dt,"dardg1dt","%/day",tstr2D, tcstr, &
-             "ice area ridging rate",                                      &
-             "none", secday*c100, c0,                                      &
-             ns1, f_dardg1dt)
-      
-      if (f_dardg2dt(1:1) /= 'x') &
-         call define_hist_field(n_dardg2dt,"dardg2dt","%/day",tstr2D, tcstr, &
-             "ridge area formation rate",                                  &
-             "none", secday*c100, c0,                                      &
-             ns1, f_dardg2dt)
-      
-      if (f_dvirdgdt(1:1) /= 'x') &
-         call define_hist_field(n_dvirdgdt,"dvirdgdt","cm/day",tstr2D, tcstr, &
-             "ice volume ridging rate",                                     &
-             "none", mps_to_cmpdy, c0,                                      &
-             ns1, f_dvirdgdt)
-      
       if (f_hisnap(1:1) /= 'x') &
          call define_hist_field(n_hisnap,"hisnap","m",tstr2D, tcstr, &
              "ice volume snapshot",                                &
@@ -1292,28 +1244,6 @@
              "weighted by ice area", c1, c0,                   &
               ns1, f_FY)
 
-      ! Level and Ridged ice       
-      if (f_alvl(1:1) /= 'x') &
-         call define_hist_field(n_alvl,"alvl","1",tstr2D, tcstr, &
-             "level ice area fraction",                            &
-             "none", c1, c0,                                       &
-             ns1, f_alvl)
-      if (f_vlvl(1:1) /= 'x') &
-         call define_hist_field(n_vlvl,"vlvl","m",tstr2D, tcstr, &
-             "level ice volume",                           &
-             "grid cell mean level ice thickness", c1, c0, &
-             ns1, f_vlvl)
-      if (f_ardg(1:1) /= 'x') &
-         call define_hist_field(n_ardg,"ardg","1",tstr2D, tcstr, &
-             "ridged ice area fraction",                           &
-             "none", c1, c0,                                       &
-             ns1, f_ardg)
-      if (f_vrdg(1:1) /= 'x') &
-         call define_hist_field(n_vrdg,"vrdg","m",tstr2D, tcstr, &
-             "ridged ice volume",                          &
-             "grid cell mean level ridged thickness", c1, c0, &
-             ns1, f_vrdg)
-
       ! Aerosols
       if (f_aero(1:1) /= 'x') then
          do n=1,n_aero
@@ -1397,60 +1327,6 @@
            call define_hist_field(n_flatn_ai,"flatn_ai","W/m^2",tstr3Dc, tcstr, & 
               "latent heat flux, category","weighted by ice area", c1, c0,      &            
               ns1, f_flatn_ai)
-
-       if (f_ardgn(1:1) /= 'x') &
-           call define_hist_field(n_ardgn,"ardgn","1",tstr3Dc, tcstr, &
-             "ridged ice area fraction, category",                 &
-             "none", c1, c0,                                       &
-             ns1, f_ardgn)
-
-       if (f_vrdgn(1:1) /= 'x') &
-           call define_hist_field(n_vrdgn,"vrdgn","m",tstr3Dc, tcstr, &
-             "ridged ice volume, category",                &
-             "grid cell mean ridged ice thickness", c1, c0, &
-             ns1, f_vrdgn)
-
-       if (f_dardg1ndt(1:1) /= 'x') &
-           call define_hist_field(n_dardg1ndt,"dardg1ndt","%/day",tstr3Dc, tcstr, &
-             "ice area ridging rate, category",                            &
-             "none", secday*c100, c0,                                      &
-             ns1, f_dardg1ndt)
-
-       if (f_dardg2ndt(1:1) /= 'x') &
-           call define_hist_field(n_dardg2ndt,"dardg2ndt","%/day",tstr3Dc, tcstr, &
-             "ridge area formation rate, category",                        &
-             "none", secday*c100, c0,                                      &
-             ns1, f_dardg2ndt)
-
-       if (f_dvirdgndt(1:1) /= 'x') &
-          call define_hist_field(n_dvirdgndt,"dvirdgndt","cm/day",tstr3Dc, tcstr, &
-             "ice volume ridging rate, category",                          &
-             "none", mps_to_cmpdy, c0,                                     &
-             ns1, f_dvirdgndt)
-
-       if (f_krdgn(1:1) /= 'x') &
-           call define_hist_field(n_krdgn,"krdgn","1",tstr3Dc, tcstr, &
-             "ridging thickness factor, category",                    &
-             "mean ridge thickness/thickness of ridging ice", c1, c0, &
-             ns1, f_krdgn)
-
-       if (f_aparticn(1:1) /= 'x') &
-           call define_hist_field(n_aparticn,"aparticn","1",tstr3Dc, tcstr, &
-             "ridging ice participation function, category",       &
-             "fraction of new ridge area added to cat", c1, c0,    &
-             ns1, f_aparticn)
-
-       if (f_aredistn(1:1) /= 'x') &
-           call define_hist_field(n_aredistn,"aredistn","1",tstr3Dc, tcstr, &
-             "ridging ice area redistribution function, category",   &
-             "fraction of new ridge volume added to cat", c1, c0,    &
-             ns1, f_aredistn)
-
-       if (f_vredistn(1:1) /= 'x') &
-           call define_hist_field(n_vredistn,"vredistn","1",tstr3Dc, tcstr, &
-             "ridging ice volume redistribution function, category",       &
-             "none", c1, c0,                                       &
-             ns1, f_vredistn)
 
         if (f_fbri(1:1) /= 'x') &
          call define_hist_field(n_fbri,"fbri","1",tstr3Dc, tcstr,        &
@@ -1647,6 +1523,8 @@
       !-----------------------------------------------------------------
       ! other history variables
       !-----------------------------------------------------------------
+      ! mechanical redistribution
+      call init_hist_mechred
       ! melt ponds
       if (tr_pond) call init_hist_pond
 
@@ -2121,28 +1999,6 @@
          if (f_daidtd (1:1) /= 'x') &
              call accum_hist_field(n_daidtd,  iblk, daidtd(:,:,iblk), a2D)
 
-         if (f_opening(1:1) /= 'x') &
-             call accum_hist_field(n_opening, iblk, opening(:,:,iblk), a2D)
-         if (f_dardg1dt(1:1)/= 'x') &
-             call accum_hist_field(n_dardg1dt,iblk, dardg1dt(:,:,iblk), a2D)
-         if (f_dardg2dt(1:1)/= 'x') &
-             call accum_hist_field(n_dardg2dt,iblk, dardg2dt(:,:,iblk), a2D)
-         if (f_dvirdgdt(1:1)/= 'x') &
-             call accum_hist_field(n_dvirdgdt,iblk, dvirdgdt(:,:,iblk), a2D)
-         if (f_alvl(1:1)/= 'x') &
-             call accum_hist_field(n_alvl,   iblk, &
-                                   aice(:,:,iblk) * trcr(:,:,nt_alvl,iblk), a2D)
-         if (f_vlvl(1:1)/= 'x') &
-             call accum_hist_field(n_vlvl,   iblk, &
-                                   vice(:,:,iblk) * trcr(:,:,nt_vlvl,iblk), a2D)
-         if (f_ardg(1:1)/= 'x') &
-             call accum_hist_field(n_ardg,   iblk, &
-                             aice(:,:,iblk) * (c1 - trcr(:,:,nt_alvl,iblk)), a2D)
-         if (f_vrdg(1:1)/= 'x') &
-             call accum_hist_field(n_vrdg,   iblk, &
-                             vice(:,:,iblk) * (c1 - trcr(:,:,nt_vlvl,iblk)), a2D)
-
-
          ! BGC
          if (f_bgc_N_sk(1:1)/= 'x') &
              call accum_hist_field(n_bgc_N_sk,iblk, &
@@ -2218,35 +2074,6 @@
          if (f_vicen   (1:1) /= 'x') &
              call accum_hist_field(n_vicen-n2D, iblk, ncat_hist, &
                                    vicen(:,:,1:ncat_hist,iblk), a3Dc)
-         if (f_ardgn(1:1)/= 'x') &
-             call accum_hist_field(n_ardgn-n2D, iblk, ncat_hist, &
-                                   aicen(:,:,1:ncat_hist,iblk) &
-                                 * (c1 - trcrn(:,:,nt_alvl,1:ncat_hist,iblk)), a3Dc)
-         if (f_vrdgn(1:1)/= 'x') &
-             call accum_hist_field(n_vrdgn-n2D, iblk, ncat_hist, &
-                                   vicen(:,:,1:ncat_hist,iblk) &
-                                 * (c1 - trcrn(:,:,nt_vlvl,1:ncat_hist,iblk)), a3Dc)
-         if (f_dardg1ndt(1:1)/= 'x') &
-             call accum_hist_field(n_dardg1ndt-n2D, iblk, ncat_hist, &
-                                   dardg1ndt(:,:,1:ncat_hist,iblk), a3Dc)
-         if (f_dardg2ndt(1:1)/= 'x') &
-             call accum_hist_field(n_dardg2ndt-n2D, iblk, ncat_hist, &
-                                   dardg2ndt(:,:,1:ncat_hist,iblk), a3Dc)
-         if (f_dvirdgndt(1:1)/= 'x') &
-             call accum_hist_field(n_dvirdgndt-n2D, iblk, ncat_hist, &
-                                   dvirdgndt(:,:,1:ncat_hist,iblk), a3Dc)
-         if (f_krdgn(1:1)/= 'x') &
-             call accum_hist_field(n_krdgn-n2D, iblk, ncat_hist, &
-                                   krdgn(:,:,1:ncat_hist,iblk), a3Dc)
-         if (f_aparticn(1:1)/= 'x') &
-             call accum_hist_field(n_aparticn-n2D, iblk, ncat_hist, &
-                                   aparticn(:,:,1:ncat_hist,iblk), a3Dc)
-         if (f_aredistn(1:1)/= 'x') &
-             call accum_hist_field(n_aredistn-n2D, iblk, ncat_hist, &
-                                   aredistn(:,:,1:ncat_hist,iblk), a3Dc)
-         if (f_vredistn(1:1)/= 'x') &
-             call accum_hist_field(n_vredistn-n2D, iblk, ncat_hist, &
-                                   vredistn(:,:,1:ncat_hist,iblk), a3Dc)
 
          if (f_fsurfn_ai   (1:1) /= 'x') &
              call accum_hist_field(n_fsurfn_ai-n2D, iblk, ncat_hist, &
@@ -2727,6 +2554,8 @@
       !---------------------------------------------------------------
       ! accumulate other history output
       !---------------------------------------------------------------
+         ! mechanical redistribution
+         call accum_hist_mechred (iblk)
          ! melt ponds
          if (tr_pond) call accum_hist_pond (iblk)
 

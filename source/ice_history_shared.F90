@@ -252,25 +252,16 @@
            f_strcorx   = 'm', f_strcory    = 'm', &
            f_strocnx   = 'm', f_strocny    = 'm', &
            f_strintx   = 'm', f_strinty    = 'm', &
-           f_strength  = 'm', f_opening    = 'm', &
+           f_strength  = 'm', &
            f_divu      = 'm', f_shear      = 'm', &
            f_sig1      = 'm', f_sig2       = 'm', &
            f_dvidtt    = 'm', f_dvidtd     = 'm', &
            f_daidtt    = 'm', f_daidtd     = 'm', &
            f_mlt_onset = 'm', f_frz_onset  = 'm', &
-           f_dardg1dt  = 'm', f_dardg2dt   = 'm', &
-           f_dvirdgdt  = 'm', f_iage       = 'm', &
-           f_FY        = 'm', &
-           f_ardg      = 'm', f_vrdg       = 'm', &
-           f_alvl      = 'm', f_vlvl       = 'm', &
+           f_iage      = 'm', f_FY         = 'm', &
            f_hisnap    = 'm', f_aisnap     = 'm', &
            f_aero      = 'm', f_aeron      = 'm', &
            f_aicen     = 'x', f_vicen      = 'x', &
-           f_ardgn     = 'x', f_vrdgn      = 'x', &
-           f_dardg1ndt = 'x', f_dardg2ndt  = 'x', &
-           f_dvirdgndt = 'x', &
-           f_aparticn  = 'x', f_krdgn      = 'x', &
-           f_aredistn  = 'x', f_vredistn   = 'x', &
            f_trsig     = 'm', f_icepresent = 'm', &
            f_fsurf_ai  = 'm', f_fcondtop_ai= 'm', &
            f_fmeltt_ai = 'm',                     &
@@ -371,25 +362,16 @@
            f_strcorx,   f_strcory  , &
            f_strocnx,   f_strocny  , &
            f_strintx,   f_strinty  , &
-           f_strength,  f_opening  , &
+           f_strength,  &
            f_divu,      f_shear    , &
            f_sig1,      f_sig2     , &
            f_dvidtt,    f_dvidtd   , &
            f_daidtt,    f_daidtd   , &
            f_mlt_onset, f_frz_onset, &
-           f_dardg1dt,  f_dardg2dt , &
-           f_dvirdgdt,  f_iage     , &
-           f_FY,                     &
-           f_ardg,      f_vrdg     , &
-           f_alvl,      f_vlvl     , &
+           f_iage,      f_FY       , &
            f_hisnap,    f_aisnap   , &
            f_aero,      f_aeron    , &
            f_aicen,     f_vicen    , &
-           f_ardgn,     f_vrdgn    , &
-           f_dardg1ndt, f_dardg2ndt, &
-           f_dvirdgndt, &
-           f_aparticn,  f_krdgn    , &
-           f_aredistn,  f_vredistn , &
            f_trsig,     f_icepresent,&
            f_fsurf_ai,  f_fcondtop_ai,&
            f_fmeltt_ai, &
@@ -499,20 +481,16 @@
            n_strcorx    , n_strcory    , &
            n_strocnx    , n_strocny    , &
            n_strintx    , n_strinty    , &
-           n_strength   , n_opening    , &
+           n_strength   , &
            n_divu       , n_shear      , &
            n_sig1       , n_sig2       , &
            n_dvidtt     , n_dvidtd     , &
            n_daidtt     , n_daidtd     , &
            n_mlt_onset  , n_frz_onset  , &
-           n_dardg1dt   , n_dardg2dt   , &
-           n_dvirdgdt   , &
            n_hisnap     , n_aisnap     , &
            n_trsig      , n_icepresent , &
            n_iage       , n_FY         , &
            n_fsurf_ai   , &
-           n_ardg       , n_vrdg       , &
-           n_alvl       , n_vlvl       , &
            n_fcondtop_ai, n_fmeltt_ai  , &   
            n_bgc_N_sk , &
            n_bgc_C_sk, &
@@ -529,11 +507,6 @@
            n_bgc_DMSP_ml, &
            n_bgc_DMS_ml, &
            n_aicen      , n_vicen      , &
-           n_ardgn      , n_vrdgn      , &
-           n_dardg1ndt  , n_dardg2ndt  , &
-           n_dvirdgndt  , &
-           n_krdgn      , n_aparticn   , &
-           n_aredistn   , n_vredistn   , &
            n_fsurfn_ai   , &
            n_fcondtopn_ai, &
            n_fmelttn_ai  , &

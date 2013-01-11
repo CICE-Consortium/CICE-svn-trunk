@@ -1,0 +1,403 @@
+!=======================================================================
+!
+!BOP
+!
+! !MODULE: ice_history - ice model history files
+!
+! Driver for core history output
+!
+! The following variables are currently hard-wired as snapshots 
+!   (instantaneous rather than time-averages):
+!   divu, shear, sig1, sig2, trsig, mlt_onset, frz_onset, hisnap, aisnap
+!
+! The flags (f_<field>) can be set to '1','h','d','m','y' or 'x', where
+!   n means the field will not be written.  To output the same field at
+!   more than one frequency, for instance monthy and daily, set 
+!   f_<field> = 'md'.
+!
+! !REVISION HISTORY:
+!  SVN:$Id: ice_history.F90 569 2013-01-10 15:28:29Z eclare $
+!
+! authors Tony Craig and Bruce Briegleb, NCAR
+!         Elizabeth C. Hunke and William H. Lipscomb, LANL
+!         C. M. Bitz, UW
+!
+! 2012 Elizabeth Hunke split code from ice_history.F90
+!
+! !INTERFACE:
+!
+      module ice_history_mechred
+!
+! !USES:
+!
+      use ice_kinds_mod
+      use ice_broadcast
+      use ice_communicate, only: my_task, master_task
+      use ice_blocks
+      use ice_fileunits
+      use ice_history_shared
+      use ice_history_write
+!
+!EOP
+!
+      implicit none
+      save
+      
+      !---------------------------------------------------------------
+      ! flags: write to output file if true or histfreq value
+      !---------------------------------------------------------------
+
+      character (len=max_nstrm) :: &
+           f_ardg      = 'm', f_vrdg       = 'm', &
+           f_alvl      = 'm', f_vlvl       = 'm', &
+           f_dardg1dt  = 'm', f_dardg2dt   = 'm', &
+           f_dvirdgdt  = 'm', f_opening    = 'm', &
+           f_ardgn     = 'x', f_vrdgn      = 'x', &
+           f_dardg1ndt = 'x', f_dardg2ndt  = 'x', &
+           f_dvirdgndt = 'x', &
+           f_aparticn  = 'x', f_krdgn      = 'x', &
+           f_aredistn  = 'x', f_vredistn   = 'x'
+
+      !---------------------------------------------------------------
+      ! namelist variables
+      !---------------------------------------------------------------
+
+      namelist / icefields_mechred_nml /     &
+           f_ardg,      f_vrdg     , &
+           f_alvl,      f_vlvl     , &
+           f_dardg1dt,  f_dardg2dt , &
+           f_dvirdgdt,  f_opening  , &
+           f_ardgn,     f_vrdgn    , &
+           f_dardg1ndt, f_dardg2ndt, &
+           f_dvirdgndt, &
+           f_aparticn,  f_krdgn    , &
+           f_aredistn,  f_vredistn
+
+      !---------------------------------------------------------------
+      ! field indices
+      !---------------------------------------------------------------
+
+      integer (kind=int_kind), dimension(max_nstrm) :: &
+           n_ardg       , n_vrdg       , &
+           n_alvl       , n_vlvl       , &
+           n_dardg1dt   , n_dardg2dt   , &
+           n_dvirdgdt   , n_opening    , &
+           n_ardgn      , n_vrdgn      , &
+           n_dardg1ndt  , n_dardg2ndt  , &
+           n_dvirdgndt  , &
+           n_aparticn   , n_krdgn      , &
+           n_aredistn   , n_vredistn
+
+!=======================================================================
+
+      contains
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: init_hist - initialize history files
+!
+! !INTERFACE:
+!
+      subroutine init_hist_mechred
+!
+! !DESCRIPTION:
+!
+! Initialize history files
+!
+! !REVISION HISTORY:
+!
+! authors Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+      use ice_constants
+      use ice_calendar, only: nstreams
+      use ice_state, only: tr_lvl
+      use ice_exit
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) :: n, k, ns
+      integer (kind=int_kind) :: nml_error ! namelist i/o error flag
+
+      !-----------------------------------------------------------------
+      ! read namelist
+      !-----------------------------------------------------------------
+
+      call get_fileunit(nu_nml)
+      if (my_task == master_task) then
+         open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
+         if (nml_error /= 0) then
+            nml_error = -1
+         else
+            nml_error =  1
+         endif
+         do while (nml_error > 0)
+            read(nu_nml, nml=icefields_mechred_nml,iostat=nml_error)
+            if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
+         end do
+         if (nml_error == 0) close(nu_nml)
+      endif
+      call release_fileunit(nu_nml)
+
+      call broadcast_scalar(nml_error, master_task)
+      if (nml_error /= 0) then
+         close (nu_nml)
+         call abort_ice('ice: error reading icefields_mechred_nml')
+      endif
+
+      if (.not. tr_lvl) then
+         f_ardg = 'x'
+         f_vrdg = 'x'
+         f_alvl = 'x'
+         f_vlvl = 'x'
+         f_ardgn = 'x'
+         f_vrdgn = 'x'
+      endif
+
+#ifndef ncdf
+      f_bounds = .false.
+#endif
+
+      call broadcast_scalar (f_ardg, master_task)
+      call broadcast_scalar (f_vrdg, master_task)
+      call broadcast_scalar (f_alvl, master_task)
+      call broadcast_scalar (f_vlvl, master_task)
+      call broadcast_scalar (f_dardg1dt, master_task)
+      call broadcast_scalar (f_dardg2dt, master_task)
+      call broadcast_scalar (f_dvirdgdt, master_task)
+      call broadcast_scalar (f_opening, master_task)
+      call broadcast_scalar (f_ardgn, master_task)
+      call broadcast_scalar (f_vrdgn, master_task)
+      call broadcast_scalar (f_dardg1ndt, master_task)
+      call broadcast_scalar (f_dardg2ndt, master_task)
+      call broadcast_scalar (f_dvirdgndt, master_task)
+      call broadcast_scalar (f_krdgn, master_task)
+      call broadcast_scalar (f_aparticn, master_task)
+      call broadcast_scalar (f_aredistn, master_task)
+      call broadcast_scalar (f_vredistn, master_task)
+
+      ! 2D variables
+
+      do ns = 1, nstreams
+
+      if (f_alvl(1:1) /= 'x') &
+         call define_hist_field(n_alvl,"alvl","1",tstr2D, tcstr, &
+             "level ice area fraction",                            &
+             "none", c1, c0,                                       &
+             ns, f_alvl)
+      if (f_vlvl(1:1) /= 'x') &
+         call define_hist_field(n_vlvl,"vlvl","m",tstr2D, tcstr, &
+             "level ice volume",                           &
+             "grid cell mean level ice thickness", c1, c0, &
+             ns, f_vlvl)
+      if (f_ardg(1:1) /= 'x') &
+         call define_hist_field(n_ardg,"ardg","1",tstr2D, tcstr, &
+             "ridged ice area fraction",                           &
+             "none", c1, c0,                                       &
+             ns, f_ardg)
+      if (f_vrdg(1:1) /= 'x') &
+         call define_hist_field(n_vrdg,"vrdg","m",tstr2D, tcstr, &
+             "ridged ice volume",                          &
+             "grid cell mean level ridged thickness", c1, c0, &
+             ns, f_vrdg)
+
+      if (f_dardg1dt(1:1) /= 'x') &
+         call define_hist_field(n_dardg1dt,"dardg1dt","%/day",tstr2D, tcstr, &
+             "ice area ridging rate",                                      &
+             "none", secday*c100, c0,                                      &
+             ns, f_dardg1dt)
+      
+      if (f_dardg2dt(1:1) /= 'x') &
+         call define_hist_field(n_dardg2dt,"dardg2dt","%/day",tstr2D, tcstr, &
+             "ridge area formation rate",                                  &
+             "none", secday*c100, c0,                                      &
+             ns, f_dardg2dt)
+      
+      if (f_dvirdgdt(1:1) /= 'x') &
+         call define_hist_field(n_dvirdgdt,"dvirdgdt","cm/day",tstr2D, tcstr, &
+             "ice volume ridging rate",                                     &
+             "none", mps_to_cmpdy, c0,                                      &
+             ns, f_dvirdgdt)
+      
+      if (f_opening(1:1) /= 'x') &
+         call define_hist_field(n_opening,"opening","%/day",tstr2D, tcstr, &
+             "lead area opening rate",                                   &
+             "none", secday*c100, c0,                                    &
+             ns, f_opening)
+
+      enddo ! nstreams
+      
+      ! 3D (category) variables must be looped separately
+
+      do ns = 1, nstreams
+
+       if (f_ardgn(1:1) /= 'x') &
+           call define_hist_field(n_ardgn,"ardgn","1",tstr3Dc, tcstr, &
+             "ridged ice area fraction, category",                 &
+             "none", c1, c0,                                       &
+             ns, f_ardgn)
+
+       if (f_vrdgn(1:1) /= 'x') &
+           call define_hist_field(n_vrdgn,"vrdgn","m",tstr3Dc, tcstr, &
+             "ridged ice volume, category",                &
+             "grid cell mean ridged ice thickness", c1, c0, &
+             ns, f_vrdgn)
+
+       if (f_dardg1ndt(1:1) /= 'x') &
+           call define_hist_field(n_dardg1ndt,"dardg1ndt","%/day",tstr3Dc, tcstr, &
+             "ice area ridging rate, category",                            &
+             "none", secday*c100, c0,                                      &
+             ns, f_dardg1ndt)
+
+       if (f_dardg2ndt(1:1) /= 'x') &
+           call define_hist_field(n_dardg2ndt,"dardg2ndt","%/day",tstr3Dc, tcstr, &
+             "ridge area formation rate, category",                        &
+             "none", secday*c100, c0,                                      &
+             ns, f_dardg2ndt)
+
+       if (f_dvirdgndt(1:1) /= 'x') &
+          call define_hist_field(n_dvirdgndt,"dvirdgndt","cm/day",tstr3Dc, tcstr, &
+             "ice volume ridging rate, category",                          &
+             "none", mps_to_cmpdy, c0,                                     &
+             ns, f_dvirdgndt)
+
+       if (f_krdgn(1:1) /= 'x') &
+           call define_hist_field(n_krdgn,"krdgn","1",tstr3Dc, tcstr, &
+             "ridging thickness factor, category",                    &
+             "mean ridge thickness/thickness of ridging ice", c1, c0, &
+             ns, f_krdgn)
+
+       if (f_aparticn(1:1) /= 'x') &
+           call define_hist_field(n_aparticn,"aparticn","1",tstr3Dc, tcstr, &
+             "ridging ice participation function, category",       &
+             "fraction of new ridge area added to cat", c1, c0,    &
+             ns, f_aparticn)
+
+       if (f_aredistn(1:1) /= 'x') &
+           call define_hist_field(n_aredistn,"aredistn","1",tstr3Dc, tcstr, &
+             "ridging ice area redistribution function, category",   &
+             "fraction of new ridge volume added to cat", c1, c0,    &
+             ns, f_aredistn)
+
+       if (f_vredistn(1:1) /= 'x') &
+           call define_hist_field(n_vredistn,"vredistn","1",tstr3Dc, tcstr, &
+             "ridging ice volume redistribution function, category",       &
+             "none", c1, c0,                                       &
+             ns, f_vredistn)
+
+      enddo ! ns
+
+      end subroutine init_hist_mechred
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: accum_hist - accumulate average ice quantities or snapshots
+!
+! !INTERFACE:
+!
+      subroutine accum_hist_mechred (iblk)
+!
+! !DESCRIPTION:
+!
+! write average ice quantities or snapshots
+!
+! !REVISION HISTORY:
+!
+! author:   Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+      use ice_blocks
+      use ice_domain
+      use ice_state
+      use ice_flux
+      use ice_shortwave, only: apeffn
+      use ice_work, only: worka
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+           iblk                 ! block index
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+           i,j, &
+           ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+
+      type (block) :: &
+         this_block           ! block information for current block
+
+      !---------------------------------------------------------------
+      ! increment field
+      !---------------------------------------------------------------
+
+         ! 2D fields
+
+         if (f_alvl(1:1)/= 'x') &
+             call accum_hist_field(n_alvl,   iblk, &
+                                   aice(:,:,iblk) * trcr(:,:,nt_alvl,iblk), a2D)
+         if (f_vlvl(1:1)/= 'x') &
+             call accum_hist_field(n_vlvl,   iblk, &
+                                   vice(:,:,iblk) * trcr(:,:,nt_vlvl,iblk), a2D)
+         if (f_ardg(1:1)/= 'x') &
+             call accum_hist_field(n_ardg,   iblk, &
+                             aice(:,:,iblk) * (c1 - trcr(:,:,nt_alvl,iblk)), a2D)
+         if (f_vrdg(1:1)/= 'x') &
+             call accum_hist_field(n_vrdg,   iblk, &
+                             vice(:,:,iblk) * (c1 - trcr(:,:,nt_vlvl,iblk)), a2D)
+         if (f_dardg1dt(1:1)/= 'x') &
+             call accum_hist_field(n_dardg1dt,iblk, dardg1dt(:,:,iblk), a2D)
+         if (f_dardg2dt(1:1)/= 'x') &
+             call accum_hist_field(n_dardg2dt,iblk, dardg2dt(:,:,iblk), a2D)
+         if (f_dvirdgdt(1:1)/= 'x') &
+             call accum_hist_field(n_dvirdgdt,iblk, dvirdgdt(:,:,iblk), a2D)
+         if (f_opening(1:1) /= 'x') &
+             call accum_hist_field(n_opening, iblk, opening(:,:,iblk), a2D)
+
+         ! 3D category fields
+
+         if (f_ardgn(1:1)/= 'x') &
+             call accum_hist_field(n_ardgn-n2D, iblk, ncat_hist, &
+                                   aicen(:,:,1:ncat_hist,iblk) &
+                                 * (c1 - trcrn(:,:,nt_alvl,1:ncat_hist,iblk)), a3Dc)
+         if (f_vrdgn(1:1)/= 'x') &
+             call accum_hist_field(n_vrdgn-n2D, iblk, ncat_hist, &
+                                   vicen(:,:,1:ncat_hist,iblk) &
+                                 * (c1 - trcrn(:,:,nt_vlvl,1:ncat_hist,iblk)), a3Dc)
+         if (f_dardg1ndt(1:1)/= 'x') &
+             call accum_hist_field(n_dardg1ndt-n2D, iblk, ncat_hist, &
+                                   dardg1ndt(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_dardg2ndt(1:1)/= 'x') &
+             call accum_hist_field(n_dardg2ndt-n2D, iblk, ncat_hist, &
+                                   dardg2ndt(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_dvirdgndt(1:1)/= 'x') &
+             call accum_hist_field(n_dvirdgndt-n2D, iblk, ncat_hist, &
+                                   dvirdgndt(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_krdgn(1:1)/= 'x') &
+             call accum_hist_field(n_krdgn-n2D, iblk, ncat_hist, &
+                                   krdgn(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_aparticn(1:1)/= 'x') &
+             call accum_hist_field(n_aparticn-n2D, iblk, ncat_hist, &
+                                   aparticn(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_aredistn(1:1)/= 'x') &
+             call accum_hist_field(n_aredistn-n2D, iblk, ncat_hist, &
+                                   aredistn(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_vredistn(1:1)/= 'x') &
+             call accum_hist_field(n_vredistn-n2D, iblk, ncat_hist, &
+                                   vredistn(:,:,1:ncat_hist,iblk), a3Dc)
+
+      end subroutine accum_hist_mechred
+
+!=======================================================================
+
+      end module ice_history_mechred
+
+!=======================================================================
