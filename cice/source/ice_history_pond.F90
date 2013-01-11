@@ -4,7 +4,7 @@
 !
 ! !MODULE: ice_history - ice model history files
 !
-! Driver for core history output
+! Melt pond history output
 !
 ! The following variables are currently hard-wired as snapshots 
 !   (instantaneous rather than time-averages):
@@ -155,10 +155,6 @@
           f_ipond_ai  = 'x'
           f_apeff_ai  = 'x'
       endif
-
-#ifndef ncdf
-      f_bounds = .false.
-#endif
 
       call broadcast_scalar (f_apondn, master_task)
       call broadcast_scalar (f_hpondn, master_task)

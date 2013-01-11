@@ -212,7 +212,6 @@
            f_fswdn     = 'm', f_flwdn      = 'm', &
            f_snow      = 'm', f_snow_ai    = 'm', &
            f_rain      = 'm', f_rain_ai    = 'm', &
-           f_faero_atm = 'm', f_faero_ocn  = 'm', &
            f_sst       = 'm', f_sss        = 'm', &
            f_uocn      = 'm', f_vocn       = 'm', &
            f_frzmlt    = 'm', &
@@ -260,7 +259,6 @@
            f_mlt_onset = 'm', f_frz_onset  = 'm', &
            f_iage      = 'm', f_FY         = 'm', &
            f_hisnap    = 'm', f_aisnap     = 'm', &
-           f_aero      = 'm', f_aeron      = 'm', &
            f_aicen     = 'x', f_vicen      = 'x', &
            f_trsig     = 'm', f_icepresent = 'm', &
            f_fsurf_ai  = 'm', f_fcondtop_ai= 'm', &
@@ -322,7 +320,6 @@
            f_fswdn,     f_flwdn    , &
            f_snow,      f_snow_ai  , &     
            f_rain,      f_rain_ai  , &
-           f_faero_atm, f_faero_ocn, &
            f_sst,       f_sss      , &
            f_uocn,      f_vocn     , &
            f_frzmlt                , &
@@ -370,7 +367,6 @@
            f_mlt_onset, f_frz_onset, &
            f_iage,      f_FY       , &
            f_hisnap,    f_aisnap   , &
-           f_aero,      f_aeron    , &
            f_aicen,     f_vicen    , &
            f_trsig,     f_icepresent,&
            f_fsurf_ai,  f_fcondtop_ai,&
@@ -545,15 +541,6 @@
 	   n_s22	 , &
 	   n_yieldstress11, n_yieldstress12,  &
 	   n_yieldstress22
-
-      ! aerosols
-      integer(kind=int_kind), dimension(max_aero,max_nstrm) :: &
-           n_faero_atm    , &
-           n_faero_ocn    , &
-           n_aerosn1      , &
-           n_aerosn2      , &
-           n_aeroic1      , &
-           n_aeroic2
 
       interface accum_hist_field ! generic interface
            module procedure accum_hist_field_2D, &

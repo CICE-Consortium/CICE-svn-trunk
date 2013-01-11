@@ -4,7 +4,7 @@
 !
 ! !MODULE: ice_history - ice model history files
 !
-! Driver for core history output
+! Mechanical redistribution history output
 !
 ! The following variables are currently hard-wired as snapshots 
 !   (instantaneous rather than time-averages):
@@ -158,10 +158,6 @@
          f_ardgn = 'x'
          f_vrdgn = 'x'
       endif
-
-#ifndef ncdf
-      f_bounds = .false.
-#endif
 
       call broadcast_scalar (f_ardg, master_task)
       call broadcast_scalar (f_vrdg, master_task)
@@ -318,8 +314,6 @@
       use ice_domain
       use ice_state
       use ice_flux
-      use ice_shortwave, only: apeffn
-      use ice_work, only: worka
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
