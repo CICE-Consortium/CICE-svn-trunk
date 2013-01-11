@@ -175,7 +175,6 @@
       ! 2D variables
       do ns = 1, nstreams
 
-      ! Melt ponds
       if (f_apond(1:1) /= 'x') &
          call define_hist_field(n_apond,"apond","1",tstr2D, tcstr, &
              "melt pond fraction of sea ice",                      &
@@ -224,9 +223,9 @@
              "weighted by ice area", c1, c0,                       &
              ns, f_apeff_ai)
 
-      enddo ! ns
-
-      ! 3D (category) variables looped separately for ordering
+      enddo ! nstreams
+      
+      ! 3D (category) variables must be looped separately
       do ns = 1, nstreams
 
         if (f_apondn(1:1) /= 'x') &
