@@ -283,9 +283,6 @@
   , f_icepresent   = 'm'
   , f_iage         = 'x'
   , f_FY           = 'x'
-  , f_faero_atm    = 'x'
-  , f_faero_ocn    = 'x'
-  , f_aero         = 'x'
   , f_aicen        = 'x'
   , f_vicen        = 'x'
   , f_Tinz         = 'x'
@@ -382,4 +379,10 @@
   , f_hpond_ai     = 'x'
   , f_ipond_ai     = 'x'
   , f_apeff_ai     = 'x'
+/
+
+&icefields_bgc_nml
+    f_faero_atm    = 'x'
+  , f_faero_ocn    = 'x'
+  , f_aero         = 'x'
 /

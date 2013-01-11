@@ -49,6 +49,7 @@
       use ice_fileunits
       use ice_history_shared
       use ice_history_write
+      use ice_history_bgc
       use ice_history_mechred
       use ice_history_pond
 !
@@ -117,7 +118,6 @@
          ntmp
       integer (kind=int_kind) :: nml_error ! namelist i/o error flag
 
-      character (len=3) :: nchar
       character (len=40) :: stmp
 
       !-----------------------------------------------------------------
@@ -169,12 +169,6 @@
 
       if (.not. tr_iage) f_iage = 'x'
       if (.not. tr_FY)   f_FY   = 'x'
-      if (.not. tr_aero) then
-         f_faero_atm = 'x'
-         f_faero_ocn = 'x'
-         f_aero      = 'x' 
-         f_aeron     = 'x' ! NOTE not implemented
-      endif
 
       if (.not. tr_bgc_N_sk)  f_bgc_N_sk = 'x'
       if (.not. tr_bgc_N_sk)  f_bgc_C_sk = 'x'
@@ -262,8 +256,6 @@
       call broadcast_scalar (f_snow_ai, master_task)
       call broadcast_scalar (f_rain, master_task)
       call broadcast_scalar (f_rain_ai, master_task)
-      call broadcast_scalar (f_faero_atm, master_task)
-      call broadcast_scalar (f_faero_ocn, master_task)
       call broadcast_scalar (f_sst, master_task)
       call broadcast_scalar (f_sss, master_task)
       call broadcast_scalar (f_uocn, master_task)
@@ -409,8 +401,6 @@
       call broadcast_scalar (f_upNH, master_task)
       call broadcast_scalar (f_iage, master_task)
       call broadcast_scalar (f_FY, master_task)
-      call broadcast_scalar (f_aero, master_task)
-      call broadcast_scalar (f_aeron, master_task)
 
       call broadcast_scalar (f_a11, master_task)
       call broadcast_scalar (f_a12, master_task)
@@ -1244,49 +1234,6 @@
              "weighted by ice area", c1, c0,                   &
               ns1, f_FY)
 
-      ! Aerosols
-      if (f_aero(1:1) /= 'x') then
-         do n=1,n_aero
-            write(nchar,'(i3.3)') n
-            write(vname_in,'(a,a)') 'aerosnossl', trim(nchar)
-            call define_hist_field(n_aerosn1(n,:),vname_in,"kg/kg",   &
-                tstr2D, tcstr,"snow ssl aerosol mass","none", c1, c0, &
-                ns1, f_aero)
-            write(vname_in,'(a,a)') 'aerosnoint', trim(nchar)
-            call define_hist_field(n_aerosn2(n,:),vname_in,"kg/kg",   &
-                tstr2D, tcstr,"snow int aerosol mass","none", c1, c0, &
-                ns1, f_aero)
-            write(vname_in,'(a,a)') 'aeroicessl', trim(nchar)
-            call define_hist_field(n_aeroic1(n,:),vname_in,"kg/kg",  &
-                tstr2D, tcstr,"ice ssl aerosol mass","none", c1, c0, &
-                ns1, f_aero)
-            write(vname_in,'(a,a)') 'aeroiceint', trim(nchar)
-            call define_hist_field(n_aeroic2(n,:),vname_in,"kg/kg",  &
-                tstr2D, tcstr,"ice int aerosol mass","none", c1, c0, &
-                ns1, f_aero)
-         enddo
-      endif
-
-      if (f_faero_atm(1:1) /= 'x') then
-         do n=1,n_aero
-            write(nchar,'(i3.3)') n
-            write(vname_in,'(a,a)') 'faero_atm', trim(nchar)
-            call define_hist_field(n_faero_atm(n,:),vname_in,"kg/m^2 s", &
-                tstr2D, tcstr,"aerosol deposition rate","none", c1, c0,  &
-                ns1, f_faero_atm)
-         enddo
-      endif
-
-      if (f_faero_ocn(1:1) /= 'x') then
-         do n=1,n_aero
-            write(nchar,'(i3.3)') n
-            write(vname_in,'(a,a)') 'faero_ocn', trim(nchar)
-            call define_hist_field(n_faero_ocn(n,:),vname_in,"kg/m^2 s", &
-                tstr2D, tcstr,"aerosol flux to ocean","none", c1, c0,    &
-                ns1, f_faero_ocn)
-         enddo
-      endif
-
       enddo ! ns1
 
       ! 3D (category) variables looped separately for ordering
@@ -1523,10 +1470,15 @@
       !-----------------------------------------------------------------
       ! other history variables
       !-----------------------------------------------------------------
+
       ! mechanical redistribution
       call init_hist_mechred
+
       ! melt ponds
       if (tr_pond) call init_hist_pond
+
+      ! biogeochemistry
+      if (tr_aero) call init_hist_bgc
 
       !-----------------------------------------------------------------
       ! fill igrd array with namelist values
@@ -2524,40 +2476,18 @@
          enddo
         endif
 
-        ! Aerosols
-        if (f_faero_atm(1:1) /= 'x') then
-           do n=1,n_aero
-              call accum_hist_field(n_faero_atm(n,:),iblk, &
-                                      faero_atm(:,:,n,iblk), a2D)
-           enddo
-        endif
-        if (f_faero_ocn(1:1) /= 'x') then
-           do n=1,n_aero
-              call accum_hist_field(n_faero_ocn(n,:),iblk, &
-                                      faero_ocn(:,:,n,iblk), a2D)
-                                    
-           enddo
-        endif
-        if (f_aero(1:1) /= 'x') then
-           do n=1,n_aero
-              call accum_hist_field(n_aerosn1(n,:), iblk, &
-                                 trcr(:,:,nt_aero  +4*(n-1),iblk)/rhos, a2D)
-              call accum_hist_field(n_aerosn2(n,:), iblk, &
-                                 trcr(:,:,nt_aero+1+4*(n-1),iblk)/rhos, a2D)
-              call accum_hist_field(n_aeroic1(n,:), iblk, &
-                                 trcr(:,:,nt_aero+2+4*(n-1),iblk)/rhoi, a2D)
-              call accum_hist_field(n_aeroic2(n,:), iblk, &
-                                 trcr(:,:,nt_aero+3+4*(n-1),iblk)/rhoi, a2D)
-           enddo
-        endif
-
       !---------------------------------------------------------------
       ! accumulate other history output
       !---------------------------------------------------------------
+
          ! mechanical redistribution
          call accum_hist_mechred (iblk)
+
          ! melt ponds
          if (tr_pond) call accum_hist_pond (iblk)
+
+         ! biogeochemistry
+         if (tr_aero) call accum_hist_bgc  (iblk)
 
       enddo                     ! iblk
 
