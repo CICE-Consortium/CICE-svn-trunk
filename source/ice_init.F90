@@ -1221,7 +1221,7 @@
                   trcrn(i,j,it,n) = c0
                enddo
             endif
-            trcrn(i,j,nt_fbri,n) = c1       ! all ice has dynamic salinity
+            if (hbrine) trcrn(i,j,nt_fbri,n) = c1
             do k = 1, nilyr
                trcrn(i,j,nt_sice+k-1,n) = salinz(i,j,k)
             enddo
@@ -1366,7 +1366,7 @@
                   vicen(i,j,n) = hinit(n) * ainit(n) ! m
                endif
                vsnon(i,j,n) = min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
-               trcrn(i,j,nt_fbri,n) = c1
+               if (hbrine) trcrn(i,j,nt_fbri,n) = c1
             enddo               ! ij
 
             ! surface temperature

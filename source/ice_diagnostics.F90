@@ -689,8 +689,13 @@
                   if (aicen(i,j,2,iblk) /= c0) &
                   phin2(n) = vicen(i,j,2,iblk)/aicen(i,j,2,iblk)
                   hsavg(n) = vsno(i,j,iblk)/paice(n)
+                  if (hbrine) then
                   hbioavg(n) = trcr(i,j,nt_fbri,iblk)* hiavg(n) !/paice(n)  
                   hbavg(n) = hbioavg(n) - rhosi/rhow*hiavg(n) - rhos/rhow*hsavg(n) 
+                  else
+                  hbioavg(n) = c0
+                  hbavg(n) = c0
+                  endif
                endif
                pTsfc(n) = trcr(i,j,nt_Tsfc,iblk)   ! ice/snow sfc temperature
                pevap(n) = evap(i,j,iblk)*dt/rhoi   ! sublimation/condensation

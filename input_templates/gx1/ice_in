@@ -1,10 +1,10 @@
 &setup_nml
     days_per_year  = 365
   , use_leap_years = .false.
-  , year_init      = 1981
+  , year_init      = 1958
   , istep0         = 0
   , dt             = 3600.0
-  , npt            = 744
+  , npt            = 175200
   , ndtd           = 1
   , runtype        = 'initial'
   , ice_ic         = './restart/iced_gx1_v5.0'
@@ -13,7 +13,7 @@
   , restart_dir    = './restart/'
   , restart_file   = 'iced'
   , pointer_file   = './restart/ice.restart_file'
-  , dumpfreq       = 'm'
+  , dumpfreq       = 'y'
   , dumpfreq_n     = 1
   , dump_last      = .false.
   , diagfreq       = 24
@@ -46,7 +46,7 @@
 /
 
 &domain_nml
-    nprocs = 8
+    nprocs = 32
   , processor_shape   = 'slenderX2'
   , distribution_type = 'cartesian'
   , distribution_wght = 'latitude'
@@ -55,17 +55,17 @@
 /
 
 &tracer_nml
-    tr_iage      = .false.
+    tr_iage      = .true.
   , restart_age  = .false.
-  , tr_FY        = .false.
+  , tr_FY        = .true.
   , restart_FY   = .false.
-  , tr_lvl       = .false.
+  , tr_lvl       = .true.
   , restart_lvl  = .false.
   , tr_pond_cesm = .false.
   , restart_pond_cesm = .false.
   , tr_pond_topo = .false.
   , restart_pond_topo = .false.
-  , tr_pond_lvl  = .false.
+  , tr_pond_lvl  = .true.
   , restart_pond_lvl  = .false.
   , tr_aero      = .false.
   , restart_aero = .false.
@@ -135,7 +135,7 @@
   , mu_rdg          = 3
   , ktherm          = 1
   , conduct         = 'bubbly'
-  , shortwave       = 'default'
+  , shortwave       = 'dEdd'
   , albedo_type     = 'default'
   , albicev         = 0.78
   , albicei         = 0.36
@@ -145,17 +145,17 @@
   , R_ice           = 0.
   , R_pnd           = 0.
   , R_snw           = 1.5
-  , hs0             = 0.03
+  , hs0             = 0.
   , hs1             = 0.03
   , dpscale         = 1.e-3
   , frzpnd          = 'hlid'
   , snowinfil       = .true.
   , rfracmin        = 0.15
-  , rfracmax        = 0.85
+  , rfracmax        = 1.
   , pndaspect       = 0.8
   , atmbndy         = 'default'
-  , fyear_init      = 1981
-  , ycycle          = 1
+  , fyear_init      = 1958
+  , ycycle          = 52
   , atm_data_format = 'bin'
   , atm_data_type   = 'LYq'
   , atm_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/LargeYeager/v2_updated/'
@@ -276,15 +276,14 @@
   , f_daidtd       = 'm' 
   , f_mlt_onset    = 'm'
   , f_frz_onset    = 'm'
-  , f_opening      = 'm'
   , f_hisnap       = 'x'
   , f_aisnap       = 'x'
   , f_trsig        = 'm'
   , f_icepresent   = 'm'
-  , f_iage         = 'x'
-  , f_FY           = 'x'
-  , f_aicen        = 'x'
-  , f_vicen        = 'x'
+  , f_iage         = 'm'
+  , f_FY           = 'm'
+  , f_aicen        = 'm'
+  , f_vicen        = 'm'
   , f_Tinz         = 'x'
   , f_Sinz         = 'x'
   , f_Tsnz         = 'x'
@@ -324,11 +323,11 @@
   , f_fSil_g_ai    = 'x'
   , f_upNO         = 'x'
   , f_upNH         = 'x'
-  , f_zTin         = 'm'
-  , f_zphi         = 'm' 
-  , f_iDi          = 'm'
+  , f_zTin         = 'x'
+  , f_zphi         = 'x' 
+  , f_iDi          = 'x'
   , f_iki          = 'x'
-  , f_bgc_NO       = 'm' 
+  , f_bgc_NO       = 'x' 
   , f_bgc_N        = 'x' 
   , f_bgc_NH       = 'x' 
   , f_bgc_C        = 'x' 
@@ -338,47 +337,50 @@
   , f_bgc_DMS      = 'x' 
   , f_bgc_Sil      = 'x' 
   , f_bgc_PON      = 'x' 
-  , f_bgc_S        = 'm'  
-  , f_fbri         = 'm'    
-  , f_growN        = 'm'
+  , f_bgc_S        = 'x'  
+  , f_fbri         = 'x'    
+  , f_growN        = 'x'
   , f_zfswin       = 'x'
-  , f_Stot         = 'm'
-  , f_chlnet       = 'm'
-  , f_PPnet        = 'm'
-  , f_NOnet        = 'm'
+  , f_Stot         = 'x'
+  , f_chlnet       = 'x'
+  , f_PPnet        = 'x'
+  , f_NOnet        = 'x'
 /
 
 &icefields_mechred_nml
-    f_alvl         = 'x'
-  , f_vlvl         = 'x'
-  , f_ardg         = 'x'
-  , f_vrdg         = 'x'
+    f_alvl         = 'm'
+  , f_vlvl         = 'm'
+  , f_ardg         = 'm'
+  , f_vrdg         = 'm'
   , f_dardg1dt     = 'm'
   , f_dardg2dt     = 'm'
   , f_dvirdgdt     = 'm'
-  , f_ardgn        = 'x'
-  , f_vrdgn        = 'x'
-  , f_dardg1ndt    = 'x'
-  , f_dardg2ndt    = 'x'
-  , f_dvirdgndt    = 'x'
-  , f_krdgn        = 'x'
-  , f_aparticn     = 'x'
-  , f_aredistn     = 'x'
-  , f_vredistn     = 'x'
+  , f_opening      = 'm'
+  , f_ardgn        = 'm'
+  , f_vrdgn        = 'm'
+  , f_dardg1ndt    = 'm'
+  , f_dardg2ndt    = 'm'
+  , f_dvirdgndt    = 'm'
+  , f_krdgn        = 'm'
+  , f_aparticn     = 'm'
+  , f_aredistn     = 'm'
+  , f_vredistn     = 'm'
+  , f_araftn       = 'm'
+  , f_vraftn       = 'm'
 /
 
 &icefields_pond_nml
     f_apondn       = 'x'
   , f_apeffn       = 'x'
   , f_hpondn       = 'x'
-  , f_apond        = 'x'
-  , f_hpond        = 'x'
-  , f_ipond        = 'x'
-  , f_apeff        = 'x'
-  , f_apond_ai     = 'x'
-  , f_hpond_ai     = 'x'
-  , f_ipond_ai     = 'x'
-  , f_apeff_ai     = 'x'
+  , f_apond        = 'm'
+  , f_hpond        = 'm'
+  , f_ipond        = 'm'
+  , f_apeff        = 'm'
+  , f_apond_ai     = 'm'
+  , f_hpond_ai     = 'm'
+  , f_ipond_ai     = 'm'
+  , f_apeff_ai     = 'm'
 /
 
 &icefields_bgc_nml

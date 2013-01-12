@@ -93,6 +93,8 @@
          krdgn,     & ! mean ridge thickness/thickness of ridging ice
          ardgn,     & ! fractional area of ridged ice
          vrdgn,     & ! volume of ridged ice
+         araftn,    & ! rafting ice area
+         vraftn,    & ! rafting ice volume 
          aredistn,  & ! redistribution function: fraction of new ridge area
          vredistn     ! redistribution function: fraction of new ridge volume
 

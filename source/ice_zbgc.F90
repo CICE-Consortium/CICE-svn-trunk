@@ -98,7 +98,6 @@
         Ra_c, grid_o, grid_o_t, l_sk, grid_oS, &
         l_skS,  lapidus_g, lapidus_m, rhosi, initbio_frac
 
-
       !-----------------------------------------------------------------
       ! default values
       !-----------------------------------------------------------------
@@ -175,18 +174,19 @@
 
       ! zsalinity
 
-      if (solve_Sin) tr_bgc_S = .true. ! echmod, for now
       call broadcast_scalar(hbrine,             master_task)
       call broadcast_scalar(read_Sin,           master_task)
       call broadcast_scalar(solve_Sin,          master_task)
-         nt_fbri = c0
-         if (hbrine) then
-             nt_fbri = ntrcr + 1   ! ice volume fraction with dynamic salt present
-             ntrcr = ntrcr + 1
-         endif
-      if (my_task == master_task) write(nu_diag,1020)'nt_fbri = ', nt_fbri
+      if (solve_Sin) tr_bgc_S = .true. ! echmod, for now
+
+      nt_fbri = c0
+      if (hbrine) then
+          nt_fbri = ntrcr + 1   ! ice volume fraction with dynamic salt present
+          ntrcr = ntrcr + 1
+      endif
       call broadcast_scalar(nt_fbri,  master_task)
-      trcr_depend(nt_fbri) = 1 ! ice volume fraction with dynamic salinity 
+      if (hbrine) trcr_depend(nt_fbri) = 1 ! ice volume fraction with dynamic salinity 
+      if (my_task == master_task) write(nu_diag,1020)'nt_fbri = ', nt_fbri
 
       ! zbgc
       !----------------------------------------------------
@@ -201,6 +201,9 @@
       l_skS = l_skS * l_sk_scale
 
       call broadcast_scalar(solve_bgc,          master_task)
+
+      if (.not. solve_bgc) return
+
       call broadcast_scalar(restore_bgc,        master_task)
       call broadcast_scalar(bgc_data_dir,       master_task)
       call broadcast_scalar(sil_data_type,      master_task)

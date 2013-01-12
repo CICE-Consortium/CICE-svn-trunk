@@ -1252,7 +1252,8 @@
                          aparticn(:,:,:,iblk), krdgn     (:,:,:,iblk),   &
                          aredistn(:,:,:,iblk), vredistn  (:,:,:,iblk),   &
                          dardg1ndt(:,:,:,iblk),dardg2ndt (:,:,:,iblk),   &
-                         dvirdgndt(:,:,:,iblk))
+                         dvirdgndt(:,:,:,iblk),                          &
+                         araftn   (:,:,:,iblk),vraftn   (:,:,:,iblk))
 
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =', &

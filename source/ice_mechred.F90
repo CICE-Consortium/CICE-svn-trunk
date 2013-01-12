@@ -136,7 +136,8 @@
                             aparticn,    krdgn,      &
                             aredistn,    vredistn,   &
                             dardg1ndt,   dardg2ndt,  &
-                            dvirdgndt)
+                            dvirdgndt,               &
+                            araftn,      vraftn)
 !
 ! !USES:
 !                            
@@ -204,6 +205,8 @@
          dvirdgndt , & ! rate of ice volume ridged (m/s)
          aparticn  , & ! participation function
          krdgn     , & ! mean ridge thickness/thickness of ridging ice
+         araftn    , & ! rafting ice area
+         vraftn    , & ! rafting ice volume 
          aredistn  , & ! redistribution function: fraction of new ridge area
          vredistn      ! redistribution function: fraction of new ridge volume
 
@@ -254,7 +257,8 @@
          krdg         , & ! mean ridge thickness/thickness of ridging ice
          ardg1n       , & ! area of ice ridged
          ardg2n       , & ! area of new ridges
-         virdgn           ! ridging ice volume
+         virdgn       , & ! ridging ice volume
+         mraftn           ! rafting ice mask 
 
       real (kind=dbl_kind), dimension (icells) :: &
          vice_init, vice_final, & ! ice volume summed over categories
@@ -437,7 +441,7 @@
                          aksum,     apartic,         &
                          hrmin,     hrmax,           &
                          hrexp,     krdg,            &
-                         aparticn,  krdgn)
+                         aparticn,  krdgn,    mraftn)
 
       !-----------------------------------------------------------------
       ! Redistribute area, volume, and energy.
@@ -729,6 +733,24 @@
             i = indxi(ij)
             j = indxj(ij)
             dvirdgndt(i,j,n) = virdgn(ij,n)*dti
+         enddo
+         enddo
+      endif
+      if (present(araftn)) then
+         do n = 1, ncat
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            araftn(i,j,n) = mraftn(ij,n)*ardg2n(ij,n)
+         enddo
+         enddo
+      endif
+      if (present(vraftn)) then
+         do n = 1, ncat
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            vraftn(i,j,n) = mraftn(ij,n)*virdgn(ij,n)
          enddo
          enddo
       endif
@@ -1024,7 +1046,7 @@
                             aksum,       apartic,         &
                             hrmin,       hrmax,           &
                             hrexp,       krdg,            &
-                            aparticn,    krdgn)
+                            aparticn,    krdgn,    mraft)
 !
 ! !USES:
 !
@@ -1067,6 +1089,9 @@
          aparticn  , & ! participation function
          krdgn         ! mean ridge thickness/thickness of ridging ice
 
+      real (kind=dbl_kind), dimension (icells,ncat), &
+         intent(out), optional :: &
+         mraft            ! rafting ice mask 
 !
 !EOP
 !
@@ -1227,7 +1252,7 @@
       !-----------------------------------------------------------------
       ! Compute variables related to ITD of ridged ice:
       ! 
-      ! krdg = mean ridge thickness/ thickness of ridging ice
+      ! krdg   = mean ridge thickness / thickness of ridging ice
       ! hrmin  = min ridge thickness
       ! hrmax  = max ridge thickness (krdg_redist = 0)
       ! hrexp  = ridge e-folding scale (krdg_redist = 1)
@@ -1259,6 +1284,8 @@
                   hrmax(ij,n) = max(hrmax(ij,n), hrmin(ij,n)+puny) 
                   hrmean = p5 * (hrmin(ij,n) + hrmax(ij,n)) 
                   krdg(ij,n) = hrmean / hi 
+
+                  ! diagnostic rafting mask not implemented
                endif 
 
             enddo               ! ij
@@ -1304,6 +1331,14 @@
                   hrmin(ij,n) = min(c2*hi, hi + maxraft)
                   hrexp(ij,n) = mu_rdg * sqrt(hi)
                   krdg(ij,n) = (hrmin(ij,n) + hrexp(ij,n)) / hi
+
+   !echmod:  check computational efficiency
+                  ! diagnostic rafting mask
+                  if (present(mraft)) then
+                     mraft(ij,n) = max(c0, sign(c1, hi+maxraft-hrmin(ij,n)))
+                     xtmp = mraft(ij,n)*((c2*hi+hrexp(ij,n))/hi - krdg(ij,n))
+                     mraft(ij,n) = max(c0, sign(c1, puny-abs(xtmp)))
+                  endif
                endif
             enddo
          enddo
