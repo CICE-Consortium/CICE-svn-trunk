@@ -1236,7 +1236,21 @@
 
       enddo ! ns1
 
+      !-----------------------------------------------------------------
+      ! other history variables
+      !-----------------------------------------------------------------
+      ! mechanical redistribution
+      call init_hist_mechred_2D
+
+      ! melt ponds
+      if (tr_pond) call init_hist_pond_2D
+
+      ! biogeochemistry
+      if (tr_aero) call init_hist_bgc_2D
+
+      !-----------------------------------------------------------------
       ! 3D (category) variables looped separately for ordering
+      !-----------------------------------------------------------------
       do ns1 = 1, nstreams
 
         if (f_aicen(1:1) /= 'x') &
@@ -1470,15 +1484,14 @@
       !-----------------------------------------------------------------
       ! other history variables
       !-----------------------------------------------------------------
-
       ! mechanical redistribution
-      call init_hist_mechred
+      call init_hist_mechred_3D
 
       ! melt ponds
-      if (tr_pond) call init_hist_pond
+      if (tr_pond) call init_hist_pond_3D
 
       ! biogeochemistry
-      if (tr_aero) call init_hist_bgc
+      if (tr_aero) call init_hist_bgc_3D
 
       !-----------------------------------------------------------------
       ! fill igrd array with namelist values

@@ -56,7 +56,8 @@
            f_dardg1ndt = 'x', f_dardg2ndt  = 'x', &
            f_dvirdgndt = 'x', &
            f_aparticn  = 'x', f_krdgn      = 'x', &
-           f_aredistn  = 'x', f_vredistn   = 'x'
+           f_aredistn  = 'x', f_vredistn   = 'x', &
+           f_araftn    = 'x', f_vraftn     = 'x'
 
       !---------------------------------------------------------------
       ! namelist variables
@@ -71,7 +72,8 @@
            f_dardg1ndt, f_dardg2ndt, &
            f_dvirdgndt, &
            f_aparticn,  f_krdgn    , &
-           f_aredistn,  f_vredistn
+           f_aredistn,  f_vredistn , &
+           f_araftn,    f_vraftn
 
       !---------------------------------------------------------------
       ! field indices
@@ -86,7 +88,8 @@
            n_dardg1ndt  , n_dardg2ndt  , &
            n_dvirdgndt  , &
            n_aparticn   , n_krdgn      , &
-           n_aredistn   , n_vredistn
+           n_aredistn   , n_vredistn   , &
+           n_araftn     , n_vraftn
 
 !=======================================================================
 
@@ -100,7 +103,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine init_hist_mechred
+      subroutine init_hist_mechred_2D
 !
 ! !DESCRIPTION:
 !
@@ -157,7 +160,10 @@
          f_vlvl = 'x'
          f_ardgn = 'x'
          f_vrdgn = 'x'
+         f_araftn = 'x'
+         f_vraftn = 'x'
       endif
+      if (f_araftn /= 'x' .or. f_vraftn /= 'x') f_ardgn = f_araftn
 
       call broadcast_scalar (f_ardg, master_task)
       call broadcast_scalar (f_vrdg, master_task)
@@ -176,6 +182,8 @@
       call broadcast_scalar (f_aparticn, master_task)
       call broadcast_scalar (f_aredistn, master_task)
       call broadcast_scalar (f_vredistn, master_task)
+      call broadcast_scalar (f_araftn, master_task)
+      call broadcast_scalar (f_vraftn, master_task)
 
       ! 2D variables
 
@@ -219,7 +227,7 @@
              "ice volume ridging rate",                                     &
              "none", mps_to_cmpdy, c0,                                      &
              ns, f_dvirdgdt)
-      
+
       if (f_opening(1:1) /= 'x') &
          call define_hist_field(n_opening,"opening","%/day",tstr2D, tcstr, &
              "lead area opening rate",                                   &
@@ -227,8 +235,42 @@
              ns, f_opening)
 
       enddo ! nstreams
-      
+
+      end subroutine init_hist_mechred_2D
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: init_hist - initialize history files
+!
+! !INTERFACE:
+!
+      subroutine init_hist_mechred_3D
+!
+! !DESCRIPTION:
+!
+! Initialize history files
+!
+! !REVISION HISTORY:
+!
+! authors Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+      use ice_constants
+      use ice_calendar, only: nstreams
+      use ice_exit
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) :: ns
+
+      !-----------------------------------------------------------------
       ! 3D (category) variables must be looped separately
+      !-----------------------------------------------------------------
 
       do ns = 1, nstreams
 
@@ -286,9 +328,21 @@
              "none", c1, c0,                                       &
              ns, f_vredistn)
 
+       if (f_araftn(1:1) /= 'x') &
+           call define_hist_field(n_araftn,"araftn","1",tstr3Dc, tcstr, &
+             "rafted ice area fraction, category",                 &
+             "none", c1, c0,                                       &
+             ns, f_araftn)
+
+       if (f_vraftn(1:1) /= 'x') &
+           call define_hist_field(n_vraftn,"vraftn","1",tstr3Dc, tcstr, &
+             "rafted ice volume, category",                 &
+             "none", c1, c0,                                       &
+             ns, f_vraftn)
+
       enddo ! ns
 
-      end subroutine init_hist_mechred
+      end subroutine init_hist_mechred_3D
 
 !=======================================================================
 !
@@ -387,6 +441,12 @@
          if (f_vredistn(1:1)/= 'x') &
              call accum_hist_field(n_vredistn-n2D, iblk, ncat_hist, &
                                    vredistn(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_araftn(1:1)/= 'x') &
+             call accum_hist_field(n_araftn-n2D, iblk, ncat_hist, &
+                                   araftn(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_vraftn(1:1)/= 'x') &
+             call accum_hist_field(n_vraftn-n2D, iblk, ncat_hist, &
+                                   vraftn(:,:,1:ncat_hist,iblk), a3Dc)
 
       end subroutine accum_hist_mechred
 

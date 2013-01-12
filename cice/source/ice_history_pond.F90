@@ -92,7 +92,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine init_hist_pond
+      subroutine init_hist_pond_2D
 !
 ! !DESCRIPTION:
 !
@@ -221,6 +221,39 @@
 
       enddo ! nstreams
       
+      end subroutine init_hist_pond_2D
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: init_hist - initialize history files
+!
+! !INTERFACE:
+!
+      subroutine init_hist_pond_3D
+!
+! !DESCRIPTION:
+!
+! Initialize history files
+!
+! !REVISION HISTORY:
+!
+! authors Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+      use ice_constants
+      use ice_calendar, only: nstreams
+      use ice_state, only: tr_pond
+      use ice_exit
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) :: ns
+      
       ! 3D (category) variables must be looped separately
       do ns = 1, nstreams
 
@@ -242,7 +275,7 @@
 
       enddo ! ns
 
-      end subroutine init_hist_pond
+      end subroutine init_hist_pond_3D
 
 !=======================================================================
 !

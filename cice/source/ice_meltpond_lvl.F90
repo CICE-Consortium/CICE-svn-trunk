@@ -361,7 +361,7 @@
                draft = (rhos*hs + rhoi*hi)/rhow + hpondn
                deltah = hpondn + hi - draft
                pressure_head = gravit * rhow * max(deltah, c0)
-               Tmlt(:) = sicen(i,j,:) * depressT
+               Tmlt(:) = -sicen(i,j,:) * depressT
                call brine_permeability(qicen(i,j,:), vicen(i,j), sicen(i,j,:), Tmlt, perm)
                drain = perm*pressure_head*dt / (viscosity*hi) * dpscale
                deltah = min(drain, hpondn)

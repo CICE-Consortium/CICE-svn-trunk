@@ -57,8 +57,8 @@
                   + TRFY        & ! first-year area
                   + TRLVL*2     & ! level/deformed ice
                   + TRPND*3     & ! ponds
-                  + n_aero*4    & ! number of aerosols * 4 aero layers
-                  + nltrcr*nblyr,&! bgc in layers
+                  + n_aero*4,    & ! number of aerosols * 4 aero layers
+!                  + nltrcr*nblyr,&! bgc in layers
         max_nstrm =   5           ! max number of history output streams
 
       integer (kind=int_kind), parameter :: &
