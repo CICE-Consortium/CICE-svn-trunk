@@ -29,14 +29,14 @@ if ($RES == 'col') then   # for column configuration:
    setenv NTASK      1       # total number of processors
    setenv BLCKX      5       # x-dimension of blocks ( not including )
    setenv BLCKY      5       # y-dimension of blocks (  ghost cells  )
-   setenv NICELYR   100       # number of vertical layers in the ice
+   setenv NICELYR   100      # number of vertical layers in the ice
    setenv NSNWLYR    1       # number of vertical layers in the snow
    setenv NICECAT    1       # number of ice thickness categories
-else                      # test problem: gx3 - serial
+else                      # test problem: gx3
    setenv NTASK      4       # total number of processors
-   setenv BLCKX     25       #20 x-dimension of blocks ( not including )
-   setenv BLCKY     29       #25 y-dimension of blocks (  ghost cells  )
-   setenv NICELYR    4      # number of vertical layers in the ice
+   setenv BLCKX     25       # x-dimension of blocks ( not including )
+   setenv BLCKY     29       # y-dimension of blocks (  ghost cells  )
+   setenv NICELYR    4       # number of vertical layers in the ice
    setenv NSNWLYR    1       # number of vertical layers in the snow
    setenv NICECAT    5       # number of ice thickness categories
 endif
@@ -48,7 +48,6 @@ endif
 #setenv MXBLCKS 37 # if necessary (code will print proper value)
 
 ### Tracers               # match ice_in tracer_nml to conserve memory
-setenv TRBRI   0          # set to 1 for brine height tracer
 setenv TRAGE   0          # set to 1 for ice age tracer
 setenv TRFY    0          # set to 1 for first-year ice area tracer
 setenv TRLVL   0          # set to 1 for level and deformed ice tracers
@@ -56,6 +55,7 @@ setenv TRPND   0          # set to 1 for melt pond tracers
 setenv NTRAERO 0          # number of aerosol tracers 
                           # (up to max_aero in ice_domain_size.F90) 
                           # CESM uses 3 aerosol tracers
+setenv TRBRI   0          # set to 1 for brine height tracer
 setenv NBGCLYR 7          # number of biogeochemistry layers
 
 ### Specialty code

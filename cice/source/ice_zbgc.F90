@@ -172,38 +172,77 @@
       endif
       call release_fileunit(nu_nml)
 
+      !-----------------------------------------------------------------
       ! zsalinity
+      !-----------------------------------------------------------------
 
       call broadcast_scalar(hbrine,             master_task)
       call broadcast_scalar(read_Sin,           master_task)
       call broadcast_scalar(solve_Sin,          master_task)
+      call broadcast_scalar(tr_bgc_S,           master_task)
+      if (solve_Sin) hbrine   = .true. ! echmod, for now
       if (solve_Sin) tr_bgc_S = .true. ! echmod, for now
 
       nt_fbri = c0
       if (hbrine) then
-          nt_fbri = ntrcr + 1   ! ice volume fraction with dynamic salt present
+          nt_fbri = ntrcr + 1   ! ice volume fraction with salt
           ntrcr = ntrcr + 1
       endif
-      call broadcast_scalar(nt_fbri,  master_task)
-      if (hbrine) trcr_depend(nt_fbri) = 1 ! ice volume fraction with dynamic salinity 
-      if (my_task == master_task) write(nu_diag,1020)'nt_fbri = ', nt_fbri
+      if (hbrine) trcr_depend(nt_fbri) = 1
 
-      ! zbgc
-      !----------------------------------------------------
-      !bio-parameters
-      ! 
-      ! multiply some bio parameters by scale factors
-      !-----------------------------------------------------
-      grid_o = grid_o * grid_o_scale
-      grid_o_t = grid_o_t * grid_o_scale
-      l_sk = l_sk * l_sk_scale
+      if (tr_bgc_S)then
+          nt_bgc_S = ntrcr + 1
+          ntrcr = ntrcr + nblyr
+      endif 
+
+      ntd = 0                    ! if nt_fbri /= 0 then use fbri dependency
+      if (nt_fbri == 0) ntd = -1 ! otherwise make tracers depend on ice volume
+      do k = 1,nblyr
+         if (tr_bgc_S)     trcr_depend(nt_bgc_S     + k - 1)  = 2+nt_fbri+ntd
+      enddo
+
+      call broadcast_scalar(restart_S,          master_task)
+      call broadcast_scalar(solve_bgc,          master_task)
+      call broadcast_scalar(restart_bgc,        master_task)
+      call broadcast_scalar(Ra_c,               master_task)
+      call broadcast_scalar(lapidus_g,          master_task)
+      call broadcast_scalar(lapidus_m,          master_task)
+      call broadcast_scalar(rhosi,              master_task)
+      call broadcast_scalar(grid_oS,            master_task)
+      call broadcast_scalar(l_skS,              master_task)
+
       grid_oS = grid_oS * grid_o_scale
       l_skS = l_skS * l_sk_scale
 
-      call broadcast_scalar(solve_bgc,          master_task)
+      if (my_task == master_task) then
+         write(nu_diag,1010) ' hbrine                    = ', hbrine
+         write(nu_diag,1010) ' read_Sin                  = ', read_Sin
+         write(nu_diag,1010) ' solve_Sin                 = ', solve_Sin
+         write(nu_diag,1010) ' solve_bgc                 = ', solve_bgc
+         write(nu_diag,1010) ' restart_S                 = ', restart_S
+         write(nu_diag,1010) ' tr_bgc_S                  = ', tr_bgc_S
+         write(nu_diag,1000) ' grid_oS                   = ', grid_oS
+         write(nu_diag,1060) ' l_skS                     = ', l_skS
+         write(nu_diag,1000) ' Ra_c                      = ', Ra_c
+         write(nu_diag,1000) ' lapidus_g                 = ', lapidus_g
+         write(nu_diag,1000) ' lapidus_m                 = ', lapidus_m
+         write(nu_diag,1000) ' rhosi                     = ', rhosi
+      endif
 
       if (.not. solve_bgc) return
 
+      !----------------------------------------------------
+      ! zbgc
+      !----------------------------------------------------
+      call broadcast_scalar(grid_o,             master_task)
+      call broadcast_scalar(grid_o_t,           master_task)
+      call broadcast_scalar(l_sk,               master_task)
+
+      grid_o = grid_o * grid_o_scale
+      grid_o_t = grid_o_t * grid_o_scale
+      l_sk = l_sk * l_sk_scale
+
+      call broadcast_scalar(scale_bgc,          master_task)
       call broadcast_scalar(restore_bgc,        master_task)
       call broadcast_scalar(bgc_data_dir,       master_task)
       call broadcast_scalar(sil_data_type,      master_task)
@@ -217,9 +256,6 @@
       call broadcast_scalar(tr_bgc_DMSPp_sk,    master_task)
       call broadcast_scalar(tr_bgc_DMSPd_sk,    master_task)
       call broadcast_scalar(tr_bgc_DMS_sk,      master_task)
-      call broadcast_scalar(restart_bgc,        master_task)
-      call broadcast_scalar(restart_S,          master_task)
-      call broadcast_scalar(scale_bgc,          master_task)
       call broadcast_scalar(tr_bgc_NO,          master_task)
       call broadcast_scalar(tr_bgc_C,           master_task)
       call broadcast_scalar(tr_bgc_chl,         master_task)
@@ -230,16 +266,6 @@
       call broadcast_scalar(tr_bgc_DMSPd,       master_task)
       call broadcast_scalar(tr_bgc_DMS,         master_task)
       call broadcast_scalar(tr_bgc_PON,         master_task)
-      call broadcast_scalar(tr_bgc_S,           master_task)
-      call broadcast_scalar(grid_o,             master_task)
-      call broadcast_scalar(grid_o_t,           master_task)
-      call broadcast_scalar(l_sk,               master_task)
-      call broadcast_scalar(grid_oS,            master_task)
-      call broadcast_scalar(l_skS,              master_task)
-      call broadcast_scalar(Ra_c,               master_task)
-      call broadcast_scalar(lapidus_g,          master_task)
-      call broadcast_scalar(lapidus_m,          master_task)
-      call broadcast_scalar(rhosi,              master_task)
       call broadcast_scalar(initbio_frac,       master_task)
 
       !-----------------------------------------------------------------
@@ -247,10 +273,6 @@
       !-----------------------------------------------------------------
       if (my_task == master_task) then
 
-         write(nu_diag,1010) ' hbrine                    = ', hbrine
-         write(nu_diag,1010) ' read_Sin                  = ', read_Sin
-         write(nu_diag,1010) ' solve_Sin                 = ', solve_Sin
-         write(nu_diag,1010) ' solve_bgc                 = ', solve_bgc
          write(nu_diag,*)    ' sil_data_type             = ', &
                                trim(sil_data_type)
          write(nu_diag,*)    ' nit_data_type             = ', &
@@ -267,7 +289,6 @@
          write(nu_diag,1010) ' tr_bgc_DMSPd_sk           = ', tr_bgc_DMSPd_sk
          write(nu_diag,1010) ' tr_bgc_DMS_sk             = ', tr_bgc_DMS_sk
          write(nu_diag,1010) ' restart_bgc               = ', restart_bgc
-         write(nu_diag,1010) ' restart_S                 = ', restart_S
          write(nu_diag,1010) ' scale_bgc                 = ', scale_bgc
          write(nu_diag,1010) ' tr_bgc_NO                 = ', tr_bgc_NO
          write(nu_diag,1010) ' tr_bgc_N                  = ', tr_bgc_N
@@ -279,17 +300,10 @@
          write(nu_diag,1010) ' tr_bgc_DMSPd              = ', tr_bgc_DMSPd
          write(nu_diag,1010) ' tr_bgc_DMS                = ', tr_bgc_DMS
          write(nu_diag,1010) ' tr_bgc_PON                = ', tr_bgc_PON
-         write(nu_diag,1010) ' tr_bgc_S                  = ', tr_bgc_S
          !bio parameters
          write(nu_diag,1000) ' grid_o                    = ', grid_o
          write(nu_diag,1000) ' grid_o_t                  = ', grid_o_t
          write(nu_diag,1060) ' l_sk                      = ', l_sk
-         write(nu_diag,1000) ' grid_oS                   = ', grid_oS
-         write(nu_diag,1060) ' l_skS                     = ', l_skS
-         write(nu_diag,1000) ' Ra_c                      = ', Ra_c
-         write(nu_diag,1000) ' lapidus_g                 = ', lapidus_g
-         write(nu_diag,1000) ' lapidus_m                 = ', lapidus_m
-         write(nu_diag,1000) ' rhosi                     = ', rhosi
          write(nu_diag,1000) ' initbio_frac              = ', initbio_frac
 
       endif   ! master_task
@@ -386,10 +400,6 @@
              ntrcr = ntrcr + nblyr
              if (ntrace_start < 0) ntrace_start = nt_bgc_PON
          endif       
-         if (tr_bgc_S)then
-             nt_bgc_S = ntrcr + 1
-             ntrcr = ntrcr + nblyr
-         endif 
 
       if (my_task == master_task) then
          write(nu_diag,1020)'nt_bgc_N = ', nt_bgc_N
@@ -397,18 +407,6 @@
          write(nu_diag,*)' '
          write(nu_diag,1020)'nblyr', nblyr
       endif
-
-      call broadcast_scalar(nt_bgc_NO, master_task)
-      call broadcast_scalar(nt_bgc_N, master_task)
-      call broadcast_scalar(nt_bgc_NH, master_task)
-      call broadcast_scalar(nt_bgc_C, master_task)
-      call broadcast_scalar(nt_bgc_chl, master_task)
-      call broadcast_scalar(nt_bgc_DMSPp, master_task)
-      call broadcast_scalar(nt_bgc_DMSPd, master_task)
-      call broadcast_scalar(nt_bgc_DMS, master_task)
-      call broadcast_scalar(nt_bgc_Sil, master_task)
-      call broadcast_scalar(nt_bgc_PON, master_task)
-      call broadcast_scalar(nt_bgc_S, master_task)
 
       ! BGC layer model (on bottom "skeletal" layer)
       if (tr_bgc_N_sk)     trcr_depend(nt_bgc_N_sk)     = 0 ! algae  (skeletal)
@@ -421,10 +419,8 @@
       if (tr_bgc_DMSPd_sk) trcr_depend(nt_bgc_DMSPd_sk) = 0 !
       if (tr_bgc_DMS_sk)   trcr_depend(nt_bgc_DMS_sk)   = 0 !
    
-      ! BGC layer model and Salinity (on bio grid)  Bulk concentration
+      ! BGC layer model (on bio grid)  Bulk concentration
       ! volume-weighted tracers determined by brine level
-      ntd = 0                    ! if nt_fbri /= 0 then use standard dependency
-      if (nt_fbri == 0) ntd = -1 ! otherwise make tracers depend on ice volume
       do k = 1,nblyr
          if (tr_bgc_NO)    trcr_depend(nt_bgc_NO    + k - 1)  = 2+nt_fbri+ntd
          if (tr_bgc_N)     trcr_depend(nt_bgc_N     + k - 1)  = 2+nt_fbri+ntd
@@ -436,7 +432,6 @@
          if (tr_bgc_DMSPd) trcr_depend(nt_bgc_DMSPd + k - 1)  = 2+nt_fbri+ntd
          if (tr_bgc_DMS)   trcr_depend(nt_bgc_DMS   + k - 1)  = 2+nt_fbri+ntd
          if (tr_bgc_PON)   trcr_depend(nt_bgc_PON   + k - 1)  = 2+nt_fbri+ntd
-         if (tr_bgc_S)     trcr_depend(nt_bgc_S     + k - 1)  = 2+nt_fbri+ntd
       enddo
 
  1000    format (a30,2x,f9.2)  ! a30 to align formatted, unformatted statements
