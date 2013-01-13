@@ -248,6 +248,7 @@
   , f_fsice_g      = 'x'
   , f_fsice_g_ai   = 'x'
   , f_fsicen_g     = 'x'
+  , f_Stot         = 'x'
   , f_fhocn        = 'x' 
   , f_fhocn_ai     = 'm' 
   , f_fswthru      = 'x' 
@@ -291,6 +292,48 @@
   , f_fcondtopn_ai = 'x'
   , f_fmelttn_ai   = 'x'
   , f_flatn_ai     = 'x'
+/
+
+&icefields_mechred_nml
+    f_alvl         = 'm'
+  , f_vlvl         = 'm'
+  , f_ardg         = 'm'
+  , f_vrdg         = 'm'
+  , f_dardg1dt     = 'm'
+  , f_dardg2dt     = 'm'
+  , f_dvirdgdt     = 'm'
+  , f_opening      = 'm'
+  , f_ardgn        = 'm'
+  , f_vrdgn        = 'm'
+  , f_dardg1ndt    = 'm'
+  , f_dardg2ndt    = 'm'
+  , f_dvirdgndt    = 'm'
+  , f_krdgn        = 'm'
+  , f_aparticn     = 'm'
+  , f_aredistn     = 'm'
+  , f_vredistn     = 'm'
+  , f_araftn       = 'm'
+  , f_vraftn       = 'm'
+/
+
+&icefields_pond_nml
+    f_apondn       = 'x'
+  , f_apeffn       = 'x'
+  , f_hpondn       = 'x'
+  , f_apond        = 'm'
+  , f_hpond        = 'm'
+  , f_ipond        = 'm'
+  , f_apeff        = 'm'
+  , f_apond_ai     = 'm'
+  , f_hpond_ai     = 'm'
+  , f_ipond_ai     = 'm'
+  , f_apeff_ai     = 'm'
+/
+
+&icefields_bgc_nml
+    f_faero_atm    = 'x'
+  , f_faero_ocn    = 'x'
+  , f_aero         = 'x'
   , f_bgc_N_sk     = 'x'
   , f_bgc_C_sk     = 'x'
   , f_bgc_chl_sk   = 'x'
@@ -341,50 +384,7 @@
   , f_fbri         = 'x'    
   , f_growN        = 'x'
   , f_zfswin       = 'x'
-  , f_Stot         = 'x'
   , f_chlnet       = 'x'
   , f_PPnet        = 'x'
   , f_NOnet        = 'x'
-/
-
-&icefields_mechred_nml
-    f_alvl         = 'm'
-  , f_vlvl         = 'm'
-  , f_ardg         = 'm'
-  , f_vrdg         = 'm'
-  , f_dardg1dt     = 'm'
-  , f_dardg2dt     = 'm'
-  , f_dvirdgdt     = 'm'
-  , f_opening      = 'm'
-  , f_ardgn        = 'm'
-  , f_vrdgn        = 'm'
-  , f_dardg1ndt    = 'm'
-  , f_dardg2ndt    = 'm'
-  , f_dvirdgndt    = 'm'
-  , f_krdgn        = 'm'
-  , f_aparticn     = 'm'
-  , f_aredistn     = 'm'
-  , f_vredistn     = 'm'
-  , f_araftn       = 'm'
-  , f_vraftn       = 'm'
-/
-
-&icefields_pond_nml
-    f_apondn       = 'x'
-  , f_apeffn       = 'x'
-  , f_hpondn       = 'x'
-  , f_apond        = 'm'
-  , f_hpond        = 'm'
-  , f_ipond        = 'm'
-  , f_apeff        = 'm'
-  , f_apond_ai     = 'm'
-  , f_hpond_ai     = 'm'
-  , f_ipond_ai     = 'm'
-  , f_apeff_ai     = 'm'
-/
-
-&icefields_bgc_nml
-    f_faero_atm    = 'x'
-  , f_faero_ocn    = 'x'
-  , f_aero         = 'x'
 /
