@@ -52,13 +52,13 @@
                   + nilyr       & ! ice enthalpy
                   + nslyr       & ! snow enthalpy
                               !!!!! optional tracers:
-                  + TRBRI       & ! brine height
                   + TRAGE       & ! age
                   + TRFY        & ! first-year area
                   + TRLVL*2     & ! level/deformed ice
                   + TRPND*3     & ! ponds
-                  + n_aero*4,    & ! number of aerosols * 4 aero layers
-!                  + nltrcr*nblyr,&! bgc in layers
+                  + n_aero*4    & ! number of aerosols * 4 aero layers
+                  + TRBRI       & ! brine height
+                  + TRBRI*nltrcr*nblyr,&! zbgc (off if TRBRI=0)
         max_nstrm =   5           ! max number of history output streams
 
       integer (kind=int_kind), parameter :: &

@@ -246,7 +246,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine init_hist_mechred_3D
+      subroutine init_hist_mechred_3Dc
 !
 ! !DESCRIPTION:
 !
@@ -342,7 +342,7 @@
 
       enddo ! ns
 
-      end subroutine init_hist_mechred_3D
+      end subroutine init_hist_mechred_3Dc
 
 !=======================================================================
 !
@@ -377,8 +377,7 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-           i,j, &
-           ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+           i,j
 
       type (block) :: &
          this_block           ! block information for current block

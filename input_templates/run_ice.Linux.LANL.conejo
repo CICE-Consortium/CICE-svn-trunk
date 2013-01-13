@@ -3,7 +3,7 @@
 #MSUB -l walltime=01:00:00
 #MSUB -l nodes=1:ppn=4
 #MSUB -N cice
-#MSUB -m ae
+##MSUB -l depend=jobname.pre-cice-job
 
 limit stacksize unlimited
      

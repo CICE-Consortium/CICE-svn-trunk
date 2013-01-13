@@ -26,14 +26,7 @@
 !         Elizabeth C. Hunke and William H. Lipscomb, LANL
 !         C. M. Bitz, UW
 !
-! 2004 WHL: Block structure added 
-! 2006 ECH: Accepted some CCSM code into mainstream CICE
-!           Added ice_present, aicen, vicen; removed aice1...10, vice1...1.
-!           Added histfreq_n and histfreq='h' options, removed histfreq='w'
-!           Converted to free source form (F90)
-!           Added option for binary output instead of netCDF
-! 2009 D Bailey and ECH: Generalized for multiple frequency output
-! 2010 Alison McLaren and ECH: Added 3D capability
+! 2012 Elizabeth Hunke split code from ice_history.F90
 !
 ! !INTERFACE:
 !
@@ -228,22 +221,14 @@
            f_Tair      = 'm', &
            f_Tref      = 'm', f_Qref       = 'm', &
            f_congel    = 'm', f_frazil     = 'm', &
-           f_snoice    = 'm', f_dsnow = 'm', f_meltt      = 'm', &
-           f_melts     = 'm', &
+           f_snoice    = 'm', f_dsnow      = 'm', &
+           f_meltt     = 'm', f_melts      = 'm', &
            f_meltb     = 'm', f_meltl      = 'm', &
            f_fresh     = 'm', f_fresh_ai   = 'm', &
            f_fsalt     = 'm', f_fsalt_ai   = 'm', &
            f_fsice     = 'm', f_fsice_ai   = 'm', &
            f_fsice_g   = 'm', f_fsice_g_ai = 'm', &
-           f_fNO     = 'm', f_fNO_ai   = 'm', &
-           f_fNO_g   = 'm', f_fNO_g_ai = 'm', &
-           f_fNH     = 'm', f_fNH_ai   = 'm', &
-           f_fNH_g   = 'm', f_fNH_g_ai = 'm', &
-           f_fN     = 'm', f_fN_ai   = 'm', &
-           f_fN_g   = 'm', f_fN_g_ai = 'm', &
-           f_fSil     = 'm', f_fSil_ai   = 'm', &
-           f_fSil_g   = 'm', f_fSil_g_ai = 'm', &
-           f_fsicen_g  = 'm',                     &
+           f_fsicen_g  = 'm', f_Stot       = 'x', &
            f_fhocn     = 'm', f_fhocn_ai   = 'm', &
            f_fswthru   = 'm', f_fswthru_ai = 'm', &
            f_strairx   = 'm', f_strairy    = 'm', &
@@ -268,30 +253,8 @@
 !          f_field3dz  = 'x',                     &
            f_Tinz      = 'x', f_Sinz       = 'x', &
            f_Tsnz      = 'x', &
-           f_bgc_N_sk  = 'x',    f_bgc_C_sk= 'x', &
-           f_bgc_chl_sk= 'x', f_bgc_Nit_sk = 'x', &
-           f_bgc_Am_sk = 'x',  f_bgc_Sil_sk= 'x', &
-           f_bgc_DMSPp_sk = 'x', f_bgc_DMSPd_sk = 'x', &
-           f_bgc_DMS_sk = 'x', & 
-           f_bgc_Nit_ml = 'x',  f_bgc_Am_ml = 'x', & 
-           f_bgc_Sil_ml = 'x', &  
-           f_bgc_DMSP_ml = 'x', f_bgc_DMS_ml = 'x', & 
-           f_upNO      = 'x',   f_upNH        = 'x',   & 
-           f_zTin       = 'x',      &
-           f_zphi       = 'x',    &
-           f_iDi       = 'x',  f_iki           = 'x',    &
-           f_bgc_NO       = 'x',    &
-           f_bgc_N     = 'x',  f_bgc_NH       = 'x',    &
-           f_bgc_C     = 'x',  f_bgc_chl      = 'x',    &
-           f_bgc_DMSPp = 'x',  f_bgc_DMSPd    = 'x',    &
-           f_bgc_DMS   = 'x',  f_bgc_Sil      = 'x',   &
-           f_bgc_PON   = 'x',  f_bgc_S        = 'x',   &
-           f_fbri = 'x',          &
-           f_growN     = 'x', f_zfswin      = 'x', &
-           f_Stot = 'x', f_chlnet = 'x',  &
-           f_PPnet = 'x', f_NOnet = 'x', &
-           f_a11       = 'x', f_a12        = 'x' , & 
-           f_e11       = 'x', f_e12        = 'x' , & 
+           f_a11       = 'x', f_a12        = 'x', & 
+           f_e11       = 'x', f_e12        = 'x', & 
            f_e22       = 'x',			  & 
            f_s11       = 'x', f_s12        = 'x', & 
            f_s22       = 'x',		          & 
@@ -336,22 +299,14 @@
            f_Tair                  , &
            f_Tref,      f_Qref     , &
            f_congel,    f_frazil   , &
-           f_snoice,  f_dsnow,   f_meltt    , &
-           f_melts,                  &
+           f_snoice,    f_dsnow    , &
+           f_meltt,     f_melts    , &
            f_meltb,     f_meltl    , &
            f_fresh,     f_fresh_ai , &  
            f_fsalt,     f_fsalt_ai , &  
            f_fsice,     f_fsice_ai , &   
-           f_fsice_g,   f_fsice_g_ai , &  
-           f_fsicen_g, &
-           f_fNO,       f_fNO_ai , &
-           f_fNO_g,     f_fNO_g_ai, &
-           f_fNH,       f_fNH_ai, &
-           f_fNH_g,     f_fNH_g_ai, &
-           f_fN,        f_fN_ai, &
-           f_fN_g,      f_fN_g_ai, &
-           f_fSil,      f_fSil_ai, &
-           f_fSil_g,    f_fSil_g_ai, &
+           f_fsice_g,   f_fsice_g_ai,&  
+           f_fsicen_g,  f_Stot     , &
            f_fhocn,     f_fhocn_ai , &
            f_fswthru,   f_fswthru_ai,&
            f_strairx,   f_strairy  , &
@@ -376,25 +331,6 @@
 !          f_field3dz,  &
            f_Tinz,      f_Sinz,      &
            f_Tsnz,  &
-           f_bgc_N_sk,    f_bgc_C_sk,   f_bgc_chl_sk, & 
-           f_bgc_Nit_sk,  f_bgc_Am_sk,  f_bgc_Sil_sk, &
-           f_bgc_DMSPp_sk, f_bgc_DMSPd_sk, f_bgc_DMS_sk, & 
-           f_bgc_Nit_ml,  f_bgc_Am_ml,  f_bgc_Sil_ml, &  
-           f_bgc_DMSP_ml, f_bgc_DMS_ml, &
-           f_upNO,  f_upNH, &       
-           f_zTin                  , &
-           f_zphi      , &
-           f_iDi,       f_iki       , &
-           f_bgc_NO   , f_bgc_N    , & 
-           f_bgc_NH  , &
-           f_bgc_C    , f_bgc_chl  , &
-           f_bgc_Sil  , f_bgc_DMSPp, &
-           f_bgc_DMSPd , f_bgc_DMS , &
-           f_bgc_PON  , f_bgc_S, &
-           f_fbri, &
-           f_growN,    f_zfswin, &
-           f_Stot,    f_chlnet, &
-           f_PPnet, f_NOnet, &
            f_a11, 	f_a12 	   , &
            f_e11, 	f_e12	   , &
            f_e22                   , &
@@ -460,16 +396,8 @@
            n_fresh      , n_fresh_ai   , &
            n_fsalt      , n_fsalt_ai   , &
            n_fsice      , n_fsice_ai   , &
-           n_fsice_g    , n_fsice_g_ai   , &
-           n_fsicen_g, & 
-           n_fNO        , n_fNO_ai , &
-           n_fNO_g      , n_fNO_g_ai, &
-           n_fNH        , n_fNH_ai, &
-           n_fNH_g      , n_fNH_g_ai, &
-           n_fN         , n_fN_ai, &
-           n_fN_g       , n_fN_g_ai, &
-           n_fSil       , n_fSil_ai, &
-           n_fSil_g     , n_fSil_g_ai, &
+           n_fsice_g    , n_fsice_g_ai , &
+           n_fsicen_g   , n_Stot       , & 
            n_fhocn      , n_fhocn_ai   , &
            n_fswthru    , n_fswthru_ai , &
            n_strairx    , n_strairy    , &
@@ -488,20 +416,6 @@
            n_iage       , n_FY         , &
            n_fsurf_ai   , &
            n_fcondtop_ai, n_fmeltt_ai  , &   
-           n_bgc_N_sk , &
-           n_bgc_C_sk, &
-           n_bgc_chl_sk, &
-           n_bgc_Nit_sk, &
-           n_bgc_Am_sk, &
-           n_bgc_Sil_sk, &
-           n_bgc_Nit_ml, &
-           n_bgc_Am_ml, &
-           n_bgc_Sil_ml, &
-           n_bgc_DMSPp_sk, &
-           n_bgc_DMSPd_sk, &
-           n_bgc_DMS_sk , &
-           n_bgc_DMSP_ml, &
-           n_bgc_DMS_ml, &
            n_aicen      , n_vicen      , &
            n_fsurfn_ai   , &
            n_fcondtopn_ai, &
@@ -510,30 +424,6 @@
 !          n_field3dz    , &
            n_Tinz        , n_Sinz      , &
            n_Tsnz, &
-           n_upNO,  &
-           n_upNH,  &
-           n_zTin         , & 
-           n_zphi, &
-           n_iDi, &
-           n_iki, &
-           n_bgc_NO, &
-           n_bgc_N, &
-           n_bgc_NH, &
-           n_bgc_C, &
-           n_bgc_chl, &
-           n_bgc_DMSPp, &
-           n_bgc_DMSPd, &
-           n_bgc_DMS, &
-           n_bgc_Sil, &
-           n_bgc_PON, &
-           n_bgc_S,  &
-           n_fbri, &
-           n_growN, &
-           n_zfswin, &
-           n_Stot, &
-           n_chlnet, &
-           n_PPnet, &
-           n_NOnet, &
 	   n_a11	 , n_a12	, &
 	   n_e11	 , n_e12 	, &
 	   n_e22	 , &

@@ -231,7 +231,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine init_hist_pond_3D
+      subroutine init_hist_pond_3Dc
 !
 ! !DESCRIPTION:
 !
@@ -275,7 +275,7 @@
 
       enddo ! ns
 
-      end subroutine init_hist_pond_3D
+      end subroutine init_hist_pond_3Dc
 
 !=======================================================================
 !
