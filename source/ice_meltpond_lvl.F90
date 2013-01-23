@@ -153,8 +153,11 @@
          trcrn
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(in) :: &
+         dhs       ! depth difference for snow on sea ice and pond ice
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(out) :: &
-         dhs, &    ! depth difference for snow on sea ice and pond ice
          ffrac     ! fraction of fsurfn over pond used to melt ipond
 
 !     local temporary variables
