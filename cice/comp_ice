@@ -62,6 +62,7 @@ setenv NBGCLYR 7          # number of biogeochemistry layers
 setenv CAM_ICE  no        # set to yes for CAM runs (single column) 
 setenv SHRDIR   csm_share # location of CCSM shared code
 setenv NETCDF   yes       # set to no if netcdf library is unavailable
+                          # set to pio for parallel netcdf
 setenv DITTO    no        # reproducible diagnostics
 setenv ONED     no        # true 1D thermodynamic calculation
 

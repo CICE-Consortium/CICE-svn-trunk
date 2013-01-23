@@ -37,8 +37,24 @@ endif
 
 ifeq ($(NETCDF), yes)
    CPPDEFS :=  $(CPPDEFS) -Dncdf
-   INCLDIR := $(INCLDIR) -I/usr/projects/climate/maltrud/local/include_coyote
-   SLIBS   := $(SLIBS) -L/usr/projects/climate/maltrud/local/lib_coyote -lnetcdf
-#   INCLDIR := $(INCLDIR) -I/usr/projects/climate/bzhao/netcdf-3.6.1/include
-#   SLIBS   := $(SLIBS) -L/usr/projects/climate/bzhao/netcdf-3.6.1/lib -lnetcdf
+   INCLDIR := $(INCLDIR) -I/usr/projects/climate/SHARED_CLIMATE/software/conejo/intel_openmpi/netcdf-3.6.3/include
+   SLIBS   := $(SLIBS) -L/usr/projects/climate/SHARED_CLIMATE/software/conejo/intel_openmpi/netcdf-3.6.3/lib -lnetcdf
+#   INCLDIR := $(INCLDIR) -I/usr/projects/cesm/software/netcdf/intel/include
+#   SLIBS   := $(SLIBS) -L/usr/projects/cesm/software/netcdf/intel/lib -lnetcdf
+#   INCLDIR := $(INCLDIR) -I/usr/projects/climate/maltrud/local/include_coyote
+#   SLIBS   := $(SLIBS) -L/usr/projects/climate/maltrud/local/lib_coyote -lnetcdf
+endif
+
+### if using parallel I/O, load all 3 libraries.  PIO must be first!
+ifeq ($(NETCDF), pio)
+   INCLDIR := $(INCLDIR) -I/usr/projects/climate/SHARED_CLIMATE/software/conejo/intel_openmpi/pio-1.4.0
+   SLIBS   := $(SLIBS) -L/usr/projects/climate/SHARED_CLIMATE/software/conejo/intel_openmpi/pio-1.4.0 -lpio
+
+   INCLDIR := $(INCLDIR) -I/usr/projects/climate/SHARED_CLIMATE/software/conejo/intel_openmpi/parallel-netcdf-1.2.0/include
+   SLIBS   := $(SLIBS) -L/usr/projects/climate/SHARED_CLIMATE/software/conejo/intel_openmpi/parallel-netcdf-1.2.0/lib -lpnetcdf
+
+   CPPDEFS :=  $(CPPDEFS) -Dncdf
+   INCLDIR := $(INCLDIR) -I/usr/projects/climate/SHARED_CLIMATE/software/conejo/intel_openmpi/netcdf-3.6.3/include
+   SLIBS   := $(SLIBS) -L/usr/projects/climate/SHARED_CLIMATE/software/conejo/intel_openmpi/netcdf-3.6.3/lib -lnetcdf
+
 endif

@@ -252,6 +252,9 @@
       use ice_work, only:  work1
       use ice_read_write
       use ice_zbgc_public, only: restore_bgc
+#ifdef ncdf
+      use netcdf
+#endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -333,11 +336,11 @@
             enddo
          enddo
 
-         ! close file
+
          if (my_task == master_task) close(nu_forcing)
 
       elseif (trim(sss_data_type) == 'exp') then
-
+#ifdef ncdf
          sss_file = trim(atm_data_dir)//'Cottier_thesis_water_salin.nc' !rct only!
 
          if (my_task == master_task) then
@@ -369,8 +372,7 @@
 
          ! close file
          if (my_task == master_task) status = nf90_close(fid)
-
-
+#endif 
       endif                     ! sss_data_type
 
     !-------------------------------------------------------------------
@@ -651,6 +653,9 @@
       use ice_read_write 
       use ice_flux
       use ice_state, only: trcrn, nt_sice
+#ifdef ncdf
+      use netcdf
+#endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -2618,13 +2623,15 @@
       use ice_read_write
       use ice_flux
       use ice_therm_shared, only: solve_Sin
+#ifdef ncdf
+      use netcdf
+#endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
 ! 
 !
 ! EOP
 ! 
-#ifdef ncdf 
 !local parameters
 
       character (char_len_long) :: & 
@@ -2698,6 +2705,7 @@
                   
       diag = .false.   ! write diagnostic information 
    
+#ifdef ncdf 
       if (trim(atm_data_format) == 'nc') then     ! read nc file
 
       if (trim(atm_data_type) == 'rct') then
@@ -2919,7 +2927,6 @@
      endif ! rct or exp
      endif  !nc
 #else      
-
     
       uatm(:,:,:) = c0              !wind velocity (m/s)
       vatm(:,:,:) = c0
@@ -2929,7 +2936,6 @@
      ! qdp(:,:,:) = -42.0_dbl_kind 
 
 #endif
-
 
       !flw   given cldf and Tair  calculated in prepare_forcing
 
@@ -2977,7 +2983,6 @@
 !
 ! EOP
 ! 
-#ifdef ncdf 
 !local parameters
 
       character (char_len_long) :: & 
@@ -3063,6 +3068,7 @@
                   
       diag = .false.   ! write diagnostic information 
 
+#ifdef ncdf 
       !-------------------------------------------------------------------
       !
       !  24 simulation of Cottier et al, 1999 Lab Experiments
@@ -4080,7 +4086,6 @@
           n           , & ! thickness category index
           iblk        , & ! block index
           ixm,ixx,ixp , & ! record numbers for neighboring months
-          recnum      , & ! record number
           maxrec      , & ! maximum record number
           recslot     , & ! spline slot for current record
           dataloc     , & ! = 1 for data located in middle of time interval
@@ -4406,7 +4411,6 @@
       integer (kind=int_kind) :: & 
           i, j        , &
           ixm,ixp     , & ! record numbers for neighboring months
-          recnum      , & ! record number
           maxrec      , & ! maximum record number
           recslot     , & ! spline slot for current record
           midmonth    , & ! middle day of month
@@ -5609,7 +5613,6 @@
           n           , & ! thickness category index
           iblk        , & ! block index
           ixm,ixx,ixp , & ! record numbers for neighboring months
-          recnum      , & ! record number
           maxrec      , & ! maximum record number
           recslot     , & ! spline slot for current record
           dataloc     , & ! = 1 for data located in middle of time interval
