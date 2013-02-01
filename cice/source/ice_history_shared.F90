@@ -131,8 +131,9 @@
          nvarz = 4              , & ! number of category/vertical grid fields written
          ncat_hist = ncat           ! number of ice categories written <= ncat
 
-      real (kind=real_kind) :: time_beg(max_nstrm), &
-                               time_end(max_nstrm) ! bounds for averaging
+      real (kind=real_kind) :: time_beg(max_nstrm), & ! bounds for averaging
+                               time_end(max_nstrm), &
+                               time_bounds(2)
 
       real (kind=dbl_kind), allocatable :: &
          a2D (:,:,:,:)    , & ! field accumulations/averages, 2D
@@ -168,12 +169,12 @@
          ustr3Db = 'ULON ULAT VGRDb time', & ! vcoord for U cell quantities, 3D
 
 !ferret
-         tstr4Di  = 'TLON TLAT VGRDi NCAT', & ! vcoord for T cell quantities, 4D, ice
-         ustr4Di  = 'ULON ULAT VGRDi NCAT', & ! vcoord for U cell quantities, 4D, ice
-         tstr4Ds  = 'TLON TLAT VGRDs NCAT', & ! vcoord for T cell quantities, 4D, snow
-         ustr4Ds  = 'ULON ULAT VGRDs NCAT', & ! vcoord for U cell quantities, 4D, snow
-         tstr4Db  = 'TLON TLAT VGRDb NCAT', & ! vcoord for T cell quantities, 4D, bio
-         ustr4Db  = 'ULON ULAT VGRDb NCAT'    ! vcoord for U cell quantities, 4D, bio
+         tstr4Di = 'TLON TLAT VGRDi NCAT', & ! vcoord for T cell, 4D, ice
+         ustr4Di = 'ULON ULAT VGRDi NCAT', & ! vcoord for U cell, 4D, ice
+         tstr4Ds = 'TLON TLAT VGRDs NCAT', & ! vcoord for T cell, 4D, snow
+         ustr4Ds = 'ULON ULAT VGRDs NCAT', & ! vcoord for U cell, 4D, snow
+         tstr4Db = 'TLON TLAT VGRDb NCAT', & ! vcoord for T cell, 4D, bio
+         ustr4Db = 'ULON ULAT VGRDb NCAT'    ! vcoord for U cell, 4D, bio
 !ferret
 !         tstr4Di  = 'TLON TLAT VGRDi NCAT time', & ! ferret can not handle time 
 !         ustr4Di  = 'ULON ULAT VGRDi NCAT time', & ! index on 4D variables.

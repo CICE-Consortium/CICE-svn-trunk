@@ -116,6 +116,8 @@ endif
 setenv DRVDIR cice
 if ($NETCDF == 'yes') then
   setenv IODIR io_netcdf
+else if ($NETCDF == 'pio') then
+  setenv IODIR io_pio
 else
   setenv IODIR io_binary
 endif

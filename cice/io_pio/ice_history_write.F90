@@ -1,3 +1,6 @@
+! NOTE 4D variables are not available with PIO.
+! Search for '1==0' to find related code
+
 !=======================================================================
 !
 !BOP
@@ -41,6 +44,8 @@
       implicit none
       save
       
+      logical (kind=log_kind) :: lcdf64
+
 !=======================================================================
 
       contains
@@ -89,7 +94,6 @@
                          nlt_bgc_DMSPd, nlt_bgc_DMS, nlt_bgc_PON , &
                          S_tot, chl_net, PP_net, NO_net, &
                          zTin, zfswin, iki, iDi, zphi
-      use ice_work, only: worka, workb, workz, workzn
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -202,7 +206,7 @@
 ! !USES:
 !
 #ifdef ncdf
-
+!!!CHECK THESE
       use ice_gather_scatter
       use ice_domain_size
       use ice_constants
@@ -211,13 +215,15 @@
                               mday, write_ic, histfreq, histfreq_n, &
                               year_init, new_year, new_month, new_day, &
                               dayyr, daymo, days_per_year, use_leap_years
-      use ice_work, only: work_g1, work_gr, work_gr3, work1
       use ice_restart, only: lenstr, runid
       use ice_domain, only: distrb_info
       use ice_itd, only: hin_max
       use ice_exit
       use netcdf
 #endif
+
+      use ice_pio	
+      use pio
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -227,9 +233,10 @@
 !
 #ifdef ncdf
       integer (kind=int_kind) :: i,j,k,ic,n,nn, &
-         ncid,status,imtid,jmtid,kmtidi,kmtids,kmtidb, cmtid,timid,varid, &
+         ncid,status,imtid,jmtid,kmtidi,kmtids,kmtidb, cmtid,timid, &
          length,nvertexid,ivertex
-      integer (kind=int_kind), dimension(3) :: dimid
+      integer (kind=int_kind), dimension(2) :: dimid2
+      integer (kind=int_kind), dimension(3) :: dimid3
       integer (kind=int_kind), dimension(4) :: dimidz
       integer (kind=int_kind), dimension(5) :: dimidcz
       integer (kind=int_kind), dimension(3) :: dimid_nverts
@@ -244,6 +251,12 @@
       character (char_len) :: start_time,current_date,current_time
       character (len=16) :: c_aice
       character (len=8) :: cdate
+
+      type(file_desc_t)     :: File
+      type(io_desc_t)       :: iodesc2d, &
+                               iodesc3dc, iodesc3dv, iodesc3di, iodesc3db, &
+                               iodesc4di
+      type(var_desc_t)      :: varid
 
       ! 4 coordinate variables: TLON, TLAT, ULON, ULAT
       INTEGER (kind=int_kind), PARAMETER :: ncoord = 4
@@ -272,10 +285,25 @@
       TYPE(coord_attributes), dimension(nvarz) :: var_nz
       CHARACTER (char_len), dimension(ncoord) :: coord_bounds
 
+      real (kind=real_kind), dimension(nx_block,ny_block,max_blocks) :: &
+           workr
+      real (kind=real_kind), dimension(nx_block,ny_block,max_blocks,ncat_hist) :: &
+           workr3c
+      real (kind=real_kind), dimension(nx_block,ny_block,max_blocks,nzlyr) :: &
+           workr3i
+      real (kind=real_kind), dimension(nx_block,ny_block,max_blocks,nzlyrb) :: &
+           workr3b
+#if 1==0
+      real (kind=real_kind), dimension(nx_block,ny_block,max_blocks,nzlyr,ncat_hist) :: &
+           workr4i
+#endif
+      real (kind=real_kind), dimension(nverts,nx_block,ny_block,max_blocks) :: &
+           workrv
+
+      character(len=char_len_long) :: &
+           filename
+
       if (my_task == master_task) then
-
-        ltime=time/int(secday)
-
         call construct_filename(ncfile(ns),'nc',ns)
 
         ! add local directory path name to ncfile
@@ -284,115 +312,83 @@
         else
           ncfile(ns) = trim(history_dir)//ncfile(ns)
         endif
+        filename = ncfile(ns)
+      end if
+      call broadcast_scalar(filename, master_task)
 
-        ! create file
-        status = nf90_create(ncfile(ns), nf90_clobber, ncid)
-        if (status /= nf90_noerr) call abort_ice( &
-           'ice: Error creating history ncfile '//ncfile(ns))
+      ! create file
+!      lcdf64 = .true.
+      lcdf64 = .false.
+      File%fh=-1
+      call ice_pio_init(mode='write', filename=trim(filename), File=File, &
+	clobber=.true., cdf64=lcdf64)
+
+      call ice_pio_initdecomp(iodesc=iodesc2d)
+      call ice_pio_initdecomp(ndim3=ncat_hist, iodesc=iodesc3dc)
+      call ice_pio_initdecomp(ndim3=nzlyr,     iodesc=iodesc3di)
+      call ice_pio_initdecomp(ndim3=nzlyrb,    iodesc=iodesc3db)
+      call ice_pio_initdecomp(ndim3=nverts, inner_dim=.true., iodesc=iodesc3dv)
+#if 1==0
+      call ice_pio_initdecomp(ndim3=nzlyr,  ndim4=ncat_hist,  iodesc=iodesc4di)
+#endif
+
+!      ltime = time/int(secday)
+      ltime = real(time/int(secday),kind=real_kind)
 
       !-----------------------------------------------------------------
       ! define dimensions
       !-----------------------------------------------------------------
 
-        if (hist_avg) then
-          status = nf90_def_dim(ncid,'d2',2,boundid)
-          if (status /= nf90_noerr) call abort_ice( &
-                        'ice: Error defining dim d2')
+       if (hist_avg .and. histfreq(ns) /= '1') then
+          status = pio_def_dim(File,'d2',2,boundid)
         endif
 
-        status = nf90_def_dim(ncid,'ni',nx_global,imtid)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error defining dim ni')
-
-        status = nf90_def_dim(ncid,'nj',ny_global,jmtid)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error defining dim nj')
-
-        status = nf90_def_dim(ncid,'nc',ncat_hist,cmtid)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error defining dim nc')
-
-        status = nf90_def_dim(ncid,'nkice',nzilyr,kmtidi)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error defining dim nki')
-
-        status = nf90_def_dim(ncid,'nksnow',nzslyr,kmtids)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error defining dim nks')
-
-        status = nf90_def_dim(ncid,'nkbio',nzblyr,kmtidb)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error defining dim nkb')
-
-        status = nf90_def_dim(ncid,'time',NF90_UNLIMITED,timid)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error defining dim time')
-
-        status = nf90_def_dim(ncid,'nvertices',nverts,nvertexid)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error defining dim nverts')
+        status = pio_def_dim(File,'ni',nx_global,imtid)
+        status = pio_def_dim(File,'nj',ny_global,jmtid)
+        status = pio_def_dim(File,'nc',ncat_hist,cmtid)
+        status = pio_def_dim(File,'nkice',nzilyr,kmtidi)
+        status = pio_def_dim(File,'nksnow',nzslyr,kmtids)
+        status = pio_def_dim(File,'nkbio',nzblyr,kmtidb)
+        status = pio_def_dim(File,'time',PIO_UNLIMITED,timid)
+        status = pio_def_dim(File,'nvertices',nverts,nvertexid)
 
       !-----------------------------------------------------------------
-      ! define coordinate variables
+      ! define coordinate variables:  time, time_bounds
       !-----------------------------------------------------------------
 
-        status = nf90_def_var(ncid,'time',nf90_float,timid,varid)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error defining var time')
-
-        status = nf90_put_att(ncid,varid,'long_name','model time')
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice Error: time long_name')
+        status = pio_def_var(File,'time',pio_real,(/timid/),varid)
+        status = pio_put_att(File,varid,'long_name','model time')
 
         write(cdate,'(i8.8)') idate0
-        write(title,'(a,a,a,a,a,a,a,a)') 'days since ', &
+        write(title,'(a,a,a,a,a,a,a)') 'days since ', &
               cdate(1:4),'-',cdate(5:6),'-',cdate(7:8),' 00:00:00'
-        status = nf90_put_att(ncid,varid,'units',title)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice Error: time units')
+        status = pio_put_att(File,varid,'units',trim(title))
 
         if (days_per_year == 360) then
-           status = nf90_put_att(ncid,varid,'calendar','360_day')
-           if (status /= nf90_noerr) call abort_ice( &
-                         'ice Error: time calendar')
+           status = pio_put_att(File,varid,'calendar','360_day')
         elseif (days_per_year == 365 .and. .not.use_leap_years ) then
-           status = nf90_put_att(ncid,varid,'calendar','NoLeap')
-           if (status /= nf90_noerr) call abort_ice( &
-                         'ice Error: time calendar')
+           status = pio_put_att(File,varid,'calendar','NoLeap')
         elseif (use_leap_years) then
-           status = nf90_put_att(ncid,varid,'calendar','Gregorian')
-           if (status /= nf90_noerr) call abort_ice( &
-                         'ice Error: time calendar')
+           status = pio_put_att(File,varid,'calendar','Gregorian')
         else
            call abort_ice( 'ice Error: invalid calendar settings')
         endif
 
-        if (hist_avg) then
-          status = nf90_put_att(ncid,varid,'bounds','time_bounds')
-          if (status /= nf90_noerr) call abort_ice( &
-                      'ice Error: time bounds')
+        if (hist_avg .and. histfreq(ns) /= '1') then
+          status = pio_put_att(File,varid,'bounds','time_bounds')
         endif
 
-      !-----------------------------------------------------------------
-      ! Define attributes for time bounds if hist_avg is true
-      !-----------------------------------------------------------------
-
-        if (hist_avg) then
-          dimid(1) = boundid
-          dimid(2) = timid
-          status = nf90_def_var(ncid,'time_bounds',nf90_float,dimid(1:2),varid)
-          if (status /= nf90_noerr) call abort_ice( &
-                        'ice: Error defining var time_bounds')
-          status = nf90_put_att(ncid,varid,'long_name', &
+        ! Define attributes for time_bounds if hist_avg is true
+        if (hist_avg .and. histfreq(ns) /= '1') then
+          dimid2(1) = boundid
+          dimid2(2) = timid
+          status = pio_def_var(File,'time_bounds',pio_real,dimid2,varid)
+          status = pio_put_att(File,varid,'long_name', &
                                 'boundaries for time-averaging interval')
-          if (status /= nf90_noerr) call abort_ice( &
-                        'ice Error: time_bounds long_name')
           write(cdate,'(i8.8)') idate0
           write(title,'(a,a,a,a,a,a,a,a)') 'days since ', &
                 cdate(1:4),'-',cdate(5:6),'-',cdate(7:8),' 00:00:00'
-          status = nf90_put_att(ncid,varid,'units',title)
-          if (status /= nf90_noerr) call abort_ice( &
-                        'ice Error: time_bounds units')
+          status = pio_put_att(File,varid,'units',trim(title))
         endif
 
       !-----------------------------------------------------------------
@@ -416,11 +412,6 @@
       coord_var(ind) = coord_attributes('ULAT', &
                        'U grid center latitude',  'degrees_north')
       coord_bounds(ind) = 'latu_bounds'
-
-      var_nz(1) = coord_attributes('NCAT', 'category maximum thickness', 'm')
-      var_nz(2) = coord_attributes('VGRDi', 'vertical ice levels', '1')
-      var_nz(3) = coord_attributes('VGRDs', 'vertical snow levels', '1')
-      var_nz(4) = coord_attributes('VGRDb', 'vertical ice-bio levels', '1')
 
       !-----------------------------------------------------------------
       ! define information for optional time-invariant variables
@@ -474,83 +465,50 @@
       ! define attributes for time-invariant variables
       !-----------------------------------------------------------------
 
-        dimid(1) = imtid
-        dimid(2) = jmtid
-        dimid(3) = timid
+        dimid2(1) = imtid
+        dimid2(2) = jmtid
 
         do i = 1, ncoord
-          status = nf90_def_var(ncid, coord_var(i)%short_name, nf90_float, &
-                                dimid(1:2), varid)
-          if (status /= nf90_noerr) call abort_ice( &
-               'Error defining short_name for '//coord_var(i)%short_name)
-          status = nf90_put_att(ncid,varid,'long_name',coord_var(i)%long_name)
-          if (status /= nf90_noerr) call abort_ice( &
-               'Error defining long_name for '//coord_var(i)%short_name)
-          status = nf90_put_att(ncid, varid, 'units', coord_var(i)%units)
-          if (status /= nf90_noerr) call abort_ice( &
-                  'Error defining units for '//coord_var(i)%short_name)
+          status = pio_def_var(File, trim(coord_var(i)%short_name), pio_real, &
+                                dimid2, varid)
+          status = pio_put_att(File,varid,'long_name',trim(coord_var(i)%long_name))
+          status = pio_put_att(File, varid, 'units', trim(coord_var(i)%units))
+          status = pio_put_att(File, varid, 'missing_value', spval)
+          status = pio_put_att(File, varid,'_FillValue',spval)
           if (coord_var(i)%short_name == 'ULAT') then
-             status = nf90_put_att(ncid,varid,'comment', &
-                  'Latitude of NE corner of T grid cell')
-             if (status /= nf90_noerr) call abort_ice( &
-                  'Error defining comment for '//coord_var(i)%short_name)
+             status = pio_put_att(File,varid,'comment', &
+                  trim('Latitude of NE corner of T grid cell'))
           endif
           if (f_bounds) then
-              status = nf90_put_att(ncid, varid, 'bounds', coord_bounds(i))
-              if (status /= nf90_noerr) call abort_ice( &
-                  'Error defining bounds for '//coord_var(i)%short_name)
+              status = pio_put_att(File, varid, 'bounds', trim(coord_bounds(i)))
           endif          
         enddo
 
-        ! Extra dimensions (NCAT, NZILYR, NZSLYR, NZBLYR)       
-          dimidex(1)=cmtid
-          dimidex(2)=kmtidi
-          dimidex(3)=kmtids
-          dimidex(4)=kmtidb
-        
-        do i = 1, nvarz
-           if (igrdz(i)) then
-             status = nf90_def_var(ncid, var_nz(i)%short_name, &
-                                   nf90_float, dimidex(i), varid)
-             if (status /= nf90_noerr) call abort_ice( &
-                'Error defining short_name for '//var_nz(i)%short_name)
-             status = nf90_put_att(ncid,varid,'long_name',var_nz(i)%long_name)
-             if (status /= nf90_noerr) call abort_ice( &
-                'Error defining long_name for '//var_nz(i)%short_name)
-             status = nf90_put_att(ncid, varid, 'units', var_nz(i)%units)
-             if (Status /= nf90_noerr) call abort_ice( &
-                'Error defining units for '//var_nz(i)%short_name)
-           endif
-        enddo
+        if (igrdz(n_NCAT)) then
+           status = pio_def_var(File, 'NCAT', &
+                                pio_real, (/cmtid/), varid)
+           status = pio_put_att(File,varid,'long_name',&
+                               'category maximum thickness')
+           status = pio_put_att(File, varid, 'units', 'm')
+        endif
 
         ! Attributes for tmask defined separately, since it has no units
         if (igrd(n_tmask)) then
-           status = nf90_def_var(ncid, 'tmask', nf90_float, dimid(1:2), varid)
-           if (status /= nf90_noerr) call abort_ice( &
-                         'ice: Error defining var tmask')
-           status = nf90_put_att(ncid,varid, 'long_name', 'ocean grid mask') 
-           if (status /= nf90_noerr) call abort_ice('ice Error: tmask long_name') 
-           status = nf90_put_att(ncid, varid, 'coordinates', 'TLON TLAT')
-           if (status /= nf90_noerr) call abort_ice('ice Error: tmask units') 
-           status = nf90_put_att(ncid,varid,'comment', '0 = land, 1 = ocean')
-           if (status /= nf90_noerr) call abort_ice('ice Error: tmask comment') 
+           status = pio_def_var(File, 'tmask', pio_real, dimid2, varid)
+           status = pio_put_att(File,varid, 'long_name', 'ocean grid mask') 
+           status = pio_put_att(File, varid, 'coordinates', 'TLON TLAT')
+           status = pio_put_att(File,varid,'comment', '0 = land, 1 = ocean')
         endif
 
         do i = 2, nvar       ! note: n_tmask=1
           if (igrd(i)) then
-             status = nf90_def_var(ncid, var(i)%req%short_name, &
-                                   nf90_float, dimid(1:2), varid)
-             if (status /= nf90_noerr) call abort_ice( &
-                  'Error defining variable '//var(i)%req%short_name)
-             status = nf90_put_att(ncid,varid, 'long_name', var(i)%req%long_name)
-             if (status /= nf90_noerr) call abort_ice( &
-                  'Error defining long_name for '//var(i)%req%short_name)
-             status = nf90_put_att(ncid, varid, 'units', var(i)%req%units)
-             if (status /= nf90_noerr) call abort_ice( &
-                  'Error defining units for '//var(i)%req%short_name)
-             status = nf90_put_att(ncid, varid, 'coordinates', var(i)%coordinates)
-             if (status /= nf90_noerr) call abort_ice( &
-                  'Error defining coordinates for '//var(i)%req%short_name)
+             status = pio_def_var(File, trim(var(i)%req%short_name), &
+                                   pio_real, dimid2, varid)
+             status = pio_put_att(File,varid, 'long_name', trim(var(i)%req%long_name))
+             status = pio_put_att(File, varid, 'units', trim(var(i)%req%units))
+             status = pio_put_att(File, varid, 'coordinates', trim(var(i)%coordinates))
+             status = pio_put_att(File, varid, 'missing_value', spval)
+             status = pio_put_att(File, varid,'_FillValue',spval)
           endif
         enddo
 
@@ -560,59 +518,47 @@
         dimid_nverts(3) = jmtid
         do i = 1, nvar_verts
           if (f_bounds) then
-             status = nf90_def_var(ncid, var_nverts(i)%short_name, &
-                                   nf90_float,dimid_nverts, varid)
-             if (status /= nf90_noerr) call abort_ice( &
-                  'Error defining variable '//var_nverts(i)%short_name)
+             status = pio_def_var(File, trim(var_nverts(i)%short_name), &
+                                   pio_real,dimid_nverts, varid)
              status = & 
-             nf90_put_att(ncid,varid, 'long_name', var_nverts(i)%long_name)
-             if (status /= nf90_noerr) call abort_ice( &
-                  'Error defining long_name for '//var_nverts(i)%short_name)
+             pio_put_att(File,varid, 'long_name', trim(var_nverts(i)%long_name))
              status = &
-             nf90_put_att(ncid, varid, 'units', var_nverts(i)%units)
-             if (status /= nf90_noerr) call abort_ice( &
-                  'Error defining units for '//var_nverts(i)%short_name)
+             pio_put_att(File, varid, 'units', trim(var_nverts(i)%units))
           endif
         enddo
+ 
+      !-----------------------------------------------------------------
+      ! define attributes for time-variant variables
+      !-----------------------------------------------------------------
+
+      !-----------------------------------------------------------------
+      ! 2D
+      !-----------------------------------------------------------------
+
+        dimid3(1) = imtid
+        dimid3(2) = jmtid
+        dimid3(3) = timid
 
         do n=1,num_avail_hist_fields_2D
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
-                         nf90_float, dimid, varid)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining variable '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'units', &
-                        avail_hist_fields(n)%vunit)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining units for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid, 'long_name', &
-                        avail_hist_fields(n)%vdesc)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining long_name for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'coordinates', &
-                        avail_hist_fields(n)%vcoord)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining coordinates for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'cell_measures', &
-                        avail_hist_fields(n)%vcellmeas)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining cell measures for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'missing_value',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'_FillValue',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+            status  = pio_def_var(File, trim(avail_hist_fields(n)%vname), &
+                         pio_real, dimid3, varid)
+            status = pio_put_att(File,varid,'units', &
+                        trim(avail_hist_fields(n)%vunit))
+            status = pio_put_att(File,varid, 'long_name', &
+                        trim(avail_hist_fields(n)%vdesc))
+            status = pio_put_att(File,varid,'coordinates', &
+                        trim(avail_hist_fields(n)%vcoord))
+            status = pio_put_att(File,varid,'cell_measures', &
+                        trim(avail_hist_fields(n)%vcellmeas))
+            status = pio_put_att(File,varid,'missing_value',spval)
+            status = pio_put_att(File,varid,'_FillValue',spval)
 
-      !-----------------------------------------------------------------
-      ! Add cell_methods attribute to variables if averaged
-      !-----------------------------------------------------------------
-            if (hist_avg) then
+            ! Add cell_methods attribute to variables if averaged
+            if (hist_avg .and. histfreq(ns) /= '1') then
               if (TRIM(avail_hist_fields(n)%vname)/='sig1' &
               .or.TRIM(avail_hist_fields(n)%vname)/='sig2') then
-                status = nf90_put_att(ncid,varid,'cell_methods','time: mean')
-                if (status /= nf90_noerr) call abort_ice( &
-                 'Error defining cell methods for '//avail_hist_fields(n)%vname)
+                status = pio_put_att(File,varid,'cell_methods','time: mean')
               endif
             endif
 
@@ -622,12 +568,16 @@
                 .or. n==n_trsig(ns)                             &
                 .or. n==n_mlt_onset(ns) .or. n==n_frz_onset(ns) &
                 .or. n==n_hisnap(ns)    .or. n==n_aisnap(ns)) then
-               status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
+               status = pio_put_att(File,varid,'time_rep','instantaneous')
             else
-               status = nf90_put_att(ncid,varid,'time_rep','averaged')
+               status = pio_put_att(File,varid,'time_rep','averaged')
             endif
           endif
         enddo  ! num_avail_hist_fields_2D
+
+      !-----------------------------------------------------------------
+      ! 3D (category)
+      !-----------------------------------------------------------------
 
         dimidz(1) = imtid
         dimidz(2) = jmtid
@@ -636,49 +586,35 @@
 
         do n = n2D + 1, n3Dccum
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
-                         nf90_float, dimidz, varid)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining variable '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'units', &
-                        avail_hist_fields(n)%vunit)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining units for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid, 'long_name', &
-                        avail_hist_fields(n)%vdesc)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining long_name for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'coordinates', &
-                        avail_hist_fields(n)%vcoord)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining coordinates for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'cell_measures', &
-                        avail_hist_fields(n)%vcellmeas)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining cell measures for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'missing_value',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'_FillValue',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+            status  = pio_def_var(File, trim(avail_hist_fields(n)%vname), &
+                         pio_real, dimidz, varid)
+            status = pio_put_att(File,varid,'units', &
+                        trim(avail_hist_fields(n)%vunit))
+            status = pio_put_att(File,varid, 'long_name', &
+                        trim(avail_hist_fields(n)%vdesc))
+            status = pio_put_att(File,varid,'coordinates', &
+                        trim(avail_hist_fields(n)%vcoord))
+            status = pio_put_att(File,varid,'cell_measures', &
+                        trim(avail_hist_fields(n)%vcellmeas))
+            status = pio_put_att(File,varid,'missing_value',spval)
+            status = pio_put_att(File,varid,'_FillValue',spval)
 
-      !-----------------------------------------------------------------
-      ! Add cell_methods attribute to variables if averaged
-      !-----------------------------------------------------------------
-            if (hist_avg) then
-                status = nf90_put_att(ncid,varid,'cell_methods','time: mean')
-                if (status /= nf90_noerr) call abort_ice( &
-                 'Error defining cell methods for '//avail_hist_fields(n)%vname)
+            ! Add cell_methods attribute to variables if averaged
+            if (hist_avg .and. histfreq(ns) /= '1') then
+                status = pio_put_att(File,varid,'cell_methods','time: mean')
             endif
 
             if (histfreq(ns) == '1' .or. .not. hist_avg) then
-               status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
+               status = pio_put_att(File,varid,'time_rep','instantaneous')
             else
-               status = nf90_put_att(ncid,varid,'time_rep','averaged')
+               status = pio_put_att(File,varid,'time_rep','averaged')
             endif
           endif
         enddo  ! num_avail_hist_fields_3Dc
+
+      !-----------------------------------------------------------------
+      ! 3D (ice layers)
+      !-----------------------------------------------------------------
 
         dimidz(1) = imtid
         dimidz(2) = jmtid
@@ -687,36 +623,36 @@
 
         do n = n3Dccum + 1, n3Dzcum
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
-                         nf90_float, dimidz, varid)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining variable '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'units', &
-                        avail_hist_fields(n)%vunit)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining units for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid, 'long_name', &
-                        avail_hist_fields(n)%vdesc)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining long_name for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'coordinates', &
-                        avail_hist_fields(n)%vcoord)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining coordinates for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'cell_measures', &
-                        avail_hist_fields(n)%vcellmeas)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining cell measures for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'missing_value',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'_FillValue',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+            status  = pio_def_var(File, trim(avail_hist_fields(n)%vname), &
+                         pio_real, dimidz, varid)
+            status = pio_put_att(File,varid,'units', &
+                        trim(avail_hist_fields(n)%vunit))
+            status = pio_put_att(File,varid, 'long_name', &
+                        trim(avail_hist_fields(n)%vdesc))
+            status = pio_put_att(File,varid,'coordinates', &
+                        trim(avail_hist_fields(n)%vcoord))
+            status = pio_put_att(File,varid,'cell_measures', &
+                        trim(avail_hist_fields(n)%vcellmeas))
+            status = pio_put_att(File,varid,'missing_value',spval)
+            status = pio_put_att(File,varid,'_FillValue',spval)
 
+            ! Add cell_methods attribute to variables if averaged
+            if (hist_avg .and. histfreq(ns) /= '1') then
+                status = pio_put_att(File,varid,'cell_methods','time: mean')
+            endif
+
+            if (histfreq(ns) == '1' .or. .not. hist_avg) then
+               status = pio_put_att(File,varid,'time_rep','instantaneous')
+            else
+               status = pio_put_att(File,varid,'time_rep','averaged')
+            endif
           endif
         enddo  ! num_avail_hist_fields_3Dz
         
+      !-----------------------------------------------------------------
+      ! 3D (biology layers)
+      !-----------------------------------------------------------------
+
         dimidz(1) = imtid
         dimidz(2) = jmtid
         dimidz(3) = kmtidb
@@ -724,35 +660,44 @@
 
         do n = n3Dzcum + 1, n3Dbcum
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
-                         nf90_float, dimidz, varid)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining variable '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'units', &
-                        avail_hist_fields(n)%vunit)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining units for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid, 'long_name', &
-                        avail_hist_fields(n)%vdesc)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining long_name for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'coordinates', &
-                        avail_hist_fields(n)%vcoord)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining coordinates for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'cell_measures', &
-                        avail_hist_fields(n)%vcellmeas)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining cell measures for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'missing_value',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'_FillValue',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+            status  = pio_def_var(File, trim(avail_hist_fields(n)%vname), &
+                         pio_real, dimidz, varid)
+            status = pio_put_att(File,varid,'units', &
+                        trim(avail_hist_fields(n)%vunit))
+            status = pio_put_att(File,varid, 'long_name', &
+                        trim(avail_hist_fields(n)%vdesc))
+            status = pio_put_att(File,varid,'coordinates', &
+                        trim(avail_hist_fields(n)%vcoord))
+            status = pio_put_att(File,varid,'cell_measures', &
+                        trim(avail_hist_fields(n)%vcellmeas))
+            status = pio_put_att(File,varid,'missing_value',spval)
+            status = pio_put_att(File,varid,'_FillValue',spval)
 
+            ! Add cell_methods attribute to variables if averaged
+            if (hist_avg .and. histfreq(ns) /= '1') then
+                status = pio_put_att(File,varid,'cell_methods','time: mean')
+            endif
+
+            if (histfreq(ns) == '1' .or. .not. hist_avg) then
+               status = pio_put_att(File,varid,'time_rep','instantaneous')
+            else
+               status = pio_put_att(File,varid,'time_rep','averaged')
+            endif
           endif
         enddo  ! num_avail_hist_fields_3Db
+
+      !-----------------------------------------------------------------
+      ! define attributes for 4D variables
+      ! time coordinate is dropped
+      !-----------------------------------------------------------------
+
+      !-----------------------------------------------------------------
+      ! 4D (ice categories and layers)
+      !-----------------------------------------------------------------
+
+!!! 4D is not available with PIO
+#if 1==0
+!!! this part works properly
 
         dimidcz(1) = imtid
         dimidcz(2) = jmtid
@@ -762,50 +707,35 @@
 
         do n = n3Dbcum + 1, n4Dicum
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
-!                             nf90_float, dimidcz, varid)
-                             nf90_float, dimidcz(1:4), varid) ! ferret    
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining variable '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'units', &
-                        avail_hist_fields(n)%vunit)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining units for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid, 'long_name', &
-                        avail_hist_fields(n)%vdesc)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining long_name for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'coordinates', &
-                        avail_hist_fields(n)%vcoord)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining coordinates for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'cell_measures', &
-                        avail_hist_fields(n)%vcellmeas)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining cell measures for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'missing_value',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'_FillValue',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+            status  = pio_def_var(File, trim(avail_hist_fields(n)%vname), &
+                             pio_real, dimidcz, varid)
+            status = pio_put_att(File,varid,'units', &
+                        trim(avail_hist_fields(n)%vunit))
+            status = pio_put_att(File,varid, 'long_name', &
+                        trim(avail_hist_fields(n)%vdesc))
+            status = pio_put_att(File,varid,'coordinates', &
+                        trim(avail_hist_fields(n)%vcoord))
+            status = pio_put_att(File,varid,'cell_measures', &
+                        trim(avail_hist_fields(n)%vcellmeas))
+            status = pio_put_att(File,varid,'missing_value',spval)
+            status = pio_put_att(File,varid,'_FillValue',spval)
 
-      !-----------------------------------------------------------------
-      ! Add cell_methods attribute to variables if averaged
-      !-----------------------------------------------------------------
-            if (hist_avg) then
-                status = nf90_put_att(ncid,varid,'cell_methods','time: mean')
-                if (status /= nf90_noerr) call abort_ice( &
-                 'Error defining cell methods for '//avail_hist_fields(n)%vname)
+            ! Add cell_methods attribute to variables if averaged
+            if (hist_avg .and. histfreq(ns) /= '1') then
+                status = pio_put_att(File,varid,'cell_methods','time: mean')
             endif
 
             if (histfreq(ns) == '1' .or. .not. hist_avg) then
-               status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
+               status = pio_put_att(File,varid,'time_rep','instantaneous')
             else
-               status = nf90_put_att(ncid,varid,'time_rep','averaged')
+               status = pio_put_att(File,varid,'time_rep','averaged')
             endif
           endif
         enddo  ! num_avail_hist_fields_4Di
+
+      !-----------------------------------------------------------------
+      ! 4D (ice categories and snow layers)
+      !-----------------------------------------------------------------
 
         dimidcz(1) = imtid
         dimidcz(2) = jmtid
@@ -815,50 +745,35 @@
 
         do n = n4Dicum + 1, n4Dscum
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
-!                             nf90_float, dimidcz, varid)
-                             nf90_float, dimidcz(1:4), varid) ! ferret    
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining variable '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'units', &
-                        avail_hist_fields(n)%vunit)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining units for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid, 'long_name', &
-                        avail_hist_fields(n)%vdesc)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining long_name for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'coordinates', &
-                        avail_hist_fields(n)%vcoord)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining coordinates for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'cell_measures', &
-                        avail_hist_fields(n)%vcellmeas)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining cell measures for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'missing_value',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'_FillValue',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+            status  = pio_def_var(File, trim(avail_hist_fields(n)%vname), &
+                             pio_real, dimidcz, varid)
+            status = pio_put_att(File,varid,'units', &
+                        trim(avail_hist_fields(n)%vunit))
+            status = pio_put_att(File,varid, 'long_name', &
+                        trim(avail_hist_fields(n)%vdesc))
+            status = pio_put_att(File,varid,'coordinates', &
+                        trim(avail_hist_fields(n)%vcoord))
+            status = pio_put_att(File,varid,'cell_measures', &
+                        trim(avail_hist_fields(n)%vcellmeas))
+            status = pio_put_att(File,varid,'missing_value',spval)
+            status = pio_put_att(File,varid,'_FillValue',spval)
 
-      !-----------------------------------------------------------------
-      ! Add cell_methods attribute to variables if averaged
-      !-----------------------------------------------------------------
-            if (hist_avg) then
-                status = nf90_put_att(ncid,varid,'cell_methods','time: mean')
-                if (status /= nf90_noerr) call abort_ice( &
-                 'Error defining cell methods for '//avail_hist_fields(n)%vname)
+            ! Add cell_methods attribute to variables if averaged
+            if (hist_avg .and. histfreq(ns) /= '1') then
+                status = pio_put_att(File,varid,'cell_methods','time: mean')
             endif
 
             if (histfreq(ns) == '1' .or. .not. hist_avg) then
-               status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
+               status = pio_put_att(File,varid,'time_rep','instantaneous')
             else
-               status = nf90_put_att(ncid,varid,'time_rep','averaged')
+               status = pio_put_att(File,varid,'time_rep','averaged')
             endif
           endif
         enddo  ! num_avail_hist_fields_4Ds
+
+      !-----------------------------------------------------------------
+      ! 4D (ice categories and biology layers)
+      !-----------------------------------------------------------------
 
         dimidcz(1) = imtid
         dimidcz(2) = jmtid
@@ -868,50 +783,34 @@
 
         do n = n4Dscum + 1, n4Dbcum
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-            status  = nf90_def_var(ncid, avail_hist_fields(n)%vname, &
-!                             nf90_float, dimidcz, varid)
-                             nf90_float, dimidcz(1:4), varid) ! ferret    
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining variable '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'units', &
-                        avail_hist_fields(n)%vunit)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining units for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid, 'long_name', &
-                        avail_hist_fields(n)%vdesc)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining long_name for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'coordinates', &
-                        avail_hist_fields(n)%vcoord)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining coordinates for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'cell_measures', &
-                        avail_hist_fields(n)%vcellmeas)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining cell measures for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'missing_value',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
-            status = nf90_put_att(ncid,varid,'_FillValue',spval)
-            if (status /= nf90_noerr) call abort_ice( &
-               'Error defining _FillValue for '//avail_hist_fields(n)%vname)
+            status  = pio_def_var(File, trim(avail_hist_fields(n)%vname), &
+                             pio_real, dimidcz, varid)
+            status = pio_put_att(File,varid,'units', &
+                        trim(avail_hist_fields(n)%vunit))
+            status = pio_put_att(File,varid, 'long_name', &
+                        trim(avail_hist_fields(n)%vdesc))
+            status = pio_put_att(File,varid,'coordinates', &
+                        trim(avail_hist_fields(n)%vcoord))
+            status = pio_put_att(File,varid,'cell_measures', &
+                        trim(avail_hist_fields(n)%vcellmeas))
+            status = pio_put_att(File,varid,'missing_value',spval)
+            status = pio_put_att(File,varid,'_FillValue',spval)
 
-      !-----------------------------------------------------------------
-      ! Add cell_methods attribute to variables if averaged
-      !-----------------------------------------------------------------
-            if (hist_avg) then
-                status = nf90_put_att(ncid,varid,'cell_methods','time: mean')
-                if (status /= nf90_noerr) call abort_ice( &
-                 'Error defining cell methods for '//avail_hist_fields(n)%vname)
+            ! Add cell_methods attribute to variables if averaged
+            if (hist_avg .and. histfreq(ns) /= '1') then
+                status = pio_put_att(File,varid,'cell_methods','time: mean')
             endif
 
             if (histfreq(ns) == '1' .or. .not. hist_avg) then
-               status = nf90_put_att(ncid,varid,'time_rep','instantaneous')
+               status = pio_put_att(File,varid,'time_rep','instantaneous')
             else
-               status = nf90_put_att(ncid,varid,'time_rep','averaged')
+               status = pio_put_att(File,varid,'time_rep','averaged')
             endif
           endif
         enddo  ! num_avail_hist_fields_4Db
+
+!end of 4D definitions, not available in PIO
+#endif
 
       !-----------------------------------------------------------------
       ! global attributes
@@ -919,489 +818,287 @@
       ! ... the user should change these to something useful ...
       !-----------------------------------------------------------------
 #ifdef CCSMCOUPLED
-        status = nf90_put_att(ncid,nf90_global,'title',runid)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error in global attribute title')
+        status = pio_put_att(File,pio_global,'title',runid)
 #else
         title  = 'sea ice model output for CICE'
-        status = nf90_put_att(ncid,nf90_global,'title',title)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error in global attribute title')
+        status = pio_put_att(File,pio_global,'title',trim(title))
 #endif
         title = 'Diagnostic and Prognostic Variables'
-        status = nf90_put_att(ncid,nf90_global,'contents',title)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice Error: global attribute contents')
+        status = pio_put_att(File,pio_global,'contents',trim(title))
 
-        title  = 'sea ice model: Community Ice Code (CICE)'
-        status = nf90_put_att(ncid,nf90_global,'source',title)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice Error: global attribute source')
+        title  = 'Los Alamos Sea Ice Model (CICE)'
+        status = pio_put_att(File,pio_global,'source',trim(title))
 
         if (use_leap_years) then
           write(title,'(a,i3,a)') 'This year has ',int(dayyr),' days'
         else
           write(title,'(a,i3,a)') 'All years have exactly ',int(dayyr),' days'
         endif
-        status = nf90_put_att(ncid,nf90_global,'comment',title)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice Error: global attribute comment')
+        status = pio_put_att(File,pio_global,'comment',trim(title))
 
         write(title,'(a,i8.8)') 'File written on model date ',idate
-        status = nf90_put_att(ncid,nf90_global,'comment2',title)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice Error: global attribute date1')
+        status = pio_put_att(File,pio_global,'comment2',trim(title))
 
         write(title,'(a,i6)') 'seconds elapsed into model date: ',sec
-        status = nf90_put_att(ncid,nf90_global,'comment3',title)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice Error: global attribute date2')
+        status = pio_put_att(File,pio_global,'comment3',trim(title))
 
         title = 'CF-1.0'
         status =  &
-             nf90_put_att(ncid,nf90_global,'conventions',title)
-        if (status /= nf90_noerr) call abort_ice( &
-             'Error in global attribute conventions')
+             pio_put_att(File,pio_global,'conventions',trim(title))
 
         call date_and_time(date=current_date, time=current_time)
         write(start_time,1000) current_date(1:4), current_date(5:6), &
                                current_date(7:8), current_time(1:2), &
-                               current_time(3:4), current_time(5:8)
+                               current_time(3:4)
 1000    format('This dataset was created on ', &
-                a,'-',a,'-',a,' at ',a,':',a,':',a)
+                a,'-',a,'-',a,' at ',a,':',a)
 
-        status = nf90_put_att(ncid,nf90_global,'history',start_time)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice Error: global attribute history')
+        status = pio_put_att(File,pio_global,'history',trim(start_time))
 
       !-----------------------------------------------------------------
       ! end define mode
       !-----------------------------------------------------------------
 
-        status = nf90_enddef(ncid)
-        if (status /= nf90_noerr) call abort_ice('ice: Error in nf90_enddef')
+        status = pio_enddef(File)
 
       !-----------------------------------------------------------------
       ! write time variable
       !-----------------------------------------------------------------
 
-        status = nf90_inq_varid(ncid,'time',varid)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error getting time varid')
-        status = nf90_put_var(ncid,varid,ltime)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error writing time variable')
+        status = pio_inq_varid(File,'time',varid)
+        call pio_setframe(varid, int(1,kind=PIO_OFFSET))
+        status = pio_put_var(File,varid,ltime)
 
       !-----------------------------------------------------------------
       ! write time_bounds info
       !-----------------------------------------------------------------
 
-        if (hist_avg) then
-          status = nf90_inq_varid(ncid,'time_bounds',varid)
-          if (status /= nf90_noerr) call abort_ice( &
-                        'ice: Error getting time_bounds id')
-          status = nf90_put_var(ncid,varid,time_beg(ns),start=(/1/))
-          if (status /= nf90_noerr) call abort_ice( &
-                        'ice: Error writing time_beg')
-          status = nf90_put_var(ncid,varid,time_end(ns),start=(/2/))
-          if (status /= nf90_noerr) call abort_ice( &
-                        'ice: Error writing time_end')
+        if (hist_avg .and. histfreq(ns) /= '1') then
+          status = pio_inq_varid(File,'time_bounds',varid)
+          call pio_setframe(varid, int(1,kind=PIO_OFFSET))
+          time_bounds=(/time_beg(ns),time_end(ns)/)
+!fails          status = pio_put_var(File,varid,time_bounds) 
         endif
-
-      endif                     ! master_task
-
-      if (my_task==master_task) then
-         allocate(work_g1(nx_global,ny_global))
-         allocate(work_gr(nx_global,ny_global))
-      else
-         allocate(work_gr(1,1))   ! to save memory
-         allocate(work_g1(1,1))
-      endif
-
-      work_g1(:,:) = c0
 
       !-----------------------------------------------------------------
       ! write coordinate variables
       !-----------------------------------------------------------------
 
         do i = 1,ncoord
-          call broadcast_scalar(coord_var(i)%short_name,master_task)
+
           SELECT CASE (coord_var(i)%short_name)
             CASE ('TLON')
-              call gather_global(work_g1,TLON,master_task,distrb_info)
-              if (my_task == master_task) then
               ! Convert T grid longitude from -180 -> 180 to 0 to 360
-                 work_gr = work_g1*rad_to_deg + c360    ! single precision
-                 where (work_gr > c360) work_gr = work_gr - c360
-                 where (work_gr < c0 )  work_gr = work_gr + c360
-              endif
+                 workr = tlon*rad_to_deg + c360
+                 where (workr > c360) workr = workr - c360
+                 where (workr < c0 )  workr = workr + c360
             CASE ('TLAT')
-              call gather_global(work_g1,TLAT,master_task,distrb_info)
-              if (my_task == master_task) work_gr = work_g1*rad_to_deg
+              workr = tlat*rad_to_deg
             CASE ('ULON')
-              call gather_global(work_g1,ULON,master_task,distrb_info)
-              if (my_task == master_task) work_gr = work_g1*rad_to_deg
+              workr = ulon*rad_to_deg
             CASE ('ULAT')
-              call gather_global(work_g1,ULAT,master_task,distrb_info)
-              if (my_task == master_task) work_gr = work_g1*rad_to_deg
+              workr = ulat*rad_to_deg
           END SELECT
           
-          if (my_task == master_task) then
-             status = nf90_inq_varid(ncid, coord_var(i)%short_name, varid)
-             if (status /= nf90_noerr) call abort_ice( &
-                  'ice: Error getting varid for '//coord_var(i)%short_name)
-             status = nf90_put_var(ncid,varid,work_gr)
-             if (status /= nf90_noerr) call abort_ice( &
-                           'ice: Error writing'//coord_var(i)%short_name)
-          endif
+             status = pio_inq_varid(File, coord_var(i)%short_name, varid)
+         call pio_write_darray(File, varid, iodesc2d, &
+                               workr, status, fillval=spval)
         enddo
 
-        ! Extra dimensions (NCAT, VGRD*)
-
-        do i = 1, nvarz
-          if (igrdz(i)) then
-          call broadcast_scalar(var_nz(i)%short_name,master_task)
-          if (my_task == master_task) then
-             status = nf90_inq_varid(ncid, var_nz(i)%short_name, varid)
-             if (status /= nf90_noerr) call abort_ice( &
-                  'ice: Error getting varid for '//var_nz(i)%short_name)
-             SELECT CASE (var_nz(i)%short_name)
-               CASE ('NCAT') 
-                 status = nf90_put_var(ncid,varid,hin_max(1:ncat_hist))
-               CASE ('VGRDi') ! index - needed for Met Office analysis code
-                 status = nf90_put_var(ncid,varid,(/(k, k=1,nzilyr)/))
-               CASE ('VGRDs') ! index - needed for Met Office analysis code
-                 status = nf90_put_var(ncid,varid,(/(k, k=1,nzslyr)/))
-             END SELECT
-             if (status /= nf90_noerr) call abort_ice( &
-                           'ice: Error writing'//var_nz(i)%short_name)
-          endif
-          endif
-        enddo
+        if (igrdz(n_NCAT)) then
+           status = pio_inq_varid(File, 'NCAT', varid)
+           status = pio_put_var(File,varid,hin_max(1:ncat_hist)) 
+        endif
 
       !-----------------------------------------------------------------
       ! write grid mask, area and rotation angle
       !-----------------------------------------------------------------
 
       if (igrd(n_tmask)) then
-      call gather_global(work_g1, hm, master_task, distrb_info)
-      if (my_task == master_task) then
-        work_gr=work_g1
-        status = nf90_inq_varid(ncid, 'tmask', varid)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error getting varid for tmask')
-        status = nf90_put_var(ncid,varid,work_gr)
-        if (status /= nf90_noerr) call abort_ice( &
-                      'ice: Error writing variable tmask')
-      endif
+        workr = tmask
+        status = pio_inq_varid(File, 'tmask', varid)
+        call pio_write_darray(File, varid, iodesc2d, &
+                              workr, status, fillval=spval)
       endif
 
       do i = 2, nvar       ! note: n_tmask=1
         if (igrd(i)) then
-        call broadcast_scalar(var(i)%req%short_name,master_task)
         SELECT CASE (var(i)%req%short_name)
           CASE ('tarea')
-            call gather_global(work_g1, tarea, master_task, distrb_info)
+            workr = tarea
           CASE ('uarea')
-            call gather_global(work_g1, uarea, master_task, distrb_info)
+            workr = uarea
           CASE ('dxu')
-            call gather_global(work_g1,   dxu, master_task, distrb_info)
+            workr = dxu
           CASE ('dyu')
-            call gather_global(work_g1,   dyu, master_task, distrb_info)
+            workr = dyu
           CASE ('dxt')
-            call gather_global(work_g1,   dxt, master_task, distrb_info)
+            workr = dxt
           CASE ('dyt')
-            call gather_global(work_g1,   dyt, master_task, distrb_info)
+            workr = dyt
           CASE ('HTN')
-            call gather_global(work_g1,   HTN, master_task, distrb_info)
+            workr = HTN
           CASE ('HTE')
-            call gather_global(work_g1,   HTE, master_task, distrb_info)
+            workr = HTE
           CASE ('ANGLE')
-            call gather_global(work_g1, ANGLE, master_task, distrb_info)
+            workr = ANGLE
           CASE ('ANGLET')
-            call gather_global(work_g1, ANGLET,master_task, distrb_info)
+            workr = ANGLET
         END SELECT
 
-        if (my_task == master_task) then
-          work_gr=work_g1
-          status = nf90_inq_varid(ncid, var(i)%req%short_name, varid)
-          if (status /= nf90_noerr) call abort_ice( &
-                        'ice: Error getting varid for '//var(i)%req%short_name)
-          status = nf90_put_var(ncid,varid,work_gr)
-          if (status /= nf90_noerr) call abort_ice( &
-                        'ice: Error writing variable '//var(i)%req%short_name)
-        endif
+        status = pio_inq_varid(File, var(i)%req%short_name, varid)
+        call pio_write_darray(File, varid, iodesc2d, &
+                              workr, status, fillval=spval)
+
         endif
       enddo
-
-      deallocate(work_gr)
 
       !----------------------------------------------------------------
       ! Write coordinates of grid box vertices
       !----------------------------------------------------------------
 
       if (f_bounds) then
-      if (my_task==master_task) then
-         allocate(work_gr3(nverts,nx_global,ny_global))
-      else
-         allocate(work_gr3(1,1,1))   ! to save memory
-      endif
-
-      work_gr3(:,:,:) = c0
-      work1   (:,:,:) = c0
-
+      workrv (:,:,:,:) = c0
       do i = 1, nvar_verts
-        call broadcast_scalar(var_nverts(i)%short_name,master_task)
         SELECT CASE (var_nverts(i)%short_name)
         CASE ('lont_bounds')
-        do ivertex = 1, nverts 
-           work1(:,:,:) = lont_bounds(ivertex,:,:,:)
-           call gather_global(work_g1, work1, master_task, distrb_info)
-           if (my_task == master_task) work_gr3(ivertex,:,:) = work_g1(:,:)
-        enddo
+           do ivertex = 1, nverts 
+              workrv(ivertex,:,:,:) = lont_bounds(ivertex,:,:,:)
+           enddo
         CASE ('latt_bounds')
-        do ivertex = 1, nverts
-           work1(:,:,:) = latt_bounds(ivertex,:,:,:)
-           call gather_global(work_g1, work1, master_task, distrb_info)
-           if (my_task == master_task) work_gr3(ivertex,:,:) = work_g1(:,:)
-        enddo
+           do ivertex = 1, nverts 
+              workrv(ivertex,:,:,:) = latt_bounds(ivertex,:,:,:)
+           enddo
         CASE ('lonu_bounds')
-        do ivertex = 1, nverts
-           work1(:,:,:) = lonu_bounds(ivertex,:,:,:)
-           call gather_global(work_g1, work1, master_task, distrb_info)
-           if (my_task == master_task) work_gr3(ivertex,:,:) = work_g1(:,:)
-        enddo
+           do ivertex = 1, nverts 
+              workrv(ivertex,:,:,:) = lonu_bounds(ivertex,:,:,:)
+           enddo
         CASE ('latu_bounds')
-        do ivertex = 1, nverts
-           work1(:,:,:) = latu_bounds(ivertex,:,:,:)
-           call gather_global(work_g1, work1, master_task, distrb_info)
-           if (my_task == master_task) work_gr3(ivertex,:,:) = work_g1(:,:)
-        enddo
+           do ivertex = 1, nverts 
+              workrv(ivertex,:,:,:) = latu_bounds(ivertex,:,:,:)
+           enddo
         END SELECT
 
-        if (my_task == master_task) then
-          status = nf90_inq_varid(ncid, var_nverts(i)%short_name, varid)
-          if (status /= nf90_noerr) call abort_ice( &
-             'ice: Error getting varid for '//var_nverts(i)%short_name)
-          status = nf90_put_var(ncid,varid,work_gr3)
-          if (status /= nf90_noerr) call abort_ice( &
-             'ice: Error writing variable '//var_nverts(i)%short_name)
-        endif
+          status = pio_inq_varid(File, var_nverts(i)%short_name, varid)
+          call pio_write_darray(File, varid, iodesc3dv, &
+                                workrv, status, fillval=spval)
       enddo
-      deallocate(work_gr3)
       endif
+
 
       !-----------------------------------------------------------------
       ! write variable data
       !-----------------------------------------------------------------
 
-      if (my_task==master_task) then
-         allocate(work_gr(nx_global,ny_global))
-      else
-         allocate(work_gr(1,1))     ! to save memory
-      endif
-      work_gr(:,:) = c0
-      work_g1(:,:) = c0
-
+      ! 2D
       do n=1,num_avail_hist_fields_2D
-        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-          call gather_global(work_g1, a2D(:,:,n,:), &
-                             master_task, distrb_info)
-          if (my_task == master_task) then
-            work_gr(:,:) = work_g1(:,:)
-            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
-            if (status /= nf90_noerr) call abort_ice( &
+         if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = pio_inq_varid(File,avail_hist_fields(n)%vname,varid)
+            if (status /= pio_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
-            status  = nf90_put_var(ncid,varid,work_gr(:,:), &
-                                   count=(/nx_global,ny_global/))
-            if (status /= nf90_noerr) call abort_ice( &
-               'ice: Error writing variable '//avail_hist_fields(n)%vname)
-          endif
-        endif
+            workr(:,:,:) = a2D(:,:,n,:)
+            call pio_setframe(varid, int(1,kind=PIO_OFFSET))
+            call pio_write_darray(File, varid, iodesc2d,&
+                                  workr, status, fillval=spval)
+         endif
       enddo ! num_avail_hist_fields_2D
 
-      work_gr(:,:) = c0
-      work_g1(:,:) = c0
-
+      ! 3D (category)
       do n = n2D + 1, n3Dccum
-        nn = n - n2D
-        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-          if (my_task == master_task) then
-            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
-            if (status /= nf90_noerr) call abort_ice( &
+         nn = n - n2D
+         if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = pio_inq_varid(File,avail_hist_fields(n)%vname,varid)
+            if (status /= pio_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
-          endif
-          do k = 1, ncat_hist
-             call gather_global(work_g1, a3Dc(:,:,k,nn,:), &
-                                master_task, distrb_info)
-             work_gr(:,:) = work_g1(:,:)
-
-             if (my_task == master_task) then
-             status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
-             if (status /= nf90_noerr) call abort_ice( &
-                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
-             status  = nf90_put_var(ncid,varid,work_gr(:,:), &
-                                    start=(/        1,        1,k/), &
-                                    count=(/nx_global,ny_global,1/))
-             if (status /= nf90_noerr) call abort_ice( &
-                'ice: Error writing variable '//avail_hist_fields(n)%vname)
-             endif
-          enddo ! k
-        endif
+            do i = 1, ncat_hist
+               workr3c(:,:,:,i) = a3Dc(:,:,i,nn,:)
+            enddo
+            call pio_setframe(varid, int(1,kind=PIO_OFFSET))
+            call pio_write_darray(File, varid, iodesc3dc,&
+                                  workr3c, status, fillval=spval)
+         endif
       enddo ! num_avail_hist_fields_3Dc
 
-      work_gr(:,:) = c0
-      work_g1(:,:) = c0
-
+      ! 3D (vertical ice)
       do n = n3Dccum+1, n3Dzcum
-        nn = n - n3Dccum
-        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-          if (my_task == master_task) then
-            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
-            if (status /= nf90_noerr) call abort_ice( &
+         nn = n - n3Dccum
+         if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = pio_inq_varid(File,avail_hist_fields(n)%vname,varid)
+            if (status /= pio_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
-          endif
-          do k = 1, nzilyr
-             call gather_global(work_g1, a3Dz(:,:,k,nn,:), &
-                                master_task, distrb_info)
-             work_gr(:,:) = work_g1(:,:)
-
-             if (my_task == master_task) then
-             status  = nf90_put_var(ncid,varid,work_gr(:,:), &
-                                    start=(/        1,        1,k/), &
-                                    count=(/nx_global,ny_global,1/))
-             if (status /= nf90_noerr) call abort_ice( &
-                'ice: Error writing variable '//avail_hist_fields(n)%vname)
-           endif
-           enddo ! k
-        endif
+            do i = 1, nzlyr
+               workr3i(:,:,:,i) = a3Dz(:,:,i,nn,:)
+            enddo
+            call pio_setframe(varid, int(1,kind=PIO_OFFSET))
+            call pio_write_darray(File, varid, iodesc3di,&
+                                  workr3i, status, fillval=spval)
+         endif
       enddo ! num_avail_hist_fields_3Dz
 
-      work_gr(:,:) = c0
-      work_g1(:,:) = c0
-
-     do n = n3Dzcum+1, n3Dbcum
-        nn = n - n3Dzcum
-        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-          if (my_task == master_task) then
-            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
-            if (status /= nf90_noerr) call abort_ice( &
+      ! 3D (vertical ice biology)
+      do n = n3Dzcum+1, n3Dbcum
+         nn = n - n3Dzcum
+         if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = pio_inq_varid(File,avail_hist_fields(n)%vname,varid)
+            if (status /= pio_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
-          endif
-          do k = 1, nzblyr
-             call gather_global(work_g1, a3Db(:,:,k,nn,:), &
-                                master_task, distrb_info)
-             work_gr(:,:) = work_g1(:,:)
-
-             if (my_task == master_task) then
-             status  = nf90_put_var(ncid,varid,work_gr(:,:), &
-                                    start=(/        1,        1,k/), &
-                                    count=(/nx_global,ny_global,1/))
-             if (status /= nf90_noerr) call abort_ice( &
-                'ice: Error writing variable '//avail_hist_fields(n)%vname)
-           endif
-           enddo ! k
-        endif
+            do i = 1, nzlyrb
+               workr3b(:,:,:,i) = a3Db(:,:,i,nn,:)
+            enddo
+            call pio_setframe(varid, int(1,kind=PIO_OFFSET))
+            call pio_write_darray(File, varid, iodesc3db,&
+                                  workr3b, status, fillval=spval)
+         endif
       enddo ! num_avail_hist_fields_3Db
 
-      work_gr(:,:) = c0
-      work_g1(:,:) = c0
-
+#if 1==0
+!!! 4D variables are not available with PIO
+      ! 4D (categories, vertical ice)
       do n = n3Dbcum+1, n4Dicum
-        nn = n - n3Dbcum
-        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-          if (my_task == master_task) then
-            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
-            if (status /= nf90_noerr) call abort_ice( &
+         nn = n - n3Dbcum
+         if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = pio_inq_varid(File,avail_hist_fields(n)%vname,varid)
+            if (status /= pio_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
-          endif
-          do ic = 1, ncat_hist
-             do k = 1, nzilyr
-                call gather_global(work_g1, a4Di(:,:,k,ic,nn,:), &
-                                master_task, distrb_info)
-                work_gr(:,:) = work_g1(:,:)
-                if (my_task == master_task) then
-                  status  = nf90_put_var(ncid,varid,work_gr(:,:), &
-                                         start=(/        1,        1,k,ic/), &
-                                         count=(/nx_global,ny_global,1, 1/))
-                  if (status /= nf90_noerr) call abort_ice( &
-                     'ice: Error writing variable '//avail_hist_fields(n)%vname)
-                endif
-             enddo ! k
-          enddo ! ic
-        endif
+            do i = 1, ncat_hist
+            do k = 1, nzilyr
+               workr4i(:,:,:,k,i) = a4Di(:,:,k,i,nn,:)
+            enddo ! k
+            enddo ! i
+            call pio_setframe(varid, int(1,kind=PIO_OFFSET))
+            call pio_write_darray(File, varid, iodesc4di,&
+                                  workr4i, status, fillval=spval)
+         endif
       enddo ! num_avail_hist_fields_4Di
 
-      work_gr(:,:) = c0
-      work_g1(:,:) = c0
-
-      do n = n4Dicum+1, n4Dscum
-        nn = n - n4Dicum
-        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-          if (my_task == master_task) then
-            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
-            if (status /= nf90_noerr) call abort_ice( &
-               'ice: Error getting varid for '//avail_hist_fields(n)%vname)
-          endif
-          do ic = 1, ncat_hist
-             do k = 1, nzslyr
-                call gather_global(work_g1, a4Ds(:,:,k,ic,nn,:), &
-                                master_task, distrb_info)
-                work_gr(:,:) = work_g1(:,:)
-                if (my_task == master_task) then
-                  status  = nf90_put_var(ncid,varid,work_gr(:,:), &
-                                         start=(/        1,        1,k,ic/), &
-                                         count=(/nx_global,ny_global,1, 1/))
-                  if (status /= nf90_noerr) call abort_ice( &
-                     'ice: Error writing variable '//avail_hist_fields(n)%vname)
-                endif
-             enddo ! k
-          enddo ! ic
-        endif
-      enddo ! num_avail_hist_fields_4Ds
-
-      work_gr(:,:) = c0
-      work_g1(:,:) = c0
-
-      do n = n4Dscum+1, n4Dbcum
-        nn = n - n4Dscum
-        if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
-          if (my_task == master_task) then
-            status  = nf90_inq_varid(ncid,avail_hist_fields(n)%vname,varid)
-            if (status /= nf90_noerr) call abort_ice( &
-               'ice: Error getting varid for '//avail_hist_fields(n)%vname)
-          endif
-          do ic = 1, ncat_hist
-             do k = 1, nzblyr
-                call gather_global(work_g1, a4Db(:,:,k,ic,nn,:), &
-                                master_task, distrb_info)
-                work_gr(:,:) = work_g1(:,:)
-                if (my_task == master_task) then
-                  status  = nf90_put_var(ncid,varid,work_gr(:,:), &
-                                         start=(/        1,        1,k,ic/), &
-                                         count=(/nx_global,ny_global,1, 1/))
-                  if (status /= nf90_noerr) call abort_ice( &
-                     'ice: Error writing variable '//avail_hist_fields(n)%vname)
-                endif
-             enddo ! k
-          enddo ! ic
-        endif
-      enddo ! num_avail_hist_fields_4Db
-
-      deallocate(work_gr)
-      deallocate(work_g1)
+      similarly for num_avail_hist_fields_4Ds (define workr4s, iodesc4ds)
+      similarly for num_avail_hist_fields_4Db (define workr4b, iodesc4db)
+!end of 4D definitions, not available in PIO
+#endif
 
       !-----------------------------------------------------------------
       ! close output dataset
       !-----------------------------------------------------------------
 
+      call pio_closefile(File)
       if (my_task == master_task) then
-         status = nf90_close(ncid)
-         if (status /= nf90_noerr) call abort_ice( &
-                       'ice: Error closing netCDF history file')
          write(nu_diag,*) ' '
          write(nu_diag,*) 'Finished writing ',trim(ncfile(ns))
       endif
+
+      !-----------------------------------------------------------------
+      ! clean-up PIO descriptors
+      !-----------------------------------------------------------------
+
+      call pio_freedecomp(File,iodesc2d)
+      call pio_freedecomp(File,iodesc3dv)
+      call pio_freedecomp(File,iodesc3dc)
+      call pio_freedecomp(File,iodesc3di)
+      call pio_freedecomp(File,iodesc3db)
+#if 1==0
+      call pio_freedecomp(File,iodesc4di)
+#endif
+
 #endif
 
       end subroutine icecdf
