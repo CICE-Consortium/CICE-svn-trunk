@@ -948,9 +948,8 @@
 
       enddo ! ns1
 
-      !-----------------------------------------------------------------
       ! other 2D history variables
-      !-----------------------------------------------------------------
+
       ! mechanical redistribution
       call init_hist_mechred_2D
 
@@ -1003,7 +1002,21 @@
 
       enddo ! ns1
 
+      ! other 3D (category) history variables
+
+      ! mechanical redistribution
+      call init_hist_mechred_3Dc
+
+      ! melt ponds
+      if (tr_pond) call init_hist_pond_3Dc
+
+      ! biogeochemistry
+      if (hbrine) call init_hist_bgc_3Dc
+
+      !-----------------------------------------------------------------
       ! 3D (vertical) variables must be looped separately
+      !-----------------------------------------------------------------
+
 !      do ns1 = 1, nstreams
 
 !      if (f_field3dz(1:1) /= 'x') &
@@ -1014,7 +1027,13 @@
 
 !      enddo ! ns1 
 
+      ! biogeochemistry
+      if (solve_bgc) call init_hist_bgc_3Db
+
+      !-----------------------------------------------------------------
       ! 4D (categories, vertical) variables must be looped separately
+      !-----------------------------------------------------------------
+
       do ns1 = 1, nstreams
 
       if (f_Tinz(1:1) /= 'x') &
@@ -1022,7 +1041,6 @@
             "ice internal temperatures on CICE grid",          &
             "vertical profile", c1, c0,                    &
             ns1, f_Tinz)
-
 
       if (f_Sinz(1:1) /= 'x') &
          call define_hist_field(n_Sinz,"Sinz","ppt",tstr4Di, tcstr, & 
@@ -1046,14 +1064,10 @@
             if (allocated(Tinz4d)) deallocate(Tinz4d)
             allocate(Tinz4d(nx_block,ny_block,nzilyr,ncat_hist))
        endif
-
-     
        if (f_Sinz   (1:1) /= 'x')  then
             if (allocated(Sinz4d)) deallocate(Sinz4d)
             allocate(Sinz4d(nx_block,ny_block,nzilyr,ncat_hist))
        endif
-
-      
        if (f_Tsnz   (1:1) /= 'x') then
             if (allocated(Tsnz4d)) deallocate(Tsnz4d)
             allocate(Tsnz4d(nx_block,ny_block,nzslyr,ncat_hist))
@@ -1063,18 +1077,9 @@
             allocate(Sinz4d(nx_block,ny_block,nzilyr,ncat_hist))
        endif
 
-      !-----------------------------------------------------------------
-      ! other history variables
-      !-----------------------------------------------------------------
-      ! mechanical redistribution
-      call init_hist_mechred_3Dc
-
-      ! melt ponds
-      if (tr_pond) call init_hist_pond_3Dc
+      ! other 4D history variables
 
       ! biogeochemistry
-      if (hbrine) call init_hist_bgc_3Dc
-      if (solve_bgc) call init_hist_bgc_3Db
       if (hbrine .or. solve_bgc) call init_hist_bgc_4Db
 
       !-----------------------------------------------------------------
@@ -1298,7 +1303,11 @@
            avgct(ns) = c1
          else                      ! write averages over time histfreq
            avgct(ns) = avgct(ns) + c1
-           if (avgct(ns) == c1) time_beg(ns) = (time-dt)/int(secday)
+!           if (avgct(ns) == c1) time_beg(ns) = (time-dt)/int(secday)
+           if (avgct(ns) == c1) then
+              time_beg(ns) = (time-dt)/int(secday)
+              time_beg(ns) = real(time_beg(ns),kind=real_kind)
+           endif
          endif
       enddo
 
@@ -1970,6 +1979,7 @@
         enddo                   ! iblk
 
         time_end(ns) = time/int(secday)
+        time_end(ns) = real(time_end(ns),kind=real_kind)
 
       !---------------------------------------------------------------
       ! write file

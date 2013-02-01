@@ -116,8 +116,8 @@
   , grid_o          = 10.0
   , grid_o_t        = 5.0
   , l_sk            = 2.0
-  , grid_oS         = 0.0
-  , l_skS           = 9.0
+  , grid_oS         = 5.0
+  , l_skS           = 7.5
   , lapidus_g       = 0.9
   , lapidus_m       = 1.5
   , rhosi           = 940.0
