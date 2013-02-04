@@ -199,6 +199,7 @@
 !                           field_loc_center,  field_type_scalar)
 !      call ice_timer_stop(timer_bound)
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
 
          do j = 1, ny_block 
@@ -230,6 +231,7 @@
                          tmass   (:,:,iblk), icetmask(:,:,iblk))
 
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (icetmask,          halo_info, &
@@ -259,6 +261,7 @@
       endif      
 #endif
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
 
       !-----------------------------------------------------------------
@@ -314,6 +317,7 @@
                             strength(:,:,  iblk) )
 
       enddo  ! iblk
+      !$OMP END PARALLEL DO
 
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (strength,           halo_info, &
@@ -332,6 +336,7 @@
       ! stress tensor equation, total surface stress
       !-----------------------------------------------------------------
 
+         !$OMP PARALLEL DO PRIVATE(iblk)
          do iblk = 1, nblocks
 
 !            if (trim(yield_curve) == 'ellipse') then
@@ -375,6 +380,7 @@
                         uvel     (:,:,iblk), vvel    (:,:,iblk))
 
          enddo
+         !$OMP END PARALLEL DO
 
          call ice_timer_start(timer_bound)
          call ice_HaloUpdate (uvel,               halo_info, &
@@ -389,6 +395,7 @@
       ! ice-ocean stress
       !-----------------------------------------------------------------
 
+      !$OMP PARALLEL DO PRIVATE(iblk)
       do iblk = 1, nblocks
 
          call evp_finish                               & 
@@ -404,6 +411,7 @@
                strocnxT(:,:,iblk), strocnyT(:,:,iblk))
 
       enddo
+      !$OMP END PARALLEL DO
 
       call u2tgrid_vector(strocnxT)    ! shift
       call u2tgrid_vector(strocnyT)
@@ -465,6 +473,7 @@
 
       allocate(fcor_blk(nx_block,ny_block,max_blocks))
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
       do iblk = 1, nblocks
       do j = 1, ny_block
       do i = 1, nx_block
@@ -503,6 +512,7 @@
       enddo                     ! i
       enddo                     ! j
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
       end subroutine init_evp
 

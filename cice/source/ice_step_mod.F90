@@ -997,6 +997,7 @@
                         vicen, vsnon)
       call ice_timer_stop(timer_bound)
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
       do iblk = 1, nblocks
 
       !-----------------------------------------------------------------
@@ -1025,6 +1026,7 @@
          enddo
 
       enddo ! iblk
+      !$OMP END PARALLEL DO
 
       end subroutine post_thermo
 
@@ -1100,9 +1102,11 @@
       call ice_timer_start(timer_column)
       call ice_timer_start(timer_ridge)
 
+      !$OMP PARALLEL DO PRIVATE(iblk)
       do iblk = 1, nblocks
          call step_ridge (dt, ndtd, iblk)
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
       call ice_timer_stop(timer_ridge)
 
@@ -1115,6 +1119,7 @@
                         vicen, vsnon)
       call ice_timer_stop(timer_bound)
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
 
       !-----------------------------------------------------------------
@@ -1149,6 +1154,7 @@
          enddo
 
       enddo
+      !$OMP END PARALLEL DO
 
       call ice_timer_stop(timer_column)
 

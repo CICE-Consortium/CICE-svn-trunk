@@ -295,6 +295,7 @@
       ! Note: On a rectangular grid, the integral of any odd function
       !       of x or y = 0.
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
@@ -314,6 +315,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
  
       end subroutine init_remap
 
@@ -501,6 +503,7 @@
 !---! Remap the open water area (without tracers).
 !---!-------------------------------------------------------------------
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block,n)
       do iblk = 1, nblocks
 
          this_block = get_block(blocks_ice(iblk),iblk)         
@@ -597,6 +600,7 @@
          endif
 
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
     !-------------------------------------------------------------------
     ! Ghost cell updates
@@ -632,6 +636,9 @@
 
       endif  ! nghost
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
+      !$OMP                     edgearea_e,edgearea_n,edge,n,iflux,jflux, &
+      !$OMP                     xp,yp,icellsng,indxing,indxjng,triarea)
       do iblk = 1, nblocks
 
          this_block = get_block(blocks_ice(iblk),iblk)         
@@ -835,6 +842,7 @@
          enddo                  ! n
 
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
       end subroutine horizontal_remap
 
