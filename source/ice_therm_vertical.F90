@@ -686,6 +686,7 @@
       ! Prescibe vertical profile of salinity and melting temperature.
       !-----------------------------------------------------------------
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,k,zn)
      do iblk = 1,max_blocks
      do j = 1, ny_block
      do i = 1, nx_block
@@ -747,6 +748,7 @@
       enddo !i
       enddo !j
       enddo !iblk
+      !$OMP END PARALLEL DO
 
       call init_therm_mushy()
 

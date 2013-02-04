@@ -205,6 +205,7 @@
 
       ! ice extent (= area of grid cells with aice > aice_extmin)
       work1(:,:,:) = c0
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
@@ -212,6 +213,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
       extentn = global_sum(work1, distrb_info, field_loc_center, &
                            tarean)
       extents = global_sum(work1, distrb_info, field_loc_center, &
@@ -249,6 +251,7 @@
       endif
 
       ! total ice-snow kinetic energy
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
@@ -258,6 +261,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
       ketotn = global_sum(work1, distrb_info, field_loc_center, tarean)
       ketots = global_sum(work1, distrb_info, field_loc_center, tareas)
 
@@ -279,6 +283,7 @@
       ! average ice albedo
       ! mask out cells where sun is below horizon (for delta-Eddington)
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
@@ -294,6 +299,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
       
       arean_alb = global_sum(aice, distrb_info, field_loc_center, work2)      
 
@@ -306,6 +312,7 @@
          albtotn = c0
       endif
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
@@ -317,6 +324,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
 
       areas_alb = global_sum(aice, distrb_info, field_loc_center, work2)      
 
@@ -334,6 +342,7 @@
       hmaxs = global_maxval(vice, distrb_info, lmask_s)
 
       ! maximum ice speed
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
@@ -342,6 +351,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
 
       umaxn = global_maxval(work1, distrb_info, lmask_n)
       umaxs = global_maxval(work1, distrb_info, lmask_s)
@@ -351,6 +361,7 @@
 
       if (check_umax) then
       	 if (umaxn > umax_stab) then
+            !$OMP PARALLEL DO PRIVATE(iblk,i,j)
             do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
@@ -363,7 +374,9 @@
             enddo
             enddo
             enddo
+            !$OMP END PARALLEL DO
          elseif (umaxs > umax_stab) then
+            !$OMP PARALLEL DO PRIVATE(iblk,i,j)
             do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
@@ -376,6 +389,7 @@
             enddo
             enddo
             enddo
+            !$OMP END PARALLEL DO
          endif   ! umax
       endif      ! check_umax
 
@@ -472,6 +486,7 @@
 
          if (calc_Tsfc) then
 
+            !$OMP PARALLEL DO PRIVATE(iblk,i,j)
             do iblk = 1, nblocks
                do j = 1, ny_block
                do i = 1, nx_block
@@ -482,9 +497,11 @@
                enddo
                enddo
             enddo
+            !$OMP END PARALLEL DO
 
          else   ! fsurf is computed by atmosphere model 
 
+            !$OMP PARALLEL DO PRIVATE(iblk,i,j)
             do iblk = 1, nblocks
                do j = 1, ny_block
                do i = 1, nx_block
@@ -494,6 +511,7 @@
                enddo
                enddo
             enddo
+            !$OMP END PARALLEL DO
 
          endif     ! calc_Tsfc
 
@@ -503,6 +521,7 @@
                              field_loc_center, tareas)
   
          ! freezing potential
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j)
          do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
@@ -510,6 +529,7 @@
             enddo
             enddo
          enddo
+         !$OMP END PARALLEL DO
          fhfrzn = global_sum(work1, distrb_info, &
                              field_loc_center, tarean)
          fhfrzs = global_sum(work1, distrb_info, &
@@ -1087,6 +1107,7 @@
       integer (kind=int_kind) :: &
         i, j, k, n, iblk, ij
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,n,k,ij,icells,indxi,indxj)
       do iblk = 1, nblocks
 
       !-----------------------------------------------------------------
@@ -1139,6 +1160,7 @@
       enddo                     ! n
 
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
       end subroutine total_energy
 

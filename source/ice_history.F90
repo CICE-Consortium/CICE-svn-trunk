@@ -1315,6 +1315,8 @@
       ! increment field
       !---------------------------------------------------------------
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
+      !$OMP                     k,n,qn,ns)
       do iblk = 1, nblocks
          workb(:,:) = aice_init(:,:,iblk)
 
@@ -1688,6 +1690,7 @@
          if (tr_aero .or. hbrine) call accum_hist_bgc  (iblk)
 
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
       !---------------------------------------------------------------
       ! Write output files at prescribed intervals
@@ -1704,6 +1707,8 @@
       !---------------------------------------------------------------
 
         ravgct = c1/avgct(ns)
+        !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
+        !$OMP                     n,nn,ravgctz)
         do iblk = 1, nblocks
            this_block = get_block(blocks_ice(iblk),iblk)         
            ilo = this_block%ilo
@@ -1977,6 +1982,7 @@
            enddo                ! j
 
         enddo                   ! iblk
+        !$OMP END PARALLEL DO
 
         time_end(ns) = time/int(secday)
         time_end(ns) = real(time_end(ns),kind=real_kind)
@@ -1990,6 +1996,7 @@
       endif  ! write_history or write_ic
       enddo  ! nstreams
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -1998,7 +2005,6 @@
          jhi = this_block%jhi
 
          if (new_year) then
-
             do j=jlo,jhi
             do i=ilo,ihi
                ! reset NH Jan 1
@@ -2010,20 +2016,17 @@
          endif                  ! new_year
 
          if ( (month .eq. 7) .and. new_month ) then 
-
             do j=jlo,jhi
             do i=ilo,ihi
-
                ! reset SH Jul 1
                if (lmask_s(i,j,iblk)) mlt_onset(i,j,iblk) = c0
-
                ! reset NH Jul 1
                if (lmask_n(i,j,iblk)) frz_onset(i,j,iblk) = c0
             enddo
             enddo
-
          endif                  ! 1st of July
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
       end subroutine accum_hist
 

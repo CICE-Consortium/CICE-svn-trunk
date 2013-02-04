@@ -377,6 +377,7 @@
 !      call ice_timer_stop(timer_bound)
 
 
+      !$OMP PARALLEL DO PRIVATE(iblk)
       do iblk = 1, nblocks
 
     !-------------------------------------------------------------------
@@ -391,6 +392,7 @@
                                aim  (:,:,:,iblk), trm  (:,:,:,:,iblk))
 
       enddo
+      !$OMP END PARALLEL DO
 
 !---!-------------------------------------------------------------------
 !---! Optional conservation and monotonicity checks.
@@ -448,6 +450,7 @@
          tmin(:,:,:,:,:) = c0
          tmax(:,:,:,:,:) = c0
 
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block,n)
          do iblk = 1, nblocks
             this_block = get_block(blocks_ice(iblk),iblk)         
             ilo = this_block%ilo
@@ -483,6 +486,7 @@
                              aimask(:,:,n,iblk), trmask(:,:,:,n,iblk))
             enddo
          enddo
+         !$OMP END PARALLEL DO
 
          call ice_timer_start(timer_bound)
          call ice_HaloUpdate (tmin,             halo_info,     &
@@ -491,6 +495,7 @@
                               field_loc_center, field_type_scalar)
          call ice_timer_stop(timer_bound)
 
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block,n)
          do iblk = 1, nblocks
             this_block = get_block(blocks_ice(iblk),iblk)         
             ilo = this_block%ilo
@@ -505,6 +510,7 @@
                                         tmax(:,:,:,n,iblk))
             enddo
          enddo
+         !$OMP END PARALLEL DO
 
       endif                     ! l_monotonicity_check
 
@@ -524,6 +530,7 @@
     ! Given new fields, recompute state variables.
     !-------------------------------------------------------------------
 
+      !$OMP PARALLEL DO PRIVATE(iblk)
       do iblk = 1, nblocks
 
          call tracers_to_state (nx_block,          ny_block,            &
@@ -534,6 +541,7 @@
                                 vicen(:,:,:,iblk), vsnon(:,:,  :,iblk))
 
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
     !-------------------------------------------------------------------
     ! Ghost cell updates for state variables.
@@ -624,6 +632,7 @@
     !-------------------------------------------------------------------
 
       if (l_monotonicity_check) then
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block,n)
          do iblk = 1, nblocks
             this_block = get_block(blocks_ice(iblk),iblk)         
             ilo = this_block%ilo
@@ -648,6 +657,7 @@
             enddo               ! n
 
          enddo                  ! iblk
+         !$OMP END PARALLEL DO
 
          deallocate(tmin, tmax, STAT=alloc_error)
          if (alloc_error /= 0) call abort_ice ('deallocation error')
@@ -726,6 +736,7 @@
     ! Average corner velocities to edges.
     !-------------------------------------------------------------------
       
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -740,6 +751,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
 
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (uee,             halo_info,     &
@@ -748,6 +760,7 @@
                            field_loc_Nface, field_type_vector)
       call ice_timer_stop(timer_bound)
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -791,6 +804,7 @@
                              aice0(:,:,    iblk), works (:,:,  :,iblk)) 
 
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
  
     !-------------------------------------------------------------------
     ! Ghost cell updates for state variables.

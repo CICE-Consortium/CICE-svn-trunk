@@ -311,6 +311,7 @@
       ! T-grid cell and U-grid cell quantities
       !-----------------------------------------------------------------
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -350,6 +351,7 @@
          enddo
 
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
       !-----------------------------------------------------------------
       ! Ghost cell updates
@@ -405,6 +407,8 @@
          ANGLET(:,:,:) = ANGLE(:,:,:)
       else
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
+      !$OMP                     angle_0,angle_w,angle_s,angle_sw)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -433,6 +437,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
       endif ! cpom_grid
       
       call ice_timer_start(timer_bound)
@@ -534,6 +539,7 @@
                     field_type=field_type_scalar)
 
       hm(:,:,:) = c0
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -548,6 +554,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
 
       !-----------------------------------------------------------------
       ! lat, lon, angle
@@ -663,6 +670,7 @@
                        field_type=field_type_scalar)
 
       hm(:,:,:) = c0
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -677,6 +685,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
 
       !-----------------------------------------------------------------
       ! lat, lon, angle
@@ -769,6 +778,7 @@
       ! Calculate various geometric 2d arrays
       !-----------------------------------------------------------------
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
@@ -776,6 +786,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
 
       allocate(work_g1(nx_global,ny_global))
 
@@ -953,6 +964,7 @@
       call ice_read(nu_kmt,1,work1,'ida4',diag)
 
       hm(:,:,:) = c0
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -968,6 +980,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
 
       allocate(work_g1(nx_global,ny_global))
 
@@ -1208,6 +1221,7 @@
       ! construct T-cell and U-cell masks
       !-----------------------------------------------------------------
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -1222,12 +1236,14 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
 
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (uvm,                halo_info, &
                            field_loc_NEcorner, field_type_scalar)
       call ice_timer_stop(timer_bound)
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
@@ -1265,8 +1281,8 @@
          enddo
          enddo
 
-
       enddo  ! iblk
+      !$OMP END PARALLEL DO
 
       end subroutine makemask
 
@@ -1317,6 +1333,9 @@
       TLAT(:,:,:) = c0
       TLON(:,:,:) = c0
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
+      !$OMP                     x1,y1,z1,x2,y2,z2,x3,y3,z3,x4,y4,z4, &
+      !$OMP                     tx,ty,tz,da)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -1364,6 +1383,7 @@
          enddo                  ! i
          enddo                  ! j         
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (TLON,             halo_info, &
@@ -1488,6 +1508,7 @@
 
       work2(:,:,:) = c0
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -1506,6 +1527,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
 
       end subroutine to_ugrid
 
@@ -1587,6 +1609,7 @@
       type (block) :: &
          this_block           ! block information for current block
       
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -1605,6 +1628,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
 
       end subroutine to_tgrid
 
@@ -1854,6 +1878,7 @@
       ! (1) SW corner, (2) SE corner, (3) NE corner, (4) NW corner
       !-------------------------------------------------------------
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -1877,7 +1902,7 @@
          enddo
          enddo
       enddo
-
+      !$OMP END PARALLEL DO
 
       !----------------------------------------------------------------
       ! extrapolate on global grid to get edge values
@@ -1982,6 +2007,7 @@
       !----------------------------------------------------------------
 
       allocate(work_g2(nx_block,ny_block))  ! not used as global here
+      !OMP fails in this loop
       do iblk = 1, nblocks
          do icorner = 1, 4
             work_g2(:,:) = lont_bounds(icorner,:,:,iblk) + c360

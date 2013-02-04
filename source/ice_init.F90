@@ -1031,6 +1031,8 @@
          enddo
       endif
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
+      !$OMP                     iglob,jglob,it)
       do iblk = 1, nblocks
 
       !-----------------------------------------------------------------
@@ -1084,6 +1086,7 @@
          aice_init(:,:,iblk) = aice(:,:,iblk)
 
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
       !-----------------------------------------------------------------
       ! ghost cell updates
