@@ -156,7 +156,7 @@
       use ice_flux
       use ice_grid
       use ice_itd
-      use ice_meltpond_lvl
+      !use ice_restart_meltpond_lvl, only: 
       use ice_orbital
       use ice_state
 !
@@ -1130,8 +1130,8 @@
       use ice_flux
       use ice_grid
       use ice_itd
-      use ice_meltpond_cesm
-      use ice_meltpond_lvl
+      use ice_restart_meltpond_cesm, only: hs0
+      use ice_restart_meltpond_lvl, only: dhsn, hs1, pndaspect, snowinfil, ffracn
       use ice_meltpond_topo
       use ice_orbital
       use ice_state
@@ -3717,7 +3717,7 @@
                                          rhosnw,   rsnw)
 ! !USES:
 !
-      use ice_meltpond_cesm, only: hs0
+      use ice_restart_meltpond_cesm, only: hs0
 !
 ! !DESCRIPTION:
 !

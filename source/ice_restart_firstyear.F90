@@ -2,7 +2,7 @@
 !
 !BOP
 !
-! !MODULE: ice_firstyear - First year concentration tracer for sea ice
+! !MODULE: ice_restart_firstyear - First year concentration tracer for sea ice
 !
 ! !DESCRIPTION:
 !
@@ -20,7 +20,7 @@
 !
 ! !INTERFACE:
 !
-      module ice_firstyear
+      module ice_restart_firstyear
 !
 ! !USES:
 !
@@ -32,7 +32,6 @@
       use ice_restart, only: lenstr, restart_dir, restart_file, &
                              pointer_file, runtype
       use ice_communicate, only: my_task, master_task
-      use ice_exit, only: abort_ice
 !
 !EOP
 !
@@ -44,112 +43,6 @@
 !=======================================================================
 
       contains
-
-!=======================================================================
-!BOP
-!
-! !ROUTINE: init_FY
-!
-! !DESCRIPTION:
-!
-!  Initialize ice FY tracer (call prior to reading restart data)
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
-      subroutine init_FY 
-!
-! !USES:
-!
-      use ice_state, only: nt_FY, trcrn
-!
-!EOP
-!
-
-      if (trim(runtype) == 'continue') restart_FY = .true.
-
-      if (restart_FY) then
-         call read_restart_FY
-      else
-         trcrn(:,:,nt_FY,:,:) = c0
-      endif
-
-      end subroutine init_FY
-
-!=======================================================================
-
-!BOP
-!
-! !ROUTINE: update_FYarea 
-!
-! !DESCRIPTION:
-!
-!  Zero ice FY tracer on fixed day of year. Zeroing FY ice tracer promotes
-!  ice to MY ice. Unfortunately some frazil ice may grow before the 
-!  zeroing date and thus get promoted to MY ice too soon.
-!  Bummer.
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
-      subroutine update_FYarea (nx_block, ny_block, &
-                                dt,       icells,   &
-                                indxi,    indxj,    &
-                                nhmask,   shmask,   &
-                                FYarea)
-!
-! !USES:
-!
-      use ice_calendar, only: secday, yday
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-      integer (kind=int_kind), intent(in) :: &
-         nx_block, ny_block, & ! block dimensions
-         icells                ! number of cells with ice present
-
-      integer (kind=int_kind), dimension (nx_block*ny_block), &
-         intent(in) :: &
-         indxi, indxj     ! compressed indices for cells with ice
-
-      real (kind=dbl_kind), intent(in) :: &
-         dt                    ! time step
-
-      logical (kind=log_kind), dimension(nx_block,ny_block), &
-         intent(in) :: &
-         nhmask, shmask
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block), &
-         intent(inout) :: &
-         FYarea
-!
-!  local variables
-!
-      integer (kind=int_kind) :: i, j, ij
-!
-!EOP
-!
-     if ((yday >= 259._dbl_kind) .and. &
-           (yday <  259._dbl_kind+dt/secday)) then
-        do ij = 1, icells
-           i = indxi(ij)
-           j = indxj(ij)
-           if (nhmask(i,j)) FYarea(i,j) = c0;
-        enddo
-      endif
-
-     if ((yday >= 75._dbl_kind) .and. &
-           (yday <  75._dbl_kind+dt/secday)) then
-        do ij = 1, icells
-           i = indxi(ij)
-           j = indxj(ij)
-           if (shmask(i,j)) FYarea(i,j) = c0;
-        enddo
-      endif
-
-      end subroutine update_FYarea
 
 !=======================================================================
 !---! these subroutines write/read Fortran unformatted data files ..
@@ -252,6 +145,7 @@
                               time, time_forc, idate, year_init
       use ice_state
       use ice_flux, only: frz_onset
+      use ice_exit, only: abort_ice
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -312,6 +206,6 @@
 
 !=======================================================================
 
-      end module ice_firstyear
+      end module ice_restart_firstyear
 
 !=======================================================================

@@ -28,7 +28,6 @@
 ! !USES:
 !
       use ice_aerosol
-      use ice_age
       use ice_algae
       use ice_atmo
       use ice_brine
@@ -40,20 +39,21 @@
       use ice_dyn_evp
       use ice_exit
       use ice_fileunits
-      use ice_firstyear
       use ice_flux
       use ice_forcing
       use ice_grid
       use ice_history
       use ice_restart
+      use ice_restart_age, only: write_restart_age
+      use ice_restart_firstyear, only: write_restart_FY
+      use ice_restart_lvl, only: write_restart_lvl
+      use ice_restart_meltpond_cesm, only: write_restart_pond_cesm
+      use ice_restart_meltpond_lvl, only: write_restart_pond_lvl
+      use ice_restart_meltpond_topo, only: write_restart_pond_topo
       use ice_init
       use ice_itd
       use ice_kinds_mod
-      use ice_lvl
       use ice_mechred
-      use ice_meltpond_cesm
-      use ice_meltpond_lvl
-      use ice_meltpond_topo
       use ice_ocean
       use ice_orbital
       use ice_shortwave

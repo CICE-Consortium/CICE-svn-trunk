@@ -26,7 +26,7 @@
 ! !USES:
 !
       use ice_aerosol
-      use ice_age
+      use ice_age, only: init_age
       use ice_calendar
       use ice_communicate
       use ice_diagnostics
@@ -35,23 +35,29 @@
       use ice_dyn_evp
       use ice_exit
       use ice_fileunits
-      use ice_firstyear
+      use ice_firstyear, only: init_FY
       use ice_flux
       use ice_forcing
       use ice_grid
       use ice_history
       use ice_restart
+      use ice_restart_age, only: restart_age, read_restart_age
+      use ice_restart_firstyear, only: restart_FY, read_restart_FY
+      use ice_restart_lvl, only: restart_lvl, read_restart_lvl
+      use ice_restart_meltpond_cesm, only: restart_pond_cesm, read_restart_pond_cesm
+      use ice_restart_meltpond_lvl, only: restart_pond_lvl, read_restart_pond_lvl
+      use ice_restart_meltpond_topo, only: restart_pond_topo, read_restart_pond_topo
       use ice_init
       use ice_itd
       use ice_kinds_mod
       use ice_mechred
-      use ice_meltpond_cesm
-      use ice_meltpond_lvl
-      use ice_meltpond_topo
+      use ice_meltpond_cesm, only: init_meltponds_cesm
+      use ice_meltpond_lvl, only: init_meltponds_lvl
+      use ice_meltpond_topo, only: init_meltponds_topo
       use ice_algae
       use ice_ocean
       use ice_orbital
-      use ice_lvl
+      use ice_lvl, only: init_lvl
       use ice_restoring
       use ice_shortwave
       use ice_therm_itd
@@ -191,12 +197,64 @@
       endif         
 
       ! tracers
-      if (tr_iage)      call init_age            ! ice age tracer
-      if (tr_FY)        call init_FY             ! first-year area tracer
-      if (tr_lvl)       call init_lvl            ! level ice tracer
-      if (tr_pond_cesm) call init_meltponds_cesm ! CESM melt ponds
-      if (tr_pond_lvl)  call init_meltponds_lvl  ! level-ice melt ponds
-      if (tr_pond_topo) call init_meltponds_topo ! topographic melt ponds
+      ! ice age tracer   
+      if (tr_iage) then 
+         if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') &
+              restart_age = .true.
+         if (restart_age) then
+            call read_restart_age
+         else
+            call init_age
+         endif
+      endif
+      ! first-year area tracer
+      if (tr_FY) then
+         if (trim(runtype) == 'continue') restart_FY = .true.
+         if (restart_FY) then
+            call read_restart_FY
+         else
+            call init_FY
+         endif
+      endif
+      ! level ice tracer
+      if (tr_lvl) then
+         if (trim(runtype) == 'continue') restart_lvl = .true.
+         if (restart_lvl) then
+            call read_restart_lvl
+         else
+            call init_lvl
+         endif
+      endif
+      ! CESM melt ponds
+      if (tr_pond_cesm) then
+         if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') &
+              restart_pond_cesm = .true.
+         if (restart_pond_cesm) then
+            call read_restart_pond_cesm
+         else
+            call init_meltponds_cesm
+         endif
+      endif
+      ! level-ice melt ponds
+      if (tr_pond_lvl) then
+         if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') &
+              restart_pond_lvl = .true.
+         if (restart_pond_lvl) then
+            call read_restart_pond_lvl
+         else
+            call init_meltponds_lvl
+         endif
+      endif
+      ! topographic melt ponds
+      if (tr_pond_topo) then
+         if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') &
+              restart_pond_topo = .true.
+         if (restart_pond_topo) then
+            call read_restart_pond_topo
+         else
+            call init_meltponds_topo
+         endif ! .not restart_pond
+      endif
       if (tr_aero)      call init_aerosol        ! ice aerosol
       if (tr_bgc_S)     call init_zsalinity(sss) ! salinity on bio-grid
       if (tr_bgc_NO .or. solve_bgc) call init_bgc! layer biogeochemistry
