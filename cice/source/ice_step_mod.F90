@@ -41,9 +41,10 @@
       use ice_itd
       use ice_kinds_mod
       use ice_mechred
-      use ice_meltpond_cesm
-      use ice_meltpond_lvl
-      use ice_meltpond_topo
+      use ice_meltpond_cesm, only: compute_ponds_cesm, compute_ponds_simple
+      use ice_meltpond_lvl, only: compute_ponds_lvl
+      use ice_meltpond_topo, only: compute_ponds_topo
+      use ice_restart_meltpond_lvl, only: ffracn, dhsn, rfracmin, rfracmax
       use ice_ocean
       use ice_orbital
       use ice_shortwave

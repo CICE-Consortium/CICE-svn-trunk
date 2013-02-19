@@ -3,11 +3,12 @@
 ### Change these to your own site and user directory! 
 ### You will need to create a Makefile Macro in bld/ and a run_ice script 
 ### in input_templates/.
-setenv SITE LANL.conejo
+#setenv SITE LANL.conejo
 #setenv SITE LANL.mustang
+setenv SITE LANL.bigsuze
 
 ### SYSTEM_USERDIR is predefined on ORNL machines
-setenv SYSTEM_USERDIR /scratch/eclare/CICE.v5.0  # conejo
+setenv SYSTEM_USERDIR /Users/akt/Work/MPAS-CICE/Column_Package/cice_package/run_dirs
 
 ### Grid resolution
 #setenv RES col ; setenv GRID 5x5
@@ -33,9 +34,9 @@ if ($RES == 'col') then   # for column configuration:
    setenv NSNWLYR    1       # number of vertical layers in the snow
    setenv NICECAT    1       # number of ice thickness categories
 else                      # test problem: gx3
-   setenv NTASK      4       # total number of processors
-   setenv BLCKX     25       # x-dimension of blocks ( not including )
-   setenv BLCKY     29       # y-dimension of blocks (  ghost cells  )
+   setenv NTASK      1       # total number of processors
+   setenv BLCKX    100       # x-dimension of blocks ( not including )
+   setenv BLCKY    116       # y-dimension of blocks (  ghost cells  )
    setenv NICELYR    4       # number of vertical layers in the ice
    setenv NSNWLYR    1       # number of vertical layers in the snow
    setenv NICECAT    5       # number of ice thickness categories
@@ -48,10 +49,10 @@ endif
 #setenv MXBLCKS 37 # if necessary (code will print proper value)
 
 ### Tracers               # match ice_in tracer_nml to conserve memory
-setenv TRAGE   0          # set to 1 for ice age tracer
-setenv TRFY    0          # set to 1 for first-year ice area tracer
-setenv TRLVL   0          # set to 1 for level and deformed ice tracers
-setenv TRPND   0          # set to 1 for melt pond tracers
+setenv TRAGE   1          # set to 1 for ice age tracer
+setenv TRFY    1          # set to 1 for first-year ice area tracer
+setenv TRLVL   1          # set to 1 for level and deformed ice tracers
+setenv TRPND   1          # set to 1 for melt pond tracers
 setenv NTRAERO 0          # number of aerosol tracers 
                           # (up to max_aero in ice_domain_size.F90) 
                           # CESM uses 3 aerosol tracers
@@ -67,10 +68,9 @@ setenv DITTO    no        # reproducible diagnostics
 setenv ONED     no        # true 1D thermodynamic calculation
 
 ### Set SRCDIR and EXEDIR to your own paths!
-setenv SRCDIR /usr/projects/climate/eclare/CICE.v5.0/cice  # conejo
+setenv SRCDIR /Users/akt/Work/MPAS-CICE/Column_Package/cice_package/cice
 
-setenv EXEDIR $SYSTEM_USERDIR/rundir
-#setenv EXEDIR $SYSTEM_USERDIR/$RES
+setenv EXEDIR $SYSTEM_USERDIR/rundir.stdtest
                                           if !(-d $EXEDIR) mkdir -p $EXEDIR
 setenv CBLD   $SRCDIR/bld
 setenv OBJDIR $EXEDIR/compile           ; if !(-d $OBJDIR) mkdir -p $OBJDIR
@@ -126,6 +126,7 @@ endif
 cat >! Filepath << EOF
 $SRCDIR/drivers/$DRVDIR
 $SRCDIR/source
+$SRCDIR/source_column
 $SRCDIR/$COMMDIR
 $SRCDIR/$IODIR
 $SRCDIR/$SHRDIR
