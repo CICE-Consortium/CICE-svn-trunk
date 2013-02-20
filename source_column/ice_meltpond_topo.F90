@@ -32,21 +32,16 @@
 !
 ! !USES:
 !
-      use ice_calendar, only: dt  
-      use ice_communicate, only: my_task, master_task
-      use ice_constants
-      use ice_domain_size, only: max_ntrcr   
-      use ice_flux
-      use ice_fileunits
       use ice_kinds_mod
-      use ice_state
-      use ice_therm_shared
-      use ice_blocks
+      use ice_constants
+      use ice_domain_size, only: nilyr, ncat
 !
 !EOP
 !
       implicit none
-      save
+
+      private
+      public :: init_meltponds_topo, compute_ponds_topo
 
 !=======================================================================
 
@@ -65,19 +60,29 @@
 !
 ! !INTERFACE:
 !
-      subroutine init_meltponds_topo
+      subroutine init_meltponds_topo(nx_block, ny_block, ncat, &
+                                     apnd, hpnd, ipnd)
 !
 ! !USES:
 !
-        use ice_state, only: trcrn, nt_apnd, nt_hpnd, nt_ipnd
-!
 ! !INPUT/OUTPUT PARAMETERS:
+!
+        integer(kind=int_kind), intent(in) :: &
+             nx_block , &
+             ny_block , &
+             ncat
+
+        real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+             intent(out) :: &
+             apnd , & ! melt pond area fraction
+             hpnd , & ! melt pond depth
+             ipnd     ! melt pond refrozen lid thickness
 !
 !EOP
 !
-        trcrn(:,:,nt_apnd,:,:) = c0
-        trcrn(:,:,nt_hpnd,:,:) = c0
-        trcrn(:,:,nt_ipnd,:,:) = c0
+        apnd(:,:,:) = c0
+        hpnd(:,:,:) = c0
+        ipnd(:,:,:) = c0
         
       end subroutine init_meltponds_topo
 
@@ -88,14 +93,17 @@
 !
 ! !INTERFACE:
 !
-      subroutine compute_ponds_topo(nx_block,ny_block, &
-                                    ilo, ihi, jlo, jhi,&
-                                    aice,    aicen, &
-                                    vice,    vicen, &
-                                    vsno,    vsnon, &
-                                    trcrn,          &
-                                    potT,    meltt, &
-                                    fsurf,   fpond)
+      subroutine compute_ponds_topo(nx_block,ny_block,  &
+                                    ilo, ihi, jlo, jhi, &
+                                    dt,                 &
+                                    aice,  aicen,       &
+                                    vice,  vicen,       &
+                                    vsno,  vsnon,       &
+                                    potT,  meltt,       &
+                                    fsurf, fpond,       &
+                                    Tsfcn,              &
+                                    qicen, sicen,       &
+                                    apnd,  hpnd, ipnd)
 !
 ! !DESCRIPTION:
 !
@@ -110,6 +118,9 @@
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
+
+      real (kind=dbl_kind), intent(in) :: &
+         dt ! time step (s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
@@ -130,9 +141,20 @@
          intent(inout) :: &
          vicen      ! ice volume, per category (m)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr,ncat), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
+         intent(in) :: &
+         Tsfcn
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr,ncat), &
+         intent(in) :: &
+         qicen, &
+         sicen
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(inout) :: &
-         trcrn      ! ice tracer array
+         apnd, &
+         hpnd, &
+         ipnd
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
@@ -144,13 +166,8 @@
 !
       ! local variables
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
-         Tsfcn, & ! ice/snow surface temperature (C)
          volpn, & ! pond volume per unit area, per category (m)
-         vuin     ! water-equivalent volume of ice lid on melt pond ('upper ice', m)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,nilyr) :: &
-         qicen, & ! ice layer enthalpy (J m-3)
-         sicen    ! salinity (ppt)   
+         vuin     ! water-equivalent volume of ice lid on melt pond ('upper ice', m) 
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
          apondn,& ! pond area fraction, per category
@@ -209,11 +226,10 @@
          do j = jlo, jhi
             do i = ilo, ihi
                ! load tracers
-               volp(i,j) = volp(i,j) + trcrn(i,j,nt_hpnd,n) &
-                                     * trcrn(i,j,nt_apnd,n) * aicen(i,j,n)
-               Tsfcn(i,j,n) = trcrn (i,j,nt_Tsfc,n) !echmod - could get rid of this cp
-               vuin (i,j,n) = trcrn(i,j,nt_ipnd,n) &
-                            * trcrn(i,j,nt_apnd,n) * aicen(i,j,n)
+               volp(i,j) = volp(i,j) + hpnd(i,j,n) &
+                                     * apnd(i,j,n) * aicen(i,j,n)
+               vuin (i,j,n) = ipnd(i,j,n) &
+                            * apnd(i,j,n) * aicen(i,j,n)
 
                hpondn(i,j,n) = c0     ! pond depth, per category
                apondn(i,j,n) = c0     ! pond area,  per category
@@ -222,16 +238,6 @@
          indxii(:,n) = 0
          indxjj(:,n) = 0
          kcells  (n) = 0
-      enddo
-      do n = 1, ncat
-         do k = 1, nilyr
-            do j = jlo, jhi
-            do i = ilo, ihi
-               qicen(i,j,n,k) = trcrn(i,j,nt_qice+k-1,n) 
-               sicen(i,j,n,k) = trcrn(i,j,nt_sice+k-1,n) 
-            enddo
-            enddo
-         enddo
       enddo
 
       ! The freezing temperature for meltponds is assumed slightly below 0C,
@@ -271,11 +277,11 @@
          !--------------------------------------------------------------
          ! calculate pond area and depth
          !--------------------------------------------------------------
-         call pond_area(aice(i,j),vice(i,j),vsno(i,j), &
-                   aicen(i,j,:), vicen(i,j,:), vsnon(i,j,:), &
-                   qicen(i,j,:,:), sicen(i,j,:,:), &
-                   volpn(i,j,:), volp(i,j), &
-                   apondn(i,j,:),hpondn(i,j,:), dvn)
+         call pond_area(dt,aice(i,j),   vice(i,j),vsno(i,j), &
+                        aicen(i,j,:),   vicen(i,j,:), vsnon(i,j,:), &
+                        qicen(i,j,:,:), sicen(i,j,:,:), &
+                        volpn(i,j,:),   volp(i,j), &
+                        apondn(i,j,:),  hpondn(i,j,:), dvn)
 
          fpond(i,j) = fpond(i,j) - dvn
 
@@ -393,24 +399,23 @@
          do j = jlo, jhi
             do i = ilo, ihi
                if (apondn(i,j,n) > puny) then
-                  trcrn (i,j,nt_ipnd,n) = vuin(i,j,n) / apondn(i,j,n)
+                  ipnd(i,j,n) = vuin(i,j,n) / apondn(i,j,n)
                else
                   vuin(i,j,n) = c0
-                  trcrn (i,j,nt_ipnd,n) = c0
+                  ipnd(i,j,n) = c0
                endif
                if (aicen(i,j,n) > puny) then
-                  trcrn (i,j,nt_apnd,n) = apondn(i,j,n) / aicen(i,j,n)
-                  trcrn (i,j,nt_hpnd,n) = hpondn(i,j,n)
+                  apnd(i,j,n) = apondn(i,j,n) / aicen(i,j,n)
+                  hpnd(i,j,n) = hpondn(i,j,n)
                else
-                  trcrn (i,j,nt_apnd,n) = c0
-                  trcrn (i,j,nt_hpnd,n) = c0
-                  trcrn (i,j,nt_ipnd,n) = c0
+                  apnd(i,j,n) = c0
+                  hpnd(i,j,n) = c0
+                  ipnd(i,j,n) = c0
                endif
             enddo ! i
          enddo    ! j
 
       enddo       ! n
-
 
  end subroutine compute_ponds_topo
 
@@ -427,7 +432,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine pond_area(aice,vice,vsno, &
+      subroutine pond_area(dt,aice,vice,vsno, &
                            aicen, vicen, vsnon, qicen, sicen, &
                            volpn, volp,  &
                            apondn,hpondn,dvolp)
@@ -439,12 +444,12 @@
 ! !INPUT/OUTPUT PARAMETERS:
     
       real (kind=dbl_kind), intent(in) :: &
-         aice,vice,vsno
+         dt,aice,vice,vsno
 
       real (kind=dbl_kind), dimension(ncat), intent(in) :: &
          aicen, vicen, vsnon
-
-      real (kind=dbl_kind), dimension(ncat,nilyr), intent(in) :: &
+!nilyr,ncat
+      real (kind=dbl_kind), dimension(nilyr,ncat), intent(in) :: &
          qicen, &
          sicen
 
@@ -602,7 +607,7 @@
       ! height and area corresponding to the remaining volume
 
       call calc_hpond(reduced_aicen, asnon, hsnon, alfan, &
-           volp, cum_max_vol, hpond, m_index)
+                      volp, cum_max_vol, hpond, m_index)
     
       do n=1, m_index
          hpondn(n) = hpond - alfan(n) + alfan(1)
@@ -627,7 +632,7 @@
       if (pressure_head > c0) then
       do n = 1, ncat-1
          if (hicen(n) /= c0) then
-            call permeability_phi(qicen(n,:),sicen(n,:),vicen(n),perm)
+            call permeability_phi(qicen(:,n),sicen(:,n),vicen(n),perm)
             if (perm > c0) permflag = 1
             drain = perm*apondn(n)*pressure_head*dt / (viscosity*hicen(n))
             dvolp = dvolp + min(drain, volp)
@@ -873,6 +878,8 @@
       subroutine permeability_phi(qicen, sicen, vicen, perm)
 !
 ! !USES:
+!
+      use ice_therm_shared, only: calculate_Tin_from_qin
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

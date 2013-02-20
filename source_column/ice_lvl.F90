@@ -24,6 +24,9 @@
 !
       implicit none
 
+      private
+      public :: init_lvl
+
 !=======================================================================
 
       contains
@@ -41,18 +44,24 @@
 !
 ! !INTERFACE:
 !
-      subroutine init_lvl 
+      subroutine init_lvl(nx_block, ny_block, ncat, alvl, vlvl) 
 !
 ! !USES:
 !
-      use ice_state, only: nt_alvl, nt_vlvl, trcrn, aicen, vicen
+        integer(kind=int_kind), intent(in) :: &
+             nx_block , &
+             ny_block , &
+             ncat
+
+        real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+             intent(out) :: &
+             alvl , & ! level ice area fraction
+             vlvl     ! level ice volume
 !
 !EOP
 !
- 
-      ! assume all ice is level
-      trcrn(:,:,nt_alvl,:,:) = c1 ! level ice area fraction
-      trcrn(:,:,nt_vlvl,:,:) = c1 ! level ice volume
+      alvl(:,:,:) = c1 ! level ice area fraction
+      vlvl(:,:,:) = c1 ! level ice volume
 
       end subroutine init_lvl
 

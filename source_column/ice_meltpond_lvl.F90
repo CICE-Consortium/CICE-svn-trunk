@@ -26,13 +26,14 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size
-      use ice_blocks, only: nx_block, ny_block
       use ice_constants
 !
 !EOP
 !
       implicit none
+
+      private
+      public :: init_meltponds_lvl, compute_ponds_lvl
 
 !=======================================================================
 
@@ -51,21 +52,31 @@
 !
 ! !INTERFACE:
 !
-      subroutine init_meltponds_lvl
+      subroutine init_meltponds_lvl(nx_block, ny_block, ncat, &
+                                    apnd, hpnd, ipnd, dhsn)
 !
 ! !USES:
 !
-      use ice_state, only: trcrn, nt_apnd, nt_hpnd, nt_ipnd
-      use ice_restart_meltpond_lvl, only: dhsn
-!
 ! !INPUT/OUTPUT PARAMETERS:
+!
+        integer(kind=int_kind), intent(in) :: &
+             nx_block , &
+             ny_block , &
+             ncat
+
+        real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+             intent(out) :: &
+             apnd , & ! melt pond area fraction
+             hpnd , & ! melt pond depth
+             ipnd , & ! melt pond refrozen lid thickness
+             dhsn     ! depth difference for snow on sea ice and pond ice
 !
 !EOP
 !
-      trcrn(:,:,nt_apnd,:,:) = c0
-      trcrn(:,:,nt_hpnd,:,:) = c0
-      trcrn(:,:,nt_ipnd,:,:) = c0
-      dhsn (:,:,:,:) = c0
+      apnd(:,:,:) = c0
+      hpnd(:,:,:) = c0
+      ipnd(:,:,:) = c0
+      dhsn(:,:,:) = c0
 
       end subroutine init_meltponds_lvl
 
@@ -78,11 +89,16 @@
 !
       subroutine compute_ponds_lvl(nx_block,ny_block,   &
                                    ilo, ihi, jlo, jhi,  &
+                                   dt,                  &
+                                   dpscale, frzpnd,     &
+                                   pndaspect,           &
                                    rfrac, meltt, melts, &
                                    frain, Tair,  fsurfn,&
                                    dhs,   ffrac,        &
                                    aicen, vicen, vsnon, &
-                                   trcrn)
+                                   qicen, sicen,        &
+                                   Tsfcn, alvl, &
+                                   apnd,  hpnd, ipnd)
 !
 ! !DESCRIPTION:
 !
@@ -92,19 +108,26 @@
 !
 ! !USES:
 !
-      use ice_state, only: nt_Tsfc, nt_apnd, nt_hpnd, nt_ipnd, nt_alvl, nt_qice, nt_sice
-      use ice_calendar, only: dt, istep
-      use ice_domain_size, only: max_ntrcr
+      use ice_domain_size, only: max_ntrcr, nilyr
       use ice_itd, only: hi_min
       use ice_therm_shared, only: ktherm
-      use ice_restart_meltpond_lvl, only: dpscale, frzpnd, pndaspect
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
 
+      real (kind=dbl_kind), intent(in) :: &
+         dt,       & ! time step (s)  
+         dpscale,  & ! alter e-folding time scale for flushing 
+         pndaspect   ! ratio of pond depth to pond fraction
+
+      character (len=char_len), intent(in) :: &
+         frzpnd       ! pond refreezing parameterization
+
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(in) :: &
+         Tsfcn, &
+         alvl,  &
          rfrac, &    ! water fraction retained for melt ponds
          meltt, &
          melts, &
@@ -115,9 +138,13 @@
          vicen, &
          vsnon
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_ntrcr), &
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(inout) :: &
-         trcrn
+         apnd, hpnd, ipnd
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), intent(in) :: &
+         qicen, &  ! ice layer enthalpy (J m-3)
+         sicen     ! salinity (ppt)   
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(in) :: &
@@ -130,12 +157,7 @@
 !     local temporary variables
 
       real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
-         volpn, &
-         Tsfcn
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr) :: &
-         qicen, &  ! ice layer enthalpy (J m-3)
-         sicen     ! salinity (ppt)   
+         volpn 
 
       real (kind=dbl_kind), dimension (nilyr) :: &
          Tmlt      ! melting temperature 
@@ -158,7 +180,7 @@
          hlid, alid             , & ! refrozen lid thickness, area
          dhlid                  , & ! change in refrozen lid thickness
          bdt                    , & ! 2 kice dT dt / (rhoi Lfresh)
-         alvl                   , & ! level ice fraction of ice area
+         alvl_tmp               , & ! level ice fraction of ice area
          draft, deltah, pressure_head, perm, drain ! for permeability
 
       real (kind=dbl_kind), parameter :: &
@@ -172,18 +194,9 @@
 
       do j = 1, ny_block
       do i = 1, nx_block
-         Tsfcn(i,j) = trcrn(i,j,nt_Tsfc)
-         volpn(i,j) = trcrn(i,j,nt_hpnd) &
-                    * aicen(i,j) * trcrn(i,j,nt_alvl) * trcrn(i,j,nt_apnd)
+         volpn(i,j) = hpnd(i,j) &
+                    * aicen(i,j) * alvl(i,j) * apnd(i,j)
          ffrac(i,j) = c0
-      enddo
-      enddo
-      do k = 1, nilyr
-      do j = 1, ny_block
-      do i = 1, nx_block
-         qicen(i,j,k) = trcrn(i,j,nt_qice+k-1) 
-         sicen(i,j,k) = trcrn(i,j,nt_sice+k-1) 
-      enddo
       enddo
       enddo
 
@@ -194,7 +207,7 @@
       icells = 0
       do j = jlo, jhi
       do i = ilo, ihi
-         if (aicen(i,j)*trcrn(i,j,nt_alvl) > puny**2) then
+         if (aicen(i,j)*alvl(i,j) > puny**2) then
             icells = icells + 1
             indxi(icells) = i
             indxj(icells) = j
@@ -208,7 +221,7 @@
 
          hi = vicen(i,j)/aicen(i,j)
          hs = vsnon(i,j)/aicen(i,j)
-         alvl = trcrn(i,j,nt_alvl)
+         alvl_tmp = alvl(i,j)
 
          if (hi < hi_min) then
 
@@ -225,7 +238,7 @@
             !-----------------------------------------------------------
             ! initialize pond area as fraction of ice
             !-----------------------------------------------------------
-            apondn = trcrn(i,j,nt_apnd)*alvl
+            apondn = apnd(i,j)*alvl_tmp
 
             !-----------------------------------------------------------
             ! update pond volume
@@ -244,7 +257,7 @@
             elseif (trim(frzpnd) == 'hlid') then ! Stefan approximation
                ! assumes pond is fresh (freezing temperature = 0 C)
                ! and ice grows from existing pond ice
-               hlid = trcrn(i,j,nt_ipnd)
+               hlid = ipnd(i,j)
                if (dvn == c0) then ! freeze pond
                   Ts = Tair(i,j) - Tffresh
                   if (Ts < c0) then
@@ -252,7 +265,7 @@
                      bdt = -c2*Ts*kice*dt/(rhoi*Lfresh)
                      dhlid = p5*sqrt(bdt)                  ! open water freezing
                      if (hlid > dhlid) dhlid = p5*bdt/hlid ! existing ice
-                     dhlid = min(dhlid, trcrn(i,j,nt_hpnd)*rhofresh/rhoi)
+                     dhlid = min(dhlid, hpnd(i,j)*rhofresh/rhoi)
                      hlid = hlid + dhlid
                   endif
                else ! convert refrozen pond ice back to water
@@ -291,14 +304,14 @@
             endif
 
             if (apondn*aicen(i,j) > puny) then ! existing ponds
-               apondn = max(c0, min(alvl, &
+               apondn = max(c0, min(alvl_tmp, &
                             apondn + 0.5*dvn/(pndaspect*apondn*aicen(i,j))))
                hpondn = c0
                if (apondn > puny) &
                   hpondn = volpn(i,j)/(apondn*aicen(i,j))
 
-            elseif (alvl*aicen(i,j) > c10*puny) then ! new ponds
-               apondn = min (sqrt(volpn(i,j)/(pndaspect*aicen(i,j))), alvl)
+            elseif (alvl_tmp*aicen(i,j) > c10*puny) then ! new ponds
+               apondn = min (sqrt(volpn(i,j)/(pndaspect*aicen(i,j))), alvl_tmp)
                hpondn = pndaspect * apondn
 
             else           ! melt water runs off deformed ice      
@@ -338,7 +351,7 @@
                dvn = -deltah*apondn
                volpn(i,j) = volpn(i,j) + dvn
                apondn = max(c0, min(apondn &
-                          + 0.5*dvn/(pndaspect*apondn), alvl*aicen(i,j)))
+                          + 0.5*dvn/(pndaspect*apondn), alvl_tmp*aicen(i,j)))
                hpondn = c0
                if (apondn > puny) hpondn = volpn(i,j)/apondn
             endif
@@ -349,9 +362,9 @@
          ! Reload tracer array
          !-----------------------------------------------------------
 
-         trcrn(i,j,nt_hpnd) = hpondn
-         trcrn(i,j,nt_apnd) = apondn / (aicen(i,j)*alvl)
-         if (trim(frzpnd) == 'hlid') trcrn(i,j,nt_ipnd) = hlid
+         hpnd(i,j) = hpondn
+         apnd(i,j) = apondn / (aicen(i,j)*alvl_tmp)
+         if (trim(frzpnd) == 'hlid') ipnd(i,j) = hlid
 
       enddo
 
@@ -375,6 +388,7 @@
 ! !USES:
 !
       use ice_therm_shared, only: calculate_Tin_from_qin
+      use ice_domain_size, only: nilyr
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

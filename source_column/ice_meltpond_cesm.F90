@@ -32,6 +32,9 @@
 !
       implicit none
 
+      private
+      public :: init_meltponds_cesm, compute_ponds_cesm, compute_ponds_simple
+
 !=======================================================================
 
       contains
@@ -49,18 +52,27 @@
 !
 ! !INTERFACE:
 !
-      subroutine init_meltponds_cesm
+      subroutine init_meltponds_cesm(nx_block, ny_block, ncat, &
+                                     apnd, hpnd)
 !
 ! !USES:
 !
-      use ice_state, only: trcrn, nt_apnd, nt_hpnd
-!
 ! !INPUT/OUTPUT PARAMETERS:
+!
+        integer(kind=int_kind), intent(in) :: &
+             nx_block , &
+             ny_block , &
+             ncat
+
+        real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+             intent(out) :: &
+             apnd , & ! melt pond area fraction
+             hpnd     ! melt pond depth
 !
 !EOP
 !
-      trcrn(:,:,nt_apnd,:,:) = c0
-      trcrn(:,:,nt_hpnd,:,:) = c0
+      apnd(:,:,:) = c0
+      hpnd(:,:,:) = c0
 
       end subroutine init_meltponds_cesm
 
@@ -71,11 +83,13 @@
 !
 ! !INTERFACE:
 !
-      subroutine compute_ponds_cesm(nx_block,ny_block,          &
-                                   ilo, ihi, jlo, jhi,         &
-                                   rfrac, meltt, melts,  frain,&
-                                   aicen, vicen,  vsnon,       &
-                                   trcrn)
+      subroutine compute_ponds_cesm(nx_block,ny_block,  &
+                                   ilo, ihi, jlo, jhi,  &
+                                   dt,    pndaspect,    &
+                                   rfrac, meltt,        &
+                                   melts, frain,        &
+                                   aicen, vicen, vsnon, &
+                                   Tsfcn, apnd,  hpnd)
 !
 ! !DESCRIPTION:
 !
@@ -85,15 +99,16 @@
 !
 ! !USES:
 !
-      use ice_state, only: nt_Tsfc, nt_apnd, nt_hpnd
-      use ice_calendar, only: dt
       use ice_domain_size, only: max_ntrcr
       use ice_itd, only: hi_min
-      use ice_restart_meltpond_lvl, only: pndaspect
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
+
+      real (kind=dbl_kind), intent(in) :: &
+         dt,       & ! time step (s)
+         pndaspect   ! ratio of pond depth to pond fraction
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(in) :: &
@@ -105,15 +120,19 @@
          vicen, &
          vsnon
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_ntrcr), &
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(in) :: &
+         Tsfcn
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(inout) :: &
-         trcrn
+         apnd, &
+         hpnd
 
 !     local temporary variables
 
       real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
-         volpn, &
-         Tsfcn
+         volpn
 
       integer (kind=int_kind), dimension (nx_block*ny_block) :: &
          indxi, indxj     ! compressed indices for cells with ice melting
@@ -137,8 +156,7 @@
       !-----------------------------------------------------------------
       ! Initialize 
       !-----------------------------------------------------------------
-      Tsfcn(:,:) = trcrn(:,:,nt_Tsfc)
-      volpn(:,:) = trcrn(:,:,nt_hpnd) * trcrn(:,:,nt_apnd) * aicen(:,:)
+      volpn(:,:) = hpnd(:,:) * apnd(:,:) * aicen(:,:)
 
       !-----------------------------------------------------------------
       ! Identify grid cells where ice can melt
@@ -206,8 +224,8 @@
          !-----------------------------------------------------------
          ! Reload tracer array
          !-----------------------------------------------------------
-         trcrn(i,j,nt_apnd) = apondn / aicen(i,j)
-         trcrn(i,j,nt_hpnd) = hpondn
+         apnd(i,j) = apondn / aicen(i,j)
+         hpnd(i,j) = hpondn
 
       enddo
 
@@ -220,11 +238,12 @@
 !
 ! !INTERFACE:
 !
-      subroutine compute_ponds_simple(nx_block,ny_block,          &
-                                      ilo, ihi, jlo, jhi,         &
-                                      rfrac, meltt, melts, frain, &
-                                      aicen, vicen, vsnon,        &
-                                      trcrn)
+      subroutine compute_ponds_simple(nx_block,ny_block,   &
+                                      ilo, ihi, jlo, jhi,  &
+                                      dt,    rfrac,        &
+                                      meltt, melts, frain, &
+                                      aicen, vicen, vsnon, &
+                                      Tsfcn, apnd,  hpnd)
 !
 ! !DESCRIPTION:
 !
@@ -234,15 +253,15 @@
 !
 ! !USES:
 !
-!      use ice_state, only: nt_Tsfc, nt_volp, nt_apnd, nt_hpnd
-      use ice_state, only: nt_Tsfc, nt_apnd, nt_hpnd
-      use ice_calendar, only: dt, istep
       use ice_domain_size, only: max_ntrcr
       use ice_itd, only: hi_min
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
+
+      real (kind=dbl_kind), intent(in) :: &
+         dt ! time step (s)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(in) :: &
@@ -254,15 +273,19 @@
          vicen, &
          vsnon
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_ntrcr), &
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(in) :: &
+         Tsfcn
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(inout) :: &
-         trcrn
+         apnd, &
+         hpnd
 
 !     local temporary variables
 
       real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
-         volpn, &
-         Tsfcn
+         volpn
 
       integer (kind=int_kind), dimension (nx_block*ny_block) :: &
          indxi, indxj     ! compressed indices for cells with ice melting
@@ -284,9 +307,8 @@
       !-----------------------------------------------------------------
       ! Initialize 
       !-----------------------------------------------------------------
-      Tsfcn(:,:) = trcrn(:,:,nt_Tsfc)
-      volpn(:,:) = trcrn(:,:,nt_hpnd) * trcrn(:,:,nt_apnd) * aicen(:,:)
 !      volpn(:,:) = trcrn(:,:,nt_volp) * aicen(:,:)
+      volpn(:,:) = hpnd(:,:) * apnd(:,:) * aicen(:,:)
 
       !-----------------------------------------------------------------
       ! Identify grid cells where ice can melt
@@ -336,8 +358,8 @@
             !-----------------------------------------------------------
             ! Reload tracer array
             !-----------------------------------------------------------
-            trcrn(i,j,nt_apnd) = apondn / aicen(i,j)
-            trcrn(i,j,nt_hpnd) = hpondn
+            apnd(i,j) = apondn / aicen(i,j)
+            hpnd(i,j) = hpondn
 !            trcrn(i,j,nt_volp) = volpn(i,j) / aicen(i,j)
 
          endif
