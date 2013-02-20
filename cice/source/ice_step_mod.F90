@@ -23,7 +23,6 @@
 !
 ! !USES:
 !
-!      use ice_age
       use ice_atmo
       use ice_calendar
       use ice_communicate
@@ -44,7 +43,7 @@
       use ice_meltpond_cesm, only: compute_ponds_cesm, compute_ponds_simple
       use ice_meltpond_lvl, only: compute_ponds_lvl
       use ice_meltpond_topo, only: compute_ponds_topo
-      use ice_restart_meltpond_lvl, only: ffracn, dhsn, rfracmin, rfracmax
+      use ice_restart_meltpond_lvl, only: ffracn, dhsn, rfracmin, rfracmax, dpscale, pndaspect, frzpnd
       use ice_ocean
       use ice_orbital
       use ice_shortwave
@@ -209,8 +208,8 @@
 ! !USES:
 !
       use ice_aerosol
-      use ice_age
-      use ice_firstyear
+      use ice_age, only: increment_age
+      use ice_firstyear, only: update_FYarea
       use ice_work, only: worka, workb
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -450,6 +449,7 @@
                                    indxi, indxj,            &
                                    lmask_n(:,:,iblk),       &
                                    lmask_s(:,:,iblk),       &
+                                   yday,                    &
                                    trcrn(:,:,nt_FY,n,iblk))
             endif
 
@@ -558,24 +558,37 @@
             if (tr_pond_cesm) then
 !               rfrac(:,:) = 0.15_dbl_kind + 0.7_dbl_kind * aicen(:,:,n,iblk)
                rfrac(:,:) = rfracmin + (rfracmax-rfracmin) * aicen(:,:,n,iblk) 
-              call compute_ponds_cesm(nx_block, ny_block,                      &
-                                       ilo, ihi, jlo, jhi,                      &
-                                       rfrac, melttn(:,:,n,iblk), meltsn, frain(:,:,iblk),  &
-                                       aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
-                                       vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk))
+               call compute_ponds_cesm(nx_block, ny_block,                     &
+                                       ilo, ihi, jlo, jhi,                     &
+                                       dt,     pndaspect,                      &
+                                       rfrac,  melttn(:,:,n,iblk),             &
+                                       meltsn, frain(:,:,iblk),                &
+                                       aicen (:,:,n,iblk), vicen (:,:,n,iblk), &
+                                       vsnon (:,:,n,iblk),                     &
+                                       trcrn(:,:,nt_Tsfc,n,iblk),              &
+                                       trcrn(:,:,nt_apnd,n,iblk),              &
+                                       trcrn(:,:,nt_hpnd,n,iblk))
 
             elseif (tr_pond_lvl) then
                rfrac(:,:) = rfracmin + (rfracmax-rfracmin) * aicen(:,:,n,iblk)
-               call compute_ponds_lvl(nx_block, ny_block,                      &
-                                      ilo, ihi, jlo, jhi,                      &
-                                      rfrac,                                   &
-                                      melttn(:,:,n,iblk), meltsn,              &
-                                      frain (:,:,iblk),   Tair  (:,:,iblk),    &
-                                      fsurfn(:,:,n,iblk),                      &
-                                      dhsn  (:,:,n,iblk), ffracn(:,:,n,iblk),  &
-                                      aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
-                                      vsnon (:,:,n,iblk),                      &
-                                      trcrn (:,:,:,n,iblk))
+               call compute_ponds_lvl(nx_block,  ny_block,                        &
+                                      ilo, ihi,  jlo, jhi,                        &
+                                      dt,                                         &
+                                      dpscale,   frzpnd,                          &
+                                      pndaspect, rfrac,                           &
+                                      melttn(:,:,n,iblk), meltsn,                 &
+                                      frain (:,:,iblk),   Tair  (:,:,iblk),       &
+                                      fsurfn(:,:,n,iblk),                         &
+                                      dhsn  (:,:,n,iblk), ffracn(:,:,n,iblk),     &
+                                      aicen (:,:,n,iblk), vicen (:,:,n,iblk),     &
+                                      vsnon (:,:,n,iblk),                         &
+                                      trcrn (:,:,nt_qice:nt_qice+nilyr-1,n,iblk), &
+                                      trcrn (:,:,nt_sice:nt_sice+nilyr-1,n,iblk), &
+                                      trcrn (:,:,nt_Tsfc,n,iblk),                 &
+                                      trcrn (:,:,nt_alvl,n,iblk),                 &
+                                      trcrn (:,:,nt_apnd,n,iblk),                 &
+                                      trcrn (:,:,nt_hpnd,n,iblk),                 &
+                                      trcrn (:,:,nt_ipnd,n,iblk))
 
             elseif (tr_pond_topo .and. icells > 0) then
                do ij = 1, icells
@@ -612,11 +625,15 @@
 
             rfrac(:,:) = c1
 
-            call compute_ponds_simple(nx_block, ny_block,                      &
-                                   ilo, ihi, jlo, jhi,                      &
-                                   rfrac, melttn(:,:,n,iblk), meltsn, frain(:,:,iblk),  &
-                                   aicen (:,:,n,iblk), vicen (:,:,n,iblk),  &
-                                   vsnon (:,:,n,iblk), trcrn (:,:,:,n,iblk))
+            call compute_ponds_simple(nx_block, ny_block,                       &
+                                   ilo, ihi, jlo, jhi,                          &
+                                   dt, rfrac,                                   &
+                                   melttn(:,:,n,iblk), meltsn, frain(:,:,iblk), &
+                                   aicen (:,:,n,iblk), vicen (:,:,n,iblk),      &
+                                   vsnon (:,:,n,iblk),                          &
+                                   trcrn(:,:,nt_Tsfc,n,iblk),                   &
+                                   trcrn(:,:,nt_apnd,n,iblk),                   &
+                                   trcrn(:,:,nt_hpnd,n,iblk))
 
             call ice_timer_stop(timer_ponds)
          endif
@@ -660,14 +677,20 @@
       !-----------------------------------------------------------------
             if (tr_pond_topo) then
                call ice_timer_start(timer_ponds)
-               call compute_ponds_topo(nx_block, ny_block,                &
-                                    ilo, ihi, jlo, jhi,                   &
-                                    aice (:,:,  iblk), aicen(:,:,:,iblk), &
-                                    vice (:,:,  iblk), vicen(:,:,:,iblk), &
-                                    vsno (:,:,  iblk), vsnon(:,:,:,iblk), &
-                                    trcrn(:,:,:,:,iblk),                  &
-                                    potT(:,:,  iblk),  meltt(:,:,iblk),   &
-                                    fsurf(:,:,iblk),   fpond(:,:,iblk))
+               call compute_ponds_topo(nx_block, ny_block,                     &
+                                    ilo, ihi, jlo, jhi,                        &
+                                    dt,                                        &
+                                    aice (:,:,  iblk), aicen(:,:,:,iblk),      &
+                                    vice (:,:,  iblk), vicen(:,:,:,iblk),      &
+                                    vsno (:,:,  iblk), vsnon(:,:,:,iblk),      &
+                                    potT(:,:,  iblk),  meltt(:,:,iblk),        &
+                                    fsurf(:,:,iblk),   fpond(:,:,iblk),        &
+                                    trcrn(:,:,nt_Tsfc,:,iblk),                 &
+                                    trcrn(:,:,nt_qice:nt_qice+nilyr-1,:,iblk), &
+                                    trcrn(:,:,nt_sice:nt_sice+nilyr-1,:,iblk), &
+                                    trcrn(:,:,nt_apnd,:,iblk),                 &
+                                    trcrn(:,:,nt_hpnd,:,iblk),                 &
+                                    trcrn(:,:,nt_ipnd,:,iblk))
                call ice_timer_stop(timer_ponds)
             endif
 

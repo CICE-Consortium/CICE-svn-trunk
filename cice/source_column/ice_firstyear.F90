@@ -31,6 +31,9 @@
 !
       implicit none
 
+      private
+      public :: init_FY, update_FYarea
+
 !=======================================================================
 
       contains
@@ -48,15 +51,23 @@
 !
 ! !INTERFACE:
 !
-      subroutine init_FY 
+      subroutine init_FY(nx_block, ny_block, ncat, firstyear)
 !
 ! !USES:
 !
-      use ice_state, only: nt_FY, trcrn
+! !INPUT/OUTPUT PARAMETERS:
+!
+        integer(kind=int_kind), intent(in) :: &
+             nx_block , &
+             ny_block , &
+             ncat
+
+        real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+             intent(out) :: firstyear
 !
 !EOP
 !
-      trcrn(:,:,nt_FY,:,:) = c0
+        firstyear(:,:,:) = c0
 
       end subroutine init_FY
 
@@ -81,11 +92,9 @@
                                 dt,       icells,   &
                                 indxi,    indxj,    &
                                 nhmask,   shmask,   &
-                                FYarea)
+                                yday,     FYarea)
 !
 ! !USES:
-!
-      use ice_calendar, only: secday, yday
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -95,10 +104,11 @@
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
-         indxi, indxj     ! compressed indices for cells with ice
+         indxi, indxj          ! compressed indices for cells with ice
 
       real (kind=dbl_kind), intent(in) :: &
-         dt                    ! time step
+         dt , &                ! time step
+         yday                  ! day of the year
 
       logical (kind=log_kind), dimension(nx_block,ny_block), &
          intent(in) :: &

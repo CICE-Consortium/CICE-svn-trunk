@@ -24,6 +24,9 @@
 !
       implicit none
 
+      private
+      public :: init_age, increment_age
+
 !=======================================================================
 
       contains
@@ -41,15 +44,23 @@
 !
 ! !INTERFACE:
 !
-      subroutine init_age 
+      subroutine init_age(nx_block, ny_block, ncat, iage)
 !
 ! !USES:
 !
-      use ice_state, only: nt_iage, trcrn
+! !INPUT/OUTPUT PARAMETERS:
+!
+        integer(kind=int_kind), intent(in) :: &
+             nx_block , &
+             ny_block , &
+             ncat
+
+        real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+             intent(out) :: iage
 !
 !EOP
 !
-         trcrn(:,:,nt_iage,:,:) = c0
+        iage(:,:,:) = c0
 
       end subroutine init_age
 

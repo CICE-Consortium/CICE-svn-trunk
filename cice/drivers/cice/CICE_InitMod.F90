@@ -45,7 +45,7 @@
       use ice_restart_firstyear, only: restart_FY, read_restart_FY
       use ice_restart_lvl, only: restart_lvl, read_restart_lvl
       use ice_restart_meltpond_cesm, only: restart_pond_cesm, read_restart_pond_cesm
-      use ice_restart_meltpond_lvl, only: restart_pond_lvl, read_restart_pond_lvl
+      use ice_restart_meltpond_lvl, only: restart_pond_lvl, read_restart_pond_lvl, dhsn
       use ice_restart_meltpond_topo, only: restart_pond_topo, read_restart_pond_topo
       use ice_init
       use ice_itd
@@ -141,6 +141,7 @@
 !
 !EOP
 !
+        integer(kind=int_kind) :: iblk
 
       call init_communicate     ! initial setup for message passing
       call init_fileunits       ! unit numbers
@@ -204,7 +205,9 @@
          if (restart_age) then
             call read_restart_age
          else
-            call init_age
+            do iblk = 1, nblocks 
+               call init_age(nx_block, ny_block, ncat, trcrn(:,:,nt_iage,:,iblk))
+            enddo ! iblk
          endif
       endif
       ! first-year area tracer
@@ -213,7 +216,9 @@
          if (restart_FY) then
             call read_restart_FY
          else
-            call init_FY
+            do iblk = 1, nblocks 
+               call init_FY(nx_block, ny_block, ncat, trcrn(:,:,nt_FY,:,iblk))
+            enddo ! iblk
          endif
       endif
       ! level ice tracer
@@ -222,7 +227,10 @@
          if (restart_lvl) then
             call read_restart_lvl
          else
-            call init_lvl
+            do iblk = 1, nblocks 
+               call init_lvl(nx_block, ny_block, ncat, &
+                    trcrn(:,:,nt_alvl,:,iblk), trcrn(:,:,nt_vlvl,:,iblk))
+            enddo ! iblk
          endif
       endif
       ! CESM melt ponds
@@ -232,7 +240,10 @@
          if (restart_pond_cesm) then
             call read_restart_pond_cesm
          else
-            call init_meltponds_cesm
+            do iblk = 1, nblocks 
+               call init_meltponds_cesm(nx_block, ny_block, ncat, &
+                    trcrn(:,:,nt_apnd,:,iblk), trcrn(:,:,nt_hpnd,:,iblk))
+            enddo ! iblk
          endif
       endif
       ! level-ice melt ponds
@@ -242,7 +253,11 @@
          if (restart_pond_lvl) then
             call read_restart_pond_lvl
          else
-            call init_meltponds_lvl
+            do iblk = 1, nblocks 
+               call init_meltponds_lvl(nx_block, ny_block, ncat, &
+                    trcrn(:,:,nt_apnd,:,iblk), trcrn(:,:,nt_hpnd,:,iblk), &
+                    trcrn(:,:,nt_ipnd,:,iblk), dhsn(:,:,:,iblk))
+            enddo ! iblk
          endif
       endif
       ! topographic melt ponds
@@ -252,7 +267,11 @@
          if (restart_pond_topo) then
             call read_restart_pond_topo
          else
-            call init_meltponds_topo
+            do iblk = 1, nblocks 
+               call init_meltponds_topo(nx_block, ny_block, ncat, &
+                    trcrn(:,:,nt_apnd,:,iblk), trcrn(:,:,nt_hpnd,:,iblk), &
+                    trcrn(:,:,nt_ipnd,:,iblk))
+            enddo ! iblk
          endif ! .not restart_pond
       endif
       if (tr_aero)      call init_aerosol        ! ice aerosol
