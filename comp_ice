@@ -8,7 +8,8 @@
 setenv SITE LANL.bigsuze
 
 ### SYSTEM_USERDIR is predefined on ORNL machines
-setenv SYSTEM_USERDIR /Users/akt/Work/MPAS-CICE/Column_Package/cice_package/run_dirs
+setenv SYSTEM_USERDIR /scratch/eclare/CICE.v5.0  # conejo
+#setenv SYSTEM_USERDIR /Users/akt/Work/MPAS-CICE/Column_Package/cice_package/run_dirs
 
 ### Grid resolution
 #setenv RES col ; setenv GRID 5x5
@@ -34,9 +35,9 @@ if ($RES == 'col') then   # for column configuration:
    setenv NSNWLYR    1       # number of vertical layers in the snow
    setenv NICECAT    1       # number of ice thickness categories
 else                      # test problem: gx3
-   setenv NTASK      1       # total number of processors
-   setenv BLCKX    100       # x-dimension of blocks ( not including )
-   setenv BLCKY    116       # y-dimension of blocks (  ghost cells  )
+   setenv NTASK      4       # total number of processors
+   setenv BLCKX     25       # x-dimension of blocks ( not including )
+   setenv BLCKY     29       # y-dimension of blocks (  ghost cells  )
    setenv NICELYR    4       # number of vertical layers in the ice
    setenv NSNWLYR    1       # number of vertical layers in the snow
    setenv NICECAT    5       # number of ice thickness categories
@@ -68,9 +69,10 @@ setenv DITTO    no        # reproducible diagnostics
 setenv ONED     no        # true 1D thermodynamic calculation
 
 ### Set SRCDIR and EXEDIR to your own paths!
-setenv SRCDIR /Users/akt/Work/MPAS-CICE/Column_Package/cice_package/cice
+setenv SRCDIR /usr/projects/climate/eclare/CICE.v5.0/cice  # conejo
+#setenv SRCDIR /Users/akt/Work/MPAS-CICE/Column_Package/cice_package/cice
 
-setenv EXEDIR $SYSTEM_USERDIR/rundir.stdtest
+setenv EXEDIR $SYSTEM_USERDIR/rundir
                                           if !(-d $EXEDIR) mkdir -p $EXEDIR
 setenv CBLD   $SRCDIR/bld
 setenv OBJDIR $EXEDIR/compile           ; if !(-d $OBJDIR) mkdir -p $OBJDIR
