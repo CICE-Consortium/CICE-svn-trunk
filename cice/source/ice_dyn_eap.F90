@@ -540,7 +540,7 @@
 
           call get_fileunit(nu_eap)
           open(nu_eap,file=eap_filename,status='old',iostat=eap_error)
-          if (my_task == master_task) print*,'Reading eap stresses'
+          if (my_task == master_task) write(nu_diag,*) 'Reading eap stresses'
           do k = 1, na_yield
           do i = 1, nx_yield
           do j = 1, ny_yield
