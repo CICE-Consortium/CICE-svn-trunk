@@ -46,7 +46,10 @@
       use ice_restart_meltpond_lvl, only: ffracn, dhsn, rfracmin, rfracmax, dpscale, pndaspect, frzpnd
       use ice_ocean
       use ice_orbital
-      use ice_shortwave
+      use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswthruln, &
+                               Sswabsn, Iswabsn, shortwave, &
+                               albicen, albsnon, alvdrn, alidrn, alvdfn, alidfn, &
+                               run_dedd, shortwave_ccsm3
       use ice_state
       use ice_therm_itd
       use ice_therm_vertical

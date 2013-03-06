@@ -56,7 +56,6 @@
       use ice_mechred
       use ice_ocean
       use ice_orbital
-      use ice_shortwave
       use ice_state
       use ice_step_mod
       use ice_therm_itd
@@ -329,6 +328,9 @@
       subroutine coupling_prep (iblk)!
 
 ! !USES:
+!
+      use ice_shortwave, only: alvdfn, alidfn, alvdrn, alidrn, &
+                               albicen, albsnon, albpndn, apeffn
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
