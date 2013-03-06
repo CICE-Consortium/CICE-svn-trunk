@@ -53,18 +53,20 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size
+      use ice_domain_size, only: nilyr, nslyr, ncat, n_aero, max_blocks, max_aero
       use ice_constants
-      use ice_blocks
-      use ice_diagnostics
+      use ice_blocks, only: nx_block, ny_block, block, get_block
+      use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc
+      use ice_fileunits, only: nu_diag
       use ice_communicate, only: my_task
 !
 !EOP
 !
       implicit none
-      private
-      public :: init_shortwave, shortwave_ccsm3, run_dedd
       save
+
+      private
+      public :: init_shortwave, run_dEdd, shortwave_ccsm3
 
       character (len=char_len), public :: &
          shortwave, & ! shortwave method, 'default' ('ccsm3') or 'dEdd'
@@ -80,35 +82,37 @@
          ahmax       ! thickness above which ice albedo is constant (m)
 
       ! category albedos
-      real (kind=dbl_kind), public, &
-         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+      real (kind=dbl_kind), &
+         dimension (nx_block,ny_block,ncat,max_blocks), public :: &
          alvdrn      , & ! visible direct albedo           (fraction)
          alidrn      , & ! near-ir direct albedo           (fraction)
          alvdfn      , & ! visible diffuse albedo          (fraction)
          alidfn          ! near-ir diffuse albedo          (fraction)
 
       ! albedo components for history
-      real (kind=dbl_kind), public, &
-         dimension (nx_block,ny_block,ncat,max_blocks) :: &
-         albicen  , & ! bare ice 
-         albsnon  , & ! snow 
-         albpndn  , & ! pond 
+      real (kind=dbl_kind), &
+         dimension (nx_block,ny_block,ncat,max_blocks), public :: &
+         albicen, &   ! bare ice 
+         albsnon, &   ! snow 
+         albpndn, &   ! pond 
          apeffn       ! effective pond area used for radiation calculation
 
       ! shortwave components
-      real (kind=dbl_kind), public, &
-         dimension (nx_block,ny_block,nilyr,ncat,max_blocks) :: &
+      real (kind=dbl_kind), &
+         dimension (nx_block,ny_block,nilyr,ncat,max_blocks), public :: &
          Iswabsn         ! SW radiation absorbed in ice layers (W m-2)
 
-      real (kind=dbl_kind), public, &
-         dimension (nx_block,ny_block,nslyr,ncat,max_blocks) :: &
+      real (kind=dbl_kind), &
+         dimension (nx_block,ny_block,nslyr,ncat,max_blocks), public :: &
          Sswabsn         ! SW radiation absorbed in snow layers (W m-2)
+
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks), &
          public :: &
          fswsfcn     , & ! SW absorbed at ice/snow surface (W m-2)
          fswthrun    , & ! SW through ice to ocean            (W/m^2)
          fswintn         ! SW absorbed in ice interior, below surface (W m-2)
+
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1,ncat,max_blocks), &
          public :: &
@@ -120,10 +124,6 @@
          R_pnd , & ! ponded ice tuning parameter; +1 > 1sig increase in albedo
          R_snw     ! snow tuning parameter; +1 > ~.01 change in broadband albedo
 
-      real (kind=dbl_kind), public :: &
-         dT_mlt_in          , &  ! temperature at which melt begins (tuning)
-         rsnw_melt_in            ! maximum snow grain radius (tuning)
-
       ! for delta Eddington
       real (kind=dbl_kind), parameter, public :: &
          hi_ssl = 0.050_dbl_kind, & ! ice surface scattering layer thickness (m)
@@ -132,6 +132,11 @@
       real (kind=dbl_kind), parameter :: &
          hpmin  = 0.005_dbl_kind, & ! minimum allowed melt pond depth (m)
          hp0    = 0.200_dbl_kind    ! pond depth below which transition to bare ice
+
+      ! non public variables
+      real (kind=dbl_kind) :: &
+         dT_mlt_in          , &  ! temperature at which melt begins (tuning)
+         rsnw_melt_in            ! maximum snow grain radius (tuning)
 
       real (kind=dbl_kind) :: &
          exp_min              ! minimum exponential value
@@ -157,16 +162,14 @@
 !
 ! !USES:
 !
-      use ice_domain_size
-      use ice_blocks
-      use ice_calendar
-      use ice_domain
-      use ice_flux
-      use ice_grid
-      use ice_itd
-      !use ice_restart_meltpond_lvl, only: 
-      use ice_orbital
-      use ice_state
+      use ice_calendar, only: nstreams
+      use ice_domain, only: nblocks, blocks_ice
+      use ice_flux, only: alvdf, alidf, alvdr, alidr, &
+                          alvdr_gbm, alidr_gbm, alvdf_gbm, alidf_gbm, &
+                          swvdr, swvdf, swidr, swidf, &
+                          albice, albsno, albpnd, apeff_ai, albcnt, coszen
+      use ice_orbital, only: init_orbit
+      use ice_state, only: aicen, vicen, vsnon, trcrn, nt_Tsfc
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1131,17 +1134,16 @@
 !
 ! !USES:
 !
-      use ice_domain_size
-      use ice_blocks
-      use ice_calendar
-      use ice_domain
-      use ice_flux
-      use ice_grid
-      use ice_itd
+      use ice_calendar, only: dt
+      use ice_domain, only: blocks_ice
+      use ice_flux, only: swvdr, swvdf, swidr, swidf, coszen, fsnow
+      use ice_grid, only: tlat, tlon, tmask
       use ice_restart_meltpond_cesm, only: hs0
       use ice_restart_meltpond_lvl, only: dhsn, hs1, pndaspect, snowinfil, ffracn
-      use ice_orbital
-      use ice_state
+      use ice_orbital, only: compute_coszen
+      use ice_state, only: ntrcr, aicen, vicen, vsnon, trcrn, &
+                           nt_Tsfc, nt_alvl, nt_apnd, nt_hpnd, nt_ipnd, &
+                           tr_pond_cesm, tr_pond_lvl, tr_pond_topo
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1445,7 +1447,6 @@
 !
 ! !USES:
 !
-      use ice_calendar
       use ice_state, only: nt_aero, tr_aero
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -2212,7 +2213,7 @@
 
       ! snow extinction efficiency (unitless)
       real (kind=dbl_kind), dimension (nspint,nmbrad), parameter :: &
-         Qs_tab = (/ &
+         Qs_tab = reshape((/ &
           2.131798_dbl_kind,  2.187756_dbl_kind,  2.267358_dbl_kind, &
           2.104499_dbl_kind,  2.148345_dbl_kind,  2.236078_dbl_kind, &
           2.081580_dbl_kind,  2.116885_dbl_kind,  2.175067_dbl_kind, &
@@ -2244,11 +2245,12 @@
           2.002776_dbl_kind,  2.003929_dbl_kind,  2.005700_dbl_kind, &
           2.002590_dbl_kind,  2.003627_dbl_kind,  2.005276_dbl_kind, &
           2.002395_dbl_kind,  2.003391_dbl_kind,  2.004904_dbl_kind, &
-          2.002071_dbl_kind,  2.002922_dbl_kind,  2.004241_dbl_kind/)
+          2.002071_dbl_kind,  2.002922_dbl_kind,  2.004241_dbl_kind/), &
+          (/nspint,nmbrad/))
 
       ! snow single scattering albedo (unitless)
       real (kind=dbl_kind), dimension (nspint,nmbrad), parameter :: &
-        ws_tab = (/ &
+        ws_tab = reshape((/ &
          0.9999994_dbl_kind,  0.9999673_dbl_kind,  0.9954589_dbl_kind, &
          0.9999992_dbl_kind,  0.9999547_dbl_kind,  0.9938576_dbl_kind, &
          0.9999990_dbl_kind,  0.9999382_dbl_kind,  0.9917989_dbl_kind, &
@@ -2280,11 +2282,12 @@
          0.9998515_dbl_kind,  0.9933966_dbl_kind,  0.8227881_dbl_kind, &
          0.9998332_dbl_kind,  0.9926888_dbl_kind,  0.8095131_dbl_kind, &
          0.9998148_dbl_kind,  0.9919968_dbl_kind,  0.7968620_dbl_kind, &
-         0.9997691_dbl_kind,  0.9903277_dbl_kind,  0.7677887_dbl_kind/)
+         0.9997691_dbl_kind,  0.9903277_dbl_kind,  0.7677887_dbl_kind/), &
+         (/nspint,nmbrad/))
 
       ! snow asymmetry parameter (unitless)
       real (kind=dbl_kind), dimension (nspint,nmbrad), parameter :: &
-         gs_tab = (/ &
+         gs_tab = reshape((/ &
           0.859913_dbl_kind,  0.848003_dbl_kind,  0.824415_dbl_kind, &
           0.867130_dbl_kind,  0.858150_dbl_kind,  0.848445_dbl_kind, &
           0.873381_dbl_kind,  0.867221_dbl_kind,  0.861714_dbl_kind, &
@@ -2316,7 +2319,8 @@
           0.891323_dbl_kind,  0.896388_dbl_kind,  0.949762_dbl_kind, &
           0.891340_dbl_kind,  0.896623_dbl_kind,  0.950916_dbl_kind, &
           0.891356_dbl_kind,  0.896851_dbl_kind,  0.951945_dbl_kind, &
-          0.891386_dbl_kind,  0.897399_dbl_kind,  0.954156_dbl_kind/)
+          0.891386_dbl_kind,  0.897399_dbl_kind,  0.954156_dbl_kind/), &
+          (/nspint,nmbrad/))
 
       ! inherent optical property (iop) arrays for ice and ponded ice
       ! mn = specified mean (or base) value
@@ -2381,27 +2385,30 @@
       !                                       v aerosol
       ! for combined dust category, use category 4 properties
       real (kind=dbl_kind), dimension(nspint,max_aero), parameter :: & 
-         kaer_tab = (/ &      ! aerosol mass extinction cross section (m2/kg)
+         kaer_tab = reshape((/ &      ! aerosol mass extinction cross section (m2/kg)
           11580.61872,   5535.41835,   2793.79690, &
           25798.96479,  11536.03871,   4688.24207, &
             196.49772,    204.14078,    214.42287, &
            2665.85867,   2256.71027,    820.36024, &
             840.78295,   1028.24656,   1163.03298, &
             387.51211,    414.68808,    450.29814/), &
-         waer_tab = (/ &      ! aerosol single scatter albedo (fraction)
+            (/nspint,max_aero/)), &
+         waer_tab = reshape((/ &      ! aerosol single scatter albedo (fraction)
               0.29003,      0.17349,      0.06613, &
               0.51731,      0.41609,      0.21324, &
               0.84467,      0.94216,      0.95666, &
               0.97764,      0.99402,      0.98552, &
               0.94146,      0.98527,      0.99093, &
               0.90034,      0.96543,      0.97678/), &
-         gaer_tab = (/ &      ! aerosol asymmetry parameter (cos(theta))
+              (/nspint,max_aero/)), &
+         gaer_tab = reshape((/ &      ! aerosol asymmetry parameter (cos(theta))
               0.35445,      0.19838,      0.08857, &
               0.52581,      0.32384,      0.14970, &
               0.83162,      0.78306,      0.74375, &
               0.68861,      0.70836,      0.54171, &
               0.70239,      0.66115,      0.71983, &
-              0.78734,      0.73580,      0.64411/)
+              0.78734,      0.73580,      0.64411/), &
+              (/nspint,max_aero/))
 
 !-----------------------------------------------------------------------
 ! Initialize and tune bare ice/ponded ice iops

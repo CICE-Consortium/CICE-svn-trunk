@@ -26,28 +26,33 @@
       implicit none
       save
 
-      integer (kind=int_kind) :: &
+      private
+      public :: calculate_Tin_from_qin
+
+      integer (kind=int_kind), public :: &
          ktherm          ! type of thermodynamics
                          ! 0 = 0-layer approximation
                          ! 1 = Bitz and Lipscomb 1999
                          ! 2 = mushy layer theory
 
-      real (kind=dbl_kind), dimension(nilyr+1) :: &
-         salin       , & ! salinity (ppt)   
+      !real (kind=dbl_kind), dimension(nilyr+1) :: &
+      !   salin        ! salinity (ppt)   
+
+      real (kind=dbl_kind), dimension(nilyr+1), public :: &
          Tmlt            ! melting temp, -depressT * salinity
                          ! nilyr + 1 index is for bottom surface
 
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
          ferrmax = 1.0e-3_dbl_kind    ! max allowed energy flux error (W m-2)
                                       ! recommend ferrmax < 0.01 W m-2
 
-      character (char_len) :: &
+      character (char_len), public :: &
          conduct         ! 'MU71' or 'bubbly'
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          l_brine         ! if true, treat brine pocket effects
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          heat_capacity, &! if true, ice has nonzero heat capacity
                          ! if false, use zero-layer thermodynamics
          calc_Tsfc,     &! if true, calculate surface temperature
@@ -56,7 +61,7 @@
          read_Sin,      &! if true, update salinity profile from file
          solve_Sin       ! if true, update salinity profile from solve_S_dt
 
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
          hfrazilmin = 0.05_dbl_kind ! min thickness of new frazil ice (m)
 
 !=======================================================================

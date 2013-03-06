@@ -33,16 +33,17 @@
 !
       use ice_kinds_mod
       use ice_domain_size, only: ncat, nilyr, nslyr, max_ntrcr, max_blocks 
-      use ice_calendar, only: istep1, istep
+      use ice_calendar, only: istep1
       use ice_constants
       use ice_fileunits, only: nu_diag
-      use ice_state, only: tr_iage, tr_pond_topo, nt_apnd, nt_hpnd, tr_pond
-      use ice_state, only: nt_Tsfc, nt_iage, nt_sice, nt_qice, nt_qsno, &
+      use ice_state, only: tr_iage, tr_pond_topo, nt_apnd, nt_hpnd, tr_pond, &
+                           nt_Tsfc, nt_iage, nt_sice, nt_qice, nt_qsno, &
                            nt_apnd, nt_hpnd
-      use ice_timers
-      use ice_therm_shared
-      use ice_therm_bl99
-      use ice_therm_0layer
+      use ice_therm_shared, only: ktherm, ferrmax, heat_capacity, l_brine, &
+                                  read_Sin, solve_Sin, calc_Tsfc, &
+                                  calculate_tin_from_qin
+      use ice_therm_bl99, only: hs_min, temperature_changes
+      use ice_therm_0layer, only: zerolayer_temperature
       use ice_flux, only: Tf
       use ice_zbgc_public, only: min_salin
 !
@@ -51,7 +52,10 @@
       implicit none
       save
 
-      real (kind=dbl_kind), parameter :: &
+      private
+      public :: init_thermo_vertical, frzmlt_bottom_lateral, thermo_vertical
+
+      real (kind=dbl_kind), parameter, public :: &
 #if defined notz_fieldwork
          saltmax = 35.0_dbl_kind,  & ! max salinity at ice base (ppt)
 #elif defined notz_experiment
@@ -67,11 +71,11 @@
 !echmod         saltmax = c0,  & ! max salinity at ice base (ppt)
 #endif
          ! for mushy
-         keff     = 1.0_dbl_kind,   & ! effective distribution coefficient - c1 for reality
+         !keff     = 1.0_dbl_kind,   & ! effective distribution coefficient - c1 for reality
          phi_init = 0.75_dbl_kind,  & ! initial liquid fraction of frazil
          dSin0_frazil = 3.0 ! reduction in bulk salinity of newly formed frazil
 
-      real (kind=dbl_kind) :: &
+      real (kind=dbl_kind), public :: &
          ustar_min       ! minimum friction velocity for ice-ocean heat flux
 
 !=======================================================================
@@ -125,9 +129,7 @@
 ! 
 ! !USES:
 !
-      use ice_communicate, only: my_task, master_task
-      use ice_exit
-      use ice_ocean 
+      use ice_communicate, only: my_task
 #if defined notz_fieldwork
       use ice_therm_mushy, only: temperature_changes_salinity, &
            liquidus_brine_salinity_mush, enthalpy_mush, &

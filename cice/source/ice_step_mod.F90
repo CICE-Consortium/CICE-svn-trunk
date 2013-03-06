@@ -52,6 +52,7 @@
                                run_dedd, shortwave_ccsm3
       use ice_state
       use ice_therm_itd
+      use ice_therm_shared, only: ktherm, heat_capacity, calc_Tsfc
       use ice_therm_vertical
       use ice_timers
       use ice_transport_driver
