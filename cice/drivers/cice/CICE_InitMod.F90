@@ -59,7 +59,7 @@
       use ice_orbital
       use ice_lvl, only: init_lvl
       use ice_restoring
-      use ice_shortwave
+      use ice_shortwave, only: init_shortwave
       use ice_therm_itd
       use ice_therm_vertical
       use ice_therm_oned
