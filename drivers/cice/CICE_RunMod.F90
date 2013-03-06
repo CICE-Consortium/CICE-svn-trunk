@@ -60,6 +60,7 @@
       use ice_step_mod
       use ice_therm_itd
       use ice_therm_vertical
+      use ice_therm_shared, only: calc_Tsfc, read_Sin
       use ice_timers
       use ice_transport_driver
       use ice_transport_remap
