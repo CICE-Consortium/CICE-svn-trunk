@@ -23,20 +23,26 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size, only: nilyr, nslyr, max_ntrcr, n_aero
+      use ice_domain_size, only: nilyr, nslyr, max_ntrcr, n_aero, ncat
       use ice_constants
       use ice_fileunits, only: nu_diag
-      use ice_therm_shared
+      use ice_therm_shared, only: conduct, calc_Tsfc, ferrmax, l_brine, hfrazilmin
 !
 !EOP
 !
       implicit none
       save
 
+      private
+      public :: surface_fluxes, add_new_ice_bl99, temperature_changes
+
+      real (kind=dbl_kind), parameter, public :: &
+         hs_min = 1.e-4_dbl_kind    ! min snow thickness for computing Tsno (m)
+
       real (kind=dbl_kind), parameter :: &
-         hs_min = 1.e-4_dbl_kind, & ! min snow thickness for computing Tsno (m)
          betak   = 0.13_dbl_kind, & ! constant in formula for k (W m-1 ppt-1)
          kimin   = 0.10_dbl_kind    ! min conductivity of saline ice (W m-1 deg-1)
+
 
 !=======================================================================
 

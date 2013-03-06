@@ -26,11 +26,13 @@
       use ice_constants
       use ice_fileunits, only: nu_diag
       use ice_therm_bl99, only: surface_fluxes
-      use ice_therm_shared
 !
 !EOP
 !
       implicit none
+
+      private
+      public :: zerolayer_temperature
 
 !=======================================================================
 
