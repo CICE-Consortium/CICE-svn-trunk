@@ -20,10 +20,10 @@
 ! !USES:
 
    use ice_kinds_mod
-   use ice_constants
-   use ice_domain
-   use ice_global_reductions
-   use ice_exit
+   use ice_constants, only: c0, c1, bignum
+   use ice_domain, only: nblocks, distrb_info
+   use ice_global_reductions, only: global_minval, global_maxval, global_sum
+   use ice_exit, only: abort_ice
    use ice_fileunits, only: nu_diag
    use ice_communicate, only: my_task, master_task
 

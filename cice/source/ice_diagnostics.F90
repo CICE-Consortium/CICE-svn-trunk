@@ -24,26 +24,30 @@
 !
       use ice_kinds_mod
       use ice_communicate, only: my_task, master_task
-      use ice_constants
+      use ice_constants, only: c0
       use ice_calendar, only: diagfreq, istep1, istep
       use ice_domain_size, only: max_aero
-      use ice_fileunits
+      use ice_fileunits, only: nu_diag
 !
 !EOP
 !
       implicit none
+      private
+      public :: runtime_diags, init_mass_diags, init_diags, print_state, &
+                get_global_location, get_local_location
+
       save
 	
       ! diagnostic output file
-      character (len=char_len) :: diag_file
+      character (len=char_len), public :: diag_file
 
       ! point print data
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          print_points     , & ! if true, print point data
          print_global         ! if true, print global data
 
-      integer (kind=int_kind), parameter :: &
+      integer (kind=int_kind), parameter, public :: &
          npnt = 2             ! total number of points to be printed
 
       ! Set to true to identify unstable fast-moving ice.
@@ -54,7 +58,7 @@
          umax_stab   = 1.0_dbl_kind , & ! ice speed threshold for instability (m/s)
          aice_extmin = 0.15_dbl_kind    ! min aice value for ice extent calc
  
-      real (kind=dbl_kind), dimension(npnt) :: &
+      real (kind=dbl_kind), dimension(npnt), public :: &
          latpnt           , & !  latitude of diagnostic points
          lonpnt               ! longitude of diagnostic points
 
@@ -67,10 +71,12 @@
       real (kind=dbl_kind), dimension(npnt) :: &
          pdhi             , & ! change in mean ice thickness (m)
          pdhs             , & ! change in mean snow thickness (m)
-         pde              , & ! change in ice and snow energy (W m-2)
+         pde                  ! change in ice and snow energy (W m-2)
+
+      real (kind=dbl_kind), dimension(npnt), public :: &
          plat, plon           ! latitude, longitude of points
 
-      integer (kind=int_kind), dimension(npnt) :: &
+      integer (kind=int_kind), dimension(npnt), public :: &
          piloc, pjloc, pbloc, pmloc  ! location of diagnostic points
 
       ! for hemispheric water and heat budgets
@@ -89,7 +95,7 @@
       ! printing info for routine print_state
       ! iblkp, ip, jp, mtask identify the grid cell to print
       character (char_len) :: plabel
-      integer (kind=int_kind), parameter :: &
+      integer (kind=int_kind), parameter, public :: &
          check_step = 999999999, & ! begin printing at istep1=check_step
          iblkp = 1, &      ! block number 
          ip = 3, &         ! i index
@@ -132,16 +138,23 @@
 !
 ! !USES:
 !
-      use ice_broadcast
-      use ice_global_reductions
-      use ice_blocks
-      use ice_domain
-      use ice_domain_size
-      use ice_flux
-      use ice_state
+      use ice_blocks, only: nx_block, ny_block
+      use ice_broadcast, only: broadcast_scalar
+      use ice_constants, only: c1, c1000, c2, p001, p5, puny, rhoi, rhos, rhow, &
+          rhofresh, Tffresh, Lfresh, Lvap, ice_ref_salinity, field_loc_center, &
+          m2_to_km2, awtvdr, awtidr, awtvdf, awtidf
+      use ice_domain, only: distrb_info, nblocks
+      use ice_fileunits, only: flush_fileunit
+      use ice_flux, only: alvdr, alidr, alvdf, alidf, evap, fsnow, frazil, &
+          fswabs, fswthru, flw, flwout, fsens, fsurf, flat, frzmlt, frain, fpond, &
+          coszen, faero_atm, faero_ocn, fhocn_gbm, fsalt_gbm, fresh_gbm, &
+          update_ocn_f, Tair, Qa, fsw, fcondtop, meltt, meltb, meltl, snoice, &
+          dsnow, congel, sst, sss, Tf, fhocn
+      use ice_global_reductions, only: global_sum, global_sum_prod, global_maxval
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
-      use ice_work, only: work1, work2
+      use ice_state
       use ice_therm_shared, only: calc_Tsfc
+      use ice_work, only: work1, work2
       use ice_zbgc_public, only: rhosi
 
 #if (defined CCSM) || (defined SEQ_MCT)
@@ -965,11 +978,15 @@
 ! author: Elizabeth C. Hunke, LANL
 !
 ! !USES:
-!
-      use ice_global_reductions
-      use ice_grid
-      use ice_state
-      use ice_broadcast
+! 
+      use ice_blocks, only: nx_block, ny_block
+      use ice_constants, only: field_loc_center, rhofresh, rhoi, rhos
+      use ice_domain, only: distrb_info, nblocks
+      use ice_domain_size, only: n_aero, ncat
+      use ice_global_reductions, only: global_sum
+      use ice_grid, only: tareas, tarean
+      use ice_state, only: aicen, vice, vsno, trcrn, trcr, &
+          tr_aero, nt_aero, tr_pond_topo, nt_apnd, nt_hpnd
       use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1084,7 +1101,7 @@
 !
       use ice_blocks, only: nx_block, ny_block
       use ice_domain, only: nblocks
-      use ice_domain_size
+      use ice_domain_size, only: ncat, nilyr, nslyr, max_blocks
       use ice_grid, only: tmask
       use ice_state, only: vicen, vsnon, trcrn, nt_qice, nt_qsno
 !
@@ -1183,11 +1200,11 @@
 ! authors: Elizabeth C. Hunke and William H. Lipscomb, LANL
 !
 ! !USES:
-      use ice_grid
-      use ice_blocks
-      use ice_broadcast
-      use ice_global_reductions
-      use ice_gather_scatter
+      use ice_grid, only: hm, TLAT, TLON
+      use ice_blocks, only: block, get_block
+      use ice_constants, only: c180, c360, p5, rad_to_deg, puny
+      use ice_domain, only: blocks_ice, distrb_info, nblocks
+      use ice_global_reductions, only: global_minval, global_maxval
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1331,12 +1348,15 @@
 !
 ! !USES:
 !
-      use ice_blocks
-      use ice_domain
-      use ice_domain_size
-      use ice_state
-    !  use ice_itd
-      use ice_flux
+      use ice_blocks, only: block, get_block
+      use ice_constants, only: puny, rhoi, rhos, Lfresh, cp_ice
+      use ice_domain, only: blocks_ice
+      use ice_domain_size, only: ncat, nilyr, nslyr
+      use ice_state, only: aice0, aicen, vicen, vsnon, uvel, vvel, &
+          trcrn,  nt_Tsfc, nt_qice, nt_qsno
+      use ice_flux, only: uatm, vatm, potT, Tair, Qa, flw, frain, fsnow, &
+          fsens, flat, evap, flwout, swvdr, swvdf, swidr, swidf, rhoa, &
+          frzmlt, sst, sss, Tf, Tref, Qref, uocn, vocn, strtltx, strtlty
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1458,9 +1478,9 @@
     subroutine get_global_location(il, jl, iblkl, my_task_l)
 
       use ice_communicate, only: my_task
-      use ice_blocks
+      use ice_blocks, only: block, get_block
       use ice_domain, only: blocks_ice
-      use ice_exit, only: abort_ice
+      !use ice_exit, only: abort_ice
 
       integer, intent(in) :: il
       integer, intent(in) :: jl
@@ -1497,9 +1517,9 @@
     subroutine get_local_location()
 
       use ice_communicate, only: my_task
-      use ice_blocks
+      use ice_blocks, only: block, get_block
       use ice_domain, only: blocks_ice, nblocks
-      use ice_exit, only: abort_ice
+      !use ice_exit, only: abort_ice
 
       type(block) :: this_block
       integer :: ilo, ihi, jlo, jhi

@@ -31,19 +31,14 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_communicate, only: my_task, master_task
-      use ice_constants
-      use ice_domain_size
-      use ice_dyn_evp
-      use ice_fileunits
-      use ice_flux
-      use ice_read_write
-      use ice_restart, only: lenstr, restart_dir, restart_file, &
-                             pointer_file, runtype
+      use ice_blocks, only: nx_block, ny_block
+      use ice_domain_size, only: max_blocks
 !
 !EOP
 !
       implicit none
+      private
+      public :: eap, init_eap, write_restart_eap
       save
 
       ! Look-up table needed for calculating structure tensor
@@ -63,7 +58,7 @@
          a12_1, a12_2, a12_3, a12_4                     ! structure tensor
 
       ! history
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), public :: &
          e11      , & ! components of strain rate tensor (1/s)
          e12      , & 
          e22      , &
@@ -107,13 +102,28 @@
 !
 ! !USES:
 !
-      use ice_boundary
-      use ice_blocks
-      use ice_domain
-      use ice_state
-      use ice_grid
-      use ice_timers
+      use ice_boundary, only: ice_haloupdate
+      use ice_blocks, only: block, get_block
+      use ice_constants, only: field_loc_center, field_loc_NEcorner, &
+          field_type_scalar, field_type_vector, c0
+      use ice_domain, only: nblocks, blocks_ice, halo_info
+      use ice_dyn_evp, only: fcor_blk, ndte, dtei, a_min, m_min, &
+          cosw, sinw, dte2T, denom1, &
+          evp_prep1, stepu, evp_finish
+      use ice_flux, only: rdg_conv, rdg_shear, prs_sig, strairxT, strairyT, &
+          strairx, strairy, uocn, vocn, ss_tltx, ss_tlty, iceumask, fm, &
+          strtltx, strtlty, strocnx, strocny, strintx, strinty, &
+          strocnxT, strocnyT, &
+          stressp_1, stressp_2, stressp_3, stressp_4, &
+          stressm_1, stressm_2, stressm_3, stressm_4, &
+          stress12_1, stress12_2, stress12_3, stress12_4
+      use ice_grid, only: tmask, umask, dxt, dyt, dxhy, dyhx, cxp, cyp, cxm, cym, &
+          tarear, uarear, tinyarea, to_ugrid, t2ugrid_vector, u2tgrid_vector
       use ice_mechred, only: ice_strength
+      use ice_state, only: aice, vice, vsno, uvel, vvel, divu, shear, &
+          aice_init, aice0, aicen, vicen, strength
+      use ice_timers, only: timer_dynamics, timer_bound, &
+          ice_timer_start, ice_timer_stop
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -248,13 +258,15 @@
          jlo = this_block%jlo
          jhi = this_block%jhi
 
-! Added new variables        
          call eap_prep  (nx_block,             ny_block,             & 
                          ilo, ihi,             jlo, jhi,             &
                          icellt(iblk),         icellu(iblk),         & 
                          indxti      (:,iblk), indxtj      (:,iblk), & 
                          indxui      (:,iblk), indxuj      (:,iblk), & 
+                         a_min,                m_min,                &
+                         cosw,                 sinw,                 &
                          aiu       (:,:,iblk), umass     (:,:,iblk), & 
+                         dtei,                                       &
                          umassdtei (:,:,iblk), fcor_blk  (:,:,iblk), & 
                          umask     (:,:,iblk),                       & 
                          uocn      (:,:,iblk), vocn      (:,:,iblk), & 
@@ -317,9 +329,11 @@
 
          do iblk = 1, nblocks
 
-            call stress_eap (nx_block,             ny_block,             &
-                              ksub,                 icellt(iblk),         &
+            call stress_eap  (nx_block,             ny_block,             &
+                              ksub,                 ndte,                 &
+                              icellt(iblk),                               &
                               indxti      (:,iblk), indxtj      (:,iblk), &
+                              dte2T,                denom1,         &
                               uvel      (:,:,iblk), vvel      (:,:,iblk), &
                               dxt       (:,:,iblk), dyt       (:,:,iblk), &
                               dxhy      (:,:,iblk), dyhx      (:,:,iblk), &
@@ -371,8 +385,8 @@
       ! evolution of structure tensor A
       !-----------------------------------------------------------------
 
-            call stepa  (nx_block,            ny_block,             &
-                        icellt     (iblk),                          &
+            call stepa (nx_block,          ny_block,                &
+                        dtei,              icellt     (iblk),       &
                         indxti   (:,iblk), indxtj    (:,iblk),      &
                         a11    (:,:,iblk), a12  (:,:,iblk),         &
                         a11_1  (:,:,iblk), a11_2   (:,:,iblk),      &
@@ -444,12 +458,21 @@
 !
 ! !USES:
 !
-      use ice_boundary
-      use ice_blocks
-      use ice_domain
-      use ice_state
-      use ice_grid
-      use ice_fileunits
+      use ice_blocks, only: nx_block, ny_block
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0, p5, c2, omega
+      use ice_domain, only: nblocks
+      use ice_dyn_evp, only: fcor_blk, ndte, eyc, set_evp_parameters
+      use ice_exit, only: abort_ice
+      use ice_flux, only: rdg_conv, rdg_shear, iceumask, fm, &
+          stressp_1, stressp_2, stressp_3, stressp_4, &
+          stressm_1, stressm_2, stressm_3, stressm_4, &
+          stress12_1, stress12_2, stress12_3, stress12_4
+      use ice_restart, only: runtype
+      use ice_state, only: uvel, vvel, divu, shear
+      use ice_grid, only: ULAT, ULON
+      use ice_fileunits, only: nu_diag, nu_eap, eap_filename, &
+          get_fileunit, release_fileunit
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -573,7 +596,10 @@
                             icellt,     icellu,     & 
                             indxti,     indxtj,     & 
                             indxui,     indxuj,     & 
+                            a_min,      m_min,      &
+                            cosw,       sinw,       &
                             aiu,        umass,      & 
+                            dtei,                   &
                             umassdtei,  fcor,       & 
                             umask,                  & 
                             uocn,       vocn,       & 
@@ -615,6 +641,8 @@
 !
 ! !USES:
 !
+      use ice_constants, only: c0, c1
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -632,6 +660,12 @@
          indxui   , & ! compressed index in i-direction
          indxuj       ! compressed index in j-direction
 
+      real (kind=dbl_kind), intent(in) :: &
+         cosw     , & ! cos(ocean turning angle)  ! turning angle = 0
+         sinw     , & ! sin(ocean turning angle)  ! turning angle = 0
+         a_min    , & ! minimum ice area
+         m_min        ! minimum ice mass (kg/m^2)
+
       logical (kind=log_kind), dimension (nx_block,ny_block), & 
          intent(in) :: &
          umask       ! land/boundary mask, thickness (U-cell)
@@ -643,6 +677,9 @@
       logical (kind=log_kind), dimension (nx_block,ny_block), & 
          intent(inout) :: &
          iceumask    ! ice extent mask (U-cell)
+
+      real (kind=dbl_kind), intent(in) :: &
+         dtei        ! 1/dte, where dte is subcycling timestep (1/s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
          aiu     , & ! ice fraction on u-grid
@@ -819,8 +856,10 @@
 ! !INTERFACE:
 !
       subroutine stress_eap  (nx_block,   ny_block,       &
-                              ksub,       icellt,         &
+                              ksub,       ndte,           &
+                              icellt,                     &
                               indxti,     indxtj,         &
+                              dte2T,      denom1,         &
                               uvel,       vvel,           &
                               dxt,        dyt,            &
                               dxhy,       dyhx,           &
@@ -863,17 +902,25 @@
 !
 ! !USES
 !
+      use ice_constants, only: c0, p027, p055, p111, p166, &
+          p2, p222, p25, p333, p5, puny
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: & 
          nx_block, ny_block, & ! block dimensions
          ksub              , & ! subcycling step
+         ndte              , & ! number of subcycles
          icellt                ! no. of cells where icetmask = 1
 
       integer (kind=int_kind), dimension (nx_block*ny_block), & 
          intent(in) :: &
          indxti   , & ! compressed index in i-direction
          indxtj       ! compressed index in j-direction
+
+      real (kind=dbl_kind), intent(in) :: &
+         dte2T    , & ! dte/2T
+         denom1       ! constant for stress equation
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
          strength , & ! ice strength (N/m)
@@ -1003,25 +1050,25 @@
       !-----------------------------------------------------------------
 
 ! ne
-         call update_stress_rdg (ksub, divune, tensionne, &
+         call update_stress_rdg (ksub, ndte, divune, tensionne, &
                                  shearne, a11_1(i,j), a12_1(i,j), &
                                  stressptemp_1(i,j), stressmtemp_1(i,j), &
                                  stress12temp_1(i,j), strength(i,j), &
                                  alpharne, alphasne)
 ! nw
-         call update_stress_rdg (ksub, divunw, tensionnw, &
+         call update_stress_rdg (ksub, ndte, divunw, tensionnw, &
                                  shearnw, a11_2(i,j), a12_2(i,j), &
                                  stressptemp_2(i,j), stressmtemp_2(i,j), &
                                  stress12temp_2(i,j), strength(i,j), &
                                  alpharnw, alphasnw)
 ! sw
-         call update_stress_rdg (ksub, divusw, tensionsw, &
+         call update_stress_rdg (ksub, ndte, divusw, tensionsw, &
                                  shearsw, a11_3(i,j), a12_3(i,j), &
                                  stressptemp_3(i,j), stressmtemp_3(i,j), &
                                  stress12temp_3(i,j), strength(i,j), &
                                  alpharsw, alphassw)
 ! se
-         call update_stress_rdg (ksub, divuse, tensionse, &
+         call update_stress_rdg (ksub, ndte, divuse, tensionse, &
                                  shearse, a11_4(i,j), a12_4(i,j), &
                                  stressptemp_4(i,j), stressmtemp_4(i,j), &
                                  stress12temp_4(i,j), strength(i,j), &
@@ -1242,7 +1289,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine update_stress_rdg (ksub, divu, tension, &
+      subroutine update_stress_rdg (ksub, ndte, divu, tension, &
                                    shear, a11, a12, &
                                    stressp,  stressm, &
                                    stress12, strength, &
@@ -1256,13 +1303,15 @@
 ! !REVISION HISTORY:
 !
 ! same as module
-!
-! !USES:
+
+      use ice_constants, only: c0, p025, p05, p1, p5, c1, c2, c12, puny, &
+          pi, pih, pi2, piq
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
-         ksub
+         ksub, &
+         ndte
 
       real (kind=dbl_kind), intent(in) :: &
          a11,     a12,                   &
@@ -1512,8 +1561,8 @@
 !
 ! !INTERFACE:
 !
-      subroutine stepa (nx_block,   ny_block,       &
-                         icellt,                     &
+      subroutine stepa  (nx_block,   ny_block,       &
+                         dtei,       icellt,         &
                          indxti,     indxtj,         &
                          a11, a12,                   &
                          a11_1, a11_2, a11_3, a11_4, &
@@ -1534,11 +1583,16 @@
 !
 ! !USES
 !
+      use ice_constants, only: p001, p2, p25, p5
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icellt                ! no. of cells where icetmask = 1
+
+      real (kind=dbl_kind), intent(in) :: &
+         dtei        ! 1/dte, where dte is subcycling timestep (1/s)
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
@@ -1668,6 +1722,8 @@
 !
 ! !USES:
 !
+      use ice_constants, only: c0, p001, p1, p5, c2, c3
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer(kind=int_kind), intent(in) :: &
@@ -1756,10 +1812,12 @@
 !
 ! !USES:
 !
-      use ice_domain_size
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init
-      use ice_state
+      use ice_communicate, only: my_task, master_task
+      use ice_fileunits, only: nu_diag, nu_dump_eap
+      use ice_read_write, only: ice_open, ice_write
+      use ice_restart, only: lenstr, restart_dir, restart_file
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1835,14 +1893,19 @@
 !
 ! !USES:
 ! 
-      use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init
-      use ice_domain
-      use ice_domain_size
-      use ice_exit
+      use ice_blocks, only: nghost
+      use ice_calendar, only: istep1, time, time_forc
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0
+      use ice_domain, only: distrb_info, nblocks
+      use ice_domain_size, only: nx_global, ny_global
+      use ice_exit, only: abort_ice
       use ice_gather_scatter, only: scatter_global_stress
-      use ice_state
-      use ice_work, only: work1, work_g1, work_g2
+      use ice_read_write, only: ice_open, ice_read_global
+      use ice_restart, only: lenstr, restart_file, &
+                             pointer_file, runtype
+      use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_restart_eap
+      use ice_work, only: work_g1, work_g2
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1851,8 +1914,7 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
-          iyear, imonth, iday     ! year, month, day
+          i, j, k, n, it, iblk ! counting indices
 
       character(len=char_len_long) :: &
          filename, filename0, string1, string2

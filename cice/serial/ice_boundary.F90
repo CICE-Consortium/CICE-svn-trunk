@@ -27,7 +27,7 @@
            field_loc_center,  field_loc_NEcorner, &
            field_loc_Nface, field_loc_Eface
    use ice_global_reductions, only: global_maxval
-   use ice_exit
+   use ice_exit, only: abort_ice
 
    use ice_blocks, only: nx_block, ny_block, nghost, &
            nblocks_tot, ice_blocksNorth, &
@@ -4225,9 +4225,9 @@ contains
 
 ! !USES:
 
-   use ice_blocks
-   use ice_constants
-   use ice_distribution
+   use ice_blocks, only: block, nblocks_x, nblocks_y, get_block
+   use ice_constants, only: c2
+   use ice_distribution, only: ice_distributionGetBlockID
 
 ! !INPUT PARAMETERS:
 

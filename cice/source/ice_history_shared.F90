@@ -35,9 +35,10 @@
 ! !USES:
 !
       use ice_kinds_mod
+      use ice_blocks
       use ice_broadcast
       use ice_communicate, only: my_task, master_task
-      use ice_blocks
+      use ice_domain_size, only: ncat, nilyr, nslyr, nblyr, max_nstrm
       use ice_read_write
       use ice_fileunits
 !

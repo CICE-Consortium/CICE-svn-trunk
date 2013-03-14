@@ -17,7 +17,7 @@
 ! !USES:
 
    use ice_kinds_mod
-   use ice_communicate
+   use ice_communicate, only: mpiR8, mpir4, MPI_COMM_ICE
 
    implicit none
    private

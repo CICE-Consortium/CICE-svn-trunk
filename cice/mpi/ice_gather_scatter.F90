@@ -23,13 +23,17 @@
 ! !USES:
 
    use ice_kinds_mod
-   use ice_communicate
-   use ice_constants
-   use ice_blocks
-   use ice_distribution
-   use ice_domain
-   use ice_domain_size
-   use ice_exit
+   use ice_communicate, only: my_task, mpiR8, mpiR4, mpitag_gs, MPI_COMM_ICE
+   use ice_constants, only: spval_dbl, c0, &
+       field_loc_center, field_loc_NEcorner, field_loc_Nface, field_loc_Eface, &
+       field_loc_noupdate, &
+       field_type_scalar, field_type_vector, field_type_angle, &
+       field_type_noupdate
+   use ice_blocks, only: block, nx_block, ny_block, nblocks_tot, get_block, &
+       nblocks_x, nblocks_y, nghost
+   use ice_distribution, only: distrb
+   use ice_domain_size, only: nx_global, ny_global
+   use ice_exit, only: abort_ice
 
    implicit none
    private

@@ -44,34 +44,31 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_fileunits
-      use ice_communicate, only: my_task, master_task
-      use ice_domain_size
-      use ice_constants
-#ifdef CICE_IN_NEMO
-      use ice_atmo, only: calc_strair
-#endif
+      use ice_constants, only: c0, c1, p01, p001, dragio, rhow
 !
 !EOP
 !
       implicit none
+      private
+      public :: evp, init_evp, set_evp_parameters, stepu, principal_stress, &
+                evp_prep1, evp_finish
       save
 
       ! namelist parameters
 
-      integer (kind=int_kind) :: &
+      integer (kind=int_kind), public :: &
          kdyn     , & ! type of dynamics ( 1 = evp, 2 = eap )
          ndte         ! number of subcycles:  ndte=dt/dte
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          evp_damping  ! if true, use evp damping procedure
 
       ! other EVP parameters
 
-      character (len=char_len) :: & 
+      character (len=char_len), public :: & 
          yield_curve  ! 'ellipse' ('teardrop' needs further testing)
                                                                       ! 
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
          dragw = dragio * rhow, &
                          ! drag coefficient for water on ice *rhow (kg/m^3)
          eyc = 0.36_dbl_kind, &
@@ -81,7 +78,7 @@
          a_min = p001, & ! minimum ice area
          m_min = p01     ! minimum ice mass (kg/m^2)
 
-      real (kind=dbl_kind) :: &
+      real (kind=dbl_kind), public :: &
          ecci     , & ! 1/e^2
          dtei     , & ! 1/dte, where dte is subcycling timestep (1/s)
          dte2T    , & ! dte/2T
@@ -89,7 +86,7 @@
          denom2   , & !
          rcon         ! for damping criterion (kg/s)
 
-      real (kind=dbl_kind), allocatable :: & 
+      real (kind=dbl_kind), allocatable, public :: & 
          fcor_blk(:,:,:)   ! Coriolis parameter (1/s)
 
 !=======================================================================
@@ -123,14 +120,29 @@
 !
 ! !USES:
 !
-      use ice_boundary
-      use ice_blocks
-      use ice_domain
-      use ice_state
-      use ice_flux
-      use ice_grid
-      use ice_timers
+      use ice_boundary, only: ice_haloupdate
+      use ice_blocks, only: block, get_block, nx_block, ny_block
+      use ice_constants, only: field_loc_center, field_loc_NEcorner, &
+          field_type_scalar, field_type_vector, c0
+      use ice_domain, only: nblocks, blocks_ice, halo_info
+      use ice_domain_size, only: max_blocks
+      use ice_flux, only: rdg_conv, rdg_shear, prs_sig, strairxT, strairyT, &
+          strairx, strairy, uocn, vocn, ss_tltx, ss_tlty, iceumask, fm, &
+          strtltx, strtlty, strocnx, strocny, strintx, strinty, &
+          strocnxT, strocnyT, &
+          stressp_1, stressp_2, stressp_3, stressp_4, &
+          stressm_1, stressm_2, stressm_3, stressm_4, &
+          stress12_1, stress12_2, stress12_3, stress12_4
+      use ice_grid, only: tmask, umask, dxt, dyt, dxhy, dyhx, cxp, cyp, cxm, cym, &
+          tarear, uarear, tinyarea, to_ugrid, t2ugrid_vector, u2tgrid_vector
       use ice_mechred, only: ice_strength
+      use ice_state, only: aice, vice, vsno, uvel, vvel, divu, shear, &
+          aice_init, aice0, aicen, vicen, strength
+      use ice_timers, only: timer_dynamics, timer_bound, &
+          ice_timer_start, ice_timer_stop
+#ifdef CICE_IN_NEMO
+      use ice_atmo, only: calc_strair
+#endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -439,13 +451,18 @@
 !
 ! !USES:
 !
-      use ice_boundary
-      use ice_blocks
-      use ice_domain
-      use ice_state
-      use ice_flux
-      use ice_grid
-      use ice_fileunits
+      use ice_blocks, only: nx_block, ny_block
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0, c2, omega
+      use ice_domain, only: nblocks
+      use ice_domain_size, only: max_blocks
+      use ice_flux, only: rdg_conv, rdg_shear, iceumask, fm, &
+          stressp_1, stressp_2, stressp_3, stressp_4, &
+          stressm_1, stressm_2, stressm_3, stressm_4, &
+          stress12_1, stress12_2, stress12_3, stress12_4
+      use ice_state, only: uvel, vvel, divu, shear
+      use ice_grid, only: ULAT, ULON
+      use ice_fileunits, only: nu_diag
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -538,6 +555,8 @@
 !
 ! !USES:
 !
+      use ice_constants, only: p25, c1, c2, c4
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       real (kind=dbl_kind), intent(in) :: &
@@ -594,6 +613,8 @@
 ! author: Elizabeth C. Hunke, LANL
 !
 ! !USES:
+!
+      use ice_constants, only: c0, rhoi, rhos
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -731,6 +752,8 @@
 ! author: Elizabeth C. Hunke, LANL
 !
 ! !USES:
+!
+      use ice_constants, only: c0, c1
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -955,6 +978,9 @@
 ! author: Elizabeth C. Hunke, LANL
 !
 ! !USES
+!
+      use ice_constants, only: c0, c4, p027, p055, p111, p166, &
+          p2, p222, p25, p333, p5, puny
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1302,8 +1328,6 @@
 !
 ! !USES:
 !
-      use ice_work, only: worka, workb
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -1532,6 +1556,8 @@
 ! author: Elizabeth C. Hunke, LANL
 !
 ! !USES:
+
+      use ice_constants, only: spval_dbl, puny, p5, c4
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

@@ -110,6 +110,7 @@
 !
 ! !USES:
 !
+      use ice_calendar, only: month, mday, istep, sec
       use ice_domain, only: nblocks, blocks_ice
       use ice_read_write
       use ice_flux

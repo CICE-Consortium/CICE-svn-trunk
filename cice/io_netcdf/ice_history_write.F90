@@ -68,7 +68,7 @@
       use ice_blocks
       use ice_domain
       use ice_grid, only: tmask, lmask_n, lmask_s
-      use ice_calendar, only: new_year, secday, write_history, &
+      use ice_calendar, only: new_year, write_history, &
                               write_ic, time, histfreq, nstreams, month, &
                               new_month
       use ice_state

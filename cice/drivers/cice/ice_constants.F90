@@ -26,6 +26,7 @@
 !EOP
 !
       implicit none
+      public
       save
 
       !-----------------------------------------------------------------
@@ -191,11 +192,7 @@
         bignum = 1.0e+30_dbl_kind, &
         pih    = p5*pi, &
         piq    = p5*pih, &
-        pi2    = c2*pi, &
-	days_per_4c = 146097.0_dbl_kind, &
-	days_per_c  = 36524.0_dbl_kind,  &
-	days_per_4y = 1461.0_dbl_kind,   &
-	days_per_y  = 365.0_dbl_kind
+        pi2    = c2*pi
 
       !-----------------------------------------------------------------
       ! location of fields for staggered grids

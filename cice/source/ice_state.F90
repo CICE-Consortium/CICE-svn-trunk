@@ -48,12 +48,13 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size
-      use ice_blocks
+      use ice_domain_size, only: max_blocks, ncat, max_ntrcr, n_aero
+      use ice_blocks, only: nx_block, ny_block
 !
 !EOP
 !
       implicit none
+      public
       save
 
       !-----------------------------------------------------------------
@@ -205,9 +206,9 @@
 !
 ! !USES:
 !
-      use ice_boundary
-      use ice_domain
-      use ice_constants
+      use ice_boundary, only: ice_HaloUpdate
+      use ice_domain, only: halo_info
+      use ice_constants, only: field_loc_center, field_type_scalar
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

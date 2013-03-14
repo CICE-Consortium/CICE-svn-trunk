@@ -179,6 +179,7 @@
 !EOP
 !BOC
 !
+      use ice_boundary, only: ice_HaloUpdate
       use ice_restoring, only: restore_ice, ice_HaloRestore
 
       use ice_state, only: nt_qsno, trcrn

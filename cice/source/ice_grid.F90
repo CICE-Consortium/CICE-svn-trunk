@@ -27,31 +27,35 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_boundary
+      use ice_boundary, only: ice_HaloUpdate, ice_HaloExtrapolate
       use ice_communicate, only: my_task, master_task
-      use ice_constants
-      use ice_blocks
-      use ice_domain_size
-      use ice_domain
-      use ice_fileunits
-      use ice_gather_scatter
-      use ice_read_write
-      use ice_timers
-      use ice_exit
+      use ice_blocks, only: block, get_block, nx_block, ny_block, nghost
+      use ice_domain_size, only: nx_global, ny_global, max_blocks
+      use ice_domain, only: blocks_ice, nblocks, halo_info, distrb_info, &
+          ew_boundary_type, ns_boundary_type, init_domain_distribution
+      use ice_fileunits, only: nu_diag, nu_grid, nu_kmt
+      use ice_gather_scatter, only: gather_global, scatter_global
+      use ice_read_write, only: ice_read, ice_read_nc, ice_read_global, &
+          ice_read_global_nc, ice_open, ice_open_nc, ice_close_nc
+      use ice_timers, only: timer_bound, ice_timer_start, ice_timer_stop
 !
 !EOP
 !
       implicit none
+      private
+      public :: init_grid1, init_grid2, &
+                t2ugrid_vector, u2tgrid_vector, &
+                to_ugrid, to_tgrid
 !echmod      save
 
-      character (len=char_len_long), save :: &
+      character (len=char_len_long), public, save :: &
          grid_format  , & ! file format ('bin'=binary or 'nc'=netcdf)
          grid_file    , & !  input file for POP grid info
          kmt_file     , & !  input file for POP grid info
          grid_type        !  current options are rectangular (default),
                           !  displaced_pole, tripole
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public, save :: &
          dxt    , & ! width of T-cell through the middle (m)
          dyt    , & ! height of T-cell through the middle (m)
          dxu    , & ! width of U-cell through the middle (m)
@@ -72,7 +76,7 @@
          ANGLE  , & ! for conversions between POP grid and lat/lon
          ANGLET     ! ANGLE converted to T-cells
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public, save :: &
          cyp    , & ! 1.5*HTE - 0.5*HTE
          cxp    , & ! 1.5*HTN - 0.5*HTN
          cym    , & ! 0.5*HTE - 1.5*HTE
@@ -81,14 +85,14 @@
          dyhx       ! 0.5*(HTN - HTN)
 
       ! Corners of grid boxes for history output
-      real (kind=dbl_kind), dimension (4,nx_block,ny_block,max_blocks), save :: &
+      real (kind=dbl_kind), dimension (4,nx_block,ny_block,max_blocks), public, save :: &
          lont_bounds, & ! longitude of gridbox corners for T point
          latt_bounds, & ! latitude of gridbox corners for T point
          lonu_bounds, & ! longitude of gridbox corners for U point
          latu_bounds    ! latitude of gridbox corners for U point       
 
       ! geometric quantities used for remapping transport
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public, save :: &
          xav  , & ! mean T-cell value of x
          yav  , & ! mean T-cell value of y
          xxav , & ! mean T-cell value of xx
@@ -101,19 +105,19 @@
 !         yyyav    ! mean T-cell value of yyy
 
       real (kind=dbl_kind), &
-         dimension (2,2,nx_block,ny_block,max_blocks), save :: &
+         dimension (2,2,nx_block,ny_block,max_blocks), public, save :: &
          mne, & ! matrices used for coordinate transformations in remapping
          mnw, & ! ne = northeast corner, nw = northwest, etc.
          mse, & 
          msw
 
       ! masks
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public, save :: &
          hm     , & ! land/boundary mask, thickness (T-cell)
          uvm        ! land/boundary mask, velocity (U-cell)
 
       logical (kind=log_kind), &
-         dimension (nx_block,ny_block,max_blocks), save :: &
+         dimension (nx_block,ny_block,max_blocks), public, save :: &
          tmask  , & ! land/boundary mask, thickness (T-cell)
          umask  , & ! land/boundary mask, velocity (U-cell)
          lmask_n, & ! northern hemisphere mask
@@ -124,7 +128,7 @@
          dxrect = 30.e5_dbl_kind   ,&! uniform HTN (cm)
          dyrect = 30.e5_dbl_kind     ! uniform HTE (cm)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), save :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public, save :: &
          rndex_global       ! global index for local subdomain (dbl)
 
 !=======================================================================
@@ -151,7 +155,8 @@
 !
 ! !USES:
 !
-      use ice_broadcast
+      use ice_broadcast, only: broadcast_array
+      use ice_constants, only: c1, rad_to_deg, puny
       use ice_work, only: work_g1, work_g2
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -269,8 +274,11 @@
 !
 ! !USES:
 !
+      use ice_constants, only: c0, c1, pi, pi2, puny, p5, p25, c1p5, &
+          field_loc_center, field_loc_NEcorner, &
+          field_type_scalar, field_type_vector, field_type_angle
       use ice_work, only: work_g1
-      use ice_exit
+      use ice_exit, only: abort_ice
       use ice_blocks, only: get_block, block
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -509,6 +517,9 @@
 !
 ! !USES:
 !
+      use ice_constants, only: c0, c1, pi, &
+          field_loc_center, field_loc_NEcorner, &
+          field_type_scalar, field_type_angle
       use ice_work, only: work1, work_g1
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -634,6 +645,9 @@
 !
 ! !USES:
 !
+      use ice_constants, only: c0, c1, pi, pi2, rad_to_deg, puny, p5, p25, &
+          field_loc_center, field_loc_NEcorner, &
+          field_type_scalar, field_type_angle
       use ice_work, only: work1, work_g1
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -761,7 +775,9 @@
 !
 ! !USES:
 !
-      use ice_domain_size
+      use ice_constants, only: c0, c1, rad_to_deg, c2, radius, cm_to_m, &
+          field_loc_center, field_loc_NEcorner, field_type_scalar
+      use ice_exit, only: abort_ice
       use ice_work, only: work_g1
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -939,6 +955,8 @@
 !
 ! !USES:
 !
+      use ice_constants, only: c0, c1, rad_to_deg, m_to_cm, &
+          field_loc_NEcorner, field_type_scalar
       use ice_work, only: work1, work_g1
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1042,6 +1060,9 @@
 !
 ! !USES:
 !
+      use ice_constants, only: p5, c2, cm_to_m, &
+          field_loc_center, field_loc_NEcorner, &
+          field_loc_Nface, field_type_scalar
       use ice_work, only: work_g2
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1121,6 +1142,9 @@
 !
 ! !USES:
 !
+      use ice_constants, only: p5, c2, cm_to_m, &
+          field_loc_center, field_loc_NEcorner, &
+          field_loc_Eface, field_type_scalar
       use ice_work, only: work_g2
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1200,6 +1224,9 @@
 ! author: Elizabeth C. Hunke, LANL
 !
 ! !USES:
+!
+      use ice_constants, only: c0, puny, p5, &
+          field_loc_center, field_loc_NEcorner, field_type_scalar
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1306,7 +1333,8 @@
 !
 ! !USES:
 !
-      use ice_domain_size
+      use ice_constants, only: c0, c1, rad_to_deg, c4, &
+          field_loc_center, field_type_scalar
       use ice_global_reductions, only: global_minval, global_maxval
 #if (defined oned && defined notz_fieldwork)
       use ice_therm_oned, only: lon_advent_rad, lat_advent_rad
@@ -1446,6 +1474,7 @@
 !
 ! !USES:
 !
+      use ice_constants, only: field_loc_center, field_type_vector
       use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1488,6 +1517,8 @@
 ! author: Elizabeth C. Hunke, LANL
 !
 ! !USES:
+!
+      use ice_constants, only: c0, p25
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1552,6 +1583,7 @@
 !
 ! !USES:
 !
+      use ice_constants, only: field_loc_NEcorner, field_type_vector
       use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1595,6 +1627,8 @@
 !
 ! !USES:
 !
+      use ice_constants, only: p25
+
 ! !INPUT/OUTPUT PARAMETERS:
 !
       real (kind=dbl_kind) :: work1(nx_block,ny_block,max_blocks), &
@@ -1655,7 +1689,9 @@
 ! author: Jacob Sewall
 !
 ! !USES:
-      use ice_exit
+
+      use ice_constants, only:  c1, c2, pi, p5, p25, c100
+      use ice_exit, only: abort_ice
 
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1778,6 +1814,8 @@
 !
 ! !USES:
 !
+      use ice_constants, only: pi
+
 ! !INPUT/OUTPUT PARAMETERS:
 !
 
@@ -1860,6 +1898,8 @@
 !            E. Hunke, LANL
 !
 ! !USES:
+      use ice_constants, only: c0,  rad_to_deg, c2, c360, &
+          field_loc_NEcorner, field_type_scalar
       use ice_work, only: work1, work_g2
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -2046,6 +2086,8 @@
 !            E. Hunke, LANL
 !
 ! !USES:
+      use ice_constants, only: c0, rad_to_deg, c2, &
+          field_loc_NEcorner, field_type_scalar
       use ice_work, only: work_g2, work1
 !
 ! !INPUT/OUTPUT PARAMETERS:

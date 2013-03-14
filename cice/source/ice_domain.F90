@@ -22,10 +22,11 @@
 ! !USES:
 !
    use ice_kinds_mod
-   use ice_constants
-   use ice_communicate
-   use ice_broadcast
-   use ice_blocks
+   use ice_constants, only: puny, shlat, nhlat, rad_to_deg
+   use ice_communicate, only: my_task, master_task, get_num_procs
+   use ice_broadcast, only: broadcast_scalar
+   use ice_blocks, only: block, get_block, create_blocks, nghost, &
+       nblocks_x, nblocks_y, nblocks_tot, nx_block, ny_block
    use ice_distribution
    use ice_exit
    use ice_fileunits
@@ -54,9 +55,6 @@
 
    type (ice_halo), public :: &
       halo_info          !  ghost cell update info
-
-   logical (log_kind), public :: &
-      ltripole_grid      ! flag to signal use of tripole grid
 
     character (char_len), public :: &
        ew_boundary_type,    &! type of domain bndy in each logical
@@ -103,8 +101,6 @@
 !  same as module
 
 ! !USES:
-!
-   use ice_global_reductions
 !
 !EOP
 !BOC
@@ -177,13 +173,6 @@
 !
 !----------------------------------------------------------------------
 
-   if (trim(ns_boundary_type) == 'tripole' &
-   .or. trim(ns_boundary_type) == 'tripoleT') then
-      ltripole_grid = .true.
-   else
-      ltripole_grid = .false.
-   endif
-
    if (nx_global < 1 .or. ny_global < 1 .or. ncat < 1) then
       !***
       !*** domain size zero or negative
@@ -204,12 +193,6 @@
       !***
       call abort_ice('ice: Not enough ghost cells allocated')
    endif
-
-!----------------------------------------------------------------------
-!  notify global_reductions whether tripole grid is being used
-!----------------------------------------------------------------------
-
-   call init_global_reductions (ltripole_grid)
 
 !----------------------------------------------------------------------
 !

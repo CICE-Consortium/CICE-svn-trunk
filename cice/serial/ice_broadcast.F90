@@ -18,7 +18,6 @@
 ! !USES:
 
    use ice_kinds_mod
-   use ice_communicate
 
    implicit none
    private

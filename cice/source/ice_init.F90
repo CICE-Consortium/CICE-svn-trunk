@@ -26,9 +26,6 @@
 !
       use ice_kinds_mod
       use ice_communicate, only: my_task, master_task
-      use ice_domain_size
-      use ice_constants
-      use ice_state
 !
 !EOP
 !
@@ -65,9 +62,12 @@
 !
 ! !USES:
 !
-      use ice_broadcast
-      use ice_diagnostics
-      use ice_fileunits
+      use ice_broadcast, only: broadcast_scalar, broadcast_array
+      use ice_constants, only: c0, c1, puny
+      use ice_diagnostics, only: diag_file, print_global, print_points, latpnt, lonpnt
+      use ice_domain_size, only: max_nstrm, nilyr, nslyr, max_ntrcr, ncat
+      use ice_fileunits, only: nu_nml, nu_diag, nml_filename, diag_type, &
+          ice_stdout, get_fileunit, release_fileunit
       use ice_calendar, only: year_init, istep0, histfreq, histfreq_n, &
                               dumpfreq, dumpfreq_n, diagfreq, nstreams, &
                               npt, dt, ndtd, days_per_year, use_leap_years, &
@@ -78,7 +78,7 @@
       use ice_history, only: hist_avg, &
                              history_format, history_dir, history_file, &
                              incond_dir, incond_file
-      use ice_exit
+      use ice_exit, only: abort_ice
       use ice_itd, only: kitd, kcatbound
       use ice_ocean, only: oceanmixed_ice
       use ice_flux, only: Tfrzpt, update_ocn_f
@@ -97,7 +97,10 @@
       use ice_atmo, only: atmbndy, calc_strair
       use ice_transport_driver, only: advection
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, &
-                           tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_aero
+                           tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_aero, &
+                           nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_iage, nt_FY, &
+                           nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd, nt_aero, &
+                           ntrcr, hbrine, n_aero
       use ice_restart_age, only: restart_age
       use ice_restart_firstyear, only: restart_FY
       use ice_restart_lvl, only: restart_lvl
@@ -111,7 +114,7 @@
       use ice_therm_mushy, only: a_rapid_mode, Rac_rapid_mode, aspect_rapid_mode, &
                                  dSdt_slow_mode, phi_c_slow_mode, &
                                  phi_i_mushy
-      use ice_restoring
+      use ice_restoring, only: restore_ice
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -927,13 +930,21 @@
 !
 ! !USES:
 !
-      use ice_blocks
-      use ice_domain
+      use ice_blocks, only: block, get_block, nx_block, ny_block
+      use ice_constants, only: c0
+      use ice_domain, only: nblocks, blocks_ice
+      use ice_domain_size, only: nilyr, nslyr, max_ntrcr
+      use ice_fileunits, only: nu_diag
       use ice_flux, only: sst, Tf, Tair, salinz, Tmltz
-      use ice_grid
-      use ice_state
-      use ice_itd
-      use ice_exit
+      use ice_grid, only: tmask, ULON, ULAT
+      use ice_state, only: trcr_depend, tr_iage, tr_FY, tr_lvl, &
+          tr_pond_cesm, nt_apnd, tr_pond_lvl, nt_alvl, tr_pond_topo, &
+          nt_Tsfc, nt_sice, nt_qice, nt_qsno, nt_iage, nt_FY, nt_vlvl, &
+          nt_hpnd, nt_ipnd, tr_aero, nt_aero, aicen, trcrn, vicen, vsnon, &
+          aice0, aice, vice, vsno, trcr, ntrcr, aice_init, bound_state, &
+          n_aero
+      use ice_itd, only: aggregate
+      use ice_exit, only: abort_ice
       use ice_therm_shared, only: ktherm, heat_capacity
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1126,7 +1137,10 @@
 !
 ! !USES:
 !
-      use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_fbri
+      use ice_constants, only: c0, c1, c2, c3, p2, p5, rhoi, rhos, Lfresh, &
+           cp_ice, cp_ocn, Tsmelt, Tffresh, rad_to_deg, puny
+      use ice_domain_size, only: nilyr, nslyr, nx_global, ny_global, max_ntrcr, ncat
+      use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_fbri, hbrine
       use ice_itd, only: hin_max
       use ice_therm_vertical, only: phi_init
       use ice_therm_mushy, only: &
