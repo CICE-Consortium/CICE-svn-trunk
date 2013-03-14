@@ -125,7 +125,7 @@
 !
 ! !DESCRIPTION:
 !
-! Read an unformatted file and scatter to processors.  \\
+! Read an unformatted file and scatter to processors.
 ! work is a real array, atype indicates the format of the data.
 ! If the optional variables field_loc and field_type are present,
 ! the ghost cells are filled using values from the global array.
@@ -271,7 +271,7 @@
 !
 ! !DESCRIPTION:
 !
-! Read an unformatted file and scatter to processors.  \\
+! Read an unformatted file and scatter to processors.
 ! work is a real array, atype indicates the format of the data.
 ! If the optional variables field_loc and field_type are present,
 ! the ghost cells are filled using values from the global array.
@@ -424,8 +424,8 @@
 !
 ! !DESCRIPTION:
 !
-! Read an unformatted file \\
-! Just like ice_read except that it returns a global array. \\
+! Read an unformatted file
+! Just like ice_read except that it returns a global array.
 ! work_g is a real array, atype indicates the format of the data
 !
 ! !REVISION HISTORY:
@@ -538,7 +538,7 @@
 !
 ! !DESCRIPTION:
 !
-! Read an unformatted file and scatter to processors, incl ghost cells.  \\
+! Read an unformatted file and scatter to processors, incl ghost cells.
 ! work is a real array, atype indicates the format of the data.
 ! (subroutine ice_HaloUpdate need not be called).
 !
@@ -675,7 +675,7 @@
 !
 ! !DESCRIPTION:
 !
-! Writes an unformatted file \\
+! Writes an unformatted file
 ! work is a real array, atype indicates the format of the data
 !
 ! !REVISION HISTORY:
@@ -881,7 +881,7 @@
 !
 ! !DESCRIPTION:
 !
-! Writes an unformatted file, including ghost cells \\
+! Writes an unformatted file, including ghost cells
 ! work is a real array, atype indicates the format of the data
 !
 ! !REVISION HISTORY:
@@ -1036,7 +1036,7 @@
 !
 ! !DESCRIPTION:
 !
-! Read a netCDF file and scatter to processors. \\
+! Read a netCDF file and scatter to processors.
 ! If the optional variables field_loc and field_type are present,
 ! the ghost cells are filled using values from the global array.
 ! This prevents them from being filled with zeroes in land cells
@@ -1413,8 +1413,8 @@
 !
 ! !DESCRIPTION:
 !
-! Read a netcdf file. \\
-! Just like ice_read_nc except that it returns a global array. \\
+! Read a netcdf file.
+! Just like ice_read_nc except that it returns a global array.
 ! work_g is a real array
 !
 ! !REVISION HISTORY:

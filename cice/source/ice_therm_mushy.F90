@@ -5860,7 +5860,7 @@ contains
 
     real(kind=dbl_kind), intent(inout) :: &
          fadvheat , & ! heat flux to ocean from brine advection (W m-2)
-         fadvsalt     ! salt flux to ocean from brine advection (??)
+         fadvsalt     ! salt flux to ocean from brine advection 
         
     integer(kind=int_kind) :: &
          k            ! ice layer index
@@ -6107,7 +6107,7 @@ contains
 
     real(kind=dbl_kind), intent(inout) :: &
          fadvheat , & ! heat flux to ocean from brine advection (W m-2)
-         fadvsalt     ! salt flux to ocean from brine advection (??)
+         fadvsalt     ! salt flux to ocean from brine advection
 
     integer(kind=int_kind) :: &
          k            ! ice layer index
@@ -6211,7 +6211,7 @@ contains
     real(kind=dbl_kind), intent(out) :: &
          hslyr       , & ! ice layer thickness (m)
          hilyr       , & ! snow layer thickness (m)
-         snoice          ! snow ice formation (??)
+         snoice          ! snow ice formation
 
     real(kind=dbl_kind) :: &
          hin2        , & ! new ice thickness (m)
@@ -8486,7 +8486,7 @@ contains
 !     is applied). The DQGMRES and TFQMR use two estimates for the
 !     residual norms. The estimates are not accurate, but they are
 !     acceptable in most of the cases. Generally speaking, the error
-!     of the TFQMR's estimate is less accurate.
+!     of the TFQMRs estimate is less accurate.
 !
 !     The convergence test type is indicated by ipar(3). There are four
 !     type convergence tests: (1) tests based on the residual norm;
@@ -8548,7 +8548,7 @@ contains
 !     ipar(3) = 1	! use convergence test scheme 1
 !     ipar(4) = 10000	! the 'w' has 10,000 elements
 !     ipar(5) = 10	! use *GMRES(10) (e.g. FGMRES(10))
-!     ipar(6) = 100	! use at most 100 matvec's
+!     ipar(6) = 100	! use at most 100 matvecs
 !     fpar(1) = 1.0E-6	! relative tolerance 1.0E-6
 !     fpar(2) = 1.0E-10 ! absolute tolerance 1.0E-10
 !     fpar(11) = 0.0	! clearing the FLOPS counter
@@ -8607,7 +8607,7 @@ contains
 !     after every ipar(5) iterations, the GMRES will restart with
 !     the updated solution and recomputed residual vector.
 !
-!     the space of the `w' is used as follows:
+!     the space of the 'w' is used as follows:
 !     (1) the basis for the Krylov subspace, size n*(m+1);
 !     (2) the Hessenberg matrix, only the upper triangular
 !     portion of the matrix is stored, size (m+1)*m/2 + 1
@@ -9187,7 +9187,7 @@ contains
       subroutine givens(x,y,c,s)
       real(kind=dbl_kind) :: x,y,c,s
 !-----------------------------------------------------------------------
-!     Given x and y, this subroutine generates a Givens' rotation c, s.
+!     Given x and y, this subroutine generates a Givens rotation c, s.
 !     And apply the rotation on (x,y) ==> (sqrt(x**2 + y**2), 0).
 !     (See P 202 of "matrix computation" by Golub and van Loan.)
 !-----------------------------------------------------------------------
@@ -9369,7 +9369,7 @@ contains
 !-----------------------------------------------------------------------
 !     MGSRO  -- Modified Gram-Schmidt procedure with Selective Re-
 !               Orthogonalization
-!     The ind'th vector of VEC is orthogonalized against the rest of
+!     The indth vector of VEC is orthogonalized against the rest of
 !     the vectors.
 !
 !     The test for performing re-orthogonalization is performed for
@@ -9378,7 +9378,7 @@ contains
 !     performed. The norm of the 'new' vector is kept in variable NRM0,
 !     and updated after operating with each vector.
 !
-!     full   -- .ture. if it is necessary to orthogonalize the ind'th
+!     full   -- .ture. if it is necessary to orthogonalize the indth
 !               against all the vectors vec(:,1:ind-1), vec(:,ind+2:m)
 !               .false. only orthogonalize againt vec(:,1:ind-1)
 !     lda    -- the leading dimension of VEC
@@ -9492,7 +9492,7 @@ contains
 !-----------------------------------------------------------------------
 !     MGSRO  -- Modified Gram-Schmidt procedure with Selective Re-
 !               Orthogonalization
-!     The ind'th vector of VEC is orthogonalized against the rest of
+!     The indth vector of VEC is orthogonalized against the rest of
 !     the vectors.
 !
 !     The test for performing re-orthogonalization is performed for
@@ -9501,7 +9501,7 @@ contains
 !     performed. The norm of the 'new' vector is kept in variable NRM0,
 !     and updated after operating with each vector.
 !
-!     full   -- .ture. if it is necessary to orthogonalize the ind'th
+!     full   -- .ture. if it is necessary to orthogonalize the indth
 !               against all the vectors vec(:,1:ind-1), vec(:,ind+2:m)
 !               .false. only orthogonalize againt vec(:,1:ind-1)
 !     lda    -- the leading dimension of VEC
