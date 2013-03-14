@@ -72,7 +72,8 @@ setenv ONED     no        # true 1D thermodynamic calculation
 setenv SRCDIR /usr/projects/climate/eclare/CICE.v5.0/cice  # conejo
 #setenv SRCDIR /Users/akt/Work/MPAS-CICE/Column_Package/cice_package/cice
 
-setenv EXEDIR $SYSTEM_USERDIR/rundir
+#setenv EXEDIR $SYSTEM_USERDIR/rundir
+setenv EXEDIR $SYSTEM_USERDIR/rundir.yellowstone
                                           if !(-d $EXEDIR) mkdir -p $EXEDIR
 setenv CBLD   $SRCDIR/bld
 setenv OBJDIR $EXEDIR/compile           ; if !(-d $OBJDIR) mkdir -p $OBJDIR

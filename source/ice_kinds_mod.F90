@@ -5,7 +5,7 @@
 !
 ! !DESCRIPTION:
 !
-! Defines variable precision for all common data types \\
+! Defines variable precision for all common data types
 ! Code originally based on kinds_mod.F in POP
 !
 ! !REVISION HISTORY:
