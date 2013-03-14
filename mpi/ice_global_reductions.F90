@@ -19,11 +19,12 @@
 ! !USES:
 
    use ice_kinds_mod
-   use ice_communicate
-   use ice_constants
-   use ice_blocks
-   use ice_distribution
-   use ice_domain_size
+   use ice_communicate, only: my_task, mpiR8, mpiR4
+   use ice_constants, only: field_loc_Nface, field_loc_NEcorner
+   use ice_blocks, only: block, get_block
+   use ice_distribution, only: distrb, ice_distributionGet, &
+       ice_distributionGetBlockID
+   use ice_domain_size, only: nx_global
 
    implicit none
    private
@@ -36,8 +37,7 @@
    public :: global_sum,      &
              global_sum_prod, &
              global_maxval,   &
-             global_minval,   &
-             init_global_reductions
+             global_minval
 
 !EOP
 !BOC
@@ -80,46 +80,10 @@
                       global_minval_scalar_int
    end interface
 
-!-----------------------------------------------------------------------
-!
-!  module variables
-!
-!-----------------------------------------------------------------------
-
-   logical(log_kind) :: ltripole_grid  ! in lieu of use domain
-
 !EOC
 !***********************************************************************
 
  contains
-
-!***********************************************************************
-!BOP
-! !IROUTINE: init_global_reductions
-! !INTERFACE:
-
- subroutine init_global_reductions(tripole_flag)
-
-! !DESCRIPTION:
-!  Initializes necessary buffers for global reductions.
-!
-! !REVISION HISTORY:
-!  same as module
-!
-! !INPUT PARAMETERS:
-!
-   logical(log_kind), intent(in) :: tripole_flag
-!
-!EOP
-!BOC
-
-! This flag is apparently never used; if it were used, it might need
-! a corresponding tripoleTFlag to be defined.
-   ltripole_grid = tripole_flag
-
-!EOC
-
- end subroutine init_global_reductions
 
 !***********************************************************************
 !BOP

@@ -21,17 +21,12 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain
-      use ice_domain_size
-      use ice_constants
-      use shr_orb_mod
-
-! 2 Jan07 BPB
-      use ice_diagnostics
 !
 !EOP
 !
       implicit none
+      private
+      public :: init_orbit, compute_coszen
       save
 
       integer (kind=int_kind) :: iyear_AD  ! Year to calculate orbit for
@@ -72,6 +67,8 @@
 ! author:  Bruce P. Briegleb, NCAR 
 !
 ! !USES: none
+
+      use shr_orb_mod, only: shr_orb_params
 !
 ! !INPUT/OUTPUT PARAMETERS: none
 !
@@ -107,7 +104,9 @@
 !
 ! !USES:
 !
-      use ice_calendar, only: yday, sec, secday
+      use ice_calendar, only: yday, sec
+      use ice_constants, only: c0, c2, pi, secday
+      use shr_orb_mod, only: shr_orb_decl
 ! 
 ! !INPUT/OUTPUT PARAMETERS: 
 ! 
@@ -160,7 +159,6 @@
          coszen(i,j) = sin(tlat(i,j))*sin(delta) - &
                        cos(tlat(i,j))*cos(delta)   &
                       *cos(ydayp1*c2*pi + tlon(i,j))
-
       enddo
  
       end subroutine compute_coszen

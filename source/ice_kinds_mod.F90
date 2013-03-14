@@ -24,6 +24,7 @@
 !=======================================================================
 
       implicit none
+      public
       save
 
       integer, parameter :: char_len  = 80, &

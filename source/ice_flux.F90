@@ -26,9 +26,10 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_blocks
-      use ice_domain_size
-      use ice_constants
+      use ice_blocks, only: nx_block, ny_block, block, get_block
+      use ice_domain_size, only: max_blocks, ncat, max_aero, max_nstrm, nilyr
+      use ice_constants, only: c0, c1, c5, c10, c20, c180, &
+          depressT, stefan_boltzmann, Tffresh, emissivity
       use ice_zbgc_public, only: fsicen, fsicen_g, flux_bio, flux_bio_g,  &
                           flux_bio_gbm, flux_bio_g_gbm, fsice, fsice_g, &
                           upNO, upNH, growN, growNp
@@ -36,6 +37,7 @@
 !EOP
 !
       implicit none
+      public
       save
 
       !-----------------------------------------------------------------
@@ -612,13 +614,12 @@
 ! !USES:
 !
       use ice_domain, only: nblocks
+      use ice_state, only: aice, vice
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
 !
-      use ice_state, only: aice, vice
-
       fsurf  (:,:,:) = c0
       fcondtop(:,:,:)= c0
       congel (:,:,:) = c0

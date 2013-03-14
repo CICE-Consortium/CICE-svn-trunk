@@ -43,8 +43,8 @@
 !
       use ice_kinds_mod
       use ice_communicate, only: my_task, master_task
-      use ice_domain_size
-      use ice_constants
+      use ice_domain_size, only: max_blocks, ncat
+!      use ice_constants
       use ice_fileunits, only: nu_diag
 !
 !EOP
@@ -274,13 +274,12 @@
 !
 ! !USES:
 !
-      use ice_boundary
-      use ice_domain
-      use ice_blocks
+      use ice_constants, only: c0, c1, c12
+      use ice_domain, only: nblocks
+      use ice_blocks, only: nx_block, ny_block
       use ice_grid, only: xav, yav, xxav, yyav
 !                          dxt, dyt, xyav, &
 !                          xxxav, xxyav, xyyav, yyyav
-      use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -357,17 +356,19 @@
 !       
 ! !USES:
 !
-      use ice_boundary
-      use ice_global_reductions
-      use ice_domain
-      use ice_blocks
+      use ice_boundary, only: ice_HaloUpdate
+      use ice_constants, only: c0, p5, &
+          field_loc_center, field_type_scalar, &
+          field_loc_NEcorner, field_type_vector
+      use ice_domain, only: nblocks, blocks_ice, halo_info
+      use ice_blocks, only: block, get_block, nghost, nx_block, ny_block
       use ice_grid, only: HTE, HTN, dxu, dyu,       &
                           tarea, tarear, hm,                  &
                           xav, yav, xxav, yyav
 !                          xyav, xxxav, xxyav, xyyav, yyyav
-      use ice_exit
+      use ice_exit, only: abort_ice
       use ice_calendar, only: istep1
-      use ice_timers
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bound
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -882,6 +883,9 @@
 ! author William H. Lipscomb, LANL
 !
 ! !USES:
+
+      use ice_constants, only: c0, c1, puny
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1061,6 +1065,9 @@
 !         John R. Baumgardner, LANL
 !
 ! !USES:
+
+      use ice_constants, only: c0, c1, puny
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1381,6 +1388,9 @@
 !         John R. Baumgardner, LANL
 !
 ! !USES:
+
+      use ice_constants, only: c0, c1, p5, puny
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1544,6 +1554,9 @@
 ! author William H. Lipscomb, LANL
 !
 ! !USES:
+
+      use ice_constants, only: c0, p5
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1742,6 +1755,9 @@
 !         John R. Baumgardner, LANL
 !
 ! !USES:
+
+      use ice_constants, only: c0, c1, c2, p5, puny, eps13, eps16
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -3146,6 +3162,9 @@
 ! author William H. Lipscomb, LANL
 !
 ! !USES:
+
+      use ice_constants, only: p333, p4, p5, p6
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -3286,6 +3305,9 @@
 ! author William H. Lipscomb, LANL
 !
 ! !USES:
+
+      use ice_constants, only: c0, p333
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -3616,6 +3638,9 @@
 ! author William H. Lipscomb, LANL
 !
 ! !USES:
+
+      use ice_constants, only: c0, puny
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

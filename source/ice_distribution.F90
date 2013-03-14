@@ -19,12 +19,11 @@
 ! !USES:
 
    use ice_kinds_mod
-   use ice_domain_size
-   use ice_communicate
-   use ice_blocks
-   use ice_exit
+   use ice_domain_size, only: max_blocks
+   use ice_communicate, only: my_task, master_task, create_communicator
+   use ice_blocks, only: nblocks_x, nblocks_y, nblocks_tot
+   use ice_exit, only: abort_ice
    use ice_fileunits, only: nu_diag
-   use ice_spacecurve
 
    implicit none
    private
@@ -249,8 +248,6 @@
 !  same as module
 !
 ! !USES:
-
-   use ice_domain_size
 
 ! !INPUT PARAMETERS:
 
@@ -1708,6 +1705,8 @@
 !
 ! !REVISION HISTORY:
 !  added by J. Dennis 3/10/06
+
+   use ice_spacecurve, only: IsFactorable, GenSpaceCurve
 
 ! !INPUT PARAMETERS:
 

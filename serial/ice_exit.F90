@@ -21,11 +21,10 @@
 !
 ! !USES:
 !
-      use ice_kinds_mod
-!
 !EOP
 !
       implicit none
+      public
 
 !=======================================================================
 
@@ -50,8 +49,7 @@
 !
 ! !USES:
 !
-      use ice_fileunits
-      use ice_communicate
+      use ice_fileunits, only: nu_diag, flush_fileunit
 #ifdef CCSM
       use shr_sys_mod
 #endif

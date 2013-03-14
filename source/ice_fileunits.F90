@@ -37,12 +37,15 @@
 !=======================================================================
 
       implicit none
+      private
+      public :: init_fileunits, get_fileunit, flush_fileunit, &
+                release_fileunit, release_all_fileunits
       save
 
-      character (len=char_len) :: &
+      character (len=char_len), public :: &
          diag_type               ! 'stdout' or 'file'
 
-      integer (kind=int_kind) :: &
+      integer (kind=int_kind), public :: &
          nu_grid       , &  ! grid file
          nu_kmt        , &  ! land mask file
          nu_nml        , &  ! namelist input file
@@ -72,13 +75,13 @@
          nu_diag       , &  ! diagnostics output file
          nu_jfnkdiag        ! diagnostics for JFNK failure
 
-      character (6), parameter :: &
+      character (6), parameter, public :: &
          nml_filename = 'ice_in' ! namelist input file name
 
-      character (12), parameter :: &
+      character (12), parameter, public :: &
          eap_filename = 'eap_stresses' ! eap dynmaics input file name
 
-      integer (kind=int_kind), parameter :: &
+      integer (kind=int_kind), parameter, public :: &
          ice_stdin  =  5, & ! reserved unit for standard input
          ice_stdout =  6, & ! reserved unit for standard output
          ice_stderr =  6    ! reserved unit for standard error

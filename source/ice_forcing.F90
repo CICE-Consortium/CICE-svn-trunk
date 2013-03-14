@@ -30,23 +30,30 @@
 !
       use ice_kinds_mod
       use ice_blocks, only: nx_block, ny_block
-      use ice_domain_size
+      use ice_domain_size, only: ncat, max_blocks, nx_global, ny_global
       use ice_communicate, only: my_task, master_task
-      use ice_constants
       use ice_calendar, only: istep, istep1, time, time_forc, year_init, &
                               sec, mday, month, nyr, yday, daycal, dayyr, &
                               daymo, days_per_year
-      use ice_fileunits
+      use ice_fileunits, only: nu_diag, nu_forcing
       use ice_atmo, only: calc_strair
-      use ice_exit
+      use ice_exit, only: abort_ice
+      use ice_read_write, only: ice_open, ice_read, &
+                                ice_open_nc, ice_read_nc, ice_close_nc
       use ice_timers
 !
 !EOP
 !
       implicit none
+      private
+      public :: init_forcing_atmo, init_forcing_ocn, &
+                get_forcing_atmo, get_forcing_ocn, &
+                get_ice_salinity, &
+                read_clim_data, read_clim_data_nc, &
+                interpolate_data, interp_coeff_monthly
       save
 
-      integer (kind=int_kind) :: &
+      integer (kind=int_kind), public :: &
          ycycle          , & ! number of years in forcing cycle
          fyear_init      , & ! first year of data in forcing cycle
          fyear           , & ! current year in forcing cycle
@@ -115,7 +122,7 @@
         topmelt_data, &
         botmelt_data
 
-      character(char_len) :: & 
+      character(char_len), public :: & 
          atm_data_format, & ! 'bin'=binary or 'nc'=netcdf
          ocn_data_format, & ! 'bin'=binary or 'nc'=netcdf
          atm_data_type, & ! 'default', 'monthly', 'ncar', 'ecmwf', 
@@ -125,7 +132,7 @@
                           !     'hadgem_sst' or 'hadgem_sst_uvocn'
          precip_units     ! 'mm_per_month', 'mm_per_sec', 'mks'
  
-      character(char_len_long) :: & 
+      character(char_len_long), public :: & 
          atm_data_dir , & ! top directory for atmospheric data
          ocn_data_dir , & ! top directory for ocean data
          oceanmixed_file  ! file name for ocean forcing data
@@ -144,16 +151,16 @@
        dimension (nx_block,ny_block,max_blocks,nfld,12) :: & 
          ocn_frc_m   ! ocn data for 12 months
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          restore_sst                 ! restore sst if true
 
-      integer (kind=int_kind) :: &
+      integer (kind=int_kind), public :: &
          trestore                    ! restoring time scale (days)
 
-      real (kind=dbl_kind) :: & 
+      real (kind=dbl_kind), public :: & 
          trest                       ! restoring time scale (sec)
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          dbug             ! prints debugging output if true
 
       interface read_data_nc
@@ -247,10 +254,11 @@
 !
 ! !USES:
 !
+      use ice_constants, only: c0, c12, secday, depressT, &
+          field_loc_center, field_type_scalar
       use ice_domain, only: nblocks
       use ice_flux, only: sss, sst, Tf, Tfrzpt
       use ice_work, only:  work1
-      use ice_read_write
       use ice_zbgc_public, only: restore_bgc
 #ifdef ncdf
       use netcdf
@@ -478,11 +486,14 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: block, get_block
+      use ice_constants, only: field_loc_center, field_type_scalar
       use ice_boundary, only: ice_HaloUpdate
-      use ice_domain
-      use ice_blocks
-      use ice_flux
-      use ice_state
+      use ice_domain, only: nblocks, blocks_ice, halo_info
+      use ice_flux, only: Tair, fsw, flw, frain, fsnow, Qa, rhoa, &
+          uatm, vatm, strax, stray, zlvl, wind, swvdr, swvdf, swidr, swidf, &
+          potT, sst
+      use ice_state, only: aice, trcr, nt_Tsfc
       use ice_grid, only: ANGLET, hm
 !
 !EOP
@@ -603,9 +614,6 @@
 !
 ! !USES:
 !
-      use ice_domain, only: nblocks
-      use ice_ocean
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       real (kind=dbl_kind), intent(in) :: &
@@ -650,8 +658,9 @@
 !
 ! !USES: 
 !      
-      use ice_read_write 
-      use ice_flux
+      use ice_constants, only: secday, &
+          field_loc_center, field_type_scalar
+      use ice_domain_size, only: nilyr
       use ice_state, only: trcrn, nt_sice
 #ifdef ncdf
       use netcdf
@@ -837,7 +846,6 @@
 !
 ! !USES:
 !
-      use ice_read_write
       use ice_diagnostics, only: check_step
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -999,7 +1007,7 @@
 !
 ! !USES:
 !
-      use ice_read_write
+      use ice_constants, only: c0
       use ice_diagnostics, only: check_step
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1171,8 +1179,8 @@
 !
 ! !USES:
 !
-      use ice_read_write
- !     use ice_diagnostics, only: check_step
+      use ice_constants, only: c0
+!      use ice_diagnostics, only: check_step
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1352,8 +1360,9 @@
 !
 ! !USES:
 !
-      use ice_read_write
- !     use ice_diagnostics, only: check_step
+      use ice_constants, only: c0
+      use ice_domain_size, only: nilyr
+!      use ice_diagnostics, only: check_step
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1514,7 +1523,6 @@
 !
 ! !USES:
 !
-      use ice_read_write
       use ice_diagnostics, only: check_step
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1612,7 +1620,6 @@
 !
 ! !USES:
 !
-      use ice_read_write
       use ice_diagnostics, only: check_step
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1711,6 +1718,7 @@
 ! authors: same as module
 !
 ! !USES:
+      use ice_constants, only: c1, secday
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1774,6 +1782,7 @@
 ! authors: same as module
 !
 ! !USES:
+      use ice_constants, only: c1, p5, secday
 !
       integer (kind=int_kind), intent(in) :: &
           recnum      , & ! record number for current data value
@@ -1891,7 +1900,6 @@
 !
 ! !USES:
 !
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       character (char_len_long), intent(inout) ::  data_file
@@ -1952,6 +1960,10 @@
 !
 ! !USES:
 !
+      use ice_constants, only: c0, c1, c10, c12, c4, c1000, &
+          secday, Tffresh, stefan_boltzmann, &
+          emissivity, qqqocn, TTTocn
+
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -2288,6 +2300,8 @@
 
       subroutine longwave_parkinson_washington(Tair, cldf, flw)
 
+      use ice_constants, only: c1, Tffresh, stefan_boltzmann
+
       ! compute downward longwave as in Parkinson and Washington (1979)
       ! (for now)
       ! Parkinson, C. L. and W. M. Washington (1979),
@@ -2314,6 +2328,9 @@
                                           aice, sst,  &
                                           Qa,   Tair, &
                                           hm,   flw)
+
+      use ice_constants, only: c1, c4, c1000, &
+          Tffresh, stefan_boltzmann, emissivity
 
       ! longwave, Rosati and Miyakoda, JPO 18, p. 1607 (1988) - sort of 
       ! Rosati, A. and K. Miyakoda (1988), 
@@ -2453,7 +2470,9 @@
 !
 ! !USES:
 !
-      use ice_flux
+      use ice_constants, only: c4, p5, secday, &
+          field_loc_center, field_type_scalar, field_type_vector
+      use ice_flux, only: fsw, fsnow, Tair, uatm, vatm, rhoa, Qa
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -2619,9 +2638,10 @@
 !
 ! !USES:
 !
-      use ice_domain, only: nblocks, blocks_ice
-      use ice_read_write
-      use ice_flux
+      use ice_constants, only: c0, c1, c2, p001, p01, p1, secday, &
+          field_loc_center, field_type_scalar
+      use ice_domain, only: nblocks
+      use ice_flux, only: uatm, vatm, Tair, fsw, fsnow, Qa, qdp, rhoa, frain
       use ice_therm_shared, only: solve_Sin
 #ifdef ncdf
       use netcdf
@@ -2652,9 +2672,6 @@
       integer (kind=int_kind) :: &
          iblk             ! block index
 
-      type (block) :: &
-         this_block       ! block information for current block
-      
       real (kind=dbl_kind) :: & ! used to determine specific humidity
          Temp               , & ! air temperature (K)
          rh                 , & ! relative humidity (%)
@@ -2972,9 +2989,11 @@
 !
 ! !USES:
 !
-      use ice_domain, only: nblocks, blocks_ice
-      use ice_read_write
-      use ice_flux
+      use ice_constants, only: c0, c1, c12, c2, c180, c365,  &
+          c3600, p1, p5, p6, pi, secday, &
+          field_loc_center, field_type_scalar
+      use ice_domain, only: nblocks
+      use ice_flux, only: Tair, qdp, Qa, uatm, vatm, fsw, rhoa, frain
       use ice_therm_shared, only: solve_Sin
       use ice_diagnostics, only: latpnt, lonpnt 
 !
@@ -3003,9 +3022,6 @@
       integer (kind=int_kind) :: &
          iblk             ! block index
 
-      type (block) :: &
-         this_block       ! block information for current block
-      
       real (kind=dbl_kind) :: & ! used to determine specific humidity
          Temp               , & ! air temperature (K)
          rh                 , & ! relative humidity (%)
@@ -3078,7 +3094,6 @@
 
       if (trim(atm_data_format) == 'nc') then     ! read nc file
      
-
      !-------------------------------------------------------------------
      ! hourly data
      ! Assume that the hourly value is located at the end of the
@@ -3333,7 +3348,9 @@
 !
 ! !USES:
 !
-      use ice_flux
+      use ice_constants, only: p5, secday, puny, &
+          field_loc_center, field_type_scalar, field_type_vector
+      use ice_flux, only: fsnow, rhoa, Tair, uatm, vatm, fsw, flw, Qa
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -3503,7 +3520,6 @@
 !
 ! !USES:
 !
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -3566,9 +3582,12 @@
 !
 ! !USES:
 !
-      use ice_global_reductions
+      use ice_blocks, only: block, get_block
+      use ice_constants, only: c4, p1, p5, secday, Tffresh, &
+          field_loc_center, field_type_scalar, field_type_vector
+      use ice_global_reductions, only: global_minval, global_maxval
       use ice_domain, only: nblocks, distrb_info, blocks_ice
-      use ice_flux 
+      use ice_flux, only: fsnow, Tair, uatm, vatm, Qa, fsw
       use ice_grid, only: hm, tlon, tlat, tmask, umask
       use ice_state, only: aice
 !
@@ -3782,6 +3801,9 @@
 !---! AOMIP shortwave forcing
 !---!-------------------------------------------------------------------
 
+      use ice_constants, only: c0, c1, c12, c2, c180, c365, &
+          c3600, p1, p5, p6, pi, secday
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
@@ -3836,6 +3858,7 @@
 
       subroutine Qa_fixLY(nx_block, ny_block, Tair, Qa)
 
+      use ice_constants, only: c1, c10, c2, Tffresh, puny
       use ice_work, only: worka
 
       integer (kind=int_kind), intent(in) :: &
@@ -4070,8 +4093,11 @@
 !
 ! !USES:
 !
+      use ice_constants, only: p5, Lsub, &
+          field_loc_center, field_type_scalar, field_type_vector
       use ice_domain, only: nblocks
-      use ice_flux
+      use ice_flux, only: fsnow, frain, uatm, vatm, strax, stray, wind, &
+          fsw, flw, Tair, rhoa, Qa, fcondtopn_f, fsurfn_f, flatn_f
       use ice_state, only: aice,aicen
       use ice_ocean, only: oceanmixed_ice
       use ice_therm_shared, only: calc_Tsfc
@@ -4332,7 +4358,6 @@
 !
 ! !USES:
 !
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -4399,9 +4424,12 @@
 !
 ! !USES:
 !
-      use ice_global_reductions
+      use ice_blocks, only: block, get_block
+      use ice_constants, only: p5, &
+          field_loc_center, field_type_scalar, field_type_vector
+      use ice_global_reductions, only: global_minval, global_maxval
       use ice_domain, only: nblocks, distrb_info, blocks_ice
-      use ice_flux 
+      use ice_flux, only: fsnow, Tair, Qa, wind, strax, stray, fsw
       use ice_grid, only: hm, tlon, tlat, tmask, umask
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -4578,11 +4606,13 @@
 
       subroutine oned_data
 
+      use ice_blocks, only: block, get_block
+      use ice_constants, only: c0, p1, Tffresh
+
 #if defined notz_fieldwork || defined era-interim
 
-      use ice_global_reductions
       use ice_domain, only: nblocks, distrb_info, blocks_ice
-      use ice_flux 
+      use ice_flux, only: Tair, Qa, uatm, vatm, fsnow, frain, fsw
       use ice_grid, only: hm, tlon, tlat, tmask, umask
       use ice_calendar, only: dt
       use ice_state, only: aice
@@ -4706,10 +4736,10 @@
 !
 ! !USES:
 !
+      use ice_constants, only: c0, p5, depressT, &
+          field_loc_center, field_type_scalar
       use ice_domain, only: nblocks
-      use ice_ocean
       use ice_flux, only: Tf, sss, sst, uocn, vocn, ss_tltx, ss_tlty, Tfrzpt
-      use ice_grid, only: t2ugrid_vector
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -4850,10 +4880,10 @@
 !
 ! !USES:
 !
+      use ice_constants, only: secday, depressT, &
+          field_loc_center, field_type_scalar
       use ice_domain, only: nblocks
-      use ice_ocean
       use ice_flux, only: Tf, sss, Tfrzpt
-     ! use ice_grid, only: t2ugrid_vector
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -4877,8 +4907,6 @@
 
       character (char_len) :: & 
             fieldname    	! field name in netcdf file
-
-    
 
       if (my_task == master_task .and. istep == 1) then
          if (trim(sss_data_type)=='exp') then
@@ -4905,7 +4933,6 @@
          ixm  = mod(recnum+maxrec-2,maxrec) + 1
          ixx  = mod(recnum-1,         maxrec) + 1
 
-    
       ! Compute interpolation coefficients
       ! If data is located at the end of the time interval, then the
       !  data value for the current record goes in slot 2
@@ -4925,7 +4952,6 @@
                     maxrec, sss_file, fieldname, sss_data_p, &
                     field_loc_center, field_type_scalar)
      
-
        sss(:,:,:) =  c1intp * sss_data_p(1) &
                             + c2intp * sss_data_p(2)
        do iblk = 1, nblocks
@@ -4987,11 +5013,10 @@
 !
 ! !USES:
 !
-      use ice_domain, only: nblocks, distrb_info
-      use ice_gather_scatter
-      use ice_exit
+      use ice_constants, only: c0, &
+          field_loc_center, field_loc_NEcorner, &
+          field_type_scalar, field_type_vector
       use ice_work, only: work1
-      use ice_read_write
 #ifdef ncdf
       use netcdf
 #endif
@@ -5150,11 +5175,9 @@
 !
 ! !USES:
 !
-      use ice_domain, only: nblocks, distrb_info
-      use ice_gather_scatter
-      use ice_exit
+      use ice_constants, only: c0, &
+          field_loc_center, field_type_scalar
       use ice_work, only: work1, work2
-      use ice_read_write
       use ice_grid, only: to_ugrid, ANGLET
 #ifdef ncdf
       use netcdf
@@ -5303,14 +5326,12 @@
 !
 ! !USES:
 !
-      use ice_global_reductions
+      use ice_constants, only: c0, c1, p5, depressT
+      use ice_global_reductions, only: global_minval, global_maxval
       use ice_domain, only: nblocks, distrb_info
-      use ice_gather_scatter
-      use ice_exit
-      use ice_work, only: work_g1, work1
+      use ice_work, only: work1
       use ice_flux, only: sss, sst, Tf, uocn, vocn, ss_tltx, ss_tlty, &
             qdp, hmix, Tfrzpt
-!      use ice_ocean
       use ice_restart, only: restart
       use ice_grid, only: hm, tmask, umask
 !
@@ -5490,6 +5511,8 @@
 
       subroutine ocn_data_oned(dt)
 
+      use ice_constants, only: c0, c1, p1
+
 #if defined notz_fieldwork
 
       use ice_flux, only: sss, sst, Tf, uocn, vocn, ss_tltx, ss_tlty, &
@@ -5596,6 +5619,8 @@
 !
 ! !USES:
 !
+      use ice_constants, only: p5, cm_to_m, &
+          field_loc_center, field_type_scalar, field_type_vector
       use ice_domain, only: nblocks
       use ice_flux, only: sst, uocn, vocn
       use ice_grid, only: t2ugrid_vector, ANGLET
@@ -5664,7 +5689,6 @@
       readm = .false.
       if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
 
-
       if (my_task == master_task .and. istep == 1) then
          write (nu_diag,*) ' '
          write (nu_diag,*) 'SST data interpolated to timestep:'
@@ -5678,7 +5702,6 @@
             write (nu_diag,*) trim(ocn_data_dir)//'MONTHLY/vocn.1997.nc'
          endif
       endif                     ! my_task, istep
-
 
       ! -----------------------------------------------------------
       ! SST
@@ -5703,7 +5726,6 @@
             enddo
          enddo
          endif      
-
 
       ! -----------------------------------------------------------
       ! Ocean currents
@@ -5764,12 +5786,9 @@
 	call t2ugrid_vector(uocn)
 	call t2ugrid_vector(vocn)
 
-
      endif    !   sst_data_type = hadgem_sst_uvocn
 
-
      end subroutine ocn_data_hadgem
-
 
 !=======================================================================
 

@@ -20,25 +20,20 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_blocks
-      use ice_calendar, only: dt
-      use ice_domain
-      use ice_domain_size
-      use ice_communicate, only: my_task, master_task
-      use ice_constants
-      use ice_exit
-      use ice_fileunits
+      use ice_blocks, only: nx_block, ny_block
+      use ice_domain_size, only: ncat, max_blocks
       use ice_forcing, only: trestore, trest
-      use ice_restart, only: restart_ext
-      use ice_state
-      use ice_timers
+      use ice_state, only: aicen, vicen, vsnon, trcrn, ntrcr, bound_state
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bound
 !
 !EOP
 !
       implicit none
+      private
+      public :: ice_HaloRestore_init, ice_HaloRestore
       save
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          restore_ice                 ! restore ice state if true
 
       !-----------------------------------------------------------------
@@ -72,6 +67,11 @@
 !  same as module
 
 ! !USES:
+
+      use ice_communicate, only: my_task, master_task
+      use ice_domain, only: ew_boundary_type, ns_boundary_type
+      use ice_fileunits, only: nu_diag
+      use ice_restart, only: restart_ext
 
    if (ew_boundary_type == 'open' .and. &
        ns_boundary_type == 'open' .and. .not.(restart_ext)) then
@@ -125,8 +125,11 @@
 !
 ! !USES:
 
-   use ice_distribution
-
+      use ice_blocks, only: block, get_block, nblocks_x, nblocks_y
+      use ice_calendar, only: dt
+      use ice_constants, only: secday
+      use ice_domain, only: ew_boundary_type, ns_boundary_type, &
+          nblocks, blocks_ice
 !EOP
 !BOC
 !-----------------------------------------------------------------------

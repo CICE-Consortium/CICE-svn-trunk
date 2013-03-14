@@ -24,8 +24,8 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_blocks
-      use ice_domain_size
+      use ice_blocks, only: nx_block, ny_block
+      use ice_domain_size, only: max_blocks, nblyr_hist, ncat
 !
 !EOP
 !
@@ -110,7 +110,7 @@
 !
 ! !USES:
 !
-      use ice_constants
+      use ice_constants, only: c0
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

@@ -20,8 +20,8 @@
 ! !USES:
 
    use ice_kinds_mod
-   use ice_exit
-   use ice_domain_size
+   use ice_domain_size, only: block_size_x, block_size_y
+   use ice_exit, only: abort_ice
 
    implicit none
    private

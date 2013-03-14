@@ -298,6 +298,7 @@
 ! !USES:
 !
       use ice_blocks
+      use ice_constants, only: puny
       use ice_domain
       use ice_state
       use ice_flux

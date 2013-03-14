@@ -30,6 +30,7 @@
 !
       use ice_kinds_mod
       use ice_communicate, only: my_task, master_task
+      use ice_constants
       use ice_blocks
       use ice_read_write
       use ice_fileunits
@@ -83,6 +84,7 @@
 !
 ! !USES:
 !
+      use ice_domain, only: nblocks
       use ice_domain_size
       use ice_flux
       use ice_grid
@@ -581,6 +583,7 @@
 !
 ! !USES:
 !
+      use ice_domain, only: nblocks
       use ice_domain_size
       use ice_flux
       use ice_grid

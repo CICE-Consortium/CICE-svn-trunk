@@ -23,11 +23,14 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_constants
+      use ice_constants, only: c0, spval_dbl, &
+          field_loc_noupdate, field_type_noupdate
       use ice_communicate, only: my_task, master_task
-      use ice_broadcast
-      use ice_domain_size
-      use ice_blocks
+      use ice_broadcast, only: broadcast_scalar
+      use ice_domain, only: distrb_info
+      use ice_domain_size, only: max_blocks, nx_global, ny_global
+      use ice_blocks, only: nx_block, ny_block, nghost
+      use ice_exit, only: abort_ice
       use ice_fileunits
 #ifdef ncdf
       use netcdf      
@@ -135,8 +138,7 @@
 !
 ! !USES:
 !
-      use ice_domain
-      use ice_gather_scatter
+      use ice_gather_scatter, only: scatter_global
       use ice_work, only: work_g1, work_gr, work_gi4, work_gi8
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -282,9 +284,9 @@
 !
 ! !USES:
 !
-      use ice_domain
-      use ice_gather_scatter
+      use ice_gather_scatter, only: scatter_global
       use ice_work, only: work_g4, work_gr3, work_gi5, work_gi9
+      use ice_domain_size, only: nblyr_hist
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -546,8 +548,7 @@
 !
 ! !USES:
 !
-      use ice_domain
-      use ice_gather_scatter
+      use ice_gather_scatter, only: scatter_global_ext
       use ice_work, only: work_g1, work_gr, work_gi4, work_gi8
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -683,8 +684,7 @@
 !
 ! !USES:
 !
-      use ice_gather_scatter
-      use ice_domain
+      use ice_gather_scatter, only: gather_global
       use ice_work, only: work_g1, work_gr, work_gi4, work_gi8
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -787,9 +787,9 @@
 !
 ! !USES:
 !
-      use ice_gather_scatter
-      use ice_domain
+      use ice_gather_scatter, only: gather_global
       use ice_work, only: work_g4, work_gr3, work_gi5, work_gi9
+      use ice_domain_size, only: nblyr_hist
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -890,8 +890,7 @@
 !
 ! !USES:
 !
-      use ice_gather_scatter
-      use ice_domain
+      use ice_gather_scatter, only: gather_global_ext
       use ice_work, only: work_g1, work_gr, work_gi4, work_gi8
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -995,12 +994,9 @@
 ! Adapted by Alison McLaren, Met Office from ice_open
 !
 ! !USES:
- 
-      use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-
       character (char_len_long), intent(in) :: & 
            filename      ! netCDF filename
 
@@ -1012,7 +1008,6 @@
 #ifdef ncdf
       integer (kind=int_kind) :: &
         status        ! status variable from netCDF routine 
-
 
       if (my_task == master_task) then
 
@@ -1053,10 +1048,8 @@
 !
 ! !USES:
 !
-      use ice_domain
-      use ice_gather_scatter
+      use ice_gather_scatter, only: scatter_global
       use ice_work, only: work_g1, work_g2
-      use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1184,7 +1177,7 @@
 #endif
       end subroutine ice_read_nc_xy
 
-!!=======================================================================
+!=======================================================================
 !BOP
 !
 ! !IROUTINE: ice_read_nc - read field from a netCDF file for a single location
@@ -1203,10 +1196,6 @@
 ! Adapted by Alison McLaren, Met Office from ice_read
 !
 ! !USES:
-!
-      use ice_domain
-      use ice_gather_scatter
-      use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1227,7 +1216,6 @@
       integer (kind=int_kind), optional, intent(in) :: &
            field_loc, &      ! location of field on staggered grid
            field_type        ! type of field (scalar, vector, angle)
-!
 !
 !EOP
 !
@@ -1308,7 +1296,7 @@
 !=======================================================================
 !BOP
 !
-! !IROUTINE: ice_read_nc - read and scatter one field from a netCDF file
+! !IROUTINE: ice_read_nc - read one field from a netCDF file
 !                          for a single location with nilyr vertical points
 ! !INTERFACE:
 !
@@ -1317,22 +1305,14 @@
 !
 ! !DESCRIPTION:
 !
-! Read a netCDF file and scatter to processors. \\
-! If the optional variables field_loc and field_type are present,
-! the ghost cells are filled using values from the global array.
-! This prevents them from being filled with zeroes in land cells
-! (subroutine ice_HaloUpdate need not be called).
-!
 ! !REVISION HISTORY:
 !
 ! Adapted by Nicole Jeffery, LANL
 !
 ! !USES:
 !
-      use ice_domain
-      use ice_gather_scatter
       use ice_work, only: work_z
-      use ice_exit
+      use ice_domain_size, only: nilyr
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1354,7 +1334,6 @@
            field_loc, &      ! location of field on staggered grid
            field_type        ! type of field (scalar, vector, angle)
 !
-!
 !EOP
 !
 #ifdef ncdf
@@ -1372,9 +1351,7 @@
       character (char_len) :: &
          dimname            ! dimension name            
 
-
       allocate(work_z(nilyr))
-
 
       if (my_task == master_task) then
 
@@ -1396,7 +1373,6 @@
          status = nf90_get_var( fid, varid, work_z, &
                start=(/1,nrec/), & 
                count=(/nilyr,1/) )
-
 
       endif                     ! my_task = master_task
 
@@ -1426,7 +1402,6 @@
 
       end subroutine ice_read_nc_z
 
-
 !=======================================================================
 !BOP
 !
@@ -1448,7 +1423,6 @@
 !
 ! !USES:
 ! 
-      use ice_exit
 #ifdef ORCA_GRID
       use ice_work, only: work_g3
 #endif

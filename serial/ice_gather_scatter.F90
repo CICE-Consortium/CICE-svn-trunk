@@ -20,13 +20,12 @@
 ! !USES:
 
    use ice_kinds_mod
-   use ice_communicate
    use ice_constants
-   use ice_blocks
-   use ice_distribution
-   use ice_domain
-   use ice_domain_size
-   use ice_exit
+   use ice_blocks, only: block, get_block, nghost, nx_block, ny_block, &
+       nblocks_x, nblocks_y, nblocks_tot
+   use ice_distribution, only: distrb
+   use ice_domain_size, only: nx_global, ny_global
+   use ice_exit, only: abort_ice
 
    implicit none
    private

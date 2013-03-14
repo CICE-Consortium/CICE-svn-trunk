@@ -29,6 +29,7 @@
 !=======================================================================
 
       implicit none
+      public
       save
 
       integer (kind=int_kind), parameter :: &

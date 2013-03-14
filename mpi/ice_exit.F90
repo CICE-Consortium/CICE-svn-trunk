@@ -26,6 +26,7 @@
 !EOP
 !
       implicit none
+      public
 
 !=======================================================================
 
@@ -50,8 +51,7 @@
 !
 ! !USES:
 !
-      use ice_fileunits
-      use ice_communicate
+      use ice_fileunits, only: nu_diag, ice_stderr, flush_fileunit
 #if (defined CCSM) || (defined SEQ_MCT)
       use shr_sys_mod
 #endif

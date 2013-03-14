@@ -27,6 +27,8 @@
 !
       use ice_kinds_mod
       use ice_constants
+      use ice_blocks, only: nx_block, ny_block
+      use ice_domain_size, only: max_blocks, ncat
       use ice_fileunits
       use ice_read_write
       use ice_restart, only: lenstr, restart_dir, restart_file, &

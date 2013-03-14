@@ -25,16 +25,17 @@
 ! !USES:
       use ice_kinds_mod
       use ice_communicate, only: my_task, master_task
-      use ice_domain_size
-      use ice_constants
-      use ice_fileunits
+!      use ice_constants
+      use ice_fileunits, only: nu_diag
 !
 !EOP
 !
       implicit none
+      private
+      public :: init_transport, transport_remap, transport_upwind
       save
 
-      character (len=char_len) ::     &
+      character (len=char_len), public ::     &
          advection   ! type of advection scheme used
                      ! 'upwind' => 1st order donor cell scheme
                      ! 'remap' => remapping scheme
@@ -89,9 +90,11 @@
 !
 ! !USES:
 !
-      use ice_state
-      use ice_exit
-      use ice_timers
+      use ice_state, only: ntrcr, trcr_depend, nt_Tsfc, nt_qice, nt_qsno, &
+          nt_sice, nt_fbri, nt_iage, nt_FY, nt_alvl, nt_vlvl, &
+          nt_apnd, nt_hpnd, nt_ipnd, nt_bgc_n_sk, nt_bgc_no, nt_bgc_s
+      use ice_exit, only: abort_ice
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_advect
       use ice_transport_remap, only: init_remap
 !
 !EOP
@@ -249,16 +252,23 @@
 !
 ! !USES:
 !
-      use ice_boundary
-      use ice_global_reductions
-      use ice_domain
-      use ice_blocks
-      use ice_state
+      use ice_blocks, only: nx_block, ny_block
+      use ice_boundary, only: ice_HaloUpdate
+      use ice_constants, only: c0, &
+          field_loc_center, field_loc_NEcorner, &
+          field_type_scalar, field_type_vector
+      use ice_global_reductions, only: global_sum, global_sum_prod
+      use ice_domain, only: nblocks, distrb_info, blocks_ice, halo_info
+      use ice_domain_size, only: nx_block, ny_block, ncat, max_blocks
+      use ice_blocks, only: block, get_block, nghost
+      use ice_state, only: aice0, aicen, vicen, vsnon, trcrn, ntrcr, &
+          uvel, vvel, bound_state
       use ice_grid, only: tarea, HTE, HTN
-      use ice_exit
+      use ice_exit, only: abort_ice
       use ice_work, only: work1
       use ice_calendar, only: istep1
-      use ice_timers
+      use ice_timers, only: ice_timer_start, ice_timer_stop, &
+          timer_advect, timer_bound
       use ice_transport_remap, only: horizontal_remap, make_masks
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -688,12 +698,17 @@
 !
 ! !USES:
 !
-      use ice_boundary
-      use ice_blocks
-      use ice_domain
-      use ice_state
+      use ice_boundary, only: ice_HaloUpdate
+      use ice_blocks, only: block, get_block, nx_block, ny_block
+      use ice_constants, only: p5, &
+          field_loc_Nface, field_loc_Eface, field_type_vector
+      use ice_domain, only: blocks_ice, halo_info, nblocks
+      use ice_domain_size, only: nx_block, ny_block, ncat, max_blocks
+      use ice_state, only: aice0, aicen, vicen, vsnon, trcrn, ntrcr, &
+          uvel, vvel, trcr_depend, bound_state
       use ice_grid, only: HTE, HTN, tarea
-      use ice_timers
+      use ice_timers, only: ice_timer_start, ice_timer_stop, &
+          timer_bound, timer_advect
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -857,6 +872,8 @@
 !
 ! !USES:
 !
+      use ice_constants, only: c0, c1, rhos, Lfresh, puny
+      use ice_domain_size, only: nx_block, ny_block, ncat, nslyr
       use ice_state, only: nt_qsno
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -987,6 +1004,8 @@
 !
 ! !USES:
 !
+      use ice_constants, only: c0, rhos, Lfresh
+      use ice_domain_size, only: nx_block, ny_block, ncat, nslyr
       use ice_state, only: nt_qsno
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1098,6 +1117,9 @@
 ! author William H. Lipscomb, LANL
 !
 ! !USES:
+
+      use ice_constants, only: puny
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1184,6 +1206,8 @@
 ! author William H. Lipscomb, LANL
 !
 ! !USES:
+
+      use ice_constants, only: c1
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1370,6 +1394,8 @@
 ! author William H. Lipscomb, LANL
 !
 ! !USES:
+
+      use ice_constants, only: c1, puny
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1523,6 +1549,7 @@
 !
 ! !USES:
 !
+      use ice_domain_size, only: nx_block, ny_block, ncat
       use ice_state, only: nt_alvl, nt_apnd, nt_fbri, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo
 !
@@ -1675,6 +1702,7 @@
 !
 ! !USES:
 !
+      use ice_domain_size, only: nx_block, ny_block, ncat
       use ice_itd, only: compute_tracers
 
 !
@@ -1786,6 +1814,7 @@
 !
 ! !USES:
 !
+      use ice_constants, only: p5
       use ice_work, only:  worka, workb
 !
 ! !INPUT/OUTPUT PARAMETERS:

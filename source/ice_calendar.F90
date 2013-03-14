@@ -25,16 +25,21 @@
 !
 ! !USES:
 !
-      use ice_constants
+      use ice_kinds_mod
+      use ice_constants, only: c0, c1, c100, c30, c360, c365, c3600, &
+          c4, c400, secday
       use ice_domain_size, only: max_nstrm
       use ice_exit, only: abort_ice
 !
 !EOP
 !
       implicit none
+      private
       save
 
-      integer (kind=int_kind) :: &
+      public :: init_calendar, calendar
+
+      integer (kind=int_kind), public :: &
          days_per_year        , & ! number of days in one year
          daymo(12)            , & ! number of days in each month
          daycal(13)               ! day number at end of month
@@ -60,7 +65,13 @@
       data daymo366 /   31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31/
       data daycal366/ 0,31, 60, 91,121,152,182,213,244,274,305,335,366/
 
-      integer (kind=int_kind) :: &
+      real (kind=dbl_kind), parameter :: &
+	days_per_4c = 146097.0_dbl_kind, &
+	days_per_c  = 36524.0_dbl_kind,  &
+	days_per_4y = 1461.0_dbl_kind,   &
+	days_per_y  = 365.0_dbl_kind
+
+      integer (kind=int_kind), public :: &
          istep    , & ! local step counter for time loop
          istep0   , & ! counter, number of steps taken in previous run
          istep1   , & ! counter, number of steps at current timestep
@@ -82,7 +93,7 @@
          nstreams     , & ! number of history output streams
          histfreq_n(max_nstrm) ! history output frequency 
 
-      real (kind=dbl_kind) :: &
+      real (kind=dbl_kind), public :: &
          dt             , & ! thermodynamics timestep (s)
          dt_dyn         , & ! dynamics/transport/ridging timestep (s)
          time           , & ! total elapsed time (s)
@@ -92,7 +103,7 @@
          dayyr          , & ! number of days per year
          basis_seconds      ! Seconds since calendar zero.
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          new_year       , & ! new year = .true.
          new_month      , & ! new month = .true.
          new_day        , & ! new day = .true.
@@ -102,7 +113,7 @@
          dump_last      , & ! write restart file on last time step
          write_history(max_nstrm) ! write history now
 
-      character (len=1) :: &
+      character (len=1), public :: &
          histfreq(max_nstrm), & ! history output frequency, 'y','m','d','h','1'
          dumpfreq               ! restart frequency, 'y','m','d'
 
