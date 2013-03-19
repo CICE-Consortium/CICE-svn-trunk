@@ -259,8 +259,8 @@
           field_type_scalar, field_type_vector
       use ice_global_reductions, only: global_sum, global_sum_prod
       use ice_domain, only: nblocks, distrb_info, blocks_ice, halo_info
-      use ice_domain_size, only: nx_block, ny_block, ncat, max_blocks
-      use ice_blocks, only: block, get_block, nghost
+      use ice_domain_size, only: ncat, max_blocks
+      use ice_blocks, only: nx_block, ny_block, block, get_block, nghost
       use ice_state, only: aice0, aicen, vicen, vsnon, trcrn, ntrcr, &
           uvel, vvel, bound_state
       use ice_grid, only: tarea, HTE, HTN
@@ -699,11 +699,11 @@
 ! !USES:
 !
       use ice_boundary, only: ice_HaloUpdate
-      use ice_blocks, only: block, get_block, nx_block, ny_block
+      use ice_blocks, only: nx_block, ny_block, block, get_block, nx_block, ny_block
       use ice_constants, only: p5, &
           field_loc_Nface, field_loc_Eface, field_type_vector
       use ice_domain, only: blocks_ice, halo_info, nblocks
-      use ice_domain_size, only: nx_block, ny_block, ncat, max_blocks
+      use ice_domain_size, only: ncat, max_blocks
       use ice_state, only: aice0, aicen, vicen, vsnon, trcrn, ntrcr, &
           uvel, vvel, trcr_depend, bound_state
       use ice_grid, only: HTE, HTN, tarea
@@ -873,7 +873,7 @@
 ! !USES:
 !
       use ice_constants, only: c0, c1, rhos, Lfresh, puny
-      use ice_domain_size, only: nx_block, ny_block, ncat, nslyr
+      use ice_domain_size, only: ncat, nslyr
       use ice_state, only: nt_qsno
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1005,7 +1005,7 @@
 ! !USES:
 !
       use ice_constants, only: c0, rhos, Lfresh
-      use ice_domain_size, only: nx_block, ny_block, ncat, nslyr
+      use ice_domain_size, only: ncat, nslyr
       use ice_state, only: nt_qsno
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1549,7 +1549,7 @@
 !
 ! !USES:
 !
-      use ice_domain_size, only: nx_block, ny_block, ncat
+      use ice_domain_size, only: ncat
       use ice_state, only: nt_alvl, nt_apnd, nt_fbri, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo
 !
@@ -1702,7 +1702,8 @@
 !
 ! !USES:
 !
-      use ice_domain_size, only: nx_block, ny_block, ncat
+      use ice_domain_size, only: ncat
+      use ice_blocks, only: 
       use ice_itd, only: compute_tracers
 
 !
