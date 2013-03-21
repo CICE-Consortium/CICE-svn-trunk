@@ -55,7 +55,8 @@
       use ice_kinds_mod
       use ice_domain_size, only: nilyr, nslyr, ncat, n_aero, max_blocks, max_aero
       use ice_constants
-      use ice_blocks, only: nx_block, ny_block, block, get_block
+      !use ice_blocks, only: nx_block, ny_block, block, get_block
+      use ice_blocks, only: nx_block, ny_block
       use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc
       use ice_fileunits, only: nu_diag
       use ice_communicate, only: my_task
@@ -167,9 +168,12 @@
       use ice_flux, only: alvdf, alidf, alvdr, alidr, &
                           alvdr_gbm, alidr_gbm, alvdf_gbm, alidf_gbm, &
                           swvdr, swvdf, swidr, swidf, &
-                          albice, albsno, albpnd, apeff_ai, albcnt, coszen
+                          albice, albsno, albpnd, apeff_ai, albcnt, coszen, fsnow
       use ice_orbital, only: init_orbit
       use ice_state, only: aicen, vicen, vsnon, trcrn, nt_Tsfc
+      use ice_blocks, only: block, get_block
+      use ice_grid, only: tmask, tlat, tlon
+      use ice_restart_meltpond_lvl, only: dhsn, ffracn
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -222,28 +226,59 @@
          call init_orbit       ! initialize orbital parameters
 #endif
          do iblk=1,nblocks
-            call run_dEdd(iblk) ! initialize delta Eddington
+
+            this_block = get_block(blocks_ice(iblk),iblk)         
+            ilo = this_block%ilo
+            ihi = this_block%ihi
+            jlo = this_block%jlo
+            jhi = this_block%jhi
+
+            ! initialize delta Eddington
+            call run_dEdd(ilo, ihi, jlo, jhi,                             &
+                          aicen(:,:,:,iblk),     vicen(:,:,:,iblk),       &
+                          vsnon(:,:,:,iblk),     trcrn(:,:,:,:,iblk),     &
+                          tlat(:,:,iblk),        tlon(:,:,iblk),          & 
+                          tmask(:,:,iblk),                                &
+                          swvdr(:,:,iblk),       swvdf(:,:,iblk),         &
+                          swidr(:,:,iblk),       swidf(:,:,iblk),         &
+                          coszen(:,:,iblk),      fsnow(:,:,iblk),         &
+                          alvdrn(:,:,:,iblk),    alvdfn(:,:,:,iblk),      &
+                          alidrn(:,:,:,iblk),    alidfn(:,:,:,iblk),      &
+                          fswsfcn(:,:,:,iblk),   fswintn(:,:,:,iblk),     &
+                          fswthrun(:,:,:,iblk),  fswthruln(:,:,:,:,iblk), &
+                          Sswabsn(:,:,:,:,iblk), Iswabsn(:,:,:,:,iblk),   &
+                          albicen(:,:,:,iblk),   albsnon(:,:,:,iblk),     &
+                          albpndn(:,:,:,iblk),   apeffn(:,:,:,iblk),      &
+                          dhsn(:,:,:,iblk),      ffracn(:,:,:,iblk))
+
          enddo
- 
+
       else                     ! basic (ccsm3) shortwave
 
          do iblk=1,nblocks
-               call shortwave_ccsm3(iblk,                             &
-                              nx_block,     ny_block,                 &
-                              aicen(:,:,:,iblk), vicen(:,:,:,iblk),   &
-                              vsnon(:,:,:,iblk),                      &
-                              trcrn(:,:,nt_Tsfc,:,iblk),              &
-                              swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
-                              swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                              alvdrn(:,:,:,iblk),alidrn(:,:,:,iblk),  &
-                              alvdfn(:,:,:,iblk),alidfn(:,:,:,iblk),  &
-                              fswsfcn(:,:,:,iblk),fswintn(:,:,:,iblk),&
-                              fswthrun(:,:,:,iblk),                   &
-                              fswthruln(:,:,:,:,iblk),                &
-                              Iswabsn(:,:,:,:,iblk),                  &
-                              Sswabsn(:,:,:,:,iblk),                  &
-                              albicen(:,:,:,iblk),albsnon(:,:,:,iblk),&
-                              coszen(:,:,iblk))
+
+            this_block = get_block(blocks_ice(iblk),iblk)         
+            ilo = this_block%ilo
+            ihi = this_block%ihi
+            jlo = this_block%jlo
+            jhi = this_block%jhi
+
+            call shortwave_ccsm3(nx_block, ny_block,                       &
+                                 ilo, ihi, jlo, jhi,                       &
+                                 aicen(:,:,:,iblk),   vicen(:,:,:,iblk),   &
+                                 vsnon(:,:,:,iblk),                        &
+                                 trcrn(:,:,nt_Tsfc,:,iblk),                &
+                                 swvdr(:,:,  iblk),   swvdf(:,:,  iblk),   &
+                                 swidr(:,:,  iblk),   swidf(:,:,  iblk),   &
+                                 alvdrn(:,:,:,iblk),  alidrn(:,:,:,iblk),  &
+                                 alvdfn(:,:,:,iblk),  alidfn(:,:,:,iblk),  &
+                                 fswsfcn(:,:,:,iblk), fswintn(:,:,:,iblk), &
+                                 fswthrun(:,:,:,iblk),                     &
+                                 fswthruln(:,:,:,:,iblk),                  &
+                                 Iswabsn(:,:,:,:,iblk),                    &
+                                 Sswabsn(:,:,:,:,iblk),                    &
+                                 albicen(:,:,:,iblk), albsnon(:,:,:,iblk), &
+                                 coszen(:,:,iblk))
          enddo     ! nblocks
 
       endif
@@ -331,8 +366,8 @@
 !
 ! !INTERFACE:
 !
-      subroutine shortwave_ccsm3 (iblk,               &
-                                  nx_block, ny_block, &
+      subroutine shortwave_ccsm3 (nx_block, ny_block, &
+                                  ilo, ihi, jlo, jhi, &
                                   aicen,    vicen,    &
                                   vsnon,    Tsfcn,    &
                                   swvdr,    swvdf,    &
@@ -356,13 +391,13 @@
 !
 ! !USES:
 !
-      use ice_domain, only: blocks_ice
+      !use ice_domain, only: blocks_ice
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
-         iblk        , & ! block index
-         nx_block, ny_block ! block dimensions
+         nx_block, ny_block, & ! block dimensions
+         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(in) :: &
@@ -411,15 +446,11 @@
       integer (kind=int_kind) :: &
          i, j           , & ! horizontal indices
          icells         , & ! number of ice-covered grid cells
-         ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          n                  ! thickness category index
 
       integer (kind=int_kind), dimension (nx_block*ny_block) :: &
          indxi    , & ! indices for ice-covered cells
          indxj
-
-      type (block) :: &
-         this_block      ! block information for current block
 
       ! ice and snow albedo for each category
 
@@ -437,94 +468,88 @@
       ! Solar radiation: albedo and absorbed shortwave
       !-----------------------------------------------------------------
 
-            ! For basic shortwave, set coszen to a constant between 0 and 1.
-            coszen(:,:) = p5 ! sun above the horizon
+      ! For basic shortwave, set coszen to a constant between 0 and 1.
+      coszen(:,:) = p5 ! sun above the horizon
 
-            this_block = get_block(blocks_ice(iblk),iblk)         
-            ilo = this_block%ilo
-            ihi = this_block%ihi
-            jlo = this_block%jlo
-            jhi = this_block%jhi
+      do n = 1, ncat
 
-            do n = 1, ncat
+         icells = 0
+         do j = jlo, jhi
+         do i = ilo, ihi
+            if (aicen(i,j,n) > puny) then
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
+            endif
+         enddo               ! i
+         enddo               ! j
 
-               icells = 0
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (aicen(i,j,n) > puny) then
-                     icells = icells + 1
-                     indxi(icells) = i
-                     indxj(icells) = j
-                  endif
-               enddo               ! i
-               enddo               ! j
-
-               Sswabs(:,:,:,n) = c0
+         Sswabs(:,:,:,n) = c0
 
       !-----------------------------------------------------------------
       ! Compute albedos for ice and snow.
       !-----------------------------------------------------------------
 
-      if (trim(albedo_type) == 'constant') then
-         call constant_albedos (nx_block,   ny_block, &
-                                icells,               &
-                                indxi,      indxj,    &
-                                aicen(:,:,n),         &
-                                vsnon(:,:,n),         &
-                                Tsfcn(:,:,n),         &
-                                alvdrni,    alidrni,  &
-                                alvdfni,    alidfni,  &
-                                alvdrns,    alidrns,  &
-                                alvdfns,    alidfns,  &
-                                alvdrn(:,:,n),        &
-                                alidrn(:,:,n),        &
-                                alvdfn(:,:,n),        &
-                                alidfn(:,:,n),        &
-                                albin(:,:,n),         &
-                                albsn(:,:,n))
-      else ! default
-         call compute_albedos (nx_block,   ny_block, &
-                               icells,               &
-                               indxi,      indxj,    &
-                               aicen(:,:,n),         &
-                               vicen(:,:,n),         &
-                               vsnon(:,:,n),         &
-                               Tsfcn(:,:,n),         &
-                               alvdrni,    alidrni,  &
-                               alvdfni,    alidfni,  &
-                               alvdrns,    alidrns,  &
-                               alvdfns,    alidfns,  &
-                               alvdrn(:,:,n),        &
-                               alidrn(:,:,n),        &
-                               alvdfn(:,:,n),        &
-                               alidfn(:,:,n),        &
-                               albin(:,:,n),         &
-                               albsn(:,:,n))
-      endif
+         if (trim(albedo_type) == 'constant') then
+            call constant_albedos (nx_block,   ny_block, &
+                                   icells,               &
+                                   indxi,      indxj,    &
+                                   aicen(:,:,n),         &
+                                   vsnon(:,:,n),         &
+                                   Tsfcn(:,:,n),         &
+                                   alvdrni,    alidrni,  &
+                                   alvdfni,    alidfni,  &
+                                   alvdrns,    alidrns,  &
+                                   alvdfns,    alidfns,  &
+                                   alvdrn(:,:,n),        &
+                                   alidrn(:,:,n),        &
+                                   alvdfn(:,:,n),        &
+                                   alidfn(:,:,n),        &
+                                   albin(:,:,n),         &
+                                   albsn(:,:,n))
+         else ! default
+            call compute_albedos (nx_block,   ny_block, &
+                                  icells,               &
+                                  indxi,      indxj,    &
+                                  aicen(:,:,n),         &
+                                  vicen(:,:,n),         &
+                                  vsnon(:,:,n),         &
+                                  Tsfcn(:,:,n),         &
+                                  alvdrni,    alidrni,  &
+                                  alvdfni,    alidfni,  &
+                                  alvdrns,    alidrns,  &
+                                  alvdfns,    alidfns,  &
+                                  alvdrn(:,:,n),        &
+                                  alidrn(:,:,n),        &
+                                  alvdfn(:,:,n),        &
+                                  alidfn(:,:,n),        &
+                                  albin(:,:,n),         &
+                                  albsn(:,:,n))
+         endif
 
       !-----------------------------------------------------------------
       ! Compute solar radiation absorbed in ice and penetrating to ocean.
       !-----------------------------------------------------------------
 
-      call absorbed_solar  (nx_block,   ny_block, &
-                            icells,               &
-                            indxi,      indxj,    &
-                            aicen(:,:,n),         &
-                            vicen(:,:,n),         &
-                            vsnon(:,:,n),         &
-                            swvdr,      swvdf,    &
-                            swidr,      swidf,    &
-                            alvdrni,    alvdfni,  &
-                            alidrni,    alidfni,  &
-                            alvdrns,    alvdfns,  &
-                            alidrns,    alidfns,  &
-                            fswsfc(:,:,n),        &
-                            fswint(:,:,n),        &
-                            fswthru(:,:,n),       &
-                            fswthrul(:,:,:,n),    &
-                            Iswabs(:,:,:,n))
+         call absorbed_solar  (nx_block,   ny_block, &
+                               icells,               &
+                               indxi,      indxj,    &
+                               aicen(:,:,n),         &
+                               vicen(:,:,n),         &
+                               vsnon(:,:,n),         &
+                               swvdr,      swvdf,    &
+                               swidr,      swidf,    &
+                               alvdrni,    alvdfni,  &
+                               alidrni,    alidfni,  &
+                               alvdrns,    alvdfns,  &
+                               alidrns,    alidfns,  &
+                               fswsfc(:,:,n),        &
+                               fswint(:,:,n),        &
+                               fswthru(:,:,n),       &
+                               fswthrul(:,:,:,n),    &
+                               Iswabs(:,:,:,n))
 
-            enddo                  ! ncat
+      enddo                  ! ncat
 
       end subroutine shortwave_ccsm3
 
@@ -1119,7 +1144,22 @@
 !
 ! !INTERFACE:
 !
-      subroutine run_dEdd (iblk)
+      subroutine run_dEdd(ilo,ihi,jlo,jhi,     &
+                          aicen,    vicen,     &
+                          vsnon,    trcrn,     &
+                          tlat,     tlon,      & 
+                          tmask,               &
+                          swvdr,    swvdf,     &
+                          swidr,    swidf,     &
+                          coszen,   fsnow,     &
+                          alvdrn,   alvdfn,    &
+                          alidrn,   alidfn,    &
+                          fswsfcn,  fswintn,   &
+                          fswthrun, fswthruln, &
+                          Sswabsn,  Iswabsn,   &
+                          albicen,  albsnon,   &
+                          albpndn,  apeffn,    &
+                          dhsn,     ffracn)
 !
 ! !DESCRIPTION:
 !
@@ -1135,20 +1175,66 @@
 ! !USES:
 !
       use ice_calendar, only: dt
-      use ice_domain, only: blocks_ice
-      use ice_flux, only: swvdr, swvdf, swidr, swidf, coszen, fsnow
-      use ice_grid, only: tlat, tlon, tmask
       use ice_restart_meltpond_cesm, only: hs0
-      use ice_restart_meltpond_lvl, only: dhsn, hs1, pndaspect, snowinfil, ffracn
+      use ice_restart_meltpond_lvl, only: hs1, pndaspect, snowinfil
       use ice_orbital, only: compute_coszen
-      use ice_state, only: ntrcr, aicen, vicen, vsnon, trcrn, &
-                           nt_Tsfc, nt_alvl, nt_apnd, nt_hpnd, nt_ipnd, &
+      use ice_state, only: ntrcr, nt_Tsfc, nt_alvl, nt_apnd, nt_hpnd, nt_ipnd, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo
+      use ice_domain_size, only: max_ntrcr
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
-         iblk    ! block index
+           ilo,ihi,jlo,jhi
+
+      logical(kind=log_kind), dimension(nx_block,ny_block), intent(in) :: &
+           tmask    ! land/boundary mask, thickness (T-cell)
+
+      real(kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
+           tlat,  & ! latitude of temp pts (radians)
+           tlon,  & ! longitude of temp pts (radians)
+           swvdr, & ! sw down, visible, direct  (W/m^2)
+           swvdf, & ! sw down, visible, diffuse (W/m^2)
+           swidr, & ! sw down, near IR, direct  (W/m^2)
+           swidf, & ! sw down, near IR, diffuse (W/m^2)
+           fsnow    ! snowfall rate (kg/m^2 s)
+
+      real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), intent(in) :: &
+           aicen, & ! concentration of ice
+           vicen, & ! volume per unit area of ice (m)
+           vsnon, & ! volume per unit area of snow (m)
+           ffracn   ! fraction of fsurfn used to melt ipond
+
+      real(kind=dbl_kind), dimension(nx_block,ny_block,max_ntrcr,ncat), intent(in) :: &
+           trcrn    ! tracers
+
+      real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), intent(inout) :: &
+           dhsn     ! depth difference for snow on sea ice and pond ice
+
+      real(kind=dbl_kind), dimension(nx_block,ny_block), intent(out) :: &
+           coszen   ! cosine solar zenith angle, < 0 for sun below horizon 
+
+      real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), intent(out) :: &
+           alvdrn,   & ! visible direct albedo (fraction)
+           alvdfn,   & ! near-ir direct albedo (fraction)
+           alidrn,   & ! visible diffuse albedo (fraction)
+           alidfn,   & ! near-ir diffuse albedo (fraction)
+           fswsfcn,  & ! SW absorbed at ice/snow surface (W m-2)
+           fswintn,  & ! SW absorbed in ice interior, below surface (W m-2)
+           fswthrun, & ! SW through ice to ocean (W/m^2) 
+           albicen,  & ! albedo bare ice 
+           albsnon,  & ! albedo snow 
+           albpndn,  & ! albedo pond 
+           apeffn      ! effective pond area used for radiation calculation
+
+      real(kind=dbl_kind), dimension(nx_block,ny_block,nslyr,ncat), intent(out) :: &
+           Sswabsn     ! SW radiation absorbed in snow layers (W m-2)
+
+      real(kind=dbl_kind), dimension(nx_block,ny_block,nilyr,ncat), intent(out) :: &
+           Iswabsn     ! SW radiation absorbed in ice layers (W m-2) 
+
+      real(kind=dbl_kind), dimension(nx_block,ny_block,nilyr+1,ncat), intent(out) :: &
+           fswthruln   ! visible SW  at ice interior (W m-2)
 !
 !EOP
 !
@@ -1176,7 +1262,6 @@
 
       integer (kind=int_kind) :: &
          i, j, ij    , & ! horizontal indices
-         ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          n               ! thickness category index
 
       real (kind=dbl_kind) :: &
@@ -1190,202 +1275,193 @@
          spn         , & ! snow depth on refrozen pond (m)
          tmp             ! 0 or 1
 
-      type (block) :: &
-         this_block      ! block information for current block
-
       real (kind=dbl_kind), parameter :: & 
          argmax = c10, & ! maximum argument of exponential
          ipnd_crit = p01 ! critical lid depth for meltpond_topo 
 
       exp_min = exp(-argmax)
 
-            this_block = get_block(blocks_ice(iblk),iblk)         
-            ilo = this_block%ilo
-            ihi = this_block%ihi
-            jlo = this_block%jlo
-            jhi = this_block%jhi
+      ! identify ice-ocean cells
+      icells = 0
+      do j = 1, ny_block
+      do i = 1, nx_block
+         if (tmask(i,j)) then
+            icells = icells + 1
+            indxi(icells) = i
+            indxj(icells) = j
+         endif
+      enddo               ! i
+      enddo               ! j
 
-            ! identify ice-ocean cells
-            icells = 0
-            do j = 1, ny_block
-            do i = 1, nx_block
-               if (tmask(i,j,iblk)) then
-                  icells = icells + 1
-                  indxi(icells) = i
-                  indxj(icells) = j
-               endif
-            enddo               ! i
-            enddo               ! j
+      ! cosine of the zenith angle
+      call compute_coszen (nx_block,         ny_block,       &
+                           icells,                           &
+                           indxi,            indxj,          &
+                           tlat  (:,:), tlon(:,:), &
+                           coszen(:,:), dt)
 
-            ! cosine of the zenith angle
-            call compute_coszen (nx_block,         ny_block,       &
-                                 icells,                           &
-                                 indxi,            indxj,          &
-                                 tlat  (:,:,iblk), tlon(:,:,iblk), &
-                                 coszen(:,:,iblk), dt)
+      do n = 1, ncat
 
-            do n = 1, ncat
-
-               icells = 0
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (aicen(i,j,n,iblk) > puny) then
-                     icells = icells + 1
-                     indxi(icells) = i
-                     indxj(icells) = j
-                  endif
-               enddo               ! i
-               enddo               ! j
+         icells = 0
+         do j = jlo, jhi
+         do i = ilo, ihi
+            if (aicen(i,j,n) > puny) then
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
+            endif
+         enddo               ! i
+         enddo               ! j
 
       ! note that rhoswn, rsnw, fp, hp and Sswabs ARE NOT dimensioned with ncat
       ! BPB 19 Dec 2006
 
-               ! set snow properties
-               call shortwave_dEdd_set_snow(nx_block, ny_block,        &
-                              icells,                                  &
-                              indxi,               indxj,              &
-                              aicen(:,:,n,iblk),   vsnon(:,:,n,iblk),  &
-                              trcrn(:,:,nt_Tsfc,n,iblk), fsn, hsn,     &
-                              rhosnwn,             rsnwn)
+         ! set snow properties
+         call shortwave_dEdd_set_snow(nx_block, ny_block,                      &
+                                      icells,                                  &
+                                      indxi,               indxj,              &
+                                      aicen(:,:,n),        vsnon(:,:,n),       &
+                                      trcrn(:,:,nt_Tsfc,n), fsn, hsn,          &
+                                      rhosnwn,             rsnwn)
 
-               ! set pond properties
-               if (tr_pond_cesm) then
-                  apeffn(:,:,n,iblk) = c0 ! for history
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
+         ! set pond properties
+         if (tr_pond_cesm) then
+            apeffn(:,:,n) = c0 ! for history
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
 
-                     ! fraction of ice area
-                     fpn(i,j) = trcrn(i,j,nt_apnd,n,iblk)
-                     ! pond depth over fraction fpn 
-                     hpn(i,j) = trcrn(i,j,nt_hpnd,n,iblk)
-                     ! snow infiltration
-                     if (hsn(i,j) >= hsmin .and. hs0 > puny) then
-                        asnow = min(hsn(i,j)/hs0, c1) ! delta-Eddington formulation
-                        fpn(i,j) = (c1 - asnow) * fpn(i,j)
-                        hpn(i,j) = pndaspect * fpn(i,j)
-                     endif
-                     apeffn(i,j,n,iblk) = fpn(i,j) ! for history
-                  enddo
+               ! fraction of ice area
+               fpn(i,j) = trcrn(i,j,nt_apnd,n)
+               ! pond depth over fraction fpn 
+               hpn(i,j) = trcrn(i,j,nt_hpnd,n)
+               ! snow infiltration
+               if (hsn(i,j) >= hsmin .and. hs0 > puny) then
+                  asnow = min(hsn(i,j)/hs0, c1) ! delta-Eddington formulation
+                  fpn(i,j) = (c1 - asnow) * fpn(i,j)
+                  hpn(i,j) = pndaspect * fpn(i,j)
+               endif
+               apeffn(i,j,n) = fpn(i,j) ! for history
+            enddo
 
-               elseif (tr_pond_lvl) then
-                  apeffn(:,:,n,iblk) = c0 ! for history
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
+         elseif (tr_pond_lvl) then
+            apeffn(:,:,n) = c0 ! for history
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
 
-                     fpn(i,j) = c0  ! fraction of ice covered in pond
-                     hpn(i,j) = c0  ! pond depth over fpn
-                                    ! refrozen pond lid thickness avg over ice
-                     ! allow snow to cover pond ice
-                     ipn = trcrn(i,j,nt_alvl,n,iblk) * trcrn(i,j,nt_apnd,n,iblk) &
-                                                     * trcrn(i,j,nt_ipnd,n,iblk)
-                     dhs = dhsn(i,j,n,iblk) ! snow depth difference, sea ice - pond
-                     if (ipn > puny .and. &
-                         dhs < puny .and. fsnow(i,j,iblk)*dt > hsmin) &
-                         dhs =  hsn(i,j) - fsnow(i,j,iblk)*dt ! initialize dhs>0
-                     spn = hsn(i,j) - dhs   ! snow depth on pond ice
-                     if (ipn*spn < puny) dhs = c0
-                     dhsn(i,j,n,iblk) = dhs ! save: constant until reset to 0
+               fpn(i,j) = c0  ! fraction of ice covered in pond
+               hpn(i,j) = c0  ! pond depth over fpn
+               ! refrozen pond lid thickness avg over ice
+               ! allow snow to cover pond ice
+               ipn = trcrn(i,j,nt_alvl,n) * trcrn(i,j,nt_apnd,n) &
+                    * trcrn(i,j,nt_ipnd,n)
+               dhs = dhsn(i,j,n) ! snow depth difference, sea ice - pond
+               if (ipn > puny .and. &
+                    dhs < puny .and. fsnow(i,j)*dt > hsmin) &
+                    dhs =  hsn(i,j) - fsnow(i,j)*dt ! initialize dhs>0
+               spn = hsn(i,j) - dhs   ! snow depth on pond ice
+               if (ipn*spn < puny) dhs = c0
+               dhsn(i,j,n) = dhs ! save: constant until reset to 0
 
-                     ! not using ipn assumes that lid ice is perfectly clear
-!                     if (ipn <= 0.3_dbl_kind) then
+               ! not using ipn assumes that lid ice is perfectly clear
+               !                     if (ipn <= 0.3_dbl_kind) then
+               
+               ! fraction of ice area
+               fpn(i,j) = trcrn(i,j,nt_apnd,n) &
+                    * trcrn(i,j,nt_alvl,n) 
+               ! pond depth over fraction fpn
+               hpn(i,j) = trcrn(i,j,nt_hpnd,n)
 
-                        ! fraction of ice area
-                        fpn(i,j) = trcrn(i,j,nt_apnd,n,iblk) &
-                                 * trcrn(i,j,nt_alvl,n,iblk) 
-                        ! pond depth over fraction fpn
-                        hpn(i,j) = trcrn(i,j,nt_hpnd,n,iblk)
+               ! reduce effective pond area absorbing surface heat flux
+               ! due to flux already having been used to melt pond ice
+               fpn(i,j) = (c1 - ffracn(i,j,n)) * fpn(i,j)
 
-                        ! reduce effective pond area absorbing surface heat flux
-                        ! due to flux already having been used to melt pond ice
-                        fpn(i,j) = (c1 - ffracn(i,j,n,iblk)) * fpn(i,j)
-
-                        ! taper pond area with snow on pond ice
-                        if (dhs > puny .and. spn >= puny .and. hs1 > puny) then
-                           asnow = min(spn/hs1, c1)
-                           fpn(i,j) = (c1 - asnow) * fpn(i,j)
-                        endif 
-
-                        ! infiltrate snow
-                        hp = hpn(i,j)
-                        if (snowinfil .and. hp > puny) then
-                           hs = hsn(i,j)
-                           rp = rhofresh*hp/(rhofresh*hp + rhos*hs)
-                           if (rp < p15) then
-                              fpn(i,j) = c0
-                              hpn(i,j) = c0
-                           else
-                              hmx = hs*(rhofresh - rhos)/rhofresh
-                              tmp = max(c0, sign(c1, hp-hmx)) ! 1 if hp>=hmx, else 0
-                              hp = (rhofresh*hp + rhos*hs*tmp) &
-                                 / (rhofresh    - rhos*(c1-tmp))
-                              hsn(i,j) = hs - hp*fpn(i,j)*(c1-tmp)
-                              hpn(i,j) = hp * tmp
-                              fpn(i,j) = fpn(i,j) * tmp
-                           endif
-                           fsn(i,j) = min(fsn(i,j), c1-fpn(i,j))
-
-                        endif ! snowinfil
-
-!                     endif    ! masking by lid ice
-                     apeffn(i,j,n,iblk) = fpn(i,j) ! for history
-                  enddo ! ij
-
-               elseif (tr_pond_topo) then
-                  apeffn(:,:,n,iblk) = c0 ! for history
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
-                     ! Lid effective if thicker than ipnd_crit (1 cm) 
-                     if (trcrn(i,j,nt_apnd,n,iblk)*aicen(i,j,n,iblk) > puny .and. &
-                         trcrn(i,j,nt_ipnd,n,iblk) < ipnd_crit) then
-                        fpn(i,j) = trcrn(i,j,nt_apnd,n,iblk)
-                     else
-                        fpn(i,j) = c0
-                     endif
-                     if (trcrn(i,j,nt_apnd,n,iblk) > puny) then
-                        hpn(i,j) = trcrn(i,j,nt_hpnd,n,iblk) 
-                     else
-                        fpn(i,j) = c0
-                        hpn(i,j) = c0
-                     endif
-                     apeffn(i,j,n,iblk) = fpn(i,j)
-                  enddo
-               else
-                  call shortwave_dEdd_set_pond(nx_block, ny_block,      &
-                              icells,                                   &
-                              indxi,               indxj,               &
-                              trcrn(:,:,nt_Tsfc,n,iblk),                &
-                              fsn,                 fpn,                 &
-                              hpn)
-                  apeffn(:,:,n,iblk) = fpn(i,j) ! for history
-                  fpn = c0
-                  hpn = c0
+               ! taper pond area with snow on pond ice
+               if (dhs > puny .and. spn >= puny .and. hs1 > puny) then
+                  asnow = min(spn/hs1, c1)
+                  fpn(i,j) = (c1 - asnow) * fpn(i,j)
                endif
 
-               call shortwave_dEdd(nx_block,     ny_block,            &
-                              ntrcr,             icells,              &
-                              indxi,             indxj,               &
-                              coszen(:,:, iblk),                      &
-                              aicen(:,:,n,iblk), vicen(:,:,n,iblk),   &
-                              hsn,               fsn,                 &
-                              rhosnwn,           rsnwn,               &
-                              fpn,               hpn,                 &
-                              trcrn(:,:,1:ntrcr,n,iblk),              &
-                              swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
-                              swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                              alvdrn(:,:,n,iblk),alvdfn(:,:,n,iblk),  &
-                              alidrn(:,:,n,iblk),alidfn(:,:,n,iblk),  &
-                              fswsfcn(:,:,n,iblk),fswintn(:,:,n,iblk),&
-                              fswthrun(:,:,n,iblk),                   &
-                              Sswabsn(:,:,:,n,iblk),                  &
-                              Iswabsn(:,:,:,n,iblk),                  &
-                              albicen(:,:,n,iblk),                    &
-                              albsnon(:,:,n,iblk),albpndn(:,:,n,iblk),&
-                              fswthruln(:,:,:,n,iblk))
+               ! infiltrate snow
+               hp = hpn(i,j)
+               if (snowinfil .and. hp > puny) then
+                  hs = hsn(i,j)
+                  rp = rhofresh*hp/(rhofresh*hp + rhos*hs)
+                  if (rp < p15) then
+                     fpn(i,j) = c0
+                     hpn(i,j) = c0
+                  else
+                     hmx = hs*(rhofresh - rhos)/rhofresh
+                     tmp = max(c0, sign(c1, hp-hmx)) ! 1 if hp>=hmx, else 0
+                     hp = (rhofresh*hp + rhos*hs*tmp) &
+                          / (rhofresh    - rhos*(c1-tmp))
+                     hsn(i,j) = hs - hp*fpn(i,j)*(c1-tmp)
+                     hpn(i,j) = hp * tmp
+                     fpn(i,j) = fpn(i,j) * tmp
+                  endif
+                  fsn(i,j) = min(fsn(i,j), c1-fpn(i,j))
 
-            enddo  ! ncat
+               endif ! snowinfil
+
+               !                     endif    ! masking by lid ice
+               apeffn(i,j,n) = fpn(i,j) ! for history
+            enddo ! ij
+
+         elseif (tr_pond_topo) then
+            apeffn(:,:,n) = c0 ! for history
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+               ! Lid effective if thicker than ipnd_crit (1 cm) 
+               if (trcrn(i,j,nt_apnd,n)*aicen(i,j,n) > puny .and. &
+                    trcrn(i,j,nt_ipnd,n) < ipnd_crit) then
+                  fpn(i,j) = trcrn(i,j,nt_apnd,n)
+               else
+                  fpn(i,j) = c0
+               endif
+               if (trcrn(i,j,nt_apnd,n) > puny) then
+                  hpn(i,j) = trcrn(i,j,nt_hpnd,n) 
+               else
+                  fpn(i,j) = c0
+                  hpn(i,j) = c0
+               endif
+               apeffn(i,j,n) = fpn(i,j)
+            enddo
+         else
+            call shortwave_dEdd_set_pond(nx_block, ny_block,         &
+                                         icells,                     &
+                                         indxi,               indxj, &
+                                         trcrn(:,:,nt_Tsfc,n),       &
+                                         fsn,                 fpn,   &
+                                         hpn)
+            apeffn(:,:,n) = fpn(i,j) ! for history
+            fpn = c0
+            hpn = c0
+         endif
+         
+         call shortwave_dEdd(nx_block,          ny_block,       &
+                             ntrcr,             icells,         &
+                             indxi,             indxj,          &
+                             coszen(:,:),                       &
+                             aicen(:,:,n),      vicen(:,:,n),   &
+                             hsn,               fsn,            &
+                             rhosnwn,           rsnwn,          &
+                             fpn,               hpn,            &
+                             trcrn(:,:,1:ntrcr,n),              &
+                             swvdr(:,:),        swvdf(:,:),     &
+                             swidr(:,:),        swidf(:,:),     &
+                             alvdrn(:,:,n),     alvdfn(:,:,n),  &
+                             alidrn(:,:,n),     alidfn(:,:,n),  &
+                             fswsfcn(:,:,n),    fswintn(:,:,n), &
+                             fswthrun(:,:,n),                   &
+                             Sswabsn(:,:,:,n),                  &
+                             Iswabsn(:,:,:,n),                  &
+                             albicen(:,:,n),                    &
+                             albsnon(:,:,n),    albpndn(:,:,n), &
+                             fswthruln(:,:,:,n))
+
+      enddo  ! ncat
  
       end subroutine run_dEdd
  

@@ -48,8 +48,8 @@
       use ice_orbital
       use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswthruln, &
                                Sswabsn, Iswabsn, shortwave, &
-                               albicen, albsnon, alvdrn, alidrn, alvdfn, alidfn, &
-                               run_dedd, shortwave_ccsm3
+                               albicen, albsnon, albpndn, alvdrn, alidrn, alvdfn, alidfn, &
+                               run_dedd, shortwave_ccsm3, apeffn
       use ice_state
       use ice_therm_itd
       use ice_therm_shared, only: ktherm, heat_capacity, calc_Tsfc
@@ -1368,11 +1368,15 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-         i, j, ij    , & ! horizontal indices
-         n               ! thickness category index
+         i, j, ij    ,    & ! horizontal indices
+         ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
+         n                  ! thickness category index
 
       integer (kind=int_kind) :: &
          icells          ! number of cells with aicen > puny
+
+      type (block) :: &
+         this_block      ! block information for current block
 
       call ice_timer_start(timer_sw)      ! shortwave
 
@@ -1394,27 +1398,48 @@
       Iswabsn(:,:,:,:,iblk) = c0
       Sswabsn(:,:,:,:,iblk) = c0
 
+      this_block = get_block(blocks_ice(iblk),iblk)         
+      ilo = this_block%ilo
+      ihi = this_block%ihi
+      jlo = this_block%jlo
+      jhi = this_block%jhi
+
       if (trim(shortwave) == 'dEdd') then ! delta Eddington
 
-         call run_dEdd (iblk)
-
+         call run_dEdd(ilo, ihi, jlo, jhi,                             &
+                       aicen(:,:,:,iblk),     vicen(:,:,:,iblk),       &
+                       vsnon(:,:,:,iblk),     trcrn(:,:,:,:,iblk),     &
+                       tlat(:,:,iblk),        tlon(:,:,iblk),          &
+                       tmask(:,:,iblk),                                & 
+                       swvdr(:,:,iblk),       swvdf(:,:,iblk),         &
+                       swidr(:,:,iblk),       swidf(:,:,iblk),         &
+                       coszen(:,:,iblk),      fsnow(:,:,iblk),         &                        
+                       alvdrn(:,:,:,iblk),    alvdfn(:,:,:,iblk),      &
+                       alidrn(:,:,:,iblk),    alidfn(:,:,:,iblk),      &
+                       fswsfcn(:,:,:,iblk),   fswintn(:,:,:,iblk),     &
+                       fswthrun(:,:,:,iblk),  fswthruln(:,:,:,:,iblk), &
+                       Sswabsn(:,:,:,:,iblk), Iswabsn(:,:,:,:,iblk),   &
+                       albicen(:,:,:,iblk),   albsnon(:,:,:,iblk),     &
+                       albpndn(:,:,:,iblk),   apeffn(:,:,:,iblk),      &
+                       dhsn(:,:,:,iblk),      ffracn(:,:,:,iblk))
+         
       else  ! .not. dEdd
 
-         call shortwave_ccsm3(iblk,                                   &
-                              nx_block,     ny_block,                 &
-                              aicen(:,:,:,iblk), vicen(:,:,:,iblk),   &
-                              vsnon(:,:,:,iblk),                      &
-                              trcrn(:,:,nt_Tsfc,:,iblk),              &
-                              swvdr(:,:,  iblk), swvdf(:,:,  iblk),   &
-                              swidr(:,:,  iblk), swidf(:,:,  iblk),   &
-                              alvdrn(:,:,:,iblk),alidrn(:,:,:,iblk),  &
-                              alvdfn(:,:,:,iblk),alidfn(:,:,:,iblk),  &
-                              fswsfcn(:,:,:,iblk),fswintn(:,:,:,iblk),&
-                              fswthrun(:,:,:,iblk),                   &
-                              fswthruln(:,:,:,:,iblk),                &
-                              Iswabsn(:,:,:,:,iblk),                  &
-                              Sswabsn(:,:,:,:,iblk),                  &
-                              albicen(:,:,:,iblk),albsnon(:,:,:,iblk),&
+         call shortwave_ccsm3(nx_block, ny_block,                       &
+                              ilo, ihi, jlo, jhi,                       &
+                              aicen(:,:,:,iblk),   vicen(:,:,:,iblk),   &
+                              vsnon(:,:,:,iblk),                        &
+                              trcrn(:,:,nt_Tsfc,:,iblk),                &
+                              swvdr(:,:,  iblk),   swvdf(:,:,  iblk),   &
+                              swidr(:,:,  iblk),   swidf(:,:,  iblk),   &
+                              alvdrn(:,:,:,iblk),  alidrn(:,:,:,iblk),  &
+                              alvdfn(:,:,:,iblk),  alidfn(:,:,:,iblk),  &
+                              fswsfcn(:,:,:,iblk), fswintn(:,:,:,iblk), &
+                              fswthrun(:,:,:,iblk),                     &
+                              fswthruln(:,:,:,:,iblk),                  &
+                              Iswabsn(:,:,:,:,iblk),                    &
+                              Sswabsn(:,:,:,:,iblk),                    &
+                              albicen(:,:,:,iblk), albsnon(:,:,:,iblk), &
                               coszen(:,:,iblk))
 
       endif   ! shortwave
