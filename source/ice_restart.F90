@@ -29,31 +29,27 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_communicate, only: my_task, master_task
-      use ice_constants
-      use ice_blocks
-      use ice_read_write
-      use ice_fileunits
-      use ice_timers
 !
 !EOP
 !
       implicit none
+      private
+      public :: lenstr, dumpfile, restartfile, dumpfile_ext, restartfile_ext
       save
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          restart, & ! if true, initialize using restart file instead of defaults
          restart_ext! if true, read/write extended grid (with ghost cells)
 
-      character (len=char_len) :: &
+      character (len=char_len), public :: &
          restart_file  , & ! output file for restart dump
          runtype           ! initial, continue, hybrid, branch or bering
 
-      character (len=char_len_long) :: &
+      character (len=char_len_long), public :: &
          restart_dir   , & ! directory name for restart dump
          runid             ! identifier for CCSM coupled run
 
-      character (len=char_len_long) :: &
+      character (len=char_len_long), public :: &
          pointer_file      ! input pointer file for restarts
 
 !=======================================================================
@@ -84,16 +80,24 @@
 !
 ! !USES:
 !
-      use ice_domain, only: nblocks
-      use ice_domain_size
-      use ice_flux
-      use ice_grid
+      use ice_blocks, only: nx_block, ny_block
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init
-      use ice_state
-      use ice_dyn_evp
-      use ice_work, only: work1
+                              time, time_forc, year_init
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0, c1
+      use ice_domain, only: nblocks
+      use ice_domain_size, only: nilyr, nslyr, ncat
+      use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_dump
+      use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
+          strocnxT, strocnyT, sst, frzmlt, iceumask, &
+          stressp_1, stressp_2, stressp_3, stressp_4, &
+          stressm_1, stressm_2, stressm_3, stressm_4, &
+          stress12_1, stress12_2, stress12_3, stress12_4
       use ice_ocean, only: oceanmixed_ice
+      use ice_read_write, only: ice_open, ice_write
+      use ice_state, only: aicen, vicen, vsnon, trcrn, &
+          nt_Tsfc, nt_sice, nt_qice, nt_qsno, uvel, vvel
+      use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -251,19 +255,31 @@
 !
 ! !USES:
 !
-      use ice_broadcast
-      use ice_boundary
-      use ice_domain_size
-      use ice_domain
+      use ice_broadcast, only: broadcast_scalar
+      use ice_blocks, only: nghost, nx_block, ny_block
       use ice_calendar, only: istep0, istep1, time, time_forc, calendar, npt
-      use ice_dyn_evp, only: kdyn
-      use ice_flux
-      use ice_state
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0, p5, &
+          field_loc_center, field_loc_NEcorner, &
+          field_type_scalar, field_type_vector
+      use ice_domain, only: nblocks, distrb_info
+      use ice_domain_size, only: nilyr, nslyr, ncat, nx_global, ny_global, &
+          max_ntrcr
+      use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_restart
+      use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
+          strocnxT, strocnyT, sst, frzmlt, iceumask, &
+          stressp_1, stressp_2, stressp_3, stressp_4, &
+          stressm_1, stressm_2, stressm_3, stressm_4, &
+          stress12_1, stress12_2, stress12_3, stress12_4
+      use ice_gather_scatter, only: scatter_global_stress
       use ice_grid, only: tmask
       use ice_itd, only: aggregate
       use ice_ocean, only: oceanmixed_ice
+      use ice_read_write, only: ice_open, ice_read, ice_read_global
+      use ice_state, only: trcr_depend, aice, vice, vsno, trcr, &
+          aice0, aicen, vicen, vsnon, trcrn, aice_init, &
+          nt_Tsfc, nt_sice, nt_qice, nt_qsno, uvel, vvel
       use ice_work, only: work1, work_g1, work_g2
-      use ice_gather_scatter, only: scatter_global_stress
 !
 ! !INPUT/OUTPUT PARAMETERS:
 
@@ -583,16 +599,24 @@
 !
 ! !USES:
 !
-      use ice_domain, only: nblocks
-      use ice_domain_size
-      use ice_flux
-      use ice_grid
+      use ice_blocks, only: nx_block, ny_block
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init
-      use ice_state
-      use ice_dyn_evp
-      use ice_work, only: work1
+                              time, time_forc, year_init
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0, c1
+      use ice_domain, only: nblocks
+      use ice_domain_size, only: nilyr, nslyr, ncat
+      use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_dump
+      use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
+          strocnxT, strocnyT, sst, frzmlt, iceumask, &
+          stressp_1, stressp_2, stressp_3, stressp_4, &
+          stressm_1, stressm_2, stressm_3, stressm_4, &
+          stress12_1, stress12_2, stress12_3, stress12_4
       use ice_ocean, only: oceanmixed_ice
+      use ice_read_write, only: ice_open, ice_write_ext
+      use ice_state, only: aicen, vicen, vsnon, trcrn, &
+          nt_Tsfc, nt_sice, nt_qice, nt_qsno, uvel, vvel
+      use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -758,18 +782,29 @@
 !
 ! !USES:
 !
-      use ice_broadcast
-      use ice_boundary
-      use ice_domain_size
-      use ice_domain
+      use ice_broadcast, only: broadcast_scalar
+      use ice_blocks, only: nx_block, ny_block
       use ice_calendar, only: istep0, istep1, time, time_forc, calendar
-      use ice_flux
-      use ice_state
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0, p5, &
+          field_loc_center, field_loc_NEcorner, &
+          field_type_scalar, field_type_vector
+      use ice_domain, only: nblocks, distrb_info
+      use ice_domain_size, only: nilyr, nslyr, ncat, max_ntrcr
+      use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_restart
+      use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
+          strocnxT, strocnyT, sst, frzmlt, iceumask, &
+          stressp_1, stressp_2, stressp_3, stressp_4, &
+          stressm_1, stressm_2, stressm_3, stressm_4, &
+          stress12_1, stress12_2, stress12_3, stress12_4
       use ice_grid, only: tmask
-      use ice_itd
+      use ice_itd, only: aggregate
       use ice_ocean, only: oceanmixed_ice
-      use ice_work, only: work1, work_g1, work_g2
-      use ice_gather_scatter, only: scatter_global_stress
+      use ice_read_write, only: ice_open, ice_read_ext
+      use ice_state, only: trcr_depend, aice, vice, vsno, trcr, &
+          aice0, aicen, vicen, vsnon, trcrn, aice_init, &
+          nt_Tsfc, nt_sice, nt_qice, nt_qsno, uvel, vvel
+      use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
 

@@ -3353,7 +3353,6 @@
 !
 ! !USES:
 !
-  
       use ice_domain_size
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init

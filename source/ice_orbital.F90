@@ -105,7 +105,7 @@
 ! !USES:
 !
       use ice_calendar, only: yday, sec
-      use ice_constants, only: c0, c2, pi, secday
+      use ice_constants, only: c0, c2, p5, pi, secday
       use shr_orb_mod, only: shr_orb_decl
 ! 
 ! !INPUT/OUTPUT PARAMETERS: 
@@ -156,9 +156,15 @@
 !         coszen(i,j) = shr_orb_cosz(ydayp1, &
 !                                    tlat(i,j),tlon(i,j),delta)
 
+!echmod - cesm version: buggy?
          coszen(i,j) = sin(tlat(i,j))*sin(delta) - &
                        cos(tlat(i,j))*cos(delta)   &
                       *cos(ydayp1*c2*pi + tlon(i,j))
+
+!echmod - is this correct?
+!         coszen(i,j) = sin(tlat(i,j))*sin(delta) &
+!                     + cos(tlat(i,j))*cos(delta) &
+!                      *cos((sec/secday-p5)*c2*pi + tlon(i,j)) !cos(hour angle)
       enddo
  
       end subroutine compute_coszen
