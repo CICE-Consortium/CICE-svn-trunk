@@ -26,21 +26,17 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_constants
-      use ice_fileunits
-      use ice_read_write
-      use ice_restart, only: lenstr, restart_dir, restart_file, &
-                             pointer_file, runtype
-      use ice_communicate, only: my_task, master_task
 !
 !EOP
 !
       implicit none
+      private
+      public :: write_restart_pond_cesm, read_restart_pond_cesm
 
-      logical (kind=log_kind) :: & 
+      logical (kind=log_kind), public :: & 
          restart_pond_cesm ! if .true., read meltponds restart file
 
-      real (kind=dbl_kind) :: &
+      real (kind=dbl_kind), public :: &
          hs0               ! snow depth for transition to bare sea ice (m)
 
 !=======================================================================
@@ -68,10 +64,14 @@
 !
 ! !USES:
 !
-      use ice_domain_size
+      use ice_communicate, only: my_task, master_task
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init
-      use ice_state
+                              time, time_forc, year_init
+      use ice_domain_size, only: ncat
+      use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_dump_pond
+      use ice_read_write, only: ice_open, ice_write
+      use ice_restart, only: lenstr, restart_dir, restart_file
+      use ice_state, only: trcrn, nt_apnd, nt_hpnd
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -140,10 +140,13 @@
 !
 ! !USES:
 !
-      use ice_domain_size
-      use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init
-      use ice_state
+      use ice_communicate, only: my_task, master_task
+      use ice_domain_size, only: ncat
+      use ice_calendar, only: istep1, time, time_forc
+      use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_restart_pond 
+      use ice_read_write, only: ice_open, ice_read
+      use ice_restart, only: lenstr, restart_file, pointer_file
+      use ice_state, only: trcrn, nt_apnd, nt_hpnd
       use ice_exit, only: abort_ice
 !
 ! !INPUT/OUTPUT PARAMETERS:

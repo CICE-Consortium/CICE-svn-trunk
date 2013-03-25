@@ -25,19 +25,14 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size
-      use ice_constants
-      use ice_fileunits
-      use ice_read_write
-      use ice_restart, only: lenstr, restart_dir, restart_file, &
-                             pointer_file, runtype
-      use ice_communicate, only: my_task, master_task
 !
 !EOP
 !
       implicit none
+      private
+      public :: write_restart_FY, read_restart_FY
 
-      logical (kind=log_kind) :: & 
+      logical (kind=log_kind), public :: & 
          restart_FY      ! if .true., read FY tracer restart file
 
 !=======================================================================
@@ -66,11 +61,15 @@
 !
 ! !USES:
 !
-      use ice_domain_size
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init
-      use ice_state
+                              time, time_forc, year_init
+      use ice_communicate, only: my_task, master_task
+      use ice_domain_size, only: ncat
+      use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_dump_FY
       use ice_flux, only: frz_onset
+      use ice_read_write, only: ice_open, ice_write
+      use ice_restart, only: lenstr, restart_dir, restart_file
+      use ice_state, only: trcrn, nt_FY
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -140,11 +139,14 @@
 !
 ! !USES:
 !
-      use ice_domain_size
-      use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init
-      use ice_state
+      use ice_communicate, only: my_task, master_task
+      use ice_domain_size, only: ncat
+      use ice_calendar, only: istep1, time, time_forc
+      use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_restart_FY
       use ice_flux, only: frz_onset
+      use ice_read_write, only: ice_open, ice_read
+      use ice_restart, only: lenstr, restart_file, pointer_file
+      use ice_state, only: trcrn, nt_FY
       use ice_exit, only: abort_ice
 !
 ! !INPUT/OUTPUT PARAMETERS:
