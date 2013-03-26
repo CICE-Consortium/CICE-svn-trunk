@@ -28,17 +28,12 @@
 !
 ! !USES:
 !
-      use ice_kinds_mod
-      use ice_broadcast
-      use ice_communicate, only: my_task, master_task
-      use ice_blocks
-      use ice_read_write
-      use ice_fileunits
-      use ice_history_shared
 !
 !EOP
 !
       implicit none
+      private
+      public :: ice_write_hist
       save
       
 !=======================================================================
@@ -65,157 +60,25 @@
 !
 ! !USES:
 !
-      use ice_blocks
-      use ice_domain
-      use ice_grid, only: tmask, lmask_n, lmask_s
-      use ice_calendar, only: new_year, write_history, &
-                              write_ic, time, histfreq, nstreams, month, &
-                              new_month
-      use ice_state
-      use ice_constants
-      use ice_dyn_eap
-      use ice_dyn_evp
-      use ice_flux
-      use ice_therm_shared, only: calculate_Tin_from_qin, Tmlt, ktherm
-!      use ice_therm_vertical
-      use ice_therm_mushy, only: temperature_mush, temperature_snow
-      use ice_shortwave, only: apeffn
-      use ice_timers
-      use ice_zbgc_public, only:  &
-                         nit, sil, amm, dmsp, dms, algalN, R_C2N, &
-                         R_chl2N, nlt_bgc_N, &
-                         nlt_bgc_NO, nlt_bgc_C, nlt_bgc_chl, &
-                         nlt_bgc_NH, nlt_bgc_Sil, nlt_bgc_DMSPp, &
-                         nlt_bgc_DMSPd, nlt_bgc_DMS, nlt_bgc_PON , &
-                         S_tot, chl_net, PP_net, NO_net, &
-                         zTin, zfswin, iki, iDi, zphi
-      use ice_work, only: worka, workb, workz, workzn
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-      integer (kind=int_kind), intent(in) :: &
-           ns                   ! stream
-!EOP
-!
-      integer (kind=int_kind) :: &
-           i,j,k,ic,n,nn, &
-           iblk             , & ! block index
-           ilo,ihi,jlo,jhi  , & ! beginning and end of physical domain
-           nstrm                ! nstreams (1 if writing initial condition)
-
-      real (kind=dbl_kind) :: &
-           ravgct           , & ! 1/avgct
-           ravgctz          , & ! 1/avgct
-           ai               , & ! aice_init
-           ain                  ! aicen_init
-
-      real (kind=dbl_kind) :: & 
-           qn                , & ! temporary variable for enthalpy
-           Tmlts                 !  temporary variable for melting temperature
-
-      type (block) :: &
-         this_block           ! block information for current block
-
-      !---------------------------------------------------------------
-      ! write file
-      !---------------------------------------------------------------
-
-        call ice_timer_start(timer_readwrite)  ! reading/writing
-
-        if (history_format == 'nc') then
-          call icecdf(ns)         ! netcdf output
-!        else
-!          call icebin(ns)         ! binary output
-        endif
-
-        call ice_timer_stop(timer_readwrite)  ! reading/writing
-
-      !---------------------------------------------------------------
-      ! reset to zero
-      !------------------------------------------------------------
-        if (write_ic) then
-           if (allocated(a2D))  a2D (:,:,:,:)     = c0
-           if (allocated(a3Dc)) a3Dc(:,:,:,:,:)   = c0
-           if (allocated(a3Dz)) a3Dz(:,:,:,:,:)   = c0
-           if (allocated(a3Db)) a3Db(:,:,:,:,:)   = c0
-           if (allocated(a4Di)) a4Di(:,:,:,:,:,:) = c0
-           if (allocated(a4Ds)) a4Ds(:,:,:,:,:,:) = c0
-           if (allocated(a4Db)) a4Db(:,:,:,:,:,:) = c0
-           avgct(:) = c0
-           albcnt(:,:,:,:) = c0
-           write_ic = .false.        ! write initial condition once at most
-        else
-           avgct(ns) = c0
-           albcnt(:,:,:,ns) = c0
-        endif
-!        if (write_history(ns)) albcnt(:,:,:,ns) = c0
-
-        do n = 1,n2D
-           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a2D(:,:,n,:) = c0
-        enddo
-        do n = n2D + 1, n3Dccum   
-           nn = n - n2D               
-           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a3Dc(:,:,:,nn,:) = c0
-        enddo
-        do n = n3Dccum + 1, n3Dzcum
-           nn = n - n3Dccum
-           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a3Dz(:,:,:,nn,:) = c0
-        enddo
-        do n = n3Dzcum + 1, n3Dbcum
-           nn = n - n3Dzcum
-           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a3Db(:,:,:,nn,:) = c0
-        enddo
-        do n = n3Dbcum + 1, n4Dicum
-           nn = n - n3Dbcum
-           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Di(:,:,:,:,nn,:) = c0
-        enddo
-        do n = n4Dicum + 1, n4Dscum
-           nn = n - n4Dicum
-           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Ds(:,:,:,:,nn,:) = c0
-        enddo
-        do n = n4Dscum + 1, n4Dbcum
-           nn = n - n4Dscum
-           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Db(:,:,:,:,nn,:) = c0
-        enddo
-
-      end subroutine ice_write_hist
-
-!=======================================================================
-!
-!BOP
-!
-! !IROUTINE: icecdf - write netCDF history file
-!
-! !INTERFACE:
-!
-      subroutine icecdf(ns)
-!
-! !DESCRIPTION:
-!
-! write netCDF history file
-!
-! !REVISION HISTORY:
-!
-! authors:   E.C.Hunke, LANL
-!            Bruce P. Briegleb, NCAR
-!
-! !USES:
-!
+      use ice_kinds_mod
 #ifdef ncdf
-
-      use ice_gather_scatter
-      use ice_domain_size
-      use ice_constants
-      use ice_grid
-      use ice_calendar, only: time, sec, idate, idate0, nyr, month, &
-                              mday, write_ic, histfreq, histfreq_n, &
-                              year_init, new_year, new_month, new_day, &
-                              dayyr, daymo, days_per_year, use_leap_years
-      use ice_work, only: work_g1, work_gr, work_gr3, work1
-      use ice_restart, only: lenstr, runid
+      use ice_broadcast, only: broadcast_scalar
+      use ice_calendar, only: time, sec, idate, idate0, write_ic, &
+          histfreq, dayyr, days_per_year, use_leap_years
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0, c360, secday, spval, rad_to_deg
       use ice_domain, only: distrb_info
+      use ice_domain_size, only: nx_global, ny_global
+      use ice_exit, only: abort_ice
+      use ice_fileunits, only: nu_diag
+      use ice_gather_scatter, only: gather_global
+      use ice_grid, only: TLON, TLAT, ULON, ULAT, hm, tarea, uarea, &
+          dxu, dxt, dyu, dyt, HTN, HTE, ANGLE, ANGLET, &
+          lont_bounds, latt_bounds, lonu_bounds, latu_bounds
+      use ice_history_shared
       use ice_itd, only: hin_max
-      use ice_exit
+      use ice_restart, only: runid
+      use ice_work, only: work_g1, work_gr, work_gr3, work1
       use netcdf
 #endif
 !
@@ -238,7 +101,7 @@
       character (char_len) :: title
       character (char_len_long) :: ncfile(max_nstrm)
 
-      integer (kind=int_kind) :: iyear, imonth, iday
+      integer (kind=int_kind) :: iyear, iday
       integer (kind=int_kind) :: icategory,ind,i_aice,boundid
 
       character (char_len) :: start_time,current_date,current_time
@@ -933,7 +796,7 @@
         if (status /= nf90_noerr) call abort_ice( &
                       'ice Error: global attribute contents')
 
-        title  = 'sea ice model: Community Ice Code (CICE)'
+        title  = 'sea ice model: CICE'
         status = nf90_put_att(ncid,nf90_global,'source',title)
         if (status /= nf90_noerr) call abort_ice( &
                       'ice Error: global attribute source')
@@ -1404,7 +1267,7 @@
       endif
 #endif
 
-      end subroutine icecdf
+      end subroutine ice_write_hist
 
 !=======================================================================
 

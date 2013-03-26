@@ -42,20 +42,12 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_broadcast
-      use ice_communicate, only: my_task, master_task
-      use ice_blocks
-      use ice_read_write
-      use ice_fileunits
-      use ice_history_shared
-      use ice_history_write
-      use ice_history_bgc
-      use ice_history_mechred
-      use ice_history_pond
 !
 !EOP
 !
       implicit none
+      private
+      public :: init_hist, accum_hist
       save
       
 !=======================================================================
@@ -86,14 +78,27 @@
 !
 ! !USES:
 !
-      use ice_constants
+      use ice_blocks, only: nx_block, ny_block
+      use ice_broadcast, only: broadcast_scalar, broadcast_array
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0, c1, c2, c100, mps_to_cmpdy, rhofresh, &
+          Tffresh, kg_to_g, secday
       use ice_calendar, only: yday, days_per_year, histfreq, &
-           histfreq_n, nstreams
+          histfreq_n, nstreams
+      use ice_domain_size, only: max_blocks
       use ice_dyn_evp, only: kdyn
+      use ice_exit, only: abort_ice
+      use ice_fileunits, only: nu_nml, nml_filename, nu_diag, &
+          get_fileunit, release_fileunit
       use ice_flux, only: mlt_onset, frz_onset, albcnt
+      use ice_history_shared ! everything
+      use ice_history_mechred, only: init_hist_mechred_2D, init_hist_mechred_3Dc
+      use ice_history_pond, only: init_hist_pond_2D, init_hist_pond_3Dc
+      use ice_history_bgc, only: init_hist_bgc_2D, init_hist_bgc_3Dc, &
+          init_hist_bgc_3Db, init_hist_bgc_4Db
       use ice_restart, only: restart
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero, hbrine
-      use ice_exit
+      use ice_zbgc_public, only: solve_bgc
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1209,23 +1214,43 @@
 !
 ! !USES:
 !
-      use ice_blocks
-      use ice_domain
+      use ice_blocks, only: block, get_block
+      use ice_constants, only: c0, c1, p25, puny, secday, &
+          awtvdr, awtidr, awtvdf, awtidf, Lfresh, rhos, cp_ice, spval
+      use ice_domain, only: blocks_ice, nblocks
       use ice_grid, only: tmask, lmask_n, lmask_s
       use ice_calendar, only: new_year, write_history, &
                               write_ic, time, histfreq, nstreams, month, &
                               new_month
-      use ice_state
-      use ice_constants
-      use ice_dyn_eap
-      use ice_dyn_evp
-      use ice_flux
+      use ice_dyn_eap, only: a11, a12, e11, e12, e22, s11, s12, s22, &
+          yieldstress11, yieldstress12, yieldstress22
+      use ice_dyn_evp, only: kdyn, principal_stress
+      use ice_flux, only: fsw, flw, fsnow, frain, sst, sss, uocn, vocn, &
+          frzmlt, fswfac, fswabs, fswthru, alvdr, alvdf, alidr, alidf, &
+          albice, albsno, albpnd, coszen, flat, fsens, flwout, evap, &
+          Tair, Tref, Qref, congel, frazil, snoice, dsnow, &
+          melts, meltb, meltt, meltl, fresh, fsalt, fresh_gbm, fsalt_gbm, &
+          fsice, fsice_gbm, fsice_g, fsice_g_gbm, fhocn, fhocn_gbm, &
+          fswthru_gbm, strairx, strairy, strtltx, strtlty, strintx, strinty, &
+          strocnx, strocny, fm, daidtt, dvidtt, daidtd, dvidtd, fsurf, &
+          fcondtop, fsurfn, fcondtopn, fsicen_g, flatn, albcnt, prs_sig, &
+          stressp_1, stressm_1, stress12_1, &
+          stressp_2, stressm_2, stress12_2, &
+          stressp_3, stressm_3, stress12_3, &
+          stressp_4, stressm_4, stress12_4, sig1, sig2, &
+          mlt_onset, frz_onset
+      use ice_history_shared ! almost everything
+      use ice_history_write, only: ice_write_hist
+      use ice_history_bgc, only: accum_hist_bgc
+      use ice_history_mechred, only: accum_hist_mechred
+      use ice_history_pond, only: accum_hist_pond
+      use ice_state ! almost everything
       use ice_therm_shared, only: calculate_Tin_from_qin, Tmlt, ktherm
-!      use ice_therm_vertical
       use ice_therm_mushy, only: temperature_mush, temperature_snow
-      use ice_shortwave, only: apeffn
-      use ice_timers
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
       use ice_work, only: worka, workb
+      use ice_zbgc_public, only: S_tot
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1991,7 +2016,57 @@
       ! write file
       !---------------------------------------------------------------
 
-      call ice_write_hist (ns)
+        call ice_timer_start(timer_readwrite)  ! reading/writing
+        call ice_write_hist (ns)
+        call ice_timer_stop(timer_readwrite)  ! reading/writing
+
+      !---------------------------------------------------------------
+      ! reset to zero
+      !------------------------------------------------------------
+        if (write_ic) then
+           if (allocated(a2D))  a2D (:,:,:,:)     = c0
+           if (allocated(a3Dc)) a3Dc(:,:,:,:,:)   = c0
+           if (allocated(a3Dz)) a3Dz(:,:,:,:,:)   = c0
+           if (allocated(a3Db)) a3Db(:,:,:,:,:)   = c0
+           if (allocated(a4Di)) a4Di(:,:,:,:,:,:) = c0
+           if (allocated(a4Ds)) a4Ds(:,:,:,:,:,:) = c0
+           if (allocated(a4Db)) a4Db(:,:,:,:,:,:) = c0
+           avgct(:) = c0
+           albcnt(:,:,:,:) = c0
+           write_ic = .false.        ! write initial condition once at most
+        else
+           avgct(ns) = c0
+           albcnt(:,:,:,ns) = c0
+        endif
+!        if (write_history(ns)) albcnt(:,:,:,ns) = c0
+
+        do n = 1,n2D
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a2D(:,:,n,:) = c0
+        enddo
+        do n = n2D + 1, n3Dccum   
+           nn = n - n2D               
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a3Dc(:,:,:,nn,:) = c0
+        enddo
+        do n = n3Dccum + 1, n3Dzcum
+           nn = n - n3Dccum
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a3Dz(:,:,:,nn,:) = c0
+        enddo
+        do n = n3Dzcum + 1, n3Dbcum
+           nn = n - n3Dzcum
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a3Db(:,:,:,nn,:) = c0
+        enddo
+        do n = n3Dbcum + 1, n4Dicum
+           nn = n - n3Dbcum
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Di(:,:,:,:,nn,:) = c0
+        enddo
+        do n = n4Dicum + 1, n4Dscum
+           nn = n - n4Dicum
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Ds(:,:,:,:,nn,:) = c0
+        enddo
+        do n = n4Dscum + 1, n4Dbcum
+           nn = n - n4Dscum
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Db(:,:,:,:,nn,:) = c0
+        enddo
 
       endif  ! write_history or write_ic
       enddo  ! nstreams

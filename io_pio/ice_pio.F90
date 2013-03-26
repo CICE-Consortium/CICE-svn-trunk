@@ -20,13 +20,9 @@ module ice_pio
 !echmod not used:  use shr_kind_mod, only: cl => shr_kind_cl
 !echmod not used:  use shr_sys_mod , only: shr_sys_flush
   use ice_kinds_mod
-  use ice_blocks
-  use ice_broadcast
-  use ice_communicate
-  use ice_domain, only : nblocks, blocks_ice, distrb_info
-  use ice_domain_size
-  use ice_fileunits  
-  use ice_exit
+  use ice_blocks, only: block, get_block, nx_block, ny_block
+  use ice_domain, only: nblocks, blocks_ice, distrb_info
+  use ice_domain_size, only: nx_global, ny_global
   use pio
 
   implicit none
@@ -67,8 +63,11 @@ contains
 !
 ! !INTERFACE: 
    subroutine ice_pio_init(mode, filename, File, clobber, cdf64)
+
 !echmod     use shr_pio_mod, only: shr_pio_getiosys, shr_pio_getiotype
-     
+  use ice_communicate, only: my_task, master_task, MPI_COMM_ICE
+  use ice_fileunits, only: nu_diag
+  use ice_exit, only: abort_ice
 !
 ! !DESCRIPTION:
 !    Initialize the io subsystem
@@ -76,6 +75,7 @@ contains
 ! !REVISION HISTORY:
 !    2009-Feb-17 - J. Edwards - initial version
 !
+
 ! !INPUT/OUTPUT PARAMETERS:
 !
    implicit none

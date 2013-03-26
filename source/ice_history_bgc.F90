@@ -31,25 +31,23 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_broadcast
-      use ice_communicate, only: my_task, master_task
-      use ice_blocks
-      use ice_fileunits
-      use ice_history_shared
-      use ice_history_write
-      use ice_state
+      use ice_domain_size, only: max_nstrm
+
       use ice_zbgc_public
 !
 !EOP
 !
       implicit none
+      private
+      public :: init_hist_bgc_2D, init_hist_bgc_3Dc, init_hist_bgc_3Db, &
+              init_hist_bgc_4Db, accum_hist_bgc
       save
       
       !---------------------------------------------------------------
       ! flags: write to output file if true or histfreq value
       !---------------------------------------------------------------
 
-      character (len=max_nstrm) :: &
+      character (len=max_nstrm), public :: &
            f_faero_atm    = 'm', f_faero_ocn  = 'm', &
            f_aero         = 'm', f_aeron      = 'm', &
            f_fNO          = 'm', f_fNO_ai   = 'm', &
@@ -199,9 +197,16 @@
 !
 ! !USES:
 !
-      use ice_constants
+      use ice_broadcast, only: broadcast_scalar
       use ice_calendar, only: nstreams
-      use ice_exit
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0, c1
+      use ice_exit, only: abort_ice
+      use ice_fileunits, only: nu_nml, nml_filename, &
+          get_fileunit, release_fileunit
+      use ice_history_shared, only: tstr2D, tcstr, define_hist_field, &
+          vname_in
+      use ice_state, only: tr_aero, hbrine
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -591,9 +596,9 @@
 !
 ! !USES:
 !
-      use ice_constants
       use ice_calendar, only: nstreams
-      use ice_exit
+      use ice_constants, only: c0, c1
+      use ice_history_shared, only: tstr3Dc, tcstr, define_hist_field
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -632,9 +637,9 @@
 !
 ! !USES:
 !
-      use ice_constants
       use ice_calendar, only: nstreams
-      use ice_exit
+      use ice_constants, only: c0, secday
+      use ice_history_shared, only: tstr3Db, tcstr, define_hist_field
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -681,9 +686,9 @@
 !
 ! !USES:
 !
-      use ice_constants
       use ice_calendar, only: nstreams
-      use ice_exit
+      use ice_constants, only: c0, c1, c100, secday
+      use ice_history_shared, only: tstr4Db, tcstr, define_hist_field
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -818,9 +823,20 @@
 !
 ! !USES:
 !
-      use ice_blocks
-      use ice_domain
-      use ice_flux
+      use ice_blocks, only: block, get_block
+      use ice_constants, only: c0, puny
+      use ice_domain, only: blocks_ice
+      use ice_flux, only: faero_atm, faero_ocn, sss
+      use ice_history_shared, only: n2D, a2D, a3Dc, n3Dccum, a3Db, &
+          n4Dscum, a4Db, &
+          ncat_hist, accum_hist_field, nzblyr
+      use ice_state, only: trcrn, trcr, aicen, vice, vicen, nt_aero, nt_fbri, &
+          nt_bgc_N, nt_bgc_C, nt_bgc_chl, nt_bgc_NO, nt_bgc_NH, nt_bgc_Sil, &
+          nt_bgc_DMSPd, nt_bgc_DMSPp, nt_bgc_DMS, nt_bgc_PON, nt_bgc_S, &
+          nt_bgc_N_sk, nt_bgc_C_sk, nt_bgc_chl_sk, nt_bgc_Nit_sk, &
+          nt_bgc_Am_sk, nt_bgc_Sil_sk, nt_bgc_DMSPp_sk, nt_bgc_DMSPd_sk, &
+          nt_bgc_DMS_sk, nt_bgc_Nit_ml, nt_bgc_Am_ml, nt_bgc_Sil_ml, &
+          nt_bgc_DMSP_ml, nt_bgc_DMS_ml
       use ice_work, only: workz, workzn  !echmod:  make these local, allocatable
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -831,8 +847,8 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-           i,j,k,n, &
-           ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+         i,j,k,n, &
+         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
       type (block) :: &
          this_block           ! block information for current block
