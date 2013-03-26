@@ -31,23 +31,20 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_broadcast
-      use ice_communicate, only: my_task, master_task
-      use ice_blocks
-      use ice_fileunits
-      use ice_history_shared
-      use ice_history_write
+      use ice_domain_size, only: max_nstrm
 !
 !EOP
 !
       implicit none
+      private
+      public :: accum_hist_mechred, init_hist_mechred_2D, init_hist_mechred_3Dc
       save
       
       !---------------------------------------------------------------
       ! flags: write to output file if true or histfreq value
       !---------------------------------------------------------------
 
-      character (len=max_nstrm) :: &
+      character (len=max_nstrm), public :: &
            f_ardg      = 'm', f_vrdg       = 'm', &
            f_alvl      = 'm', f_vlvl       = 'm', &
            f_dardg1dt  = 'm', f_dardg2dt   = 'm', &
@@ -115,10 +112,15 @@
 !
 ! !USES:
 !
-      use ice_constants
+      use ice_broadcast, only: broadcast_scalar
       use ice_calendar, only: nstreams
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0, c1, secday, c100, mps_to_cmpdy
+      use ice_exit, only: abort_ice
+      use ice_fileunits, only: nu_nml, nml_filename, &
+          get_fileunit, release_fileunit
+      use ice_history_shared, only: tstr2D, tcstr, define_hist_field
       use ice_state, only: tr_lvl
-      use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -258,9 +260,10 @@
 !
 ! !USES:
 !
-      use ice_constants
+      use ice_constants, only: c0, c1, secday, c100, mps_to_cmpdy
       use ice_calendar, only: nstreams
-      use ice_exit
+      use ice_exit, only: abort_ice
+      use ice_history_shared, only: tstr3Dc, tcstr, define_hist_field
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -364,10 +367,14 @@
 !
 ! !USES:
 !
-      use ice_blocks
-      use ice_domain
-      use ice_state
-      use ice_flux
+      use ice_constants, only: c1
+      use ice_history_shared, only: n2D, a2D, a3Dc, ncat_hist, &
+          accum_hist_field
+      use ice_state, only: aice, vice, trcr, nt_alvl, nt_vlvl, &
+          aicen, vicen, trcrn
+      use ice_flux, only: dardg1dt, dardg2dt, dvirdgdt, dardg1ndt,&
+          dardg2ndt, dvirdgndt, krdgn, aparticn, aredistn, vredistn, &
+          araftn, vraftn, opening
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -378,9 +385,6 @@
 !
       integer (kind=int_kind) :: &
            i,j
-
-      type (block) :: &
-         this_block           ! block information for current block
 
       !---------------------------------------------------------------
       ! increment field

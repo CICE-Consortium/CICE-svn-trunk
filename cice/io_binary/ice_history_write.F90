@@ -24,21 +24,16 @@
 !
 ! !INTERFACE:
 !
-      module ice_history
+      module ice_history_write
 !
 ! !USES:
 !
-      use ice_kinds_mod
-      use ice_broadcast
-      use ice_communicate, only: my_task, master_task
-      use ice_blocks
-      use ice_read_write
-      use ice_fileunits
-      use ice_history_shared
 !
 !EOP
 !
       implicit none
+      private
+      public :: ice_write_hist
       save
       
 !=======================================================================
@@ -49,14 +44,13 @@
 !
 !BOP
 !
-! !IROUTINE: icebin - write binary history file
 ! This routine writes fewer grid variables compared with the netcdf
 ! version, to reduce file size.  Grid variables can be obtained from
 ! the original grid input files.
 !
 ! !INTERFACE:
 !
-      subroutine icebin(ns)
+      subroutine ice_write_hist(ns)
 !
 ! !DESCRIPTION:
 !
@@ -68,13 +62,17 @@
 !
 ! !USES:
 !
-      use ice_gather_scatter
-      use ice_domain_size
-      use ice_constants
-      use ice_grid
-      use ice_restart, only: lenstr, runid
-      use ice_itd, only: c_hi_range
+      use ice_kinds_mod
       use ice_calendar, only: write_ic, dayyr, histfreq, use_leap_years
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: spval
+      use ice_domain_size, only: nx_global, ny_global
+      use ice_read_write, only: ice_open, ice_write
+      use ice_fileunits, only: nu_history, nu_hdr, nu_diag
+      use ice_grid, only: tarea
+      use ice_history_shared
+      use ice_itd, only: c_hi_range
+      use ice_restart, only: lenstr, runid
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -113,7 +111,7 @@
         call ice_open(nu_history, ncfile(ns), nbits) ! direct access
         open(nu_hdr,file=hdrfile,form='formatted',status='unknown') ! ascii
 
-        title  = 'sea ice model: Community Ice Code (CICE)'
+        title  = 'sea ice model: CICE'
         write (nu_hdr, 999) 'source',title,' '
 
         write (nu_hdr, 999) 'file name contains model date',trim(ncfile(ns)),' '
@@ -279,10 +277,10 @@
         write (nu_diag,*) 'Finished writing ',trim(ncfile(ns))
       endif
 
-      end subroutine icebin
+      end subroutine ice_write_hist
 
 !=======================================================================
 
-      end module ice_history
+      end module ice_history_write
 
 !=======================================================================

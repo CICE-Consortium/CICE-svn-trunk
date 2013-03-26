@@ -75,8 +75,7 @@
       use ice_restart, only: &
           restart, restart_ext, restart_dir, restart_file, pointer_file, &
           runid, runtype
-      use ice_history, only: hist_avg, &
-                             history_format, history_dir, history_file, &
+      use ice_history_shared, only: hist_avg, history_dir, history_file, &
                              incond_dir, incond_file
       use ice_exit, only: abort_ice
       use ice_itd, only: kitd, kcatbound
@@ -144,7 +143,7 @@
         diagfreq,       diag_type,      diag_file,                      &
         print_global,   print_points,   latpnt,          lonpnt,        &
         dbug,           histfreq,       histfreq_n,      hist_avg,      &
-        history_dir,    history_file,   history_format,                 &
+        history_dir,    history_file,                                   &
         write_ic,       incond_dir,     incond_file
 
       namelist /grid_nml/ &
@@ -209,7 +208,6 @@
       hist_avg = .true.      ! if true, write time-averages (not snapshots)
       history_dir  = './'    ! write to executable dir for default
       history_file = 'iceh'  ! history file name prefix
-      history_format = 'nc'  ! file format ('bin'=binary or 'nc'=netcdf)
       write_ic = .false.     ! write out initial condition
       incond_dir = history_dir ! write to history dir for default
       incond_file = 'iceh_ic'! file prefix
@@ -398,7 +396,6 @@
 
 #ifndef ncdf
       ! netcdf is unavailable
-      history_format  = 'bin'
       grid_format     = 'bin'
       atm_data_format = 'bin'
       ocn_data_format = 'bin' 
@@ -516,7 +513,6 @@
       call broadcast_scalar(print_global,       master_task)
       call broadcast_scalar(diag_type,          master_task)
       call broadcast_scalar(diag_file,          master_task)
-      call broadcast_scalar(history_format,     master_task)
       do n = 1, max_nstrm
          call broadcast_scalar(histfreq(n),     master_task)
       enddo  

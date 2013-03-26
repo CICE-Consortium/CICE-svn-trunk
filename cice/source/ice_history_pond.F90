@@ -31,24 +31,20 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_broadcast
-      use ice_communicate, only: my_task, master_task
-      use ice_blocks
-!      use ice_read_write
-      use ice_fileunits
-      use ice_history_shared
-      use ice_history_write
+      use ice_domain_size, only: max_nstrm
 !
 !EOP
 !
       implicit none
+      private
+      public :: accum_hist_pond, init_hist_pond_2D, init_hist_pond_3Dc
       save
       
       !---------------------------------------------------------------
       ! flags: write to output file if true or histfreq value
       !---------------------------------------------------------------
 
-      character (len=max_nstrm) :: &
+      character (len=max_nstrm), public :: &
            f_apondn    = 'm', f_apeffn     = 'm', &
            f_hpondn    = 'm',                     &
            f_apond     = 'x', f_apond_ai   = 'x', &
@@ -104,10 +100,15 @@
 !
 ! !USES:
 !
-      use ice_constants
+      use ice_broadcast, only: broadcast_scalar
       use ice_calendar, only: nstreams
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0, c1
+      use ice_exit, only: abort_ice
+      use ice_fileunits, only: nu_nml, nml_filename, &
+          get_fileunit, release_fileunit
+      use ice_history_shared, only: tstr2D, tcstr, define_hist_field
       use ice_state, only: tr_pond
-      use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -243,10 +244,10 @@
 !
 ! !USES:
 !
-      use ice_constants
       use ice_calendar, only: nstreams
+      use ice_constants, only: c0, c1
+      use ice_history_shared, only: tstr3Dc, tcstr, define_hist_field
       use ice_state, only: tr_pond
-      use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -297,12 +298,15 @@
 !
 ! !USES:
 !
-      use ice_blocks
-      use ice_constants, only: puny
-      use ice_domain
-      use ice_state
-      use ice_flux
+      use ice_blocks, only: block, get_block
+      use ice_constants, only: c0, puny
+      use ice_domain, only: blocks_ice
+      use ice_flux, only: apeff_ai
+      use ice_history_shared, only: n2D, a2D, a3Dc, ncat_hist, &
+          accum_hist_field
       use ice_shortwave, only: apeffn
+      use ice_state, only: tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
+          aice, trcr, trcrn, nt_apnd, nt_hpnd, nt_ipnd, nt_alvl
       use ice_work, only: worka
 !
 ! !INPUT/OUTPUT PARAMETERS:

@@ -35,23 +35,18 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_blocks
-      use ice_broadcast
-      use ice_communicate, only: my_task, master_task
       use ice_domain_size, only: ncat, nilyr, nslyr, nblyr, max_nstrm
-      use ice_read_write
-      use ice_fileunits
 !
 !EOP
 !
       implicit none
+      public
       save
       
       logical (kind=log_kind) :: &
          hist_avg  ! if true, write averaged data instead of snapshots
 
       character (len=char_len) :: &
-         history_format, & ! file format ('bin'=binary or 'nc'=netcdf)
          history_file  , & ! output file for history
          incond_file       ! output file for snapshot initial conditions
 
@@ -448,10 +443,10 @@
 
       subroutine construct_filename(ncfile,suffix,ns)
 
-      use ice_calendar, only: time, sec, idate, nyr, month, daymo,  &
+      use ice_calendar, only: time, sec, nyr, month, daymo,  &
                               mday, write_ic, histfreq, histfreq_n, &
                               year_init, new_year, new_month, new_day, &
-                              dayyr, dt
+                              dt
       use ice_restart, only: lenstr
 
       character (char_len_long), intent(inout) :: ncfile
@@ -536,8 +531,9 @@
 !     2009 Created by D. Bailey following POP
 
 !     !USES:
-      use ice_exit
       use ice_calendar, only: histfreq, histfreq_n, nstreams
+      use ice_domain_size, only: max_nstrm
+      use ice_exit, only: abort_ice
 
 !     !OUTPUT PARAMETERS:
 
@@ -641,9 +637,12 @@
 !     2009 Created by D. Bailey following POP
 !     2010 Generalized dimension of variables by N. Jeffery, E. Hunke
 
-      use ice_domain
-      use ice_grid, only: tmask
+
+      use ice_blocks, only: block, get_block
       use ice_calendar, only: nstreams
+      use ice_domain, only: blocks_ice
+      use ice_domain_size, only: max_nstrm
+      use ice_grid, only: tmask
 
 !     !OUTPUT PARAMETERS:
 
@@ -702,9 +701,11 @@
 !     2009 Created by D. Bailey following POP
 !     2010 Generalized dimension of variables by N. Jeffery, E. Hunke
 
-      use ice_domain
-      use ice_grid, only: tmask
+      use ice_blocks, only: block, get_block
       use ice_calendar, only: nstreams
+      use ice_domain, only: blocks_ice
+      use ice_domain_size, only: max_nstrm
+      use ice_grid, only: tmask
 
 !     !OUTPUT PARAMETERS:
 
@@ -768,9 +769,11 @@
 !     2009 Created by D. Bailey following POP
 !     2010 Generalized dimension of variables by N. Jeffery, E. Hunke
 
-      use ice_domain
-      use ice_grid, only: tmask
+      use ice_blocks, only: block, get_block
       use ice_calendar, only: nstreams
+      use ice_domain, only: blocks_ice
+      use ice_domain_size, only: max_nstrm
+      use ice_grid, only: tmask
 
 !     !OUTPUT PARAMETERS:
 
