@@ -18,7 +18,6 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_constants
 !
 !EOP
 !
@@ -47,6 +46,8 @@
       subroutine init_lvl(nx_block, ny_block, ncat, alvl, vlvl) 
 !
 ! !USES:
+!
+      use ice_constants, only: c1
 !
         integer(kind=int_kind), intent(in) :: &
              nx_block , &

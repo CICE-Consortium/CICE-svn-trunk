@@ -38,29 +38,36 @@
 
       implicit none
 
-! !PUBLIC MEMBER FUNCTIONS:
-
-   public :: ice_write, &
-             ice_read
+      private
+      public :: ice_open,           &
+                ice_open_nc,        &
+                ice_read,           &
+                ice_read_ext,       &
+                ice_read_nc,        &
+                ice_read_global,    &
+                ice_read_global_nc, &
+                ice_write,          &
+                ice_write_ext,      &
+                ice_close_nc
 
 !EOP
 !BOC
-   interface ice_write
-     module procedure ice_write_xyt,  &
-                      ice_write_xyzt
-   end interface
+      interface ice_write
+        module procedure ice_write_xyt,  &
+                         ice_write_xyzt
+      end interface
 
 
-   interface ice_read
-     module procedure ice_read_xyt,  &
-                      ice_read_xyzt
-   end interface
+      interface ice_read
+        module procedure ice_read_xyt,  &
+                         ice_read_xyzt
+      end interface
 
-   interface ice_read_nc
-     module procedure ice_read_nc_xy,  &
-                      ice_read_nc_point, &
-                      ice_read_nc_z
-   end interface
+      interface ice_read_nc
+        module procedure ice_read_nc_xy,  &
+                         ice_read_nc_point, &
+                         ice_read_nc_z
+      end interface
 
 !=======================================================================
 

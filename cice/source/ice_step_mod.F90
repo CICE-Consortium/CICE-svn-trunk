@@ -565,7 +565,8 @@
                rfrac(:,:) = rfracmin + (rfracmax-rfracmin) * aicen(:,:,n,iblk) 
                call compute_ponds_cesm(nx_block, ny_block,                     &
                                        ilo, ihi, jlo, jhi,                     &
-                                       dt,     pndaspect,                      &
+                                       dt,       hi_min,                       &
+                                       pndaspect,                              &
                                        rfrac,  melttn(:,:,n,iblk),             &
                                        meltsn, frain(:,:,iblk),                &
                                        aicen (:,:,n,iblk), vicen (:,:,n,iblk), &
@@ -578,7 +579,7 @@
                rfrac(:,:) = rfracmin + (rfracmax-rfracmin) * aicen(:,:,n,iblk)
                call compute_ponds_lvl(nx_block,  ny_block,                        &
                                       ilo, ihi,  jlo, jhi,                        &
-                                      dt,                                         &
+                                      dt,        hi_min,                          &
                                       dpscale,   frzpnd,                          &
                                       pndaspect, rfrac,                           &
                                       melttn(:,:,n,iblk), meltsn,                 &
@@ -632,7 +633,7 @@
 
             call compute_ponds_simple(nx_block, ny_block,                       &
                                    ilo, ihi, jlo, jhi,                          &
-                                   dt, rfrac,                                   &
+                                   dt, rfrac, hi_min,                           &
                                    melttn(:,:,n,iblk), meltsn, frain(:,:,iblk), &
                                    aicen (:,:,n,iblk), vicen (:,:,n,iblk),      &
                                    vsnon (:,:,n,iblk),                          &

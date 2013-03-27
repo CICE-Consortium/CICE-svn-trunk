@@ -54,20 +54,22 @@
 !EOP
 !
       implicit none
-      public
+      private
+      public :: bound_state
       save
 
       !-----------------------------------------------------------------
       ! state of the ice aggregated over all categories
       !-----------------------------------------------------------------
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
+         public :: &
          aice  , & ! concentration of ice
          vice  , & ! volume per unit area of ice          (m)
          vsno      ! volume per unit area of snow         (m)
 
       real (kind=dbl_kind), &
-         dimension(nx_block,ny_block,max_ntrcr,max_blocks) :: &
+         dimension(nx_block,ny_block,max_ntrcr,max_blocks), public :: &
          trcr      ! ice tracers
                    ! 1: surface temperature of ice/snow (C)
 
@@ -75,37 +77,38 @@
       ! state of the ice for each category
       !-----------------------------------------------------------------
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks):: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), &
+         public:: &
          aice0     ! concentration of open water
 
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         dimension (nx_block,ny_block,ncat,max_blocks), public :: &
          aicen , & ! concentration of ice
          vicen , & ! volume per unit area of ice          (m)
          vsnon     ! volume per unit area of snow         (m)
 
-      real (kind=dbl_kind), &
+      real (kind=dbl_kind), public, &
          dimension (nx_block,ny_block,max_ntrcr,ncat,max_blocks) :: &
          trcrn     ! tracers
                    ! 1: surface temperature of ice/snow (C)
 
-      integer (kind=int_kind), dimension (max_ntrcr) :: &
+      integer (kind=int_kind), dimension (max_ntrcr), public :: &
          trcr_depend   ! = 0 for ice area tracers
                        ! = 1 for ice volume tracers
                        ! = 2 for snow volume tracers
 
-      integer (kind=int_kind) :: &
+      integer (kind=int_kind), public :: &
          ntrcr     ! number of tracers in use
 
       !-----------------------------------------------------------------
       ! indices and flags for tracers
       !-----------------------------------------------------------------
 
-      integer (kind=int_kind) ::                      &
-         ntraceb     , &    ! number of bio layer tracers in use                   &
+      integer (kind=int_kind), public :: &
+         ntraceb     , &    ! number of bio layer tracers in use
          ntrace_start       ! index of first bio tracer
       
-      integer (kind=int_kind) :: &
+      integer (kind=int_kind), public :: &
          nt_Tsfc  , & ! ice/snow temperature
          nt_qice  , & ! volume-weighted ice enthalpy (in layers)
          nt_qsno  , & ! volume-weighted snow enthalpy (in layers)
@@ -145,7 +148,7 @@
          nt_bgc_PON, & ! zooplankton and detritus  
          nt_bgc_S      ! Bulk salinity in fraction ice with dynamic salinity (Bio grid) 
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          tr_iage,   & ! if .true., use age tracer
          tr_FY,     & ! if .true., use first-year area tracer
          tr_lvl,    & ! if .true., use level ice tracer
@@ -159,7 +162,8 @@
       ! dynamic variables closely related to the state of the ice
       !-----------------------------------------------------------------
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
+         public :: &
          uvel     , & ! x-component of velocity (m/s)
          vvel     , & ! y-component of velocity (m/s)
          divu     , & ! strain rate I component, velocity divergence (1/s)
@@ -170,15 +174,16 @@
       ! ice state at start of time step, saved for later in the step 
       !-----------------------------------------------------------------
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
+         public :: &
          aice_init       ! initial concentration of ice, for diagnostics
 
       real (kind=dbl_kind), &
-         dimension(nx_block,ny_block,ncat,max_blocks) :: &
+         dimension(nx_block,ny_block,ncat,max_blocks), public :: &
          aicen_init  , & ! initial ice concentration, for linear ITD
          vicen_init      ! initial ice volume (m), for linear ITD
 
-       logical (kind=log_kind) :: &
+       logical (kind=log_kind), public :: &
          hbrine          ! if .true., brine height differs from ice thickness
 
 !=======================================================================
