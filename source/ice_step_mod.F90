@@ -30,6 +30,7 @@
       use ice_domain
       use ice_dyn_evp
       use ice_dyn_eap
+      use ice_dyn_shared, only: kdyn
 !      use ice_exit
       use ice_fileunits
       use ice_flux

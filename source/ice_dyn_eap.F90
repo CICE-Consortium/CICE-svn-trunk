@@ -51,9 +51,6 @@
         s11r, s12r, s22r, s11s, s12s, s22s           
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
-         stressptemp_1, stressptemp_2, stressptemp_3, stressptemp_4 , & ! sigma11+sigma22
-         stressmtemp_1, stressmtemp_2, stressmtemp_3, stressmtemp_4 , & ! sigma11-sigma22
-         stress12temp_1,stress12temp_2,stress12temp_3,stress12temp_4, & ! sigma12
          a11_1, a11_2, a11_3, a11_4,                  & ! components of 
          a12_1, a12_2, a12_3, a12_4                     ! structure tensor
 
@@ -105,11 +102,11 @@
       use ice_boundary, only: ice_haloupdate
       use ice_blocks, only: block, get_block
       use ice_constants, only: field_loc_center, field_loc_NEcorner, &
-          field_type_scalar, field_type_vector, c0
+          field_type_scalar, field_type_vector, c0, p5
       use ice_domain, only: nblocks, blocks_ice, halo_info
-      use ice_dyn_evp, only: fcor_blk, ndte, dtei, a_min, m_min, &
+      use ice_dyn_shared, only: fcor_blk, ndte, dtei, a_min, m_min, &
           cosw, sinw, dte2T, denom1, &
-          evp_prep1, stepu, evp_finish
+          evp_prep1, evp_prep2, stepu, evp_finish
       use ice_flux, only: rdg_conv, rdg_shear, prs_sig, strairxT, strairyT, &
           strairx, strairy, uocn, vocn, ss_tltx, ss_tlty, iceumask, fm, &
           strtltx, strtlty, strocnx, strocny, strintx, strinty, &
@@ -174,11 +171,9 @@
       !-----------------------------------------------------------------
 
        ! This call is needed only if dt changes during runtime.
-!echmod: automate this
 !      call set_evp_parameters (dt)
 
       do iblk = 1, nblocks
-
          do j = 1, ny_block 
          do i = 1, nx_block 
             rdg_conv (i,j,iblk) = c0 
@@ -258,15 +253,12 @@
          jlo = this_block%jlo
          jhi = this_block%jhi
 
-         call eap_prep  (nx_block,             ny_block,             & 
+         call evp_prep2 (nx_block,             ny_block,             & 
                          ilo, ihi,             jlo, jhi,             &
                          icellt(iblk),         icellu(iblk),         & 
                          indxti      (:,iblk), indxtj      (:,iblk), & 
                          indxui      (:,iblk), indxuj      (:,iblk), & 
-                         a_min,                m_min,                &
-                         cosw,                 sinw,                 &
                          aiu       (:,:,iblk), umass     (:,:,iblk), & 
-                         dtei,                                       &
                          umassdtei (:,:,iblk), fcor_blk  (:,:,iblk), & 
                          umask     (:,:,iblk),                       & 
                          uocn      (:,:,iblk), vocn      (:,:,iblk), & 
@@ -279,10 +271,6 @@
                          strintx   (:,:,iblk), strinty   (:,:,iblk), & 
                          waterx    (:,:,iblk), watery    (:,:,iblk), & 
                          forcex    (:,:,iblk), forcey    (:,:,iblk), & 
-                         a11_1     (:,:,iblk), a11_2     (:,:,iblk), &
-                         a11_3     (:,:,iblk), a11_4     (:,:,iblk), &
-                         a12_1     (:,:,iblk), a12_2     (:,:,iblk), &
-                         a12_3     (:,:,iblk), a12_4     (:,:,iblk), &
                          stressp_1 (:,:,iblk), stressp_2 (:,:,iblk), & 
                          stressp_3 (:,:,iblk), stressp_4 (:,:,iblk), & 
                          stressm_1 (:,:,iblk), stressm_2 (:,:,iblk), & 
@@ -292,10 +280,30 @@
                          uvel      (:,:,iblk), vvel      (:,:,iblk))
 
       !-----------------------------------------------------------------
-      ! ice strength
+      ! Initialize structure tensor
       !-----------------------------------------------------------------
 
-! New strength used in Ukita Moritz rheology         
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (icetmask(i,j,iblk)==0) then
+            ! structure tensor
+               a11_1(i,j,iblk) = p5
+               a11_2(i,j,iblk) = p5
+               a11_3(i,j,iblk) = p5
+               a11_4(i,j,iblk) = p5
+               a12_1(i,j,iblk) = c0
+               a12_2(i,j,iblk) = c0
+               a12_3(i,j,iblk) = c0
+               a12_4(i,j,iblk) = c0
+            endif                  ! icetmask
+         enddo                     ! i
+         enddo                     ! j
+
+      !-----------------------------------------------------------------
+      ! ice strength
+      ! New strength used in Ukita Moritz rheology         
+      !-----------------------------------------------------------------
+
          call ice_strength (nx_block, ny_block,   & 
                             ilo, ihi, jlo, jhi,   &
                             icellt(iblk),         & 
@@ -460,17 +468,11 @@
 !
       use ice_blocks, only: nx_block, ny_block
       use ice_communicate, only: my_task, master_task
-      use ice_constants, only: c0, p5, c2, omega
+      use ice_constants, only: c0, p5
       use ice_domain, only: nblocks
-      use ice_dyn_evp, only: fcor_blk, ndte, eyc, set_evp_parameters
+      use ice_dyn_shared, only: init_evp
       use ice_exit, only: abort_ice
-      use ice_flux, only: rdg_conv, rdg_shear, iceumask, fm, &
-          stressp_1, stressp_2, stressp_3, stressp_4, &
-          stressm_1, stressm_2, stressm_3, stressm_4, &
-          stress12_1, stress12_2, stress12_3, stress12_4
       use ice_restart, only: runtype
-      use ice_state, only: uvel, vvel, divu, shear
-      use ice_grid, only: ULAT, ULON
       use ice_fileunits, only: nu_diag, nu_eap, eap_filename, &
           get_fileunit, release_fileunit
 !
@@ -486,32 +488,11 @@
          iblk, &         ! block index
          eap_error       ! eap input file i/o error flag
 
-      real (kind=dbl_kind) :: &
-         dte         , & ! subcycling timestep for EAP dynamics, s
-         ecc         , & ! (ratio of major to minor ellipse axes)^2
-         tdamp2          ! 2(wave damping time scale T)
-
-      call set_evp_parameters (dt)
-
-      if (my_task == master_task) then
-         write(nu_diag,*) 'dt  = ',dt
-         write(nu_diag,*) 'dte = ',dt/real(ndte,kind=dbl_kind)
-         write(nu_diag,*) 'tdamp =', eyc*dt
-      endif
-
-      allocate(fcor_blk(nx_block,ny_block,max_blocks))
+      call init_evp (dt)
 
       do iblk = 1, nblocks
       do j = 1, ny_block
       do i = 1, nx_block
-
-         ! velocity
-         uvel(i,j,iblk) = c0    ! m/s
-         vvel(i,j,iblk) = c0    ! m/s
-
-         ! strain rates
-         divu (i,j,iblk) = c0
-         shear(i,j,iblk) = c0
          e11(i,j,iblk) = c0
          e12(i,j,iblk) = c0
          e22(i,j,iblk) = c0
@@ -529,30 +510,6 @@
          a12_2 (i,j,iblk) = c0
          a12_3 (i,j,iblk) = c0
          a12_4 (i,j,iblk) = c0
-
-         rdg_conv (i,j,iblk) = c0
-         rdg_shear(i,j,iblk) = c0
-
-         ! Coriolis parameter
-         fcor_blk(i,j,iblk) = c2*omega*sin(ULAT(i,j,iblk)) ! 1/s
-
-         ! stress tensor,  kg/s^2
-         stressp_1 (i,j,iblk) = c0
-         stressp_2 (i,j,iblk) = c0
-         stressp_3 (i,j,iblk) = c0
-         stressp_4 (i,j,iblk) = c0
-         stressm_1 (i,j,iblk) = c0
-         stressm_2 (i,j,iblk) = c0
-         stressm_3 (i,j,iblk) = c0
-         stressm_4 (i,j,iblk) = c0
-         stress12_1(i,j,iblk) = c0
-         stress12_2(i,j,iblk) = c0
-         stress12_3(i,j,iblk) = c0
-         stress12_4(i,j,iblk) = c0
-
-         ! ice extent mask on velocity points
-         iceumask(i,j,iblk) = .false.
-
       enddo                     ! i
       enddo                     ! j
       enddo                     ! iblk
@@ -583,269 +540,6 @@
       if (runtype == 'continue') call read_restart_eap
 
       end subroutine init_eap
-
-!=======================================================================
-!BOP
-!
-! !IROUTINE: eap_prep - compute quantities needed for stress tensor and mom eqns
-!
-! !INTERFACE:
-!
-      subroutine eap_prep  (nx_block,   ny_block,   & 
-                            ilo, ihi,  jlo, jhi,    &
-                            icellt,     icellu,     & 
-                            indxti,     indxtj,     & 
-                            indxui,     indxuj,     & 
-                            a_min,      m_min,      &
-                            cosw,       sinw,       &
-                            aiu,        umass,      & 
-                            dtei,                   &
-                            umassdtei,  fcor,       & 
-                            umask,                  & 
-                            uocn,       vocn,       & 
-                            strairx,    strairy,    & 
-                            ss_tltx,    ss_tlty,    &  
-                            icetmask,   iceumask,   & 
-                            fm,                     & 
-                            strtltx,    strtlty,    & 
-                            strocnx,    strocny,    &
-                            strintx,    strinty,    &
-                            waterx,     watery,     & 
-                            forcex,     forcey,     &
-                            a11_1,      a11_2,      &
-                            a11_3,      a11_4,      &
-                            a12_1,      a12_2,      &
-                            a12_3,      a12_4,      &     
-                            stressp_1,  stressp_2,  &   
-                            stressp_3,  stressp_4,  & 
-                            stressm_1,  stressm_2,  & 
-                            stressm_3,  stressm_4,  & 
-                            stress12_1, stress12_2, & 
-                            stress12_3, stress12_4, & 
-                            uvel,       vvel)
-
-
-! !DESCRIPTION:
-!
-! Computes quantities needed in the stress tensor (sigma)
-! and momentum (u) equations, but which do not change during
-! the thermodynamics/transport time step:
-! --wind stress shift to U grid,
-! --ice mass and ice extent masks,
-! initializes ice velocity for new points to ocean sfc current
-! (based on evp_prep2)
-!
-! !REVISION HISTORY:
-!
-! same as module 
-!
-! !USES:
-!
-      use ice_constants, only: c0, c1
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-      integer (kind=int_kind), intent(in) :: &
-         nx_block, ny_block, & ! block dimensions
-         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
-
-      integer (kind=int_kind), intent(out) :: &
-         icellt   , & ! no. of cells where icetmask = 1
-         icellu       ! no. of cells where iceumask = 1
-
-      integer (kind=int_kind), dimension (nx_block*ny_block), & 
-         intent(out) :: &
-         indxti   , & ! compressed index in i-direction
-         indxtj   , & ! compressed index in j-direction
-         indxui   , & ! compressed index in i-direction
-         indxuj       ! compressed index in j-direction
-
-      real (kind=dbl_kind), intent(in) :: &
-         cosw     , & ! cos(ocean turning angle)  ! turning angle = 0
-         sinw     , & ! sin(ocean turning angle)  ! turning angle = 0
-         a_min    , & ! minimum ice area
-         m_min        ! minimum ice mass (kg/m^2)
-
-      logical (kind=log_kind), dimension (nx_block,ny_block), & 
-         intent(in) :: &
-         umask       ! land/boundary mask, thickness (U-cell)
-
-      integer (kind=int_kind), dimension (nx_block,ny_block), & 
-         intent(in) :: &
-         icetmask    ! ice extent mask (T-cell)
-
-      logical (kind=log_kind), dimension (nx_block,ny_block), & 
-         intent(inout) :: &
-         iceumask    ! ice extent mask (U-cell)
-
-      real (kind=dbl_kind), intent(in) :: &
-         dtei        ! 1/dte, where dte is subcycling timestep (1/s)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         aiu     , & ! ice fraction on u-grid
-         umass   , & ! total mass of ice and snow (u grid)
-         fcor    , & ! Coriolis parameter (1/s)
-         strairx , & ! stress on ice by air, x-direction
-         strairy , & ! stress on ice by air, y-direction
-         uocn    , & ! ocean current, x-direction (m/s)
-         vocn    , & ! ocean current, y-direction (m/s)
-         ss_tltx , & ! sea surface slope, x-direction (m/m)
-         ss_tlty     ! sea surface slope, y-direction
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), & 
-         intent(out) :: &
-         umassdtei,& ! mass of U-cell/dte (kg/m^2 s)
-         waterx  , & ! for ocean stress calculation, x (m/s)
-         watery  , & ! for ocean stress calculation, y (m/s)
-         forcex  , & ! work array: combined atm stress and ocn tilt, x
-         forcey      ! work array: combined atm stress and ocn tilt, y
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), & 
-         intent(inout) :: &
-         fm      , & ! Coriolis param. * mass in U-cell (kg/s)
-         stressp_1, stressp_2, stressp_3, stressp_4 , & ! sigma11+sigma22
-         stressm_1, stressm_2, stressm_3, stressm_4 , & ! sigma11-sigma22
-         stress12_1,stress12_2,stress12_3,stress12_4, & ! sigma12
-         a11_1, a11_2, a11_3, a11_4,                  & ! structure tensor  
-         a12_1, a12_2, a12_3, a12_4,                  & ! structure tensor
-         uvel    , & ! x-component of velocity (m/s)
-         vvel    , & ! y-component of velocity (m/s)
-         strtltx , & ! stress due to sea surface slope, x-direction
-         strtlty , & ! stress due to sea surface slope, y-direction
-         strocnx , & ! ice-ocean stress, x-direction
-         strocny , & ! ice-ocean stress, y-direction
-         strintx , & ! divergence of internal ice stress, x (N/m^2)
-         strinty     ! divergence of internal ice stress, y (N/m^2)
-!
-! local variables
-!
-      integer (kind=int_kind) :: &
-         i, j, ij
-
-      logical (kind=log_kind), dimension(nx_block,ny_block) :: &
-         iceumask_old      ! old-time iceumask
-
-      !-----------------------------------------------------------------
-      ! Water points: Set back to initial values 
-      !-----------------------------------------------------------------
-
-      do j = 1, ny_block
-      do i = 1, nx_block
-         waterx   (i,j) = c0
-         watery   (i,j) = c0
-         forcex   (i,j) = c0
-         forcey   (i,j) = c0
-         umassdtei(i,j) = c0
-
-         if (icetmask(i,j)==0) then
-         ! structure tensor
-            a11_1(i,j) = 0.5_dbl_kind ! p75 
-            a11_2(i,j) = 0.5_dbl_kind ! p75
-            a11_3(i,j) = 0.5_dbl_kind ! p75
-            a11_4(i,j) = 0.5_dbl_kind ! p75
-            a12_1(i,j) = c0    
-            a12_2(i,j) = c0   
-            a12_3(i,j) = c0  
-            a12_4(i,j) = c0 
-            stressp_1 (i,j) = c0
-            stressp_2 (i,j) = c0
-            stressp_3 (i,j) = c0
-            stressp_4 (i,j) = c0
-            stressm_1 (i,j) = c0
-            stressm_2 (i,j) = c0
-            stressm_3 (i,j) = c0
-            stressm_4 (i,j) = c0
-            stress12_1(i,j) = c0
-            stress12_2(i,j) = c0
-            stress12_3(i,j) = c0
-            stress12_4(i,j) = c0
-         endif                  ! icetmask
-      enddo                     ! i
-      enddo                     ! j
-
-      !-----------------------------------------------------------------
-      ! Identify cells where icetmask = 1
-      ! Note: The icellt mask includes north and east ghost cells
-      !       where stresses are needed.
-      !-----------------------------------------------------------------
-
-      icellt = 0
-      do j = jlo, jhi+1
-      do i = ilo, ihi+1
-         if (icetmask(i,j) == 1) then
-            icellt = icellt + 1
-            indxti(icellt) = i
-            indxtj(icellt) = j
-         endif
-      enddo
-      enddo
-
-      !-----------------------------------------------------------------
-      ! Define iceumask
-      ! Identify cells where iceumask is true
-      ! Initialize velocity where needed
-      !-----------------------------------------------------------------
-
-      icellu = 0
-      do j = jlo, jhi
-      do i = ilo, ihi
-
-         ! ice extent mask (U-cells)
-         iceumask_old(i,j) = iceumask(i,j) ! save
-         iceumask(i,j) = (umask(i,j)) .and. (aiu  (i,j) > a_min) & 
-                                      .and. (umass(i,j) > m_min)
-
-         if (iceumask(i,j)) then
-            icellu = icellu + 1
-            indxui(icellu) = i
-            indxuj(icellu) = j
-
-            ! initialize velocity for new ice points to ocean sfc current
-            if (.not. iceumask_old(i,j)) then
-               uvel(i,j) = uocn(i,j)
-               vvel(i,j) = vocn(i,j)
-            endif
-         else
-            ! set velocity and stresses to zero for masked-out points
-            uvel(i,j)    = c0
-            vvel(i,j)    = c0
-            strintx(i,j) = c0
-            strinty(i,j) = c0
-            strocnx(i,j) = c0
-            strocny(i,j) = c0
-         endif
-      enddo
-      enddo
-
-      !-----------------------------------------------------------------
-      ! Define variables for momentum equation
-      !-----------------------------------------------------------------
-
-      do ij = 1, icellu
-         i = indxui(ij)
-         j = indxuj(ij)
-
-         umassdtei(i,j) = umass(i,j)*dtei ! m/dte, kg/m^2 s
-         fm(i,j) = fcor(i,j)*umass(i,j)   ! Coriolis * mass
-
-         ! for ocean stress
-         waterx(i,j) = uocn(i,j)*cosw - vocn(i,j)*sinw*sign(c1,fm(i,j))
-         watery(i,j) = vocn(i,j)*cosw + uocn(i,j)*sinw*sign(c1,fm(i,j))
-
-         ! combine tilt with wind stress
-#ifndef coupled
-         ! calculate tilt from geostrophic currents if needed
-         strtltx(i,j) = -fm(i,j)*vocn(i,j)
-         strtlty(i,j) =  fm(i,j)*uocn(i,j)
-#else
-         strtltx(i,j) = -gravit*umass(i,j)*ss_tltx(i,j)
-         strtlty(i,j) = -gravit*umass(i,j)*ss_tlty(i,j)
-#endif
-         forcex(i,j) = strairx(i,j) + strtltx(i,j)
-         forcey(i,j) = strairy(i,j) + strtlty(i,j)
-      enddo
-
-      end subroutine eap_prep
 
 !=======================================================================
 !BOP
@@ -939,14 +633,9 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), & 
          intent(inout) :: &
-         stressp_1, stressp_2, stressp_3, stressp_4 , & ! sigma11+sigma22
-         stressm_1, stressm_2, stressm_3, stressm_4 , & ! sigma11-sigma22
-         stress12_1,stress12_2,stress12_3,stress12_4    ! sigma12
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block):: &
-         stressptemp_1, stressptemp_2, stressptemp_3, stressptemp_4 , & ! sigma11+sigma22
-         stressmtemp_1, stressmtemp_2, stressmtemp_3, stressmtemp_4 , & ! sigma11-sigma22
-         stress12temp_1,stress12temp_2,stress12temp_3,stress12temp_4    ! sigma12
+         stressp_1, stressp_2, stressp_3, stressp_4, & ! sigma11+sigma22
+         stressm_1, stressm_2, stressm_3, stressm_4, & ! sigma11-sigma22
+         stress12_1,stress12_2,stress12_3,stress12_4   ! sigma12
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
@@ -979,6 +668,11 @@
       integer (kind=int_kind) :: &
          i, j, ij
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block):: &
+         stressptmp_1, stressptmp_2, stressptmp_3, stressptmp_4, & ! sigma11+sigma22
+         stressmtmp_1, stressmtmp_2, stressmtmp_3, stressmtmp_4, & ! sigma11-sigma22
+         stress12tmp_1,stress12tmp_2,stress12tmp_3,stress12tmp_4   ! sigma12
+
       real (kind=dbl_kind) :: &
         divune, divunw, divuse, divusw            , & ! divergence
         tensionne, tensionnw, tensionse, tensionsw, & ! tension
@@ -996,7 +690,6 @@
       real (kind=dbl_kind) :: &
         alpharne, alpharnw, alpharsw, alpharse,     &
         alphasne, alphasnw, alphassw, alphasse
-
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -1049,29 +742,29 @@
       ! Stress updated depending on strain rate and structure tensor
       !-----------------------------------------------------------------
 
-! ne
+         ! ne
          call update_stress_rdg (ksub, ndte, divune, tensionne, &
                                  shearne, a11_1(i,j), a12_1(i,j), &
-                                 stressptemp_1(i,j), stressmtemp_1(i,j), &
-                                 stress12temp_1(i,j), strength(i,j), &
+                                 stressptmp_1(i,j), stressmtmp_1(i,j), &
+                                 stress12tmp_1(i,j), strength(i,j), &
                                  alpharne, alphasne)
-! nw
+         ! nw
          call update_stress_rdg (ksub, ndte, divunw, tensionnw, &
                                  shearnw, a11_2(i,j), a12_2(i,j), &
-                                 stressptemp_2(i,j), stressmtemp_2(i,j), &
-                                 stress12temp_2(i,j), strength(i,j), &
+                                 stressptmp_2(i,j), stressmtmp_2(i,j), &
+                                 stress12tmp_2(i,j), strength(i,j), &
                                  alpharnw, alphasnw)
-! sw
+         ! sw
          call update_stress_rdg (ksub, ndte, divusw, tensionsw, &
                                  shearsw, a11_3(i,j), a12_3(i,j), &
-                                 stressptemp_3(i,j), stressmtemp_3(i,j), &
-                                 stress12temp_3(i,j), strength(i,j), &
+                                 stressptmp_3(i,j), stressmtmp_3(i,j), &
+                                 stress12tmp_3(i,j), strength(i,j), &
                                  alpharsw, alphassw)
-! se
+         ! se
          call update_stress_rdg (ksub, ndte, divuse, tensionse, &
                                  shearse, a11_4(i,j), a12_4(i,j), &
-                                 stressptemp_4(i,j), stressmtemp_4(i,j), &
-                                 stress12temp_4(i,j), strength(i,j), &
+                                 stressptmp_4(i,j), stressmtmp_4(i,j), &
+                                 stress12tmp_4(i,j), strength(i,j), &
                                  alpharse, alphasse)
 
       !-----------------------------------------------------------------
@@ -1086,9 +779,11 @@
                 +  (shearne +   shearnw +   shearse +   shearsw)**2)
 
             divu(i,j) = p25*(divune + divunw + divuse + divusw) * tarear(i,j)
-            rdg_conv(i,j)  = -min(p25*(alpharne + alpharnw + alpharsw + alpharse),c0) * tarear(i,j)
+            rdg_conv(i,j)  = -min(p25*(alpharne + alpharnw &
+                                     + alpharsw + alpharse),c0) * tarear(i,j)
             !rdg_shear=0 for computing closing_net in ridge_prep
-            !rdg_shear(i,j) = p25*(alphasne + alphasnw + alphassw + alphasse) * tarear(i,j)
+            !rdg_shear(i,j) = p25*(alphasne + alphasnw &
+            !                    + alphassw + alphasse) * tarear(i,j)
          endif
 
          e11(i,j) = p5*p25*(divune + divunw + divuse + divusw + &
@@ -1105,31 +800,31 @@
       ! elastic relaxation, see Eq. A12-A14
       !-----------------------------------------------------------------
 
-         stressp_1(i,j) = (stressp_1(i,j) + stressptemp_1(i,j)*dte2T) &
+         stressp_1(i,j) = (stressp_1(i,j) + stressptmp_1(i,j)*dte2T) &
                           * denom1
-         stressp_2(i,j) = (stressp_2(i,j) + stressptemp_2(i,j)*dte2T) &
+         stressp_2(i,j) = (stressp_2(i,j) + stressptmp_2(i,j)*dte2T) &
                           * denom1
-         stressp_3(i,j) = (stressp_3(i,j) + stressptemp_3(i,j)*dte2T) &
+         stressp_3(i,j) = (stressp_3(i,j) + stressptmp_3(i,j)*dte2T) &
                           * denom1
-         stressp_4(i,j) = (stressp_4(i,j) + stressptemp_4(i,j)*dte2T) &
-                          * denom1
-
-         stressm_1(i,j) = (stressm_1(i,j) + stressmtemp_1(i,j)*dte2T) &
-                          * denom1
-         stressm_2(i,j) = (stressm_2(i,j) + stressmtemp_2(i,j)*dte2T) &
-                          * denom1
-         stressm_3(i,j) = (stressm_3(i,j) + stressmtemp_3(i,j)*dte2T) &
-                          * denom1
-         stressm_4(i,j) = (stressm_4(i,j) + stressmtemp_4(i,j)*dte2T) &
+         stressp_4(i,j) = (stressp_4(i,j) + stressptmp_4(i,j)*dte2T) &
                           * denom1
 
-         stress12_1(i,j) = (stress12_1(i,j) + stress12temp_1(i,j)*dte2T) &
+         stressm_1(i,j) = (stressm_1(i,j) + stressmtmp_1(i,j)*dte2T) &
                           * denom1
-         stress12_2(i,j) = (stress12_2(i,j) + stress12temp_2(i,j)*dte2T) &
+         stressm_2(i,j) = (stressm_2(i,j) + stressmtmp_2(i,j)*dte2T) &
                           * denom1
-         stress12_3(i,j) = (stress12_3(i,j) + stress12temp_3(i,j)*dte2T) &
+         stressm_3(i,j) = (stressm_3(i,j) + stressmtmp_3(i,j)*dte2T) &
                           * denom1
-         stress12_4(i,j) = (stress12_4(i,j) + stress12temp_4(i,j)*dte2T) &
+         stressm_4(i,j) = (stressm_4(i,j) + stressmtmp_4(i,j)*dte2T) &
+                          * denom1
+
+         stress12_1(i,j) = (stress12_1(i,j) + stress12tmp_1(i,j)*dte2T) &
+                          * denom1
+         stress12_2(i,j) = (stress12_2(i,j) + stress12tmp_2(i,j)*dte2T) &
+                          * denom1
+         stress12_3(i,j) = (stress12_3(i,j) + stress12tmp_3(i,j)*dte2T) &
+                          * denom1
+         stress12_4(i,j) = (stress12_4(i,j) + stress12tmp_4(i,j)*dte2T) &
                           * denom1
 
           s11(i,j) = p5 * p25 * (stressp_1(i,j) + stressp_2(i,j) &
@@ -1143,16 +838,16 @@
           s12(i,j) = p25 *      (stress12_1(i,j) + stress12_2(i,j) &
                                + stress12_3(i,j) + stress12_4(i,j))
 
-          yieldstress11(i,j) = p5 * p25 * (stressptemp_1(i,j) + stressptemp_2(i,j) &
-                                         + stressptemp_3(i,j) + stressptemp_4(i,j) &
-                                         + stressmtemp_1(i,j) + stressmtemp_2(i,j) &
-                                         + stressmtemp_3(i,j) + stressmtemp_4(i,j))
-          yieldstress22(i,j) = p5 * p25 * (stressptemp_1(i,j) + stressptemp_2(i,j) &
-                                         + stressptemp_3(i,j) + stressptemp_4(i,j) &
-                                         - stressmtemp_1(i,j) - stressmtemp_2(i,j) &
-                                         - stressmtemp_3(i,j) - stressmtemp_4(i,j))
-          yieldstress12(i,j) = p25 *      (stress12temp_1(i,j) + stress12temp_2(i,j) &
-                                         + stress12temp_3(i,j) + stress12temp_4(i,j))
+          yieldstress11(i,j) = p5 * p25 * (stressptmp_1(i,j) + stressptmp_2(i,j) &
+                                         + stressptmp_3(i,j) + stressptmp_4(i,j) &
+                                         + stressmtmp_1(i,j) + stressmtmp_2(i,j) &
+                                         + stressmtmp_3(i,j) + stressmtmp_4(i,j))
+          yieldstress22(i,j) = p5 * p25 * (stressptmp_1(i,j) + stressptmp_2(i,j) &
+                                         + stressptmp_3(i,j) + stressptmp_4(i,j) &
+                                         - stressmtmp_1(i,j) - stressmtmp_2(i,j) &
+                                         - stressmtmp_3(i,j) - stressmtmp_4(i,j))
+          yieldstress12(i,j) = p25 *      (stress12tmp_1(i,j) + stress12tmp_2(i,j) &
+                                         + stress12tmp_3(i,j) + stress12tmp_4(i,j))
 
       !-----------------------------------------------------------------
       ! Eliminate underflows.
@@ -1324,7 +1019,6 @@
 !
 !     local variables
 !
-
       real (kind=dbl_kind), dimension(2,2) :: &
          Q, Qd, atemp,                   &
          dtemp,               &
@@ -1605,7 +1299,6 @@
          stressp_1, stressp_2, stressp_3, stressp_4, & ! sigma11+sigma22
          stressm_1, stressm_2, stressm_3, stressm_4, & ! sigma11-sigma22
          stress12_1, stress12_2, stress12_3, stress12_4    ! sigma12
-
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
@@ -1996,6 +1689,7 @@
       !-----------------------------------------------------------------
       ! Ensure unused values in west and south ghost cells are 0
       !-----------------------------------------------------------------
+
          do iblk = 1, nblocks
             do j = 1, nghost
             do i = 1, nx_block

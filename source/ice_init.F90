@@ -89,7 +89,7 @@
           oceanmixed_file, restore_sst,   trestore
       use ice_grid, only: grid_file, kmt_file, grid_type, grid_format
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist, mu_rdg
-      use ice_dyn_evp, only: ndte, kdyn, evp_damping, yield_curve
+      use ice_dyn_shared, only: ndte, kdyn, evp_damping, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, ahmax, &
                                shortwave, albedo_type, R_ice, R_pnd, &
                                R_snw
