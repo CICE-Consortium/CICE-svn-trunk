@@ -1214,7 +1214,7 @@
 !
 ! !USES:
 !
-      use ice_blocks, only: block, get_block
+      use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_constants, only: c0, c1, p25, puny, secday, &
           awtvdr, awtidr, awtvdf, awtidf, Lfresh, rhos, cp_ice, spval
       use ice_domain, only: blocks_ice, nblocks

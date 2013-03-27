@@ -85,7 +85,8 @@
 !
       subroutine compute_ponds_cesm(nx_block,ny_block,  &
                                    ilo, ihi, jlo, jhi,  &
-                                   dt,    pndaspect,    &
+                                   dt,    hi_min,       &
+                                   pndaspect,           &
                                    rfrac, meltt,        &
                                    melts, frain,        &
                                    aicen, vicen, vsnon, &
@@ -99,15 +100,13 @@
 !
 ! !USES:
 !
-      use ice_domain_size, only: max_ntrcr
-      use ice_itd, only: hi_min
-
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
 
       real (kind=dbl_kind), intent(in) :: &
          dt,       & ! time step (s)
+         hi_min,   & ! minimum ice thickness allowed for thermo (m)
          pndaspect   ! ratio of pond depth to pond fraction
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
@@ -240,7 +239,7 @@
 !
       subroutine compute_ponds_simple(nx_block,ny_block,   &
                                       ilo, ihi, jlo, jhi,  &
-                                      dt,    rfrac,        &
+                                      dt,    rfrac, hi_min,&
                                       meltt, melts, frain, &
                                       aicen, vicen, vsnon, &
                                       Tsfcn, apnd,  hpnd)
@@ -253,15 +252,13 @@
 !
 ! !USES:
 !
-      use ice_domain_size, only: max_ntrcr
-      use ice_itd, only: hi_min
-
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
 
       real (kind=dbl_kind), intent(in) :: &
-         dt ! time step (s)
+         dt,       & ! time step (s)
+         hi_min      ! minimum ice thickness allowed for thermo (m)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(in) :: &

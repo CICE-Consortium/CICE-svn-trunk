@@ -54,6 +54,7 @@
 !
 ! !USES:
 !
+      use ice_domain_size, only: n_aero
       use ice_state
 !
 !EOP

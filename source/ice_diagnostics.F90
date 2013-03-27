@@ -144,6 +144,7 @@
           rhofresh, Tffresh, Lfresh, Lvap, ice_ref_salinity, field_loc_center, &
           m2_to_km2, awtvdr, awtidr, awtvdf, awtidf
       use ice_domain, only: distrb_info, nblocks
+      use ice_domain_size, only: ncat, n_aero
       use ice_fileunits, only: flush_fileunit
       use ice_flux, only: alvdr, alidr, alvdf, alidf, evap, fsnow, frazil, &
           fswabs, fswthru, flw, flwout, fsens, fsurf, flat, frzmlt, frain, fpond, &

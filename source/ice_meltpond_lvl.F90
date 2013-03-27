@@ -89,7 +89,7 @@
 !
       subroutine compute_ponds_lvl(nx_block,ny_block,   &
                                    ilo, ihi, jlo, jhi,  &
-                                   dt,                  &
+                                   dt,    hi_min,       &
                                    dpscale, frzpnd,     &
                                    pndaspect,           &
                                    rfrac, meltt, melts, &
@@ -108,8 +108,7 @@
 !
 ! !USES:
 !
-      use ice_domain_size, only: max_ntrcr, nilyr
-      use ice_itd, only: hi_min
+      use ice_domain_size, only: nilyr
       use ice_therm_shared, only: ktherm
 
       integer (kind=int_kind), intent(in) :: &
@@ -118,6 +117,7 @@
 
       real (kind=dbl_kind), intent(in) :: &
          dt,       & ! time step (s)  
+         hi_min,   & ! minimum ice thickness allowed for thermo (m)
          dpscale,  & ! alter e-folding time scale for flushing 
          pndaspect   ! ratio of pond depth to pond fraction
 
@@ -345,7 +345,8 @@
                deltah = hpondn + hi - draft
                pressure_head = gravit * rhow * max(deltah, c0)
                Tmlt(:) = -sicen(i,j,:) * depressT
-               call brine_permeability(qicen(i,j,:), vicen(i,j), sicen(i,j,:), Tmlt, perm)
+               call brine_permeability(nilyr, qicen(i,j,:), &
+                    vicen(i,j), sicen(i,j,:), Tmlt, perm)
                drain = perm*pressure_head*dt / (viscosity*hi) * dpscale
                deltah = min(drain, hpondn)
                dvn = -deltah*apondn
@@ -383,15 +384,17 @@
 !
 ! !INTERFACE:
 !
-      subroutine brine_permeability(qicen, vicen, salin, Tmlt, perm)
+      subroutine brine_permeability(nilyr, qicen, vicen, salin, Tmlt, perm)
 !
 ! !USES:
 !
       use ice_therm_shared, only: calculate_Tin_from_qin
-      use ice_domain_size, only: nilyr
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
+      integer (kind=int_kind), intent(in) :: &
+         nilyr     ! number of ice layers
+
       real (kind=dbl_kind), dimension(nilyr), intent(in) :: &
          qicen, &  ! enthalpy for each ice layer (J m-3)
          salin, &  ! salinity (ppt)   
