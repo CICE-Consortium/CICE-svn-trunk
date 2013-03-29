@@ -1,15 +1,8 @@
 !=======================================================================
 !
-!BOP
-!
-! !MODULE: CICE_InitMod - performs CICE initialization
-!
-! !DESCRIPTION:
-!
 !  This module contains the CICE initialization routine that sets model
 !  parameters and initializes the grid and CICE state variables.
 !
-! !REVISION HISTORY:
 !  SVN:$Id$
 !
 !  authors Elizabeth C. Hunke, LANL
@@ -18,13 +11,9 @@
 !
 ! 2006: Converted to free form source (F90) by Elizabeth Hunke
 ! 2008: E. Hunke moved ESMF code to its own driver
-!
-! !INTERFACE:
-!
+
       module CICE_InitMod
-!
-! !USES:
-!
+
       use ice_aerosol
       use ice_age, only: init_age
       use ice_calendar
@@ -77,26 +66,15 @@
 
       implicit none
       private
+      public :: CICE_Initialize, cice_init
       save
 
-! !PUBLIC MEMBER FUNCTIONS:
-
-      public :: CICE_Initialize, cice_init
-
-!
-!EOP
-!
 !=======================================================================
 
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: CICE_Initialize - initialize CICE model
-!
-! !DESCRIPTION:
-!
+
 !  Initialize the basic state, grid and all necessary parameters for
 !  running the CICE model.  Return the initial state in routine
 !  export state.
@@ -105,50 +83,29 @@
 !        applications (e.g., standalone CAM), this driver would be
 !        replaced by a different driver that calls subroutine cice_init,
 !        where most of the work is done.
-!
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine CICE_Initialize
-!
-!EOP
-!BOC
-!
+
    !--------------------------------------------------------------------
    ! model initialization
    !--------------------------------------------------------------------
 
       call cice_init
-!
-!EOC
-!
+
       end subroutine CICE_Initialize
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: cice_init - initialize CICE model
-!
-! !DESCRIPTION:
 !
 !  Initialize CICE model.
-!
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine cice_init
-!
-!EOP
-!
-        integer(kind=int_kind) :: iblk
+
+      integer(kind=int_kind) :: iblk
 
       call init_communicate     ! initial setup for message passing
       call init_fileunits       ! unit numbers
       call input_data           ! namelist variables
-      if (trim(runtype) == 'bering') &
-         call check_finished_file  ! quit if finished file already exists
+      if (trim(runid) == 'bering') call check_finished_file
       call init_zbgc            ! vertical biogeochemistry namelist
       call init_work            ! work arrays
 
@@ -181,7 +138,7 @@
       call ice_HaloRestore_init ! restored boundary conditions
 
       if (restart_ext) then           ! read extended grid
-         if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') then 
+         if (trim(runtype) == 'continue') then 
             ! start from core restart file
             call restartfile_ext()       ! given by pointer in ice_in
             call calendar(time)          ! update time parameters
@@ -189,7 +146,7 @@
             call restartfile_ext(ice_ic) !  or 'default' or 'none'
          endif         
       else                            ! read physical grid
-         if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') then 
+         if (trim(runtype) == 'continue') then 
             ! start from core restart file
             call restartfile()           ! given by pointer in ice_in
             call calendar(time)          ! update time parameters
@@ -201,7 +158,7 @@
       ! tracers
       ! ice age tracer   
       if (tr_iage) then 
-         if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') &
+         if (trim(runtype) == 'continue') &
               restart_age = .true.
          if (restart_age) then
             call read_restart_age
@@ -236,7 +193,7 @@
       endif
       ! CESM melt ponds
       if (tr_pond_cesm) then
-         if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') &
+         if (trim(runtype) == 'continue') &
               restart_pond_cesm = .true.
          if (restart_pond_cesm) then
             call read_restart_pond_cesm
@@ -249,7 +206,7 @@
       endif
       ! level-ice melt ponds
       if (tr_pond_lvl) then
-         if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') &
+         if (trim(runtype) == 'continue') &
               restart_pond_lvl = .true.
          if (restart_pond_lvl) then
             call read_restart_pond_lvl
@@ -263,7 +220,7 @@
       endif
       ! topographic melt ponds
       if (tr_pond_topo) then
-         if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') &
+         if (trim(runtype) == 'continue') &
               restart_pond_topo = .true.
          if (restart_pond_topo) then
             call read_restart_pond_topo
@@ -286,7 +243,7 @@
       ! Initialize shortwave components using swdn from previous timestep 
       ! if restarting. These components will be scaled to current forcing 
       ! in prep_radiation.
-      if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering' .or. restart) &
+      if (trim(runtype) == 'continue' .or. restart) &
          call init_shortwave    ! initialize radiative transfer
 
          istep  = istep  + 1    ! update time step counters
@@ -322,26 +279,27 @@
       end subroutine cice_init
 
 !=======================================================================
+!
+! Check whether a file indicating that the previous run finished cleanly
+! If so, then do not continue the current restart.  This is needed only 
+! for runs on machine 'bering' (set using runid = 'bering').
+!
+!  author: Adrian Turner, LANL
 
       subroutine check_finished_file()
 
-        character(len=char_len_long) :: filename
+      character(len=char_len_long) :: filename
+      logical :: lexist = .false.
 
-        logical :: lexist = .false.
+      if (my_task == master_task) then
+           
+         filename = trim(restart_dir)//"finished"
+         inquire(file=filename, exist=lexist)
+         if (lexist) then
+            call abort_ice("Found already finished file - quitting")
+         end if
 
-        if (my_task == master_task) then
-           
-           filename = trim(restart_dir)//"finished"
-           
-           inquire(file=filename, exist=lexist)
-           
-           if (lexist) then
-              
-              call abort_ice("Found already finished file - quitting")
-              
-           end if
-
-        endif
+      endif
 
       end subroutine check_finished_file
 

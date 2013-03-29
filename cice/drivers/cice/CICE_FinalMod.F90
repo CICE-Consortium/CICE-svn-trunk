@@ -1,28 +1,17 @@
 !=======================================================================
 !
-!BOP
-!
-! !MODULE: CICE_FinalMod - routines for final exit of CICE model
-!
-! !DESCRIPTION:
-!
 !  This module contains routines for the final exit of the CICE model,
 !  including final output and clean exit from any message passing
 !  environments and frameworks.
 !
-! !REVISION HISTORY:
 !  SVN:$Id$
 !
 !  authors: Philip W. Jones, LANL
 !  2006: Converted to free source form (F90) by Elizabeth Hunke
 !  2008: E. Hunke moved ESMF code to its own driver
-!
-! !INTERFACE:
-!
+
       module CICE_FinalMod
-!
-! !USES:
-!
+
       use ice_exit
       use ice_fileunits
       use ice_kinds_mod
@@ -30,39 +19,21 @@
 
       implicit none
       private
+      public :: CICE_Finalize
       save
 
-! !PUBLIC MEMBER FUNCTIONS:
-
-      public :: CICE_Finalize
-
-!
-!EOP
-!
 !=======================================================================
 
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: CICE_Finalize - final exit of CICE model
-!
-! !DESCRIPTION:
 !
 !  This routine shuts down CICE by exiting all relevent environments.
-!
-! !REVISION HISTORY:
-!
-!  author same as module
-!
-! !INTERFACE:
-!
+
       subroutine CICE_Finalize
-!
-!EOP
-!BOC
-!
+
+      use ice_restart, only: runid
+
    !-------------------------------------------------------------------
    ! stop timers and print timer info
    !-------------------------------------------------------------------
@@ -73,34 +44,44 @@
 !echmod      if (nu_diag /= 6) close (nu_diag) ! diagnostic output
       call release_all_fileunits
 
-      call writeout_finished_file()
+   !-------------------------------------------------------------------
+   ! write 'finished' file if needed
+   !-------------------------------------------------------------------
+
+      if (runid == 'bering') call writeout_finished_file()
+
+   !-------------------------------------------------------------------
+   ! quit MPI
+   !-------------------------------------------------------------------
 
 #ifndef coupled
       call end_run       ! quit MPI
 #endif
-!
-!EOC
-!
+
       end subroutine CICE_Finalize
 
 !=======================================================================
+!
+! Write a file indicating that this run finished cleanly.  This is
+! needed only for runs on machine 'bering' (set using runid = 'bering').
+!
+!  author: Adrian Turner, LANL
 
       subroutine writeout_finished_file()
       
-        use ice_restart, only: restart_dir
-        use ice_communicate, only: my_task, master_task
+      use ice_restart, only: restart_dir
+      use ice_communicate, only: my_task, master_task
 
-        character(len=char_len_long) :: filename
+      character(len=char_len_long) :: filename
 
-        if (my_task == master_task) then
+      if (my_task == master_task) then
            
-           filename = trim(restart_dir)//"finished"
-           
-           open(11,file=filename)
-           write(11,*) "finished"
-           close(11)
+         filename = trim(restart_dir)//"finished"
+         open(11,file=filename)
+         write(11,*) "finished"
+         close(11)
 
-        endif
+      endif
 
       end subroutine writeout_finished_file
 

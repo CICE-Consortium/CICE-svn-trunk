@@ -43,11 +43,11 @@
 
       character (len=char_len), public :: &
          restart_file  , & ! output file for restart dump
-         runtype           ! initial, continue, hybrid, branch or bering
+         runtype           ! initial, continue, hybrid, branch
 
       character (len=char_len_long), public :: &
          restart_dir   , & ! directory name for restart dump
-         runid             ! identifier for CCSM coupled run
+         runid             ! identifier for CESM coupled run or bering
 
       character (len=char_len_long), public :: &
          pointer_file      ! input pointer file for restarts
@@ -569,8 +569,8 @@
       enddo
       !$OMP END PARALLEL DO
 
-      ! if runtype is bering then need to correct npt for istep0
-      if (trim(runtype) == 'bering') then
+      ! if runid is bering then need to correct npt for istep0
+      if (trim(runid) == 'bering') then
          npt = npt - istep0
       endif
 

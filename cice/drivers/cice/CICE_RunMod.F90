@@ -1,14 +1,7 @@
 !=======================================================================
 !
-!BOP
+!  Main driver routine for time stepping of CICE.
 !
-! !MODULE: CICE_RunMod - contains main run method for CICE
-!
-! !DESCRIPTION:
-!
-!  Contains main driver routine for time stepping of CICE.
-!
-! !REVISION HISTORY:
 !  SVN:$Id$
 !
 !  authors Elizabeth C. Hunke, LANL
@@ -20,13 +13,9 @@
 ! 2006 ECH: Converted to free source form (F90)
 ! 2007 BPB: Modified Delta-Eddington shortwave interface
 ! 2008 ECH: moved ESMF code to its own driver
-!
-! !INTERFACE:
-!
+
       module CICE_RunMod
-!
-! !USES:
-!
+
       use ice_aerosol
       use ice_algae
       use ice_atmo
@@ -72,43 +61,24 @@
 
       implicit none
       private
+      public :: CICE_Run, ice_step
       save
 
-! !PUBLIC MEMBER FUNCTIONS:
-
-      public :: CICE_Run, ice_step
-!
-!EOP
 !=======================================================================
 
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: CICE_Run - advances CICE model forward in time
-!
-! !DESCRIPTION:
 !
 !  This is the main driver routine for advancing CICE forward in time.
-!
-! !REVISION HISTORY:
 !
 !  author Elizabeth C. Hunke, LANL
 !         Philip W. Jones, LANL
 !         William H. Lipscomb, LANL
-!
-! !INTERFACE:
-!
-      subroutine CICE_Run
-!
-!EOP
-!BOC
-!
-   !--------------------------------------------------------------------
-   !  local variables
-   !--------------------------------------------------------------------
 
+      subroutine CICE_Run
+
+      ! local variables
       integer (kind=int_kind) :: k
 
    !--------------------------------------------------------------------
@@ -154,32 +124,18 @@
    !--------------------------------------------------------------------
 
       call ice_timer_stop(timer_step)   ! end timestepping loop timer     
-!
-!EOC
-!
+
       end subroutine CICE_Run
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: ice_step
-!
-! !DESCRIPTION:
 !
 !  Calls drivers for physics components, some initialization, and output
 !
-! !REVISION HISTORY:
-!
 !  author Elizabeth C. Hunke, LANL
 !         William H. Lipscomb, LANL
-!
-! !INTERFACE:
-!
+
       subroutine ice_step
-!
-!EOP
-!BOC
-!
+
       use ice_boundary, only: ice_HaloUpdate
       use ice_restoring, only: restore_ice, ice_HaloRestore
 
@@ -314,34 +270,20 @@
       end subroutine ice_step
     
 !=======================================================================
-!BOP
-!
-! !ROUTINE: coupling_prep
-!
-! !DESCRIPTION:
 !
 ! Prepare for coupling
 !
-! !REVISION HISTORY:
-!
 ! authors: Elizabeth C. Hunke, LANL
-!
-! !INTERFACE:
 
       subroutine coupling_prep (iblk)!
 
-! !USES:
-!
       use ice_shortwave, only: alvdfn, alidfn, alvdrn, alidrn, &
                                albicen, albsnon, albpndn, apeffn
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: & 
          iblk            ! block index 
-!
-!EOP
-!
+
+      ! local variables
       type (block) :: &
          this_block      ! block information for current block
 
@@ -495,11 +437,6 @@
       end subroutine coupling_prep
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: sfcflux_to_ocn
-!
-! !DESCRIPTION:
 !
 ! If surface heat fluxes are provided to CICE instead of CICE calculating
 ! them internally (i.e. .not. calc_Tsfc), then these heat fluxes can 
@@ -508,20 +445,14 @@
 ! heat fluxes not recalculated at every CICE timestep.)  At ice free points, 
 ! conserve energy and water by passing these fluxes to the ocean.
 !
-! !INTERFACE:
-!
-       subroutine sfcflux_to_ocn(nx_block,   ny_block,     &
-                                 tmask,      aice,         &
-                                 fsurfn_f,   flatn_f,      &
-                                 fresh,      fhocn)
-!
-! !REVISION HISTORY:
-!
-! authors: A. McLaren, Met Office
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
+! author: A. McLaren, Met Office
+
+      subroutine sfcflux_to_ocn(nx_block,   ny_block,     &
+                                tmask,      aice,         &
+                                fsurfn_f,   flatn_f,      &
+                                fresh,      fhocn)
+
+
       integer (kind=int_kind), intent(in) :: &
           nx_block, ny_block  ! block dimensions
 
@@ -542,10 +473,10 @@
           intent(inout):: &
           fresh        , & ! fresh water flux to ocean         (kg/m2/s)
           fhocn            ! actual ocn/ice heat flx           (W/m**2)
-!
-!EOP
-!
+
 #ifdef CICE_IN_NEMO
+
+      ! local variables
       integer (kind=int_kind) :: &
           i, j, n    ! horizontal indices
       
@@ -568,6 +499,7 @@
       enddo      ! n
 
 #endif 
+
       end subroutine sfcflux_to_ocn
 
 !=======================================================================
