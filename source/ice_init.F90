@@ -288,8 +288,8 @@
       latpnt(2) = -65._dbl_kind   ! latitude of diagnostic point 2 (deg)
       lonpnt(2) = -45._dbl_kind   ! longitude of point 2 (deg)
 
-      runid   = 'unknown'   ! run ID, only used in CCSM
-      runtype = 'initial'   ! run type: 'initial', 'continue', 'bering'
+      runid   = 'unknown'   ! run ID used in CESM and for machine 'bering'
+      runtype = 'initial'   ! run type: 'initial', 'continue'
 
       ! extra tracers
       tr_iage      = .false. ! ice age
@@ -366,8 +366,8 @@
          write(nu_diag,*) ' '
       endif
 
-      if (trim(runtype) == 'continue' .or. trim(runtype) == 'bering') restart = .true.
-      if (trim(runtype) /= 'continue' .and. trim(runtype) /= 'bering' .and. (restart)) then
+      if (trim(runtype) == 'continue') restart = .true.
+      if (trim(runtype) /= 'continue' .and. (restart)) then
          if (ice_ic == 'none' .or. ice_ic == 'default') then
             if (my_task == master_task) then
             write(nu_diag,*) &
