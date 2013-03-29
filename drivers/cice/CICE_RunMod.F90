@@ -1,6 +1,6 @@
 !=======================================================================
 !
-!  Main driver routine for time stepping of CICE.
+!  Main driver for time stepping of CICE.
 !
 !  SVN:$Id$
 !
@@ -16,48 +16,7 @@
 
       module CICE_RunMod
 
-      use ice_aerosol
-      use ice_algae
-      use ice_atmo
-      use ice_brine
-      use ice_calendar
-      use ice_communicate
-      use ice_diagnostics
-      use ice_domain
-      use ice_dyn_eap
-      use ice_dyn_evp
-      use ice_dyn_shared, only: kdyn
-      use ice_exit
-      use ice_fileunits
-      use ice_flux
-      use ice_forcing
-      use ice_grid
-      use ice_history
-      use ice_restart
-      use ice_restart_age, only: write_restart_age
-      use ice_restart_firstyear, only: write_restart_FY
-      use ice_restart_lvl, only: write_restart_lvl
-      use ice_restart_meltpond_cesm, only: write_restart_pond_cesm
-      use ice_restart_meltpond_lvl, only: write_restart_pond_lvl
-      use ice_restart_meltpond_topo, only: write_restart_pond_topo
-      use ice_init
-      use ice_itd
       use ice_kinds_mod
-      use ice_mechred
-      use ice_ocean
-      use ice_orbital
-      use ice_state
-      use ice_step_mod
-      use ice_therm_itd
-      use ice_therm_vertical
-      use ice_therm_shared, only: calc_Tsfc, read_Sin
-      use ice_timers
-      use ice_transport_driver
-      use ice_transport_remap
-      use ice_work
-      use ice_zbgc
-      use ice_zsalinity
-      use ice_domain_size, only: nltrcr
 
       implicit none
       private
@@ -77,6 +36,18 @@
 !         William H. Lipscomb, LANL
 
       subroutine CICE_Run
+
+      use ice_aerosol, only: faero_default
+      use ice_calendar, only: istep, istep1, time, dt, stop_now, calendar
+      use ice_forcing, only: get_forcing_atmo, get_forcing_ocn, &
+          get_ice_salinity
+      use ice_flux, only: init_flux_atm, init_flux_ocn
+      use ice_state, only: tr_aero
+      use ice_therm_shared, only: read_Sin
+      use ice_timers, only: ice_timer_start, ice_timer_stop, &
+          timer_couple, timer_step
+      use ice_zbgc, only: get_forcing_bgc
+      use ice_zbgc_public, only: tr_bgc_NO, tr_bgc_Sil
 
       ! local variables
       integer (kind=int_kind) :: k
@@ -137,11 +108,36 @@
       subroutine ice_step
 
       use ice_boundary, only: ice_HaloUpdate
-      use ice_restoring, only: restore_ice, ice_HaloRestore
-
-      use ice_state, only: nt_qsno, trcrn
+      use ice_calendar, only: dt, dt_dyn, ndtd, diagfreq, write_restart, istep
+      use ice_constants, only: field_loc_center, field_type_scalar
+      use ice_diagnostics, only: init_mass_diags, runtime_diags
+      use ice_domain, only: halo_info, nblocks
       use ice_domain_size, only: nslyr
-      use ice_calendar, only: istep
+      use ice_dyn_eap, only: write_restart_eap
+      use ice_dyn_shared, only: kdyn
+      use ice_flux, only: scale_factor, init_history_therm
+      use ice_history, only: accum_hist
+      use ice_restart, only: restart_ext, dumpfile_ext, dumpfile
+      use ice_restart_age, only: write_restart_age
+      use ice_restart_firstyear, only: write_restart_FY
+      use ice_restart_lvl, only: write_restart_lvl
+      use ice_restart_meltpond_cesm, only: write_restart_pond_cesm
+      use ice_restart_meltpond_lvl, only: write_restart_pond_lvl
+      use ice_restart_meltpond_topo, only: write_restart_pond_topo
+      use ice_restoring, only: restore_ice, ice_HaloRestore
+      use ice_state, only: nt_qsno, trcrn, tr_iage, tr_FY, tr_lvl, &
+          tr_pond_cesm, tr_pond_lvl, tr_pond_topo
+      use ice_step_mod, only: prep_radiation, step_therm1, step_therm2, &
+          post_thermo, step_dynamics, step_radiation
+      use ice_therm_shared, only: calc_Tsfc
+      use ice_timers, only: ice_timer_start, ice_timer_stop, &
+          timer_diags, timer_column, timer_thermo, timer_bound, timer_hist, &
+          timer_diags_bgc, timer_readwrite
+      use ice_zbgc, only: init_history_bgc, biogeochemistry, bgc_diags, &
+          write_restart_bgc
+      use ice_zbgc_public, only: tr_bgc_S, solve_bgc, tr_bgc_NO
+      use ice_zsalinity, only: S_diags, write_restart_S
+      use ice_domain_size, only: nltrcr
 
       integer (kind=int_kind) :: &
          iblk        , & ! block index 
@@ -275,10 +271,28 @@
 !
 ! authors: Elizabeth C. Hunke, LANL
 
-      subroutine coupling_prep (iblk)!
+      subroutine coupling_prep (iblk)
 
+      use ice_blocks, only: block, nx_block, ny_block
+      use ice_calendar, only: dt, nstreams
+      use ice_constants, only: c0, c1, puny, rhofresh
+      use ice_domain_size, only: ncat, nbltrcr
+      use ice_flux, only: alvdf, alidf, alvdr, alidr, albice, albsno, &
+          albpnd, albcnt, apeff_ai, coszen, fpond, fresh, &
+          alvdf_gbm, alidf_gbm, alvdr_gbm, alidr_gbm, fhocn_gbm, &
+          fresh_gbm, fsalt_gbm, fsalt, fsice_gbm, fsice_g_gbm, &
+          fswthru_gbm, fsice, fsice_g, fhocn, fswthru, scale_factor, &
+          swvdr, swidr, swvdf, swidf, Tf, Tair, Qa, strairxT, strairyt, &
+          fsens, flat, fswabs, flwout, evap, Tref, Qref, faero_ocn, &
+          fsurfn_f, flatn_f, scale_fluxes
+      use ice_grid, only: tmask
+      use ice_ocean, only: oceanmixed_ice, ocean_mixed_layer
       use ice_shortwave, only: alvdfn, alidfn, alvdrn, alidrn, &
                                albicen, albsnon, albpndn, apeffn
+      use ice_state, only: aicen, aice, aice_init
+      use ice_therm_shared, only: calc_Tsfc
+      use ice_zbgc_public, only: flux_bio, flux_bio_g, flux_bio_gbm, &
+          flux_bio_g_gbm
 
       integer (kind=int_kind), intent(in) :: & 
          iblk            ! block index 
@@ -452,6 +466,7 @@
                                 fsurfn_f,   flatn_f,      &
                                 fresh,      fhocn)
 
+      use ice_domain_size, only: ncat
 
       integer (kind=int_kind), intent(in) :: &
           nx_block, ny_block  ! block dimensions

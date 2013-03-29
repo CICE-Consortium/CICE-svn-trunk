@@ -1,38 +1,25 @@
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_constants - sets physical constants
-!
-! !DESCRIPTION:
 !
 ! This module defines a variety of physical and numerical constants
-! used throughout the ice model \\
+! used throughout the ice model 
 !
-! Code originally based on constants.F in POP
-!
-! !REVISION HISTORY:
 !  SVN:$Id$
 !
 ! author Elizabeth C. Hunke, LANL
-!
-! !INTERFACE:
 
       module ice_constants
-!
-! !USES:
-!
+
       use ice_kinds_mod
-!
-!EOP
-!
+
       implicit none
+      public
       save
 
       !-----------------------------------------------------------------
       ! physical constants
       !-----------------------------------------------------------------
 
-! CICE default parameters
+      ! CICE default parameters
       real (kind=dbl_kind), parameter :: &
          rhos      = 330.0_dbl_kind   ,&! density of snow (kg/m^3)
          rhoi      = 917.0_dbl_kind   ,&! density of ice (kg/m^3)
@@ -46,6 +33,13 @@
          depressT  = 0.054_dbl_kind   ,&! Tf:brine salinity ratio (C/ppt)
          dragio    = 0.00536_dbl_kind ,&! ice-ocn drag coefficient
          albocn    = 0.06_dbl_kind      ! ocean albedo
+
+      ! UNESCO melting temperature parameters
+      real (kind=dbl_kind), parameter :: &
+         mlt_a     = 0.0575_dbl_kind       ,& !nonlinear melting T coefficient (oC/ppt)
+         mlt_b     = 1.710523e-3_dbl_kind  ,& !(oC/ppt^(3/2))
+         mlt_c     = 2.154996e-4_dbl_kind     !(oC/ppt^2)
+          
 
       real (kind=dbl_kind), parameter :: &
          gravit    = 9.80665_dbl_kind    ,&! gravitational acceleration (m/s^2)
@@ -89,12 +83,13 @@
          ksno   = 0.31_dbl_kind  ,&! thermal conductivity of snow  (W/m/deg)
          zref   = 10._dbl_kind   ,&! reference height for stability (m)
          hsmin  = 0.0001_dbl_kind,&! minimum allowed snow depth (m) for DE
-         snowpatch = 0.02_dbl_kind ! parameter for fractional snow area (m)
-
-      ! weights for albedos
-! 4 Jan 2007 BPB  Following are appropriate for complete cloud
-! in a summer polar atmosphere with 1.5m bare sea ice surface:
-! .636/.364 vis/nir with only 0.5% direct for each band.
+         snowpatch = 0.02_dbl_kind,&! parameter for fractional snow area (m)
+         salt_loss = 0.65_dbl_kind ! zbgc fraction of available salt retained (1.0 = no loss)
+                    
+      ! weights for albedos 
+      ! 4 Jan 2007 BPB  Following are appropriate for complete cloud
+      ! in a summer polar atmosphere with 1.5m bare sea ice surface:
+      ! .636/.364 vis/nir with only 0.5% direct for each band.
       real (kind=dbl_kind), parameter :: &           ! currently used only
          awtvdr = 0.00318_dbl_kind, &! visible, direct  ! for history and
          awtidr = 0.00182_dbl_kind, &! near IR, direct  ! diagnostics
@@ -143,6 +138,7 @@
         c1000= 1000.0_dbl_kind, &
         p001 = 0.001_dbl_kind, &
         p01  = 0.01_dbl_kind, &
+        p025 = 0.025_dbl_kind, &
         p1   = 0.1_dbl_kind, &
         p2   = 0.2_dbl_kind, &
         p4   = 0.4_dbl_kind, &
@@ -165,6 +161,7 @@
         puny   = eps11, &
         bignum = 1.0e+30_dbl_kind, &
         pih    = p5*pi, &
+        piq    = p5*pih, &
         pi2    = c2*pi
 
       !-----------------------------------------------------------------
@@ -179,7 +176,6 @@
         field_loc_Nface    =  3, & 
         field_loc_Eface    =  4, &
         field_loc_Wface    =  5
-
 
       !-----------------------------------------------------------------
       ! field type attribute - necessary for handling

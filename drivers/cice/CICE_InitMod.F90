@@ -14,55 +14,7 @@
 
       module CICE_InitMod
 
-      use ice_aerosol
-      use ice_age, only: init_age
-      use ice_calendar
-      use ice_communicate
-      use ice_diagnostics
-      use ice_domain
-      use ice_dyn_eap
-      use ice_dyn_evp
-      use ice_dyn_shared, only: kdyn, init_evp
-      use ice_exit
-      use ice_fileunits
-      use ice_firstyear, only: init_FY
-      use ice_flux
-      use ice_forcing
-      use ice_grid
-      use ice_history
-      use ice_restart
-      use ice_restart_age, only: restart_age, read_restart_age
-      use ice_restart_firstyear, only: restart_FY, read_restart_FY
-      use ice_restart_lvl, only: restart_lvl, read_restart_lvl
-      use ice_restart_meltpond_cesm, only: restart_pond_cesm, read_restart_pond_cesm
-      use ice_restart_meltpond_lvl, only: restart_pond_lvl, read_restart_pond_lvl, dhsn
-      use ice_restart_meltpond_topo, only: restart_pond_topo, read_restart_pond_topo
-      use ice_init
-      use ice_itd
       use ice_kinds_mod
-      use ice_mechred
-      use ice_meltpond_cesm, only: init_meltponds_cesm
-      use ice_meltpond_lvl, only: init_meltponds_lvl
-      use ice_meltpond_topo, only: init_meltponds_topo
-      use ice_algae
-      use ice_ocean
-      use ice_orbital
-      use ice_lvl, only: init_lvl
-      use ice_restoring
-      use ice_shortwave, only: init_shortwave
-      use ice_therm_itd
-      use ice_therm_vertical
-      use ice_therm_oned
-      use ice_timers
-      use ice_transport_driver
-      use ice_transport_remap
-      use ice_work
-      use ice_zbgc
-      use ice_zsalinity
-      use ice_domain_size, only: nltrcr
-#ifdef popcice
-      use drv_forcing, only: sst_sss
-#endif
 
       implicit none
       private
@@ -100,7 +52,38 @@
 
       subroutine cice_init
 
-      integer(kind=int_kind) :: iblk
+      use ice_aerosol, only: faero_default
+      use ice_calendar, only: dt, dt_dyn, time, istep, istep1, write_ic, &
+          init_calendar, calendar
+      use ice_communicate, only: init_communicate
+      use ice_diagnostics, only: init_diags
+      use ice_domain, only: init_domain_blocks
+      use ice_dyn_eap, only: init_eap
+      use ice_dyn_shared, only: kdyn, init_evp
+      use ice_fileunits, only: init_fileunits
+      use ice_firstyear, only: init_FY
+      use ice_flux, only: init_coupler_flux, init_history_therm, &
+          init_history_dyn, init_flux_atm, init_flux_ocn
+      use ice_forcing, only: init_forcing_ocn, init_forcing_atmo, &
+          get_forcing_atmo, get_forcing_ocn
+      use ice_grid, only: init_grid1, init_grid2
+      use ice_history, only: init_hist, accum_hist
+      use ice_restart, only: restart, runid, runtype
+      use ice_init, only: input_data, init_state
+      use ice_itd, only: init_itd
+      use ice_kinds_mod
+      use ice_restoring, only: ice_HaloRestore_init
+      use ice_shortwave, only: init_shortwave
+      use ice_state, only: tr_aero
+      use ice_therm_vertical, only: init_thermo_vertical
+      use ice_timers, only: timer_total, init_ice_timers, ice_timer_start
+      use ice_transport_driver, only: init_transport
+      use ice_work, only: init_work
+      use ice_zbgc, only: init_zbgc, get_forcing_bgc
+      use ice_zbgc_public, only: tr_bgc_NO, tr_bgc_Sil
+#ifdef popcice
+      use drv_forcing, only: sst_sss
+#endif
 
       call init_communicate     ! initial setup for message passing
       call init_fileunits       ! unit numbers
@@ -137,7 +120,85 @@
       call init_transport       ! initialize horizontal transport
       call ice_HaloRestore_init ! restored boundary conditions
 
-      if (restart_ext) then           ! read extended grid
+      call init_restart         ! initialize restart variables
+
+      call init_diags           ! initialize diagnostic output points
+      call init_history_therm   ! initialize thermo history variables
+      call init_history_dyn     ! initialize dynamic history variables
+
+      ! Initialize shortwave components using swdn from previous timestep 
+      ! if restarting. These components will be scaled to current forcing 
+      ! in prep_radiation.
+      if (trim(runtype) == 'continue' .or. restart) &
+         call init_shortwave    ! initialize radiative transfer
+
+         istep  = istep  + 1    ! update time step counters
+         istep1 = istep1 + 1
+         time = time + dt       ! determine the time and date
+         call calendar(time)    ! at the end of the first timestep
+
+   !--------------------------------------------------------------------
+   ! coupler communication or forcing data initialization
+   !--------------------------------------------------------------------
+
+      call init_forcing_atmo    ! initialize atmospheric forcing (standalone)
+#ifdef oned
+      call init_therm_oned
+#endif
+
+#ifndef coupled
+      call get_forcing_atmo     ! atmospheric forcing from data
+      call get_forcing_ocn(dt)  ! ocean forcing from data
+!      if (tr_aero) call faero_data          ! aerosols
+      if (tr_aero) call faero_default ! aerosols
+      if (tr_bgc_NO .or. tr_bgc_Sil) call get_forcing_bgc
+#endif
+
+      if (runtype == 'initial' .and. .not. restart) &
+         call init_shortwave    ! initialize radiative transfer using current swdn
+
+      call init_flux_atm        ! initialize atmosphere fluxes sent to coupler
+      call init_flux_ocn        ! initialize ocean fluxes sent to coupler
+
+      if (write_ic) call accum_hist(dt) ! write initial conditions 
+
+      end subroutine cice_init
+
+!=======================================================================
+
+      subroutine init_restart
+
+      use ice_aerosol, only: init_aerosol
+      use ice_age, only: init_age
+      use ice_blocks, only: nx_block, ny_block
+      use ice_calendar, only: time, calendar
+      use ice_domain, only: nblocks
+      use ice_domain_size, only: ncat
+      use ice_firstyear, only: init_fy
+      use ice_flux, only: sss
+      use ice_init, only: ice_ic
+      use ice_lvl, only: init_lvl
+      use ice_meltpond_cesm, only: init_meltponds_cesm
+      use ice_meltpond_lvl, only: init_meltponds_lvl
+      use ice_meltpond_topo, only: init_meltponds_topo
+      use ice_restart, only: runtype, restart, restart_ext, &
+          restartfile_ext, restartfile
+      use ice_restart_age, only: restart_age, read_restart_age
+      use ice_restart_firstyear, only: restart_FY, read_restart_FY
+      use ice_restart_lvl, only: restart_lvl, read_restart_lvl
+      use ice_restart_meltpond_cesm, only: restart_pond_cesm, read_restart_pond_cesm
+      use ice_restart_meltpond_lvl, only: restart_pond_lvl, read_restart_pond_lvl, dhsn
+      use ice_restart_meltpond_topo, only: restart_pond_topo, read_restart_pond_topo
+      use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond_cesm, &
+          tr_pond_lvl, tr_pond_topo, tr_aero, trcrn, &
+          nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd
+      use ice_zbgc, only: init_bgc
+      use ice_zbgc_public, only: tr_bgc_S, tr_bgc_NO, solve_bgc
+      use ice_zsalinity, only: init_zsalinity
+
+      integer(kind=int_kind) :: iblk
+
+      if (restart_ext) then              ! read extended grid
          if (trim(runtype) == 'continue') then 
             ! start from core restart file
             call restartfile_ext()       ! given by pointer in ice_in
@@ -236,47 +297,7 @@
       if (tr_bgc_S)     call init_zsalinity(sss) ! salinity on bio-grid
       if (tr_bgc_NO .or. solve_bgc) call init_bgc! layer biogeochemistry
 
-      call init_diags           ! initialize diagnostic output points
-      call init_history_therm   ! initialize thermo history variables
-      call init_history_dyn     ! initialize dynamic history variables
-
-      ! Initialize shortwave components using swdn from previous timestep 
-      ! if restarting. These components will be scaled to current forcing 
-      ! in prep_radiation.
-      if (trim(runtype) == 'continue' .or. restart) &
-         call init_shortwave    ! initialize radiative transfer
-
-         istep  = istep  + 1    ! update time step counters
-         istep1 = istep1 + 1
-         time = time + dt       ! determine the time and date
-         call calendar(time)    ! at the end of the first timestep
-
-   !--------------------------------------------------------------------
-   ! coupler communication or forcing data initialization
-   !--------------------------------------------------------------------
-
-      call init_forcing_atmo    ! initialize atmospheric forcing (standalone)
-#ifdef oned
-      call init_therm_oned
-#endif
-
-#ifndef coupled
-      call get_forcing_atmo     ! atmospheric forcing from data
-      call get_forcing_ocn(dt)  ! ocean forcing from data
-!      if (tr_aero) call faero_data          ! aerosols
-      if (tr_aero) call faero_default ! aerosols
-      if (tr_bgc_NO .or. tr_bgc_Sil) call get_forcing_bgc
-#endif
-
-      if (runtype == 'initial' .and. .not. restart) &
-         call init_shortwave    ! initialize radiative transfer using current swdn
-
-      call init_flux_atm        ! initialize atmosphere fluxes sent to coupler
-      call init_flux_ocn        ! initialize ocean fluxes sent to coupler
-
-      if (write_ic) call accum_hist(dt) ! write initial conditions 
-
-      end subroutine cice_init
+      end subroutine init_restart
 
 !=======================================================================
 !
@@ -287,6 +308,10 @@
 !  author: Adrian Turner, LANL
 
       subroutine check_finished_file()
+
+      use ice_communicate, only: my_task, master_task
+      use ice_exit, only: abort_ice
+      use ice_restart, only: restart_dir
 
       character(len=char_len_long) :: filename
       logical :: lexist = .false.

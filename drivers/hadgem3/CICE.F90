@@ -1,5 +1,5 @@
 !=======================================================================
-! Copyright 2008, LANSLLC. All rights reserved.
+! Copyright 2013, LANSLLC. All rights reserved.
 ! Unless otherwise indicated, this information has been authored by an 
 ! employee or employees of the Los Alamos National Security, LLC (LANS), 
 ! operator of the Los Alamos National Laboratory under Contract No. 
@@ -12,65 +12,37 @@
 ! information.
 !
 ! CICE is developed and maintained by Elizabeth C. Hunke (eclare@lanl.gov)
-! and William H. Lipscomb (lipscomb@lanl.gov) of Group T-3 (Fluid 
-! Dynamics), Los Alamos National Laboratory, with support from the 
-! Climate Change Prediction Program (CCPP) and the Scientific 
-! Discovery through Advanced Computing (SciDAC) program of the U.S. 
-! Department of Energy.  We thank John Dukowicz (T-3), Phil Jones (T-3), 
-! and Robert Malone (CCS-2) for their support of the sea ice modeling 
-! effort at LANL.
-!   
-! CICE has been developed in close collaboration with the NCAR CCSM
-! climate modeling project and includes ideas and efforts from 
-! members the CCSM Polar Climate Working Group (PCWG).  We especially 
-! thank the following members of the PCWG code development team:
-!
-! Cecilia Bitz, UW
-! Bruce Briegleb, NCAR
-! Tony Craig, NCAR
-! John Dennis, NCAR
-! Marika Holland, NCAR
-! Bonnie Light, UW
-! Julie Schramm, NCAR
-! David Bailey, NCAR
-!
-! Assistance from researchers from U.K. Met Office Hadley Centre is
-! also much appreciated, especially our collaboration with Alison 
-! McLaren and Ann Keen. Numerous others have contributed to this 
-! effort--thanks to all! 
+! Group T-3 (Fluid Dynamics and Solid Mechanics), Los Alamos National
+! Laboratory, with support from the Earth System Modeling and Regional and
+! Global Climate Modeling programs of the Office of Biological and
+! Environmental Research within the U.S. Department of Energy's Office of
+! Science.  Los Alamos National Laboratory is operated by the DOE National
+! Nuclear Security Administration under Contract DE-AC52-06NA25396.
+! 
+! Numerous researchers have contributed to this effort, especially members
+! of the CESM Polar Climate Working Group and the sea ice modeling team
+! at UK Met Office Hadley Centre -- thanks to all! 
+! 
 !=======================================================================
 #ifndef popcice
-!
-!BOP
-!
-! !MODULE: icemodel - main ice model program
-!
-! !DESCRIPTION:
 !
 ! Main driver routine for CICE.  Initializes and steps through the model.
 ! This program should be compiled if CICE is run as a separate executable,
 !  but not if CICE subroutines are called from another program (e.g., CAM).
 !
-! !REVISION HISTORY:
-!  SVN:$Id: CICE.F90 56 2007-03-15 14:42:35Z dbailey $
+!  SVN:$Id: CICE.F90 607 2013-03-29 15:49:42Z eclare $
 !
 ! authors Elizabeth C. Hunke and William H. Lipscomb, LANL
 !
 ! 2006: Converted to free form source (F90) by Elizabeth Hunke
 ! 2008: E. Hunke moved ESMF code to its own driver
 !
-! !INTERFACE:
-!
       program icemodel
-!
-! !USES:
-!
+
       use CICE_InitMod
       use CICE_RunMod
       use CICE_FinalMod
-!
-!EOP
-!
+
       implicit none
 
       !-----------------------------------------------------------------
@@ -95,37 +67,23 @@
 
 #endif
 !=======================================================================
-!BOP
-!
-! !ROUTINE: debug_ice - wrapper for print_state
-!
-! !DESCRIPTION:
 !
 ! Wrapper for the print_state debugging routine.
 ! Useful for debugging in the main driver (see ice.F_debug)
 ! ip, jp, mtask are set in ice_diagnostics.F
 !
-! !REVISION HISTORY:
-!
 ! author Elizabeth C. Hunke, LANL
 !
-! !INTERFACE:
-!
       subroutine debug_ice(plabeld)
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_diagnostics
       use ice_domain, only: nblocks
       use ice_blocks, only: nx_block, ny_block
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character (char_len), intent(in) :: plabeld
-!
-!EOP
-!
+
+      ! local 
       integer (kind=int_kind) :: i, j, iblk
 
       if (istep1 >= check_step) then
