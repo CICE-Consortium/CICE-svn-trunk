@@ -1,30 +1,16 @@
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_constants - sets physical constants
-!
-! !DESCRIPTION:
 !
 ! This module defines a variety of physical and numerical constants
-! used throughout the ice model \\
+! used throughout the ice model 
 !
-! Code originally based on constants.F in POP
-!
-! !REVISION HISTORY:
 !  SVN:$Id$
 !
 ! author Elizabeth C. Hunke, LANL
-!
-! !INTERFACE:
 
       module ice_constants
-!
-! !USES:
-!
+
       use ice_kinds_mod
-!
-!EOP
-!
+
       implicit none
       public
       save
@@ -48,7 +34,7 @@
          dragio    = 0.0055_dbl_kind  ,&! ice-ocn drag coefficient
          albocn    = 0.10_dbl_kind      ! ocean albedo
 #else
-! CICE default parameters
+      ! CICE default parameters
       real (kind=dbl_kind), parameter :: &
          rhos      = 330.0_dbl_kind   ,&! density of snow (kg/m^3)
          rhoi      = 917.0_dbl_kind   ,&! density of ice (kg/m^3)
@@ -64,7 +50,7 @@
          albocn    = 0.06_dbl_kind      ! ocean albedo
 #endif
 
-! UNESCO melting temperature parameters
+      ! UNESCO melting temperature parameters
       real (kind=dbl_kind), parameter :: &
          mlt_a     = 0.0575_dbl_kind       ,& !nonlinear melting T coefficient (oC/ppt)
          mlt_b     = 1.710523e-3_dbl_kind  ,& !(oC/ppt^(3/2))
@@ -117,9 +103,9 @@
          salt_loss = 0.65_dbl_kind ! zbgc fraction of available salt retained (1.0 = no loss)
                     
       ! weights for albedos 
-! 4 Jan 2007 BPB  Following are appropriate for complete cloud
-! in a summer polar atmosphere with 1.5m bare sea ice surface:
-! .636/.364 vis/nir with only 0.5% direct for each band.
+      ! 4 Jan 2007 BPB  Following are appropriate for complete cloud
+      ! in a summer polar atmosphere with 1.5m bare sea ice surface:
+      ! .636/.364 vis/nir with only 0.5% direct for each band.
       real (kind=dbl_kind), parameter :: &           ! currently used only
          awtvdr = 0.00318_dbl_kind, &! visible, direct  ! for history and
          awtidr = 0.00182_dbl_kind, &! near IR, direct  ! diagnostics
@@ -206,7 +192,6 @@
         field_loc_Nface    =  3, & 
         field_loc_Eface    =  4, &
         field_loc_Wface    =  5
-
 
       !-----------------------------------------------------------------
       ! field type attribute - necessary for handling

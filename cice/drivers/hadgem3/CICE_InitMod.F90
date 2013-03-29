@@ -1,16 +1,9 @@
 !=======================================================================
 !
-!BOP
-!
-! !MODULE: CICE_InitMod - performs CICE initialization
-!
-! !DESCRIPTION:
-!
 !  This module contains the CICE initialization routine that sets model
 !  parameters and initializes the grid and CICE state variables.
 !
-! !REVISION HISTORY:
-!  SVN:$Id: CICE_InitMod.F90 131 2008-05-30 16:53:40Z eclare $
+!  SVN:$Id: CICE_InitMod.F90 607 2013-03-29 15:49:42Z eclare $
 !
 !  authors Elizabeth C. Hunke, LANL
 !          William H. Lipscomb, LANL
@@ -18,72 +11,22 @@
 !
 ! 2006: Converted to free form source (F90) by Elizabeth Hunke
 ! 2008: E. Hunke moved ESMF code to its own driver
-!
-! !INTERFACE:
-!
+
       module CICE_InitMod
-!
-! !USES:
-!
-      use ice_aerosol
-      use ice_age
-      use ice_calendar
-      use ice_communicate
-      use ice_diagnostics
-      use ice_domain
-      use ice_dyn_evp
-      use ice_exit
-      use ice_fileunits
-      use ice_firstyear
-      use ice_flux
-      use ice_forcing
-      use ice_grid
-      use ice_history
-      use ice_restart
-      use ice_init
-      use ice_itd
+
       use ice_kinds_mod
-      use ice_mechred
-      use ice_meltpond_cesm
-      use ice_meltpond_lvl
-      use ice_meltpond_topo
-      use ice_ocean
-      use ice_orbital
-      use ice_lvl
-      use ice_restoring
-      use ice_shortwave
-      use ice_therm_itd
-      use ice_therm_vertical
-      use ice_timers
-      use ice_transport_driver
-      use ice_transport_remap
-      use ice_work
-#ifdef popcice
-      use drv_forcing, only: sst_sss
-#endif
 
       implicit none
       private
+      public :: CICE_Initialize, cice_init
       save
 
-! !PUBLIC MEMBER FUNCTIONS:
-
-      public :: CICE_Initialize, cice_init
-
-!
-!EOP
-!
 !=======================================================================
 
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: CICE_Initialize - initialize CICE model
-!
-! !DESCRIPTION:
-!
+
 !  Initialize the basic state, grid and all necessary parameters for
 !  running the CICE model.  Return the initial state in routine
 !  export state.
@@ -92,51 +35,61 @@
 !        applications (e.g., standalone CAM), this driver would be
 !        replaced by a different driver that calls subroutine cice_init,
 !        where most of the work is done.
-!
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine CICE_Initialize
-!
-!EOP
-!BOC
-!
+
    !--------------------------------------------------------------------
    ! model initialization
    !--------------------------------------------------------------------
 
       call cice_init
 
-!
-!EOC
-!
       end subroutine CICE_Initialize
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: cice_init - initialize CICE model
-!
-! !DESCRIPTION:
 !
 !  Initialize CICE model.
-!
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine cice_init
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
+      use ice_aerosol, only: faero_default
+      use ice_calendar, only: dt, dt_dyn, time, istep, istep1, write_ic, &
+          init_calendar, calendar
+      use ice_communicate, only: init_communicate
+      use ice_diagnostics, only: init_diags
+      use ice_domain, only: init_domain_blocks
+      use ice_dyn_eap, only: init_eap
+      use ice_dyn_shared, only: kdyn, init_evp
+      use ice_fileunits, only: init_fileunits
+      use ice_firstyear, only: init_FY
+      use ice_flux, only: init_coupler_flux, init_history_therm, &
+          init_history_dyn, init_flux_atm, init_flux_ocn
+      use ice_forcing, only: init_forcing_ocn, init_forcing_atmo, &
+          get_forcing_atmo, get_forcing_ocn
+      use ice_grid, only: init_grid1, init_grid2
+      use ice_history, only: init_hist, accum_hist
+      use ice_restart, only: restart, runid, runtype
+      use ice_init, only: input_data, init_state
+      use ice_itd, only: init_itd
+      use ice_kinds_mod
+      use ice_restoring, only: ice_HaloRestore_init
+      use ice_shortwave, only: init_shortwave
+      use ice_state, only: tr_aero
+      use ice_therm_vertical, only: init_thermo_vertical
+      use ice_timers, only: timer_total, init_ice_timers, ice_timer_start
+      use ice_transport_driver, only: init_transport
+      use ice_work, only: init_work
+      use ice_zbgc, only: init_zbgc, get_forcing_bgc
+      use ice_zbgc_public, only: tr_bgc_NO, tr_bgc_Sil
+#ifdef popcice
+      use drv_forcing, only: sst_sss
+#endif
+
       call init_communicate     ! initial setup for message passing
       call init_fileunits       ! unit numbers
       call input_data           ! namelist variables
+      if (trim(runid) == 'bering') call check_finished_file
+      call init_zbgc            ! vertical biogeochemistry namelist
       call init_work            ! work arrays
 
       call init_domain_blocks   ! set up block decomposition
@@ -147,11 +100,17 @@
 
       call init_calendar        ! initialize some calendar stuff
       call init_hist (dt)       ! initialize output history file
-      call init_evp (dyn_dt)    ! define evp dynamics parameters, variables
+
+      if (kdyn == 2) then
+         call init_eap (dt_dyn) ! define eap dynamics parameters, variables
+      else                      ! for both kdyn = 0 or 1
+         call init_evp (dt_dyn) ! define evp dynamics parameters, variables
+      endif
+
       call init_coupler_flux    ! initialize fluxes exchanged with coupler
 #ifdef popcice
       call sst_sss              ! POP data for CICE initialization
-#endif
+#endif 
       call init_thermo_vertical ! initialize vertical thermodynamics
       call init_itd             ! initialize ice thickness distribution
       call calendar(time)       ! determine the initial date
@@ -163,30 +122,7 @@
       call init_transport       ! initialize horizontal transport
       call ice_HaloRestore_init ! restored boundary conditions
 
-      if (restart_ext) then           ! read extended grid
-         if (runtype == 'continue') then ! start from core restart file
-            call restartfile_ext()       ! given by pointer in ice_in
-            call calendar(time)          ! update time parameters
-         else if (restart) then          ! ice_ic = core restart file
-            call restartfile_ext(ice_ic) !  or 'default' or 'none'
-         endif         
-      else                            ! read physical grid
-         if (runtype == 'continue') then ! start from core restart file
-            call restartfile()           ! given by pointer in ice_in
-            call calendar(time)          ! update time parameters
-         else if (restart) then          ! ice_ic = core restart file
-            call restartfile (ice_ic)    !  or 'default' or 'none'
-         endif         
-      endif         
-
-      ! tracers
-      if (tr_iage)      call init_age            ! ice age tracer
-      if (tr_FY)        call init_FY             ! first-year area tracer
-      if (tr_lvl)       call init_lvl            ! level ice tracer
-      if (tr_pond_cesm) call init_meltponds_cesm ! CESM melt ponds
-      if (tr_pond_lvl)  call init_meltponds_lvl  ! level-ice melt ponds
-      if (tr_pond_topo) call init_meltponds_topo ! topographic melt ponds
-      if (tr_aero)      call init_aerosol        ! ice aerosol
+      call init_restart         ! initialize restart variables
 
       call init_diags           ! initialize diagnostic output points
       call init_history_therm   ! initialize thermo history variables
@@ -195,7 +131,7 @@
       ! Initialize shortwave components using swdn from previous timestep 
       ! if restarting. These components will be scaled to current forcing 
       ! in prep_radiation.
-      if (runtype == 'continue' .or. restart) &
+      if (trim(runtype) == 'continue' .or. restart) &
          call init_shortwave    ! initialize radiative transfer
 
          istep  = istep  + 1    ! update time step counters
@@ -211,11 +147,16 @@
       call init_forcing_atmo    ! initialize atmospheric forcing (standalone)
 #endif
 
+#ifdef oned
+      call init_therm_oned
+#endif
+
 #ifndef coupled
       call get_forcing_atmo     ! atmospheric forcing from data
       call get_forcing_ocn(dt)  ! ocean forcing from data
 !      if (tr_aero) call faero_data          ! aerosols
       if (tr_aero) call faero_default ! aerosols
+      if (tr_bgc_NO .or. tr_bgc_Sil) call get_forcing_bgc
 #endif
 
       if (runtype == 'initial' .and. .not. restart) &
@@ -224,9 +165,173 @@
       call init_flux_atm        ! initialize atmosphere fluxes sent to coupler
       call init_flux_ocn        ! initialize ocean fluxes sent to coupler
 
-      if (write_ic) call ice_write_hist(dt) ! write initial conditions 
+      if (write_ic) call accum_hist(dt) ! write initial conditions 
 
       end subroutine cice_init
+
+!=======================================================================
+
+      subroutine init_restart
+
+      use ice_aerosol, only: init_aerosol
+      use ice_age, only: init_age
+      use ice_blocks, only: nx_block, ny_block
+      use ice_calendar, only: time, calendar
+      use ice_domain, only: nblocks
+      use ice_domain_size, only: ncat
+      use ice_firstyear, only: init_fy
+      use ice_flux, only: sss
+      use ice_init, only: ice_ic
+      use ice_lvl, only: init_lvl
+      use ice_meltpond_cesm, only: init_meltponds_cesm
+      use ice_meltpond_lvl, only: init_meltponds_lvl
+      use ice_meltpond_topo, only: init_meltponds_topo
+      use ice_restart, only: runtype, restart, restart_ext, &
+          restartfile_ext, restartfile
+      use ice_restart_age, only: restart_age, read_restart_age
+      use ice_restart_firstyear, only: restart_FY, read_restart_FY
+      use ice_restart_lvl, only: restart_lvl, read_restart_lvl
+      use ice_restart_meltpond_cesm, only: restart_pond_cesm, read_restart_pond_cesm
+      use ice_restart_meltpond_lvl, only: restart_pond_lvl, read_restart_pond_lvl, dhsn
+      use ice_restart_meltpond_topo, only: restart_pond_topo, read_restart_pond_topo
+      use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond_cesm, &
+          tr_pond_lvl, tr_pond_topo, tr_aero, trcrn, &
+          nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd
+      use ice_zbgc, only: init_bgc
+      use ice_zbgc_public, only: tr_bgc_S, tr_bgc_NO, solve_bgc
+      use ice_zsalinity, only: init_zsalinity
+
+      integer(kind=int_kind) :: iblk
+
+      if (restart_ext) then              ! read extended grid
+         if (trim(runtype) == 'continue') then 
+            ! start from core restart file
+            call restartfile_ext()       ! given by pointer in ice_in
+            call calendar(time)          ! update time parameters
+         else if (restart) then          ! ice_ic = core restart file
+            call restartfile_ext(ice_ic) !  or 'default' or 'none'
+         endif         
+      else                            ! read physical grid
+         if (trim(runtype) == 'continue') then 
+            ! start from core restart file
+            call restartfile()           ! given by pointer in ice_in
+            call calendar(time)          ! update time parameters
+         else if (restart) then          ! ice_ic = core restart file
+            call restartfile (ice_ic)    !  or 'default' or 'none'
+         endif         
+      endif         
+
+      ! tracers
+      ! ice age tracer   
+      if (tr_iage) then 
+         if (trim(runtype) == 'continue') &
+              restart_age = .true.
+         if (restart_age) then
+            call read_restart_age
+         else
+            do iblk = 1, nblocks 
+               call init_age(nx_block, ny_block, ncat, trcrn(:,:,nt_iage,:,iblk))
+            enddo ! iblk
+         endif
+      endif
+      ! first-year area tracer
+      if (tr_FY) then
+         if (trim(runtype) == 'continue') restart_FY = .true.
+         if (restart_FY) then
+            call read_restart_FY
+         else
+            do iblk = 1, nblocks 
+               call init_FY(nx_block, ny_block, ncat, trcrn(:,:,nt_FY,:,iblk))
+            enddo ! iblk
+         endif
+      endif
+      ! level ice tracer
+      if (tr_lvl) then
+         if (trim(runtype) == 'continue') restart_lvl = .true.
+         if (restart_lvl) then
+            call read_restart_lvl
+         else
+            do iblk = 1, nblocks 
+               call init_lvl(nx_block, ny_block, ncat, &
+                    trcrn(:,:,nt_alvl,:,iblk), trcrn(:,:,nt_vlvl,:,iblk))
+            enddo ! iblk
+         endif
+      endif
+      ! CESM melt ponds
+      if (tr_pond_cesm) then
+         if (trim(runtype) == 'continue') &
+              restart_pond_cesm = .true.
+         if (restart_pond_cesm) then
+            call read_restart_pond_cesm
+         else
+            do iblk = 1, nblocks 
+               call init_meltponds_cesm(nx_block, ny_block, ncat, &
+                    trcrn(:,:,nt_apnd,:,iblk), trcrn(:,:,nt_hpnd,:,iblk))
+            enddo ! iblk
+         endif
+      endif
+      ! level-ice melt ponds
+      if (tr_pond_lvl) then
+         if (trim(runtype) == 'continue') &
+              restart_pond_lvl = .true.
+         if (restart_pond_lvl) then
+            call read_restart_pond_lvl
+         else
+            do iblk = 1, nblocks 
+               call init_meltponds_lvl(nx_block, ny_block, ncat, &
+                    trcrn(:,:,nt_apnd,:,iblk), trcrn(:,:,nt_hpnd,:,iblk), &
+                    trcrn(:,:,nt_ipnd,:,iblk), dhsn(:,:,:,iblk))
+            enddo ! iblk
+         endif
+      endif
+      ! topographic melt ponds
+      if (tr_pond_topo) then
+         if (trim(runtype) == 'continue') &
+              restart_pond_topo = .true.
+         if (restart_pond_topo) then
+            call read_restart_pond_topo
+         else
+            do iblk = 1, nblocks 
+               call init_meltponds_topo(nx_block, ny_block, ncat, &
+                    trcrn(:,:,nt_apnd,:,iblk), trcrn(:,:,nt_hpnd,:,iblk), &
+                    trcrn(:,:,nt_ipnd,:,iblk))
+            enddo ! iblk
+         endif ! .not restart_pond
+      endif
+      if (tr_aero)      call init_aerosol        ! ice aerosol
+      if (tr_bgc_S)     call init_zsalinity(sss) ! salinity on bio-grid
+      if (tr_bgc_NO .or. solve_bgc) call init_bgc! layer biogeochemistry
+
+      end subroutine init_restart
+
+!=======================================================================
+!
+! Check whether a file indicating that the previous run finished cleanly
+! If so, then do not continue the current restart.  This is needed only 
+! for runs on machine 'bering' (set using runid = 'bering').
+!
+!  author: Adrian Turner, LANL
+
+      subroutine check_finished_file()
+
+      use ice_communicate, only: my_task, master_task
+      use ice_exit, only: abort_ice
+      use ice_restart, only: restart_dir
+
+      character(len=char_len_long) :: filename
+      logical :: lexist = .false.
+
+      if (my_task == master_task) then
+           
+         filename = trim(restart_dir)//"finished"
+         inquire(file=filename, exist=lexist)
+         if (lexist) then
+            call abort_ice("Found already finished file - quitting")
+         end if
+
+      endif
+
+      end subroutine check_finished_file
 
 !=======================================================================
 
