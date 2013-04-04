@@ -35,7 +35,10 @@
       implicit none
       save
 
-      logical (kind=log_kind) :: &
+      private
+      public :: ocean_mixed_layer
+
+      logical (kind=log_kind), public :: &
          oceanmixed_ice           ! if true, use ocean mixed layer
 
       real (kind=dbl_kind), parameter :: &
@@ -65,10 +68,12 @@
 !
 ! !USES:
 !
-      use ice_blocks
-      use ice_domain
+      use ice_blocks, only: nx_block, ny_block
       use ice_state, only: aice
-      use ice_flux
+      use ice_flux, only: sst, Tf, Qa, uatm, vatm, wind, potT, rhoa, zlvl, &
+           frzmlt, fhocn, fswthru, flw, flwout_ocn, fsens_ocn, flat_ocn, evap_ocn, &
+           alvdr_ocn, alidr_ocn, alvdf_ocn, alidf_ocn, swidf, swvdf, swidr, swvdr, &
+           qdp, hmix, strairx_ocn, strairy_ocn, Tref_ocn, Qref_ocn
       use ice_grid, only: tmask
       use ice_atmo, only: atmo_boundary_layer, atmbndy, atmo_boundary_const
 !
@@ -105,9 +110,6 @@
 
       integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
          indxi, indxj    ! compressed indices for ocean cells
-
-      type (block) :: &
-         this_block           ! block information for current block
 
       !-----------------------------------------------------------------
       ! Identify ocean cells.

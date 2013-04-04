@@ -29,10 +29,10 @@
 !=======================================================================
 
       implicit none
-      public
+      private
       save
 
-      integer (kind=int_kind), parameter :: &
+      integer (kind=int_kind), parameter, public :: &
         nx_global = NXGLOB    , & ! i-axis size
         ny_global = NYGLOB    , & ! j-axis size
         ncat      = NICECAT   , & ! number of categories
@@ -62,7 +62,7 @@
                   + TRBRI*nltrcr*nblyr,&! zbgc (off if TRBRI=0)
         max_nstrm =   5           ! max number of history output streams
 
-      integer (kind=int_kind), parameter :: &
+      integer (kind=int_kind), parameter, public :: &
         block_size_x = BLCKX  , & ! size of block in first horiz dimension
         block_size_y = BLCKY      ! size of block in second horiz dimension
 
@@ -75,7 +75,7 @@
    !*** max_blocks = (nx_global/block_size_x)*(ny_global/block_size_y)/
    !***               num_procs
  
-      integer (kind=int_kind), parameter :: &
+      integer (kind=int_kind), parameter, public :: &
         max_blocks = MXBLCKS      ! max number of blocks per processor
 
 !=======================================================================

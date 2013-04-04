@@ -32,19 +32,37 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size
       use ice_constants
-      use ice_fileunits
-      use ice_read_write
-      use ice_timers
+      use ice_domain_size, only: nblyr, nilyr, nblyr_hist, max_blocks, nbltrcr
+      use ice_blocks, only: nx_block, ny_block
+      use ice_fileunits, only: nu_diag, nu_restart_bgc, nu_rst_pointer, nu_dump_bgc, flush_fileunit
+      use ice_read_write, only: ice_open, ice_read, ice_write
+      use ice_timers, only: timer_bgc2, timer_bgc3, ice_timer_start, ice_timer_stop
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
-      use ice_state
-      use ice_zbgc_public
+      use ice_state, only: vicen, vice, trcr, ntrcr, ntraceb, nt_bgc_am_sk, nt_bgc_c_sk, &
+           nt_bgc_chl_sk, nt_bgc_DMS_sk, nt_bgc_DMSPd_sk, nt_bgc_DMSPp_sk, nt_bgc_N, &
+           nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_NO, nt_bgc_PON, nt_bgc_Sil, nt_bgc_Sil_sk, &
+           nt_bgc_C, nt_bgc_chl, nt_bgc_DMS, nt_bgc_DMSPd, nt_bgc_DMSPp, nt_bgc_NH, &
+           nt_bgc_NO, nt_bgc_PON, nt_bgc_Sil, nt_bgc_Nit_sk, nt_bgc_Sil_sk, nt_bgc_Nit_sk, &
+           nt_bgc_Sil_sk
+      use ice_zbgc_public, only: sil, nit, algalN, amm, dms, dmsp, R_C2N, R_chl2N, tr_bgc_C, &
+           tr_bgc_chl, tr_bgc_DMSPd, tr_bgc_DMSPp, tr_bgc_N, tr_bgc_NH, tr_bgc_NO, tr_bgc_PON, &
+           tr_bgc_Sil, tr_bgc_DMSPd, tr_bgc_DMSPp, tr_bgc_N, tr_bgc_NH, tr_bgc_NO, tr_bgc_PON, &
+           tr_bgc_Sil, tr_bgc_N, tr_bgc_N_sk, tr_bgc_NO, tr_bgc_PON, tr_bgc_Sil, grid_o, &
+           grid_o_t, fr_resp, nlt_bgc_DMS, nlt_bgc_DMSPd, nlt_bgc_N, nlt_bgc_NH, nlt_bgc_NO, &
+           nlt_bgc_PON, nlt_bgc_Sil, tr_bgc_DMS, Dm, initbio_frac, min_salin, nlt_bgc_C, &
+           nlt_bgc_chl, nlt_bgc_DMS, nlt_bgc_DMSPd, nlt_bgc_DMSPp, nlt_bgc_N, nlt_bgc_NH, &
+           nlt_bgc_NO, nlt_bgc_PON, nlt_bgc_Sil, thin, nit_data_type, nit_file, &
+           restore_bgc, sil_data_type, sil_file, zfswin, grownp, remap_layers_bgc_plus
 !
 !EOP
 !
       implicit none
+
+      private
+      public :: get_forcing_bgc, bgc_diags, write_restart_bgc, &
+                algal_dynamics, tracer_transport, read_restart_bgc
 
       real (kind=dbl_kind), parameter, private :: &
          R_Si2N  = 1.5_dbl_kind , & ! algal Si to N (mole/mole)
@@ -76,7 +94,7 @@
 !
 ! !USES:
 !
-      use ice_calendar
+      use ice_calendar, only: dt, istep, mday, month, sec
       use ice_domain, only: nblocks
       use ice_forcing, only: trestore, trest, ocn_data_dir, &
           read_clim_data, interpolate_data, interp_coeff_monthly
@@ -241,7 +259,7 @@
 !
 ! !USES:
 !
-      use ice_calendar,    only: dt
+      use ice_calendar, only: dt
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -644,7 +662,7 @@
 !
 ! !USES:
 !
-      use ice_calendar,    only: dt
+      use ice_calendar, only: dt
 !      use ice_zbgc_public, only: R_C2N, R_chl2N
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1885,7 +1903,7 @@
 !
 ! !USES:
 !
-      use ice_calendar,    only: dt
+      use ice_calendar, only: dt
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -2500,8 +2518,6 @@
 !
 ! !USES:
 !
-      use ice_zsalinity, only: thin
-
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -2949,13 +2965,9 @@
 !
 ! !USES:
 !
-      use ice_broadcast
-      use ice_global_reductions
-      use ice_blocks
-      use ice_diagnostics
-      use ice_domain
-      use ice_domain_size
-!      use ice_flux
+      use ice_broadcast, only: broadcast_scalar
+      use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc, pbloc, plat, plon
+      use ice_domain_size, only: ncat, nltrcr
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
       use ice_work, only: work1, work2
 !
@@ -3353,12 +3365,12 @@
 !
 ! !USES:
 !
-      use ice_domain_size
+      use ice_domain_size, only: ncat
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init
       use ice_domain, only: nblocks
       use ice_restart, only: lenstr, restart_dir, restart_file
-      use ice_state
+      use ice_state, only: trcrn
 !      use ice_zbgc_public, only:tr_bgc_N, tr_bgc_NO,tr_bgc_NH, &
 !                  tr_bgc_Sil, tr_bgc_DMSPp, tr_bgc_DMSPd,  &
 !                  tr_bgc_PON, nit, amm, sil, dmsp, dms, algalN
@@ -3470,13 +3482,13 @@
 !
 ! !USES:
 !
-      use ice_domain_size
+      use ice_domain_size, only: ncat
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init, &
                               istep0
       use ice_domain, only: nblocks
       use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
-      use ice_state
+      use ice_state, only: trcrn
       use ice_exit, only: abort_ice
 !      use ice_zbgc_public, only: tr_bgc_N, tr_bgc_NO,tr_bgc_NH, tr_bgc_C, tr_bgc_chl,&
 !                  tr_bgc_Sil, tr_bgc_DMSPp, tr_bgc_DMSPd, tr_bgc_PON,  &

@@ -9,21 +9,26 @@
       module ice_zbgc
 
       use ice_kinds_mod
-      use ice_domain_size
       use ice_constants
+      use ice_blocks, only: nx_block, ny_block
+      use ice_domain_size
+      use ice_communicate, only: my_task, master_task
+      use ice_fileunits, only: nu_diag, nu_forcing
       use ice_algae
       use ice_zbgc_public
       use ice_brine
       use ice_state
       use ice_zsalinity
-      use ice_grid
+      use ice_grid, only: tlat, tlon
       use ice_shortwave, only: fswthruln, fswthrun
       use ice_therm_shared, only: solve_Sin
       use ice_domain, only: nblocks, blocks_ice
-      use ice_timers
-      
 
       implicit none 
+
+      private
+      public :: add_new_ice_bgc, init_zbgc, get_forcing_bgc, init_bgc, &
+           init_history_bgc, biogeochemistry, bgc_diags, write_restart_bgc
 
       ! zbgc
       real (kind=dbl_kind), parameter :: & 
@@ -55,9 +60,9 @@
 !
 ! !USES:
 !
-      use ice_broadcast
-      use ice_exit
-      use ice_fileunits
+      use ice_broadcast, only: broadcast_scalar
+      use ice_exit, only: abort_ice
+      use ice_fileunits, only: nu_nml, nml_filename, get_fileunit, release_fileunit
       use ice_therm_shared, only: read_Sin, solve_Sin
 !      use ice_state
 !      use ice_zbgc_public, only: tr_bgc_N_sk, tr_bgc_C_sk, tr_bgc_chl_sk, &
@@ -460,14 +465,16 @@
 ! !USES:
 !
       use ice_domain, only: nblocks
-      use ice_flux, only:  hmix, upNO, upNH, growN, growNp, sss
+      use ice_flux, only:  hmix, sss
+      use ice_zbgc_public, only: upNO, upNH, growN, growNp
 !      use ice_zbgc_public, only: zfswin, ocean_bio
       use ice_calendar, only: month, dt
       use ice_work, only:  work1
       use ice_therm_shared, only: solve_Sin
       use ice_restart, only: runtype
       use ice_algae  
-      use ice_exit
+      use ice_exit, only: abort_ice
+      use ice_read_write, only: ice_read, ice_open
 !      use ice_state
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1111,6 +1118,8 @@
       subroutine biogeochemistry (dt, iblk)
 
       use ice_flux
+      use ice_blocks, only: block, get_block
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bgc, timer_bgc4, timer_bgc5
 !      use ice_state
 
       real (kind=dbl_kind), intent(in) :: &

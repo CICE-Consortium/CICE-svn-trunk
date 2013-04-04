@@ -85,7 +85,7 @@
           Tffresh, kg_to_g, secday
       use ice_calendar, only: yday, days_per_year, histfreq, &
           histfreq_n, nstreams
-      use ice_domain_size, only: max_blocks
+      use ice_domain_size, only: max_blocks, max_nstrm
       use ice_dyn_shared, only: kdyn
       use ice_exit, only: abort_ice
       use ice_fileunits, only: nu_nml, nml_filename, nu_diag, &
@@ -1230,10 +1230,10 @@
           albice, albsno, albpnd, coszen, flat, fsens, flwout, evap, &
           Tair, Tref, Qref, congel, frazil, snoice, dsnow, &
           melts, meltb, meltt, meltl, fresh, fsalt, fresh_gbm, fsalt_gbm, &
-          fsice, fsice_gbm, fsice_g, fsice_g_gbm, fhocn, fhocn_gbm, &
+          fsice_gbm, fsice_g_gbm, fhocn, fhocn_gbm, &
           fswthru_gbm, strairx, strairy, strtltx, strtlty, strintx, strinty, &
           strocnx, strocny, fm, daidtt, dvidtt, daidtd, dvidtd, fsurf, &
-          fcondtop, fsurfn, fcondtopn, fsicen_g, flatn, albcnt, prs_sig, &
+          fcondtop, fsurfn, fcondtopn, flatn, albcnt, prs_sig, &
           stressp_1, stressm_1, stress12_1, &
           stressp_2, stressm_2, stress12_2, &
           stressp_3, stressm_3, stress12_3, &
@@ -1249,7 +1249,7 @@
       use ice_therm_mushy, only: temperature_mush, temperature_snow
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
       use ice_work, only: worka, workb
-      use ice_zbgc_public, only: S_tot
+      use ice_zbgc_public, only: S_tot, fsice, fsice_g, fsicen_g
 
 !
 ! !INPUT/OUTPUT PARAMETERS:

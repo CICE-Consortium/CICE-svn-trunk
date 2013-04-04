@@ -46,9 +46,9 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size
       use ice_constants
-      use ice_fileunits
+      use ice_domain_size, only: ncat, max_aero, n_aero, nilyr, nslyr, nblyr
+      use ice_fileunits, only: nu_diag
       use ice_itd, only: hin_max, column_sum, &
                          column_conservation_check, compute_tracers
 !
@@ -57,11 +57,14 @@
       implicit none
       save
 
+      private
+      public :: ice_strength, ridge_ice
+
 !-----------------------------------------------------------------------
 ! Ridging parameters
 !-----------------------------------------------------------------------
 
-      integer (kind=int_kind) :: & ! defined in namelist 
+      integer (kind=int_kind), public :: & ! defined in namelist 
          kstrength    , & ! 0 for simple Hibler (1979) formulation 
                           ! 1 for Rothrock (1975) pressure formulation 
          krdg_partic  , & ! 0 for Thorndike et al. (1975) formulation 
@@ -69,7 +72,7 @@
          krdg_redist      ! 0 for Hibler (1980) formulation 
                           ! 1 for exponential redistribution function 
 
-      real (kind=dbl_kind) :: &  
+      real (kind=dbl_kind), public :: &  
          mu_rdg           ! gives e-folding scale of ridged ice (m^.5) 
                           ! (krdg_redist = 1) 
  

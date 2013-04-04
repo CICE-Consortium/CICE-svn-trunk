@@ -26,25 +26,25 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_blocks, only: nx_block, ny_block, block, get_block
+      use ice_blocks, only: nx_block, ny_block
       use ice_domain_size, only: max_blocks, ncat, max_aero, max_nstrm, nilyr
       use ice_constants, only: c0, c1, c5, c10, c20, c180, &
           depressT, stefan_boltzmann, Tffresh, emissivity
-      use ice_zbgc_public, only: fsicen, fsicen_g, flux_bio, flux_bio_g,  &
-                          flux_bio_gbm, flux_bio_g_gbm, fsice, fsice_g, &
-                          upNO, upNH, growN, growNp
 !
 !EOP
 !
       implicit none
-      public
+      private
+      public :: init_coupler_flux, init_history_therm, init_history_dyn, &
+                init_flux_ocn, init_flux_atm, scale_fluxes, merge_fluxes, &
+                set_sfcflux
       save
 
       !-----------------------------------------------------------------
       ! Dynamics component
       !-----------------------------------------------------------------
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
 
        ! in from atmos (if .not.calc_strair)  
          strax   , & ! wind stress components (N/m^2)
@@ -67,7 +67,7 @@
 
        ! diagnostic
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          sig1    , & ! principal stress component
          sig2    , & ! principal stress component
          strairx , & ! stress on ice by air, x-direction
@@ -86,7 +86,7 @@
          opening     ! rate of opening due to divergence/shear (1/s)
 
       real (kind=dbl_kind), & 
-         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         dimension (nx_block,ny_block,ncat,max_blocks), public :: &
        ! ridging diagnostics in categories
          dardg1ndt, & ! rate of area loss by ridging ice (1/s)
          dardg2ndt, & ! rate of area gain by new ridges (1/s)
@@ -102,19 +102,19 @@
 
        ! restart
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
        ! ice stress tensor in each corner of T cell (kg/s^2)
          stressp_1, stressp_2, stressp_3, stressp_4 , & ! sigma11+sigma22
          stressm_1, stressm_2, stressm_3, stressm_4 , & ! sigma11-sigma22
          stress12_1,stress12_2,stress12_3,stress12_4    ! sigma12
 
       logical (kind=log_kind), &
-         dimension (nx_block,ny_block,max_blocks) :: &
+         dimension (nx_block,ny_block,max_blocks), public :: &
          iceumask   ! ice extent mask (U-cell)
 
        ! internal
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          prs_sig  , & ! replacement pressure, for stress calc
          fm           ! Coriolis param. * mass in U-cell (kg/s)
 
@@ -124,7 +124,7 @@
 
        ! in from atmosphere (if calc_Tsfc)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          zlvl    , & ! atm level height (m)
          uatm    , & ! wind velocity components (m/s)
          vatm    , &
@@ -145,24 +145,24 @@
        ! not per ice area. When in standalone mode, these are per ice area.
 
       real (kind=dbl_kind), & 
-         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         dimension (nx_block,ny_block,ncat,max_blocks), public :: &
          fsurfn_f   , & ! net flux to top surface, excluding fcondtop
          fcondtopn_f, & ! downward cond flux at top surface (W m-2)
          flatn_f        ! latent heat flux (W m-2)
 
        ! in from atmosphere
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          frain   , & ! rainfall rate (kg/m^2 s)
          fsnow       ! snowfall rate (kg/m^2 s)
 
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,max_aero,max_blocks) :: &
+         dimension (nx_block,ny_block,max_aero,max_blocks), public :: &
          faero_atm   ! aerosol deposition rate (kg/m^2 s)
 
        ! in from ocean
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          sss     , & ! sea surface salinity (ppt)
          sst     , & ! sea surface temperature (C)
          frzmlt  , & ! freezing/melting potential (W/m^2)
@@ -170,14 +170,14 @@
          qdp     , & ! deep ocean heat flux (W/m^2), negative upward
          hmix        ! mixed layer depth (m)
 
-      character (char_len) :: &
+      character (char_len), public :: &
          Tfrzpt      ! ocean freezing temperature formulation
                      ! 'constant' (-1.8C), 'linear_S'
 
        ! out to atmosphere (if calc_Tsfc)
        ! note Tsfc is in ice_state.F
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          fsens   , & ! sensible heat flux (W/m^2)
          flat    , & ! latent heat flux   (W/m^2)
          fswabs  , & ! shortwave flux absorbed in ice and ocean (W/m^2)
@@ -187,7 +187,7 @@
          evap        ! evaporative water flux (kg/m^2/s)
 
        ! albedos aggregated over categories (if calc_Tsfc)
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), public :: &
          alvdr   , & ! visible, direct   (fraction)
          alidr   , & ! near-ir, direct   (fraction)
          alvdf   , & ! visible, diffuse  (fraction)
@@ -204,13 +204,13 @@
          apeff_ai     ! effective pond area used for radiation calculation
 
       real (kind=dbl_kind), &
-         dimension(nx_block,ny_block,max_blocks,max_nstrm) :: &
+         dimension(nx_block,ny_block,max_blocks,max_nstrm), public :: &
          albcnt       ! counter for zenith angle
 
        ! out to ocean 
        ! (Note CICE_IN_NEMO does not use these for coupling.  
        !  It uses fresh_gbm,fsalt_gbm,fhocn_gbm and fswthru_gbm)
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          fpond   , & ! fresh water flux to ponds (kg/m2/s)
          fresh   , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt   , & ! salt flux to ocean (kg/m^2/s)
@@ -218,27 +218,27 @@
          fswthru     ! shortwave penetrating to ocean (W/m^2)
 
       real (kind=dbl_kind), &
-        dimension (nx_block,ny_block,max_aero,max_blocks) :: &
+        dimension (nx_block,ny_block,max_aero,max_blocks), public :: &
          faero_ocn   ! aerosol flux to ocean  (kg/m^2/s)
 
        ! internal
 
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,max_blocks) :: &
+         dimension (nx_block,ny_block,max_blocks), public :: &
          fswfac  , & ! for history
          scale_factor! scaling factor for shortwave components
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          update_ocn_f ! if true, update fresh water and salt fluxes
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks), public :: &
          melttn      , & ! top melt in category n (m)
          meltbn      , & ! bottom melt in category n (m)
          congeln     , & ! congelation ice formation in category n (m)
          snoicen         ! snow-ice formation in category n (m)
 
       ! for biogeochemistry
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks), public :: &
          hin_old     , & ! old ice thickness
          dsnown          ! change in snow thickness in category n (m)
 
@@ -247,7 +247,7 @@
       ! (for running with CAM)
       !-----------------------------------------------------------------
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          strairx_ocn , & ! stress on ocean by air, x-direction
          strairy_ocn , & ! stress on ocean by air, y-direction
          fsens_ocn   , & ! sensible heat flux (W/m^2)
@@ -265,7 +265,7 @@
       ! diagnostic
       !-----------------------------------------------------------------
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          fsurf , & ! net surface heat flux (excluding fcondtop)(W/m^2)
          fcondtop,&! top surface conductive flux        (W/m^2)
          congel, & ! basal ice growth         (m/step-->cm/day)
@@ -282,7 +282,7 @@
          frz_onset   ! day of year that freezing begins (congel or frazil)
          
       real (kind=dbl_kind), & 
-         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         dimension (nx_block,ny_block,ncat,max_blocks), public :: &
          fsurfn,   & ! category fsurf
          fcondtopn,& ! category fcondtop
          flatn       ! cagegory latent heat flux
@@ -294,7 +294,7 @@
       ! (The others suffer from problem of incorrect values at grid boxes
       !  that change from an ice free state to an icy state.)
     
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          fresh_gbm, & ! fresh water flux to ocean (kg/m^2/s)
          fsalt_gbm, & ! salt flux to ocean (kg/m^2/s)
          fhocn_gbm, & ! net heat flux to ocean (W/m^2)
@@ -306,14 +306,14 @@
       ! internal
       !-----------------------------------------------------------------
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          rside   , & ! fraction of ice that melts laterally
          fsw     , & ! incoming shortwave radiation (W/m^2)
          coszen  , & ! cosine solar zenith angle, < 0 for sun below horizon 
          rdg_conv, & ! convergence term for ridging (1/s)
          rdg_shear   ! shear term for ridging (1/s)
  
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nilyr+1,max_blocks) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nilyr+1,max_blocks), public :: &
          salinz    ,&   ! initial salinity  profile (ppt)   
          Tmltz          ! initial melting temperature (^oC)
 
@@ -340,6 +340,8 @@
 ! author Elizabeth C. Hunke, LANL
 !
 ! !USES:
+!
+        use ice_zbgc_public, only: flux_bio, flux_bio_g, upNO, upNH, growN, growNp
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -567,6 +569,8 @@
 !
 ! !USES:
 !
+        use ice_zbgc_public, only: flux_bio, flux_bio_g, fsice, fsice_g, upNO, upNH
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !
@@ -613,8 +617,9 @@
 !
 ! !USES:
 !
-      use ice_domain, only: nblocks
+      !use ice_domain, only: nblocks
       use ice_state, only: aice, vice
+      use ice_zbgc_public, only: fsicen, fsicen_g
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -671,7 +676,7 @@
 !
 ! !USES:
 !
-      use ice_domain, only: nblocks
+      !use ice_domain, only: nblocks
       use ice_state, only: aice, vice
 !
 ! !INPUT/OUTPUT PARAMETERS:

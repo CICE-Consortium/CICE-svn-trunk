@@ -68,7 +68,7 @@
       use ice_communicate, only: my_task, master_task
       use ice_constants, only: c0, c360, secday, spval, rad_to_deg
       use ice_domain, only: distrb_info
-      use ice_domain_size, only: nx_global, ny_global
+      use ice_domain_size, only: nx_global, ny_global, max_nstrm
       use ice_exit, only: abort_ice
       use ice_fileunits, only: nu_diag
       use ice_gather_scatter, only: gather_global
