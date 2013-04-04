@@ -281,7 +281,7 @@
           albpnd, albcnt, apeff_ai, coszen, fpond, fresh, &
           alvdf_gbm, alidf_gbm, alvdr_gbm, alidr_gbm, fhocn_gbm, &
           fresh_gbm, fsalt_gbm, fsalt, fsice_gbm, fsice_g_gbm, &
-          fswthru_gbm, fsice, fsice_g, fhocn, fswthru, scale_factor, &
+          fswthru_gbm, fhocn, fswthru, scale_factor, &
           swvdr, swidr, swvdf, swidf, Tf, Tair, Qa, strairxT, strairyt, &
           fsens, flat, fswabs, flwout, evap, Tref, Qref, faero_ocn, &
           fsurfn_f, flatn_f, scale_fluxes
@@ -292,7 +292,7 @@
       use ice_state, only: aicen, aice, aice_init
       use ice_therm_shared, only: calc_Tsfc
       use ice_zbgc_public, only: flux_bio, flux_bio_g, flux_bio_gbm, &
-          flux_bio_g_gbm
+          flux_bio_g_gbm, fsice, fsice_g
 
       integer (kind=int_kind), intent(in) :: & 
          iblk            ! block index 

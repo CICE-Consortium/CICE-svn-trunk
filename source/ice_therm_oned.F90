@@ -5,9 +5,15 @@ module ice_therm_oned
   use ice_kinds_mod
   use ice_constants
   use ice_domain_size
-  use ice_therm_mushy
+  use ice_therm_mushy, only: temperature_mush, temperature_snow, liquid_fraction, liquidus_brine_salinity_mush, liquidus_temperature_mush
+  use ice_calendar, only: istep1
+  use ice_communicate, only: my_task
+  use ice_therm_shared, only: ktherm
 
   implicit none
+
+  private
+  public :: thermo_vertical_diag, diagnose_itd
 
   real(kind=dbl_kind) :: z_interface_snow ! snow surface
   real(kind=dbl_kind) :: z_interface_snic ! snow ice surface

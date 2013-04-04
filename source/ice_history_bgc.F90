@@ -31,8 +31,8 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size, only: max_nstrm
-
+      use ice_constants
+      use ice_domain_size, only: max_nstrm, max_aero, n_aero, nblyr
       use ice_zbgc_public
 !
 !EOP
@@ -40,7 +40,7 @@
       implicit none
       private
       public :: init_hist_bgc_2D, init_hist_bgc_3Dc, init_hist_bgc_3Db, &
-              init_hist_bgc_4Db, accum_hist_bgc
+                init_hist_bgc_4Db, accum_hist_bgc
       save
       
       !---------------------------------------------------------------

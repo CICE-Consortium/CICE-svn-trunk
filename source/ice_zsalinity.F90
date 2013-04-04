@@ -31,19 +31,23 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size
       use ice_constants
-      use ice_fileunits
-      use ice_read_write
-      use ice_timers
+      use ice_domain_size
+      use ice_fileunits, only: nu_diag, nu_dump_S, nu_restart_S, &
+           nu_rst_pointer, nu_dump_S, flush_fileunit
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
       use ice_state
       use ice_zbgc_public
+      use ice_blocks, only: nx_block, ny_block
 !
 !EOP
 !
       implicit none
+
+      private
+      public :: init_zsalinity, first_ice, S_diags, write_restart_S, solve_zsalinity, &
+           column_sum_S, merge_S_fluxes
 
       integer (kind=int_kind), parameter :: &
          restart_n  = 7       ! value  of nblyr in restart files
@@ -85,7 +89,7 @@
       use ice_domain, only: nblocks
 !      use ice_zbgc_public, only: zTin, ocean_bio, cgrid, &
 !                           bgrid, igrid, zphi, iDi, iki
-      use ice_exit
+     ! use ice_exit
 !
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -246,7 +250,8 @@
 !
       use ice_therm_shared, only: solve_Sin
       use ice_therm_shared, only: calculate_Tin_from_qin
-      use ice_calendar,    only: istep1, time
+      use ice_calendar, only: istep1, time
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bgc1
 !
 ! !INPUT/OUTPUT PARAMETERS:                                
 !
@@ -1900,13 +1905,8 @@
 !
 ! !USES:
 !
-      use ice_broadcast
-      use ice_global_reductions
-      use ice_blocks
-      use ice_diagnostics
-      use ice_domain
-      use ice_domain_size
-      use ice_flux
+      use ice_broadcast, only: broadcast_scalar
+      use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc, pbloc, plat, plon
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
       use ice_work, only: work1, work2
 !
@@ -2199,6 +2199,7 @@
       use ice_state
       use ice_flux, only: sss  
       use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
+      use ice_read_write, only: ice_open, ice_write
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -2308,6 +2309,7 @@
       use ice_state
       use ice_exit, only: abort_ice
       use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
+      use ice_read_write, only: ice_open, ice_read, ice_write
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

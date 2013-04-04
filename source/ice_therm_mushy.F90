@@ -16,20 +16,26 @@ module ice_therm_mushy
 
   use ice_kinds_mod
   use ice_constants
-  use ice_domain_size
-  use ice_calendar
+  use ice_domain_size, only: ncat, nilyr, nslyr, max_ntrcr, n_aero
+  use ice_calendar, only: istep, istep1, dt
   use ice_state, only: nt_apnd, nt_hpnd, tr_pond
   use ice_exit, only: abort_ice
   use ice_communicate, only: my_task, master_task
-  use ice_therm_shared
+  use ice_therm_shared, only: ferrmax, hfrazilmin
   use ice_fileunits, only: nu_diag
 
   implicit none
 
+  private
+  public :: temperature_mush, temperature_snow, liquid_fraction, &
+       liquidus_brine_salinity_mush, liquidus_temperature_mush, &
+       temperature_changes_salinity, init_therm_mushy, enthalpy_mush, &
+       enthalpy_of_melting, add_new_ice_mushy
+
   !-----------------------------------------------------------------
   ! namelist parameters
   !-----------------------------------------------------------------
-  real(kind=dbl_kind) :: &
+  real(kind=dbl_kind), public :: &
        a_rapid_mode      , & ! channel radius for rapid drainage mode (m)
        Rac_rapid_mode    , & ! critical Rayleigh number for rapid drainage mode
        aspect_rapid_mode , & ! aspect ratio for rapid drainage mode (larger is wider)
@@ -57,7 +63,7 @@ module ice_therm_mushy
   !-----------------------------------------------------------------
   ! solver solution sizes
   !-----------------------------------------------------------------
-  integer, parameter, private :: &
+  integer, parameter :: &
        nyn_nosnow_cold = 2 * nilyr + 1         , & ! solution size for cold, no snow conditions
        nyn_nosnow_melt = 2 * nilyr             , & ! solution size for melting, no snow conditions
        nyn_snow_cold   = 2 * nilyr + nslyr + 1 , & ! solution size for cold, snow conditions
@@ -67,43 +73,43 @@ module ice_therm_mushy
   !-----------------------------------------------------------------
   ! JFNK Solver global variables 
   !-----------------------------------------------------------------
-  integer, parameter, private :: &
+  integer, parameter :: &
        nit_newton_max = 100                         , & ! maximum number of newton iterations
        nit_gmres_max  = 100                         , & ! maximum number of GMRES matrix-vector multiplies
        nsize_krylov   = nynmax+4                    , & ! size of Krylov subspace
        wsizemax       = (nynmax+3)*(nsize_krylov+2) + &
                         (nsize_krylov+1)*nsize_krylov/2 ! size of the GMRES workspace
  
-  integer, dimension(16), private :: &
+  integer, dimension(16) :: &
        ipar ! GMRES integer input/output parameters
 
-  real(kind=dbl_kind), private, dimension(16) :: &
+  real(kind=dbl_kind), dimension(16) :: &
        fpar ! GMRES real input/output parameters
 
   !-----------------------------------------------------------------
   ! physical parameters for passing to residual function through solver
   !-----------------------------------------------------------------
-  real(kind=dbl_kind), private :: &
+  real(kind=dbl_kind) :: &
        Tsf0     ! Surface temperature (C) at beginning of timestep
 
-  real(kind=dbl_kind), private, dimension(1:nslyr) :: &
+  real(kind=dbl_kind), dimension(1:nslyr) :: &
        qsn0 , & ! snow layer enthalpy (J m-3) at beginning of timestep
        ks0  , & ! snow layer conductivity (W m-1 K-1) at beginning of timestep
        Tsn0     ! snow layer temperature (C) at beginning of timestep
 
-  real(kind=dbl_kind), private, dimension(1:nslyr+1) :: &
+  real(kind=dbl_kind), dimension(1:nslyr+1) :: &
        ksstar0  ! snow interface conductivity (W m-1 K-1) at beginning of timestep
 
-  real(kind=dbl_kind), private, dimension(1:nilyr) :: &
+  real(kind=dbl_kind), dimension(1:nilyr) :: &
        qin0 , & ! ice layer enthalpy (J m-3) at beginning of timestep
        km0  , & ! ice layer conductivity (W m-1 K-1) at beginning of timestep
        Tin0 , & ! ice layer temperature (C) at beginning of timestep
        Sin0     ! ice layer bulk salinity (ppt) at beginning of timestep
 
-  real(kind=dbl_kind), private, dimension(1:nilyr+1) :: &
+  real(kind=dbl_kind), dimension(1:nilyr+1) :: &
        kmstar0  ! ice interface conductivity (W m-1 K-1) at beginning of timestep
 
-  real(kind=dbl_kind), private :: &
+  real(kind=dbl_kind) :: &
        g_dt      , & ! time step (s)
        g_hin     , & ! ice thickness (m)
        g_hsn     , & ! snow thickness (m)
@@ -127,17 +133,17 @@ module ice_therm_mushy
        g_sss     , & ! sea surface salinity (ppt)
        g_qocn        ! sea water enthalpy (J m-3)
 
-  real(kind=dbl_kind), dimension(1:nslyr), private :: &
+  real(kind=dbl_kind), dimension(1:nslyr) :: &
        g_Sswabs ! SW radiation absorbed in snow layers (W m-2)
 
-  real(kind=dbl_kind), dimension(1:nilyr), private :: &
+  real(kind=dbl_kind), dimension(1:nilyr) :: &
        g_Iswabs , & ! SW radiation absorbed in ice layers (W m-2)
        g_dSdt       ! gravity drainage desalination rate for slow mode (ppt s-1)
 
-  real(kind=dbl_kind), dimension(0:nilyr), private :: &
+  real(kind=dbl_kind), dimension(0:nilyr) :: &
        g_q ! upward interface vertical Darcy flow (m s-1)
 
-  integer(kind=int_kind), private :: &
+  integer(kind=int_kind) :: &
        g_i , & ! current grid i-index (for diagnostics)
        g_j , & ! current grid j-index  (for diagnostics)
        g_n     ! current category (for diagnostics)
@@ -147,29 +153,29 @@ module ice_therm_mushy
   !-----------------------------------------------------------------
 
   ! liquidus relation - higher temperature region
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        az1_liq = -18.48_dbl_kind, &
        bz1_liq =    0.0_dbl_kind
 
   ! liquidus relation - lower temperature region
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        az2_liq = -10.3085_dbl_kind, &
        bz2_liq =     62.4_dbl_kind
 
   ! liquidus break
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        Tb_liq = -7.6362968855167352_dbl_kind, & ! temperature of liquidus break
        Sb_liq =  123.66702800276086_dbl_kind    ! salinity of liquidus break
 
   ! basic liquidus relation constants
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        az1p_liq = az1_liq / 1000.0_dbl_kind, &
        bz1p_liq = bz1_liq / 1000.0_dbl_kind, &
        az2p_liq = az2_liq / 1000.0_dbl_kind, &
        bz2p_liq = bz2_liq / 1000.0_dbl_kind
   
   ! quadratic constants - higher temperature region
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        AS1_liq = az1p_liq * (rhow * cp_ocn - rhoi * cp_ice)                                   , &
        AC1_liq = rhoi * cp_ice * az1_liq                                                      , &
        BS1_liq = (c1 + bz1p_liq) * (rhow * cp_ocn - rhoi * cp_ice) + rhoi * Lfresh * az1p_liq , &
@@ -180,7 +186,7 @@ module ice_therm_mushy
        CC1_liq = -rhoi * Lfresh * bz1_liq
   
   ! quadratic constants - lower temperature region
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        AS2_liq = az2p_liq * (rhow * cp_ocn - rhoi * cp_ice)                                   , &
        AC2_liq = rhoi * cp_ice * az2_liq                                                      , &
        BS2_liq = (c1 + bz2p_liq) * (rhow * cp_ocn - rhoi * cp_ice) + rhoi * Lfresh * az2p_liq , &
@@ -191,13 +197,13 @@ module ice_therm_mushy
        CC2_liq = -rhoi * Lfresh * bz2_liq
   
   ! break enthalpy constants
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        D_liq = ((c1 + az1p_liq * Tb_liq + bz1p_liq) / (az1_liq * Tb_liq + bz1_liq)) * &
                ((cp_ocn * rhow - cp_ice * rhoi) * Tb_liq + Lfresh * rhoi), &
        E_liq = cp_ice * rhoi * Tb_liq - Lfresh * rhoi
   
   ! just fully melted enthapy constants
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        F1_liq = (-1000.0_dbl_kind * cp_ocn * rhow) / az1_liq , &
        G1_liq = -1000.0_dbl_kind                             , &
        H1_liq = (-bz1_liq * cp_ocn * rhow) / az1_liq         , &
@@ -206,11 +212,11 @@ module ice_therm_mushy
        H2_liq = (-bz2_liq * cp_ocn * rhow) / az2_liq
   
   ! warmer than fully melted constants
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        I_liq = c1 / (cp_ocn * rhow)
 
   ! temperature to brine salinity
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        J1_liq = bz1_liq / az1_liq         , &
        K1_liq = c1 / 1000.0_dbl_kind      , &
        L1_liq = (c1 + bz1p_liq) / az1_liq , &
@@ -219,7 +225,7 @@ module ice_therm_mushy
        L2_liq = (c1 + bz2p_liq) / az2_liq
 
   ! brine salinity to temperature
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        M1_liq = az1_liq            , &
        N1_liq = -az1p_liq          , &
        O1_liq = -bz1_liq / az1_liq , &
@@ -231,19 +237,19 @@ module ice_therm_mushy
  ! Other parameters
  !-----------------------------------------------------------------
 
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        serrmax = 1e-11_dbl_kind  ! max allowed salt flux error (ppt m s-1)
 
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        dTsf_errmax = 5.e-4_dbl_kind  ! max allowed error in dTsf
 
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        dTsf_errcon = dTsf_errmax  ! max allowed error in dTsf for consistency
 
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        ferrcon = ferrmax ! max allowed surface flux error for consistency
 
-  real(kind=dbl_kind), parameter, private :: &
+  real(kind=dbl_kind), parameter :: &
        hs_min = 1.e-4_dbl_kind  ! min snow thickness for computing Tsno (m)
 
 !=======================================================================

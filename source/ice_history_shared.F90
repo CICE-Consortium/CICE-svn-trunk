@@ -40,21 +40,23 @@
 !EOP
 !
       implicit none
-      public
       save
+
+      private
+      public :: define_hist_field, accum_hist_field, icefields_nml, construct_filename
       
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          hist_avg  ! if true, write averaged data instead of snapshots
 
-      character (len=char_len) :: &
+      character (len=char_len), public :: &
          history_file  , & ! output file for history
          incond_file       ! output file for snapshot initial conditions
 
-      character (len=char_len_long) :: &
+      character (len=char_len_long), public :: &
          history_dir   , & ! directory name for history file
          incond_dir        ! directory for snapshot initial conditions
 
-      character (len=char_len_long) :: &
+      character (len=char_len_long), public :: &
          pointer_file      ! input pointer file for restarts
 
       !---------------------------------------------------------------
@@ -83,10 +85,10 @@
           integer (kind=int_kind) :: vhistfreq_n ! number of vhistfreq intervals
       end type
 
-      integer (kind=int_kind), parameter :: &
+      integer (kind=int_kind), parameter, public :: &
          max_avail_hist_fields = 600      ! Max number of history fields
 
-      integer (kind=int_kind) :: &
+      integer (kind=int_kind), public :: &
          num_avail_hist_fields_tot  = 0, & ! Current, total number of defined fields
          num_avail_hist_fields_2D   = 0, & ! Number of 2D fields
          num_avail_hist_fields_3Dz  = 0, & ! Number of 3D fields (vertical)
@@ -96,7 +98,7 @@
          num_avail_hist_fields_4Ds  = 0, & ! Number of 4D fields (categories,vertical), snow
          num_avail_hist_fields_4Db  = 0    ! Number of 4D fields (categories,vertical), ice-biology
 
-      integer (kind=int_kind) :: &        ! cumulative counts
+      integer (kind=int_kind), public :: &        ! cumulative counts
          n2D     , & ! num_avail_hist_fields_2D
          n3Dccum , & ! n2D     + num_avail_hist_fields_3Dc
          n3Dzcum , & ! n3Dccum + num_avail_hist_fields_3Dz
@@ -109,29 +111,29 @@
 
       ! for now, ice and snow have same dimensions in netcdf
       ! could set nzilyr = nilyr + nslyr and write Tin+Tsn together into Tinz
-      integer (kind=int_kind), parameter :: &
+      integer (kind=int_kind), parameter, public :: &
          nzilyr = nilyr         , & ! vertical dimension (allows alternative grids)
          nzslyr = nslyr         , &
          nzblyr = nblyr+2
 
-      type (ice_hist_field), dimension(max_avail_hist_fields) :: &
+      type (ice_hist_field), dimension(max_avail_hist_fields), public :: &
          avail_hist_fields
 
-      character (len=16) :: vname_in     ! variable name
-      character (len=55) :: vdesc_in     ! variable description
-      character (len=55) :: vcomment_in  ! variable description
+      character (len=16), public :: vname_in     ! variable name
+      character (len=55), public :: vdesc_in     ! variable description
+      character (len=55), public :: vcomment_in  ! variable description
 
-      integer (kind=int_kind), parameter :: &
+      integer (kind=int_kind), parameter, public :: &
          nvar = 11              , & ! number of grid fields that can be written
                                     !   excluding grid vertices
          nvarz = 4              , & ! number of category/vertical grid fields written
          ncat_hist = ncat           ! number of ice categories written <= ncat
 
-      real (kind=real_kind) :: time_beg(max_nstrm), & ! bounds for averaging
-                               time_end(max_nstrm), &
-                               time_bounds(2)
+      real (kind=real_kind), public :: time_beg(max_nstrm), & ! bounds for averaging
+                                       time_end(max_nstrm), &
+                                       time_bounds(2)
 
-      real (kind=dbl_kind), allocatable :: &
+      real (kind=dbl_kind), allocatable, public :: &
          a2D (:,:,:,:)    , & ! field accumulations/averages, 2D
          a3Dz(:,:,:,:,:)  , & ! field accumulations/averages, 3D vertical
          a3Db(:,:,:,:,:)  , & ! field accumulations/averages, 3D vertical biology
@@ -140,19 +142,19 @@
          a4Ds(:,:,:,:,:,:), & ! field accumulations/averages, 4D categories,vertical, snow
          a4Db(:,:,:,:,:,:)    ! field accumulations/averages, 4D categories,vertical, bio
          
-      real (kind=dbl_kind), allocatable :: &
+      real (kind=dbl_kind), allocatable, public :: &
          Tinz4d (:,:,:,:)    , & ! array for Tin
          Tsnz4d (:,:,:,:)    , & ! array for Tsn
          Sinz4d (:,:,:,:)        ! array for Sin
 
-      real (kind=dbl_kind) :: &
+      real (kind=dbl_kind), public :: &
          avgct(max_nstrm)   ! average sample counter
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          igrd (nvar), &        ! true if grid field is written to output file
          igrdz(nvarz)          ! true if category/vertical grid field is written
 
-      character (len=25), parameter :: &
+      character (len=25), public, parameter :: &
          tcstr = 'area: tarea'          , & ! vcellmeas for T cell quantities
          ucstr = 'area: uarea'          , & ! vcellmeas for U cell quantities
          tstr2D  = 'TLON TLAT time'     , & ! vcoord for T cell quantities, 2D
@@ -183,7 +185,7 @@
       ! flags: write to output file if true or histfreq value
       !---------------------------------------------------------------
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
            f_tmask     = .true., &
            f_tarea     = .true., f_uarea      = .true., &
            f_dxt       = .true., f_dyt        = .true., &
@@ -194,7 +196,7 @@
            f_VGRDi     = .true., f_VGRDs      = .true., &
            f_VGRDb     = .true.
 
-      character (len=max_nstrm) :: &
+      character (len=max_nstrm), public :: &
 !          f_example   = 'md', &
            f_hi        = 'm', f_hs         = 'm', &
            f_Tsfc      = 'm', f_aice       = 'm', &
@@ -341,7 +343,7 @@
       ! field indices
       !---------------------------------------------------------------
 
-      integer (kind=int_kind), parameter :: &
+      integer (kind=int_kind), parameter, public :: &
            n_tmask      = 1,  &
            n_tarea      = 2,  &
            n_uarea      = 3,  &
@@ -364,7 +366,7 @@
            n_lonu_bnds  = 3, &
            n_latu_bnds  = 4
 
-      integer (kind=int_kind), dimension(max_nstrm) :: &
+      integer (kind=int_kind), dimension(max_nstrm), public :: &
 !          n_example    , &
            n_hi         , n_hs         , &
            n_Tsfc       , n_aice       , &

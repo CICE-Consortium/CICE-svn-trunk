@@ -11,42 +11,46 @@
       use ice_kinds_mod
       use ice_constants
       use ice_domain_size
-      use ice_exit
+      !use ice_exit
       use ice_blocks, only: nx_block, ny_block
 
       implicit none 
 
-      logical (kind=log_kind) :: & 
+      private
+      public :: lateral_melt_bgc, calculate_qin_from_Sin, remap_layers_bgc_plus, &
+           remap_layers_bgc_plus_xy
+
+      logical (kind=log_kind), public :: & 
          restart_S     ,   &! if .true., read Salinity from restart file
          tr_bgc_S           ! if .true., S as product tracer on ice
 
-      character(char_len_long) :: & 
+      character(char_len_long), public :: & 
          bgc_data_dir       ! directory for biogeochemistry data
 
-      logical (kind=log_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      logical (kind=log_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          Rayleigh_criteria, &   ! .true. means Ra_c was reached
          first_ice              ! .true. until ice is formed (false)  
                                 !
-      real (kind=dbl_kind) :: & 
+      real (kind=dbl_kind), public :: & 
          Ra_c      ,  &  ! critical Rayleigh number for bottom convection
          grid_oS   ,  &  ! for bottom flux (zsalinity)
          l_skS     ,  &  ! 0.02 characteristic skeletal layer thickness (m) (zsalinity)
          lapidus_g , &   ! constant for artificial viscosity/diffusion during growth
          lapidus_m       ! constant for artificial diffusion during melt
 
-      real (kind=dbl_kind), parameter :: & 
+      real (kind=dbl_kind), parameter, public :: & 
          min_salin = p1             , & ! threshold for brine pocket treatment 
          Dm        = 1.0e-9_dbl_kind, & ! molecular diffusion (m^2/s)
          thin      = 0.05_dbl_kind      ! minimum ice thickness for salinity dynamics
 
-      real (kind=dbl_kind), parameter :: & 
+      real (kind=dbl_kind), parameter, public :: & 
          k_o        = 3.e-8_dbl_kind      ! scaling factor permeability calculation (m^2)
 
-      integer (kind=int_kind), parameter :: &
+      integer (kind=int_kind), parameter, public :: &
          exp_h    = 3                 ! power law for hierarchical model  
 
       real (kind=dbl_kind), & 
-         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         dimension (nx_block,ny_block,ncat,max_blocks), public :: &
          dh_top    ,& ! brine top change
          dh_bot    ,& ! brine bottom change
          dhi_top   ,& ! ice top change
@@ -54,23 +58,23 @@
          sice_rho     ! avg sea ice density  (kg/m^3)  ! ech: diagnostic only?
 
       real (kind=dbl_kind), & 
-         dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         dimension (nx_block,ny_block,ncat,max_blocks), public :: &
          fsicen, &    ! category fsice(kg/m^2/s) 
          fsicen_g     ! salt flux from gravity drainage only
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr,max_blocks), public :: &
          flux_bio ,&    ! all bio fluxes (+ive to ocean) are included here 
          flux_bio_g, &   !gravity drainage contribution
          ocean_bio,  &  ! contains all the ocean bgc tracer concentrations
          flux_bio_gbm ,&  ! all bio fluxes (+ive to ocean) are included here
          flux_bio_g_gbm  !gravity drainage contribution
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          fsice   , & ! Total flux  of salt to ocean at time step for conservation
          fsice_g     ! Total gravity drainage flux
                         !(kg/m^2/s)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          nit     , & ! ocean nitrate (mmol/m^3)          
          amm     , & ! ammonia/um (mmol/m^3)
          sil     , & ! silicate (mmol/m^3)
@@ -78,15 +82,15 @@
          dms     , & ! dms (mmmol/m^3     
          algalN      ! ocean algal nitrogen (mmol/m^3)
 
-      character (char_len_long) :: &        ! input data file names
+      character (char_len_long), public :: &        ! input data file names
          nit_file, &! nitrate input file
          sil_file   ! silicate input file
 
-      character(char_len) :: &          
+      character(char_len), public :: &          
          sil_data_type, & ! 'default', 'clim'
          nit_data_type    ! 'default', 'clim'
 
-      logical (kind=log_kind) :: & 
+      logical (kind=log_kind), public :: & 
          tr_bgc_N_sk,       & ! if .true., nitrogen as algal tracer on ice
          tr_bgc_C_sk,       & ! if .true., carbon as algal tracer on ice
          tr_bgc_chl_sk,     & ! if .true., chlorophyll as algal tracer on ice
@@ -99,7 +103,7 @@
          restart_bgc  ,     & ! if .true., read bgc restart file
          scale_bgc            ! if .true., initialize bgc tracers proportionally with salinity
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          tr_bgc_NO,      &   !if .true. Nitrate tracer in ice 
          tr_bgc_N,       & ! if .true., nitrogen as algal tracer on ice
          tr_bgc_C,       & ! if .true., carbon as algal tracer on ice
@@ -114,7 +118,7 @@
          solve_bgc         ! if .true., solve chemistry portion of code
 
       ! zbgc tracer indices
-      integer (kind=int_kind):: &
+      integer (kind=int_kind), public :: &
          nlt_bgc_N    ,   & ! algae 
          nlt_bgc_C    ,   & ! 
          nlt_bgc_chl  ,   & ! 
@@ -128,7 +132,7 @@
 !
 !  Bio-variables from Diffuse_biology  (in ice_init)
 !
-      real (kind=dbl_kind) :: & 
+      real (kind=dbl_kind), public :: & 
          grid_o    ,  &  ! for bottom flux        
          l_sk      ,  &  ! characteristic diffusive scale (zsalinity) (m)
          grid_o_t  , &   ! top grid point length scale
@@ -136,7 +140,7 @@
 
 !    Bioparameters from algal_dynamic
      
-    real (kind=dbl_kind), parameter :: &
+    real (kind=dbl_kind), parameter, public :: &
          R_C2N      = 7.0_dbl_kind, & ! algal C to N (mole/mole) Kristiansen 1991 (Barents), 9.0_dbl_kind
          R_gC2molC  = 12.01_dbl_kind, & ! mg/mmol C
          R_chl2N    = 3.0_dbl_kind , &  ! algal chlorophyll to N (mg/millimole)
@@ -145,47 +149,47 @@
       !-----------------------------------------------------------------
       ! for bgc layer model
       !-----------------------------------------------------------------
-      real (kind=dbl_kind):: &
+      real (kind=dbl_kind), public :: &
          rhosi         ! average sea ice density (919-974 kg/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          S_tot      , &  ! Total ice salinity in per grid cell (g/m^2)
          chl_net    , &  ! Total chla (mg chla/m^2) per grid cell
          PP_net     , &  ! Total production (mg C/m^2/s) per grid cell
          NO_net     , &  ! Total production (mg C/m^2/s) per grid cell
          hbri            ! brine height
 
-      real (kind=dbl_kind), dimension (nblyr+2) :: &
+      real (kind=dbl_kind), dimension (nblyr+2), public :: &
          bgrid          ! biology nondimensional vertical grid points
 
-      real (kind=dbl_kind), dimension (nblyr+1) :: &
+      real (kind=dbl_kind), dimension (nblyr+1), public :: &
          igrid          ! biology vertical interface points
  
-      real (kind=dbl_kind), dimension (nilyr+1) :: &
+      real (kind=dbl_kind), dimension (nilyr+1), public :: &
          cgrid           !CICE vertical coordinate   
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2,ncat,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2,ncat,max_blocks), public :: &
          zphi        , & ! Porosity of layers    
          zTin         ! Temperature on ice layers interpolated on the bio grid (oC
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+1,ncat,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+1,ncat,max_blocks), public :: &
          zfswin         ! Shortwave flux into layers interpolated on bio grid  (W/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+1,ncat,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+1,ncat,max_blocks), public :: &
          iDi        , & ! igrid Diffusivity          (m^2/s)    
          iki            ! Ice permeability            (m^2)     
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr,max_blocks), public :: &
          upNO    , & ! nitrate uptake rate (mmol/m^3/s)
          upNH        ! ammonium uptake rate (mmol/m^3/s)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr,ncat,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr,ncat,max_blocks), public :: &
          growN            ! algal growth rate         (mmol/m^3/s)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr,max_blocks), public :: &
          growNp            ! algal growth rate         (mmol/m^3/s)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks), public :: &
          darcy_V          ! darcy velocity positive up        (m/s)
 
 !=======================================================================
@@ -360,7 +364,8 @@
 !
 ! !USES:
 
-      use ice_fileunits
+      use ice_fileunits, only: nu_diag
+      use ice_exit, only: abort_ice
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -579,7 +584,8 @@
 !
 ! !USES:
 
-      use ice_fileunits
+      use ice_fileunits, only: nu_diag
+      use ice_exit, only: abort_ice
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

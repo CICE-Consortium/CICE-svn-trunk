@@ -20,7 +20,7 @@
 !
       use ice_kinds_mod
       use ice_constants
-      use ice_fileunits
+      use ice_fileunits, only: nu_diag
       use ice_restart, only: lenstr, restart_dir, restart_file, &
                              pointer_file, runtype
       use ice_communicate, only: my_task, master_task
@@ -30,7 +30,10 @@
 !
       implicit none
 
-      logical (kind=log_kind) :: & 
+      private
+      public :: init_aerosol, faero_default, update_aerosol
+
+      logical (kind=log_kind), public :: & 
          restart_aero      ! if .true., read aerosol tracer restart file
 
 !=======================================================================
@@ -55,7 +58,7 @@
 ! !USES:
 !
       use ice_domain_size, only: n_aero
-      use ice_state
+      use ice_state, only: trcrn, nt_aero
 !
 !EOP
 !
@@ -84,7 +87,7 @@
 !
 ! !USES:
 !
-      use ice_flux
+      use ice_flux, only: faero_atm
 !
 ! EOP
 ! 
@@ -112,10 +115,10 @@
 ! !USES:
 !
       use ice_calendar, only: month, mday, istep, sec
-      use ice_domain, only: nblocks, blocks_ice
-      use ice_read_write
-      use ice_flux
-      use ice_forcing
+      use ice_domain_size, only: max_blocks
+      use ice_blocks, only: nx_block, ny_block
+      use ice_flux, only: faero_atm
+      use ice_forcing, only: interp_coeff_monthly, read_clim_data_nc, interpolate_data
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -158,9 +161,6 @@
           ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
       logical (kind=log_kind) :: readm
-
-      type (block) :: &
-         this_block           ! block information for current block
 
     !-------------------------------------------------------------------
     ! monthly data 
@@ -732,11 +732,12 @@
 !
 ! !USES:
 !
-      use ice_domain_size
+      use ice_domain_size, only: ncat, n_aero
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init
-      use ice_state
-      use ice_read_write
+      use ice_state, only: trcrn, nt_aero
+      use ice_read_write, only: ice_open
+      use ice_fileunits, only: nu_dump_aero
       use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -813,11 +814,12 @@
 !
 ! !USES:
 !
-      use ice_domain_size
+      use ice_domain_size, only: n_aero, ncat
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init
-      use ice_state
-      use ice_read_write
+      use ice_state, only: trcrn, nt_aero
+      use ice_fileunits, only: nu_restart_aero, nu_rst_pointer
+      use ice_read_write, only: ice_read, ice_open
       use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file
 !
 ! !INPUT/OUTPUT PARAMETERS:

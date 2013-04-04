@@ -23,20 +23,22 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_domain_size
       use ice_constants
-      use ice_fileunits
-      use ice_read_write
-      use ice_timers
+      use ice_domain_size, only: nilyr, nblyr, nblyr_hist
+      use ice_fileunits, only: nu_diag
+      use ice_blocks, only: nx_block, ny_block
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
-      use ice_state
-      use ice_zbgc_public
+      use ice_state, only: ntrcr, nt_bgc_S, nt_qice, nt_sice
+      use ice_zbgc_public, only: cgrid, bgrid, exp_h, k_o, rhosi, &
+           thin, min_salin, Ra_c, igrid, remap_layers_bgc_plus_xy, remap_layers_bgc_plus
 !
 !EOP
 !
       implicit none
 
+      private
+      public :: preflushing_changes, compute_micros, update_hbrine
  
       real (kind=dbl_kind), parameter :: &   
          maxhinS = 1.90_dbl_kind, & ! brine overflow condition if hinS > maxhinS*hin
@@ -261,7 +263,7 @@
 ! !USES:
 !
       use ice_therm_shared, only: solve_Sin, calculate_Tin_from_qin
-      use ice_calendar,    only: istep1, time
+      use ice_calendar, only: istep1, time
 !
 ! !INPUT/OUTPUT PARAMETERS:                                
 !
@@ -663,8 +665,6 @@
 
 ! !USES:
 !
-   use ice_zsalinity, only: exp_h
-
 ! !INPUT/OUTPUT PARAMETERS:
 !
      integer (kind=int_kind), intent(in) :: &

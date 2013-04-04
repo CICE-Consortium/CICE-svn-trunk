@@ -24,21 +24,24 @@
 ! !USES:
 !
       use ice_atmo
+      use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_calendar
       use ice_communicate
+      use ice_constants
       use ice_diagnostics
       use ice_domain
+      use ice_domain_size
       use ice_dyn_evp
       use ice_dyn_eap
       use ice_dyn_shared, only: kdyn
-!      use ice_exit
+      use ice_exit, only: abort_ice
       use ice_fileunits
       use ice_flux
       use ice_forcing
       use ice_grid
       use ice_history
       use ice_restart
-      use ice_itd
+      use ice_itd, only: cleanup_itd, kitd, hi_min, aggregate, aggregate_area
       use ice_kinds_mod
       use ice_mechred
       use ice_meltpond_cesm, only: compute_ponds_cesm, compute_ponds_simple
@@ -52,7 +55,7 @@
                                albicen, albsnon, albpndn, alvdrn, alidrn, alvdfn, alidfn, &
                                run_dedd, shortwave_ccsm3, apeffn
       use ice_state
-      use ice_therm_itd
+      use ice_therm_itd, only: lateral_melt, linear_itd
       use ice_therm_shared, only: ktherm, heat_capacity, calc_Tsfc
       use ice_therm_vertical
       use ice_timers
@@ -216,6 +219,7 @@
       use ice_age, only: increment_age
       use ice_firstyear, only: update_FYarea
       use ice_work, only: worka, workb
+      use ice_zbgc_public, only: fsicen
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -728,7 +732,7 @@
       use ice_therm_mushy, only: add_new_ice_mushy
       use ice_therm_bl99, only: add_new_ice_bl99
       use ice_therm_oned, only: diagnose_itd
-      use ice_zbgc_public, only: ocean_bio
+      use ice_zbgc_public, only: ocean_bio, fsicen, fsice, flux_bio
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1207,6 +1211,8 @@
 ! !INTERFACE:
 
       subroutine step_ridge (dt, ndtd, iblk)
+
+        use ice_zbgc_public, only: fsicen, fsice, flux_bio
 
 ! !INPUT/OUTPUT PARAMETERS:
 !

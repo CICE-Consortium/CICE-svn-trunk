@@ -31,60 +31,63 @@
 !
       implicit none
 
+      private
+      public :: init_work
+
       ! global
 
-      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+      real (kind=dbl_kind), dimension(:,:), allocatable, public :: &
          work_g1, &
          work_g2, &
          work_g3
 
-      real (kind=dbl_kind), dimension(:,:,:), allocatable :: &
+      real (kind=dbl_kind), dimension(:,:,:), allocatable, public :: &
          work_g4
 
-      real (kind=dbl_kind), dimension(:,:,:,:), allocatable :: &
+      real (kind=dbl_kind), dimension(:,:,:,:), allocatable, public :: &
          work_g5
 
-      real (kind=real_kind), dimension(:,:), allocatable :: &
+      real (kind=real_kind), dimension(:,:), allocatable, public :: &
          work_gr
 
-      real (kind=real_kind), dimension(:,:,:), allocatable :: &
+      real (kind=real_kind), dimension(:,:,:), allocatable, public :: &
          work_gr3
  
-      real (kind=real_kind), dimension(:,:,:,:), allocatable :: &
+      real (kind=real_kind), dimension(:,:,:,:), allocatable, public :: &
          work_gr4
 
-      integer(kind=int_kind), dimension(:,:), allocatable :: &
+      integer(kind=int_kind), dimension(:,:), allocatable, public :: &
          work_gi4
 
-      integer(selected_int_kind(13)), dimension(:,:), allocatable :: &
+      integer(selected_int_kind(13)), dimension(:,:), allocatable, public :: &
          work_gi8
  
-      integer(kind=int_kind), dimension(:,:,:), allocatable :: &
+      integer(kind=int_kind), dimension(:,:,:), allocatable, public :: &
          work_gi5
 
-      integer(selected_int_kind(13)), dimension(:,:,:), allocatable :: &
+      integer(selected_int_kind(13)), dimension(:,:,:), allocatable, public :: &
          work_gi9
 
       ! all blocks
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          work1, &
          work2
 
       ! local (single block)
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block), public :: &
          worka, &
          workb, &
          workc, &
          workd
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist), public :: &
          workz 
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist,ncat) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist,ncat), public :: &
          workzn 
 
       ! vertical
-      real (kind=dbl_kind), dimension(:), allocatable :: &
+      real (kind=dbl_kind), dimension(:), allocatable, public :: &
          work_z
 
 !=======================================================================

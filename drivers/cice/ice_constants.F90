@@ -12,15 +12,16 @@
       use ice_kinds_mod
 
       implicit none
-      public
       save
+
+      private
 
       !-----------------------------------------------------------------
       ! physical constants
       !-----------------------------------------------------------------
 
 #ifdef AOMIP
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
          rhos      = 300.0_dbl_kind   ,&! density of snow (kg/m^3)
          rhoi      = 900.0_dbl_kind   ,&! density of ice (kg/m^3)
          rhow      = 1025.0_dbl_kind  ,&! density of seawater (kg/m^3)
@@ -35,7 +36,7 @@
          albocn    = 0.10_dbl_kind      ! ocean albedo
 #else
       ! CICE default parameters
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
          rhos      = 330.0_dbl_kind   ,&! density of snow (kg/m^3)
          rhoi      = 917.0_dbl_kind   ,&! density of ice (kg/m^3)
          rhow      = 1026.0_dbl_kind  ,&! density of seawater (kg/m^3)
@@ -51,18 +52,18 @@
 #endif
 
       ! UNESCO melting temperature parameters
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
          mlt_a     = 0.0575_dbl_kind       ,& !nonlinear melting T coefficient (oC/ppt)
          mlt_b     = 1.710523e-3_dbl_kind  ,& !(oC/ppt^(3/2))
          mlt_c     = 2.154996e-4_dbl_kind     !(oC/ppt^2)
           
 
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
          gravit    = 9.80616_dbl_kind    ,&! gravitational acceleration (m/s^2)
          omega     = 7.292e-5_dbl_kind   ,&! angular velocity of earth (rad/sec)
          radius    = 6.37e6_dbl_kind       ! earth radius (m)
 
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
          pi = 3.14159265358979323846_dbl_kind,&! pi
          secday    = 86400.0_dbl_kind ,&! seconds in calendar day
          Tocnfrz   = -1.8_dbl_kind    ,&! freezing temp of seawater (C),
@@ -83,10 +84,10 @@
 !        rho_air   = 1.2_dbl_kind     ,&! ambient air density (kg/m^3)
          spval_dbl = 1.0e30_dbl_kind    ! special value (double precision)
 
-      real (kind=real_kind), parameter :: &
+      real (kind=real_kind), parameter, public :: &
          spval     = 1.0e30_real_kind   ! special value for netCDF output
 
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
          iceruf   = 0.0005_dbl_kind   ,&! ice surface roughness (m)
 
          ! (Ebert, Schramm and Curry JGR 100 15965-15975 Aug 1995)
@@ -106,20 +107,20 @@
       ! 4 Jan 2007 BPB  Following are appropriate for complete cloud
       ! in a summer polar atmosphere with 1.5m bare sea ice surface:
       ! .636/.364 vis/nir with only 0.5% direct for each band.
-      real (kind=dbl_kind), parameter :: &           ! currently used only
+      real (kind=dbl_kind), parameter, public :: &           ! currently used only
          awtvdr = 0.00318_dbl_kind, &! visible, direct  ! for history and
          awtidr = 0.00182_dbl_kind, &! near IR, direct  ! diagnostics
          awtvdf = 0.63282_dbl_kind, &! visible, diffuse
          awtidf = 0.36218_dbl_kind   ! near IR, diffuse
 
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
          qqqice  = 11637800._dbl_kind   ,&! for qsat over ice
          TTTice  = 5897.8_dbl_kind      ,&! for qsat over ice
          qqqocn  = 627572.4_dbl_kind    ,&! for qsat over ocn
          TTTocn  = 5107.4_dbl_kind        ! for qsat over ocn
 
       ! these are currently set so as to have no effect on the decomposition
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
          shlat  =  30.0_dbl_kind   ,&! artificial masking edge (deg)
          nhlat  = -30.0_dbl_kind     ! artificial masking edge (deg)
    
@@ -127,7 +128,7 @@
       ! numbers
       !-----------------------------------------------------------------
 
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
         c0   = 0.0_dbl_kind, &
         c1   = 1.0_dbl_kind, &
         c1p5 = 1.5_dbl_kind, &
@@ -184,7 +185,7 @@
       ! location of fields for staggered grids
       !-----------------------------------------------------------------
 
-      integer (int_kind), parameter :: &   
+      integer (int_kind), parameter, public :: &   
         field_loc_unknown  =  0, & 
         field_loc_noupdate = -1, & 
         field_loc_center   =  1, & 
@@ -198,7 +199,7 @@
       ! changes of direction across tripole boundary
       !-----------------------------------------------------------------
 
-      integer (int_kind), parameter :: &   
+      integer (int_kind), parameter, public :: &   
         field_type_unknown  =  0, & 
         field_type_noupdate = -1, & 
         field_type_scalar   =  1, & 
@@ -209,7 +210,7 @@
       ! conversion factors
       !-----------------------------------------------------------------
 
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
         cm_to_m       = 0.01_dbl_kind   ,&! cm to meters
         m_to_cm       = 100._dbl_kind   ,&! meters to cm
         m2_to_km2     = 1.e-6_dbl_kind  ,&! m^2 to km^2

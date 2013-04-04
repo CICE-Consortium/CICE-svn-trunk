@@ -37,18 +37,21 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_communicate, only: my_task, master_task
-      use ice_domain_size
       use ice_constants
-      use ice_fileunits
-      use ice_exit
+      use ice_communicate, only: my_task, master_task
+      use ice_domain_size, only: ncat, max_aero, nilyr, nslyr, n_aero, nblyr
+      use ice_fileunits, only: nu_diag
 !
 !EOP
 !
       implicit none
       save
 
-      integer (kind=int_kind) :: &
+      private
+      public :: aggregate_area, shift_ice, column_sum, column_conservation_check, &
+                aggregate, compute_tracers, init_itd, cleanup_itd
+
+      integer (kind=int_kind), public :: &
          kitd        , & ! type of itd conversions
                          !   0 = delta function
                          !   1 = linear remap
@@ -56,10 +59,10 @@
                          !   1 = new formula giving round numbers
                          !   2 = WMO standard
 
-      real (kind=dbl_kind) :: &
+      real (kind=dbl_kind), public :: &
          hi_min          ! minimum ice thickness allowed (m)
 
-      real (kind=dbl_kind) :: &
+      real (kind=dbl_kind), public :: &
          hin_max(0:ncat) ! category limits (m)
 
       character (len=35) :: c_hi_range(ncat)

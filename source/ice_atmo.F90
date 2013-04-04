@@ -30,10 +30,13 @@
       implicit none
       save
 
-      character (len=char_len) :: &
+      private
+      public :: atmo_boundary_layer, atmo_boundary_const
+
+      character (len=char_len), public :: &
          atmbndy ! atmo boundary method, 'default' ('ccsm3') or 'constant'
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), public :: &
          calc_strair ! if true, calculate wind stress components
 
 !=======================================================================

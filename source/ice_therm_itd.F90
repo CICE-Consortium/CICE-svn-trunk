@@ -31,15 +31,18 @@
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_communicate, only: my_task, master_task
-      use ice_domain_size
       use ice_constants
-      use ice_fileunits
+      use ice_communicate, only: my_task, master_task
+      use ice_domain_size, only: nilyr, nslyr, nblyr, ncat, max_aero, n_aero, max_ntrcr
+      use ice_fileunits, only: nu_diag
 !
 !EOP
 !
       implicit none
       save
+      
+      private
+      public :: update_vertical_tracers, lateral_melt, linear_itd
 
 !=======================================================================
 
