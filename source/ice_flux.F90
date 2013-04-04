@@ -1117,7 +1117,7 @@
          extreme_flag    ! flag for extreme forcing values
 
       logical (kind=log_kind), parameter :: & 
-         extreme_test=.true. ! test and write out extreme forcing data
+         extreme_test=.false. ! test and write out extreme forcing data
 !
 !EOP
 !

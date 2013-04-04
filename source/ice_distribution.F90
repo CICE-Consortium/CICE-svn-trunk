@@ -1706,7 +1706,7 @@
 ! !REVISION HISTORY:
 !  added by J. Dennis 3/10/06
 
-   use ice_spacecurve, only: IsFactorable, GenSpaceCurve
+   use ice_spacecurve, only: IsFactorable, GenSpaceCurve, PrintCurve
 
 ! !INPUT PARAMETERS:
 
