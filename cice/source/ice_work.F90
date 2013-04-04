@@ -25,7 +25,7 @@
 !
       use ice_kinds_mod
       use ice_blocks, only: nx_block, ny_block
-      use ice_domain_size, only: max_blocks, nblyr_hist, ncat
+      use ice_domain_size, only: max_blocks
 !
 !EOP
 !
@@ -79,12 +79,6 @@
          workb, &
          workc, &
          workd
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist), public :: &
-         workz 
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist,ncat), public :: &
-         workzn 
 
       ! vertical
       real (kind=dbl_kind), dimension(:), allocatable, public :: &

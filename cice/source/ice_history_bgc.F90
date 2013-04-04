@@ -823,9 +823,10 @@
 !
 ! !USES:
 !
-      use ice_blocks, only: block, get_block
+      use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_constants, only: c0, puny
       use ice_domain, only: blocks_ice
+      use ice_domain_size, only: ncat, nblyr_hist
       use ice_flux, only: faero_atm, faero_ocn, sss
       use ice_history_shared, only: n2D, a2D, a3Dc, n3Dccum, a3Db, &
           n4Dscum, a4Db, &
@@ -837,7 +838,6 @@
           nt_bgc_Am_sk, nt_bgc_Sil_sk, nt_bgc_DMSPp_sk, nt_bgc_DMSPd_sk, &
           nt_bgc_DMS_sk, nt_bgc_Nit_ml, nt_bgc_Am_ml, nt_bgc_Sil_ml, &
           nt_bgc_DMSP_ml, nt_bgc_DMS_ml
-      use ice_work, only: workz, workzn  !echmod:  make these local, allocatable
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -849,6 +849,12 @@
       integer (kind=int_kind) :: &
          i,j,k,n, &
          ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist) :: &
+         workz 
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist,ncat) :: &
+         workzn 
 
       type (block) :: &
          this_block           ! block information for current block
