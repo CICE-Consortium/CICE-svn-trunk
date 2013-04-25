@@ -156,15 +156,9 @@
 !         coszen(i,j) = shr_orb_cosz(ydayp1, &
 !                                    tlat(i,j),tlon(i,j),delta)
 
-!echmod - cesm version: buggy?
-         coszen(i,j) = sin(tlat(i,j))*sin(delta) - &
-                       cos(tlat(i,j))*cos(delta)   &
-                      *cos(ydayp1*c2*pi + tlon(i,j))
-
-!echmod - is this correct?
-!         coszen(i,j) = sin(tlat(i,j))*sin(delta) &
-!                     + cos(tlat(i,j))*cos(delta) &
-!                      *cos((sec/secday-p5)*c2*pi + tlon(i,j)) !cos(hour angle)
+         coszen(i,j) = sin(tlat(i,j))*sin(delta) &
+                     + cos(tlat(i,j))*cos(delta) &
+                      *cos((sec/secday-p5)*c2*pi + tlon(i,j)) !cos(hour angle)
       enddo
  
       end subroutine compute_coszen
