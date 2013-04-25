@@ -729,6 +729,7 @@
 !
 ! !USES:
 !
+      use ice_itd, only: reduce_area
       use ice_therm_mushy, only: add_new_ice_mushy
       use ice_therm_bl99, only: add_new_ice_bl99
       use ice_therm_oned, only: diagnose_itd

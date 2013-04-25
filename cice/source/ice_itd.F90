@@ -49,7 +49,7 @@
 
       private
       public :: aggregate_area, shift_ice, column_sum, column_conservation_check, &
-                aggregate, compute_tracers, init_itd, cleanup_itd
+                aggregate, compute_tracers, init_itd, cleanup_itd, reduce_area
 
       integer (kind=int_kind), public :: &
          kitd        , & ! type of itd conversions
