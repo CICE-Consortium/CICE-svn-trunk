@@ -127,6 +127,7 @@
     kitd            = 1
   , kdyn            = 1
   , ndte            = 120
+  , revised_evp     = .false.
   , advection       = 'remap'
   , kstrength       = 1
   , krdg_partic     = 1

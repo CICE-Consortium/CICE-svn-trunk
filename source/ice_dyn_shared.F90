@@ -23,6 +23,8 @@
 !
       use ice_kinds_mod
       use ice_constants, only: c0, c1, p01, p001, dragio, rhow
+      use ice_blocks, only: nx_block, ny_block
+      use ice_domain_size, only: max_blocks
 !
 !EOP
 !
@@ -39,7 +41,7 @@
          ndte         ! number of subcycles:  ndte=dt/dte
 
       logical (kind=log_kind), public :: &
-         evp_damping  ! if true, use evp damping procedure
+         revised_evp  ! if true, use revised evp procedure
 
       ! other EVP parameters
 
@@ -57,15 +59,22 @@
          m_min = p01     ! minimum ice mass (kg/m^2)
 
       real (kind=dbl_kind), public :: &
+         revp     , & ! 0 for classic EVP, 1 for revised EVP
          ecci     , & ! 1/e^2
          dtei     , & ! 1/dte, where dte is subcycling timestep (1/s)
          dte2T    , & ! dte/2T
-         denom1   , & ! constants for stress equation
-         denom2   , & !
-         rcon         ! for damping criterion (kg/s)
+         denom1       ! constants for stress equation
+
+      real (kind=dbl_kind), public :: & ! Bouillon et al relaxation constants
+         arlx1i   , & ! alpha1 for stressp
+         brlx         ! beta   for momentum
 
       real (kind=dbl_kind), allocatable, public :: & 
          fcor_blk(:,:,:)   ! Coriolis parameter (1/s)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: & 
+         uvel_init, & ! x-component of velocity (m/s), beginning of timestep
+         vvel_init    ! y-component of velocity (m/s), beginning of timestep
 
 !=======================================================================
 
@@ -194,7 +203,12 @@
 !
 ! !USES:
 !
-      use ice_constants, only: p25, c1, c2, c4
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: p25, c1, c2, c4, p5
+      use ice_domain, only: distrb_info
+      use ice_global_reductions, only: global_minval, global_maxval
+      use ice_grid, only: dxt, dyt, tmask, tarea
+      use ice_fileunits, only: nu_diag
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -204,6 +218,10 @@
 !EOP
 !
       real (kind=dbl_kind) :: &
+         Se          , & ! stability parameter for revised EVP
+         xi          , & ! stability parameter for revised EVP
+         gamma       , & ! stability parameter for revised EVP
+         xmin, ymin  , & ! minimum grid length for ocean points, m
          dte         , & ! subcycling timestep for EVP dynamics, s
          ecc         , & ! (ratio of major to minor ellipse axes)^2
          tdamp2          ! 2*(wave damping time scale T)
@@ -219,9 +237,45 @@
       ! constants for stress equation
       tdamp2 = c2*eyc*dt                    ! s
       dte2T = dte/tdamp2                    ! ellipse (unitless)
-      denom1 = c1/(c1+dte2T)
-      denom2 = c1/(c1+dte2T*ecc)
-      rcon = 1230._dbl_kind*eyc*dt*dtei**2  ! kg/s
+
+      ! grid min/max
+      xmin = global_minval(dxt, distrb_info, tmask)
+      ymin = global_minval(dyt, distrb_info, tmask)
+      xmin = min(xmin,ymin)  ! min(dxt, dyt)
+
+      ! revised evp parameters
+      Se = 0.86_dbl_kind                 ! Se > 0.5
+      xi = 5.5e-3_dbl_kind               ! Sv/Sc < 1
+      gamma = p25 * 1.e11_dbl_kind * dt  ! rough estimate (P/m~10^5/10^3)
+
+      if (revised_evp) then       ! Bouillon et al, Ocean Mod 2013
+         revp   = c1
+         arlx1i = c2*xi/Se        ! 1/alpha1
+         brlx = c2*Se*xi*gamma/xmin**2 ! beta
+
+! classic evp parameters (but modified equations)
+!         arlx1i = dte2T
+!         brlx   = dt*dtei
+
+      else                        ! Hunke, JCP 2013 with modified stress eq
+         revp   = c0
+         arlx1i = dte2T
+         brlx   = dt*dtei
+
+! revised evp parameters
+!         arlx1i = c2*xi/Se        ! 1/alpha1
+!         brlx = c2*Se*xi*gamma/xmin**2 ! beta
+
+      endif
+      if (my_task == master_task) then
+         write (nu_diag,*) 'arlx, brlx', c1/arlx1i, brlx
+         write (nu_diag,*) 'Se, Sv, xi', &
+                  sqrt(brlx/(arlx1i*gamma))*xmin, &
+                  p5*brlx/gamma*xmin**2, &
+                  p5*xmin*sqrt(brlx*arlx1i/gamma)
+      endif            
+
+      denom1 = c1/(c1+arlx1i)
 
       end subroutine set_evp_parameters
 
@@ -352,18 +406,18 @@
 ! !INTERFACE:
 !
       subroutine evp_prep2 (nx_block,   ny_block,   & 
-                            ilo, ihi,  jlo, jhi,    &
+                            ilo, ihi,   jlo, jhi,   &
                             icellt,     icellu,     & 
                             indxti,     indxtj,     & 
                             indxui,     indxuj,     & 
                             aiu,        umass,      & 
-                            umassdtei,  fcor,       & 
+                            umassdti,   fcor,       & 
                             umask,                  & 
                             uocn,       vocn,       & 
                             strairx,    strairy,    & 
                             ss_tltx,    ss_tlty,    &  
                             icetmask,   iceumask,   & 
-                            fm,                     & 
+                            fm,         dt,         & 
                             strtltx,    strtlty,    & 
                             strocnx,    strocny,    &
                             strintx,    strinty,    &
@@ -375,6 +429,7 @@
                             stressm_3,  stressm_4,  & 
                             stress12_1, stress12_2, & 
                             stress12_3, stress12_4, & 
+                            uvel_init,  vvel_init,  &
                             uvel,       vvel)
 
 ! !DESCRIPTION:
@@ -434,9 +489,14 @@
          ss_tltx , & ! sea surface slope, x-direction (m/m)
          ss_tlty     ! sea surface slope, y-direction
 
+      real (kind=dbl_kind), intent(in) :: &
+         dt          ! time step
+
       real (kind=dbl_kind), dimension (nx_block,ny_block), & 
          intent(out) :: &
-         umassdtei,& ! mass of U-cell/dte (kg/m^2 s)
+         uvel_init,& ! x-component of velocity (m/s), beginning of time step
+         vvel_init,& ! y-component of velocity (m/s), beginning of time step
+         umassdti, & ! mass of U-cell/dt (kg/m^2 s)
          waterx  , & ! for ocean stress calculation, x (m/s)
          watery  , & ! for ocean stress calculation, y (m/s)
          forcex  , & ! work array: combined atm stress and ocn tilt, x
@@ -475,9 +535,9 @@
          watery   (i,j) = c0
          forcex   (i,j) = c0
          forcey   (i,j) = c0
-         umassdtei(i,j) = c0
+         umassdti (i,j) = c0
 
-         if (icetmask(i,j)==0) then
+         if (revp==1) then               ! revised evp
             stressp_1 (i,j) = c0
             stressp_2 (i,j) = c0
             stressp_3 (i,j) = c0
@@ -490,7 +550,20 @@
             stress12_2(i,j) = c0
             stress12_3(i,j) = c0
             stress12_4(i,j) = c0
-         endif                  ! icetmask
+         else if (icetmask(i,j)==0) then ! classic evp
+            stressp_1 (i,j) = c0
+            stressp_2 (i,j) = c0
+            stressp_3 (i,j) = c0
+            stressp_4 (i,j) = c0
+            stressm_1 (i,j) = c0
+            stressm_2 (i,j) = c0
+            stressm_3 (i,j) = c0
+            stressm_4 (i,j) = c0
+            stress12_1(i,j) = c0
+            stress12_2(i,j) = c0
+            stress12_3(i,j) = c0
+            stress12_4(i,j) = c0
+         endif                  ! revp
       enddo                     ! i
       enddo                     ! j
 
@@ -545,6 +618,9 @@
             strocnx(i,j) = c0
             strocny(i,j) = c0
          endif
+
+         uvel_init(i,j) = uvel(i,j)
+         vvel_init(i,j) = vvel(i,j)
       enddo
       enddo
 
@@ -556,7 +632,8 @@
          i = indxui(ij)
          j = indxuj(ij)
 
-         umassdtei(i,j) = umass(i,j)*dtei ! m/dte, kg/m^2 s
+         umassdti(i,j) = umass(i,j)/dt ! kg/m^2 s
+
          fm(i,j) = fcor(i,j)*umass(i,j)   ! Coriolis * mass
 
          ! for ocean stress
@@ -592,10 +669,11 @@
                         uocn,       vocn,     &
                         waterx,     watery,   &
                         forcex,     forcey,   &
-                        umassdtei,  fm,       &
+                        umassdti,   fm,       &
                         uarear,               &
                         strocnx,    strocny,  &
                         strintx,    strinty,  &
+                        uvel_init,  vvel_init,&
                         uvel,       vvel)
 !
 ! !DESCRIPTION:
@@ -621,12 +699,14 @@
          indxuj      ! compressed index in j-direction
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         uvel_init,& ! x-component of velocity (m/s), beginning of timestep
+         vvel_init,& ! y-component of velocity (m/s), beginning of timestep
          aiu     , & ! ice fraction on u-grid
          waterx  , & ! for ocean stress calculation, x (m/s)
          watery  , & ! for ocean stress calculation, y (m/s)
          forcex  , & ! work array: combined atm stress and ocn tilt, x
          forcey  , & ! work array: combined atm stress and ocn tilt, y
-         umassdtei,& ! mass of U-cell/dte (kg/m^2 s)
+         umassdti, & ! mass of U-cell/dt (kg/m^2 s)
          uocn    , & ! ocean current, x-direction (m/s)
          vocn    , & ! ocean current, y-direction (m/s)
          fm      , & ! Coriolis param. * mass in U-cell (kg/s)
@@ -677,9 +757,9 @@
          taux = vrel*waterx(i,j) ! NOTE this is not the entire
          tauy = vrel*watery(i,j) ! ocn stress term
 
-         ! alpha, beta are defined in Hunke and Dukowicz (1997), section 3.2
-         cca = umassdtei(i,j) + vrel * cosw                  ! alpha, kg/m^2 s
-         ccb = fm(i,j)        + vrel * sinw*sign(c1,fm(i,j)) ! beta,  kg/m^2 s
+         ! revp = 0 for classic evp, 1 for revised evp
+         cca = (brlx + revp)*umassdti(i,j) + vrel * cosw ! kg/m^2 s
+         ccb = fm(i,j) + sign(c1,fm(i,j)) * vrel * sinw ! kg/m^2 s
 
          ab2 = cca**2 + ccb**2
 
@@ -691,9 +771,9 @@
 
          ! finally, the velocity components
          cc1 = strintx(i,j) + forcex(i,j) + taux &
-             + umassdtei(i,j)*uold
+             + umassdti(i,j)*(brlx*uold + revp*uvel_init(i,j))
          cc2 = strinty(i,j) + forcey(i,j) + tauy &
-             + umassdtei(i,j)*vold
+             + umassdti(i,j)*(brlx*vold + revp*vvel_init(i,j))
 
          uvel(i,j) = (cca*cc1 + ccb*cc2) / ab2 ! m/s
          vvel(i,j) = (cca*cc2 - ccb*cc1) / ab2

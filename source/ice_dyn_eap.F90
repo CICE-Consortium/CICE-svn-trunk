@@ -105,7 +105,7 @@
           field_type_scalar, field_type_vector, c0, p5
       use ice_domain, only: nblocks, blocks_ice, halo_info
       use ice_dyn_shared, only: fcor_blk, ndte, dtei, a_min, m_min, &
-          cosw, sinw, dte2T, denom1, &
+          cosw, sinw, denom1, uvel_init, vvel_init, arlx1i, &
           evp_prep1, evp_prep2, stepu, evp_finish
       use ice_flux, only: rdg_conv, rdg_shear, prs_sig, strairxT, strairyT, &
           strairx, strairy, uocn, vocn, ss_tltx, ss_tlty, iceumask, fm, &
@@ -153,7 +153,7 @@
          forcey   , & ! work array: combined atm stress and ocn tilt, y
          aiu      , & ! ice fraction on u-grid
          umass    , & ! total mass of ice and snow (u grid)
-         umassdtei    ! mass of U-cell/dte (kg/m^2 s)
+         umassdti     ! mass of U-cell/dte (kg/m^2 s)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,8):: &
          str          ! stress combinations for momentum equation
@@ -259,13 +259,13 @@
                          indxti      (:,iblk), indxtj      (:,iblk), & 
                          indxui      (:,iblk), indxuj      (:,iblk), & 
                          aiu       (:,:,iblk), umass     (:,:,iblk), & 
-                         umassdtei (:,:,iblk), fcor_blk  (:,:,iblk), & 
+                         umassdti  (:,:,iblk), fcor_blk  (:,:,iblk), & 
                          umask     (:,:,iblk),                       & 
                          uocn      (:,:,iblk), vocn      (:,:,iblk), & 
                          strairx   (:,:,iblk), strairy   (:,:,iblk), & 
                          ss_tltx   (:,:,iblk), ss_tlty   (:,:,iblk), &  
                          icetmask  (:,:,iblk), iceumask  (:,:,iblk), & 
-                         fm        (:,:,iblk),                       & 
+                         fm        (:,:,iblk), dt,                   & 
                          strtltx   (:,:,iblk), strtlty   (:,:,iblk), & 
                          strocnx   (:,:,iblk), strocny   (:,:,iblk), & 
                          strintx   (:,:,iblk), strinty   (:,:,iblk), & 
@@ -277,6 +277,7 @@
                          stressm_3 (:,:,iblk), stressm_4 (:,:,iblk), & 
                          stress12_1(:,:,iblk), stress12_2(:,:,iblk), & 
                          stress12_3(:,:,iblk), stress12_4(:,:,iblk), & 
+                         uvel_init (:,:,iblk), vvel_init (:,:,iblk), &
                          uvel      (:,:,iblk), vvel      (:,:,iblk))
 
       !-----------------------------------------------------------------
@@ -341,7 +342,7 @@
                               ksub,                 ndte,                 &
                               icellt(iblk),                               &
                               indxti      (:,iblk), indxtj      (:,iblk), &
-                              dte2T,                denom1,         &
+                              arlx1i,               denom1,         &
                               uvel      (:,:,iblk), vvel      (:,:,iblk), &
                               dxt       (:,:,iblk), dyt       (:,:,iblk), &
                               dxhy      (:,:,iblk), dyhx      (:,:,iblk), &
@@ -383,10 +384,11 @@
                         uocn     (:,:,iblk), vocn    (:,:,iblk), &     
                         waterx   (:,:,iblk), watery  (:,:,iblk), & 
                         forcex   (:,:,iblk), forcey  (:,:,iblk), & 
-                        umassdtei(:,:,iblk), fm      (:,:,iblk), & 
+                        umassdti (:,:,iblk), fm      (:,:,iblk), & 
                         uarear   (:,:,iblk),                     & 
                         strocnx  (:,:,iblk), strocny (:,:,iblk), & 
                         strintx  (:,:,iblk), strinty (:,:,iblk), & 
+                        uvel_init(:,:,iblk), vvel_init(:,:,iblk),&
                         uvel     (:,:,iblk), vvel    (:,:,iblk))
 
       !-----------------------------------------------------------------
@@ -553,7 +555,7 @@
                               ksub,       ndte,           &
                               icellt,                     &
                               indxti,     indxtj,         &
-                              dte2T,      denom1,         &
+                              arlx1i,     denom1,         &
                               uvel,       vvel,           &
                               dxt,        dyt,            &
                               dxhy,       dyhx,           &
@@ -613,7 +615,7 @@
          indxtj       ! compressed index in j-direction
 
       real (kind=dbl_kind), intent(in) :: &
-         dte2T    , & ! dte/2T
+         arlx1i   , & ! dte/2T (original) or 1/alpha1 (revised)
          denom1       ! constant for stress equation
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
@@ -800,31 +802,31 @@
       ! elastic relaxation, see Eq. A12-A14
       !-----------------------------------------------------------------
 
-         stressp_1(i,j) = (stressp_1(i,j) + stressptmp_1(i,j)*dte2T) &
+         stressp_1(i,j) = (stressp_1(i,j) + stressptmp_1(i,j)*arlx1i) &
                           * denom1
-         stressp_2(i,j) = (stressp_2(i,j) + stressptmp_2(i,j)*dte2T) &
+         stressp_2(i,j) = (stressp_2(i,j) + stressptmp_2(i,j)*arlx1i) &
                           * denom1
-         stressp_3(i,j) = (stressp_3(i,j) + stressptmp_3(i,j)*dte2T) &
+         stressp_3(i,j) = (stressp_3(i,j) + stressptmp_3(i,j)*arlx1i) &
                           * denom1
-         stressp_4(i,j) = (stressp_4(i,j) + stressptmp_4(i,j)*dte2T) &
-                          * denom1
-
-         stressm_1(i,j) = (stressm_1(i,j) + stressmtmp_1(i,j)*dte2T) &
-                          * denom1
-         stressm_2(i,j) = (stressm_2(i,j) + stressmtmp_2(i,j)*dte2T) &
-                          * denom1
-         stressm_3(i,j) = (stressm_3(i,j) + stressmtmp_3(i,j)*dte2T) &
-                          * denom1
-         stressm_4(i,j) = (stressm_4(i,j) + stressmtmp_4(i,j)*dte2T) &
+         stressp_4(i,j) = (stressp_4(i,j) + stressptmp_4(i,j)*arlx1i) &
                           * denom1
 
-         stress12_1(i,j) = (stress12_1(i,j) + stress12tmp_1(i,j)*dte2T) &
+         stressm_1(i,j) = (stressm_1(i,j) + stressmtmp_1(i,j)*arlx1i) &
                           * denom1
-         stress12_2(i,j) = (stress12_2(i,j) + stress12tmp_2(i,j)*dte2T) &
+         stressm_2(i,j) = (stressm_2(i,j) + stressmtmp_2(i,j)*arlx1i) &
                           * denom1
-         stress12_3(i,j) = (stress12_3(i,j) + stress12tmp_3(i,j)*dte2T) &
+         stressm_3(i,j) = (stressm_3(i,j) + stressmtmp_3(i,j)*arlx1i) &
                           * denom1
-         stress12_4(i,j) = (stress12_4(i,j) + stress12tmp_4(i,j)*dte2T) &
+         stressm_4(i,j) = (stressm_4(i,j) + stressmtmp_4(i,j)*arlx1i) &
+                          * denom1
+
+         stress12_1(i,j) = (stress12_1(i,j) + stress12tmp_1(i,j)*arlx1i) &
+                          * denom1
+         stress12_2(i,j) = (stress12_2(i,j) + stress12tmp_2(i,j)*arlx1i) &
+                          * denom1
+         stress12_3(i,j) = (stress12_3(i,j) + stress12tmp_3(i,j)*arlx1i) &
+                          * denom1
+         stress12_4(i,j) = (stress12_4(i,j) + stress12tmp_4(i,j)*arlx1i) &
                           * denom1
 
           s11(i,j) = p5 * p25 * (stressp_1(i,j) + stressp_2(i,j) &
