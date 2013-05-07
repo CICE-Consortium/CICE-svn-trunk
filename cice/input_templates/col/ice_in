@@ -128,6 +128,7 @@
     kitd            = 1
   , kdyn            = 0
   , ndte            = 120
+  , revised_evp     = .false.
   , kstrength       = 1
   , krdg_partic     = 1
   , krdg_redist     = 1

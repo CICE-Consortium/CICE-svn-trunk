@@ -89,7 +89,7 @@
           oceanmixed_file, restore_sst,   trestore
       use ice_grid, only: grid_file, kmt_file, grid_type, grid_format
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist, mu_rdg
-      use ice_dyn_shared, only: ndte, kdyn, evp_damping, yield_curve
+      use ice_dyn_shared, only: ndte, kdyn, revised_evp, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, ahmax, &
                                shortwave, albedo_type, R_ice, R_pnd, &
                                R_snw
@@ -152,7 +152,7 @@
 
       namelist /ice_nml/ &
         kitd,           kdyn,            ndte,                          &
-        evp_damping,    yield_curve,     advection,                     &
+        revised_evp,    yield_curve,     advection,                     &
         kstrength,      krdg_partic,     krdg_redist,   mu_rdg,         &
         ktherm,         conduct,         shortwave,     albedo_type,    &
         albicev,        albicei,         albsnowv,      albsnowi,       &
@@ -230,7 +230,7 @@
       kdyn = 1           ! type of dynamics (1 = evp, 2 = eap)
       ndtd = 1           ! dynamic time steps per thermodynamic time step
       ndte = 120         ! subcycles per dynamics timestep:  ndte=dt_dyn/dte
-      evp_damping = .false.  ! if true, use damping procedure in evp dynamics
+      revised_evp = .false.  ! if true, use revised procedure for evp dynamics
       yield_curve = 'ellipse'
       kstrength = 1          ! 1 = Rothrock 75 strength, 0 = Hibler 79
       krdg_partic = 1        ! 1 = new participation, 0 = Thorndike et al 75
@@ -401,8 +401,6 @@
       ocn_data_format = 'bin' 
 #endif
 
-      if (days_per_year /= 365) shortwave = 'default' ! definite conflict
-
       chartmp = advection(1:6)
       if (chartmp /= 'upwind' .and. chartmp /= 'remap ') advection = 'remap'
 
@@ -424,6 +422,16 @@
          endif
          kitd = 1
          kcatbound = 0
+      endif
+
+      if (kdyn == 2 .and. revised_evp == .true.) then
+         if (my_task == master_task) then
+            write (nu_diag,*) &
+               'WARNING: revised_evp = T with EAP dynamics'
+            write (nu_diag,*) &
+               'WARNING: Setting revised_evp = F'
+         endif
+         revised_evp = .false.
       endif
 
       rpcesm = c0
@@ -485,7 +493,6 @@
          call abort_ice('ice: aerosol tracer conflict: comp_ice, ice_in')
       endif
 
-
       rfracmin = min(max(rfracmin,c0),c1)
       rfracmax = min(max(rfracmax,c0),c1)
 
@@ -541,7 +548,7 @@
       call broadcast_scalar(kdyn,               master_task)
       call broadcast_scalar(ndtd,               master_task)
       call broadcast_scalar(ndte,               master_task)
-      call broadcast_scalar(evp_damping,        master_task)
+      call broadcast_scalar(revised_evp,        master_task)
       call broadcast_scalar(yield_curve,        master_task)
       call broadcast_scalar(kstrength,          master_task)
       call broadcast_scalar(krdg_partic,        master_task)
@@ -686,8 +693,8 @@
          write(nu_diag,1020) ' kdyn                      = ', kdyn
          write(nu_diag,1020) ' ndtd                      = ', ndtd
          write(nu_diag,1020) ' ndte                      = ', ndte
-         write(nu_diag,1010) ' evp_damping               = ', &
-                               evp_damping
+         write(nu_diag,1010) ' revised_evp               = ', &
+                               revised_evp
          write(nu_diag,*)    ' yield_curve               = ', &
                                trim(yield_curve)
          write(nu_diag,1020) ' kstrength                 = ', kstrength

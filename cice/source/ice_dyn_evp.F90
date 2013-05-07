@@ -25,6 +25,8 @@
 ! Hunke, E. C., and J. K. Dukowicz (2003).  The sea ice momentum
 ! equation in the free drift regime.  Los Alamos Tech. Rep. LA-UR-03-2219.
 !
+! Bouillon, S., T. Fichefet, V. Legat and G. Madec (submitted 2013).  The 
+! revised elastic-viscous-plastic method.  Ocean Modelling.
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
@@ -139,7 +141,7 @@
          forcey   , & ! work array: combined atm stress and ocn tilt, y
          aiu      , & ! ice fraction on u-grid
          umass    , & ! total mass of ice and snow (u grid)
-         umassdtei    ! mass of U-cell/dte (kg/m^2 s)
+         umassdti     ! mass of U-cell/dte (kg/m^2 s)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,8):: &
          str          ! stress combinations for momentum equation
@@ -255,13 +257,13 @@
                          indxti      (:,iblk), indxtj      (:,iblk), & 
                          indxui      (:,iblk), indxuj      (:,iblk), & 
                          aiu       (:,:,iblk), umass     (:,:,iblk), & 
-                         umassdtei (:,:,iblk), fcor_blk  (:,:,iblk), & 
+                         umassdti  (:,:,iblk), fcor_blk  (:,:,iblk), & 
                          umask     (:,:,iblk),                       & 
                          uocn      (:,:,iblk), vocn      (:,:,iblk), & 
                          strairx   (:,:,iblk), strairy   (:,:,iblk), & 
                          ss_tltx   (:,:,iblk), ss_tlty   (:,:,iblk), &  
                          icetmask  (:,:,iblk), iceumask  (:,:,iblk), & 
-                         fm        (:,:,iblk),                       & 
+                         fm        (:,:,iblk), dt,                   & 
                          strtltx   (:,:,iblk), strtlty   (:,:,iblk), & 
                          strocnx   (:,:,iblk), strocny   (:,:,iblk), & 
                          strintx   (:,:,iblk), strinty   (:,:,iblk), & 
@@ -273,6 +275,7 @@
                          stressm_3 (:,:,iblk), stressm_4 (:,:,iblk), & 
                          stress12_1(:,:,iblk), stress12_2(:,:,iblk), & 
                          stress12_3(:,:,iblk), stress12_4(:,:,iblk), & 
+                         uvel_init (:,:,iblk), vvel_init (:,:,iblk), &
                          uvel      (:,:,iblk), vvel      (:,:,iblk))
 
       !-----------------------------------------------------------------
@@ -341,17 +344,18 @@
       ! momentum equation
       !-----------------------------------------------------------------
 
-            call stepu (nx_block,            ny_block,           & 
+            call stepu (nx_block,            ny_block,           &
                         icellu       (iblk),                     & 
                         indxui     (:,iblk), indxuj    (:,iblk), & 
                         aiu      (:,:,iblk), str     (:,:,:),    & 
                         uocn     (:,:,iblk), vocn    (:,:,iblk), &     
                         waterx   (:,:,iblk), watery  (:,:,iblk), & 
                         forcex   (:,:,iblk), forcey  (:,:,iblk), & 
-                        umassdtei(:,:,iblk), fm      (:,:,iblk), & 
+                        umassdti (:,:,iblk), fm      (:,:,iblk), & 
                         uarear   (:,:,iblk),                     & 
                         strocnx  (:,:,iblk), strocny (:,:,iblk), & 
                         strintx  (:,:,iblk), strinty (:,:,iblk), & 
+                        uvel_init(:,:,iblk), vvel_init(:,:,iblk),&
                         uvel     (:,:,iblk), vvel    (:,:,iblk))
 
          enddo
@@ -579,27 +583,21 @@
       ! replacement pressure/Delta                   ! kg/s
       ! save replacement pressure for principal stress calculation
       !-----------------------------------------------------------------
-         if (evp_damping) then
-            ! enforce damping criterion
-            c0ne = min(strength(i,j)/max(Deltane,c4*tinyarea(i,j)),rcon)
-            c0nw = min(strength(i,j)/max(Deltanw,c4*tinyarea(i,j)),rcon)
-            c0sw = min(strength(i,j)/max(Deltasw,c4*tinyarea(i,j)),rcon)
-            c0se = min(strength(i,j)/max(Deltase,c4*tinyarea(i,j)),rcon)
-            prs_sig(i,j) = strength(i,j)* &
-                           Deltane/max(Deltane,c4*tinyarea(i,j)) ! ne
-         else
-            ! original version
-            c0ne = strength(i,j)/max(Deltane,tinyarea(i,j))
-            c0nw = strength(i,j)/max(Deltanw,tinyarea(i,j))
-            c0sw = strength(i,j)/max(Deltasw,tinyarea(i,j))
-            c0se = strength(i,j)/max(Deltase,tinyarea(i,j))
-            prs_sig(i,j) = c0ne*Deltane ! northeast
-         endif
+         c0ne = strength(i,j)/max(Deltane,tinyarea(i,j))
+         c0nw = strength(i,j)/max(Deltanw,tinyarea(i,j))
+         c0sw = strength(i,j)/max(Deltasw,tinyarea(i,j))
+         c0se = strength(i,j)/max(Deltase,tinyarea(i,j))
+         prs_sig(i,j) = c0ne*Deltane ! northeast
 
-         c1ne = c0ne*dte2T
-         c1nw = c0nw*dte2T
-         c1sw = c0sw*dte2T
-         c1se = c0se*dte2T
+         c1ne = c0ne*arlx1i
+         c1nw = c0nw*arlx1i
+         c1sw = c0sw*arlx1i
+         c1se = c0se*arlx1i
+
+         c0ne = c1ne*ecci
+         c0nw = c1nw*ecci
+         c0sw = c1sw*ecci
+         c0se = c1se*ecci
 
       !-----------------------------------------------------------------
       ! the stresses                            ! kg/s^2
@@ -615,15 +613,15 @@
          stressp_4(i,j) = (stressp_4(i,j) + c1se*(divuse - Deltase)) &
                           * denom1
 
-         stressm_1(i,j) = (stressm_1(i,j) + c1ne*tensionne) * denom2
-         stressm_2(i,j) = (stressm_2(i,j) + c1nw*tensionnw) * denom2
-         stressm_3(i,j) = (stressm_3(i,j) + c1sw*tensionsw) * denom2
-         stressm_4(i,j) = (stressm_4(i,j) + c1se*tensionse) * denom2
-
-         stress12_1(i,j) = (stress12_1(i,j) + c1ne*shearne*p5) * denom2
-         stress12_2(i,j) = (stress12_2(i,j) + c1nw*shearnw*p5) * denom2
-         stress12_3(i,j) = (stress12_3(i,j) + c1sw*shearsw*p5) * denom2
-         stress12_4(i,j) = (stress12_4(i,j) + c1se*shearse*p5) * denom2
+         stressm_1(i,j) = (stressm_1(i,j) + c0ne*tensionne) * denom1
+         stressm_2(i,j) = (stressm_2(i,j) + c0nw*tensionnw) * denom1
+         stressm_3(i,j) = (stressm_3(i,j) + c0sw*tensionsw) * denom1
+         stressm_4(i,j) = (stressm_4(i,j) + c0se*tensionse) * denom1
+        
+         stress12_1(i,j) = (stress12_1(i,j) + c0ne*shearne*p5) * denom1
+         stress12_2(i,j) = (stress12_2(i,j) + c0nw*shearnw*p5) * denom1
+         stress12_3(i,j) = (stress12_3(i,j) + c0sw*shearsw*p5) * denom1
+         stress12_4(i,j) = (stress12_4(i,j) + c0se*shearse*p5) * denom1
 
       !-----------------------------------------------------------------
       ! Eliminate underflows.
