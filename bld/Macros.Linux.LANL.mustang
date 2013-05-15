@@ -1,4 +1,3 @@
-
 #==============================================================================
 # Makefile macros for "mustang," Linux cluster at LANL
 #==============================================================================
@@ -29,7 +28,8 @@ LDFLAGS    := $(FFLAGS) -v
                 -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS) \
                 -DNICELYR=$(NICELYR) -DNSNWLYR=$(NSNWLYR) -DNICECAT=$(NICECAT) \
                 -DTRAGE=$(TRAGE) -DTRFY=$(TRFY) -DTRLVL=$(TRLVL) -DTRPND=$(TRPND) \
-                -DNTRAERO=$(NTRAERO)
+                -DTRBRI=$(TRBRI) -DNTRAERO=$(NTRAERO) -DNBGCLYR=$(NBGCLYR) \
+                -DNUMIN=$(NUMIN) -DNUMAX=$(NUMAX)
 #   CPPDEFS :=  $(CPPDEFS) -DAOMIP
 
 ifeq ($(DITTO), yes)

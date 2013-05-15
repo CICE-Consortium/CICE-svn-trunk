@@ -17,7 +17,7 @@
 !  vendor is using different values.
 !
 !  The maximum number of I/O units per node is currently set by
-!  the parameter ice\_IOMaxUnits.
+!  the parameter ice\_IOMaxUnit.
 !
 ! !REVISION HISTORY:
 !  SVN:$Id$
@@ -85,13 +85,12 @@
          ice_stdin  =  5, & ! reserved unit for standard input
          ice_stdout =  6, & ! reserved unit for standard output
          ice_stderr =  6    ! reserved unit for standard error
-!EOP
-!BOC
-      integer (kind=int_kind), parameter :: &
-         ice_IOUnitsMinUnits = 11,   & ! do not use unit numbers below this
-         ice_IOUnitsMaxUnits = 99      ! maximum number of open units
 
-      logical (kind=log_kind), dimension(ice_IOUnitsMaxUnits) :: &
+      integer (kind=int_kind), parameter :: &
+         ice_IOUnitsMinUnit = NUMIN, & ! do not use unit numbers below 
+         ice_IOUnitsMaxUnit = NUMAX    ! or above
+
+      logical (kind=log_kind), dimension(ice_IOUnitsMaxUnit) :: &
          ice_IOUnitsInUse   ! flag=.true. if unit currently open
 
 !EOC
@@ -178,7 +177,7 @@
    iunit = shr_file_getUnit()
 #else
 
-   srch_units: do n=ice_IOUnitsMinUnits, ice_IOUnitsMaxUnits
+   srch_units: do n=ice_IOUnitsMinUnit, ice_IOUnitsMaxUnit
       if (.not. ice_IOUnitsInUse(n)) then   ! I found one, I found one
 
          !*** make sure not in use by library or calling routines
@@ -196,7 +195,7 @@
       endif
    end do srch_units
 
-   if (iunit > ice_IOUnitsMaxUnits) stop 'ice_IOUnitsGet: No free units'
+   if (iunit > ice_IOUnitsMaxUnit) stop 'ice_IOUnitsGet: No free units'
 
 #endif
 
@@ -269,7 +268,7 @@
          call shr_file_freeUnit(iunit)
 #else
 !  check for proper unit number
-   if (iunit < 1 .or. iunit > ice_IOUnitsMaxUnits) then
+   if (iunit < 1 .or. iunit > ice_IOUnitsMaxUnit) then
       stop 'release_fileunit: bad unit'
    endif
 

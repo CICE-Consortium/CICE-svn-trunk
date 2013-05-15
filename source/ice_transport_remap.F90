@@ -1505,19 +1505,19 @@
          qmx = max (w1, w2, w3, w4)
 
          ! the limiting coefficient
-         if (abs(qmn) > c0) then ! 'abs(qmn) > puny' not sufficient
+         if ( abs(qmn) > abs(pmn) ) then ! 'abs(qmn) > puny' not sufficient
             w1 = max(c0, pmn/qmn)
          else
             w1 = c1
          endif
 
-         if (abs(qmx) > c0) then
+         if ( abs(qmx) > abs(pmx) ) then
             w2 = max(c0, pmx/qmx)
          else
             w2 = c1
          endif
 
-         w1 = min(c1, w1, w2)
+         w1 = min(w1, w2)
 
          ! Limit the gradient components
          gx(i,j) = w1 * gxtmp
