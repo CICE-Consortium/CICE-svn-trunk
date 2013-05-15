@@ -173,8 +173,12 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
-          iyear, imonth, iday     ! year, month, day
+         i, j, k, n, it, iblk, & ! counting indices
+         iyear, imonth, iday , & ! year, month, day
+         iignore                 ! dummy variable
+
+      real (kind=real_kind) :: &
+         rignore                 ! dummy variable
 
       character(len=char_len_long) :: &
          filename, filename0, string1, string2
@@ -202,7 +206,8 @@
       call ice_open(nu_restart_pond,filename,0)
 
       if (my_task == master_task) then
-        read(nu_restart_pond) istep1,time,time_forc
+!        read (nu_restart_pond) istep1,time,time_forc
+        read (nu_restart_pond) iignore,rignore,rignore
         write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
       endif
 

@@ -168,7 +168,9 @@
          frzmlt  , & ! freezing/melting potential (W/m^2)
          Tf      , & ! freezing temperature (C)
          qdp     , & ! deep ocean heat flux (W/m^2), negative upward
-         hmix        ! mixed layer depth (m)
+         hmix    , & ! mixed layer depth (m)
+         daice_da    ! data assimilation concentration increment rate 
+                     ! (concentration s-1)(only used in hadgem drivers)
 
       character (char_len), public :: &
          Tfrzpt      ! ocean freezing temperature formulation
@@ -301,6 +303,11 @@
          fswthru_gbm, &  ! shortwave penetrating to ocean (W/m^2)
          fsice_gbm, & ! salt flux to ocean from salinity model (kg/m^2/s)
          fsice_g_gbm  ! gravity drainage salt flux to ocean (kg/m^2/s)
+
+      ! Used with data assimilation in hadgem drivers
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         fresh_da, & ! fresh water flux to ocean due to data assim (kg/m^2/s)
+         fsalt_da    ! salt flux to ocean due to data assimilation(kg/m^2/s)
 
       !-----------------------------------------------------------------
       ! internal
@@ -450,6 +457,7 @@
 #endif
       qdp   (:,:,:) = c0              ! deep ocean heat flux (W/m^2)
       hmix  (:,:,:) = c20             ! ocean mixed layer depth
+      daice_da(:,:,:) = c0            ! data assimilation increment rate
 
       !-----------------------------------------------------------------
       ! fluxes sent to atmosphere
@@ -480,10 +488,10 @@
       fsalt   (:,:,:) = c0
       fhocn   (:,:,:) = c0
       fswthru (:,:,:) = c0
- 
+      fresh_da(:,:,:) = c0    ! data assimilation
+      fsalt_da(:,:,:) = c0
       flux_bio (:,:,:,:) = c0 ! bgc
       flux_bio_g (:,:,:,:) = c0
-
       upNO  (:,:,:,:) = c0
       upNH  (:,:,:,:) = c0
       growNp(:,:,:,:) = c0

@@ -10,6 +10,7 @@
   , ice_ic         = './restart/iced_gx1_v5.0'
   , restart        = .true.
   , restart_ext    = .false.
+  , use_restart_time = .true.
   , restart_dir    = './restart/'
   , restart_file   = 'iced'
   , pointer_file   = './restart/ice.restart_file'

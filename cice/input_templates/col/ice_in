@@ -10,6 +10,7 @@
   , ice_ic         = 'none'
   , restart        = .false.
   , restart_ext    = .false.
+  , use_restart_time = .true.
   , restart_dir    = './restart/'
   , restart_file   = 'iced'
   , pointer_file   = './restart/ice.restart_file'

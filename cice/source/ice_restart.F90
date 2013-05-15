@@ -38,8 +38,9 @@
       save
 
       logical (kind=log_kind), public :: &
-         restart, & ! if true, initialize using restart file instead of defaults
-         restart_ext! if true, read/write extended grid (with ghost cells)
+         restart    , &   ! if true, initialize using restart file instead of defaults
+         restart_ext, &   ! if true, read/write extended grid (with ghost cells)
+         use_restart_time ! if true, use time written in core restart file
 
       character (len=char_len), public :: &
          restart_file  , & ! output file for restart dump
@@ -288,7 +289,11 @@
 !EOP
 !
       integer (kind=int_kind) :: &
-         i, j, k, n, it, iblk ! counting indices
+         i, j, k, n, it, iblk, & ! counting indices
+         iignore                 ! dummy variable
+
+      real (kind=real_kind) :: &
+         rignore                 ! dummy variable
 
       character(len=char_len_long) :: &
          filename, filename0
@@ -308,19 +313,27 @@
 
       call ice_open(nu_restart,filename,0)
 
-      if (my_task == master_task) then
+      if (my_task == master_task) &
          write(nu_diag,*) 'Using restart dump=', trim(filename)
-         read (nu_restart) istep0,time,time_forc
-         write(nu_diag,*) 'Restart read at istep=',istep0,time,time_forc
+
+      if (use_restart_time) then
+
+         if (my_task == master_task) then
+            read (nu_restart) istep0,time,time_forc
+            write(nu_diag,*) 'Restart read at istep=',istep0,time,time_forc
+         endif
+         call calendar(time)
+         call broadcast_scalar(istep0,master_task)
+         istep1 = istep0
+         call broadcast_scalar(time,master_task)
+         call broadcast_scalar(time_forc,master_task)
+
+      else
+
+         if (my_task == master_task) &
+            read (nu_restart) iignore,rignore,rignore
+
       endif
-      call calendar(time)
-
-      call broadcast_scalar(istep0,master_task)
-
-      istep1 = istep0
-
-      call broadcast_scalar(time,master_task)
-      call broadcast_scalar(time_forc,master_task)
 
       diag = .true.     ! write min/max diagnostics for field
 

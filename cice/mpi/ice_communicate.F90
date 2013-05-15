@@ -22,7 +22,7 @@
    use cpl_fields_mod, only : cpl_fields_icename
 #endif
 
-#if defined key_oasis3
+#if defined key_oasis3 || key_oasis3mct
    use cpl_oasis3
 #endif
 
@@ -96,7 +96,7 @@
 !
 !-----------------------------------------------------------------------
 
-#if (defined key_oasis3 || defined key_oasis4)
+#if (defined key_oasis3 || defined key_oasis3mct || defined key_oasis4)
     ice_comm = localComm       ! communicator from NEMO/OASISn 
 #else
     ice_comm = MPI_COMM_WORLD  ! Global communicator 
