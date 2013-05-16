@@ -130,12 +130,12 @@
   , kdyn            = 0
   , ndte            = 120
   , revised_evp     = .false.
+  , advection       = 'remap'
   , kstrength       = 1
   , krdg_partic     = 1
   , krdg_redist     = 1
   , mu_rdg          = 3
-  , advection       = 'remap'
-  , heat_capacity   = .true.
+  , ktherm          = 1
   , conduct         = 'bubbly'
   , shortwave       = 'default'
   , albedo_type     = 'default'

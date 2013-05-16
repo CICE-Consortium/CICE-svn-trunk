@@ -43,7 +43,7 @@
 
         nblyr     = NBGCLYR   , & ! number of biology layers per category
         nblyr_hist = nblyr+2  , & ! number of ice layer plus boundary points
-        nltrcr    = 6         , & ! number of layer bgc tracers  
+        nltrcr    = 6*TRBRI   , & ! number of layer bgc tracers  
                                   ! number of biology layer tracers      
         nbltrcr   = 1         , & ! 4 basic bio;  1 nitrate only 
 
