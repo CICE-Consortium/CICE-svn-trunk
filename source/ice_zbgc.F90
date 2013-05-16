@@ -173,7 +173,7 @@
       endif
       call broadcast_scalar(nml_error, master_task)
       if (nml_error /= 0) then
-         call abort_ice('ice: error reading namelist')
+         call abort_ice('ice: error reading zbgc namelist')
       endif
       call release_fileunit(nu_nml)
 

@@ -73,15 +73,14 @@
       use ice_fileunits, only: nu_diag
       use ice_restart, only: restart_ext
 
+   if (.not. restore_ice) return
+
    if (ew_boundary_type == 'open' .and. &
        ns_boundary_type == 'open' .and. .not.(restart_ext)) then
       if (my_task == master_task) write (nu_diag,*) &
             'WARNING: Setting restart_ext = T for open boundaries'
-      restore_ice = .true.
       restart_ext = .true.
    endif
-
-   if (.not. restore_ice) return
 
    allocate (aicen_rest(nx_block,ny_block,ncat,max_blocks), &
              vicen_rest(nx_block,ny_block,ncat,max_blocks), &
