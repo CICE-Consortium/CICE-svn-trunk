@@ -126,7 +126,7 @@
 !
 ! !INTERFACE:
 !
-      subroutine ice_read_xyt(nu,  nrec,  work, atype, diag, &
+      subroutine ice_read_xyt(nu, nrec, work, atype, diag, &
                           field_loc, field_type, &
                           ignore_eof, hit_eof)
 !
@@ -146,7 +146,6 @@
 ! !USES:
 !
       use ice_gather_scatter, only: scatter_global
-      use ice_work, only: work_g1, work_gr, work_gi4, work_gi8
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -180,6 +179,18 @@
          amin, amax         ! min and max values of input array
 
       logical (kind=log_kind) :: ignore_eof_use
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1
+
+      real (kind=real_kind), dimension(:,:), allocatable :: &
+         work_gr
+
+      integer(kind=int_kind), dimension(:,:), allocatable :: &
+         work_gi4
+
+      integer(selected_int_kind(13)), dimension(:,:), allocatable :: &
+         work_gi8
 
       if (my_task == master_task) then
          allocate(work_g1(nx_global,ny_global))
@@ -292,7 +303,6 @@
 ! !USES:
 !
       use ice_gather_scatter, only: scatter_global
-      use ice_work, only: work_g4, work_gr3, work_gi5, work_gi9
       use ice_domain_size, only: nblyr_hist
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -327,6 +337,19 @@
          amin, amax         ! min and max values of input array
 
       logical (kind=log_kind) :: ignore_eof_use
+
+
+      real (kind=dbl_kind), dimension(:,:,:), allocatable :: &
+         work_g4
+
+      integer(kind=int_kind), dimension(:,:,:), allocatable :: &
+         work_gi5
+
+      integer(selected_int_kind(13)), dimension(:,:,:), allocatable :: &
+         work_gi9
+
+      real (kind=real_kind), dimension(:,:,:), allocatable :: &
+         work_gr3
 
       if (my_task == master_task) then
          allocate(work_g4(nx_global,ny_global,nblyr_hist))
@@ -440,8 +463,6 @@
 !
 ! !USES:
 !
-      use ice_work, only: work_gr, work_gi4, work_gi8
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -470,6 +491,15 @@
          amin, amax         ! min and max values of input array
 
       logical (kind=log_kind) :: ignore_eof_use
+
+      real (kind=real_kind), dimension(:,:), allocatable :: &
+         work_gr
+
+      integer(kind=int_kind), dimension(:,:), allocatable :: &
+         work_gi4
+
+      integer(selected_int_kind(13)), dimension(:,:), allocatable :: &
+         work_gi8
 
       work_g(:,:) = c0
 
@@ -556,7 +586,6 @@
 ! !USES:
 !
       use ice_gather_scatter, only: scatter_global_ext
-      use ice_work, only: work_g1, work_gr, work_gi4, work_gi8
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -590,6 +619,18 @@
          amin, amax         ! min and max values of input array
 
       logical (kind=log_kind) :: ignore_eof_use
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1
+
+      real (kind=real_kind), dimension(:,:), allocatable :: &
+         work_gr
+
+      integer(kind=int_kind), dimension(:,:), allocatable :: &
+         work_gi4
+
+      integer(selected_int_kind(13)), dimension(:,:), allocatable :: &
+         work_gi8
 
       nx = nx_global + 2*nghost
       ny = ny_global + 2*nghost
@@ -692,7 +733,6 @@
 ! !USES:
 !
       use ice_gather_scatter, only: gather_global
-      use ice_work, only: work_g1, work_gr, work_gi4, work_gi8
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -717,6 +757,18 @@
 
       real (kind=dbl_kind) :: &
          amin, amax     ! min and max values of ouput array
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1
+
+      real (kind=real_kind), dimension(:,:), allocatable :: &
+         work_gr
+
+      integer(kind=int_kind), dimension(:,:), allocatable :: &
+         work_gi4
+
+      integer(selected_int_kind(13)), dimension(:,:), allocatable :: &
+         work_gi8
 
     !-------------------------------------------------------------------
     ! Gather data from individual processors
@@ -795,7 +847,6 @@
 ! !USES:
 !
       use ice_gather_scatter, only: gather_global
-      use ice_work, only: work_g4, work_gr3, work_gi5, work_gi9
       use ice_domain_size, only: nblyr_hist
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -821,6 +872,18 @@
 
       real (kind=dbl_kind) :: &
          amin, amax     ! min and max values of ouput array
+
+      real (kind=dbl_kind), dimension(:,:,:), allocatable :: &
+         work_g4
+
+      real (kind=real_kind), dimension(:,:,:), allocatable :: &
+         work_gr3
+
+      integer(kind=int_kind), dimension(:,:,:), allocatable :: &
+         work_gi5
+
+      integer(selected_int_kind(13)), dimension(:,:,:), allocatable :: &
+         work_gi9
 
     !-------------------------------------------------------------------
     ! Gather data from individual processors
@@ -898,7 +961,6 @@
 ! !USES:
 !
       use ice_gather_scatter, only: gather_global_ext
-      use ice_work, only: work_g1, work_gr, work_gi4, work_gi8
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -923,6 +985,18 @@
 
       real (kind=dbl_kind) :: &
          amin, amax     ! min and max values of ouput array
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1
+
+      real (kind=real_kind), dimension(:,:), allocatable :: &
+         work_gr
+
+      integer(kind=int_kind), dimension(:,:), allocatable :: &
+         work_gi4
+
+      integer(selected_int_kind(13)), dimension(:,:), allocatable :: &
+         work_gi8
 
     !-------------------------------------------------------------------
     ! Gather data from individual processors
@@ -1056,7 +1130,6 @@
 ! !USES:
 !
       use ice_gather_scatter, only: scatter_global
-      use ice_work, only: work_g1, work_g2
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1094,20 +1167,26 @@
 
       character (char_len) :: &
          dimname            ! dimension name            
-!
-      if (my_task == master_task) then
-         allocate(work_g1(nx_global,ny_global))
-      else
-         allocate(work_g1(1,1))   ! to save memory
-      endif
 
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1
+!
 #ifdef ORCA_GRID
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g2
+
       if (my_task == master_task) then
          allocate(work_g2(nx_global+2,ny_global+1))
       else
          allocate(work_g2(1,1))   ! to save memory
       endif
 #endif
+
+      if (my_task == master_task) then
+         allocate(work_g1(nx_global,ny_global))
+      else
+         allocate(work_g1(1,1))   ! to save memory
+      endif
 
       if (my_task == master_task) then
 
@@ -1260,14 +1339,11 @@
        ! Read point variable
        !--------------------------------------------------------------
 
-
-
          status = nf90_get_var(fid, varid, workg, & 
                start= (/ nrec /), & 
                count=(/ 1 /) )
 
- 
-         if (status /= nf90_noerr) then
+          if (status /= nf90_noerr) then
            call abort_ice ( & 
                'ice_read_nc_point: Cannot get variable '//trim(varname) )
          endif
@@ -1318,7 +1394,6 @@
 !
 ! !USES:
 !
-      use ice_work, only: work_z
       use ice_domain_size, only: nilyr
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1343,6 +1418,9 @@
 !
 !EOP
 !
+      real (kind=dbl_kind), dimension(:), allocatable :: &
+         work_z
+
 #ifdef ncdf
 ! netCDF file diagnostics:
       integer (kind=int_kind) :: & 
@@ -1430,10 +1508,6 @@
 !
 ! !USES:
 ! 
-#ifdef ORCA_GRID
-      use ice_work, only: work_g3
-#endif
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -1466,9 +1540,11 @@
 
      character (char_len) :: &
          dimname            ! dimension name            
-
 !
 #ifdef ORCA_GRID
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g3
+
       if (my_task == master_task) then
           allocate(work_g3(nx_global+2,ny_global+1))
        else

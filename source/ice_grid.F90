@@ -155,9 +155,10 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_broadcast, only: broadcast_array
       use ice_constants, only: c1, rad_to_deg, puny
-      use ice_work, only: work_g1, work_g2
+      use ice_domain_size, only: max_blocks
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -171,6 +172,9 @@
 
       character (char_len) :: &
          fieldname       ! field name in netCDF file
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1, work_g2
 
       !-----------------------------------------------------------------
       ! Get global ULAT and KMT arrays used for block decomposition.
@@ -274,12 +278,12 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: get_block, block, nx_block, ny_block
       use ice_constants, only: c0, c1, pi, pi2, puny, p5, p25, c1p5, &
           field_loc_center, field_loc_NEcorner, &
           field_type_scalar, field_type_vector, field_type_angle
-      use ice_work, only: work_g1
+      use ice_domain_size, only: max_blocks
       use ice_exit, only: abort_ice
-      use ice_blocks, only: get_block, block
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -294,6 +298,9 @@
 
       logical (kind=log_kind), dimension(nx_block,ny_block,max_blocks):: &
          out_of_range
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1
 
       type (block) :: &
          this_block           ! block information for current block
@@ -517,10 +524,11 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, c1, pi, &
           field_loc_center, field_loc_NEcorner, &
           field_type_scalar, field_type_angle
-      use ice_work, only: work1, work_g1
+      use ice_domain_size, only: max_blocks
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -532,6 +540,12 @@
          ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
       logical (kind=log_kind) :: diag
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       type (block) :: &
          this_block           ! block information for current block
@@ -645,10 +659,11 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, c1, pi, pi2, rad_to_deg, puny, p5, p25, &
           field_loc_center, field_loc_NEcorner, &
           field_type_scalar, field_type_angle
-      use ice_work, only: work1, work_g1
+      use ice_domain_size, only: max_blocks
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -665,6 +680,12 @@
 
       character (char_len) :: &
          fieldname		! field name in netCDF file
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       type (block) :: &
          this_block           ! block information for current block
@@ -775,10 +796,11 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, c1, rad_to_deg, c2, radius, cm_to_m, &
           field_loc_center, field_loc_NEcorner, field_type_scalar
+      use ice_domain_size, only: max_blocks
       use ice_exit, only: abort_ice
-      use ice_work, only: work_g1
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -789,6 +811,9 @@
          imid, jmid
 
       real (kind=dbl_kind) :: length
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1
 
       !-----------------------------------------------------------------
       ! Calculate various geometric 2d arrays
@@ -955,9 +980,10 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, c1, rad_to_deg, m_to_cm, &
           field_loc_NEcorner, field_type_scalar
-      use ice_work, only: work1, work_g1
+      use ice_domain_size, only: max_blocks
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -969,6 +995,12 @@
            ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
       logical (kind=log_kind) :: diag
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       type (block) :: &
            this_block           ! block information for current block
@@ -1060,10 +1092,11 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: p5, c2, cm_to_m, &
           field_loc_center, field_loc_NEcorner, &
           field_loc_Nface, field_type_scalar
-      use ice_work, only: work_g2
+      use ice_domain_size, only: max_blocks
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1076,6 +1109,9 @@
       integer (kind=int_kind) :: &
          i, j, &
          ip1     ! i+1
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g2
 
       if (my_task == master_task) then
          allocate(work_g2(nx_global,ny_global))
@@ -1142,10 +1178,11 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: p5, c2, cm_to_m, &
           field_loc_center, field_loc_NEcorner, &
           field_loc_Eface, field_type_scalar
-      use ice_work, only: work_g2
+      use ice_domain_size, only: max_blocks
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1158,6 +1195,9 @@
       integer (kind=int_kind) :: &
          i, j, &
          im1     ! i-1
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g2
 
       if (my_task == master_task) then
          allocate(work_g2(nx_global,ny_global))
@@ -1474,8 +1514,9 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: field_loc_center, field_type_vector
-      use ice_work, only: work1
+      use ice_domain_size, only: max_blocks
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1485,6 +1526,9 @@
 !
 !EOP
 !
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
+
       work1(:,:,:) = work(:,:,:)
 
       call ice_timer_start(timer_bound)
@@ -1583,8 +1627,9 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: field_loc_NEcorner, field_type_vector
-      use ice_work, only: work1
+      use ice_domain_size, only: max_blocks
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1594,6 +1639,9 @@
 !
 !EOP
 !
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
+
       work1(:,:,:) = work(:,:,:)
 
       call ice_timer_start(timer_bound)
@@ -1898,9 +1946,10 @@
 !            E. Hunke, LANL
 !
 ! !USES:
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0,  rad_to_deg, c2, c360, &
           field_loc_NEcorner, field_type_scalar
-      use ice_work, only: work1, work_g2
+      use ice_domain_size, only: max_blocks
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1909,6 +1958,12 @@
       integer (kind=int_kind) :: &
           i,j,iblk,icorner,& ! index counters
           ilo,ihi,jlo,jhi    ! beginning and end of physical domain
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g2
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       type (block) :: &
          this_block           ! block information for current block
@@ -2086,9 +2141,10 @@
 !            E. Hunke, LANL
 !
 ! !USES:
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, rad_to_deg, c2, &
           field_loc_NEcorner, field_type_scalar
-      use ice_work, only: work_g2, work1
+      use ice_domain_size, only: max_blocks
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -2103,6 +2159,12 @@
       integer (kind=int_kind) :: &
           i,j,             & ! index counters
           ilo,ihi,jlo,jhi    ! beginning and end of physical domain
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g2
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       type (block) :: &
          this_block           ! block information for current block

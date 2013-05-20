@@ -1600,7 +1600,6 @@
       use ice_restart, only: lenstr, restart_file, &
                              pointer_file, runtype
       use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_restart_eap
-      use ice_work, only: work_g1, work_g2
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1616,6 +1615,9 @@
 
       logical (kind=log_kind) :: &
          diag
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1, work_g2
 
       if (my_task == master_task) then
          open(nu_rst_pointer,file=pointer_file)

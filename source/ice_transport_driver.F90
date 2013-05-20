@@ -265,7 +265,6 @@
           uvel, vvel, bound_state
       use ice_grid, only: tarea, HTE, HTN
       use ice_exit, only: abort_ice
-      use ice_work, only: work1
       use ice_calendar, only: istep1
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_advect, timer_bound
@@ -332,6 +331,9 @@
          tmax           ! local max tracer
 
       integer (kind=int_kind) :: alloc_error
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       call ice_timer_start(timer_advect)  ! advection 
 
@@ -1816,7 +1818,6 @@
 ! !USES:
 !
       use ice_constants, only: p5
-      use ice_work, only:  worka, workb
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1848,6 +1849,9 @@
 
       real (kind=dbl_kind) ::        &
          upwind, y1, y2, a, h   ! function
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         worka, workb
 
     !-------------------------------------------------------------------
     ! Define upwind function

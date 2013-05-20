@@ -78,7 +78,6 @@
       use ice_therm_vertical, only: init_thermo_vertical
       use ice_timers, only: timer_total, init_ice_timers, ice_timer_start
       use ice_transport_driver, only: init_transport
-      use ice_work, only: init_work
       use ice_zbgc, only: init_zbgc, get_forcing_bgc
       use ice_zbgc_public, only: tr_bgc_NO, tr_bgc_Sil
 #ifdef popcice
@@ -90,7 +89,6 @@
       call input_data           ! namelist variables
       if (trim(runid) == 'bering') call check_finished_file
       call init_zbgc            ! vertical biogeochemistry namelist
-      call init_work            ! work arrays
 
       call init_domain_blocks   ! set up block decomposition
       call init_grid1           ! domain distribution

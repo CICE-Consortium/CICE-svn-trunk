@@ -1905,10 +1905,11 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_broadcast, only: broadcast_scalar
       use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc, pbloc, plat, plon
+      use ice_domain_size, only: max_blocks
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
-      use ice_work, only: work1, work2
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1935,6 +1936,9 @@
 
       real (kind=dbl_kind), dimension(npnt,nblyr+1) :: &
          pzTin, piDin
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1, work2
 
       !-----------------------------------------------------------------
       ! salinity and microstructure  of the ice

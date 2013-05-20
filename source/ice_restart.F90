@@ -87,7 +87,7 @@
       use ice_communicate, only: my_task, master_task
       use ice_constants, only: c0, c1
       use ice_domain, only: nblocks
-      use ice_domain_size, only: nilyr, nslyr, ncat
+      use ice_domain_size, only: nilyr, nslyr, ncat, max_blocks
       use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_dump
       use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
           strocnxT, strocnyT, sst, frzmlt, iceumask, &
@@ -98,7 +98,6 @@
       use ice_read_write, only: ice_open, ice_write
       use ice_state, only: aicen, vicen, vsnon, trcrn, &
           nt_Tsfc, nt_sice, nt_qice, nt_qsno, uvel, vvel
-      use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -113,6 +112,9 @@
       character(len=char_len_long) :: filename
 
       logical (kind=log_kind) :: diag
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       ! construct path/file
       if (present(filename_spec)) then
@@ -265,7 +267,7 @@
           field_type_scalar, field_type_vector
       use ice_domain, only: nblocks, distrb_info
       use ice_domain_size, only: nilyr, nslyr, ncat, nx_global, ny_global, &
-          max_ntrcr
+          max_ntrcr, max_blocks
       use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_restart
       use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
           strocnxT, strocnyT, sst, frzmlt, iceumask, &
@@ -280,7 +282,6 @@
       use ice_state, only: trcr_depend, aice, vice, vsno, trcr, &
           aice0, aicen, vicen, vsnon, trcrn, aice_init, &
           nt_Tsfc, nt_sice, nt_qice, nt_qsno, uvel, vvel
-      use ice_work, only: work1, work_g1, work_g2
 !
 ! !INPUT/OUTPUT PARAMETERS:
 
@@ -300,6 +301,12 @@
 
       logical (kind=log_kind) :: &
          diag
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1, work_g2
 
       if (present(ice_ic)) then
          filename = ice_ic
@@ -618,7 +625,7 @@
       use ice_communicate, only: my_task, master_task
       use ice_constants, only: c0, c1
       use ice_domain, only: nblocks
-      use ice_domain_size, only: nilyr, nslyr, ncat
+      use ice_domain_size, only: nilyr, nslyr, ncat, max_blocks
       use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_dump
       use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
           strocnxT, strocnyT, sst, frzmlt, iceumask, &
@@ -629,7 +636,6 @@
       use ice_read_write, only: ice_open, ice_write_ext
       use ice_state, only: aicen, vicen, vsnon, trcrn, &
           nt_Tsfc, nt_sice, nt_qice, nt_qsno, uvel, vvel
-      use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -644,6 +650,9 @@
       character(len=char_len_long) :: filename
 
       logical (kind=log_kind) :: diag
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       ! construct path/file
       if (present(filename_spec)) then
@@ -803,7 +812,7 @@
           field_loc_center, field_loc_NEcorner, &
           field_type_scalar, field_type_vector
       use ice_domain, only: nblocks, distrb_info
-      use ice_domain_size, only: nilyr, nslyr, ncat, max_ntrcr
+      use ice_domain_size, only: nilyr, nslyr, ncat, max_ntrcr, max_blocks
       use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_restart
       use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
           strocnxT, strocnyT, sst, frzmlt, iceumask, &
@@ -817,7 +826,6 @@
       use ice_state, only: trcr_depend, aice, vice, vsno, trcr, &
           aice0, aicen, vicen, vsnon, trcrn, aice_init, &
           nt_Tsfc, nt_sice, nt_qice, nt_qsno, uvel, vvel
-      use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
 
@@ -833,6 +841,9 @@
 
       logical (kind=log_kind) :: &
          diag
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       if (present(ice_ic)) then
          filename = ice_ic

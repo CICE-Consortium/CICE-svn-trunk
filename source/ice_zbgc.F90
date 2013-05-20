@@ -464,12 +464,13 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_domain, only: nblocks
+      use ice_domain_size, only: max_blocks
       use ice_flux, only:  hmix, sss
       use ice_zbgc_public, only: upNO, upNH, growN, growNp
 !      use ice_zbgc_public, only: zfswin, ocean_bio
       use ice_calendar, only: month, dt
-      use ice_work, only:  work1
       use ice_therm_shared, only: solve_Sin
       use ice_restart, only: runtype
       use ice_algae  
@@ -505,6 +506,9 @@
                   1.8255e3_dbl_kind, -0.7523e3_dbl_kind, &  !for initial
                   0.1456e3_dbl_kind, -0.0299e3_dbl_kind, &  !Salinity
                   0.0223_dbl_kind/)  
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       !-----------------------------------------------------------------------------   
       !     BGC Layer Model

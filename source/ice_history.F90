@@ -1248,7 +1248,6 @@
       use ice_therm_shared, only: calculate_Tin_from_qin, Tmlt, ktherm
       use ice_therm_mushy, only: temperature_mush, temperature_snow
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
-      use ice_work, only: worka, workb
       use ice_zbgc_public, only: S_tot, fsice, fsice_g, fsicen_g
 
 !
@@ -1273,6 +1272,9 @@
       real (kind=dbl_kind) :: & 
            qn                , & ! temporary variable for enthalpy
            Tmlts                 !  temporary variable for melting temperature
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         worka, workb
 
       type (block) :: &
          this_block           ! block information for current block
