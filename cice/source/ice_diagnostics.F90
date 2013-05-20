@@ -144,7 +144,7 @@
           rhofresh, Tffresh, Lfresh, Lvap, ice_ref_salinity, field_loc_center, &
           m2_to_km2, awtvdr, awtidr, awtvdf, awtidf
       use ice_domain, only: distrb_info, nblocks
-      use ice_domain_size, only: ncat, n_aero
+      use ice_domain_size, only: ncat, n_aero, max_blocks
       use ice_fileunits, only: flush_fileunit
       use ice_flux, only: alvdr, alidr, alvdf, alidf, evap, fsnow, frazil, &
           fswabs, fswthru, flw, flwout, fsens, fsurf, flat, frzmlt, frain, fpond, &
@@ -155,7 +155,6 @@
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
       use ice_state
       use ice_therm_shared, only: calc_Tsfc
-      use ice_work, only: work1, work2
       use ice_zbgc_public, only: rhosi
 
 #if (defined CCSM) || (defined SEQ_MCT)
@@ -205,6 +204,9 @@
          pfhocn, &
          pmeltt, pmeltb, pmeltl, psnoice, pdsnow, pfrazil, pcongel, &
          phin1, phin2
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1, work2
 
       !-----------------------------------------------------------------
       ! state of the ice
@@ -983,12 +985,11 @@
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: field_loc_center, rhofresh, rhoi, rhos
       use ice_domain, only: distrb_info, nblocks
-      use ice_domain_size, only: n_aero, ncat
+      use ice_domain_size, only: n_aero, ncat, max_blocks
       use ice_global_reductions, only: global_sum
       use ice_grid, only: tareas, tarean
       use ice_state, only: aicen, vice, vsno, trcrn, trcr, &
           tr_aero, nt_aero, tr_pond_topo, nt_apnd, nt_hpnd
-      use ice_work, only: work1
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -998,6 +999,9 @@
 
       real (kind=dbl_kind) :: &
          shmaxn, snwmxn,  shmaxs, snwmxs, totpn, totps
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       ! total ice volume
       shmaxn = global_sum(vice, distrb_info, field_loc_center, tarean)

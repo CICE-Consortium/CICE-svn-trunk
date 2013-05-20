@@ -217,8 +217,8 @@
 !
       use ice_aerosol
       use ice_age, only: increment_age
+      use ice_blocks, only: nx_block, ny_block
       use ice_firstyear, only: update_FYarea
-      use ice_work, only: worka, workb
       use ice_zbgc_public, only: fsicen
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -280,6 +280,9 @@
 
       integer (kind=int_kind) :: &
          istop, jstop    ! indices of grid cell where model aborts 
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         worka, workb
 
       l_stop = .false.
 

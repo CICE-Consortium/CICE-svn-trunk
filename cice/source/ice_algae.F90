@@ -2969,7 +2969,6 @@
       use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc, pbloc, plat, plon
       use ice_domain_size, only: ncat, nltrcr
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
-      use ice_work, only: work1, work2
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

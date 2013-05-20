@@ -254,11 +254,12 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, c12, secday, depressT, &
           field_loc_center, field_type_scalar
       use ice_domain, only: nblocks
+      use ice_domain_size, only: max_blocks
       use ice_flux, only: sss, sst, Tf, Tfrzpt
-      use ice_work, only:  work1
       use ice_zbgc_public, only: restore_bgc
 #ifdef ncdf
       use netcdf
@@ -285,6 +286,9 @@
 
       character (char_len) :: & 
             fieldname    ! field name in netcdf file
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       nbits = 64                ! double precision data
 
@@ -3859,7 +3863,6 @@
       subroutine Qa_fixLY(nx_block, ny_block, Tair, Qa)
 
       use ice_constants, only: c1, c10, c2, Tffresh, puny
-      use ice_work, only: worka
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block ! block dimensions
@@ -3870,6 +3873,9 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(inout) :: &
          Qa                 ! specific humidity
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         worka
 
       worka = Tair - Tffresh
       worka = c2 + (0.7859_dbl_kind + 0.03477_dbl_kind*worka) &
@@ -5013,10 +5019,11 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, &
           field_loc_center, field_loc_NEcorner, &
           field_type_scalar, field_type_vector
-      use ice_work, only: work1
+      use ice_domain_size, only: max_blocks
 #ifdef ncdf
       use netcdf
 #endif
@@ -5045,6 +5052,9 @@
         status  , & ! status flag
         nlat    , & ! number of longitudes of data
         nlon        ! number of latitudes  of data
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
       if (my_task == master_task) then
 
@@ -5175,9 +5185,10 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, &
-          field_loc_center, field_type_scalar
-      use ice_work, only: work1, work2
+          field_loc_center, field_type_scalar 
+      use ice_domain_size, only: max_blocks
       use ice_grid, only: to_ugrid, ANGLET
 #ifdef ncdf
       use netcdf
@@ -5207,6 +5218,9 @@
         status  , & ! status flag
         nlat    , & ! number of longitudes of data
         nlon        ! number of latitudes  of data
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1, work2
 
       if (my_task == master_task) then
 
@@ -5326,10 +5340,11 @@
 !
 ! !USES:
 !
+      use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, c1, p5, depressT
       use ice_global_reductions, only: global_minval, global_maxval
       use ice_domain, only: nblocks, distrb_info
-      use ice_work, only: work1
+      use ice_domain_size, only: max_blocks
       use ice_flux, only: sss, sst, Tf, uocn, vocn, ss_tltx, ss_tlty, &
             qdp, hmix, Tfrzpt
       use ice_restart, only: restart
@@ -5351,6 +5366,9 @@
 
       real (kind=dbl_kind) :: &
           vmin, vmax
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
 
     !-------------------------------------------------------------------
     ! monthly data 

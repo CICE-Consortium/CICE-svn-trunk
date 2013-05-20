@@ -298,7 +298,7 @@
 !
 ! !USES:
 !
-      use ice_blocks, only: block, get_block
+      use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_constants, only: c0, puny
       use ice_domain, only: blocks_ice
       use ice_flux, only: apeff_ai
@@ -307,7 +307,6 @@
       use ice_shortwave, only: apeffn
       use ice_state, only: tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
           aice, trcr, trcrn, nt_apnd, nt_hpnd, nt_ipnd, nt_alvl
-      use ice_work, only: worka
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -319,6 +318,9 @@
       integer (kind=int_kind) :: &
            i,j, &
            ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         worka
 
       type (block) :: &
          this_block           ! block information for current block

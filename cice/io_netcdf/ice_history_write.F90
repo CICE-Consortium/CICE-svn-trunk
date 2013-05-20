@@ -62,13 +62,14 @@
 !
       use ice_kinds_mod
 #ifdef ncdf
+      use ice_blocks, only: nx_block, ny_block
       use ice_broadcast, only: broadcast_scalar
       use ice_calendar, only: time, sec, idate, idate0, write_ic, &
           histfreq, dayyr, days_per_year, use_leap_years
       use ice_communicate, only: my_task, master_task
       use ice_constants, only: c0, c360, secday, spval, rad_to_deg
       use ice_domain, only: distrb_info
-      use ice_domain_size, only: nx_global, ny_global, max_nstrm
+      use ice_domain_size, only: nx_global, ny_global, max_nstrm, max_blocks
       use ice_exit, only: abort_ice
       use ice_fileunits, only: nu_diag
       use ice_gather_scatter, only: gather_global
@@ -78,7 +79,6 @@
       use ice_history_shared
       use ice_itd, only: hin_max
       use ice_restart, only: runid
-      use ice_work, only: work_g1, work_gr, work_gr3, work1
       use netcdf
 #endif
 !
@@ -89,6 +89,12 @@
 !EOP
 !
 #ifdef ncdf
+      real (kind=dbl_kind),  dimension(:,:),   allocatable :: work_g1
+      real (kind=real_kind), dimension(:,:),   allocatable :: work_gr
+      real (kind=real_kind), dimension(:,:,:), allocatable :: work_gr3
+      real (kind=dbl_kind),  dimension(nx_block,ny_block,max_blocks) :: &
+         work1
+
       integer (kind=int_kind) :: i,j,k,ic,n,nn, &
          ncid,status,imtid,jmtid,kmtidi,kmtids,kmtidb, cmtid,timid,varid, &
          length,nvertexid,ivertex

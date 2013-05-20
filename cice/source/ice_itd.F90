@@ -914,7 +914,6 @@
 !
 ! !USES:
 !
-      use ice_work, only: worka, workb
       use ice_state, only: nt_apnd, nt_alvl, nt_fbri, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo
 !
@@ -996,6 +995,9 @@
         dvice_negative     , & ! true if dvice < -puny
         daice_greater_aicen, & ! true if daice > aicen
         dvice_greater_vicen    ! true if dvice > vicen
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         worka, workb
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -1940,7 +1942,6 @@
       use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_aero, nt_apnd, nt_hpnd, &
                            nt_fbri, nt_bgc_S, hbrine
       use ice_zbgc_public, only: rhosi, lateral_melt_bgc, min_salin
-      use ice_work, only: worka
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -2010,6 +2011,8 @@
         indxj
 
       real (kind=dbl_kind) :: xtmp, zspace      ! temporary variable
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: worka
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -2388,7 +2391,6 @@
 !
 ! !USES:
 !
-      use ice_work, only: worka, workb
       use ice_state, only: nt_qice, nt_qsno
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -2438,6 +2440,9 @@
       logical (kind=log_kind) :: &
          ice_energy_correct  , & ! zero layer ice energy check
          snow_energy_correct     ! zero layer snow energy check
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         worka, workb
 
       !-----------------------------------------------------------------
       ! Initialize
