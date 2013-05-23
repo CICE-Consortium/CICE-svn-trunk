@@ -746,10 +746,10 @@
       !  data value for the current record goes in slot 2
  !     if (real(sec,kind=dbl_kind) < p5*sec1hr-puny) then  ! first half of hour
         recslot = 2
-        ixp = 99
+        ixp = -99
  !     else                             ! second half of hour
  !       recslot = 1
- !       ixm = 99
+ !       ixm = -99
  !     endif
 
       call interp_coeff (recnum, recslot, sec1hr, dataloc)
@@ -908,7 +908,7 @@
       ! read data
       !-----------------------------------------------------------------
 
-         if (ixm /= 99) then
+         if (ixm /= -99) then
          ! currently in first half of data interval
             if (ixx <= 1) then
                if (yr > fyear_init) then ! get data from previous year
@@ -930,7 +930,7 @@
                            'rda8', dbug, field_loc, field_type)
 
             if (ixx==1 .and. my_task == master_task) close(nu_forcing)
-         endif                  ! ixm ne 99
+         endif                  ! ixm ne -99
 
          ! always read ixx data from data file for current year
          call file_year (data_file, yr)
@@ -941,7 +941,7 @@
          call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
                         'rda8', dbug, field_loc, field_type)
 
-         if (ixp /= 99) then
+         if (ixp /= -99) then
          ! currently in latter half of data interval
             if (ixx==maxrec) then
                if (yr < fyear_final) then ! get data from following year
@@ -965,7 +965,7 @@
             nrec = recd + n4
             call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
                            'rda8', dbug, field_loc, field_type)
-         endif                  ! ixp /= 99
+         endif                  ! ixp /= -99
 
          if (my_task == master_task) close(nu_forcing)
 
@@ -1072,7 +1072,7 @@
       ! read data
       !-----------------------------------------------------------------
 
-         if (ixm /= 99) then
+         if (ixm /= -99) then
          ! currently in first half of data interval
             if (ixx <= 1) then
                if (yr > fyear_init) then ! get data from previous year
@@ -1096,7 +1096,7 @@
                   field_loc, field_type)
 
             if (ixx==1) call ice_close_nc(fid)
-         endif                  ! ixm ne 99
+         endif                  ! ixm ne -99
 
          ! always read ixx data from data file for current year
          call file_year (data_file, yr)
@@ -1109,7 +1109,7 @@
               (fid, nrec, fieldname, field_data(:,:,arg,:), dbug, &
                field_loc, field_type)
 
-         if (ixp /= 99) then
+         if (ixp /= -99) then
          ! currently in latter half of data interval
             if (ixx==maxrec) then
                if (yr < fyear_final) then ! get data from following year
@@ -1134,7 +1134,7 @@
             call ice_read_nc & 
                  (fid, nrec, fieldname, field_data(:,:,arg,:), dbug, &
                   field_loc, field_type)
-         endif                  ! ixp /= 99
+         endif                  ! ixp /= -99
 
          call ice_close_nc(fid)
 
@@ -1245,7 +1245,7 @@
       ! read data
       !-----------------------------------------------------------------
 
-         if (ixm /= 99) then
+         if (ixm /= -99) then
          ! currently in first half of data interval
             if (ixx <= 1) then
                if (yr > fyear_init) then ! get data from previous year
@@ -1277,7 +1277,7 @@
                   field_loc, field_type)
 
             if (ixx==1) call ice_close_nc(fid)
-         endif                  ! ixm ne 99
+         endif                  ! ixm ne -99
 
          ! always read ixx data from data file for current year
         ! call file_year (data_file, yr)
@@ -1290,7 +1290,7 @@
               (fid, nrec, fieldname, field_data(arg), dbug, &
                field_loc, field_type)
 
-         if (ixp /= 99) then
+         if (ixp /= -99) then
          ! currently in latter half of data interval
             if (ixx==maxrec) then
                if (yr < fyear_final) then ! get data from following year
@@ -1315,7 +1315,7 @@
             call ice_read_nc & 
                  (fid, nrec, fieldname, field_data(arg), dbug, &
                   field_loc, field_type)
-         endif                  ! ixp /= 99
+         endif                  ! ixp /= -99
 
          call ice_close_nc(fid)
 
@@ -1427,7 +1427,7 @@
       ! read data
       !-----------------------------------------------------------------
 
-         if (ixm /= 99) then
+         if (ixm /= -99) then
          ! currently in first half of data interval
             if (ixx <= 1) then
                if (yr > fyear_init) then ! get data from previous year
@@ -1451,7 +1451,7 @@
                   field_loc, field_type)
 
             if (ixx==1) call ice_close_nc(fid)
-         endif                  ! ixm ne 99
+         endif                  ! ixm ne -99
 
          ! always read ixx data from data file for current year
         ! call file_year (data_file, yr)
@@ -1464,7 +1464,7 @@
               (fid, nrec, fieldname, field_data(:,arg), dbug, &
                field_loc, field_type)
 
-         if (ixp /= 99) then
+         if (ixp /= -99) then
          ! currently in latter half of data interval
             if (ixx==maxrec) then
                if (yr < fyear_final) then ! get data from following year
@@ -1489,7 +1489,7 @@
             call ice_read_nc & 
                  (fid, nrec, fieldname, field_data(:,arg), dbug, &
                   field_loc, field_type)
-         endif                  ! ixp /= 99
+         endif                  ! ixp /= -99
 
          call ice_close_nc(fid)
 
@@ -1573,7 +1573,7 @@
          call ice_open (nu_forcing, data_file, nbits)
 
          arg = 0
-         if (ixm /= 99) then
+         if (ixm /= -99) then
             arg = 1
             nrec = recd + ixm
             call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
@@ -1585,7 +1585,7 @@
          call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
                         'rda8', dbug, field_loc, field_type)
 
-         if (ixp /= 99) then
+         if (ixp /= -99) then
             arg = arg + 1
             nrec = recd + ixp
             call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
@@ -1674,7 +1674,7 @@
          call ice_open_nc (data_file, fid)
 
          arg = 0
-         if (ixm /= 99) then
+         if (ixm /= -99) then
             arg = 1
             nrec = recd + ixm
             call ice_read_nc & 
@@ -1688,7 +1688,7 @@
                  (fid, nrec, fieldname, field_data(:,:,arg,:), &
                   dbug, field_loc, field_type)
 
-         if (ixp /= 99) then
+         if (ixp /= -99) then
             arg = arg + 1
             nrec = recd + ixp
             call ice_read_nc & 
@@ -2512,8 +2512,8 @@
       maxrec = 12
       ixm  = mod(month+maxrec-2,maxrec) + 1
       ixp  = mod(month,         maxrec) + 1
-      if (mday >= midmonth) ixm = 99  ! other two points will be used
-      if (mday <  midmonth) ixp = 99
+      if (mday >= midmonth) ixm = -99  ! other two points will be used
+      if (mday <  midmonth) ixp = -99
 
       ! Determine whether interpolation will use values 1:2 or 2:3
       ! recslot = 2 means we use values 1:2, with the current value (2)
@@ -2585,7 +2585,7 @@
       !  data value for the current record always goes in slot 2.
 
       recslot = 2
-      ixp = 99
+      ixp = -99
       call interp_coeff (recnum, recslot, sec6hr, dataloc)
 
       ! Read
@@ -2821,7 +2821,7 @@
       !  data value for the current record goes in slot 2
 
       recslot = 2
-      ixp = 99
+      ixp = -99
       call interp_coeff (recnum, recslot, sec1hr, dataloc)
 
       read1 = .false.
@@ -3122,7 +3122,7 @@
       !  data value for the current record goes in slot 2
 
       recslot = 2
-      ixp = 99
+      ixp = -99
       call interp_coeff (recnum, recslot, sec1hr, dataloc)
 
       read1 = .false.
@@ -3386,8 +3386,8 @@
       maxrec = 12
       ixm  = mod(month+maxrec-2,maxrec) + 1
       ixp  = mod(month,         maxrec) + 1
-      if (mday >= midmonth) ixm = 99  ! other two points will be used
-      if (mday <  midmonth) ixp = 99
+      if (mday >= midmonth) ixm = -99  ! other two points will be used
+      if (mday <  midmonth) ixp = -99
 
       ! Determine whether interpolation will use values 1:2 or 2:3
       ! recslot = 2 means we use values 1:2, with the current value (2)
@@ -3447,10 +3447,10 @@
       !  in the first slot
       if (real(sec,kind=dbl_kind) < p5*secday-puny) then  ! first half of day
          recslot = 2
-         ixp = 99
+         ixp = -99
       else                             ! second half of day
          recslot = 1
-         ixm = 99
+         ixm = -99
       endif
 
       call interp_coeff (recnum, recslot, secday, dataloc)
@@ -3634,8 +3634,8 @@
       maxrec = 12
       ixm  = mod(month+maxrec-2,maxrec) + 1
       ixp  = mod(month,         maxrec) + 1
-      if (mday >= midmonth) ixm = 99  ! other two points will be used
-      if (mday <  midmonth) ixp = 99
+      if (mday >= midmonth) ixm = -99  ! other two points will be used
+      if (mday <  midmonth) ixp = -99
 
       ! Determine whether interpolation will use values 1:2 or 2:3
       ! recslot = 2 means we use values 1:2, with the current value (2)
@@ -3686,7 +3686,7 @@
       !  data value for the current record goes in slot 2
 
       recslot = 2
-      ixp = 99
+      ixp = -99
       call interp_coeff (recnum, recslot, sec6hr, dataloc)
 
       ! Read
@@ -4148,8 +4148,8 @@
       maxrec = 12
       ixm  = mod(month+maxrec-2,maxrec) + 1
       ixp  = mod(month,         maxrec) + 1
-      if (mday >= midmonth) ixm = 99  ! other two points will be used
-      if (mday <  midmonth) ixp = 99
+      if (mday >= midmonth) ixm = -99  ! other two points will be used
+      if (mday <  midmonth) ixp = -99
 
       ! Determine whether interpolation will use values 1:2 or 2:3
       ! recslot = 2 means we use values 1:2, with the current value (2)
@@ -4473,8 +4473,8 @@
       maxrec = 12
       ixm  = mod(month+maxrec-2,maxrec) + 1
       ixp  = mod(month,         maxrec) + 1
-      if (mday >= midmonth) ixm = 99  ! other two points will be used
-      if (mday <  midmonth) ixp = 99
+      if (mday >= midmonth) ixm = -99  ! other two points will be used
+      if (mday <  midmonth) ixp = -99
 
       ! Determine whether interpolation will use values 1:2 or 2:3
       ! recslot = 2 means we use values 1:2, with the current value (2)
@@ -4798,8 +4798,8 @@
          maxrec = 12
          ixm  = mod(month+maxrec-2,maxrec) + 1
          ixp  = mod(month,         maxrec) + 1
-         if (mday >= midmonth) ixm = 99 ! other two points will be used
-         if (mday <  midmonth) ixp = 99
+         if (mday >= midmonth) ixm = -99 ! other two points will be used
+         if (mday <  midmonth) ixp = -99
 
          ! Determine whether interpolation will use values 1:2 or 2:3
          ! recslot = 2 means we use values 1:2, with the current value (2)
@@ -4944,7 +4944,7 @@
       !  data value for the current record goes in slot 2
 
       recslot = 2
-      ixp = 99
+      ixp = -99
       call interp_coeff (recnum, recslot, secday, dataloc)
       
       read1 = .false.
@@ -5384,8 +5384,8 @@
       maxrec = 12
       ixm  = mod(month+maxrec-2,maxrec) + 1
       ixp  = mod(month,         maxrec) + 1
-      if (mday >= midmonth) ixm = 99  ! other two points will be used
-      if (mday <  midmonth) ixp = 99
+      if (mday >= midmonth) ixm = -99  ! other two points will be used
+      if (mday <  midmonth) ixp = -99
 
       ! Determine whether interpolation will use values 1:2 or 2:3
       ! recslot = 2 means we use values 1:2, with the current value (2)
@@ -5401,7 +5401,7 @@
       do n = nfld, 1, -1
         do iblk = 1, nblocks
         ! use sst_data arrays as temporary work space until n=1
-        if (ixm /= 99) then  ! first half of month
+        if (ixm /= -99) then  ! first half of month
           sst_data(:,:,1,iblk) = ocn_frc_m(:,:,iblk,n,ixm)
           sst_data(:,:,2,iblk) = ocn_frc_m(:,:,iblk,n,month)
         else                 ! second half of month
@@ -5689,8 +5689,8 @@
       maxrec = 12
       ixm  = mod(month+maxrec-2,maxrec) + 1
       ixp  = mod(month,         maxrec) + 1
-      if (mday >= midmonth) ixm = 99  ! other two points will be used
-      if (mday <  midmonth) ixp = 99
+      if (mday >= midmonth) ixm = -99  ! other two points will be used
+      if (mday <  midmonth) ixp = -99
 
       ! Determine whether interpolation will use values 1:2 or 2:3
       ! recslot = 2 means we use values 1:2, with the current value (2)
