@@ -631,7 +631,7 @@
       permflag = 0
       if (pressure_head > c0) then
       do n = 1, ncat-1
-         if (hicen(n) /= c0) then
+         if (hicen(n) > c0) then
             call permeability_phi(qicen(:,n),sicen(:,n),vicen(n),perm)
             if (perm > c0) permflag = 1
             drain = perm*apondn(n)*pressure_head*dt / (viscosity*hicen(n))
@@ -945,7 +945,7 @@
       ! permeability
       !-----------------------------------------------------------------
 
-      perm = 3.0e-08_dbl_kind * (minval(phi))**3
+      perm = 3.0e-08_dbl_kind * max((minval(phi))**3, c0)
     
       end subroutine permeability_phi
 
