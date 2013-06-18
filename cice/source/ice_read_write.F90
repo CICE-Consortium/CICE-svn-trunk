@@ -744,11 +744,11 @@
            intent(in) :: &
            work              ! input array (real, 8-byte)
 
-      character (len=4) :: &
+      character (len=4), intent(in) :: &
            atype             ! format for output array
                              ! (real/integer, 4-byte/8-byte)
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), intent(in) :: &
            diag              ! if true, write diagnostic output
 !
 !EOP
@@ -859,11 +859,11 @@
            intent(in) :: &
            work              ! input array (real, 8-byte)
 
-      character (len=4) :: &
+      character (len=4), intent(in) :: &
            atype             ! format for output array
                              ! (real/integer, 4-byte/8-byte)
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), intent(in) :: &
            diag              ! if true, write diagnostic output
 !
 !EOP
@@ -972,11 +972,11 @@
            intent(in) :: &
            work              ! input array (real, 8-byte)
 
-      character (len=4) :: &
+      character (len=4), intent(in) :: &
            atype             ! format for output array
                              ! (real/integer, 4-byte/8-byte)
 
-      logical (kind=log_kind) :: &
+      logical (kind=log_kind), intent(in) :: &
            diag              ! if true, write diagnostic output
 !
 !EOP
