@@ -218,6 +218,8 @@
          call ecmwf_files(fyear)    
       elseif (trim(atm_data_type) == 'LYq') then
          call LY_files(fyear)
+      elseif (trim(atm_data_type) == 'LYqNY') then
+         call LYqNY_files(fyear)
       elseif (trim(atm_data_type) == 'hadgem') then
          call hadgem_files(fyear)
       elseif (trim(atm_data_type) == 'monthly') then
@@ -528,6 +530,8 @@
          call ecmwf_data
       elseif (trim(atm_data_type) == 'LYq') then
          call LY_data
+      elseif (trim(atm_data_type) == 'LYqNY') then
+         call LYqNY_data
       elseif (trim(atm_data_type) == 'hadgem') then
          call hadgem_data
       elseif (trim(atm_data_type) == 'rct' .or. &
@@ -974,6 +978,147 @@
       call ice_timer_stop(timer_readwrite)  ! reading/writing
 
       end subroutine read_data
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: read_data - Read data needed for interpolation
+!
+! !INTERFACE:
+!
+      subroutine read_data_nmyr (flag, recd, ixm, ixx, ixp, &
+                            maxrec, data_file, field_data, &
+                            field_loc, field_type)
+!
+! !DESCRIPTION:
+!
+! If data is at the beginning of a one-year record, get data from
+!  the previous year.
+! If data is at the end of a one-year record, get data from the
+!  following year.
+! If no earlier data exists (beginning of fyear_init), then
+!  (1) For monthly data, get data from the end of fyear_final.
+!  (2) For more frequent data, let the ixm value equal the
+!      first value of the year.
+! If no later data exists (end of fyear_final), then
+!  (1) For monthly data, get data from the beginning of fyear_init.
+!  (2) For more frequent data, let the ixp value
+!      equal the last value of the year.
+! In other words, we assume persistence when daily or 6-hourly
+!   data is missing, and we assume periodicity when monthly data
+!   is missing.
+!
+! !REVISION HISTORY:
+!
+! authors: same as module
+!
+! !USES:
+!
+      use ice_diagnostics, only: check_step
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      logical (kind=log_kind), intent(in) :: flag
+
+      integer (kind=int_kind), intent(in) :: &
+         recd                , & ! baseline record number
+         ixm, ixx, ixp       , & ! record numbers of 3 data values
+                                 ! relative to recd
+         maxrec                  ! maximum record value
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
+         intent(out) :: &
+         field_data              ! 2 values needed for interpolation
+
+      integer (kind=int_kind), intent(in) :: &
+           field_loc, &      ! location of field on staggered grid
+           field_type        ! type of field (scalar, vector, angle)
+!
+!EOP
+!
+      character (char_len_long) :: &
+         data_file               ! data file to be read
+
+      integer (kind=int_kind) :: &
+         nbits            , & ! = 32 for single precision, 64 for double
+         nrec             , & ! record number to read
+         n2, n4           , & ! like ixm and ixp, but
+                              ! adjusted at beginning and end of data
+         arg                  ! value of time argument in field_data
+
+      call ice_timer_start(timer_readwrite)  ! reading/writing
+
+      nbits = 64              ! double precision data
+
+      if (istep1 > check_step) dbug = .true.  !! debugging
+
+      if (my_task==master_task .and. (dbug)) then
+         write(nu_diag,*) '  ', trim(data_file)
+      endif
+
+      if (flag) then
+
+      !-----------------------------------------------------------------
+      ! Initialize record counters
+      ! (n2, n4 will change only at the very beginning or end of
+      !  a forcing cycle.)
+      !-----------------------------------------------------------------
+         n2 = ixm
+         n4 = ixp
+         arg = 0
+
+      !-----------------------------------------------------------------
+      ! read data
+      !-----------------------------------------------------------------
+
+         if (ixm /= -99) then
+         ! currently in first half of data interval
+            if (ixx <= 1) then
+                  if (maxrec > 12) then ! extrapolate from first record
+                     if (ixx == 1) n2 = ixx
+                  endif
+            endif               ! ixx <= 1
+
+            call ice_open (nu_forcing, data_file, nbits)
+
+            arg = 1
+            nrec = recd + n2
+            call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
+                           'rda8', dbug, field_loc, field_type)
+
+            if (ixx==1 .and. my_task == master_task) close(nu_forcing)
+         endif                  ! ixm ne -99
+
+         ! always read ixx data from data file for current year
+         call ice_open (nu_forcing, data_file, nbits)
+
+         arg = arg + 1
+         nrec = recd + ixx
+         call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
+                        'rda8', dbug, field_loc, field_type)
+
+         if (ixp /= -99) then
+         ! currently in latter half of data interval
+            if (ixx==maxrec) then
+                  if (maxrec > 12) then ! extrapolate from ixx
+                     n4 = ixx
+                  endif
+            endif               ! ixx = maxrec
+
+            arg = arg + 1
+            nrec = recd + n4
+            call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
+                           'rda8', dbug, field_loc, field_type)
+         endif                  ! ixp /= -99
+
+         if (my_task == master_task) close(nu_forcing)
+
+      endif                     ! flag
+
+      call ice_timer_stop(timer_readwrite)  ! reading/writing
+
+      end subroutine read_data_nmyr
 
 !=======================================================================
 !
@@ -2079,7 +2224,8 @@
 
          enddo
          enddo
-      elseif (trim(atm_data_type) == 'LYq') then
+      elseif (trim(atm_data_type) == 'LYq' &
+         .or. trim(atm_data_type) == 'LYqNY') then
          ! precip is in mm/s
          zlvl0 = c10
 
@@ -3794,6 +3940,312 @@
         endif                   ! dbug
 
       end subroutine LY_data
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: LY_files - construct filenames for Large and Yeager data
+!     note:  includes AOMIP (OMIP) cldf climatology 
+!            and normal-year humidity
+!
+! !INTERFACE:
+!
+      subroutine LYqNY_files (yr)
+!
+! !DESCRIPTION:
+!
+! Construct filenames based on the LANL naming conventions for NCAR data.
+! Edit for other directory structures or filenames.
+! Note: The year number in these filenames does not matter, because
+!       subroutine file_year will insert the correct year.
+!
+!
+! !REVISION HISTORY:
+!
+! author: Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind), intent(in) :: &
+           yr                   ! current forcing year
+!
+!EOP
+!
+      flw_file = &
+           trim(atm_data_dir)//'MONTHLY/cldf.omip.dat'
+
+      rain_file = &
+           trim(atm_data_dir)//'MONTHLY/prec.nmyr.dat'
+
+      uwind_file = &
+           trim(atm_data_dir)//'4XDAILY/u_10.1996.dat'
+      call file_year(uwind_file,yr)
+
+      vwind_file = &
+           trim(atm_data_dir)//'4XDAILY/v_10.1996.dat'
+      call file_year(vwind_file,yr)
+
+      tair_file = &
+           trim(atm_data_dir)//'4XDAILY/t_10.nmyr.dat'
+!           trim(atm_data_dir)//'4XDAILY/t_10.1996.dat'
+!      call file_year(tair_file,yr)
+
+      humid_file = &
+!           trim(atm_data_dir)//'4XDAILY/q_10.nmyr.dat'
+           trim(atm_data_dir)//'4XDAILY/q_10.1996.dat'
+      call file_year(humid_file,yr)
+
+      if (my_task == master_task) then
+         write (nu_diag,*) ' '
+         write (nu_diag,*) 'Forcing data year = ', fyear         
+         write (nu_diag,*) 'Atmospheric data files:'
+         write (nu_diag,*) trim(flw_file)
+         write (nu_diag,*) trim(rain_file)
+         write (nu_diag,*) trim(uwind_file)
+         write (nu_diag,*) trim(vwind_file)
+         write (nu_diag,*) trim(tair_file)
+         write (nu_diag,*) trim(humid_file)
+      endif                     ! master_task
+
+      end subroutine LYqNY_files
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: LY_data - read Large and Yeager atmospheric data
+!        note:  also uses AOMIP protocol, in part
+!
+! !INTERFACE:
+!
+      subroutine LYqNY_data
+!
+! !DESCRIPTION:
+!
+! !REVISION HISTORY:
+!
+! authors: same as module
+!
+! !USES:
+!
+      use ice_blocks, only: block, get_block
+      use ice_constants, only: c4, p1, p5, secday, Tffresh, &
+          field_loc_center, field_type_scalar, field_type_vector
+      use ice_global_reductions, only: global_minval, global_maxval
+      use ice_domain, only: nblocks, distrb_info, blocks_ice
+      use ice_flux, only: fsnow, Tair, uatm, vatm, Qa, fsw
+      use ice_grid, only: hm, tlon, tlat, tmask, umask
+      use ice_state, only: aice
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) :: & 
+          i, j        , &
+          ixm,ixx,ixp , & ! record numbers for neighboring months
+          recnum      , & ! record number
+          maxrec      , & ! maximum record number
+          recslot     , & ! spline slot for current record
+          midmonth    , & ! middle day of month
+          dataloc     , & ! = 1 for data located in middle of time interval
+                          ! = 2 for date located at end of time interval
+          iblk        , & ! block index
+          ilo,ihi,jlo,jhi ! beginning and end of physical domain
+
+      real (kind=dbl_kind) :: &
+          sec6hr          , & ! number of seconds in 6 hours
+          vmin, vmax
+
+      logical (kind=log_kind) :: readm, read6
+
+      type (block) :: &
+         this_block           ! block information for current block
+
+    !-------------------------------------------------------------------
+    ! monthly data 
+    !
+    ! Assume that monthly data values are located in the middle of the 
+    ! month.
+    !-------------------------------------------------------------------
+
+      midmonth = 15  ! data is given on 15th of every month
+!      midmonth = fix(p5 * real(daymo(month)))  ! exact middle
+
+      ! Compute record numbers for surrounding months
+      maxrec = 12
+      ixm  = mod(month+maxrec-2,maxrec) + 1
+      ixp  = mod(month,         maxrec) + 1
+      if (mday >= midmonth) ixm = -99  ! other two points will be used
+      if (mday <  midmonth) ixp = -99
+
+      ! Determine whether interpolation will use values 1:2 or 2:3
+      ! recslot = 2 means we use values 1:2, with the current value (2)
+      !  in the second slot
+      ! recslot = 1 means we use values 2:3, with the current value (2)
+      !  in the first slot
+      recslot = 1                             ! latter half of month
+      if (mday < midmonth) recslot = 2        ! first half of month
+
+      ! Find interpolation coefficients
+      call interp_coeff_monthly (recslot)
+
+      ! Read 2 monthly values 
+      readm = .false.
+      if (istep==1 .or. (mday==midmonth .and. sec==0)) readm = .true.
+
+      call read_clim_data (readm, 0, ixm, month, ixp,  &
+             flw_file, cldf_data, field_loc_center, field_type_scalar)
+      call read_clim_data (readm, 0, ixm, month, ixp,  &
+             rain_file, fsnow_data, field_loc_center, field_type_scalar)
+
+      call interpolate_data (cldf_data, cldf)
+      call interpolate_data (fsnow_data, fsnow)  ! units mm/s = kg/m^2/s
+
+    !-------------------------------------------------------------------
+    ! 6-hourly data
+    ! 
+    ! Assume that the 6-hourly value is located at the end of the
+    !  6-hour period.  This is the convention for NCEP reanalysis data.
+    !  E.g. record 1 gives conditions at 6 am GMT on 1 January.
+    !-------------------------------------------------------------------
+
+      dataloc = 2               ! data located at end of interval
+      sec6hr = secday/c4        ! seconds in 6 hours
+      maxrec = 1460             ! 365*4
+
+      ! current record number
+      recnum = 4*int(yday) - 3 + int(real(sec,kind=dbl_kind)/sec6hr)
+
+      ! Compute record numbers for surrounding data (2 on each side)
+
+      ixm = mod(recnum+maxrec-2,maxrec) + 1
+      ixx = mod(recnum-1,       maxrec) + 1
+!     ixp = mod(recnum,         maxrec) + 1
+
+      ! Compute interpolation coefficients
+      ! If data is located at the end of the time interval, then the
+      !  data value for the current record goes in slot 2
+
+      recslot = 2
+      ixp = -99
+      call interp_coeff (recnum, recslot, sec6hr, dataloc)
+
+      ! Read
+      read6 = .false.
+      if (istep==1 .or. oldrecnum .ne. recnum) read6 = .true.
+
+      if (trim(atm_data_format) == 'bin') then
+!         call read_data (read6, 0, fyear, ixm, ixx, ixp, maxrec, &
+!                         tair_file, Tair_data, &
+!                         field_loc_center, field_type_scalar)
+         call read_data (read6, 0, fyear, ixm, ixx, ixp, maxrec, &
+                         uwind_file, uatm_data, &
+                         field_loc_center, field_type_vector)
+         call read_data (read6, 0, fyear, ixm, ixx, ixp, maxrec, &
+                         vwind_file, vatm_data, &
+                         field_loc_center, field_type_vector)
+         call read_data (read6, 0, fyear, ixm, ixx, ixp, maxrec, &
+                         humid_file, Qa_data, &
+                         field_loc_center, field_type_scalar)
+! normal year forcing
+         call read_data_nmyr (read6, 0, ixm, ixx, ixp, maxrec, &
+                         tair_file, Tair_data, &
+                         field_loc_center, field_type_scalar)
+!         call read_data_nmyr (read6, 0, ixm, ixx, ixp, maxrec, &
+!                         humid_file, Qa_data, &
+!                         field_loc_center, field_type_scalar)
+      else
+         call abort_ice ('nonbinary atm_data_format unavailable')
+      endif
+
+      ! Interpolate
+      call interpolate_data (Tair_data, Tair)
+      call interpolate_data (uatm_data, uatm)
+      call interpolate_data (vatm_data, vatm)
+      call interpolate_data (Qa_data, Qa)
+
+      do iblk = 1, nblocks
+        !echmod
+        ! limit summer Tair values where ice is present
+        do j = 1, ny_block
+          do i = 1, nx_block
+            if (aice(i,j,iblk) > p1) Tair(i,j,iblk) = min(Tair(i,j,iblk), Tffresh+p1)
+          enddo
+        enddo
+
+        call Qa_fixLY(nx_block,  ny_block, &
+                                 Tair (:,:,iblk), &
+                                 Qa   (:,:,iblk))
+
+        do j = 1, ny_block
+          do i = 1, nx_block
+            Qa  (i,j,iblk) = Qa  (i,j,iblk) * hm(i,j,iblk)
+            Tair(i,j,iblk) = Tair(i,j,iblk) * hm(i,j,iblk)
+            uatm(i,j,iblk) = uatm(i,j,iblk) * hm(i,j,iblk)
+            vatm(i,j,iblk) = vatm(i,j,iblk) * hm(i,j,iblk)
+          enddo
+        enddo
+
+      ! AOMIP
+        this_block = get_block(blocks_ice(iblk),iblk)         
+        ilo = this_block%ilo
+        ihi = this_block%ihi
+        jlo = this_block%jlo
+        jhi = this_block%jhi
+
+        call compute_shortwave(nx_block, ny_block, &
+                               ilo, ihi, jlo, jhi, &
+                               TLON (:,:,iblk), &
+                               TLAT (:,:,iblk), &
+                               hm   (:,:,iblk), &
+                               Qa   (:,:,iblk), &
+                               cldf (:,:,iblk), &
+                               fsw  (:,:,iblk))
+
+      enddo  ! iblk
+
+      ! Save record number
+      oldrecnum = recnum
+
+         if (dbug) then
+           if (my_task == master_task) write (nu_diag,*) 'LY_bulk_data'
+           vmin = global_minval(fsw,distrb_info,tmask)
+                               
+           vmax = global_maxval(fsw,distrb_info,tmask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'fsw',vmin,vmax 
+           vmin = global_minval(cldf,distrb_info,tmask)
+           vmax = global_maxval(cldf,distrb_info,tmask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'cldf',vmin,vmax
+           vmin =global_minval(fsnow,distrb_info,tmask)
+           vmax =global_maxval(fsnow,distrb_info,tmask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'fsnow',vmin,vmax
+           vmin = global_minval(Tair,distrb_info,tmask)
+           vmax = global_maxval(Tair,distrb_info,tmask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'Tair',vmin,vmax
+           vmin = global_minval(uatm,distrb_info,umask)
+           vmax = global_maxval(uatm,distrb_info,umask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'uatm',vmin,vmax
+           vmin = global_minval(vatm,distrb_info,umask)
+           vmax = global_maxval(vatm,distrb_info,umask)
+           if (my_task.eq.master_task) & 
+               write (nu_diag,*) 'vatm',vmin,vmax
+           vmin = global_minval(Qa,distrb_info,tmask)
+           vmax = global_maxval(Qa,distrb_info,tmask)
+           if (my_task.eq.master_task)  &
+               write (nu_diag,*) 'Qa',vmin,vmax
+
+        endif                   ! dbug
+
+      end subroutine LYqNY_data
 
 !=======================================================================
 
