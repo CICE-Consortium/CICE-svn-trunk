@@ -211,9 +211,10 @@
 !
 ! !USES:
 !
-      use ice_boundary, only: ice_HaloUpdate
-      use ice_domain, only: halo_info
-      use ice_constants, only: field_loc_center, field_type_scalar
+      use ice_boundary, only: ice_halo, ice_HaloMask, ice_HaloUpdate, &
+          ice_HaloDestroy
+      use ice_domain, only: halo_info, maskhalo_bound, nblocks
+      use ice_constants, only: field_loc_center, field_type_scalar, c0
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -230,14 +231,45 @@
 !
 !EOP
 !
-         call ice_HaloUpdate (aicen,            halo_info, &
+      integer (kind=int_kind) :: i, j, n, iblk
+
+      integer (kind=int_kind), &
+         dimension(nx_block,ny_block,max_blocks) :: halomask
+
+      type (ice_halo) :: halo_info_aicemask
+
+      call ice_HaloUpdate (aicen,            halo_info, &
+                           field_loc_center, field_type_scalar)
+
+      if (maskhalo_bound) then
+         halomask = 0
+         do iblk = 1, nblocks
+         do n = 1, ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (aicen(i,j,n,iblk) > c0) halomask(i,j,iblk) = 1
+         enddo
+         enddo
+         enddo
+         enddo
+         call ice_HaloMask(halo_info_aicemask, halo_info, halomask)
+
+         call ice_HaloUpdate (trcrn(:,:,1:ntrcr,:,:), halo_info_aicemask, &
                               field_loc_center, field_type_scalar)
+         call ice_HaloUpdate (vicen,            halo_info_aicemask, &
+                              field_loc_center, field_type_scalar)
+         call ice_HaloUpdate (vsnon,            halo_info_aicemask, &
+                              field_loc_center, field_type_scalar)
+         call ice_HaloDestroy(halo_info_aicemask)
+
+      else
          call ice_HaloUpdate (trcrn(:,:,1:ntrcr,:,:), halo_info, &
                               field_loc_center, field_type_scalar)
          call ice_HaloUpdate (vicen,            halo_info, &
                               field_loc_center, field_type_scalar)
          call ice_HaloUpdate (vsnon,            halo_info, &
                               field_loc_center, field_type_scalar)
+      endif
 
       end subroutine bound_state
 

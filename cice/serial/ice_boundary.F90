@@ -64,8 +64,10 @@
 ! !PUBLIC MEMBER FUNCTIONS:
 
    public :: ice_HaloCreate,  &
+             ice_HaloMask, &
              ice_HaloUpdate,  &
-             ice_HaloExtrapolate
+             ice_HaloExtrapolate, &
+             ice_HaloDestroy
 
    interface ice_HaloUpdate  ! generic interface
       module procedure ice_HaloUpdate2DR8, &
@@ -582,6 +584,86 @@ contains
 !EOC
 
  end function ice_HaloCreate
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_HaloMask
+! !INTERFACE:
+
+ subroutine ice_HaloMask(halo, basehalo, mask)
+
+! !DESCRIPTION:
+!  This routine creates a halo type with info necessary for
+!  performing a halo (ghost cell) update. This info is computed
+!  based on a base halo already initialized and a mask
+!
+! !REVISION HISTORY:
+!  same as module
+
+   use ice_domain_size, only: max_blocks
+
+! !INPUT PARAMETERS:
+
+   type (ice_halo) :: &
+      basehalo            ! basehalo to mask
+   integer (int_kind), intent(in) ::  &
+      mask(nx_block,ny_block,max_blocks)   ! mask of live points
+
+! !OUTPUT PARAMETERS:
+
+   type (ice_halo) :: &
+      halo               ! a new halo type with info for halo updates
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) ::           &
+      istat,                       &! allocate status flag
+      communicator,                &! communicator for message passing
+      numLocalCopies,              &! num local copies for halo update
+      tripoleRows                   ! number of rows in tripole buffer
+
+   logical (log_kind) :: &
+      tripoleTFlag           ! flag for processing tripole buffer as T-fold
+
+!-----------------------------------------------------------------------
+!
+!  allocate and initialize halo
+!  halos are not masked for local copies
+!
+!-----------------------------------------------------------------------
+
+      communicator   = basehalo%communicator
+      tripoleRows    = basehalo%tripoleRows
+      tripoleTFlag   = basehalo%tripoleTFlag
+      numLocalCopies = basehalo%numLocalCopies
+
+      allocate(halo%srcLocalAddr(3,numLocalCopies), &
+               halo%dstLocalAddr(3,numLocalCopies), &
+               stat = istat)
+
+      if (istat > 0) then
+         call abort_ice( &
+            'ice_HaloMask: error allocating halo message info arrays')
+         return
+      endif
+
+      halo%communicator   = communicator
+      halo%tripoleRows    = tripoleRows
+      halo%tripoleTFlag   = tripoleTFlag
+      halo%numLocalCopies = numLocalCopies
+
+      halo%srcLocalAddr   = basehalo%srcLocalAddr
+      halo%dstLocalAddr   = basehalo%dstLocalAddr
+
+!-----------------------------------------------------------------------
+
+ end subroutine ice_HaloMask
 
 !***********************************************************************
 !BOP
@@ -4323,6 +4405,39 @@ contains
 !-----------------------------------------------------------------------
 
  end subroutine ice_HaloExtrapolate2DR8
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_HaloDestroy
+! !INTERFACE:
+
+ subroutine ice_HaloDestroy(halo)
+
+! !DESCRIPTION:
+!  This routine creates a halo type with info necessary for
+!  performing a halo (ghost cell) update. This info is computed
+!  based on the input block distribution.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !INPUT PARAMETERS:
+
+! !OUTPUT PARAMETERS:
+
+   type (ice_halo) :: &
+      halo               ! a new halo type with info for halo updates
+
+!EOP
+!BOC
+   integer (int_kind) ::           &
+      istat                      ! error or status flag for MPI,alloc
+!-----------------------------------------------------------------------
+
+   deallocate(halo%srcLocalAddr, stat=istat)
+   deallocate(halo%dstLocalAddr, stat=istat)
+
+end subroutine ice_HaloDestroy
 
 !***********************************************************************
 

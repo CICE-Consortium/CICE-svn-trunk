@@ -56,9 +56,14 @@
    type (ice_halo), public :: &
       halo_info          !  ghost cell update info
 
-    character (char_len), public :: &
-       ew_boundary_type,    &! type of domain bndy in each logical
-       ns_boundary_type      !    direction (ew is i, ns is j)
+   character (char_len), public :: &
+      ew_boundary_type, &! type of domain bndy in each logical
+      ns_boundary_type   !    direction (ew is i, ns is j)
+
+   logical (kind=log_kind), public :: &
+      maskhalo_dyn   , & ! if true, use masked halo updates for dynamics
+      maskhalo_remap , & ! if true, use masked halo updates for transport
+      maskhalo_bound     ! if true, use masked halo updates for bound_state
 
 !EOP
 !BOC
@@ -124,7 +129,10 @@
                          distribution_type, &
                          distribution_wght, &
                          ew_boundary_type,  &
-                         ns_boundary_type
+                         ns_boundary_type,  &
+                         maskhalo_dyn,      &
+                         maskhalo_remap,    &
+                         maskhalo_bound
 
 !----------------------------------------------------------------------
 !
@@ -138,6 +146,9 @@
    distribution_wght = 'latitude'
    ew_boundary_type  = 'cyclic'
    ns_boundary_type  = 'open'
+   maskhalo_dyn      = .false.     ! if true, use masked halos for dynamics
+   maskhalo_remap    = .false.     ! if true, use masked halos for transport
+   maskhalo_bound    = .false.     ! if true, use masked halos for bound_state
 
    call get_fileunit(nu_nml)
    if (my_task == master_task) then
@@ -166,6 +177,9 @@
    call broadcast_scalar(distribution_wght, master_task)
    call broadcast_scalar(ew_boundary_type,  master_task)
    call broadcast_scalar(ns_boundary_type,  master_task)
+   call broadcast_scalar(maskhalo_dyn,      master_task)
+   call broadcast_scalar(maskhalo_remap,    master_task)
+   call broadcast_scalar(maskhalo_bound,    master_task)
 
 !----------------------------------------------------------------------
 !
@@ -224,6 +238,12 @@
                                   trim(distribution_type)
      write(nu_diag,'(a25,a10)') '  Distribution weight:    ', &
                                   trim(distribution_wght)
+     write(nu_diag,'(a26,a10)') ' maskhalo_dyn           = ', &
+                                  maskhalo_dyn
+     write(nu_diag,'(a26,a10)') ' maskhalo_remap         = ', &
+                                  maskhalo_remap
+     write(nu_diag,'(a26,a10)') ' maskhalo_bound         = ', &
+                                  maskhalo_bound
      write(nu_diag,'(a26,i6)') '  max_blocks =            ', max_blocks
      write(nu_diag,'(a26,i6,/)')'  Number of ghost cells:  ', nghost
    endif

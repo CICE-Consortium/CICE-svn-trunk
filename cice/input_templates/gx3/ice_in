@@ -52,6 +52,9 @@
   , distribution_wght = 'latitude'
   , ew_boundary_type  = 'cyclic'
   , ns_boundary_type  = 'open'
+  , maskhalo_dyn      = .false.
+  , maskhalo_remap    = .false.
+  , maskhalo_bound    = .false.
 /
 
 &tracer_nml
