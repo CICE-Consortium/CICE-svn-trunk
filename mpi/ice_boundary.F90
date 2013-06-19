@@ -63,7 +63,9 @@
          recvTask,         &! task from which to recv each msg
          sendTask,         &! task to   which to send each msg
          sizeSend,         &! size of each sent message
-         sizeRecv           ! size of each recvd message
+         sizeRecv,         &! size of each recvd message
+         tripSend,         &! send msg tripole flag, 0=non-zipper block
+         tripRecv           ! recv msg tripole flag, for masked halos
 
       integer (int_kind), dimension(:,:), pointer :: &
          srcLocalAddr,     &! src addresses for each local copy
@@ -77,9 +79,11 @@
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-   public :: ice_HaloCreate,  &
-             ice_HaloUpdate,  &
-             ice_HaloExtrapolate
+   public :: ice_HaloCreate, &
+             ice_HaloMask, &
+             ice_HaloUpdate, &
+             ice_HaloExtrapolate, &
+             ice_HaloDestroy
 
    interface ice_HaloUpdate  ! generic interface
       module procedure ice_HaloUpdate2DR8, &
@@ -679,6 +683,8 @@ contains
             halo%recvTask(numMsgRecv), &
             halo%sizeSend(numMsgSend), &
             halo%sizeRecv(numMsgRecv), &
+            halo%tripSend(numMsgSend), &
+            halo%tripRecv(numMsgRecv), &
             halo%sendAddr(3,bufSizeSend,numMsgSend), &
             halo%recvAddr(3,bufSizeRecv,numMsgRecv), &
             halo%srcLocalAddr(3,halo%numLocalCopies), &
@@ -695,6 +701,8 @@ contains
    halo%recvTask = 0
    halo%sizeSend = 0
    halo%sizeRecv = 0
+   halo%tripSend = 0
+   halo%tripRecv = 0
    halo%sendAddr = 0
    halo%recvAddr = 0
    halo%srcLocalAddr = 0
@@ -1022,6 +1030,149 @@ contains
 
 !***********************************************************************
 !BOP
+! !IROUTINE: ice_HaloMask
+! !INTERFACE:
+
+ subroutine ice_HaloMask(halo, basehalo, mask)
+
+! !DESCRIPTION:
+!  This routine creates a halo type with info necessary for
+!  performing a halo (ghost cell) update. This info is computed
+!  based on a base halo already initialized and a mask
+!
+! !REVISION HISTORY:
+!  same as module
+
+   use ice_domain_size, only: max_blocks
+
+! !INPUT PARAMETERS:
+
+   type (ice_halo) :: &
+      basehalo            ! basehalo to mask
+   integer (int_kind), intent(in) ::  &
+      mask(nx_block,ny_block,max_blocks)   ! mask of live points
+
+! !OUTPUT PARAMETERS:
+
+   type (ice_halo) :: &
+      halo               ! a new halo type with info for halo updates
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) ::           &
+      n,nmsg,scnt,                 &! counters
+      icel,jcel,nblock,            &! gridcell index
+      istat,                       &! allocate status flag
+      communicator,                &! communicator for message passing
+      numMsgSend, numMsgRecv,      &! number of messages for this halo
+      numLocalCopies,              &! num local copies for halo update
+      tripoleRows,                 &! number of rows in tripole buffer
+      lbufSizeSend,                &! buffer size for send messages
+      lbufSizeRecv                  ! buffer size for recv messages
+   logical (log_kind) :: &
+      tripoleTFlag           ! flag for processing tripole buffer as T-fold
+
+!-----------------------------------------------------------------------
+!
+!  allocate and initialize halo
+!  always keep tripole zipper msgs
+!
+!-----------------------------------------------------------------------
+
+      communicator   = basehalo%communicator
+      tripoleRows    = basehalo%tripoleRows
+      tripoleTFlag   = basehalo%tripoleTFlag
+      numMsgSend     = basehalo%numMsgSend
+      numMsgRecv     = basehalo%numMsgRecv
+      numLocalCopies = basehalo%numLocalCopies
+      lbufSizeSend   = size(basehalo%sendAddr,dim=2)
+      lbufSizeRecv   = size(basehalo%recvAddr,dim=2)
+
+      allocate(halo%sendTask(numMsgSend), &
+               halo%recvTask(numMsgRecv), &
+               halo%sizeSend(numMsgSend), &
+               halo%sizeRecv(numMsgRecv), &
+               halo%tripSend(numMsgSend), &
+               halo%tripRecv(numMsgRecv), &
+               halo%sendAddr(3,lbufSizeSend,numMsgSend), &
+               halo%recvAddr(3,lbufSizeRecv,numMsgRecv), &
+               halo%srcLocalAddr(3,numLocalCopies), &
+               halo%dstLocalAddr(3,numLocalCopies), &
+               stat = istat)
+
+      if (istat > 0) then
+         call abort_ice( &
+            'ice_HaloMask: error allocating halo message info arrays')
+         return
+      endif
+
+      halo%communicator   = communicator
+      halo%tripoleRows    = tripoleRows
+      halo%tripoleTFlag   = tripoleTFlag
+      halo%numLocalCopies = numLocalCopies
+
+      halo%srcLocalAddr   = basehalo%srcLocalAddr
+      halo%dstLocalAddr   = basehalo%dstLocalAddr
+
+   numMsgSend = 0
+   do nmsg=1,basehalo%numMsgSend
+      scnt = 0
+      do n=1,basehalo%sizeSend(nmsg)
+         icel     = basehalo%sendAddr(1,n,nmsg)
+         jcel     = basehalo%sendAddr(2,n,nmsg)
+         nblock   = basehalo%sendAddr(3,n,nmsg)
+         if (mask(icel,jcel,abs(nblock)) /= 0 .or. basehalo%tripSend(nmsg) /= 0) then
+            scnt = scnt + 1
+            if (scnt == 1) then
+               numMsgSend = numMsgSend + 1
+               halo%sendTask(numMsgSend) = basehalo%sendTask(nmsg)
+               halo%tripSend(numMsgSend) = basehalo%tripSend(nmsg)
+            endif
+            halo%sendAddr(1,scnt,numMsgSend) = icel
+            halo%sendAddr(2,scnt,numMsgSend) = jcel
+            halo%sendAddr(3,scnt,numMsgSend) = nblock
+            halo%sizeSend(numMsgSend) = scnt
+         endif
+      enddo
+   enddo
+   halo%numMsgSend = numMsgSend     
+
+   numMsgRecv = 0
+   do nmsg=1,basehalo%numMsgRecv
+      scnt = 0
+      do n=1,basehalo%sizeRecv(nmsg)
+         icel     = basehalo%recvAddr(1,n,nmsg)
+         jcel     = basehalo%recvAddr(2,n,nmsg)
+         nblock   = basehalo%recvAddr(3,n,nmsg)
+         if (mask(icel,jcel,abs(nblock)) /= 0 .or. basehalo%tripRecv(nmsg) /= 0) then
+            scnt = scnt + 1
+            if (scnt == 1) then
+               numMsgRecv = numMsgRecv + 1
+               halo%recvTask(numMsgRecv) = basehalo%recvTask(nmsg)
+               halo%tripRecv(numMsgRecv) = basehalo%tripRecv(nmsg)
+            endif
+            halo%recvAddr(1,scnt,numMsgRecv) = icel
+            halo%recvAddr(2,scnt,numMsgRecv) = jcel
+            halo%recvAddr(3,scnt,numMsgRecv) = nblock
+            halo%sizeRecv(numMsgRecv) = scnt
+         endif
+      enddo
+   enddo
+   halo%numMsgRecv = numMsgRecv     
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine ice_HaloMask
+
+!***********************************************************************
+!BOP
 ! !IROUTINE: ice_HaloUpdate2DR8
 ! !INTERFACE:
 
@@ -1173,6 +1324,23 @@ contains
                      mpitagHalo + my_task,              &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
+
+!-----------------------------------------------------------------------
+!
+!  while messages are being communicated, fill out halo region
+!  needed for masked halos to ensure halo values are filled for 
+!  halo grid cells that are not updated
+!
+!-----------------------------------------------------------------------
+
+   do j = 1,nghost
+      array(1:nx_block,           j,:) = fill
+      array(1:nx_block,ny_block-j+1,:) = fill
+   enddo
+   do i = 1,nghost
+      array(i,           1:ny_block,:) = fill
+      array(nx_block-i+1,1:ny_block,:) = fill
+   enddo
 
 !-----------------------------------------------------------------------
 !
@@ -1572,6 +1740,23 @@ contains
 
 !-----------------------------------------------------------------------
 !
+!  while messages are being communicated, fill out halo region
+!  needed for masked halos to ensure halo values are filled for 
+!  halo grid cells that are not updated
+!
+!-----------------------------------------------------------------------
+
+   do j = 1,nghost
+      array(1:nx_block,           j,:) = fill
+      array(1:nx_block,ny_block-j+1,:) = fill
+   enddo
+   do i = 1,nghost
+      array(i,           1:ny_block,:) = fill
+      array(nx_block-i+1,1:ny_block,:) = fill
+   enddo
+
+!-----------------------------------------------------------------------
+!
 !  do local copies while waiting for messages to complete
 !  if srcBlock is zero, that denotes an eliminated land block or a 
 !    closed boundary where ghost cell values are undefined
@@ -1965,6 +2150,23 @@ contains
                      mpitagHalo + my_task,                    &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
+
+!-----------------------------------------------------------------------
+!
+!  while messages are being communicated, fill out halo region
+!  needed for masked halos to ensure halo values are filled for 
+!  halo grid cells that are not updated
+!
+!-----------------------------------------------------------------------
+
+   do j = 1,nghost
+      array(1:nx_block,           j,:) = fill
+      array(1:nx_block,ny_block-j+1,:) = fill
+   enddo
+   do i = 1,nghost
+      array(i,           1:ny_block,:) = fill
+      array(nx_block-i+1,1:ny_block,:) = fill
+   enddo
 
 !-----------------------------------------------------------------------
 !
@@ -2390,6 +2592,23 @@ contains
                      mpitagHalo + my_task,            &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
+
+!-----------------------------------------------------------------------
+!
+!  while messages are being communicated, fill out halo region
+!  needed for masked halos to ensure halo values are filled for 
+!  halo grid cells that are not updated
+!
+!-----------------------------------------------------------------------
+
+   do j = 1,nghost
+      array(1:nx_block,           j,:,:) = fill
+      array(1:nx_block,ny_block-j+1,:,:) = fill
+   enddo
+   do i = 1,nghost
+      array(i,           1:ny_block,:,:) = fill
+      array(nx_block-i+1,1:ny_block,:,:) = fill
+   enddo
 
 !-----------------------------------------------------------------------
 !
@@ -2850,6 +3069,23 @@ contains
 
 !-----------------------------------------------------------------------
 !
+!  while messages are being communicated, fill out halo region
+!  needed for masked halos to ensure halo values are filled for 
+!  halo grid cells that are not updated
+!
+!-----------------------------------------------------------------------
+
+   do j = 1,nghost
+      array(1:nx_block,           j,:,:) = fill
+      array(1:nx_block,ny_block-j+1,:,:) = fill
+   enddo
+   do i = 1,nghost
+      array(i,           1:ny_block,:,:) = fill
+      array(nx_block-i+1,1:ny_block,:,:) = fill
+   enddo
+
+!-----------------------------------------------------------------------
+!
 !  do local copies while waiting for messages to complete
 !  if srcBlock is zero, that denotes an eliminated land block or a 
 !    closed boundary where ghost cell values are undefined
@@ -3304,6 +3540,23 @@ contains
                      mpitagHalo + my_task,                  &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
+
+!-----------------------------------------------------------------------
+!
+!  while messages are being communicated, fill out halo region
+!  needed for masked halos to ensure halo values are filled for 
+!  halo grid cells that are not updated
+!
+!-----------------------------------------------------------------------
+
+   do j = 1,nghost
+      array(1:nx_block,           j,:,:) = fill
+      array(1:nx_block,ny_block-j+1,:,:) = fill
+   enddo
+   do i = 1,nghost
+      array(i,           1:ny_block,:,:) = fill
+      array(nx_block-i+1,1:ny_block,:,:) = fill
+   enddo
 
 !-----------------------------------------------------------------------
 !
@@ -3765,6 +4018,23 @@ contains
                      mpitagHalo + my_task,            &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
+
+!-----------------------------------------------------------------------
+!
+!  while messages are being communicated, fill out halo region
+!  needed for masked halos to ensure halo values are filled for 
+!  halo grid cells that are not updated
+!
+!-----------------------------------------------------------------------
+
+   do j = 1,nghost
+      array(1:nx_block,           j,:,:,:) = fill
+      array(1:nx_block,ny_block-j+1,:,:,:) = fill
+   enddo
+   do i = 1,nghost
+      array(i,           1:ny_block,:,:,:) = fill
+      array(nx_block-i+1,1:ny_block,:,:,:) = fill
+   enddo
 
 !-----------------------------------------------------------------------
 !
@@ -4249,6 +4519,23 @@ contains
 
 !-----------------------------------------------------------------------
 !
+!  while messages are being communicated, fill out halo region
+!  needed for masked halos to ensure halo values are filled for 
+!  halo grid cells that are not updated
+!
+!-----------------------------------------------------------------------
+
+   do j = 1,nghost
+      array(1:nx_block,           j,:,:,:) = fill
+      array(1:nx_block,ny_block-j+1,:,:,:) = fill
+   enddo
+   do i = 1,nghost
+      array(i,           1:ny_block,:,:,:) = fill
+      array(nx_block-i+1,1:ny_block,:,:,:) = fill
+   enddo
+
+!-----------------------------------------------------------------------
+!
 !  do local copies while waiting for messages to complete
 !  if srcBlock is zero, that denotes an eliminated land block or a 
 !    closed boundary where ghost cell values are undefined
@@ -4727,6 +5014,23 @@ contains
                      mpitagHalo + my_task,                  &
                      halo%communicator, sndRequest(nmsg), ierr)
    end do
+
+!-----------------------------------------------------------------------
+!
+!  while messages are being communicated, fill out halo region
+!  needed for masked halos to ensure halo values are filled for 
+!  halo grid cells that are not updated
+!
+!-----------------------------------------------------------------------
+
+   do j = 1,nghost
+      array(1:nx_block,           j,:,:,:) = fill
+      array(1:nx_block,ny_block-j+1,:,:,:) = fill
+   enddo
+   do i = 1,nghost
+      array(i,           1:ny_block,:,:,:) = fill
+      array(nx_block-i+1,1:ny_block,:,:,:) = fill
+   enddo
 
 !-----------------------------------------------------------------------
 !
@@ -5817,6 +6121,7 @@ contains
 
             !*** tripole block - send top halo%tripoleRows rows of phys domain
 
+            halo%tripSend(msgIndx) = 1
             do j=1,halo%tripoleRows
             do i=1,ieSrc-ibSrc+1
 
@@ -5879,6 +6184,7 @@ contains
 
             !*** tripole block - send top halo%tripoleRows rows of phys domain
 
+            halo%tripSend(msgIndx) = 1
             do j=1,halo%tripoleRows
             do i=1,ieSrc-ibSrc+1
 
@@ -5921,6 +6227,7 @@ contains
 
             !*** tripole block - send top halo%tripoleRows rows of phys domain
 
+            halo%tripSend(msgIndx) = 1
             do j=1,halo%tripoleRows
             do i=1,ieSrc-ibSrc+1
 
@@ -6077,6 +6384,7 @@ contains
 
             !*** tripole block - receive into tripole buffer
 
+            halo%tripRecv(msgIndx) = 1
             do j=1,halo%tripoleRows
             do i=1,ieSrc-ibSrc+1
 
@@ -6138,6 +6446,7 @@ contains
 
             !*** tripole block - receive into tripole buffer
 
+            halo%tripRecv(msgIndx) = 1
             do j=1,halo%tripoleRows
             do i=1,ieSrc-ibSrc+1
 
@@ -6180,6 +6489,7 @@ contains
 
             !*** tripole block - receive into tripole buffer
 
+            halo%tripRecv(msgIndx) = 1
             do j=1,halo%tripoleRows
             do i=1,ieSrc-ibSrc+1
 
@@ -6376,6 +6686,47 @@ contains
 !-----------------------------------------------------------------------
 
  end subroutine ice_HaloExtrapolate2DR8
+
+!***********************************************************************
+!BOP
+! !IROUTINE: ice_HaloDestroy
+! !INTERFACE:
+
+ subroutine ice_HaloDestroy(halo)
+
+! !DESCRIPTION:
+!  This routine creates a halo type with info necessary for
+!  performing a halo (ghost cell) update. This info is computed
+!  based on the input block distribution.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !INPUT PARAMETERS:
+
+! !OUTPUT PARAMETERS:
+
+   type (ice_halo) :: &
+      halo               ! a new halo type with info for halo updates
+
+!EOP
+!BOC
+   integer (int_kind) ::           &
+      istat                      ! error or status flag for MPI,alloc
+!-----------------------------------------------------------------------
+
+   deallocate(halo%sendTask, stat=istat)
+   deallocate(halo%recvTask, stat=istat)
+   deallocate(halo%sizeSend, stat=istat)
+   deallocate(halo%sizeRecv, stat=istat)
+   deallocate(halo%tripSend, stat=istat)
+   deallocate(halo%tripRecv, stat=istat)
+   deallocate(halo%srcLocalAddr, stat=istat)
+   deallocate(halo%dstLocalAddr, stat=istat)
+   deallocate(halo%sendAddr, stat=istat)
+   deallocate(halo%recvAddr, stat=istat)
+
+end subroutine ice_HaloDestroy
 
 !***********************************************************************
 

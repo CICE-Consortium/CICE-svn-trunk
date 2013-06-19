@@ -86,11 +86,12 @@
 !
 ! !USES:
 !
-      use ice_boundary, only: ice_haloupdate
+      use ice_boundary, only: ice_halo, ice_HaloMask, ice_HaloUpdate, &
+          ice_HaloDestroy
       use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_constants, only: field_loc_center, field_loc_NEcorner, &
           field_type_scalar, field_type_vector, c0
-      use ice_domain, only: nblocks, blocks_ice, halo_info
+      use ice_domain, only: nblocks, blocks_ice, halo_info, maskhalo_dyn
       use ice_domain_size, only: max_blocks
       use ice_flux, only: rdg_conv, rdg_shear, prs_sig, strairxT, strairyT, &
           strairx, strairy, uocn, vocn, ss_tltx, ss_tlty, iceumask, fm, &
@@ -143,11 +144,19 @@
          umass    , & ! total mass of ice and snow (u grid)
          umassdti     ! mass of U-cell/dte (kg/m^2 s)
 
+      real (kind=dbl_kind), allocatable :: fld2(:,:,:,:)
+
       real (kind=dbl_kind), dimension(nx_block,ny_block,8):: &
          str          ! stress combinations for momentum equation
 
       integer (kind=int_kind), dimension (nx_block,ny_block,max_blocks) :: &
-         icetmask   ! ice extent mask (T-cell)
+         icetmask     ! ice extent mask (T-cell)
+
+      integer (kind=int_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         halomask     ! mask for masked halo creation
+
+      type (ice_halo) :: &
+         halo_info_mask !  ghost cell update info for masked halo
 
       type (block) :: &
          this_block           ! block information for current block
@@ -157,6 +166,8 @@
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
+
+      allocate(fld2(nx_block,ny_block,2,max_blocks))
 
        ! This call is needed only if dt changes during runtime.
 !      call set_evp_parameters (dt)
@@ -294,6 +305,10 @@
                             vicen   (:,:,:,iblk), & 
                             strength(:,:,  iblk) )
 
+         ! load velocity into array for boundary updates
+         fld2(:,:,1,iblk) = uvel(:,:,iblk)
+         fld2(:,:,2,iblk) = vvel(:,:,iblk)
+
       enddo  ! iblk
       !$OMP END PARALLEL DO
 
@@ -301,12 +316,20 @@
       call ice_HaloUpdate (strength,           halo_info, &
                            field_loc_center,   field_type_scalar)
       ! velocities may have changed in evp_prep2
-      call ice_HaloUpdate (uvel,               halo_info, &
+      call ice_HaloUpdate (fld2,               halo_info, &
                            field_loc_NEcorner, field_type_vector)
-      call ice_HaloUpdate (vvel,               halo_info, &
-                           field_loc_NEcorner, field_type_vector)
-      call ice_timer_stop(timer_bound)
 
+      ! unload
+      !$OMP PARALLEL DO PRIVATE(iblk)
+      do iblk = 1,nblocks
+         uvel(:,:,iblk) = fld2(:,:,1,iblk)
+         vvel(:,:,iblk) = fld2(:,:,2,iblk)
+      enddo
+      !$OMP END PARALLEL DO
+
+      if (maskhalo_dyn) &
+         call ice_HaloMask(halo_info_mask, halo_info, icetmask)
+      call ice_timer_stop(timer_bound)
 
       do ksub = 1,ndte        ! subcycling
 
@@ -358,17 +381,34 @@
                         uvel_init(:,:,iblk), vvel_init(:,:,iblk),&
                         uvel     (:,:,iblk), vvel    (:,:,iblk))
 
+            ! load velocity into array for boundary updates
+            fld2(:,:,1,iblk) = uvel(:,:,iblk)
+            fld2(:,:,2,iblk) = vvel(:,:,iblk)
          enddo
          !$OMP END PARALLEL DO
 
          call ice_timer_start(timer_bound)
-         call ice_HaloUpdate (uvel,               halo_info, &
-                              field_loc_NEcorner, field_type_vector)
-         call ice_HaloUpdate (vvel,               halo_info, &
-                              field_loc_NEcorner, field_type_vector)
+         if (maskhalo_dyn) then
+            call ice_HaloUpdate (fld2,               halo_info_mask, &
+                                 field_loc_NEcorner, field_type_vector)
+         else
+            call ice_HaloUpdate (fld2,               halo_info, &
+                                 field_loc_NEcorner, field_type_vector)
+         endif
+
+         ! unload
+         !$OMP PARALLEL DO PRIVATE(iblk)
+         do iblk = 1,nblocks
+            uvel(:,:,iblk) = fld2(:,:,1,iblk)
+            vvel(:,:,iblk) = fld2(:,:,2,iblk)
+         enddo
+         !$OMP END PARALLEL DO
          call ice_timer_stop(timer_bound)
 
       enddo                     ! subcycling
+
+      deallocate(fld2)
+      if (maskhalo_dyn) call ice_HaloDestroy(halo_info_mask)
 
       !-----------------------------------------------------------------
       ! ice-ocean stress

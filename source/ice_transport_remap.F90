@@ -356,11 +356,12 @@
 !       
 ! !USES:
 !
-      use ice_boundary, only: ice_HaloUpdate
+      use ice_boundary, only: ice_halo, ice_HaloMask, ice_HaloUpdate, &
+          ice_HaloDestroy
       use ice_constants, only: c0, p5, &
           field_loc_center, field_type_scalar, &
           field_loc_NEcorner, field_type_vector
-      use ice_domain, only: nblocks, blocks_ice, halo_info
+      use ice_domain, only: nblocks, blocks_ice, halo_info, maskhalo_remap
       use ice_blocks, only: block, get_block, nghost, nx_block, ny_block
       use ice_grid, only: HTE, HTN, dxu, dyu,       &
                           tarea, tarear, hm,                  &
@@ -415,7 +416,7 @@
 
       logical (kind=log_kind), intent(in) :: &
          l_dp_midpt          ! if true, find departure points using
-                                ! corrected midpoint velocity
+                             ! corrected midpoint velocity
 !
 !EOP
 !
@@ -423,9 +424,9 @@
 
       integer (kind=int_kind) ::     &
          i, j           ,&! horizontal indices
-         iblk           ,&! block indices
+         iblk           ,&! block index
          ilo,ihi,jlo,jhi,&! beginning and end of physical domain
-         n                ! ice category index
+         n, m             ! ice category, tracer indices
 
       integer (kind=int_kind), dimension(0:ncat,max_blocks) ::     &
          icellsnc         ! number of cells with ice
@@ -491,6 +492,11 @@
 
       character (len=char_len) ::   &
          edge             ! 'north' or 'east'
+
+      integer (kind=int_kind), &
+         dimension(nx_block,ny_block,max_blocks) :: halomask
+
+      type (ice_halo) :: halo_info_tracer
 
       type (block) ::     &
          this_block       ! block information for current block
@@ -626,13 +632,49 @@
          call ice_HaloUpdate (my,               halo_info, &
                               field_loc_center, field_type_vector)
 
-         ! tracer fields
-         call ice_HaloUpdate (tc,               halo_info, &
-                              field_loc_center, field_type_scalar)
-         call ice_HaloUpdate (tx,               halo_info, &
-                              field_loc_center, field_type_vector)
-         call ice_HaloUpdate (ty,               halo_info, &
-                              field_loc_center, field_type_vector)
+         ! tracer fields 
+         if (maskhalo_remap) then
+            halomask = 0
+            !$OMP PARALLEL DO PRIVATE(iblk,this_block,ilo,ihi,jlo,jhi,n,m,j,i)
+            do iblk = 1, nblocks
+               this_block = get_block(blocks_ice(iblk),iblk)         
+               ilo = this_block%ilo
+               ihi = this_block%ihi
+               jlo = this_block%jlo
+               jhi = this_block%jhi
+
+               do n = 1, ncat
+               do m = 1, ntrace
+               do j = jlo, jhi
+               do i = ilo, ihi
+                  if (tc(i,j,m,n,iblk) /= c0) halomask(i,j,iblk) = 1
+                  if (tx(i,j,m,n,iblk) /= c0) halomask(i,j,iblk) = 1
+                  if (ty(i,j,m,n,iblk) /= c0) halomask(i,j,iblk) = 1
+               enddo
+               enddo
+               enddo
+               enddo
+            enddo
+            !$OMP END PARALLEL DO
+            call ice_HaloUpdate(halomask, halo_info, &
+                                field_loc_center, field_type_scalar)
+            call ice_HaloMask(halo_info_tracer, halo_info, halomask)
+
+            call ice_HaloUpdate (tc,               halo_info_tracer, &
+                                 field_loc_center, field_type_scalar)
+            call ice_HaloUpdate (tx,               halo_info_tracer, &
+                                 field_loc_center, field_type_vector)
+            call ice_HaloUpdate (ty,               halo_info_tracer, &
+                                 field_loc_center, field_type_vector)
+            call ice_HaloDestroy(halo_info_tracer)
+         else
+            call ice_HaloUpdate (tc,               halo_info, &
+                                 field_loc_center, field_type_scalar)
+            call ice_HaloUpdate (tx,               halo_info, &
+                                 field_loc_center, field_type_vector)
+            call ice_HaloUpdate (ty,               halo_info, &
+                                 field_loc_center, field_type_vector)
+         endif
          call ice_timer_stop(timer_bound)
 
       endif  ! nghost
