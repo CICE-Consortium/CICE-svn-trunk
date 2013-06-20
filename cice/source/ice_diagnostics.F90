@@ -249,6 +249,7 @@
       ptotn = c0
       ptots = c0
       if (tr_pond_topo) then
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j,n)
          do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
@@ -262,6 +263,7 @@
          enddo
          enddo
          enddo
+         !$OMP END PARALLEL DO
          ptotn = global_sum(work1, distrb_info, field_loc_center, tarean)
          ptots = global_sum(work1, distrb_info, field_loc_center, tareas)
       endif
@@ -664,6 +666,7 @@
             faeron(n) = faeron(n)*dt
             faeros(n) = faeros(n)*dt
 
+            !$OMP PARALLEL DO PRIVATE(iblk,i,j)
             do iblk = 1, nblocks
                do j = 1, ny_block
                do i = 1, nx_block
@@ -675,6 +678,7 @@
                enddo
                enddo
             enddo
+            !$OMP END PARALLEL DO
             aerototn(n) = global_sum(work1, distrb_info, field_loc_center, tarean)
             aerotots(n) = global_sum(work1, distrb_info, field_loc_center, tareas)
             aeromx1n(n) = global_maxval(work1, distrb_info, lmask_n)
@@ -1026,6 +1030,7 @@
 
       if (tr_aero) then
          do n=1,n_aero
+            !$OMP PARALLEL DO PRIVATE(iblk,i,j)
             do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
@@ -1036,6 +1041,7 @@
             enddo
             enddo
             enddo
+            !$OMP END PARALLEL DO
             totaeron(n)= global_sum(work1, distrb_info, field_loc_center, tarean)
             totaeros(n)= global_sum(work1, distrb_info, field_loc_center, tareas)
          enddo
@@ -1044,6 +1050,7 @@
       if (tr_pond_topo) then
          totpn = c0
          totps = c0
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j,n)
          do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
@@ -1057,6 +1064,7 @@
          enddo
          enddo
          enddo
+         !$OMP END PARALLEL DO
          totpn = global_sum(work1, distrb_info, field_loc_center, tarean)
          totps = global_sum(work1, distrb_info, field_loc_center, tareas)
 
@@ -1260,6 +1268,7 @@
             bindx = 0
             mindis = 540.0_dbl_kind !  360. + 180.
 
+            !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,latdis,londis,totdis)
             do iblk = 1, nblocks
                this_block = get_block(blocks_ice(iblk),iblk)         
                ilo = this_block%ilo
@@ -1284,6 +1293,7 @@
                enddo            ! i
                enddo            ! j
             enddo               ! iblk
+            !$OMP END PARALLEL DO
 
             ! find global minimum distance to diagnostic points 
             mindis_g = global_minval(mindis, distrb_info)
