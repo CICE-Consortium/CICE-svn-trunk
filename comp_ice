@@ -66,6 +66,9 @@ setenv NETCDF   yes       # set to no if netcdf library is unavailable
                           # set to pio for parallel netcdf
 setenv DITTO    no        # reproducible diagnostics
 setenv ONED     no        # true 1D thermodynamic calculation
+setenv THRD     yes       # set to yes for OpenMP threading
+
+if ( $THRD == 'yes') setenv OMP_NUM_THREADS 2 # positive integer 
 
 ### File unit numbers
 setenv NUMIN 11           # minimum file unit number
