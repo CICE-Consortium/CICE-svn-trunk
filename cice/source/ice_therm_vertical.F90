@@ -689,9 +689,9 @@
       !-----------------------------------------------------------------
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,k,zn)
-     do iblk = 1,max_blocks
-     do j = 1, ny_block
-     do i = 1, nx_block
+      do iblk = 1,max_blocks
+      do j = 1, ny_block
+      do i = 1, nx_block
       if (l_brine) then
          if (read_Sin .OR. solve_Sin) then
            do k = 1, nilyr
