@@ -204,6 +204,7 @@
          rsnw_melt_in = 1500._dbl_kind ! maximum melting snow grain radius
 !echmod
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
       do iblk=1,nblocks
       do j = 1, ny_block
       do i = 1, nx_block
@@ -218,6 +219,7 @@
       enddo
       enddo
       enddo
+      !$OMP END PARALLEL DO
 
       if (trim(shortwave) == 'dEdd') then ! delta Eddington
 
@@ -225,6 +227,7 @@
          ! These come from the driver in the coupled model.
          call init_orbit       ! initialize orbital parameters
 #endif
+         !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block)
          do iblk=1,nblocks
 
             this_block = get_block(blocks_ice(iblk),iblk)         
@@ -252,9 +255,11 @@
                           dhsn(:,:,:,iblk),      ffracn(:,:,:,iblk))
 
          enddo
+         !$OMP END PARALLEL DO
 
       else                     ! basic (ccsm3) shortwave
 
+         !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block)
          do iblk=1,nblocks
 
             this_block = get_block(blocks_ice(iblk),iblk)         
@@ -280,6 +285,7 @@
                                  albicen(:,:,:,iblk), albsnon(:,:,:,iblk), &
                                  coszen(:,:,iblk))
          enddo     ! nblocks
+         !$OMP END PARALLEL DO
 
       endif
 
@@ -287,6 +293,8 @@
       ! Aggregate albedos 
       !-----------------------------------------------------------------
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,n,ilo,ihi,jlo,jhi,this_block, &
+      !$OMP                     ij,icells,cszn)
       do iblk=1,nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -356,6 +364,7 @@
          enddo
 
       enddo     ! nblocks
+      !$OMP END PARALLEL DO
 
       end subroutine init_shortwave
 

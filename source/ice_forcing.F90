@@ -327,6 +327,7 @@
          do k = 1,12            ! loop over 12 months
             call ice_read (nu_forcing, k, work1, 'rda8', dbug, &
                            field_loc_center, field_type_scalar)
+            !$OMP PARALLEL DO PRIVATE(iblk,i,j)
             do iblk = 1, nblocks
                do j = 1, ny_block
                do i = 1, nx_block
@@ -334,8 +335,10 @@
                enddo
                enddo
             enddo
+            !$OMP END PARALLEL DO
          enddo                  ! k
 
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j)
          do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
@@ -349,7 +352,7 @@
             enddo
             enddo
          enddo
-
+         !$OMP END PARALLEL DO
 
          if (my_task == master_task) close(nu_forcing)
 
@@ -372,6 +375,7 @@
          call ice_read_nc(fid,1,fieldname,work,diag) 
          sss(:,:,:) = work       
         
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j)
          do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
@@ -383,6 +387,7 @@
             enddo
             enddo
          enddo
+         !$OMP END PARALLEL DO
 
          ! close file
          if (my_task == master_task) status = nf90_close(fid)
@@ -418,6 +423,7 @@
          if (my_task == master_task) close(nu_forcing)
 
          ! Make sure sst is not less than freezing temperature Tf
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j)
          do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
@@ -425,6 +431,7 @@
             enddo
             enddo
          enddo
+         !$OMP END PARALLEL DO
 
       endif                     ! init_sst_data
 
@@ -451,6 +458,7 @@
          if (my_task == master_task) call ice_close_nc(fid)  
 
          ! Make sure sst is not less than freezing temperature Tf
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j)
          do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
@@ -458,6 +466,7 @@
             enddo
             enddo
          enddo
+         !$OMP END PARALLEL DO
 
       endif                        ! sst_data_type
 
@@ -551,6 +560,7 @@
     ! Convert forcing data to fields needed by ice model
     !-------------------------------------------------------------------
 
+      !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
 
          this_block = get_block(blocks_ice(iblk),iblk)         
@@ -587,6 +597,7 @@
                                aice  (:,:,iblk) )
 
       enddo                     ! iblk
+      !$OMP END PARALLEL DO
 
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (swvdr,             halo_info, &
@@ -2016,6 +2027,7 @@
 !
       integer (kind=int_kind) :: i,j, iblk
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
@@ -2024,6 +2036,7 @@
          enddo
          enddo
       enddo
+      !$OMP END PARALLEL DO
 
       end subroutine interpolate_data
 
@@ -3072,16 +3085,16 @@
   !    Tair(:,:,:) = 225.15_dbl_kind -  3.4722e-4_dbl_kind*time   
   !    Tair(:,:,:) = 218.15_dbl_kind -  3.4722e-4_dbl_kind*time   
   !    Tair(:,:,:) = 210.15_dbl_kind -  3.4722e-4_dbl_kind*time 
-    
 
        Qa(:,:,:)   = p1  !0.004_dbl_kind 
      
+       !$OMP PARALLEL DO PRIVATE(iblk,i,j)
        do iblk = 1, nblocks   !use maximum specific humidity
-        call Qa_fixLY(nx_block,  ny_block, &
-                                 Tair (:,:,iblk), &
-                                 Qa   (:,:,iblk))
+          call Qa_fixLY(nx_block,  ny_block, &
+                        Tair (:,:,iblk), &
+                        Qa   (:,:,iblk))
        enddo
-
+       !$OMP END PARALLEL DO
        
      endif   !solve_Sin
       
@@ -3313,14 +3326,14 @@
          qdp(:,:,:) = -16.0_dbl_kind  !-16 3.5_dbl_kind   !-25.0_dbl_kind ! deep ocean heat flux (W/m^2)
       endif
     
-
        Qa(:,:,:)   = p1 
-     
+       !$OMP PARALLEL DO PRIVATE(iblk,i,j)
        do iblk = 1, nblocks   !use maximum specific humidity
-        call Qa_fixLY(nx_block,  ny_block, &
-                                 Tair (:,:,iblk), &
-                                 Qa   (:,:,iblk))
+          call Qa_fixLY(nx_block,  ny_block, &
+                        Tair (:,:,iblk), &
+                        Qa   (:,:,iblk))
        enddo
+       !$OMP END PARALLEL DO
         
        uatm(:,:,:) = c0              !wind velocity (m/s)
        vatm(:,:,:) = c0
@@ -3862,8 +3875,8 @@
       call interpolate_data (vatm_data, vatm)
       call interpolate_data (Qa_data, Qa)
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
-        !echmod
         ! limit summer Tair values where ice is present
         do j = 1, ny_block
           do i = 1, nx_block
@@ -3901,6 +3914,7 @@
                                fsw  (:,:,iblk))
 
       enddo  ! iblk
+      !$OMP END PARALLEL DO
 
       ! Save record number
       oldrecnum = recnum
@@ -4168,8 +4182,8 @@
       call interpolate_data (vatm_data, vatm)
       call interpolate_data (Qa_data, Qa)
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
-        !echmod
         ! limit summer Tair values where ice is present
         do j = 1, ny_block
           do i = 1, nx_block
@@ -4207,6 +4221,7 @@
                                fsw  (:,:,iblk))
 
       enddo  ! iblk
+      !$OMP END PARALLEL DO
 
       ! Save record number
       oldrecnum = recnum
@@ -4771,19 +4786,18 @@
             ! categories
             !--------------------------------------------------------
 
+            !$OMP PARALLEL DO PRIVATE(iblk,i,j)
             do iblk = 1, nblocks
                do j = 1, ny_block
                do i = 1, nx_block
-
                   fcondtopn_f(i,j,n,iblk) = botmelt(i,j,iblk)
                   fsurfn_f(i,j,n,iblk)    = topmelt(i,j,iblk) & 
                                             + botmelt(i,j,iblk)
                   flatn_f(i,j,n,iblk)    = - sublim(i,j,iblk)*Lsub
-                  
                enddo
                enddo
-
             enddo
+            !$OMP END PARALLEL DO
 
          enddo  ! ncat
 
@@ -4973,6 +4987,7 @@
       call interpolate_data (strax_data, strax)
       call interpolate_data (stray_data, stray)
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
         call Qa_fixLY(nx_block,  ny_block, &
                                  Tair (:,:,iblk), &
@@ -5005,6 +5020,7 @@
                              fsw  (:,:,iblk))
 
       enddo  ! iblk
+      !$OMP END PARALLEL DO
 
          if (dbug) then
            if (my_task == master_task) write (nu_diag,*) 'LY_bulk_data'
@@ -5111,8 +5127,8 @@
 
 #endif
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
-        !echmod
         ! limit summer Tair values where ice is present
         do j = 1, ny_block
           do i = 1, nx_block
@@ -5150,6 +5166,7 @@
                                fsw  (:,:,iblk))
 
       enddo  ! iblk
+      !$OMP END PARALLEL DO
 
 #elif defined notz_experiment
 
@@ -5280,6 +5297,7 @@
                               field_loc_center, field_type_scalar)
          call interpolate_data (sss_data, sss)
 
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j)
          do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
@@ -5292,6 +5310,7 @@
             enddo
             enddo
          enddo
+         !$OMP END PARALLEL DO
       endif
 
     !-------------------------------------------------------------------
@@ -5306,6 +5325,7 @@
          call interpolate_data (sst_data, sstdat)
 
          if (restore_sst) then
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j)
          do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
@@ -5314,6 +5334,7 @@
             enddo
             enddo
          enddo
+         !$OMP END PARALLEL DO
          endif
       endif
 
@@ -5412,7 +5433,8 @@
      
        sss(:,:,:) =  c1intp * sss_data_p(1) &
                             + c2intp * sss_data_p(2)
-       do iblk = 1, nblocks
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
+      do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
                if (trim(Tfrzpt) == 'constant') then
@@ -5423,6 +5445,7 @@
             enddo
             enddo
        enddo
+       !$OMP END PARALLEL DO
 
       endif
       oldrecnum_S = recnum
@@ -5851,6 +5874,7 @@
       call interp_coeff_monthly (recslot)
 
       do n = nfld, 1, -1
+        !$OMP PARALLEL DO PRIVATE(iblk,i,j)
         do iblk = 1, nblocks
         ! use sst_data arrays as temporary work space until n=1
         if (ixm /= -99) then  ! first half of month
@@ -5861,6 +5885,7 @@
           sst_data(:,:,2,iblk) = ocn_frc_m(:,:,iblk,n,ixp)
         endif
         enddo
+        !$OMP END PARALLEL DO
         call interpolate_data (sst_data,work1)
         ! masking by hm is necessary due to NaNs in the data file
         do j = 1, ny_block 
@@ -5911,6 +5936,7 @@
       ! initialize sst properly on first step
       if (istep1 <= 1 .and. .not. (restart)) then
         call interpolate_data (sst_data,sst)
+        !$OMP PARALLEL DO PRIVATE(iblk,i,j)
         do iblk = 1, nblocks
          do j = 1, ny_block 
           do i = 1, nx_block 
@@ -5922,6 +5948,7 @@
           enddo 
          enddo 
         enddo 
+        !$OMP END PARALLEL DO
       endif
 
       if (dbug) then
@@ -6187,6 +6214,7 @@
 
       ! Restore SSTs if required
         if (restore_sst) then
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j)
          do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
@@ -6195,6 +6223,7 @@
             enddo
             enddo
          enddo
+         !$OMP END PARALLEL DO
          endif      
 
       ! -----------------------------------------------------------
@@ -6231,7 +6260,8 @@
      ! and change  units
      !----------------------------------------------------------------- 
 
-        do iblk = 1, nblocks
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j)
+         do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
 
@@ -6242,19 +6272,20 @@
                vocn(i,j,iblk) = worky*cos(ANGLET(i,j,iblk)) & 
                                   - workx*sin(ANGLET(i,j,iblk))
 
-		uocn(i,j,iblk) = uocn(i,j,iblk) * cm_to_m
-		vocn(i,j,iblk) = vocn(i,j,iblk) * cm_to_m
+               uocn(i,j,iblk) = uocn(i,j,iblk) * cm_to_m
+               vocn(i,j,iblk) = vocn(i,j,iblk) * cm_to_m
 
             enddo		! i
             enddo		! j
-        enddo		! nblocks
+         enddo		! nblocks
+         !$OMP END PARALLEL DO
 
      !----------------------------------------------------------------- 
      ! Interpolate to U grid 
      !----------------------------------------------------------------- 
 
-	call t2ugrid_vector(uocn)
-	call t2ugrid_vector(vocn)
+         call t2ugrid_vector(uocn)
+         call t2ugrid_vector(vocn)
 
      endif    !   sst_data_type = hadgem_sst_uvocn
 

@@ -171,6 +171,8 @@
 !
 !-----------------------------------------------------------------------
 
+   !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block, &
+   !$OMP                     i,j,n,nt,ibc,npad)
    do iblk = 1, nblocks
       this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -287,6 +289,7 @@
       endif
 
    enddo ! iblk
+   !$OMP END PARALLEL DO
 
    call ice_timer_stop(timer_bound)
 
