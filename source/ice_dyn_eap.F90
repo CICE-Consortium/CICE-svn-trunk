@@ -1368,7 +1368,7 @@
         mresult11, mresult12
 
       real (kind=dbl_kind), parameter :: &
-        ktherm  = p2*p001             
+        kth  = p2*p001             
 
       do ij = 1, icellt
          i = indxti(ij)
@@ -1385,9 +1385,9 @@
                            a12_1(i,j),                       &
                            mresult12)
 
-         a11_1(i,j) = (a11_1(i,j)*dtei + ktherm*p5 - mresult11) / &
-                      (dtei + ktherm) ! implicit
-         a12_1(i,j) = (a12_1(i,j)*dtei - mresult12)/(dtei + ktherm) ! implicit
+         a11_1(i,j) = (a11_1(i,j)*dtei + kth*p5 - mresult11) / &
+                      (dtei + kth) ! implicit
+         a12_1(i,j) = (a12_1(i,j)*dtei - mresult12)/(dtei + kth) ! implicit
 
  
 ! nw
@@ -1401,9 +1401,9 @@
                            a12_2(i,j),                       &
                            mresult12)
 
-         a11_2(i,j) = (a11_2(i,j)*dtei + ktherm*p5 - mresult11) / &
-                      (dtei + ktherm) ! implicit
-         a12_2(i,j) = (a12_2(i,j)*dtei - mresult12)/(dtei + ktherm) ! implicit
+         a11_2(i,j) = (a11_2(i,j)*dtei + kth*p5 - mresult11) / &
+                      (dtei + kth) ! implicit
+         a12_2(i,j) = (a12_2(i,j)*dtei - mresult12)/(dtei + kth) ! implicit
 
 ! sw
          call calc_ffrac(1, stressp_3(i,j), stressm_3(i,j),  &
@@ -1416,9 +1416,9 @@
                            a12_3(i,j),                       &
                            mresult12)
 
-         a11_3(i,j) = (a11_3(i,j)*dtei + ktherm*p5 - mresult11) / &
-                      (dtei + ktherm) ! implicit
-         a12_3(i,j) = (a12_3(i,j)*dtei - mresult12)/(dtei + ktherm) ! implicit
+         a11_3(i,j) = (a11_3(i,j)*dtei + kth*p5 - mresult11) / &
+                      (dtei + kth) ! implicit
+         a12_3(i,j) = (a12_3(i,j)*dtei - mresult12)/(dtei + kth) ! implicit
                                 
 ! se
          call calc_ffrac(1, stressp_4(i,j), stressm_4(i,j),  &
@@ -1431,9 +1431,9 @@
                            a12_4(i,j),                       &
                            mresult12)
 
-         a11_4(i,j) = (a11_4(i,j)*dtei + ktherm*p5 - mresult11) / &
-                      (dtei + ktherm) ! implicit
-         a12_4(i,j) = (a12_4(i,j)*dtei - mresult12)/(dtei + ktherm) ! implicit
+         a11_4(i,j) = (a11_4(i,j)*dtei + kth*p5 - mresult11) / &
+                      (dtei + kth) ! implicit
+         a12_4(i,j) = (a12_4(i,j)*dtei - mresult12)/(dtei + kth) ! implicit
 
 ! average structure tensor
 

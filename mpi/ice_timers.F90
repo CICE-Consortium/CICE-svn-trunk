@@ -71,7 +71,6 @@
       timer_sndrcv,           &! time between send to receive
 #endif
       timer_bound,            &! boundary updates
-      timer_vert,             &!
       timer_bgc,              &! biogeochemistry
       timer_diags_bgc,        &! diagnostics bgc
       timer_bgc1,     &
@@ -208,7 +207,6 @@
    call get_ice_timer(timer_diags,    'Diags    ',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_hist,     'History  ',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_bound,    'Bound',    nblocks,distrb_info%nprocs)
-   call get_ice_timer(timer_vert,     'Vert',     nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_bgc,      'BGC',      nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_diags_bgc, 'BGC Diags',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_bgc1,'bgc1',nblocks,distrb_info%nprocs)
