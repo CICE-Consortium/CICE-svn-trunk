@@ -736,7 +736,7 @@
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init
       use ice_state, only: trcrn, nt_aero
-      use ice_read_write, only: ice_open
+      use ice_read_write, only: ice_open, ice_write
       use ice_fileunits, only: nu_dump_aero
       use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file
 !

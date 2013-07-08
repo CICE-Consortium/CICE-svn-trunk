@@ -910,7 +910,7 @@
       !-----------------------------------------------------------------
 
       do k = 1,nilyr
-         Tmlt = sicen(k) * depressT
+         Tmlt = -sicen(k) * depressT
          Tin(k) = calculate_Tin_from_qin(qicen(k),Tmlt)
       enddo
 
@@ -940,12 +940,13 @@
          enddo
 
       endif
-    
+
       !-----------------------------------------------------------------
       ! permeability
       !-----------------------------------------------------------------
 
-      perm = 3.0e-08_dbl_kind * max((minval(phi))**3, c0)
+!      perm = 3.0e-08_dbl_kind * max((minval(phi))**3, c0)
+      perm = 3.0e-08_dbl_kind * (minval(phi))**3
     
       end subroutine permeability_phi
 

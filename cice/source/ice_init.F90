@@ -425,7 +425,7 @@
          kcatbound = 0
       endif
 
-      if (kdyn == 2 .and. revised_evp == .true.) then
+      if (kdyn == 2 .and. revised_evp) then
          if (my_task == master_task) then
             write (nu_diag,*) &
                'WARNING: revised_evp = T with EAP dynamics'
@@ -800,12 +800,12 @@
          write(nu_diag,1010) ' tr_aero                   = ', tr_aero
          write(nu_diag,1010) ' restart_aero              = ', restart_aero
 
-         write(nu_diag,1010) ' a_rapid_mode              = ', a_rapid_mode
-         write(nu_diag,1010) ' Rac_rapid_mode            = ', Rac_rapid_mode
-         write(nu_diag,1010) ' aspect_rapid_mode         = ', aspect_rapid_mode
-         write(nu_diag,1010) ' dSdt_slow_mode            = ', dSdt_slow_mode
-         write(nu_diag,1010) ' phi_c_slow_mode           = ', phi_c_slow_mode
-         write(nu_diag,1010) ' phi_i_mushy               = ', phi_i_mushy
+         write(nu_diag,1005) ' a_rapid_mode              = ', a_rapid_mode
+         write(nu_diag,1005) ' Rac_rapid_mode            = ', Rac_rapid_mode
+         write(nu_diag,1005) ' aspect_rapid_mode         = ', aspect_rapid_mode
+         write(nu_diag,1005) ' dSdt_slow_mode            = ', dSdt_slow_mode
+         write(nu_diag,1005) ' phi_c_slow_mode           = ', phi_c_slow_mode
+         write(nu_diag,1005) ' phi_i_mushy               = ', phi_i_mushy
 
          nt_Tsfc = 1           ! index tracers, starting with Tsfc = 1
          ntrcr = 1             ! count tracers, starting with Tsfc = 1
