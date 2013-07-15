@@ -332,16 +332,20 @@
 
          do while (nml_error > 0)
             print*,'Reading setup_nml'
-            read(nu_nml, nml=setup_nml,iostat=nml_error)
+               read(nu_nml, nml=setup_nml,iostat=nml_error)
+               if (nml_error /= 0) exit
             print*,'Reading grid_nml'
-            read(nu_nml, nml=grid_nml,iostat=nml_error)
+               read(nu_nml, nml=grid_nml,iostat=nml_error)
+               if (nml_error /= 0) exit
             print*,'Reading tracer_nml'
-            read(nu_nml, nml=tracer_nml,iostat=nml_error)
+               read(nu_nml, nml=tracer_nml,iostat=nml_error)
+               if (nml_error /= 0) exit
             print*,'Reading mushy_nml'
-            read(nu_nml, nml=mushy_nml,iostat=nml_error)
+               read(nu_nml, nml=mushy_nml,iostat=nml_error)
+               if (nml_error /= 0) exit
             print*,'Reading ice_nml'
-            read(nu_nml, nml=ice_nml,iostat=nml_error)
-            if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
+               read(nu_nml, nml=ice_nml,iostat=nml_error)
+               if (nml_error /= 0) exit
          end do
          if (nml_error == 0) close(nu_nml)
       endif

@@ -945,7 +945,6 @@
       ! permeability
       !-----------------------------------------------------------------
 
-!      perm = 3.0e-08_dbl_kind * max((minval(phi))**3, c0)
       perm = 3.0e-08_dbl_kind * (minval(phi))**3
     
       end subroutine permeability_phi

@@ -160,7 +160,6 @@
       endif
       do while (nml_error > 0)
          read(nu_nml, nml=domain_nml,iostat=nml_error)
-	 if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
       end do
       if (nml_error == 0) close(nu_nml)
    endif
@@ -238,11 +237,11 @@
                                   trim(distribution_type)
      write(nu_diag,'(a25,a10)') '  Distribution weight:    ', &
                                   trim(distribution_wght)
-     write(nu_diag,'(a26,a10)') ' maskhalo_dyn           = ', &
+     write(nu_diag,'(a26,l6)') '  maskhalo_dyn          = ', &
                                   maskhalo_dyn
-     write(nu_diag,'(a26,a10)') ' maskhalo_remap         = ', &
+     write(nu_diag,'(a26,l6)') '  maskhalo_remap        = ', &
                                   maskhalo_remap
-     write(nu_diag,'(a26,a10)') ' maskhalo_bound         = ', &
+     write(nu_diag,'(a26,l6)') '  maskhalo_bound        = ', &
                                   maskhalo_bound
      write(nu_diag,'(a26,i6)') '  max_blocks =            ', max_blocks
      write(nu_diag,'(a26,i6,/)')'  Number of ghost cells:  ', nghost
