@@ -131,7 +131,6 @@
          endif
          do while (nml_error > 0)
             read(nu_nml, nml=icefields_pond_nml,iostat=nml_error)
-            if (nml_error > 0) read(nu_nml,*)  ! for Nagware compiler
          end do
          if (nml_error == 0) close(nu_nml)
       endif
