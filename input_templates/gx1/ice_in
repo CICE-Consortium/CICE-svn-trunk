@@ -165,6 +165,7 @@
   , atm_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/LargeYeager/v2_updated/'
   , calc_strair     = .true.
   , calc_Tsfc       = .true.
+  , calc_formdrag   = .false.
   , precip_units    = 'mm_per_sec'
   , Tfrzpt          = 'linear_S'
   , ustar_min       = 0.0005
@@ -392,3 +393,10 @@
   , f_PPnet        = 'x'
   , f_NOnet        = 'x'
 /
+
+&icefields_drag_nml
+    f_drag         = 'x'
+  , f_Cdn_atm      = 'x'
+  , f_Cdn_ocn      = 'x'
+/
+

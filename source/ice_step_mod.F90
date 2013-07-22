@@ -253,6 +253,7 @@
          fhocnn      , & ! fbot corrected for leftover energy (W/m^2)
          strairxn    , & ! air/ice zonal  stress,             (N/m^2)
          strairyn    , & ! air/ice meridional stress,         (N/m^2)
+         Cdn_atm_ocn_n,& ! drag coefficient ratio
          Trefn       , & ! air tmp reference level                (K)
          Qrefn           ! air sp hum reference level         (kg/kg)
 
@@ -353,11 +354,36 @@
                                  Tbot,               fbot,               &
                                  rside (:,:,  iblk) )
 
+      !-----------------------------------------------------------------
+      ! Update the neutral drag coefficients to account for form drag
+      ! Oceanic and atmospheric drag coefficients
+      !-----------------------------------------------------------------
+
+         if (calc_formdrag) then
+            call neutral_drag_coeffs &
+                       (nx_block,       ny_block,                      &
+                        ilo, ihi,       jlo, jhi,                      &
+                        trcrn (:,:,nt_apnd,:,iblk),                    &
+                        trcrn (:,:,nt_hpnd,:,iblk),                    &
+                        trcrn (:,:,nt_ipnd,:,iblk),                    &
+                        trcrn (:,:,nt_alvl,:,iblk),                    &
+                        trcrn (:,:,nt_vlvl,:,iblk),                    &
+                        aice        (:,:,iblk), vice        (:,:,iblk),&
+                        vsno        (:,:,iblk), aicen     (:,:,:,iblk),&
+                        vicen     (:,:,:,iblk), vsnon     (:,:,:,iblk),&
+                        Cdn_ocn     (:,:,iblk), Cdn_ocn_skin(:,:,iblk),&
+                        Cdn_ocn_floe(:,:,iblk), Cdn_ocn_keel(:,:,iblk),&
+                        Cdn_atm     (:,:,iblk), Cdn_atm_skin(:,:,iblk),&
+                        Cdn_atm_floe(:,:,iblk), Cdn_atm_pond(:,:,iblk),&
+                        Cdn_atm_rdg (:,:,iblk), hfreebd     (:,:,iblk),&
+                        hdraft      (:,:,iblk), hridge      (:,:,iblk),&
+                        distrdg     (:,:,iblk), hkeel       (:,:,iblk),&
+                        dkeel       (:,:,iblk), lfloe       (:,:,iblk),&
+                        dfloe       (:,:,iblk), ncat)
+            endif 
+
          do n = 1, ncat
 
-      !-----------------------------------------------------------------
-      ! Identify cells with nonzero ice area
-      !-----------------------------------------------------------------
             melttn(:,:,n,iblk)  = c0
             meltbn(:,:,n,iblk)  = c0
             congeln(:,:,n,iblk) = c0
@@ -365,6 +391,10 @@
             dsnown(:,:,n,iblk) = c0 
 !            Tsf_icen(:,:,n,iblk) = c0
            
+      !-----------------------------------------------------------------
+      ! Identify cells with nonzero ice area
+      !-----------------------------------------------------------------
+
             icells = 0
             do j = jlo, jhi
             do i = ilo, ihi
@@ -402,7 +432,8 @@
                                     trcrn(:,:,nt_Tsfc,n,iblk),      &
                                     potT(:,:,iblk), Qa  (:,:,iblk), &
                                     worka,          workb,          &
-                                    lhcoef,         shcoef)
+                                    lhcoef,         shcoef,         &
+                                    Cdn_atm(:,:,iblk))
                else ! default
                    call atmo_boundary_layer & 
                                   (nx_block,       ny_block,       &
@@ -416,7 +447,8 @@
                                    strairxn,       strairyn,       &
                                    Trefn,          Qrefn,          &
                                    worka,          workb,          &
-                                   lhcoef,         shcoef)
+                                   lhcoef,         shcoef,         &
+                                   Cdn_atm(:,:,iblk), Cdn_atm_ocn_n)
                endif ! atmbndy
 
             else
@@ -661,6 +693,7 @@
                             aicen_init(:,:,n,iblk),                   &
                             flw(:,:,iblk),      coszen(:,:,iblk),     &
                             strairxn,           strairyn,             &
+                            Cdn_atm_ocn_n,                            &
                             fsurfn(:,:,n,iblk), fcondtopn(:,:,n,iblk),&
                             fsensn,             flatn(:,:,n,iblk),    &
                             fswabsn,            flwoutn,              &
@@ -669,6 +702,7 @@
                             freshn,             fsaltn,               &
                             fhocnn,             fswthrun(:,:,n,iblk), &
                             strairxT(:,:,iblk), strairyT  (:,:,iblk), &
+                            Cdn_atm_ocn(:,:,iblk),              &
                             fsurf   (:,:,iblk), fcondtop  (:,:,iblk), &
                             fsens   (:,:,iblk), flat      (:,:,iblk), &
                             fswabs  (:,:,iblk), flwout    (:,:,iblk), &
@@ -1140,6 +1174,7 @@
       call ice_timer_start(timer_column)
       call ice_timer_start(timer_ridge)
 
+
       !$OMP PARALLEL DO PRIVATE(iblk)
       do iblk = 1, nblocks
          call step_ridge (dt, ndtd, iblk)
@@ -1173,6 +1208,7 @@
                          vice (:,:,  iblk), vsno (:,:,    iblk),  &
                          aice0(:,:,  iblk), tmask(:,:,    iblk),  &
                          ntrcr, trcr_depend(1:ntrcr)) 
+
 
       !-----------------------------------------------------------------
       ! Compute dynamic area and volume tendencies.

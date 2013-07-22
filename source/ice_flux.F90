@@ -28,8 +28,12 @@
       use ice_kinds_mod
       use ice_blocks, only: nx_block, ny_block
       use ice_domain_size, only: max_blocks, ncat, max_aero, max_nstrm, nilyr
-      use ice_constants, only: c0, c1, c5, c10, c20, c180, &
-          depressT, stefan_boltzmann, Tffresh, emissivity
+      use ice_constants, only: c0, c1, c5, c10, c20, c180, dragio, &
+          depressT, stefan_boltzmann, Tffresh, emissivity 
+      use ice_atmo, only: calc_formdrag, &
+          hfreebd, hdraft, hridge, distrdg, hkeel, dkeel, lfloe, dfloe, &
+          Cdn_atm_skin, Cdn_atm_floe, Cdn_atm_pond, Cdn_atm_rdg, &
+          Cdn_ocn_skin, Cdn_ocn_floe, Cdn_ocn_keel, Cdn_atm_ocn
 !
 !EOP
 !
@@ -56,7 +60,7 @@
          ss_tltx , & ! sea surface slope, x-direction (m/m)
          ss_tlty , & ! sea surface slope, y-direction
 
-       ! out to atmosphere (if calc_strair)
+       ! out to atmosphere
          strairxT, & ! stress on ice by air, x-direction
          strairyT, & ! stress on ice by air, y-direction
 
@@ -465,6 +469,7 @@
 
       strairxT(:,:,:) = c0            ! wind stress, T grid
       strairyT(:,:,:) = c0
+
       fsens   (:,:,:) = c0
       flat    (:,:,:) = c0
       fswabs  (:,:,:) = c0
@@ -625,7 +630,11 @@
 !
 ! !USES:
 !
-      !use ice_domain, only: nblocks
+      use ice_atmo, only: hfreebd, hdraft, hridge, distrdg, hkeel, &
+                          dkeel, lfloe, dfloe, Cdn_atm, Cdn_atm_rdg, &
+                          Cdn_atm_floe, Cdn_atm_pond, Cdn_atm_skin, &
+                          Cdn_atm_ocn, Cdn_ocn, Cdn_ocn_keel, &
+                          Cdn_ocn_floe, Cdn_ocn_skin
       use ice_state, only: aice, vice
       use ice_zbgc_public, only: fsicen, fsicen_g
 !
@@ -662,6 +671,29 @@
       fsicen(:,:,:,:) = c0    ! salt flux per category into ocean (kg/m^2/s)
       fsicen_g(:,:,:,:) = c0  
 
+      ! drag coefficients are computed prior to the atmo_boundary call, 
+      ! during the thermodynamics section 
+      Cdn_ocn(:,:,:) = dragio
+      Cdn_atm(:,:,:) = c0
+
+      if (calc_formdrag) then
+        Cdn_atm_rdg (:,:,:) = c0
+        Cdn_atm_floe(:,:,:) = c0
+        Cdn_atm_pond(:,:,:) = c0
+        Cdn_atm_skin(:,:,:) = c0
+        Cdn_ocn_skin(:,:,:) = c0
+        Cdn_ocn_keel(:,:,:) = c0
+        Cdn_ocn_floe(:,:,:) = c0
+        hfreebd     (:,:,:) = c0
+        hdraft      (:,:,:) = c0
+        hridge      (:,:,:) = c0
+        distrdg     (:,:,:) = c0
+        hkeel       (:,:,:) = c0
+        dkeel       (:,:,:) = c0
+        lfloe       (:,:,:) = c0
+        dfloe       (:,:,:) = c0
+      endif
+
       end subroutine init_history_therm
 
 !=======================================================================
@@ -684,7 +716,6 @@
 !
 ! !USES:
 !
-      !use ice_domain, only: nblocks
       use ice_state, only: aice, vice
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -734,6 +765,7 @@
                                aicen,                &    
                                flw,      coszn,      &
                                strairxn, strairyn,   &
+                               Cdn_atm_ocn_n,  &
                                fsurfn,   fcondtopn,  &  
                                fsensn,   flatn,      & 
                                fswabsn,  flwoutn,    &
@@ -742,6 +774,7 @@
                                freshn,   fsaltn,     &
                                fhocnn,   fswthrun,   &
                                strairxT, strairyT,   &  
+                               Cdn_atm_ocn,    &
                                fsurf,    fcondtop,   &
                                fsens,    flat,       & 
                                fswabs,   flwout,     &
@@ -783,6 +816,7 @@
           coszn   , & ! cosine of solar zenith angle 
           strairxn, & ! air/ice zonal  strss,           (N/m**2)
           strairyn, & ! air/ice merdnl strss,           (N/m**2)
+          Cdn_atm_ocn_n,  & ! ratio of total drag over neutral drag  
           fsurfn  , & ! net heat flux to top surface    (W/m**2)
           fcondtopn,& ! downward cond flux at top sfc   (W/m**2)
           fsensn  , & ! sensible heat flx               (W/m**2)
@@ -807,6 +841,7 @@
           intent(inout):: &
           strairxT, & ! air/ice zonal  strss,           (N/m**2)
           strairyT, & ! air/ice merdnl strss,           (N/m**2)
+          Cdn_atm_ocn,   & ! ratio of total drag over neutral drag
           fsurf   , & ! net heat flux to top surface    (W/m**2)
           fcondtop, & ! downward cond flux at top sfc   (W/m**2)
           fsens   , & ! sensible heat flx               (W/m**2)
@@ -849,6 +884,8 @@
 
          strairxT (i,j)  = strairxT(i,j) + strairxn(i,j)*aicen(i,j)
          strairyT (i,j)  = strairyT(i,j) + strairyn(i,j)*aicen(i,j)
+         Cdn_atm_ocn (i,j) = Cdn_atm_ocn (i,j) + &
+                                   Cdn_atm_ocn_n( i,j)*aicen(i,j)
          fsurf    (i,j)  = fsurf   (i,j) + fsurfn  (i,j)*aicen(i,j)
          fcondtop (i,j)  = fcondtop(i,j) + fcondtopn(i,j)*aicen(i,j) 
          fsens    (i,j)  = fsens   (i,j) + fsensn  (i,j)*aicen(i,j)

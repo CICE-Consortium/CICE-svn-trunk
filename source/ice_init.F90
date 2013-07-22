@@ -93,7 +93,7 @@
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, ahmax, &
                                shortwave, albedo_type, R_ice, R_pnd, &
                                R_snw
-      use ice_atmo, only: atmbndy, calc_strair
+      use ice_atmo, only: atmbndy, calc_strair, calc_formdrag
       use ice_transport_driver, only: advection
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_aero, &
@@ -161,6 +161,7 @@
         rfracmin,       rfracmax,        pndaspect,     hs1,            &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
         atm_data_type,  atm_data_dir,    calc_strair,   calc_Tsfc,      &
+        calc_formdrag, &
         precip_units,   Tfrzpt,          update_ocn_f,  ustar_min,      &
         oceanmixed_ice, ocn_data_format, sss_data_type, sst_data_type,  &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
@@ -271,6 +272,7 @@
       atm_data_type   = 'default'
       atm_data_dir    = ' '
       calc_strair     = .true.    ! calculate wind stress
+      calc_formdrag   = .false.   ! calculate form drag
       precip_units    = 'mks'     ! 'mm_per_month' or
                                   ! 'mm_per_sec' = 'mks' = kg/m^2 s
       oceanmixed_ice  = .false.   ! if true, use internal ocean mixed layer
@@ -514,6 +516,33 @@
          precip_units='mks'
       endif
 
+      if (calc_formdrag) then
+      if (trim(atmbndy) == 'constant') then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'WARNING: atmbndy = constant not allowed'
+            write (nu_diag,*) 'WARNING: for calcform_drag'
+            write (nu_diag,*) 'WARNING: Setting atmbndy = default'
+         endif
+         atmbndy = 'default'
+      endif
+
+      if (.not. calc_strair) then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'WARNING: calc_formdrag=T but calc_strair=F'
+            write (nu_diag,*) 'WARNING: Setting calc_strair=T'
+         endif
+         calc_strair = .true.
+      endif
+
+      if (.not. tr_lvl) then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'WARNING: calc_formdrag=T but tr_lvl=F'
+            write (nu_diag,*) 'WARNING: Setting tr_lvl=T'
+         endif
+         tr_lvl = .true.
+      endif
+      endif
+
       call broadcast_scalar(days_per_year,      master_task)
       call broadcast_scalar(use_leap_years,     master_task)
       call broadcast_scalar(year_init,          master_task)
@@ -589,6 +618,7 @@
       call broadcast_scalar(atm_data_dir,       master_task)
       call broadcast_scalar(calc_strair,        master_task)
       call broadcast_scalar(calc_Tsfc,          master_task)
+      call broadcast_scalar(calc_formdrag,      master_task)
       call broadcast_scalar(Tfrzpt,             master_task)
       call broadcast_scalar(update_ocn_f,       master_task)
       call broadcast_scalar(ustar_min,          master_task)
@@ -744,6 +774,7 @@
                                trim(atm_data_type)
          write(nu_diag,1010) ' calc_strair               = ', calc_strair
          write(nu_diag,1010) ' calc_Tsfc                 = ', calc_Tsfc
+         write(nu_diag,1010) ' calc_formdrag             = ', calc_formdrag
          write(nu_diag,*)    ' Tfrzpt                    = ', trim(Tfrzpt)
          write(nu_diag,1010) ' update_ocn_f              = ', update_ocn_f
          write(nu_diag,1005) ' ustar_min                 = ', ustar_min

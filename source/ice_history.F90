@@ -96,8 +96,10 @@
       use ice_history_pond, only: init_hist_pond_2D, init_hist_pond_3Dc
       use ice_history_bgc, only: init_hist_bgc_2D, init_hist_bgc_3Dc, &
           init_hist_bgc_3Db, init_hist_bgc_4Db
+      use ice_history_drag, only: init_hist_drag_2D
       use ice_restart, only: restart
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero, hbrine
+      use ice_atmo, only: calc_formdrag
       use ice_zbgc_public, only: solve_bgc
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -963,6 +965,8 @@
       ! biogeochemistry
       if (tr_aero .or. hbrine) call init_hist_bgc_2D
 
+      if (calc_formdrag) call init_hist_drag_2D
+
       !-----------------------------------------------------------------
       ! 3D (category) variables looped separately for ordering
       !-----------------------------------------------------------------
@@ -1238,11 +1242,13 @@
           stressp_3, stressm_3, stress12_3, &
           stressp_4, stressm_4, stress12_4, sig1, sig2, &
           mlt_onset, frz_onset
+      use ice_atmo, only: calc_formdrag
       use ice_history_shared ! almost everything
       use ice_history_write, only: ice_write_hist
       use ice_history_bgc, only: accum_hist_bgc
       use ice_history_mechred, only: accum_hist_mechred
       use ice_history_pond, only: accum_hist_pond
+      use ice_history_drag, only: accum_hist_drag
       use ice_state ! almost everything
       use ice_therm_shared, only: calculate_Tin_from_qin, Tmlt, ktherm
       use ice_therm_mushy, only: temperature_mush, temperature_snow
@@ -1714,6 +1720,9 @@
 
          ! biogeochemistry
          if (tr_aero .or. hbrine) call accum_hist_bgc  (iblk)
+
+         ! form drag
+         if (calc_formdrag) call accum_hist_drag (iblk)
 
       enddo                     ! iblk
       !$OMP END PARALLEL DO

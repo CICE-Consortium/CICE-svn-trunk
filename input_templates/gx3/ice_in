@@ -165,6 +165,7 @@
   , atm_data_dir    = '/usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/'
   , calc_strair     = .true.
   , calc_Tsfc       = .true.
+  , calc_formdrag   = .false.
   , precip_units    = 'mm_per_month'
   , Tfrzpt          = 'linear_S'
   , ustar_min       = 0.05
@@ -390,3 +391,10 @@
   , f_PPnet        = 'x'
   , f_NOnet        = 'x'
 /
+
+&icefields_drag_nml
+    f_drag         = 'x'
+  , f_Cdn_atm      = 'x'
+  , f_Cdn_ocn      = 'x'
+/
+

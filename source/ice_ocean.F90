@@ -75,7 +75,8 @@
            alvdr_ocn, alidr_ocn, alvdf_ocn, alidf_ocn, swidf, swvdf, swidr, swvdr, &
            qdp, hmix, strairx_ocn, strairy_ocn, Tref_ocn, Qref_ocn
       use ice_grid, only: tmask
-      use ice_atmo, only: atmo_boundary_layer, atmbndy, atmo_boundary_const
+      use ice_atmo, only: atmo_boundary_layer, atmbndy, atmo_boundary_const, &
+           Cdn_atm, Cdn_atm_ocn
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -154,7 +155,8 @@
                                       delt       (:,:),      &    
                                       delq       (:,:),      &
                                       lhcoef     (:,:),      &
-                                      shcoef     (:,:) )
+                                      shcoef     (:,:),      &
+                                      Cdn_atm(:,:,iblk)) 
 
          else ! default
             call atmo_boundary_layer (nx_block,  ny_block,   &
@@ -175,7 +177,9 @@
                                       delt       (:,:),      &    
                                       delq       (:,:),      &
                                       lhcoef     (:,:),      &
-                                      shcoef     (:,:) )
+                                      shcoef     (:,:),      &
+                                      Cdn_atm(:,:,iblk),          & 
+                                      Cdn_atm_ocn(:,:,iblk))    
          endif
 
       !-----------------------------------------------------------------
