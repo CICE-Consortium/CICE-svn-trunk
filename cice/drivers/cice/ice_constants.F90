@@ -101,7 +101,7 @@
          zref   = 10._dbl_kind   ,&! reference height for stability (m)
          hsmin  = 0.0001_dbl_kind,&! minimum allowed snow depth (m) for DE
          snowpatch = 0.02_dbl_kind,&! parameter for fractional snow area (m)
-         salt_loss = 0.65_dbl_kind ! zbgc fraction of available salt retained (1.0 = no loss)
+         salt_loss = 0.55_dbl_kind ! zbgc fraction of available salt retained (1.0 = no loss)
                     
       ! weights for albedos 
       ! 4 Jan 2007 BPB  Following are appropriate for complete cloud

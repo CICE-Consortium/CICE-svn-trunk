@@ -43,7 +43,6 @@
          betak   = 0.13_dbl_kind, & ! constant in formula for k (W m-1 ppt-1)
          kimin   = 0.10_dbl_kind    ! min conductivity of saline ice (W m-1 deg-1)
 
-
 !=======================================================================
 
       contains
@@ -99,7 +98,7 @@
                            tr_iage, tr_FY, tr_lvl, tr_aero
       use ice_therm_shared, only: solve_Sin
       use ice_zbgc, only: add_new_ice_bgc
-      use ice_zbgc_public, only: initbio_frac, rhosi
+      use ice_zbgc_public, only: initbio_frac, rhosi, bgc_tracer_type
 
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -314,7 +313,8 @@
                   - rhosi*vi0new(ij)/dt*p001*sss(i,j)*salt_loss
             do k = 1, nbltrcr  ! only correct for dissolved tracers
                flux_bio(i,j,k) = flux_bio(i,j,k) &
-                  - vi0new(ij)/dt*ocean_bio(i,j,k)*initbio_frac
+                  - vi0new(ij)/dt*ocean_bio(i,j,k)* & 
+                 (bgc_tracer_type(k)*initbio_frac + c1*(c1-bgc_tracer_type(k)))
             enddo
          endif
 
@@ -617,6 +617,8 @@
 !
 ! !USES:
 !
+      use ice_therm_shared, only: solve_Sin
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) :: &
@@ -855,6 +857,7 @@
 
       frac = 0.9
       dTemp = 0.02_dbl_kind
+      if (solve_Sin) dTemp = p1
       do k = 1, nilyr
          do ij = 1, icells
             i = indxi(ij)
@@ -869,7 +872,7 @@
                else
                   ci = cp_ice
                   Iswabs_tmp = min(Iswabs(i,j,k), &
-                     frac*(       -Tin_init(ij,k))*ci/dt_rhoi_hlyr(ij))
+                                   frac*(-Tin_init(ij,k))*ci/dt_rhoi_hlyr(ij))
                endif
             endif
             if (Iswabs_tmp < puny) Iswabs_tmp = c0
@@ -1301,7 +1304,7 @@
                else
                   qin(m,k) = -rhoi * (-cp_ice*Tin(m,k) + Lfresh)
                endif
-               enew(ij) = enew(ij) + hilyr(m) * (qin(m,k) + dqmat(m,k))
+               enew(ij) = enew(ij) + hilyr(m) * qin(m,k)
                einex(m) = einex(m) + hilyr(m) * dqmat(m,k)
 
                Tin_start(m,k) = Tin(m,k) ! for next iteration
@@ -1363,7 +1366,7 @@
                           (Tin(m,nilyr) - Tbot(i,j))
 
             ! Flux extra energy out of the ice
-            fcondbot(m) = fcondbot(m) + einex(m)/dt    
+            fcondbot(m) = fcondbot(m) + einex(m)/dt 
 
             ferr(m) = abs( (enew(ij)-einit(m))/dt &
                     - (fcondtopn(i,j) - fcondbot(m) + fswint(i,j)) )
@@ -1374,7 +1377,7 @@
                converged(m) = .false.
                all_converged = .false.
 
-                  ! reduce conductivity for next iteration
+               ! reduce conductivity for next iteration
                do k = 1, nilyr
                   if (reduce_kh(m,k) .and. dqmat(m,k) > c0) then
                      frac = max(0.5*(c1-ferr(m)/abs(fcondtopn(i,j)-fcondbot(m))),p1)

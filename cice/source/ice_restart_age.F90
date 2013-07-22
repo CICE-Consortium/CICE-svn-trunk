@@ -89,7 +89,7 @@
               restart_dir(1:lenstr(restart_dir)), &
               restart_file(1:lenstr(restart_file)),'.age.', &
               iyear,'-',month,'-',mday,'-',sec
-      end if
+      endif
          
       ! begin writing restart data
       call ice_open(nu_dump_age,filename,0)

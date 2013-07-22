@@ -87,7 +87,8 @@
     hbrine          = .false.
   , read_Sin        = .false.
   , solve_Sin       = .false.
-  , solve_bgc       = .false.
+  , solve_skl_bgc   = .false.
+  , solve_zbgc      = .false.
   , restore_bgc     = .false.
   , bgc_data_dir    = 'unknown_bgc_data_dir'
   , sil_data_type   = 'default'
@@ -100,9 +101,10 @@
   , tr_bgc_Sil_sk   = .false.
   , tr_bgc_DMSPp_sk = .false.
   , tr_bgc_DMSPd_sk = .false.
-  , tr_bgc_DMS_sk   = .false
+  , tr_bgc_DMS_sk   = .false.
   , restart_bgc     = .false.
-  , restart_S       = .false
+  , restart_S       = .false.
+  , restart_hbrine  = .false.
   , scale_bgc       = .false.
   , tr_bgc_NO       = .false.
   , tr_bgc_N        = .false.  
@@ -115,16 +117,13 @@
   , tr_bgc_Sil      = .false.
   , tr_bgc_PON      = .false. 
   , tr_bgc_S        = .false.
-  , Ra_c            = 0.05
-  , grid_o          = 10.0
-  , grid_o_t        = 5.0
-  , l_sk            = 2.0
-  , grid_oS         = 5.0
-  , l_skS           = 7.5
-  , lapidus_g       = 0.9
-  , lapidus_m       = 1.5
-  , rhosi           = 940.0
-  , initbio_frac    = 0.6
+  , grid_o          = 6.0
+  , grid_o_t        = 0.0
+  , l_sk            = 1.2
+  , grid_oS         = 6.0
+  , l_skS           = 1.5
+  , phi_snow        = 0.5
+  , initbio_frac    = 0.55
 /
 
 &ice_nml
@@ -384,7 +383,8 @@
   , f_bgc_Sil      = 'x' 
   , f_bgc_PON      = 'x' 
   , f_bgc_S        = 'x'  
-  , f_fbri         = 'x'    
+  , f_fbri         = 'x'  
+  , f_hbri         = 'x'    
   , f_growN        = 'x'
   , f_zfswin       = 'x'
   , f_chlnet       = 'x'

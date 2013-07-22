@@ -38,6 +38,7 @@
       subroutine CICE_Run
 
       use ice_aerosol, only: faero_default
+      use ice_algae, only: get_forcing_bgc
       use ice_calendar, only: istep, istep1, time, dt, stop_now, calendar
       use ice_forcing, only: get_forcing_atmo, get_forcing_ocn, &
           get_ice_salinity
@@ -46,8 +47,7 @@
       use ice_therm_shared, only: read_Sin
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_couple, timer_step
-      use ice_zbgc, only: get_forcing_bgc
-      use ice_zbgc_public, only: tr_bgc_NO, tr_bgc_Sil
+      use ice_zbgc_public, only: tr_bgc_NO, solve_skl_bgc
 
       ! local variables
       integer (kind=int_kind) :: k
@@ -81,7 +81,8 @@
 !         if (tr_aero) call faero_data        ! aerosols
          if (tr_aero) call faero_default     ! aerosols
          if (read_Sin)  call get_ice_salinity  !update ice salinity from file
-         if (tr_bgc_NO .OR. tr_bgc_Sil) call get_forcing_bgc    ! biogeochemistry
+         if (tr_bgc_NO .OR. solve_skl_bgc) &
+                call get_forcing_bgc    ! biogeochemistry
          call ice_timer_stop(timer_couple)   ! atm/ocn coupling
 #endif
 
@@ -126,18 +127,18 @@
       use ice_restart_meltpond_topo, only: write_restart_pond_topo
       use ice_restoring, only: restore_ice, ice_HaloRestore
       use ice_state, only: nt_qsno, trcrn, tr_iage, tr_FY, tr_lvl, &
-          tr_pond_cesm, tr_pond_lvl, tr_pond_topo
+          tr_pond_cesm, tr_pond_lvl, tr_pond_topo, hbrine, ntraceb
       use ice_step_mod, only: prep_radiation, step_therm1, step_therm2, &
           post_thermo, step_dynamics, step_radiation
-      use ice_therm_shared, only: calc_Tsfc
+      use ice_therm_shared, only: calc_Tsfc, ktherm
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_diags, timer_column, timer_thermo, timer_bound, timer_hist, &
           timer_diags_bgc, timer_readwrite
-      use ice_zbgc, only: init_history_bgc, biogeochemistry, bgc_diags, &
-          write_restart_bgc
-      use ice_zbgc_public, only: tr_bgc_S, solve_bgc, tr_bgc_NO
-      use ice_zsalinity, only: S_diags, write_restart_S
-      use ice_domain_size, only: nltrcr
+      use ice_algae, only: bgc_diags, write_restart_bgc
+      use ice_zbgc, only: init_history_bgc, biogeochemistry
+      use ice_zbgc_public, only: tr_bgc_S
+      use ice_zsalinity, only: S_diags, write_restart_S, &
+             write_restart_hbrine, hbrine_diags
 
       integer (kind=int_kind) :: &
          iblk        , & ! block index 
@@ -234,8 +235,9 @@
 
          call ice_timer_start(timer_diags_bgc)
          if (mod(istep,diagfreq) == 0) then
-            if (tr_bgc_S)                 call S_diags   (dt)
-            if (solve_bgc .OR. tr_bgc_NO) call bgc_diags (dt)
+            if (tr_bgc_S)    call S_diags   (dt)
+            if (ntraceb > 0) call bgc_diags (dt)
+            if (hbrine .and. ktherm == 2) call hbrine_diags (dt)
          endif
          call ice_timer_stop(timer_diags_bgc)
 
@@ -256,8 +258,9 @@
             if (tr_pond_cesm) call write_restart_pond_cesm
             if (tr_pond_lvl)  call write_restart_pond_lvl
             if (tr_pond_topo) call write_restart_pond_topo
-            if (nltrcr > 0)   call write_restart_bgc  ! for layer model
-            if (tr_bgc_S)     call write_restart_S    ! for layer model
+            if (ntraceb > 0)  call write_restart_bgc  
+            if (tr_bgc_S)     call write_restart_S 
+            if (hbrine)       call write_restart_hbrine
             if (kdyn == 2)    call write_restart_eap
          endif
 
@@ -276,7 +279,7 @@
       use ice_blocks, only: block, nx_block, ny_block
       use ice_calendar, only: dt, nstreams
       use ice_constants, only: c0, c1, puny, rhofresh
-      use ice_domain_size, only: ncat, nbltrcr
+      use ice_domain_size, only: ncat
       use ice_flux, only: alvdf, alidf, alvdr, alidr, albice, albsno, &
           albpnd, albcnt, apeff_ai, coszen, fpond, fresh, &
           alvdf_gbm, alidf_gbm, alvdr_gbm, alidr_gbm, fhocn_gbm, &
@@ -289,7 +292,7 @@
       use ice_ocean, only: oceanmixed_ice, ocean_mixed_layer
       use ice_shortwave, only: alvdfn, alidfn, alvdrn, alidrn, &
                                albicen, albsnon, albpndn, apeffn
-      use ice_state, only: aicen, aice, aice_init
+      use ice_state, only: aicen, aice, aice_init, ntraceb
       use ice_therm_shared, only: calc_Tsfc
       use ice_zbgc_public, only: flux_bio, flux_bio_g, flux_bio_gbm, &
           flux_bio_g_gbm, fsice, fsice_g
@@ -392,7 +395,7 @@
             fsice_gbm  (i,j,iblk) = fsice  (i,j,iblk)
             fsice_g_gbm  (i,j,iblk) = fsice_g  (i,j,iblk)
 
-            do k = 1,nbltrcr
+            do k = 1,ntraceb
               flux_bio_gbm  (i,j,k,iblk) = flux_bio (i,j,k,iblk)
               flux_bio_g_gbm  (i,j,k,iblk) = flux_bio_g  (i,j,k,iblk)
             enddo
@@ -416,7 +419,7 @@
       !-----------------------------------------------------------------
 
          call scale_fluxes (nx_block,            ny_block,           &
-                            tmask    (:,:,iblk), nbltrcr,            &
+                            tmask    (:,:,iblk), ntraceb,            &
                             aice     (:,:,iblk), Tf      (:,:,iblk), &
                             Tair     (:,:,iblk), Qa      (:,:,iblk), &
                             strairxT (:,:,iblk), strairyT(:,:,iblk), &

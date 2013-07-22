@@ -1183,6 +1183,9 @@
          dfresh  , & ! change in fresh
          dfsalt      ! change in fsalt
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         vicen_init   ! volume per unit area of ice          (m)
+
       do n = 1, ncat
 
       !-----------------------------------------------------------------
@@ -1233,6 +1236,7 @@
             meltl(i,j) = meltl(i,j) + vicen(i,j,n)*rside(i,j)
 
             ! state variables
+            vicen_init(i,j) = vicen(i,j,n)
             aicen(i,j,n) = aicen(i,j,n) * (c1 - rside(i,j))
             vicen(i,j,n) = vicen(i,j,n) * (c1 - rside(i,j))
             vsnon(i,j,n) = vsnon(i,j,n) * (c1 - rside(i,j))
@@ -1293,7 +1297,7 @@
          call lateral_melt_bgc(nx_block,       ny_block,    &
                                icells,         dt,          &
                                indxi,          indxj,       &
-                               rside,          vicen(:,:,n),&
+                               rside,          vicen_init,  &
                                trcrn(:,:,:,n), fsice,       &
                                flux_bio,       nbltrcr)
       enddo  ! n

@@ -61,8 +61,7 @@
       use ice_timers
       use ice_transport_driver
       use ice_transport_remap
-      use ice_zsalinity, only: first_ice
-
+      use ice_zbgc_public, only: first_ice
       implicit none
       private
       save
@@ -265,7 +264,6 @@
          lhcoef          ! transfer coefficient for latent heat
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         meltsn      , & ! snow melt in category n (m)
          vsnon_init  , & ! for aerosol mass budget
          rfrac           ! water fraction retained for melt ponds
 
@@ -384,6 +382,7 @@
 
          do n = 1, ncat
 
+            meltsn(:,:,n,iblk)  = c0
             melttn(:,:,n,iblk)  = c0
             meltbn(:,:,n,iblk)  = c0
             congeln(:,:,n,iblk) = c0
@@ -541,7 +540,7 @@
                                 fswabsn,             flwoutn,             &
                                 evapn,               freshn,              &
                                 fsaltn,              fhocnn,              &
-                                melttn(:,:,n,iblk),  meltsn,              &
+                                melttn(:,:,n,iblk),  meltsn(:,:,n,iblk),  &
                                 meltbn(:,:,n,iblk),                       &
                                 congeln(:,:,n,iblk), snoicen(:,:,n,iblk), &
                                 mlt_onset(:,:,iblk), frz_onset(:,:,iblk), &
@@ -562,6 +561,7 @@
                  write(nu_diag,*) 'Lat, Lon:', &
                                  TLAT(istop,jstop,iblk)*rad_to_deg, &
                                  TLON(istop,jstop,iblk)*rad_to_deg
+         
             call abort_ice ('ice: Vertical thermo error')
          endif
 
@@ -573,7 +573,8 @@
                call update_aerosol (nx_block, ny_block,                  &
                                     dt, icells,                          &
                                     indxi, indxj,                        &
-                                    melttn(:,:,n,iblk),  meltsn,         &
+                                    melttn(:,:,n,iblk),                  &
+                                    meltsn(:,:,n,iblk),                  &
                                     meltbn(:,:,n,iblk),                  &
                                     congeln(:,:,n,iblk),                 &
                                     snoicen(:,:,n,iblk),                 &
@@ -607,7 +608,7 @@
                                        dt,       hi_min,                       &
                                        pndaspect,                              &
                                        rfrac,  melttn(:,:,n,iblk),             &
-                                       meltsn, frain(:,:,iblk),                &
+                                       meltsn(:,:,n,iblk), frain(:,:,iblk),    &
                                        aicen (:,:,n,iblk), vicen (:,:,n,iblk), &
                                        vsnon (:,:,n,iblk),                     &
                                        trcrn(:,:,nt_Tsfc,n,iblk),              &
@@ -621,7 +622,7 @@
                                       dt,        hi_min,                          &
                                       dpscale,   frzpnd,                          &
                                       pndaspect, rfrac,                           &
-                                      melttn(:,:,n,iblk), meltsn,                 &
+                                      melttn(:,:,n,iblk), meltsn(:,:,n,iblk),     &
                                       frain (:,:,iblk),   Tair  (:,:,iblk),       &
                                       fsurfn(:,:,n,iblk),                         &
                                       dhsn  (:,:,n,iblk), ffracn(:,:,n,iblk),     &
@@ -645,7 +646,7 @@
 
                   rfrac(i,j) = rfracmin + (rfracmax-rfracmin) * aicen(i,j,n,iblk)
                   pond = rfrac(i,j)/rhofresh * (melttn(i,j,n,iblk)*rhoi &
-                       +                        meltsn(i,j       )*rhos &
+                       +                        meltsn(i,j,n,iblk)*rhos &
                        +                        frain (i,j,iblk)*dt)
 
                   ! if pond does not exist, create new pond over full ice area
@@ -673,7 +674,8 @@
             call compute_ponds_simple(nx_block, ny_block,                       &
                                    ilo, ihi, jlo, jhi,                          &
                                    dt, rfrac, hi_min,                           &
-                                   melttn(:,:,n,iblk), meltsn, frain(:,:,iblk), &
+                                   melttn(:,:,n,iblk), meltsn(:,:,n,iblk),      &
+                                   frain(:,:,iblk), &
                                    aicen (:,:,n,iblk), vicen (:,:,n,iblk),      &
                                    vsnon (:,:,n,iblk),                          &
                                    trcrn(:,:,nt_Tsfc,n,iblk),                   &
@@ -710,7 +712,7 @@
                             Tref    (:,:,iblk), Qref      (:,:,iblk), &
                             fresh   (:,:,iblk), fsalt     (:,:,iblk), &
                             fhocn   (:,:,iblk), fswthru   (:,:,iblk), &
-                            melttn  (:,:,n,iblk), meltsn,             &
+                            melttn  (:,:,n,iblk), meltsn(:,:,n,iblk), &
                             meltbn(:,:,n,iblk), congeln(:,:,n,iblk),  &
                             snoicen(:,:,n,iblk),                      &
                             meltt   (:,:,iblk),  melts   (:,:,iblk),  &
@@ -1015,7 +1017,7 @@
                            fhocn   (:,:,  iblk),                       &
                            faero_ocn(:,:,:,iblk),tr_aero,              &
                            tr_pond_topo,         heat_capacity,        &
-                           nbltrcr ,             first_ice(:,:,iblk),  &
+                           nbltrcr ,             first_ice(:,:,:,iblk),  &
                            fsice(:,:,  iblk),    flux_bio(:,:,:,iblk), &
                            l_stop,                                     &
                            istop,                jstop)
@@ -1030,8 +1032,6 @@
                                   this_block%j_glob(jstop) 
             call abort_ice ('ice: ITD cleanup error in step_therm2')
          endif
-
-         !call diagnose_itd(nx_block, ny_block, aicen(:,:,:,1), vicen(:,:,:,1), vsnon(:,:,:,1), trcrn(:,:,:,:,1))
 
       end subroutine step_therm2
 
@@ -1368,7 +1368,7 @@
                            fhocn   (:,:,  iblk),                       &
                            faero_ocn(:,:,:,iblk),tr_aero,              &
                            tr_pond_topo,         heat_capacity,        &
-                           nbltrcr ,             first_ice(:,:,iblk),  &
+                           nbltrcr ,             first_ice(:,:,:,iblk),  &
                            fsice(:,:,  iblk),    flux_bio(:,:,:,iblk), &
                            l_stop,                                     &
                            istop,                jstop)

@@ -130,6 +130,7 @@
 ! !USES:
 !
       use ice_communicate, only: my_task
+      use ice_state, only: nt_fbri, hbrine
 #if defined notz_fieldwork
       use ice_therm_mushy, only: temperature_changes_salinity, &
            liquidus_brine_salinity_mush, enthalpy_mush, &
@@ -279,8 +280,8 @@
       real (kind=dbl_kind), dimension (icells,nilyr) :: &
          qin         , & ! ice layer enthalpy, qin < 0 (J m-3)
          Tin         , & ! internal ice layer temperatures
-         Sin         ,&    ! internal ice layer salinities
-         dqmat             ! excess q from melted interior layers
+         Sin         , & ! internal ice layer salinities
+         dqmat           ! excess q from melted interior layers
 
       real (kind=dbl_kind), dimension (icells,nslyr) :: &
          qsn         , & ! snow layer enthalpy, qsn < 0 (J m-3)
@@ -298,7 +299,8 @@
 ! ech: the size of these arrays should be reduced to icells
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          Tsfcn, & ! temperature of ice/snow top surface  (C)
-         iage     ! ice age (s)
+         iage , & ! ice age (s)
+         fbri     ! brine height to ice thickness fraction
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          fadvocn ! advective heat flux to ocean
@@ -334,7 +336,8 @@
          congel (i,j) = c0
          snoice (i,j) = c0
          dsnow  (i,j) = c0
-
+         fbri   (i,j) = c1
+         if (hbrine) fbri(i,j) = trcrn(i,j,nt_fbri)
          if (tr_iage) iage(i,j) = trcrn(i,j,nt_iage)
       enddo
       enddo
@@ -423,21 +426,6 @@
                                               einit,         l_stop,   &
                                               istop,         jstop)
 
-            ! intermediate energy
-            do ij = 1, icells
-
-               einter(ij) = c0
-
-               do k = 1, nslyr
-                  einter(ij) = einter(ij) + hslyr(ij) * qsn(ij,k)
-               enddo ! k
-
-               do k = 1, nilyr
-                  einter(ij) = einter(ij) + hilyr(ij) * qin(ij,k)
-               enddo ! k
-
-            enddo ! ij
-            
          else ! ktherm
 
             call temperature_changes(nx_block,      ny_block, &
@@ -503,6 +491,17 @@
 
       endif         ! heat_capacity
 
+            ! intermediate energy for error check
+            do ij = 1, icells
+               einter(ij) = c0
+               do k = 1, nslyr
+                  einter(ij) = einter(ij) + hslyr(ij) * qsn(ij,k)
+               enddo ! k
+               do k = 1, nilyr
+                  einter(ij) = einter(ij) + hilyr(ij) * qin(ij,k)
+               enddo ! k
+            enddo ! ij
+
       if (l_stop) return
 
       !-----------------------------------------------------------------
@@ -530,7 +529,8 @@
                                 congel,       snoice,   &
                                 mlt_onset,    frz_onset,&
                                 Sin,          sss,      &
-                                dsnow,        einex)
+                                dsnow,        einex,    &
+                                fbri)
 #endif
       !-----------------------------------------------------------------
       ! Check for energy conservation by comparing the change in energy
@@ -546,7 +546,8 @@
                                         fsnow,    einit,    &
                                         einter,   efinal,   &
                                         fcondtopn,fcondbot, &
-                                        fadvocn,  fbot,     &
+                                        fadvocn,            &
+                                        fbot, einex,        &
                                         l_stop,             &
                                         istop,    jstop)
 
@@ -733,8 +734,8 @@
             else
                salinz(i,j,k,iblk)=(saltmax/c2)*(c1-cos(pi*zn**(nsal/(msal+zn))))
             endif ! ktherm
-
-              Tmltz(i,j,k,iblk) =  -salinz(i,j,k,iblk)*depressT
+            salinz(i,j,k,iblk) = max(salinz(i,j,k,iblk), min_salin)
+            Tmltz (i,j,k,iblk) = -salinz(i,j,k,iblk)*depressT
            enddo ! k
            salinz(i,j,nilyr+1,iblk) = saltmax         !sss(i,j,iblk)  !saltmax
          endif ! read_Sin .OR. solve_Sin
@@ -1040,7 +1041,7 @@
                                        istop,    jstop)
 !
 ! !USES:
-        use ice_therm_mushy, only: temperature_mush
+        use ice_therm_mushy, only: temperature_mush, liquidus_temperature_mush, enthalpy_of_melting
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1059,7 +1060,6 @@
          vicen , & ! volume per unit area of ice          (m)
          vsnon     ! volume per unit area of snow         (m)
  
-
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr), &
          intent(in) :: &
          trcrn     ! tracer array
@@ -1305,7 +1305,7 @@
       !---------------------------------------------------------------------
 
             Sin(ij,k) = trcrn(i,j,nt_sice+k-1)
-            if (Sin(ij,k) < min_salin-puny) then
+            if (ktherm /= 2 .and. Sin(ij,k) < min_salin-puny) then
                   write(nu_diag,*) ' '
                   write(nu_diag,*) 'Starting Sin < min_salin, layer', k
                   write(nu_diag,*) 'Sin =', Sin(ij,k)
@@ -1318,7 +1318,11 @@
                   return
             endif
 
-            Tmlts(ij,k) =  -Sin(ij,k) * depressT
+            if (ktherm /= 2) then
+               Tmlts(ij,k) =  -Sin(ij,k) * depressT
+            else
+               Tmlts(ij,k) = liquidus_temperature_mush(Sin(ij,k))
+            endif
 
       !-----------------------------------------------------------------
       ! Compute ice enthalpy
@@ -1371,17 +1375,43 @@
                endif
 
                if (Tin(ij,k) > Tmax) then
-                  write(nu_diag,*) ' '
-                  write(nu_diag,*) 'Starting thermo, T > Tmax, layer', k
-                  write(nu_diag,*) 'Tin=',Tin(ij,k),', Tmax=',Tmax
-                  write(nu_diag,*) 'Sin=',Sin(ij,k)
-                  write(nu_diag,*) 'hin=',hin(ij)
-                  write(nu_diag,*) 'istep1, my_task, i, j, k:', &
-                                    istep1, my_task, i, j, k
-                  l_stop = .true.
-                  istop = i
-                  jstop = j
-                  return
+                  if (ktherm /= 2) then
+                     write(nu_diag,*) ' '
+                     write(nu_diag,*) 'Starting thermo, T > Tmax, layer', k
+                     write(nu_diag,*) 'Tin=',Tin(ij,k),', Tmax=',Tmax
+                     write(nu_diag,*) 'Sin=',Sin(ij,k)
+                     write(nu_diag,*) 'hin=',hin(ij)
+                     write(nu_diag,*) 'istep1, my_task, i, j, k:', &
+                                       istep1, my_task, i, j, k
+                     
+                     write(nu_diag,*) qin(ij,k), Sin(ij,k)                  
+                     write(nu_diag,*) enthalpy_of_melting(Sin(ij,k))
+                     
+                     l_stop = .true.
+                     istop = i
+                     jstop = j
+                     return
+                  else
+                     write(nu_diag,*) 'Starting thermo, T > Tmax, layer', k
+
+                     write(nu_diag,*) 'Tin=',Tin(ij,k),', Tmax=',Tmax
+                     write(nu_diag,*) 'Sin=',Sin(ij,k)
+                     write(nu_diag,*) 'hin=',hin(ij)
+                     write(nu_diag,*) 'istep1, my_task, i, j, k:', &
+                                       istep1, my_task, i, j, k
+                     
+                     write(nu_diag,*) qin(ij,k), Sin(ij,k)                  
+                     write(nu_diag,*) enthalpy_of_melting(Sin(ij,k))
+
+                     qin(ij,k) = enthalpy_of_melting(Sin(ij,k)) - c1
+                     Tin(ij,k) = temperature_mush(qin(ij,k),Sin(ij,k))
+                     write(nu_diag,*) 'Starting thermo, T > Tmax, layer', k
+
+                     write(nu_diag,*) qin(ij,k), Sin(ij,k), Tin(ij,k), Tmlts(ij,k)
+
+                     !stop
+
+                  endif
                endif
             enddo               ! ij
          endif                  ! tice_high
@@ -1458,11 +1488,14 @@
                                     congel,    snoice,   &  
                                     mlt_onset, frz_onset,&
                                     Sin,       sss,      &
-                                    dsnow,     einex)
+                                    dsnow,     einex,    &
+                                    fbri)
 !
 ! !USES:
 !
-        use ice_therm_mushy, only: enthalpy_mush, enthalpy_of_melting, phi_i_mushy
+        use ice_communicate, only: my_task
+        use ice_state,       only: hbrine
+        use ice_therm_mushy, only: enthalpy_mush, enthalpy_of_melting, phi_i_mushy, temperature_mush, liquidus_temperature_mush, liquid_fraction
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1484,9 +1517,10 @@
          fsnow       , & ! snowfall rate (kg m-2 s-1)
          flatn       , & ! surface downward latent heat (W m-2)
          fsurfn      , & ! net flux to top surface, excluding fcondtopn
-         fcondtopn       ! downward cond flux at top surface (W m-2)
+         fcondtopn   , & ! downward cond flux at top surface (W m-2)
+         fbri            ! brine height to ice height fraction
 
-      real (kind=dbl_kind), dimension (icells), intent(in) :: &
+      real (kind=dbl_kind), dimension (icells), intent(inout) :: &
          fcondbot     ,&  ! downward cond flux at bottom surface (W m-2)
          einex              ! excess energy from too much interior melt
 
@@ -1712,6 +1746,7 @@
          !--------------------------------------------------------------
 
          if (ktherm == 2) then
+            einex(ij) = c0
 
             qbotm = enthalpy_mush(Tbot(i,j), sss(i,j))
             qbotp = -Lfresh * rhoi * (c1 - phi_i_mushy)!0.15_dbl_kind
@@ -1990,9 +2025,8 @@
     ! Convert snow to ice if snow lies below freeboard.
     !-------------------------------------------------------------------
 
-      if (ktherm /= 2) &
-      call freeboard (nx_block, ny_block, &
-                      icells,             &
+           call freeboard (nx_block, ny_block, &
+                       icells,             &
                       indxi,    indxj,    &
                       dt,                 &
                       snoice,             &
@@ -2117,10 +2151,23 @@
 
       endif   ! nslyr > 1
 
+      !-----------------------------------------------------------------
+      ! Remove very thin snow layers (ktherm = 2)
+      !-----------------------------------------------------------------
+
       if (ktherm == 2) then
-      do ij = 1, icells
-         if (hsn(ij) <= puny) hsn(ij) = c0 !echmod NOTE nonconservation?
-      enddo
+         do k = 1, nslyr
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+               if (hsn(ij) <= puny) then
+!echmod                  fhocnn(i,j) = fhocnn(i,j) &
+!check                    + qsn(ij,k)*hsn(ij)/(real(nslyr,kind=dbl_kind)*dt)
+                  qsn(ij,k) = -rhos*Lfresh
+                  if (k == nslyr) hsn(ij) = c0
+               endif
+            enddo
+         enddo
       endif
 
       !-----------------------------------------------------------------
@@ -2462,9 +2509,9 @@
                                             fsnow,              &
                                             einit,    einter,   &
                                             efinal,             &
-                                            fcondtopn, fcondbot, &
+                                            fcondtopn, fcondbot,&
                                             fadvocn,            &
-                                            fbot,               &
+                                            fbot,  einex,       &
                                             l_stop,             &
                                             istop,    jstop)
 !
@@ -2492,14 +2539,15 @@
          fswint      , & ! SW absorbed in ice interior, below surface (W m-2)
          fsnow       , & ! snowfall rate (kg m-2 s-1)
          fcondtopn   , &
-         fbot        , &
-         fadvocn
+         fadvocn     , &
+         fbot           
 
       real (kind=dbl_kind), dimension (icells), intent(in) :: &
          einit       , & ! initial energy of melting (J m-2)
          einter      , & ! intermediate energy of melting (J m-2)
          efinal      , & ! final energy of melting (J m-2)
-         fcondbot
+         fcondbot    , & ! 
+         einex           ! excess energy from dqmat to ocean  (J m-2)
 
       logical (kind=log_kind), intent(inout) :: &
          l_stop          ! if true, print diagnostics and abort model
@@ -2527,6 +2575,12 @@
        i = indxi(ij)
        j = indxj(ij)
 
+      !-----------------------------------------------------------------
+      ! Note that fsurf - flat = fsw + flw + fsens; i.e., the latent
+      ! heat is not included in the energy input, since (efinal - einit)
+      ! is the energy change in the system ice + vapor, and the latent
+      ! heat lost by the ice is equal to that gained by the vapor.
+      !-----------------------------------------------------------------
        
          einp = (fsurfn(i,j) - flatn(i,j) + fswint(i,j) - fhocnn(i,j) &
                - fsnow(i,j)*Lfresh - fadvocn(i,j)) * dt
@@ -2536,17 +2590,6 @@
             !l_stop = .true.
             istop = i
             jstop = j
-
-      !-----------------------------------------------------------------
-      ! Note that fsurf - flat = fsw + flw + fsens; i.e., the latent
-      ! heat is not included in the energy input, since (efinal - einit)
-      ! is the energy change in the system ice + vapor, and the latent
-      ! heat lost by the ice is equal to that gained by the vapor.
-      !-----------------------------------------------------------------
-
-!         einp = (fsurfn(i,j) - flatn(i,j) + fswint(i,j) - fhocnn(i,j) &
-!                -fsnow(i,j)*Lfresh) * dt
-!         ferr = abs(efinal(ij)-einit(ij)-einp) / dt
 
          write(nu_diag,*) 'Thermo energy conservation error'
          write(nu_diag,*) 'istep1, my_task, i, j:', &
@@ -2559,9 +2602,13 @@
                            efinal(ij)-einit(ij)
          write(nu_diag,*) 'fsurfn,flatn,fswint,fhocn, fsnow*Lfresh:'
          write(nu_diag,*) fsurfn(i,j),flatn(i,j),fswint(i,j),fhocnn(i,j), fsnow(i,j)*Lfresh
+         write(nu_diag,*) 'Input energy =', einp
+         write(nu_diag,*) 'fbot(i,j),fcondbot(ij):'
+         write(nu_diag,*) fbot(i,j),fcondbot(ij)
+         write(nu_diag,*) 'Excess energy to ocean (J/m^2)', einex(ij)
 
-         if (ktherm == 2) then
-            write(nu_diag,*) 'Inter energy   =', einter(ij)
+!         if (ktherm == 2) then
+            write(nu_diag,*) 'Intermediate energy =', einter(ij)
             write(nu_diag,*) 'efinal - einter =', &
                               efinal(ij)-einter(ij)
             write(nu_diag,*) 'einter - einit  =', &
@@ -2571,11 +2618,14 @@
             write(nu_diag,*) 'Melt/Growth Error =', (einter(ij)-einit(ij)) &
                   + ferr*dt - (fcondtopn(i,j)*dt - fcondbot(ij)*dt + fswint(i,j)*dt)
             write(nu_diag,*) 'Advection Error =', fadvocn(i,j)*dt
-         endif
+!         endif
 
-         write(nu_diag,*) 'Input energy =', einp
+!         write(nu_diag,*) fsurfn(i,j),flatn(i,j),fswint(i,j),fhocnn(i,j)
+
+         write(nu_diag,*) 'dt*(fsurfn, flatn, fswint, fhocn, fsnow*Lfresh, fadvocn):'
          write(nu_diag,*) fsurfn(i,j)*dt, flatn(i,j)*dt, &
-                          fswint(i,j)*dt, fhocnn(i,j)*dt
+                          fswint(i,j)*dt, fhocnn(i,j)*dt, &
+                          fsnow(i,j)*Lfresh*dt, fadvocn(i,j)*dt
          return
          endif
       enddo

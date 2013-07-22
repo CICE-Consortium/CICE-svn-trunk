@@ -238,6 +238,7 @@
          update_ocn_f ! if true, update fresh water and salt fluxes
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks), public :: &
+         meltsn      , & ! snow melt in category n (m)
          melttn      , & ! top melt in category n (m)
          meltbn      , & ! bottom melt in category n (m)
          congeln     , & ! congelation ice formation in category n (m)
