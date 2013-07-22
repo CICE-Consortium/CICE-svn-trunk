@@ -780,7 +780,7 @@
          allocate(work_g1(1,1)) ! to save memory
       endif
 
-      call gather_global(work_g1, work, master_task, distrb_info)
+      call gather_global(work_g1, work, master_task, distrb_info, spc_val=c0)
 
       if (my_task == master_task) then
 
@@ -895,7 +895,8 @@
          allocate(work_g4(1,1,1)) ! to save memory
       endif
       do k = 1,nblyr_hist
-       call gather_global(work_g4(:,:,k), work(:,:,k,:), master_task, distrb_info)
+       call gather_global(work_g4(:,:,k), work(:,:,k,:), master_task, &
+                          distrb_info, spc_val=c0)
       enddo   !k
 
       if (my_task == master_task) then
@@ -1011,7 +1012,7 @@
          allocate(work_g1(1,1)) ! to save memory
       endif
 
-      call gather_global_ext(work_g1, work, master_task, distrb_info)
+      call gather_global_ext(work_g1, work, master_task, distrb_info, spc_val=c0)
 
       if (my_task == master_task) then
 
