@@ -83,7 +83,7 @@
 ! !IROUTINE: gather_global
 ! !INTERFACE:
 
- subroutine gather_global_dbl(ARRAY_G, ARRAY, dst_task, src_dist)
+ subroutine gather_global_dbl(ARRAY_G, ARRAY, dst_task, src_dist, spc_val)
 
 ! !DESCRIPTION:
 !  This subroutine gathers a distributed array to a global-sized
@@ -114,6 +114,9 @@
 
    real (dbl_kind), dimension(:,:,:), intent(in) :: &
      ARRAY      ! array containing horizontal slab of distributed field
+
+   real (dbl_kind), intent(in), optional :: &
+     spc_val
 
 ! !OUTPUT PARAMETERS:
 
@@ -146,8 +149,17 @@
    real (dbl_kind), dimension(:,:), allocatable :: &
      msg_buffer
 
+   real (dbl_kind) :: &
+     special_value
+
    type (block) :: &
      this_block  ! block info for current block
+
+   if (present(spc_val)) then
+      special_value = spc_val
+   else
+      special_value = spval_dbl
+   endif
 
 !-----------------------------------------------------------------------
 !
@@ -183,7 +195,7 @@
          do j=this_block%jlo,this_block%jhi
          do i=this_block%ilo,this_block%ihi
            ARRAY_G(this_block%i_glob(i), &
-                   this_block%j_glob(j)) = spval_dbl
+                   this_block%j_glob(j)) = special_value
          end do
          end do
        endif
@@ -580,7 +592,7 @@
 ! !IROUTINE: gather_global
 ! !INTERFACE:
 
- subroutine gather_global_ext(ARRAY_G, ARRAY, dst_task, src_dist)
+ subroutine gather_global_ext(ARRAY_G, ARRAY, dst_task, src_dist, spc_val)
 
 ! !DESCRIPTION:
 !  This subroutine gathers a distributed array to a global-sized
@@ -611,6 +623,9 @@
    real (dbl_kind), dimension(:,:), intent(inout) :: &
      ARRAY_G    ! array containing global horizontal field on dst_task
 
+   real (dbl_kind), optional :: &
+     spc_val
+     
 !EOP
 !BOC
 !-----------------------------------------------------------------------
@@ -638,8 +653,17 @@
    real (dbl_kind), dimension(:,:), allocatable :: &
      msg_buffer
 
+   real (dbl_kind) :: &
+     special_value
+
    type (block) :: &
      this_block  ! block info for current block
+
+   if (present(spc_val)) then
+      special_value = spc_val
+   else
+      special_value = spval_dbl
+   endif
 
    nx = nx_global + 2*nghost
    ny = ny_global + 2*nghost
@@ -758,7 +782,7 @@
          do j=this_block%jlo,this_block%jhi
          do i=this_block%ilo,this_block%ihi
            ARRAY_G(this_block%i_glob(i)+nghost, &
-                   this_block%j_glob(j)+nghost) = spval_dbl
+                   this_block%j_glob(j)+nghost) = special_value
          end do
          end do
        endif
