@@ -203,7 +203,7 @@
          pfsurf, pfcondtop, psst, psss, pTf, hiavg, hsavg, hbavg, hbioavg, &
          pfhocn, &
          pmeltt, pmeltb, pmeltl, psnoice, pdsnow, pfrazil, pcongel, &
-         phin1, phin2
+         phin1, phin2, paicen 
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          work1, work2
@@ -737,6 +737,7 @@
                   hbavg(n) = c0
                   endif
                endif
+               paicen(n) = aicen(i,j,1,iblk)       ! cat 1 ice area
                pTsfc(n) = trcr(i,j,nt_Tsfc,iblk)   ! ice/snow sfc temperature
                pevap(n) = evap(i,j,iblk)*dt/rhoi   ! sublimation/condensation
                pfswabs(n) = fswabs(i,j,iblk)       ! absorbed solar flux
@@ -772,7 +773,8 @@
             call broadcast_scalar(hsavg    (n), pmloc(n))             
             call broadcast_scalar(hiavg    (n), pmloc(n))              
             call broadcast_scalar(phin1    (n), pmloc(n))                
-            call broadcast_scalar(phin2    (n), pmloc(n))              
+            call broadcast_scalar(phin2    (n), pmloc(n))            
+            call broadcast_scalar(paicen   (n), pmloc(n))                 
             call broadcast_scalar(hbavg    (n), pmloc(n))              
             call broadcast_scalar(hbioavg  (n), pmloc(n))             
             call broadcast_scalar(pTsfc    (n), pmloc(n))             
@@ -911,6 +913,7 @@
         endif
         write(nu_diag,*) '----------ice----------'
         write(nu_diag,900) 'area fraction          = ',paice(1),paice(2)
+        write(nu_diag,900) 'cat 1 area fraction    = ',paicen(1),paicen(2)
         write(nu_diag,900) 'cat 1 ice thickness (m)= ',phin1(1),phin1(2)
         write(nu_diag,900) 'cat 2 ice thickness (m)= ',phin2(1),phin2(2)
         write(nu_diag,900) 'avg ice thickness (m)  = ',hiavg(1),hiavg(2)

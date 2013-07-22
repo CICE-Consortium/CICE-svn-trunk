@@ -22,26 +22,32 @@
 
       logical (kind=log_kind), public :: & 
          restart_S     ,   &! if .true., read Salinity from restart file
+         restart_hbrine,   &! if .true., read hbrine from restart file
          tr_bgc_S           ! if .true., S as product tracer on ice
 
       character(char_len_long), public :: & 
          bgc_data_dir       ! directory for biogeochemistry data
 
       logical (kind=log_kind), dimension (nx_block,ny_block,max_blocks), public :: &
-         Rayleigh_criteria, &   ! .true. means Ra_c was reached
-         first_ice              ! .true. until ice is formed (false)  
-                                !
+         Rayleigh_criteria   ! .true. means Ra_c was reached
+
+      logical (kind=log_kind), dimension (nx_block,ny_block,ncat,max_blocks), public :: &
+         first_ice              ! .true. until ice is formed (false)
+     
       real (kind=dbl_kind), public :: & 
-         Ra_c      ,  &  ! critical Rayleigh number for bottom convection
          grid_oS   ,  &  ! for bottom flux (zsalinity)
          l_skS     ,  &  ! 0.02 characteristic skeletal layer thickness (m) (zsalinity)
-         lapidus_g , &   ! constant for artificial viscosity/diffusion during growth
-         lapidus_m       ! constant for artificial diffusion during melt
+         phi_snow  ,  &  ! porosity of snow
+         flood_frac      ! fraction of ocean/meltwater that floods
 
       real (kind=dbl_kind), parameter, public :: & 
-         min_salin = p1             , & ! threshold for brine pocket treatment 
-         Dm        = 1.0e-9_dbl_kind, & ! molecular diffusion (m^2/s)
-         thin      = 0.05_dbl_kind      ! minimum ice thickness for salinity dynamics
+         viscos_dynamic = 2.2_dbl_kind, & !1.8e-3_dbl_kind (pure water at 0^oC) (kg/m/s)
+         min_salin      = p1          , & ! threshold for brine pocket treatment 
+         min_bgc        = p1          , & ! fraction of ocean bgc concentration in surface melt 
+         Dm             = 1.0e-9_dbl_kind, & ! molecular diffusion (m^2/s)
+         his_min        = p01            , & ! minimum hbrine thickness
+         Ra_c           = 0.05_dbl_kind  , & ! critical Rayleigh number for bottom convection
+         thin           = 0.05_dbl_kind      ! minimum ice thickness for salinity dynamics
 
       real (kind=dbl_kind), parameter, public :: & 
          k_o        = 3.e-8_dbl_kind      ! scaling factor permeability calculation (m^2)
@@ -69,11 +75,14 @@
          flux_bio_gbm ,&  ! all bio fluxes (+ive to ocean) are included here
          flux_bio_g_gbm  !gravity drainage contribution
 
+      real (kind=int_kind), dimension(nbltrcr), public :: &
+         bgc_tracer_type  ! 1  dissolved tracers: mix like salinity
+                          ! 0  tracers that cling: resist brine motion (algae)
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          fsice   , & ! Total flux  of salt to ocean at time step for conservation
          fsice_g     ! Total gravity drainage flux
                         !(kg/m^2/s)
-
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          nit     , & ! ocean nitrate (mmol/m^3)          
          amm     , & ! ammonia/um (mmol/m^3)
@@ -88,7 +97,8 @@
 
       character(char_len), public :: &          
          sil_data_type, & ! 'default', 'clim'
-         nit_data_type    ! 'default', 'clim'
+         nit_data_type, & ! 'default', 'clim'     
+         bgc_flux_type    ! 'constant', 'Jin2006' describes type of ocean-ice piston velocity 
 
       logical (kind=log_kind), public :: & 
          tr_bgc_N_sk,       & ! if .true., nitrogen as algal tracer on ice
@@ -115,7 +125,8 @@
          tr_bgc_DMS,     & ! if .true., DMS as product tracer on ice
          tr_bgc_PON,     & ! if .true., PON as product tracer on ice
          restore_bgc,    & !            restore nitrate if true
-         solve_bgc         ! if .true., solve chemistry portion of code
+         solve_skl_bgc,  & ! if .true., solve skeletal biochemistry portion of code
+         solve_zbgc        ! if .true., solve vertical biochemistry portion of code
 
       ! zbgc tracer indices
       integer (kind=int_kind), public :: &
@@ -141,20 +152,27 @@
 !    Bioparameters from algal_dynamic
      
     real (kind=dbl_kind), parameter, public :: &
-         R_C2N      = 7.0_dbl_kind, & ! algal C to N (mole/mole) Kristiansen 1991 (Barents), 9.0_dbl_kind
+         R_C2N      = 7.0_dbl_kind  , & ! algal C to N (mole/mole) Kristiansen 1991 (Barents), 9.0_dbl_kind
          R_gC2molC  = 12.01_dbl_kind, & ! mg/mmol C
-         R_chl2N    = 3.0_dbl_kind , &  ! algal chlorophyll to N (mg/millimole)
+         R_chl2N    = 3.0_dbl_kind  , & ! algal chlorophyll to N (mg/millimole)
+         R_S2N      = 0.03_dbl_kind , & ! algal S to N (mole/mole)
          fr_resp    = 0.05_dbl_kind     ! respiration fraction
+
+    real (kind=dbl_kind), parameter, public :: &
+         sk_l       = 0.03_dbl_kind,  & ! skeletal layer thickness (m)
+         phi_sk     = 0.30_dbl_kind     ! skeletal layer porosity
 
       !-----------------------------------------------------------------
       ! for bgc layer model
       !-----------------------------------------------------------------
-      real (kind=dbl_kind), public :: &
-         rhosi         ! average sea ice density (919-974 kg/m^2)
+      real (kind=dbl_kind), parameter, public :: &
+         rhosi     = 940.0_dbl_kind   ! average sea ice density (919-974 kg/m^2, &
+                                      ! Cox and Weeks, 1982)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          S_tot      , &  ! Total ice salinity in per grid cell (g/m^2)
          chl_net    , &  ! Total chla (mg chla/m^2) per grid cell
+         grow_net   , &  ! Specific growth rate (/s) per grid cell
          PP_net     , &  ! Total production (mg C/m^2/s) per grid cell
          NO_net     , &  ! Total production (mg C/m^2/s) per grid cell
          hbri            ! brine height
@@ -191,7 +209,10 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks), public :: &
          darcy_V          ! darcy velocity positive up        (m/s)
-
+    
+      real (kind=dbl_kind), public :: & 
+         dts_b  !salinity timestep
+        
 !=======================================================================
 
       contains
@@ -831,99 +852,88 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
-
-            if (hbrine .AND. tr_bgc_S) then
-            do k = 1,nblyr
-              fsice(i,j) = fsice(i,j) + rhosi*trcrn(i,j,nt_fbri)&
+       do ij = 1, icells
+          i = indxi(ij)
+          j = indxj(ij)
+            
+          if (hbrine .AND. tr_bgc_S) then
+          do k = 1,nblyr
+             fsice(i,j) = fsice(i,j) + rhosi*trcrn(i,j,nt_fbri)&
                             *vicen(i,j)*p001 *zspace*trcrn(i,j,nt_bgc_S+k-1)&
                             * rside(i,j)/dt
-            enddo
-
-            if (tr_bgc_NO ) then
-            do k = 1,nblyr
-              flux_bio(i,j,nlt_bgc_NO) = flux_bio(i,j,nlt_bgc_NO) + trcrn(i,j,nt_fbri)&
+          enddo
+          if (tr_bgc_NO ) then
+          do k = 1,nblyr
+             flux_bio(i,j,nlt_bgc_NO) = flux_bio(i,j,nlt_bgc_NO) + trcrn(i,j,nt_fbri)&
                             *vicen(i,j)*zspace*trcrn(i,j,nt_bgc_NO+k-1)&
                             * rside(i,j)/dt
-            enddo
-            endif 
-            if (tr_bgc_chl ) then
-            do k = 1,nblyr
-              flux_bio(i,j,nlt_bgc_chl) = flux_bio(i,j,nlt_bgc_chl) + trcrn(i,j,nt_fbri)&
+          enddo
+          endif 
+          if (tr_bgc_chl ) then
+          do k = 1,nblyr
+             flux_bio(i,j,nlt_bgc_chl) = flux_bio(i,j,nlt_bgc_chl) + trcrn(i,j,nt_fbri)&
                             *vicen(i,j)*zspace*trcrn(i,j,nt_bgc_chl+k-1)&
                             * rside(i,j)/dt
-            enddo
-            endif 
-            if (tr_bgc_NH ) then
-            do k = 1,nblyr
-              flux_bio(i,j,nlt_bgc_NH) = flux_bio(i,j,nlt_bgc_NH) + trcrn(i,j,nt_fbri)&
+          enddo
+          endif 
+          if (tr_bgc_NH ) then
+          do k = 1,nblyr
+             flux_bio(i,j,nlt_bgc_NH) = flux_bio(i,j,nlt_bgc_NH) + trcrn(i,j,nt_fbri)&
                             *vicen(i,j)*zspace*trcrn(i,j,nt_bgc_NH+k-1)&
                             * rside(i,j)/dt
-            enddo
-            endif
- 
-            if (tr_bgc_C ) then
-            do k = 1,nblyr
-              flux_bio(i,j,nlt_bgc_C) = flux_bio(i,j,nlt_bgc_C) + trcrn(i,j,nt_fbri)&
+          enddo
+          endif
+          if (tr_bgc_C ) then
+          do k = 1,nblyr
+             flux_bio(i,j,nlt_bgc_C) = flux_bio(i,j,nlt_bgc_C) + trcrn(i,j,nt_fbri)&
                             *vicen(i,j)*zspace*trcrn(i,j,nt_bgc_C+k-1)&
                             * rside(i,j)/dt
-            enddo
-            endif
- 
-            if (tr_bgc_Sil ) then
-            do k = 1,nblyr
-              flux_bio(i,j,nlt_bgc_Sil) = flux_bio(i,j,nlt_bgc_Sil) + trcrn(i,j,nt_fbri)&
+          enddo
+          endif
+          if (tr_bgc_Sil ) then
+          do k = 1,nblyr
+             flux_bio(i,j,nlt_bgc_Sil) = flux_bio(i,j,nlt_bgc_Sil) + trcrn(i,j,nt_fbri)&
                             *vicen(i,j)*zspace*trcrn(i,j,nt_bgc_Sil+k-1)&
                             * rside(i,j)/dt
-            enddo
-            endif
-
- 
-            if (tr_bgc_DMSPp ) then
-            do k = 1,nblyr
-              flux_bio(i,j,nlt_bgc_DMSPp) = flux_bio(i,j,nlt_bgc_DMSPp) + trcrn(i,j,nt_fbri)&
+          enddo
+          endif
+          if (tr_bgc_DMSPp ) then
+          do k = 1,nblyr
+             flux_bio(i,j,nlt_bgc_DMSPp) = flux_bio(i,j,nlt_bgc_DMSPp) + trcrn(i,j,nt_fbri)&
                             *vicen(i,j)*zspace*trcrn(i,j,nt_bgc_DMSPp+k-1)&
                             * rside(i,j)/dt
-            enddo
-            endif
-
- 
-            if (tr_bgc_DMSPd ) then
-            do k = 1,nblyr
-              flux_bio(i,j,nlt_bgc_DMSPd) = flux_bio(i,j,nlt_bgc_DMSPd) + trcrn(i,j,nt_fbri)&
+          enddo
+          endif
+          if (tr_bgc_DMSPd ) then
+          do k = 1,nblyr
+             flux_bio(i,j,nlt_bgc_DMSPd) = flux_bio(i,j,nlt_bgc_DMSPd) + trcrn(i,j,nt_fbri)&
                             *vicen(i,j)*zspace*trcrn(i,j,nt_bgc_DMSPd+k-1)&
                             * rside(i,j)/dt
-            enddo
-            endif
-
-            if (tr_bgc_DMS ) then
-            do k = 1,nblyr
-              flux_bio(i,j,nlt_bgc_DMS) = flux_bio(i,j,nlt_bgc_DMS) + trcrn(i,j,nt_fbri)&
+          enddo
+          endif
+          if (tr_bgc_DMS ) then
+          do k = 1,nblyr
+             flux_bio(i,j,nlt_bgc_DMS) = flux_bio(i,j,nlt_bgc_DMS) + trcrn(i,j,nt_fbri)&
                             *vicen(i,j)*zspace*trcrn(i,j,nt_bgc_DMS+k-1)&
                             * rside(i,j)/dt
-            enddo
-            endif 
-
-            if (tr_bgc_N ) then
-            do k = 1,nblyr
-              flux_bio(i,j,nlt_bgc_N) = flux_bio(i,j,nlt_bgc_N) + trcrn(i,j,nt_fbri)&
+          enddo
+          endif 
+          if (tr_bgc_N ) then
+          do k = 1,nblyr
+             flux_bio(i,j,nlt_bgc_N) = flux_bio(i,j,nlt_bgc_N) + trcrn(i,j,nt_fbri)&
                             *vicen(i,j)*zspace*trcrn(i,j,nt_bgc_N+k-1)&
                             * rside(i,j)/dt
-            enddo
-            endif
-
-            if (tr_bgc_PON ) then
-            do k = 1,nblyr
-              flux_bio(i,j,nlt_bgc_PON) = flux_bio(i,j,nlt_bgc_PON) + trcrn(i,j,nt_fbri)&
+          enddo
+          endif
+          if (tr_bgc_PON ) then
+          do k = 1,nblyr
+             flux_bio(i,j,nlt_bgc_PON) = flux_bio(i,j,nlt_bgc_PON) + trcrn(i,j,nt_fbri)&
                             *vicen(i,j)*zspace*trcrn(i,j,nt_bgc_PON+k-1)&
                             * rside(i,j)/dt
-            enddo
-            endif
- 
-            endif  ! hbrine and tr_bgc_S
-         enddo                  ! ij
+          enddo
+          endif
+         endif  ! hbrine and tr_bgc_S
+       enddo                  ! ij
 
       end subroutine lateral_melt_bgc 
 

@@ -75,9 +75,11 @@
            f_bgc_DMS      = 'x', f_bgc_Sil      = 'x',   &
            f_bgc_PON      = 'x', f_bgc_S        = 'x',   &
            f_fbri         = 'x', &
+           f_hbri         = 'x', &
            f_growN        = 'x', f_zfswin      = 'x', &
            f_chlnet       = 'x', &
-           f_PPnet        = 'x', f_NOnet = 'x'
+           f_PPnet        = 'x', f_NOnet = 'x', &
+           f_grownet      = 'x'
 
       !---------------------------------------------------------------
       ! namelist variables
@@ -110,9 +112,10 @@
            f_bgc_DMSPd , f_bgc_DMS , &
            f_bgc_PON  , f_bgc_S, &
            f_fbri, &
+           f_hbri, &
            f_growN,    f_zfswin, &
            f_chlnet, &
-           f_PPnet, f_NOnet
+           f_PPnet, f_NOnet, f_grownet
 
       !---------------------------------------------------------------
       ! field indices
@@ -167,11 +170,13 @@
            n_bgc_PON, &
            n_bgc_S,  &
            n_fbri, &
+           n_hbri, &
            n_growN, &
            n_zfswin, &
            n_chlnet, &
            n_PPnet, &
-           n_NOnet
+           n_NOnet, &
+           n_grownet
 
 !=======================================================================
 
@@ -247,21 +252,23 @@
          f_aero      = 'x' 
          f_aeron     = 'x' ! NOTE not implemented
       endif
-
-      if (.not. tr_bgc_N_sk)  f_bgc_N_sk = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_C_sk = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_chl_sk = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_Nit_sk = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_Am_sk = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_Sil_sk = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_DMSPp_sk = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_DMSPd_sk = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_DMS_sk = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_Nit_ml = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_Am_ml = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_Sil_ml = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_DMSP_ml = 'x'
-      if (.not. tr_bgc_N_sk)  f_bgc_DMS_ml = 'x'
+      
+      if (.not. solve_skl_bgc) then
+          f_bgc_N_sk = 'x'
+          f_bgc_C_sk = 'x'
+          f_bgc_chl_sk = 'x'
+          f_bgc_Nit_sk = 'x'
+          f_bgc_Am_sk = 'x'
+          f_bgc_Sil_sk = 'x'
+          f_bgc_DMSPp_sk = 'x'
+          f_bgc_DMSPd_sk = 'x'
+          f_bgc_DMS_sk = 'x'
+          f_bgc_Nit_ml = 'x'
+          f_bgc_Am_ml = 'x'
+          f_bgc_Sil_ml = 'x'
+          f_bgc_DMSP_ml = 'x'
+          f_bgc_DMS_ml = 'x'
+      endif  !.not. solve_skl_bgc
       if (.not. tr_bgc_NO)    f_bgc_NO  = 'x'
       if (.not. tr_bgc_NH)    f_bgc_NH  = 'x'
       if (.not. tr_bgc_N)     f_bgc_N  = 'x'
@@ -273,7 +280,10 @@
       if (.not. tr_bgc_DMS)   f_bgc_DMS  = 'x'
       if (.not. tr_bgc_PON)   f_bgc_PON  = 'x'
       if (.not. tr_bgc_S)     f_bgc_S  = 'x'
-      if (.not. hbrine)       f_fbri = 'x'
+      if (.not. hbrine)  then
+              f_fbri  = 'x'
+              f_hbri  = 'x'
+      endif
 
       call broadcast_scalar (f_faero_atm, master_task)
       call broadcast_scalar (f_faero_ocn, master_task)
@@ -309,7 +319,7 @@
       call broadcast_scalar (f_bgc_Am_ml, master_task)
       call broadcast_scalar (f_bgc_Sil_ml, master_task)
       call broadcast_scalar (f_bgc_DMSP_ml, master_task)
-      call broadcast_scalar (f_bgc_DMS_ml, master_task)
+      call broadcast_scalar (f_bgc_DMS_ml, master_task)     
       call broadcast_scalar (f_zTin, master_task)
       call broadcast_scalar (f_zphi, master_task)
       call broadcast_scalar (f_iDi, master_task)
@@ -326,11 +336,13 @@
       call broadcast_scalar (f_bgc_PON, master_task)
       call broadcast_scalar (f_bgc_S, master_task)
       call broadcast_scalar (f_fbri, master_task)
+      call broadcast_scalar (f_hbri, master_task)
       call broadcast_scalar (f_growN, master_task)
       call broadcast_scalar (f_zfswin, master_task)
       call broadcast_scalar (f_chlnet, master_task)
       call broadcast_scalar (f_PPnet, master_task)
       call broadcast_scalar (f_NOnet, master_task)
+      call broadcast_scalar (f_grownet, master_task)
       call broadcast_scalar (f_upNO, master_task)
       call broadcast_scalar (f_upNH, master_task)
 
@@ -383,6 +395,7 @@
       ! Biogeochemistry
 
       ! skeletal layer tracers
+      if (solve_skl_bgc) then
       if (f_bgc_N_sk(1:1) /= 'x') &
          call define_hist_field(n_bgc_N_sk,"algal_N","mmol/m^2",tstr2D, tcstr, &
              "ice bottom algae (nitrogen)",                                      &
@@ -453,7 +466,8 @@
          call define_hist_field(n_bgc_DMS_ml,"ml_DMS","mmol/m^3",tstr2D, tcstr, &
              "mixed layer trace gas (DMS)",                                      &
              "upper ocean", c1, c0,                &
-             ns, f_bgc_DMS_ml)  
+             ns, f_bgc_DMS_ml) 
+      endif   !solve_skl_bgc 
 
       ! zbgc
       if (f_fNO(1:1) /= 'x') &
@@ -555,21 +569,32 @@
       if (f_chlnet(1:1) /= 'x') &
          call define_hist_field(n_chlnet,"chl_net","mg chl/m^2",tstr2D, tcstr,        &
              "Net Chlorophyll",                     &
-             "In ice volume*fbri ", c1, c0,       &
+             "weighted by ice area ", c1, c0,       &
              ns, f_chlnet)
-
-      if (f_PPnet(1:1) /= 'x') &
-         call define_hist_field(n_PPnet,"PP_net","mg C/d/m^2",tstr2D, tcstr,        &
-             "Net Primary Production",                     &
-             "In ice volume*fbri ", secday, c0,       &
-             ns, f_PPnet)
 
       if (f_NOnet(1:1) /= 'x') &
          call define_hist_field(n_NOnet,"NO_net","mmol NO/m^2",tstr2D, tcstr,        &
              "Net Nitrate",                     &
-             "In ice volume*fbri ", c1, c0,       &
+             "weighted by ice area", c1, c0,       &
              ns, f_NOnet)
 
+     ! both skl and zbgc
+       
+      if (f_PPnet(1:1) /= 'x') &
+         call define_hist_field(n_PPnet,"PP_net","mg C/d/m^2",tstr2D, tcstr,        &
+             "Net Primary Production",                     &
+             "weighted by ice area", secday, c0,       &
+             ns, f_PPnet)
+      if (f_grownet(1:1) /= 'x') &
+         call define_hist_field(n_grownet,"grow_net","/d",tstr2D, tcstr,        &
+             "Net specific growth",                     &
+             "weighted by ice area", secday, c0,       &
+             ns, f_grownet)
+      if (f_hbri(1:1) /= 'x') &
+         call define_hist_field(n_hbri,"hbrine","m",tstr2D, tcstr,        &
+             "Brine height",                     &
+             "distance from ice bottom to brine surface", c1, c0,       &
+             ns, f_hbri)
 
       enddo ! nstreams
       
@@ -595,6 +620,7 @@
 !
 ! !USES:
 !
+      use ice_broadcast, only: broadcast_scalar
       use ice_calendar, only: nstreams
       use ice_constants, only: c0, c1
       use ice_history_shared, only: tstr3Dc, tcstr, define_hist_field
@@ -689,6 +715,7 @@
       use ice_constants, only: c0, c1, c100, secday
       use ice_history_shared, only: tstr4Db, tcstr, define_hist_field
 !
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
@@ -699,23 +726,10 @@
 
       do ns = 1, nstreams
       
-      ! if (f_upNO(1:1) /= 'x') &
-      !   call define_hist_field(n_upNO,"upNO","mmol/m^3/d",tstr4Db, tcstr, &
-      !       "Algal NO uptake rate",                           &
-      !       "Positive flux is NO to N pool", secday, c0, &
-      !       ns, f_upNO)     
-
-      ! if (f_upNH(1:1) /= 'x') &
-      !   call define_hist_field(n_upNH,"upNH","mmol/m^3/d",tstr4Db, tcstr, &
-      !       "Algal NH uptake rate",                           &
-      !       "Positive flux is NH to N pool", secday, c0,&
-      !       ns, f_upNH)
-     
        if (f_zTin(1:1) /= 'x') &
             call define_hist_field(n_zTin,"zTinb","C",tstr4Db, tcstr, &
                 "ice internal temperatures on bio grid", "interpolated to bio grid", c1, c0,  &
                 ns, f_zTin)
-      
       
        if (f_zphi(1:1) /= 'x') &
             call define_hist_field(n_zphi,"zphin","%",tstr4Db, tcstr, &
@@ -927,19 +941,19 @@
                         trcr(:,:,nt_bgc_DMS_sk,iblk), a2D)  
          if (f_bgc_Nit_ml(1:1)/= 'x') &
              call accum_hist_field(n_bgc_Nit_ml,iblk, &
-                        trcr(:,:,nt_bgc_Nit_ml,iblk), a2D)  
+                        ocean_bio(:,:,nlt_bgc_NO,iblk), a2D)  
          if (f_bgc_Am_ml(1:1)/= 'x') &
              call accum_hist_field(n_bgc_Am_ml,iblk, &
-                        trcr(:,:,nt_bgc_Am_ml,iblk), a2D)  
+                        ocean_bio(:,:,nlt_bgc_NH,iblk), a2D)  
          if (f_bgc_Sil_ml(1:1)/= 'x') &
              call accum_hist_field(n_bgc_Sil_ml,iblk, &
-                        trcr(:,:,nt_bgc_Sil_ml,iblk), a2D)  
+                        ocean_bio(:,:,nlt_bgc_Sil,iblk), a2D)  
          if (f_bgc_DMSP_ml(1:1)/= 'x') &
              call accum_hist_field(n_bgc_DMSP_ml,iblk, &
-                        trcr(:,:,nt_bgc_DMSP_ml,iblk), a2D)  
+                        ocean_bio(:,:,nlt_bgc_DMSPp,iblk), a2D)  
          if (f_bgc_DMS_ml(1:1)/= 'x') &
              call accum_hist_field(n_bgc_DMS_ml,iblk, &
-                        trcr(:,:,nt_bgc_DMS_ml,iblk), a2D)  
+                        ocean_bio(:,:,nt_bgc_DMS,iblk), a2D)  
  
          ! zbgc
          if (f_fNO  (1:1) /= 'x') &
@@ -978,13 +992,16 @@
              call accum_hist_field(n_fSil_g,   iblk, flux_bio_g(:,:,nlt_bgc_Sil,iblk), a2D)
          if (f_fSil_g_ai(1:1)/= 'x') &
              call accum_hist_field(n_fSil_g_ai,iblk, flux_bio_g_gbm(:,:,nlt_bgc_Sil,iblk), a2D)
-
          if (f_chlnet  (1:1) /= 'x') &
              call accum_hist_field(n_chlnet, iblk, chl_net(:,:,iblk), a2D)
          if (f_PPnet  (1:1) /= 'x') &
              call accum_hist_field(n_PPnet,   iblk, PP_net(:,:,iblk), a2D)
          if (f_NOnet  (1:1) /= 'x') &
              call accum_hist_field(n_NOnet,   iblk, NO_net(:,:,iblk), a2D)
+         if (f_grownet  (1:1) /= 'x') &
+             call accum_hist_field(n_grownet, iblk, grow_net(:,:,iblk), a2D)
+         if (f_hbri  (1:1) /= 'x') &
+             call accum_hist_field(n_hbri, iblk, hbri(:,:,iblk), a2D)
 
          ! 3D category fields
 

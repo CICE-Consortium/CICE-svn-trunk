@@ -43,10 +43,9 @@
 
         nblyr     = NBGCLYR   , & ! number of biology layers per category
         nblyr_hist = nblyr+2  , & ! number of ice layer plus boundary points
-        nltrcr    = 6*TRBRI   , & ! number of layer bgc tracers  
-                                  ! number of biology layer tracers      
-        nbltrcr   = 1         , & ! 4 basic bio;  1 nitrate only 
-
+        nltrcr    = 1*TRBRI   , & ! number of layer bgc tracers  
+        nbltrcr   = 1         , & ! number of biology (including skl) tracer types
+        ntrcr_skl = 0         , & ! number of skeletal layer tracers 
                                   ! number of tracers (defined in ice_init)
         max_ntrcr =   1         & ! 1 = surface temperature              
                   + nilyr       & ! ice salinity
@@ -59,7 +58,8 @@
                   + TRPND*3     & ! ponds
                   + n_aero*4    & ! number of aerosols * 4 aero layers
                   + TRBRI       & ! brine height
-                  + TRBRI*nltrcr*nblyr,&! zbgc (off if TRBRI=0)
+                  + TRBRI*nltrcr*nblyr &! zbgc (off if TRBRI=0)
+                  + ntrcr_skl , & ! bgc skeletal layer tracers
         max_nstrm =   5           ! max number of history output streams
 
       integer (kind=int_kind), parameter, public :: &

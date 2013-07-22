@@ -1288,7 +1288,7 @@
                elseif (trcr_depend(it) == 1) then
                   datrcr = dvice(m,n)*trcrn(i,j,it,nd)
                elseif (trcr_depend(it) == 2) then
-                  datrcr = workb(i,j)  *trcrn(i,j,it,nd)
+                  datrcr = workb(i,j)*trcrn(i,j,it,nd)
                elseif (trcr_depend(it) == 2+nt_alvl) then
                   datrcr = daice(m,n)*trcrn(i,j,nt_alvl,nd)*trcrn(i,j,it,nd)
                elseif (trcr_depend(it) == 2+nt_apnd .and. &
@@ -1708,7 +1708,7 @@
          tr_pond_topo, & ! topo pond flag
          heat_capacity   ! if false, ice and snow have zero heat capacity
 
-      logical (kind=log_kind), dimension(nx_block,ny_block),intent(inout) :: &
+      logical (kind=log_kind), dimension(nx_block,ny_block,ncat),intent(inout) :: &
          first_ice   ! For bgc and S tracers. set to true if zapping ice.
 
       logical (kind=log_kind), intent(out) :: &
@@ -1990,7 +1990,7 @@
          tr_aero, &   ! aerosol flag
          tr_pond_topo ! pond flag
 
-      logical (kind=log_kind), dimension (nx_block,ny_block),intent(inout) :: &
+      logical (kind=log_kind), dimension (nx_block,ny_block,ncat),intent(inout) :: &
          first_ice   ! For bgc tracers.  Set to  true if zapping ice 
 
       logical (kind=log_kind), intent(out) :: &
@@ -2185,18 +2185,15 @@
                      i = indxi(ij)
                      j = indxj(ij)
                      trcrn(i,j,nt_fbri,n) = c1
-                  enddo
+                  enddo               
                endif
             enddo
          endif
-         if (n == 1) then
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-               first_ice(i,j) = .true.
-           enddo
-         endif
-
+         do ij = 1, icells
+             i = indxi(ij)
+             j = indxj(ij)
+             first_ice(i,j,n) = .true.
+         enddo
       enddo                     ! n
 
       !-----------------------------------------------------------------

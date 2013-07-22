@@ -6,8 +6,7 @@
 !
 ! !DESCRIPTION:
 !
-!  Halodynamics based on Jeffery and Hunke, 2013, the CICE sea ice model
-!  with prognostic salinity: Arctic simulations, JGR,  submitted
+!  Halodynamics based on Jeffery and Hunke
 !
 ! !REVISION HISTORY:
 !  SVN:$$
@@ -20,8 +19,8 @@
 ! The CICE Bitz and Lipscomb thermodynamics is solve in the cgrid with height
 ! vicen/aicen.
 ! Gravity drainage is parameterized as nonlinear advection
-! Flushing is incorporated in the boundary changes. 
-! (see Jeffery et al., JGR, 2011 and 2012).  
+! Flushing is incorporated in the boundary changes and a darcy flow. 
+! (see Jeffery et al., JGR, 2011).  
 !
 !
 ! !INTERFACE:
@@ -34,7 +33,7 @@
       use ice_constants
       use ice_domain_size
       use ice_fileunits, only: nu_diag, nu_dump_S, nu_restart_S, &
-           nu_rst_pointer, nu_dump_S, flush_fileunit
+           nu_rst_pointer, nu_dump_hbrine, nu_restart_hbrine, flush_fileunit
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
       use ice_state
@@ -46,24 +45,24 @@
       implicit none
 
       private
-      public :: init_zsalinity, first_ice, S_diags, write_restart_S, solve_zsalinity, &
-           column_sum_S, merge_S_fluxes
+      public :: init_zsalinity, S_diags, write_restart_S, solve_zsalinity, &
+           column_sum_S, merge_S_fluxes, calculate_drho, write_restart_hbrine, &
+           hbrine_diags
 
       integer (kind=int_kind), parameter :: &
          restart_n  = 7       ! value  of nblyr in restart files
 
       real (kind=dbl_kind), parameter :: & 
-         viscos_dynamic = 2.2_dbl_kind, & !1.8e-3_dbl_kind (pure water at 0^oC) (kg/m/s)
-         max_salin = 80.0_dbl_kind  ! (ppt) maximum bulk salinity
+         max_salin = 200.0_dbl_kind   , & !(ppt) maximum bulk salinity
+         lapidus_g = 0.3_dbl_kind     , & ! constant for artificial viscosity/diffusion during growth
+         lapidus_m = 0.9_dbl_kind         ! constant for artificial diffusion during melt
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
-         Rayleigh_real , &  ! .true. = c1, .false. = c0
+         Rayleigh_real      ! .true. = c1, .false. = c0
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks) :: &
          first_ice_real     ! .true. = c1, .false. = c0
-       
-    real (kind=dbl_kind), parameter :: & 
-         dts_b   = 120_dbl_kind, &!
-         dts_s   = c10  !Not used 
-        
+    
 !=======================================================================
 
       contains
@@ -117,7 +116,6 @@
 
       logical (kind=log_kind) :: &
          dbug             ! prints debugging output if true
-
        
       real (kind=dbl_kind), dimension(7), parameter :: & 
          Ps  =  (/0.8828e3_dbl_kind, -2.0570e3_dbl_kind, &  !polynomial fit
@@ -128,6 +126,12 @@
       !-----------------------------------------------------------------
       ! Calculate bio gridn: ice top to ice bottom corresponds to 0 to 1
       !-----------------------------------------------------------------
+
+      if (nblyr .LE. 7) then
+          dts_b = 300.0_dbl_kind
+      else
+          dts_b = 50.0_dbl_kind 
+      endif
 
       bgrid(:) = c0     !bgc grid points         
       bgrid(nblyr_hist) = c1 ! bottom value
@@ -165,26 +169,30 @@
       dbug = .true.
 
 
-      zphi(:,:,:,:,:) = c0    ! initial porosity for no ice 
-      iki(:,:,:,:,:) = c0    ! permeability
+      zphi(:,:,:,:,:) = c0   ! initial porosity for no ice 
       iDi(:,:,:,:,:) = c0    !interface diffusivity
-
       zTin(:,:,:,:,:) = c0   !initial bio grid ice temperature
 
-      if (restart_S) then
+      if (hbrine .AND. restart_hbrine) then
+          call read_restart_hbrine
+      else
+          first_ice(:,:,:,:) = .true.             ! if true, use initialization
+          if (hbrine) trcrn(:,:,nt_fbri,:,:) = c1
+      endif
+      if (tr_bgc_S .and. restart_S) then
           call read_restart_S
       else
 
-       Rayleigh_criteria(:,:,:) = .false.    ! a no ice condition              
-       first_ice(:,:,:) = .true.             ! if true, use initialization
       !-----------------------------------------------------------------
       ! Initial profile for S with hfrazilmin = 0.05 m and growing from no ice
       ! conditions:  Polynomial fit to high resolution run dt = 1s, nblyr = 40
       !              and hfrazilmin = 0.025 m and sss = 32.0 PSU 
       !------------------------------------------------------------------
-      trcrn(:,:,nt_fbri,:,:) = c1
+
+      Rayleigh_criteria(:,:,:) = .false.    ! a no ice condition 
  
       if (tr_bgc_S)  then        ! take salinity from init_state: Error
+         iki(:,:,:,:,:) = c0    ! permeability
         do n = 1,ncat
            do iblk = 1, nblocks
               do j = 1, ny_block
@@ -203,7 +211,6 @@
       endif
 
       endif    !restart_S
-
 
      1060    format (a30,2x,2D13.2)   ! dbl precision
 
@@ -227,9 +234,6 @@
       subroutine solve_zsalinity(nx_block, ny_block, &
                                    icells, n_cat, dt,&
                                    indxii, indxjj, & 
-                                  ! tcells, tndxi, tndxj, tndxij, &
-                                  ! pcells, pndxi, pndxj, pndxij, &
-                                  ! qcells, qndxi, qndxj, qndxij, &
                                    trcrn_S, trcrn_q, trcrn_Si, &
                                    aicen, vicen, &  
                                    Sin, zTin,          &
@@ -243,15 +247,14 @@
                                    dh_top,dh_bot,  &  
                                    TLAT,TLON,        &
                                    l_stop, istop, jstop, fsicen, &
-                                   fsicen_g, zphi_min,sloss) 
-
+                                   fsicen_g, zphi_min,sloss, &
+                                   flood_val,melt_frac) 
  
 ! !USES:
 !
       use ice_therm_shared, only: solve_Sin
       use ice_therm_shared, only: calculate_Tin_from_qin
       use ice_calendar, only: istep1, time
-      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bgc1
 !
 ! !INPUT/OUTPUT PARAMETERS:                                
 !
@@ -279,17 +282,17 @@
          hin         , & ! new ice thickness (m)
          hinS_old    , & ! old brine height  (m)
          hinS        , & ! new brine height  (m)
-         dh_top      , &  !  brine change in top and bottom for diagnostics (m)
-         dh_bot      , &     !
-         zphi_min     , &
+         dh_top      , & ! brine change in top and bottom for diagnostics (m)
+         dh_bot      , &
+         zphi_min    , &
          TLAT        , &
-         sloss        , & !salinity flux to ocean from brine overflow  (g/m^2)
-         TLON       
- 
+         sloss       , & !salinity flux to ocean from brine overflow  (g/m^2)
+         TLON        , & 
+         darcy_V     , &
+         melt_frac       ! abs(dht_melt/dht_total)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
-         darcy_V      , &
          fsicen       , & ! total flux of salt out of ice over timestep(kg/m^2/s)
          fsicen_g         ! gravity drainage flux of salt  over timestep(kg/m^2/s)
 
@@ -316,7 +319,8 @@
       
       logical (kind=log_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
-         first_ice    ! for first category ice only .true. initialized values should be used 
+         first_ice, &    ! for first category ice only .true. initialized values should be used 
+         flood_val       ! if true use sss for the surface salinity
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+1), intent(out) :: &
          iDin          , & !  Diffusivity on the igrid   (1/s)
@@ -326,44 +330,40 @@
          iphin         , & !  porosity on the igrid 
          ibrine_rho    , & ! brine rho on interface  
          ibrine_sal        !brine sal on interface   
-       
-    
+         
       logical (kind=log_kind), intent(inout) :: &
          l_stop          ! if true, print diagnostics and abort on return
 
       integer (kind=int_kind), intent(out) :: &
          istop, jstop    ! indices of grid cell where code aborts
-
 !
 !EOP
 !
-
-     
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
-         ij, zcells,pcells  , & ! horizontal index, combines i and j loops
+         ij, zcells  , & !
+         pcells,fcells,& ! horizontal index, combines i and j loops
          k, m, mm,nint     ! vertical biology layer index 
-         
-      !real (kind=dbl_kind), dimension (icells,nblyr) :: &       
-      !   tracer_loss_z   ! loss term (tracer that remains in ice during flushing)   
-                 !
+
       integer (kind=int_kind), dimension(nx_block*ny_block) :: &
          zndxi, zndxj, zndxij, & ! compressed indices for icells with hinS>thin, hinS_old>thin
-         pndxi, pndxj, pndxij    ! compressed indices for the rest of the icells
+         pndxi, pndxj, pndxij, & ! compressed indices for the rest of the icells
+         fndxi, fndxj, fndxij    ! compressed indices for the rest of the icells
     
       real (kind=dbl_kind), dimension(icells) :: &
          hinc         , & ! ice thickness (m)   
          hinSc        , & ! brine thickness (m)
          surface_S        ! salinity of ice above hin > hinS
-  
+      
+      real (kind=dbl_kind), dimension(icells,2) :: &
+         S_bot           
 
       real (kind=dbl_kind) :: &
          Tmlts, &             ! melting temperature
          dts                  ! local timestep (s)
 
-      logical (kind=log_kind), dimension(icells) :: & 
-         Rayleigh      !
-
+      logical (kind=log_kind), dimension(icells) :: &
+         Rayleigh
      
       real (kind=dbl_kind):: &
          Ttemp     ! initial temp profile on the CICE grid
@@ -371,7 +371,6 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr+2) :: &
          trtmp0       , &  ! temporary, remapped tracers     !need extra 
          trtmp            ! temporary, remapped tracers     ! for nblyr_hist = nblyr+2
-
 
 ! local parameters
                            
@@ -382,7 +381,6 @@
       real (kind=log_kind), parameter :: &
           accuracy = 1.0e-5   !1.0e-5 kg/m^2/s difference between boundary fluxes 
 
-
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
@@ -390,42 +388,37 @@
       dts = dts_b
       nint = max(1,INT(dt/dts))  
 
-       call ice_timer_start(timer_bgc1)  
-
-
        l_stop = .false.
        istop = 0
        jstop = 0
        fsicen_g(:,:) = c0 !only defined here
-      ! tracer_loss_z(:,:) = c0
-
      
       !----------------------------------------------------------------
       ! Update boundary conditions
       !----------------------------------------------------------------
-    
-     
+         
          do ij = 1, icells
             i = indxii(ij)
             j = indxjj(ij)    
 
             hinc(ij) = hin(i,j)
-            hinSc(ij) = hinS(i,j)
+            hinSc(ij) = hinS(i,j)           
             surface_S(ij) = min_salin
- 
+
             Rayleigh(ij) = .true.
             if (n_cat == 1 .AND. hinS_old(i,j) < Ra_c) then
                Rayleigh(ij) = Rayleigh_criteria(i,j) ! only category 1 ice can be false 
             endif
 
-            if ((dh_bot(i,j) > c0)) then
+            if (dh_bot(i,j) + darcy_V(i,j)*dt > c0) then  
             
                  Sin(i,j,nblyr+2) = sss(i,j)
                  zTin(i,j,nblyr_hist) = sst(i,j)
                  brine_sal(i,j,nblyr_hist) = sss(i,j) 
-                 brine_rho(i,j,nblyr_hist) = rhow 
+                 brine_rho(i,j,nblyr_hist) = rhow
                  zphin(i,j,nblyr_hist) = c1 
-                      
+                 S_bot(ij,1) = c0
+                 S_bot(ij,2) = c1     
          !-------------------------------
          ! !bottom melt
          !--------------------------------
@@ -433,15 +426,17 @@
             else  
                  Sin(i,j,nblyr+2) = Sin(i,j,nblyr+1)  
                  Tmlts =  -Sin(i,j,nblyr+2)* depressT 
-                 zTin(i,j,nblyr_hist) =   zTin(i,j,nblyr+1)
-            endif           
-          
+                 zTin(i,j,nblyr_hist) = zTin(i,j,nblyr+1)
+                 zphin(i,j,nblyr_hist)= iphin(i,j,nblyr+1)
+                 S_bot(ij,1) = c1
+                 S_bot(ij,2) = c0
+            endif
+            
          enddo
       !----------------------------------------------------------------
       ! Solve for S using CICE T.  If solve_Sin = .true., then couple back
       ! to the thermodynamics
       !----------------------------------------------------------------
-
 
           call solve_S_dt (icells, nx_block, ny_block, &                    
                                       indxii,   indxjj,  &
@@ -453,53 +448,40 @@
                                       ikin, hinS_old, hinS, hin, hin_old,&
                                       iDin,darcy_V,      &
                                       brine_sal, &
-                                      Rayleigh, &
+                                      Rayleigh, first_ice, &
                                       sss, dt, n_cat ,&
                                       dh_top,dh_bot, brine_rho,&
                                       ibrine_sal, ibrine_rho,TLAT,TLON,&
                                       fsicen,fsicen_g,istep1,  &
-                                      zphi_min,sloss) 
-       
-      
-     
-     
-
+                                      zphi_min,sloss,flood_val, &
+                                      melt_frac,S_bot) 
   
      if (n_cat == 1)then
-
         do ij = 1, icells 
          i = indxii(ij)
-         j = indxjj(ij)
-          
+         j = indxjj(ij)          
            Rayleigh_criteria(i,j) = Rayleigh(ij)
-
         enddo
-
      endif
-
-         trtmp0(:,:,:) = c0
-         trtmp (:,:,:) = c0
+         
+     trtmp0(:,:,:) = c0
+     trtmp (:,:,:) = c0
        
-        do k = 1,nblyr                  !back to bulk quantity  (do in solve_S_dt)
-
+      do k = 1,nblyr                  !back to bulk quantity  (do in solve_S_dt)
          do ij = 1, zcells 
             i = zndxi(ij)
             j = zndxj(ij)
-
-               trcrn_S(i,j,k) =   Sin(i,j,k+1) 
-               trtmp0(i,j,nt_sice+k-1) = trcrn_S(i,j,k)
-
-            enddo
-            do ij = 1,pcells
-              i = pndxi(ij)
-              j = pndxj(ij)
-
-              trtmp0(i,j,nt_sice+k-1) = trcrn_S(i,j,k)
-
-            enddo
-         enddo           !ij
-       
-        
+            trcrn_S(i,j,k) =   Sin(i,j,k+1) 
+            trtmp0(i,j,nt_sice+k-1) = trcrn_S(i,j,k)
+         enddo
+         do ij = 1,pcells
+            i = pndxi(ij)
+            j = pndxj(ij)
+            trcrn_S(i,j,k) =   Sin(i,j,k+1) 
+            trtmp0(i,j,nt_sice+k-1) = trcrn_S(i,j,k)
+         enddo
+       enddo           !ij
+ 
          call remap_layers_bgc_plus (nx_block,ny_block,        &
                              indxii,   indxjj,           &
                              icells,                   &
@@ -511,8 +493,6 @@
                              hinc, hinSc,         &
                              cgrid(2:nilyr+1),         &
                              bgrid(2:nblyr+1), surface_S)
-    
-       
 
          do k = 1, nilyr
 
@@ -521,23 +501,27 @@
                j = zndxj(ij)        
                
                Tmlts = -trcrn_Si(i,j,k)*depressT
-               Ttemp = calculate_Tin_from_qin(trcrn_q(i,j,k),Tmlts)
-  
+               Ttemp = calculate_Tin_from_qin(trcrn_q(i,j,k),Tmlts)  
                trcrn_Si(i,j,k) = max(min_salin,trtmp(i,j,nt_sice+k-1))
                Tmlts = -trtmp(i,j,nt_sice+k-1)*depressT 
-
-               
                Ttemp = min(Ttemp,Tmlts) 
-               trcrn_q(i,j,k) = calculate_qin_from_Sin(Ttemp,Tmlts)
+               trcrn_q(i,j,k) = calculate_qin_from_Sin(Ttemp,Tmlts)             
+          
+            enddo !ij
+            do ij = 1, pcells
+               i = pndxi(ij)
+               j = pndxj(ij)        
                
+               Tmlts = -trcrn_Si(i,j,k)*depressT
+               Ttemp = calculate_Tin_from_qin(trcrn_q(i,j,k),Tmlts)  
+               trcrn_Si(i,j,k) = max(min_salin,trtmp(i,j,nt_sice+k-1))
+               Tmlts = -trtmp(i,j,nt_sice+k-1)*depressT 
+               Ttemp = min(Ttemp,Tmlts) 
+               trcrn_q(i,j,k) = calculate_qin_from_Sin(Ttemp,Tmlts)             
           
             enddo !ij
          enddo !k
-        
 
- call ice_timer_stop(timer_bgc1) 
- 
- 
 770 format (I6,D16.6)        
 781 format (I6,I6,I6)
 790 format (I6,I6)
@@ -546,7 +530,7 @@
 793 format (3D16.6)
 794 format (4D15.5)
 800 format (F10.4)
-
+    
       end subroutine solve_zsalinity
 
 !=======================================================================
@@ -571,18 +555,19 @@
                                      (icells, nx_block, ny_block,   &
                                       indxi,   indxj,               &
                                       qcells, qndxi, qndxj, qndxij, &   
-                                      pcells, pndxi, pndxj, pndxij, &     
+                                      pcells, pndxi, pndxj, pndxij, &   
                                       nint, dts, Sin, zTin, aicen,  &
                                       zphin, iphin,                 &
                                       igrid, bgrid,                 &
                                       ikin, hin_old, hin, hice, hice_old, &             
                                       iDin,darcy_V,        &
-                                      brine_sal,  Rayleigh, &
+                                      brine_sal,  Rayleigh, first_ice, &
                                       sss, dt, n_cat, &
                                       dht, dhb, brine_rho, ibrine_sal, &
                                       ibrine_rho,TLAT,TLON,      &
                                       fsicen, fsicen_g,istep1, &
-                                      zphi_min, sloss) !, tracer_loss_z)
+                                      zphi_min, sloss, flood_val, &
+                                      melt_frac,S_bot) 
 !
 ! !USES:
 !
@@ -601,7 +586,7 @@
          qndxi, qndxj ,& ! compressed indices 
          qndxij,       &
          pndxi, pndxj ,& ! compressed indices 
-         pndxij
+         pndxij     
 
       integer (kind=int_kind), dimension(nx_block*ny_block), &
          intent(in) :: &
@@ -623,13 +608,14 @@
          zphi_min ,     &  ! surface porosity
          sloss           ! g/m^2   loss to ocean from brine runoff
 
-     !real (kind=dbl_kind), dimension (icells,nblyr), intent(inout) :: &
-     !    tracer_loss_z      !loss from each grid cell 
-    
-
       logical (kind=log_kind), dimension (icells), &
          intent(inout) :: &
-         Rayleigh    !if .true. convection is allowed.  if .false. not yet
+         Rayleigh   !if .true. convection is allowed.  if .false. not yet
+
+      logical (kind=log_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         flood_val, &   !if .true. use sss rather than min_salin for surface condition
+         first_ice
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist), intent(in) :: &
          brine_sal       , & ! Internal brine salinity (ppt)
@@ -657,10 +643,9 @@
          hin_old   , &   ! brine thickness (m) 
          hin       , &   ! new brine thickness (m)
          hice      , &   ! ice thickness (m)
-         hice_old        ! old ice thickness (m)
+         hice_old  , &   ! old ice thickness (m)
+         melt_frac       ! ratio of meltwater change to total surface change
 
-
-    
       real (kind=dbl_kind), dimension (nblyr_hist), intent(in) :: &
          bgrid            ! biology nondimensional grid layer points 
 
@@ -677,8 +662,11 @@
          intent(in) :: &
          zTin             ! Temperature of ice layers on bio grid for history file (^oC) 
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(inout) :: &
-         darcy_V       ! Darcy velocity due to a pressure head (m/s) or melt
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         darcy_V       ! Darcy velocity due to a pressure head (m/s) or melt      
+  
+      real (kind=dbl_kind), dimension (icells, 2), intent(in) :: &
+         S_bot
 !
 !EOP
 !
@@ -702,10 +690,15 @@
          Sintemp       ,& ! initial salinity
          pre_sin       ,&! estimate of  salinity of layers
          pre_sinb        ! estimate of  salinity of layers
-
-
+ 
+      real (kind=dbl_kind), dimension (icells, nblyr_hist) :: &
+         bgrid_temp       ! biology nondimensional grid layer points 
+                          ! with boundary values 
       real (kind=dbl_kind), dimension (icells) :: &
-         dh              ! (m) change in hbrine over dts
+         dh       , &       ! (m) change in hbrine over dts
+         dbgrid   , &       ! ratio of grid space to spacing across boundary 
+                            ! i.e. 1/nilyr/(dbgrid(2)-dbgrid(1))
+         S_surface          ! min_salin or sss (if flood_val = .true.)
 
       real (kind=dbl_kind), dimension (nblyr+1) :: &  !on the zbgc vertical grid 2:nblyr+1
          dSbdx          ! gradient of brine rho on grid
@@ -715,7 +708,7 @@
 
       real (kind=dbl_kind), dimension (icells, nblyr_hist) :: &  !on the zbgc vertical grid 2:nblyr+1
          Q_s, C_s, &   ! Functions in continuity equation
-         V_s, U_s
+         V_s, U_s, F_s
 
        real (kind=dbl_kind), dimension (icells, nblyr+1) :: &  !on the zbgc vertical igrid 1:nblyr+1
          Ci_s, &  ! 
@@ -724,15 +717,14 @@
 
       real (kind=dbl_kind), dimension (icells,nblyr) :: &
          vel, &               ! advective velocity times dt (m)
-         lapidus_diff               , & ! lapidus term and 
+         lapidus_diff     , & ! lapidus term and 
          flux_corr
 
       real (kind=dbl_kind), dimension (icells,nblyr+1) :: &
-         ivel   
+         ivel
 
       real (kind=dbl_kind), dimension (icells):: &
-         lapidus        ! artificial viscosity:  use lapidus_g for growth
- 
+         lapidus     ! artificial viscosity:  use lapidus_g for growth
    
       real (kind=dbl_kind), dimension (icells) :: &
          Ssum_old,Ssum_new, & ! depth integrated salt before and after timestep
@@ -743,9 +735,11 @@
          fluxm     !bottom, top and total molecular diffusion flux (g/kg/m^2)
 
       real (kind=dbl_kind) :: &
-         sum_old,sum_new, hin_next  ! integrated salinity at t and t+dt
-   
-! local parameters
+         sum_old,sum_new, hin_next, &  ! integrated salinity at t and t+dt
+         dh_dt, dS_dt             , &
+         l_cS                     , &  ! Salinity length parameter for flushing dispersion
+         l_c                           ! tracer length parameter for flushing dispersion
+                        
 
       logical (kind=log_kind) :: &   
          write_flag       , &    ! set to true at each timestep        
@@ -755,199 +749,148 @@
 
        real  (kind=dbl_kind), dimension (nblyr):: &
           lapA    , &
-          lapB 
+          lapB    
    
-      real (kind=dbl_kind), dimension (nblyr+2) :: &
-         vector_top, vector_bottom
      !--------------------------------------
      !  Initialize
      !--------------------------------------
 
-     ! to remove  if-then statements    
-      vector_top(:) = c0
-      vector_bottom(:) = c0
-      vector_top(2) = c1
-      vector_bottom(nblyr+1) = c1
-
-      write_flag = .true.
-      test_conservation = .true.
-
-      iDin_p(:,:,:) = c0   
-      Din_p(:,:,:) = c0    
-      lapA(:) = c1
-      lapB(:) = c1
-      lapA(nblyr) = c0
-      lapB(1) = c0
-      
+       write_flag = .true.
+       test_conservation = .false. 
+       iDin_p(:,:,:) = c0   
+       Din_p(:,:,:) = c0 
+       lapA(:) = c1
+       lapB(:) = c1
+       lapA(nblyr) = c0
+       lapB(1) = c0
        qcells = 0
        pcells = 0
-       !tracer_loss(:) = c0   !should modify the bottom boundary flux
-       !tracer_loss_z(:,:) = c0
        V_s(:,:) = c0
        U_s(:,:) = c0
        Q_s(:,:) = c0
        C_s(:,:) = c0
        Ci_s(:,:) = c0
+       F_s(:,:) = c0
        Ui_s(:,:) = c0
        Vi_s(:,:) = c0
        ivel(:,:) = c0
        vel(:,:) = c0
        dh(:) = c0
-          
+       dbgrid(:) = c2
+       S_surface(:) = min_salin
+       l_cS = c0 !0.048_dbl_kind
+       l_c  = c0 !0.048_dbl_kind
+
      !-----------------------------------------------------------------
      ! Find brine density gradient for gravity drainage parameterization
      !-----------------------------------------------------------------
 
          call calculate_drho(icells,nx_block,ny_block,indxi,indxj,igrid,bgrid,&
                                    brine_rho,ibrine_rho,drho)
-     
-     
+
      !-----------------------------------------------------------------
      ! Calculate zphi diffusivity on the grid points
      ! rhosi = 919-974 kg/m^2  set in bio_in
      ! rhow = 1026.0 density of sea water: uses kinematic viscosity (m^2/s)  in Q18
      ! dynamic viscosity  divided by density = kinematic. 
-     !
-     ! old representation of flushing
-     !if (k == nblyr+1 .AND. Rayleigh(ij)) then
-     !   k_min(ij) = MINLOC(kmin,DIM = 1,MASK = kmin .GE. c0)   
-     !   darcy_V(i,j) = MINVAL(kmin) * gravit / viscos * hbrn(ij)/hin_old(ij)  !positive down
-     ! endif
      !---------------------------------------------------------------- 
 
-        
         do k = 2, nblyr+1
-          
            do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij) 
-          
                iDin_p(i,j,k) =k_o*gravit*l_skS/viscos_dynamic* &  
                      drho(ij,k)/(hin_old(i,j)**2)
  
                Din_p(i,j,k) = (iDin_p(i,j,k)*(igrid(k)-bgrid(k)) + iDin_p(i,j,k-1)*&
                             (bgrid(k)-igrid(k-1)))/(igrid(k)-igrid(k-1))           
-             
-          
           enddo   !ij
          enddo                !k
 
-
- 
-    !-------------------------------------------------
-    ! Critical Ra_c value is only for the onset of convection in thin ice and not throughout
-    !  therefore I need a flag to indicate the Ra_c was reached for a particular ice block
-    ! Using a thickness minimum (Ra_c) for simplicity.
-    !-------------------------------------------------    
-        
+     !-------------------------------------------------
+     ! Critical Ra_c value is only for the onset of convection in thin ice and not throughout
+     !  therefore I need a flag to indicate the Ra_c was reached for a particular ice block
+     ! Using a thickness minimum (Ra_c) for simplicity.
+     !-------------------------------------------------    
 
         do ij = 1, icells
           i = indxi(ij)
           j = indxj(ij) 
-
+          bgrid_temp(ij,:) = bgrid(:)
           Din_p(i,j,nblyr+2) =  iDin_p(i,j,nblyr+1)
-
           if (.NOT. Rayleigh(ij) .AND. hin(i,j) < Ra_c) then
-                    
                   Din_p(i,j,:) =  c0  
-                  iDin_p(i,j,:) = c0  !
-                  darcy_V(i,j) = c0
-
+                  iDin_p(i,j,:) = c0  
           else
               Rayleigh(ij) = .true.
           endif
- 
+          if (hin_old(i,j) > thin .AND.  hice_old(i,j) > thin .AND. .NOT. first_ice(i,j)) then
+              if (flood_val(i,j)) then
+                 S_surface(ij) = melt_frac(i,j)*min_salin + (c1-melt_frac(i,j))*sss(i,j)
+               endif
+               Sin(i,j,1) = S_surface(ij)
 
-          if (hin_old(i,j) > thin .AND.  hin(i,j) > thin) then
-       
                qcells = qcells + 1
                qndxi(qcells) = i
                qndxj(qcells) = j
                qndxij(qcells) = ij 
-
-               !-----------------------------------
-               ! tracer_loss balanced by  the ocean flux
-               !-----------------------------------
-
-               ! if (darcy_V(i,j) < c0 .AND. hice(i,j) > hin(i,j)) then
-               !    tracer_loss(ij) =  (min(-darcy_V(i,j)*dt/zphi_min(i,j), &
-               !    (hice(i,j)-hin(i,j)))/hin_old(i,j)*& 
-               !        min_salin)
-                
-
-               ! elseif  (darcy_V(i,j) > c0 .AND. hice(i,j) > hin(i,j)) then   
-               !    tracer_loss(ij) =  -min(darcy_V(i,j)*dt/zphi_min(ij), &
-               !    (hice(i,j)-hin(i,j)))/hin_old(i,j)*&
-               !         min_salin
-                
-               ! endif
+               bgrid_temp(ij,1) = c0 !-grid_oS/hin_old(i,j)
+              ! bgrid_temp(ij,nblyr+2) = c1
+              ! if (S_bot(ij,2) >= c1) 
+               bgrid_temp(ij,nblyr+2) = c1!  + grid_oS/hin_old(i,j)
+               dbgrid(ij) = igrid(2)/(bgrid_temp(ij,2)-bgrid_temp(ij,1))
 
                !-----------------------------------
                ! surface boundary terms
                !-----------------------------------
-
+               
                lapidus(ij) = lapidus_g
                if (dhb(i,j) < c0 ) lapidus(ij) = lapidus_m
-               ivel(ij,1) =  dht(i,j)/hin_old(i,j) 
+               ivel(ij,1) = dht(i,j)/hin_old(i,j)
                U_s(ij,1) =  ivel(ij,1)/dt*dts 
                Ui_s(ij,1) = U_s(ij,1) 
-             !  dSbdx(1) = c0 
                Ci_s(ij,1) = c0
+               F_s(ij,1) =  darcy_V(i,j)*dts/zphi_min(i,j)/hin_old(i,j)
+
                !-----------------------------------
                ! bottom boundary terms
                !-----------------------------------
 
-               ivel(ij,nblyr+1) =  dhb(i,j)/hin_old(i,j)  
-                                  !(igrid(nblyr+1)*dhb(i,j) - (igrid(nblyr+1)-c1)*dht(i,j))/hin_old(i,j)             
+               ivel(ij,nblyr+1) =  dhb(i,j)/hin_old(i,j)           
                Ui_s(ij,nblyr+1) = ivel(ij,nblyr+1)/dt*dts   !defined on interface 1 to n+1
                dSbdx(nblyr) = (ibrine_sal(i,j,nblyr+1) - ibrine_sal(i,j,nblyr))/(igrid(nblyr+1)-igrid(nblyr))
-               C_s(ij,nblyr+1) = Dm/brine_sal(i,j,nblyr+1)*dts/hin_old(i,j)**2*&
-                (ibrine_sal(i,j,nblyr+1) - ibrine_sal(i,j,nblyr))/(igrid(nblyr+1)-igrid(nblyr)) 
-               vel(ij,nblyr) =(bgrid(nblyr+1)*(dhb(i,j)) - &
-                    (bgrid(nblyr+1) - c1)* dht(i,j) )/hin_old(i,j)                   
+              ! C_s(ij,nblyr+1) = Dm/brine_sal(i,j,nblyr+1)*dts/hin_old(i,j)**2*&
+              !  (ibrine_sal(i,j,nblyr+1) - ibrine_sal(i,j,nblyr))/(igrid(nblyr+1)-igrid(nblyr))
+               C_s(ij,nblyr+1) = (l_cS*abs(darcy_V(i,j)/zphin(i,j,nblyr+1))+Dm) &
+                 /brine_sal(i,j,nblyr+1)*dts/hin_old(i,j)**2*&
+                (ibrine_sal(i,j,nblyr+1) - ibrine_sal(i,j,nblyr))/(igrid(nblyr+1)-igrid(nblyr))
+ 
+               F_s(ij,nblyr+1) = darcy_V(i,j)*dts/hin_old(i,j)/zphin(i,j,nblyr+1)
+               F_s(ij,nblyr_hist) = darcy_V(i,j)*dts/hin_old(i,j)/zphin(i,j,nblyr+2)  !zphin(i,j,nblyr+1)
+               vel(ij,nblyr) =(bgrid(nblyr+1)*(dhb(i,j)) -(bgrid(nblyr+1) - c1)* dht(i,j) )/hin_old(i,j)
                U_s(ij,nblyr+1) = vel(ij,nblyr)/dt*dts              
                V_s(ij,nblyr+1) = Din_p(i,j,nblyr+1)*brine_rho(i,j,nblyr+1)/rhosi&
                        *(rhosi/brine_sal(i,j,nblyr+1)/brine_rho(i,j,nblyr+1))**exp_h&
                        *dts*dSbdx(nblyr)   
                dSbdx(nblyr+1) =  (brine_sal(i,j,nblyr+2) - brine_sal(i,j,nblyr+1))/&
                                (bgrid(nblyr+2)-bgrid(nblyr+1)+ grid_oS/hin_old(i,j) )  
-               C_s(ij, nblyr+2) = Dm/brine_sal(i,j,nblyr+2)*dts/hin_old(i,j)**2*&
+              ! C_s(ij, nblyr+2) = Dm/brine_sal(i,j,nblyr+2)*dts/hin_old(i,j)**2*&
+              !                (brine_sal(i,j,nblyr+2) - brine_sal(i,j,nblyr+1))/&
+              !                 (bgrid(nblyr+2)-bgrid(nblyr+1)+ grid_oS/hin_old(i,j) )   
+               C_s(ij, nblyr+2) =  (l_cS*abs(darcy_V(i,j)/zphin(i,j,nblyr+2))+Dm)&
+                              /brine_sal(i,j,nblyr+2)*dts/hin_old(i,j)**2*&
                               (brine_sal(i,j,nblyr+2) - brine_sal(i,j,nblyr+1))/&
-                               (bgrid(nblyr+2)-bgrid(nblyr+1)+ grid_oS/hin_old(i,j) )  
+                               (bgrid(nblyr+2)-bgrid(nblyr+1)+ grid_oS/hin_old(i,j) ) 
+ 
                U_s(ij,nblyr_hist) = ivel(ij,nblyr+1)/dt*dts 
                V_s(ij,nblyr_hist) = Din_p(i,j,nblyr+2)*brine_rho(i,j,nblyr+1)/rhosi &
                    *(rhosi/brine_sal(i,j,nblyr+1)/brine_rho(i,j,nblyr+1))**exp_h&
                    *dts*dSbdx(nblyr+1) 
-          
+
                Ci_s(ij,nblyr+1) = C_s(ij,nblyr_hist)
                Vi_s(ij,nblyr+1) = V_s(ij,nblyr_hist)
  
                dh(ij) =(dhb(i,j)-dht(i,j))/dt*dts
-
-              ivel(ij,2) =  (igrid(2)*dhb(i,j) - (igrid(2)-c1)*dht(i,j))/hin_old(i,j) 
-
-              Ui_s(ij,2) = ivel(ij,2)/dt*dts   
-          
-              Vi_s(ij,2) = iDin_p(i,j,2)*ibrine_rho(i,j,2)/rhosi &
-                            *(rhosi/ibrine_rho(i,j,2)/ibrine_sal(i,j,2))**exp_h*dts*&
-                            (brine_sal(i,j,3)-brine_sal(i,j,2))&
-                            /(bgrid(3)-bgrid(2))     
-              dSbdx(1) = (ibrine_sal(i,j,2) - ibrine_sal(i,j,1))/(igrid(2)-igrid(1)+grid_oS/hin_old(i,j))
-
-              C_s(ij,2) = Dm/brine_sal(i,j,2)*dts/hin_old(i,j)**2*&
-                         (ibrine_sal(i,j,2) - ibrine_sal(i,j,1))/(igrid(2)-igrid(1)+grid_oS/hin_old(i,j)) 
-              Ci_s(ij,2) = Dm/ibrine_sal(i,j,2)*dts/hin_old(i,j)**2*&
-                           (brine_sal(i,j,3)-brine_sal(i,j,2))/(bgrid(3)-bgrid(2))
-              vel(ij,1) = (bgrid(2)*(dhb(i,j)) - &
-                    (bgrid(2) - c1)* dht(i,j) )/hin_old(i,j)
-                  
-
-              U_s(ij,2) = vel(ij,1)/dt*dts  
-           
-              V_s(ij,2) = Din_p(i,j,2)*brine_rho(i,j,2)/rhosi &
-                       *(rhosi/brine_sal(i,j,2)/brine_rho(i,j,2))**exp_h&
-                       *dts*dSbdx(1)   
-
 
           else                           !thin ice solve or first_ice
                pcells = pcells + 1
@@ -957,18 +900,13 @@
            endif
       enddo
 
-
       if (qcells > 0) then
-           
-          do k = 3, nblyr    
- 
+          do k = 2, nblyr    
            do ij = 1, qcells   ! full solve: 
-          
              qij = qndxij(ij)
              i = qndxi(ij)
              j = qndxj(ij) 
-
-              ivel(qij,k) =  (igrid(k)*dhb(i,j) - (igrid(k)-c1)*dht(i,j))/hin_old(i,j) 
+              ivel(qij,k) =  (igrid(k)*dhb(i,j) - (igrid(k)-c1)*dht(i,j))/hin_old(i,j)
 
               Ui_s(qij,k) = ivel(qij,k)/dt*dts   
           
@@ -977,36 +915,36 @@
                             (brine_sal(i,j,k+1)-brine_sal(i,j,k))&
                             /(bgrid(k+1)-bgrid(k))     
               dSbdx(k-1) = (ibrine_sal(i,j,k) - ibrine_sal(i,j,k-1))/(igrid(k)-igrid(k-1))
-
-              C_s(qij,k) = Dm/brine_sal(i,j,k)*dts/hin_old(i,j)**2*&
+ 
+              F_s(qij,k) = darcy_V(i,j)*dts/hin_old(i,j)/zphin(i,j,k) 
+              !C_s(qij,k) = Dm/brine_sal(i,j,k)*dts/hin_old(i,j)**2*&
+              !           (ibrine_sal(i,j,k) - ibrine_sal(i,j,k-1))/(igrid(k)-igrid(k-1))  
+              C_s(qij,k) = (l_cS*abs(darcy_V(i,j)/zphin(i,j,k)) +Dm) &
+                          /brine_sal(i,j,k)*dts/hin_old(i,j)**2*&
                          (ibrine_sal(i,j,k) - ibrine_sal(i,j,k-1))/(igrid(k)-igrid(k-1)) 
-              Ci_s(qij,k) = Dm/ibrine_sal(i,j,k)*dts/hin_old(i,j)**2*&
-                           (brine_sal(i,j,k+1)-brine_sal(i,j,k))/(bgrid(k+1)-bgrid(k))
-              vel(qij,k-1) = (bgrid(k)*(dhb(i,j)) - &
-                    (bgrid(k) - c1)* dht(i,j) )/hin_old(i,j)
-                  
+              !Ci_s(qij,k) = Dm/ibrine_sal(i,j,k)*dts/hin_old(i,j)**2*&
+              !             (brine_sal(i,j,k+1)-brine_sal(i,j,k))/(bgrid(k+1)-bgrid(k))
 
-              U_s(qij,k) = vel(qij,k-1)/dt*dts  
-           
+              Ci_s(qij,k) = (l_cS*abs(darcy_V(i,j)/iphin(i,j,k)) +Dm)/ibrine_sal(i,j,k)*dts/hin_old(i,j)**2*&
+                           (brine_sal(i,j,k+1)-brine_sal(i,j,k))/(bgrid(k+1)-bgrid(k))
+              vel(qij,k-1) = (bgrid(k)*(dhb(i,j)) - (bgrid(k) - c1)* dht(i,j))/hin_old(i,j)
+              U_s(qij,k) = vel(qij,k-1)/dt*dts             
               V_s(qij,k) = Din_p(i,j,k)*brine_rho(i,j,k)/rhosi &
                        *(rhosi/brine_sal(i,j,k)/brine_rho(i,j,k))**exp_h&
-                       *dts*dSbdx(k-1)   
-
-         
-
+                       *dts*dSbdx(k-1) 
+              C_s(qij,2) = c0
+              V_s(qij,2) = c0
           enddo  !ij
-
          enddo !k
-      
-      
+
+
       !-----------------------------------------------------------------
       ! Solve
       !--------------------------------------------------------  
- 
-       do m = 1, nint
-        
-          lapidus_diff(:,:) = c0
-          flux_corr(:,:) = c0
+
+       do m = 1, nint     
+           lapidus_diff(:,:) = c0
+           flux_corr(:,:) = c0
            Sintemp(:,:,:) = Sin(:,:,:)
            pre_sin(:,:,:) = Sin(:,:,:)  
            pre_sinb(:,:,:) = Sin(:,:,:)
@@ -1017,74 +955,59 @@
            fluxg(:) = c0
            fluxb(:) = c0
            fluxm(:) = c0
-          
-
           do k = 2, nblyr
-                                       
              do ij = 1, qcells
                i = qndxi(ij)
                j = qndxj(ij)    
                qij = qndxij(ij) 
-            
-       
  !forward-difference 
-
               Ssum_old(qij) = Ssum_old(qij) + Sin(i,j,k)*(igrid(k)-igrid(k-1))
 
-              pre_sin(i,j,k) = Sin(i,j,k) + (Ui_s(qij,k)*(Sin(i,j,k+1) - Sin(i,j,k)) + &
+              pre_sin(i,j,k) =Sin(i,j,k) + (Ui_s(qij,k)*(Sin(i,j,k+1) - Sin(i,j,k)) + &
                  V_s(qij,k+1)*Sin(i,j,k+1)**3 - V_s(qij,k)*Sin(i,j,k)**3 + &
-                 C_s(qij,k+1)*Sin(i,j,k+1)-&
-                 C_s(qij,k)*Sin(i,j,k))/(bgrid(k+1)-bgrid(k))
+                 (C_s(qij,k+1)+F_s(qij,k+1))*Sin(i,j,k+1)-&
+                 (C_s(qij,k)+F_s(qij,k))*Sin(i,j,k))/(bgrid_temp(qij,k+1)-bgrid_temp(qij,k)) 
 
-               pre_sin(i,j,nblyr+1) = Sin(i,j,nblyr+1) + (Ui_s(qij,nblyr+1)*(Sin(i,j,nblyr+2) - Sin(i,j,nblyr+1)) + &
-                 V_s(qij,nblyr+2)*Sin(i,j,nblyr+1)**3 - V_s(qij,nblyr+1)*Sin(i,j,nblyr+1)**3+ C_s(qij,nblyr+2)*Sin(i,j,nblyr+2)-&
-                 C_s(qij,nblyr+1)*Sin(i,j,nblyr+1) ) /(bgrid(nblyr+2)-bgrid(nblyr+1))             
-                
+               pre_sin(i,j,nblyr+1) = Sin(i,j,nblyr+1) + (Ui_s(qij,nblyr+1)*(Sin(i,j,nblyr+2) - &
+                              Sin(i,j,nblyr+1)) +  V_s(qij,nblyr+2)*Sin(i,j,nblyr+1)**3 - &
+                              V_s(qij,nblyr+1)*Sin(i,j,nblyr+1)**3+ (C_s(qij,nblyr+2)+F_s(qij,nblyr+2))*&
+                              Sin(i,j,nblyr+2)-(C_s(qij,nblyr+1)+F_s(qij,nblyr+1))*Sin(i,j,nblyr+1) )/&
+                               (bgrid_temp(qij,nblyr+2)- bgrid_temp(qij,nblyr+1))
               enddo  !qcells
-
           enddo    !k
-      
-          do k = nblyr+1, 3, -1  !nblyr+1
 
+          do k = nblyr+1, 3, -1  !nblyr+1
              do ij = 1, qcells
                i = qndxi(ij)
                j = qndxj(ij) 
                qij = qndxij(ij)
-                      
   !backward-difference 
-             
-
-               pre_sinb(i,j,k) = p5*(Sin(i,j,k) + pre_sin(i,j,k) +  (Ui_s(qij,k-1)&
+               pre_sinb(i,j,k) =p5*(Sin(i,j,k) + pre_sin(i,j,k) +  (Ui_s(qij,k-1)&
                   *(pre_sin(i,j,k) - pre_sin(i,j,k-1)) + &
                    V_s(qij,k)*pre_sin(i,j,k)**3 - &
-                  V_s(qij,k-1)*pre_sin(i,j,k-1)**3 + C_s(qij,k)*pre_sin(i,j,k)-&
-                  C_s(qij,k-1)*pre_sin(i,j,k-1))/(bgrid(k)-bgrid(k-1))) 
+                   V_s(qij,k-1)*pre_sin(i,j,k-1)**3 + (C_s(qij,k)+F_s(qij,k))*pre_sin(i,j,k)-&
+                   (C_s(qij,k-1)+F_s(qij,k-1))*pre_sin(i,j,k-1))/(bgrid_temp(qij,k)-bgrid_temp(qij,k-1)) )
 
                pre_sinb(i,j,2) = p5*(Sin(i,j,2) + pre_sin(i,j,2) +  (Ui_s(qij,1)&
-                  *(pre_sin(i,j,2) - min_salin) + &
+                  *(pre_sin(i,j,2) - S_surface(qij)) + &
                    V_s(qij,2)*pre_sin(i,j,2)**3 - &
-                  V_s(qij,1)*pre_sin(i,j,1)**3 + C_s(qij,2)*pre_sin(i,j,2)-&
-                   C_s(qij,1)*pre_sin(i,j,1))/(bgrid(2)-bgrid(1))) ! - &
+                   V_s(qij,1)*pre_sin(i,j,1)**3 + (C_s(qij,2)+F_s(qij,2))*pre_sin(i,j,2)-&
+                   (C_s(qij,1)+F_s(qij,1))*pre_sin(i,j,1) )/(bgrid_temp(qij,2)-bgrid_temp(qij,1)) )
+                   
               
-                Q_s(qij,k) = V_s(qij,k)*pre_sin(i,j,k)**2 + U_s(qij,k) + C_s(qij,k)
-        
-                
- 
-                Q_s(qij,2) = V_s(qij,2)*pre_sin(i,j,2)**2 + U_s(qij,2) + C_s(qij,2)
-                Q_s(qij,1) = V_s(qij,1)*pre_sin(i,j,2)**2 + Ui_s(qij,1) 
+                Q_s(qij,k) = V_s(qij,k)*pre_sin(i,j,k)**2 + U_s(qij,k) + C_s(qij,k) + F_s(qij,k) 
+                Q_s(qij,2) = V_s(qij,2)*pre_sin(i,j,2)**2 + U_s(qij,2) + C_s(qij,2) + F_s(qij,2)
+                Q_s(qij,1) = V_s(qij,1)*pre_sin(i,j,2)**2 + Ui_s(qij,1) + C_s(qij,1)+F_s(qij,1)
                 Q_s(qij,nblyr_hist) = V_s(qij,nblyr_hist)*pre_sin(i,j,nblyr+1)**2 + & 
-                        Ui_s(qij,nblyr+1) 
-                 
-            
+                        Ui_s(qij,nblyr+1) + C_s(qij,nblyr_hist)+ F_s(qij,nblyr_hist)
              enddo  !qcells
           enddo   !k
 
         ! Add artificial viscosity   [Lapidus,1967] [Lohner et al, 1985]
         ! * more for melting ice
         !--------------------------------------------------------------------- 
-    
+
          do k = 2, nblyr+1  
- 
              do ij = 1, qcells
                i = qndxi(ij)
                j = qndxj(ij) 
@@ -1093,16 +1016,15 @@
                lapidus_diff(qij,k-1) =    lapidus(qij)/real(nblyr,kind=dbl_kind)**2/&
                   (igrid(k)-igrid(k-1))* &
                   ( lapA(k-1)*ABS(Q_s(qij,k+1)-Q_s(qij,k))*(abs(pre_sinb(i,j,k+1))-abs(pre_sinb(i,j,k)))/&
-                  (bgrid(k+1)-bgrid(k) )**2 - &
+                  (bgrid_temp(qij,k+1)-bgrid_temp(qij,k) )**2 - &
                    lapB(k-1)*ABS(Q_s(qij,k)-Q_s(qij,k-1))*(abs(pre_sinb(i,j,k))-abs(pre_sinb(i,j,k-1)))/&
-                  (bgrid(k)-bgrid(k-1))**2)
-            
-              
+                  (bgrid_temp(qij,k)-bgrid_temp(qij,k-1))**2)
+                          
               Sin(i,j,k) = pre_sinb(i,j,k) + lapidus_diff(qij,k-1)
 
               if (Sin(i,j,k) < min_salin) then
-                  flux_corr(qij,k-1) = min_salin - Sin(i,j,k) !  flux into the ice
-                  Sin(i,j,k) = min_salin  
+                flux_corr(qij,k-1) = min_salin - Sin(i,j,k) !  flux into the ice
+                Sin(i,j,k) = min_salin 
               elseif (Sin(i,j,k) > max_salin) then
                 stable = .false.
                 write(nu_diag, *) 'Very Bad value in solve_dt_S-- istep1:',istep1
@@ -1115,6 +1037,7 @@
                 write(nu_diag, *) 'V_s(qij,k+1),Ui_s(qij,k+1),U_s(qij,k+1)',V_s(qij,k+1),&
                                   Ui_s(qij,k+1),U_s(qij,k+1)
                 write(nu_diag, *) 'C_s(qij,k),C_s(qij,k+1),C_s(qij,k-1)',C_s(qij,k),C_s(qij,k+1),C_s(qij,k-1)
+                write(nu_diag, *) 'F_s(qij,k),F_s(qij,k+1),F_s(qij,k-1)',F_s(qij,k),F_s(qij,k+1),F_s(qij,k-1)
                 write(nu_diag, *)'brine_rho(i,j,k),brine_sal(i,j,k)'
                 write(nu_diag,*)brine_rho(i,j,k),brine_sal(i,j,k)
                 write(nu_diag,*)'ivel(qij,k-1),ivel(qij,k),vel(qij,k-1),Din_p(i,j,k),darcy_V(i,j)'
@@ -1127,8 +1050,8 @@
                 write(nu_diag,*)zTin(i,j,k),zTin(i,j,k-1)
                 write(nu_diag,*)'Q_s(qij,k),Q_s(qij,k+1),Q_s(qij,k-1)'
                 write(nu_diag,*)Q_s(qij,k),Q_s(qij,k+1),Q_s(qij,k-1)
-                write(nu_diag,*)'bgrid(k),bgrid(k+1),bgrid(k-1)'
-                write(nu_diag,*)bgrid(k),bgrid(k+1),bgrid(k-1)
+                write(nu_diag,*)'bgrid_temp(qij,k),bgrid_temp(qij,k+1),bgrid_temp(qij,k-1)'
+                write(nu_diag,*)bgrid_temp(qij,k),bgrid_temp(qij,k+1),bgrid_temp(qij,k-1)
                 write(nu_diag,*)'hin_old(i,j),hin(i,j),dhb(i,j),dht(i,j),&
                                  dts, dt'
                 write(nu_diag,*)hin_old(i,j),hin(i,j),dhb(i,j),dht(i,j),&
@@ -1138,20 +1061,21 @@
                 write(nu_diag,*)'Sin(i,j,1),Sin(i,j,nblyr_hist)'
                 write(nu_diag,*)Sin(i,j,1),Sin(i,j,nblyr_hist)
                 write(nu_diag,*)Sin(i,j,1),Sin(i,j,nblyr_hist)
-
                 call abort_ice ('ice: Solve_S_dt error')                 
               endif
             
+              if (k == nblyr+1) Sin(i,j,nblyr+2) = S_bot(qij,1)*Sin(i,j,nblyr+1) + &
+                                                   S_bot(qij,2)*Sin(i,j,nblyr+2) 
+
               Ssum_new(qij) = Ssum_new(qij) + Sin(i,j,k)*(igrid(k)-igrid(k-1))
-              fluxcorr(qij) = fluxcorr(qij) + flux_corr(qij,k-1)*(igrid(k)-igrid(k-1))
-             
+              fluxcorr(qij) = fluxcorr(qij) + (flux_corr(qij,k-1) + &
+                               lapidus_diff(qij,k-1))*(igrid(k)-igrid(k-1))
         enddo  !qcells
        enddo   !k
 
        call calc_salt_fluxes (m,qcells,qndxi,qndxj,qndxij,icells,nx_block,ny_block,&
-                             Ui_s,dh,hin_old,Sintemp,pre_sin,fluxb,fluxg,fluxm,V_s,&
-                             C_s,Ssum_corr,fsicen_g,fsicen,Ssum_old,fluxcorr,dts)
- 
+                             Ui_s,dh,dbgrid,hin_old,Sintemp,pre_sin,fluxb,fluxg,fluxm,V_s,&
+                             C_s,F_s,Ssum_corr,fsicen_g,fsicen,Ssum_old,fluxcorr,dts,S_surface)
 
        if (test_conservation) then
          good_numerics = .true.
@@ -1202,43 +1126,40 @@
                 write(nu_diag,*)zTin(i,j,k),zTin(i,j,k-1)
                 write(nu_diag,*)'Q_s(qij,k),Q_s(qij,k+1),Q_s(qij,k-1)'
                 write(nu_diag,*)Q_s(qij,k),Q_s(qij,k+1),Q_s(qij,k-1)
-                write(nu_diag,*)'bgrid(k),bgrid(k+1),bgrid(k-1)'
-                write(nu_diag,*)bgrid(k),bgrid(k+1),bgrid(k-1)
+                write(nu_diag,*)'bgrid_temp(qij,1),bgrid_temp(qij,nblyr+2),bgrid_temp(qij,2)'
+                write(nu_diag,*)bgrid_temp(qij,1),bgrid_temp(qij,nblyr+2),bgrid_temp(qij,2)
                 write(nu_diag,*)'hin_old(i,j),hin(i,j),dhb(i,j),dht(i,j),&
-                                 dts, dt'
+                                 dts, dt,dbgrid(qij)'
                 write(nu_diag,*)hin_old(i,j),hin(i,j),dhb(i,j),dht(i,j),&
-                                dts,dt
+                                dts,dt,dbgrid(qij)
              enddo
              call abort_ice ('ice: check_conserve_salt error')
          endif  !good_numerics
        endif  !test_conservation
-
       enddo !m
-      
-     
-
     endif   !qcells > 0 
-  
+
      if (pcells > 0) then  !  add/melt ice only 
-                                   
+
        do ij = 1, pcells
           i = pndxi(ij)
           j = pndxj(ij) 
           pij = pndxij(ij)
-       
+
           sum_old = c0
           sum_new = c0
+          dh_dt = hin(i,j)-hin_old(i,j)
+          dS_dt = c0
+          if (dh_dt > c0) dS_dt = sss(i,j)*dh_dt/real(nblyr,kind=dbl_kind)
           do k = 2, nblyr+1 
             sum_old = sum_old + Sin(i,j,k)*hin_old(i,j)*(igrid(k)-igrid(k-1))
-            Sin(i,j,k) = max(min_salin,Sin(i,j,k))
+            Sin(i,j,k) = Sin(i,j,k) + dS_dt
             sum_new = sum_new + Sin(i,j,k)*hin(i,j)*(igrid(k)-igrid(k-1))
           enddo  !k
-          
           fsicen(i,j) = fsicen(i,j) -rhosi*(sum_new-sum_old)*p001/dt
           fsicen_g(i,j) = c0
         enddo   !pcells
      endif    ! add/melt ice only
-   
 
       !-----------------------------------------------------------------
       ! Move this to bgc calculation if using tr_salinity
@@ -1248,13 +1169,14 @@
      iDin(:,:,:) = c0
      iphin(:,:,:) = c1
      ikin(:,:,:) = c0    
-             
+
        do k= 1, nblyr+1
           do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)  
-            
-              if (k < nblyr+1) zphin(i,j,k+1) = min(c1,max(puny, Sin(i,j,k+1)*rhosi/(brine_sal(i,j,k+1)*brine_rho(i,j,k+1)))) 
+
+              if (k < nblyr+1) zphin(i,j,k+1) = min(c1,max(puny, Sin(i,j,k+1)*rhosi/&
+                                             (brine_sal(i,j,k+1)*brine_rho(i,j,k+1)))) 
               if (k == 1) then     
                 zphin(i,j,k) = min(c1,max(puny, Sin(i,j,k)*rhosi/(brine_sal(i,j,k)*brine_rho(i,j,k))))  
                 iphin(i,j,k) = zphin(i,j,2)
@@ -1264,26 +1186,24 @@
                 iphin(i,j,k) =min(c1, max(c0,(zphin(i,j,k+1) - zphin(i,j,k))/(bgrid(k+1) - &
                              bgrid(k))*(igrid(k)-bgrid(k)) + zphin(i,j,k)))
               endif 
-              
+
               ikin(i,j,k) = k_o*iphin(i,j,k)**exp_h 
-           
            enddo  !ij
          enddo    !k
-       
- 
+
          do k = 2, nblyr+1
- 
             do ij = 1, qcells
                i = qndxi(ij)
                j = qndxj(ij) 
                qij = qndxij(ij)
                
-               iDin(i,j,k) =  (iphin(i,j,k)*Dm)/hin_old(i,j)**2  
+               iDin(i,j,k) =  iphin(i,j,k)*Dm/hin_old(i,j)**2  
                if (Rayleigh(qij) .AND. hin(i,j) .GE. Ra_c) &
                iDin(i,j,k) =iDin(i,j,k) + l_sk*ikin(i,j,k)*gravit/viscos_dynamic* &  
-                           drho(qij,k)/hin_old(i,j)**2   
+                           drho(qij,k)/hin_old(i,j)**2   + &
+                           l_c* abs(darcy_V(i,j))/hin_old(i,j)**2
             enddo  !ij
-  
+
             do ij = 1, pcells
                 i = pndxi(ij)
                 j = pndxj(ij) 
@@ -1292,7 +1212,6 @@
 
             enddo         !ij
         enddo       !k
-      
 
 
 770 format (I6,D16.6)        
@@ -1303,7 +1222,6 @@
 793 format (3D16.6)
 794 format (4D15.5)
 800 format (F10.4)
-      
 
      end subroutine solve_S_dt
 
@@ -1332,22 +1250,18 @@
 !
 ! !USES:
 !
-! 
-
 ! !INPUT/OUTPUT PARAMETERS:
 !
        integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells       
-                      
 
       integer (kind=int_kind), dimension(nx_block*ny_block), &
          intent(in) :: &
          indxi, indxj  ! compressed indices 
-  
+
       real (kind=dbl_kind), dimension (nblyr_hist), intent(in) :: &
          bgrid            ! biology nondimensional grid layer points 
-
 
       real (kind=dbl_kind), dimension (nblyr+1), intent(in) :: &
          igrid         ! biology grid interface points 
@@ -1360,8 +1274,6 @@
 
       real (kind=dbl_kind), dimension (icells, nblyr+1), intent(out) :: & 
          drho                 ! brine difference about grid point (kg/m^3)
-
-!
 !
 !EOP
 !
@@ -1371,7 +1283,6 @@
     integer (kind=int_kind), dimension (icells) :: &
          mstop, mstart
 
-
      real (kind=dbl_kind), dimension (icells, nblyr_hist) :: &  !on the zbgc vertical grid
          diff              ! difference array between grid points and 
                            ! the density averaging boundary 
@@ -1380,16 +1291,11 @@
          rho_a         ,&  ! average brine density  above grid point (kg/m^3)
          rho_2a            ! average brine density  above and below grid points (kg/m^3)
 
-     
-
        rho_a(:,:) = c0
        rho_2a(:,:) = c0
        drho(:,:) = c0  !surface is snow or atmosphere 
 
-
        do k = 1, nblyr+1   !igrid values
-
-
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij) 
@@ -1399,11 +1305,10 @@
          ! Calculate rho_a(k), ie  average rho above igrid(k) 
          ! first part is good
          !----------------------------------------------
-            
+
             if (k == 2) then
                rho_a(ij,2) = (brine_rho(i,j,2)*bgrid(2) + (ibrine_rho(i,j,2) + brine_rho(i,j,2))*&
                          p5*(igrid(2)-bgrid(2)) )/igrid(2)
-
 
             elseif (k > 2 .AND. k < nblyr+1) then 
                rho_a(ij,k) = (rho_a(ij,k-1)*igrid(k-1) +  (ibrine_rho(i,j,k-1) + brine_rho(i,j,k))*&
@@ -1415,7 +1320,6 @@
                         brine_rho(i,j,nblyr+1)*(igrid(nblyr+1)-bgrid(nblyr+1)))/igrid(nblyr+1)
                rho_a(ij,1) = brine_rho(i,j,2)   !for k == 1 use grid point value
             endif
-               
            enddo  !ij
         enddo     !k
 
@@ -1424,8 +1328,6 @@
         !----------------------------------------------
 
        do k = 1, nblyr+1   !igrid values
-
-
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij) 
@@ -1443,15 +1345,17 @@
                 mstart(ij) = nblyr+2
                 mstop(ij) = nblyr+3
             endif                     
-           
+
             do mm = mstart(ij),mstop(ij)
                 rho_2a(ij,k) =(rho_a(ij,nblyr+1) + rhow*(c2*igrid(k)-c1))*p5/igrid(k)
             enddo
            endif
-           drho(ij,k) = max(c0,c2*(rho_a(ij,k)-rho_2a(ij,k)))
+           drho(ij,k) = max(c0,c2*(rho_a(ij,k)-rho_2a(ij,k)), &
+              c2*(brine_rho(i,j,k)-brine_rho(i,j,k+1))/real(nblyr,kind=dbl_kind))
           enddo
         enddo
 
+     
 
      end subroutine calculate_drho
 
@@ -1475,20 +1379,17 @@
 !
       subroutine calc_salt_fluxes &
                                     (mint,qcells,qndxi,qndxj,qndxij,icells,nx_block,ny_block,&
-                                    Ui_s,dh,hin_old,Sintemp,pre_sin,fluxb,fluxg,fluxm,V_s,&
-                                    C_s,Ssum_corr,fsicen_g,fsicen,Ssum_old,fluxcorr,dts)
+                                    Ui_s,dh,dbgrid,hin_old,Sintemp,pre_sin,fluxb,fluxg,fluxm,V_s,&
+                                    C_s,F_s,Ssum_corr,fsicen_g,fsicen,Ssum_old,fluxcorr,dts,S_surface)
 !
 ! !USES:
 !
-! 
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
-  
       integer(kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          qcells, icells,mint      
- 
+
       integer (kind=int_kind), dimension(nx_block*ny_block), &
          intent(in) :: &
          qndxi, qndxj,qndxij ! compressed indices for icells with hin > thin
@@ -1504,7 +1405,10 @@
         fsicen, fsicen_g
 
       real (kind=dbl_kind), dimension(icells), intent(in) :: &
-         dh      ! (m) change in hbrine over dts
+         dh    , &  ! (m) change in hbrine over dts
+         dbgrid, &  ! ratio of grid space to spacing across boundary 
+                    ! ie. 1/nilyr/(dbgrid(2)-dbgrid(1))
+         S_surface  !min_salin or sss for flood_val = .true.
 
       real (kind=dbl_kind), dimension(icells), intent(inout) :: &
          Ssum_old       , &  ! initial integrated salt content
@@ -1521,12 +1425,12 @@
 
       real (kind=dbl_kind), dimension (icells, nblyr_hist), intent(in) :: &  !on the zbgc vertical grid 2:nblyr+1
          C_s, &   ! Functions in continuity equation
+         F_s, &
          V_s
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
          hin_old          ! (m) initial brine height
-                           
 !
 !EOP
 !
@@ -1540,7 +1444,7 @@
          fluxm_b, fluxm_t    !bottom, top and total molecular diffusion flux (g/kg/m^2)
 
       real (kind=dbl_kind) :: hin_next
-              
+
            do ij = 1, qcells
                i = qndxi(ij)
                j = qndxj(ij) 
@@ -1550,59 +1454,61 @@
                !----------------------------------
                ! boundary fluxes (positive into the ice)
                !--------------------------------
+                  fluxb_b(qij) = p5*Ui_s(qij,nblyr+1)*((c1-dh(qij)/hin_old(i,j))* &
+                                             Sintemp(i,j,nblyr+2)*dbgrid(qij) + pre_sin(i,j,nblyr+1)+&
+                                             (c1-dh(qij)/hin_old(i,j))*(c1-dbgrid(qij))*Sintemp(i,j,nblyr+1)) + &
+                                 p5*((c1-dh(qij)/hin_old(i,j))*dbgrid(qij)*F_s(qij,nblyr+2)* &
+                                 Sintemp(i,j,nblyr+2)  +  F_s(qij,nblyr+1)*(pre_sin(i,j,nblyr+1) - &
+                                  (c1-dh(qij)/hin_old(i,j))*(dbgrid(qij)-c1)*Sintemp(i,j,nblyr+1)))
 
-                  fluxb_b(qij) = Ui_s(qij,nblyr+1)*((c1-dh(qij)/hin_old(i,j))* &
-                                             Sintemp(i,j,nblyr+2) + p5*(pre_sin(i,j,nblyr+1)-&
-                                             (c1-dh(qij)/hin_old(i,j))*Sintemp(i,j,nblyr+1)))
-             
-                  fluxb_t(qij) = -Ui_s(qij,1)*(min_salin +  &
-                              p5*((c1-dh(qij)/hin_old(i,j))*Sintemp(i,j,2) - pre_sin(i,j,2)))
+                  fluxb_t(qij) = -p5*Ui_s(qij,1)*(S_surface(qij)*dbgrid(qij) +  &
+                              (c1-dh(qij)/hin_old(i,j))*Sintemp(i,j,2) - (dbgrid(qij)-c1)*pre_sin(i,j,2)) + &
+                               -p5*(dbgrid(qij)*F_s(qij,1)*pre_sin(i,j,1) + &
+                                 F_s(qij,2)*((c1-dh(qij)/hin_old(i,j))*Sintemp(i,j,2)+(c1-dbgrid(qij))*pre_sin(i,j,2)))
 
                   fluxb(qij) = fluxb_b(qij) + fluxb_t(qij)
 
                !----------------------------------
                ! gravity drainage fluxes (positive into the ice)
                !--------------------------------
-               
-
-                  fluxg_b(qij) =  ((c1-dh(qij)/hin_old(i,j))*  V_s(qij,nblyr+2)*Sintemp(i,j,nblyr+1)**3  +  &
-                                  p5*V_s(qij,nblyr+1)*(pre_sin(i,j,nblyr+1)**3 - &
-                                  (c1-dh(qij)/hin_old(i,j))*Sintemp(i,j,nblyr+1)**3))
+                  fluxg_b(qij) =  p5*((c1-dh(qij)/hin_old(i,j))* dbgrid(qij)* V_s(qij,nblyr+2)*Sintemp(i,j,nblyr+1)**3  +  &
+                                  V_s(qij,nblyr+1)*(pre_sin(i,j,nblyr+1)**3 - &
+                                  (c1-dh(qij)/hin_old(i,j))*(dbgrid(qij) - c1)*Sintemp(i,j,nblyr+1)**3))
                 
-                  fluxg_t(qij) =  -(V_s(qij,1)*pre_sin(i,j,1)**3 + &
-                                  p5*V_s(qij,2)*((c1-dh(qij)/hin_old(i,j))*Sintemp(i,j,2)**3- &
-                                      pre_sin(i,j,2)**3))
-
+                  fluxg_t(qij) =  -p5*(dbgrid(qij)*V_s(qij,1)*pre_sin(i,j,1)**3 + &
+                                  V_s(qij,2)*((c1-dh(qij)/hin_old(i,j))*Sintemp(i,j,2)**3- &
+                                      (dbgrid(qij)-c1)*pre_sin(i,j,2)**3))
                 
                   fluxg(qij) =  fluxg_b(qij) + fluxg_t(qij)
                !----------------------------------
                ! diffusion fluxes (positive into the ice)
                !--------------------------------
-                  fluxm_b(qij) =  ((c1-dh(qij)/hin_old(i,j))* C_s(qij,nblyr+2)* &
-                                 Sintemp(i,j,nblyr+2)  +  p5*C_s(qij,nblyr+1)*(pre_sin(i,j,nblyr+1) - &
-                                  (c1-dh(qij)/hin_old(i,j))*Sintemp(i,j,nblyr+1)))
+                  fluxm_b(qij) =  p5*((c1-dh(qij)/hin_old(i,j))*dbgrid(qij)*C_s(qij,nblyr+2)* &
+                                 Sintemp(i,j,nblyr+2)  +  C_s(qij,nblyr+1)*(pre_sin(i,j,nblyr+1) - &
+                                  (c1-dh(qij)/hin_old(i,j))*(dbgrid(qij)-c1)*Sintemp(i,j,nblyr+1)))
    
-                  fluxm_t(qij) =-(C_s(qij,1)*pre_sin(i,j,1) + &
-                                   p5*C_s(qij,2)*((c1-dh(qij)/hin_old(i,j))*Sintemp(i,j,2)-pre_sin(i,j,2)))
+                  fluxm_t(qij) =-p5*(dbgrid(qij)*C_s(qij,1)*pre_sin(i,j,1) + &
+                                   C_s(qij,2)*((c1-dh(qij)/hin_old(i,j))*Sintemp(i,j,2)+(c1-dbgrid(qij))*pre_sin(i,j,2)))
                 
                   fluxm(qij) =  fluxm_b(qij) + fluxm_t(qij)
 
-              Ssum_corr(qij) = (-dh(qij)/hin_old(i,j) + p5*(dh(qij)/hin_old(i,j))**2)*Ssum_old(qij) 
-                               !add to boundary flux!!
-
+              Ssum_corr(qij) = ( -dh(qij)/hin_old(i,j) + p5*(dh(qij)/hin_old(i,j))**2)*Ssum_old(qij) 
               hin_next = hin_old(i,j) + real(mint,kind=dbl_kind)*dh(qij)
               Ssum_corr_flux(qij) =  dh(qij)*Ssum_old(qij)/hin_next +Ssum_corr(qij)
           
               fsicen_g(i,j) = fsicen_g(i,j) - hin_next*fluxg(qij)*rhosi*p001/dts  
 
-              fsicen(i,j) = fsicen(i,j) - hin_next*(fluxb(qij) +  fluxg(qij) + fluxm(qij)+ &
-                    Ssum_corr_flux(qij)+ fluxcorr(qij))*rhosi*p001/dts 
-            
+              fsicen(i,j) = fsicen(i,j) - hin_next*(fluxb(qij) + &
+                            fluxg(qij) + fluxm(qij)+ Ssum_corr_flux(qij) + fluxcorr(qij))*rhosi*p001/dts
+
+             ! write(nu_diag,*)'surface fluxes: fluxb_t(qij),fluxg_t(qij),fluxm_t(qij),qij:', &
+             !               fluxb_t(qij),fluxg_t(qij),fluxm_t(qij),qij
+             ! write(nu_diag,*)'bottom fluxes: fluxb_b(qij),fluxg_b(qij),fluxm_b(qij),qij:', &
+             !               fluxb_b(qij),fluxg_b(qij),fluxm_b(qij)
+
        enddo
-        
 
      end subroutine calc_salt_fluxes
-
 
 !=======================================================================
 !BOP
@@ -1630,15 +1536,12 @@
 !
 ! !USES:
 !
-! 
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
-  
       integer(kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          qcells, icells,mint      
-  
+
       integer(kind=int_kind), intent(inout) :: &
          qij_fault          !qndxij value where conservation fails 
 
@@ -1667,7 +1570,6 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
          hin_old          ! (m) initial brine height
-                           
 !
 !EOP
 !
@@ -1681,25 +1583,19 @@
          flux_tot  , &          ! fluxg+fluxb
          fsicen_old, &  !
          order
-      
+
      real (kind=dbl_kind), parameter :: &
          accuracy = 1.0e-14_dbl_kind ! g/kg/m^3 difference between boundary fluxes 
-              
-     
+
         do ij = 1,qcells
          i =  qndxi(ij)
          j = qndxj(ij) 
          qij = qndxij(ij)
-
          dsum = Ssum_new(qij) -  Ssum_old(qij) 
- 
          flux_tot = fluxb(qij) + fluxg(qij) + fluxm(qij) + fluxcorr(qij) 
-
          dsum_flux =(Ssum_new(qij)*(hin_old(i,j) + (real(mint,kind=dbl_kind))*dh(qij)) - &
                  Ssum_old(qij)*(hin_old(i,j) + (real(mint,kind=dbl_kind)-c1)*dh(qij)) )*rhosi*p001/dts 
-
          order = abs(dh(qij)/hin_old(i,j))
-
          if (abs(dsum) > c0) then
            diff2 = abs(dsum- Ssum_corr(qij)- flux_tot)
            if (diff2 >  puny .AND. diff2 > order ) then 
@@ -1716,11 +1612,8 @@
               write(nu_diag,*) Ssum_new(qij),Ssum_old(qij),hin_old(i,j),dh(qij)
               write(nu_diag,*) 'diff2,order,puny',diff2,order,puny
            endif
-        
          endif
-
         enddo
-        
 
      end subroutine check_conserve_salt
 
@@ -1771,7 +1664,6 @@
           dsnown  , & ! snow  growth                    (m)
           fsicen  , & ! salt flux                       (kg/m**2/s)
           fsicen_g    ! gravity drainage salt flux      (kg/m**2/s)
-       
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
           intent(inout):: &          
@@ -1780,7 +1672,6 @@
           dsnow   , & ! snow growth                     (m)
           fsice   , & ! salt flux                       (kg/m**2/s)
           fsice_g     ! gravity drainage salt flux      (kg/m**2/s)
-     
 
 !EOP
 !
@@ -1802,15 +1693,13 @@
          hbri     (i,j)  = hbri    (i,j) + hbrin(i,j)*aicen(i,j)  
 
          ! ocean tot and gravity drainage salt fluxes
-
          fsice   (i,j) = fsice     (i,j) + fsicen  (i,j)*aicen(i,j)
          fsice_g (i,j) = fsice_g   (i,j) + fsicen_g(i,j)*aicen(i,j)
 
          ! ice/snow thickness
-
          dsnow    (i,j) = dsnow    (i,j) + dsnown  (i,j)*aicen(i,j)
       enddo                     ! ij
-      
+
       end subroutine merge_S_fluxes
 
 !==========================================================================
@@ -1847,7 +1736,6 @@
          intent(in) :: &
          indxi,  indxj          ! compressed i/j indices
 
-      
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in):: &          
           vicen       !volume of ice
 
@@ -1855,11 +1743,8 @@
            intent(in) :: &
            trcrn         ! input fields
 
-     
-
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out) :: &
           S_totn  ! avg salinity (psu*rhosi*vol of ice)
-           
 !
 !EOP
 !
@@ -1868,8 +1753,6 @@
            k                ! layer index
 
      S_totn(:,:) = c0
-
-   
       do k = 1, nblyr
          do ij = 1, icells
             i = indxi(ij)
@@ -1879,9 +1762,8 @@
                              
          enddo                  ! ij
       enddo                     ! n
-      
-      end subroutine column_sum_S
 
+      end subroutine column_sum_S
 
 !=======================================================================
 !BOP
@@ -1980,11 +1862,9 @@
                if (aice(i,j,iblk) > c0) then
                  psice_rho(n) = psice_rho(n)/aice(i,j,iblk)
                endif
-              
-               
                 if (hbrine .and. aice(i,j,iblk) > c0) &
                    phinS(n) = trcr(i,j,nt_fbri,iblk)*vice(i,j,iblk)/aice(i,j,iblk)
-                                     
+
                 if (aicen(i,j,1,iblk)> c0) then
                   if (hbrine) phinS1(n) = trcrn(i,j,nt_fbri,1,iblk)*vicen(i,j,1,iblk)/&
                                                 aicen(i,j,1,iblk)
@@ -2006,8 +1886,6 @@
                 if (hbrine .AND. aice(i,j,iblk) > c0) phbrn(n) = phinS(n) - &
                        rhosi/rhow*vice(i,j,iblk)/aice(i,j,iblk) - & 
                        rhos/rhow*vsno(i,j,iblk)/aice(i,j,iblk)
-               
-              
                  do k = 1, nblyr+1
                    pzTin(n,k) = c0
                    piDin(n,k) = c0
@@ -2030,7 +1908,6 @@
                    if (vice(i,j,iblk) > c0) then
                     pphin(n,k) = pphin(n,k)/vice(i,j,iblk)
                    endif
-
                  enddo
                  do k = 1,nblyr
                        pSin(n,k) = c0
@@ -2039,12 +1916,10 @@
                        pSin(n,k)= trcr(i,j,nt_bgc_S+k-1,iblk)     
                        if (aicen(i,j,1,iblk) > c0) pSin1(n,k) = trcrn(i,j,nt_bgc_S+k-1,1,iblk)      
                        if (aicen(i,j,2,iblk)> c0) pSin2(n,k) = trcrn(i,j,nt_bgc_S+k-1,2,iblk)
-                   
                  enddo 
                  do k = 1,nilyr
                    pSice(n,k) = trcr(i,j,nt_sice+k-1,iblk)   
                  enddo
-
             endif                 ! my_task = pmloc
 
            call broadcast_scalar(phinS(n), pmloc(n)) 
@@ -2080,10 +1955,7 @@
            do k = 1,nilyr
              call broadcast_scalar(pSice (n,k), pmloc(n))
            enddo
-           
-          
          enddo                  ! npnt
-
       endif                     ! print_points
 
       !-----------------------------------------------------------------
@@ -2106,9 +1978,6 @@
         write(nu_diag,903) '  my_task, iblk, i, j     ', &
                               pmloc(1),pbloc(1),piloc(1),pjloc(1), &
                               pmloc(2),pbloc(2),piloc(2),pjloc(2)
-
-      
-       
         write(nu_diag,900) 'hinS                   = ',phinS(1),phinS(2)
         write(nu_diag,900) 'hinS cat 1             = ',phinS1(1),phinS1(2)
         write(nu_diag,900) 'hinS cat 2             = ',phinS2(1),phinS2(2)
@@ -2126,8 +1995,6 @@
         write(nu_diag,900) 'Gravity Drainage Salt flux   = ',pfsice_g(1),pfsice_g(2)
         write(nu_diag,900) 'Darcy V cat 1 (m/s)    = ',pdarcy_V1(1),pdarcy_V1(2)
         write(nu_diag,900) 'Darcy V cat 2 (m/s)    = ',pdarcy_V2(1),pdarcy_V2(2)
-
-      
         write(nu_diag,*) '                         '
         write(nu_diag,*) ' Top down bgc Layer Model'
         write(nu_diag,*) '                         '
@@ -2163,7 +2030,6 @@
         write(nu_diag,*) '---------------------------------------------------'
         write(nu_diag,802) ((pSice(n,k),n=1,2), k = 1,nilyr)            
         write(nu_diag,*) '                         '
-    
        endif                    ! print_points
       endif                     ! my_task = master_task
 
@@ -2174,6 +2040,117 @@
   903 format (a25,5x,i4,1x,i4,1x,i4,1x,i4,7x,i4,1x,i4,1x,i4,1x,i4)
 
       end subroutine S_diags
+
+!=======================================================================
+!
+! Writes diagnostic info (max, min, global sums, etc) to standard out
+!
+! authors: Elizabeth C. Hunke, LANL
+!          Bruce P. Briegleb, NCAR
+!          Cecilia M. Bitz, UW
+!          Nicole Jeffery, LANL
+
+      subroutine hbrine_diags (dt)
+
+      use ice_broadcast, only: broadcast_scalar
+      use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc, pbloc, &
+                                plat, plon
+      use ice_domain_size, only: ncat, nltrcr
+     ! use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
+      use ice_state, only: aice, aicen, nt_sice , nt_fbri, trcrn, hbrine 
+
+      real (kind=dbl_kind), intent(in) :: &
+         dt      ! time step
+
+      ! local variables
+
+      integer (kind=int_kind) :: &
+         i, j, k, n, iblk
+
+      ! fields at diagnostic points
+      real (kind=dbl_kind), dimension(npnt) :: &
+         phinS, phinS1, pdarcy_V, pfbri
+
+      real (kind=dbl_kind), dimension(npnt,nilyr) :: &
+         pSin
+
+
+      !-----------------------------------------------------------------
+      ! Dynamic brine height
+      !-----------------------------------------------------------------
+
+      if (print_points) then
+
+      !-----------------------------------------------------------------
+      ! state of the ice and associated fluxes for 2 defined points
+      ! NOTE these are computed for the last timestep only (not avg)
+      !-----------------------------------------------------------------
+
+         do n = 1, npnt
+           if (my_task == pmloc(n)) then
+               i = piloc(n)
+               j = pjloc(n)
+               iblk = pbloc(n)
+             
+                phinS1(n) = c0            
+                phinS(n) = c0            
+                pfbri(n) = trcrn(i,j,nt_fbri,1,iblk) 
+                pdarcy_V(n) = darcy_V(i,j,1,iblk)
+                if (aice(i,j,iblk) > c0) &
+                       phinS(n) = trcr(i,j,nt_fbri,iblk)*vice(i,j,iblk)/aice(i,j,iblk)
+                if (aicen(i,j,1,iblk)> c0)&
+                       phinS1(n) = trcrn(i,j,nt_fbri,1,iblk)*vicen(i,j,1,iblk)/&
+                                                aicen(i,j,1,iblk)
+                 do k = 1,nilyr
+                       pSin(n,k) = trcr(i,j,nt_sice+k-1,iblk)
+                 enddo
+            endif                 ! my_task = pmloc
+           
+            do k = 1,nilyr
+                 call broadcast_scalar(pSin(n,k), pmloc(n))   
+            enddo
+            call broadcast_scalar(pfbri(n), pmloc(n))  
+            call broadcast_scalar(phinS1(n), pmloc(n))  
+            call broadcast_scalar(phinS(n), pmloc(n)) 
+            call broadcast_scalar(pdarcy_V(n), pmloc(n))
+         enddo                  ! npnt
+      endif                     ! print_points
+
+      !-----------------------------------------------------------------
+      ! start spewing
+      !-----------------------------------------------------------------
+
+      if (my_task == master_task) then
+
+       call flush_fileunit(nu_diag)
+
+      !-----------------------------------------------------------------
+      ! diagnostics for Arctic and Antarctic points
+      !-----------------------------------------------------------------
+
+      if (print_points) then
+          write(nu_diag,*) '------ hbrine ------'
+          write(nu_diag,900) 'hbrine, (m)        = ',phinS(1),phinS(2)
+          write(nu_diag,900) 'fbri, cat1 (m)     = ',pfbri(1),pfbri(2)
+          write(nu_diag,900) 'hbrine cat1, (m)   = ',phinS1(1),phinS1(2)  
+          write(nu_diag,900) 'darcy_V cat1, (m/s)= ',pdarcy_V(1),pdarcy_V(2)             
+          write(nu_diag,*) '                         '
+          write(nu_diag,*) '------ Thermosaline Salinity ------'
+          write(nu_diag,803) 'Sice(1) bulk S (ppt) ','Sice(2) bulk S'
+          write(nu_diag,*) '---------------------------------------------------'
+          write(nu_diag,802) ((pSin(n,k),n=1,2), k = 1,nilyr)              
+          write(nu_diag,*) '                         '
+      endif                   ! print_points
+      endif                   ! my_task = master_task 
+
+  802 format (f24.17,2x,f24.17)
+  803 format (a25,2x,a25)
+  900 format (a25,2x,f24.17,2x,f24.17)
+  902 format (a25,10x,f6.1,1x,f6.1,9x,f6.1,1x,f6.1)
+  903 format (a25,5x,i4,1x,i4,1x,i4,1x,i4,7x,i4,1x,i4,1x,i4,1x,i4)
+
+      end subroutine hbrine_diags
+
 
 !=======================================================================
 !
@@ -2195,7 +2172,6 @@
 !
 ! !USES:
 !
-  
       use ice_domain_size
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init
@@ -2231,8 +2207,8 @@
               restart_dir(1:lenstr(restart_dir)), &
               restart_file(1:lenstr(restart_file)),'.S.', &
               iyear,'-',month,'-',mday,'-',sec
-      end if
-         
+      endif
+
       ! begin writing restart data
       call ice_open(nu_dump_S,filename,0)
 
@@ -2248,42 +2224,127 @@
       !--------------------------
 
       do n = 1, ncat
-         if (hbrine) call ice_write(nu_dump_S,0,trcrn(:,:,nt_fbri,n,:),'ruf8',diag)
-
-         do k = 1,nblyr
-         if (tr_bgc_S) call ice_write(nu_dump_S,0,trcrn(:,:,nt_bgc_S+k-1,n,:),'ruf8',diag)
-         enddo
-
+           do k = 1,nblyr
+             call ice_write(nu_dump_S,0,trcrn(:,:,nt_bgc_S+k-1,n,:),'ruf8',diag)
+           enddo
       enddo
 
-      if (tr_bgc_S)  then
-         call ice_write(nu_dump_S,0,sss,'ruf8',diag)
-
-
+     
+      call ice_write(nu_dump_S,0,sss,'ruf8',diag)
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
             if (Rayleigh_criteria(i,j,iblk)) then
                Rayleigh_real(i,j,iblk) = c1
-            else
+            elseif (.NOT. Rayleigh_criteria(i,j,iblk)) then
                Rayleigh_real(i,j,iblk) = c0
-            endif
-            if (first_ice(i,j,iblk)) then
-               first_ice_real(i,j,iblk) = c1
-            else
-               first_ice_real(i,j,iblk) = c0
             endif
          enddo
          enddo
       enddo
 
       call ice_write(nu_dump_S,0,Rayleigh_real,'ruf8',diag)
-      call ice_write(nu_dump_S,0,first_ice_real,'ruf8',diag)
-      endif
 
       if (my_task == master_task) close(nu_dump_S)
 
       end subroutine write_restart_S
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: write_restart_hbrine - dumps all fields required for restart
+!
+! !INTERFACE:
+!
+      subroutine write_restart_hbrine(filename_spec)
+!
+! !DESCRIPTION:
+!
+! Dumps all values needed for a hbrine restart
+!
+! !REVISION HISTORY:
+!
+! author Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+      use ice_domain_size
+      use ice_calendar, only: sec, month, mday, nyr, istep1, &
+                              time, time_forc, idate, year_init
+      use ice_domain, only: nblocks
+      use ice_state
+      use ice_flux, only: sss  
+      use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
+      use ice_read_write, only: ice_open, ice_write
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      character(len=char_len_long), intent(in), optional :: filename_spec
+
+!EOP
+!
+      integer (kind=int_kind) :: &
+          i, j, k, n, it, iblk, & ! counting indices
+          iyear, imonth, iday     ! year, month, day
+
+      character(len=char_len_long) :: filename
+
+      logical (kind=log_kind) :: diag
+
+      ! construct path/file
+      if (present(filename_spec)) then
+         filename = trim(filename_spec)
+      else
+         iyear = nyr + year_init - 1
+         imonth = month
+         iday = mday
+         
+         write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
+              restart_dir(1:lenstr(restart_dir)), &
+              restart_file(1:lenstr(restart_file)),'.hb.', &
+              iyear,'-',month,'-',mday,'-',sec
+      endif
+
+      ! begin writing restart data
+      call ice_open(nu_dump_hbrine,filename,0)
+
+      if (my_task == master_task) then
+        write(nu_dump_hbrine) istep1,time,time_forc
+        write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
+        write(nu_diag,*) 'hbrine Restart written ',istep1,time,time_forc
+      endif
+
+      diag = .true.
+      !--------------------------
+      !hbrine and first ice
+      !--------------------------
+
+      do n = 1, ncat
+         call ice_write(nu_dump_hbrine,0,trcrn(:,:,nt_fbri,n,:),'ruf8',diag)
+      enddo
+
+      do iblk = 1, nblocks
+       do n = 1,ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (first_ice(i,j,n,iblk)) then
+               first_ice_real(i,j,n,iblk) = c1
+            else
+               first_ice_real(i,j,n,iblk) = c0
+            endif
+         enddo
+         enddo
+       enddo
+      enddo
+
+      do n = 1,ncat
+        call ice_write(nu_dump_hbrine,0,first_ice_real(:,:,n,:),'ruf8',diag)
+      enddo
+
+      if (my_task == master_task) close(nu_dump_hbrine)
+
+      end subroutine write_restart_hbrine
 
 !=======================================================================
 !BOP
@@ -2313,7 +2374,7 @@
       use ice_state
       use ice_exit, only: abort_ice
       use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
-      use ice_read_write, only: ice_open, ice_read, ice_write
+      use ice_read_write, only: ice_open, ice_read
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -2332,12 +2393,11 @@
       logical (kind=log_kind) :: &
          diag, hit_eof
 
-     real (kind=dbl_kind), dimension (:,:,:,:), allocatable :: &
+      real (kind=dbl_kind), dimension (:,:,:,:), allocatable :: &
           read_S
 
-     real (kind=dbl_kind), dimension (:,:,:), allocatable :: &
+      real (kind=dbl_kind), dimension (:,:,:), allocatable :: &
           interp_S
-          
 
       if (my_task == master_task) then
          open(nu_rst_pointer,file=pointer_file)
@@ -2361,12 +2421,12 @@
       if (my_task == master_task) then
         read(nu_restart_S) istep1,time,time_forc
         write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
-        write(nu_diag,*) 'Salinity Restart read at istep=',istep0,time,time_forc
+        write(nu_diag,*) 'Salinity/hbrine Restart read at istep=',istep0,time,time_forc
       endif
 
       diag = .true.
 
-      if (tr_bgc_S .AND. restart_n /= nblyr) then
+      if ( restart_n /= nblyr) then
          nsize = restart_n + nblyr
          nr0 = 0
          nt = 1
@@ -2375,14 +2435,6 @@
       endif
 
       do n = 1, ncat
-         if (hbrine ) then
-              write(nu_diag,*) 'cat ',n, &
-                               ' fbri'
-              call ice_read(nu_restart_S,0,trcrn(:,:,nt_fbri,n,:),'ruf8',diag, &
-                          field_loc_center, field_type_scalar)
-         endif
-             
-         if (tr_bgc_S ) then
            if (my_task == master_task) &
               write(nu_diag,*) 'cat ',n, &
                                ' S for each bgc layer'
@@ -2393,70 +2445,156 @@
                           field_loc_center, field_type_scalar)
              
              enddo
-
            else !restart_n .NE. nblyr
-           
              do k = 1,restart_n
                call ice_read(nu_restart_S,0,read_S(:,:,k,:),'ruf8',diag, &
                           field_loc_center, field_type_scalar)
              enddo
-         
              do iblk = 1, nblocks
                call interp_restart(nx_block,ny_block, &
                                  nsize, restart_n, read_S(:,:,:,iblk), &
                                  interp_S, nr0, nt, nblyr)
-
-
                do k = 1,nblyr
                  do j = 1, ny_block
                  do i = 1, nx_block
-                   trcrn(i,j,nt_bgc_S+k-1,n,iblk) = interp_S(i,j,k)
+                   trcrn(i,j,nt_bgc_S+k-1,n,iblk) = max(min_salin,interp_S(i,j,k))
                  enddo !j
                  enddo !i
                enddo !k
-         
              enddo  !iblk
-                    
            endif  !restart_n
-
-         endif  !tr_bgc_S 
         enddo
-      
 
-      if (my_task == master_task) &
-         write(nu_diag,*) 'ocean  sss'
-      
-        if (tr_bgc_S )call ice_read(nu_restart_S,0,sss,'ruf8',diag, &
+        if (my_task == master_task) &
+          write(nu_diag,*) 'ocean  sss'
+          call ice_read(nu_restart_S,0,sss,'ruf8',diag, &
                        field_loc_center, field_type_scalar)
-
-        call ice_write(nu_dump_S,0,Rayleigh_real,'ruf8',diag)
-        call ice_write(nu_dump_S,0,first_ice_real,'ruf8',diag)
-        do iblk = 1, nblocks
-          do j = 1, ny_block
-          do i = 1, nx_block
+          call ice_read(nu_restart_S,0,Rayleigh_real,'ruf8',diag, &
+                          field_loc_center, field_type_scalar)
+       
+         do iblk = 1, nblocks
+           do j = 1, ny_block
+           do i = 1, nx_block
             if (Rayleigh_real(i,j,iblk) .GE. c1) then
                Rayleigh_criteria (i,j,iblk) = .true.
-            else
+            elseif (Rayleigh_real(i,j,iblk) < c1) then
                Rayleigh_criteria (i,j,iblk) = .false.
             endif
-            if (first_ice_real(i,j,iblk) .GE. c1) then
-               first_ice (i,j,iblk) = .true.
-            else
-               first_ice (i,j,iblk) = .false.
-            endif
+          enddo
+          enddo
          enddo
-         enddo
-      enddo
-     
 
-      if (tr_bgc_S .AND. restart_n /= nblyr) then
+      if (restart_n /= nblyr) then
          deallocate (read_S, interp_S)
       endif
-
 
       if (my_task == master_task) close(nu_restart_S)
 
       end subroutine read_restart_S
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: read_restart_hbrine - reads all fields required for restart
+!
+! !INTERFACE:
+!
+      subroutine read_restart_hbrine(filename_spec)
+!
+! !DESCRIPTION:
+!
+! Reads all values needed for hbrine
+!
+! !REVISION HISTORY:
+!
+! author Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+      use ice_domain_size
+      use ice_calendar, only: sec, month, mday, nyr, istep1, &
+                              time, time_forc, idate, year_init, &
+                              istep0
+      use ice_domain, only: nblocks
+      use ice_flux, only: sss  
+      use ice_state
+      use ice_exit, only: abort_ice
+      use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
+      use ice_read_write, only: ice_open, ice_read
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      character(len=char_len_long), intent(in), optional :: filename_spec
+
+!EOP
+!
+      integer (kind=int_kind) :: &
+          i, j, k, n, it, iblk, & ! counting indices
+          iyear, imonth, iday  , &   ! year, month, day
+          nsize, nr0 , nt              
+
+      character(len=char_len_long) :: &
+         filename, filename0, string1, string2
+
+      logical (kind=log_kind) :: &
+         diag, hit_eof
+
+      if (my_task == master_task) then
+         open(nu_rst_pointer,file=pointer_file)
+         read(nu_rst_pointer,'(a)') filename0
+         filename = trim(filename0)
+         close(nu_rst_pointer)
+
+         ! reconstruct path/file
+         n = index(filename0,trim(restart_file))
+         if (n == 0) call abort_ice('hbrine restart: filename discrepancy')
+         string1 = trim(filename0(1:n-1))
+         string2 = trim(filename0(n+lenstr(restart_file):lenstr(filename0)))
+         write(filename,'(a,a,a,a)') &
+            string1(1:lenstr(string1)), &
+            restart_file(1:lenstr(restart_file)),'.hb', &
+            string2(1:lenstr(string2))
+      endif ! master_task
+
+      call ice_open(nu_restart_hbrine,filename,0)
+
+      if (my_task == master_task) then
+        read(nu_restart_hbrine) istep1,time,time_forc
+        write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
+        write(nu_diag,*) 'hbrine Restart read at istep=',istep0,time,time_forc
+      endif
+
+      diag = .true.
+       
+      do n = 1, ncat
+          write(nu_diag,*) 'cat ',n, &
+                               ' fbri'
+          call ice_read(nu_restart_hbrine,0,trcrn(:,:,nt_fbri,n,:),'ruf8',diag, &
+                          field_loc_center, field_type_scalar)
+      enddo
+
+      do n = 1, ncat
+          call ice_read(nu_restart_hbrine,0,first_ice_real(:,:,n,:),'ruf8',diag, &
+                          field_loc_center, field_type_scalar)
+      enddo
+      do iblk = 1, nblocks
+          do n = 1,ncat
+           do j = 1, ny_block
+           do i = 1, nx_block
+             if (first_ice_real(i,j,n,iblk) .GE. c1) then
+               first_ice (i,j,n,iblk) = .true.
+             else
+               first_ice (i,j,n,iblk) = .false.
+             endif
+           enddo
+           enddo
+          enddo
+        enddo
+
+
+      if (my_task == master_task) close(nu_restart_hbrine)
+
+      end subroutine read_restart_hbrine
 
 !=======================================================================
 !BOP
@@ -2524,7 +2662,6 @@
 !ocl novrec      !Fujitsu
       do j = 1, ny_block
       do i = 1, nx_block
-
          if (nr0 == 0) then ! restart_n  to nblyr
             n_nd = nlyrn
             n_nr = nblyr
@@ -2553,7 +2690,6 @@
                dummy_S(i,j,it+kr-1) = read_S(i,j,it+kr-1)
             enddo
          endif
-
       enddo
       enddo
 

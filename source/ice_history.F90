@@ -78,6 +78,7 @@
 !
 ! !USES:
 !
+      use ice_atmo, only: calc_formdrag
       use ice_blocks, only: nx_block, ny_block
       use ice_broadcast, only: broadcast_scalar, broadcast_array
       use ice_communicate, only: my_task, master_task
@@ -99,8 +100,7 @@
       use ice_history_drag, only: init_hist_drag_2D
       use ice_restart, only: restart
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero, hbrine
-      use ice_atmo, only: calc_formdrag
-      use ice_zbgc_public, only: solve_bgc
+      use ice_zbgc_public, only: solve_zbgc, solve_skl_bgc
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -963,7 +963,7 @@
       if (tr_pond) call init_hist_pond_2D
 
       ! biogeochemistry
-      if (tr_aero .or. hbrine) call init_hist_bgc_2D
+      if (tr_aero .or. hbrine .or. solve_skl_bgc) call init_hist_bgc_2D
 
       if (calc_formdrag) call init_hist_drag_2D
 
@@ -1036,7 +1036,7 @@
 !      enddo ! ns1 
 
       ! biogeochemistry
-      if (solve_bgc) call init_hist_bgc_3Db
+      if (solve_zbgc) call init_hist_bgc_3Db
 
       !-----------------------------------------------------------------
       ! 4D (categories, vertical) variables must be looped separately
@@ -1088,7 +1088,7 @@
       ! other 4D history variables
 
       ! biogeochemistry
-      if (hbrine .or. solve_bgc) call init_hist_bgc_4Db
+      if (hbrine .or. solve_zbgc) call init_hist_bgc_4Db
 
       !-----------------------------------------------------------------
       ! fill igrd array with namelist values
@@ -1218,7 +1218,7 @@
 ! !USES:
 !
       use ice_blocks, only: block, get_block, nx_block, ny_block
-      use ice_constants, only: c0, c1, p25, puny, secday, &
+      use ice_constants, only: c0, c1, p25, puny, secday, depressT, &
           awtvdr, awtidr, awtvdf, awtidf, Lfresh, rhos, cp_ice, spval
       use ice_domain, only: blocks_ice, nblocks
       use ice_grid, only: tmask, lmask_n, lmask_s
@@ -1591,8 +1591,6 @@
 !         if (f_field3dz   (1:1) /= 'x') &
 !             call accum_hist_field(n_field3dz-n3Dccum, iblk, nzilyr, &
 !                                   field3dz(:,:,1:nzilyr,iblk), a3Dz)
-        
-        
 
          ! 4D category fields
          if (f_Tinz   (1:1) /= 'x') then
@@ -1614,13 +1612,9 @@
                   do i = ilo, ihi
                      do k = 1, nzilyr
                         qn = trcrn(i,j,nt_qice+k-1,n,iblk)
-                        Tinz4d(i,j,k,n) = calculate_Tin_from_qin(qn,Tmlt(k))
-
-!                       Tmlts = trcrn(i,j,nt_sice+k-1,n,iblk)*(-mlt_a +  &
-!                               mlt_b*SQRT(trcrn(i,j,nt_sice+k-1,n,iblk)) - &
-!                               mlt_c*trcrn(i,j,nt_sice+k-1,n,iblk)) 
-!                                !-trcrn(i,j,nt_sice+k-1,n,iblk)* depressT
-!                       Tinz4d(i,j,k,n) =  calculate_Tin_from_qin(qn,Tmlts)
+!                       Tinz4d(i,j,k,n) = calculate_Tin_from_qin(qn,Tmlt(k))
+                        Tmlts = -trcrn(i,j,nt_sice+k-1,n,iblk)*depressT
+                        Tinz4d(i,j,k,n) =  calculate_Tin_from_qin(qn,Tmlts)
                      enddo
                   enddo
                   enddo
@@ -1635,7 +1629,7 @@
                do j = jlo, jhi
                do i = ilo, ihi
                   if (vicen(i,j,n,iblk) > puny) then
-                       Sinz4d(i,j,1:nzilyr,n) = trcrn(i,j,nt_sice:nt_sice+nzilyr-1,n,iblk) 
+                     Sinz4d(i,j,1:nzilyr,n) = trcrn(i,j,nt_sice:nt_sice+nzilyr-1,n,iblk)
                   endif
                enddo
                enddo
@@ -1644,21 +1638,6 @@
                                   Sinz4d(:,:,1:nzilyr,1:ncat_hist), a4Di)
          endif
          
-         if (f_Sinz   (1:1) /= 'x') then
-            Sinz4d(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  do k = 1, nzilyr
-                     Sinz4d(i,j,k,n) = trcrn(i,j,nt_sice+k-1,n,iblk)
-                  enddo
-               enddo
-               enddo
-            enddo
-            call accum_hist_field(n_Sinz-n3Dzcum, iblk, nzilyr, ncat_hist, &
-                                  Sinz4d(:,:,1:nzilyr,1:ncat_hist), a4Di)
-         endif
-
          if (f_Tsnz   (1:1) /= 'x') then
             Tsnz4d(:,:,:,:) = c0
             if (ktherm == 2) then
@@ -1719,7 +1698,7 @@
          if (tr_pond) call accum_hist_pond (iblk)
 
          ! biogeochemistry
-         if (tr_aero .or. hbrine) call accum_hist_bgc  (iblk)
+         if (tr_aero .or. ntraceb > 0) call accum_hist_bgc  (iblk)
 
          ! form drag
          if (calc_formdrag) call accum_hist_drag (iblk)
