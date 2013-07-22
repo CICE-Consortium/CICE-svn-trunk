@@ -21,8 +21,8 @@
 ! !REVISION HISTORY:
 !  SVN:$Id: ice_dyn_eap.F90 $
 !
-! authors: Michel Tsamados, UCL
-!          David Schroeder, UCL
+! authors: Michel Tsamados, CPOM 
+!          David Schroeder, CPOM
 !
 ! !INTERFACE:
 !
@@ -99,6 +99,7 @@
 !
 ! !USES:
 !
+      use ice_atmo, only: Cdn_ocn
       use ice_boundary, only: ice_halo, ice_HaloMask, ice_HaloUpdate, &
           ice_HaloDestroy
       use ice_blocks, only: block, get_block
@@ -406,7 +407,7 @@
       !-----------------------------------------------------------------
 
             call stepu (nx_block,            ny_block,           & 
-                        icellu       (iblk),                     & 
+                        icellu       (iblk), Cdn_ocn (:,:,iblk), & 
                         indxui     (:,iblk), indxuj    (:,iblk), & 
                         aiu      (:,:,iblk), str     (:,:,:),    & 
                         uocn     (:,:,iblk), vocn    (:,:,iblk), &     
@@ -477,7 +478,7 @@
 
          call evp_finish                               & 
               (nx_block,           ny_block,           & 
-               icellu      (iblk),                     & 
+               icellu      (iblk), Cdn_ocn (:,:,iblk), & 
                indxui    (:,iblk), indxuj    (:,iblk), & 
                uvel    (:,:,iblk), vvel    (:,:,iblk), & 
                uocn    (:,:,iblk), vocn    (:,:,iblk), & 

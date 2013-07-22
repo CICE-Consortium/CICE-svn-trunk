@@ -49,8 +49,6 @@
          yield_curve  ! 'ellipse' ('teardrop' needs further testing)
                                                                       ! 
       real (kind=dbl_kind), parameter, public :: &
-         dragw = dragio * rhow, &
-                         ! drag coefficient for water on ice *rhow (kg/m^3)
          eyc = 0.36_dbl_kind, &
                          ! coefficient for calculating the parameter E
          cosw = c1   , & ! cos(ocean turning angle)  ! turning angle = 0
@@ -663,7 +661,7 @@
 ! !INTERFACE:
 !
       subroutine stepu (nx_block,   ny_block, &
-                        icellu,               &
+                        icellu,     Cw,       &
                         indxui,     indxuj,   &
                         aiu,        str,      &
                         uocn,       vocn,     &
@@ -727,6 +725,10 @@
          strocny , & ! ice-ocean stress, y-direction
          strintx , & ! divergence of internal ice stress, x (N/m^2)
          strinty     ! divergence of internal ice stress, y (N/m^2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout) :: &
+         Cw                   ! ocean-ice neutral drag coefficient
 !
 !EOP
 !
@@ -751,8 +753,8 @@
          vold = vvel(i,j)
 
          ! (magnitude of relative ocean current)*rhow*drag*aice
-         vrel = aiu(i,j)*dragw*sqrt((uocn(i,j) - uold)**2 + &
-                                    (vocn(i,j) - vold)**2)  ! m/s
+         vrel = aiu(i,j)*rhow*Cw(i,j)*sqrt((uocn(i,j) - uold)**2 + &
+                                           (vocn(i,j) - vold)**2)  ! m/s
          ! ice/ocean stress
          taux = vrel*waterx(i,j) ! NOTE this is not the entire
          tauy = vrel*watery(i,j) ! ocn stress term
@@ -797,7 +799,7 @@
 ! !INTERFACE:
 !
       subroutine evp_finish (nx_block, ny_block, &
-                             icellu,             &
+                             icellu,   Cw,       &
                              indxui,   indxuj,   &
                              uvel,     vvel,     &
                              uocn,     vocn,     &
@@ -854,6 +856,9 @@
          i, j, ij
 
       real (kind=dbl_kind) :: vrel
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout) :: &
+         Cw                   ! ocean-ice neutral drag coefficient 
 
       do j = 1, ny_block
       do i = 1, nx_block
@@ -867,8 +872,8 @@
          i = indxui(ij)
          j = indxuj(ij)
 
-         vrel = dragw*sqrt((uocn(i,j) - uvel(i,j))**2 + &
-                           (vocn(i,j) - vvel(i,j))**2)  ! m/s
+          vrel = rhow*Cw(i,j)*sqrt((uocn(i,j) - uvel(i,j))**2 + &
+                 (vocn(i,j) - vvel(i,j))**2)  ! m/s
 
 !        strocnx(i,j) = strocnx(i,j) &
 !                     - vrel*(uvel(i,j)*cosw - vvel(i,j)*sinw) * aiu(i,j)
