@@ -22,8 +22,7 @@
 
       logical (kind=log_kind), public :: & 
          restart_S     ,   &! if .true., read Salinity from restart file
-         restart_hbrine,   &! if .true., read hbrine from restart file
-         tr_bgc_S           ! if .true., S as product tracer on ice
+         restart_hbrine     ! if .true., read hbrine from restart file
 
       character(char_len_long), public :: & 
          bgc_data_dir       ! directory for biogeochemistry data
@@ -807,6 +806,7 @@
                            nt_bgc_NO, nt_bgc_NH, nt_bgc_Sil, &
                            nt_bgc_DMSPp, nt_bgc_DMSPd, nt_bgc_DMS, &
                            nt_bgc_PON
+      use ice_therm_shared, only: solve_Sin
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -856,12 +856,14 @@
           i = indxi(ij)
           j = indxj(ij)
             
-          if (hbrine .AND. tr_bgc_S) then
+          if (hbrine) then
+          if (solve_Sin) then
           do k = 1,nblyr
              fsice(i,j) = fsice(i,j) + rhosi*trcrn(i,j,nt_fbri)&
                             *vicen(i,j)*p001 *zspace*trcrn(i,j,nt_bgc_S+k-1)&
                             * rside(i,j)/dt
           enddo
+          endif
           if (tr_bgc_NO ) then
           do k = 1,nblyr
              flux_bio(i,j,nlt_bgc_NO) = flux_bio(i,j,nlt_bgc_NO) + trcrn(i,j,nt_fbri)&
@@ -932,7 +934,7 @@
                             * rside(i,j)/dt
           enddo
           endif
-         endif  ! hbrine and tr_bgc_S
+         endif  ! hbrine
        enddo                  ! ij
 
       end subroutine lateral_melt_bgc 

@@ -211,6 +211,7 @@
           get_fileunit, release_fileunit
       use ice_history_shared, only: tstr2D, tcstr, define_hist_field, &
           vname_in
+      use ice_therm_shared, only: solve_Sin
       use ice_state, only: tr_aero, hbrine
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -279,7 +280,7 @@
       if (.not. tr_bgc_DMSPd) f_bgc_DMSPd  = 'x'
       if (.not. tr_bgc_DMS)   f_bgc_DMS  = 'x'
       if (.not. tr_bgc_PON)   f_bgc_PON  = 'x'
-      if (.not. tr_bgc_S)     f_bgc_S  = 'x'
+      if (.not. solve_Sin)    f_bgc_S  = 'x'
       if (.not. hbrine)  then
               f_fbri  = 'x'
               f_hbri  = 'x'

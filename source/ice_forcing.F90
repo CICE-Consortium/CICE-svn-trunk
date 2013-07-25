@@ -41,6 +41,7 @@
       use ice_read_write, only: ice_open, ice_read, &
                                 ice_open_nc, ice_read_nc, ice_close_nc
       use ice_timers
+      use ice_therm_shared, only: ktherm
 !
 !EOP
 !
@@ -48,7 +49,6 @@
       private
       public :: init_forcing_atmo, init_forcing_ocn, &
                 get_forcing_atmo, get_forcing_ocn, &
-                get_ice_salinity, &
                 read_clim_data, read_clim_data_nc, &
                 interpolate_data, interp_coeff_monthly
       save
@@ -127,10 +127,9 @@
          atm_data_format, & ! 'bin'=binary or 'nc'=netcdf
          ocn_data_format, & ! 'bin'=binary or 'nc'=netcdf
          atm_data_type, & ! 'default', 'monthly', 'ncar', 'ecmwf', 
-                          ! 'LYq' or 'hadgem' or 'rct','rct_bgc', 'exp'
+                          ! 'LYq' or 'hadgem' or 'rct', 'exp'
                           ! 'ISPOL'
-         sss_data_type, & ! 'default', 'clim', or 'ncar', 'exp', 'ISPOL',
-                          !  'rct_bgc'
+         sss_data_type, & ! 'default', 'clim', or 'ncar', 'exp', 'ISPOL'
          sst_data_type, & ! 'default', 'clim', 'ncar', 'ISPOL',
                           !     'hadgem_sst' or 'hadgem_sst_uvocn'
          precip_units     ! 'mm_per_month', 'mm_per_sec', 'mks'
@@ -350,7 +349,11 @@
                if (trim(Tfrzpt) == 'constant') then
                   Tf (i,j,iblk) = -1.8_dbl_kind ! deg C
                else ! default:  Tfrzpt = 'linear_S'
-                  Tf (i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
+                  if (ktherm == 2) then
+                     Tf(i,j,iblk) = sss(i,j,iblk) / (-18.48_dbl_kind + ((18.48_dbl_kind/1000.0_dbl_kind) * sss(i,j,iblk)))
+                  else
+                     Tf(i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
+                  endif
                endif
             enddo
             enddo
@@ -385,7 +388,11 @@
                if (trim(Tfrzpt) == 'constant') then
                   Tf (i,j,iblk) = -1.8_dbl_kind ! deg C
                else ! default:  Tfrzpt = 'linear_S'
-                  Tf (i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
+                  if (ktherm == 2) then
+                     Tf(i,j,iblk) = sss(i,j,iblk) / (-18.48_dbl_kind + ((18.48_dbl_kind/1000.0_dbl_kind) * sss(i,j,iblk)))
+                  else
+                     Tf(i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
+                  endif
                endif
             enddo
             enddo
@@ -552,8 +559,6 @@
               trim(atm_data_type) == 'exp' .or. &
               trim(atm_data_type) == 'ISPOL') then
          call rct_data
-      elseif (trim(atm_data_type) == 'rct_bgc') then
-         call rct_bgc_data
       elseif (trim(atm_data_type) == 'monthly') then
          call monthly_data
       elseif (trim(atm_data_type) == 'oned') then
@@ -665,177 +670,6 @@
       endif
 
       end subroutine get_forcing_ocn
-
-!=======================================================================
-!BOP
-!
-! !ROUTINE: get_ice_salinity - update salinity 
-!
-! !DESCRIPTION:
-!
-! updates the vertical ice salinity profile and melting temperature.
-!
-! !REVISION HISTORY:
-!
-! authors: N. Jeffery, LANL
-!
-! !INTERFACE:
-!
-      subroutine get_ice_salinity
-!
-! !USES: 
-!      
-      use ice_constants, only: secday, &
-          field_loc_center, field_type_scalar
-      use ice_domain_size, only: nilyr
-      use ice_state, only: trcrn, nt_sice
-#ifdef ncdf
-      use netcdf
-#endif
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      character (char_len_long) :: & 
-         met_file,   &    ! netcdf filename
-         fieldname        ! field name in netcdf file!
-
-      integer (kind=int_kind) :: &
-         fid         !  file id for netCDF file 
-
-      real (kind=dbl_kind), dimension(nilyr) :: &
-         salinity           ! salinity (ppt) 
-
-      real (kind=dbl_kind), dimension(nilyr,2) :: &
-         Sin_data           ! salinity data (ppt) for interpolation 
-
-      logical (kind=log_kind) :: diag
-
-      integer (kind=int_kind) :: &
-        status                    ! status flag
-
-
-      integer (kind=int_kind) :: k        ! ice layer index
-       
- !----------------------------------------
- !    needed for interpolation of hourly data                
- !-------------------------------------------
-      integer (kind=int_kind) :: &
-          i, j        , &
-          ixm,ixx,ixp , & ! record numbers for neighboring months
-          recnum      , & ! record number
-          maxrec      , & ! maximum record number
-          recslot     , & ! spline slot for current record
-          dataloc      ! = 1 for data located in middle of time interval
-                          ! = 2 for date located at end of time interval
-
-      real (kind=dbl_kind) :: &
-          sec1hr              ! number of seconds in 1 hour
-
-      logical (kind=log_kind) :: readm, read1
-
-      !-----------------------------------------------------------------
-      ! Determine l_brine based on saltmax.
-      ! Thermodynamic solver will not converge if l_brine is true and
-      !  saltmax is close to zero.
-      ! Set l_brine to false for zero layer thermodynamics
-      !-----------------------------------------------------------------
-
-
-     !-------------------------------------------------------------------
-     ! hourly data
-     ! 
-     ! Assume that the hourly value is located at the middle of the
-     !  1-hour period. 
-     !  E.g. record 1 gives conditions at 12:30 am GMT on 1 January.
-     !-------------------------------------------------------------------
-
-      dataloc = 2                          ! data located end of interval
-      sec1hr = secday/24.0_dbl_kind        ! seconds in 1 hour
-      maxrec = 600                         ! 24*25
-
-      ! current record number
-      recnum = 24*int(yday) - 23 + int(real(sec,kind=dbl_kind)/sec1hr)
-
-      ! Compute record numbers for surrounding data (2 on each side)
-
-      ixm = mod(recnum+maxrec-2,maxrec) + 1
-      ixx = mod(recnum-1,       maxrec) + 1
-!     ixp = mod(recnum,         maxrec) + 1
-
-      ! Compute interpolation coefficients
-      ! If data is located at the end of the time interval, then the
-      !  data value for the current record goes in slot 2
- !     if (real(sec,kind=dbl_kind) < p5*sec1hr-puny) then  ! first half of hour
-        recslot = 2
-        ixp = -99
- !     else                             ! second half of hour
- !       recslot = 1
- !       ixm = -99
- !     endif
-
-      call interp_coeff (recnum, recslot, sec1hr, dataloc)
-
-      ! Read
-      read1 = .false.
-
-      if (istep==1 .or. oldrecnum .ne. recnum) read1 = .true.
-       
-      !-----------------------------------------------------------------
-      ! Read vertical profile of salinity and melting temperature.
-      !-----------------------------------------------------------------
-
-
-           diag = .false.   ! write diagnostic information 
-      !----------------------------------------------------------  
-      !for Wakatsuchi and Ono experiment
-      !----------------------------------------------------------  
-
-          !met_file = & 
-              !   trim(atm_data_dir)//'bulk_salinity_24day_nilyr_10_fixedC.nc'     
-                    ! like fixedshapes but only fix to day 8 profile
-              ! trim(atm_data_dir)//'bulk_salinity_24day_nilyr_10_fixedC.nc'      
-                    ! like fixedshapes but only fix to day 8 profile
-              !    trim(atm_data_dir)//'bulk_salinity_24day_nilyr_10_const_log_fixed.nc' 
-                    !like log but fixed at C after day 8
-                 
-
-       !-------------------------------------------------------------------  
-       !for Cottier experiment with prescribed salinity
-       !--------------------------------------------------------------------
-
-          met_file = &    
-                trim(atm_data_dir)//'bulk_salinity_24day_nilyr_10_const_log.nc'  
-                   !with const initial profile
-                   ! but logarithmically approaching
-                   ! the 8 day value    
-       
-          !      trim(atm_data_dir)//'bulk_salinity_24day_nilyr_10_fixedshapes.nc'      
-          !      trim(atm_data_dir)//'bulk_salinity_24day_nilyr_10_const.nc'  
-                 !with const initial profile  32psu
-          !      trim(atm_data_dir)//'bulk_salinity_24day_nilyr_10.nc'
-          !          
-
-
-
-        fieldname='salin' 
-
-        call read_data_nc(read1, 0, fyear, ixm, ixx, ixp, &
-                    maxrec, met_file, fieldname, Sin_data, &
-                    field_loc_center, field_type_scalar)
-
-        do k = 1,nilyr 
-               salinity(k) =  c1intp * Sin_data(k,1) &
-                            + c2intp * Sin_data(k,2)
-               trcrn(:,:,nt_sice+k-1,:,:) = salinity(k)
-        enddo                      !k     
-
-       !  if (my_task == master_task) status = nf90_close(fid)
-  
-      oldrecnum = recnum
-
-      end subroutine get_ice_salinity
 
 !=======================================================================
 !
@@ -2306,47 +2140,6 @@
          enddo
          enddo
 
-      elseif (trim(atm_data_type) == 'rct_bgc') then
-         ! rectangular grid 
-         ! precip is in kg/m^2/s
-         zlvl0 = c10
-         
-         do j = jlo, jhi
-         do i = ilo, ihi
-
-           !--------------------------------------
-           ! for Salinity paper Cottier simulations
-           !-----------------------------------------
-              sstk = (Tsfc(i,j) * aice(i,j) &
-                  + sst(i,j) * (c1 - aice(i,j))) + Tffresh
-           
-
-              flw(i,j) = stefan_boltzmann*Tair(i,j)**4 
-
-           !-----------------------------------------------------
-           !for constant (and higher) growth rate simulations:
-           !---------------------------------------------------
-          
-           ! fcc = c1 - 0.8_dbl_kind * cldf(i,j)
-           ! sstk = (Tsfc(i,j) * aice(i,j) &
-           !      + sst(i,j) * (c1 - aice(i,j))) + Tffresh
-           ! rtea = sqrt(c1000*Qa(i,j) /  &
-           !       (0.622_dbl_kind+0.378_dbl_kind*Qa(i,j)))
-           ! ptem = Tair(i,j)    ! get this from stability?
-           ! qlwm = ptem * ptem * ptem  &
-           !      * ( ptem*(0.39_dbl_kind-0.05_dbl_kind*rtea)*fcc  &
-           !                           + c4*(sstk-ptem) )
-           ! flw(i,j) = emissivity*stefan_boltzmann * ( sstk**4 - qlwm )
-
-           !--------------------------------------------------------------
-     
-            flw(i,j) = flw(i,j) * hm(i,j) ! land mask
-
-            fsnow (i,j) = 2.318e-4_dbl_kind !2 cm in 24 days (mm per s)  
-                                        !Put precip_units as 'mm_per_sec' 
-
-         enddo
-         enddo
       elseif (trim(atm_data_type) == 'ISPOL') then
 
          zlvl0 = c10
@@ -2994,10 +2787,7 @@
         if (my_task == master_task) status = nf90_close(fid)
 
       !-------------------------------------------------------------------
-      !
       !24 simulation of Cottier et al, 1999 Lab Experiments
-      !
-      !
       !-------------------------------------------------------------------
 
       elseif (trim(atm_data_type) == 'exp') then ! 25 day simulation
@@ -3047,45 +2837,7 @@
      ! Adjust air temperature and Qa according to Salinity
      !
      !------------------------------------------------------------
-     
-      if (.NOT. solve_Sin) then
-
-      !----------------------------------
-      !see get_ice_salinity for metfile 
-      !-----------------------------------
-     
-       if (time .LE. 777600.0) then
-       Tair(:,:,:) =  c1intp * Tair_data_p(1) &
-                            + c2intp * Tair_data_p(2) + 8.0_dbl_kind
-       else
-       Tair(:,:,:) =  c1intp * Tair_data_p(1) &
-                            + c2intp * Tair_data_p(2) + 15.0_dbl_kind
-       endif
-
-
-       Qa(:,:,:)   = 0.0002_dbl_kind 
-      
-       qdp(:,:,:) = -12.0_dbl_kind !202.0_dbl_kind    ! deep ocean heat flux (W/m^2)
-
-
-     else  !(solve_Sin)
-     
-     !-------------------------------------------
-     !Cottier et al:  Forcing from Salinity Paper with too much
-     !                 bottom melt
-     !----------------------------------------------------
-     ! if (time .LE.  2138400.0_dbl_kind) then   ! melt
-     !    
-     !     Tair(:,:,:) =  c1intp * Tair_data_p(1) &
-     !                      + c2intp * Tair_data_p(2)  !+ 3.0_dbl_kind !3.0 (Cottier et al  ) 
-     !     qdp(:,:,:) = -42.0_dbl_kind  !-16 3.5_dbl_kind   !-25.0_dbl_kind ! deep ocean heat flux (W/m^2)
-     !  endif
-
-     !-------------------------------------------
-     !Cottier et al: Forcing from the Salinity Paper Experiments 
-     !                   with corrected longwave flux
-     !                and Qa maximal (uncomment below)
-     !----------------------------------------------------
+    
      if (time .LE.  2138400.0_dbl_kind) then   ! melt
         
          Tair(:,:,:) =  c1intp * Tair_data_p(1) &
@@ -3095,16 +2847,14 @@
   
      Qa(:,:,:)   = p1  !0.004_dbl_kind 
 
-     !$OMP PARALLEL DO PRIVATE(iblk,i,j)
+       !$OMP PARALLEL DO PRIVATE(iblk,i,j)
      do iblk = 1, nblocks   !use maximum specific humidity
           call Qa_fixLY(nx_block,  ny_block, &
                         Tair (:,:,iblk), &
                         Qa   (:,:,iblk))
      enddo
-     !$OMP END PARALLEL DO
+       !$OMP END PARALLEL DO
        
-     endif   !solve_Sin
-      
       uatm(:,:,:) = c0              !wind velocity (m/s)
       vatm(:,:,:) = c0
       fsnow (:,:,:) = c0 
@@ -3153,13 +2903,6 @@
         Tair(:,:,:) =  c1intp * Tair_data_p(1) &
                        + c2intp * Tair_data_p(2) &
                      - lapse_rate*8.0_dbl_kind
-
-      
-        ! vmin = global_minval(Tair,distrb_info,tmask)
-        ! vmax = global_maxval(Tair,distrb_info,tmask)
-        !   if (my_task.eq.master_task) & 
-        !       write (nu_diag,*) 'Tair',vmin,vmax
-  
 
         met_file = &
            trim(atm_data_dir)//'Qa_2m_daily.nc'
@@ -3232,19 +2975,6 @@
       read1 = .false.
       if (istep==1 .or. oldrecnum4X .ne. recnum4X) read1 = .true.
 
-      ! 10 m Air temperature 1991
-                                                
-    !    met_file = &
-    !       trim(atm_data_dir)//'Tair03_10m_4Xdaily.nc'  
-
-    !    fieldname='Tair' 
-    !    call read_data_nc(read1, 0, fyear, ixm, ixx, ixp, &
-    !                maxrec, met_file, fieldname, Tair_data_p, &
-    !                field_loc_center, field_type_scalar)
-
-    !    Tair(:,:,:) =  c1intp * Tair_data_p(1) &
-    !                   + c2intp * Tair_data_p(2) + 272.15_dbl_kind
-
         met_file = &
            trim(atm_data_dir)//'fsw_sfc_4Xdaily.nc' 
         fieldname='fsw'
@@ -3291,278 +3021,6 @@
       oldrecnum4X = recnum4X
 
       end subroutine rct_data
-
-!=======================================================================
-!
-!BOP
-!
-! !IROUTINE: rct_bgc_data - define atmospheric data fields 
-!
-! !INTERFACE:
-!
-      subroutine rct_bgc_data
-!
-! !DESCRIPTION:
-!
-!  Forcing fields to test vertical ice bgc on the rectangular grid
-!
-! !REVISION HISTORY:
-!
-! authors: Nicole Jeffery, LANL
-!
-! !USES:
-!
-      use ice_constants, only: c0, c1, c12, c2, c180, c365,  &
-          c3600, p1, p5, p6, pi, secday, &
-          field_loc_center, field_type_scalar
-      use ice_domain, only: nblocks
-      use ice_flux, only: Tair, qdp, Qa, uatm, vatm, fsw, rhoa, frain
-      use ice_therm_shared, only: solve_Sin
-      use ice_diagnostics, only: latpnt, lonpnt 
-!
-! !INPUT/OUTPUT PARAMETERS:
-! 
-!
-! EOP
-! 
-!local parameters
-
-      character (char_len_long) :: & 
-         met_file,   &    ! netcdf filename
-         fieldname        ! field name in netcdf file
-
-      integer (kind=int_kind) :: &
-         fid              ! file id for netCDF file 
-
-      real (kind=dbl_kind):: &
-         work             ! temporary variable
-
-      logical (kind=log_kind) :: diag
-
-      integer (kind=int_kind) :: &
-         status           ! status flag
-
-      integer (kind=int_kind) :: &
-         iblk             ! block index
-
-      real (kind=dbl_kind) :: & ! used to determine specific humidity
-         Temp               , & ! air temperature (K)
-         rh                 , & ! relative humidity (%)
-         Psat               , & ! saturation vapour pressure (hPa)
-         ws                     ! saturation mixing ratio
-
-      real (kind=dbl_kind), dimension(2) :: &
-         Tair_data_p            ! air temperature (K) for interpolation
-
-      real (kind=dbl_kind), parameter :: & ! coefficients for Hyland-Wexler Qa 
-         ps1 = 0.58002206e4_dbl_kind,    & ! (K) 
-         ps2 = 1.3914993_dbl_kind,       & !
-         ps3 = 0.48640239e-1_dbl_kind,   & ! (K^-1) 
-         ps4 = 0.41764768e-4_dbl_kind,   & ! (K^-2)
-         ps5 = 0.14452093e-7_dbl_kind,   & ! (K^-3)
-         ps6 = 6.5459673_dbl_kind,       & !
-         ws1 = 621.97_dbl_kind,          & ! for saturation mixing ratio 
-         Pair = 1020._dbl_kind             ! Sea level pressure (hPa) 
-       
-      real (kind=dbl_kind), parameter :: &           
-         fo = 1.3e-15_dbl_kind,   & ! coefficients for fsw function (W/m^2)
-         a1 = 1.96e-5_dbl_kind,   & ! (W/m^2/s)
-         a2 = -5.36e-13_dbl_kind, & ! (W/m^2/s^2)
-         a3 = 1.6e-6_dbl_kind, &    ! coefficients for Tair function (K/s)
-                                    ! 2.5720e-6_dbl_kind, & ! (cold) 
-                                    ! 1.6e-6_dbl_kind, & ! (standard_d)  
-         a4 = 213.15_dbl_kind, &    ! (K)
-                                    ! 233.5952, & ! (colder)
-                                    ! 250.5952, & ! (fast1)
-                                    ! 253.6_dbl_kind, & ! (standard_d)
-         a5 = 1.9e-10_dbl_kind,   & ! coefficients for Qa function (kg/kg/s)
-         a6 = 6e-4_dbl_kind         ! (kg/kg)
-
-      ! for interpolation of hourly data                
-      integer (kind=int_kind) :: &
-          i, j        , &
-          ixm,ixx,ixp , & ! record numbers for neighboring months
-          recnum      , & ! record number
-          maxrec      , & ! maximum record number
-          recslot     , & ! spline slot for current record
-          dataloc     , &    ! = 1 for data located in middle of time interval
-                          ! = 2 for date located at end of time interval
-          sec_day        !  fix time to noon
-
-       real (kind=dbl_kind) :: &
-         hour_angle, &
-         solar_time, &
-         declin    , &
-         cosZ      , &
-         year_day  , &
-         e, d      , &
-         sw0       , &
-         deg2rad   , &
-         cldf_pnt, Qa_pnt   
-
-      real (kind=dbl_kind) :: &
-          sec1hr              ! number of seconds in 1 hour
-
-      logical (kind=log_kind) :: readm, read1
-                  
-      diag = .false.   ! write diagnostic information 
-
-#ifdef ncdf 
-      !-------------------------------------------------------------------
-      !
-      !  24 simulation of Cottier et al, 1999 Lab Experiments
-      !  But with fsw and fsnow  for bgc
-      !
-      !-------------------------------------------------------------------
-
-      if (trim(atm_data_format) == 'nc') then     ! read nc file
-     
-     !-------------------------------------------------------------------
-     ! hourly data
-     ! Assume that the hourly value is located at the end of the
-     !  1-hour period. 
-     !  E.g. record 1 gives conditions at 1 am GMT on 1 January.
-     !-------------------------------------------------------------------
-
-      dataloc = 2                          ! data located at end of interval
-      sec1hr = secday/24.0_dbl_kind        ! seconds in 1 hour
-      maxrec = 600                         ! 24*25
-
-      ! current record number
-      recnum = 24*int(yday) - 23 + int(real(sec,kind=dbl_kind)/sec1hr)
-
-      ! Compute record numbers for surrounding data (2 on each side)
-      ixm = mod(recnum+maxrec-2,maxrec) + 1
-      ixx = mod(recnum-1,       maxrec) + 1
-!     ixp = mod(recnum,         maxrec) + 1
-
-      ! Compute interpolation coefficients
-      ! If data is located at the end of the time interval, then the
-      !  data value for the current record goes in slot 2
-
-      recslot = 2
-      ixp = -99
-      call interp_coeff (recnum, recslot, sec1hr, dataloc)
-
-      read1 = .false.
-      if (istep==1 .or. oldrecnum .ne. recnum) read1 = .true.
-      
-      ! hourly Air temperature data from Cottier JGR 24 day experiment   
-      ! 1.5 m air temperature
-      if (time .LE. 2138400.0_dbl_kind) then
-     
-        met_file = &
-           trim(atm_data_dir)//'Tair_hourly_24.nc'  
-        fieldname='Tair' 
-        call read_data_nc(read1, 0, fyear, ixm, ixx, ixp, &
-                    maxrec, met_file, fieldname, Tair_data_p, &
-                    field_loc_center, field_type_scalar)
-      endif
-  
-     !-------------------------------------------
-     !Cottier et al:  Forcing from Salinity Paper with too much
-     !                bottom melt
-     !----------------------------------------------------
-
-     ! if (time .LE.  2138400.0_dbl_kind) then   ! melt
-     !    
-     !     Tair(:,:,:) =  c1intp * Tair_data_p(1) &
-     !                      + c2intp * Tair_data_p(2) 
-     !     qdp(:,:,:) = -42.0_dbl_kind  ! deep ocean heat flux (W/m^2)
-     !  endif
-
-     !-------------------------------------------
-     !Cottier et al: Forcing from the Salinity Paper Experiments 
-     !               with corrected longwave flux
-     !               and Qa maximal (uncomment below)
-     !----------------------------------------------------
-     if (time .LE.  2138400.0_dbl_kind) then   ! melt
-        
-         Tair(:,:,:) =  c1intp * Tair_data_p(1) &
-                          + c2intp * Tair_data_p(2)-20.0_dbl_kind  !cldf 0.55?
-         !-7.3_dbl_kind  ! cldf 0.98  
-         !20.0_dbl_kind low cloud 0.55
-         ! -6.0_dbl_kind with snow ! + 3.0_dbl_kind 
-         qdp(:,:,:) = -16.0_dbl_kind  !-16 3.5_dbl_kind   !-25.0_dbl_kind ! deep ocean heat flux (W/m^2)
-      endif
-    
-       Qa(:,:,:)   = p1 
-       !$OMP PARALLEL DO PRIVATE(iblk,i,j)
-       do iblk = 1, nblocks   !use maximum specific humidity
-          call Qa_fixLY(nx_block,  ny_block, &
-                        Tair (:,:,iblk), &
-                        Qa   (:,:,iblk))
-       enddo
-       !$OMP END PARALLEL DO
-        
-       uatm(:,:,:) = c0              !wind velocity (m/s)
-       vatm(:,:,:) = c0
-      
-
-                       !4.0e-5_dbl_kind !  convert to snowfall rate (kg/m2/s)
-
-       !----------------------------------------------------------
-       ! Compute shortwave after AOMIP Protocal
-       ! for specific Arctic Locations
-       ! use: latpnt(1) lonpnt(1) as locations from ice_diagnostics
-       ! use year_day = march 1 = 60
-       !---------------------------------------------------------
-        Qa_pnt = MAXVAL(Qa)
-        year_day = 60.0_dbl_kind
-        sec_day  = sec
-
-        deg2rad = pi/c180
-        solar_time = mod(real(sec_day,kind=dbl_kind),secday)/c3600 &
-                   + c12*sin(p5*lonpnt(1)*deg2rad)
-        hour_angle = (c12 - solar_time)*pi/c12
-
-        declin = 23.44_dbl_kind*cos((172._dbl_kind-year_day) &
-                 * c2*pi/c365)*deg2rad     
-        cosZ = sin(latpnt(1)*deg2rad)*sin(declin) &
-             + cos(latpnt(1)*deg2rad)*cos(declin)*cos(hour_angle)
-        cosZ = max(cosZ,c0)
-        e = 1.e5*Qa_pnt/(0.622_dbl_kind + 0.378_dbl_kind*Qa_pnt)
-        d = (cosZ+2.7_dbl_kind)*e*1.e-5_dbl_kind+1.085_dbl_kind*cosZ+p1
-        sw0 = 1353._dbl_kind*cosZ**2/d
-        sw0 = max(sw0,c0)
-
-        !-------------------------------------------------------
-        ! total downward shortwave for cice
-        !from Dong et al, 2009 monthly values in Barrow 
-        ! [J F M A M J J A S O N D]
-        ! [0.6, 0.55 0.52 0.62 0.8 0.75 0.82 0.9 0.9 0.9 0.8 0.7]
-        !--------------------------------------------------------
-
-        cldf_pnt = 0.55_dbl_kind  
-        cldf(:,:,:) = cldf_pnt
-        fsw(:,:,:) = sw0*(c1-p6*cldf_pnt**3) 
-
-       
-     endif  !nc
-#else      
-
-    
-      uatm(:,:,:) = c0              !wind velocity (m/s)
-      vatm(:,:,:) = c0
-    !  fsw(:,:,:)  = c0 !fo + a1*time + a2 * time**2
-    !  fsnow (:,:,:) = c0           !4.0e-5_dbl_kind ! c0 snowfall rate (kg/m2/s)
-
-#endif
-
-
-      !flw and fsw    calculated in prepare_forcing
-
-      !-----------------------------
-      ! fixed data
-      ! May not be needed
-      !-----------------------------
-        rhoa (:,:,:) = 1.3_dbl_kind ! air density (kg/m^3)
-        frain(:,:,:) = c0            ! this is available in hourlymet_rh file
-  
-      ! Save record number for next time step
-      oldrecnum = recnum
-
-      end subroutine rct_bgc_data
 
 !=======================================================================
 ! ECMWF atmospheric forcing
@@ -5463,7 +4921,11 @@
                if (trim(Tfrzpt) == 'constant') then
                   Tf (i,j,iblk) = -1.8_dbl_kind ! deg C
                else ! default:  Tfrzpt = 'linear_S'
-                  Tf (i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
+                  if (ktherm == 2) then
+                     Tf(i,j,iblk) =  sss(i,j,iblk) / (-18.48_dbl_kind + ((18.48_dbl_kind/1000.0_dbl_kind) * sss(i,j,iblk)))
+                  else
+                     Tf(i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
+                  endif
                endif
             enddo
             enddo
@@ -5598,7 +5060,11 @@
                if (trim(Tfrzpt) == 'constant') then
                   Tf (i,j,iblk) = -1.8_dbl_kind ! deg C
                else ! default:  Tfrzpt = 'linear_S'
-                  Tf (i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
+                  if (ktherm == 2) then
+                     Tf(i,j,iblk) = sss(i,j,iblk) / (-18.48_dbl_kind + ((18.48_dbl_kind/1000.0_dbl_kind) * sss(i,j,iblk)))
+                  else
+                     Tf(i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
+                  endif
                endif
             enddo
             enddo
@@ -6076,7 +5542,11 @@
             if (trim(Tfrzpt) == 'constant') then
                Tf (i,j,:) = -1.8_dbl_kind ! deg C
             else ! default:  Tfrzpt = 'linear_S'
-               Tf (i,j,:) = -depressT * sss(i,j,:) ! deg C
+               if (ktherm == 2) then
+                  Tf(i,j,:) =  sss(i,j,:) / (-18.48_dbl_kind + ((18.48_dbl_kind/1000.0_dbl_kind) * sss(i,j,:)))
+               else
+                  Tf(i,j,:) = -depressT * sss(i,j,:) ! deg C
+               endif
             endif
           hmix(i,j,:) = max(hmix(i,j,:), c0) 
         enddo 

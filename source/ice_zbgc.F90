@@ -64,7 +64,7 @@
       use ice_broadcast, only: broadcast_scalar
       use ice_exit, only: abort_ice
       use ice_fileunits, only: nu_nml, nml_filename, get_fileunit, release_fileunit
-      use ice_therm_shared, only: read_Sin, solve_Sin, ktherm
+      use ice_therm_shared, only: solve_Sin, ktherm
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -81,7 +81,7 @@
 
       namelist /zbgc_nml/  &
         hbrine, bgc_data_dir, sil_data_type, nit_data_type, &
-        restore_bgc,     read_Sin,      solve_Sin,  &
+        restore_bgc,     solve_Sin,  &
         solve_skl_bgc, solve_zbgc, &
         tr_bgc_N_sk, tr_bgc_C_sk, tr_bgc_chl_sk, &
         tr_bgc_Nit_sk, tr_bgc_Am_sk, tr_bgc_Sil_sk, &
@@ -89,7 +89,7 @@
         restart_bgc, restart_S,  restart_hbrine, scale_bgc, &
         tr_bgc_NO, tr_bgc_N, tr_bgc_NH, tr_bgc_C, tr_bgc_chl, &
         tr_bgc_DMSPp, tr_bgc_DMSPd, &
-        tr_bgc_DMS, tr_bgc_Sil, tr_bgc_PON, tr_bgc_S, &
+        tr_bgc_DMS, tr_bgc_Sil, tr_bgc_PON, &
         grid_o, grid_o_t, l_sk, grid_oS, &
         l_skS, phi_snow, initbio_frac
 
@@ -99,7 +99,6 @@
 
       hbrine          = .false.  ! brine height differs from ice height
       restore_bgc     = .false.  ! restore bgc if true
-      read_Sin        = .false.  ! update salinity tracer profile from file
       solve_Sin       = .false.  ! update salinity tracer profile from solve_S_dt
       solve_skl_bgc   = .false.  ! solve skeletal biochemistry in diffuse bio
       solve_zbgc      = .false.  ! solve layer biochemistry in diffuse bio
@@ -129,7 +128,6 @@
       tr_bgc_DMSPd     = .false.  ! layer biogeochemistry
       tr_bgc_DMS       = .false.  ! layer biogeochemistry
       tr_bgc_PON       = .false.  ! layer biogechemistry
-      tr_bgc_S         = .false.  ! layer biogechemistry
       ! biology parameter
       grid_o     = c5            ! for bottom flux        
       grid_o_t   = c5            ! for top flux        
@@ -171,12 +169,9 @@
       !-----------------------------------------------------------------
 
       call broadcast_scalar(hbrine,             master_task)
-      call broadcast_scalar(read_Sin,           master_task)
       call broadcast_scalar(solve_Sin,          master_task)
-      call broadcast_scalar(tr_bgc_S,           master_task)
       if (solve_Sin) then
         hbrine   = .true. ! echmod, for now
-        tr_bgc_S = .true. ! echmod, for now
         ktherm = 1
       endif
 
@@ -187,7 +182,7 @@
       endif
       if (hbrine) trcr_depend(nt_fbri) = 1
 
-      if (tr_bgc_S)then
+      if (solve_Sin)then
           nt_bgc_S = ntrcr + 1
           ntrcr = ntrcr + nblyr
       endif 
@@ -195,7 +190,7 @@
       ntd = 0                    ! if nt_fbri /= 0 then use fbri dependency
       if (nt_fbri == 0) ntd = -1 ! otherwise make tracers depend on ice volume
       do k = 1,nblyr
-         if (tr_bgc_S)     trcr_depend(nt_bgc_S     + k - 1)  = 2+nt_fbri+ntd
+         if (solve_Sin)     trcr_depend(nt_bgc_S     + k - 1)  = 2+nt_fbri+ntd
       enddo
 
       call broadcast_scalar(restart_S,          master_task)
@@ -261,13 +256,11 @@
 
       if (my_task == master_task) then
          write(nu_diag,1010) ' hbrine                    = ', hbrine
-         write(nu_diag,1010) ' read_Sin                  = ', read_Sin
          write(nu_diag,1010) ' solve_Sin                 = ', solve_Sin
          write(nu_diag,1010) ' solve_skl_bgc             = ', solve_skl_bgc
          write(nu_diag,1010) ' solve_zbgc                = ', solve_zbgc
          write(nu_diag,1010) ' restart_S                 = ', restart_S
          write(nu_diag,1010) ' restart_hbrine            = ', restart_hbrine
-         write(nu_diag,1010) ' tr_bgc_S                  = ', tr_bgc_S
          write(nu_diag,1000) ' grid_oS                   = ', grid_oS
          write(nu_diag,1060) ' l_skS                     = ', l_skS
          write(nu_diag,1060) ' phi_snow                  = ', phi_snow
@@ -634,7 +627,7 @@
 
         call read_restart_bgc
 
-      elseif (scale_bgc .AND. tr_bgc_S) then
+      elseif (scale_bgc .AND. solve_Sin) then
 
      
       !-----------------------------------------------------------------------------   
@@ -903,7 +896,7 @@
         enddo           !n 
       endif
 
-      else ! not restarting and .not.(scale_bgc .AND. tr_bgc_S) 
+      else ! not restarting and .not.(scale_bgc .AND. solve_Sin) 
          
       !-----------------------------------------------------------------------------   
       !     Ocean Values
@@ -1282,7 +1275,6 @@
              do j = jlo, jhi
              do i = ilo, ihi
                if (aicen_init(i,j,n,iblk) > puny ) then !.AND. aicen(i,j,n,iblk) > puny) then
-                 ! first_ice(i,j,n,iblk) = .false.
                   hin_old(i,j,n,iblk) = vicen_init(i,j,n,iblk)/aicen_init(i,j,n,iblk)
                else  ! initialize
                   first_ice(i,j,n,iblk) = .true.
@@ -1290,7 +1282,7 @@
                      Rayleigh_criteria(i,j,iblk) = .false.
                   endif
                   if (hbrine)   trcrn(i,j,nt_fbri,n,iblk) = c1
-                  if (tr_bgc_S) trcrn(i,j,nt_bgc_S:nt_bgc_S+nblyr-1,n,iblk) = c0
+                  if (solve_Sin) trcrn(i,j,nt_bgc_S:nt_bgc_S+nblyr-1,n,iblk) = c0
                endif
              enddo
              enddo
@@ -1330,8 +1322,7 @@
           flood_val(:,:) = .false.
           dh_top_chl(:,:) = c0
           darcy_V_chl(:,:) = c0
-
-       
+      
           icells = 0
           do j = jlo, jhi
           do i = ilo, ihi
@@ -1339,10 +1330,6 @@
                 icells = icells + 1
                 indxi(icells) = i
                 indxj(icells) = j
-              !  if (maxval(trcrn(i,j,nt_bgc_S:nt_bgc_S+nblyr-1,n,iblk)) .LE. c0) then
-              !      first_ice(i,j,n,iblk) = .true.
-              !      if (hbrine) trcrn(i,j,nt_fbri,n,iblk) = c1
-              !  endif
             endif
           enddo               ! i
           enddo               ! j
@@ -1364,7 +1351,7 @@
                                    hinS_old, hin, hsn,&
                                    first_ice(:,:,n,iblk))
 
-               if (tr_bgc_S)  then
+               if (solve_Sin)  then
                  call compute_microS (nx_block, ny_block,   &
                                    icells, n, indxi,    indxj, &   
                                    trcrn(:,:,:,n,iblk), hin_old(:,:,n,iblk), &
@@ -1412,9 +1399,8 @@
                                    flood_val, melt_frac)
 
 
-               if (tr_bgc_S .AND. solve_Sin) then
-
-                                  call solve_zsalinity &
+               if (solve_Sin) then
+                  call solve_zsalinity &
                                    (nx_block, ny_block,   &
                                    icells, n, dt, indxi, indxj, &  
                                    trcrn(:,:,nt_bgc_S:nt_bgc_S+nblyr-1,n,iblk), &
@@ -1450,8 +1436,7 @@
                                     dsnown(:,:,n,iblk),               &
                                     dsnow  (:,:,iblk),                  &
                                     fsice(:,:,iblk), fsicen(:,:,n,iblk),&
-                                    fsice_g(:,:,iblk), fsicen_g(:,:,n,iblk))         
-                
+                                    fsice_g(:,:,iblk), fsicen_g(:,:,n,iblk))                        
                else
                     
                   call merge_hbrine (nx_block,           ny_block,    &
@@ -1460,7 +1445,7 @@
                                     aicen_init(:,:,n,iblk),           &
                                     hbrin, hbri(:,:,iblk)             )   
 
-               endif  !tr_bgc_S .AND. solve_Sin
+               endif  !solve_Sin
 
         endif !hbrine
        !-----------------------------------------------------------------
@@ -1999,7 +1984,7 @@
            endif
         enddo
 
-         if ((tr_bgc_S .OR. tr_bgc_NO) .AND. kcells > 0 ) then
+         if ((solve_Sin .OR. tr_bgc_NO) .AND. kcells > 0 ) then
             call adjust_tracer_profile(nx_block, ny_block,           &
                                        indxi3,   indxj3,   indxij3,  &                        
                                        icells,   kcells,             &
@@ -2011,7 +1996,7 @@
                                        vtmp,     vsurp,    sss,      &
                                        nilyr,    nblyr,    solve_Sin,& 
                                        bgrid,    cgrid,    ocean_bio)
-         endif           ! tr_bgc_S
+         endif           ! solve_Sin .or. tr_bgc_NO
       enddo              ! n
 
       !-----------------------------------------------------------------
@@ -2039,7 +2024,7 @@
       ! ice area changes for jcells
       ! add salt throughout
 
-      if ((tr_bgc_S .OR. tr_bgc_NO) .AND. jcells > 0 ) then
+      if ((solve_Sin .OR. tr_bgc_NO) .AND. jcells > 0 ) then
             call adjust_tracer_profile(nx_block, ny_block, &
                                        indxi2,   indxj2,   indxij2,  &                        
                                        icells,   jcells,             &
@@ -2051,7 +2036,7 @@
                                        vbri1,    vi0new,   sss,      &
                                        nilyr,    nblyr,    solve_Sin,& 
                                        bgrid,    cgrid,    ocean_bio)
-      endif           ! tr_bgc_S
+      endif           ! solve_Sin .or. tr_bgc_NO
   
         
       if (hbrine) then
@@ -2171,11 +2156,11 @@
 
             if (vbrin(i,j) > c0 ) then
 
-               if (tr_bgc_S) then
+               if (solve_Sin) then
                    trcrn(i,j,nt_bgc_S+k-1)           =  &
                   (trcrn(i,j,nt_bgc_S+k-1)           * vtmp(m) &
                                 + sss(i,j)*salt_loss * vsurp(m)) / vbrin(i,j)
-                  if (solve_Sin) trtmp0(i,j,nt_sice+k-1) = trcrn(i,j,nt_bgc_S+k-1)
+                  trtmp0(i,j,nt_sice+k-1) = trcrn(i,j,nt_bgc_S+k-1)
                endif
                if (tr_bgc_NO) &
                    trcrn(i,j,nt_bgc_NO+k-1)          = &

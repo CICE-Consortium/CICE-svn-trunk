@@ -40,7 +40,7 @@
                            nt_Tsfc, nt_iage, nt_sice, nt_qice, nt_qsno, &
                            nt_apnd, nt_hpnd
       use ice_therm_shared, only: ktherm, ferrmax, heat_capacity, l_brine, &
-                                  read_Sin, solve_Sin, calc_Tsfc, &
+                                  solve_Sin, calc_Tsfc, &
                                   calculate_tin_from_qin
       use ice_therm_bl99, only: hs_min, temperature_changes
       use ice_therm_0layer, only: zerolayer_temperature
@@ -401,6 +401,10 @@
 
          if (ktherm == 2) then
 
+            do ij = 1, icells
+               einex(ij) = c0
+            enddo
+
             call temperature_changes_salinity(nx_block,      ny_block, &
                                               my_task,       istep1,   &
                                               dt,            icells,   & 
@@ -694,7 +698,7 @@
       do j = 1, ny_block
       do i = 1, nx_block
       if (l_brine) then
-         if (read_Sin .OR. solve_Sin) then
+         if (solve_Sin) then
            do k = 1, nilyr
               if (k == 1) then
                  salinz(i,j,k,iblk) = sss(i,j,iblk)*salt_loss 
@@ -710,7 +714,7 @@
            salinz(i,j,nilyr+1,iblk) = sss(i,j,iblk)  !salinz(i,j,nilyr,iblk)
            Tmltz(i,j,nilyr+1,iblk) = -salinz(i,j,nilyr+1,iblk)*depressT
 
-         else ! .not. (read_Sin .OR. solve_Sin)
+         else ! .not. (solve_Sin)
            do k = 1, nilyr
               zn = (real(k,kind=dbl_kind)-p5) /  &
                    real(nilyr,kind=dbl_kind)
@@ -738,7 +742,7 @@
             Tmltz (i,j,k,iblk) = -salinz(i,j,k,iblk)*depressT
            enddo ! k
            salinz(i,j,nilyr+1,iblk) = saltmax         !sss(i,j,iblk)  !saltmax
-         endif ! read_Sin .OR. solve_Sin
+         endif !solve_Sin
          Tmltz(i,j,nilyr+1,iblk) = -salinz(i,j,nilyr+1,iblk)*depressT
 
       else ! .not. l_brine
@@ -1397,19 +1401,19 @@
                      write(nu_diag,*) 'Tin=',Tin(ij,k),', Tmax=',Tmax
                      write(nu_diag,*) 'Sin=',Sin(ij,k)
                      write(nu_diag,*) 'hin=',hin(ij)
+                     write(nu_diag,*) 'qin=',qin(ij,k)
+                     write(nu_diag,*) 'qmt=',enthalpy_of_melting(Sin(ij,k))
                      write(nu_diag,*) 'istep1, my_task, i, j, k:', &
                                        istep1, my_task, i, j, k
                      
-                     write(nu_diag,*) qin(ij,k), Sin(ij,k)                  
-                     write(nu_diag,*) enthalpy_of_melting(Sin(ij,k))
-
                      qin(ij,k) = enthalpy_of_melting(Sin(ij,k)) - c1
                      Tin(ij,k) = temperature_mush(qin(ij,k),Sin(ij,k))
-                     write(nu_diag,*) 'Starting thermo, T > Tmax, layer', k
 
-                     write(nu_diag,*) qin(ij,k), Sin(ij,k), Tin(ij,k), Tmlts(ij,k)
-
-                     !stop
+                     write(nu_diag,*) 'Corrected quantities'
+                     write(nu_diag,*) 'qin=',qin(ij,k)
+                     write(nu_diag,*) 'Sin=',Sin(ij,k)
+                     write(nu_diag,*) 'Tin=',Tin(ij,k)
+                     write(nu_diag,*) 'Tmt=',Tmlts(ij,k)
 
                   endif
                endif
@@ -1443,13 +1447,20 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-         do ij = 1, icells
-            if (Tin(ij,k) >= -Sin(ij,k)*depressT) then ! correct roundoff error
-               Tin(ij,k) = -Sin(ij,k)*depressT - puny
-               qin(ij,k) = -rhoi*cp_ocn*Sin(ij,k)*depressT
-            endif
-            einit(ij) = einit(ij) + hilyr(ij)*qin(ij,k) 
-         enddo                  ! ij
+         if (ktherm /= 2) then
+            do ij = 1, icells
+               if (Tin(ij,k) >= -Sin(ij,k)*depressT) then ! correct roundoff error
+                  Tin(ij,k) = -Sin(ij,k)*depressT - puny
+                  qin(ij,k) = -rhoi*cp_ocn*Sin(ij,k)*depressT
+               endif
+               einit(ij) = einit(ij) + hilyr(ij)*qin(ij,k) 
+            enddo                  ! ij
+         else 
+            do ij = 1, icells
+               einit(ij) = einit(ij) + hilyr(ij)*qin(ij,k) 
+            enddo                  ! ij
+         endif
+
       enddo                     ! nilyr
 
       end subroutine init_vertical_profile

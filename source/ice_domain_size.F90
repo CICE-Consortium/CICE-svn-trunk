@@ -43,7 +43,7 @@
 
         nblyr     = NBGCLYR   , & ! number of biology layers per category
         nblyr_hist = nblyr+2  , & ! number of ice layer plus boundary points
-        nltrcr    = 1*TRBRI   , & ! number of layer bgc tracers  
+        nltrcr    = 2*TRBRI   , & ! number of layer bgc tracers  
         nbltrcr   = 1         , & ! number of biology (including skl) tracer types
         ntrcr_skl = 0         , & ! number of skeletal layer tracers 
                                   ! number of tracers (defined in ice_init)

@@ -85,7 +85,6 @@
 
 &zbgc_nml
     hbrine          = .false.
-  , read_Sin        = .false.
   , solve_Sin       = .false.
   , solve_skl_bgc   = .false.
   , solve_zbgc      = .false.
@@ -115,8 +114,7 @@
   , tr_bgc_DMSPd    = .false. 
   , tr_bgc_DMS      = .false. 
   , tr_bgc_Sil      = .false.
-  , tr_bgc_PON      = .false. 
-  , tr_bgc_S        = .false.
+  , tr_bgc_PON      = .false.
   , grid_o          = 6.0
   , grid_o_t        = 0.0
   , l_sk            = 1.2

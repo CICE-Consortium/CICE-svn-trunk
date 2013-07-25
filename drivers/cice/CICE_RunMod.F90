@@ -40,11 +40,9 @@
       use ice_aerosol, only: faero_default
       use ice_algae, only: get_forcing_bgc
       use ice_calendar, only: istep, istep1, time, dt, stop_now, calendar
-      use ice_forcing, only: get_forcing_atmo, get_forcing_ocn, &
-          get_ice_salinity
+      use ice_forcing, only: get_forcing_atmo, get_forcing_ocn
       use ice_flux, only: init_flux_atm, init_flux_ocn
       use ice_state, only: tr_aero
-      use ice_therm_shared, only: read_Sin
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_couple, timer_step
       use ice_zbgc_public, only: tr_bgc_NO, solve_skl_bgc
@@ -79,8 +77,7 @@
          call get_forcing_atmo     ! atmospheric forcing from data
          call get_forcing_ocn(dt)  ! ocean forcing from data
 !         if (tr_aero) call faero_data        ! aerosols
-         if (tr_aero) call faero_default     ! aerosols
-         if (read_Sin)  call get_ice_salinity  !update ice salinity from file
+         if (tr_aero)  call faero_default     ! aerosols
          if (tr_bgc_NO .OR. solve_skl_bgc) &
                 call get_forcing_bgc    ! biogeochemistry
          call ice_timer_stop(timer_couple)   ! atm/ocn coupling
@@ -109,6 +106,7 @@
       subroutine ice_step
 
       use ice_boundary, only: ice_HaloUpdate
+      use ice_brine, only: hbrine_diags, write_restart_hbrine
       use ice_calendar, only: dt, dt_dyn, ndtd, diagfreq, write_restart, istep
       use ice_constants, only: field_loc_center, field_type_scalar
       use ice_diagnostics, only: init_mass_diags, runtime_diags
@@ -130,15 +128,13 @@
           tr_pond_cesm, tr_pond_lvl, tr_pond_topo, hbrine, ntraceb
       use ice_step_mod, only: prep_radiation, step_therm1, step_therm2, &
           post_thermo, step_dynamics, step_radiation
-      use ice_therm_shared, only: calc_Tsfc, ktherm
+      use ice_therm_shared, only: calc_Tsfc, ktherm, solve_Sin
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_diags, timer_column, timer_thermo, timer_bound, timer_hist, &
           timer_diags_bgc, timer_readwrite
       use ice_algae, only: bgc_diags, write_restart_bgc
       use ice_zbgc, only: init_history_bgc, biogeochemistry
-      use ice_zbgc_public, only: tr_bgc_S
-      use ice_zsalinity, only: S_diags, write_restart_S, &
-             write_restart_hbrine, hbrine_diags
+      use ice_zsalinity, only: S_diags, write_restart_S
 
       integer (kind=int_kind) :: &
          iblk        , & ! block index 
@@ -235,8 +231,8 @@
 
          call ice_timer_start(timer_diags_bgc)
          if (mod(istep,diagfreq) == 0) then
-            if (tr_bgc_S)    call S_diags   (dt)
-            if (ntraceb > 0) call bgc_diags (dt)
+            if (solve_Sin)    call S_diags   (dt)
+            if (ntraceb > 0)  call bgc_diags (dt)
             if (hbrine .and. ktherm == 2) call hbrine_diags (dt)
          endif
          call ice_timer_stop(timer_diags_bgc)
@@ -259,7 +255,7 @@
             if (tr_pond_lvl)  call write_restart_pond_lvl
             if (tr_pond_topo) call write_restart_pond_topo
             if (ntraceb > 0)  call write_restart_bgc  
-            if (tr_bgc_S)     call write_restart_S 
+            if (solve_Sin)    call write_restart_S 
             if (hbrine)       call write_restart_hbrine
             if (kdyn == 2)    call write_restart_eap
          endif
