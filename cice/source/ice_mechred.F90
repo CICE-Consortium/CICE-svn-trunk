@@ -145,7 +145,7 @@
 ! !USES:
 !                            
       use ice_state, only: nt_qice, nt_qsno, hbrine, nt_fbri, nt_bgc_S, nt_sice
-      use ice_zbgc_public, only: tr_bgc_S
+      use ice_therm_shared, only: solve_Sin
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -382,7 +382,7 @@
       enddo
       enddo
 
-      if (tr_bgc_S) then
+      if (solve_Sin) then
       do k = 1, nblyr
       do j = 1, ny_block
       do i = 1, nx_block
@@ -560,7 +560,7 @@
       enddo
 
 
-      if (tr_bgc_S) then
+      if (solve_Sin) then
       do k = 1, nblyr
       do j = 1, ny_block
       do i = 1, nx_block

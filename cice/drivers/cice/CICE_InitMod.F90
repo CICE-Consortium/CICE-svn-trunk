@@ -170,6 +170,7 @@
       use ice_aerosol, only: init_aerosol
       use ice_age, only: init_age
       use ice_blocks, only: nx_block, ny_block
+      use ice_brine, only: init_hbrine
       use ice_calendar, only: time, calendar
       use ice_domain, only: nblocks
       use ice_domain_size, only: ncat
@@ -191,8 +192,9 @@
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond_cesm, &
           tr_pond_lvl, tr_pond_topo, tr_aero, trcrn, &
           nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd, hbrine
+      use ice_therm_shared, only: solve_Sin
       use ice_zbgc, only: init_bgc
-      use ice_zbgc_public, only: tr_bgc_S, tr_bgc_NO, solve_skl_bgc
+      use ice_zbgc_public, only: tr_bgc_NO, solve_skl_bgc
       use ice_zsalinity, only: init_zsalinity
 
       integer(kind=int_kind) :: iblk
@@ -292,8 +294,9 @@
             enddo ! iblk
          endif ! .not restart_pond
       endif
-      if (tr_aero)      call init_aerosol        ! ice aerosol
-      if (tr_bgc_S .or. hbrine)     call init_zsalinity(sss) ! salinity on bio-grid
+      if (tr_aero)      call init_aerosol            ! ice aerosol
+      if (hbrine)       call init_hbrine             ! brine height tracer
+      if (solve_Sin)    call init_zsalinity(sss)     ! salinity on bio-grid
       if (tr_bgc_NO .or. solve_skl_bgc) call init_bgc! layer biogeochemistry
 
       end subroutine init_restart

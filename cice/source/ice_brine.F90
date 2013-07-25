@@ -24,15 +24,16 @@
 !   
       use ice_kinds_mod
       use ice_constants
-      use ice_domain_size, only: nilyr, nblyr, nblyr_hist
-      use ice_fileunits, only: nu_diag
+      use ice_domain_size, only: nilyr, nblyr, nblyr_hist, max_blocks, ncat
+      use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_dump_hbrine, &
+          nu_restart_hbrine, flush_fileunit
       use ice_blocks, only: nx_block, ny_block
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
       use ice_state, only: ntrcr, nt_bgc_S, nt_qice, nt_sice
-      use ice_zbgc_public, only: cgrid, bgrid, exp_h, k_o, rhosi, his_min,&
+      use ice_zbgc_public, only: cgrid, bgrid, igrid, exp_h, k_o, rhosi, his_min,&
            thin, min_salin, Ra_c, igrid, remap_layers_bgc_plus_xy, &
-           remap_layers_bgc_plus, phi_snow
+           remap_layers_bgc_plus, phi_snow, restart_hbrine, first_ice
 !
 !EOP
 !
@@ -40,7 +41,8 @@
 
       private
       public :: preflushing_changes, compute_microS, compute_microS_mushy, &
-                update_hbrine, merge_hbrine
+                update_hbrine, merge_hbrine, init_hbrine, write_restart_hbrine, &
+                hbrine_diags
  
       real (kind=dbl_kind), parameter :: &   
          maxhinS = 1.25_dbl_kind, & ! brine overflow condition if hinS > maxhinS*hin
@@ -52,9 +54,86 @@
          b1 = 1000.0_dbl_kind, &   !rhofresh (kg/m^3)  Brine density as a quadratic of brine salinity
          b2 = 0.8_dbl_kind         !(kg/m^3/ppt)
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks) :: &
+         first_ice_real     ! .true. = c1, .false. = c0
+
 !=======================================================================
 
       contains
+
+!=======================================================================
+!BOP
+!
+! !ROUTINE: init_hbrine
+!
+! !DESCRIPTION:
+!
+!  Initialize brine height tracer
+!  
+! 
+! !REVISION HISTORY: same as module
+!
+! !INTERFACE:
+!
+      subroutine init_hbrine 
+!
+! !USES:
+!
+   use ice_state, only: nt_fbri, trcrn
+!
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+           k               ! vertical index
+
+      real (kind=dbl_kind) :: & 
+         zspace                 !grid spacing for CICE vertical grid
+
+      !-----------------------------------------------------------------
+      ! Calculate bio gridn: ice top to ice bottom corresponds to 0 to 1
+      !-----------------------------------------------------------------
+
+      bgrid(:) = c0     !bgc grid points         
+      bgrid(nblyr_hist) = c1 ! bottom value
+      igrid(:) = c0     !bgc interface grid points   
+      igrid(1) = c0                 ! ice top
+      igrid(nblyr+1) = c1           ! ice bottom
+      
+      zspace = c1/(real(nblyr,kind=dbl_kind)) 
+      do k = 2, nblyr+1
+          bgrid(k) = zspace*(real(k,kind=dbl_kind)-c1p5)
+      enddo
+      
+      do k = 2, nblyr
+        igrid(k) = p5*(bgrid(k+1)+bgrid(k))
+      enddo
+
+    !-----------------------------------------------------------------
+    ! Calculate cgrid of CICE for interpolation ice top (0) to ice bottom (1) 
+    !-----------------------------------------------------------------
+       
+      cgrid(1) = c0                           !CICE vertical grid top point
+      zspace = c1/(real(nilyr,kind=dbl_kind)) !CICE  grid spacing
+    
+      do k = 2, nilyr+1
+        cgrid(k) = zspace * (real(k,kind=dbl_kind)-c1p5) 
+      enddo 
+
+      if (restart_hbrine) then
+          call read_restart_hbrine
+      else
+          first_ice(:,:,:,:) = .true.            
+          trcrn(:,:,nt_fbri,:,:) = c1
+      endif
+
+     1060    format (a30,2x,2D13.2)   ! dbl precision
+
+      end subroutine init_hbrine
 
 !=======================================================================
 !BOP
@@ -83,7 +162,7 @@
                                    fbri,  dh_top, dh_bot, dh_bot_chl, &
                                    dhi_top, dhi_bot,               &
                                    hinS_o,hin,hsn,                 &
-                                   first_ice)                          
+                                   firstice)                          
 ! !USES:
 !   
 !
@@ -129,7 +208,7 @@
 
       logical (kind=log_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
-         first_ice      ! .true. initialized values should be used     
+         firstice      ! .true. initialized values should be used     
 !
 !EOP
 !
@@ -181,7 +260,7 @@
            dh_bot(i,j) = dhi_bot(i,j)
            dh_bot_chl(i,j) = congel(i,j) - meltb(i,j)
 
-           if ((hice_old(i,j) < puny) .OR. (hin_old < puny) .OR. first_ice(i,j)) then
+           if ((hice_old(i,j) < puny) .OR. (hin_old < puny) .OR. firstice(i,j)) then
 
              hin_old = hin(i,j) 
              dh_top(i,j) = c0
@@ -224,7 +303,7 @@
                                    trcrn, hice_old,               &
                                    hinS_o,  sss, sst,             &
                                    zTin,  zphin,  kmin, zphi_min,    &
-                                   Rayleigh_criteria, first_ice,  &
+                                   Rayleigh_criteria, firstice,  &
                                    Sin, brine_sal, brine_rho,     &
                                    iphin, ibrine_rho, ibrine_sal, &
                                    sice_rho, sloss)
@@ -288,7 +367,7 @@
         
       logical (kind=log_kind), dimension (nx_block,ny_block), & 
          intent(in) :: &
-         first_ice            ! .true. if ice is newly formed
+         firstice            ! .true. if ice is newly formed
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2), intent(inout)  :: &
          brine_sal       ,& ! equilibrium brine salinity (ppt) 
@@ -371,7 +450,7 @@
            endif
            
            
-            if (first_ice(i,j)) then
+            if (firstice(i,j)) then
                qcells = qcells + 1
                qndxi(qcells) = i
                qndxj(qcells) = j
@@ -807,7 +886,7 @@
 !
      subroutine update_hbrine (icells, nx_block,ny_block,indxi, indxj, &
                                meltb, meltt, melts, &
-                               dt, hin,hsn,hin_old, first_ice, &
+                               dt, hin,hsn,hin_old, firstice, &
                                hinS, hinS_old, fbri, dhS_top,&
                                dhS_bottom,dh_top_chl, dh_bot_chl,kmin,zphi_min, &
                                darcy_V,darcy_V_chl, flood_val,melt_frac) 
@@ -849,7 +928,7 @@
          zphi_min     ! surface porosity
 
       logical (kind=log_kind), dimension(nx_block,ny_block), intent(in) :: & 
-         first_ice
+         firstice
 
       logical (kind=log_kind), dimension(nx_block,ny_block), intent(inout) :: & 
          flood_val       ! .true. if ocean flooded the surface
@@ -1018,6 +1097,320 @@
       enddo                     ! ij
 
       end subroutine merge_hbrine
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: read_restart_hbrine - reads all fields required for restart
+!
+! !INTERFACE:
+!
+      subroutine read_restart_hbrine(filename_spec)
+!
+! !DESCRIPTION:
+!
+! Reads all values needed for hbrine
+!
+! !REVISION HISTORY:
+!
+! author Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+      use ice_domain_size
+      use ice_calendar, only: sec, month, mday, nyr, istep1, &
+                              time, time_forc, idate, year_init, &
+                              istep0
+      use ice_domain, only: nblocks
+      use ice_flux, only: sss  
+      use ice_state
+      use ice_exit, only: abort_ice
+      use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
+      use ice_read_write, only: ice_open, ice_read
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      character(len=char_len_long), intent(in), optional :: filename_spec
+
+!EOP
+!
+      integer (kind=int_kind) :: &
+          i, j, k, n, it, iblk, & ! counting indices
+          iyear, imonth, iday  , &   ! year, month, day
+          nsize, nr0 , nt              
+
+      character(len=char_len_long) :: &
+         filename, filename0, string1, string2
+
+      logical (kind=log_kind) :: &
+         diag, hit_eof
+
+      if (my_task == master_task) then
+         open(nu_rst_pointer,file=pointer_file)
+         read(nu_rst_pointer,'(a)') filename0
+         filename = trim(filename0)
+         close(nu_rst_pointer)
+
+         ! reconstruct path/file
+         n = index(filename0,trim(restart_file))
+         if (n == 0) call abort_ice('hbrine restart: filename discrepancy')
+         string1 = trim(filename0(1:n-1))
+         string2 = trim(filename0(n+lenstr(restart_file):lenstr(filename0)))
+         write(filename,'(a,a,a,a)') &
+            string1(1:lenstr(string1)), &
+            restart_file(1:lenstr(restart_file)),'.hb', &
+            string2(1:lenstr(string2))
+      endif ! master_task
+
+      call ice_open(nu_restart_hbrine,filename,0)
+
+      if (my_task == master_task) then
+        read(nu_restart_hbrine) istep1,time,time_forc
+        write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
+        write(nu_diag,*) 'hbrine Restart read at istep=',istep0,time,time_forc
+      endif
+
+      diag = .true.
+       
+      do n = 1, ncat
+          call ice_read(nu_restart_hbrine,0,trcrn(:,:,nt_fbri,n,:),'ruf8',diag, &
+                          field_loc_center, field_type_scalar)
+      enddo
+
+      do n = 1, ncat
+          call ice_read(nu_restart_hbrine,0,first_ice_real(:,:,n,:),'ruf8',diag, &
+                          field_loc_center, field_type_scalar)
+      enddo
+      do iblk = 1, nblocks
+          do n = 1,ncat
+           do j = 1, ny_block
+           do i = 1, nx_block
+             if (first_ice_real(i,j,n,iblk) .GE. c1) then
+               first_ice (i,j,n,iblk) = .true.
+             else
+               first_ice (i,j,n,iblk) = .false.
+             endif
+           enddo
+           enddo
+          enddo
+        enddo
+
+
+      if (my_task == master_task) close(nu_restart_hbrine)
+
+      end subroutine read_restart_hbrine
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: write_restart_hbrine - dumps all fields required for restart
+!
+! !INTERFACE:
+!
+      subroutine write_restart_hbrine(filename_spec)
+!
+! !DESCRIPTION:
+!
+! Dumps all values needed for a hbrine restart
+!
+! !REVISION HISTORY:
+!
+! author Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+      use ice_domain_size
+      use ice_calendar, only: sec, month, mday, nyr, istep1, &
+                              time, time_forc, idate, year_init
+      use ice_domain, only: nblocks
+      use ice_state
+      use ice_flux, only: sss  
+      use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
+      use ice_read_write, only: ice_open, ice_write
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      character(len=char_len_long), intent(in), optional :: filename_spec
+
+!EOP
+!
+      integer (kind=int_kind) :: &
+          i, j, k, n, it, iblk, & ! counting indices
+          iyear, imonth, iday     ! year, month, day
+
+      character(len=char_len_long) :: filename
+
+      logical (kind=log_kind) :: diag
+
+      ! construct path/file
+      if (present(filename_spec)) then
+         filename = trim(filename_spec)
+      else
+         iyear = nyr + year_init - 1
+         imonth = month
+         iday = mday
+         
+         write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
+              restart_dir(1:lenstr(restart_dir)), &
+              restart_file(1:lenstr(restart_file)),'.hb.', &
+              iyear,'-',month,'-',mday,'-',sec
+      endif
+
+      ! begin writing restart data
+      call ice_open(nu_dump_hbrine,filename,0)
+
+      if (my_task == master_task) then
+        write(nu_dump_hbrine) istep1,time,time_forc
+        write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
+        write(nu_diag,*) 'hbrine Restart written ',istep1,time,time_forc
+      endif
+
+      diag = .true.
+      !--------------------------
+      !hbrine and first ice
+      !--------------------------
+
+      do n = 1, ncat
+         call ice_write(nu_dump_hbrine,0,trcrn(:,:,nt_fbri,n,:),'ruf8',diag)
+      enddo
+
+      do iblk = 1, nblocks
+       do n = 1,ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (first_ice(i,j,n,iblk)) then
+               first_ice_real(i,j,n,iblk) = c1
+            else
+               first_ice_real(i,j,n,iblk) = c0
+            endif
+         enddo
+         enddo
+       enddo
+      enddo
+
+      do n = 1,ncat
+        call ice_write(nu_dump_hbrine,0,first_ice_real(:,:,n,:),'ruf8',diag)
+      enddo
+
+      if (my_task == master_task) close(nu_dump_hbrine)
+
+      end subroutine write_restart_hbrine
+
+!=======================================================================
+!
+! Writes diagnostic info (max, min, global sums, etc) to standard out
+!
+! authors: Elizabeth C. Hunke, LANL
+!          Bruce P. Briegleb, NCAR
+!          Cecilia M. Bitz, UW
+!          Nicole Jeffery, LANL
+
+      subroutine hbrine_diags (dt)
+              
+!        
+! !USES:
+!
+      use ice_broadcast, only: broadcast_scalar
+      use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc, pbloc, &
+                                plat, plon
+      use ice_domain_size, only: ncat, nltrcr
+      use ice_state, only: aice, aicen, vicen, vice, trcr, nt_sice , nt_fbri, &
+                          trcrn, hbrine
+      use ice_zbgc_public, only: darcy_V
+!
+! !INPUT PARAMETERS:
+!
+      real (kind=dbl_kind), intent(in) :: &
+         dt      ! time step
+
+      ! local variables
+
+      integer (kind=int_kind) :: &
+         i, j, k, n, iblk
+
+      ! fields at diagnostic points
+      real (kind=dbl_kind), dimension(npnt) :: &
+         phinS, phinS1, pdarcy_V, pfbri
+
+      real (kind=dbl_kind), dimension(npnt,nilyr) :: &
+         pSin
+
+
+      !-----------------------------------------------------------------
+      ! Dynamic brine height
+      !-----------------------------------------------------------------
+
+      if (print_points) then
+
+      !-----------------------------------------------------------------
+      ! state of the ice and associated fluxes for 2 defined points
+      ! NOTE these are computed for the last timestep only (not avg)
+      !-----------------------------------------------------------------
+
+         do n = 1, npnt
+           if (my_task == pmloc(n)) then
+               i = piloc(n)
+               j = pjloc(n)
+               iblk = pbloc(n)            
+               phinS1(n) = c0             
+               phinS(n) = c0            
+               pfbri(n) = trcrn(i,j,nt_fbri,1,iblk) 
+               pdarcy_V(n) = darcy_V(i,j,1,iblk)
+               if (aice(i,j,iblk) > c0) &
+                       phinS(n) = trcr(i,j,nt_fbri,iblk)*vice(i,j,iblk)/aice(i,j,iblk)
+               if (aicen(i,j,1,iblk)> c0)&
+                       phinS1(n) = trcrn(i,j,nt_fbri,1,iblk)*vicen(i,j,1,iblk)/&
+                                                aicen(i,j,1,iblk)
+               do k = 1,nilyr
+                       pSin(n,k) = trcr(i,j,nt_sice+k-1,iblk)
+               enddo
+            endif                 ! my_task = pmloc
+           
+            do k = 1,nilyr
+                 call broadcast_scalar(pSin(n,k), pmloc(n))   
+            enddo
+            call broadcast_scalar(pfbri(n), pmloc(n))  
+            call broadcast_scalar(phinS1(n), pmloc(n))  
+            call broadcast_scalar(phinS(n), pmloc(n)) 
+            call broadcast_scalar(pdarcy_V(n), pmloc(n))
+         enddo                  ! npnt
+      endif                     ! print_points
+
+      !-----------------------------------------------------------------
+      ! start spewing
+      !-----------------------------------------------------------------
+
+      if (my_task == master_task) then
+
+       call flush_fileunit(nu_diag)
+
+      !-----------------------------------------------------------------
+      ! diagnostics for Arctic and Antarctic points
+      !-----------------------------------------------------------------
+
+      if (print_points) then
+          write(nu_diag,*) '------ hbrine ------'
+          write(nu_diag,900) 'hbrine, (m)        = ',phinS(1),phinS(2)
+          write(nu_diag,900) 'fbri, cat1 (m)     = ',pfbri(1),pfbri(2)
+          write(nu_diag,900) 'hbrine cat1, (m)   = ',phinS1(1),phinS1(2)  
+          write(nu_diag,900) 'darcy_V cat1, (m/s)= ',pdarcy_V(1),pdarcy_V(2)             
+          write(nu_diag,*) '                         '
+          write(nu_diag,*) '------ Thermosaline Salinity ------'
+          write(nu_diag,803) 'Sice(1) bulk S (ppt) ','Sice(2) bulk S'
+          write(nu_diag,*) '---------------------------------------------------'
+          write(nu_diag,802) ((pSin(n,k),n=1,2), k = 1,nilyr)              
+          write(nu_diag,*) '                         '
+      endif                   ! print_points
+      endif                   ! my_task = master_task 
+
+  802 format (f24.17,2x,f24.17)
+  803 format (a25,2x,a25)
+  900 format (a25,2x,f24.17,2x,f24.17)
+  902 format (a25,10x,f6.1,1x,f6.1,9x,f6.1,1x,f6.1)
+  903 format (a25,5x,i4,1x,i4,1x,i4,1x,i4,7x,i4,1x,i4,1x,i4,1x,i4)
+
+      end subroutine hbrine_diags
 
 !=======================================================================
 !BOP

@@ -58,7 +58,6 @@
          calc_Tsfc,     &! if true, calculate surface temperature
                          ! if false, Tsfc is computed elsewhere and
                          ! atmos-ice fluxes are provided to CICE
-         read_Sin,      &! if true, update salinity profile from file
          solve_Sin       ! if true, update salinity profile from solve_S_dt
 
       real (kind=dbl_kind), parameter, public :: &
