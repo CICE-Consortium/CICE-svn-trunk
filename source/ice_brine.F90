@@ -42,7 +42,7 @@
       private
       public :: preflushing_changes, compute_microS, compute_microS_mushy, &
                 update_hbrine, merge_hbrine, init_hbrine, write_restart_hbrine, &
-                hbrine_diags
+                hbrine_diags, calculate_drho
  
       real (kind=dbl_kind), parameter :: &   
          maxhinS = 1.25_dbl_kind, & ! brine overflow condition if hinS > maxhinS*hin
@@ -696,7 +696,6 @@
 ! !USES:
 !
       use ice_therm_mushy, only: temperature_mush, liquid_fraction, permeability
-      use ice_zsalinity, only: calculate_drho
       use ice_zbgc_public, only: Dm, l_sk, Ra_c, viscos_dynamic
 !
 ! !INPUT/OUTPUT PARAMETERS:                                
@@ -862,6 +861,138 @@
       enddo    !k
 
  end subroutine compute_microS_mushy
+
+!==========================================================================================
+!BOP
+!
+! !ROUTINE: calculate_drho --  find density difference about interface grid points
+!                              for gravity drainage parameterization
+!                              *except for k == 1 which is the first grid point value
+!                          
+!
+! !DESCRIPTION:
+!
+!
+! !REVISION HISTORY:
+!
+! authors     Nicole Jeffery, LANL
+!
+!
+!
+! !INTERFACE:
+!
+      subroutine calculate_drho &
+                                  (icells,nx_block,ny_block,indxi,indxj,igrid,bgrid,&
+                                   brine_rho,ibrine_rho,drho)
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+       integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells       
+
+      integer (kind=int_kind), dimension(nx_block*ny_block), &
+         intent(in) :: &
+         indxi, indxj  ! compressed indices 
+
+      real (kind=dbl_kind), dimension (nblyr_hist), intent(in) :: &
+         bgrid            ! biology nondimensional grid layer points 
+
+      real (kind=dbl_kind), dimension (nblyr+1), intent(in) :: &
+         igrid         ! biology grid interface points 
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist), intent(in) :: &
+         brine_rho           ! Internal brine density (kg/m^3)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr + 1), intent(in) :: &
+         ibrine_rho           ! Internal brine density (kg/m^3)
+
+      real (kind=dbl_kind), dimension (icells, nblyr+1), intent(out) :: & 
+         drho                 ! brine difference about grid point (kg/m^3)
+!
+!EOP
+!
+    integer (kind=int_kind) :: &
+         k, i,j, ij,m, mm ! indices
+
+    integer (kind=int_kind), dimension (icells) :: &
+         mstop, mstart
+
+     real (kind=dbl_kind), dimension (icells, nblyr_hist) :: &  !on the zbgc vertical grid
+         diff              ! difference array between grid points and 
+                           ! the density averaging boundary 
+
+     real (kind=dbl_kind), dimension (icells, nblyr + 1) :: &  !on the zbgc vertical grid
+         rho_a         ,&  ! average brine density  above grid point (kg/m^3)
+         rho_2a            ! average brine density  above and below grid points (kg/m^3)
+
+       rho_a(:,:) = c0
+       rho_2a(:,:) = c0
+       drho(:,:) = c0  !surface is snow or atmosphere 
+
+       do k = 1, nblyr+1   !igrid values
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij) 
+
+         !----------------------------------------------
+         ! h_avg(k,ij) = igrid(k)                        
+         ! Calculate rho_a(k), ie  average rho above igrid(k) 
+         ! first part is good
+         !----------------------------------------------
+
+            if (k == 2) then
+               rho_a(ij,2) = (brine_rho(i,j,2)*bgrid(2) + (ibrine_rho(i,j,2) + brine_rho(i,j,2))*&
+                         p5*(igrid(2)-bgrid(2)) )/igrid(2)
+
+            elseif (k > 2 .AND. k < nblyr+1) then 
+               rho_a(ij,k) = (rho_a(ij,k-1)*igrid(k-1) +  (ibrine_rho(i,j,k-1) + brine_rho(i,j,k))*&
+                         p5*(bgrid(k)-igrid(k-1)) + (ibrine_rho(i,j,k) + brine_rho(i,j,k))*p5*&
+                         (igrid(k)-bgrid(k)))/igrid(k)
+            else
+               rho_a(ij,nblyr+1) = (rho_a(ij,nblyr)*igrid(nblyr) + (ibrine_rho(i,j,nblyr) + &
+                        brine_rho(i,j,nblyr+1))*p5*(bgrid(nblyr+1)-igrid(nblyr)) + &
+                        brine_rho(i,j,nblyr+1)*(igrid(nblyr+1)-bgrid(nblyr+1)))/igrid(nblyr+1)
+               rho_a(ij,1) = brine_rho(i,j,2)   !for k == 1 use grid point value
+            endif
+           enddo  !ij
+        enddo     !k
+
+        !----------------------------------------------
+        ! Calculate average above and below k rho_2a
+        !----------------------------------------------
+
+       do k = 1, nblyr+1   !igrid values
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij) 
+           if (k == 1) then
+              rho_2a(ij,1) = (rho_a(ij,1)*bgrid(2) + p5*(brine_rho(i,j,2) + ibrine_rho(i,j,2))*&
+                      (igrid(2)-bgrid(2)))/igrid(2)
+           else
+            mstop(ij) = 2*(k-1) + 1
+
+            if (mstop(ij) < nblyr+1) then
+               rho_2a(ij,k) = rho_a(ij,mstop(ij))
+               mstart(ij) = 2;
+               mstop(ij) = 1;
+            else
+                mstart(ij) = nblyr+2
+                mstop(ij) = nblyr+3
+            endif                     
+
+            do mm = mstart(ij),mstop(ij)
+                rho_2a(ij,k) =(rho_a(ij,nblyr+1) + rhow*(c2*igrid(k)-c1))*p5/igrid(k)
+            enddo
+           endif
+           drho(ij,k) = max(c0,c2*(rho_a(ij,k)-rho_2a(ij,k)), &
+              c2*(brine_rho(i,j,k)-brine_rho(i,j,k+1))/real(nblyr,kind=dbl_kind))
+          enddo
+        enddo
+
+     end subroutine calculate_drho
 
 !=======================================================================
 !BOP
