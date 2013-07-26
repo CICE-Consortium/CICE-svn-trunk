@@ -2618,7 +2618,6 @@
           field_loc_center, field_type_scalar
       use ice_flux, only: uatm, vatm, Tair, fsw, fsnow, Qa, qdp, rhoa, &
           frain, flw
-      use ice_therm_shared, only: solve_Sin
       use ice_grid, only:  tmask
       use ice_diagnostics, only: latpnt, lonpnt 
 #ifdef ncdf
