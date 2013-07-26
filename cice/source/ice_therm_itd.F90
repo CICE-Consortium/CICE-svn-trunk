@@ -95,7 +95,6 @@
                          column_sum, column_conservation_check
       use ice_state, only: nt_qice, nt_qsno, nt_fbri, nt_bgc_S, nt_sice, &
                            tr_pond_topo, nt_apnd, nt_hpnd, hbrine
-      use ice_therm_shared, only: solve_Sin
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -186,17 +185,15 @@
          eicen, &     ! energy of melting for each ice layer (J/m^2)
          esnon, &     ! energy of melting for each snow layer (J/m^2)
          vbrin, &     ! ice volume with defined by brine height (m)
-         Shin , &     ! Bulk salt in h ice (ppt*m)
-         Shbrn        ! Bulk salt in h brine (ppt*m)
+         sicen        ! Bulk salt in h ice (ppt*m)
 
       real (kind=dbl_kind), dimension(icells) :: &
          vice_init, vice_final, & ! ice volume summed over categories
          vsno_init, vsno_final, & ! snow volume summed over categories
          eice_init, eice_final, & ! ice energy summed over categories
-         vbri_init, vbri_final, & ! ice volume define by hbri summed over categories
-         Shi_init, Shi_final, & ! ice bulk salinity summed over categories
-         Shbr_init, Shbr_final, & ! ice bulk salinity in hbri summed over categories
-         esno_init, esno_final    ! snow energy summed over categories
+         esno_init, esno_final, & ! snow energy summed over categories
+         sice_init, sice_final, & ! ice bulk salinity summed over categories
+         vbri_init, vbri_final    ! ice volume define by hbri summed over categories
 
       ! NOTE: Third index of donor, daice, dvice should be ncat-1,
       !       except that compilers would have trouble when ncat = 1 
@@ -238,8 +235,7 @@
       eicen(:,:,:) = c0
       esnon(:,:,:) = c0
       vbrin(:,:,:) = c0
-      Shin(:,:,:) = c0
-      Shbrn(:,:,:) = c0
+      sicen(:,:,:) = c0
 
       do n = 1, ncat
       do k = 1, nilyr
@@ -270,24 +266,13 @@
       do k = 1, nilyr
       do j = 1, ny_block
       do i = 1, nx_block
-         Shin(i,j,n) = Shin(i,j,n) + trcrn(i,j,nt_sice+k-1,n) &
+         sicen(i,j,n) = sicen(i,j,n) + trcrn(i,j,nt_sice+k-1,n) &
                       * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
       enddo
       enddo
       enddo
 
-      if (solve_Sin) then
-      do k = 1, nblyr
-      do j = 1, ny_block
-      do i = 1, nx_block
-               Shbrn(i,j,n) = Shbrn(i,j,n) + trcrn(i,j,nt_bgc_S+k-1,n) &
-                      *  vbrin(i,j,n)/real(nblyr,kind=dbl_kind)
-      enddo
-      enddo
-      enddo
-      endif
-      enddo  !ncat
-
+      enddo  ! ncat
 
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
@@ -317,13 +302,7 @@
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
                           ncat,                     &
-                          Shin,    Shi_init)
-
-         call column_sum (nx_block, ny_block,       &
-                          icells,   indxi,   indxj, &
-                          ncat,                     &
-                          Shbrn,    Shbr_init)
-
+                          sicen,    sice_init)
       endif
 
       !-----------------------------------------------------------------
@@ -750,8 +729,7 @@
       eicen(:,:,:) = c0
       esnon(:,:,:) = c0
       vbrin(:,:,:) = c0
-      Shin(:,:,:) = c0
-      Shbrn(:,:,:) = c0
+      sicen(:,:,:) = c0
 
       do n = 1, ncat
       do k = 1, nilyr
@@ -781,22 +759,12 @@
       do k = 1, nilyr
       do j = 1, ny_block
       do i = 1, nx_block
-         Shin(i,j,n) = Shin(i,j,n) + trcrn(i,j,nt_sice+k-1,n) &
+         sicen(i,j,n) = sicen(i,j,n) + trcrn(i,j,nt_sice+k-1,n) &
                       * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
       enddo
       enddo
       enddo
 
-      if (solve_Sin) then
-      do k = 1, nblyr
-      do j = 1, ny_block
-      do i = 1, nx_block 
-         Shbrn(i,j,n) = Shbrn(i,j,n) + trcrn(i,j,nt_bgc_S+k-1,n) &
-                      * vbrin(i,j,n)/real(nblyr,kind=dbl_kind)
-      enddo
-      enddo
-      enddo
-      endif
       enddo
 
          call column_sum (nx_block, ny_block,       &
@@ -805,7 +773,7 @@
                           vicen,    vice_final)
          fieldid = 'vice, ITD remap'
          call column_conservation_check (nx_block,  ny_block,      &
-                                         icells,   indxi,   indxj, &
+                                         icells,    indxi,  indxj, &
                                          fieldid,                  &
                                          vice_init, vice_final,    &
                                          puny,      l_stop,        &
@@ -818,7 +786,7 @@
                           vsnon,    vsno_final)
          fieldid = 'vsno, ITD remap'
          call column_conservation_check (nx_block,  ny_block,      &
-                                         icells,   indxi,   indxj, &
+                                         icells,    indxi,  indxj, &
                                          fieldid,                  &
                                          vsno_init, vsno_final,    &
                                          puny,      l_stop,        &
@@ -830,10 +798,10 @@
                           ncat,                     &
                           eicen,    eice_final)
          fieldid = 'eice, ITD remap'
-         call column_conservation_check (nx_block,   ny_block,     &
-                                         icells,   indxi,   indxj, &
+         call column_conservation_check (nx_block,  ny_block,      &
+                                         icells,    indxi,  indxj, &
                                          fieldid,                  &
-                                         eice_init,  eice_final,   &
+                                         eice_init, eice_final,    &
                                          puny*Lfresh*rhoi,         &
                                          l_stop,                   &
                                          istop,     jstop)
@@ -844,10 +812,10 @@
                           ncat,                     &
                           esnon,    esno_final)
          fieldid = 'esno, ITD remap'
-         call column_conservation_check (nx_block,   ny_block,     &
-                                         icells,   indxi,   indxj, &
+         call column_conservation_check (nx_block,  ny_block,      &
+                                         icells,    indxi,  indxj, &
                                          fieldid,                  &
-                                         esno_init,  esno_final,   &
+                                         esno_init, esno_final,    &
                                          puny*Lfresh*rhos,         &
                                          l_stop,                   &
                                          istop,     jstop)
@@ -856,12 +824,12 @@
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
                           ncat,                     &
-                          Shin,    Shi_final)
-         fieldid = 'Shin, ITD remap'
+                          sicen,    sice_final)
+         fieldid = 'sicen, ITD remap'
          call column_conservation_check (nx_block,  ny_block,      &
-                                         icells,   indxi,   indxj, &
+                                         icells,    indxi,  indxj, &
                                          fieldid,                  &
-                                         Shi_init, Shi_final,    &
+                                         sice_init, sice_final,    &
                                          puny,      l_stop,        &
                                          istop,     jstop)
          if (l_stop) return         
@@ -869,26 +837,13 @@
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
                           ncat,                     &
-                          Shbrn,    Shbr_final)
-         fieldid = 'Shbri, ITD remap'
-         call column_conservation_check (nx_block,  ny_block,      &
-                                         icells,   indxi,   indxj, &
-                                         fieldid,                  &
-                                         Shbr_init, Shbr_final,    &
-                                         puny*c10,  l_stop,        &
-                                         istop,     jstop)
-         if (l_stop) return
-
-         call column_sum (nx_block, ny_block,       &
-                          icells,   indxi,   indxj, &
-                          ncat,                     &
                           vbrin,    vbri_final)
          fieldid = 'vbrin, ITD remap'
          call column_conservation_check (nx_block,  ny_block,      &
-                                         icells,   indxi,   indxj, &
+                                         icells,    indxi,  indxj, &
                                          fieldid,                  &
                                          vbri_init, vbri_final,    &
-                                         puny*c10,      l_stop,        &
+                                         puny*c10,  l_stop,        &
                                          istop,     jstop)
          if (l_stop) return         
       endif                     ! conservation check

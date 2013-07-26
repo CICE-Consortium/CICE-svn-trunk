@@ -543,7 +543,7 @@
                                   cgrid, flood_val,zphi_min)     
 
       use ice_calendar,    only: istep1, time
-      use ice_therm_shared, only: solve_Sin, ktherm
+      use ice_therm_shared, only: ktherm
       use ice_state, only: aice, nt_sice      
 
       integer (kind=int_kind), intent(in) :: &

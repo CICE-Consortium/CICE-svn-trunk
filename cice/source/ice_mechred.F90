@@ -145,7 +145,6 @@
 ! !USES:
 !                            
       use ice_state, only: nt_qice, nt_qsno, hbrine, nt_fbri, nt_bgc_S, nt_sice
-      use ice_therm_shared, only: solve_Sin
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -226,7 +225,6 @@
          esnon , &    ! energy of melting for each snow layer (J/m^2)
          vbrin, &     ! ice volume with defined by brine height (m)
          Shin, &      ! Bulk salt in h ice (ppt*m)
-         Shbrn, &     ! Bulk salt in h brine (ppt*m)
          hinS, SinS   ! save initial brine height, salt content
 
       real (kind=dbl_kind), dimension (icells) :: &
@@ -268,8 +266,7 @@
          vsno_init, vsno_final, & ! snow volume summed over categories
          eice_init, eice_final, & ! ice energy summed over layers
          vbri_init, vbri_final, & ! ice volume in fbri*vicen summed over categories
-         Shi_init, Shi_final, & ! ice bulk salinity summed over categories
-         Shbr_init, Shbr_final, & ! ice bulk salinity in hbri summed over categories
+         Shi_init , Shi_final , & ! ice bulk salinity summed over categories
          esno_init, esno_final    ! snow energy summed over layers
 
       integer (kind=int_kind), parameter :: &
@@ -344,7 +341,6 @@
       esnon(:,:,:) = c0
       vbrin(:,:,:) = c0
       Shin(:,:,:) = c0
-      Shbrn(:,:,:) = c0
       SinS(:,:,:) = c0
 
       do n = 1, ncat
@@ -382,16 +378,6 @@
       enddo
       enddo
 
-      if (solve_Sin) then
-      do k = 1, nblyr
-      do j = 1, ny_block
-      do i = 1, nx_block
-         Shbrn(i,j,n) = Shbrn(i,j,n) + trcrn(i,j,nt_bgc_S+k-1,n) &
-                      * vbrin(i,j,n)/real(nblyr,kind=dbl_kind)
-      enddo
-      enddo
-      enddo
-      endif
       enddo
 
          call column_sum (nx_block,   ny_block,     &
@@ -424,10 +410,6 @@
                           ncat,                     &
                           Shin,    Shi_init)
 
-         call column_sum (nx_block, ny_block,       &
-                          icells,   indxi,   indxj, &
-                          ncat,                     &
-                          Shbrn,    Shbr_init)
       endif            
 
       do niter = 1, nitermax
@@ -520,7 +502,6 @@
       eicen(:,:,:) = c0
       esnon(:,:,:) = c0
       Shin(:,:,:) = c0
-      Shbrn(:,:,:) = c0
       vbrin(:,:,:) = c0
 
       do n = 1, ncat
@@ -559,17 +540,6 @@
       enddo
       enddo
 
-
-      if (solve_Sin) then
-      do k = 1, nblyr
-      do j = 1, ny_block
-      do i = 1, nx_block
-         Shbrn(i,j,n) = Shbrn(i,j,n) + trcrn(i,j,nt_bgc_S+k-1,n) &
-                      * vbrin(i,j,n)/real(nblyr,kind=dbl_kind)
-      enddo
-      enddo
-      enddo
-      endif
       enddo
 
          call column_sum (nx_block,   ny_block,     &
@@ -596,11 +566,6 @@
                           icells,   indxi,   indxj, &
                           ncat,                     &
                           Shin,    Shi_final)
-
-         call column_sum (nx_block, ny_block,       &
-                          icells,   indxi,   indxj, &
-                          ncat,                     &
-                          Shbrn,    Shbr_final)
 
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
@@ -652,21 +617,12 @@
 
          fieldid = 'Shin, ridging'
          call column_conservation_check (nx_block,  ny_block,      &
-                                         icells,   indxi,   indxj, &
+                                         icells,    indxi,  indxj, &
                                          fieldid,                  &
-                                         Shi_init, Shi_final,    &
+                                         Shi_init,  Shi_final,     &
                                          puny,      l_stop,        &
                                          istop,     jstop)
          if (l_stop) return         
-
-         fieldid = 'Shbri, ridging'
-         call column_conservation_check (nx_block,  ny_block,      &
-                                         icells,   indxi,   indxj, &
-                                         fieldid,                  &
-                                         Shbr_init, Shbr_final,    &
-                                         puny*c10,  l_stop,        &
-                                         istop,     jstop)
-         if (l_stop) return
 
          fieldid = 'vbrin, ridging'
          call column_conservation_check (nx_block,  ny_block,      &
@@ -1539,20 +1495,16 @@
          iridge            ! number of cells with nonzero ridging
 
       integer (kind=int_kind), dimension (icells) :: &
-         indxii, indxjj  , & ! compressed indices
-         indxij              ! compressed indices
+         indxii, indxjj, & ! compressed indices
+         indxij            ! compressed indices
 
       integer (kind=int_kind), dimension (icells) :: &
-         rndxii, rndxjj  , & ! more compressed indices
+         rndxii, rndxjj, & ! more compressed indices
          rndxij             
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
-         vbrine             !  brine volume
 
       real (kind=dbl_kind), dimension (icells,ncat) :: &
          aicen_init    , & ! ice area before ridging
          vicen_init    , & ! ice volume before ridging
-         vbrine_init    , & ! brine volume before ridging
          vsnon_init        ! snow volume before ridging
 
       real (kind=dbl_kind), dimension(icells,ntrcr,ncat) :: &
