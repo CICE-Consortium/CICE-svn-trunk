@@ -33,7 +33,7 @@
       use ice_kinds_mod
       use ice_constants
       use ice_domain_size, only: max_nstrm, max_aero, n_aero, nblyr
-      use ice_zbgc_public
+      use ice_zbgc_shared
 !
 !EOP
 !
@@ -67,7 +67,6 @@
            f_bgc_DMSP_ml  = 'x', f_bgc_DMS_ml = 'x', & 
            f_upNO         = 'x', f_upNH        = 'x',   & 
            f_zTin         = 'x', f_zphi         = 'x',  &
-           f_iDi          = 'x', f_iki           = 'x',    &
            f_bgc_NO       = 'x', &
            f_bgc_N        = 'x', f_bgc_NH       = 'x',    &
            f_bgc_C        = 'x', f_bgc_chl      = 'x',    &
@@ -76,7 +75,7 @@
            f_bgc_PON      = 'x', f_bgc_S        = 'x',   &
            f_fbri         = 'x', &
            f_hbri         = 'x', &
-           f_growN        = 'x', f_zfswin      = 'x', &
+           f_growN        = 'x', &
            f_chlnet       = 'x', &
            f_PPnet        = 'x', f_NOnet = 'x', &
            f_grownet      = 'x'
@@ -104,7 +103,6 @@
            f_upNO,  f_upNH, &       
            f_zTin                  , &
            f_zphi      , &
-           f_iDi,       f_iki       , &
            f_bgc_NO   , f_bgc_N    , & 
            f_bgc_NH  , &
            f_bgc_C    , f_bgc_chl  , &
@@ -113,7 +111,7 @@
            f_bgc_PON  , f_bgc_S, &
            f_fbri, &
            f_hbri, &
-           f_growN,    f_zfswin, &
+           f_growN,  &
            f_chlnet, &
            f_PPnet, f_NOnet, f_grownet
 
@@ -156,8 +154,6 @@
            n_upNH,  &
            n_zTin         , & 
            n_zphi, &
-           n_iDi, &
-           n_iki, &
            n_bgc_NO, &
            n_bgc_N, &
            n_bgc_NH, &
@@ -172,7 +168,6 @@
            n_fbri, &
            n_hbri, &
            n_growN, &
-           n_zfswin, &
            n_chlnet, &
            n_PPnet, &
            n_NOnet, &
@@ -211,7 +206,6 @@
           get_fileunit, release_fileunit
       use ice_history_shared, only: tstr2D, tcstr, define_hist_field, &
           vname_in
-      use ice_therm_shared, only: solve_Sin
       use ice_state, only: tr_aero, hbrine
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -270,17 +264,6 @@
           f_bgc_DMSP_ml = 'x'
           f_bgc_DMS_ml = 'x'
       endif  !.not. solve_skl_bgc
-      if (.not. tr_bgc_NO)    f_bgc_NO  = 'x'
-      if (.not. tr_bgc_NH)    f_bgc_NH  = 'x'
-      if (.not. tr_bgc_N)     f_bgc_N  = 'x'
-      if (.not. tr_bgc_C)     f_bgc_C  = 'x'
-      if (.not. tr_bgc_chl)   f_bgc_chl  = 'x'
-      if (.not. tr_bgc_Sil)   f_bgc_Sil  = 'x'
-      if (.not. tr_bgc_DMSPp) f_bgc_DMSPp  = 'x'
-      if (.not. tr_bgc_DMSPd) f_bgc_DMSPd  = 'x'
-      if (.not. tr_bgc_DMS)   f_bgc_DMS  = 'x'
-      if (.not. tr_bgc_PON)   f_bgc_PON  = 'x'
-      if (.not. solve_Sin)    f_bgc_S  = 'x'
       if (.not. hbrine)  then
               f_fbri  = 'x'
               f_hbri  = 'x'
@@ -323,23 +306,9 @@
       call broadcast_scalar (f_bgc_DMS_ml, master_task)     
       call broadcast_scalar (f_zTin, master_task)
       call broadcast_scalar (f_zphi, master_task)
-      call broadcast_scalar (f_iDi, master_task)
-      call broadcast_scalar (f_iki, master_task)
-      call broadcast_scalar (f_bgc_NO, master_task)
-      call broadcast_scalar (f_bgc_NH, master_task)
-      call broadcast_scalar (f_bgc_N, master_task)
-      call broadcast_scalar (f_bgc_C, master_task)
-      call broadcast_scalar (f_bgc_chl, master_task)
-      call broadcast_scalar (f_bgc_Sil, master_task)
-      call broadcast_scalar (f_bgc_DMSPp, master_task)
-      call broadcast_scalar (f_bgc_DMSPd, master_task)
-      call broadcast_scalar (f_bgc_DMS, master_task)
-      call broadcast_scalar (f_bgc_PON, master_task)
-      call broadcast_scalar (f_bgc_S, master_task)
       call broadcast_scalar (f_fbri, master_task)
       call broadcast_scalar (f_hbri, master_task)
       call broadcast_scalar (f_growN, master_task)
-      call broadcast_scalar (f_zfswin, master_task)
       call broadcast_scalar (f_chlnet, master_task)
       call broadcast_scalar (f_PPnet, master_task)
       call broadcast_scalar (f_NOnet, master_task)
@@ -737,82 +706,11 @@
                 "porosity", "brine volume fraction", c100, c0, &
                 ns, f_zphi)
          
-       if (f_iDi(1:1) /= 'x') &
-             call define_hist_field(n_iDi,"iDin","m^2/d",tstr4Db, tcstr, &
-                "interface diffusivity", "on bio interface grid", secday, c0, &
-                ns, f_iDi)
-      
-       if (f_iki(1:1) /= 'x') &
-            call define_hist_field(n_iki,"ikin","mm^2",tstr4Db, tcstr, &
-                "permeability", "on bio interface grid", 1.0e6_dbl_kind, c0,&
-                ns, f_iki)
-
-       if (f_bgc_NO(1:1) /= 'x') &
-            call define_hist_field(n_bgc_NO,"bgc_NO","mmol/m^3",tstr4Db, tcstr, &
-                "bulk nitrate ", "on bio grid", c1, c0,     &
-                ns, f_bgc_NO)
- 
-       if (f_bgc_NH(1:1) /= 'x') &
-            call define_hist_field(n_bgc_NH,"bgc_NH","mmol/m^3",tstr4Db, tcstr, &
-                "bulk ammonia/um ", "on bio grid", c1, c0,  &
-                ns, f_bgc_NH)
-
-       if (f_bgc_N(1:1) /= 'x') &
-            call define_hist_field(n_bgc_N,"bgc_N","mmol/m^3",tstr4Db, tcstr, &
-                "bulk algal N conc. ", "on bio grid", c1, c0, &
-                ns, f_bgc_N)
-     
-       if (f_bgc_C(1:1) /= 'x') &
-            call define_hist_field(n_bgc_C,"bgc_C","mmol/m^3",tstr4Db, tcstr, &
-                "bulk algal carbon ", "on bio grid", c1, c0, &
-                ns, f_bgc_C)
-
-       if (f_bgc_chl(1:1) /= 'x') &
-            call define_hist_field(n_bgc_chl,"bgc_chl","mg/m^3",tstr4Db, tcstr, &
-                "bulk algal chlorophyll ", "on bio grid", c1, c0,&
-                ns, f_bgc_chl)
-      
-       if (f_bgc_Sil(1:1) /= 'x') &
-            call define_hist_field(n_bgc_Sil,"bgc_Sil","mmol/m^3",tstr4Db, tcstr, &
-                "bulk silicate ", "on bio grid", c1, c0, &
-                ns, f_bgc_Sil)
-      
-       if (f_bgc_DMSPp(1:1) /= 'x') &
-            call define_hist_field(n_bgc_DMSPp,"bgc_DMSPp","mmol/m^3",tstr4Db, tcstr, &
-                "bulk algal DMSP ", "on bio grid", c1, c0,&
-                ns, f_bgc_DMSPp)
-      
-       if (f_bgc_DMSPd(1:1) /= 'x') &
-            call define_hist_field(n_bgc_DMSPd,"bgc_DMSPd","mmol/m^3",tstr4Db, tcstr, &
-                "bulk dissolved DMSP ", "on bio grid", c1, c0, &
-                ns, f_bgc_DMSPd)
-  
-       if (f_bgc_DMS(1:1) /= 'x') &
-            call define_hist_field(n_bgc_DMS,"bgc_DMS","mmol/m^3",tstr4Db, tcstr, &
-                "bulk DMS gas ", "on bio grid", c1, c0, &
-                ns, f_bgc_DMS)
-     
-       if (f_bgc_PON(1:1) /= 'x') &
-            call define_hist_field(n_bgc_PON,"bgc_PON","mmol/m^3",tstr4Db, tcstr, &
-                "other bulk nitrogen pool ", "on bio grid valid for (2:nblyr+1)", c1, c0, &
-                ns, f_bgc_PON)
- 
-       if (f_bgc_S(1:1) /= 'x') &
-            call define_hist_field(n_bgc_S,"bgc_S","ppt",tstr4Db, tcstr, &
-                "bulk salinity", "on bio grid valid for (2:nblyr+1)", c1, c0, &
-                ns, f_bgc_S)
-     
        if (f_growN(1:1) /= 'x') &
             call define_hist_field(n_growN,"growN","d^-1",tstr4Db, tcstr, &
                 "Specific algal growth rate", "on bio grid valid for (2:nblyr+1)", secday , c0,  &
                 ns, f_growN)
       
-       if (f_zfswin(1:1) /= 'x') &
-            call define_hist_field(n_zfswin,"zfswin","W/m^2",tstr4Db, tcstr, &
-                "internal ice PAR", "on bio grid", c1, c0, &
-                ns, f_zfswin)
-    
-
       enddo  !ns
 
       end subroutine init_hist_bgc_4Db
@@ -846,8 +744,6 @@
           n4Dscum, a4Db, &
           ncat_hist, accum_hist_field, nzblyr
       use ice_state, only: trcrn, trcr, aicen, vice, vicen, nt_aero, nt_fbri, &
-          nt_bgc_N, nt_bgc_C, nt_bgc_chl, nt_bgc_NO, nt_bgc_NH, nt_bgc_Sil, &
-          nt_bgc_DMSPd, nt_bgc_DMSPp, nt_bgc_DMS, nt_bgc_PON, nt_bgc_S, &
           nt_bgc_N_sk, nt_bgc_C_sk, nt_bgc_chl_sk, nt_bgc_Nit_sk, &
           nt_bgc_Am_sk, nt_bgc_Sil_sk, nt_bgc_DMSPp_sk, nt_bgc_DMSPd_sk, &
           nt_bgc_DMS_sk, nt_bgc_Nit_ml, nt_bgc_Am_ml, nt_bgc_Sil_ml, &
@@ -954,7 +850,7 @@
                         ocean_bio(:,:,nlt_bgc_DMSPp,iblk), a2D)  
          if (f_bgc_DMS_ml(1:1)/= 'x') &
              call accum_hist_field(n_bgc_DMS_ml,iblk, &
-                        ocean_bio(:,:,nt_bgc_DMS,iblk), a2D)  
+                        ocean_bio(:,:,nlt_bgc_DMS,iblk), a2D)  
  
          ! zbgc
          if (f_fNO  (1:1) /= 'x') &
@@ -1010,281 +906,9 @@
              call accum_hist_field(n_fbri-n2D, iblk, ncat_hist, &
                                    trcrn(:,:,nt_fbri,1:ncat_hist,iblk), a3Dc)
 
-        if (f_upNO (1:1) /= 'x') then
-            workz(:,:,:) = c0
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vice(i,j,iblk) > puny) then
-                  workz(i,j,1) = upNO(i,j,1,iblk)
-                  workz(i,j,2:nblyr+1) = upNO(i,j,1:nblyr,iblk)
-                  workz(i,j,nblyr+2) = upNO(i,j,nblyr,iblk)
-                  endif
-                enddo !i
-               enddo  !j
-             call accum_hist_field(n_upNO- n3Dccum, iblk, nzblyr, &
-                                   workz(:,:,1:nzblyr), a3Db)
-        endif        
-          if (f_upNH (1:1) /= 'x') then
-            workz(:,:,:) = c0
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vice(i,j,iblk) > puny) then
-                  workz(i,j,1) = upNH(i,j,1,iblk)
-                  workz(i,j,2:nblyr+1) = upNH(i,j,1:nblyr,iblk)
-                  workz(i,j,nblyr+2) = upNH(i,j,nblyr,iblk)
-                  endif
-                enddo !i
-               enddo  !j
-             call accum_hist_field(n_upNH- n3Dccum, iblk, nzblyr, &
-                                   workz(:,:,1:nzblyr), a3Db)
-        endif        
-
-        if (f_bgc_N   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vicen(i,j,n,iblk) > puny) then
-                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_N,n,iblk) !*aicen_init(i,j,n,iblk)
-                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_N:nt_bgc_N+nblyr-1,n,iblk)
-                    workzn(i,j,nblyr+2,n) = algalN(i,j,iblk) !*aicen_init(i,j,n,iblk)
-                  endif
-                enddo !i
-               enddo  !j
-               
-            enddo     !n
-            call accum_hist_field(n_bgc_N-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-         endif
-         
-        if (f_bgc_C   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vicen(i,j,n,iblk) > puny) then
-                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_C,n,iblk) 
-                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_C:nt_bgc_C+nblyr-1,n,iblk) 
-                    workzn(i,j,nblyr+2,n) = R_C2N*algalN(i,j,iblk)
-                  
-                  endif
-                enddo !i
-               enddo  !j
-            enddo
-            call accum_hist_field(n_bgc_C-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-         endif
-         
-
-        if (f_bgc_chl   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vicen(i,j,n,iblk) > puny) then
-                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_chl,n,iblk)
-                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_chl:nt_bgc_chl+nblyr-1,n,iblk) 
-                    workzn(i,j,nblyr+2,n) = R_chl2N*algalN(i,j,iblk) 
-                  endif
-                enddo !i
-               enddo  !j
-               
-            enddo
-            call accum_hist_field(n_bgc_chl-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-         endif
-         
-
-        if (f_bgc_NO   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vicen(i,j,n,iblk) > puny) then
-                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_NO,n,iblk)    
-                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_NO:nt_bgc_NO+nblyr-1,n,iblk)   
-                    workzn(i,j,nblyr+2,n) = nit(i,j,iblk)     
-                  endif
-                enddo !i
-               enddo  !j
-            enddo
-            call accum_hist_field(n_bgc_NO-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-         endif
-
-        if (f_bgc_NH   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vicen(i,j,n,iblk) > puny) then
-                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_NH,n,iblk) 
-                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_NH:nt_bgc_NH+nblyr-1,n,iblk)
-                    workzn(i,j,nblyr+2,n) = amm(i,j,iblk)
-                  endif
-                enddo !i
-               enddo  !j
-               
-            enddo
-            call accum_hist_field(n_bgc_NH-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-         endif
-
-        if (f_bgc_Sil   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vicen(i,j,n,iblk) > puny) then
-                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_Sil,n,iblk)
-                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_Sil:nt_bgc_Sil+nblyr-1,n,iblk) 
-                    workzn(i,j,nblyr+2,n) = sil(i,j,iblk) 
-                  endif
-                enddo !i
-               enddo  !j
-            enddo
-            call accum_hist_field(n_bgc_Sil-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-         endif
-  
-        if (f_bgc_DMSPd   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vicen(i,j,n,iblk) > puny) then
-                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_DMSPd,n,iblk) 
-                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_DMSPd:nt_bgc_DMSPd+nblyr-1,n,iblk)
-                    workzn(i,j,nblyr+2,n) = dmsp(i,j,iblk)
-                  endif
-                enddo !i
-               enddo  !j
-            enddo
-            call accum_hist_field(n_bgc_DMSPd-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-         endif       
-
-        if (f_bgc_DMSPp   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vicen(i,j,n,iblk) > puny) then
-                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_DMSPp,n,iblk) 
-                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_DMSPp:nt_bgc_DMSPp+nblyr-1,n,iblk)
-                    workzn(i,j,nblyr+2,n) = dmsp(i,j,iblk)
-                  endif
-                enddo !i
-               enddo  !j
-            enddo
-            call accum_hist_field(n_bgc_DMSPp-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-         endif
-
-       if (f_bgc_DMS   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vicen(i,j,n,iblk) > puny) then
-                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_DMS,n,iblk) 
-                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_DMS:nt_bgc_DMS+nblyr-1,n,iblk)
-                    workzn(i,j,nblyr+2,n) = dms(i,j,iblk) 
-                  endif
-                enddo !i
-               enddo  !j
-            enddo
-            call accum_hist_field(n_bgc_DMS-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-         endif
-
-
-       if (f_bgc_PON   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vicen(i,j,n,iblk) > puny) then
-                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_PON,n,iblk) 
-                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_PON:nt_bgc_PON+nblyr-1,n,iblk) 
-                    workzn(i,j,nblyr+2,n) = nit(i,j,iblk) 
-                  endif
-                enddo !i
-               enddo  !j
-            enddo
-            call accum_hist_field(n_bgc_PON-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-         endif
-
-       if (f_bgc_S   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                  if (vicen(i,j,n,iblk) > puny) then
-                    workzn(i,j,1,n) = trcrn(i,j,nt_bgc_S,n,iblk)
-                    workzn(i,j,2:nblyr+1,n) = trcrn(i,j,nt_bgc_S:nt_bgc_S+nblyr-1,n,iblk)
-                    workzn(i,j,nblyr+2,n) = sss(i,j,iblk)    
-                  endif
-                enddo !i
-               enddo  !j
-            enddo
-            call accum_hist_field(n_bgc_S-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-         endif
-
        if (f_zTin  (1:1) /= 'x')  &
             call accum_hist_field(n_zTin-n4Dscum, iblk, nzblyr, ncat_hist, &
                                   zTin(:,:,1:nzblyr,1:ncat_hist,iblk), a4Db)
-
-       if (f_zfswin   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                if (aicen(i,j,n,iblk) > c0) then
-                   workzn(i,j,1:nblyr+1,n) = zfswin(i,j,1:nblyr+1,n,iblk)
-                   workzn(i,j,nzblyr,n)   = zfswin(i,j,nblyr+1,n,iblk)
-                endif
-               enddo  !j
-               enddo  !i          
-            enddo
-            call accum_hist_field(n_zfswin-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-       endif
-
-       if (f_iDi   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-              do k = 1,nzblyr-1
-               do j = jlo, jhi
-               do i = ilo, ihi
-                if (aicen(i,j,n,iblk) > c0) then
-                   workzn(i,j,k,n) = iDi(i,j,k,n,iblk)*(vicen(i,j,n,iblk)/aicen(i,j,n,iblk))**2
-                   workzn(i,j,nzblyr,n)   = workzn(i,j,nzblyr-1,n)     
-                endif
-               enddo  !j
-               enddo  !i
-              enddo   !k        
-            enddo
-            call accum_hist_field(n_iDi-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-       endif
-       if (f_iki   (1:1) /= 'x') then
-            workzn(:,:,:,:) = c0
-            do n = 1, ncat_hist
-               do j = jlo, jhi
-               do i = ilo, ihi
-                if (aicen(i,j,n,iblk) > c0) then
-                   workzn(i,j,1:nblyr+1,n) = iki(i,j,1:nblyr+1,n,iblk)
-                   workzn(i,j,nzblyr,n)   = iki(i,j,nblyr+1,n,iblk) 
-                endif
-               enddo  !j
-               enddo  !i      
-            enddo  !n
-            call accum_hist_field(n_iki-n4Dscum, iblk, nzblyr, ncat_hist, &
-                                  workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-       endif
 
        if (f_growN   (1:1) /= 'x') then
             workzn(:,:,:,:) = c0

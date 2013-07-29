@@ -155,7 +155,7 @@
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
       use ice_state
       use ice_therm_shared, only: calc_Tsfc
-      use ice_zbgc_public, only: rhosi
+      use ice_zbgc_shared, only: rhosi
 
 #if (defined CCSM) || (defined SEQ_MCT)
       use ice_prescribed_mod, only : prescribed_ice

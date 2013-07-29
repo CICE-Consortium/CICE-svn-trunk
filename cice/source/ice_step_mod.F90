@@ -61,7 +61,7 @@
       use ice_timers
       use ice_transport_driver
       use ice_transport_remap
-      use ice_zbgc_public, only: first_ice
+      use ice_zbgc_shared, only: first_ice
       implicit none
       private
       save
@@ -218,7 +218,6 @@
       use ice_age, only: increment_age
       use ice_blocks, only: nx_block, ny_block
       use ice_firstyear, only: update_FYarea
-      use ice_zbgc_public, only: fsicen
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -546,8 +545,7 @@
                                 mlt_onset(:,:,iblk), frz_onset(:,:,iblk), &
                                 yday,                l_stop,              &
                                 istop,               jstop,               &
-                                dsnown(:,:,n,iblk),                       &
-                                fsicen(:,:,n,iblk)) !,  Tsf_icen(:,:,n,iblk))
+                                dsnown(:,:,n,iblk))
 
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =', &
@@ -772,7 +770,7 @@
       use ice_therm_mushy, only: add_new_ice_mushy
       use ice_therm_bl99, only: add_new_ice_bl99
       use ice_therm_oned, only: diagnose_itd
-      use ice_zbgc_public, only: ocean_bio, fsicen, fsice, flux_bio
+      use ice_zbgc_shared, only: ocean_bio, flux_bio
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -945,7 +943,6 @@
                            sss       (:,:,  iblk),          &
                            salinz    (:,:,:,iblk), l_stop,  &
                            istop                 , jstop,   &
-                           fsice(:,:,iblk), &
                            flux_bio(:,:,:,iblk),nbltrcr, &
                            ocean_bio(:,:,:,iblk))
          endif
@@ -980,7 +977,6 @@
                             vicen     (:,:,:,iblk), &
                             vsnon     (:,:,:,iblk), &
                             trcrn     (:,:,:,:,iblk),&
-                            fsice     (:,:,  iblk), &
                             flux_bio(:,:,:,iblk),nbltrcr)
 
       !-----------------------------------------------------------------
@@ -1017,9 +1013,8 @@
                            fhocn   (:,:,  iblk),                       &
                            faero_ocn(:,:,:,iblk),tr_aero,              &
                            tr_pond_topo,         heat_capacity,        &
-                           nbltrcr ,             first_ice(:,:,:,iblk),  &
-                           fsice(:,:,  iblk),    flux_bio(:,:,:,iblk), &
-                           l_stop,                                     &
+                           nbltrcr ,             first_ice(:,:,:,iblk),&
+                           flux_bio(:,:,:,iblk), l_stop,               &
                            istop,                jstop)
 
          if (l_stop) then
@@ -1252,7 +1247,7 @@
 
       subroutine step_ridge (dt, ndtd, iblk)
 
-        use ice_zbgc_public, only: fsicen, fsice, flux_bio
+        use ice_zbgc_shared, only: flux_bio
 
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1330,7 +1325,7 @@
                          dvirdgdt(:,:,iblk),   opening   (:,:,iblk),     &
                          fpond   (:,:,iblk),                             &
                          fresh   (:,:,iblk),   fhocn     (:,:,iblk),     &
-                         fsicen(:,:,:,iblk),   faero_ocn(:,:,:,iblk),    &
+                         faero_ocn(:,:,:,iblk),                          &
                          aparticn(:,:,:,iblk), krdgn     (:,:,:,iblk),   &
                          aredistn(:,:,:,iblk), vredistn  (:,:,:,iblk),   &
                          dardg1ndt(:,:,:,iblk),dardg2ndt (:,:,:,iblk),   &
@@ -1368,9 +1363,8 @@
                            fhocn   (:,:,  iblk),                       &
                            faero_ocn(:,:,:,iblk),tr_aero,              &
                            tr_pond_topo,         heat_capacity,        &
-                           nbltrcr ,             first_ice(:,:,:,iblk),  &
-                           fsice(:,:,  iblk),    flux_bio(:,:,:,iblk), &
-                           l_stop,                                     &
+                           nbltrcr ,             first_ice(:,:,:,iblk),&
+                           flux_bio(:,:,:,iblk), l_stop,               &
                            istop,                jstop)
 
          if (l_stop) then

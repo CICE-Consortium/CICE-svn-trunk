@@ -305,9 +305,7 @@
          fresh_gbm, & ! fresh water flux to ocean (kg/m^2/s)
          fsalt_gbm, & ! salt flux to ocean (kg/m^2/s)
          fhocn_gbm, & ! net heat flux to ocean (W/m^2)
-         fswthru_gbm, &  ! shortwave penetrating to ocean (W/m^2)
-         fsice_gbm, & ! salt flux to ocean from salinity model (kg/m^2/s)
-         fsice_g_gbm  ! gravity drainage salt flux to ocean (kg/m^2/s)
+         fswthru_gbm  ! shortwave penetrating to ocean (W/m^2)
 
       ! Used with data assimilation in hadgem drivers
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
@@ -353,7 +351,7 @@
 !
 ! !USES:
 !
-        use ice_zbgc_public, only: flux_bio, flux_bio_g, upNO, upNH, growN, growNp
+        use ice_zbgc_shared, only: flux_bio, flux_bio_g, upNO, upNH, growN, growNp
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -583,7 +581,7 @@
 !
 ! !USES:
 !
-        use ice_zbgc_public, only: flux_bio, flux_bio_g, fsice, fsice_g, upNO, upNH
+        use ice_zbgc_shared, only: flux_bio, flux_bio_g, upNO, upNH
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -600,9 +598,6 @@
       fswthru  (:,:,:)   = c0
       faero_ocn(:,:,:,:) = c0
  
-      fsice(:,:,:)  = c0      ! salt flux
-      fsice_g(:,:,:)  = c0    ! salt flux
-
       flux_bio (:,:,:,:) = c0  ! bgc
       flux_bio_g (:,:,:,:) = c0 
 
@@ -637,7 +632,6 @@
                           Cdn_atm_ocn, Cdn_ocn, Cdn_ocn_keel, &
                           Cdn_ocn_floe, Cdn_ocn_skin
       use ice_state, only: aice, vice
-      use ice_zbgc_public, only: fsicen, fsicen_g
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -666,11 +660,6 @@
       albice (:,:,:) = c0
       albsno (:,:,:) = c0
       albpnd (:,:,:) = c0
-      fsice_gbm  (:,:,:) = c0
-      fsice_g_gbm  (:,:,:) = c0
-      
-      fsicen(:,:,:,:) = c0    ! salt flux per category into ocean (kg/m^2/s)
-      fsicen_g(:,:,:,:) = c0  
 
       ! drag coefficients are computed prior to the atmo_boundary call, 
       ! during the thermodynamics section 
@@ -943,7 +932,6 @@
                                faero_ocn,          &
                                alvdr,    alidr,    &
                                alvdf,    alidf,    &
-                               fsice,    fsice_g,  &
                                flux_bio, flux_bio_g,&
                                fsurf,    fcondtop)
 !
@@ -989,10 +977,7 @@
           alvdr   , & ! visible, direct   (fraction)
           alidr   , & ! near-ir, direct   (fraction)
           alvdf   , & ! visible, diffuse  (fraction)
-          alidf   , &    ! near-ir, diffuse  (fraction)
-          fsice   , & ! salt flux to ocean with prognositic salinity (kg/m2/s)
-          fsice_g     ! Gravity drainage salt flux to ocean (kg/m2/s)
-
+          alidf       ! near-ir, diffuse  (fraction)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,nbltrcr), &
           intent(inout):: &
@@ -1040,8 +1025,6 @@
             alidr   (i,j) = alidr   (i,j) * ar
             alvdf   (i,j) = alvdf   (i,j) * ar
             alidf   (i,j) = alidf   (i,j) * ar
-            fsice   (i,j) = fsice   (i,j) * ar
-            fsice_g (i,j) = fsice_g (i,j) * ar
             flux_bio   (i,j,:) = flux_bio   (i,j,:) * ar
             flux_bio_g (i,j,:) = flux_bio_g (i,j,:) * ar
             faero_ocn(i,j,:) = faero_ocn(i,j,:) * ar
@@ -1065,8 +1048,6 @@
             alvdf   (i,j) = c0 
             alidf   (i,j) = c0
             faero_ocn(i,j,:) = c0
-            fsice   (i,j) = c0
-            fsice_g (i,j) = c0
             flux_bio   (i,j,:) = c0
             flux_bio_g (i,j,:) = c0
          endif                  ! tmask and aice > 0

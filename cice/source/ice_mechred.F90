@@ -135,7 +135,7 @@
                             dvirdgdt,    opening,    &
                             fpond,                   &
                             fresh,       fhocn,      &
-                            fsicen,      faero_ocn,  &
+                            faero_ocn,               &
                             aparticn,    krdgn,      &
                             aredistn,    vredistn,   &
                             dardg1ndt,   dardg2ndt,  &
@@ -144,7 +144,7 @@
 !
 ! !USES:
 !                            
-      use ice_state, only: nt_qice, nt_qsno, hbrine, nt_fbri, nt_bgc_S, nt_sice
+      use ice_state, only: nt_qice, nt_qsno, hbrine, nt_fbri, nt_sice
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -169,8 +169,7 @@
          intent(inout) :: &
          aicen , & ! concentration of ice
          vicen , & ! volume per unit area of ice          (m)
-         vsnon , & ! volume per unit area of snow         (m)
-         fsicen    !  total salt water flux to ocean (kg/m^2/s)
+         vsnon     ! volume per unit area of snow         (m)
  
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
          intent(inout) :: & 
@@ -448,7 +447,7 @@
                            virdgn,                     &
                            msnow_mlt, esnow_mlt,       &
                            maero,     mpond,           &
-                           fsicen,    l_stop,          &
+                           l_stop,                     &
                            istop,     jstop,           &
                            aredistn,  vredistn)
 
@@ -1395,7 +1394,7 @@
                               virdgnn,                      &
                               msnow_mlt,   esnow_mlt,       &
                               maero,       mpond,           &
-                              fsicen,      l_stop,          &
+                              l_stop,                       &
                               istop,       jstop,           &
                               aredistn,    vredistn)
 !
@@ -1405,7 +1404,7 @@
                            nt_alvl, nt_vlvl, nt_aero, tr_lvl, tr_aero, &
                            nt_apnd, nt_hpnd, nt_ipnd, tr_pond, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
-                           nt_bgc_S, nt_fbri
+                           nt_fbri
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1432,8 +1431,7 @@
          intent(inout) :: &
          aicen , & ! concentration of ice
          vicen , & ! volume per unit area of ice          (m)
-         vsnon , & ! volume per unit area of snow         (m)
-         fsicen    ! Total flux of salt to ocean (kg/m^2/s)
+         vsnon     ! volume per unit area of snow         (m)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
          intent(inout) :: &

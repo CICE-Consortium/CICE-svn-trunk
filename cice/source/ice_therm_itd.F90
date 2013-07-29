@@ -93,7 +93,7 @@
       use ice_calendar, only: istep1
       use ice_itd, only: hin_max, hi_min, aggregate_area, shift_ice, & 
                          column_sum, column_conservation_check
-      use ice_state, only: nt_qice, nt_qsno, nt_fbri, nt_bgc_S, nt_sice, &
+      use ice_state, only: nt_qice, nt_qsno, nt_fbri, nt_sice, &
                            tr_pond_topo, nt_apnd, nt_hpnd, hbrine
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -1072,13 +1072,12 @@
                                rside,      meltl,      &
                                aicen,      vicen,      &
                                vsnon,      trcrn,      &
-                               fsice, flux_bio, nbltrcr)
+                               flux_bio,   nbltrcr)
 !
 ! !USES:
 !
       use ice_state, only: nt_qice, nt_qsno, &
                            nt_aero, tr_aero, tr_pond_topo, nt_apnd, nt_hpnd
-      use ice_zbgc_public, only: lateral_melt_bgc
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1109,8 +1108,7 @@
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt     , & ! salt flux to ocean (kg/m^2/s)
          fhocn     , & ! net heat flux to ocean (W/m^2)
-         meltl     , &    ! lateral ice melt         (m/step-->cm/day)
-         fsice       ! salt flux from layer Salinity (kg/m^2/s)
+         meltl         ! lateral ice melt         (m/step-->cm/day)
   
       real (kind=dbl_kind), dimension(nx_block,ny_block,nbltrcr), &
          intent(inout) :: &
@@ -1245,16 +1243,6 @@
             enddo
          endif
 
-      !-----------------------------------------------------------------
-      ! Biogeochemistry
-      !-----------------------------------------------------------------
-
-         call lateral_melt_bgc(nx_block,       ny_block,    &
-                               icells,         dt,          &
-                               indxi,          indxj,       &
-                               rside,          vicen_init,  &
-                               trcrn(:,:,:,n), fsice,       &
-                               flux_bio,       nbltrcr)
       enddo  ! n
 
       end subroutine lateral_melt

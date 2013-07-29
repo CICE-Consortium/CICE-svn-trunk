@@ -86,45 +86,21 @@
 
 &zbgc_nml
     hbrine          = .false.
-  , read_Sin        = .false.
-  , solve_Sin       = .false.
-  , solve_bgc       = .false.
+  , solve_skl_bgc   = .false.
   , restore_bgc     = .false.
   , bgc_data_dir    = 'unknown_bgc_data_dir'
   , sil_data_type   = 'default'
   , nit_data_type   = 'default'
-  , tr_bgc_N_sk     = .false.
   , tr_bgc_C_sk     = .false.
   , tr_bgc_chl_sk   = .false.
-  , tr_bgc_Nit_sk   = .false.
   , tr_bgc_Am_sk    = .false.
   , tr_bgc_Sil_sk   = .false.
   , tr_bgc_DMSPp_sk = .false.
   , tr_bgc_DMSPd_sk = .false.
   , tr_bgc_DMS_sk   = .false
   , restart_bgc     = .false.
-  , restart_S       = .false
-  , scale_bgc       = .false.
-  , tr_bgc_NO       = .false.
-  , tr_bgc_N        = .false.  
-  , tr_bgc_NH       = .false. 
-  , tr_bgc_C        = .false. 
-  , tr_bgc_chl      = .false. 
-  , tr_bgc_DMSPp    = .false. 
-  , tr_bgc_DMSPd    = .false. 
-  , tr_bgc_DMS      = .false. 
-  , tr_bgc_Sil      = .false.
-  , tr_bgc_PON      = .false. 
-  , tr_bgc_S        = .false.
-  , Ra_c            = 0.05
-  , grid_o          = 10.0
-  , grid_o_t        = 5.0
-  , l_sk            = 2.0
-  , grid_oS         = 0.0
-  , l_skS           = 9.0
-  , lapidus_g       = 0.9
-  , lapidus_m       = 1.5
-  , rhosi           = 940.0
+  , restart_hbrine  = .false.
+  , phi_snow        = 0.5
   , initbio_frac    = 0.6
 /
 
@@ -249,12 +225,6 @@
   , f_fresh_ai     = 'm'
   , f_fsalt        = 'x'
   , f_fsalt_ai     = 'm'
-  , f_fsice        = 'x'
-  , f_fsice_ai     = 'x'
-  , f_fsice_g      = 'x'
-  , f_fsice_g_ai   = 'x'
-  , f_fsicen_g     = 'x'
-  , f_Stot         = 'x'
   , f_fhocn        = 'x' 
   , f_fhocn_ai     = 'm' 
   , f_fswthru      = 'x' 
@@ -318,6 +288,8 @@
   , f_aparticn     = 'x'
   , f_aredistn     = 'x'
   , f_vredistn     = 'x'
+  , f_araftn       = 'x'
+  , f_vraftn       = 'x'
 /
 
 &icefields_pond_nml
@@ -372,22 +344,9 @@
   , f_upNH         = 'x'
   , f_zTin         = 'x'
   , f_zphi         = 'x' 
-  , f_iDi          = 'x'
-  , f_iki          = 'x'
-  , f_bgc_NO       = 'x' 
-  , f_bgc_N        = 'x' 
-  , f_bgc_NH       = 'x' 
-  , f_bgc_C        = 'x' 
-  , f_bgc_chl      = 'x' 
-  , f_bgc_DMSPp    = 'x' 
-  , f_bgc_DMSPd    = 'x' 
-  , f_bgc_DMS      = 'x' 
-  , f_bgc_Sil      = 'x' 
-  , f_bgc_PON      = 'x' 
-  , f_bgc_S        = 'x'  
   , f_fbri         = 'x'    
+  , f_hbri         = 'x'    
   , f_growN        = 'x'
-  , f_zfswin       = 'x'
   , f_chlnet       = 'x'
   , f_PPnet        = 'x'
   , f_NOnet        = 'x'

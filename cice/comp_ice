@@ -56,7 +56,7 @@ setenv TRPND   1          # set to 1 for melt pond tracers
 setenv NTRAERO 0          # number of aerosol tracers 
                           # (up to max_aero in ice_domain_size.F90) 
                           # CESM uses 3 aerosol tracers
-setenv TRBRI   0          # set to 1 for brine height tracer
+setenv TRBRI   1          # set to 1 for brine height tracer
 setenv NBGCLYR 7          # number of biogeochemistry layers
 
 ### Specialty code
