@@ -100,7 +100,7 @@
       use ice_history_drag, only: init_hist_drag_2D
       use ice_restart, only: restart
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero, hbrine
-      use ice_zbgc_public, only: solve_zbgc, solve_skl_bgc
+      use ice_zbgc_shared, only: solve_skl_bgc
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -263,12 +263,6 @@
       call broadcast_scalar (f_fresh_ai, master_task)
       call broadcast_scalar (f_fsalt, master_task)
       call broadcast_scalar (f_fsalt_ai, master_task)
-      call broadcast_scalar (f_fsice, master_task)
-      call broadcast_scalar (f_fsice_ai, master_task)
-      call broadcast_scalar (f_fsice_g, master_task)
-      call broadcast_scalar (f_fsice_g_ai, master_task)
-      call broadcast_scalar (f_fsicen_g, master_task)
-      call broadcast_scalar (f_Stot, master_task)
       call broadcast_scalar (f_fhocn, master_task)
       call broadcast_scalar (f_fhocn_ai, master_task)
       call broadcast_scalar (f_fswthru, master_task)
@@ -647,36 +641,6 @@
              "weighted by ice area", c1, c0,                                  &
              ns1, f_fsalt_ai)
       
-      if (f_fsice(1:1) /= 'x') &
-         call define_hist_field(n_fsice,"fsice","kg/m^2/s",tstr2D, tcstr, &
-             "prognostic salt flux ice to ocn (cpl)",                              &
-             "if positive, ocean gains salt", c1, c0,                   &
-             ns1, f_fsice)
-      
-      if (f_fsice_ai(1:1) /= 'x') &
-         call define_hist_field(n_fsice_ai,"fsice_ai","kg/m^2/s",tstr2D, tcstr, &
-             "prognostic salt flux ice to ocean",                                        &
-             "weighted by ice area", c1, c0,                                  &
-             ns1, f_fsice_ai)
-      
-      if (f_fsice_g(1:1) /= 'x') &
-         call define_hist_field(n_fsice_g,"fsice_g","kg/m^2/s",tstr2D, tcstr, &
-             "Gravity drainage salt flux ice to ocn (cpl)",                              &
-             "if positive, ocean gains salt", c1, c0,                   &
-             ns1, f_fsice_g)
-      
-      if (f_fsice_g_ai(1:1) /= 'x') &
-         call define_hist_field(n_fsice_g_ai,"fsice_g_ai","kg/m^2/s",tstr2D, tcstr, &
-             "Gravity drainage salt flux ice to ocean",                                        &
-             "weighted by ice area", c1, c0,                                  &
-             ns1, f_fsice_g_ai)
-      
-      if (f_Stot(1:1) /= 'x') &
-         call define_hist_field(n_Stot,"S_tot","g/m^2",tstr2D, tcstr,        &
-             "Total Salt content",                     &
-             "In ice volume*fbri", c1, c0,       &
-             ns1, f_Stot)
-     
       if (f_fhocn(1:1) /= 'x') &
          call define_hist_field(n_fhocn,"fhocn","W/m^2",tstr2D, tcstr, &
              "heat flux ice to ocn (cpl)",                           &
@@ -987,12 +951,6 @@
               "net surface heat flux, categories","weighted by ice area", c1, c0, &            
               ns1, f_fsurfn_ai)
    
-         if (f_fsicen_g(1:1) /= 'x') &
-         call define_hist_field(n_fsicen_g,"fsicen_g","kg/m^2/s",tstr3Dc, tcstr, &
-             "salt flux from gravity drainage to ocn",                              &
-             "if positive, ocean gains salt", c1, c0,                   &
-             ns1, f_fsicen_g)
-      
         if (f_fcondtopn_ai(1:1) /= 'x') &
            call define_hist_field(n_fcondtopn_ai,"fcondtopn_ai","W/m^2",tstr3Dc, tcstr, &
               "top sfc conductive heat flux, cat","weighted by ice area", c1, c0,       &
@@ -1034,9 +992,6 @@
 !            ns1, f_field3dz)
 
 !      enddo ! ns1 
-
-      ! biogeochemistry
-      if (solve_zbgc) call init_hist_bgc_3Db
 
       !-----------------------------------------------------------------
       ! 4D (categories, vertical) variables must be looped separately
@@ -1088,7 +1043,7 @@
       ! other 4D history variables
 
       ! biogeochemistry
-      if (hbrine .or. solve_zbgc) call init_hist_bgc_4Db
+      if (hbrine) call init_hist_bgc_4Db
 
       !-----------------------------------------------------------------
       ! fill igrd array with namelist values
@@ -1233,7 +1188,7 @@
           albice, albsno, albpnd, coszen, flat, fsens, flwout, evap, &
           Tair, Tref, Qref, congel, frazil, snoice, dsnow, &
           melts, meltb, meltt, meltl, fresh, fsalt, fresh_gbm, fsalt_gbm, &
-          fsice_gbm, fsice_g_gbm, fhocn, fhocn_gbm, &
+          fhocn, fhocn_gbm, &
           fswthru_gbm, strairx, strairy, strtltx, strtlty, strintx, strinty, &
           strocnx, strocny, fm, daidtt, dvidtt, daidtd, dvidtd, fsurf, &
           fcondtop, fsurfn, fcondtopn, flatn, albcnt, prs_sig, &
@@ -1253,8 +1208,6 @@
       use ice_therm_shared, only: calculate_Tin_from_qin, Tmlt, ktherm
       use ice_therm_mushy, only: temperature_mush, temperature_snow
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
-      use ice_zbgc_public, only: S_tot, fsice, fsice_g, fsicen_g
-
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1471,17 +1424,6 @@
          if (f_fsalt_ai(1:1)/= 'x') &
              call accum_hist_field(n_fsalt_ai,iblk, fsalt_gbm(:,:,iblk), a2D)
 
-         if (f_fsice  (1:1) /= 'x') &
-             call accum_hist_field(n_fsice,   iblk, fsice(:,:,iblk), a2D)
-         if (f_fsice_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fsice_ai,iblk, fsice_gbm(:,:,iblk), a2D)
-         if (f_fsice_g  (1:1) /= 'x') &
-             call accum_hist_field(n_fsice_g,   iblk, fsice_g(:,:,iblk), a2D)
-         if (f_fsice_g_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fsice_g_ai,iblk, fsice_g_gbm(:,:,iblk), a2D)
-
-         if (f_Stot  (1:1) /= 'x') &
-             call accum_hist_field(n_Stot,   iblk, S_tot(:,:,iblk), a2D)
          if (f_fhocn  (1:1) /= 'x') &
              call accum_hist_field(n_fhocn,   iblk, fhocn(:,:,iblk), a2D)
          if (f_fhocn_ai(1:1)/= 'x') &
@@ -1571,9 +1513,6 @@
          if (f_fsurfn_ai   (1:1) /= 'x') &
              call accum_hist_field(n_fsurfn_ai-n2D, iblk, ncat_hist, &
                   fsurfn(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
-         if (f_fsicen_g  (1:1) /= 'x') &
-             call accum_hist_field(n_fsicen_g-n2D, iblk, ncat_hist, &
-                  fsicen_g(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
          if (f_fcondtopn_ai   (1:1) /= 'x') &
              call accum_hist_field(n_fcondtopn_ai-n2D, iblk, ncat_hist, &
                   fcondtopn(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)

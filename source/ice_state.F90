@@ -92,6 +92,10 @@
          trcrn     ! tracers
                    ! 1: surface temperature of ice/snow (C)
 
+      !-----------------------------------------------------------------
+      ! indices and flags for tracers
+      !-----------------------------------------------------------------
+
       integer (kind=int_kind), dimension (max_ntrcr), public :: &
          trcr_depend   ! = 0 for ice area tracers
                        ! = 1 for ice volume tracers
@@ -99,10 +103,6 @@
 
       integer (kind=int_kind), public :: &
          ntrcr     ! number of tracers in use
-
-      !-----------------------------------------------------------------
-      ! indices and flags for tracers
-      !-----------------------------------------------------------------
 
       integer (kind=int_kind), public :: &
          ntraceb     , &    ! number of bio layer tracers in use
@@ -135,18 +135,7 @@
          nt_bgc_Am_ml,  & ! 
          nt_bgc_Sil_ml, & !
          nt_bgc_DMSP_ml, & ! trace gases (ocean mixed layer)
-         nt_bgc_DMS_ml, & !  
-         nt_bgc_N,   & ! algae: bulk quantities are tracers (volume preserved)
-         nt_bgc_C,   & ! 
-         nt_bgc_chl, & ! 
-         nt_bgc_NO,  & ! nutrients  
-         nt_bgc_NH,  & ! 
-         nt_bgc_Sil, & !
-         nt_bgc_DMSPp, & ! trace gases (skeletal layer)
-         nt_bgc_DMSPd, & ! 
-         nt_bgc_DMS, & ! 
-         nt_bgc_PON, & ! zooplankton and detritus  
-         nt_bgc_S      ! Bulk salinity in fraction ice with dynamic salinity (Bio grid) 
+         nt_bgc_DMS_ml
 
       logical (kind=log_kind), public :: &
          tr_iage,   & ! if .true., use age tracer

@@ -264,7 +264,7 @@
       use ice_domain, only: nblocks
       use ice_domain_size, only: max_blocks
       use ice_flux, only: sss, sst, Tf, Tfrzpt
-      use ice_zbgc_public, only: restore_bgc
+      use ice_zbgc_shared, only: restore_bgc
 #ifdef ncdf
       use netcdf
 #endif

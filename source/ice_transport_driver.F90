@@ -92,7 +92,7 @@
 !
       use ice_state, only: ntrcr, trcr_depend, nt_Tsfc, nt_qice, nt_qsno, &
           nt_sice, nt_fbri, nt_iage, nt_FY, nt_alvl, nt_vlvl, &
-          nt_apnd, nt_hpnd, nt_ipnd, nt_bgc_n_sk, nt_bgc_no, nt_bgc_s
+          nt_apnd, nt_hpnd, nt_ipnd, nt_bgc_n_sk
       use ice_exit, only: abort_ice
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_advect
       use ice_transport_remap, only: init_remap
@@ -203,12 +203,6 @@
                                               has_dependents(nt)
              if (nt-k==nt_bgc_N_sk) &
                 write(nu_diag,*) 'nt_bgc_sk',nt,depend(nt),tracer_type(nt),&
-                                              has_dependents(nt)
-             if (nt-k==nt_bgc_NO) &
-                write(nu_diag,*) 'nt_bgc_NO',nt,depend(nt),tracer_type(nt),&
-                                              has_dependents(nt)
-             if (nt-k==nt_bgc_S) &
-                write(nu_diag,*) 'nt_bgcS',nt,depend(nt),tracer_type(nt),&
                                               has_dependents(nt)
           enddo
 

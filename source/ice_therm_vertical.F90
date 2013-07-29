@@ -40,12 +40,11 @@
                            nt_Tsfc, nt_iage, nt_sice, nt_qice, nt_qsno, &
                            nt_apnd, nt_hpnd
       use ice_therm_shared, only: ktherm, ferrmax, heat_capacity, l_brine, &
-                                  solve_Sin, calc_Tsfc, &
-                                  calculate_tin_from_qin
+                                  calc_Tsfc, calculate_tin_from_qin
       use ice_therm_bl99, only: hs_min, temperature_changes
       use ice_therm_0layer, only: zerolayer_temperature
       use ice_flux, only: Tf
-      use ice_zbgc_public, only: min_salin
+      use ice_zbgc_shared, only: min_salin
 !
 !EOP
 !
@@ -125,7 +124,7 @@
                                   mlt_onset,   frz_onset, &
                                   yday,        l_stop,    &
                                   istop,       jstop,     &
-                                  dsnow,       fsicen)
+                                  dsnow)
 ! 
 ! !USES:
 !
@@ -223,8 +222,7 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(inout):: &
          flatn    , & ! latent heat flux   (W/m^2) 
          fsurfn   , & ! net flux to top surface, excluding fcondtopn
-         fcondtopn, & ! downward cond flux at top surface (W m-2)
-         fsicen       ! net salt flux out of ice
+         fcondtopn    ! downward cond flux at top surface (W m-2)
 
       ! coupler fluxes to ocean
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
@@ -327,8 +325,6 @@
          fsaltn (i,j) = c0
          fhocnn (i,j) = c0
          fadvocn(i,j) = c0
-
-         fsicen (i,j) = c0  
 
          meltt  (i,j) = c0
          meltb  (i,j) = c0
@@ -683,11 +679,8 @@
       heat_capacity = .true.      
       if (ktherm == 0) heat_capacity = .false. ! 0-layer thermodynamics
 
-      if ((saltmax > min_salin .and. heat_capacity) .or. solve_Sin) then
-         l_brine = .true.
-      else
-         l_brine = .false.
-      endif
+      l_brine = .false.
+      if (saltmax > min_salin .and. heat_capacity) l_brine = .true.
 
       !-----------------------------------------------------------------
       ! Prescibe vertical profile of salinity and melting temperature.
@@ -698,26 +691,9 @@
       do j = 1, ny_block
       do i = 1, nx_block
       if (l_brine) then
-         if (solve_Sin) then
-           do k = 1, nilyr
-              if (k == 1) then
-                 salinz(i,j,k,iblk) = sss(i,j,iblk)*salt_loss 
-              elseif (k > 1 .AND. k < nilyr) then
-                 salinz(i,j,k,iblk) = sss(i,j,iblk)*salt_loss 
-              else
-                 salinz(i,j,k,iblk) = sss(i,j,iblk)*salt_loss 
-             
-              endif
-
-              Tmltz(i,j,k,iblk) = -salinz(i,j,k,iblk)*depressT 
-           enddo
-           salinz(i,j,nilyr+1,iblk) = sss(i,j,iblk)  !salinz(i,j,nilyr,iblk)
-           Tmltz(i,j,nilyr+1,iblk) = -salinz(i,j,nilyr+1,iblk)*depressT
-
-         else ! .not. (solve_Sin)
-           do k = 1, nilyr
-              zn = (real(k,kind=dbl_kind)-p5) /  &
-                   real(nilyr,kind=dbl_kind)
+         do k = 1, nilyr
+            zn = (real(k,kind=dbl_kind)-p5) /  &
+                  real(nilyr,kind=dbl_kind)
 
             if (ktherm == 2) then
 #if defined notz_experiment
@@ -740,9 +716,8 @@
             endif ! ktherm
             salinz(i,j,k,iblk) = max(salinz(i,j,k,iblk), min_salin)
             Tmltz (i,j,k,iblk) = -salinz(i,j,k,iblk)*depressT
-           enddo ! k
-           salinz(i,j,nilyr+1,iblk) = saltmax         !sss(i,j,iblk)  !saltmax
-         endif !solve_Sin
+         enddo ! k
+         salinz(i,j,nilyr+1,iblk) = saltmax         !sss(i,j,iblk)  !saltmax
          Tmltz(i,j,nilyr+1,iblk) = -salinz(i,j,nilyr+1,iblk)*depressT
 
       else ! .not. l_brine

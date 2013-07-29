@@ -225,9 +225,6 @@
            f_meltb     = 'm', f_meltl      = 'm', &
            f_fresh     = 'm', f_fresh_ai   = 'm', &
            f_fsalt     = 'm', f_fsalt_ai   = 'm', &
-           f_fsice     = 'm', f_fsice_ai   = 'm', &
-           f_fsice_g   = 'm', f_fsice_g_ai = 'm', &
-           f_fsicen_g  = 'm', f_Stot       = 'x', &
            f_fhocn     = 'm', f_fhocn_ai   = 'm', &
            f_fswthru   = 'm', f_fswthru_ai = 'm', &
            f_strairx   = 'm', f_strairy    = 'm', &
@@ -303,9 +300,6 @@
            f_meltb,     f_meltl    , &
            f_fresh,     f_fresh_ai , &  
            f_fsalt,     f_fsalt_ai , &  
-           f_fsice,     f_fsice_ai , &   
-           f_fsice_g,   f_fsice_g_ai,&  
-           f_fsicen_g,  f_Stot     , &
            f_fhocn,     f_fhocn_ai , &
            f_fswthru,   f_fswthru_ai,&
            f_strairx,   f_strairy  , &
@@ -394,9 +388,6 @@
            n_meltb      , n_meltl      , &
            n_fresh      , n_fresh_ai   , &
            n_fsalt      , n_fsalt_ai   , &
-           n_fsice      , n_fsice_ai   , &
-           n_fsice_g    , n_fsice_g_ai , &
-           n_fsicen_g   , n_Stot       , & 
            n_fhocn      , n_fhocn_ai   , &
            n_fswthru    , n_fswthru_ai , &
            n_strairx    , n_strairy    , &

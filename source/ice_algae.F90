@@ -1,19 +1,10 @@
 !=======================================================================
 !
-! Compute biogeochemistry vertically resolved.
-!
-!  SVN:$$
+! Compute biogeochemistry in the skeletal layer
 !
 ! authors: Nicole Jeffery, LANL
 !          Scott Elliot,   LANL
 !          Elizabeth C. Hunke, LANL
-!
-! Vertical Transport of biological scalars is split between implicit diffusion
-! (tridiag_solver) and advection.  A nondimensional z coordinate is used which 
-! ranges from 0 (ice surface or snow/ice interface)  to 1 (ice bottom) and has 
-! the number of layers nblyr while the ice has nilyr. Changes in ice thickness are 
-! included as advective fluxes.  Initially, the only scalar modeled is nitrate (NO).
-! Reaction terms will follow original ice_bgc.F90.   
 !
       module ice_algae
 
@@ -26,25 +17,22 @@
       use ice_read_write, only: ice_open, ice_read, ice_write
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
-      use ice_zbgc_public
+      use ice_zbgc_shared
       use ice_state, only: vicen, vice, trcr, ntrcr, ntraceb, nt_bgc_am_sk, &
           nt_bgc_c_sk, nt_bgc_chl_sk, nt_bgc_DMS_sk, nt_bgc_DMSPd_sk, &
-          nt_bgc_DMSPp_sk, nt_bgc_N, nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_NO, &
-          nt_bgc_PON, nt_bgc_Sil, nt_bgc_Sil_sk,nt_bgc_C, nt_bgc_chl, &
-          nt_bgc_DMS, nt_bgc_DMSPd, nt_bgc_DMSPp, nt_bgc_NH, nt_bgc_NO, &
-          nt_bgc_PON, nt_bgc_Sil, nt_bgc_Nit_sk, nt_bgc_Sil_sk, nt_bgc_Nit_sk, &
-          nt_bgc_Sil_sk, nt_bgc_S
+          nt_bgc_DMSPp_sk, nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_Sil_sk, &
+          nt_bgc_Nit_sk, nt_bgc_Sil_sk, nt_bgc_Nit_sk, &
+          nt_bgc_Sil_sk
 
       implicit none
 
       private
       public :: get_forcing_bgc, bgc_diags, write_restart_bgc, &
                 algal_dyn, read_restart_bgc, &
-                z_biogeochemistry, skl_biogeochemistry
+                skl_biogeochemistry
 
       real (kind=dbl_kind), parameter, private :: &
-         R_Si2N   = 1.5_dbl_kind,  & ! algal Si to N (mole/mole)
-         zphimin  = 0.01_dbl_kind    ! minimum porosity for bgc only
+         R_Si2N   = 1.5_dbl_kind ! algal Si to N (mole/mole)
 
 !=======================================================================
 
@@ -61,20 +49,20 @@
 
       use ice_calendar, only: dt, istep, mday, month, sec
       use ice_domain, only: nblocks
-      use ice_flux, only:  hmix, sss
-      use ice_forcing, only: trestore, trest, ocn_data_dir, &
+      use ice_flux, only: sss
+      use ice_forcing, only: trestore, trest, &
           read_clim_data, interpolate_data, interp_coeff_monthly
 
       integer (kind=int_kind) :: &
-          i, j, iblk  , & ! horizontal indices
-          ixm,ixp     , & ! record numbers for neighboring months
-          maxrec      , & ! maximum record number
-          recslot     , & ! spline slot for current record
-          midmonth        ! middle day of month
+         i, j, iblk  , & ! horizontal indices
+         ixm,ixp     , & ! record numbers for neighboring months
+         maxrec      , & ! maximum record number
+         recslot     , & ! spline slot for current record
+         midmonth        ! middle day of month
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
-          nitdat      , & ! data value toward which nitrate is restored
-          sildat          ! data value toward which silicate is restored
+         nitdat      , & ! data value toward which nitrate is restored
+         sildat          ! data value toward which silicate is restored
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks) :: &
          nit_data, & ! field values at 2 temporal data points
@@ -89,12 +77,12 @@
          sil_file = trim(bgc_data_dir)//'silicate_WOA2005_surface_monthly' ! gx1 only
 
          if (my_task == master_task .and. istep == 1) then
-         if (trim(sil_data_type)=='clim' .AND. (tr_bgc_Sil_sk .OR. tr_bgc_Sil)) then
+         if (trim(sil_data_type)=='clim' .AND. tr_bgc_Sil_sk) then
             write (nu_diag,*) ' '
             write (nu_diag,*) 'silicate data interpolated to timestep:'
             write (nu_diag,*) trim(sil_file)
          endif
-         if (trim(nit_data_type)=='clim' .AND. (tr_bgc_Nit_sk .OR. tr_bgc_NO)) then
+         if (trim(nit_data_type)=='clim' .AND. tr_bgc_Nit_sk) then
             write (nu_diag,*) ' '
             write (nu_diag,*) 'nitrate data interpolated to timestep:'
             write (nu_diag,*) trim(nit_file)
@@ -141,55 +129,62 @@
     ! Restore toward interpolated value.
     !-------------------------------------------------------------------
 
-      if (trim(sil_data_type)=='clim'  .AND. (tr_bgc_Sil_sk .OR. tr_bgc_Sil)) then
+      if (trim(sil_data_type)=='clim'  .AND. tr_bgc_Sil_sk) then
          call read_clim_data (readm, 0, ixm, month, ixp, &
                               sil_file, sil_data, &
                               field_loc_center, field_type_scalar)
          call interpolate_data (sil_data, sildat)
 
          if (restore_bgc) then
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j)
          do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
                sil(i,j,iblk) = sil(i,j,iblk)  &
-                         + (sildat(i,j,iblk)-sil(i,j,iblk))*dt/trest
+                             + (sildat(i,j,iblk)-sil(i,j,iblk))*dt/trest
             enddo
             enddo
          enddo
+         !$OMP END PARALLEL DO
          endif
 
       endif
+
     !-------------------------------------------------------------------
     ! Read two monthly nitrate values and interpolate.
     ! Restore toward interpolated value.
     !-------------------------------------------------------------------
 
-      if (trim(nit_data_type)=='clim' .AND. (tr_bgc_Nit_sk .OR. tr_bgc_NO)) then
+      if (trim(nit_data_type)=='clim' .AND. tr_bgc_Nit_sk) then
          call read_clim_data (readm, 0, ixm, month, ixp, &
                               nit_file, nit_data, &
                               field_loc_center, field_type_scalar)
          call interpolate_data (nit_data, nitdat)
 
          if (restore_bgc) then
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j)
          do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
                nit(i,j,iblk) = nit(i,j,iblk)  &
-                         + (nitdat(i,j,iblk)-nit(i,j,iblk))*dt/trest
+                             + (nitdat(i,j,iblk)-nit(i,j,iblk))*dt/trest
             enddo
             enddo
          enddo
+         !$OMP END PARALLEL DO
          endif
 
-      elseif (trim(nit_data_type) == 'sss'  .AND. (tr_bgc_NO .OR. tr_bgc_Nit_sk)) then
+      elseif (trim(nit_data_type) == 'sss' .AND. tr_bgc_Nit_sk) then
           
-            do iblk = 1, nblocks
-               do j = 1, ny_block
-               do i = 1, nx_block
-                  nit(i,j,iblk) =  sss(i,j,iblk)        
-               enddo
-               enddo
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j)
+         do iblk = 1, nblocks
+            do j = 1, ny_block
+            do i = 1, nx_block
+               nit(i,j,iblk) =  sss(i,j,iblk)        
             enddo
+            enddo
+         enddo
+         !$OMP END PARALLEL DO
                  
       endif
 
@@ -201,19 +196,17 @@
 ! biochemistry from the physics 
 ! 
       subroutine skl_biogeochemistry (nx_block, ny_block, &
-                                 icells,  n_cat, dt,             &
+                                 icells, dt,             &
                                  indxi,    indxj,         &
                                  flux_bio,   ocean_bio,   &
                                  hmix, aicen,         &
                                  meltb,    congel,        &
                                  fswthrul, first_ice, &
-                                 trcrn, Iavgn, &
-                                 grow_Cn, fN_partn)
+                                 trcrn,    grow_Cn)
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         icells, n_cat         ! number of cells with aicen > puny 
-                               !category
+         icells                ! number of cells with aicen > puny 
 
       integer (kind=int_kind), dimension(nx_block*ny_block), &
          intent(in) :: &
@@ -237,14 +230,12 @@
          intent(inout) :: &
          trcrn
    
-    !-------------------------
+    !-------------------------------------------------------------------
     ! history variables
-    !----------------------------   	
+    !-------------------------------------------------------------------
 
      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out) :: &
-         Iavgn,   & ! attenuated Fswthru  (W/m^2)
-         grow_Cn, & ! specific growth (1/s)  
-         fN_partn   ! particulate N flux  (mmol/m^2/s)
+         grow_Cn    ! specific growth (1/s)  
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), intent(inout) :: &
          flux_bio,& ! ocean tracer flux (mmol/m^2/s) positive into ocean
@@ -261,7 +252,6 @@
                         ! (used as initialization)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         growN      ,&  !  algal growth rate    (mmol/m^3/s)
          upNOn      ,&  !  algal NO uptake rate (mmol/m^3/s)
          upNHn          !  algal NH uptake rate (mmol/m^3/s)
 
@@ -436,8 +426,7 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             
-       call algal_dyn &
-                        (nx_block, ny_block,        &
+       call algal_dyn   (nx_block, ny_block,        &
                          icells,                    &
                          indxi,    indxj,           &
                          fswthrul, react,           & 
@@ -515,798 +504,6 @@
 
 !=======================================================================
 !
-! Solve the scalar vertical diffusion equation implicitly using 
-! tridiag_solver. Calculate the diffusivity from temperature and salinity.
-! 
-! NOTE: In this subroutine, trcrn(nt_fbri) is  the volume fraction of ice with 
-! dynamic salinity or the height ratio == hinS/vicen*aicen, where hinS is the 
-! height of the brine surface relative to the bottom of the ice.  This volume fraction
-! may be > 1 in which case there is brine above the ice surface (meltponds). 
-! 
-      subroutine z_biogeochemistry (nx_block, ny_block,      &
-                                  icells, n_cat, dt,         &
-                                  indxii,   indxjj,          &   
-                                  aicen,  vicen,             & 
-                                  hice_old,     nitn,        & 
-                                  flux_bio, flux_bio_g,      &
-                                  ammn, siln,  dmspn,  dmsn, & 
-                                  algalNn, zphin, iphin,     & 
-                                  trcrn,  iDin,   sss,       &
-                                  fswthrul,                  &
-                                  growN, upNOn, upNHn,       &
-                                  dh_top, dh_bot,            &
-                                  dh_top_chl, dh_bot_chl,    &
-                                  zfswin,                    &
-                                  first_ice,  TLAT, TLON,    &
-                                  hbri, hbri_old, darcy_V,   &
-                                  darcy_V_chl, bgrid, igrid, &
-                                  cgrid, flood_val,zphi_min)     
-
-      use ice_calendar,    only: istep1, time
-      use ice_therm_shared, only: ktherm
-      use ice_state, only: aice, nt_sice      
-
-      integer (kind=int_kind), intent(in) :: &
-         nx_block, ny_block, & ! block dimensions
-         icells, n_cat         ! number of true cells with aicen > 0
-                              
-      integer (kind=int_kind), dimension(nx_block*ny_block), &
-         intent(in) :: &
-         indxii, indxjj ! compressed indices for icells with aicen > puny
-
-      real (kind=dbl_kind), intent(in) :: &
-         dt             ! time step 
-
-      real (kind=dbl_kind), dimension (nblyr+2), intent(inout) :: &
-         bgrid          ! biology nondimensional vertical grid points
-
-      real (kind=dbl_kind), dimension (nblyr+1), intent(in) :: &
-         igrid          ! biology vertical interface points
- 
-      real (kind=dbl_kind), dimension (nilyr+1), intent(in) :: &
-         cgrid          ! CICE vertical coordinate   
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), &
-         intent(in) :: &
-         aicen       , & ! concentration of ice
-         vicen       , & ! volume per unit area of ice          (m)
-         sss         , & ! ocean salinity (ppt)
-         TLAT        , &
-         TLON        , &
-         hbri        , & ! brine height  (m)
-         hbri_old    , & ! brine height  (m)
-         hice_old    , & ! ice height (m)
-         darcy_V     , & ! darcy velocity
-         darcy_V_chl , & ! darcy velocity for algae
-         zphi_min    , & ! surface porosity
-         dh_top      , & ! change in brine top (m)
-         dh_bot      , & ! change in brine bottom (m)
-         dh_bot_chl  , & ! change in brine bottom (m) felt by algae
-         dh_top_chl      ! change in brine top (m) felt by algae
-
-      logical (kind=log_kind), dimension (nx_block,ny_block), &
-         intent(in) :: &
-         first_ice   , &  ! .true. for first ice
-         flood_val        ! .true. if ocean floods surface    
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1), &
-         intent(in) :: &
-         fswthrul         ! Short wave radiation at each ice layer (W/m^2)  
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr + 1), &
-         intent(out) :: &
-         zfswin           ! Short wave flux on bio grid (W/m^2)  1 is surface point 
-                          ! 2:nblyr+1 interior grid points
-       
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), intent(inout) :: &
-         flux_bio, &   ! total ocean tracer flux (mmol/m^2/s)
-         flux_bio_g    ! ocean tracer flux from gravity drainage &
-                       ! and molecular diffusion (mmol/m^2/s)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &   
-         !change to  inout when updating ocean fields
-         nitn        , & ! ocean nitrate (mmol/m^3) 
-         ammn        , & ! ocean ammonium (mmol/m^3) 
-         siln        , & ! ocean silicate (mmol/m^3) 
-         algalNn     , & ! ocean algal nitrogen (mmol/m^3)
-         dmspn       , & ! ocean DMSP (mmol/m^3)
-         dmsn            ! ocean DMS (mmol/m^3)  
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr), intent(inout) :: &
-         growN       , & ! algal growth rate          (mmol/m^3/s)
-         upNOn       , & ! algal nitrate uptake rate  (mmol/m^3/s)
-         upNHn           ! algal ammonium uptake rate (mmol/m^3/s)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist), intent(in) :: &
-         zphin            ! Porosity on the bgrid
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+1), intent(in) :: &
-         iphin       , &  ! Porosity on the igrid   
-         iDin             ! Diffusivity/h on the igrid (1/s)
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr), &
-         intent(inout) :: &
-         trcrn           ! tracers: for salinity (ppt * vicen) and NO (mmol/m^3 * vicen)    
-
-      ! local variables
-
-      integer (kind=int_kind) :: &
-         i, j        , & ! horizontal indices
-         ij          , & ! horizontal index, combines i and j loops
-         k, m, mm        ! vertical biology layer index 
-
-      real (kind=dbl_kind), dimension(icells) :: &
-         hin         , & ! ice thickness (m)        
-         hin_old     , & ! ice thickness before current melt/growth (m)
-         hinS        , & ! brine thickness (m)
-         hinS_old    , & ! brine thickness before current melt/growth (m)
-         surface_S       ! salinity of ice above hin > hinS
-   
-      real (kind=dbl_kind) :: &
-         dh_add      , & ! Ice algae added throughout ice during growth (m) 
-                         ! max(0,dh_bot-dh_bot_chl)
-         Dm_bot      , & ! Bottom diffusivity/h (1/s)
-         dh_bot_all      ! dh_bot or dh_bot_chl   
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2) :: &
-         zphin_N         ! porosity for tracer model has minimum 
-                         ! zphin_N >= zphimin
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+1) :: &
-         iDin_N      , & ! (1/s) diffusivity/h for algae (molecular only)
-         iphin_N         ! tracer porosity on the igrid
-
-      real (kind=dbl_kind), dimension(icells,nblyr_hist):: & 
-         NOin        , & ! Local layer nitrate values (mmol/m^3)
-         Nin         , & ! Local layer algal N values (mmol/m^3)
-         Silin       , & ! Local layer silicate values (mmol/m^3)
-         Cin         , & ! Local layer carbon values (mmol/m^3)
-         chlin       , & ! Local layer chlorophyll values (mg/m^3)
-         DMSPpin     , & ! Local layer DMSPp values (mmol/m^3)
-         DMSPdin     , & ! Local layer DMSPd values (mmol/m^3)
-         DMSin       , & ! Local layer DMS values (mmol/m^3)
-         NHin        , & ! Local layer ammonium values (mmol/m^3)
-         PONin           ! Local layer PON values (mmol/m^3)
-
-      real (kind=dbl_kind), dimension(icells,nblyr_hist):: &
-         sbdiag      , & ! sub-diagonal matrix elements
-         diag        , & ! diagonal matrix elements
-         spdiag      , & ! super-diagonal matrix elements
-         rhs             ! rhs of tri-diagonal matrix equation
-
-      real (kind=dbl_kind), dimension(icells,nblyr,nbltrcr):: &
-         react       , & ! biological sources and sinks for equation matrix
-         react_phi       ! react*zphin_N
- 
-      real (kind=dbl_kind), dimension(icells, nblyr_hist,nbltrcr):: &
-         in_init     , & ! Initial concentration from previous time-step
-         biomat          ! Matrix output    
-
-      real (kind=dbl_kind), dimension(icells, nblyr, nbltrcr):: &
-         bulk_biomat , & ! Final ice bulk concentration from previous time-step
-         bulk_biomat_o   ! initial ice bulk concentration
-
-      real (kind=dbl_kind):: &
-         bulk_top    , & ! top bulk concentration  
-         bulk_bot    , & ! bot bulk concentration
-         dC_dx_bot       ! bottom tracer gradient
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr+2) :: &
-         trtmp0      , & ! temporary, remapped tracers
-         trtmp           ! temporary, remapped tracers
-
-      real (kind=dbl_kind), dimension(icells):: &
-         thin_check      ! c0 if thin and c1 if not
-
-      logical (kind=log_kind), dimension(icells,nbltrcr) :: & 
-         good_bio_numerics ! .false. if tracer conservation fails     
-   
-      logical (kind=log_kind):: & 
-         check_conserve   ! .true. if check tracer conservation
-
-      ! local parameters
-         
-      integer, parameter :: &
-         nt_zfswin = 1    ! for interpolation of short wave to bgrid
- 
-  !------------------------------------------------------------------------ 
-  ! define gravity drainage diffusivity on bio grid 
-  ! if using tr_salinity. 
-  !----------------------------------------------------------------------
-  !-------------------------------------
-  ! Initialize 
-  !------------------------------------
-        thin_check(:) = c0
-        NOin(:,:) = c0
-        Nin(:,:) = c0
-        NHin(:,:) = c0
-        Silin(:,:) = c0
-        Cin(:,:) = c0
-        chlin(:,:) = c0
-        DMSPpin(:,:) = c0
-        DMSPdin(:,:) = c0
-        DMSin(:,:) = c0
-        PONin(:,:) = c0
-        iDin_N(:,:,:) = c0
-
-        do k = 1, nblyr
-        do ij = 1, icells   
-              i = indxii(ij)
-              j = indxjj(ij)  
-              zphin_N(i,j,k+2) = max(zphimin,zphin(i,j,k+2))
-              zphin_N(i,j,k+1) = max(zphimin,zphin(i,j,k+1))
-              zphin_N(i,j,k)   = max(zphimin,zphin(i,j,k))
-              iphin_N(i,j,k)   = max(zphimin,iphin(i,j,k))
-              iphin_N(i,j,k+1) = max(zphimin,iphin(i,j,k+1))
-              zphin_N(i,j,2) = zphi_min(i,j)
-              zphin_N(i,j,1) = zphi_min(i,j)
-              iphin_N(i,j,1) = zphi_min(i,j)
-
-              iDin_N(i,j,k+1) = iphin_N(i,j,k+1)*Dm/hbri(i,j)**2 
-   
-                if (first_ice(i,j)) then                             !initialize
-                       trcrn(i,j,nt_bgc_NO+k-1) = nitn(i,j)*initbio_frac  
-                       NOin(ij,k+1) = trcrn(i,j,nt_bgc_NO+k-1)/zphin_N(i,j,k+1) 
-
-                       if (trcrn(i,j,nt_bgc_NO+k-1) > 1000.0_dbl_kind) then
-                          write(nu_diag,*)'Bulk Nitrate solution error initially, first_ice(i,j):',first_ice(i,j)      
-                          write(nu_diag,*)'Category,i,j,ij,TLAT,TLON-- istep1,mm:'&
-                                         ,n_cat,i,j,ij,TLAT(i,j)*rad_to_deg,&
-                                         TLON(i,j)*rad_to_deg,istep1,mm
-                          write(nu_diag,*)'dh_bot_chl(i,j),dh_top(i,j)'&
-                                         ,dh_bot_chl(i,j),dh_top(i,j) 
-                          write(nu_diag,*)'ij,k,NOin(ij,k+1)'
-                          write(nu_diag,*)ij,k,NOin(ij,k+1)
-                          write(nu_diag,*)'k,trcrn(i,j,nt_bgc_NO+k-1),zphin_N(i,j,k+1)' 
-                          write(nu_diag,*)k,trcrn(i,j,nt_bgc_NO+k-1),zphin_N(i,j,k+1)
-                        if (ktherm == 1 ) then
-                          write(nu_diag,*)'trcrn(i,j,nt_bgc_S+nblyr-1),trcrn(i,j,nt_bgc_S+nblyr-2)'
-                          write(nu_diag,*)trcrn(i,j,nt_bgc_S+nblyr-1),trcrn(i,j,nt_bgc_S+nblyr-2)
-                        elseif (ktherm == 2) then
-                          write(nu_diag,*)'trcrn(i,j,nt_sice+nilyr-1),trcrn(i,j,nt_sice+nilyr-2)'
-                          write(nu_diag,*)trcrn(i,j,nt_sice+nilyr-1),trcrn(i,j,nt_sice+nilyr-2)
-                        endif
-
-                          write(nu_diag,*)'hinS(ij),hinS_old(ij)' 
-                          write(nu_diag,*)hinS(ij),hinS_old(ij)
-                          call abort_ice ('ice_bgc.F90: BGC error1')
-                       endif
-   
-                else
-                       NOin(ij,k+1) = trcrn(i,j,nt_bgc_NO+k-1)/zphin_N(i,j,k+1)
-
-                       if (trcrn(i,j,nt_bgc_NO+k-1) > 1000.0_dbl_kind .AND. tr_bgc_N) then
-                          write(nu_diag,*)'Bulk Nitrate solution error initially, first_ice(i,j):',first_ice(i,j)      
-                          write(nu_diag,*)'Category,i,j,ij,TLAT,TLON-- istep1,mm:'&
-                                           ,n_cat,i,j,ij,TLAT(i,j)*rad_to_deg,&
-                                            TLON(i,j)*rad_to_deg,istep1,mm
-                          write(nu_diag,*)'dh_bot_chl(i,j),dh_top(i,j)'&
-                                           ,dh_bot_chl(i,j),dh_top(i,j) 
-                          write(nu_diag,*)'ij,k,NOin(ij,k+1)'
-                          write(nu_diag,*)ij,k,NOin(ij,k+1)
-                          write(nu_diag,*)'k,trcrn(i,j,nt_bgc_NO+k-1),zphin_N(i,j,k+1)' 
-                          write(nu_diag,*)k,trcrn(i,j,nt_bgc_NO+k-1),zphin_N(i,j,k+1)
-                        if (ktherm == 1 ) then
-                          write(nu_diag,*)'trcrn(i,j,nt_bgc_S+nblyr-1),trcrn(i,j,nt_bgc_S+nblyr-2)'
-                          write(nu_diag,*)trcrn(i,j,nt_bgc_S+nblyr-1),trcrn(i,j,nt_bgc_S+nblyr-2)
-                        elseif (ktherm == 2) then
-                          write(nu_diag,*)'trcrn(i,j,nt_sice+nilyr-1),trcrn(i,j,nt_sice+nilyr-2)'
-                          write(nu_diag,*)trcrn(i,j,nt_sice+nilyr-1),trcrn(i,j,nt_sice+nilyr-2)
-                        endif
-                          write(nu_diag,*)'hinS(ij),hinS_old(ij)'
-                          write(nu_diag,*)hinS(ij),hinS_old(ij)
-                          call abort_ice ('ice_bgc.F90: BGC error1')
-                       endif
-                     
-                endif
-                if (tr_bgc_N) then
-                     if (first_ice(i,j)) then 
-                         trcrn(i,j,nt_bgc_N+k-1) = algalNn(i,j) 
-                         Nin(ij,k+1) = trcrn(i,j,nt_bgc_N+k-1)/zphin_N(i,j,k+1) 
-                     else 
-                          Nin(ij,k+1) = trcrn(i,j,nt_bgc_N+k-1)/zphin_N(i,j,k+1)
-                     endif      
-                endif
-                if (tr_bgc_NH) then
-                     if (first_ice(i,j)) then 
-                         trcrn(i,j,nt_bgc_NH+k-1) = ammn(i,j)*initbio_frac     
-                         NHin(ij,k+1) = trcrn(i,j,nt_bgc_NH+k-1)/zphin_N(i,j,k+1) 
-                     else
-                         NHin(ij,k+1) = trcrn(i,j,nt_bgc_NH+k-1)/zphin_N(i,j,k+1) 
-                     endif
-                endif
-                if (tr_bgc_Sil) then
-                     if (first_ice(i,j)) then 
-                         trcrn(i,j,nt_bgc_Sil+k-1) = siln(i,j)*initbio_frac    
-                         Silin(ij,k+1) = trcrn(i,j,nt_bgc_Sil+k-1)/zphin_N(i,j,k+1)
-                     else
-                         Silin(ij,k+1) = trcrn(i,j,nt_bgc_Sil+k-1)/zphin_N(i,j,k+1)   
-                     endif
-                endif
-                if (tr_bgc_C) then
-                     if (first_ice(i,j)) then 
-                         trcrn(i,j,nt_bgc_C+k-1) = R_C2N*algalNn(i,j)
-                         Cin(ij,k+1) = trcrn(i,j,nt_bgc_C+k-1)/zphin_N(i,j,k+1)  
-                     else
-                         Cin(ij,k+1) = trcrn(i,j,nt_bgc_C+k-1)/zphin_N(i,j,k+1)  
-                     endif
-                endif
-                if (tr_bgc_chl) then
-                     if (first_ice(i,j)) then 
-                         trcrn(i,j,nt_bgc_chl+k-1) = R_chl2N*algalNn(i,j) 
-                         chlin(ij,k+1) = trcrn(i,j,nt_bgc_chl+k-1)/zphin_N(i,j,k+1) 
-                     else 
-                         chlin(ij,k+1) = trcrn(i,j,nt_bgc_chl+k-1)/zphin_N(i,j,k+1) 
-                     endif 
-                endif
-                if (tr_bgc_DMSPp) then
-                     if (first_ice(i,j)) then
-                         trcrn(i,j,nt_bgc_DMSPp+k-1) = dmspn(i,j)
-                         DMSPpin(ij,k+1) = trcrn(i,j,nt_bgc_DMSPp+k-1)/zphin_N(i,j,k+1) 
-                     else
-                         DMSPpin(ij,k+1) = trcrn(i,j,nt_bgc_DMSPp+k-1)/zphin_N(i,j,k+1)    
-                     endif
-                endif
-                if (tr_bgc_DMSPd) then
-                     if (first_ice(i,j)) then
-                         trcrn(i,j,nt_bgc_DMSPd+k-1) = dmspn(i,j)*initbio_frac    
-                         DMSPdin(ij,k+1) = trcrn(i,j,nt_bgc_DMSPd+k-1)/zphin_N(i,j,k+1) 
-                     else
-                         DMSPdin(ij,k+1) = trcrn(i,j,nt_bgc_DMSPd+k-1)/zphin_N(i,j,k+1)   
-                     endif
-                endif
-                if (tr_bgc_DMS) then
-                     if (first_ice(i,j)) then
-                         trcrn(i,j,nt_bgc_DMS+k-1) = dmsn(i,j)*initbio_frac    
-                         DMSin(ij,k+1) = trcrn(i,j,nt_bgc_DMS+k-1)/zphin_N(i,j,k+1)  
-                     else
-                         DMSin(ij,k+1) = trcrn(i,j,nt_bgc_DMS+k-1)/zphin_N(i,j,k+1)    
-                     endif   
-                endif
-                if (tr_bgc_PON) then
-                     if (first_ice(i,j)) then
-                         trcrn(i,j,nt_bgc_PON+k-1) =  nitn(i,j)*initbio_frac      
-                         PONin(ij,k+1) = trcrn(i,j,nt_bgc_PON+k-1)/zphin_N(i,j,k+1)  
-                     else
-                         PONin(ij,k+1) = trcrn(i,j,nt_bgc_PON+k-1)/zphin_N(i,j,k+1)   
-                     endif   
-                endif
-       enddo             !ij
-       enddo          !k
-  
-      !-----------------------------------------------------------------
-      !     boundary conditions
-      !-----------------------------------------------------------------
-       do ij = 1, icells
-          
-          i = indxii(ij)
-          j = indxjj(ij)  
-           surface_S(ij) = min_salin
-           hinS(ij) = hbri(i,j)
-           hin(ij) = vicen(i,j)/aicen(i,j)
-           hin_old(ij) = hice_old(i,j)
-           hinS_old(ij) = hbri_old(i,j)
-           !---------------------------------
-           ! diagnostic variable
-           !---------------------------------
-           NOin(ij,1)   = NOin(ij,2)
-           Nin(ij,1)    = Nin(ij,2) 
-           NHin(ij,1)   = NHin(ij,2)
-           Silin(ij,1)  = Silin(ij,2)
-           Cin(ij,1)    = Cin(ij,2)
-           chlin(ij,1)  = chlin(ij,2) 
-           DMSPpin(ij,1)= DMSPpin(ij,2)
-           DMSPdin(ij,1)= DMSPdin(ij,2)
-           DMSin(ij,1)  = DMSin(ij,2) 
-           PONin(ij,1)  = PONin(ij,2)
-
-           if (dh_top(i,j) +darcy_V(i,j)/zphi_min(i,j)*dt < c0 .AND. .NOT. flood_val(i,j)) then 
-                NOin(ij,1)   = min_bgc*nitn(i,j)/zphi_min(i,j) 
-                NHin(ij,1)   = min_bgc*ammn(i,j)/zphi_min(i,j)
-                Silin(ij,1)  = min_bgc*siln(i,j)/zphi_min(i,j)
-                DMSPdin(ij,1)= min_bgc*dmspn(i,j)/zphi_min(i,j)
-                DMSin(ij,1)  = min_bgc*dmsn(i,j)/zphi_min(i,j)
-                PONin(ij,1) =  NOin(ij,1) 
-           elseif (dh_top(i,j) + darcy_V(i,j)/zphi_min(i,j)*dt < c0 .AND. flood_val(i,j)) then              
-                NOin(ij,1)   = nitn(i,j)/zphi_min(i,j)
-                NHin(ij,1)   = ammn(i,j)/zphi_min(i,j)
-                Silin(ij,1)  = siln(i,j)/zphi_min(i,j)
-                DMSPdin(ij,1)= dmspn(i,j)/zphi_min(i,j)
-                DMSin(ij,1)  = dmsn(i,j)/zphi_min(i,j)
-                PONin(ij,1) =  NOin(ij,1) 
-           endif
-           if (dh_top_chl(i,j) +darcy_V_chl(i,j)/zphi_min(i,j)*dt < c0 .AND. .NOT. flood_val(i,j)) then
-                Nin(ij,1)    = min_bgc*algalNn(i,j)/zphi_min(i,j)
-                Cin(ij,1)    = R_C2N* Nin(ij,1) 
-                chlin(ij,1)  = R_chl2N * Nin(ij,1)
-                DMSPpin(ij,1)= min_bgc*dmspn(i,j)/zphi_min(i,j)
-           elseif (dh_top_chl(i,j) + darcy_V_chl(i,j)/zphi_min(i,j)*dt < c0 .AND. flood_val(i,j)) then  
-                Nin(ij,1)    = algalNn(i,j)/zphi_min(i,j)
-                Cin(ij,1)    = R_C2N* Nin(ij,1) 
-                chlin(ij,1)  = R_chl2N * Nin(ij,1)
-                DMSPpin(ij,1)= dmspn(i,j)/zphi_min(i,j)
-           endif
-
-           if ((dh_bot(i,j) + darcy_V(i,j)*dt > c0)) then 
-               NOin(ij,nblyr_hist)   = nitn(i,j) 
-               NHin(ij,nblyr_hist)   = ammn(i,j) 
-               Silin(ij,nblyr_hist)  = siln(i,j) 
-               DMSPdin(ij,nblyr_hist)= dmspn(i,j)
-               DMSin(ij,nblyr_hist)  = dmsn(i,j)
-               PONin(ij,nblyr_hist)  = nitn(i,j)  
-            else  
-               NOin(ij,nblyr_hist)   = NOin(ij,nblyr+1)
-               NHin(ij,nblyr_hist)   = NHin(ij,nblyr+1)
-               Silin(ij,nblyr_hist)  = Silin(ij,nblyr+1)
-               DMSPdin(ij,nblyr_hist)= DMSPdin(ij,nblyr+1)
-               DMSin(ij,nblyr_hist)  =  DMSin(ij,nblyr+1)
-               PONin(ij,nblyr_hist)  = PONin(ij,nblyr+1) 
-            endif
-           if ((dh_bot_chl(i,j) + darcy_V_chl(i,j)*dt > c0)) then  
-               Nin(ij,nblyr_hist)    = algalNn(i,j)  
-               Cin(ij,nblyr_hist)    = R_C2N * Nin(ij,nblyr_hist)
-               chlin(ij,nblyr_hist)  = R_chl2N * Nin(ij,nblyr_hist)
-               DMSPpin(ij,nblyr_hist)= dmspn(i,j)
-            else  
-               Nin(ij,nblyr_hist)    = Nin(ij,nblyr+1)
-               Cin(ij,nblyr_hist)    = R_C2N * Nin(ij,nblyr_hist)
-               chlin(ij,nblyr_hist)  = R_chl2N * Nin(ij,nblyr_hist)
-               DMSPpin(ij,nblyr_hist)= DMSPpin(ij,nblyr+1)
-            endif
-       enddo             !ij
-   
-      !-----------------------------------------------------------------
-      ! Interpolate shortwave flux, fswthrul (defined at top to bottom with nilyr+1 
-      !  evenly spaced  with spacing = (1/nilyr) to grid variable zfswin:
-      !-----------------------------------------------------------------
-      
-       trtmp(:,:,:) = c0     
-       do k = 1, nilyr
-       do ij = 1, icells    
-           i = indxii(ij)
-           j = indxjj(ij)               
-           ! contains cice values (fswthrul(i,j,1) is surface value)
-           trtmp0(i,j,nt_zfswin+k-1) = fswthrul(i,j,k+1) 
-        enddo
-        enddo
-        
-        call remap_layers_bgc_plus (nx_block,ny_block, &
-                             indxii,   indxjj,         &
-                             icells,                   &
-                             ntrcr,                    &
-                             nilyr,                    &
-                             nt_zfswin,                &
-                             trtmp0,    trtmp,         &
-                             0,        nblyr,          &
-                             hin, hinS,                &
-                             cgrid(2:nilyr+1),         &
-                             bgrid(2:nblyr+1), surface_S)
-
-       do k = 1,nblyr
-       do ij = 1, icells  
-           i = indxii(ij)
-           j = indxjj(ij) 
-           zfswin(i,j,k+1) = trtmp(i,j,nt_zfswin+k-1)
-           zfswin(i,j,1) = fswthrul(i,j,1)
-       enddo                    !ij
-       enddo
-  
-      !-----------------------------------------------------------------
-      ! Initialize Biology  or better, combine this with above
-      !-----------------------------------------------------------------
- 
-      do k = 1, nblyr_hist
-         do ij = 1, icells    
-            i = indxii(ij)
-            j = indxjj(ij)!!
-                           ! save initial values
-            in_init(ij,k,nlt_bgc_NO) = NOin(ij,k)        
-            biomat(ij,k,nlt_bgc_NO)  = NOin(ij,k)
-
-            if (tr_bgc_NH) then
-               in_init(ij,k,nlt_bgc_NH) = NHin(ij,k)      
-               biomat(ij,k,nlt_bgc_NH)  = NHin(ij,k)      
-            endif
-            if (tr_bgc_N) then
-               in_init(ij,k,nlt_bgc_N)  = Nin(ij,k)      
-               biomat(ij,k,nlt_bgc_N)   = Nin(ij,k)      
-            endif
-            if (tr_bgc_Sil) then
-               in_init(ij,k,nlt_bgc_Sil)= Silin(ij,k)  
-               biomat(ij,k,nlt_bgc_Sil) = Silin(ij,k)      
-            endif
-            if (tr_bgc_C) then
-               in_init(ij,k,nlt_bgc_C)  = Cin(ij,k)  
-               biomat(ij,k,nlt_bgc_C)   = Cin(ij,k)      
-             endif
-            if (tr_bgc_chl) then
-               in_init(ij,k,nlt_bgc_chl)= chlin(ij,k)      
-               biomat(ij,k,nlt_bgc_chl) = chlin(ij,k)      
-            endif
-            if (tr_bgc_DMSPp) then
-                in_init(ij,k,nlt_bgc_DMSPp)= DMSPpin(ij,k)   
-                biomat(ij,k,nlt_bgc_DMSPp) = DMSPpin(ij,k)      
-            endif
-            if (tr_bgc_DMSPd) then
-                in_init(ij,k,nlt_bgc_DMSPd)= DMSPdin(ij,k) 
-                biomat(ij,k,nlt_bgc_DMSPd) = DMSPdin(ij,k)      
-            endif
-            if (tr_bgc_DMS) then
-               in_init(ij,k,nlt_bgc_DMS) = DMSin(ij,k)  
-               biomat(ij,k,nlt_bgc_DMS)  = DMSin(ij,k)           
-            endif
-            if (tr_bgc_PON) then
-              in_init(ij,k,nlt_bgc_PON) = PONin(ij,k) 
-              biomat(ij,k,nlt_bgc_PON)  = PONin(ij,k) 
-            endif
-
-         enddo             !ij 
-
-        
-      enddo                !k
-  
-      !-----------------------------------------------------------------
-      ! Compute biological reaction terms: react(1:nblyr,mm) 
-      !        and algal growth rates: growN(i,j,1:nblyr)
-      !        in_init(2:nblyr+1),     zfswin (2:nblyr+1), upNOn(1:nblyr)
-      !----------------------------------------------------------------- 
-         react(:,:,:) = c0   !reaction terms
-         react_phi(:,:,:) = c0   !reaction terms
-         growN(:,:,:) = c0   !algal growth rate
-         upNOn (:,:,:) = c0   !algal NO uptake rate
-         upNHn (:,:,:) = c0   !algal NH uptake rate
-
-     if (solve_zbgc) then
-
-       do k = 2, nblyr+1   
-       
-         call algal_dyn &
-                        (nx_block, ny_block,           &
-                         icells,                       &
-                         indxii,    indxjj,            &
-                         zfswin(:,:,k), react(:,k-1,:),& 
-                         in_init(:,k,:),ntraceb,       &
-                         growN(:,:,k-1),               &
-                         upNOn(:,:,k-1),               &
-                         upNHn(:,:,k-1),               &
-                         tr_bgc_N,tr_bgc_NO,           &
-                         tr_bgc_NH,tr_bgc_Sil,         &
-                         tr_bgc_C,tr_bgc_chl,          &
-                         tr_bgc_DMSPp, tr_bgc_DMSPd,   & 
-                         tr_bgc_DMS, tr_bgc_PON)
-          
-          
-         do ij = 1, icells    
-            i = indxii(ij)
-            j = indxjj(ij)
-            dh_add = max(c0,dh_bot(i,j)-dh_bot_chl(i,j))
-            react(ij,k-1, nlt_bgc_N) = react(ij,k-1,nlt_bgc_N) + &
-                       dh_add*algalNn(i,j)/zphin_N(i,j,k)/ &
-                       hinS(ij)*(igrid(k)-igrid(k-1))      
-         enddo     !ij
-       enddo       !k
-
-      endif        !solve_zbgc
-
-      !-----------------------------------------------------------------
-      ! Compute elements of tridiagonal matrix for each tracer
-      !-----------------------------------------------------------------
-      do mm = 1, nbltrcr
-
-       if (bgc_tracer_type(mm) > p5) then  !c1
-          
-            call get_matrix_elements_calc_bgc &
-                                     (nx_block, ny_block,        &
-                                      icells,                    &
-                                      indxii,    indxjj,         &
-                                      igrid, bgrid,              &
-                                      dt,     zphin_N,           &
-                                      iDin,   iphin_N,           &
-                                      in_init(:,:,mm), hinS_old, &
-                                      hinS,                      &
-                                      sbdiag,   diag,            &
-                                      spdiag,   rhs, darcy_V,    &
-                                      react(:,:,mm),             &
-                                      dh_top,dh_bot,             &
-                                      thin_check,mm)
-      
-         !------------------------------------------------------------------------
-         !
-         !  Use molecular diffusion only for DMSPp and N
-         !------------------------------------------------------------------------
-
-        elseif (bgc_tracer_type(mm) < p5) then  !c0
-
-            call get_matrix_elements_calc_bgc &
-                                     (nx_block, ny_block,         &
-                                      icells,                     &
-                                      indxii,    indxjj,          &
-                                      igrid, bgrid,               &
-                                      dt,     zphin_N,            &
-                                      iDin_N,   iphin_N,          &
-                                      in_init(:,:,mm), hinS_old,  &
-                                      hinS,                       &
-                                      sbdiag,   diag,             &
-                                      spdiag,   rhs,  darcy_V_chl,&
-                                      react(:,:,mm)            ,  &
-                                      dh_top_chl,dh_bot_chl,      &
-                                      thin_check,mm)
-
-        endif
-        
-      !-----------------------------------------------------------------
-      ! Solve tridiagonal matrix to obtain the new tracers
-      !-----------------------------------------------------------------
-         call tridiag_solver (icells,                  &
-                              nblyr_hist, sbdiag,      &
-                              diag,     spdiag,        &
-                              rhs,      biomat(:,:,mm))
-
-        do ij = 1, icells  
-          i = indxii(ij)
-          j = indxjj(ij) 
-         
-          bulk_top = biomat(ij,1,mm)*zphin_N(i,j,1)
-          bulk_bot = biomat(ij,nblyr_hist,mm)*zphin_N(i,j,nblyr+1)
-          if (dh_bot(i,j) < c0) then
-            bulk_bot = biomat(ij,nblyr+1,mm)*zphin_N(i,j,nblyr+1)
-          endif
-          dC_dx_bot = (biomat(ij,nblyr_hist,mm) - biomat(ij,nblyr+1,mm)) &
-                           /(bgrid(nblyr_hist)-bgrid(nblyr+1))
-          Dm_bot = bgc_tracer_type(mm)*iDin(i,j,nblyr+1) + &
-                   (c1-bgc_tracer_type(mm))*iDin_N(i,j,nblyr+1)
-          dh_bot_all = bgc_tracer_type(mm)*dh_bot(i,j) + &
-                (c1-bgc_tracer_type(mm))*dh_bot_chl(i,j)
-          flux_bio_g(i,j,mm) = flux_bio_g(i,j,mm) -thin_check(ij)*Dm_bot*hinS_old(ij)*dC_dx_bot
-          flux_bio(i,j,mm) = flux_bio(i,j,mm) + thin_check(ij)*(flux_bio_g(i,j,mm)+&
-                    (dh_bot_all*bulk_bot-dh_top(i,j)*bulk_top)/dt)   
-          if (hinS_old(ij) < thin)&
-                Call thin_ice_flux(hinS(ij),hinS_old(ij),zphin_N(i,j,:),in_init(ij,:,mm), &
-                            flux_bio(i,j,mm), igrid, dt)
-          !-------------------------------
-          ! update ocean concentration
-          ! Not coupled to ocean biogeochemistry
-          !-------------------------------------
-          !ocean_bio(i,j,mm) = ocean_bio(i,j,mm) + flux_bio(i,j,mm)/hmix(i,j)*aicen(i,j)   
-        enddo  !ij
-      enddo                !mm
-
-      !-----------------------------------------------------------------
-      ! Reload NOin from the matrix solution
-      !-----------------------------------------------------------------
-     
-      do k = 2,nblyr+1
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-         do ij = 1, icells  
-              i = indxii(ij)
-              j = indxjj(ij) 
-              do mm = 1, nbltrcr
-                 bulk_biomat(ij,k-1,mm)  = biomat(ij,k,mm)*zphin_N(i,j,k)
-                 bulk_biomat_o(ij,k-1,mm)= in_init(ij,k,mm)*zphin_N(i,j,k)
-                 react_phi(ij,k-1,mm)    = react(ij,k-1,mm)*zphin_N(i,j,k)
-              enddo
-              if ( bulk_biomat(ij,k-1,nlt_bgc_NO) > 1000.0_dbl_kind) then              
-                   write(nu_diag,*)'Bulk Nitrate solution error'      
-                   write(nu_diag,*)'Category,i,j,ij,TLAT,TLON-- istep1,mm:'&
-                                   ,n_cat,i,j,ij,TLAT(i,j)*rad_to_deg,&
-                                    TLON(i,j)*rad_to_deg,istep1,mm
-                   write(nu_diag,*)'dh_bot_chl(i,j),dh_top(i,j)'&
-                                   ,dh_bot_chl(i,j),dh_top(i,j) 
-                   write(nu_diag,*)'ij,k,nlt_bgc_NO'
-                   write(nu_diag,*) ij,k,nlt_bgc_NO
-                   write(nu_diag,*)'biomat(ij,mm,nlt_bgc_NO),mm = 1,nblyr+2'
-                   write(nu_diag,*)(biomat(ij,mm,nlt_bgc_NO),mm = 1,nblyr+2)
-                   write(nu_diag,*)'in_init(ij,k,nlt_bgc_NO),zphin_N(i,j,k),nbltrcr,nbltrcr'
-                   write(nu_diag,*) in_init(ij,k,nlt_bgc_NO),zphin_N(i,j,k),nbltrcr,nbltrcr 
-                   write(nu_diag,*)'iphin_N(i,j,mm),mm =1,nblyr+1' 
-                   write(nu_diag,*)(iphin_N(i,j,mm),mm =1,nblyr+1)
-                   write(nu_diag,*) 'zphin_N(i,j,mm),mm=1,nblyr+2'
-                   write(nu_diag,*) (zphin_N(i,j,mm),mm=1,nblyr+2)
-                        if (ktherm == 1 ) then
-                          write(nu_diag,*)'trcrn(i,j,nt_bgc_S-1+mm),mm=1,nblyr+2'
-                          write(nu_diag,*) ( trcrn(i,j,nt_bgc_S-1+mm),mm=1,nblyr+2)
-                        elseif (ktherm == 2) then
-                          write(nu_diag,*)'trcrn(i,j,nt_sice-1+mm),mm=1,nilyr+2'
-                          write(nu_diag,*) ( trcrn(i,j,nt_sice-1+mm),mm=1,nilyr+2)
-                        endif
-                   write(nu_diag,*) 'Sin: trcrn(i,j,nt_bgc_S-1+mm),mm=1,nblyr+2'
-                   write(nu_diag,*) ( trcrn(i,j,nt_bgc_S-1+mm),mm=1,nblyr+2)
-                   write(nu_diag,*)'hinS(ij),hinS_old(ij),hin_old(ij),hin(ij)' 
-                   write(nu_diag,*)hinS(ij),hinS_old(ij),hin_old(ij),hin(ij)
-                   call abort_ice ('ice_bgc.F90: BGC error')
-              endif   
-              NOin(ij,k) = max(biomat(ij,k,nlt_bgc_NO),c0)
-              if (tr_bgc_N)    Nin(ij,k)     = max(biomat(ij,k,nlt_bgc_N),c0) 
-              if (tr_bgc_NH)   NHin(ij,k)    = max(biomat(ij,k,nlt_bgc_NH),c0)
-              if (tr_bgc_Sil)  Silin(ij,k)   = max(biomat(ij,k,nlt_bgc_Sil),c0)
-              if (tr_bgc_DMSPp)DMSPpin(ij,k) = max(biomat(ij,k,nlt_bgc_DMSPp),c0)
-              if (tr_bgc_DMSPd)DMSPdin(ij,k) = max(biomat(ij,k,nlt_bgc_DMSPd),c0) 
-              if (tr_bgc_DMS)  DMSin(ij,k)   = max(biomat(ij,k,nlt_bgc_DMS),c0)
-              if (tr_bgc_PON)  PONin(ij,k)   = max(biomat(ij,k,nlt_bgc_PON),c0)   
-         enddo       ! ij
-      enddo          ! k
-
-      !-----------------------------------------------------------------
-      ! Check flux conservation of tracers
-      !-----------------------------------------------------------------
-      check_conserve = .false.
-      good_bio_numerics(:,:) = .true.
-      if (check_conserve) then        
-        do  mm = 1, nbltrcr
-           do ij = 1, icells 
-              i = indxii(ij)
-              j = indxjj(ij)
-
-              if (thin_check(ij) > c0) call check_conserve_bgc &
-                                     (hinS(ij), hinS_old(ij), bulk_biomat(ij,1:nblyr,mm), &
-                                      bulk_biomat_o(ij,1:nblyr,mm), dt, &
-                                      igrid,good_bio_numerics(ij,mm),flux_bio(i,j,mm),&
-                                      react_phi(ij,:,mm),aicen(i,j)) 
-     
-              if (.NOT. good_bio_numerics(ij,mm)) then
-                write(nu_diag,*)'1st Calc_bgc_fluxes: Category,i,j,ij,TLAT,TLON,'
-                write(nu_diag,*)'istep1,mm, nlt_bgc_NO:'&
-                 ,n_cat,i,j,ij,TLAT(i,j)*rad_to_deg,&
-                TLON(i,j)*rad_to_deg,istep1,mm, nlt_bgc_NO
-                write(nu_diag,*)'hinS(ij),hinS_old(ij),aicen(i,j)'
-                write(nu_diag,*) hinS(ij),hinS_old(ij),aicen(i,j)
-                write(nu_diag,*)'dh_bot_chl(i,j),dh_top(i,j)'&
-                ,dh_bot_chl(i,j),dh_top(i,j)
-                write(nu_diag,*)'iDin_N(i,j,nblyr+1)'
-                write(nu_diag,*)iDin_N(i,j,nblyr+1)
-                write(nu_diag,*)'flux_bio(i,j,mm)'
-                write(nu_diag,*) flux_bio(i,j,mm)
-                write(nu_diag,*)'react_phi(ij,m,mm),m = 1,nblyr'
-                write(nu_diag,*)(react_phi(ij,m,mm),m = 1,nblyr)
-                write(nu_diag,*)'bulk_biomat(ij,m,mm),m = 1,nblyr'
-                write(nu_diag,*)(bulk_biomat(ij,m,mm),m = 1,nblyr)
-                write(nu_diag,*)'bulk_biomat_o(ij,m,mm),m = 1,nblyr'
-                write(nu_diag,*)(bulk_biomat_o(ij,m,mm),m = 1,nblyr)
-                call abort_ice ('ice: calc_bgc_fluxes ')
-              endif
-                         
-           enddo  !ij
-        enddo   !mm
-      endif     !check_conserve
-      
-      !-----------------------------------------------------------------
-      ! Update the tracer variable
-      !-----------------------------------------------------------------
-    
-       do k = 1,nblyr                  !back to bulk quantity
-         do ij = 1, icells 
-            i = indxii(ij)
-            j = indxjj(ij)
-            if (hinS_old(ij) > thin) then
-              trcrn(i,j,nt_bgc_NO+k-1)                     =  NOin(ij,k+1)*zphin_N(i,j,k+1)
-              if (tr_bgc_N)    trcrn(i,j,nt_bgc_N+k-1)     =  Nin(ij,k+1)*zphin_N(i,j,k+1)
-              if (tr_bgc_NH)   trcrn(i,j,nt_bgc_NH+k-1)    =  NHin(ij,k+1)*zphin_N(i,j,k+1)
-              if (tr_bgc_C)    trcrn(i,j,nt_bgc_C+k-1)     =  R_C2N * Nin(ij,k+1)*zphin_N(i,j,k+1)
-              if (tr_bgc_chl)  trcrn(i,j,nt_bgc_chl+k-1)   =  R_chl2N * Nin(ij,k+1)*zphin_N(i,j,k+1)
-              if (tr_bgc_sil)  trcrn(i,j,nt_bgc_Sil+k-1)   =  Silin(ij,k+1)*zphin_N(i,j,k+1)
-              if (tr_bgc_DMSPp)trcrn(i,j,nt_bgc_DMSPp+k-1) =  DMSPpin(ij,k+1)*zphin_N(i,j,k+1)
-              if (tr_bgc_DMSPd)trcrn(i,j,nt_bgc_DMSPd+k-1) =  DMSPdin(ij,k+1)*zphin_N(i,j,k+1)
-              if (tr_bgc_DMS)  trcrn(i,j,nt_bgc_DMS+k-1)   =  DMSin(ij,k+1)*zphin_N(i,j,k+1)
-              if (tr_bgc_PON)  trcrn(i,j,nt_bgc_PON+k-1)   =  PONin(ij,k+1)*zphin_N(i,j,k+1)
-            endif
-         enddo           !ij
-      enddo        !k   
-   
-770 format (I6,D16.6)        
-781 format (I6,I6,I6)
-790 format (I6,I6)
-791 format (f24.17)
-792 format (2D16.6)
-793 format (3D16.6)
-794 format (4D15.5)
-800 format (F10.4)
-
-      end subroutine z_biogeochemistry
-
-!=======================================================================
-!
 ! Do biogeochemistry from subroutine algal_dynamics
 ! by Scott Elliott: updated to 175
 ! 
@@ -1321,7 +518,7 @@
                                  tr_bio_C,tr_bio_chl, &
                                  tr_bio_DMSPp,        &
                                  tr_bio_DMSPd,        &
-                                 tr_bio_DMS, PON_flag)
+                                 tr_bio_DMS)
 
       use ice_calendar, only: dt
 
@@ -1357,14 +554,7 @@
          tr_bio_DMSPp, tr_bio_DMSPd, & !DMSP dissolved, DMS
          tr_bio_DMS
 
-      logical (kind=log_kind), intent(in), optional:: &
-         PON_flag ! if true, add an extra tracer
-                  ! currently for z_bgc only.
-
       !  local variables
-
-      logical (kind=log_kind):: &
-         tr_bio_PON ! carries a non-reactive nitrate tracer for testing physics parametrizations 
 
       real (kind=dbl_kind), parameter :: & 
          T_bot      = -1.8_dbl_kind , & ! interface close to freezing (C)
@@ -1420,8 +610,7 @@
          Silin      , &     ! silicon concentration on volume (mmol/m^3) 
          DMSPpin    , &     ! DMSPp concentration on volume (mmol/m^3)
          DMSPdin    , &     ! DMSPd concentration on volume (mmol/m^3)
-         DMSin      , &     ! DMS concentration on volume (mmol/m^3)
-         PONin              ! PON concentration on volume (mmol/m^3)
+         DMSin              ! DMS concentration on volume (mmol/m^3)
 
       real (kind=dbl_kind) :: &
          op_dep     , &  ! bottom layer attenuation exponent (optical depth)
@@ -1487,11 +676,7 @@
          DMS_s_c   , &  ! skl DMS source via conversion (mmol/m^3)
          DMS_r_o   , &  ! skl DMS losses due to oxidation (mmol/m^3)
          DMS_s     , &  ! net skl DMS sources (mmol/m^3)
-         DMS_r     , &  ! net skl DMS removal (mmol/m^3)
-         PON_s_z   , &  ! PON source as zooplankton (mmol/m^3)
-         PON_s_d   , &  ! PON source as detritus (mmol/m^3)
-         PON_s     , &  ! net  PON sources (mmol/m^3)
-         PON_r          ! net  PON removal (mmol/m^3)
+         DMS_r          ! net skl DMS removal (mmol/m^3)
 
      ! real (kind=dbl_kind) :: &
      !    DMSP_pr_s_nd , &  ! product layer dissolved DMSP from local bio (mmol/m^3)
@@ -1515,12 +700,6 @@
 
       write_flag = .true.
       
-      if (present(PON_flag)) then
-         tr_bio_PON = PON_flag
-      else
-         tr_bio_PON = .false.
-      endif
-
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
@@ -1536,7 +715,6 @@
          DMSPpin = c0
          DMSPdin = c0
          DMSin = c0
-         PONin = c0
 
          NOin     = ltrcrn(ij,nlt_bgc_NO)
          if (tr_bio_N)         Nin      = ltrcrn(ij,nlt_bgc_N)
@@ -1546,7 +724,6 @@
          if (tr_bio_DMSPp)     DMSPpin  = ltrcrn(ij,nlt_bgc_DMSPp)
          if (tr_bio_DMSPd)     DMSPdin  = ltrcrn(ij,nlt_bgc_DMSPd)
          if (tr_bio_DMS)       DMSin    = ltrcrn(ij,nlt_bgc_DMS)
-         if (tr_bio_PON)       PONin    = ltrcrn(ij,nlt_bgc_PON)
          chlin = R_chl2N * Nin  
 
 !----------------------
@@ -1726,17 +903,6 @@
        !  DMS_pr_s = DMS_pr_s_c                   ! + DMS_pr_f
        !  DMS_pr_r = DMS_pr_r_o
 
-
-
-! Add PON 
-!        currently using PON to shadow nitrate without reactions
-!        PON_react = N_r_g *( c1- fr_graze_e*fr_graze_a)
-
-         PON_s_z = N_r_g * fr_graze_a 
-         PON_s_d = N_r_g * (c1 - fr_graze_a)
-         PON_s   = PON_s_z + PON_s_d
-         PON_r   = N_r_g * fr_graze_a* fr_graze_e
-                 
 ! Define reaction terms
 
          reactb(ij,nlt_bgc_NO)                    = NO_s  - NO_r
@@ -1746,7 +912,6 @@
          if (tr_bio_Sil)reactb(ij,nlt_bgc_Sil)    = Sil_s  - Sil_r
          if (tr_bio_DMSPd)reactb(ij,nlt_bgc_DMSPd)= DMSPd_s- DMSPd_r
          if (tr_bio_DMS)reactb(ij,nlt_bgc_DMS)    = DMS_s  - DMS_r
-         if (tr_bio_PON)reactb(ij,nlt_bgc_PON)    =  c0 !PON_s - PON_r
 
          !if (growN(i,j) > c0 .AND. write_flag) then
          !       write(nu_diag, *) 'reactb(ij,nlt_bgc_N), ij:',reactb(ij,nlt_bgc_N),ij
@@ -1758,324 +923,19 @@
 
       enddo
 
-
       end subroutine algal_dyn
-!
-!=======================================================================
-!
-! Compute terms in tridiagonal matrix that will be solved to find
-!  the bgc vertical profile
-!
-! November 2008 by N. Jeffery, modified for bgc layer model
-!
-      subroutine get_matrix_elements_calc_bgc &
-                                     (nx_block, ny_block,         &
-                                      icells,                     &
-                                      indxi,   indxj,             &
-                                      igrid, bgrid,               &
-                                      dt,     zphin_N,            &
-                                      iDin,    iphin_N,           &
-                                      NOin_init, hin_old,         &
-                                      hin,                        &
-                                      sbdiag,   diag,             &
-                                      spdiag,   rhs,  darcy_V,    &
-                                      reactb,  dht,dhb,           &
-                                      thin_check,mm)
-
-      integer (kind=int_kind), intent(in) :: &
-         nx_block, ny_block, & ! block dimensions
-         icells ,mm            ! number of cells with aicen > puny
-
-      integer (kind=int_kind), dimension(nx_block*ny_block), &
-         intent(in) :: &
-         indxi, indxj  ! compressed indices 
-
-      real (kind=dbl_kind), intent(in) :: &
-         dt              ! time step
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist), intent(in) :: &
-         zphin_N         ! Porosity of layers where zphin >= zphimin
-
-      real (kind=dbl_kind), dimension (icells), intent(in) :: &
-         hin         , & ! brine thickness (m)                  (m)
-         hin_old         ! brine thickness before growth/melt (m)
-
-      real (kind=dbl_kind), dimension (icells), intent(inout) :: &
-         thin_check      ! c0 if thin and c1 if > thin       
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+1), intent(in) :: &
-         iphin_N     , & ! Porosity with min condition on igrid
-         iDin            ! Diffusivity on the igrid (m^2/s)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         dht         , & ! Change in brine top (m)
-         dhb         , & ! Change in brine bottom (m)
-         darcy_V         ! Darcy velocity (m/s)
-
-      real (kind=dbl_kind), dimension (nblyr_hist), intent(in) :: &
-         bgrid           ! biology nondimensional grid layer points 
-
-      real (kind=dbl_kind), dimension (nblyr+1), intent(in) :: &
-         igrid           ! biology interface grid points 
-
-      real (kind=dbl_kind), dimension (icells,nblyr), intent(in) :: &
-         reactb          ! Reaction terms from  algal_dyn (mmol/m^3)
-
-      real (kind=dbl_kind), dimension (icells,nblyr_hist), &
-         intent(in) :: &
-         NOin_init       ! bgc concentration (mmol/m^3) at start of dt 
-
-      real (kind=dbl_kind), dimension (icells,nblyr_hist), &
-         intent(out) :: &
-         sbdiag      , & ! sub-diagonal matrix elements
-         diag        , & ! diagonal matrix elements
-         spdiag      , & ! super-diagonal matrix elements
-         rhs             ! rhs of tri-diagonal matrix eqn.
-
-      ! local variables
-
-      real (kind=dbl_kind), dimension (icells,nblyr) :: &
-         vel              ! advective velocity times dt (m)
-
-      real (kind=dbl_kind), dimension (icells,nblyr+1) :: &
-         ivel             ! advective velocity*dt on igrid (m)
-   
-      real (kind=dbl_kind), dimension (icells,nblyr_hist) :: &
-         bgrid_temp       ! biology nondimensional grid layer points 
-
-      real (kind=dbl_kind) :: &
-         rhs_sp, rhs_sb,& ! components of the rhs tri-diagonal matrix:
-                          ! sp is super-diagonal, sb is sub-diagonal 
-         rhs_diag         ! and diag is diagonal (mmol/m^3)
- 
-      integer (kind=int_kind) :: &
-         i, j        , & ! horizontal indices
-         ij,           & ! horizontal indices, combine i and j loops
-         k, ks, ki, kr   ! vertical indices and row counters
-
-      real (kind=dbl_kind), dimension (icells):: &
-         dhf             ! darcy_V*dt/hin_old
-            
-      !-----------------------------------------------------------------
-      ! Initialize matrix elements.
-      !-----------------------------------------------------------------
-
-      sbdiag(:,:)= c0
-      diag(:,:) = c1
-      spdiag(:,:) = c0
-      rhs(:,:) = c0
-
-      do k = 1, nblyr_hist
-           do ij = 1, icells
-             rhs   (ij,k) = NOin_init(ij,k)  
-             bgrid_temp(ij,k) = bgrid(k)
-           enddo
-      enddo
-     
-      !-----------------------------------------------------------------
-      ! Compute matrix elements
-      !-----------------------------------------------------------------
-
-       do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)  
-         dhf(ij) = darcy_V(i,j)*dt/hin_old(ij)
-         if (hin_old(ij) > thin .OR. thin_check(ij) > p5) then
-           thin_check(ij) = c1
-           bgrid_temp(ij,1) =  c0 - grid_o_t/hin_old(ij)
-           bgrid_temp(ij,nblyr_hist) = c1 + grid_o/hin_old(ij)
-           do k = 1, nblyr+1
-               ivel(ij,k) =  (igrid(k)*dhb(i,j) - (igrid(k)-c1)*(dht(i,j)))/hin_old(ij) 
-               if (k < nblyr+1) then
-                  vel(ij,k) = (bgrid_temp(ij,k+1)*(dhb(i,j)) - &
-                          (bgrid_temp(ij,k+1) - c1)* (dht(i,j)) )/hin_old(ij) 
-               endif
-           enddo    !k
-           do k = 2, nblyr+1
-
-             if (k == 2) then               
-                 if (dht(i,j) + darcy_V(i,j)*dt/iphin_N(i,j,1) > c0) then   
-
-                    sbdiag(ij,2) =  c0 
-                 
-                    diag(ij,2)   = c1 + dt/zphin_N(i,j,k)/(igrid(k) - igrid(k-1))* &
-                             (iDin(i,j,k)/(bgrid_temp(ij,k+1)- bgrid_temp(ij,k))) + &
-                                (ivel(ij,1)*(zphin_N(i,j,2)-iphin_N(i,j,1)/c2)+ dhf(ij)/c2)/&
-                              (zphin_N(i,j,2)*igrid(2))
-
-
-                    spdiag(ij,2) = -(ivel(ij,1)*zphin_N(i,j,1) + dhf(ij))/c2/&
-                             zphin_N(i,j,k)/igrid(2)  -  &
-                             dt *iDin(i,j,k)/zphin_N(i,j,k)/(igrid(k) - &
-                             igrid(k-1))/(bgrid_temp(ij,k+1) - bgrid_temp(ij,k))
-                 else   
-                    sbdiag(ij,2) =(ivel(ij,1)*zphin_N(i,j,1)+ dhf(ij))/&
-                           zphin_N(i,j,2)/(igrid(2) - bgrid_temp(ij,1))
- 
-                    diag(ij,2)   = c1 + dt/zphin_N(i,j,k)/(igrid(k) - &
-                              igrid(k-1))* (iDin(i,j,k)/(bgrid_temp(ij,k+1)- &
-                              bgrid_temp(ij,k))) - &
-                              (ivel(ij,1)*zphin_N(i,j,1)+ dhf(ij))/c2/zphin_N(i,j,2)/ &
-                              (igrid(2)-bgrid_temp(ij,1))
-
-
-                    spdiag(ij,2) = - (ivel(ij,1)*zphin_N(i,j,1) + dhf(ij))/c2/ &
-                            zphin_N(i,j,2)/ (igrid(2)-bgrid_temp(ij,1)) - &
-                             dt *iDin(i,j,k)/zphin_N(i,j,k)/(igrid(k) - &
-                             igrid(k-1))/(bgrid_temp(ij,k+1) - bgrid_temp(ij,k)) 
-                  endif
-             elseif (k == nblyr+1) then
-                if (dhb(i,j) +darcy_V(i,j)*dt .LE. 0) then    !bottom melt /iphin_N(i,j,nblyr+1)
-
-                   sbdiag(ij,nblyr+1) = (vel(ij,nblyr)*(iphin_N(i,j,nblyr)) + dhf(ij))/c2/&
-                          zphin_N(i,j,k)/(igrid(nblyr+1) - igrid(nblyr)) - & 
-                          dt *iDin(i,j,k-1)/zphin_N(i,j,k)/(igrid(k) - &
-                          igrid(k-1))/(bgrid_temp(ij,k) - bgrid_temp(ij,k-1)) 
-
-                   diag(ij,nblyr+1)   = c1 +  dt/zphin_N(i,j,k)/(igrid(k) - &
-                              igrid(k-1))* (iDin(i,j,k)/(bgrid_temp(ij,k+1)- &    
-                              igrid(k)) + iDin(i,j,k-1)/(bgrid_temp(ij,k)-  &  
-                              bgrid_temp(ij,k-1))) - &
-                              (vel(ij,nblyr)*(iphin_N(i,j,nblyr+1) - zphin_N(i,j,nblyr)/c2) + &
-                              dhf(ij)/c2)/&
-                             (igrid(nblyr+1)-igrid(nblyr))/zphin_N(i,j,nblyr+1)
-
-                   spdiag(ij,nblyr+1) = - dt *iDin(i,j,k)/zphin_N(i,j,k)/(igrid(k) - &
-                             igrid(k-1))/(bgrid_temp(ij,k+1) - igrid(k))
-
-                else
-                 sbdiag(ij,nblyr+1) = (vel(ij,nblyr)*iphin_N(i,j,nblyr) + dhf(ij))/c2/&
-                         zphin_N(i,j,k)/(bgrid_temp(ij,nblyr+2)-igrid(nblyr)) -  & 
-                          dt *iDin(i,j,k-1)/zphin_N(i,j,k)/(igrid(k) - &
-                          igrid(k-1))/(bgrid_temp(ij,k) - bgrid_temp(ij,k-1))
-
-                 diag(ij,nblyr+1)   = c1 +  dt/zphin_N(i,j,k)/(igrid(k) - &
-                              igrid(k-1))* (iDin(i,j,k)/(bgrid_temp(ij,k+1)- &
-                              igrid(k)) + iDin(i,j,k-1)/(bgrid_temp(ij,k)-  & 
-                              bgrid_temp(ij,k-1))) + &
-                              (vel(ij,nblyr)*iphin_N(i,j,nblyr) + dhf(ij))/c2/&
-                              zphin_N(i,j,nblyr+1)/(bgrid_temp(ij,nblyr+2)-igrid(nblyr))
-
-                 spdiag(ij,nblyr+1) = - (vel(ij,nblyr) + dhf(ij)/iphin_N(i,j,nblyr+1))/&
-                             zphin_N(i,j,k)/(bgrid_temp(ij,nblyr+2)-igrid(nblyr)) -  &
-                             dt *iDin(i,j,k)/zphin_N(i,j,k)/(igrid(k) - &
-                             igrid(k-1))/(bgrid_temp(ij,k+1) - igrid(k))
-               endif
-             else    
-                 sbdiag(ij,k) = (vel(ij,k-1)*iphin_N(i,j,k-1)+ dhf(ij))/c2/&
-                           zphin_N(i,j,k)/(igrid(k) - igrid(k-1)) -  & 
-                           dt *iDin(i,j,k-1)/zphin_N(i,j,k)/(igrid(k) - &
-                           igrid(k-1))/(bgrid_temp(ij,k) - bgrid_temp(ij,k-1))
-  
-                 diag(ij,k)   = c1 + dt/zphin_N(i,j,k)/(igrid(k) - &
-                              igrid(k-1))* (iDin(i,j,k)/(bgrid_temp(ij,k+1)- &
-                              bgrid_temp(ij,k)) + iDin(i,j,k-1)/(bgrid_temp(ij,k)-  &
-                              bgrid_temp(ij,k-1))) - vel(ij,k-1)*(iphin_N(i,j,k)-iphin_N(i,j,k-1))/&
-                              c2/(igrid(k)-igrid(k-1))/zphin_N(i,j,k)
-
-                 spdiag(ij,k) = - (vel(ij,k-1)*iphin_N(i,j,k) + dhf(ij))/c2/zphin_N(i,j,k)/&
-                             (igrid(k)-igrid(k-1)) - dt *iDin(i,j,k)/zphin_N(i,j,k)/(igrid(k) - &
-                             igrid(k-1))/(bgrid_temp(ij,k+1) - bgrid_temp(ij,k)) 
-            endif 
-            rhs(ij,k)   = NOin_init(ij,k) + reactb(ij,k-1) 
-
-           enddo               !k
-      endif                    !hin_old > thin
-      enddo                    ! ij
-
-802 format (5d15.5)
-
-      end subroutine get_matrix_elements_calc_bgc
-
-!=======================================================================
-!
-! Tridiagonal matrix solver-- for salinity
-!
-! authors William H. Lipscomb, LANL
-!         C. M. Bitz, UW
-!
-      subroutine tridiag_solver (icells,    &
-                                 nmat,     sbdiag,   &
-                                 diag,     spdiag,   &
-                                 rhs,      xout)
-
-      integer (kind=int_kind), intent(in) :: &
-          icells         ! number of cells with aicen > puny
-
-      integer (kind=int_kind), intent(in) :: &
-         nmat            ! matrix dimension
-
-      real (kind=dbl_kind), dimension (icells,nmat), &
-           intent(in) :: &
-         sbdiag      , & ! sub-diagonal matrix elements
-         diag        , & ! diagonal matrix elements
-         spdiag      , & ! super-diagonal matrix elements
-         rhs             ! rhs of tri-diagonal matrix eqn.
-
-      real (kind=dbl_kind), dimension (icells,nmat), &
-           intent(inout) :: &
-         xout            ! solution vector
-
-      ! local variables     
-
-      integer (kind=int_kind) :: &
-         ij   , & ! horizontal index, combines i and j loops
-         k               ! row counter
-
-      real (kind=dbl_kind), dimension (icells) :: &
-         wbeta           ! temporary matrix variable
-
-      real (kind=dbl_kind), dimension(icells,nmat):: &
-         wgamma          ! temporary matrix variable
-
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-      do ij = 1, icells
-         wbeta(ij) = diag(ij,1)
-         xout(ij,1) = rhs(ij,1) / wbeta(ij)
-      enddo                     ! ij
-
-      do k = 2, nmat
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-         do ij = 1, icells
-            wgamma(ij,k) = spdiag(ij,k-1) / wbeta(ij)
-            wbeta(ij) = diag(ij,k) - sbdiag(ij,k)*wgamma(ij,k)
-            xout(ij,k) = (rhs(ij,k) - sbdiag(ij,k)*xout(ij,k-1)) &
-                         / wbeta(ij)
-         enddo                  ! ij
-      enddo                     ! k
-
-      do k = nmat-1, 1, -1
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-         do ij = 1, icells
-            xout(ij,k) = xout(ij,k) - wgamma(ij,k+1)*xout(ij,k+1)
-         enddo                  ! ij
-      enddo                     ! k
-
-      end subroutine tridiag_solver
 
 !=======================================================================
 !
 ! Writes diagnostic info (max, min, global sums, etc) to standard out
 !
 ! authors: Elizabeth C. Hunke, LANL
-!          Bruce P. Briegleb, NCAR
-!          Cecilia M. Bitz, UW
 !          Nicole Jeffery, LANL
 
       subroutine bgc_diags (dt)
 
       use ice_broadcast, only: broadcast_scalar
-      use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc, pbloc, &
-                                plat, plon
-      use ice_domain_size, only: ncat, nltrcr
-      use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
-      use ice_state, only: aice, aicen 
+      use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc, pbloc
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -2083,29 +943,19 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-         i, j, k, n, nn, ii,jj, iblk
+         i, j, n, iblk
 
       ! fields at diagnostic points
       real (kind=dbl_kind), dimension(npnt) :: &
          pN_sk, pNit_sk, pAm_sk, pSil_sk, &
          pDMSPp_sk, pDMSPd_sk, pDMS_sk, pN_ac, &
-         pNit_ac, pAm_ac, pSil_ac, pDMSP_ac, pDMS_ac, pN_tot, &
+         pNit_ac, pAm_ac, pSil_ac, pDMSP_ac, pDMS_ac, &
          pflux_NO, pflux_N, pflux_Sil, pflux_NH
-
-      ! vertical  fields of category 1 at diagnostic points for bgc layer model
-      real (kind=dbl_kind), dimension(npnt,nblyr) :: &
-         pNO,pN, pSil, pPON, pgrowN
-
-      real (kind=dbl_kind), dimension(npnt,nblyr+1) :: &
-         pzfswin      
-
-      !-----------------------------------------------------------------
-      ! biogeochemical state of the ice
-      !-----------------------------------------------------------------
 
       if (print_points) then
 
       !-----------------------------------------------------------------
+      ! biogeochemical 
       ! state of the ice and associated fluxes for 2 defined points
       ! NOTE these are computed for the last timestep only (not avg)
       !-----------------------------------------------------------------
@@ -2115,111 +965,68 @@
                i = piloc(n)
                j = pjloc(n)
                iblk = pbloc(n)
-               pNit_ac(n)  = ocean_bio(i,j,nlt_bgc_NO,iblk)   !nit(i,j,iblk)
-               pAm_ac(n)   = ocean_bio(i,j,nlt_bgc_NH,iblk)   !amm(i,j,iblk)
-               pSil_ac(n)  = ocean_bio(i,j,nlt_bgc_Sil,iblk)  !sil(i,j,iblk)
-               pDMSP_ac(n) = ocean_bio(i,j,nlt_bgc_DMSPp,iblk)!dmsp(i,j,iblk)
-               pDMS_ac(n)  = ocean_bio(i,j,nlt_bgc_DMS,iblk)  !dms(i,j,iblk)
-               pN_ac(n)    = ocean_bio(i,j,nlt_bgc_N,iblk)    !algalN(i,j,iblk)             
+               pNit_ac(n)  = ocean_bio(i,j,nlt_bgc_NO,iblk)   ! nit(i,j,iblk)
+               pAm_ac(n)   = ocean_bio(i,j,nlt_bgc_NH,iblk)   ! amm(i,j,iblk)
+               pSil_ac(n)  = ocean_bio(i,j,nlt_bgc_Sil,iblk)  ! sil(i,j,iblk)
+               pDMSP_ac(n) = ocean_bio(i,j,nlt_bgc_DMSPp,iblk)! dmsp(i,j,iblk)
+               pDMS_ac(n)  = ocean_bio(i,j,nlt_bgc_DMS,iblk)  ! dms(i,j,iblk)
+               pN_ac(n)    = ocean_bio(i,j,nlt_bgc_N,iblk)    ! algalN(i,j,iblk)             
+
                !----------------------------------------------------------------------
                ! fluxes in mmol/m^2/d
                ! concentrations are bulk in mmol/m^3
                !---------------------------------------------------------------------
+
                if (solve_skl_bgc) then
-                 pNit_sk(n) = c0
-                 pAm_sk(n) = c0
-                 pSil_sk(n) = c0
-                 pDMSPp_sk(n) = c0
-                 pDMSPd_sk(n) = c0
-                 pDMS_sk(n) = c0
+                  pNit_sk(n)   = c0
+                  pAm_sk(n)    = c0
+                  pSil_sk(n)   = c0
+                  pDMSPp_sk(n) = c0
+                  pDMSPd_sk(n) = c0
+                  pDMS_sk(n)   = c0
                
-                 pN_sk(n) = trcr(i,j,nt_bgc_N_sk,iblk)*phi_sk/sk_l                
-                 pflux_N(n) = flux_bio(i,j,nlt_bgc_N,iblk)*mps_to_cmpdy/c100 
-                 if (tr_bgc_Nit_sk) then
-                    pNit_sk(n)  = trcr(i,j,nt_bgc_Nit_sk,iblk)*phi_sk/sk_l   
-                    pflux_NO(n) = flux_bio(i,j,nlt_bgc_NO,iblk)*mps_to_cmpdy/c100 
-                 endif
-                 if (tr_bgc_Am_sk) then
-                    pAm_sk(n)   = trcr(i,j,nt_bgc_Am_sk,iblk)*phi_sk/sk_l        
-                    pflux_NH(n) = flux_bio(i,j,nlt_bgc_NH,iblk) *mps_to_cmpdy/c100 
-                 endif
-                 if (tr_bgc_Sil_sk) then
-                    pSil_sk(n)   = trcr(i,j,nt_bgc_Sil_sk,iblk)*phi_sk/sk_l       
-                    pflux_Sil(n) = flux_bio(i,j,nlt_bgc_Sil,iblk) *mps_to_cmpdy/c100 
-                 endif
-                 if (tr_bgc_DMSPp_sk) pDMSPp_sk(n) = trcr(i,j,nt_bgc_DMSPp_sk,iblk)*phi_sk/sk_l  
-                 if (tr_bgc_DMSPd_sk) pDMSPd_sk(n) = trcr(i,j,nt_bgc_DMSPd_sk,iblk)*phi_sk/sk_l 
-                 if (tr_bgc_DMS_sk)   pDMS_sk(n)   = trcr(i,j,nt_bgc_DMS_sk,iblk)*phi_sk/sk_l  
+                  pN_sk(n)       = trcr    (i,j, nt_bgc_N_sk,  iblk)*phi_sk/sk_l                
+                  pflux_N(n)     = flux_bio(i,j,nlt_bgc_N,     iblk)*mps_to_cmpdy/c100 
+                  if (tr_bgc_Nit_sk) then
+                     pNit_sk(n)  = trcr    (i,j, nt_bgc_Nit_sk,iblk)*phi_sk/sk_l   
+                     pflux_NO(n) = flux_bio(i,j,nlt_bgc_NO,    iblk)*mps_to_cmpdy/c100 
+                  endif
+                  if (tr_bgc_Am_sk) then
+                     pAm_sk(n)   = trcr    (i,j, nt_bgc_Am_sk, iblk)*phi_sk/sk_l        
+                     pflux_NH(n) = flux_bio(i,j,nlt_bgc_NH,    iblk)*mps_to_cmpdy/c100 
+                  endif
+                  if (tr_bgc_Sil_sk) then
+                     pSil_sk(n)  = trcr    (i,j, nt_bgc_Sil_sk,iblk)*phi_sk/sk_l       
+                     pflux_Sil(n)= flux_bio(i,j,nlt_bgc_Sil,   iblk)*mps_to_cmpdy/c100 
+                  endif
+                  if (tr_bgc_DMSPp_sk) pDMSPp_sk(n) = trcr(i,j,nt_bgc_DMSPp_sk,iblk)*phi_sk/sk_l  
+                  if (tr_bgc_DMSPd_sk) pDMSPd_sk(n) = trcr(i,j,nt_bgc_DMSPd_sk,iblk)*phi_sk/sk_l 
+                  if (tr_bgc_DMS_sk)   pDMS_sk  (n) = trcr(i,j,nt_bgc_DMS_sk,  iblk)*phi_sk/sk_l  
+               endif
 
-               elseif (tr_bgc_NO) then   ! zbgc
-                 pN_tot(n) = c0
-                 pflux_NO(n)                =   flux_bio(i,j,nlt_bgc_NO,iblk)
-                 if (tr_bgc_Sil)pflux_Sil(n)=   flux_bio(i,j,nlt_bgc_Sil,iblk)
-                 if (tr_bgc_N)  pflux_N(n)  =   flux_bio(i,j,nlt_bgc_N,iblk)
-                 if (tr_bgc_NH) pflux_NH(n) =   flux_bio(i,j,nlt_bgc_NH,iblk)
-
-                 do k = 1, nblyr+1
-                   pzfswin(n,k) = c0
-                   do nn = 1,ncat
-                     pzfswin(n,k) = pzfswin(n,k) +  zfswin(i,j,k,nn,iblk)*vicen(i,j,nn,iblk)
-                   enddo !nn
-                   if (vice(i,j,iblk) > c0) then
-                     pzfswin(n,k) = pzfswin(n,k)/vice(i,j,iblk)
-                   endif !vice
-                 enddo  !k
-                 do k = 1,nblyr
-                   pNO(n,k) = c0
-                   pSil(n,k) = c0
-                   pN(n,k) = c0
-                   pPON(n,k) = c0
-                   pgrowN(n,k) =  growNp(i,j,k,iblk)
-
-                   if (vice(i,j,iblk) > c0) pgrowN(n,k) = pgrowN(n,k)/vice(i,j,iblk)                   
-                   pNO(n,k)                  =  trcr(i,j,nt_bgc_NO+k-1,iblk)                   
-                   if (tr_bgc_Sil) pSil(n,k) =  trcr(i,j,nt_bgc_Sil+k-1,iblk)     
-                   if (tr_bgc_N)   pN(n,k)   =  trcr(i,j,nt_bgc_N+k-1,iblk)    
-                   if (tr_bgc_PON) pPON(n,k) =  trcr(i,j,nt_bgc_PON+k-1,iblk)
-                  
-                   if (aice(i,j,iblk) > c0) pN_tot(n) = pN_tot(n) + &
-                          pN(n,k)/real(nblyr,kind=dbl_kind)*vice(i,j,iblk)/aice(i,j,iblk)
-                 enddo   !k
-                endif
-             endif                 ! my_task = pmloc
+            endif                 ! my_task = pmloc
  
-             call broadcast_scalar(pN_ac    (n), pmloc(n))     
-             call broadcast_scalar(pNit_ac  (n), pmloc(n))             
-             call broadcast_scalar(pAm_ac   (n), pmloc(n))             
-             call broadcast_scalar(pSil_ac  (n), pmloc(n))             
-             call broadcast_scalar(pDMSP_ac (n), pmloc(n))             
-             call broadcast_scalar(pDMS_ac  (n), pmloc(n))
-             call broadcast_scalar(pflux_N  (n), pmloc(n))     
-             call broadcast_scalar(pflux_NO (n), pmloc(n))             
-             call broadcast_scalar(pflux_NH (n), pmloc(n))             
-             call broadcast_scalar(pflux_Sil(n), pmloc(n))
+            call broadcast_scalar(pN_ac    (n), pmloc(n))     
+            call broadcast_scalar(pNit_ac  (n), pmloc(n))             
+            call broadcast_scalar(pAm_ac   (n), pmloc(n))             
+            call broadcast_scalar(pSil_ac  (n), pmloc(n))             
+            call broadcast_scalar(pDMSP_ac (n), pmloc(n))             
+            call broadcast_scalar(pDMS_ac  (n), pmloc(n))
+            call broadcast_scalar(pflux_N  (n), pmloc(n))     
+            call broadcast_scalar(pflux_NO (n), pmloc(n))             
+            call broadcast_scalar(pflux_NH (n), pmloc(n))             
+            call broadcast_scalar(pflux_Sil(n), pmloc(n))
 
             if (solve_skl_bgc) then              ! skl_bgc
-             call broadcast_scalar(pN_sk    (n), pmloc(n))            
-             call broadcast_scalar(pNit_sk  (n), pmloc(n))             
-             call broadcast_scalar(pAm_sk   (n), pmloc(n))             
-             call broadcast_scalar(pSil_sk  (n), pmloc(n))             
-             call broadcast_scalar(pDMSPp_sk(n), pmloc(n))             
-             call broadcast_scalar(pDMSPd_sk(n), pmloc(n))             
-             call broadcast_scalar(pDMS_sk  (n), pmloc(n))        
-            endif   !tr_bgc_sk
+               call broadcast_scalar(pN_sk    (n), pmloc(n))            
+               call broadcast_scalar(pNit_sk  (n), pmloc(n))             
+               call broadcast_scalar(pAm_sk   (n), pmloc(n))             
+               call broadcast_scalar(pSil_sk  (n), pmloc(n))             
+               call broadcast_scalar(pDMSPp_sk(n), pmloc(n))             
+               call broadcast_scalar(pDMSPd_sk(n), pmloc(n))             
+               call broadcast_scalar(pDMS_sk  (n), pmloc(n))        
+           endif   !tr_bgc_sk
 
-           if (tr_bgc_NO) then                   !  z_bgc
-              call broadcast_scalar(pN_tot  (n), pmloc(n))
-             do k = 1,nblyr+1
-              call broadcast_scalar(pzfswin (n,k), pmloc(n))
-             enddo !k
-             do k = 1,nblyr
-              call broadcast_scalar(pNO (n,k), pmloc(n))
-              call broadcast_scalar(pSil (n,k), pmloc(n))
-              call broadcast_scalar(pN (n,k), pmloc(n))
-              call broadcast_scalar(pPON (n,k), pmloc(n))
-              call broadcast_scalar(pgrowN (n,k), pmloc(n))
-             enddo  !k
-            endif
          enddo                  ! npnt
       endif                     ! print_points
 
@@ -2227,21 +1034,23 @@
       ! start spewing
       !-----------------------------------------------------------------
 
-     if (my_task == master_task) then
+      if (my_task == master_task) then
 
-       call flush_fileunit(nu_diag)
+      call flush_fileunit(nu_diag)
 
       !-----------------------------------------------------------------
       ! diagnostics for Arctic and Antarctic points
       !-----------------------------------------------------------------
 
       if (print_points) then
+         if (solve_skl_bgc) then  
+
        write(nu_diag,*) '--ocean mixed layer----'
        write(nu_diag,900) 'algal N(mmol/m^3)      = ',pN_ac(1),pN_ac(2)
        write(nu_diag,900) 'nitrate(mmol/m^3)      = ',pNit_ac(1),pNit_ac(2)
        write(nu_diag,900) 'ammonia/um(mmol/m^3)   = ',pAm_ac(1),pAm_ac(2)
        write(nu_diag,900) 'silicon(mmol/m^3)      = ',pSil_ac(1),pSil_ac(2)
-       if (tr_bgc_DMS_sk .OR. tr_bgc_DMS) then
+       if (tr_bgc_DMS_sk) then
          write(nu_diag,900) 'DMSP(mmol/m^3)         = ',pDMSP_ac(1),pDMSP_ac(2)
          write(nu_diag,900) 'DMS(mmol/m^3)          = ',pDMS_ac(1),pDMS_ac(2)
        endif
@@ -2252,56 +1061,19 @@
        write(nu_diag,900) 'amm. flux(mmol/m^2/d)  = ',pflux_NH(1),pflux_NH(2)
        write(nu_diag,900) 'sil. flux(mmol/m^2/d)  = ',pflux_Sil(1),pflux_Sil(2)
        write(nu_diag,*) '                         '
-      if (solve_skl_bgc) then  
-        write(nu_diag,*) '-Bulk Bottom bgc-------'
-        write(nu_diag,900) 'nitrogen, (mmol/m^3)   = ',pN_sk(1),pN_sk(2)
-        write(nu_diag,900) 'nitrate, (mmol/m^3)    = ',pNit_sk(1),pNit_sk(2)
-        write(nu_diag,900) 'ammonia/um, (mmol/m^3) = ',pAm_sk(1),pAm_sk(2)
-        write(nu_diag,900) 'silicon, (mmol/m^3)    = ',pSil_sk(1),pSil_sk(2)
-        if (tr_bgc_DMS_sk) then
+       write(nu_diag,*) '--Bulk Bottom bgc------'
+       write(nu_diag,900) 'nitrogen, (mmol/m^3)   = ',pN_sk(1),pN_sk(2)
+       write(nu_diag,900) 'nitrate, (mmol/m^3)    = ',pNit_sk(1),pNit_sk(2)
+       write(nu_diag,900) 'ammonia/um, (mmol/m^3) = ',pAm_sk(1),pAm_sk(2)
+       write(nu_diag,900) 'silicon, (mmol/m^3)    = ',pSil_sk(1),pSil_sk(2)
+       if (tr_bgc_DMS_sk) then
           write(nu_diag,900) 'DMSPp, (mmol/m^3)      = ',pDMSPp_sk(1),pDMSPp_sk(2)
           write(nu_diag,900) 'DMSPd, (mmol/m^3)      = ',pDMSPd_sk(1),pDMSPd_sk(2)
           write(nu_diag,900) 'DMS, (mmol/m^3)        = ',pDMS_sk(1),pDMS_sk(2)
-        endif
-        write(nu_diag,*) '                         '
-      elseif (tr_bgc_NO) then
-        write(nu_diag,*) '------ zbgc  Model------' 
-        if (tr_bgc_N) then
-          write(nu_diag,900) 'tot bulk N(mmol/m^2) = ',pN_tot(1),pN_tot(2)
-          write(nu_diag,*) '                         '
-        endif
-        write(nu_diag,803) 'NO(1) Bulk NO3   ','NO(2) Bulk NO3 '
-        write(nu_diag,*) '---------------------------------------------------'
-        write(nu_diag,802) ((pNO(n,k),n=1,2), k = 1,nblyr)              
-        write(nu_diag,*) '                           '
-        if (tr_bgc_PON) then
-          write(nu_diag,803) 'PON(1) NO3 tracer   ','PON(2) NO3 tracer '
-          write(nu_diag,*) '---------------------------------------------------'
-          write(nu_diag,802) ((pPON(n,k),n=1,2), k = 1,nblyr)              
-          write(nu_diag,*) '                         '
-        endif
-        if (solve_zbgc) then
-          write(nu_diag,803) 'growN(1) specific growth  ','growN(2) specific growth '
-          write(nu_diag,*) '---------------------------------------------------'
-          write(nu_diag,802) ((pgrowN(n,k),n=1,2), k = 1,nblyr) 
-          write(nu_diag,*) '                         '
-          write(nu_diag,803) 'zfswin(1) PAR  ','zfswin(2) PAR '
-          write(nu_diag,*) '---------------------------------------------------'
-          write(nu_diag,802) ((pzfswin(n,k),n=1,2), k = 1,nblyr+1)              
-          write(nu_diag,*) '                         '
-        endif
-        if (tr_bgc_N) then
-          write(nu_diag,803) 'N(1) Bulk algalN   ','N(2) Bulk algalN '
-          write(nu_diag,*) '---------------------------------------------------'
-          write(nu_diag,802) ((pN(n,k),n=1,2), k = 1,nblyr)              
-          write(nu_diag,*) '                         '
-        endif
-        if (tr_bgc_Sil) then
-          write(nu_diag,803) 'Sil(1) Bulk Silicate   ','Sil(2) Bulk Silicate '
-          write(nu_diag,*) '---------------------------------------------------'
-          write(nu_diag,802) ((pSil(n,k),n=1,2), k = 1,nblyr)  
-        endif
-      endif                   ! tr_bgc_NO
+       endif
+       write(nu_diag,*) '                         '
+
+         endif                ! solve_skl_bgc
       endif                   ! print_points
       endif                   ! my_task = master_task 
 
@@ -2312,142 +1084,6 @@
   903 format (a25,5x,i4,1x,i4,1x,i4,1x,i4,7x,i4,1x,i4,1x,i4,1x,i4)
 
       end subroutine bgc_diags
-
-
-!=======================================================================
-!
-!  Written in flux conservative form 
-!           d(h zphi c)/dt = d(v zphi c + D*h dc/dx)/dx + zphi hR  
-!           where v = (x-1) dzt/dt - x dzb/dt (which includes flushing),
-!           D includes the gravity drainage eddy term plus molecular = (De + zphi Dm)/h^2, 
-!           and R is the algal chemistry = react/dt
-!
-! authors     Nicole Jeffery, LANL
-
-      subroutine check_conserve_bgc &
-                                     (hin, hin_old, Cin, Cin_old, dt, &
-                                      igrid,good_numerics,flux_o_tot, &
-                                      react,aicen) 
-
-      real (kind=dbl_kind), dimension(nblyr), intent(in) :: &
-         Cin           , & ! bulk c = zphi*c
-         Cin_old       , & ! old bulk c = zphi_old * c_old
-         react             ! reaction term
-
-      real (kind=dbl_kind), intent(in) :: &
-         aicen         , & ! ice area
-         hin_old       , & ! old brine thickness (m) 
-         hin           , & ! new brine thickness (m)
-         dt                ! time-step
-
-      real (kind=dbl_kind), intent(in) :: &
-         flux_o_tot       ! tracer flux, gravity+molecular drainage flux,
-                          ! and boundary flux to ocean (kg/m^2/s)  
-                          ! positive into the ocean  
-
-      real (kind=dbl_kind), dimension (nblyr + 1), intent(in) :: &
-         igrid            ! biology nondimensional grid interface points 
-
-      logical (kind=log_kind), intent(inout) :: &   
-         good_numerics    ! true if conservation satisfied within error
-
-     ! local variables
-
-     integer (kind=int_kind) :: &
-         k         ! vertical biology layer index 
-   
-     real (kind=dbl_kind) :: &
-         sum_old      , &  ! total initial ice tracer conc. (mmol/m^2)
-         sum_new      , &  ! total final ice tracer conc. (mmol/m^2)
-         sum_true     , &  !
-         sum_react    , & !
-         dh           , &  ! hin-hin_old
-         dsum         , &  ! sum_true - sum_new
-         htrue        , &  !
-         diff_dt           !difference in units of (kg/m^2/s)
-       
-     real (kind=log_kind), parameter :: &
-         accuracy = 2.0e-5 ! (kg/m^2/s)
-                             
-         good_numerics = .true.
-         dh = hin - hin_old
-         sum_old = c0
-         sum_new = c0
-         sum_true = c0
-         sum_react = c0
-
-         do k = 1, nblyr
-          sum_old = sum_old + Cin_old(k)*hin_old*(igrid(k+1)-igrid(k))  !hin_old
-          sum_new = sum_new + Cin(k)*hin*(igrid(k+1)-igrid(k)) 
-          sum_react = sum_react + react(k)*hin_old*(igrid(k+1)-igrid(k))
-          if (Cin(k) > c0) then
-            sum_true = sum_true +Cin(k)*hin*(igrid(k+1)-igrid(k))
-          endif 
-         enddo
-         dsum = sum_true - sum_new   !negative correction
-     !-------------------------------------
-     !  Ocean flux: positive into the ocean
-     !-------------------------------------    
-         diff_dt = ((sum_true - sum_old -sum_react)/dt + flux_o_tot)*aicen   
-  
-     if (abs(diff_dt) > accuracy ) then
-         good_numerics = .false.
-         write(nu_diag,*) 'Conservation failure in bgc,diff_dt,accuracy:',diff_dt, accuracy
-         write(nu_diag,*) 'Total initial tracer',sum_old
-         write(nu_diag,*) 'Total final1  tracer',sum_true
-         write(nu_diag,*) 'Total final2 (with possible negative values)',sum_new
-         write(nu_diag,*) 'final1-final2,dsum',dsum
-         write(nu_diag,*) 'Total reactions',sum_react
-         write(nu_diag,*) 'Total flux_o_tot',flux_o_tot
-         write(nu_diag,*) 'aicen:',aicen
-     endif
-
-     end subroutine check_conserve_bgc
-
-!=======================================================================
-!
-! Find ice-ocean flux when ice is thin and internal dynamics/reactions are
-!             assumed to be zero
-!
-! authors     Nicole Jeffery, LANL
-
-      subroutine thin_ice_flux (hin, hin_old, phin, Cin, flux_o_tot,igrid,dt) 
-
-      real (kind=dbl_kind), dimension(nblyr), intent(in) :: &
-         phin
-
-      real (kind=dbl_kind), dimension(nblyr), intent(in) :: &
-         Cin              ! initial concentration
-
-      real (kind=dbl_kind), intent(in) :: &
-         hin_old   , &     ! brine thickness (m) 
-         hin       , &     ! new brine thickness (m)
-         dt                ! time step
-
-      real (kind=dbl_kind), intent(inout) :: &
-         flux_o_tot       ! tracer flux, gravity+molecular drainage flux ,
-                          ! and boundary flux to ocean (kg/m^2/s)  
-                          ! positive into the ocean  
-
-      real (kind=dbl_kind), dimension (nblyr + 1), intent(in) :: &
-         igrid            ! biology nondimensional grid interface points 
-
-     ! local variables
-
-     integer (kind=int_kind) :: &
-         k         ! vertical biology layer index
-   
-     real (kind=dbl_kind) :: &
-         sum_bio        !
-   
-         sum_bio = c0
-         do k = 1, nblyr
-          sum_bio = sum_bio + Cin(k)*phin(k)*(igrid(k+1)-igrid(k))
-         enddo
-
-         flux_o_tot = flux_o_tot -(hin-hin_old)*sum_bio/dt
-
-     end subroutine thin_ice_flux
 
 !=======================================================================
 !---! these subroutines write/read Fortran unformatted data files ..
@@ -2461,8 +1097,7 @@
 
       use ice_domain_size, only: ncat
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init
-      use ice_domain, only: nblocks
+                              time, time_forc, year_init
       use ice_restart, only: lenstr, restart_dir, restart_file
       use ice_state, only: trcrn
 
@@ -2471,8 +1106,8 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
-          iyear, imonth, iday     ! year, month, day
+          n,      & ! category index
+          iyear     ! year, month, day
 
       character(len=char_len_long) :: filename
 
@@ -2483,8 +1118,6 @@
          filename = trim(filename_spec)
       else
          iyear = nyr + year_init - 1
-         imonth = month
-         iday = mday
          
          write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
               restart_dir(1:lenstr(restart_dir)), &
@@ -2502,66 +1135,44 @@
       endif
 
       diag = .true.
-      !--------------------------
-      !bgc_stuff
-      !---------------------------
+
+      !-----------------------------------------------------------------
+      ! Skeletal layer BGC
+      !-----------------------------------------------------------------
+
       do n = 1, ncat
-      if (tr_bgc_NO) then
-        if (tr_bgc_N) then
-         do k = 1,nblyr
-              call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_N+k-1,n,:),'ruf8',diag)
-         enddo
-        endif
-        do k = 1,nblyr
-            call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_NO+k-1,n,:),'ruf8',diag)
-        enddo
-        if (tr_bgc_NH) then
-         do k = 1,nblyr 
-            call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_NH+k-1,n,:),'ruf8',diag)
-         enddo
-        endif
-         if (tr_bgc_Sil) then
-         do k = 1,nblyr 
-            call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_Sil+k-1,n,:),'ruf8',diag)
-         enddo
-         endif
-         if (tr_bgc_DMSPp) then
-         do k = 1,nblyr 
-           call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_DMSPp+k-1,n,:),'ruf8',diag)
-         enddo
-         endif
-         if (tr_bgc_DMSPd) then
-         do k = 1,nblyr 
-            call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_DMSPd+k-1,n,:),'ruf8',diag)
-         enddo
-         endif
-         if (tr_bgc_PON) then
-         do k = 1,nblyr
-            call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_PON+k-1,n,:),'ruf8',diag)
-         enddo
-         endif
-        elseif (solve_skl_bgc) then
-         call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_N_sk,n,:),'ruf8',diag)
-         if (tr_bgc_C_sk)  call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_C_sk,n,:),'ruf8',diag)
-         if (tr_bgc_chl_sk)call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_chl_sk,n,:),'ruf8',diag)
-         if (tr_bgc_Nit_sk)call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_Nit_sk,n,:),'ruf8',diag)
-         if (tr_bgc_Am_sk) call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_Am_sk,n,:),'ruf8',diag)
-         if (tr_bgc_Sil_sk)call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_Sil_sk,n,:),'ruf8',diag)
-         if (tr_bgc_DMSPp_sk)call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_DMSPp_sk,n,:),'ruf8',diag)
-         if (tr_bgc_DMSPd_sk)call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_DMSPd_sk,n,:),'ruf8',diag)
-         if (tr_bgc_DMS_sk) call ice_write(nu_dump_bgc,0,trcrn(:,:,nt_bgc_DMS_sk,n,:),'ruf8',diag)
-        endif  ! tr_bgc_NO
+        if (solve_skl_bgc) then
+                              call ice_write(nu_dump_bgc,0, &
+                                             trcrn(:,:,nt_bgc_N_sk,n,:),    'ruf8',diag)
+         if (tr_bgc_C_sk)     call ice_write(nu_dump_bgc,0, &
+                                             trcrn(:,:,nt_bgc_C_sk,n,:),    'ruf8',diag)
+         if (tr_bgc_chl_sk)   call ice_write(nu_dump_bgc,0, &
+                                             trcrn(:,:,nt_bgc_chl_sk,n,:),  'ruf8',diag)
+         if (tr_bgc_Nit_sk)   call ice_write(nu_dump_bgc,0, &
+                                             trcrn(:,:,nt_bgc_Nit_sk,n,:),  'ruf8',diag)
+         if (tr_bgc_Am_sk)    call ice_write(nu_dump_bgc,0, &
+                                             trcrn(:,:,nt_bgc_Am_sk,n,:),   'ruf8',diag)
+         if (tr_bgc_Sil_sk)   call ice_write(nu_dump_bgc,0, &
+                                             trcrn(:,:,nt_bgc_Sil_sk,n,:),  'ruf8',diag)
+         if (tr_bgc_DMSPp_sk) call ice_write(nu_dump_bgc,0, &
+                                             trcrn(:,:,nt_bgc_DMSPp_sk,n,:),'ruf8',diag)
+         if (tr_bgc_DMSPd_sk) call ice_write(nu_dump_bgc,0, &
+                                             trcrn(:,:,nt_bgc_DMSPd_sk,n,:),'ruf8',diag)
+         if (tr_bgc_DMS_sk)   call ice_write(nu_dump_bgc,0, &
+                                             trcrn(:,:,nt_bgc_DMS_sk,n,:),  'ruf8',diag)
+        endif  ! solve_skl_bgc
       enddo
       
-      !---------------------------------------------------      
-      ! ocean values
-      !-----------------------------------------------------
-      if (tr_bgc_N .OR. tr_bgc_N_sk) call ice_write(nu_dump_bgc,0,algalN,'ruf8',diag)
-      if (tr_bgc_NO .OR. tr_bgc_Nit_sk) call ice_write(nu_dump_bgc,0,nit,'ruf8',diag)
-      if (tr_bgc_NH .OR. tr_bgc_Am_sk) call ice_write(nu_dump_bgc,0,amm,'ruf8',diag)
-      if (tr_bgc_Sil .OR. tr_bgc_Sil_sk) call ice_write(nu_dump_bgc,0,sil,'ruf8',diag)
-      if (tr_bgc_DMSPp .OR. tr_bgc_DMSPp_sk) call ice_write(nu_dump_bgc,0,dmsp,'ruf8',diag)
-      if (tr_bgc_DMS .OR. tr_bgc_DMS_sk) call ice_write(nu_dump_bgc,0,dms,'ruf8',diag)
+      !-----------------------------------------------------------------
+      ! Ocean BGC
+      !-----------------------------------------------------------------
+
+      if (tr_bgc_N_sk)     call ice_write(nu_dump_bgc,0,algalN,'ruf8',diag)
+      if (tr_bgc_Nit_sk)   call ice_write(nu_dump_bgc,0,nit,   'ruf8',diag)
+      if (tr_bgc_Am_sk)    call ice_write(nu_dump_bgc,0,amm,   'ruf8',diag)
+      if (tr_bgc_Sil_sk)   call ice_write(nu_dump_bgc,0,sil,   'ruf8',diag)
+      if (tr_bgc_DMSPp_sk) call ice_write(nu_dump_bgc,0,dmsp,  'ruf8',diag)
+      if (tr_bgc_DMS_sk)   call ice_write(nu_dump_bgc,0,dms,   'ruf8',diag)
 
       if (my_task == master_task) close(nu_dump_bgc)
 
@@ -2577,10 +1188,9 @@
 
       use ice_domain_size, only: ncat
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init, &
+                              time, time_forc, year_init, &
                               istep0
-      use ice_domain, only: nblocks
-      use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
+      use ice_restart, only: lenstr, restart_file, pointer_file
       use ice_state, only: trcrn
       use ice_exit, only: abort_ice
 
@@ -2589,14 +1199,13 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
-          iyear, imonth, iday     ! year, month, day
+          n,  & ! category index
+          iyear ! year
 
       character(len=char_len_long) :: &
          filename, filename0, string1, string2
 
-      logical (kind=log_kind) :: &
-         diag, hit_eof
+      logical (kind=log_kind) :: diag
 
       if (my_task == master_task) then
          open(nu_rst_pointer,file=pointer_file)
@@ -2624,109 +1233,51 @@
       endif
 
       diag = .true.
-      do n = 1, ncat
-       if (tr_bgc_NO) then
-         if (tr_bgc_N) then
-           if (my_task == master_task) &
-              write(nu_diag,*) 'cat ',n, &
-                               ' N for each bgc layer'
-           do k = 1,nblyr
-             call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_N+k-1,n,:),'ruf8',diag, &
-                          field_loc_center, field_type_scalar)
-                if (tr_bgc_C .OR. tr_bgc_chl) then
-                  do iblk = 1, max_blocks
-                  do i = 1,nx_block
-                  do j = 1,ny_block
-                  if (tr_bgc_C) trcrn(i,j,nt_bgc_C+k-1,n,iblk) = trcrn(i,j,nt_bgc_N+k-1,n,iblk)*R_C2N
-                  if (tr_bgc_chl) trcrn(i,j,nt_bgc_chl+k-1,n,iblk) = trcrn(i,j,nt_bgc_N+k-1,n,iblk)*R_chl2N
-                  enddo  !j
-                  enddo  !i
-                  enddo  !iblk
-                endif
-          enddo
-         endif
-         
-         if (my_task == master_task) &
-              write(nu_diag,*) 'cat ',n, &
-                               ' NO for each bgc layer'
-          do k = 1,nblyr
-             call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_NO+k-1,n,:),'ruf8',diag, &
-                          field_loc_center, field_type_scalar)
-         enddo
-         if (tr_bgc_NH) then
-           if (my_task == master_task) &
-              write(nu_diag,*) 'cat ',n, &
-                               ' NH for each bgc layer'
-           do k = 1,nblyr
-             call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_NH+k-1,n,:),'ruf8',diag, &
-                          field_loc_center, field_type_scalar)
-           enddo
-         endif
-         if (tr_bgc_Sil) then
-           if (my_task == master_task) &
-              write(nu_diag,*) 'cat ',n, &
-                               ' Sil for each bgc layer'
-           do k = 1,nblyr
-            call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_Sil+k-1,n,:),'ruf8',diag, &
-                          field_loc_center, field_type_scalar)
-           enddo
-          endif
-         if (tr_bgc_DMSPp) then
-           if (my_task == master_task) &
-              write(nu_diag,*) 'cat ',n, &
-                               ' DMSPp for each bgc layer'
-           do k = 1,nblyr
-             call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_DMSPp+k-1,n,:),'ruf8',diag, &
-                          field_loc_center, field_type_scalar)
-           enddo
-         endif
-         if (tr_bgc_DMSPd) then
-           if (my_task == master_task) &
-              write(nu_diag,*) 'cat ',n, &
-                               ' DMSPd for each bgc layer'
-           do k = 1,nblyr
-              call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_DMSPd+k-1,n,:),'ruf8',diag, &
-                          field_loc_center, field_type_scalar)
-           enddo
-         endif
-         if (tr_bgc_PON) then
-           if (my_task == master_task) &
-              write(nu_diag,*) 'cat ',n, &
-                               ' PON for each bgc layer'
-           do k = 1,nblyr
-              call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_PON+k-1,n,:),'ruf8',diag, &
-                          field_loc_center, field_type_scalar)
-           enddo
-         endif
 
-       elseif (solve_skl_bgc) then
+      !-----------------------------------------------------------------
+      ! Skeletal Layer BGC
+      !-----------------------------------------------------------------
+
+      do n = 1, ncat
+       if (solve_skl_bgc) then
          call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_N_sk,n,:),'ruf8',diag)
          if (tr_bgc_C_sk) call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_C_sk,n,:),'ruf8',diag)
-         if (tr_bgc_chl_sk) call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_chl_sk,n,:),'ruf8',diag)
-         if (tr_bgc_Nit_sk) call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_Nit_sk,n,:),'ruf8',diag)
-         if (tr_bgc_Am_sk) call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_Am_sk,n,:),'ruf8',diag)
-         if (tr_bgc_Sil_sk)call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_Sil_sk,n,:),'ruf8',diag)
-         if(tr_bgc_DMSPp_sk)call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_DMSPp_sk,n,:),'ruf8',diag)
-         if (tr_bgc_DMSPd_sk)call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_DMSPd_sk,n,:),'ruf8',diag)
-         if (tr_bgc_DMS_sk) call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_DMS_sk,n,:),'ruf8',diag)
-       endif  !tr_bgc_NO
+         if (tr_bgc_chl_sk)   call ice_read(nu_restart_bgc,0, &
+                                            trcrn(:,:,nt_bgc_chl_sk  ,n,:),'ruf8',diag)
+         if (tr_bgc_Nit_sk)   call ice_read(nu_restart_bgc,0, &
+                                            trcrn(:,:,nt_bgc_Nit_sk  ,n,:),'ruf8',diag)
+         if (tr_bgc_Am_sk)    call ice_read(nu_restart_bgc,0, &
+                                            trcrn(:,:,nt_bgc_Am_sk   ,n,:),'ruf8',diag)
+         if (tr_bgc_Sil_sk)   call ice_read(nu_restart_bgc,0, &
+                                            trcrn(:,:,nt_bgc_Sil_sk  ,n,:),'ruf8',diag)
+         if(tr_bgc_DMSPp_sk)  call ice_read(nu_restart_bgc,0, &
+                                            trcrn(:,:,nt_bgc_DMSPp_sk,n,:),'ruf8',diag)
+         if (tr_bgc_DMSPd_sk) call ice_read(nu_restart_bgc,0, &
+                                            trcrn(:,:,nt_bgc_DMSPd_sk,n,:),'ruf8',diag)
+         if (tr_bgc_DMS_sk)   call ice_read(nu_restart_bgc,0, &
+                                            trcrn(:,:,nt_bgc_DMS_sk  ,n,:),'ruf8',diag)
+       endif  ! solve_skl_bgc
       enddo
      
+      !-----------------------------------------------------------------
+      ! Ocean BGC
+      !-----------------------------------------------------------------
+
       if (my_task == master_task) &
-        write(nu_diag,*) 'ocean bgc fields:  algalN, nit, amm, sil, dmsp, dms'
-      if (tr_bgc_N .OR. tr_bgc_N_sk)call ice_read(nu_restart_bgc,0,algalN,'ruf8',diag, &
-                       field_loc_center, field_type_scalar)
-      if (tr_bgc_NO .OR. tr_bgc_Nit_sk) call ice_read(nu_restart_bgc,0,nit,'ruf8',diag, &
-                       field_loc_center, field_type_scalar)
-      if (tr_bgc_NH .OR. tr_bgc_Am_sk) call ice_read(nu_restart_bgc,0,amm,'ruf8',diag, &
-                       field_loc_center, field_type_scalar)
-      if (tr_bgc_Sil .OR. tr_bgc_Sil_sk) call ice_read(nu_restart_bgc,0,sil,'ruf8',diag, &
-                       field_loc_center, field_type_scalar)
-      if (tr_bgc_DMSPp .OR. tr_bgc_DMSPp_sk) call ice_read(nu_restart_bgc,0,dmsp,'ruf8',diag, &
-                       field_loc_center, field_type_scalar)
-      if (tr_bgc_DMS .OR. tr_bgc_DMS_sk)call ice_read(nu_restart_bgc,0,dms,'ruf8',diag, &
-                       field_loc_center, field_type_scalar)
-       if (my_task == master_task) close(nu_restart_bgc)
+         write(nu_diag,*) 'ocean bgc fields:  algalN, nit, amm, sil, dmsp, dms'
+      if (tr_bgc_N_sk)     call ice_read(nu_restart_bgc,0,algalN,'ruf8',diag, &
+                                         field_loc_center, field_type_scalar)
+      if (tr_bgc_Nit_sk)   call ice_read(nu_restart_bgc,0,nit   ,'ruf8',diag, &
+                                         field_loc_center, field_type_scalar)
+      if (tr_bgc_Am_sk)    call ice_read(nu_restart_bgc,0,amm   ,'ruf8',diag, &
+                                         field_loc_center, field_type_scalar)
+      if (tr_bgc_Sil_sk)   call ice_read(nu_restart_bgc,0,sil   ,'ruf8',diag, &
+                                         field_loc_center, field_type_scalar)
+      if (tr_bgc_DMSPp_sk) call ice_read(nu_restart_bgc,0,dmsp  ,'ruf8',diag, &
+                                         field_loc_center, field_type_scalar)
+      if (tr_bgc_DMS_sk)   call ice_read(nu_restart_bgc,0,dms   ,'ruf8',diag, &
+                                         field_loc_center, field_type_scalar)
+      if (my_task == master_task) close(nu_restart_bgc)
 
       end subroutine read_restart_bgc
 

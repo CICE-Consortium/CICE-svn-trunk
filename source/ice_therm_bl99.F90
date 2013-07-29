@@ -84,7 +84,6 @@
                               Tf,        sss,        &
                               salinz,    l_stop,     &
                               istop,     jstop,      &
-                              fsice, &
                               flux_bio,  nbltrcr, &
                               ocean_bio)
 !
@@ -96,9 +95,8 @@
                            nt_sice, nt_qice, &
                            nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
                            tr_iage, tr_FY, tr_lvl, tr_aero
-      use ice_therm_shared, only: solve_Sin
       use ice_zbgc, only: add_new_ice_bgc
-      use ice_zbgc_public, only: initbio_frac, rhosi, bgc_tracer_type
+      use ice_zbgc_shared, only: initbio_frac, rhosi, bgc_tracer_type
 
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -163,10 +161,6 @@
       ! BGC
       integer (kind=int_kind), intent(in) :: &
          nbltrcr         ! number of biology tracers
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), &
-         intent(inout) :: &
-         fsice      ! salt flux to ocean from prognostic S (kg/m^2/s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
          intent(inout) :: &
@@ -309,12 +303,10 @@
             fsalt(i,j)      = fsalt(i,j)      + dfsalt
 
             ! bgc
-            fsice(i,j)      = fsice(i,j)  &
-                  - rhosi*vi0new(ij)/dt*p001*sss(i,j)*salt_loss
             do k = 1, nbltrcr  ! only correct for dissolved tracers
                flux_bio(i,j,k) = flux_bio(i,j,k) &
                   - vi0new(ij)/dt*ocean_bio(i,j,k)* & 
-                 (bgc_tracer_type(k)*initbio_frac + c1*(c1-bgc_tracer_type(k)))
+                 (bgc_tracer_type(k)*initbio_frac + (c1-bgc_tracer_type(k)))
             enddo
          endif
 
@@ -432,11 +424,8 @@
                   ! enthalpy
                   trcrn(i,j,nt_qice+k-1,n) = &
                  (trcrn(i,j,nt_qice+k-1,n)*vtmp + qi0(ij,k)*vsurp) / vicen(i,j,n)
-                  if (.not. solve_Sin) then !bgc
-                     ! Otherwise this is done for nt_bgc_S and mapped to nt_sice
                      trcrn(i,j,nt_sice+k-1,n) = &
                     (trcrn(i,j,nt_sice+k-1,n)*vtmp + salinz(i,j,k)*vsurp) / vicen(i,j,n) 
-                  endif
                endif
             enddo               ! ij
          enddo                  ! k
@@ -527,13 +516,12 @@
                              + qi0(ij,k)*vi0new(m))/vicen(i,j,1) 
               
                ! salinity
-              if (.NOT. solve_Sin) & !bgc
                trcrn(i,j,nt_sice+k-1,1) = &
               (trcrn(i,j,nt_sice+k-1,1)*vice1(ij) &
                             + salinz(i,j,k)*vi0new(m))/vicen(i,j,1)
-            endif    !vicen
-         enddo       !ij
-      enddo          !k
+            endif    ! vicen
+         enddo       ! ij
+      enddo          ! k
 
       call column_sum (nx_block, ny_block,       &
                        icells,   indxi,   indxj, &
@@ -616,8 +604,6 @@
                                       hin,      einex)
 !
 ! !USES:
-!
-      use ice_therm_shared, only: solve_Sin
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -857,7 +843,6 @@
 
       frac = 0.9
       dTemp = 0.02_dbl_kind
-      if (solve_Sin) dTemp = p1
       do k = 1, nilyr
          do ij = 1, icells
             i = indxi(ij)

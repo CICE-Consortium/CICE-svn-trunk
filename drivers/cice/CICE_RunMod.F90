@@ -45,7 +45,7 @@
       use ice_state, only: tr_aero
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_couple, timer_step
-      use ice_zbgc_public, only: tr_bgc_NO, solve_skl_bgc
+      use ice_zbgc_shared, only: solve_skl_bgc
 
       ! local variables
       integer (kind=int_kind) :: k
@@ -78,7 +78,7 @@
          call get_forcing_ocn(dt)  ! ocean forcing from data
 !         if (tr_aero) call faero_data        ! aerosols
          if (tr_aero)  call faero_default     ! aerosols
-         if (tr_bgc_NO .OR. solve_skl_bgc) &
+         if (solve_skl_bgc) &
                 call get_forcing_bgc    ! biogeochemistry
          call ice_timer_stop(timer_couple)   ! atm/ocn coupling
 #endif
@@ -128,13 +128,12 @@
           tr_pond_cesm, tr_pond_lvl, tr_pond_topo, hbrine, ntraceb
       use ice_step_mod, only: prep_radiation, step_therm1, step_therm2, &
           post_thermo, step_dynamics, step_radiation
-      use ice_therm_shared, only: calc_Tsfc, ktherm, solve_Sin
+      use ice_therm_shared, only: calc_Tsfc, ktherm
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_diags, timer_column, timer_thermo, timer_bound, timer_hist, &
           timer_diags_bgc, timer_readwrite
       use ice_algae, only: bgc_diags, write_restart_bgc
       use ice_zbgc, only: init_history_bgc, biogeochemistry
-      use ice_zsalinity, only: S_diags, write_restart_S
 
       integer (kind=int_kind) :: &
          iblk        , & ! block index 
@@ -231,7 +230,6 @@
 
          call ice_timer_start(timer_diags_bgc)
          if (mod(istep,diagfreq) == 0) then
-            if (solve_Sin)    call S_diags   (dt)
             if (ntraceb > 0)  call bgc_diags (dt)
             if (hbrine .and. ktherm == 2) call hbrine_diags (dt)
          endif
@@ -255,7 +253,6 @@
             if (tr_pond_lvl)  call write_restart_pond_lvl
             if (tr_pond_topo) call write_restart_pond_topo
             if (ntraceb > 0)  call write_restart_bgc  
-            if (solve_Sin)    call write_restart_S 
             if (hbrine)       call write_restart_hbrine
             if (kdyn == 2)    call write_restart_eap
          endif
@@ -279,7 +276,7 @@
       use ice_flux, only: alvdf, alidf, alvdr, alidr, albice, albsno, &
           albpnd, albcnt, apeff_ai, coszen, fpond, fresh, &
           alvdf_gbm, alidf_gbm, alvdr_gbm, alidr_gbm, fhocn_gbm, &
-          fresh_gbm, fsalt_gbm, fsalt, fsice_gbm, fsice_g_gbm, &
+          fresh_gbm, fsalt_gbm, fsalt, &
           fswthru_gbm, fhocn, fswthru, scale_factor, &
           swvdr, swidr, swvdf, swidf, Tf, Tair, Qa, strairxT, strairyt, &
           fsens, flat, fswabs, flwout, evap, Tref, Qref, faero_ocn, &
@@ -290,8 +287,8 @@
                                albicen, albsnon, albpndn, apeffn
       use ice_state, only: aicen, aice, aice_init, ntraceb
       use ice_therm_shared, only: calc_Tsfc
-      use ice_zbgc_public, only: flux_bio, flux_bio_g, flux_bio_gbm, &
-          flux_bio_g_gbm, fsice, fsice_g
+      use ice_zbgc_shared, only: flux_bio, flux_bio_g, flux_bio_gbm, &
+          flux_bio_g_gbm
 
       integer (kind=int_kind), intent(in) :: & 
          iblk            ! block index 
@@ -388,8 +385,6 @@
             fsalt_gbm  (i,j,iblk) = fsalt  (i,j,iblk)
             fhocn_gbm  (i,j,iblk) = fhocn  (i,j,iblk)
             fswthru_gbm(i,j,iblk) = fswthru(i,j,iblk)
-            fsice_gbm  (i,j,iblk) = fsice  (i,j,iblk)
-            fsice_g_gbm  (i,j,iblk) = fsice_g  (i,j,iblk)
 
             do k = 1,ntraceb
               flux_bio_gbm  (i,j,k,iblk) = flux_bio (i,j,k,iblk)
@@ -428,7 +423,6 @@
                             faero_ocn(:,:,:,iblk),                   &
                             alvdr    (:,:,iblk), alidr   (:,:,iblk), &
                             alvdf    (:,:,iblk), alidf   (:,:,iblk), &
-                            fsice    (:,:,iblk), fsice_g (:,:,iblk), &
                             flux_bio(:,:,:,iblk),flux_bio_g(:,:,:,iblk))
  
 !echmod - comment this out for efficiency, if .not. calc_Tsfc

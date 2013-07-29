@@ -1655,7 +1655,7 @@
                               tr_pond_topo,            &
                               heat_capacity,           &
                               nbltrcr,     first_ice,  &
-                              fsice,       flux_bio,   &
+                              flux_bio,                &
                               l_stop,                  &
                               istop,         jstop,    &
                               limit_aice_in)
@@ -1727,8 +1727,7 @@
          fpond    , & ! fresh water flux to ponds (kg/m^2/s)
          fresh    , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt    , & ! salt flux to ocean        (kg/m^2/s)
-         fhocn    , & ! net heat flux to ocean     (W/m^2)
-         fsice        ! net salt flux to ocean from layer Salinity (kg/m^2/s)
+         fhocn        ! net heat flux to ocean     (W/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
          intent(inout), optional :: &
@@ -1866,8 +1865,7 @@
                                dfhocn,   dfaero_ocn,&
                                tr_aero,  tr_pond_topo, &
                                first_ice,nbltrcr,   &
-                               fsice,    flux_bio,  &
-                               l_stop,              &
+                               flux_bio, l_stop,    &
                                istop,    jstop)
          if (l_stop) return
       endif   ! l_limit_aice
@@ -1924,8 +1922,7 @@
                                   dfhocn,   dfaero_ocn,&
                                   tr_aero,  tr_pond_topo, &
                                   first_ice,nbltrcr,   &
-                                  fsice,    flux_bio,  &
-                                  l_stop,              &
+                                  flux_bio, l_stop,    &
                                   istop,    jstop)
 !
 ! !DESCRIPTION:
@@ -1940,8 +1937,8 @@
 ! !USES:
 !
       use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_aero, nt_apnd, nt_hpnd, &
-                           nt_fbri, nt_bgc_S, hbrine
-      use ice_zbgc_public, only: rhosi, lateral_melt_bgc, min_salin
+                           nt_fbri, hbrine
+      use ice_zbgc_shared, only: rhosi, min_salin
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1974,8 +1971,7 @@
          dfpond   , & ! zapped pond water flux (kg/m^2/s)
          dfresh   , & ! zapped fresh water flux (kg/m^2/s)
          dfsalt   , & ! zapped salt flux   (kg/m^2/s)
-         dfhocn   , & ! zapped energy flux ( W/m^2)
-         fsice        ! Ocean salt flux from S layer model (kg/m^2/s)
+         dfhocn       ! zapped energy flux ( W/m^2)
 
      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
          intent(out) :: &
@@ -2076,16 +2072,6 @@
                dfpond(i,j) = dfpond(i,j) - xtmp
             enddo                  ! ij
          endif
-
-        ! Biogeochemistry
-        ! Calls bgc lateral melting routine with rside=1.
-         worka (:,:) = c1
-         call lateral_melt_bgc(nx_block,       ny_block,    &
-                               icells,         dt,          &
-                               indxi,          indxj,       &
-                               worka,          vicen(:,:,n),&
-                               trcrn(:,:,:,n), fsice,       &
-                               flux_bio,       nbltrcr)
 
          if (tr_aero) then
 !DIR$ CONCURRENT !Cray
@@ -2317,19 +2303,6 @@
                  * (aice(i,j)-c1)/aice(i,j) / dt
             dfsalt(i,j) = dfsalt(i,j) + xtmp 
  
-            if (hbrine) then
-            do k = 1,nblyr
-               fsice(i,j) = fsice(i,j) + rhosi*trcrn(i,j,nt_fbri,n)&
-                            *vicen(i,j,n)*p001 *zspace*trcrn(i,j,nt_bgc_S+k-1,n) &
-                            * (aice(i,j)-c1)/aice(i,j) /dt
-            enddo
-
-            if (vicen(i,j,n) > vicen(i,j,n)*trcrn(i,j,nt_fbri,n)) &
-               fsice(i,j) = fsice(i,j) + &
-               (vicen(i,j,n)-vicen(i,j,n)*trcrn(i,j,nt_fbri,n))*(aice(i,j)-c1)/&
-                aice(i,j)*p001*rhosi*min_salin/dt
-            endif ! hbrine
-
             aicen(i,j,n) = aicen(i,j,n) * (c1/aice(i,j)) 
             vicen(i,j,n) = vicen(i,j,n) * (c1/aice(i,j)) 
             vsnon(i,j,n) = vsnon(i,j,n) * (c1/aice(i,j))
