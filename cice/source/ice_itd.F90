@@ -2450,7 +2450,7 @@
                esnon(i,j,n) = esnon(i,j,n) + trcrn(i,j,nt_qsno+k-1,n) &
                             * vsnon(i,j,n) / real(nslyr,kind=dbl_kind)
             enddo
-            workb(i,j) = esnon(i,j,n) + rhoi * Lfresh * vicen(i,j,n)
+            workb(i,j) = esnon(i,j,n) + rhos * Lfresh * vsnon(i,j,n)
 
             if(abs(worka(i,j)) > max_error) then
                ice_energy_correct = .false.

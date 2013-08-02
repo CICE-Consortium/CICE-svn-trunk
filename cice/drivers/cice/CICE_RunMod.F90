@@ -230,7 +230,7 @@
 
          call ice_timer_start(timer_diags_bgc)
          if (mod(istep,diagfreq) == 0) then
-            if (ntraceb > 0)  call bgc_diags (dt)
+            if (ntraceb > 0)              call bgc_diags (dt)
             if (hbrine .and. ktherm == 2) call hbrine_diags (dt)
          endif
          call ice_timer_stop(timer_diags_bgc)
@@ -275,9 +275,9 @@
       use ice_domain_size, only: ncat
       use ice_flux, only: alvdf, alidf, alvdr, alidr, albice, albsno, &
           albpnd, albcnt, apeff_ai, coszen, fpond, fresh, &
-          alvdf_gbm, alidf_gbm, alvdr_gbm, alidr_gbm, fhocn_gbm, &
-          fresh_gbm, fsalt_gbm, fsalt, &
-          fswthru_gbm, fhocn, fswthru, scale_factor, &
+          alvdf_ai, alidf_ai, alvdr_ai, alidr_ai, fhocn_ai, &
+          fresh_ai, fsalt_ai, fsalt, &
+          fswthru_ai, fhocn, fswthru, scale_factor, &
           swvdr, swidr, swvdf, swidf, Tf, Tair, Qa, strairxT, strairyt, &
           fsens, flat, fswabs, flwout, evap, Tref, Qref, faero_ocn, &
           fsurfn_f, flatn_f, scale_fluxes
@@ -287,8 +287,8 @@
                                albicen, albsnon, albpndn, apeffn
       use ice_state, only: aicen, aice, aice_init, ntraceb
       use ice_therm_shared, only: calc_Tsfc
-      use ice_zbgc_shared, only: flux_bio, flux_bio_g, flux_bio_gbm, &
-          flux_bio_g_gbm
+      use ice_zbgc_shared, only: flux_bio, flux_bio_g, flux_bio_ai, &
+          flux_bio_g_ai
 
       integer (kind=int_kind), intent(in) :: & 
          iblk            ! block index 
@@ -377,28 +377,28 @@
       ! Store grid box mean albedos and fluxes before scaling by aice
       !----------------------------------------------------------------
 
-            alvdf_gbm  (i,j,iblk) = alvdf  (i,j,iblk)
-            alidf_gbm  (i,j,iblk) = alidf  (i,j,iblk)
-            alvdr_gbm  (i,j,iblk) = alvdr  (i,j,iblk)
-            alidr_gbm  (i,j,iblk) = alidr  (i,j,iblk)
-            fresh_gbm  (i,j,iblk) = fresh  (i,j,iblk)
-            fsalt_gbm  (i,j,iblk) = fsalt  (i,j,iblk)
-            fhocn_gbm  (i,j,iblk) = fhocn  (i,j,iblk)
-            fswthru_gbm(i,j,iblk) = fswthru(i,j,iblk)
+            alvdf_ai  (i,j,iblk) = alvdf  (i,j,iblk)
+            alidf_ai  (i,j,iblk) = alidf  (i,j,iblk)
+            alvdr_ai  (i,j,iblk) = alvdr  (i,j,iblk)
+            alidr_ai  (i,j,iblk) = alidr  (i,j,iblk)
+            fresh_ai  (i,j,iblk) = fresh  (i,j,iblk)
+            fsalt_ai  (i,j,iblk) = fsalt  (i,j,iblk)
+            fhocn_ai  (i,j,iblk) = fhocn  (i,j,iblk)
+            fswthru_ai(i,j,iblk) = fswthru(i,j,iblk)
 
             do k = 1,ntraceb
-              flux_bio_gbm  (i,j,k,iblk) = flux_bio (i,j,k,iblk)
-              flux_bio_g_gbm  (i,j,k,iblk) = flux_bio_g  (i,j,k,iblk)
+              flux_bio_ai  (i,j,k,iblk) = flux_bio  (i,j,k,iblk)
+              flux_bio_g_ai(i,j,k,iblk) = flux_bio_g(i,j,k,iblk)
             enddo
 
       !-----------------------------------------------------------------
       ! Save net shortwave for scaling factor in scale_factor
       !-----------------------------------------------------------------
             scale_factor(i,j,iblk) = &
-                       swvdr(i,j,iblk)*(c1 - alvdr_gbm(i,j,iblk)) &
-                     + swvdf(i,j,iblk)*(c1 - alvdf_gbm(i,j,iblk)) &
-                     + swidr(i,j,iblk)*(c1 - alidr_gbm(i,j,iblk)) &
-                     + swidf(i,j,iblk)*(c1 - alidf_gbm(i,j,iblk))
+                       swvdr(i,j,iblk)*(c1 - alvdr_ai(i,j,iblk)) &
+                     + swvdf(i,j,iblk)*(c1 - alvdf_ai(i,j,iblk)) &
+                     + swidr(i,j,iblk)*(c1 - alidr_ai(i,j,iblk)) &
+                     + swidf(i,j,iblk)*(c1 - alidf_ai(i,j,iblk))
 
          enddo
          enddo

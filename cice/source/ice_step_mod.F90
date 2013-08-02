@@ -138,10 +138,10 @@
          do j = jlo, jhi
          do i = ilo, ihi
             if (aice(i,j,iblk) > c0 .and. scale_factor(i,j,iblk) > puny) then
-               netsw = swvdr(i,j,iblk)*(c1 - alvdr_gbm(i,j,iblk)) &
-                     + swvdf(i,j,iblk)*(c1 - alvdf_gbm(i,j,iblk)) &
-                     + swidr(i,j,iblk)*(c1 - alidr_gbm(i,j,iblk)) &
-                     + swidf(i,j,iblk)*(c1 - alidf_gbm(i,j,iblk))
+               netsw = swvdr(i,j,iblk)*(c1 - alvdr_ai(i,j,iblk)) &
+                     + swvdf(i,j,iblk)*(c1 - alvdf_ai(i,j,iblk)) &
+                     + swidr(i,j,iblk)*(c1 - alidr_ai(i,j,iblk)) &
+                     + swidf(i,j,iblk)*(c1 - alidf_ai(i,j,iblk))
                scale_factor(i,j,iblk) = netsw / scale_factor(i,j,iblk)
             else
                scale_factor(i,j,iblk) = c1
@@ -769,7 +769,6 @@
       use ice_itd, only: reduce_area
       use ice_therm_mushy, only: add_new_ice_mushy
       use ice_therm_bl99, only: add_new_ice_bl99
-      use ice_therm_oned, only: diagnose_itd
       use ice_zbgc_shared, only: ocean_bio, flux_bio
 !
 ! !INPUT/OUTPUT PARAMETERS:

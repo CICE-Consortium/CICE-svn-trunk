@@ -167,13 +167,13 @@
          dflwout_dT      ! deriv of flwout wrt Tsf (W m-2 deg-1)
 
       real (kind=dbl_kind), dimension (:), allocatable :: &
-         heff        , & ! effective ice thickness (m)
-                         ! ( hice + hsno*kseaice/ksnow)
          kh          , & ! effective conductivity
          diag        , & ! diagonal matrix elements
          rhs             ! rhs of tri-diagonal matrix equation
 
       real (kind=dbl_kind) :: &
+         heff        , & ! effective ice thickness (m)
+                         ! ( hice + hsno*kseaice/ksnow)
          kratio      , & ! ratio of ice and snow conductivies
          avg_Tsf         ! = 1. if Tsf averaged w/Tsf_start, else = 0.
 
@@ -225,7 +225,6 @@
          allocate(     diag(isolve))
          allocate(      rhs(isolve))
          allocate(       kh(isolve))
-         allocate(     heff(isolve))
          allocate(Tsf_start(isolve))
          allocate(     dTsf(isolve))
          allocate(dfsurf_dT(isolve))
@@ -257,8 +256,8 @@
          do ij = 1, isolve
              m = indxij(ij)
    
-             heff(ij) = hilyr(m) + kratio * hslyr(m)
-             kh(ij) = kseaice / heff(ij)        
+             heff = hilyr(m) + kratio * hslyr(m)
+             kh(ij) = kseaice / heff
          enddo                     ! ij
 
 
@@ -414,7 +413,6 @@
          deallocate(diag)
          deallocate(rhs)
          deallocate(kh)
-         deallocate(heff)
          deallocate(Tsf_start)
          deallocate(dTsf)
          deallocate(dfsurf_dT)

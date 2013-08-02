@@ -603,7 +603,7 @@
                                       istop,    jstop,    &
                                       hin,      einex)
 !
-! !USES:
+      use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -990,18 +990,6 @@
       ! with respect to Tsf.
       !-----------------------------------------------------------------
 
-          call surface_fluxes(nx_block,    ny_block,          &
-                              isolve,      icells,            &
-                              indxii,      indxjj,    indxij, &
-                              Tsf,         fswsfc,            &
-                              rhoa,        flw,               &
-                              potT,        Qa,                &
-                              shcoef,      lhcoef,            &
-                              flwoutn,     fsensn,            &
-                              flatn,       fsurfn,            &
-                              dflwout_dT,  dfsens_dT,         &
-                              dflat_dT,    dfsurf_dT)
-
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -1009,6 +997,22 @@
             i = indxii(ij)
             j = indxjj(ij)
             m = indxij(ij)
+
+         ! surface heat flux
+         call surface_heat_flux(Tsf    (m),   fswsfc(i,j), &
+                                rhoa   (i,j), flw   (i,j), &
+                                potT   (i,j), Qa    (i,j), &
+                                shcoef (i,j), lhcoef(i,j), &
+                                flwoutn(i,j), fsensn(i,j), &
+                                flatn  (i,j), fsurfn(i,j))
+
+         ! derivative of heat flux with respect to surface temperature
+         call dsurface_heat_flux_dTsf(Tsf      (m),   fswsfc    (i,j), &
+                                      rhoa     (i,j), flw       (i,j), &
+                                      potT     (i,j), Qa        (i,j), &
+                                      shcoef   (i,j), lhcoef    (i,j), &
+                                      dfsurf_dT(ij),  dflwout_dT(m),   &
+                                      dfsens_dT(m),   dflat_dT  (m))
 
       !-----------------------------------------------------------------
       ! Compute conductive flux at top surface, fcondtopn.
@@ -1643,7 +1647,7 @@
                                  dflwout_dT, dfsens_dT,         &
                                  dflat_dT,   dfsurf_dT)
 !
-! !USES:
+      use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1711,33 +1715,21 @@
          j = indxjj(ij)
          m = indxij(ij)
 
-         ! ice surface temperature in Kelvin
-         TsfK = Tsf(m) + Tffresh
-         tmpvar = c1/TsfK
+         ! surface heat flux
+         call surface_heat_flux(Tsf    (m),   fswsfc(i,j), &
+                                rhoa   (i,j), flw   (i,j), &
+                                potT   (i,j), Qa    (i,j), &
+                                shcoef (i,j), lhcoef(i,j), &
+                                flwoutn(i,j), fsensn(i,j), &
+                                flatn  (i,j), fsurfn(i,j))
 
-         ! saturation humidity
-         qsat    = qqqice * exp(-TTTice*tmpvar)
-         Qsfc    = qsat / rhoa(i,j)
-         dQsfcdT = TTTice * tmpvar*tmpvar * Qsfc
-
-         ! longwave radiative flux
-         flwdabs =  emissivity * flw(i,j)
-         flwoutn(i,j) = -emissivity * stefan_boltzmann * TsfK**4
-
-         ! downward latent and sensible heat fluxes
-         fsensn(i,j) = shcoef(i,j) * (potT(i,j) - TsfK)
-         flatn(i,j)  = lhcoef(i,j) * (Qa(i,j) - Qsfc)
-
-         ! derivatives wrt surface temp
-         dflwout_dT(m) = - emissivity*stefan_boltzmann * c4*TsfK**3
-         dfsens_dT(m)  = - shcoef(i,j)
-         dflat_dT(m)   = - lhcoef(i,j) * dQsfcdT
-
-         fsurfn(i,j) = fswsfc(i,j) + flwdabs + flwoutn(i,j) &
-                     + fsensn(i,j) + flatn(i,j)
-         dfsurf_dT(ij) = dflwout_dT(m) &
-                         + dfsens_dT(m) + dflat_dT(m)
-
+         ! derivative of heat flux with respect to surface temperature
+         call dsurface_heat_flux_dTsf(Tsf      (m),   fswsfc    (i,j), &
+                                      rhoa     (i,j), flw       (i,j), &
+                                      potT     (i,j), Qa        (i,j), &
+                                      shcoef   (i,j), lhcoef    (i,j), &
+                                      dfsurf_dT(ij),  dflwout_dT(m),   &
+                                      dfsens_dT(m),   dflat_dT  (m))
       enddo                     ! ij
 
       end subroutine surface_fluxes
