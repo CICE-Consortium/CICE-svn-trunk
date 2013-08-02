@@ -53,6 +53,7 @@
       subroutine cice_init
 
       use ice_aerosol, only: faero_default
+      use ice_algae, only: get_forcing_bgc
       use ice_calendar, only: dt, dt_dyn, time, istep, istep1, write_ic, &
           init_calendar, calendar
       use ice_communicate, only: init_communicate
@@ -78,8 +79,8 @@
       use ice_therm_vertical, only: init_thermo_vertical
       use ice_timers, only: timer_total, init_ice_timers, ice_timer_start
       use ice_transport_driver, only: init_transport
-      use ice_zbgc, only: init_zbgc, get_forcing_bgc
-      use ice_zbgc_public, only: tr_bgc_NO, tr_bgc_Sil
+      use ice_zbgc, only: init_zbgc
+      use ice_zbgc_shared, only: solve_skl_bgc
 #ifdef popcice
       use drv_forcing, only: sst_sss
 #endif
@@ -154,7 +155,7 @@
       call get_forcing_ocn(dt)  ! ocean forcing from data
 !      if (tr_aero) call faero_data          ! aerosols
       if (tr_aero) call faero_default ! aerosols
-      if (tr_bgc_NO .or. tr_bgc_Sil) call get_forcing_bgc
+      if (solve_skl_bgc) call get_forcing_bgc
 #endif
 
       if (runtype == 'initial' .and. .not. restart) &
@@ -174,6 +175,7 @@
       use ice_aerosol, only: init_aerosol
       use ice_age, only: init_age
       use ice_blocks, only: nx_block, ny_block
+      use ice_brine, only: init_hbrine
       use ice_calendar, only: time, calendar
       use ice_domain, only: nblocks
       use ice_domain_size, only: ncat
@@ -194,10 +196,9 @@
       use ice_restart_meltpond_topo, only: restart_pond_topo, read_restart_pond_topo
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond_cesm, &
           tr_pond_lvl, tr_pond_topo, tr_aero, trcrn, &
-          nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd
+          nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd, hbrine
       use ice_zbgc, only: init_bgc
-      use ice_zbgc_public, only: tr_bgc_S, tr_bgc_NO, solve_bgc
-      use ice_zsalinity, only: init_zsalinity
+      use ice_zbgc_shared, only: solve_skl_bgc
 
       integer(kind=int_kind) :: iblk
 
@@ -296,9 +297,9 @@
             enddo ! iblk
          endif ! .not restart_pond
       endif
-      if (tr_aero)      call init_aerosol        ! ice aerosol
-      if (tr_bgc_S)     call init_zsalinity(sss) ! salinity on bio-grid
-      if (tr_bgc_NO .or. solve_bgc) call init_bgc! layer biogeochemistry
+      if (tr_aero)       call init_aerosol ! ice aerosol
+      if (hbrine)        call init_hbrine  ! brine height tracer
+      if (solve_skl_bgc) call init_bgc     ! biogeochemistry
 
       end subroutine init_restart
 

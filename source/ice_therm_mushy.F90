@@ -29,7 +29,6 @@ module ice_therm_mushy
             liquidus_brine_salinity_mush, &
             liquidus_temperature_mush, &
             temperature_changes_salinity, &
-            init_therm_mushy, &
             enthalpy_mush, &
             enthalpy_of_melting, &
             add_new_ice_mushy, &
@@ -636,13 +635,6 @@ contains
       if (l_stop) return
 
       end subroutine add_new_ice_mushy
-
-!=======================================================================
-
-  subroutine init_therm_mushy()
-
-
-  end subroutine init_therm_mushy
 
 !=======================================================================
 
@@ -1592,12 +1584,9 @@ contains
     ! initial surface melting temperature
     Tmlt = liquidus_temperature_mush(Sin(1))
 
-#if defined flushing_notz
-    if (.true.) then
-#else
     ! determine if surface is initially cold or melting
     if (Tsf < Tmlt) then
-#endif
+
        ! initially cold
 
 #if debug == 1
@@ -1635,10 +1624,6 @@ contains
 
 #if debug == 1
        write(*,*) istep1, "Two stage nosnow: 1", Tsf, Tmlt, Tsf < Tmlt, Tsf - Tmlt
-#endif
-
-#if defined flushing_notz
-       return
 #endif
 
        ! check if solution is consistent - surface should still be cold
@@ -1920,6 +1905,8 @@ contains
                            q,        dSdt,     &
                            w,        lstop)
 
+    use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
+
     logical, intent(in) :: &
          lsnow        , & ! snow presence: T: has snow, F: no snow
          lcold            ! surface cold: T: surface is cold, F: surface is melting
@@ -2003,7 +1990,7 @@ contains
          dfsurfn_dTsf , & ! derivative of net flux to top surface, excluding fcondtopn
          Tsf_prev     , & ! snow surface temperature at previous iteration
          einit        , & ! initial total energy (J)
-         fadvheat_nit     ! flow of heat to ocean due to advection (W m-2) during iteration
+         fadvheat_nit     ! heat to ocean due to advection (W m-2) during iteration
 
     logical :: &
          lconverged       ! has Picard solver converged?
@@ -2014,6 +2001,8 @@ contains
 
     integer, parameter :: &
          nit_max = 100    ! maximum number of Picard iterations
+
+    real(kind=dbl_kind) :: tmpflux
 
     lconverged = .false.
 
@@ -2055,7 +2044,8 @@ contains
                                     rhoa,    flw,    &
                                     potT,    Qa,     &
                                     shcoef,  lhcoef, &
-                                    dfsurfn_dTsf)
+                                    dfsurfn_dTsf, &
+                                    tmpflux, tmpflux, tmpflux)
 
        ! tridiagonal solve of new temperatures
        call solve_heat_conduction(lsnow,     lcold,        &
@@ -3643,145 +3633,6 @@ contains
   end subroutine tdma_solve_sparse
 
 !=======================================================================
-! Surface heat flux
-!=======================================================================
-
-  subroutine surface_heat_flux(Tsf,     fswsfc, &
-                               rhoa,    flw,    &
-                               potT,    Qa,     &
-                               shcoef,  lhcoef, &
-                               flwoutn, fsensn, &
-                               flatn,   fsurfn)       
-    
-    ! heat flux into ice
-    
-    ! input surface temperature
-    real(kind=dbl_kind), intent(in) :: &
-         Tsf             ! ice/snow surface temperature (C)
-    
-    ! input variables
-    real(kind=dbl_kind), intent(in) :: &
-         fswsfc      , & ! SW absorbed at ice/snow surface (W m-2)
-         rhoa        , & ! air density (kg/m^3)
-         flw         , & ! incoming longwave radiation (W/m^2)
-         potT        , & ! air potential temperature  (K)
-         Qa          , & ! specific humidity (kg/kg)
-         shcoef      , & ! transfer coefficient for sensible heat
-         lhcoef          ! transfer coefficient for latent heat
-    
-    ! output
-    real(kind=dbl_kind), intent(out) :: &
-         fsensn      , & ! surface downward sensible heat (W m-2)
-         flatn       , & ! surface downward latent heat (W m-2)
-         flwoutn     , & ! upward LW at surface (W m-2)
-         fsurfn          ! net flux to top surface, excluding fcondtopn
-    
-    ! local variables
-    real(kind=dbl_kind) :: &
-         TsfK        , & ! ice/snow surface temperature (K)
-         Qsfc        , & ! saturated surface specific humidity (kg/kg)
-         qsat        , & ! the saturation humidity of air (kg/m^3)
-         flwdabs     , & ! downward longwave absorbed heat flx (W/m^2)
-         tmpvar          ! 1/TsfK
-    
-    
-    ! ice surface temperature in Kelvin
-    TsfK = max(Tsf + Tffresh, c1)
-    tmpvar = c1/TsfK
-    
-    ! saturation humidity
-    qsat    = qqqice * exp(-TTTice*tmpvar)
-    Qsfc    = qsat / rhoa
-    
-    ! longwave radiative flux
-    flwdabs =  emissivity * flw
-    flwoutn = -emissivity * stefan_boltzmann * TsfK**4
-    
-    ! downward latent and sensible heat fluxes
-#if !defined notz_experiment
-    fsensn = shcoef * (potT - TsfK)
-#elif defined  notz_experiment
-    fsensn = c0
-#else
-    fsensn = heat_coeff_air_global * (potT - TsfK)
-#endif
-    flatn  = lhcoef * (Qa - Qsfc)
-    
-    ! combine fluxes
-#if !defined notz_experiment
-    fsurfn = fswsfc + flwdabs + flwoutn + fsensn + flatn
-#elif defined notz_experiment
-    fsurfn = c0
-    flwdabs = c0
-    flatn = c0
-    flwoutn = c0
-#else
-    flatn = c0
-    fsurfn = fsensn + flwoutn * longwave_fudge_global + flwdabs
-#endif
-
-  end subroutine surface_heat_flux
-
-  !=======================================================================
-  
-  subroutine dsurface_heat_flux_dTsf(Tsf,     fswsfc, &
-                                     rhoa,    flw,    &
-                                     potT,    Qa,     &
-                                     shcoef,  lhcoef, &
-                                     dfsurfn_dTsf)
-    
-    ! input surface temperature
-    real(kind=dbl_kind), intent(in) :: &
-         Tsf               ! ice/snow surface temperature (C)
-    
-    ! input variables
-    real(kind=dbl_kind), intent(in) :: &
-         fswsfc        , & ! SW absorbed at ice/snow surface (W m-2)
-         rhoa          , & ! air density (kg/m^3)
-         flw           , & ! incoming longwave radiation (W/m^2)
-         potT          , & ! air potential temperature  (K)
-         Qa            , & ! specific humidity (kg/kg)
-         shcoef        , & ! transfer coefficient for sensible heat
-         lhcoef            ! transfer coefficient for latent heat
-    
-    ! output
-    real(kind=dbl_kind), intent(out) :: &
-         dfsurfn_dTsf      ! derivative of net flux to top surface, excluding fcondtopn
-    
-    ! local variables
-    real(kind=dbl_kind) :: &
-         TsfK          , & ! ice/snow surface temperature (K)
-         dQsfc_dTsf    , & ! saturated surface specific humidity (kg/kg)
-         qsat          , & ! the saturation humidity of air (kg/m^3)
-         flwdabs       , & ! downward longwave absorbed heat flx (W/m^2)
-         tmpvar            ! 1/TsfK
-    
-    real(kind=dbl_kind) :: &
-         dflwoutn_dTsf , & ! derivative of longwave flux wrt surface temperature
-         dfsensn_dTsf  , & ! derivative of sensible heat flux wrt surface temperature
-         dflatn_dTsf       ! derivative of latent heat flux wrt surface temperature
-    
-    ! ice surface temperature in Kelvin
-    TsfK = max(Tsf + Tffresh, c1)
-    tmpvar = c1/TsfK
-    
-    ! saturation humidity
-    qsat          = qqqice * exp(-TTTice*tmpvar)
-    dQsfc_dTsf    = (qsat / rhoa) * TTTice * tmpvar * tmpvar
-    
-    ! longwave radiative flux
-    dflwoutn_dTsf = -c4 * emissivity * stefan_boltzmann * TsfK**3
-    
-    ! downward latent and sensible heat fluxes
-    dfsensn_dTsf = -shcoef
-    dflatn_dTsf  = - lhcoef * dQsfc_dTsf
-    
-    ! combine fluxes
-    dfsurfn_dTsf = dflwoutn_dTsf + dfsensn_dTsf + dflatn_dTsf
-    
-  end subroutine dsurface_heat_flux_dTsf
-
-!=======================================================================
 ! Effect of salinity
 !=======================================================================
 
@@ -4021,7 +3872,7 @@ contains
     real(kind=dbl_kind), dimension(nilyr), intent(in) :: &
          Tin       , & ! ice layer temperature (C)
          Sin       , & ! ice layer bulk salinity (ppt)
-         phi
+         phi           ! ice layer liquid fraction
 
     real(kind=dbl_kind), intent(in) :: &
          hilyr     , & ! ice layer thickness (m)
@@ -4043,7 +3894,6 @@ contains
          advection_limit = 0.005_dbl_kind      ! limit to fraction of brine in any layer that can be advected 
 
     real(kind=dbl_kind) :: &
-!         phi        , & ! ice layer liquid fraction
          perm       , & ! ice layer permeability (m2)
          Mice       , & ! mass of ice (kg m-2)
          perm_harm  , & ! harmonic mean of ice permeability (m2)
@@ -4051,7 +3901,8 @@ contains
          hbrine     , & ! brine surface height above ice base (m)
          w_down_max , & ! maximum downward flushing Darcy flow rate (m s-1) 
          phi_min    , & ! minimum porosity in the mush
-         wlimit         ! limit to w to avoid advecting all brine in layer
+         wlimit     , & ! limit to w to avoid advecting all brine in layer
+         rtmp
 
     integer(kind=int_kind) :: &
          k             ! ice layer index
@@ -4131,7 +3982,11 @@ contains
     !write(44,*) istep, wlimit, w, w * max(min(abs(wlimit/w),c1),c0)
     !close(44)
 
-    w = w * max(min(abs(wlimit/w),c1),c0)
+    if (abs(w) > puny) then
+       w = w * max(min(abs(wlimit/w),c1),c0)
+    else
+       w = c0
+    endif
 
 #if flushing_up == 0
     ! no flooding

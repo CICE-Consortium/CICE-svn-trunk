@@ -166,7 +166,7 @@
       use ice_calendar, only: nstreams
       use ice_domain, only: nblocks, blocks_ice
       use ice_flux, only: alvdf, alidf, alvdr, alidr, &
-                          alvdr_gbm, alidr_gbm, alvdf_gbm, alidf_gbm, &
+                          alvdr_ai, alidr_ai, alvdf_ai, alidf_ai, &
                           swvdr, swvdf, swidr, swidf, &
                           albice, albsno, albpnd, apeff_ai, albcnt, coszen, fsnow
       use ice_orbital, only: init_orbit
@@ -212,10 +212,10 @@
          alidf(i,j,iblk) = c0
          alvdr(i,j,iblk) = c0
          alidr(i,j,iblk) = c0
-         alvdr_gbm(i,j,iblk) = c0
-         alidr_gbm(i,j,iblk) = c0
-         alvdf_gbm(i,j,iblk) = c0
-         alidf_gbm(i,j,iblk) = c0
+         alvdr_ai(i,j,iblk) = c0
+         alidr_ai(i,j,iblk) = c0
+         alvdf_ai(i,j,iblk) = c0
+         alidf_ai(i,j,iblk) = c0
       enddo
       enddo
       enddo
@@ -349,10 +349,10 @@
 
          do j = 1, ny_block
          do i = 1, nx_block
-            alvdf_gbm  (i,j,iblk) = alvdf  (i,j,iblk)
-            alidf_gbm  (i,j,iblk) = alidf  (i,j,iblk)
-            alvdr_gbm  (i,j,iblk) = alvdr  (i,j,iblk)
-            alidr_gbm  (i,j,iblk) = alidr  (i,j,iblk)
+            alvdf_ai  (i,j,iblk) = alvdf  (i,j,iblk)
+            alidf_ai  (i,j,iblk) = alidf  (i,j,iblk)
+            alvdr_ai  (i,j,iblk) = alvdr  (i,j,iblk)
+            alidr_ai  (i,j,iblk) = alidr  (i,j,iblk)
 
             ! for history averaging
             cszn = c0

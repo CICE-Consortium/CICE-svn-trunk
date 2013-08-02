@@ -947,8 +947,8 @@
       growN    (:,:,:,:,:) = c0
       flux_bio (:,:,:,:) = c0
       flux_bio_g(:,:,:,:) = c0
-      flux_bio_gbm  (:,:,:,:) = c0
-      flux_bio_g_gbm  (:,:,:,:) = c0
+      flux_bio_ai  (:,:,:,:) = c0
+      flux_bio_g_ai  (:,:,:,:) = c0
 
       end subroutine init_history_bgc
 

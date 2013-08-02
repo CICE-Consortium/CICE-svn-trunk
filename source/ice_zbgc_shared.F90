@@ -55,8 +55,8 @@
          flux_bio ,&    ! all bio fluxes (+ive to ocean) are included here 
          flux_bio_g, &   !gravity drainage contribution
          ocean_bio,  &  ! contains all the ocean bgc tracer concentrations
-         flux_bio_gbm ,&  ! all bio fluxes (+ive to ocean) are included here
-         flux_bio_g_gbm  !gravity drainage contribution
+         flux_bio_ai ,&  ! all bio fluxes (+ive to ocean) are included here
+         flux_bio_g_ai  !gravity drainage contribution
 
       real (kind=int_kind), dimension(nbltrcr), public :: &
          bgc_tracer_type  ! 1  dissolved tracers: mix like salinity

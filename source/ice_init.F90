@@ -1252,11 +1252,7 @@
          hinit(ncat)
 
       real (kind=dbl_kind), parameter :: &
-#if (defined notz_experiment || defined notz_fieldwork || defined flushing_notz || defined snowice_maksym || defined pond_barrow)
-         hsno_init = 0.0_dbl_kind   , & ! initial snow thickness (m)
-#else 
          hsno_init = 0.20_dbl_kind   , & ! initial snow thickness (m)
-#endif
          edge_init_nh =  70._dbl_kind, & ! initial ice edge, N.Hem. (deg) 
          edge_init_sh = -60._dbl_kind    ! initial ice edge, S.Hem. (deg)
 
@@ -1342,13 +1338,7 @@
          indxi(icells) = 4
          indxj(icells) = 4
          ainit(:) = c1
-#if (defined notz_fieldwork || defined notz_experiment || defined snowice_maksym || defined pond_barrow)
-         hinit(:) = 0.01_dbl_kind
-#elif defined flushing_notz
-         hinit(:) = 0.9_dbl_kind
-#else
          hinit(:) = c1
-#endif
 #endif
             
          ! place ice on left side of domain
@@ -1432,23 +1422,7 @@
                do ij = 1, icells
                   i = indxi(ij)
                   j = indxj(ij)
-
-                  if (ktherm == 2) then
-#if defined notz_experiment
-                     trcrn(i,j,nt_Tsfc,n) = -10.0_dbl_kind
-#elif (defined notz_fieldwork || defined snowice_maksym || defined pond_barrow)
-                     trcrn(i,j,nt_Tsfc,n) = liquidus_temperature_mush(salinz(i,j,1) / phi_init)
-#elif defined flushing_notz
-                     trcrn(i,j,nt_Tsfc,n) = liquidus_temperature_mush(salinz(i,j,1))
-#else
-                     trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) !deg C
-#endif
-                  else
-
-                     trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) !deg C
-
-                  endif
-
+                  trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) !deg C
                enddo
 
             else    ! Tsfc is not calculated by the ice model
@@ -1472,21 +1446,10 @@
                      j = indxj(ij)
 
                      ! assume linear temp profile and compute enthalpy
-#if defined notz_experiment
-
                      slope = Tf(i,j) - trcrn(i,j,nt_Tsfc,n)
                      Ti = trcrn(i,j,nt_Tsfc,n) &
                         + slope*(real(k,kind=dbl_kind)-p5) &
                                 /real(nilyr,kind=dbl_kind)
-
-#elif (defined notz_fieldwork || defined snowice_maksym || defined pond_barrow)
-                     Ti = liquidus_temperature_mush(salinz(i,j,k) / phi_init)
-#else
-                     slope = Tf(i,j) - trcrn(i,j,nt_Tsfc,n)
-                     Ti = trcrn(i,j,nt_Tsfc,n) &
-                        + slope*(real(k,kind=dbl_kind)-p5) &
-                                /real(nilyr,kind=dbl_kind)
-#endif
 
                      if (ktherm == 2) then
                         ! enthalpy

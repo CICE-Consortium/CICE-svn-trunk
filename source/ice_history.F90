@@ -1187,9 +1187,9 @@
           frzmlt, fswfac, fswabs, fswthru, alvdr, alvdf, alidr, alidf, &
           albice, albsno, albpnd, coszen, flat, fsens, flwout, evap, &
           Tair, Tref, Qref, congel, frazil, snoice, dsnow, &
-          melts, meltb, meltt, meltl, fresh, fsalt, fresh_gbm, fsalt_gbm, &
-          fhocn, fhocn_gbm, &
-          fswthru_gbm, strairx, strairy, strtltx, strtlty, strintx, strinty, &
+          melts, meltb, meltt, meltl, fresh, fsalt, fresh_ai, fsalt_ai, &
+          fhocn, fhocn_ai, &
+          fswthru_ai, strairx, strairy, strtltx, strtlty, strintx, strinty, &
           strocnx, strocny, fm, daidtt, dvidtt, daidtd, dvidtd, fsurf, &
           fcondtop, fsurfn, fcondtopn, flatn, albcnt, prs_sig, &
           stressp_1, stressm_1, stress12_1, &
@@ -1418,20 +1418,20 @@
          if (f_fresh  (1:1) /= 'x') &
              call accum_hist_field(n_fresh,   iblk, fresh(:,:,iblk), a2D)
          if (f_fresh_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fresh_ai,iblk, fresh_gbm(:,:,iblk), a2D)
+             call accum_hist_field(n_fresh_ai,iblk, fresh_ai(:,:,iblk), a2D)
          if (f_fsalt  (1:1) /= 'x') &
              call accum_hist_field(n_fsalt,   iblk, fsalt(:,:,iblk), a2D)
          if (f_fsalt_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fsalt_ai,iblk, fsalt_gbm(:,:,iblk), a2D)
+             call accum_hist_field(n_fsalt_ai,iblk, fsalt_ai(:,:,iblk), a2D)
 
          if (f_fhocn  (1:1) /= 'x') &
              call accum_hist_field(n_fhocn,   iblk, fhocn(:,:,iblk), a2D)
          if (f_fhocn_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fhocn_ai,iblk, fhocn_gbm(:,:,iblk), a2D)
+             call accum_hist_field(n_fhocn_ai,iblk, fhocn_ai(:,:,iblk), a2D)
          if (f_fswthru(1:1) /= 'x') &
              call accum_hist_field(n_fswthru, iblk, fswthru(:,:,iblk), a2D)
          if (f_fswthru_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fswthru_ai,iblk, fswthru_gbm(:,:,iblk), a2D)
+             call accum_hist_field(n_fswthru_ai,iblk, fswthru_ai(:,:,iblk), a2D)
                
          if (f_strairx(1:1) /= 'x') &
              call accum_hist_field(n_strairx, iblk, strairx(:,:,iblk), a2D)

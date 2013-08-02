@@ -148,7 +148,7 @@
       use ice_fileunits, only: flush_fileunit
       use ice_flux, only: alvdr, alidr, alvdf, alidf, evap, fsnow, frazil, &
           fswabs, fswthru, flw, flwout, fsens, fsurf, flat, frzmlt, frain, fpond, &
-          coszen, faero_atm, faero_ocn, fhocn_gbm, fsalt_gbm, fresh_gbm, &
+          coszen, faero_atm, faero_ocn, fhocn_ai, fsalt_ai, fresh_ai, &
           update_ocn_f, Tair, Qa, fsw, fcondtop, meltt, meltb, meltl, snoice, &
           dsnow, congel, sst, sss, Tf, fhocn
       use ice_global_reductions, only: global_sum, global_sum_prod, global_maxval
@@ -456,17 +456,17 @@
          endif
 
          ! salt flux
-         sfsaltn = global_sum(fsalt_gbm, distrb_info, &
+         sfsaltn = global_sum(fsalt_ai, distrb_info, &
                                    field_loc_center, tarean)
-         sfsalts = global_sum(fsalt_gbm, distrb_info, &
+         sfsalts = global_sum(fsalt_ai, distrb_info, &
                                    field_loc_center, tareas)
          sfsaltn = sfsaltn*dt
          sfsalts = sfsalts*dt
 
          ! fresh water flux
-         sfreshn = global_sum(fresh_gbm, distrb_info, &
+         sfreshn = global_sum(fresh_ai, distrb_info, &
                                    field_loc_center, tarean)
-         sfreshs = global_sum(fresh_gbm, distrb_info, &
+         sfreshs = global_sum(fresh_ai, distrb_info, &
                                    field_loc_center, tareas)
          sfreshn = sfreshn*dt
          sfreshs = sfreshs*dt
@@ -485,9 +485,9 @@
 
          ! ocean heat
          ! Note: fswthru not included because it does not heat ice
-         fhocnn = global_sum(fhocn_gbm, distrb_info, &
+         fhocnn = global_sum(fhocn_ai, distrb_info, &
                                   field_loc_center, tarean)
-         fhocns = global_sum(fhocn_gbm, distrb_info, &
+         fhocns = global_sum(fhocn_ai, distrb_info, &
                                   field_loc_center, tareas)
 
          ! latent heat

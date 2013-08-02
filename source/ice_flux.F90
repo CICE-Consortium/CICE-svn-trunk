@@ -199,10 +199,10 @@
          alvdf   , & ! visible, diffuse  (fraction)
          alidf   , & ! near-ir, diffuse  (fraction)
          ! grid-box-mean versions
-         alvdr_gbm, & ! visible, direct   (fraction)
-         alidr_gbm, & ! near-ir, direct   (fraction)
-         alvdf_gbm, & ! visible, diffuse  (fraction)
-         alidf_gbm, & ! near-ir, diffuse  (fraction)
+         alvdr_ai, & ! visible, direct   (fraction)
+         alidr_ai, & ! near-ir, direct   (fraction)
+         alvdf_ai, & ! visible, diffuse  (fraction)
+         alidf_ai, & ! near-ir, diffuse  (fraction)
          ! components for history
          albice   , & ! bare ice albedo
          albsno   , & ! snow albedo
@@ -215,7 +215,7 @@
 
        ! out to ocean 
        ! (Note CICE_IN_NEMO does not use these for coupling.  
-       !  It uses fresh_gbm,fsalt_gbm,fhocn_gbm and fswthru_gbm)
+       !  It uses fresh_ai,fsalt_ai,fhocn_ai and fswthru_ai)
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          fpond   , & ! fresh water flux to ponds (kg/m2/s)
          fresh   , & ! fresh water flux to ocean (kg/m^2/s)
@@ -302,10 +302,10 @@
       !  that change from an ice free state to an icy state.)
     
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
-         fresh_gbm, & ! fresh water flux to ocean (kg/m^2/s)
-         fsalt_gbm, & ! salt flux to ocean (kg/m^2/s)
-         fhocn_gbm, & ! net heat flux to ocean (W/m^2)
-         fswthru_gbm  ! shortwave penetrating to ocean (W/m^2)
+         fresh_ai, & ! fresh water flux to ocean (kg/m^2/s)
+         fsalt_ai, & ! salt flux to ocean (kg/m^2/s)
+         fhocn_ai, & ! net heat flux to ocean (W/m^2)
+         fswthru_ai  ! shortwave penetrating to ocean (W/m^2)
 
       ! Used with data assimilation in hadgem drivers
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
@@ -442,19 +442,12 @@
       uocn  (:,:,:) = c0              ! surface ocean currents (m/s)
       vocn  (:,:,:) = c0
       frzmlt(:,:,:) = c0              ! freezing/melting potential (W/m^2)
-#if defined flushing_notz
-      Tf    (:,:,:) = -1.8_dbl_kind
-!echmod: using ice_therm_mushy causes circular dependency
-!      sss   (:,:,:) = liquidus_brine_salinity_mush(-1.8_dbl_kind)
-      sss   (:,:,:) = -1.8_dbl_kind/(-1.8_dbl_kind*p001 + (c1/-18.48_dbl_kind))
-#else
       sss   (:,:,:) = 34.0_dbl_kind   ! sea surface salinity (ppt)
       if (trim(Tfrzpt) == 'constant') then
          Tf    (:,:,:) = -1.8_dbl_kind   ! freezing temp (C)
       else ! default:  Tfrzpt = 'linear_S'
          Tf    (:,:,:) = -depressT*sss(:,:,:)  ! freezing temp (C)
       endif
-#endif
 #ifndef CICE_IN_NEMO
       sst   (:,:,:) = Tf(:,:,:)       ! sea surface temp (C)
 #endif
@@ -653,10 +646,10 @@
       fcondtopn (:,:,:,:) = c0
       flatn     (:,:,:,:) = c0
       fpond      (:,:,:) = c0
-      fresh_gbm  (:,:,:) = c0
-      fsalt_gbm  (:,:,:) = c0
-      fhocn_gbm  (:,:,:) = c0
-      fswthru_gbm(:,:,:) = c0
+      fresh_ai  (:,:,:) = c0
+      fsalt_ai  (:,:,:) = c0
+      fhocn_ai  (:,:,:) = c0
+      fswthru_ai(:,:,:) = c0
       albice (:,:,:) = c0
       albsno (:,:,:) = c0
       albpnd (:,:,:) = c0

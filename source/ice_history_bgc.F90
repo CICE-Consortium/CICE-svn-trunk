@@ -856,39 +856,39 @@
          if (f_fNO  (1:1) /= 'x') &
              call accum_hist_field(n_fNO,   iblk, flux_bio(:,:,nlt_bgc_NO,iblk), a2D)
          if (f_fNO_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fNO_ai,iblk, flux_bio_gbm(:,:,nlt_bgc_NO,iblk), a2D)
+             call accum_hist_field(n_fNO_ai,iblk, flux_bio_ai(:,:,nlt_bgc_NO,iblk), a2D)
          if (f_fNO_g  (1:1) /= 'x') &
              call accum_hist_field(n_fNO_g,   iblk, flux_bio_g(:,:,nlt_bgc_NO,iblk), a2D)
          if (f_fNO_g_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fNO_g_ai,iblk, flux_bio_g_gbm(:,:,nlt_bgc_NO,iblk), a2D)
+             call accum_hist_field(n_fNO_g_ai,iblk, flux_bio_g_ai(:,:,nlt_bgc_NO,iblk), a2D)
 
          if (f_fNH  (1:1) /= 'x') &
              call accum_hist_field(n_fNH,   iblk, flux_bio(:,:,nlt_bgc_NH,iblk), a2D)
          if (f_fNH_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fNH_ai,iblk, flux_bio_gbm(:,:,nlt_bgc_NH,iblk), a2D)
+             call accum_hist_field(n_fNH_ai,iblk, flux_bio_ai(:,:,nlt_bgc_NH,iblk), a2D)
          if (f_fNH_g  (1:1) /= 'x') &
              call accum_hist_field(n_fNH_g,   iblk, flux_bio_g(:,:,nlt_bgc_NH,iblk), a2D)
          if (f_fNH_g_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fNH_g_ai,iblk, flux_bio_g_gbm(:,:,nlt_bgc_NH,iblk), a2D)
+             call accum_hist_field(n_fNH_g_ai,iblk, flux_bio_g_ai(:,:,nlt_bgc_NH,iblk), a2D)
 
          if (f_fN  (1:1) /= 'x') &
              call accum_hist_field(n_fN,   iblk, flux_bio(:,:,nlt_bgc_N,iblk), a2D)
          if (f_fN_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fN_ai,iblk, flux_bio_gbm(:,:,nlt_bgc_N,iblk), a2D)
+             call accum_hist_field(n_fN_ai,iblk, flux_bio_ai(:,:,nlt_bgc_N,iblk), a2D)
          if (f_fN_g  (1:1) /= 'x') &
              call accum_hist_field(n_fN_g,   iblk, flux_bio_g(:,:,nlt_bgc_N,iblk), a2D)
          if (f_fN_g_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fN_g_ai,iblk, flux_bio_g_gbm(:,:,nlt_bgc_N,iblk), a2D)
+             call accum_hist_field(n_fN_g_ai,iblk, flux_bio_g_ai(:,:,nlt_bgc_N,iblk), a2D)
 
 
          if (f_fSil  (1:1) /= 'x') &
              call accum_hist_field(n_fSil,   iblk, flux_bio(:,:,nlt_bgc_Sil,iblk), a2D)
          if (f_fSil_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fSil_ai,iblk, flux_bio_gbm(:,:,nlt_bgc_Sil,iblk), a2D)
+             call accum_hist_field(n_fSil_ai,iblk, flux_bio_ai(:,:,nlt_bgc_Sil,iblk), a2D)
          if (f_fSil_g  (1:1) /= 'x') &
              call accum_hist_field(n_fSil_g,   iblk, flux_bio_g(:,:,nlt_bgc_Sil,iblk), a2D)
          if (f_fSil_g_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fSil_g_ai,iblk, flux_bio_g_gbm(:,:,nlt_bgc_Sil,iblk), a2D)
+             call accum_hist_field(n_fSil_g_ai,iblk, flux_bio_g_ai(:,:,nlt_bgc_Sil,iblk), a2D)
          if (f_chlnet  (1:1) /= 'x') &
              call accum_hist_field(n_chlnet, iblk, chl_net(:,:,iblk), a2D)
          if (f_PPnet  (1:1) /= 'x') &

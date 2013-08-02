@@ -218,13 +218,8 @@
 
       else   ! rectangular grid
 
-!#if defined notz_fieldwork
-!         work_g1(:,:) = 78.0_dbl_kind/rad_to_deg  ! Adventfjorden
-!         work_g2(:,:) = 16.0_dbl_kind/rad_to_deg
-!#else
          work_g1(:,:) = 75._dbl_kind/rad_to_deg  ! arbitrary polar latitude
          work_g2(:,:) = c1
-!#endif
 
       endif
 
@@ -1376,9 +1371,6 @@
       use ice_constants, only: c0, c1, rad_to_deg, c4, &
           field_loc_center, field_type_scalar
       use ice_global_reductions, only: global_minval, global_maxval
-#if (defined oned && defined notz_fieldwork)
-      use ice_therm_oned, only: lon_advent_rad, lat_advent_rad
-#endif
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1465,7 +1457,7 @@
       call ice_HaloExtrapolate(TLAT, distrb_info, &
                                ew_boundary_type, ns_boundary_type)
       call ice_timer_stop(timer_bound)
-#if !(defined oned && defined notz_fieldwork)
+
       x1 = global_minval(TLON, distrb_info, tmask)
       x2 = global_maxval(TLON, distrb_info, tmask)
       x3 = global_minval(TLAT, distrb_info, tmask)
@@ -1485,14 +1477,7 @@
          write(nu_diag,*) 'min/max TLON:', x1*rad_to_deg, x2*rad_to_deg
          write(nu_diag,*) 'min/max TLAT:', x3*rad_to_deg, x4*rad_to_deg
       endif                     ! my_task
-#else
-      TLON = lon_advent_rad
-      TLAT = lat_advent_rad
-      if (my_task==master_task) then
-         write(nu_diag,*) 'TLON: ', lon_advent_rad
-         write(nu_diag,*) 'TLAT: ', lat_advent_rad
-      endif
-#endif
+
       end subroutine Tlatlon
 
 !=======================================================================
