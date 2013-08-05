@@ -981,8 +981,11 @@ contains
          lsnow           ! snow presence: T: has snow, F: no snow
 
     lstop = .false.
+    fadvheat = c0
     fadvsalt = c0
     snoice = c0
+    snowice_en = c0
+    snowice_st = c0
 
 #if defined oned
     if (hilyr <= c0) return
@@ -1908,101 +1911,102 @@ contains
     use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
 
     logical, intent(in) :: &
-         lsnow        , & ! snow presence: T: has snow, F: no snow
-         lcold            ! surface cold: T: surface is cold, F: surface is melting
+         lsnow         , & ! snow presence: T: has snow, F: no snow
+         lcold             ! surface cold: T: surface is cold, F: surface is melting
 
     real(kind=dbl_kind), intent(inout) :: &
-         Tsf              ! snow surface temperature (C)
+         Tsf               ! snow surface temperature (C)
 
     real(kind=dbl_kind), intent(out) :: &
-         fcondtop     , & ! downward cond flux at top surface (W m-2)
-         fcondbot     , & ! downward cond flux at bottom surface (W m-2)
-         fadvheat         ! flow of heat to ocean due to advection (W m-2)
+         fcondtop      , & ! downward cond flux at top surface (W m-2)
+         fcondbot      , & ! downward cond flux at bottom surface (W m-2)
+         fadvheat          ! flow of heat to ocean due to advection (W m-2)
 
     real(kind=dbl_kind), dimension(nilyr), intent(inout) :: &
-         qin          , & ! ice layer enthalpy (J m-3)
-         Sin          , & ! ice layer bulk salinity (ppt)
-         Tin          , & ! ice layer temperature (C)
-         phi              ! ice layer liquid fraction
+         qin           , & ! ice layer enthalpy (J m-3)
+         Sin           , & ! ice layer bulk salinity (ppt)
+         Tin           , & ! ice layer temperature (C)
+         phi               ! ice layer liquid fraction
 
     real(kind=dbl_kind), dimension(nslyr), intent(inout) :: &
-         qsn          , & ! snow layer enthalpy (J m-3)
-         Tsn              ! snow layer temperature (C)
+         qsn           , & ! snow layer enthalpy (J m-3)
+         Tsn               ! snow layer temperature (C)
 
     real(kind=dbl_kind), dimension(nilyr), intent(in) :: &
-         km           , & ! ice conductivity (W m-1 K-1)
-         Iswabs       , & ! SW radiation absorbed in ice layers (W m-2)
-         dSdt             ! gravity drainage desalination rate for slow mode (ppt s-1)
+         km            , & ! ice conductivity (W m-1 K-1)
+         Iswabs        , & ! SW radiation absorbed in ice layers (W m-2)
+         dSdt              ! gravity drainage desalination rate for slow mode (ppt s-1)
 
     real(kind=dbl_kind), dimension(0:nilyr), intent(in) :: &
-         q                ! upward interface vertical Darcy flow (m s-1)
+         q                 ! upward interface vertical Darcy flow (m s-1)
 
     real(kind=dbl_kind), dimension(nslyr), intent(in) :: &
-         ks           , & ! snow conductivity (W m-1 K-1)
-         Sswabs           ! SW radiation absorbed in snow layers (W m-2)
+         ks            , & ! snow conductivity (W m-1 K-1)
+         Sswabs            ! SW radiation absorbed in snow layers (W m-2)
 
     real(kind=dbl_kind), intent(out) :: &
-         flwoutn      , & ! upward LW at surface (W m-2)
-         fsensn       , & ! surface downward sensible heat (W m-2)
-         flatn        , & ! surface downward latent heat (W m-2)
-         fsurfn           ! net flux to top surface, excluding fcondtop
+         flwoutn       , & ! upward LW at surface (W m-2)
+         fsensn        , & ! surface downward sensible heat (W m-2)
+         flatn         , & ! surface downward latent heat (W m-2)
+         fsurfn            ! net flux to top surface, excluding fcondtop
 
     real(kind=dbl_kind), intent(in) :: &
-         hilyr        , & ! ice layer thickness (m)
-         hslyr        , & ! snow layer thickness (m)
-         Tbot         , & ! ice bottom surfce temperature (deg C)
-         fswint       , & ! SW absorbed in ice interior below surface (W m-2)
-         fswsfc       , & ! SW absorbed at ice/snow surface (W m-2)
-         rhoa         , & ! air density (kg/m^3)
-         flw          , & ! incoming longwave radiation (W/m^2)
-         potT         , & ! air potential temperature (K)
-         Qa           , & ! specific humidity (kg/kg)
-         shcoef       , & ! transfer coefficient for sensible heat
-         lhcoef       , & ! transfer coefficient for latent heat
-         qpond        , & ! melt pond brine enthalpy (J m-3)
-         qocn         , & ! ocean brine enthalpy (J m-3)
-         Spond        , & ! melt pond salinity (ppt)
-         sss          , & ! sea surface salinity (ppt)
-         w                ! vertical flushing Darcy velocity (m/s)
+         hilyr         , & ! ice layer thickness (m)
+         hslyr         , & ! snow layer thickness (m)
+         Tbot          , & ! ice bottom surfce temperature (deg C)
+         fswint        , & ! SW absorbed in ice interior below surface (W m-2)
+         fswsfc        , & ! SW absorbed at ice/snow surface (W m-2)
+         rhoa          , & ! air density (kg/m^3)
+         flw           , & ! incoming longwave radiation (W/m^2)
+         potT          , & ! air potential temperature (K)
+         Qa            , & ! specific humidity (kg/kg)
+         shcoef        , & ! transfer coefficient for sensible heat
+         lhcoef        , & ! transfer coefficient for latent heat
+         qpond         , & ! melt pond brine enthalpy (J m-3)
+         qocn          , & ! ocean brine enthalpy (J m-3)
+         Spond         , & ! melt pond salinity (ppt)
+         sss           , & ! sea surface salinity (ppt)
+         w                 ! vertical flushing Darcy velocity (m/s)
       
     logical(kind=log_kind), intent(inout) :: &
-         lstop            ! solver failure flag 
+         lstop             ! solver failure flag 
 
     real(kind=dbl_kind), dimension(nilyr) :: &
-         Sbr          , & ! ice layer brine salinity (ppt)
-         qbr          , & ! ice layer brine enthalpy (J m-3)
-         Tin0         , & ! ice layer temperature (C) at start of timestep
-         qin0         , & ! ice layer enthalpy (J m-3) at start of timestep
-         Sin0         , & ! ice layer bulk salinity (ppt) at start of timestep
-         Tin_prev         ! ice layer temperature at previous iteration
+         Sbr           , & ! ice layer brine salinity (ppt)
+         qbr           , & ! ice layer brine enthalpy (J m-3)
+         Tin0          , & ! ice layer temperature (C) at start of timestep
+         qin0          , & ! ice layer enthalpy (J m-3) at start of timestep
+         Sin0          , & ! ice layer bulk salinity (ppt) at start of timestep
+         Tin_prev          ! ice layer temperature at previous iteration
     
     real(kind=dbl_kind), dimension(nslyr) :: &
-         qsn0         , & ! snow layer enthalpy (J m-3) at start of timestep
-         Tsn0         , & ! snow layer temperature (C) at start of timestep
-         Tsn_prev         ! snow layer temperature at previous iteration
+         qsn0          , & ! snow layer enthalpy (J m-3) at start of timestep
+         Tsn0          , & ! snow layer temperature (C) at start of timestep
+         Tsn_prev          ! snow layer temperature at previous iteration
 
     real(kind=dbl_kind), dimension(nslyr+nilyr+1) :: &
-         dxp          , & ! distances between grid points (m)
-         kcstar           ! interface conductivities (W m-1 K-1)
+         dxp           , & ! distances between grid points (m)
+         kcstar            ! interface conductivities (W m-1 K-1)
 
     real(kind=dbl_kind) :: &
-         Tsf0         , & ! snow surface temperature (C) at start of timestep
-         dfsurfn_dTsf , & ! derivative of net flux to top surface, excluding fcondtopn
-         Tsf_prev     , & ! snow surface temperature at previous iteration
-         einit        , & ! initial total energy (J)
-         fadvheat_nit     ! heat to ocean due to advection (W m-2) during iteration
+         Tsf0          , & ! snow surface temperature (C) at start of timestep
+         dfsurfn_dTsf  , & ! derivative of net flux to top surface, excluding fcondtopn
+         dflwoutn_dTsf , & ! derivative of longwave flux wrt surface temperature
+         dfsensn_dTsf  , & ! derivative of sensible heat flux wrt surface temperature
+         dflatn_dTsf   , & ! derivative of latent heat flux wrt surface temperature
+         Tsf_prev      , & ! snow surface temperature at previous iteration
+         einit         , & ! initial total energy (J)
+         fadvheat_nit      ! heat to ocean due to advection (W m-2) during iteration
 
     logical :: &
-         lconverged       ! has Picard solver converged?
+         lconverged        ! has Picard solver converged?
 
     integer :: &
-         nit          , & ! Picard iteration count
-         k                ! vertical layer index
+         nit           , & ! Picard iteration count
+         k                 ! vertical layer index
 
     integer, parameter :: &
-         nit_max = 100    ! maximum number of Picard iterations
-
-    real(kind=dbl_kind) :: tmpflux
+         nit_max = 100     ! maximum number of Picard iterations
 
     lconverged = .false.
 
@@ -2040,12 +2044,12 @@ contains
                               flatn,   fsurfn)
 
        ! derivative of heat flux with respect to surface temperature
-       call dsurface_heat_flux_dTsf(Tsf,     fswsfc, &
-                                    rhoa,    flw,    &
-                                    potT,    Qa,     &
-                                    shcoef,  lhcoef, &
-                                    dfsurfn_dTsf, &
-                                    tmpflux, tmpflux, tmpflux)
+       call dsurface_heat_flux_dTsf(Tsf,          fswsfc,        &
+                                    rhoa,         flw,           &
+                                    potT,         Qa,            &
+                                    shcoef,       lhcoef,        &
+                                    dfsurfn_dTsf, dflwoutn_dTsf, &
+                                    dfsensn_dTsf, dflatn_dTsf)
 
        ! tridiagonal solve of new temperatures
        call solve_heat_conduction(lsnow,     lcold,        &
