@@ -665,131 +665,6 @@
 
 !=======================================================================
 
-      subroutine read_data_nmyr (flag, recd, ixm, ixx, ixp, &
-                            maxrec, data_file, field_data, &
-                            field_loc, field_type)
-
-! If data is at the beginning of a one-year record, get data from
-!  the previous year.
-! If data is at the end of a one-year record, get data from the
-!  following year.
-! If no earlier data exists (beginning of fyear_init), then
-!  (1) For monthly data, get data from the end of fyear_final.
-!  (2) For more frequent data, let the ixm value equal the
-!      first value of the year.
-! If no later data exists (end of fyear_final), then
-!  (1) For monthly data, get data from the beginning of fyear_init.
-!  (2) For more frequent data, let the ixp value
-!      equal the last value of the year.
-! In other words, we assume persistence when daily or 6-hourly
-!   data is missing, and we assume periodicity when monthly data
-!   is missing.
-
-      use ice_diagnostics, only: check_step
-
-      logical (kind=log_kind), intent(in) :: flag
-
-      integer (kind=int_kind), intent(in) :: &
-         recd                , & ! baseline record number
-         ixm, ixx, ixp       , & ! record numbers of 3 data values
-                                 ! relative to recd
-         maxrec                  ! maximum record value
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
-         intent(out) :: &
-         field_data              ! 2 values needed for interpolation
-
-      integer (kind=int_kind), intent(in) :: &
-           field_loc, &      ! location of field on staggered grid
-           field_type        ! type of field (scalar, vector, angle)
-
-      ! local variables
-
-      character (char_len_long) :: &
-         data_file               ! data file to be read
-
-      integer (kind=int_kind) :: &
-         nbits            , & ! = 32 for single precision, 64 for double
-         nrec             , & ! record number to read
-         n2, n4           , & ! like ixm and ixp, but
-                              ! adjusted at beginning and end of data
-         arg                  ! value of time argument in field_data
-
-      call ice_timer_start(timer_readwrite)  ! reading/writing
-
-      nbits = 64              ! double precision data
-
-      if (istep1 > check_step) dbug = .true.  !! debugging
-
-      if (my_task==master_task .and. (dbug)) then
-         write(nu_diag,*) '  ', trim(data_file)
-      endif
-
-      if (flag) then
-
-      !-----------------------------------------------------------------
-      ! Initialize record counters
-      ! (n2, n4 will change only at the very beginning or end of
-      !  a forcing cycle.)
-      !-----------------------------------------------------------------
-         n2 = ixm
-         n4 = ixp
-         arg = 0
-
-      !-----------------------------------------------------------------
-      ! read data
-      !-----------------------------------------------------------------
-
-         if (ixm /= -99) then
-         ! currently in first half of data interval
-            if (ixx <= 1) then
-                  if (maxrec > 12) then ! extrapolate from first record
-                     if (ixx == 1) n2 = ixx
-                  endif
-            endif               ! ixx <= 1
-
-            call ice_open (nu_forcing, data_file, nbits)
-
-            arg = 1
-            nrec = recd + n2
-            call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
-                           'rda8', dbug, field_loc, field_type)
-
-            if (ixx==1 .and. my_task == master_task) close(nu_forcing)
-         endif                  ! ixm ne -99
-
-         ! always read ixx data from data file for current year
-         call ice_open (nu_forcing, data_file, nbits)
-
-         arg = arg + 1
-         nrec = recd + ixx
-         call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
-                        'rda8', dbug, field_loc, field_type)
-
-         if (ixp /= -99) then
-         ! currently in latter half of data interval
-            if (ixx==maxrec) then
-                  if (maxrec > 12) then ! extrapolate from ixx
-                     n4 = ixx
-                  endif
-            endif               ! ixx = maxrec
-
-            arg = arg + 1
-            nrec = recd + n4
-            call ice_read (nu_forcing, nrec, field_data(:,:,arg,:), &
-                           'rda8', dbug, field_loc, field_type)
-         endif                  ! ixp /= -99
-
-         if (my_task == master_task) close(nu_forcing)
-
-      endif                     ! flag
-
-      call ice_timer_stop(timer_readwrite)  ! reading/writing
-
-      end subroutine read_data_nmyr
-
-!=======================================================================
-
       subroutine read_data_nc (flag, recd, yr, ixm, ixx, ixp, &
                             maxrec, data_file, fieldname, field_data, &
                             field_loc, field_type)
@@ -1538,7 +1413,7 @@
       real(kind=dbl_kind), intent(out) :: &
            flw      ! incoming longwave radiation (W/m^2)
       
-        flw = stefan_boltzmann*Tair**4 &
+      flw = stefan_boltzmann*Tair**4 &
              * (c1 - 0.261_dbl_kind &
              * exp(-7.77e-4_dbl_kind*(Tffresh - Tair)**2)) &
              * (c1 + 0.275_dbl_kind*cldf)
@@ -1555,7 +1430,7 @@
       use ice_constants, only: c1, c4, c1000, &
           Tffresh, stefan_boltzmann, emissivity
 
-      ! longwave, Rosati and Miyakoda, JPO 18, p. 1607 (1988) - sort of 
+      ! based on 
       ! Rosati, A. and K. Miyakoda (1988), 
       ! A general-circulation model for upper ocean simulation, 
       ! J. Physical Oceanography, 18, 1601-1626, 
@@ -1603,7 +1478,7 @@
 ! Construct filenames based on the LANL naming conventions for NCAR data.
 ! Edit for other directory structures or filenames.
 ! Note: The year number in these filenames does not matter, because
-!       subroutine file\_year will insert the correct year.
+!       subroutine file_year will insert the correct year.
 
       integer (kind=int_kind), intent(in) :: &
            yr                   ! current forcing year
@@ -2072,13 +1947,16 @@
       end subroutine LY_data
 
 !=======================================================================
+!
+! AOMIP shortwave forcing
+! standard calculation using solar declination angle
+! then shortwave is reduced using a function of cloud fraction
 
       subroutine compute_shortwave(nx_block,  ny_block, &
                                    ilo, ihi, jlo, jhi, &
                                    TLON, TLAT, hm, Qa, cldf, fsw)
 
 !---!-------------------------------------------------------------------
-!---! AOMIP shortwave forcing
 !---!-------------------------------------------------------------------
 
       use ice_constants, only: c0, c1, c12, c2, c180, c365, &
@@ -2135,6 +2013,8 @@
       end subroutine compute_shortwave
 
 !=======================================================================
+!
+! prevents humidity from being super-saturated
 
       subroutine Qa_fixLY(nx_block, ny_block, Tair, Qa)
 
@@ -2176,7 +2056,7 @@
 ! Construct filenames based on selected model options
 !
 ! Note: The year number in these filenames does not matter, because
-!       subroutine file\_year will insert the correct year.
+!       subroutine file_year will insert the correct year.
 !
 ! author: Alison McLaren, Met Office
 
@@ -2807,7 +2687,7 @@
       end subroutine monthly_data
 
 !=======================================================================
-! Oned atmospheric data files
+! Oned atmospheric data
 !=======================================================================
 
       subroutine oned_data
@@ -2957,8 +2837,6 @@
 
       end subroutine oned_data
 
-!=======================================================================
-! Oned atmospheric data files
 !=======================================================================
 
       subroutine oned_files(yr)
