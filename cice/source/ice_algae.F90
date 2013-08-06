@@ -9,7 +9,6 @@
       module ice_algae
 
       use ice_kinds_mod
-      use ice_constants
       use ice_domain_size, only: nblyr, nilyr, nblyr_hist, max_blocks, nbltrcr
       use ice_blocks, only: nx_block, ny_block
       use ice_fileunits, only: nu_diag, nu_restart_bgc, nu_rst_pointer, &
@@ -48,6 +47,7 @@
       subroutine get_forcing_bgc
 
       use ice_calendar, only: dt, istep, mday, month, sec
+      use ice_constants, only: field_loc_center, field_type_scalar
       use ice_domain, only: nblocks
       use ice_flux, only: sss
       use ice_forcing, only: trestore, trest, &
@@ -192,17 +192,18 @@
 
 !=======================================================================
 !
-! After algal_dynamics but separates the skeletal layer 
-! biochemistry from the physics 
+! skeletal layer biochemistry
 ! 
-      subroutine skl_biogeochemistry (nx_block, ny_block, &
-                                 icells, dt,             &
-                                 indxi,    indxj,         &
-                                 flux_bio,   ocean_bio,   &
-                                 hmix, aicen,         &
-                                 meltb,    congel,        &
-                                 fswthrul, first_ice, &
-                                 trcrn,    grow_Cn)
+      subroutine skl_biogeochemistry (nx_block, ny_block,  &
+                                      icells,   dt,        &
+                                      indxi,    indxj,     &
+                                      flux_bio, ocean_bio, &
+                                      hmix,     aicen,     &
+                                      meltb,    congel,    &
+                                      fswthrul, first_ice, &
+                                      trcrn,    grow_Cn)
+
+      use ice_constants, only: p5, p05, p1, c1, c0, puny
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -220,21 +221,19 @@
          first_ice  ! initialized values should be used
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         hmix   , & ! mixed layer depth
+         hmix   , & ! mixed layer depth (m)
          aicen  , & ! ice area 
-         meltb  , & ! bottom ice melt
-         congel , & ! bottom ice growth 
+         meltb  , & ! bottom ice melt (m)
+         congel , & ! bottom ice growth (m)
          fswthrul   ! shortwave passing through ice to ocean
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr), &
          intent(inout) :: &
-         trcrn
+         trcrn      ! tracer array
    
-    !-------------------------------------------------------------------
-    ! history variables
-    !-------------------------------------------------------------------
+      ! history variables
 
-     real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out) :: &
          grow_Cn    ! specific growth (1/s)  
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), intent(inout) :: &
@@ -246,281 +245,287 @@
       integer (kind=int_kind) :: i, j, ij, nn
 
       real (kind=dbl_kind), dimension(icells,nbltrcr):: &
-         react      , & ! biological sources and sinks for equation matrix
-         in_init    , & ! Initial concentration from previous time-step
-         congel_alg     ! (mg N/m^2/s) congelation flux contribution to ice algae 
-                        ! (used as initialization)
+         react      , & ! biological sources and sinks for equation matrix (mmol/m^3)
+         cinit      , & ! Initial concentration from previous time-step (mmol/m^2)
+         congel_alg     ! congelation flux contribution to ice algae (mmol/m^2 s) 
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          upNOn      ,&  !  algal NO uptake rate (mmol/m^3/s)
          upNHn          !  algal NH uptake rate (mmol/m^3/s)
 
       real (kind=dbl_kind), dimension (nbltrcr):: &
-         flux_bio_temp  !  tracer flux to ocean (mmol/m^2/s)
+         flux_bio_temp, & ! tracer flux to ocean (mmol/m^2 s)
+         PVflag       , & ! 1 for tracers that flow with the brine, 0 otherwise
+         cling            ! 1 for tracers that cling, 0 otherwise
 
       real (kind=dbl_kind), parameter :: &
-         PVc = 1.e-6_dbl_kind           , & ! type 'constant' piston velocity for interface (m/s) 
-         PV_scale_growth = p5           , & ! scale factor in Jin code PV during ice growth
-         PV_scale_melt = p05            , & ! scale factor in Jin code PV during ice melt
-         MJ1 = 9.667e-9_dbl_kind        , & ! (m/s) coefficients in Jin2008
-         MJ2 = 38.8_dbl_kind            , & ! (1) from:4.49e-4_dbl_kind*secday   
-         MJ3 = 1.04e7_dbl_kind          , & ! 1/(m/s) from: 1.39e-3_dbl_kind*secday^2  
-         PV_frac_max = 0.9_dbl_kind         ! Maximum Piston velocity is 90% of skeletal layer/dt
+         PVc = 1.e-6_dbl_kind   , & ! type 'constant' piston velocity (m/s) 
+         PV_scale_growth = p5   , & ! scale factor in Jin code PV during ice growth
+         PV_scale_melt = p05    , & ! scale factor in Jin code PV during ice melt
+         MJ1 = 9.667e-9_dbl_kind, & ! coefficients in Jin 2008 (m/s)
+         MJ2 = 38.8_dbl_kind    , & ! 4.49e-4_dbl_kind*secday (unitless)
+         MJ3 = 1.04e7_dbl_kind  , & ! 1.39e-3_dbl_kind*secday^2  (s/m)
+         PV_frac_max = 0.9_dbl_kind ! max piston velocity coefficient
 
       real (kind=dbl_kind), dimension(icells) :: &
          PVt       , & ! type 'Jin2006' piston velocity (m/s) 
-         ice_growth, & ! Jin2006 definition: either congel rate or bottom melt rate  (m/s)
+         ice_growth, & ! Jin2006 defn: congel rate or bottom melt rate (m/s)
          f_meltn       ! vertical melt fraction of skeletal layer in dt
 
-      real (kind=dbl_kind), dimension(nbltrcr) :: &
-         PVn    , & ! 1 for tracers that flow with the brine and 0 otherwise
-         fmeltn     ! 0 for tracers that flow and  1 for tracers that cling
-
       real (kind=dbl_kind):: &
-         init_temp  ! tracer Concentration after biochemistry (mmol/m^3) 
+         rphi_sk   , & ! 1 / skeletal layer porosity
+         cinit_tmp     ! temporary variable for concentration (mmol/m^2)
 
-  !-------------------------------------
-  ! Initialize 
-  !------------------------------------
+      !-------------------------------------------------------------------
+      ! Initialize 
+      !-------------------------------------------------------------------
           
-  in_init(:,:) = c0
-  bgc_flux_type = 'Jin2006'    ! or 'constant'
-  congel_alg(:,:) = c0
-  PVn(:) = c1
-  PVt(:) = c0
-  fmeltn(:) = c0
-  f_meltn(:) = c0
-  react(:,:) = c0
-  fmeltn(nlt_bgc_N) = c1
+      bgc_flux_type = 'Jin2006'    ! or 'constant'
 
-  do nn = 1,nbltrcr          
-       if (bgc_tracer_type(nn) < p5) PVn(nn) = c0
-  enddo 
+      do nn = 1,nbltrcr          
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, icells
+            cinit     (ij,nn) = c0
+            congel_alg(ij,nn) = c0
+            react     (ij,nn) = c0
+         enddo 
+         PVflag(nn) = c1
+         if (bgc_tracer_type(nn) < p5) PVflag(nn) = c0
+         cling(nn) = c0
+      enddo 
+      cling(nlt_bgc_N) = c1
 
- !----------------------------------------------------------------------
- ! 'Jin2006':
- ! 1. congel/melt dependent piston velocity (PV) for both
- ! growth and melt
- ! 2. If congel > melt use 'congel' and melt > congel use 'melt'
- ! 3. For algal N, PV for ice growth only provides a seeding concentration 
- ! 4. Melt affects nutrients and algae in the same manner through PV(melt)
- !-----------------------------------------------------------------------
- if (trim(bgc_flux_type) == 'Jin2006') then  
-
-   do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
- 
-         if (first_ice(i,j)) then     
-          trcrn(i,j,nt_bgc_N_sk)                          = ocean_bio(i,j,nlt_bgc_N)*sk_l/phi_sk
-          if (tr_bgc_Nit_sk) trcrn(i,j,nt_bgc_Nit_sk)     = ocean_bio(i,j,nlt_bgc_NO)*sk_l/phi_sk
-          if (tr_bgc_Am_sk)  trcrn(i,j,nt_bgc_Am_sk)      = ocean_bio(i,j,nlt_bgc_NH)*sk_l/phi_sk
-          if (tr_bgc_Sil_sk) trcrn(i,j,nt_bgc_Sil_sk)     = ocean_bio(i,j,nlt_bgc_Sil)*sk_l/phi_sk
-          if (tr_bgc_C_sk)   trcrn(i,j,nt_bgc_C_sk)       = ocean_bio(i,j,nlt_bgc_C)*sk_l/phi_sk 
-          if (tr_bgc_chl_sk) trcrn(i,j,nt_bgc_chl_sk)     = ocean_bio(i,j,nlt_bgc_chl)*sk_l/phi_sk
-          if (tr_bgc_DMSPp_sk) trcrn(i,j,nt_bgc_DMSPp_sk) = ocean_bio(i,j,nlt_bgc_DMSPp)*sk_l/phi_sk 
-          if (tr_bgc_DMSPd_sk) trcrn(i,j,nt_bgc_DMSPd_sk) = ocean_bio(i,j,nlt_bgc_DMSPd)*sk_l/phi_sk
-          if (tr_bgc_DMS_sk) trcrn(i,j,nt_bgc_DMS_sk)     = ocean_bio(i,j,nlt_bgc_DMS)*sk_l/phi_sk
-         endif
-
-         in_init(ij,nlt_bgc_N)                           = trcrn(i,j,nt_bgc_N_sk)/sk_l
-         if (tr_bgc_Nit_sk) in_init(ij,nlt_bgc_NO)       = trcrn(i,j,nt_bgc_Nit_sk)/sk_l
-         if (tr_bgc_Am_sk)  in_init(ij,nlt_bgc_NH)       = trcrn(i,j,nt_bgc_Am_sk)/sk_l
-         if (tr_bgc_Sil_sk) in_init(ij,nlt_bgc_Sil)      = trcrn(i,j,nt_bgc_Sil_sk)/sk_l
-         if (tr_bgc_C_sk)   in_init(ij,nlt_bgc_C)        = trcrn(i,j,nt_bgc_C_sk)/sk_l
-         if (tr_bgc_chl_sk) in_init(ij,nlt_bgc_chl)      = trcrn(i,j,nt_bgc_chl_sk)/sk_l
-         if (tr_bgc_DMSPp_sk) in_init(ij,nlt_bgc_DMSPp)  = trcrn(i,j,nt_bgc_DMSPp_sk)/sk_l
-         if (tr_bgc_DMSPd_sk) in_init(ij,nlt_bgc_DMSPd)  = trcrn(i,j,nt_bgc_DMSPd_sk)/sk_l
-         if (tr_bgc_DMS_sk) in_init(ij,nlt_bgc_DMS)      = trcrn(i,j,nt_bgc_DMS_sk)/sk_l
-
-         do nn = 1,nbltrcr
-           if (in_init(ij,nn) < c0) then
-             write(nu_diag,*)'Before: initial sk_bgc < 0, ij,nn,nbltrcr,in_init(ij,nn)', &
-                    ij,nn,nbltrcr,in_init(ij,nn)
-             call abort_ice ('ice_bgc.F90: BGC error1')
-           endif
-         enddo
-         ice_growth(ij) = (congel(i,j)-meltb(i,j))/dt
-         if (ice_growth(ij) > c0) then         ! ice_growth(ij) = congel(i,j)/dt
-             PVt(ij) =-min(abs(PV_scale_growth*(MJ1 + MJ2*ice_growth(ij) - MJ3*ice_growth(ij)**2)), &
-                      PV_frac_max*sk_l/dt)  
-         else                                   !ice_growth(ij) = -meltb(i,j)/dt
-             PVt(ij) = min(abs(PV_scale_melt*(MJ2*ice_growth(ij)-MJ3*ice_growth(ij)**2)), &
-                      PV_frac_max*sk_l/dt)
-         endif
-   
-       !---------------------------------------------------------
-       ! Algae melt like nutrients
-       !---------------------------------------------------------        
-        if  (ice_growth(ij) < c0) then   !melt:  flux from ice to ocean
- 
-             f_meltn(ij) =  PVt(ij)*in_init(ij,nlt_bgc_N)   !for algae only
-
-        elseif (ice_growth(ij) > c0 .AND. in_init(ij,nlt_bgc_N) < ocean_bio(i,j,nlt_bgc_N)/phi_sk) then
-
-       !---------------------------------------------------------
-       ! Growth only contributes to seeding from ocean 
-       !---------------------------------------------------------
-           congel_alg(ij,nlt_bgc_N) = (ocean_bio(i,j,nlt_bgc_N)/phi_sk - in_init(ij,nlt_bgc_N))*sk_l/dt
-     
-        endif  !PVt > c0       
-    enddo   !ij
-
- !----------------------------------------------------------------------
- ! 'constant':
- ! 1. Constant PV  for congel > melt
- ! 2. For algae, PV for ice growth only provides a seeding concentration 
- ! 3. Melt loss (f_meltn) affects algae only and is proportional to melt
- !-----------------------------------------------------------------------
-  else   !PV_type = 'constant'
-
-
-    do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-
-         if (congel(i,j) > meltb(i,j)) PVt(ij) =-PVc  
-
-         if (first_ice(i,j) ) then     
-          trcrn(i,j,nt_bgc_N_sk)                          = ocean_bio(i,j,nlt_bgc_N)*sk_l/phi_sk
-          if (tr_bgc_Nit_sk)   trcrn(i,j,nt_bgc_Nit_sk)   = ocean_bio(i,j,nlt_bgc_NO)*sk_l/phi_sk
-          if (tr_bgc_Am_sk)    trcrn(i,j,nt_bgc_Am_sk)    = ocean_bio(i,j,nlt_bgc_NH)*sk_l/phi_sk
-          if (tr_bgc_Sil_sk)   trcrn(i,j,nt_bgc_Sil_sk)   = ocean_bio(i,j,nlt_bgc_Sil)*sk_l/phi_sk
-          if (tr_bgc_C_sk)     trcrn(i,j,nt_bgc_C_sk)     = ocean_bio(i,j,nlt_bgc_C)*sk_l/phi_sk 
-          if (tr_bgc_chl_sk)   trcrn(i,j,nt_bgc_chl_sk)   = ocean_bio(i,j,nlt_bgc_chl)*sk_l/phi_sk
-          if (tr_bgc_DMSPp_sk) trcrn(i,j,nt_bgc_DMSPp_sk) = ocean_bio(i,j,nlt_bgc_DMSPp)*sk_l/phi_sk 
-          if (tr_bgc_DMSPd_sk) trcrn(i,j,nt_bgc_DMSPd_sk) = ocean_bio(i,j,nlt_bgc_DMSPd)*sk_l/phi_sk
-          if (tr_bgc_DMS_sk)   trcrn(i,j,nt_bgc_DMS_sk)   = ocean_bio(i,j,nlt_bgc_DMS)*sk_l/phi_sk
-         endif
-
-         in_init(ij,nlt_bgc_N)                          = trcrn(i,j,nt_bgc_N_sk)/sk_l
-         if (tr_bgc_Nit_sk)   in_init(ij,nlt_bgc_NO)    = trcrn(i,j,nt_bgc_Nit_sk)/sk_l
-         if (tr_bgc_Am_sk)    in_init(ij,nlt_bgc_NH)    = trcrn(i,j,nt_bgc_Am_sk)/sk_l
-         if (tr_bgc_Sil_sk)   in_init(ij,nlt_bgc_Sil)   = trcrn(i,j,nt_bgc_Sil_sk)/sk_l
-         if (tr_bgc_C_sk)     in_init(ij,nlt_bgc_C)     = trcrn(i,j,nt_bgc_C_sk)/sk_l
-         if (tr_bgc_chl_sk)   in_init(ij,nlt_bgc_chl)   = trcrn(i,j,nt_bgc_chl_sk)/sk_l
-         if (tr_bgc_DMSPp_sk) in_init(ij,nlt_bgc_DMSPp) = trcrn(i,j,nt_bgc_DMSPp_sk)/sk_l
-         if (tr_bgc_DMSPd_sk) in_init(ij,nlt_bgc_DMSPd) = trcrn(i,j,nt_bgc_DMSPd_sk)/sk_l
-         if (tr_bgc_DMS_sk)   in_init(ij,nlt_bgc_DMS)   = trcrn(i,j,nt_bgc_DMS_sk)/sk_l
-        
-        do nn = 1,nbltrcr
-           if (in_init(ij,nn) < c0) then
-             write(nu_diag,*)'Before: initial sk_bgc < 0, ij,nn,nbltrcr,in_init(ij,nn)', &
-                    ij,nn,nbltrcr,in_init(ij,nn)
-             call abort_ice ('ice_bgc.F90: BGC error1')
-           endif
-        enddo
-
-        if (congel(i,j) .GE. meltb(i,j) .AND. in_init(ij,nlt_bgc_N) < ocean_bio(i,j,nlt_bgc_N)/phi_sk) then
-             congel_alg(ij,nlt_bgc_N) = (ocean_bio(i,j,nlt_bgc_N)/phi_sk - in_init(ij,nlt_bgc_N))*sk_l/dt
-        elseif (meltb(i,j) > congel(i,j)) then
-             f_meltn(ij) = min(in_init(ij,nlt_bgc_N), min(c1,meltb(i,j)/sk_l)*in_init(ij,nlt_bgc_N))*sk_l/dt
-        endif
-      enddo    !ij
-
- endif
-
-!  begin building biogeochemistry terms
+      rphi_sk = c1/phi_sk
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            
-       call algal_dyn   (nx_block, ny_block,        &
-                         icells,                    &
-                         indxi,    indxj,           &
-                         fswthrul, react,           & 
-                         in_init, nbltrcr,          &
-                         grow_Cn, upNOn,            &
-                         upNHn,                     &
-                         tr_bgc_N_sk,tr_bgc_Nit_sk, &
-                         tr_bgc_Am_sk,tr_bgc_Sil_sk,&
-                         tr_bgc_C_sk,tr_bgc_chl_sk, &
-                         tr_bgc_DMSPp_sk,           & 
-                         tr_bgc_DMSPd_sk,           &
-                         tr_bgc_DMS_sk)
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+ 
+         PVt       (ij) = c0
+         f_meltn   (ij) = c0
+         ice_growth(ij) = (congel(i,j)-meltb(i,j))/dt
 
-!  Compute new tracer concencentrations
+         if (first_ice(i,j)) then     
+               trcrn(i,j,nt_bgc_N_sk)     = ocean_bio(i,j,nlt_bgc_N)    *sk_l*rphi_sk
+            if (tr_bgc_Nit_sk) &
+               trcrn(i,j,nt_bgc_Nit_sk)   = ocean_bio(i,j,nlt_bgc_NO)   *sk_l*rphi_sk
+            if (tr_bgc_Am_sk)  &
+               trcrn(i,j,nt_bgc_Am_sk)    = ocean_bio(i,j,nlt_bgc_NH)   *sk_l*rphi_sk
+            if (tr_bgc_Sil_sk) &
+               trcrn(i,j,nt_bgc_Sil_sk)   = ocean_bio(i,j,nlt_bgc_Sil)  *sk_l*rphi_sk
+            if (tr_bgc_C_sk)   &
+               trcrn(i,j,nt_bgc_C_sk)     = ocean_bio(i,j,nlt_bgc_C)    *sk_l*rphi_sk 
+            if (tr_bgc_chl_sk) &
+               trcrn(i,j,nt_bgc_chl_sk)   = ocean_bio(i,j,nlt_bgc_chl)  *sk_l*rphi_sk
+            if (tr_bgc_DMSPp_sk) &
+               trcrn(i,j,nt_bgc_DMSPp_sk) = ocean_bio(i,j,nlt_bgc_DMSPp)*sk_l*rphi_sk
+            if (tr_bgc_DMSPd_sk) &
+               trcrn(i,j,nt_bgc_DMSPd_sk) = ocean_bio(i,j,nlt_bgc_DMSPd)*sk_l*rphi_sk
+            if (tr_bgc_DMS_sk) &
+               trcrn(i,j,nt_bgc_DMS_sk)   = ocean_bio(i,j,nlt_bgc_DMS)  *sk_l*rphi_sk
+         endif ! first_ice
+
+                              cinit(ij,nlt_bgc_N)     = trcrn(i,j,nt_bgc_N_sk)    
+         if (tr_bgc_Nit_sk)   cinit(ij,nlt_bgc_NO)    = trcrn(i,j,nt_bgc_Nit_sk)  
+         if (tr_bgc_Am_sk)    cinit(ij,nlt_bgc_NH)    = trcrn(i,j,nt_bgc_Am_sk)   
+         if (tr_bgc_Sil_sk)   cinit(ij,nlt_bgc_Sil)   = trcrn(i,j,nt_bgc_Sil_sk)  
+         if (tr_bgc_C_sk)     cinit(ij,nlt_bgc_C)     = trcrn(i,j,nt_bgc_C_sk)    
+         if (tr_bgc_chl_sk)   cinit(ij,nlt_bgc_chl)   = trcrn(i,j,nt_bgc_chl_sk)  
+         if (tr_bgc_DMSPp_sk) cinit(ij,nlt_bgc_DMSPp) = trcrn(i,j,nt_bgc_DMSPp_sk)
+         if (tr_bgc_DMSPd_sk) cinit(ij,nlt_bgc_DMSPd) = trcrn(i,j,nt_bgc_DMSPd_sk)
+         if (tr_bgc_DMS_sk)   cinit(ij,nlt_bgc_DMS)   = trcrn(i,j,nt_bgc_DMS_sk)  
+            
+      enddo     ! ij
+
+      do nn = 1,nbltrcr          
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, icells
+            if (cinit(ij,nn) < c0) then
+               write(nu_diag,*)'initial sk_bgc < 0, ij,nn,nbltrcr,cinit(ij,nn)', &
+                    ij,nn,nbltrcr,cinit(ij,nn)
+               call abort_ice ('ice_bgc.F90: BGC error1')
+            endif
+         enddo 
+      enddo 
+
+      !-------------------------------------------------------------------
+      ! 'Jin2006':
+      ! 1. congel/melt dependent piston velocity (PV) for growth and melt
+      ! 2. If congel > melt use 'congel'; if melt > congel use 'melt'
+      ! 3. For algal N, PV for ice growth only provides a seeding concentration 
+      ! 4. Melt affects nutrients and algae in the same manner through PV(melt)
+      !-------------------------------------------------------------------
+
+      if (trim(bgc_flux_type) == 'Jin2006') then  
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+ 
+            if (ice_growth(ij) > c0) then  ! ice_growth(ij) = congel(i,j)/dt
+               PVt(ij) = -min(abs(PV_scale_growth*(MJ1 + MJ2*ice_growth(ij) &
+                                                       - MJ3*ice_growth(ij)**2)), &
+                              PV_frac_max*sk_l/dt)  
+            else                           ! ice_growth(ij) = -meltb(i,j)/dt
+               PVt(ij) =  min(abs(PV_scale_melt  *(      MJ2*ice_growth(ij) &
+                                                       - MJ3*ice_growth(ij)**2)), &
+                              PV_frac_max*sk_l/dt)
+            endif
+   
+            if (ice_growth(ij) < c0) then ! flux from ice to ocean
+               ! Algae melt like nutrients
+               f_meltn(ij) = PVt(ij)*cinit(ij,nlt_bgc_N)/sk_l  ! for algae only
+            elseif (ice_growth(ij) > c0 .AND. &
+                   cinit(ij,nlt_bgc_N)/sk_l < ocean_bio(i,j,nlt_bgc_N)*rphi_sk) then
+               ! Growth only contributes to seeding from ocean 
+               congel_alg(ij,nlt_bgc_N) = (ocean_bio(i,j,nlt_bgc_N)*rphi_sk &
+                                        - cinit(ij,nlt_bgc_N))/dt
+            endif ! PVt > c0       
+         enddo    ! ij
+
+      !----------------------------------------------------------------------
+      ! 'constant':
+      ! 1. Constant PV for congel > melt
+      ! 2. For algae, PV for ice growth only provides a seeding concentration 
+      ! 3. Melt loss (f_meltn) affects algae only and is proportional to melt
+      !-----------------------------------------------------------------------
+
+      else   ! bgc_flux_type = 'constant'
+
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+            if (ice_growth(ij) > c0) PVt(ij) = -PVc
+            if (ice_growth(ij) >= c0 .AND. &
+                   cinit(ij,nlt_bgc_N)/sk_l < ocean_bio(i,j,nlt_bgc_N)*rphi_sk) then
+               congel_alg(ij,nlt_bgc_N) = (ocean_bio(i,j,nlt_bgc_N)*rphi_sk &
+                                        - cinit(ij,nlt_bgc_N))/dt
+            elseif (ice_growth(ij) < c0) then
+               f_meltn(ij) = min(c1, meltb(i,j)/sk_l)*cinit(ij,nlt_bgc_N)/dt
+           endif
+         enddo  ! ij
+
+      endif  ! bgc_flux_type
+
+      !-----------------------------------------------------------------------
+      ! begin building biogeochemistry terms
+      !-----------------------------------------------------------------------
+
+!echmod note upNOn and upNHn are not used
+            
+      call algal_dyn (nx_block,        ny_block,        &
+                      icells,          dt,              &
+                      indxi,           indxj,           &
+                      fswthrul,        react,           & 
+                      cinit,           nbltrcr,         &
+                      grow_Cn,         upNOn,           &
+                      upNHn,                            &
+                      tr_bgc_N_sk,     tr_bgc_Nit_sk,   &
+                      tr_bgc_Am_sk,    tr_bgc_Sil_sk,   &
+                      tr_bgc_C_sk,     tr_bgc_chl_sk,   &
+                      tr_bgc_DMSPp_sk, tr_bgc_DMSPd_sk, & 
+                      tr_bgc_DMS_sk)
+
+      !-----------------------------------------------------------------------
+      ! compute new tracer concencentrations
+      !-----------------------------------------------------------------------
   
-     do ij = 1, icells
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+      do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
         
-          do nn = 1,nbltrcr
+         do nn = 1, nbltrcr
 
-           !--------------------------------------------------------------------
-           ! if PVt(ij) > 0, ie melt, then ocean_bio term drops out (MJ2006)
-           ! Combine boundary fluxes
-           !-------------------------------------------------------------------        
+      !-----------------------------------------------------------------------
+      ! if PVt(ij) > 0, ie melt, then ocean_bio term drops out (MJ2006)
+      ! Combine boundary fluxes
+      !-----------------------------------------------------------------------
            
-           PVn(nn) = SIGN(PVn(nn),PVt(ij))
-           init_temp = max(c0,in_init(ij,nn) + react(ij,nn))
-           flux_bio_temp(nn) = (PVn(nn)*PVt(ij)*init_temp -PVn(nn)*min(c0,PVt(ij))*ocean_bio(i,j,nn))+ &
-                                + f_meltn(ij)*fmeltn(nn) - congel_alg(ij,nn)
+         PVflag(nn) = SIGN(PVflag(nn),PVt(ij))
+         cinit_tmp = max(c0, cinit(ij,nn) + react(ij,nn)*sk_l)
+         flux_bio_temp(nn) = (PVflag(nn)*PVt(ij)*cinit_tmp/sk_l &
+                           -  PVflag(nn)*min(c0,PVt(ij))*ocean_bio(i,j,nn)) &
+                           + f_meltn(ij)*cling(nn) - congel_alg(ij,nn)
 
-           if (init_temp - flux_bio_temp(nn)*dt/sk_l < c0) then
-               flux_bio_temp(nn) = init_temp*sk_l/dt*(c1-puny)
-           endif
+         if (cinit_tmp < flux_bio_temp(nn)*dt) then
+             flux_bio_temp(nn) = cinit_tmp/dt*(c1-puny)
+         endif
 
-           in_init(ij,nn) = init_temp - flux_bio_temp(nn)*dt/sk_l
-           flux_bio(i,j,nn) = flux_bio(i,j,nn) +  flux_bio_temp(nn)*phi_sk  
+         cinit(ij,nn) = cinit_tmp - flux_bio_temp(nn)*dt
+         flux_bio(i,j,nn) = flux_bio(i,j,nn) + flux_bio_temp(nn)*phi_sk  
 
-           !--------------------------------------------------
-           ! Uncomment to update ocean concentration
-           ! Currently not coupled with ocean biogeochemistry
-           !----------------------------------------------------
-           !ocean_bio(i,j,nn) = ocean_bio(i,j,nn) + flux_bio(i,j,nn)/hmix(i,j)*aicen(i,j)
+         ! Uncomment to update ocean concentration
+         ! Currently not coupled with ocean biogeochemistry
+         !ocean_bio(i,j,nn) = ocean_bio(i,j,nn) &
+         !                  + flux_bio(i,j,nn)/hmix(i,j)*aicen(i,j)
 
-           if (in_init(ij,nn) < c0) then
-                write(nu_diag,*)'after algal fluxes sk_bgc < 0, ij,nn,in_init(ij,nn),flux_bio(i,j,nn)', &
-                    ij,nn,in_init(ij,nn),flux_bio(i,j,nn)
-                write(nu_diag,*) 'init_temp,flux_bio_temp(nn),f_meltn(ij), congel_alg(ij,nn),PVt(ij),PVn(nn):'
-                write(nu_diag,*) init_temp,flux_bio_temp(nn),f_meltn(ij), congel_alg(ij,nn),PVt(ij),PVn(nn)
-                write(nu_diag,*) 'congel(i,j),meltb(i,j):'
-                write(nu_diag,*) congel(i,j),meltb(i,j)
-                call abort_ice ('ice_bgc.F90: BGC error3')
-           endif
+         if (cinit(ij,nn) < c0) then
+              write(nu_diag,*) 'sk_bgc < 0 after algal fluxes, ij,nn,cinit,flux_bio',&
+                               ij,nn,cinit(ij,nn),flux_bio(i,j,nn)
+              write(nu_diag,*) 'cinit_tmp,flux_bio_temp,f_meltn,congel_alg,PVt,PVflag: '
+              write(nu_diag,*) cinit_tmp,flux_bio_temp(nn),f_meltn(ij), &
+                               congel_alg(ij,nn),PVt(ij),PVflag(nn)
+              write(nu_diag,*) 'congel, meltb: ',congel(i,j),meltb(i,j)
+              call abort_ice ('ice_bgc.F90: BGC error3')
+         endif
          
-          enddo  !nbltrcr
+         enddo  ! nbltrcr
 
-           !------------------------
-           ! combine reactions 
-           ! and back to (m^2)
-           !-------------------------
+      !-----------------------------------------------------------------------
+      ! reload tracer array
+      !-----------------------------------------------------------------------
 
-         trcrn(i,j,nt_bgc_N_sk) = in_init(ij,nlt_bgc_N)*sk_l
-         if (tr_bgc_Nit_sk)trcrn(i,j,nt_bgc_Nit_sk) =  sk_l*in_init(ij,nlt_bgc_NO)
-         if (tr_bgc_Am_sk)trcrn(i,j,nt_bgc_Am_sk) = sk_l*in_init(ij,nlt_bgc_NH)
-         if (tr_bgc_Sil_sk)trcrn(i,j,nt_bgc_Sil_sk) = sk_l*in_init(ij,nlt_bgc_Sil)
-         if (tr_bgc_C_sk) trcrn(i,j,nt_bgc_C_sk) =   trcrn(i,j,nt_bgc_N_sk)*R_C2N
-         if (tr_bgc_chl_sk)  trcrn(i,j,nt_bgc_chl_sk) =  trcrn(i,j,nt_bgc_N_sk)*R_chl2N
-         if (tr_bgc_DMSPp_sk) trcrn(i,j,nt_bgc_DMSPp_sk) = sk_l*in_init(ij,nlt_bgc_DMSPp)
-         if (tr_bgc_DMSPd_sk) trcrn(i,j,nt_bgc_DMSPd_sk) = sk_l*in_init(ij,nlt_bgc_DMSPd)
-         if (tr_bgc_DMS_sk)trcrn(i,j,nt_bgc_DMS_sk) = sk_l*in_init(ij,nlt_bgc_DMS)
+                              trcrn(i,j,nt_bgc_N_sk)     = cinit(ij,nlt_bgc_N)
+         if (tr_bgc_Nit_sk)   trcrn(i,j,nt_bgc_Nit_sk)   = cinit(ij,nlt_bgc_NO)
+         if (tr_bgc_Am_sk)    trcrn(i,j,nt_bgc_Am_sk)    = cinit(ij,nlt_bgc_NH)
+         if (tr_bgc_Sil_sk)   trcrn(i,j,nt_bgc_Sil_sk)   = cinit(ij,nlt_bgc_Sil)
+         if (tr_bgc_C_sk)     trcrn(i,j,nt_bgc_C_sk)     = trcrn(i,j,nt_bgc_N_sk)*R_C2N
+         if (tr_bgc_chl_sk)   trcrn(i,j,nt_bgc_chl_sk)   = trcrn(i,j,nt_bgc_N_sk)*R_chl2N
+         if (tr_bgc_DMSPp_sk) trcrn(i,j,nt_bgc_DMSPp_sk) = cinit(ij,nlt_bgc_DMSPp)
+         if (tr_bgc_DMSPd_sk) trcrn(i,j,nt_bgc_DMSPd_sk) = cinit(ij,nlt_bgc_DMSPd)
+         if (tr_bgc_DMS_sk)   trcrn(i,j,nt_bgc_DMS_sk)   = cinit(ij,nlt_bgc_DMS)
         
-    enddo !icells
+      enddo ! icells
 
-    end subroutine skl_biogeochemistry
+      end subroutine skl_biogeochemistry
 
 !=======================================================================
 !
 ! Do biogeochemistry from subroutine algal_dynamics
-! by Scott Elliott: updated to 175
-! 
-      subroutine algal_dyn (nx_block, ny_block,       &
-                                 icells,              &
-                                 indxi,    indxj,     &
-                                 fswthrul, reactb,    &
-                                 ltrcrn, ntr, growN,  &
-                                 upNOn, upNHn,        &
-                                 tr_bio_N,tr_bio_NO,  &
-                                 tr_bio_NH,tr_bio_Sil,&
-                                 tr_bio_C,tr_bio_chl, &
-                                 tr_bio_DMSPp,        &
-                                 tr_bio_DMSPd,        &
-                                 tr_bio_DMS)
+! authors: Scott Elliott, LANL
+!          Nicole Jeffery, LANL
 
-      use ice_calendar, only: dt
+      subroutine algal_dyn (nx_block,     ny_block,     &
+                            icells,       dt,           &
+                            indxi,        indxj,        &
+                            fswthrul,     reactb,       & 
+                            ltrcrn,       ntr,          &
+                            growN,        upNOn,        &
+                            upNHn,                      &
+                            tr_bio_N,     tr_bio_NO,    &
+                            tr_bio_NH,    tr_bio_Sil,   &
+                            tr_bio_C,     tr_bio_chl,   &
+                            tr_bio_DMSPp, tr_bio_DMSPd, &
+                            tr_bio_DMS)
+
+      use ice_constants, only: p1, p5, c0, c1, secday
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -531,53 +536,58 @@
          intent(in) :: &
          indxi, indxj ! compressed indices for cells with aicen > puny
 
+      real (kind=dbl_kind), intent(in) :: &
+         dt         ! time step 
+
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
          fswthrul   ! average shortwave passing through current ice layer (W/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(inout) :: &
-         growN,  &  !  algal specific growth rate   (/s)
-         upNOn,  &  !  algal NO uptake  rate   (mmol/m^3/s)
-         upNHn      !  algal NH uptake rate    (mmol/m^3/s)
+         growN,  &  !  algal specific growth rate   (1/s)
+         upNOn,  &  !  algal NO uptake  rate   (mmol/m^3 s)
+         upNHn      !  algal NH uptake rate    (mmol/m^3 s)
 
-      real (kind=dbl_kind), dimension(icells,ntr), &
-         intent(inout) :: &
-         reactb     ! biological reaction terms (mmol/m3)
+      real (kind=dbl_kind), dimension(icells,ntr), intent(inout) :: &
+         reactb     ! biological reaction terms (mmol/m^3)
 
-      real (kind=dbl_kind), dimension(icells,ntr), &
-         intent(in) :: &
-         ltrcrn     ! concentrations  in layer
+      real (kind=dbl_kind), dimension(icells,ntr), intent(in) :: &
+         ltrcrn     ! concentrations in layer
 
-      logical (kind=log_kind), intent(in):: &
-         tr_bio_N, tr_bio_NO  , &   ! tracer flags for z_bgc or skl_bgc: 
-         tr_bio_NH, tr_bio_Sil, &   ! algal nitrogen, nitrate, ammonium, silicate
-         tr_bio_C, tr_bio_chl , &   ! algal carbon, algal chlorophyll, DMSP particulate
-         tr_bio_DMSPp, tr_bio_DMSPd, & !DMSP dissolved, DMS
-         tr_bio_DMS
+      ! tracer flags for z_bgc or skl_bgc
+      logical (kind=log_kind), intent(in):: & 
+         tr_bio_N    , & ! algal nitrogen
+         tr_bio_NO   , & ! algal nitrate  
+         tr_bio_NH   , & ! algal ammonium
+         tr_bio_Sil  , & ! algal silicate
+         tr_bio_C    , & ! algal carbon
+         tr_bio_chl  , & ! algal chlorophyll
+         tr_bio_DMSPp, & ! DMSP particulate
+         tr_bio_DMSPd, & ! DMSP dissolved
+         tr_bio_DMS      ! DMS
 
       !  local variables
 
       real (kind=dbl_kind), parameter :: & 
          T_bot      = -1.8_dbl_kind , & ! interface close to freezing (C)
-         chlabs     = 9.e-4_dbl_kind, & ! chlorophyll absorption (1/(mg/m^3)) where a 3 cm 
-                                        ! skeletal layer thickness is assumed
-         mu_max     = 1.5_dbl_kind,   & ! (1/day) maximum growth rate 'Jin2006'     
-         T_max      = -1.8_dbl_kind,  & ! (C) maximum growth at Tmax
-         op_dep_min = 0.1          ,  & ! 0.01 Light attenuates for optical depths exceeding
-                                        ! op_dep_min (small effect unless chla > 100 mg/m^2)
-         grow_Tdep  = 0.0633_dbl_kind,& ! (1/C)and its T dependence
+         chlabs     = 9.e-4_dbl_kind, & ! chlorophyll absorption (1/(mg/m^3))
+                                        ! assuming skeletal layer thickness = 3 cm
+         mu_max     = 1.5_dbl_kind,   & ! maximum growth rate 'Jin2006' (1/day) 
+         T_max      = -1.8_dbl_kind,  & ! maximum growth at Tmax (C)
+         op_dep_min = 0.1          ,  & ! optical depth above which light attentuates
+         grow_Tdep  = 0.0633_dbl_kind,& ! and its T dependence (1/C)
          fr_graze   = p1           ,  & ! A93 val for S, set to zero in Jin 06
          fr_graze_s = 0.5_dbl_kind ,  & ! fraction of grazing spilled or slopped
          fr_graze_a = 0.5_dbl_kind ,  & ! fraction of grazing assimilated
          fr_graze_e = 0.5_dbl_kind ,  & ! fraction of assimilation excreted  
          alpha2max  = 0.8_dbl_kind,   & ! light limitation (1/(W/m^2))
-         beta2max   = 0.018_dbl_kind, & ! corresponding light inhibition (1/W/m^2)
+         !beta2max   = 0.018_dbl_kind, & ! corresponding light inhibition (1/W/m^2)
          K_Nit      = c1           ,  & ! nitrate half saturation (mmol/m^3) 
          K_Am       = c1           ,  & ! ammonium half saturation (mmol/m^3) 
          K_Sil      = 4.0_dbl_kind ,  & ! silicon half saturation (mmol/m^3)
-         mort_pre   = 0.0208_dbl_kind,& ! (1/day) prefix to mortality
-         mort_Tdep  = 0.03_dbl_kind , & ! (1/C) T dependence of mortality
+         mort_pre   = 0.0208_dbl_kind,& ! prefix to mortality (1/day) 
+         mort_Tdep  = 0.03_dbl_kind , & ! T dependence of mortality (1/C) 
          fr_mort2min= c1            , & ! fractionation to remin
-         t_nitrif   = 67.0_dbl_kind , & ! (days) nitrification time scale
+         !t_nitrif   = 67.0_dbl_kind , & ! nitrification time scale (days)
          max_loss   = 0.9               ! restrict uptake to 90% of remaining value 
 
       real (kind=dbl_kind), parameter :: &
@@ -638,7 +648,7 @@
          mort     , &  ! sum of mortality and excretion (mmol/m^3/s)
          nitrif        ! nitrification (mmol/m^3/s)
 
-!  source terms underscore s, removal underscore r
+      ! source terms underscore s, removal underscore r
 
       real (kind=dbl_kind) :: &
          N_s_p     , &  ! algal nitrogen photosynthesis (mmol/m^3)
@@ -689,237 +699,244 @@
      !    DMS_pr_s     , &  ! net product DMS sources (mmol/m^3)
      !    DMS_pr_r          ! net product DMS removal (mmol/m^3)
 
-      logical (kind=log_kind) :: &   
-         write_flag           ! set to true at each timestep        
-
-!  begin building biogeochemistry terms
-
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-
-      write_flag = .true.
-      
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
 
-!  map to local variable names, provide conversions to volume data
+      !-----------------------------------------------------------------------
+      ! Initialize
+      !-----------------------------------------------------------------------
 
-         Nin = c0
-         Cin = c0
-         chlin = c0
-         NOin = c0
-         NHin = c0
-         Silin = c0
+         Nin     = c0
+         Cin     = c0
+         chlin   = c0
+         NOin    = c0
+         NHin    = c0
+         Silin   = c0
          DMSPpin = c0
          DMSPdin = c0
-         DMSin = c0
+         DMSin   = c0
 
-         NOin     = ltrcrn(ij,nlt_bgc_NO)
-         if (tr_bio_N)         Nin      = ltrcrn(ij,nlt_bgc_N)
-         if (tr_bio_C)         Cin      = ltrcrn(ij,nlt_bgc_C)
-         if (tr_bio_NH)        NHin     = ltrcrn(ij,nlt_bgc_NH)
-         if (tr_bio_Sil)       Silin    = ltrcrn(ij,nlt_bgc_Sil)
-         if (tr_bio_DMSPp)     DMSPpin  = ltrcrn(ij,nlt_bgc_DMSPp)
-         if (tr_bio_DMSPd)     DMSPdin  = ltrcrn(ij,nlt_bgc_DMSPd)
-         if (tr_bio_DMS)       DMSin    = ltrcrn(ij,nlt_bgc_DMS)
+                               NOin     = ltrcrn(ij,nlt_bgc_NO)   /sk_l
+         if (tr_bio_N)         Nin      = ltrcrn(ij,nlt_bgc_N)    /sk_l
+         if (tr_bio_C)         Cin      = ltrcrn(ij,nlt_bgc_C)    /sk_l
+         if (tr_bio_NH)        NHin     = ltrcrn(ij,nlt_bgc_NH)   /sk_l
+         if (tr_bio_Sil)       Silin    = ltrcrn(ij,nlt_bgc_Sil)  /sk_l
+         if (tr_bio_DMSPp)     DMSPpin  = ltrcrn(ij,nlt_bgc_DMSPp)/sk_l
+         if (tr_bio_DMSPd)     DMSPdin  = ltrcrn(ij,nlt_bgc_DMSPd)/sk_l
+         if (tr_bio_DMS)       DMSin    = ltrcrn(ij,nlt_bgc_DMS)  /sk_l
          chlin = R_chl2N * Nin  
 
-!----------------------
-! Light limitation
-!----------------------- 
+      !-----------------------------------------------------------------------
+      ! Light limitation
+      !-----------------------------------------------------------------------
 
-        op_dep   = chlabs * chlin   
+         op_dep   = chlabs * chlin   
 
-!  Okhotsk maxima causes a reevaluation.
-!  The new concept is, late algae at the bottom of the bottom strongly attenuated.
-!  Since k about 0.03 1/m(mg/m3), efold at about 30 mg/m3
-!  values of order hundreds will be shut down...
-!  Newest algae experience super aborption above because they sit low.
-!  More than perhaps two efolds and light falls below half value.
+         ! Okhotsk maxima causes a reevaluation.
+         ! The new concept is, late algae at the bottom of the bottom strongly 
+         ! attenuated.  Since k about 0.03 1/m(mg/m3), efold at about 30 mg/m3
+         ! values of order hundreds will be shut down...
+         ! Newest algae experience super aborption above because they sit low.
+         ! More than perhaps two efolds and light falls below half value.
 
          if (op_dep > op_dep_min) then
-           Iavg_loc   = fswthrul(i,j)*  (c1 - exp(-op_dep)) / op_dep
+            Iavg_loc   = fswthrul(i,j)*  (c1 - exp(-op_dep)) / op_dep
          else
-           Iavg_loc   = fswthrul(i,j)
+            Iavg_loc   = fswthrul(i,j)
          endif
 
-!  With light inhibition
-!           
-!       L_lim     = (c1 - exp(-alpha2max*Iavg_loc)) * exp(-beta2max*Iavg_loc)      
-!
-!  Without light inhibition
-!           
-        L_lim     = (c1 - exp(-alpha2max*Iavg_loc)) 
+         ! With light inhibition
+         ! L_lim     = (c1 - exp(-alpha2max*Iavg_loc)) * exp(-beta2max*Iavg_loc)      
 
-!--------------------------- 
-! Nutrient limitation
-!----------------------------
+         ! Without light inhibition
+         L_lim     = (c1 - exp(-alpha2max*Iavg_loc)) 
 
-        Nit_lim =   NOin/(NOin + K_Nit)
-        Am_lim = c0
-        if (tr_bio_NH) then
-            Am_lim    = NHin/(NHin + K_Am)
-            N_lim     = min(c1,Nit_lim + Am_lim)  
-        else
-            N_lim = Nit_lim
-        endif
-        Sil_lim = c1
-        if (tr_bio_Sil)  Sil_lim   = Silin/(Silin + K_Sil)
+      !-----------------------------------------------------------------------
+      ! Nutrient limitation
+      !-----------------------------------------------------------------------
+
+         Nit_lim = NOin/(NOin + K_Nit)
+         Am_lim  = c0
+         N_lim = Nit_lim
+         if (tr_bio_NH) then
+            Am_lim = NHin/(NHin + K_Am)
+            N_lim  = min(c1, Nit_lim + Am_lim)  
+         endif
+         Sil_lim = c1
+         if (tr_bio_Sil) Sil_lim = Silin/(Silin + K_Sil)
  
-!  Growth and uptake computed within the bottom layer 
-!  Note here per A93 discussions and MBJ model, salinity is a universal restriction
-!  Comparison with available column nutrients inserted but in tests had no effect
-!  Primary production reverts to SE form, see MBJ below and be careful
+         ! Growth and uptake computed within the bottom layer 
+         ! Note here per A93 discussions and MBJ model, salinity is a universal 
+         ! restriction.  Comparison with available column nutrients inserted 
+         ! but in tests had no effect.
+         ! Primary production reverts to SE form, see MBJ below and be careful
 
-       growmax_N   = mu_max / secday * exp(grow_Tdep * (T_bot - T_max))* Nin 
-       grow_N   = min(L_lim,N_lim,Sil_lim) * growmax_N
-       potU_Nit = Nit_lim          * growmax_N
-       potU_Am  = Am_lim           * growmax_N 
-       U_Am     = min(grow_N, potU_Am)
-       U_Nit    = grow_N - U_Am
-       U_Sil    = R_Si2N * grow_N
+         growmax_N = mu_max / secday * exp(grow_Tdep * (T_bot - T_max))* Nin 
+         grow_N    = min(L_lim, N_lim, Sil_lim) * growmax_N
+         potU_Nit  = Nit_lim                    * growmax_N
+         potU_Am   = Am_lim                     * growmax_N 
+         U_Am      = min(grow_N, potU_Am)
+         U_Nit     = grow_N - U_Am
+         U_Sil     = R_Si2N * grow_N
 
-       if (tr_bio_Sil) U_Sil = min(U_Sil, max_loss * Silin/dt)
-       U_Nit = min(U_Nit, max_loss * NOin/dt)  
-       U_Am  = min(U_Am, max_loss * NHin/dt)    
+         if (tr_bio_Sil) U_Sil = min(U_Sil, max_loss * Silin/dt)
+         U_Nit = min(U_Nit, max_loss * NOin/dt)  
+         U_Am  = min(U_Am,  max_loss * NHin/dt)    
  
-       grow_N = min(U_Sil/R_Si2N,U_Nit + U_Am)
-       fr_Am = c0
-       if (tr_bio_NH) then
-          fr_Am = p5
-          if (grow_N > c0) fr_Am = min(U_Am/grow_N,c1)
-       endif
-       fr_Nit = c1-fr_Am
-       U_Nit  = fr_Nit * grow_N
-       U_Am   = fr_Am  * grow_N
-       U_Sil  = R_Si2N * grow_N
+         grow_N = min(U_Sil/R_Si2N,U_Nit + U_Am)
+         fr_Am = c0
+         if (tr_bio_NH) then
+            fr_Am = p5
+            if (grow_N > c0) fr_Am = min(U_Am/grow_N, c1)
+         endif
+         fr_Nit = c1 - fr_Am
+         U_Nit  = fr_Nit * grow_N
+         U_Am   = fr_Am  * grow_N
+         U_Sil  = R_Si2N * grow_N
     
-       resp        = fr_resp* grow_N
-       graze       = fr_graze*grow_N
-       mort        = mort_pre * exp(mort_Tdep*(T_bot-T_max)) * Nin / secday 
-       nitrif      = c0 ! (NHin / t_nitrif) / secday
+         resp   = fr_resp  * grow_N
+         graze  = fr_graze * grow_N
+         mort   = mort_pre * exp(mort_Tdep*(T_bot-T_max)) * Nin / secday 
+         nitrif = c0 ! (NHin / t_nitrif) / secday
  
-! history variables
+         ! history variables
 
-        growN(i,j) = grow_N 
-        if (Nin > c0) growN(i,j) = grow_N/Nin  ! specific growth rate (per s)
-        upNOn(i,j) = U_Nit
-        upNHn(i,j) = U_Am
+         growN(i,j) = grow_N 
+         if (Nin > c0) growN(i,j) = grow_N/Nin  ! specific growth rate (per s)
+         upNOn(i,j) = U_Nit
+         upNHn(i,j) = U_Am
 
-!  Since the framework remains incomplete at this point,
-!  it is assumed as a starting expedient that 
-!  DMSP loss to melting results in 10% conversion to DMS
-!  which is then given a ten day removal constant.
-!  Grazing losses are channeled into rough spillage and assimilation
-!  then following ammonia there is some recycling.
-!
-!  Algal reaction term
-!       N_react = (grow_N*(c1 -fr_resp - fr_graze) - mort)*dt
+      !-----------------------------------------------------------------------
+      ! Define reaction terms
+      !-----------------------------------------------------------------------
 
-        N_s_p = grow_N * dt  
-        N_r_g = graze * dt 
-        N_r_r = resp * dt
-        N_r_mo= mort * dt
-        N_s = N_s_p
-        N_r = N_r_g + N_r_r + N_r_mo 
+         ! Since the framework remains incomplete at this point,
+         ! it is assumed as a starting expedient that 
+         ! DMSP loss to melting results in 10% conversion to DMS
+         ! which is then given a ten day removal constant.
+         ! Grazing losses are channeled into rough spillage and assimilation
+         ! then following ammonia there is some recycling.
 
-!  Carbon chemistry 
-!       C_react = R_C2N * N_react 
+         !--------------------------------------------------------------------
+         ! Algal reaction term
+         ! N_react = (grow_N*(c1 -fr_resp - fr_graze) - mort)*dt
+         !--------------------------------------------------------------------
 
-        C_s = R_C2N * N_s
-        C_r = R_C2N * N_r
+         N_s_p  = grow_N * dt  
+         N_r_g  = graze  * dt 
+         N_r_r  = resp   * dt
+         N_r_mo = mort   * dt
+         N_s    = N_s_p
+         N_r    = N_r_g + N_r_r + N_r_mo 
 
-! Nitrate reaction term
-!       NO_react = (nitrif - fr_Nit*grow_N)*dt
+         !--------------------------------------------------------------------
+         ! Carbon chemistry 
+         ! C_react = R_C2N * N_react 
+         !--------------------------------------------------------------------
 
-        NO_s_n = nitrif * dt               
-        NO_r_p = U_Nit * dt                
-        NO_s = NO_s_n
-        NO_r = NO_r_p
+         C_s = R_C2N * N_s
+         C_r = R_C2N * N_r
 
-! Ammonium reaction term
-!        NH_react = (-nitrif - (c1-fr_Nit - fr_resp - &
-!           fr_graze*fr_graze_e*fr_graze_a)*grow_N + mort*fr_mort2min)*dt  
+         !--------------------------------------------------------------------
+         ! Nitrate reaction term
+         ! NO_react = (nitrif - fr_Nit*grow_N)*dt
+         !--------------------------------------------------------------------
 
-        NH_s_r =  N_r_r 
-        NH_s_e = fr_graze_e*fr_graze_a* N_r_g
-        NH_s_mo= fr_mort2min * N_r_mo
-        NH_r_p = U_Am * dt                
-        NH_r_n = nitrif *dt                  
-        NH_s = NH_s_r + NH_s_e + NH_s_mo
-        NH_r = NH_r_p + NH_r_n 
+         NO_s_n = nitrif * dt               
+         NO_r_p = U_Nit  * dt                
+         NO_s   = NO_s_n
+         NO_r   = NO_r_p
 
-! Silica  reaction term
-!        Sil_react = - R_Si2N * grow_N * dt
+         !--------------------------------------------------------------------
+         ! Ammonium reaction term
+         ! NH_react = (-nitrif - (c1-fr_Nit - fr_resp 
+         !     - fr_graze*fr_graze_e*fr_graze_a)*grow_N + mort*fr_mort2min)*dt  
+         !--------------------------------------------------------------------
+
+         NH_s_r  = N_r_r 
+         NH_s_e  = fr_graze_e * fr_graze_a * N_r_g
+         NH_s_mo = fr_mort2min * N_r_mo
+         NH_r_p  = U_Am   * dt
+         NH_r_n  = nitrif * dt
+         NH_s    = NH_s_r + NH_s_e + NH_s_mo
+         NH_r    = NH_r_p + NH_r_n 
+
+         !--------------------------------------------------------------------
+         ! Silica reaction term
+         ! Sil_react = - R_Si2N * grow_N * dt
+         !--------------------------------------------------------------------
      
-        Sil_r_p = U_Sil * dt
-        Sil_s = c0
-        Sil_r = Sil_r_p 
+         Sil_r_p = U_Sil * dt
+         Sil_s   = c0
+         Sil_r   = Sil_r_p 
 
-!  Sulfur cycle begins here
-!  Grazing losses are channeled into rough spillage and assimilation
-!  then onward and the MBJ mortality channel is included
-!  It is assumed as a starting expedient that 
-!  DMSP loss to melting gives partial conversion to DMS in product layer
-!  which then undergoes Stefels removal.
+         !--------------------------------------------------------------------
+         ! Sulfur cycle begins here
+         !--------------------------------------------------------------------
+         ! Grazing losses are channeled into rough spillage and assimilation
+         ! then onward and the MBJ mortality channel is included
+         ! It is assumed as a starting expedient that 
+         ! DMSP loss to melting gives partial conversion to DMS in product layer
+         ! which then undergoes Stefels removal.
 
+         !--------------------------------------------------------------------
+         ! DMSPd  reaction term
+         ! DMSPd_react = R_S2N*((fr_graze_s+fr_excrt_2S*fr_graze_e*fr_graze_a)
+         !                      *fr_graze*grow_N + fr_mort2min*mort)*dt
+         !             - [\DMSPd]/t_sk_conv*dt
+         !--------------------------------------------------------------------
 
-! DMSPd  reaction term
-!        DMSPd_react = R_S2N*((fr_graze_s+fr_excrt_2S*fr_graze_e*fr_graze_a)*fr_graze*grow_N + &
-!                  fr_mort2min*mort)*dt - [\DMSPd]/t_sk_conv*dt
+         DMSPd_s_s  = fr_graze_s * R_S2N * N_r_g
+         DMSPd_s_e  = fr_excrt_2S * fr_graze_e * fr_graze_a * R_S2N * N_r_g
+         DMSPd_s_mo = fr_mort2min * R_S2N * N_r_mo
+         DMSPd_r_c  = DMSPdin * dt / (t_sk_conv * secday) 
+         DMSPd_s    = DMSPd_s_s + DMSPd_s_e + DMSPd_s_mo 
+         DMSPd_r    = DMSPd_r_c
 
-        DMSPd_s_s = fr_graze_s * R_S2N * N_r_g
-        DMSPd_s_e = fr_excrt_2S * fr_graze_e * fr_graze_a * R_S2N * N_r_g
-        DMSPd_s_mo= fr_mort2min * R_S2N * N_r_mo
-        DMSPd_r_c = (c1/t_sk_conv) * (c1/secday)  * (DMSPdin) * dt
-        DMSPd_s = DMSPd_s_s + DMSPd_s_e + DMSPd_s_mo 
-        DMSPd_r = DMSPd_r_c
-!
-! DMS reaction term
-!       DMS_react = ([\DMSPd]*y_sk_DMS/t_sk_conv - c1/t_sk_ox *[\DMS])*dt
+         !--------------------------------------------------------------------
+         ! DMS reaction term
+         ! DMS_react = ([\DMSPd]*y_sk_DMS/t_sk_conv - c1/t_sk_ox *[\DMS])*dt
+         !--------------------------------------------------------------------
  
-        DMS_s_c = y_sk_DMS * DMSPd_r_c 
-        DMS_r_o = (c1/t_sk_ox) * (c1/secday) * (DMSin) * dt 
-        DMS_s = DMS_s_c  
-        DMS_r = DMS_r_o 
+         DMS_s_c = y_sk_DMS * DMSPd_r_c 
+         DMS_r_o = DMSin * dt / (t_sk_ox * secday)
+         DMS_s   = DMS_s_c
+         DMS_r   = DMS_r_o
 
-!  for mixed layer sulfur chemistry, fluxes kept separate for ice area weighting
-!   units are different here, but not sure if they need to be changed
-!   no fluxes into the product layer here
-!
-       !  DMSP_pr_s_nd= (c1/t_pr_dsrp) * (c1/secday) * &
-       !                (chl_pr_v*pr_l) * (R_S2N_nd/R_chl2N_nd) * dt 
-       !  DMSP_pr_s_me= fr_melt_2S * DMSPp_sk_r_me
-       !  DMSP_pr_r_c = (c1/t_pr_conv)*(c1/secday) * (dmsp(i,j,iblk)*pr_l) * dt 
-       !  DMSP_pr_f   = F_DMSP * dt
-       !  DMSP_pr_s = DMSP_pr_s_nd                ! + DMSP_pr_s_me + DMSP_pr_f
-       !  DMSP_pr_r = DMSP_pr_r_c
+         ! for mixed layer sulfur chemistry, fluxes kept separate for ice 
+         ! area weighting
+         ! units are different here, but not sure if they need to be changed
+         ! no fluxes into the product layer here
 
-       !  DMS_pr_s_c = y_pr_DMS * DMSP_pr_r_c
-       !  DMS_pr_r_o = (c1/t_pr_ox) * (c1/secday) * (dms(i,j,iblk)*pr_l) * dt
-       !  DMS_pr_f   = F_DMS * dt 
-       !  DMS_pr_s = DMS_pr_s_c                   ! + DMS_pr_f
-       !  DMS_pr_r = DMS_pr_r_o
+         ! DMSP_pr_s_nd = chl_pr_v*pr_l * R_S2N_nd/R_chl2N_nd * dt &
+         !              / (t_pr_dsrp * secday)
+         ! DMSP_pr_s_me = fr_melt_2S * DMSPp_sk_r_me
+         ! DMSP_pr_r_c  = dmsp(i,j,iblk)*pr_l * dt / (t_pr_conv * secday) 
+         ! DMSP_pr_f    = F_DMSP * dt
+         ! DMSP_pr_s    = DMSP_pr_s_nd                ! + DMSP_pr_s_me + DMSP_pr_f
+         ! DMSP_pr_r    = DMSP_pr_r_c
 
-! Define reaction terms
+         ! DMS_pr_s_c = y_pr_DMS * DMSP_pr_r_c
+         ! DMS_pr_r_o = dms(i,j,iblk)*pr_l * dt / (t_pr_ox * secday)
+         ! DMS_pr_f   = F_DMS * dt 
+         ! DMS_pr_s   = DMS_pr_s_c                   ! + DMS_pr_f
+         ! DMS_pr_r   = DMS_pr_r_o
 
-         reactb(ij,nlt_bgc_NO)                    = NO_s  - NO_r
-         if (tr_bio_N) reactb(ij,nlt_bgc_N)       = N_s   - N_r 
-         if (tr_bio_C) reactb(ij,nlt_bgc_C)       = C_s    - C_r
-         if (tr_bio_NH)reactb(ij,nlt_bgc_NH)      = NH_s   - NH_r
-         if (tr_bio_Sil)reactb(ij,nlt_bgc_Sil)    = Sil_s  - Sil_r
-         if (tr_bio_DMSPd)reactb(ij,nlt_bgc_DMSPd)= DMSPd_s- DMSPd_r
-         if (tr_bio_DMS)reactb(ij,nlt_bgc_DMS)    = DMS_s  - DMS_r
+      !-----------------------------------------------------------------------
+      ! Load reaction array
+      !-----------------------------------------------------------------------
 
-         !if (growN(i,j) > c0 .AND. write_flag) then
-         !       write(nu_diag, *) 'reactb(ij,nlt_bgc_N), ij:',reactb(ij,nlt_bgc_N),ij
-         !       write(nu_diag, *) 'growN(i,j), i,j:',growN(i,j),i,j
-         !       write(nu_diag, *) 'fswthrul(i,j):',fswthrul(i,j)
-         !       write(nu_diag, *) 'Nin,NOin,NHin,Silin:',Nin,NOin,NHin,Silin
-         !       write_flag = .false.
-         !endif
+                           reactb(ij,nlt_bgc_NO)    = NO_s    - NO_r
+         if (tr_bio_N)     reactb(ij,nlt_bgc_N)     = N_s     - N_r 
+         if (tr_bio_C)     reactb(ij,nlt_bgc_C)     = C_s     - C_r
+         if (tr_bio_NH)    reactb(ij,nlt_bgc_NH)    = NH_s    - NH_r
+         if (tr_bio_Sil)   reactb(ij,nlt_bgc_Sil)   = Sil_s   - Sil_r
+         if (tr_bio_DMSPd) reactb(ij,nlt_bgc_DMSPd) = DMSPd_s - DMSPd_r
+         if (tr_bio_DMS)   reactb(ij,nlt_bgc_DMS)   = DMS_s   - DMS_r
 
       enddo
 
@@ -935,6 +952,7 @@
       subroutine bgc_diags (dt)
 
       use ice_broadcast, only: broadcast_scalar
+      use ice_constants, only: c0, mps_to_cmpdy, c100
       use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc, pbloc
 
       real (kind=dbl_kind), intent(in) :: &
@@ -970,7 +988,7 @@
                pSil_ac(n)  = ocean_bio(i,j,nlt_bgc_Sil,iblk)  ! sil(i,j,iblk)
                pDMSP_ac(n) = ocean_bio(i,j,nlt_bgc_DMSPp,iblk)! dmsp(i,j,iblk)
                pDMS_ac(n)  = ocean_bio(i,j,nlt_bgc_DMS,iblk)  ! dms(i,j,iblk)
-               pN_ac(n)    = ocean_bio(i,j,nlt_bgc_N,iblk)    ! algalN(i,j,iblk)             
+               pN_ac(n)    = ocean_bio(i,j,nlt_bgc_N,iblk)    ! algalN(i,j,iblk)
 
                !----------------------------------------------------------------------
                ! fluxes in mmol/m^2/d
@@ -985,23 +1003,26 @@
                   pDMSPd_sk(n) = c0
                   pDMS_sk(n)   = c0
                
-                  pN_sk(n)       = trcr    (i,j, nt_bgc_N_sk,  iblk)*phi_sk/sk_l                
-                  pflux_N(n)     = flux_bio(i,j,nlt_bgc_N,     iblk)*mps_to_cmpdy/c100 
+                  pN_sk(n)       = trcr    (i,j, nt_bgc_N_sk,   iblk)*phi_sk/sk_l
+                  pflux_N(n)     = flux_bio(i,j,nlt_bgc_N,      iblk)*mps_to_cmpdy/c100 
                   if (tr_bgc_Nit_sk) then
-                     pNit_sk(n)  = trcr    (i,j, nt_bgc_Nit_sk,iblk)*phi_sk/sk_l   
-                     pflux_NO(n) = flux_bio(i,j,nlt_bgc_NO,    iblk)*mps_to_cmpdy/c100 
+                     pNit_sk(n)  = trcr    (i,j, nt_bgc_Nit_sk, iblk)*phi_sk/sk_l   
+                     pflux_NO(n) = flux_bio(i,j,nlt_bgc_NO,     iblk)*mps_to_cmpdy/c100 
                   endif
                   if (tr_bgc_Am_sk) then
-                     pAm_sk(n)   = trcr    (i,j, nt_bgc_Am_sk, iblk)*phi_sk/sk_l        
-                     pflux_NH(n) = flux_bio(i,j,nlt_bgc_NH,    iblk)*mps_to_cmpdy/c100 
+                     pAm_sk(n)   = trcr    (i,j, nt_bgc_Am_sk,  iblk)*phi_sk/sk_l
+                     pflux_NH(n) = flux_bio(i,j,nlt_bgc_NH,     iblk)*mps_to_cmpdy/c100 
                   endif
                   if (tr_bgc_Sil_sk) then
-                     pSil_sk(n)  = trcr    (i,j, nt_bgc_Sil_sk,iblk)*phi_sk/sk_l       
-                     pflux_Sil(n)= flux_bio(i,j,nlt_bgc_Sil,   iblk)*mps_to_cmpdy/c100 
+                     pSil_sk(n)  = trcr    (i,j, nt_bgc_Sil_sk, iblk)*phi_sk/sk_l       
+                     pflux_Sil(n)= flux_bio(i,j,nlt_bgc_Sil,    iblk)*mps_to_cmpdy/c100 
                   endif
-                  if (tr_bgc_DMSPp_sk) pDMSPp_sk(n) = trcr(i,j,nt_bgc_DMSPp_sk,iblk)*phi_sk/sk_l  
-                  if (tr_bgc_DMSPd_sk) pDMSPd_sk(n) = trcr(i,j,nt_bgc_DMSPd_sk,iblk)*phi_sk/sk_l 
-                  if (tr_bgc_DMS_sk)   pDMS_sk  (n) = trcr(i,j,nt_bgc_DMS_sk,  iblk)*phi_sk/sk_l  
+                  if (tr_bgc_DMSPp_sk) &
+                     pDMSPp_sk(n) = trcr   (i,j,nt_bgc_DMSPp_sk,iblk)*phi_sk/sk_l  
+                  if (tr_bgc_DMSPd_sk) &
+                     pDMSPd_sk(n) = trcr   (i,j,nt_bgc_DMSPd_sk,iblk)*phi_sk/sk_l 
+                  if (tr_bgc_DMS_sk)   &
+                     pDMS_sk  (n) = trcr   (i,j,nt_bgc_DMS_sk,  iblk)*phi_sk/sk_l  
                endif
 
             endif                 ! my_task = pmloc
@@ -1025,7 +1046,7 @@
                call broadcast_scalar(pDMSPp_sk(n), pmloc(n))             
                call broadcast_scalar(pDMSPd_sk(n), pmloc(n))             
                call broadcast_scalar(pDMS_sk  (n), pmloc(n))        
-           endif   !tr_bgc_sk
+           endif
 
          enddo                  ! npnt
       endif                     ! print_points
@@ -1143,23 +1164,23 @@
       do n = 1, ncat
         if (solve_skl_bgc) then
                               call ice_write(nu_dump_bgc,0, &
-                                             trcrn(:,:,nt_bgc_N_sk,n,:),    'ruf8',diag)
+                              trcrn(:,:,nt_bgc_N_sk,n,:),    'ruf8',diag)
          if (tr_bgc_C_sk)     call ice_write(nu_dump_bgc,0, &
-                                             trcrn(:,:,nt_bgc_C_sk,n,:),    'ruf8',diag)
+                              trcrn(:,:,nt_bgc_C_sk,n,:),    'ruf8',diag)
          if (tr_bgc_chl_sk)   call ice_write(nu_dump_bgc,0, &
-                                             trcrn(:,:,nt_bgc_chl_sk,n,:),  'ruf8',diag)
+                              trcrn(:,:,nt_bgc_chl_sk,n,:),  'ruf8',diag)
          if (tr_bgc_Nit_sk)   call ice_write(nu_dump_bgc,0, &
-                                             trcrn(:,:,nt_bgc_Nit_sk,n,:),  'ruf8',diag)
+                              trcrn(:,:,nt_bgc_Nit_sk,n,:),  'ruf8',diag)
          if (tr_bgc_Am_sk)    call ice_write(nu_dump_bgc,0, &
-                                             trcrn(:,:,nt_bgc_Am_sk,n,:),   'ruf8',diag)
+                              trcrn(:,:,nt_bgc_Am_sk,n,:),   'ruf8',diag)
          if (tr_bgc_Sil_sk)   call ice_write(nu_dump_bgc,0, &
-                                             trcrn(:,:,nt_bgc_Sil_sk,n,:),  'ruf8',diag)
+                              trcrn(:,:,nt_bgc_Sil_sk,n,:),  'ruf8',diag)
          if (tr_bgc_DMSPp_sk) call ice_write(nu_dump_bgc,0, &
-                                             trcrn(:,:,nt_bgc_DMSPp_sk,n,:),'ruf8',diag)
+                              trcrn(:,:,nt_bgc_DMSPp_sk,n,:),'ruf8',diag)
          if (tr_bgc_DMSPd_sk) call ice_write(nu_dump_bgc,0, &
-                                             trcrn(:,:,nt_bgc_DMSPd_sk,n,:),'ruf8',diag)
+                              trcrn(:,:,nt_bgc_DMSPd_sk,n,:),'ruf8',diag)
          if (tr_bgc_DMS_sk)   call ice_write(nu_dump_bgc,0, &
-                                             trcrn(:,:,nt_bgc_DMS_sk,n,:),  'ruf8',diag)
+                              trcrn(:,:,nt_bgc_DMS_sk,n,:),  'ruf8',diag)
         endif  ! solve_skl_bgc
       enddo
       
@@ -1186,6 +1207,7 @@
 
       subroutine read_restart_bgc(filename_spec)
 
+      use ice_constants, only: field_loc_center, field_type_scalar
       use ice_domain_size, only: ncat
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, year_init, &
@@ -1241,21 +1263,22 @@
       do n = 1, ncat
        if (solve_skl_bgc) then
          call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_N_sk,n,:),'ruf8',diag)
-         if (tr_bgc_C_sk) call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_C_sk,n,:),'ruf8',diag)
+         if (tr_bgc_C_sk)     call ice_read(nu_restart_bgc,0, &
+                              trcrn(:,:,nt_bgc_C_sk,n,:),'ruf8',diag)
          if (tr_bgc_chl_sk)   call ice_read(nu_restart_bgc,0, &
-                                            trcrn(:,:,nt_bgc_chl_sk  ,n,:),'ruf8',diag)
+                              trcrn(:,:,nt_bgc_chl_sk  ,n,:),'ruf8',diag)
          if (tr_bgc_Nit_sk)   call ice_read(nu_restart_bgc,0, &
-                                            trcrn(:,:,nt_bgc_Nit_sk  ,n,:),'ruf8',diag)
+                              trcrn(:,:,nt_bgc_Nit_sk  ,n,:),'ruf8',diag)
          if (tr_bgc_Am_sk)    call ice_read(nu_restart_bgc,0, &
-                                            trcrn(:,:,nt_bgc_Am_sk   ,n,:),'ruf8',diag)
+                              trcrn(:,:,nt_bgc_Am_sk   ,n,:),'ruf8',diag)
          if (tr_bgc_Sil_sk)   call ice_read(nu_restart_bgc,0, &
-                                            trcrn(:,:,nt_bgc_Sil_sk  ,n,:),'ruf8',diag)
+                              trcrn(:,:,nt_bgc_Sil_sk  ,n,:),'ruf8',diag)
          if(tr_bgc_DMSPp_sk)  call ice_read(nu_restart_bgc,0, &
-                                            trcrn(:,:,nt_bgc_DMSPp_sk,n,:),'ruf8',diag)
+                              trcrn(:,:,nt_bgc_DMSPp_sk,n,:),'ruf8',diag)
          if (tr_bgc_DMSPd_sk) call ice_read(nu_restart_bgc,0, &
-                                            trcrn(:,:,nt_bgc_DMSPd_sk,n,:),'ruf8',diag)
+                              trcrn(:,:,nt_bgc_DMSPd_sk,n,:),'ruf8',diag)
          if (tr_bgc_DMS_sk)   call ice_read(nu_restart_bgc,0, &
-                                            trcrn(:,:,nt_bgc_DMS_sk  ,n,:),'ruf8',diag)
+                              trcrn(:,:,nt_bgc_DMS_sk  ,n,:),'ruf8',diag)
        endif  ! solve_skl_bgc
       enddo
      
