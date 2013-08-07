@@ -767,8 +767,7 @@
 ! !USES:
 !
       use ice_itd, only: reduce_area
-      use ice_therm_mushy, only: add_new_ice_mushy
-      use ice_therm_bl99, only: add_new_ice_bl99
+      use ice_therm_itd, only: add_new_ice
       use ice_zbgc_shared, only: ocean_bio, flux_bio
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -899,11 +898,10 @@
          enddo               ! i
          enddo               ! j
             
-         if (ktherm == 2) then
-         call add_new_ice_mushy (nx_block,              ny_block, &
+         call add_new_ice (nx_block,              ny_block, &
                            ntrcr,                 icells,   &
                            indxi,                 indxj,    &
-                           tmask     (:,:,  iblk), dt,      &
+                           dt,                              &
                            aicen     (:,:,:,iblk),          &
                            trcrn     (:,:,1:ntrcr,:,iblk),  &
                            vicen     (:,:,:,iblk),          &
@@ -917,34 +915,11 @@
                            fsalt     (:,:,  iblk),          &
                            Tf        (:,:,  iblk),          &
                            sss       (:,:,  iblk),          &
+                           salinz    (:,:,:,iblk),          &
                            phi_init, dSin0_frazil,          &
-                           l_stop,                          &
+                           flux_bio(:,:,:,iblk),   nbltrcr, &
+                           ocean_bio(:,:,:,iblk),  l_stop,  &
                            istop                 , jstop)
-
-         else
-
-         call add_new_ice_bl99 (nx_block,              ny_block, &
-                           ntrcr,                 icells,   &
-                           indxi,                 indxj,    &
-                           tmask     (:,:,  iblk), dt,      &
-                           aicen     (:,:,:,iblk),          &
-                           trcrn     (:,:,1:ntrcr,:,iblk),  &
-                           vicen     (:,:,:,iblk),          &
-                           aice0     (:,:,  iblk),          &
-                           aice      (:,:,  iblk),          &
-                           frzmlt    (:,:,  iblk),          &
-                           frazil    (:,:,  iblk),          &
-                           frz_onset (:,:,  iblk), yday,    &
-                           update_ocn_f,                    &
-                           fresh     (:,:,  iblk),          &
-                           fsalt     (:,:,  iblk),          &
-                           Tf        (:,:,  iblk),          &
-                           sss       (:,:,  iblk),          &
-                           salinz    (:,:,:,iblk), l_stop,  &
-                           istop                 , jstop,   &
-                           flux_bio(:,:,:,iblk),nbltrcr, &
-                           ocean_bio(:,:,:,iblk))
-         endif
 
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =', &
@@ -975,8 +950,7 @@
                             aicen     (:,:,:,iblk), &
                             vicen     (:,:,:,iblk), &
                             vsnon     (:,:,:,iblk), &
-                            trcrn     (:,:,:,:,iblk),&
-                            flux_bio(:,:,:,iblk),nbltrcr)
+                            trcrn     (:,:,:,:,iblk))
 
       !-----------------------------------------------------------------
       ! For the special case of a single category, adjust the area and

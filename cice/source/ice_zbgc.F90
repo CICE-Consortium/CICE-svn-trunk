@@ -956,7 +956,7 @@
 
 ! Adjust biogeochemical tracers when new frazil ice forms
 
-      subroutine add_new_ice_bgc (nx_block,   ny_block,             &
+      subroutine add_new_ice_bgc (nx_block,   ny_block,   dt,       &
                                   icells,     jcells,     kcells,   &
                                   indxi,      indxj,                &
                                   indxi2,     indxj2,     indxij2,  &
@@ -964,7 +964,7 @@
                                   aicen_init, vicen_init, vi0_init, &
                                   aicen,      vicen,      vi0new,   &
                                   ntrcr,      trcrn,      nbltrcr,  &
-                                  sss,        ocean_bio,            &
+                                  sss,        ocean_bio,  flux_bio, &
                                   hsurp,      &
                                   l_stop,     istop,      jstop)
 
@@ -988,6 +988,9 @@
          indxi2, indxj2, indxij2, & ! compressed i/j indices
          indxi3, indxj3, indxij3    ! compressed i/j indices
 
+      real (kind=dbl_kind), intent(in) :: &
+         dt        ! time step (s)
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(in) :: &
          aicen_init  , & ! initial concentration of ice
@@ -1010,6 +1013,10 @@
          intent(in) :: &
          ocean_bio       ! ocean concentration of biological tracer
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
+         intent(inout) :: &
+         flux_bio   ! tracer flux to ocean from biology (mmol/m^2/s) 
+        
       real (kind=dbl_kind), dimension (icells), intent(in) :: &
          hsurp           ! thickness of new ice added to each cat
 
@@ -1041,8 +1048,23 @@
       character (len=char_len) :: &
          fieldid         ! field identifier
 
-      vbrin(:,:,:) = c0
+      !-----------------------------------------------------------------     
+      ! ocean flux
+      !-----------------------------------------------------------------     
+      do k = 1, nbltrcr  ! only correct for dissolved tracers
+         do ij = 1,icells
+            i = indxi(ij)
+            j = indxj(ij)
+            flux_bio(i,j,k) = flux_bio(i,j,k) &
+                            - vi0_init(ij)/dt*ocean_bio(i,j,k) & 
+                            * (bgc_tracer_type(k)*initbio_frac &
+                                      + (c1-bgc_tracer_type(k)))
+         enddo
+      enddo
 
+      !-----------------------------------------------------------------     
+      ! brine
+      !-----------------------------------------------------------------     
       do n = 1, ncat
       do ij = 1,icells
          i = indxi(ij)
@@ -1056,6 +1078,7 @@
                        icells,   indxi,   indxj, &
                        ncat,                     &
                        vbrin,    vbri_init)
+
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
