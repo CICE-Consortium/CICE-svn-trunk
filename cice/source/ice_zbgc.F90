@@ -150,6 +150,14 @@
       ntd = 0                    ! if nt_fbri /= 0 then use fbri dependency
       if (nt_fbri == 0) ntd = -1 ! otherwise make tracers depend on ice volume
 
+      if (TRBGCS == 0 .and. solve_skl_bgc) then
+         write(nu_diag,*) &
+            'WARNING: solve_skl_bgc=T but 0 bgc tracers compiled'
+         write(nu_diag,*) &
+            'WARNING: setting solve_skl_bgc = F'
+         solve_skl_bgc = .false.
+      endif
+
       call broadcast_scalar(restart_hbrine,     master_task)
       call broadcast_scalar(solve_skl_bgc,      master_task)
       call broadcast_scalar(restart_bgc,        master_task)
@@ -175,7 +183,7 @@
          write(nu_diag,1010) ' hbrine                    = ', hbrine
          write(nu_diag,1010) ' solve_skl_bgc             = ', solve_skl_bgc
          write(nu_diag,1010) ' restart_hbrine            = ', restart_hbrine
-         write(nu_diag,1060) ' phi_snow                  = ', phi_snow
+         write(nu_diag,1005) ' phi_snow                  = ', phi_snow
       endif
 
       !----------------------------------------------------
@@ -225,45 +233,95 @@
 
       endif   ! master_task
 
-!zbgc
-!  skeletal layer biology model
+      !  skeletal layer biology model
 
       if (solve_skl_bgc) then
 
-         nt_bgc_N_sk = ntrcr + 1
+      nbtrcr = 0
+      nlt_bgc_NO = 0
+      nlt_bgc_N = 0
+      nlt_bgc_C = 0
+      nlt_bgc_chl = 0
+      nlt_bgc_NH = 0
+      nlt_bgc_Sil = 0
+      nlt_bgc_DMSPp = 0
+      nlt_bgc_DMSPd = 0
+      nlt_bgc_DMS = 0
+      nlt_bgc_PON = 0
+
          ntrcr = ntrcr + 1
+         nt_bgc_N_sk = ntrcr
+         nbtrcr = nbtrcr + 1
+         nlt_bgc_N = nbtrcr
       
+         ntrcr = ntrcr + 1
+         nt_bgc_Nit_sk = ntrcr
+         nbtrcr = nbtrcr + 1
+         nlt_bgc_NO = nbtrcr
+
          if (tr_bgc_C_sk) then
-             nt_bgc_C_sk = ntrcr + 1
              ntrcr = ntrcr + 1
+             nt_bgc_C_sk = ntrcr
+             nbtrcr = nbtrcr + 1
+             nlt_bgc_C = nbtrcr
          endif    
          if (tr_bgc_chl_sk)then
-             nt_bgc_chl_sk = ntrcr + 1
              ntrcr = ntrcr + 1
+             nt_bgc_chl_sk = ntrcr
+             nbtrcr = nbtrcr + 1
+             nlt_bgc_chl = nbtrcr
          endif 
-         nt_bgc_Nit_sk = ntrcr + 1
-         ntrcr = ntrcr + 1
          if (tr_bgc_Am_sk)then
-             nt_bgc_Am_sk = ntrcr + 1
              ntrcr = ntrcr + 1
+             nt_bgc_Am_sk = ntrcr
+             nbtrcr = nbtrcr + 1
+             nlt_bgc_NH = nbtrcr
          endif    
          if (tr_bgc_Sil_sk)then
-             nt_bgc_Sil_sk = ntrcr + 1
              ntrcr = ntrcr + 1
+             nt_bgc_Sil_sk = ntrcr
+             nbtrcr = nbtrcr + 1
+             nlt_bgc_Sil = nbtrcr
          endif    
          if (tr_bgc_DMSPp_sk)then
-             nt_bgc_DMSPp_sk = ntrcr + 1
              ntrcr = ntrcr + 1
+             nt_bgc_DMSPp_sk = ntrcr
+             nbtrcr = nbtrcr + 1
+             nlt_bgc_DMSPp = nbtrcr
          endif    
          if (tr_bgc_DMSPd_sk)then
-             nt_bgc_DMSPd_sk = ntrcr + 1
              ntrcr = ntrcr + 1
+             nt_bgc_DMSPd_sk = ntrcr
+             nbtrcr = nbtrcr + 1
+             nlt_bgc_DMSPd = nbtrcr
          endif    
          if (tr_bgc_DMS_sk)then
-             nt_bgc_DMS_sk = ntrcr + 1
              ntrcr = ntrcr + 1
+             nt_bgc_DMS_sk = ntrcr
+             nbtrcr = nbtrcr + 1
+             nlt_bgc_DMS = nbtrcr
          endif  
       endif  ! solve_skl_bgc
+
+      if (nbtrcr > max_nbtrcr) then
+         write (nu_diag,*) ' '
+         write (nu_diag,*) 'nbtrcr > max_nbtrcr'
+         write (nu_diag,*) 'nbtrcr, max_nbtrcr:',nbtrcr, max_nbtrcr
+         call abort_ice ('ice: ice_zbgc error')
+      endif
+
+      if (ntrcr > max_ntrcr) then
+         write(nu_diag,*) 'max_ntrcr < number of namelist tracers'
+         write(nu_diag,*) 'max_ntrcr = ',max_ntrcr,' ntrcr = ',ntrcr
+         call abort_ice('max_ntrcr < number of namelist tracers')
+      endif                               
+
+      if (TRBGCS < 2) then
+         write (nu_diag,*) ' '
+         write (nu_diag,*) 'comp_ice must have number of bgc tracers >= 2'
+         write (nu_diag,*) 'number of bgc tracers compiled:',TRBGCS
+         call abort_ice ('ice: ice_zbgc error')
+      endif
 
       if (my_task == master_task) then
          write(nu_diag,1020)'nt_bgc_N_sk = ', nt_bgc_N_sk
@@ -276,17 +334,27 @@
       if (tr_bgc_N_sk)     trcr_depend(nt_bgc_N_sk)     = 0 ! algae  (skeletal)
       if (tr_bgc_C_sk)     trcr_depend(nt_bgc_C_sk)     = 0 ! 
       if (tr_bgc_chl_sk)   trcr_depend(nt_bgc_chl_sk)   = 0 ! 
-      if (tr_bgc_Nit_sk)   trcr_depend(nt_bgc_Nit_sk)   = 0 ! nutrients (skeletal)
+      if (tr_bgc_Nit_sk)   trcr_depend(nt_bgc_Nit_sk)   = 0 ! nutrients
       if (tr_bgc_Am_sk)    trcr_depend(nt_bgc_Am_sk)    = 0 ! 
       if (tr_bgc_Sil_sk)   trcr_depend(nt_bgc_Sil_sk)   = 0 ! 
       if (tr_bgc_DMSPp_sk) trcr_depend(nt_bgc_DMSPp_sk) = 0 ! trace gases
       if (tr_bgc_DMSPd_sk) trcr_depend(nt_bgc_DMSPd_sk) = 0 !
       if (tr_bgc_DMS_sk)   trcr_depend(nt_bgc_DMS_sk)   = 0 !
+
+      if (tr_bgc_N_sk)     bgc_tracer_type(nlt_bgc_N)     = c0 ! algae
+      if (tr_bgc_C_sk)     bgc_tracer_type(nlt_bgc_C)     = c0 ! 
+      if (tr_bgc_chl_sk)   bgc_tracer_type(nlt_bgc_chl)   = c0 ! 
+      if (tr_bgc_Nit_sk)   bgc_tracer_type(nlt_bgc_NO)    = c1 ! nutrients
+      if (tr_bgc_Am_sk)    bgc_tracer_type(nlt_bgc_NH)    = c1 ! 
+      if (tr_bgc_Sil_sk)   bgc_tracer_type(nlt_bgc_Sil)   = c1 ! 
+      if (tr_bgc_DMSPp_sk) bgc_tracer_type(nlt_bgc_DMSPp) = c0 ! trace gases
+      if (tr_bgc_DMSPd_sk) bgc_tracer_type(nlt_bgc_DMSPd) = c1 !
+      if (tr_bgc_DMS_sk)   bgc_tracer_type(nlt_bgc_DMS)   = c1 !
    
  1000    format (a30,2x,f9.2)  ! a30 to align formatted, unformatted statements
+ 1005    format (a30,2x,f9.6)  ! float
  1010    format (a30,2x,l6)    ! logical
  1020    format (a30,2x,i6)    ! integer
- 1060    format (a30,2x,2D13.2)! dbl precision
 
       end subroutine init_zbgc
 
@@ -357,71 +425,9 @@
 
       dbug = .true.
 
-      ntraceb = 0
-      nlt_bgc_NO = 0
-      nlt_bgc_N = 0
-      nlt_bgc_C = 0
-      nlt_bgc_chl = 0
-      nlt_bgc_NH = 0
-      nlt_bgc_Sil = 0
-      nlt_bgc_DMSPp = 0
-      nlt_bgc_DMSPd = 0
-      nlt_bgc_DMS = 0
-      nlt_bgc_PON = 0
+      if (.not. solve_skl_bgc) return
   
       !if (trim(runtype) == 'continue') restart_bgc = .true.
-        if (tr_bgc_Nit_sk)   then  !initialize like S
-           ntraceb = ntraceb + 1
-           nlt_bgc_NO = ntraceb
-           bgc_tracer_type(ntraceb) = c1
-        endif
-        if (tr_bgc_N_sk)   then  !initialize like S
-          ntraceb = ntraceb + 1
-          nlt_bgc_N = ntraceb
-           bgc_tracer_type(ntraceb) = c0
-        endif
-        if (tr_bgc_C_sk)   then  !initialize like S
-          ntraceb = ntraceb + 1
-          nlt_bgc_C = ntraceb
-           bgc_tracer_type(ntraceb) = c0
-        endif
-        if (tr_bgc_chl_sk)   then  !initialize like S
-          ntraceb = ntraceb + 1
-          nlt_bgc_chl = ntraceb
-           bgc_tracer_type(ntraceb) = c0
-        endif
-        if (tr_bgc_Am_sk)   then  !initialize like S
-          ntraceb = ntraceb + 1
-          nlt_bgc_NH = ntraceb
-           bgc_tracer_type(ntraceb) = c1
-        endif
-        if (tr_bgc_Sil_sk)   then  !initialize like S
-          ntraceb = ntraceb + 1
-          nlt_bgc_Sil = ntraceb
-           bgc_tracer_type(ntraceb) = c1
-        endif
-        if (tr_bgc_DMSPp_sk)   then  !initialize like S
-          ntraceb = ntraceb + 1
-          nlt_bgc_DMSPp = ntraceb
-           bgc_tracer_type(ntraceb) = c0
-        endif
-        if (tr_bgc_DMSPd_sk)   then  !initialize like S
-          ntraceb = ntraceb + 1
-          nlt_bgc_DMSPd = ntraceb
-           bgc_tracer_type(ntraceb) = c1
-        endif
-        if (tr_bgc_DMS_sk)   then  !initialize like S
-          ntraceb = ntraceb + 1
-          nlt_bgc_DMS = ntraceb
-           bgc_tracer_type(ntraceb) = c1
-        endif
-             
-        if (ntraceb .NE. nbltrcr) then
-           write (nu_diag,*) ' '
-           write (nu_diag,*) 'ntraceb /= nbltrcr'
-           write (nu_diag,*) 'ntraceb, nbltrcr:',ntraceb, nbltrcr
-           call abort_ice ('ice: ice_zbgc error')
-        endif
 
       if (restart_bgc) then       
 
@@ -619,9 +625,8 @@
          fN_partn  ! N down flux (mmol/m^2/s)
 
       ! for bgc layer
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr) :: &
-         flux_bion, & !tracer flux to ocean
-         flux_bio_gn  !tracer flux to ocean from gravity drainage (mmol/m^2/s)
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr) :: &
+         flux_bion ! tracer flux to ocean
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          hbrin  ! brine height
@@ -659,10 +664,9 @@
              ! initialize
              hin_old(:,:,n,iblk) = c0
              flux_bion(:,:,:) = c0
-             flux_bio_gn(:,:,:) = c0
              do j = jlo, jhi
              do i = ilo, ihi
-               if (aicen_init(i,j,n,iblk) > puny ) then !.AND. aicen(i,j,n,iblk) > puny) then
+               if (aicen_init(i,j,n,iblk) > puny ) then 
                   hin_old(i,j,n,iblk) = vicen_init(i,j,n,iblk)/aicen_init(i,j,n,iblk)
                else  ! initialize
                   first_ice(i,j,n,iblk) = .true.
@@ -774,7 +778,9 @@
                  call skl_biogeochemistry (nx_block, ny_block,           &
                                    icells,   dt,                         &
                                    indxi,    indxj,                      &  
-                                   flux_bion, ocean_bio(:,:,:,iblk),     &
+                                   nbtrcr,                      &
+                                   flux_bion(:,:,1:nbtrcr),  &
+                                   ocean_bio(:,:,1:nbtrcr,iblk),     &
                                    hmix (:,:,iblk), aicen(:,:,n,iblk),   & 
                                    meltbn(:,:,n,iblk), congeln(:,:,n,iblk),  &
                                    fswthrun(:,:,n,iblk), first_ice(:,:,n,iblk),&
@@ -784,9 +790,11 @@
                  call merge_bgc_fluxes_skl (nx_block, ny_block,  &
                                     icells,                      &
                                     indxi,              indxj,   &
+                                    nbtrcr,                      &
                                     aicen_init(:,:,n,iblk),      &
                                     trcrn(:,:,nt_bgc_N_sk,n,iblk),  &  
-                                    flux_bion, flux_bio(:,:,:,iblk), &
+                                    flux_bion(:,:,1:nbtrcr),  &
+                                    flux_bio (:,:,1:nbtrcr,iblk), &
                                     PP_net(:,:,iblk),            &
                                     grow_net(:,:,iblk), grow_Cn)
               endif  
@@ -819,6 +827,7 @@
       subroutine merge_bgc_fluxes_skl (nx_block, ny_block,   &
                                icells,               &
                                indxi,    indxj,      &
+                               nbtrcr, &
                                aicen,  algal_N,        &
                                flux_bion, flux_bio,  &
                                PP_net, grow_net,     &
@@ -840,7 +849,8 @@
 !
       integer (kind=int_kind), intent(in) :: &
           nx_block, ny_block, & ! block dimensions
-          icells                ! number of cells with aicen > puny
+          icells            , & ! number of cells with aicen > puny
+          nbtrcr                ! number of bgc tracers
 
       integer (kind=int_kind), dimension(nx_block*ny_block), &
           intent(in) :: &
@@ -855,11 +865,11 @@
           algal_N       ! (mmol N/m^2) in the bottom layer
      
       ! single category fluxes
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nbltrcr), intent(in):: &          
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nbtrcr), intent(in):: &          
           flux_bion
 
       ! cumulative fluxes
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nbltrcr), intent(inout):: &          
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nbtrcr), intent(inout):: &          
           flux_bio
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
@@ -890,7 +900,7 @@
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
-         do k = 1,nbltrcr
+         do k = 1,nbtrcr
            flux_bio (i,j,k)  = flux_bio(i,j,k) + flux_bion(i,j,k)*aicen(i,j)
          enddo
         
@@ -937,9 +947,7 @@
       growNp   (:,:,:,:) = c0
       growN    (:,:,:,:,:) = c0
       flux_bio (:,:,:,:) = c0
-      flux_bio_g(:,:,:,:) = c0
-      flux_bio_ai  (:,:,:,:) = c0
-      flux_bio_g_ai  (:,:,:,:) = c0
+      flux_bio_ai(:,:,:,:) = c0
 
       end subroutine init_history_bgc
 
@@ -954,7 +962,7 @@
                                   indxi3,     indxj3,     indxij3,  &
                                   aicen_init, vicen_init, vi0_init, &
                                   aicen,      vicen,      vi0new,   &
-                                  ntrcr,      trcrn,      nbltrcr,  &
+                                  ntrcr,      trcrn,      nbtrcr,  &
                                   sss,        ocean_bio,  flux_bio, &
                                   hsurp,      &
                                   l_stop,     istop,      jstop)
@@ -1002,13 +1010,13 @@
          hsurp           ! thickness of new ice added to each cat
 
       integer (kind=int_kind), intent(in) :: &
-         nbltrcr         ! number of biology tracers
+         nbtrcr         ! number of biology tracers
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
          intent(inout) :: &
          flux_bio   ! tracer flux to ocean from biology (mmol/m^2/s) 
         
-       real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
+       real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
          intent(in) :: &
          ocean_bio   ! ocean concentration of biological tracer
 
@@ -1046,7 +1054,7 @@
       !-----------------------------------------------------------------     
       ! ocean flux
       !-----------------------------------------------------------------     
-      do k = 1, nbltrcr  ! only correct for dissolved tracers
+      do k = 1, nbtrcr  ! only correct for dissolved tracers
          do ij = 1,icells
             i = indxi(ij)
             j = indxj(ij)
@@ -1083,7 +1091,7 @@
 
          vbri_init(ij) = vbri_init(ij) + vi0_init(ij)
 
-         do k = 1, nbltrcr  ! only correct for dissolved tracers
+         do k = 1, nbtrcr  ! only correct for dissolved tracers
             flux_bio(i,j,k) = flux_bio(i,j,k) &
                             - vi0_init(ij)/dt*ocean_bio(i,j,k) & 
                             * (bgc_tracer_type(k)*initbio_frac &

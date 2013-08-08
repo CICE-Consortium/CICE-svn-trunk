@@ -856,40 +856,40 @@
 
          nt_iage = 0
          if (tr_iage) then
-             nt_iage = ntrcr + 1   ! chronological ice age
              ntrcr = ntrcr + 1
+             nt_iage = ntrcr   ! chronological ice age
          endif
 
          nt_FY = 0
          if (tr_FY) then
-             nt_FY = ntrcr + 1     ! area of first year ice
              ntrcr = ntrcr + 1
+             nt_FY = ntrcr     ! area of first year ice
          endif
 
          nt_alvl = 0
          nt_vlvl = 0
          if (tr_lvl) then
-             nt_alvl = ntrcr + 1
              ntrcr = ntrcr + 1
-             nt_vlvl = ntrcr + 1
+             nt_alvl = ntrcr
              ntrcr = ntrcr + 1
+             nt_vlvl = ntrcr
          endif
 
          nt_apnd = 0
          nt_hpnd = 0
          nt_ipnd = 0
          if (tr_pond) then            ! all explicit melt pond schemes
-             nt_apnd = ntrcr + 1
              ntrcr = ntrcr + 1
-             nt_hpnd = ntrcr + 1
+             nt_apnd = ntrcr
              ntrcr = ntrcr + 1
+             nt_hpnd = ntrcr
              if (tr_pond_lvl) then
-                 nt_ipnd = ntrcr + 1  ! refrozen pond ice lid thickness
-                 ntrcr = ntrcr + 1    ! on level-ice ponds (if frzpnd='hlid')
+                 ntrcr = ntrcr + 1    ! refrozen pond ice lid thickness
+                 nt_ipnd = ntrcr      ! on level-ice ponds (if frzpnd='hlid')
              endif
              if (tr_pond_topo) then
-                 nt_ipnd = ntrcr + 1  ! refrozen pond ice lid thickness
                  ntrcr = ntrcr + 1    ! 
+                 nt_ipnd = ntrcr      ! refrozen pond ice lid thickness
              endif
          endif
 

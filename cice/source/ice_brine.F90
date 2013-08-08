@@ -8,7 +8,7 @@
 
       use ice_kinds_mod
       use ice_constants
-      use ice_domain_size, only: nilyr, nblyr, nblyr_hist, max_blocks, ncat
+      use ice_domain_size, only: nilyr, nblyr, max_blocks, ncat
       use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_dump_hbrine, &
           nu_restart_hbrine, flush_fileunit
       use ice_blocks, only: nx_block, ny_block
@@ -62,13 +62,11 @@
       ! Calculate bio gridn: 0 to 1 corresponds to ice top to bottom 
       !-----------------------------------------------------------------
 
-!echmod:  why nblyr_hist?  is this for history variables?
-
-      bgrid(:)          = c0 ! bgc grid points         
-      bgrid(nblyr_hist) = c1 ! bottom value
-      igrid(:)          = c0 ! bgc interface grid points   
-      igrid(1)          = c0 ! ice top
-      igrid(nblyr+1)    = c1 ! ice bottom
+      bgrid(:)       = c0 ! bgc grid points         
+      bgrid(nblyr+2) = c1 ! bottom value
+      igrid(:)       = c0 ! bgc interface grid points   
+      igrid(1)       = c0 ! ice top
+      igrid(nblyr+1) = c1 ! ice bottom
       
       zspace = c1/(real(nblyr,kind=dbl_kind)) 
       do k = 2, nblyr+1
@@ -410,12 +408,12 @@
          intent(in) :: &
          indxi, indxj ! compressed indices for icells with aicen > puny
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2), &
          intent(in) :: &
          Sin        , & ! salinity of ice layers on bio grid (ppt)
          zTin           ! temperature of ice layers on bio grid for history (C)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2), &
          intent(inout) :: &
          zphin      , & ! porosity of layers
          brine_sal  , & ! equilibrium brine salinity (ppt)  
@@ -459,8 +457,8 @@
       sice_rho(:,:) = c0
       kperm   (:,:) = c0
       ktemp   (:)   = c0
-      
-      do k = 1, nblyr+2
+
+      k = 1      
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -468,38 +466,56 @@
             i = indxi(ij)
             j = indxj(ij) 
 
-            brine_sal(i,j,k) = a1*zTin(i,j,k) + a2*zTin(i,j,k)**2 + a3*zTin(i,j,k)**3
+            brine_sal(i,j,k) = a1*zTin(i,j,k)    &
+                             + a2*zTin(i,j,k)**2 &
+                             + a3*zTin(i,j,k)**3
             brine_rho(i,j,k) = b1 + b2*brine_sal(i,j,k)
-            zphin    (i,j,k) = min(c1, max(puny, &
-                               Sin(i,j,k)*rhosi/(brine_sal(i,j,k)*brine_rho(i,j,k)))) 
-  
-            if (k == nblyr+2) then 
-               brine_sal(i,j,nblyr+2) = sss(i,j)  !max(brine_sal(i,j,nblyr+2),Sin(i,j,nblyr+2))
-               brine_rho(i,j,nblyr+2) =  rhow  !b1 + b2*brine_sal(i,j,nblyr+2) 
-               zphin(i,j,nblyr+2) = c1 !
-               ibrine_sal(i,j,1) =brine_sal(i,j,2)! brine_sal(i,j,1)             !
-               ibrine_sal(i,j,nblyr+1) =brine_sal(i,j,nblyr+2)! brine_sal(i,j,nblyr+2) !
-               ibrine_rho(i,j,1) =brine_rho(i,j,2) !brine_rho(i,j,1)
-               ibrine_rho(i,j,nblyr+1) = brine_rho(i,j,nblyr+2) !brine_rho(i,j,nblyr+2) !
-               iphin(i,j,1) = zphin(i,j,2)
-               iphin(i,j,nblyr+1) = zphin(i,j,nblyr+1)
-                
-            endif
+            zphin    (i,j,k) = min(c1, max(puny, Sin(i,j,k)*rhosi &
+                             /(brine_sal(i,j,k)*brine_rho(i,j,k)))) 
+         enddo ! ij
 
-            if (k > 1 .AND. k < nblyr+2) then
+      do k = 2, nblyr+1
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1,icells
+            i = indxi(ij)
+            j = indxj(ij) 
 
-               kin(ij, k-1) = k_o*zphin(i,j,k)**exp_h 
-               sice_rho(i,j) = sice_rho(i,j) + (rhoi*(c1-zphin(i,j,k)) + &
-               brine_rho(i,j,k)*zphin(i,j,k))*(igrid(k)-igrid(k-1))
-                  
-            elseif (k == nblyr+2) then
-
-               k_min(ij) = MINVAL(kin(ij,:))
-               zphi_min(i,j) = zphin(i,j,2) 
-                         
-            endif
+            brine_sal(i,j,k) = a1*zTin(i,j,k)    &
+                             + a2*zTin(i,j,k)**2 &
+                             + a3*zTin(i,j,k)**3
+            brine_rho(i,j,k) = b1 + b2*brine_sal(i,j,k)
+            zphin    (i,j,k) = min(c1, max(puny, Sin(i,j,k)*rhosi &
+                             /(brine_sal(i,j,k)*brine_rho(i,j,k)))) 
+            kin(ij, k-1)  = k_o*zphin(i,j,k)**exp_h 
+            sice_rho(i,j) = sice_rho(i,j) &
+                          + (rhoi            *(c1-zphin(i,j,k)) &
+                          +  brine_rho(i,j,k)*    zphin(i,j,k)) &
+                          * (igrid(k)-igrid(k-1))
          enddo ! ij
       enddo      ! k         
+
+      k = nblyr+2
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+         do ij = 1,icells
+            i = indxi(ij)
+            j = indxj(ij) 
+
+            brine_sal(i,j,nblyr+2)  = sss(i,j)
+            brine_rho(i,j,nblyr+2)  = rhow
+            zphin(i,j,nblyr+2)      = c1
+            ibrine_sal(i,j,1)       = brine_sal(i,j,2)
+            ibrine_sal(i,j,nblyr+1) = brine_sal(i,j,nblyr+2)
+            ibrine_rho(i,j,1)       = brine_rho(i,j,2)
+            ibrine_rho(i,j,nblyr+1) = brine_rho(i,j,nblyr+2)
+            iphin(i,j,1)            = zphin(i,j,2)
+            iphin(i,j,nblyr+1)      = zphin(i,j,nblyr+1)
+            k_min(ij)               = MINVAL(kin(ij,:))
+            zphi_min(i,j)           = zphin(i,j,2) 
+         enddo ! ij
     
       do k = 2, nblyr
 !DIR$ CONCURRENT !Cray
@@ -509,7 +525,7 @@
             i = indxi(ij)
             j = indxj(ij) 
  
-            if (k_min(ij) >  c0) then
+            if (k_min(ij) > c0) then
                ktemp(ij) = ktemp(ij) + c1/kin(ij,k-1)
                if (k == nblyr) then
                   ktemp(ij)  = ktemp(ij) + c1/kin(ij,nblyr) 
@@ -814,7 +830,7 @@
       use ice_broadcast, only: broadcast_scalar
       use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc, pbloc, &
                                 plat, plon
-      use ice_domain_size, only: ncat, nltrcr
+      use ice_domain_size, only: ncat
       use ice_state, only: aice, aicen, vicen, vice, trcr, nt_fbri, &
                           trcrn, hbrine, nt_sice
       use ice_zbgc_shared, only: darcy_V

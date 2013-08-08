@@ -917,8 +917,10 @@
                            sss       (:,:,  iblk),          &
                            salinz    (:,:,:,iblk),          &
                            phi_init, dSin0_frazil,          &
-                           flux_bio(:,:,:,iblk),   nbltrcr, &
-                           ocean_bio(:,:,:,iblk),  l_stop,  &
+                           nbtrcr,                          &
+                           flux_bio  (:,:,1:nbtrcr,iblk),   &
+                           ocean_bio (:,:,1:nbtrcr,iblk),   &
+                           l_stop,                          &
                            istop                 , jstop)
 
          if (l_stop) then
@@ -986,8 +988,9 @@
                            fhocn   (:,:,  iblk),                       &
                            faero_ocn(:,:,:,iblk),tr_aero,              &
                            tr_pond_topo,         heat_capacity,        &
-                           nbltrcr ,             first_ice(:,:,:,iblk),&
-                           flux_bio(:,:,:,iblk), l_stop,               &
+                           nbtrcr,               first_ice(:,:,:,iblk),&
+                           flux_bio(:,:,1:nbtrcr,iblk),                &
+                           l_stop,                                     &
                            istop,                jstop)
 
          if (l_stop) then
@@ -1336,8 +1339,9 @@
                            fhocn   (:,:,  iblk),                       &
                            faero_ocn(:,:,:,iblk),tr_aero,              &
                            tr_pond_topo,         heat_capacity,        &
-                           nbltrcr ,             first_ice(:,:,:,iblk),&
-                           flux_bio(:,:,:,iblk), l_stop,               &
+                           nbtrcr,               first_ice(:,:,:,iblk),&
+                           flux_bio(:,:,1:nbtrcr,iblk),                &
+                           l_stop,                                     &
                            istop,                jstop)
 
          if (l_stop) then

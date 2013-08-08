@@ -1637,7 +1637,7 @@
          if (tr_pond) call accum_hist_pond (iblk)
 
          ! biogeochemistry
-         if (tr_aero .or. ntraceb > 0) call accum_hist_bgc  (iblk)
+         if (tr_aero .or. nbtrcr > 0) call accum_hist_bgc  (iblk)
 
          ! form drag
          if (calc_formdrag) call accum_hist_drag (iblk)

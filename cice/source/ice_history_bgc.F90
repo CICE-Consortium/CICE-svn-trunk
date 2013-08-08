@@ -51,13 +51,9 @@
            f_faero_atm    = 'm', f_faero_ocn  = 'm', &
            f_aero         = 'm', f_aeron      = 'm', &
            f_fNO          = 'm', f_fNO_ai   = 'm', &
-           f_fNO_g        = 'm', f_fNO_g_ai = 'm', &
            f_fNH          = 'm', f_fNH_ai   = 'm', &
-           f_fNH_g        = 'm', f_fNH_g_ai = 'm', &
            f_fN           = 'm', f_fN_ai   = 'm', &
-           f_fN_g         = 'm', f_fN_g_ai = 'm', &
            f_fSil         = 'm', f_fSil_ai   = 'm', &
-           f_fSil_g       = 'm', f_fSil_g_ai = 'm', &
            f_bgc_N_sk     = 'x', f_bgc_C_sk= 'x', &
            f_bgc_chl_sk   = 'x', f_bgc_Nit_sk = 'x', &
            f_bgc_Am_sk    = 'x', f_bgc_Sil_sk= 'x', &
@@ -88,13 +84,9 @@
            f_faero_atm, f_faero_ocn, &
            f_aero,      f_aeron, &
            f_fNO,       f_fNO_ai , &
-           f_fNO_g,     f_fNO_g_ai, &
            f_fNH,       f_fNH_ai, &
-           f_fNH_g,     f_fNH_g_ai, &
            f_fN,        f_fN_ai, &
-           f_fN_g,      f_fN_g_ai, &
            f_fSil,      f_fSil_ai, &
-           f_fSil_g,    f_fSil_g_ai, &
            f_bgc_N_sk,    f_bgc_C_sk,   f_bgc_chl_sk, & 
            f_bgc_Nit_sk,  f_bgc_Am_sk,  f_bgc_Sil_sk, &
            f_bgc_DMSPp_sk, f_bgc_DMSPd_sk, f_bgc_DMS_sk, & 
@@ -129,13 +121,9 @@
 
       integer(kind=int_kind), dimension(max_nstrm) :: &
            n_fNO        , n_fNO_ai , &
-           n_fNO_g      , n_fNO_g_ai, &
            n_fNH        , n_fNH_ai, &
-           n_fNH_g      , n_fNH_g_ai, &
            n_fN         , n_fN_ai, &
-           n_fN_g       , n_fN_g_ai, &
            n_fSil       , n_fSil_ai, &
-           n_fSil_g     , n_fSil_g_ai, &
            n_bgc_N_sk , &
            n_bgc_C_sk, &
            n_bgc_chl_sk, &
@@ -276,20 +264,12 @@
 
       call broadcast_scalar (f_fNO, master_task)
       call broadcast_scalar (f_fNO_ai, master_task)
-      call broadcast_scalar (f_fNO_g, master_task)
-      call broadcast_scalar (f_fNO_g_ai, master_task)
       call broadcast_scalar (f_fNH, master_task)
       call broadcast_scalar (f_fNH_ai, master_task)
-      call broadcast_scalar (f_fNH_g, master_task)
-      call broadcast_scalar (f_fNH_g_ai, master_task)
       call broadcast_scalar (f_fN,  master_task)
       call broadcast_scalar (f_fN_ai, master_task)
-      call broadcast_scalar (f_fN_g, master_task)
-      call broadcast_scalar (f_fN_g_ai, master_task)
       call broadcast_scalar (f_fSil, master_task)
       call broadcast_scalar (f_fSil_ai, master_task)
-      call broadcast_scalar (f_fSil_g, master_task)
-      call broadcast_scalar (f_fSil_g_ai, master_task)
       call broadcast_scalar (f_bgc_N_sk, master_task)
       call broadcast_scalar (f_bgc_C_sk, master_task)
       call broadcast_scalar (f_bgc_chl_sk, master_task)
@@ -452,18 +432,6 @@
              "weighted by ice area", c1, c0,                                  &
              ns, f_fNO_ai)
       
-      if (f_fNO_g(1:1) /= 'x') &
-         call define_hist_field(n_fNO_g,"fNO_g","kg/m^2/s",tstr2D, tcstr, &
-             "Gravity drainage nitrate flux ice to ocn (cpl)",                   &
-             "if positive, ocean gains nitrate", c1, c0,                   &
-             ns, f_fNO_g)
-      
-      if (f_fNO_g_ai(1:1) /= 'x') &
-         call define_hist_field(n_fNO_g_ai,"fNO_g_ai","kg/m^2/s",tstr2D, tcstr, &
-             "Gravity drainage nitrate flux ice to ocean",                       &
-             "weighted by ice area", c1, c0,                                  &
-             ns, f_fNO_g_ai)
-            
       if (f_fNH(1:1) /= 'x') &
          call define_hist_field(n_fNH,"fNH","mmol/m^2/s",tstr2D, tcstr, &
              "ammonium flux ice to ocn (cpl)",                              &
@@ -476,18 +444,6 @@
              "weighted by ice area", c1, c0,                                  &
              ns, f_fNH_ai)
       
-      if (f_fNH_g(1:1) /= 'x') &
-         call define_hist_field(n_fNH_g,"fNH_g","kg/m^2/s",tstr2D, tcstr, &
-             "Gravity drainage ammonium flux ice to ocn (cpl)",                  &
-             "if positive, ocean gains ammonium", c1, c0,                   &
-             ns, f_fNH_g)
-      
-      if (f_fNH_g_ai(1:1) /= 'x') &
-         call define_hist_field(n_fNH_g_ai,"fNH_g_ai","kg/m^2/s",tstr2D, tcstr, &
-             "Gravity drainage ammonium flux ice to ocean",                      &
-             "weighted by ice area", c1, c0,                                  &
-             ns, f_fNH_g_ai)
-                    
       if (f_fN(1:1) /= 'x') &
          call define_hist_field(n_fN,"fN","mmol/m^2/s",tstr2D, tcstr, &
              "algal N flux ice to ocn (cpl)",                              &
@@ -500,18 +456,6 @@
              "weighted by ice area", c1, c0,                                  &
              ns, f_fN_ai)
       
-      if (f_fN_g(1:1) /= 'x') &
-         call define_hist_field(n_fN_g,"fN_g","kg/m^2/s",tstr2D, tcstr, &
-             "Gravity drainage algal N flux ice to ocn (cpl)",                   &
-             "if positive, ocean gains algal N", c1, c0,                   &
-             ns, f_fN_g)
-      
-      if (f_fN_g_ai(1:1) /= 'x') &
-         call define_hist_field(n_fN_g_ai,"fN_g_ai","kg/m^2/s",tstr2D, tcstr, &
-             "Gravity drainage algal N flux ice to ocean",                       &
-             "weighted by ice area", c1, c0,                                  &
-             ns, f_fN_g_ai)
-              
       if (f_fSil(1:1) /= 'x') &
          call define_hist_field(n_fSil,"fSil","mmol/m^2/s",tstr2D, tcstr, &
              "silicate flux ice to ocn (cpl)",                              &
@@ -524,18 +468,6 @@
              "weighted by ice area", c1, c0,                                  &
              ns, f_fSil_ai)
       
-      if (f_fSil_g(1:1) /= 'x') &
-         call define_hist_field(n_fSil_g,"fSil_g","kg/m^2/s",tstr2D, tcstr, &
-             "Gravity drainage silicate flux ice to ocn (cpl)",                  &
-             "if positive, ocean gains silicate", c1, c0,                   &
-             ns, f_fSil_g)
-      
-      if (f_fSil_g_ai(1:1) /= 'x') &
-         call define_hist_field(n_fSil_g_ai,"fSil_g_ai","kg/m^2/s",tstr2D, tcstr, &
-             "Gravity drainage silicate flux ice to ocean",                      &
-             "weighted by ice area", c1, c0,                                  &
-             ns, f_fSil_g_ai)
-            
       if (f_chlnet(1:1) /= 'x') &
          call define_hist_field(n_chlnet,"chl_net","mg chl/m^2",tstr2D, tcstr,        &
              "Net Chlorophyll",                     &
@@ -738,7 +670,7 @@
       use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_constants, only: c0, puny
       use ice_domain, only: blocks_ice
-      use ice_domain_size, only: ncat, nblyr_hist
+      use ice_domain_size, only: ncat, nblyr
       use ice_flux, only: faero_atm, faero_ocn, sss
       use ice_history_shared, only: n2D, a2D, a3Dc, n3Dccum, a3Db, &
           n4Dscum, a4Db, &
@@ -760,10 +692,10 @@
          i,j,k,n, &
          ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2) :: &
          workz 
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr_hist,ncat) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2,ncat) :: &
          workzn 
 
       type (block) :: &
@@ -857,38 +789,21 @@
              call accum_hist_field(n_fNO,   iblk, flux_bio(:,:,nlt_bgc_NO,iblk), a2D)
          if (f_fNO_ai(1:1)/= 'x') &
              call accum_hist_field(n_fNO_ai,iblk, flux_bio_ai(:,:,nlt_bgc_NO,iblk), a2D)
-         if (f_fNO_g  (1:1) /= 'x') &
-             call accum_hist_field(n_fNO_g,   iblk, flux_bio_g(:,:,nlt_bgc_NO,iblk), a2D)
-         if (f_fNO_g_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fNO_g_ai,iblk, flux_bio_g_ai(:,:,nlt_bgc_NO,iblk), a2D)
 
          if (f_fNH  (1:1) /= 'x') &
              call accum_hist_field(n_fNH,   iblk, flux_bio(:,:,nlt_bgc_NH,iblk), a2D)
          if (f_fNH_ai(1:1)/= 'x') &
              call accum_hist_field(n_fNH_ai,iblk, flux_bio_ai(:,:,nlt_bgc_NH,iblk), a2D)
-         if (f_fNH_g  (1:1) /= 'x') &
-             call accum_hist_field(n_fNH_g,   iblk, flux_bio_g(:,:,nlt_bgc_NH,iblk), a2D)
-         if (f_fNH_g_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fNH_g_ai,iblk, flux_bio_g_ai(:,:,nlt_bgc_NH,iblk), a2D)
 
          if (f_fN  (1:1) /= 'x') &
              call accum_hist_field(n_fN,   iblk, flux_bio(:,:,nlt_bgc_N,iblk), a2D)
          if (f_fN_ai(1:1)/= 'x') &
              call accum_hist_field(n_fN_ai,iblk, flux_bio_ai(:,:,nlt_bgc_N,iblk), a2D)
-         if (f_fN_g  (1:1) /= 'x') &
-             call accum_hist_field(n_fN_g,   iblk, flux_bio_g(:,:,nlt_bgc_N,iblk), a2D)
-         if (f_fN_g_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fN_g_ai,iblk, flux_bio_g_ai(:,:,nlt_bgc_N,iblk), a2D)
-
 
          if (f_fSil  (1:1) /= 'x') &
              call accum_hist_field(n_fSil,   iblk, flux_bio(:,:,nlt_bgc_Sil,iblk), a2D)
          if (f_fSil_ai(1:1)/= 'x') &
              call accum_hist_field(n_fSil_ai,iblk, flux_bio_ai(:,:,nlt_bgc_Sil,iblk), a2D)
-         if (f_fSil_g  (1:1) /= 'x') &
-             call accum_hist_field(n_fSil_g,   iblk, flux_bio_g(:,:,nlt_bgc_Sil,iblk), a2D)
-         if (f_fSil_g_ai(1:1)/= 'x') &
-             call accum_hist_field(n_fSil_g_ai,iblk, flux_bio_g_ai(:,:,nlt_bgc_Sil,iblk), a2D)
          if (f_chlnet  (1:1) /= 'x') &
              call accum_hist_field(n_chlnet, iblk, chl_net(:,:,iblk), a2D)
          if (f_PPnet  (1:1) /= 'x') &

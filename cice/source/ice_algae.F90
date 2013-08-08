@@ -9,7 +9,7 @@
       module ice_algae
 
       use ice_kinds_mod
-      use ice_domain_size, only: nblyr, nilyr, nblyr_hist, max_blocks, nbltrcr
+      use ice_domain_size, only: nblyr, nilyr, max_blocks
       use ice_blocks, only: nx_block, ny_block
       use ice_fileunits, only: nu_diag, nu_restart_bgc, nu_rst_pointer, &
           nu_dump_bgc, flush_fileunit
@@ -17,7 +17,7 @@
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
       use ice_zbgc_shared
-      use ice_state, only: vicen, vice, trcr, ntrcr, ntraceb, nt_bgc_am_sk, &
+      use ice_state, only: vicen, vice, trcr, ntrcr, nt_bgc_am_sk, &
           nt_bgc_c_sk, nt_bgc_chl_sk, nt_bgc_DMS_sk, nt_bgc_DMSPd_sk, &
           nt_bgc_DMSPp_sk, nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_Sil_sk, &
           nt_bgc_Nit_sk, nt_bgc_Sil_sk, nt_bgc_Nit_sk, &
@@ -197,6 +197,7 @@
       subroutine skl_biogeochemistry (nx_block, ny_block,  &
                                       icells,   dt,        &
                                       indxi,    indxj,     &
+                                      nbtrcr,              &
                                       flux_bio, ocean_bio, &
                                       hmix,     aicen,     &
                                       meltb,    congel,    &
@@ -207,7 +208,8 @@
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         icells                ! number of cells with aicen > puny 
+         icells            , & ! number of cells with aicen > puny 
+         nbtrcr                ! number of bgc tracers
 
       integer (kind=int_kind), dimension(nx_block*ny_block), &
          intent(in) :: &
@@ -236,7 +238,8 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out) :: &
          grow_Cn    ! specific growth (1/s)  
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), intent(inout) :: &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
+         intent(inout) :: &
          flux_bio,& ! ocean tracer flux (mmol/m^2/s) positive into ocean
          ocean_bio  ! ocean tracer concentration (mmol/m^3)
 
@@ -244,24 +247,24 @@
 
       integer (kind=int_kind) :: i, j, ij, nn
 
-      real (kind=dbl_kind), dimension(icells,nbltrcr):: &
-         react      , & ! biological sources and sinks for equation matrix (mmol/m^3)
-         cinit      , & ! Initial concentration from previous time-step (mmol/m^2)
-         congel_alg     ! congelation flux contribution to ice algae (mmol/m^2 s) 
+      real (kind=dbl_kind), dimension(icells,nbtrcr):: &
+         react  , & ! biological sources and sinks (mmol/m^3)
+         cinit  , & ! initial concentration (mmol/m^2)
+         congel_alg ! congelation flux contribution to ice algae (mmol/m^2 s) 
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          upNOn      ,&  !  algal NO uptake rate (mmol/m^3/s)
          upNHn          !  algal NH uptake rate (mmol/m^3/s)
 
-      real (kind=dbl_kind), dimension (nbltrcr):: &
+      real (kind=dbl_kind), dimension (nbtrcr):: &
          flux_bio_temp, & ! tracer flux to ocean (mmol/m^2 s)
          PVflag       , & ! 1 for tracers that flow with the brine, 0 otherwise
          cling            ! 1 for tracers that cling, 0 otherwise
 
       real (kind=dbl_kind), parameter :: &
          PVc = 1.e-6_dbl_kind   , & ! type 'constant' piston velocity (m/s) 
-         PV_scale_growth = p5   , & ! scale factor in Jin code PV during ice growth
-         PV_scale_melt = p05    , & ! scale factor in Jin code PV during ice melt
+         PV_scale_growth = p5   , & ! scale factor in Jin PV during ice growth
+         PV_scale_melt = p05    , & ! scale factor in Jin PV during ice melt
          MJ1 = 9.667e-9_dbl_kind, & ! coefficients in Jin 2008 (m/s)
          MJ2 = 38.8_dbl_kind    , & ! 4.49e-4_dbl_kind*secday (unitless)
          MJ3 = 1.04e7_dbl_kind  , & ! 1.39e-3_dbl_kind*secday^2  (s/m)
@@ -282,7 +285,7 @@
           
       bgc_flux_type = 'Jin2006'    ! or 'constant'
 
-      do nn = 1,nbltrcr          
+      do nn = 1, nbtrcr          
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -342,14 +345,14 @@
             
       enddo     ! ij
 
-      do nn = 1,nbltrcr          
+      do nn = 1, nbtrcr          
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
             if (cinit(ij,nn) < c0) then
-               write(nu_diag,*)'initial sk_bgc < 0, ij,nn,nbltrcr,cinit(ij,nn)', &
-                    ij,nn,nbltrcr,cinit(ij,nn)
+               write(nu_diag,*)'initial sk_bgc < 0, ij,nn,nbtrcr,cinit(ij,nn)', &
+                    ij,nn,nbtrcr,cinit(ij,nn)
                call abort_ice ('ice_bgc.F90: BGC error1')
             endif
          enddo 
@@ -431,7 +434,7 @@
                       icells,          dt,              &
                       indxi,           indxj,           &
                       fswthrul,        react,           & 
-                      cinit,           nbltrcr,         &
+                      cinit,           nbtrcr,          &
                       grow_Cn,         upNOn,           &
                       upNHn,                            &
                       tr_bgc_N_sk,     tr_bgc_Nit_sk,   &
@@ -451,7 +454,7 @@
          i = indxi(ij)
          j = indxj(ij)
         
-         do nn = 1, nbltrcr
+         do nn = 1, nbtrcr
 
       !-----------------------------------------------------------------------
       ! if PVt(ij) > 0, ie melt, then ocean_bio term drops out (MJ2006)
@@ -486,7 +489,7 @@
               call abort_ice ('ice_bgc.F90: BGC error3')
          endif
          
-         enddo  ! nbltrcr
+         enddo  ! nbtrcr
 
       !-----------------------------------------------------------------------
       ! reload tracer array
@@ -516,7 +519,7 @@
                             icells,       dt,           &
                             indxi,        indxj,        &
                             fswthrul,     reactb,       & 
-                            ltrcrn,       ntr,          &
+                            ltrcrn,       nbtrcr,       &
                             growN,        upNOn,        &
                             upNHn,                      &
                             tr_bio_N,     tr_bio_NO,    &
@@ -530,7 +533,7 @@
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells            , & ! number of cells with aicen > puny
-         ntr                   ! number of layer tracers
+         nbtrcr                ! number of layer tracers
 
       integer (kind=int_kind), dimension(nx_block*ny_block), &
          intent(in) :: &
@@ -547,10 +550,10 @@
          upNOn,  &  !  algal NO uptake  rate   (mmol/m^3 s)
          upNHn      !  algal NH uptake rate    (mmol/m^3 s)
 
-      real (kind=dbl_kind), dimension(icells,ntr), intent(inout) :: &
+      real (kind=dbl_kind), dimension(icells,nbtrcr), intent(inout) :: &
          reactb     ! biological reaction terms (mmol/m^3)
 
-      real (kind=dbl_kind), dimension(icells,ntr), intent(in) :: &
+      real (kind=dbl_kind), dimension(icells,nbtrcr), intent(in) :: &
          ltrcrn     ! concentrations in layer
 
       ! tracer flags for z_bgc or skl_bgc
@@ -983,12 +986,21 @@
                i = piloc(n)
                j = pjloc(n)
                iblk = pbloc(n)
+               pAm_ac(n)   = c0
+               pSil_ac(n)  = c0
+               pDMSP_ac(n) = c0
+               pDMS_ac(n)  = c0
+
+               pN_ac(n)    = ocean_bio(i,j,nlt_bgc_N,iblk)    ! algalN(i,j,iblk)
                pNit_ac(n)  = ocean_bio(i,j,nlt_bgc_NO,iblk)   ! nit(i,j,iblk)
+               if (tr_bgc_Am_sk) &
                pAm_ac(n)   = ocean_bio(i,j,nlt_bgc_NH,iblk)   ! amm(i,j,iblk)
+               if (tr_bgc_Sil_sk) &
                pSil_ac(n)  = ocean_bio(i,j,nlt_bgc_Sil,iblk)  ! sil(i,j,iblk)
+               if (tr_bgc_DMS_sk) then
                pDMSP_ac(n) = ocean_bio(i,j,nlt_bgc_DMSPp,iblk)! dmsp(i,j,iblk)
                pDMS_ac(n)  = ocean_bio(i,j,nlt_bgc_DMS,iblk)  ! dms(i,j,iblk)
-               pN_ac(n)    = ocean_bio(i,j,nlt_bgc_N,iblk)    ! algalN(i,j,iblk)
+               endif
 
                ! fluxes in mmol/m^2/d
                ! concentrations are bulk in mmol/m^3
@@ -1069,7 +1081,9 @@
       write(nu_diag,*) '------bulk skl bgc-----'
       write(nu_diag,900) 'nitrogen    (mmol/m^3) = ',pN_sk(1),pN_sk(2)
       write(nu_diag,900) 'nitrate     (mmol/m^3) = ',pNit_sk(1),pNit_sk(2)
+      if (tr_bgc_Am_sk) &
       write(nu_diag,900) 'ammonia/um  (mmol/m^3) = ',pAm_sk(1),pAm_sk(2)
+      if (tr_bgc_Sil_sk) &
       write(nu_diag,900) 'silicon     (mmol/m^3) = ',pSil_sk(1),pSil_sk(2)
       if (tr_bgc_DMS_sk) then
       write(nu_diag,900) 'DMSPp       (mmol/m^3) = ',pDMSPp_sk(1),pDMSPp_sk(2)
@@ -1080,13 +1094,17 @@
       write(nu_diag,*) '---ice-ocean fluxes----'
       write(nu_diag,900) 'algalN flx(mmol/m^2/d) = ',pflux_N(1),pflux_N(2)
       write(nu_diag,900) 'nit. flux (mmol/m^2/d) = ',pflux_NO(1),pflux_NO(2)
+      if (tr_bgc_Am_sk) &
       write(nu_diag,900) 'amm. flux (mmol/m^2/d) = ',pflux_NH(1),pflux_NH(2)
+      if (tr_bgc_Sil_sk) &
       write(nu_diag,900) 'sil. flux (mmol/m^2/d) = ',pflux_Sil(1),pflux_Sil(2)
 
       write(nu_diag,*) '---ocean mixed layer---'
       write(nu_diag,900) 'algal N     (mmol/m^3) = ',pN_ac(1),pN_ac(2)
       write(nu_diag,900) 'nitrate     (mmol/m^3) = ',pNit_ac(1),pNit_ac(2)
+      if (tr_bgc_Am_sk) &
       write(nu_diag,900) 'ammonia/um  (mmol/m^3) = ',pAm_ac(1),pAm_ac(2)
+      if (tr_bgc_Sil_sk) &
       write(nu_diag,900) 'silicon     (mmol/m^3) = ',pSil_ac(1),pSil_ac(2)
       if (tr_bgc_DMS_sk) then
       write(nu_diag,900) 'DMSP        (mmol/m^3) = ',pDMSP_ac(1),pDMSP_ac(2)

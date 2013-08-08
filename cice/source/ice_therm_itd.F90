@@ -1226,7 +1226,7 @@
                               Tf,        sss,        &
                               salinz,    phi_init,   &
                               dSin0_frazil,          &
-                              flux_bio,  nbltrcr, &
+                              nbtrcr,    flux_bio,   &
                               ocean_bio, &
                               l_stop,                &
                               istop,     jstop)
@@ -1302,13 +1302,13 @@
 
       ! BGC
       integer (kind=int_kind), intent(in) :: &
-         nbltrcr         ! number of biology tracers
+         nbtrcr          ! number of biology tracers
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
          intent(inout) :: &
          flux_bio   ! tracer flux to ocean from biology (mmol/m^2/s) 
         
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
          intent(in) :: &
          ocean_bio   ! ocean concentration of biological tracer
 
@@ -1746,7 +1746,7 @@
                            indxi3,     indxj3,     indxij3,  &
                            aicen_init, vicen_init, vi0_init, &
                            aicen,      vicen,      vi0new,   &
-                           ntrcr,      trcrn,      nbltrcr,  &
+                           ntrcr,      trcrn,      nbtrcr,   &
                            sss,        ocean_bio,  flux_bio, &
                            hsurp,      &
                            l_stop,     istop,      jstop)

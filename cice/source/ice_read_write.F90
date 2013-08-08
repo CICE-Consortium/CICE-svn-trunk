@@ -303,7 +303,7 @@
 ! !USES:
 !
       use ice_gather_scatter, only: scatter_global
-      use ice_domain_size, only: nblyr_hist
+      use ice_domain_size, only: nblyr
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -311,7 +311,7 @@
            nu            , & ! unit number
            nrec              ! record number (0 for sequential access)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nblyr_hist,max_blocks), &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nblyr+2,max_blocks), &
            intent(out) :: &
            work              ! output array (real, 8-byte)
 
@@ -352,7 +352,7 @@
          work_gr3
 
       if (my_task == master_task) then
-         allocate(work_g4(nx_global,ny_global,nblyr_hist))
+         allocate(work_g4(nx_global,ny_global,nblyr+2))
       else
          allocate(work_g4(1,1,1))   ! to save memory
       endif
@@ -365,17 +365,17 @@
          if (present(hit_eof)) hit_eof = .false.
 
          if (atype == 'ida4') then
-            allocate(work_gi5(nx_global,ny_global,nblyr_hist))
+            allocate(work_gi5(nx_global,ny_global,nblyr+2))
             read(nu,rec=nrec) work_gi5
             work_g4 = real(work_gi5,kind=dbl_kind)
             deallocate(work_gi5)
          elseif (atype == 'ida8') then
-            allocate(work_gi9(nx_global,ny_global,nblyr_hist))
+            allocate(work_gi9(nx_global,ny_global,nblyr+2))
             read(nu,rec=nrec) work_gi9
             work_g4 = real(work_gi9,kind=dbl_kind)
             deallocate(work_gi9)
          elseif (atype == 'rda4') then
-            allocate(work_gr3(nx_global,ny_global,nblyr_hist))
+            allocate(work_gr3(nx_global,ny_global,nblyr+2))
             read(nu,rec=nrec) work_gr3
             work_g4 = work_gr3
             deallocate(work_gr3)
@@ -390,12 +390,12 @@
             if (ignore_eof_use) then
              ! Read line from file, checking for end-of-file
                read(nu, iostat=ios) (((work_g4(i,j,k),i=1,nx_global), &
-                                                   j=1,ny_global), &
-                                                   k = 1,nblyr_hist)
+                                                      j=1,ny_global), &
+                                                      k=1,nblyr+2)
                if (present(hit_eof)) hit_eof = ios < 0
             else
                read(nu) (((work_g4(i,j,k),i=1,nx_global),j=1,ny_global),&
-                                                   k = 1,nblyr_hist)
+                                                         k=1,nblyr+2)
             endif
          else
             write(nu_diag,*) ' ERROR: reading unknown atype ',atype
@@ -425,7 +425,7 @@
     ! NOTE: Ghost cells are not updated unless field_loc is present.
     !-------------------------------------------------------------------
 
-     do k = 1, nblyr_hist
+     do k = 1, nblyr+2
 
       if (present(field_loc)) then
          call scatter_global(work(:,:,k,:), work_g4(:,:,k), master_task, distrb_info, &
@@ -838,7 +838,6 @@
 !
 ! Writes an unformatted file 
 ! work is a real array, atype indicates the format of the data
-! z dimension is nblyr_hist= nblyr+2
 !
 ! !REVISION HISTORY:
 !
@@ -847,7 +846,7 @@
 ! !USES:
 !
       use ice_gather_scatter, only: gather_global
-      use ice_domain_size, only: nblyr_hist
+      use ice_domain_size, only: nblyr
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -855,7 +854,7 @@
            nu            , & ! unit number
            nrec              ! record number (0 for sequential access)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nblyr_hist,max_blocks), &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nblyr+2,max_blocks), &
            intent(in) :: &
            work              ! input array (real, 8-byte)
 
@@ -890,11 +889,11 @@
     !-------------------------------------------------------------------
 
       if (my_task == master_task) then
-         allocate(work_g4(nx_global,ny_global,nblyr_hist))
+         allocate(work_g4(nx_global,ny_global,nblyr+2))
       else
          allocate(work_g4(1,1,1)) ! to save memory
       endif
-      do k = 1,nblyr_hist
+      do k = 1,nblyr+2
        call gather_global(work_g4(:,:,k), work(:,:,k,:), master_task, &
                           distrb_info, spc_val=c0)
       enddo   !k
@@ -905,24 +904,25 @@
     ! Write global array according to format atype
     !-------------------------------------------------------------------
          if (atype == 'ida4') then
-            allocate(work_gi5(nx_global,ny_global,nblyr_hist))
+            allocate(work_gi5(nx_global,ny_global,nblyr+2))
             work_gi5 = nint(work_g4)
             write(nu,rec=nrec) work_gi5
             deallocate(work_gi5)
          elseif (atype == 'ida8') then
-            allocate(work_gi9(nx_global,ny_global,nblyr_hist))
+            allocate(work_gi9(nx_global,ny_global,nblyr+2))
             work_gi9 = nint(work_g4)
             write(nu,rec=nrec) work_gi9           
             deallocate(work_gi9)
          elseif (atype == 'rda4') then
-            allocate(work_gr3(nx_global,ny_global,nblyr_hist))
+            allocate(work_gr3(nx_global,ny_global,nblyr+2))
             work_gr3 = work_g4
             write(nu,rec=nrec) work_gr3
             deallocate(work_gr3)
          elseif (atype == 'rda8') then
             write(nu,rec=nrec) work_g4
          elseif (atype == 'ruf8') then
-            write(nu)(((work_g4(i,j,k),i=1,nx_global),j=1,ny_global),k = 1,nblyr_hist)
+            write(nu)(((work_g4(i,j,k),i=1,nx_global),j=1,ny_global), &
+                                       k=1,nblyr+2)
          else
             write(nu_diag,*) ' ERROR: writing unknown atype ',atype
          endif
