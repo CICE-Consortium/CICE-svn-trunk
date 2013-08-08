@@ -21,7 +21,7 @@
    use ice_kinds_mod
    use ice_communicate, only: my_task, mpiR8, mpiR4
    use ice_constants, only: field_loc_Nface, field_loc_NEcorner
-   use ice_blocks, only: block, get_block
+   use ice_blocks, only: block, get_block, nblocks_tot
    use ice_distribution, only: distrb, ice_distributionGet, &
        ice_distributionGetBlockID
    use ice_domain_size, only: nx_global

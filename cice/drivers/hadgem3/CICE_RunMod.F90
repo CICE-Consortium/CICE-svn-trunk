@@ -466,6 +466,7 @@
                                 fsurfn_f,   flatn_f,      &
                                 fresh,      fhocn)
 
+      use ice_constants, only: c1, puny, lsub
       use ice_domain_size, only: ncat
 
       integer (kind=int_kind), intent(in) :: &
@@ -543,6 +544,8 @@
 !          A. McLaren,  Met Office
 !
 ! !USES:
+
+      use ice_constants, only: c1, puny
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !

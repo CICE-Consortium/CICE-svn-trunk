@@ -126,7 +126,7 @@
          nfld = 8   ! number of fields to search for in forcing file
 
       ! as in the dummy atm (latm)
-      real (kind=dbl_kind), parameter :: &
+      real (kind=dbl_kind), parameter, public :: &
          frcvdr = 0.28_dbl_kind, & ! frac of incoming sw in vis direct band
          frcvdf = 0.24_dbl_kind, & ! frac of incoming sw in vis diffuse band
          frcidr = 0.31_dbl_kind, & ! frac of incoming sw in near IR direct band
