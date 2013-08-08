@@ -1,9 +1,4 @@
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_therm_itd - thermo calculations after call to coupler
-!
-! !DESCRIPTION:
 !
 ! Thermo calculations after call to coupler, related to ITD:
 ! ice thickness redistribution, lateral growth and melting.
@@ -13,7 +8,6 @@
 !       fluxes.  Then ice_therm_itd does thermodynamic calculations not
 !       needed for coupling.
 !       
-! !REVISION HISTORY:
 !  SVN:$Id$
 !
 ! authors William H. Lipscomb, LANL
@@ -24,20 +18,15 @@
 ! 2004: Block structure added by William Lipscomb.  
 ! 2006: Streamlined for efficiency by Elizabeth Hunke
 !
-! !INTERFACE:
-!
       module ice_therm_itd
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_constants
       use ice_communicate, only: my_task, master_task
-      use ice_domain_size, only: nilyr, nslyr, nblyr, ncat, max_aero, n_aero, max_ntrcr
+      use ice_domain_size, only: nilyr, nslyr, nblyr, ncat, max_aero, &
+                                 n_aero, max_ntrcr
       use ice_fileunits, only: nu_diag
-!
-!EOP
-!
+
       implicit none
       save
       
@@ -50,22 +39,9 @@
       contains
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: linear_itd - ITD scheme that shifts ice among categories
+! ITD scheme that shifts ice among categories
 !
-! !INTERFACE:
-!
-      subroutine linear_itd (nx_block,    ny_block,    & 
-                             icells, indxi, indxj,     & 
-                             ntrcr,       trcr_depend, & 
-                             aicen_init,  vicen_init,  & 
-                             aicen,       trcrn,       & 
-                             vicen,       vsnon,       & 
-                             aice,        aice0,       & 
-                             fpond,       l_stop,      &
-                             istop,       jstop)
-
 ! See Lipscomb, W. H.  Remapping the thickness distribution in sea
 !     ice models. 2001, J. Geophys. Res., Vol 106, 13989--14000.
 !
@@ -84,21 +60,25 @@
 ! and volume across each boundary in the appropriate direction, thus
 ! restoring the original boundaries.
 !
-! !REVISION HISTORY:
-!
 ! authors: William H. Lipscomb, LANL
 !          Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine linear_itd (nx_block,    ny_block,    & 
+                             icells, indxi, indxj,     & 
+                             ntrcr,       trcr_depend, & 
+                             aicen_init,  vicen_init,  & 
+                             aicen,       trcrn,       & 
+                             vicen,       vsnon,       & 
+                             aice,        aice0,       & 
+                             fpond,       l_stop,      &
+                             istop,       jstop)
+
       use ice_calendar, only: istep1
       use ice_itd, only: hin_max, hi_min, aggregate_area, shift_ice, & 
                          column_sum, column_conservation_check
       use ice_state, only: nt_qice, nt_qsno, nt_fbri, nt_sice, &
                            tr_pond_topo, nt_apnd, nt_hpnd, hbrine
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells            , & ! number of grid cells with ice
@@ -140,9 +120,9 @@
 
       integer (kind=int_kind), intent(out) :: &
          istop, jstop    ! indices of grid cell where model aborts 
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j         , & ! horizontal indices
          n, nd        , & ! category indices
@@ -185,7 +165,7 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
          eicen, &     ! energy of melting for each ice layer (J/m^2)
          esnon, &     ! energy of melting for each snow layer (J/m^2)
-         vbrin, &     ! ice volume with defined by brine height (m)
+         vbrin, &     ! ice volume defined by brine height (m)
          sicen        ! Bulk salt in h ice (ppt*m)
 
       real (kind=dbl_kind), dimension(icells) :: &
@@ -194,7 +174,7 @@
          eice_init, eice_final, & ! ice energy summed over categories
          esno_init, esno_final, & ! snow energy summed over categories
          sice_init, sice_final, & ! ice bulk salinity summed over categories
-         vbri_init, vbri_final    ! ice volume define by hbri summed over categories
+         vbri_init, vbri_final    ! briny ice volume summed over categories
 
       ! NOTE: Third index of donor, daice, dvice should be ncat-1,
       !       except that compilers would have trouble when ncat = 1 
@@ -256,13 +236,14 @@
       enddo
       enddo
 
-     
+      if (hbrine) then
       do j = 1, ny_block
       do i = 1, nx_block
-         vbrin(i,j,n) =  vicen(i,j,n)
-         if (hbrine) vbrin(i,j,n) = vbrin(i,j,n)*trcrn(i,j,nt_fbri,n)
+         vbrin(i,j,n) = vbrin(i,j,n) + trcrn(i,j,nt_fbri,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
       enddo
       enddo    
+      endif
 
       do k = 1, nilyr
       do j = 1, ny_block
@@ -750,12 +731,14 @@
       enddo
       enddo
 
+      if (hbrine) then
       do j = 1, ny_block
       do i = 1, nx_block
-         vbrin(i,j,n) =  vicen(i,j,n)
-         if (hbrine) vbrin(i,j,n) = vbrin(i,j,n)*trcrn(i,j,nt_fbri,n)
+         vbrin(i,j,n) = vbrin(i,j,n) + trcrn(i,j,nt_fbri,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
       enddo
       enddo
+      endif
 
       do k = 1, nilyr
       do j = 1, ny_block
@@ -852,12 +835,14 @@
       end subroutine linear_itd
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: fit_line - fit g(h) with a line using area, volume constraints
+! Fit g(h) with a line, satisfying area and volume constraints.
+! To reduce roundoff errors caused by large values of g0 and g1,
+! we actually compute g(eta), where eta = h - hL, and hL is the
+! left boundary.
 !
-! !INTERFACE:
-!
+! authors: William H. Lipscomb, LANL
+!          Elizabeth C. Hunke, LANL
 
       subroutine fit_line (nx_block, ny_block,        &
                            iflag,   icells,           &
@@ -866,23 +851,7 @@
                            hbL,      hbR,             &
                            g0,       g1,              &
                            hL,       hR)
-!
-! !DESCRIPTION:
-!
-! Fit g(h) with a line, satisfying area and volume constraints.
-! To reduce roundoff errors caused by large values of g0 and g1,
-! we actually compute g(eta), where eta = h - hL, and hL is the
-! left boundary.
-!
-! !REVISION HISTORY:
-!
-! authors: William H. Lipscomb, LANL
-!          Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells            , & ! number of grid cells with ice
@@ -904,9 +873,9 @@
          g0, g1      , & ! coefficients in linear equation for g(eta)
          hL          , & ! min value of range over which g(h) > 0
          hR              ! max value of range over which g(h) > 0
-!
-!EOP
-!
+
+      ! local varibles
+
       integer (kind=int_kind) :: &
          i,j         , & ! horizontal indices
          ij, m           ! combined horizontal indices
@@ -965,43 +934,34 @@
       end subroutine fit_line
 
 !=======================================================================
-!BOP
 !
-! !ROUTINE: update_vertical_tracers
-!
-! !DESCRIPTION:
-!
-! Given some added new ice to the base of the existing ice, recalculate vertical tracer
-! so that new grid cells are all the same size. 
-!
-! !REVISION HISTORY:
+! Given some added new ice to the base of the existing ice, recalculate 
+! vertical tracer so that new grid cells are all the same size. 
 !
 ! author: A. K. Turner, LANL
 !
-! !INTERFACE:
-!
       subroutine update_vertical_tracers(trc, h1, h2, trc0)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-        real(kind=dbl_kind), dimension(1:nilyr), intent(inout) :: trc ! vertical tracer
-        real(kind=dbl_kind), intent(in) :: h1 ! old thickness
-        real(kind=dbl_kind), intent(in) :: h2 ! new thickness
-        real(kind=dbl_kind), intent(in) :: trc0 ! tracer value of added ice on ice bottom
-!
-!EOP
-!
-        real(kind=dbl_kind), dimension(1:nilyr) :: trc2 ! temporary array for updated tracer
 
-        ! vertical indexes for old and new grid
-        integer :: k1, k2
+      real (kind=dbl_kind), dimension(1:nilyr), intent(inout) :: &
+           trc ! vertical tracer
 
-        real(kind=dbl_kind) :: z1a, z1b ! upper and lower boundary of old cell/added new ice at bottom
-        real(kind=dbl_kind) :: z2a, z2b ! upper and lower boundary of new cell
-        real(kind=dbl_kind) :: overlap  ! overlap between old and new cell
-        real(kind=dbl_kind) :: rnilyr
+      real (kind=dbl_kind), intent(in) :: &
+         h1, & ! old thickness
+         h2, & ! new thickness
+         trc0  ! tracer value of added ice on ice bottom
+           
+      ! local variables
+
+      real(kind=dbl_kind), dimension(1:nilyr) :: trc2 ! updated tracer temporary
+
+      ! vertical indexes for old and new grid
+      integer :: k1, k2
+
+      real (kind=dbl_kind) :: &
+         z1a, z1b, & ! upper, lower boundary of old cell/added new ice at bottom
+         z2a, z2b, & ! upper, lower boundary of new cell
+         overlap , & ! overlap between old and new cell
+         rnilyr
 
         rnilyr = real(nilyr,dbl_kind)
 
@@ -1049,21 +1009,12 @@
       end subroutine update_vertical_tracers
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: lateral_melt - melt ice laterally
-!
-! !DESCRIPTION:
 !
 ! Given the fraction of ice melting laterally in each grid cell
 !  (computed in subroutine frzmlt_bottom_lateral), melt ice.
 !
-! !REVISION HISTORY:
-!
 ! author: C. M. Bitz, UW
 ! 2003:   Modified by William H. Lipscomb and Elizabeth C. Hunke, LANL
-!
-! !INTERFACE:
 !
       subroutine lateral_melt (nx_block,   ny_block,   &
                                ilo, ihi,   jlo, jhi,   &
@@ -1073,14 +1024,10 @@
                                rside,      meltl,      &
                                aicen,      vicen,      &
                                vsnon,      trcrn)
-!
-! !USES:
-!
+
       use ice_state, only: nt_qice, nt_qsno, &
                            nt_aero, tr_aero, tr_pond_topo, nt_apnd, nt_hpnd
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
@@ -1112,9 +1059,9 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
          intent(inout) :: &
          faero_ocn     ! aerosol flux to ocean (kg/m^2/s)
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          n           , & ! thickness category index
@@ -1246,10 +1193,6 @@
       end subroutine lateral_melt
 
 !=======================================================================
-
-! !ROUTINE: add_new_ice - add frazil ice to ice thickness distribution
-!
-! !DESCRIPTION:
 !
 ! Given the volume of new ice grown in open water, compute its area
 ! and thickness and add it to the appropriate category or categories.
@@ -1265,12 +1208,9 @@
 ! added to only category 1, all formulations combine the new ice and
 ! existing ice tracers as bulk quantities.
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         Elizabeth C. Hunke, LANL
-!
-! !INTERFACE:
+!         Adrian Turner, LANL
 !
       subroutine add_new_ice (nx_block,  ny_block,   &
                               ntrcr,     icells,     &

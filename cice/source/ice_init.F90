@@ -108,7 +108,7 @@
                                           rfracmin, rfracmax, pndaspect, hs1
       use ice_restart_meltpond_topo, only: restart_pond_topo
       use ice_aerosol, only: restart_aero
-      use ice_therm_shared, only: ktherm, calc_Tsfc, heat_capacity, conduct
+      use ice_therm_shared, only: ktherm, calc_Tsfc, conduct
       use ice_therm_vertical, only: ustar_min
       use ice_therm_mushy, only: a_rapid_mode, Rac_rapid_mode, aspect_rapid_mode, &
                                  dSdt_slow_mode, phi_c_slow_mode, &

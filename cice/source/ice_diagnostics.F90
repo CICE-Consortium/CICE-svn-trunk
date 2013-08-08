@@ -200,10 +200,9 @@
       real (kind=dbl_kind), dimension(npnt) :: &
          paice, pTair, pQa, pfsnow, pfrain, pfsw, pflw, & 
          pTsfc, pevap, pfswabs, pflwout, pflat, pfsens, &
-         pfsurf, pfcondtop, psst, psss, pTf, hiavg, hsavg, hbavg, hbioavg, &
-         pfhocn, &
-         pmeltt, pmeltb, pmeltl, psnoice, pdsnow, pfrazil, pcongel, &
-         phin1, phin2, paicen 
+         pfsurf, pfcondtop, psst, psss, pTf, hiavg, hsavg, hbravg, &
+         pfhocn, psalt, &
+         pmeltt, pmeltb, pmeltl, psnoice, pdsnow, pfrazil, pcongel
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          work1, work2
@@ -445,7 +444,7 @@
          evpn = evpn*dt
          evps = evps*dt
 
-         ! total ice volume from brine height tracer
+         ! total brine tracer
          shmaxnt = c0
          shmaxst = c0
          if (hbrine) then
@@ -701,6 +700,7 @@
       !-----------------------------------------------------------------
 
          call total_energy (work1)
+         call total_salt   (work2)
 
          do n = 1, npnt
             if (my_task == pmloc(n)) then
@@ -718,26 +718,13 @@
                
                hiavg(n) = c0                       ! avg snow/ice thickness
                hsavg(n) = c0
-               hbavg(n) = c0                       ! avg freeboard height
-               hbioavg(n) = c0                     ! avg bio thickness
-               phin1(n) = c0                       ! cat 1 ice thickness
-               phin2(n) = c0                       ! cat 2 ice thickness
+               hbravg(n) = c0                      ! avg brine thickness
                if (paice(n) /= c0) then
                   hiavg(n) = vice(i,j,iblk)/paice(n)
-                  if (aicen(i,j,1,iblk) /= c0) &
-                  phin1(n) = vicen(i,j,1,iblk)/aicen(i,j,1,iblk) 
-                  if (aicen(i,j,2,iblk) /= c0) &
-                  phin2(n) = vicen(i,j,2,iblk)/aicen(i,j,2,iblk)
                   hsavg(n) = vsno(i,j,iblk)/paice(n)
-                  if (hbrine) then
-                  hbioavg(n) = trcr(i,j,nt_fbri,iblk)* hiavg(n) !/paice(n)  
-                  hbavg(n) = hbioavg(n) - rhosi/rhow*hiavg(n) - rhos/rhow*hsavg(n) 
-                  else
-                  hbioavg(n) = c0
-                  hbavg(n) = c0
-                  endif
+                  if (hbrine) hbravg(n) = trcr(i,j,nt_fbri,iblk)* hiavg(n)
                endif
-               paicen(n) = aicen(i,j,1,iblk)       ! cat 1 ice area
+               psalt(n) = work2(i,j,iblk)
                pTsfc(n) = trcr(i,j,nt_Tsfc,iblk)   ! ice/snow sfc temperature
                pevap(n) = evap(i,j,iblk)*dt/rhoi   ! sublimation/condensation
                pfswabs(n) = fswabs(i,j,iblk)       ! absorbed solar flux
@@ -772,11 +759,8 @@
             call broadcast_scalar(paice    (n), pmloc(n))             
             call broadcast_scalar(hsavg    (n), pmloc(n))             
             call broadcast_scalar(hiavg    (n), pmloc(n))              
-            call broadcast_scalar(phin1    (n), pmloc(n))                
-            call broadcast_scalar(phin2    (n), pmloc(n))            
-            call broadcast_scalar(paicen   (n), pmloc(n))                 
-            call broadcast_scalar(hbavg    (n), pmloc(n))              
-            call broadcast_scalar(hbioavg  (n), pmloc(n))             
+            call broadcast_scalar(psalt    (n), pmloc(n))
+            call broadcast_scalar(hbravg   (n), pmloc(n))
             call broadcast_scalar(pTsfc    (n), pmloc(n))             
             call broadcast_scalar(pevap    (n), pmloc(n))             
             call broadcast_scalar(pfswabs  (n), pmloc(n)) 
@@ -858,7 +842,7 @@
          write(nu_diag,901) 'arwt heat error        = ',herrn,herrs
 
          write(nu_diag,*) '----------------------------'
-         write(nu_diag,901) 'total ice vol tr (m^3) = ',shmaxnt, shmaxst
+         write(nu_diag,901) 'total brine tr (m^3)   = ',shmaxnt, shmaxst
          write(nu_diag,901) 'arwt salt mass (kg)    = ',msltn,mslts
          write(nu_diag,901) 'arwt salt mass chng(kg)= ',delmsltn, &
                                                         delmslts
@@ -913,13 +897,10 @@
         endif
         write(nu_diag,*) '----------ice----------'
         write(nu_diag,900) 'area fraction          = ',paice(1),paice(2)
-        write(nu_diag,900) 'cat 1 area fraction    = ',paicen(1),paicen(2)
-        write(nu_diag,900) 'cat 1 ice thickness (m)= ',phin1(1),phin1(2)
-        write(nu_diag,900) 'cat 2 ice thickness (m)= ',phin2(1),phin2(2)
         write(nu_diag,900) 'avg ice thickness (m)  = ',hiavg(1),hiavg(2)
         write(nu_diag,900) 'avg snow depth (m)     = ',hsavg(1),hsavg(2)
-        write(nu_diag,900) 'avg freeboard height(m)= ',hbavg(1),hbavg(2)
-        write(nu_diag,900) 'avg bio thickness (m)  = ',hbioavg(1),hbioavg(2)
+        write(nu_diag,900) 'avg salinity (ppt)     = ',psalt(1),psalt(2)
+        write(nu_diag,900) 'avg brine thickness (m)= ',hbravg(1),hbravg(2)
 
         if (calc_Tsfc) then
            write(nu_diag,900) 'surface temperature(C) = ',pTsfc(1),pTsfc(2)
@@ -1190,12 +1171,84 @@
                                  * vsnon(i,j,n,iblk) / real(nslyr,kind=dbl_kind)
                enddo            ! ij
             enddo               ! k
-      enddo                     ! n
+         enddo                  ! n
 
       enddo                     ! iblk
       !$OMP END PARALLEL DO
 
       end subroutine total_energy
+
+!=======================================================================
+! Computes bulk salinity of ice and snow in a grid cell.
+! author: E. C. Hunke, LANL
+
+      subroutine total_salt (work)
+
+      use ice_blocks, only: nx_block, ny_block
+      use ice_domain, only: nblocks
+      use ice_domain_size, only: ncat, nilyr, nslyr, max_blocks
+      use ice_grid, only: tmask
+      use ice_state, only: vicen, trcrn, nt_sice
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks),  &
+         intent(out) :: &
+         work      ! total salt
+
+      ! local variables
+
+      integer (kind=int_kind) :: &
+        icells                ! number of ocean/ice cells
+
+      integer (kind=int_kind), dimension (nx_block*ny_block) :: &
+        indxi, &              ! compressed indices in i/j directions
+        indxj
+
+      integer (kind=int_kind) :: &
+        i, j, k, n, iblk, ij
+
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,n,k,ij,icells,indxi,indxj)
+      do iblk = 1, nblocks
+
+      !-----------------------------------------------------------------
+      ! Initialize
+      !-----------------------------------------------------------------
+
+      icells = 0
+      do j = 1, ny_block
+      do i = 1, nx_block
+         if (tmask(i,j,iblk)) then
+            icells = icells + 1
+            indxi(icells) = i
+            indxj(icells) = j
+         endif                  ! tmask
+      enddo
+      enddo
+
+      work(:,:,iblk) = c0
+
+      !-----------------------------------------------------------------
+      ! Aggregate
+      !-----------------------------------------------------------------
+
+         do n = 1, ncat
+            do k = 1, nilyr
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  work(i,j,iblk) = work(i,j,iblk) &
+                                 + trcrn(i,j,nt_sice+k-1,n,iblk) &
+                                 * vicen(i,j,n,iblk) / real(nilyr,kind=dbl_kind)
+               enddo            ! ij
+            enddo               ! k
+         enddo                  ! n
+
+      enddo                     ! iblk
+      !$OMP END PARALLEL DO
+
+      end subroutine total_salt
 
 !=======================================================================
 !BOP
