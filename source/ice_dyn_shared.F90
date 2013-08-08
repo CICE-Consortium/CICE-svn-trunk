@@ -445,7 +445,7 @@
 !
 ! !USES:
 !
-      use ice_constants, only: c0, c1
+      use ice_constants, only: c0, c1, gravit
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
