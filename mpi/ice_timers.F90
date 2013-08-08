@@ -71,9 +71,8 @@
       timer_sndrcv,           &! time between send to receive
 #endif
       timer_bound,            &! boundary updates
-      timer_bgc,              &! biogeochemistry
-      timer_diags_bgc          ! diagnostics bgc
-!      timer_tmp                ! for temporary timings
+      timer_bgc                ! biogeochemistry
+!      timer_tmp               ! for temporary timings
 
 !-----------------------------------------------------------------------
 !
@@ -203,7 +202,6 @@
    call get_ice_timer(timer_hist,     'History  ',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_bound,    'Bound',    nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_bgc,      'BGC',      nblocks,distrb_info%nprocs)
-   call get_ice_timer(timer_diags_bgc,'BGC Diags',nblocks,distrb_info%nprocs)
 #if (defined CCSM) || (defined SEQ_MCT)
    call get_ice_timer(timer_cplrecv,  'Cpl-recv', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_rcvsnd,   'Rcv->Snd', nblocks,distrb_info%nprocs)

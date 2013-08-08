@@ -974,7 +974,7 @@
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,nbltrcr), &
           intent(inout):: &
-          flux_bio   , & ! tracer flux to ocean from biology (mmol/m2/s)
+          flux_bio, & ! tracer flux to ocean from biology (mmol/m2/s)
           flux_bio_g  ! Gravity drainage tracer flux to ocean (mmol/m2/s)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &

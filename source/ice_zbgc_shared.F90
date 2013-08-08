@@ -17,7 +17,7 @@
       implicit none 
 
       private
-      public :: remap_layers_bgc_plus_xy
+      public :: remap_layers_bgc
 
       logical (kind=log_kind), public :: & 
          restart_hbrine     ! if .true., read hbrine from restart file
@@ -173,7 +173,7 @@
 ! Remaps tracer fields in a given category from one set of layers to another.
 ! Grids can be very different and  so can  vertical spaces.  
 
-      subroutine remap_layers_bgc_plus_xy ( ntrcr,                    &
+      subroutine remap_layers_bgc ( ntrcr,                    &
                                    nlyrn,                    &
                                    it,                       &
                                    trcrn,    trtmp,          &
@@ -195,7 +195,7 @@
          intent(in) ::       &
          trcrn                 ! ice tracers
 
-      real (kind=dbl_kind), dimension (ntrcr), &
+      real (kind=dbl_kind), dimension (nblyr+2), &
          intent(inout) ::    &
          trtmp                 ! temporary, remapped ice tracers
 
@@ -228,10 +228,10 @@
            rgrid              !  temporary, receiver grid dimensional
 
          if ((hinS < c0) .OR. (hice < c0)) then
-                  write(nu_diag, *)'Problem in remap_layers_bgc_plus'
+                  write(nu_diag, *)'Problem in remap_layers_bgc'
                   write(nu_diag, *) '(hinS < c0) .OR. (hice < c0)'
                   write(nu_diag, *) 'hinS,hice',hinS,hice
-                  call abort_ice ('ice: remap_layers_bgc_plus error')
+                  call abort_ice ('ice: remap_layers_bgc error')
          endif
          
          if (nr0 == 0) then ! cice to bio
@@ -323,22 +323,22 @@
                 kdr = kdr + 1
                 kdi = kd
                 trgrid(kdr) = rgrid(kr+1)
-                trtmp(it+kr-1) = trdr(kdr-1) + (rgrid(kr+1) - trgrid(kdr-1)) * &
+                trtmp(kr) = trdr(kdr-1) + (rgrid(kr+1) - trgrid(kdr-1)) * &
                                    (tracer(kd) - trdr(kdr-1))/(dgrid(kd) - trgrid(kdr-1))
-                trdr(kdr) = trtmp(it+kr-1)
-                EXIT
+                trdr(kdr) = trtmp(kr)
+!                EXIT
              else
                 kdr = kdr+1
                 kdi = kd+1
                 trgrid(kdr) = rgrid(kr+1)
-                trtmp(it+kr-1) = tracer(kd)              
+                trtmp(kr) = tracer(kd)              
                 trdr(kdr) = tracer(kd)
-                EXIT
+!                EXIT
              endif
            enddo
          enddo
 
-      end subroutine remap_layers_bgc_plus_xy
+      end subroutine remap_layers_bgc
 
 !=======================================================================
 

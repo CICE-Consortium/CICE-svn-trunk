@@ -128,12 +128,13 @@
           tr_pond_cesm, tr_pond_lvl, tr_pond_topo, hbrine, ntraceb
       use ice_step_mod, only: prep_radiation, step_therm1, step_therm2, &
           post_thermo, step_dynamics, step_radiation
-      use ice_therm_shared, only: calc_Tsfc, ktherm
+      use ice_therm_shared, only: calc_Tsfc
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
-          timer_diags, timer_column, timer_thermo, timer_bound, timer_hist, &
-          timer_diags_bgc, timer_readwrite
+          timer_diags, timer_column, timer_thermo, timer_bound, &
+          timer_hist, timer_readwrite
       use ice_algae, only: bgc_diags, write_restart_bgc
       use ice_zbgc, only: init_history_bgc, biogeochemistry
+      use ice_zbgc_shared, only: solve_skl_bgc
 
       integer (kind=int_kind) :: &
          iblk        , & ! block index 
@@ -225,15 +226,12 @@
       !-----------------------------------------------------------------
 
          call ice_timer_start(timer_diags)  ! diagnostics
-         if (mod(istep,diagfreq) == 0) call runtime_diags(dt) ! log file
-         call ice_timer_stop(timer_diags)   ! diagnostics
-
-         call ice_timer_start(timer_diags_bgc)
          if (mod(istep,diagfreq) == 0) then
-            if (ntraceb > 0)              call bgc_diags (dt)
-            if (hbrine .and. ktherm == 2) call hbrine_diags (dt)
+            call runtime_diags(dt)          ! log file
+            if (solve_skl_bgc) call bgc_diags (dt)
+            if (hbrine)        call hbrine_diags (dt)
          endif
-         call ice_timer_stop(timer_diags_bgc)
+         call ice_timer_stop(timer_diags)   ! diagnostics
 
          call ice_timer_start(timer_hist)   ! history
          call accum_hist (dt)               ! history file
@@ -252,7 +250,7 @@
             if (tr_pond_cesm) call write_restart_pond_cesm
             if (tr_pond_lvl)  call write_restart_pond_lvl
             if (tr_pond_topo) call write_restart_pond_topo
-            if (ntraceb > 0)  call write_restart_bgc  
+            if (solve_skl_bgc)call write_restart_bgc  
             if (hbrine)       call write_restart_hbrine
             if (kdyn == 2)    call write_restart_eap
          endif
@@ -386,10 +384,12 @@
             fhocn_ai  (i,j,iblk) = fhocn  (i,j,iblk)
             fswthru_ai(i,j,iblk) = fswthru(i,j,iblk)
 
+            if (ntraceb > 0) then
             do k = 1,ntraceb
               flux_bio_ai  (i,j,k,iblk) = flux_bio  (i,j,k,iblk)
               flux_bio_g_ai(i,j,k,iblk) = flux_bio_g(i,j,k,iblk)
             enddo
+            endif
 
       !-----------------------------------------------------------------
       ! Save net shortwave for scaling factor in scale_factor

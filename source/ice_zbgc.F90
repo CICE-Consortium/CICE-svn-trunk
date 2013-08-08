@@ -564,15 +564,14 @@
       use ice_algae, only: skl_biogeochemistry
       use ice_flux
       use ice_blocks, only: block, get_block
+      use ice_timers, only: timer_bgc, ice_timer_start, ice_timer_stop
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
 
       integer (kind=int_kind), intent(in) :: &
          iblk    ! block index
-!
-!EOP
-!
+
       integer (kind=int_kind) :: &
          i, j, ij    , & ! horizontal indices
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
@@ -590,10 +589,7 @@
          hinS_old    , &  ! old brine thickness before growh/melt
          zphi_o      , &  ! surface ice porosity 
          kavg        , &  ! average ice permeability (m^2)
-         sloss       , &  ! brine flux contribution from surface runoff (g/m^2)
-         dh_bot_chl  , &  ! Chlorophyll may or may not flush
-         dh_top_chl  , &  ! Chlorophyll may or may not flush
-         darcy_V_chl
+         sloss            ! brine flux contribution from surface runoff (g/m^2)
 
 !--------------------------------
 ! Defined on the Bio Grid points
@@ -628,9 +624,7 @@
          flux_bio_gn  !tracer flux to ocean from gravity drainage (mmol/m^2/s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         hbrin , &  ! brine height
-         melt_frac  ! fraction of top accumulation due to meltwater
-         
+         hbrin  ! brine height
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr) :: &
          upNOn,  &  ! nitrate uptake rate (mmol/m^3/s)
@@ -642,17 +636,17 @@
       logical (kind=log_kind) :: &
          l_stop          ! if true, abort the model
 
-      logical (kind=log_kind), dimension (nx_block,ny_block) :: &
-         flood_val          ! .true. if ocean water flooded the surface
-                            ! use sss rather than min_salin as surface 
-                            ! condition
-
       integer (kind=int_kind) :: &
          istop, jstop    ! indices of grid cell where model aborts 
 
        !-----------------------------------------------------------------
        ! Biogeochemistry
        !-----------------------------------------------------------------
+
+       if (hbrine .or. solve_skl_bgc) then
+         call ice_timer_start(timer_bgc) ! biogeochemistry
+
+
 
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -705,10 +699,6 @@
           hbrin(:,:) = c0
           kavg(:,:) = c0
           zphi_o(:,:) = c0
-          melt_frac(:,:) = c1
-          flood_val(:,:) = .false.
-          dh_top_chl(:,:) = c0
-          darcy_V_chl(:,:) = c0
       
           icells = 0
           do j = jlo, jhi
@@ -733,7 +723,6 @@
                                    hin_old(:,:,n,iblk), & 
                                    trcrn(:,:,nt_fbri,n,iblk), &
                                    dh_top(:,:,n,iblk), dh_bot(:,:,n,iblk), &
-                                   dh_bot_chl,&
                                    dhi_top(:,:,n,iblk),dhi_bot(:,:,n,iblk), &
                                    hinS_old, hin, hsn,&
                                    first_ice(:,:,n,iblk))
@@ -757,24 +746,22 @@
                                    sice_rho(:,:,n,iblk))
 !               endif
  
-               call update_hbrine (icells, nx_block, ny_block, &
-                                   indxi,    indxj,            &
-                                   meltbn(:,:,n,iblk),melttn(:,:,n,iblk), &
-                                   meltsn(:,:,n,iblk), dt, hin, hsn, &
-                                   hin_old(:,:,n,iblk),  first_ice(:,:,n,iblk), &
-                                   hbrin, hinS_old,                &
-                                   trcrn(:,:,nt_fbri,n,iblk),  &
-                                   dh_top(:,:,n,iblk),dh_bot(:,:,n,iblk), &
-                                   dh_top_chl, dh_bot_chl,kavg, zphi_o, &
-                                   darcy_V(:,:,n,iblk),darcy_V_chl,&
-                                   flood_val, melt_frac)
-                    
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
+
+               call update_hbrine (meltbn(i,j,n,iblk),melttn(i,j,n,iblk), &
+                                   meltsn(i,j,n,iblk), dt, hin(i,j), hsn(i,j), &
+                                   hin_old(i,j,n,iblk),  first_ice(i,j,n,iblk), &
+                                   hbrin(i,j), hinS_old(i,j),                &
+                                   trcrn(i,j,nt_fbri,n,iblk),  &
+                                   dh_top(i,j,n,iblk),dh_bot(i,j,n,iblk), &
+                                   kavg(i,j), zphi_o(i,j), &
+                                   darcy_V(i,j,n,iblk))
+                    
          hbri(i,j,iblk) = hbri(i,j,iblk) + hbrin(i,j)*aicen_init(i,j,n,iblk)  
       enddo                     ! ij
 
@@ -814,6 +801,10 @@
               enddo  !icells
           endif                  ! icells      
         enddo                  ! ncat
+
+       call ice_timer_stop(timer_bgc) ! biogeochemistry
+
+       endif  ! hbrine .or. solve_skl_bgc
 
       end subroutine biogeochemistry
 
@@ -970,6 +961,7 @@
 
       use ice_itd, only: column_sum, &
                          column_conservation_check
+      use ice_timers, only: timer_bgc, ice_timer_start, ice_timer_stop
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, & ! block dimensions
@@ -978,9 +970,6 @@
          icells  , & ! number of ice/ocean grid cells
          jcells  , & ! grid cell counter
          kcells      ! grid cell counter
-
-      integer (kind=int_kind), intent(in) :: &
-         nbltrcr     ! number of biology tracers
 
       integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
@@ -1006,19 +995,22 @@
          sss             ! sea surface salinity (ppt)
 
       real (kind=dbl_kind), dimension (icells), intent(in) :: &
-         vi0_init    , & ! volume of new ice added to cat 1 (intial)
+         vi0_init    , & ! volume of new ice added to cat 1 (initial)
          vi0new          ! volume of new ice added to cat 1
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
-         intent(in) :: &
-         ocean_bio       ! ocean concentration of biological tracer
+      real (kind=dbl_kind), dimension (icells), intent(in) :: &
+         hsurp           ! thickness of new ice added to each cat
+
+      integer (kind=int_kind), intent(in) :: &
+         nbltrcr         ! number of biology tracers
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
          intent(inout) :: &
          flux_bio   ! tracer flux to ocean from biology (mmol/m^2/s) 
         
-      real (kind=dbl_kind), dimension (icells), intent(in) :: &
-         hsurp           ! thickness of new ice added to each cat
+       real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
+         intent(in) :: &
+         ocean_bio   ! ocean concentration of biological tracer
 
       logical (kind=log_kind), intent(out) :: &
          l_stop          ! if true, abort on return
@@ -1026,7 +1018,8 @@
       integer (kind=int_kind), intent(out) :: &
          istop, jstop    ! indices of grid cell where model aborts
 
-! local
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          n           , & ! ice category index
@@ -1047,6 +1040,8 @@
 
       character (len=char_len) :: &
          fieldid         ! field identifier
+
+         call ice_timer_start(timer_bgc) ! biogeochemistry
 
       !-----------------------------------------------------------------     
       ! ocean flux
@@ -1083,7 +1078,17 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
       do ij = 1, icells
-         vbri_init(ij) = vbri_init(ij) + vi0_init(ij) !bgc
+         i = indxi(ij)
+         j = indxj(ij)
+
+         vbri_init(ij) = vbri_init(ij) + vi0_init(ij)
+
+         do k = 1, nbltrcr  ! only correct for dissolved tracers
+            flux_bio(i,j,k) = flux_bio(i,j,k) &
+                            - vi0_init(ij)/dt*ocean_bio(i,j,k) & 
+                            * (bgc_tracer_type(k)*initbio_frac &
+                                     + (c1-bgc_tracer_type(k)))
+         enddo
       enddo
 
       !-----------------------------------------------------------------
@@ -1154,6 +1159,8 @@
                                          istop,     jstop)
          if (l_stop) return
       endif
+
+         call ice_timer_stop(timer_bgc) ! biogeochemistry
 
       end subroutine add_new_ice_bgc
 

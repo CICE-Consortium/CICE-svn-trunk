@@ -990,10 +990,8 @@
                pDMS_ac(n)  = ocean_bio(i,j,nlt_bgc_DMS,iblk)  ! dms(i,j,iblk)
                pN_ac(n)    = ocean_bio(i,j,nlt_bgc_N,iblk)    ! algalN(i,j,iblk)
 
-               !----------------------------------------------------------------------
                ! fluxes in mmol/m^2/d
                ! concentrations are bulk in mmol/m^3
-               !---------------------------------------------------------------------
 
                if (solve_skl_bgc) then
                   pNit_sk(n)   = c0
@@ -1064,45 +1062,43 @@
       !-----------------------------------------------------------------
 
       if (print_points) then
-         if (solve_skl_bgc) then  
+      if (solve_skl_bgc) then  
 
-       write(nu_diag,*) '--ocean mixed layer----'
-       write(nu_diag,900) 'algal N(mmol/m^3)      = ',pN_ac(1),pN_ac(2)
-       write(nu_diag,900) 'nitrate(mmol/m^3)      = ',pNit_ac(1),pNit_ac(2)
-       write(nu_diag,900) 'ammonia/um(mmol/m^3)   = ',pAm_ac(1),pAm_ac(2)
-       write(nu_diag,900) 'silicon(mmol/m^3)      = ',pSil_ac(1),pSil_ac(2)
-       if (tr_bgc_DMS_sk) then
-         write(nu_diag,900) 'DMSP(mmol/m^3)         = ',pDMSP_ac(1),pDMSP_ac(2)
-         write(nu_diag,900) 'DMS(mmol/m^3)          = ',pDMS_ac(1),pDMS_ac(2)
-       endif
-       write(nu_diag,*) '                         '
-       write(nu_diag,*) '--ice-ocean fluxes----'
-       write(nu_diag,900) 'algalN flux(mmol/m^2/d)= ',pflux_N(1),pflux_N(2)
-       write(nu_diag,900) 'nit. flux(mmol/m^2/d)  = ',pflux_NO(1),pflux_NO(2)
-       write(nu_diag,900) 'amm. flux(mmol/m^2/d)  = ',pflux_NH(1),pflux_NH(2)
-       write(nu_diag,900) 'sil. flux(mmol/m^2/d)  = ',pflux_Sil(1),pflux_Sil(2)
-       write(nu_diag,*) '                         '
-       write(nu_diag,*) '--Bulk Bottom bgc------'
-       write(nu_diag,900) 'nitrogen, (mmol/m^3)   = ',pN_sk(1),pN_sk(2)
-       write(nu_diag,900) 'nitrate, (mmol/m^3)    = ',pNit_sk(1),pNit_sk(2)
-       write(nu_diag,900) 'ammonia/um, (mmol/m^3) = ',pAm_sk(1),pAm_sk(2)
-       write(nu_diag,900) 'silicon, (mmol/m^3)    = ',pSil_sk(1),pSil_sk(2)
-       if (tr_bgc_DMS_sk) then
-          write(nu_diag,900) 'DMSPp, (mmol/m^3)      = ',pDMSPp_sk(1),pDMSPp_sk(2)
-          write(nu_diag,900) 'DMSPd, (mmol/m^3)      = ',pDMSPd_sk(1),pDMSPd_sk(2)
-          write(nu_diag,900) 'DMS, (mmol/m^3)        = ',pDMS_sk(1),pDMS_sk(2)
-       endif
-       write(nu_diag,*) '                         '
+      write(nu_diag,*) '----------BGC----------'
 
-         endif                ! solve_skl_bgc
+      write(nu_diag,*) '------bulk skl bgc-----'
+      write(nu_diag,900) 'nitrogen    (mmol/m^3) = ',pN_sk(1),pN_sk(2)
+      write(nu_diag,900) 'nitrate     (mmol/m^3) = ',pNit_sk(1),pNit_sk(2)
+      write(nu_diag,900) 'ammonia/um  (mmol/m^3) = ',pAm_sk(1),pAm_sk(2)
+      write(nu_diag,900) 'silicon     (mmol/m^3) = ',pSil_sk(1),pSil_sk(2)
+      if (tr_bgc_DMS_sk) then
+      write(nu_diag,900) 'DMSPp       (mmol/m^3) = ',pDMSPp_sk(1),pDMSPp_sk(2)
+      write(nu_diag,900) 'DMSPd       (mmol/m^3) = ',pDMSPd_sk(1),pDMSPd_sk(2)
+      write(nu_diag,900) 'DMS         (mmol/m^3) = ',pDMS_sk(1),pDMS_sk(2)
+      endif
+
+      write(nu_diag,*) '---ice-ocean fluxes----'
+      write(nu_diag,900) 'algalN flx(mmol/m^2/d) = ',pflux_N(1),pflux_N(2)
+      write(nu_diag,900) 'nit. flux (mmol/m^2/d) = ',pflux_NO(1),pflux_NO(2)
+      write(nu_diag,900) 'amm. flux (mmol/m^2/d) = ',pflux_NH(1),pflux_NH(2)
+      write(nu_diag,900) 'sil. flux (mmol/m^2/d) = ',pflux_Sil(1),pflux_Sil(2)
+
+      write(nu_diag,*) '---ocean mixed layer---'
+      write(nu_diag,900) 'algal N     (mmol/m^3) = ',pN_ac(1),pN_ac(2)
+      write(nu_diag,900) 'nitrate     (mmol/m^3) = ',pNit_ac(1),pNit_ac(2)
+      write(nu_diag,900) 'ammonia/um  (mmol/m^3) = ',pAm_ac(1),pAm_ac(2)
+      write(nu_diag,900) 'silicon     (mmol/m^3) = ',pSil_ac(1),pSil_ac(2)
+      if (tr_bgc_DMS_sk) then
+      write(nu_diag,900) 'DMSP        (mmol/m^3) = ',pDMSP_ac(1),pDMSP_ac(2)
+      write(nu_diag,900) 'DMS         (mmol/m^3) = ',pDMS_ac(1),pDMS_ac(2)
+      endif
+
+      endif                   ! solve_skl_bgc
       endif                   ! print_points
+
       endif                   ! my_task = master_task 
 
-  802 format (f24.17,2x,f24.17)
-  803 format (a25,2x,a25)
   900 format (a25,2x,f24.17,2x,f24.17)
-  902 format (a25,10x,f6.1,1x,f6.1,9x,f6.1,1x,f6.1)
-  903 format (a25,5x,i4,1x,i4,1x,i4,1x,i4,7x,i4,1x,i4,1x,i4,1x,i4)
 
       end subroutine bgc_diags
 
