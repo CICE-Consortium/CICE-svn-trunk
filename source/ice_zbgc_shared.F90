@@ -51,14 +51,12 @@
          dhi_bot   ,& ! ice bottom change
          sice_rho     ! avg sea ice density  (kg/m^3)  ! ech: diagnostic only?
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr,max_blocks), public :: &
-         flux_bio ,&    ! all bio fluxes (+ive to ocean) are included here 
-         flux_bio_g, &   !gravity drainage contribution
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_nbtrcr,max_blocks), public :: &
+         flux_bio ,&    ! all bio fluxes to ocean
          ocean_bio,  &  ! contains all the ocean bgc tracer concentrations
-         flux_bio_ai ,&  ! all bio fluxes (+ive to ocean) are included here
-         flux_bio_g_ai  !gravity drainage contribution
+         flux_bio_ai    ! all bio fluxes to ocean, averaged over grid cell
 
-      real (kind=int_kind), dimension(nbltrcr), public :: &
+      real (kind=int_kind), dimension(max_nbtrcr), public :: &
          bgc_tracer_type  ! 1  dissolved tracers: mix like salinity
                           ! 0  tracers that cling: resist brine motion (algae)
 

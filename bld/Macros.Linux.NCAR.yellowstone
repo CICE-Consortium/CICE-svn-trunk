@@ -51,7 +51,7 @@ SFC:= ifort
                 -DNICELYR=$(NICELYR) -DNSNWLYR=$(NSNWLYR) -DNICECAT=$(NICECAT) \
                 -DTRAGE=$(TRAGE) -DTRFY=$(TRFY) -DTRLVL=$(TRLVL) -DTRPND=$(TRPND) \
                 -DTRBRI=$(TRBRI) -DNTRAERO=$(NTRAERO) -DNBGCLYR=$(NBGCLYR) \
-                -DNUMIN=$(NUMIN) -DNUMAX=$(NUMAX)
+                -DTRBGCS=$(TRBGCS) -DNUMIN=$(NUMIN) -DNUMAX=$(NUMAX)
 
 ifeq ($(compile_threaded), true) 
    LDFLAGS += -openmp 

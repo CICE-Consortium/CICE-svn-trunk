@@ -105,8 +105,7 @@
          ntrcr     ! number of tracers in use
 
       integer (kind=int_kind), public :: &
-         ntraceb     , &    ! number of bio layer tracers in use
-         ntrace_start       ! index of first bio tracer
+         nbtrcr    ! number of bgc tracers in use
       
       integer (kind=int_kind), public :: &
          nt_Tsfc  , & ! ice/snow temperature

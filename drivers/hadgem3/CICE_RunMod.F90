@@ -125,7 +125,7 @@
       use ice_restart_meltpond_topo, only: write_restart_pond_topo
       use ice_restoring, only: restore_ice, ice_HaloRestore
       use ice_state, only: nt_qsno, trcrn, tr_iage, tr_FY, tr_lvl, &
-          tr_pond_cesm, tr_pond_lvl, tr_pond_topo, hbrine, ntraceb
+          tr_pond_cesm, tr_pond_lvl, tr_pond_topo, hbrine
       use ice_step_mod, only: prep_radiation, step_therm1, step_therm2, &
           post_thermo, step_dynamics, step_radiation
       use ice_therm_shared, only: calc_Tsfc
@@ -290,10 +290,9 @@
       use ice_ocean, only: oceanmixed_ice, ocean_mixed_layer
       use ice_shortwave, only: alvdfn, alidfn, alvdrn, alidrn, &
                                albicen, albsnon, albpndn, apeffn
-      use ice_state, only: aicen, aice, aice_init, ntraceb
+      use ice_state, only: aicen, aice, aice_init, nbtrcr
       use ice_therm_shared, only: calc_Tsfc
-      use ice_zbgc_shared, only: flux_bio, flux_bio_g, flux_bio_ai, &
-          flux_bio_g_ai
+      use ice_zbgc_shared, only: flux_bio, flux_bio_ai
 
       integer (kind=int_kind), intent(in) :: & 
          iblk            ! block index 
@@ -391,10 +390,9 @@
             fhocn_ai  (i,j,iblk) = fhocn  (i,j,iblk)
             fswthru_ai(i,j,iblk) = fswthru(i,j,iblk)
 
-            if (ntraceb > 0) then
-            do k = 1,ntraceb
+            if (nbtrcr > 0) then
+            do k = 1, nbtrcr
               flux_bio_ai  (i,j,k,iblk) = flux_bio  (i,j,k,iblk)
-              flux_bio_g_ai(i,j,k,iblk) = flux_bio_g(i,j,k,iblk)
             enddo
             endif
 
@@ -417,7 +415,7 @@
       !-----------------------------------------------------------------
 
          call scale_fluxes (nx_block,            ny_block,           &
-                            tmask    (:,:,iblk), ntraceb,            &
+                            tmask    (:,:,iblk), nbtrcr,             &
                             aice     (:,:,iblk), Tf      (:,:,iblk), &
                             Tair     (:,:,iblk), Qa      (:,:,iblk), &
                             strairxT (:,:,iblk), strairyT(:,:,iblk), &
@@ -430,7 +428,7 @@
                             faero_ocn(:,:,:,iblk),                   &
                             alvdr    (:,:,iblk), alidr   (:,:,iblk), &
                             alvdf    (:,:,iblk), alidf   (:,:,iblk), &
-                            flux_bio(:,:,:,iblk),flux_bio_g(:,:,:,iblk))
+                            flux_bio(:,:,:,iblk))
  
 !echmod - comment this out for efficiency, if .not. calc_Tsfc
          if (.not. calc_Tsfc) then

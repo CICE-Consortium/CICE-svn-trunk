@@ -38,14 +38,14 @@
         ncat      = NICECAT   , & ! number of categories
         nilyr     = NICELYR   , & ! number of ice layers per category
         nslyr     = NSNWLYR   , & ! number of snow layers per category
+
         max_aero  =   6       , & ! maximum number of aerosols 
         n_aero    = NTRAERO   , & ! number of aerosols in use
 
-        nblyr     = NBGCLYR   , & ! number of biology layers per category
-        nblyr_hist = nblyr+2  , & ! number of ice layer plus boundary points
-        nltrcr    = 2*TRBRI   , & ! number of layer bgc tracers  
-        nbltrcr   = 2         , & ! number of biology (including skl) tracers
-                                  ! number of tracers (defined in ice_init)
+        nblyr     = NBGCLYR   , & ! number of bio/brine layers per category
+        max_nbtrcr=   2       , & ! maximum number of biology tracers
+!        nltrcr    = max_nbtrcr*TRBRI, & ! maximum layer bgc tracers (for zbgc)
+
         max_ntrcr =   1         & ! 1 = surface temperature              
                   + nilyr       & ! ice salinity
                   + nilyr       & ! ice enthalpy
@@ -57,7 +57,8 @@
                   + TRPND*3     & ! ponds
                   + n_aero*4    & ! number of aerosols * 4 aero layers
                   + TRBRI       & ! brine height
-                  + TRBRI*nltrcr*nblyr, & ! zbgc (off if TRBRI=0)
+                  + TRBGCS*max_nbtrcr, & ! skeletal layer BGC
+!                  + TRBGCZ*nltrcr*nblyr ! for zbgc (off if TRBRI=0)
         max_nstrm =   5           ! max number of history output streams
 
       integer (kind=int_kind), parameter, public :: &

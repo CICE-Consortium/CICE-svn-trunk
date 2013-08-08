@@ -1654,7 +1654,7 @@
                               faero_ocn,   tr_aero,    &
                               tr_pond_topo,            &
                               heat_capacity,           &
-                              nbltrcr,     first_ice,  &
+                              nbtrcr,      first_ice,  &
                               flux_bio,                &
                               l_stop,                  &
                               istop,         jstop,    &
@@ -1720,7 +1720,7 @@
       ! ice-ocean fluxes (required for strict conservation)
 
       integer (kind=int_kind), intent(in) :: &
-         nbltrcr      ! number of layer tracers for bgc
+         nbtrcr       ! number of bgc tracers
       
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout), optional :: &
@@ -1729,7 +1729,7 @@
          fsalt    , & ! salt flux to ocean        (kg/m^2/s)
          fhocn        ! net heat flux to ocean     (W/m^2)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
          intent(inout), optional :: &
          flux_bio     ! net tracer flux to ocean from biology (mmol/m^2/s)
 
@@ -1864,7 +1864,7 @@
                                dfresh,   dfsalt,    &
                                dfhocn,   dfaero_ocn,&
                                tr_aero,  tr_pond_topo, &
-                               first_ice,nbltrcr,   &
+                               first_ice,nbtrcr,    &
                                flux_bio, l_stop,    &
                                istop,    jstop)
          if (l_stop) return
@@ -1921,7 +1921,7 @@
                                   dfresh,   dfsalt,    &
                                   dfhocn,   dfaero_ocn,&
                                   tr_aero,  tr_pond_topo, &
-                                  first_ice,nbltrcr,   &
+                                  first_ice,nbtrcr,    &
                                   flux_bio, l_stop,    &
                                   istop,    jstop)
 !
@@ -1946,7 +1946,7 @@
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi   , & ! beginning and end of physical domain
          ntrcr           , &   ! number of tracers in use
-         nbltrcr               ! number of biology tracers
+         nbtrcr                ! number of biology tracers
 
       real (kind=dbl_kind), intent(in) :: &
          dt                    ! time step
@@ -1973,7 +1973,7 @@
          dfsalt   , & ! zapped salt flux   (kg/m^2/s)
          dfhocn       ! zapped energy flux ( W/m^2)
 
-     real (kind=dbl_kind), dimension (nx_block,ny_block,nbltrcr), &
+     real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
          intent(out) :: &
          flux_bio     ! Ocean tracer flux from biology (mmol/m^2/s)
 

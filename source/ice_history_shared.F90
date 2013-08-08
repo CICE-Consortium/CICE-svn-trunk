@@ -112,8 +112,8 @@
       ! for now, ice and snow have same dimensions in netcdf
       ! could set nzilyr = nilyr + nslyr and write Tin+Tsn together into Tinz
       integer (kind=int_kind), parameter, public :: &
-         nzilyr = nilyr         , & ! vertical dimension (allows alternative grids)
-         nzslyr = nslyr         , &
+         nzilyr = nilyr, & ! vertical dimension (allows alternative grids)
+         nzslyr = nslyr, &
          nzblyr = nblyr+2
 
       type (ice_hist_field), dimension(max_avail_hist_fields), public :: &

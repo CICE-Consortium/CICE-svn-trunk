@@ -351,7 +351,7 @@
 !
 ! !USES:
 !
-        use ice_zbgc_shared, only: flux_bio, flux_bio_g, upNO, upNH, growN, growNp
+        use ice_zbgc_shared, only: flux_bio, upNO, upNH, growN, growNp
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -488,7 +488,6 @@
       fresh_da(:,:,:) = c0    ! data assimilation
       fsalt_da(:,:,:) = c0
       flux_bio (:,:,:,:) = c0 ! bgc
-      flux_bio_g (:,:,:,:) = c0
       upNO  (:,:,:,:) = c0
       upNH  (:,:,:,:) = c0
       growNp(:,:,:,:) = c0
@@ -574,7 +573,7 @@
 !
 ! !USES:
 !
-        use ice_zbgc_shared, only: flux_bio, flux_bio_g, upNO, upNH
+        use ice_zbgc_shared, only: flux_bio, upNO, upNH
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -592,7 +591,6 @@
       faero_ocn(:,:,:,:) = c0
  
       flux_bio (:,:,:,:) = c0  ! bgc
-      flux_bio_g (:,:,:,:) = c0 
 
       upNO  (:,:,:,:) = c0
       upNH  (:,:,:,:) = c0
@@ -912,7 +910,7 @@
 ! !INTERFACE:
 !
       subroutine scale_fluxes (nx_block, ny_block, &
-                               tmask,    nbltrcr,  &
+                               tmask,    nbtrcr,   &
                                aice,     Tf,       &
                                Tair,     Qa,       &
                                strairxT, strairyT, &
@@ -925,7 +923,7 @@
                                faero_ocn,          &
                                alvdr,    alidr,    &
                                alvdf,    alidf,    &
-                               flux_bio, flux_bio_g,&
+                               flux_bio,           &
                                fsurf,    fcondtop)
 !
 ! !REVISION HISTORY:
@@ -938,7 +936,7 @@
 !
       integer (kind=int_kind), intent(in) :: &
           nx_block, ny_block, &    ! block dimensions
-          nbltrcr                  ! number of biology tracers
+          nbtrcr                   ! number of biology tracers
 
       logical (kind=log_kind), dimension (nx_block,ny_block), &
           intent(in) :: &
@@ -972,10 +970,9 @@
           alvdf   , & ! visible, diffuse  (fraction)
           alidf       ! near-ir, diffuse  (fraction)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nbltrcr), &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nbtrcr), &
           intent(inout):: &
-          flux_bio, & ! tracer flux to ocean from biology (mmol/m2/s)
-          flux_bio_g  ! Gravity drainage tracer flux to ocean (mmol/m2/s)
+          flux_bio    ! tracer flux to ocean from biology (mmol/m2/s)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
           intent(inout):: &
@@ -1018,8 +1015,7 @@
             alidr   (i,j) = alidr   (i,j) * ar
             alvdf   (i,j) = alvdf   (i,j) * ar
             alidf   (i,j) = alidf   (i,j) * ar
-            flux_bio   (i,j,:) = flux_bio   (i,j,:) * ar
-            flux_bio_g (i,j,:) = flux_bio_g (i,j,:) * ar
+            flux_bio (i,j,:) = flux_bio (i,j,:) * ar
             faero_ocn(i,j,:) = faero_ocn(i,j,:) * ar
          else                   ! zero out fluxes
             strairxT(i,j) = c0
@@ -1040,9 +1036,8 @@
             alidr   (i,j) = c0
             alvdf   (i,j) = c0 
             alidf   (i,j) = c0
+            flux_bio (i,j,:) = c0
             faero_ocn(i,j,:) = c0
-            flux_bio   (i,j,:) = c0
-            flux_bio_g (i,j,:) = c0
          endif                  ! tmask and aice > 0
       enddo                     ! i
       enddo                     ! j
