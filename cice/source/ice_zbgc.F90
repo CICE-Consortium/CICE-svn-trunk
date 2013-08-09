@@ -9,78 +9,54 @@
       module ice_zbgc
 
       use ice_kinds_mod
-      use ice_constants
-      use ice_blocks, only: nx_block, ny_block
-      use ice_domain_size
-      use ice_communicate, only: my_task, master_task
-      use ice_fileunits, only: nu_diag, nu_forcing
-      use ice_algae
-      use ice_zbgc_shared
-      use ice_brine
-      use ice_state
-      use ice_grid, only: tlat, tlon
-      use ice_shortwave, only: fswthruln, fswthrun
-      use ice_domain, only: nblocks, blocks_ice
-      use ice_calendar, only: istep1
+      use ice_zbgc_shared ! everything
 
       implicit none 
 
       private
       public :: add_new_ice_bgc, init_zbgc, init_bgc, &
-           init_history_bgc, biogeochemistry
+                init_history_bgc, biogeochemistry
 
 !=======================================================================
 
       contains
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_zbgc - namelist variables for vertical biogeochemistry
-!
-! !INTERFACE:
-!
-      subroutine init_zbgc
-!
-! !DESCRIPTION:
-!
-! Namelist variables, set to default values; may be altered
-! at run time
-!
-! !REVISION HISTORY:
-!
+
+! Namelist variables, set to default values; may be altered at run time
+! 
 ! author Elizabeth C. Hunke, LANL
 !        Nicole Jeffery, LANL
-!
-! !USES:
-!
+
+      subroutine init_zbgc
+
       use ice_broadcast, only: broadcast_scalar
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c1, p5, c0, rhos, rhoi
+      use ice_domain_size, only: max_ntrcr, max_nbtrcr, nblyr
       use ice_exit, only: abort_ice
-      use ice_fileunits, only: nu_nml, nml_filename, get_fileunit, release_fileunit
-      use ice_therm_shared, only: ktherm
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+      use ice_fileunits, only: nu_nml, nml_filename, get_fileunit, &
+                               release_fileunit, nu_diag
+      use ice_state, only: hbrine, nt_fbri, ntrcr, nbtrcr, trcr_depend, &
+          nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_chl_sk, nt_bgc_Am_sk, &
+          nt_bgc_Sil_sk, nt_bgc_DMSPp_sk, nt_bgc_DMSPd_sk, &
+          nt_bgc_DMS_sk, nt_bgc_C_sk
+
       integer (kind=int_kind) :: &
         nml_error, & ! namelist i/o error flag
-        k        , & ! loop index
         ntd          ! for tracer dependency calculation
 
       !-----------------------------------------------------------------
-      ! Namelist variables.
+      ! namelist variables
       !-----------------------------------------------------------------
 
       namelist /zbgc_nml/  &
-        hbrine, bgc_data_dir, sil_data_type, nit_data_type, &
-        restore_bgc, &
-        solve_skl_bgc, &
-        tr_bgc_N_sk, tr_bgc_C_sk, tr_bgc_chl_sk, &
-        tr_bgc_Nit_sk, tr_bgc_Am_sk, tr_bgc_Sil_sk, &
-        tr_bgc_DMSPp_sk, tr_bgc_DMSPd_sk, tr_bgc_DMS_sk, &
-        restart_bgc, restart_hbrine, &
-        phi_snow, initbio_frac
+         hbrine, bgc_data_dir, sil_data_type, nit_data_type, &
+         restore_bgc, solve_skl_bgc, &
+         tr_bgc_N_sk, tr_bgc_C_sk, tr_bgc_chl_sk, &
+         tr_bgc_Nit_sk, tr_bgc_Am_sk, tr_bgc_Sil_sk, &
+         tr_bgc_DMSPp_sk, tr_bgc_DMSPd_sk, tr_bgc_DMS_sk, &
+         restart_bgc, restart_hbrine, phi_snow, initbio_frac
 
       !-----------------------------------------------------------------
       ! default values
@@ -92,21 +68,19 @@
       bgc_data_dir    = 'unknown_bgc_data_dir'
       sil_data_type   = 'default'
       nit_data_type   = 'default'
-      tr_bgc_N_sk     = .false. ! biogeochemistry, algae (skeletal)
-      tr_bgc_C_sk     = .false. ! biogeochemistry, 
-      tr_bgc_chl_sk   = .false. ! biogeochemistry,
-      tr_bgc_Nit_sk   = .false. ! biogeochemistry, nutrients (skeletal)
-      tr_bgc_Am_sk    = .false. ! biogeochemistry, 
-      tr_bgc_Sil_sk   = .false. ! biogeochemistry,
-      tr_bgc_DMSPp_sk  = .false. ! biogeochemistry, trace gases (skeletal)
-      tr_bgc_DMSPd_sk  = .false. ! biogeochemistry, trace gases (skeletal)
-      tr_bgc_DMS_sk    = .false. ! biogeochemistry, trace gases (skeletal) 
-      restart_bgc      = .false. ! biogeochemistry restart
-      restart_hbrine   = .false. ! hbrine restart
-      ! biology parameter
-      initbio_frac = c1          ! fraction of ocean tracer concentration in bio tracers
-      !  parameters for Salinity
-      phi_snow    = 0.5_dbl_kind   ! snow porosity
+      tr_bgc_N_sk     = .false.  ! biogeochemistry, algae (skeletal)
+      tr_bgc_C_sk     = .false.  ! biogeochemistry, 
+      tr_bgc_chl_sk   = .false.  ! biogeochemistry,
+      tr_bgc_Nit_sk   = .false.  ! biogeochemistry, nutrients (skeletal)
+      tr_bgc_Am_sk    = .false.  ! biogeochemistry, 
+      tr_bgc_Sil_sk   = .false.  ! biogeochemistry,
+      tr_bgc_DMSPp_sk = .false.  ! biogeochemistry, trace gases (skeletal)
+      tr_bgc_DMSPd_sk = .false.  ! biogeochemistry, trace gases (skeletal)
+      tr_bgc_DMS_sk   = .false.  ! biogeochemistry, trace gases (skeletal) 
+      restart_bgc     = .false.  ! biogeochemistry restart
+      restart_hbrine  = .false.  ! hbrine restart
+      initbio_frac    = c1       ! fraction of ocean tracer used for initialization
+      phi_snow        = p5       ! snow porosity
 
       !-----------------------------------------------------------------
       ! read from input file
@@ -125,6 +99,7 @@
          do while (nml_error > 0)
             print*,'Reading zbgc_nml'
             read(nu_nml, nml=zbgc_nml,iostat=nml_error)
+            if (nml_error /= 0) exit
          end do
          if (nml_error == 0) close(nu_nml)
       endif
@@ -135,10 +110,12 @@
       call release_fileunit(nu_nml)
 
       !-----------------------------------------------------------------
-      ! zsalinity
+      ! brine
       !-----------------------------------------------------------------
 
       call broadcast_scalar(hbrine,             master_task)
+      call broadcast_scalar(restart_hbrine,     master_task)
+      call broadcast_scalar(phi_snow,           master_task)
 
       nt_fbri = c0
       if (hbrine) then
@@ -150,6 +127,19 @@
       ntd = 0                    ! if nt_fbri /= 0 then use fbri dependency
       if (nt_fbri == 0) ntd = -1 ! otherwise make tracers depend on ice volume
 
+      if (phi_snow .le. c0) phi_snow = c1-rhos/rhoi
+
+      if (my_task == master_task) then
+         write(nu_diag,1010) ' hbrine                    = ', hbrine
+         write(nu_diag,1010) ' restart_hbrine            = ', restart_hbrine
+         write(nu_diag,1005) ' phi_snow                  = ', phi_snow
+         write(nu_diag,1010) ' solve_skl_bgc             = ', solve_skl_bgc
+      endif
+
+      !-----------------------------------------------------------------
+      ! skeletal layer biogeochemistry
+      !-----------------------------------------------------------------
+
       if (TRBGCS == 0 .and. solve_skl_bgc) then
          write(nu_diag,*) &
             'WARNING: solve_skl_bgc=T but 0 bgc tracers compiled'
@@ -158,12 +148,9 @@
          solve_skl_bgc = .false.
       endif
 
-      call broadcast_scalar(restart_hbrine,     master_task)
       call broadcast_scalar(solve_skl_bgc,      master_task)
       call broadcast_scalar(restart_bgc,        master_task)
-      call broadcast_scalar(phi_snow,           master_task)
 
-      if (phi_snow .le. c0) phi_snow = c1-rhos/rhoi
       if (solve_skl_bgc) then
             tr_bgc_N_sk      = .true.   !minimum NP biogeochemistry
             tr_bgc_Nit_sk    = .true.
@@ -179,18 +166,6 @@
             tr_bgc_DMS_sk    = .false.
       endif
 
-      if (my_task == master_task) then
-         write(nu_diag,1010) ' hbrine                    = ', hbrine
-         write(nu_diag,1010) ' solve_skl_bgc             = ', solve_skl_bgc
-         write(nu_diag,1010) ' restart_hbrine            = ', restart_hbrine
-         write(nu_diag,1005) ' phi_snow                  = ', phi_snow
-      endif
-
-      !----------------------------------------------------
-      ! zbgc
-      !----------------------------------------------------
-
-!      call broadcast_scalar(scale_bgc,          master_task)
       call broadcast_scalar(restore_bgc,        master_task)
       call broadcast_scalar(bgc_data_dir,       master_task)
       call broadcast_scalar(sil_data_type,      master_task)
@@ -207,9 +182,7 @@
       call broadcast_scalar(initbio_frac,       master_task)
 
       if (.not. solve_skl_bgc) return
-      !-----------------------------------------------------------------
-      ! spew
-      !-----------------------------------------------------------------
+
       if (my_task == master_task) then
 
          write(nu_diag,*)    ' sil_data_type             = ', &
@@ -233,28 +206,30 @@
 
       endif   ! master_task
 
-      !  skeletal layer biology model
+      !-----------------------------------------------------------------
+      ! assign tracer indices and dependencies
+      !-----------------------------------------------------------------
 
       if (solve_skl_bgc) then
 
-      nbtrcr = 0
-      nlt_bgc_NO = 0
-      nlt_bgc_N = 0
-      nlt_bgc_C = 0
-      nlt_bgc_chl = 0
-      nlt_bgc_NH = 0
-      nlt_bgc_Sil = 0
-      nlt_bgc_DMSPp = 0
-      nlt_bgc_DMSPd = 0
-      nlt_bgc_DMS = 0
-      nlt_bgc_PON = 0
+         nbtrcr = 0
+         nlt_bgc_NO = 0
+         nlt_bgc_N = 0
+         nlt_bgc_C = 0
+         nlt_bgc_chl = 0
+         nlt_bgc_NH = 0
+         nlt_bgc_Sil = 0
+         nlt_bgc_DMSPp = 0
+         nlt_bgc_DMSPd = 0
+         nlt_bgc_DMS = 0
+         nlt_bgc_PON = 0
 
-         ntrcr = ntrcr + 1
+         ntrcr = ntrcr + 1              ! algalN, required tracer
          nt_bgc_N_sk = ntrcr
          nbtrcr = nbtrcr + 1
          nlt_bgc_N = nbtrcr
       
-         ntrcr = ntrcr + 1
+         ntrcr = ntrcr + 1              ! nitrate, required tracer 
          nt_bgc_Nit_sk = ntrcr
          nbtrcr = nbtrcr + 1
          nlt_bgc_NO = nbtrcr
@@ -359,116 +334,92 @@
       end subroutine init_zbgc
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: init_bgc
-!
-! !DESCRIPTION:
-!
+
 !  Initialize vertical profile of biogeochemistry
-!  
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine init_bgc
-!
-! !USES:
-!
+
+      use ice_algae, only: read_restart_bgc
       use ice_blocks, only: nx_block, ny_block
+      use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c1, c0, c10, c5, p15, &
+              field_type_scalar, field_loc_center
       use ice_domain, only: nblocks
       use ice_domain_size, only: max_blocks
-      use ice_flux, only:  hmix, sss
-      use ice_calendar, only: month, dt
+      use ice_fileunits, only: nu_diag, nu_forcing
+      use ice_flux, only: sss
+      use ice_calendar, only: month
       use ice_restart, only: runtype
-      use ice_algae  
-      use ice_exit, only: abort_ice
       use ice_read_write, only: ice_read, ice_open
-!      use ice_state
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+      use ice_state, only: trcrn, aicen, &
+          nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_chl_sk, nt_bgc_Am_sk, &
+          nt_bgc_Sil_sk, nt_bgc_DMSPp_sk, nt_bgc_DMSPd_sk, &
+          nt_bgc_DMS_sk, nt_bgc_C_sk
+
       integer (kind=int_kind) :: &
-           i, j, iblk       , & ! horizontal indices
-           ij               , & ! horizontal index, combines i and j loops
-           l                , & ! month index
-           k,m               , & ! vertical index
-           n                , & ! category index
-           nbits
-
-      real (kind=dbl_kind), dimension(nilyr+2) :: &
-         Temp      
-
-      real (kind=dbl_kind) :: &
-         xin                , & !transformed coordinate point       
-         zspace                 !grid spacing for CICE vertical grid
+         i, j, iblk       , & ! horizontal indices
+         nbits
 
       logical (kind=log_kind) :: &
          dbug             ! prints debugging output if true
 
-       
-      real (kind=dbl_kind), dimension(7), parameter :: & 
-         Ps  =  (/0.8828e3_dbl_kind, -2.0570e3_dbl_kind, &  !polynomial fit
-                  1.8255e3_dbl_kind, -0.7523e3_dbl_kind, &  !for initial
-                  0.1456e3_dbl_kind, -0.0299e3_dbl_kind, &  !Salinity
-                  0.0223_dbl_kind/)  
-
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          work1
-
-      !-----------------------------------------------------------------------------   
-      !     BGC Layer Model
-      !-----------------------------------------------------------------------------   
 
       dbug = .true.
 
       if (.not. solve_skl_bgc) return
   
-      !if (trim(runtype) == 'continue') restart_bgc = .true.
+      if (trim(runtype) == 'continue') restart_bgc = .true.
 
       if (restart_bgc) then       
 
-        call read_restart_bgc
+         call read_restart_bgc
 
       else ! not restarting
          
-      !-----------------------------------------------------------------------------   
-      !     Ocean Values
-      !-----------------------------------------------------------------------------   
+      !-----------------------------------------------------------------
+      ! default ocean values
+      !-----------------------------------------------------------------
 
-         sil(:,:,:) = c10 !initial ocean silicate (mmol/m^3)
-         nit(:,:,:) = c5  !initial ocean nitrate (mmol/m^3)
-         amm(:,:,:) = c1  !initial ocean ammonia (mmol/m^3)
-         dmsp(:,:,:)= R_S2N*0.15_dbl_kind !sulfur cycle product (mmol/m^3)
-         dms(:,:,:) = c0 !sulfur cycle product (mmol/m^3)
-         algalN(:,:,:) = 0.15_dbl_kind ! initial mixed layer algal concentration (mmol/m^3)
+         sil   (:,:,:) = c10       ! ocean silicate       (mmol/m^3)
+         nit   (:,:,:) = c5        ! ocean nitrate        (mmol/m^3)
+         amm   (:,:,:) = c1        ! ocean ammonia        (mmol/m^3)
+         dmsp  (:,:,:) = R_S2N*p15 ! sulfur cycle product (mmol/m^3)
+         dms   (:,:,:) = c0        ! sulfur cycle product (mmol/m^3)
+         algalN(:,:,:) = p15       ! algal concentration  (mmol/m^3)
 
-      !-----------------------------------------------------------------------------   
-      !     Skeletal Layer Model
-      !-----------------------------------------------------------------------------   
+      !-----------------------------------------------------------------
+      !  skeletal layer model
+      !-----------------------------------------------------------------
 
-         if (tr_bgc_N_sk)     trcrn(:,:,nt_bgc_N_sk,:,:)     = 0.15_dbl_kind/phi_sk*sk_l
-         if (tr_bgc_C_sk)     trcrn(:,:,nt_bgc_C_sk,:,:)     = R_C2N*0.15_dbl_kind/phi_sk*sk_l
-         if (tr_bgc_chl_sk)   trcrn(:,:,nt_bgc_chl_sk,:,:)   = R_chl2N**0.15_dbl_kind/phi_sk*sk_l
-         if (tr_bgc_Nit_sk)   trcrn(:,:,nt_bgc_Nit_sk,:,:)   = c5/phi_sk*sk_l
-         if (tr_bgc_Am_sk)    trcrn(:,:,nt_bgc_Am_sk,:,:)    = c1/phi_sk*sk_l
-         if (tr_bgc_Sil_sk)   trcrn(:,:,nt_bgc_Sil_sk,:,:)   = c10/phi_sk*sk_l
-         if (tr_bgc_DMSPp_sk) trcrn(:,:,nt_bgc_DMSPp_sk,:,:) = R_S2N*0.15_dbl_kind/phi_sk*sk_l
+         if (tr_bgc_N_sk)     trcrn(:,:,nt_bgc_N_sk,    :,:) = &
+                                                         p15/phi_sk*sk_l
+         if (tr_bgc_C_sk)     trcrn(:,:,nt_bgc_C_sk,    :,:) = &
+                                                   R_C2N*p15/phi_sk*sk_l
+         if (tr_bgc_chl_sk)   trcrn(:,:,nt_bgc_chl_sk,  :,:) = &
+                                                 R_chl2N*p15/phi_sk*sk_l
+         if (tr_bgc_Nit_sk)   trcrn(:,:,nt_bgc_Nit_sk,  :,:) = &
+                                                          c5/phi_sk*sk_l
+         if (tr_bgc_Am_sk)    trcrn(:,:,nt_bgc_Am_sk,   :,:) = &
+                                                          c1/phi_sk*sk_l
+         if (tr_bgc_Sil_sk)   trcrn(:,:,nt_bgc_Sil_sk,  :,:) = &
+                                                         c10/phi_sk*sk_l
+         if (tr_bgc_DMSPp_sk) trcrn(:,:,nt_bgc_DMSPp_sk,:,:) = &
+                                                   R_S2N*p15/phi_sk*sk_l
          if (tr_bgc_DMSPd_sk) trcrn(:,:,nt_bgc_DMSPd_sk,:,:) = c0
-         if (tr_bgc_DMS_sk)   trcrn(:,:,nt_bgc_DMS_sk,:,:)   = c0
+         if (tr_bgc_DMS_sk)   trcrn(:,:,nt_bgc_DMS_sk,  :,:) = c0
  
-      !-------------------------------------------------------------------
+      !-----------------------------------------------------------------
       ! silicate
-      !-------------------------------------------------------------------
+      !-----------------------------------------------------------------
 
          nbits = 64                ! double precision data
 
-         if (trim(sil_data_type) == 'clim' .AND. tr_bgc_Sil_sk) then  !only Arctic climatology
-
-            sil_file = trim(bgc_data_dir)//'silicate_WOA2005_surface_monthly' ! gx1 only
+         if (tr_bgc_Sil_sk) then
+         if (trim(sil_data_type) == 'clim') then  
+            ! gx1 only
+            sil_file = trim(bgc_data_dir)//'silicate_WOA2005_surface_monthly'
 
             if (my_task == master_task) then
                write (nu_diag,*) ' '
@@ -479,8 +430,7 @@
             if (my_task == master_task) &
                call ice_open (nu_forcing, sil_file, nbits)
 
-            k = month
-            call ice_read (nu_forcing, k, work1, 'rda8', dbug, &
+            call ice_read (nu_forcing, month, work1, 'rda8', dbug, &
                            field_loc_center, field_type_scalar)
             do iblk = 1, nblocks
                do j = 1, ny_block
@@ -490,27 +440,30 @@
                enddo
             enddo
 
-           if (my_task == master_task) close(nu_forcing)
+            if (my_task == master_task) close(nu_forcing)
 
-         elseif (trim(sil_data_type) == 'rct_clim' .AND. tr_bgc_Sil_sk) then
+         elseif (trim(sil_data_type) == 'rct_clim') then
         
-          !use WOA2005_surface (winter or spring) for a specific location
-          !(Bering (60, 180), Okhotsk (55, 150E),  Chukchi (70, 170W) Labrador Sea (56, 50W), central(0,86)) 
-          !           Just March: (25, 50, 30, 2.5,  20)
-          !mmol/m^3  Apr, May, Jun spring range: (20, 40, 10, 2.5, 20)
-          !          Jan, Feb, Mar winter range:  (20, 60, 25, 2.5, 20)
+            ! use WOA2005_surface (winter or spring) for a specific location
+            ! Bering (60, 180), Okhotsk (55, 150E),  Chukchi (70, 170W) 
+            ! Labrador Sea (56, 50W), central(0,86)
+            !          March:                      (25, 50, 30, 2.5, 20)
+            ! mmol/m^3 Apr, May, Jun spring range: (20, 40, 10, 2.5, 20)
+            !          Jan, Feb, Mar winter range: (20, 60, 25, 2.5, 20)
           
             sil(:,:,:) = 30.0_dbl_kind  !chukchi, march
 
-         endif
+         endif ! sil_data_type
+         endif ! tr_bgc_Sil_sk
 
-      !-------------------------------------------------------------------
+      !-----------------------------------------------------------------
       ! nitrate
-      !-------------------------------------------------------------------
+      !-----------------------------------------------------------------
 
-         if (trim(nit_data_type) == 'clim' .AND. tr_bgc_Nit_sk) then
-
-            nit_file = trim(bgc_data_dir)//'nitrate_WOA2005_surface_monthly' ! gx1 only
+         if (tr_bgc_Nit_sk) then
+         if (trim(nit_data_type) == 'clim') then
+            ! gx1 only
+            nit_file = trim(bgc_data_dir)//'nitrate_WOA2005_surface_monthly'
 
             if (my_task == master_task) then
                write (nu_diag,*) ' '
@@ -521,8 +474,7 @@
             if (my_task == master_task) &
                call ice_open (nu_forcing, nit_file, nbits)
 
-            l = month
-             call ice_read (nu_forcing, l, work1, 'rda8', dbug, &
+            call ice_read (nu_forcing, month, work1, 'rda8', dbug, &
                            field_loc_center, field_type_scalar)
             do iblk = 1, nblocks
                do j = 1, ny_block
@@ -534,7 +486,7 @@
             
             if (my_task == master_task) close(nu_forcing)
 
-         elseif (trim(nit_data_type) == 'rct_clim' .AND. tr_bgc_Nit_sk) then
+         elseif (trim(nit_data_type) == 'rct_clim') then
             
             if (my_task == master_task) then
                write (nu_diag,*) ' '
@@ -543,7 +495,7 @@
              
             nit(:,:,:) = c10 
 
-         elseif (trim(nit_data_type) == 'sss' .AND. tr_bgc_Nit_sk) then
+         elseif (trim(nit_data_type) == 'sss') then
            
             if (my_task == master_task) then
                write (nu_diag,*) ' '
@@ -553,13 +505,14 @@
             do iblk = 1, nblocks
                do j = 1, ny_block
                do i = 1, nx_block
-                  nit(i,j,iblk) =  sss(i,j,iblk)        
+                  nit(i,j,iblk) = sss(i,j,iblk)        
                enddo
                enddo
             enddo
-        endif
+         endif ! nit_data_type
+         endif ! tr_bgc_Nit_sk
               
-      endif  ! restart_bgc
+      endif    ! restart_bgc
 
       end subroutine init_bgc
 
@@ -568,8 +521,20 @@
       subroutine biogeochemistry (dt, iblk)
 
       use ice_algae, only: skl_biogeochemistry
-      use ice_flux
-      use ice_blocks, only: block, get_block
+      use ice_blocks, only: nx_block, ny_block, block, get_block
+      use ice_brine, only: preflushing_changes, compute_microS_mushy, &
+                           update_hbrine
+      use ice_constants, only: c0, c1, puny
+      use ice_domain, only: blocks_ice
+      use ice_domain_size, only: ncat, nblyr
+      use ice_flux, only: hin_old, meltbn, melttn, congeln, snoicen, &
+                          sss, sst, meltsn, hmix
+      use ice_shortwave, only:  fswthrun
+      use ice_state, only: aicen_init, vicen_init, aicen, vicen, vsnon, &
+          trcrn, nt_fbri, hbrine, ntrcr, nbtrcr, &
+          nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_chl_sk, nt_bgc_Am_sk, &
+          nt_bgc_Sil_sk, nt_bgc_DMSPp_sk, nt_bgc_DMSPd_sk, &
+          nt_bgc_DMS_sk, nt_bgc_C_sk
       use ice_timers, only: timer_bgc, ice_timer_start, ice_timer_stop
 
       real (kind=dbl_kind), intent(in) :: &
@@ -577,6 +542,8 @@
 
       integer (kind=int_kind), intent(in) :: &
          iblk    ! block index
+
+      ! local variables
 
       integer (kind=int_kind) :: &
          i, j, ij    , & ! horizontal indices
@@ -590,50 +557,36 @@
          indxi, indxj    ! indirect indices for cells with aicen > puny
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         hin         , &  ! new ice thickness
-         hsn         , &  !snow thickness  (m)
-         hinS_old    , &  ! old brine thickness before growh/melt
-         zphi_o      , &  ! surface ice porosity 
-         kavg        , &  ! average ice permeability (m^2)
-         sloss            ! brine flux contribution from surface runoff (g/m^2)
-
-!--------------------------------
-! Defined on the Bio Grid points
-!--------------------------------
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2) :: &
-         Sinn      , &   ! salinity on the bio grid  (ppt)
-         brine_sal , &   ! brine salinity (ppt)
-         brine_rho       ! brine_density (kg/m^3)
-
-!-----------------------------------
-! Defined on the Bio Grid interfaces
-!-----------------------------------
+         hin         , & ! new ice thickness
+         hsn         , & !snow thickness  (m)
+         hinS_old    , & ! old brine thickness before growh/melt
+         zphi_o      , & ! surface ice porosity 
+         kavg        , & ! average ice permeability (m^2)
+         sloss       , & ! brine flux contribution from surface runoff (g/m^2)
+         Iavgn       , & ! Iavg (W/m^2)
+         grow_Cn,& ! C growth
+         fN_partn, &  ! N down flux (mmol/m^2/s)
+         hbrin  ! brine height
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2) :: &
-         iphin      , &   ! porosity 
-         ibrine_sal , &   ! brine salinity  (ppt)
-         ibrine_rho       ! brine_density (kg/m^3)
+      ! Defined on Bio Grid points
+         Sinn        , & ! salinity on the bio grid  (ppt)
+         brine_sal   , & ! brine salinity (ppt)
+         brine_rho   , & ! brine_density (kg/m^3)
+      ! Defined on Bio Grid interfaces
+         iphin       , & ! porosity 
+         ibrine_sal  , & ! brine salinity  (ppt)
+         ibrine_rho      ! brine_density (kg/m^3)
 
       real (kind=dbl_kind) :: &
          pond            ! flux of water retained in ponds (kg/m^2/s)
 
-      ! for bgc sk
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         Iavgn,  & ! Iavg (W/m^2)
-         grow_Cn,& ! C growth
-         fN_partn  ! N down flux (mmol/m^2/s)
-
-      ! for bgc layer
       real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr) :: &
-         flux_bion ! tracer flux to ocean
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         hbrin  ! brine height
+         flux_bion       ! tracer flux to ocean
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr) :: &
-         upNOn,  &  ! nitrate uptake rate (mmol/m^3/s)
-         upNHn      ! ammonium uptake rate (mmol/m^3/s)
+         upNOn       , & ! nitrate uptake rate (mmol/m^3/s)
+         upNHn           ! ammonium uptake rate (mmol/m^3/s)
     
       type (block) :: &
          this_block      ! block information for current block
@@ -644,14 +597,13 @@
       integer (kind=int_kind) :: &
          istop, jstop    ! indices of grid cell where model aborts 
 
-       !-----------------------------------------------------------------
-       ! Biogeochemistry
-       !-----------------------------------------------------------------
+      if (hbrine .or. solve_skl_bgc) then
 
-       if (hbrine .or. solve_skl_bgc) then
          call ice_timer_start(timer_bgc) ! biogeochemistry
 
-
+      !-----------------------------------------------------------------
+      ! initialize
+      !-----------------------------------------------------------------
 
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -660,170 +612,175 @@
          jhi = this_block%jhi
 
          do n = 1, ncat
-
-             ! initialize
-             hin_old(:,:,n,iblk) = c0
-             flux_bion(:,:,:) = c0
-             do j = jlo, jhi
-             do i = ilo, ihi
-               if (aicen_init(i,j,n,iblk) > puny ) then 
-                  hin_old(i,j,n,iblk) = vicen_init(i,j,n,iblk)/aicen_init(i,j,n,iblk)
-               else  ! initialize
+            
+            hin_old(:,:,n,iblk) = c0
+            flux_bion(:,:,:) = c0
+            do j = jlo, jhi
+            do i = ilo, ihi
+               if (aicen_init(i,j,n,iblk) > puny) then 
+                  hin_old(i,j,n,iblk) = vicen_init(i,j,n,iblk) &
+                                      / aicen_init(i,j,n,iblk)
+               else
                   first_ice(i,j,n,iblk) = .true.
-                  if (hbrine)   trcrn(i,j,nt_fbri,n,iblk) = c1
+                  if (hbrine) trcrn(i,j,nt_fbri,n,iblk) = c1
                endif
-             enddo
-             enddo
-          enddo  !ncat
+            enddo
+            enddo
+         enddo  !ncat
           
-         !  Define ocean tracer concentration
-          if (solve_skl_bgc) then
-          do j = 1, ny_block
-          do i = 1, nx_block
-           if (tr_bgc_Nit_sk) ocean_bio(i,j,nlt_bgc_NO,iblk) = nit(i,j,iblk)
-           if (tr_bgc_chl_sk)  ocean_bio(i,j,nlt_bgc_chl,iblk) = R_chl2N*algalN(i,j,iblk)
-           if (tr_bgc_Am_sk)  ocean_bio(i,j,nlt_bgc_NH,iblk) = amm(i,j,iblk)
-           if (tr_bgc_C_sk)  ocean_bio(i,j,nlt_bgc_C,iblk) = R_C2N*algalN(i,j,iblk)
-           if (tr_bgc_Sil_sk)  ocean_bio(i,j,nlt_bgc_Sil,iblk) = sil(i,j,iblk)
-           if (tr_bgc_DMSPp_sk)  ocean_bio(i,j,nlt_bgc_DMSPp,iblk) = dmsp(i,j,iblk)
-           if (tr_bgc_DMSPd_sk)  ocean_bio(i,j,nlt_bgc_DMSPd,iblk) = dmsp(i,j,iblk)
-           if (tr_bgc_DMS_sk)  ocean_bio(i,j,nlt_bgc_DMS,iblk) = dms(i,j,iblk)
-           if (tr_bgc_N_sk)  ocean_bio(i,j,nlt_bgc_N,iblk) = algalN(i,j,iblk)
-          enddo
-          enddo
-          endif
+         ! Define ocean tracer concentration
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (tr_bgc_Nit_sk)   ocean_bio(i,j,nlt_bgc_NO   ,iblk) = nit   (i,j,iblk)
+            if (tr_bgc_chl_sk)   ocean_bio(i,j,nlt_bgc_chl  ,iblk) = algalN(i,j,iblk)*R_chl2N
+            if (tr_bgc_Am_sk)    ocean_bio(i,j,nlt_bgc_NH   ,iblk) = amm   (i,j,iblk)
+            if (tr_bgc_C_sk)     ocean_bio(i,j,nlt_bgc_C    ,iblk) = algalN(i,j,iblk)*R_C2N
+            if (tr_bgc_Sil_sk)   ocean_bio(i,j,nlt_bgc_Sil  ,iblk) = sil   (i,j,iblk)
+            if (tr_bgc_DMSPp_sk) ocean_bio(i,j,nlt_bgc_DMSPp,iblk) = dmsp  (i,j,iblk)
+            if (tr_bgc_DMSPd_sk) ocean_bio(i,j,nlt_bgc_DMSPd,iblk) = dmsp  (i,j,iblk)
+            if (tr_bgc_DMS_sk)   ocean_bio(i,j,nlt_bgc_DMS  ,iblk) = dms   (i,j,iblk)
+            if (tr_bgc_N_sk)     ocean_bio(i,j,nlt_bgc_N    ,iblk) = algalN(i,j,iblk)
+         enddo
+         enddo
 
-        do n = 1, ncat
+         do n = 1, ncat
 
-          hsn(:,:) = c0
-          hin(:,:) = c0
-          Sinn(:,:,:) = c0
-          upNOn(:,:,:) = c0
-          upNHn(:,:,:) = c0 
-          hbrin(:,:) = c0
-          kavg(:,:) = c0
-          zphi_o(:,:) = c0
+            hsn(:,:)     = c0
+            hin(:,:)     = c0
+            Sinn(:,:,:)  = c0
+            upNOn(:,:,:) = c0
+            upNHn(:,:,:) = c0 
+            hbrin(:,:)   = c0
+            kavg(:,:)    = c0
+            zphi_o(:,:)  = c0
       
-          icells = 0
-          do j = jlo, jhi
-          do i = ilo, ihi
-            if (aicen(i,j,n,iblk) > puny) then
-                icells = icells + 1
-                indxi(icells) = i
-                indxj(icells) = j
-            endif
-          enddo               ! i
-          enddo               ! j
+            icells = 0
+            do j = jlo, jhi
+            do i = ilo, ihi
+               if (aicen(i,j,n,iblk) > puny) then
+                  icells = icells + 1
+                  indxi(icells) = i
+                  indxj(icells) = j
+               endif
+            enddo               ! i
+            enddo               ! j
 
-          if (icells > 0) then
-          if (hbrine) then 
+            if (icells > 0) then
 
-               call preflushing_changes (nx_block, ny_block, &
-                                   icells, n, indxi,    indxj,      &    
-                                   aicen (:,:,n,iblk),  &
-                                   vicen(:,:,n,iblk) , vsnon(:,:,n,iblk), &
-                                   meltbn(:,:,n,iblk), melttn(:,:,n,iblk), &
-                                   congeln(:,:,n,iblk),snoicen(:,:,n,iblk), &
-                                   hin_old(:,:,n,iblk), & 
-                                   trcrn(:,:,nt_fbri,n,iblk), &
-                                   dh_top(:,:,n,iblk), dh_bot(:,:,n,iblk), &
-                                   dhi_top(:,:,n,iblk),dhi_bot(:,:,n,iblk), &
-                                   hinS_old, hin, hsn,&
-                                   first_ice(:,:,n,iblk))
+      !-----------------------------------------------------------------
+      ! brine dynamics
+      !-----------------------------------------------------------------
 
-          !-------------------------------------------------------------
-          !  NOTE: Requires the average ice permeability = kavg(:,:)
-          !  and the surface ice porosity = zphi_o(:,:)
-          !  computed in "compute_microS" or from "thermosaline_vertical"
-          !--------------------------------------------------------------
+            if (hbrine) then 
 
-                   call compute_microS_mushy (nx_block, ny_block,   &
-                                   icells, n, indxi,    indxj, &   
-                                   trcrn(:,:,:,n,iblk), hin_old(:,:,n,iblk), &
-                                   hinS_old, &
-                                   sss(:,:,iblk),sst(:,:,iblk),    & 
-                                   zTin(:,:,:,n,iblk), &
-                                   zphi(:,:,:,n,iblk), &
-                                   kavg, zphi_o, Sinn, &
-                                   brine_sal, brine_rho, iphin, &
-                                   ibrine_rho, ibrine_sal,  &
-                                   sice_rho(:,:,n,iblk))
-!               endif
+               call preflushing_changes (nx_block,   ny_block,            &
+                                icells,              n,                   &
+                                indxi,               indxj,               &
+                                aicen  (:,:,n,iblk),                      &
+                                vicen  (:,:,n,iblk), vsnon  (:,:,n,iblk), &
+                                meltbn (:,:,n,iblk), melttn (:,:,n,iblk), &
+                                congeln(:,:,n,iblk), snoicen(:,:,n,iblk), &
+                                hin_old(:,:,n,iblk),                      & 
+                                trcrn  (:,:,nt_fbri,n,iblk),              &
+                                dh_top (:,:,n,iblk), dh_bot (:,:,n,iblk), &
+                                dhi_top(:,:,n,iblk), dhi_bot(:,:,n,iblk), &
+                                hinS_old,            hin,                 &
+                                hsn,                 first_ice(:,:,n,iblk))
+
+               ! Requires the average ice permeability = kavg(:,:)
+               ! and the surface ice porosity = zphi_o(:,:)
+               ! computed in "compute_microS" or from "thermosaline_vertical"
+
+               call compute_microS_mushy (nx_block,  ny_block,            &
+                                icells,              n,                   &
+                                indxi,               indxj,               &
+                                trcrn(:,:,:,n,iblk), hin_old(:,:,n,iblk), &
+                                hinS_old,                                 &
+                                sss  (:,:,iblk),     sst(:,:,iblk),       & 
+                                zTin (:,:,:,n,iblk), zphi(:,:,:,n,iblk),  &
+                                kavg,                zphi_o,              &
+                                Sinn,                brine_sal,           &
+                                brine_rho,           iphin,               &
+                                ibrine_rho,          ibrine_sal,          &
+                                sice_rho(:,:,n,iblk))
  
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
 
-               call update_hbrine (meltbn(i,j,n,iblk),melttn(i,j,n,iblk), &
-                                   meltsn(i,j,n,iblk), dt, hin(i,j), hsn(i,j), &
-                                   hin_old(i,j,n,iblk),  first_ice(i,j,n,iblk), &
-                                   hbrin(i,j), hinS_old(i,j),                &
-                                   trcrn(i,j,nt_fbri,n,iblk),  &
-                                   dh_top(i,j,n,iblk),dh_bot(i,j,n,iblk), &
-                                   kavg(i,j), zphi_o(i,j), &
-                                   darcy_V(i,j,n,iblk))
+               call update_hbrine (meltbn  (i,j,n,iblk), melttn(i,j,n,iblk), &
+                                   meltsn  (i,j,n,iblk), dt,                 &
+                                   hin     (i,j),        hsn   (i,j),        &
+                                   hin_old (i,j,n,iblk), hbrin (i,j),        &
+                                   hinS_old(i,j),                            &
+                                   trcrn (i,j,nt_fbri,n,iblk),               &
+                                   dh_top  (i,j,n,iblk), dh_bot(i,j,n,iblk), &
+                                   kavg    (i,j),        zphi_o(i,j),        &
+                                   darcy_V (i,j,n,iblk))
                     
-         hbri(i,j,iblk) = hbri(i,j,iblk) + hbrin(i,j)*aicen_init(i,j,n,iblk)  
-      enddo                     ! ij
+               hbri(i,j,iblk) = hbri(i,j,iblk) + hbrin(i,j)*aicen_init(i,j,n,iblk)  
+               enddo                     ! ij
 
-        endif !hbrine
-       !-----------------------------------------------------------------
-       !    BGC
-       !-----------------------------------------------------------------  
-             
-              if (solve_skl_bgc) then
-                 call skl_biogeochemistry (nx_block, ny_block,           &
-                                   icells,   dt,                         &
-                                   indxi,    indxj,                      &  
-                                   nbtrcr,                      &
-                                   flux_bion(:,:,1:nbtrcr),  &
-                                   ocean_bio(:,:,1:nbtrcr,iblk),     &
-                                   hmix (:,:,iblk), aicen(:,:,n,iblk),   & 
-                                   meltbn(:,:,n,iblk), congeln(:,:,n,iblk),  &
-                                   fswthrun(:,:,n,iblk), first_ice(:,:,n,iblk),&
-                                   trcrn(:,:,1:ntrcr,n,iblk),            &
-                                   grow_Cn)
+            endif ! hbrine
 
-                 call merge_bgc_fluxes_skl (nx_block, ny_block,  &
-                                    icells,                      &
-                                    indxi,              indxj,   &
-                                    nbtrcr,                      &
-                                    aicen_init(:,:,n,iblk),      &
-                                    trcrn(:,:,nt_bgc_N_sk,n,iblk),  &  
-                                    flux_bion(:,:,1:nbtrcr),  &
-                                    flux_bio (:,:,1:nbtrcr,iblk), &
-                                    PP_net(:,:,iblk),            &
-                                    grow_net(:,:,iblk), grow_Cn)
-              endif  
+      !-----------------------------------------------------------------
+      ! biogeochemistry
+      !-----------------------------------------------------------------
 
-             
-              do ij = 1, icells
-                 i = indxi(ij)
-                 j = indxj(ij)
-               
-                 first_ice(i,j,n,iblk) = .false.
+            if (solve_skl_bgc) then
+               call skl_biogeochemistry (nx_block, ny_block,            &
+                                         icells,   dt,                  &
+                                         indxi,    indxj,               &  
+                                         nbtrcr,                        &
+                                         flux_bion(:,:,1:nbtrcr),       &
+                                         ocean_bio(:,:,1:nbtrcr, iblk), &
+                                         hmix     (:,:,          iblk), &
+                                         aicen    (:,:,        n,iblk), & 
+                                         meltbn   (:,:,        n,iblk), &
+                                         congeln  (:,:,        n,iblk), &
+                                         fswthrun (:,:,        n,iblk), &
+                                         first_ice(:,:,        n,iblk), &
+                                         trcrn    (:,:,1:ntrcr,n,iblk), &
+                                         grow_Cn)
 
-              enddo  !icells
-          endif                  ! icells      
-        enddo                  ! ncat
+               call merge_bgc_fluxes_skl(nx_block, ny_block,                 &
+                                         icells,                             &
+                                         indxi,    indxj,                    &
+                                         nbtrcr,                             &
+                                         aicen_init(:,:,            n,iblk), &
+                                         trcrn     (:,:,nt_bgc_N_sk,n,iblk), &
+                                         flux_bion (:,:,1:nbtrcr),           &
+                                         flux_bio  (:,:,1:nbtrcr,     iblk), &
+                                         PP_net    (:,:,              iblk), &
+                                         grow_net  (:,:,              iblk), &
+                                         grow_Cn)
+            endif  
 
-       call ice_timer_stop(timer_bgc) ! biogeochemistry
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+               first_ice(i,j,n,iblk) = .false.
+            enddo
+   
+            endif               ! icells      
+         enddo                  ! ncat
 
-       endif  ! hbrine .or. solve_skl_bgc
+         call ice_timer_stop(timer_bgc) ! biogeochemistry
+
+      endif  ! hbrine .or. solve_skl_bgc
 
       end subroutine biogeochemistry
 
 !=======================================================================
+
+! Aggregate flux information from all ice thickness categories
+! for skeletal layer biogeochemistry
 !
-!BOP
-!
-! !IROUTINE: merge_fluxes - aggregate flux information over ITD
-!
-! !INTERFACE:
-!
+! author: Elizabeth C. Hunke and William H. Lipscomb, LANL
+
       subroutine merge_bgc_fluxes_skl (nx_block, ny_block,   &
                                icells,               &
                                indxi,    indxj,      &
@@ -832,21 +789,9 @@
                                flux_bion, flux_bio,  &
                                PP_net, grow_net,     &
                                grow_Cn)
-!
-! !DESCRIPTION:
-!
-! Aggregate flux information from all ice thickness categories
-! for skeletal layer biogeochemistry
-!
-! !REVISION HISTORY:
-!
-! author: Elizabeth C. Hunke and William H. Lipscomb, LANL
-!
-! !USES:
-!
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      use ice_constants, only: c1
+
       integer (kind=int_kind), intent(in) :: &
           nx_block, ny_block, & ! block dimensions
           icells            , & ! number of cells with aicen > puny
@@ -854,37 +799,36 @@
 
       integer (kind=int_kind), dimension(nx_block*ny_block), &
           intent(in) :: &
-          indxi, indxj    ! compressed indices for cells with aicen > puny
+          indxi, indxj          ! compressed indices for cells with aicen > puny
 
       ! single category fluxes
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in):: &          
-          aicen   !
+          aicen                 ! category ice area fraction
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
           intent(in) :: &
-          algal_N       ! (mmol N/m^2) in the bottom layer
+          algal_N               ! (mmol N/m^2)
      
-      ! single category fluxes
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nbtrcr), intent(in):: &          
-          flux_bion
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nbtrcr), &
+          intent(in):: &
+          flux_bion             ! all bio fluxes to ocean, on categories
 
-      ! cumulative fluxes
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nbtrcr), intent(inout):: &          
-          flux_bio
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nbtrcr), &
+          intent(inout):: &
+          flux_bio              ! all bio fluxes to ocean, aggregated
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
           intent(in):: & 
-          grow_Cn   !Specific growth (/s) 
+          grow_Cn               ! specific growth (/s) 
 
+      ! history output
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
           intent(inout):: & 
-          PP_net , & ! Bulk net PP (mg C/m^2/s) in history divid by aice
-          grow_net   ! net specific growth (/s) in history divide by aice
+          PP_net , &            ! Bulk net PP (mg C/m^2/s)
+          grow_net              ! net specific growth (/s)
       
+      ! local variables
 
-! !INPUT/OUTPUT PARAMETERS: column_sum !echmod
-!
- 
       integer (kind=int_kind) :: &
           ij, i, j, &   ! horizontal indices
           k             ! tracer indice
@@ -896,57 +840,42 @@
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-   
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
          do k = 1,nbtrcr
-           flux_bio (i,j,k)  = flux_bio(i,j,k) + flux_bion(i,j,k)*aicen(i,j)
+            flux_bio (i,j,k) = flux_bio(i,j,k) + flux_bion(i,j,k)*aicen(i,j)
          enddo
         
-         PP_net   (i,j)  = PP_net  (i,j) + algal_N(i,j)*phi_sk*grow_Cn(i,j)*(c1-fr_resp)*&
-                           R_C2N*R_gC2molC *aicen(i,j)
-         grow_net (i,j)  = grow_net(i,j) + grow_Cn(i,j) * phi_sk*aicen(i,j) 
-
+         PP_net   (i,j) = PP_net  (i,j) &
+                        + algal_N(i,j)*phi_sk*grow_Cn(i,j)*(c1-fr_resp) &
+                        * R_C2N*R_gC2molC * aicen(i,j)
+         grow_net (i,j) = grow_net(i,j) + grow_Cn(i,j) * phi_sk*aicen(i,j) 
       enddo                     ! ij
       
       end subroutine merge_bgc_fluxes_skl
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_history_bgc - initialize bgc history fields
-!
-! !INTERFACE:
-!
-      subroutine init_history_bgc
-!
-! !DESCRIPTION:
-!
+
 ! Initialize bgc fields written to history files.
-!
-! !REVISION HISTORY:
 !
 ! authors: William H. Lipscomb, LANL
 !          Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      upNO     (:,:,:,:) = c0
-      upNH     (:,:,:,:) = c0
-      chl_net  (:,:,:)   = c0
-      PP_net   (:,:,:)   = c0
-      NO_net   (:,:,:)   = c0
-      grow_net (:,:,:)   = c0
-      hbri     (:,:,:)   = c0
-      growNp   (:,:,:,:) = c0
+
+      subroutine init_history_bgc
+
+      use ice_constants, only: c0
+
+      upNO     (:,:,:,:)   = c0
+      upNH     (:,:,:,:)   = c0
+      chl_net  (:,:,:)     = c0
+      PP_net   (:,:,:)     = c0
+      NO_net   (:,:,:)     = c0
+      grow_net (:,:,:)     = c0
+      hbri     (:,:,:)     = c0
+      growNp   (:,:,:,:)   = c0
       growN    (:,:,:,:,:) = c0
-      flux_bio (:,:,:,:) = c0
+      flux_bio (:,:,:,:)   = c0
       flux_bio_ai(:,:,:,:) = c0
 
       end subroutine init_history_bgc
@@ -962,13 +891,16 @@
                                   indxi3,     indxj3,     indxij3,  &
                                   aicen_init, vicen_init, vi0_init, &
                                   aicen,      vicen,      vi0new,   &
-                                  ntrcr,      trcrn,      nbtrcr,  &
+                                  ntrcr,      trcrn,      nbtrcr,   &
                                   sss,        ocean_bio,  flux_bio, &
-                                  hsurp,      &
+                                  hsurp,                            &
                                   l_stop,     istop,      jstop)
 
+      use ice_constants, only: c0, c1, puny
+      use ice_domain_size, only: ncat
       use ice_itd, only: column_sum, &
                          column_conservation_check
+      use ice_state, only: hbrine, nt_fbri
       use ice_timers, only: timer_bgc, ice_timer_start, ice_timer_stop
 
       integer (kind=int_kind), intent(in) :: &
@@ -986,7 +918,7 @@
          indxi3, indxj3, indxij3    ! compressed i/j indices
 
       real (kind=dbl_kind), intent(in) :: &
-         dt        ! time step (s)
+         dt              ! time step (s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(in) :: &
@@ -1049,7 +981,7 @@
       character (len=char_len) :: &
          fieldid         ! field identifier
 
-         call ice_timer_start(timer_bgc) ! biogeochemistry
+      call ice_timer_start(timer_bgc) ! biogeochemistry
 
       !-----------------------------------------------------------------     
       ! ocean flux
@@ -1168,7 +1100,7 @@
          if (l_stop) return
       endif
 
-         call ice_timer_stop(timer_bgc) ! biogeochemistry
+      call ice_timer_stop(timer_bgc) ! biogeochemistry
 
       end subroutine add_new_ice_bgc
 
