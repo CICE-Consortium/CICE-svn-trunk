@@ -1748,7 +1748,7 @@
                            aicen,      vicen,      vi0new,   &
                            ntrcr,      trcrn,      nbtrcr,   &
                            sss,        ocean_bio,  flux_bio, &
-                           hsurp,      &
+                           hsurp,                            &
                            l_stop,     istop,      jstop)
 
       end subroutine add_new_ice

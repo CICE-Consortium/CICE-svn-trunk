@@ -567,14 +567,12 @@
       subroutine update_hbrine (meltb,      meltt,       &
                                 melts,      dt,          &
                                 hin,        hsn,         &
-                                hin_old,    firstice,    &
+                                hin_old,                 &
                                 hinS,       hinS_old,    &
                                 fbri,                    &
                                 dhS_top,    dhS_bottom,  &
                                 kperm,      zphi_min,    &
                                 darcy_V)
-
-      use ice_zbgc_shared, only: flood_frac
 
       real (kind=dbl_kind), intent(in) :: &
          dt  !timestep, tuning parameter
@@ -596,9 +594,6 @@
          hinS       , & ! thickness of brine (m) 
          fbri       , & ! brine height ratio tracer (hinS/hin) 
          zphi_min       ! surface porosity
-
-      logical (kind=log_kind), intent(in) :: & 
-         firstice
 
       ! local variables
 
