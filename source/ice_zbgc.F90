@@ -37,6 +37,7 @@
       use ice_exit, only: abort_ice
       use ice_fileunits, only: nu_nml, nml_filename, get_fileunit, &
                                release_fileunit, nu_diag
+      use ice_restart, only: runtype
       use ice_state, only: hbrine, nt_fbri, ntrcr, nbtrcr, trcr_depend, &
           nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_chl_sk, nt_bgc_Am_sk, &
           nt_bgc_Sil_sk, nt_bgc_DMSPp_sk, nt_bgc_DMSPd_sk, &
@@ -113,6 +114,8 @@
       ! brine
       !-----------------------------------------------------------------
 
+      if (trim(runtype) == 'continue') restart_hbrine = .true.
+
       call broadcast_scalar(hbrine,             master_task)
       call broadcast_scalar(restart_hbrine,     master_task)
       call broadcast_scalar(phi_snow,           master_task)
@@ -147,6 +150,8 @@
             'WARNING: setting solve_skl_bgc = F'
          solve_skl_bgc = .false.
       endif
+
+      if (trim(runtype) == 'continue') restart_bgc = .true.
 
       call broadcast_scalar(solve_skl_bgc,      master_task)
       call broadcast_scalar(restart_bgc,        master_task)
@@ -349,7 +354,6 @@
       use ice_fileunits, only: nu_diag, nu_forcing
       use ice_flux, only: sss
       use ice_calendar, only: month
-      use ice_restart, only: runtype
       use ice_read_write, only: ice_read, ice_open
       use ice_state, only: trcrn, aicen, &
           nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_chl_sk, nt_bgc_Am_sk, &
@@ -370,8 +374,6 @@
 
       if (.not. solve_skl_bgc) return
   
-      if (trim(runtype) == 'continue') restart_bgc = .true.
-
       if (restart_bgc) then       
 
          call read_restart_bgc
@@ -611,23 +613,6 @@
          jlo = this_block%jlo
          jhi = this_block%jhi
 
-         do n = 1, ncat
-            
-            hin_old(:,:,n,iblk) = c0
-            flux_bion(:,:,:) = c0
-            do j = jlo, jhi
-            do i = ilo, ihi
-               if (aicen_init(i,j,n,iblk) > puny) then 
-                  hin_old(i,j,n,iblk) = vicen_init(i,j,n,iblk) &
-                                      / aicen_init(i,j,n,iblk)
-               else
-                  first_ice(i,j,n,iblk) = .true.
-                  if (hbrine) trcrn(i,j,nt_fbri,n,iblk) = c1
-               endif
-            enddo
-            enddo
-         enddo  !ncat
-          
          ! Define ocean tracer concentration
          do j = 1, ny_block
          do i = 1, nx_block
@@ -644,6 +629,20 @@
          enddo
 
          do n = 1, ncat
+            
+            hin_old(:,:,n,iblk) = c0
+            flux_bion(:,:,:) = c0
+            do j = jlo, jhi
+            do i = ilo, ihi
+               if (aicen_init(i,j,n,iblk) > puny) then 
+                  hin_old(i,j,n,iblk) = vicen_init(i,j,n,iblk) &
+                                      / aicen_init(i,j,n,iblk)
+               else
+                  first_ice(i,j,n,iblk) = .true.
+                  if (hbrine) trcrn(i,j,nt_fbri,n,iblk) = c1
+               endif
+            enddo
+            enddo
 
             hsn(:,:)     = c0
             hin(:,:)     = c0
@@ -857,9 +856,9 @@
 
 !=======================================================================
 
-! Initialize bgc fields written to history files.
+! Initialize bgc fields written to history files
 !
-! authors: William H. Lipscomb, LANL
+! authors: Nicole Jeffery, LANL
 !          Elizabeth C. Hunke, LANL
 
       subroutine init_history_bgc
@@ -873,7 +872,6 @@
       NO_net   (:,:,:)     = c0
       grow_net (:,:,:)     = c0
       hbri     (:,:,:)     = c0
-      growNp   (:,:,:,:)   = c0
       growN    (:,:,:,:,:) = c0
       flux_bio (:,:,:,:)   = c0
       flux_bio_ai(:,:,:,:) = c0
