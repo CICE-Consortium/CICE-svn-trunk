@@ -43,7 +43,7 @@
         n_aero    = NTRAERO   , & ! number of aerosols in use
 
         nblyr     = NBGCLYR   , & ! number of bio/brine layers per category
-        max_nbtrcr=   2       , & ! maximum number of biology tracers
+        max_nbtrcr=   9       , & ! maximum number of biology tracers
 !        nltrcr    = max_nbtrcr*TRBRI, & ! maximum layer bgc tracers (for zbgc)
 
         max_ntrcr =   1         & ! 1 = surface temperature              
@@ -57,7 +57,7 @@
                   + TRPND*3     & ! ponds
                   + n_aero*4    & ! number of aerosols * 4 aero layers
                   + TRBRI       & ! brine height
-                  + TRBGCS*max_nbtrcr, & ! skeletal layer BGC
+                  + TRBGCS    , & ! skeletal layer BGC
 !                  + TRBGCZ*nltrcr*nblyr ! for zbgc (off if TRBRI=0)
         max_nstrm =   5           ! max number of history output streams
 

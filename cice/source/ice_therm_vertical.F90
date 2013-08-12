@@ -1986,7 +1986,7 @@
                               hilyr,    hin,      &
                               qin)
 
-        if (ktherm ==2) &
+        if (ktherm == 2) &
              call adjust_enthalpy (nx_block, ny_block, &
                                    nilyr,    icells,   &
                                    indxi,    indxj,    &

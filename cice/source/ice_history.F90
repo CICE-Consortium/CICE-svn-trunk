@@ -1208,6 +1208,7 @@
       use ice_therm_shared, only: calculate_Tin_from_qin, Tmlt, ktherm
       use ice_therm_mushy, only: temperature_mush, temperature_snow
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
+      use ice_zbgc_shared, only: solve_skl_bgc
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1637,7 +1638,7 @@
          if (tr_pond) call accum_hist_pond (iblk)
 
          ! biogeochemistry
-         if (tr_aero .or. nbtrcr > 0) call accum_hist_bgc  (iblk)
+         if (tr_aero .or. hbrine .or. solve_skl_bgc) call accum_hist_bgc (iblk)
 
          ! form drag
          if (calc_formdrag) call accum_hist_drag (iblk)

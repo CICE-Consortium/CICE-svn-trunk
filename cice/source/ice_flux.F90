@@ -351,7 +351,7 @@
 !
 ! !USES:
 !
-        use ice_zbgc_shared, only: flux_bio, upNO, upNH, growN, growNp
+        use ice_zbgc_shared, only: flux_bio, upNO, upNH, growN
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -490,7 +490,6 @@
       flux_bio (:,:,:,:) = c0 ! bgc
       upNO  (:,:,:,:) = c0
       upNH  (:,:,:,:) = c0
-      growNp(:,:,:,:) = c0
       growN (:,:,:,:,:) = c0
 
       !-----------------------------------------------------------------

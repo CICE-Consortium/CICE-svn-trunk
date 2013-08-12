@@ -690,7 +690,7 @@
 
       real (kind=dbl_kind) :: &
          tau   ,    & ! stress at zlvl      
-          astar,     & ! new constant for form drag
+         astar,     & ! new constant for form drag
          ctecaf,    & ! constante
          ctecwf,    & ! constante
          sca,       & ! wind attenuation function

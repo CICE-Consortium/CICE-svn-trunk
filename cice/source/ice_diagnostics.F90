@@ -33,8 +33,7 @@
 !
       implicit none
       private
-      public :: runtime_diags, init_mass_diags, init_diags, print_state, &
-                get_global_location, get_local_location
+      public :: runtime_diags, init_mass_diags, init_diags, print_state
 
       save
 	
@@ -101,17 +100,6 @@
          ip = 3, &         ! i index
          jp = 5, &         ! j index
          mtask = 0         ! my_task
-
-      ! specific point diagnostic points
-      !integer, parameter :: igex = 147
-      !integer, parameter :: jgex = 341
-      integer, parameter :: igex = 10
-      integer, parameter :: jgex = 10
-      integer :: ilex
-      integer :: jlex
-      integer :: iblklex
-      integer :: my_task_lex
-      integer, parameter :: nlex = 1
 
 !=======================================================================
 
@@ -1543,95 +1531,6 @@
       write(nu_diag,*) ' '
 
       end subroutine print_state
-
-!=======================================================================
-
-    subroutine get_global_location(il, jl, iblkl, my_task_l)
-
-      use ice_communicate, only: my_task
-      use ice_blocks, only: block, get_block
-      use ice_domain, only: blocks_ice
-      !use ice_exit, only: abort_ice
-
-      integer, intent(in) :: il
-      integer, intent(in) :: jl
-      integer, intent(in) :: iblkl
-      integer, intent(in) :: my_task_l
-
-      type(block) :: this_block
-
-      integer :: ig
-      integer :: jg
-
-      ig = -1
-      jg = -1
-
-      write(*,*) "Get global location", my_task
-
-      if (my_task == my_task_l) then
-      
-         this_block = get_block(blocks_ice(iblkl),iblkl)      
-   
-         ig = this_block%i_glob(il)
-         jg = this_block%j_glob(jl)
-
-         write(nu_diag,*) "Global specific point: ", ig, jg
-         
-      endif
-
-      !call abort_ice("")
-
-    end subroutine get_global_location
-
-!=======================================================================
-
-    subroutine get_local_location()
-
-      use ice_communicate, only: my_task
-      use ice_blocks, only: block, get_block
-      use ice_domain, only: blocks_ice, nblocks
-      !use ice_exit, only: abort_ice
-
-      type(block) :: this_block
-      integer :: ilo, ihi, jlo, jhi
-      integer :: i, j, iblk
-
-      integer :: ig_test, jg_test
-
-      ilex = -1
-      jlex = -1
-      iblklex = -1
-      my_task_lex = -1
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks_ice(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do i = ilo, ihi
-         do j = jlo, jhi
-            ig_test = this_block%i_glob(i)
-            jg_test = this_block%j_glob(j)
-            if (ig_test == igex .and. jg_test == jgex) then
-               ! found local point
-               ilex = i
-               jlex = j
-               iblklex = iblk
-               my_task_lex = my_task
-               write(nu_diag,*)  "local specific point: ", ilex, jlex, iblklex, my_task_lex
-            endif
-         enddo ! j
-         enddo ! i
-
-      enddo ! iblk
-
-      !write(nu_diag,*)  my_task, ilex, jlex, iblklex, my_task_lex
-     
-      !call abort_ice("")
-
-    end subroutine get_local_location
 
 !=======================================================================
 

@@ -1175,8 +1175,8 @@
       ! Skeletal layer BGC
       !-----------------------------------------------------------------
 
+      if (solve_skl_bgc) then
       do n = 1, ncat
-        if (solve_skl_bgc) then
                               call ice_write(nu_dump_bgc,0, &
                               trcrn(:,:,nt_bgc_N_sk,n,:),    'ruf8',diag)
          if (tr_bgc_C_sk)     call ice_write(nu_dump_bgc,0, &
@@ -1195,8 +1195,8 @@
                               trcrn(:,:,nt_bgc_DMSPd_sk,n,:),'ruf8',diag)
          if (tr_bgc_DMS_sk)   call ice_write(nu_dump_bgc,0, &
                               trcrn(:,:,nt_bgc_DMS_sk,n,:),  'ruf8',diag)
-        endif  ! solve_skl_bgc
       enddo
+      endif  ! solve_skl_bgc
       
       !-----------------------------------------------------------------
       ! Ocean BGC
@@ -1274,8 +1274,8 @@
       ! Skeletal Layer BGC
       !-----------------------------------------------------------------
 
+      if (solve_skl_bgc) then
       do n = 1, ncat
-       if (solve_skl_bgc) then
          call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_N_sk,n,:),'ruf8',diag)
          if (tr_bgc_C_sk)     call ice_read(nu_restart_bgc,0, &
                               trcrn(:,:,nt_bgc_C_sk,n,:),'ruf8',diag)
@@ -1293,8 +1293,8 @@
                               trcrn(:,:,nt_bgc_DMSPd_sk,n,:),'ruf8',diag)
          if (tr_bgc_DMS_sk)   call ice_read(nu_restart_bgc,0, &
                               trcrn(:,:,nt_bgc_DMS_sk  ,n,:),'ruf8',diag)
-       endif  ! solve_skl_bgc
       enddo
+      endif ! solve_skl_bgc
      
       !-----------------------------------------------------------------
       ! Ocean BGC

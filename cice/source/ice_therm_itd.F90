@@ -654,6 +654,17 @@
       ! Shift ice between categories as necessary
       !-----------------------------------------------------------------
 
+      ! maintain qsno negative definiteness
+      do n = 1, ncat
+         do k = nt_qsno, nt_qsno+nslyr
+            do ij = 1, iflag
+               i = indxii(ij)
+               j = indxjj(ij)
+               trcrn(i,j,k,n) = trcrn(i,j,k,n) + rhos*Lfresh
+            enddo
+         enddo
+      enddo
+
       call shift_ice (nx_block, ny_block,    &
                       indxi,    indxj,       &
                       icells,                &
@@ -664,6 +675,18 @@
                       daice,    dvice,       &
                       l_stop,                &
                       istop,    jstop)
+
+
+      ! maintain qsno negative definiteness
+      do n = 1, ncat
+         do k = nt_qsno, nt_qsno+nslyr
+            do ij = 1, iflag
+               i = indxii(ij)
+               j = indxjj(ij)
+               trcrn(i,j,k,n) = trcrn(i,j,k,n) - rhos*Lfresh
+            enddo
+         enddo
+      enddo
 
       if (l_stop) return
 

@@ -96,7 +96,6 @@
 
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,nblyr,max_blocks), public :: &
-         growNp         , & ! algal growth rate (mmol/m^3/s)
          upNO           , & ! nitrate uptake rate (mmol/m^3/s)
          upNH               ! ammonium uptake rate (mmol/m^3/s)
 
