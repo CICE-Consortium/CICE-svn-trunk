@@ -1,0 +1,93 @@
+\documentclass[11pt]{amsart}
+\usepackage{geometry}                % See geometry.pdf to learn the layout options. There are lots.
+\geometry{letterpaper}                   % ... or a4paper or a5paper or ... 
+%\geometry{landscape}                % Activate for for rotated page geometry
+%\usepackage[parfill]{parskip}    % Activate to begin paragraphs with an empty line rather than an indent
+\usepackage{graphicx,color}
+\usepackage{amssymb}
+\usepackage{epstopdf}
+\DeclareGraphicsRule{.tif}{png}{.png}{`convert #1 `dirname #1`/`basename #1 .tif`.png}
+\definecolor{dark}{gray}{0.6}
+\definecolor{light}{gray}{0.85}
+
+\begin{document}
+\thicklines
+
+\begin{tabular}{ccc}
+\multicolumn{3}{c}{\bf Mean thickness over}\\
+\bf grid cell & \bf sea ice & \bf pond \\
+\hline
+&&\\
+&&\\
+&&\\
+&&\\
+&&\\
+$h_i a_i$ & $h_i$ & \\
+&&\\
+&&\\
+&&\\
+$h_{pnd} a_{pnd} a_i$ & $h_{pnd} a_{pnd}$ & $h_{pnd}$ \\
+&&\\
+&&\\
+&&\\
+&&\\
+&&\\
+&&\\
+&&\\
+$h_{pnd} a_{pnd} a_{lvl} a_i$ & $h_{pnd} a_{pnd} a_{lvl} $ & $h_{pnd}$ \\
+
+\end{tabular}
+
+\begin{picture}(0,0)(-190,-172)
+% grid cell
+\put(0,40){\line(1,0){300}}%\put(0,35){\line(0,1){10}}\put(300,35){\line(0,1){10}}
+\put(-3,50){0}\put(297,50){1}
+\put(120,47){grid cell}
+
+% shading
+\put(0,-180){\color{light}\rule{1.66in}{1.05in}}
+\put(0,-180){\color{dark}\rule{0.69in}{2.9in}}
+
+% ice area
+\put(0,0){\line(1,0){300}}%\put(0,-5){\line(0,1){10}}\put(300,-5){\line(0,1){10}}
+\put(10,-10){$1-a_i$}%\put(50,-5){\line(0,1){10}}
+\put(150,-10){$a_i$}
+\put(10,15){open}\put(10,7){water}
+\put(120,7){ice area fraction}
+
+% cesm, topo ponds
+\put(0,-60){\line(1,0){300}}%\put(0,-65){\line(0,1){10}}\put(300,-65){\line(0,1){10}}
+%\put(50,-65){\line(0,1){10}}%\put(10,-70){$1-a_i$}
+\put(70,-70){$(1-a_{pnd})a_i$}\put(145,-65){\line(0,1){10}}
+\put(200,-70){$a_{pnd} a_i$}
+\put(65,-53){unponded ice}
+\put(170,-53){ponded ice fraction}
+\put(55,-40){\bf CESM and topo ponds}
+
+% level ice 
+\put(0,-120){\line(1,0){300}}%\put(0,-125){\line(0,1){10}}\put(300,-125){\line(0,1){10}}
+%\put(50,-125){\line(0,1){10}}%\put(10,-130){$1-a_i$}
+\put(60,-130){$(1-a_{lvl})a_i$}%\put(120,-125){\line(0,1){10}}
+\put(200,-130){$a_{lvl} a_i$}
+\put(55,-113){deformed ice}
+\put(170,-113){level ice fraction}
+
+% level-ice ponds
+\put(0,-160){\line(1,0){300}}%\put(0,-165){\line(0,1){10}}\put(300,-165){\line(0,1){10}}
+%\put(50,-165){\line(0,1){10}}%\put(10,-170){$1-a_i$}
+%\put(120,-165){\line(0,1){10}}%\put(60,-170){$(1-a_{lvl})a_i$}
+\put(210,-165){\line(0,1){10}}\put(125,-170){$(1-a_{pnd})a_{lvl} a_i$}
+\put(230,-170){$a_{pnd}a_{lvl} a_i$}
+\put(130,-153){unponded ice}
+\put(225,-153){ponded ice}
+\put(55,-98){\bf Level-ice ponds}
+
+\put(0,-180){\line(0,1){225}}
+\put(50,-180){\line(0,1){210}}
+\put(120,-180){\line(0,1){76}}
+\put(300,-180){\line(0,1){225}}
+
+\end{picture}
+
+\end{document}  
+
