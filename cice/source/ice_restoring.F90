@@ -73,13 +73,21 @@
       use ice_domain, only: ew_boundary_type, ns_boundary_type, &
           nblocks, blocks_ice
       use ice_fileunits, only: nu_diag
+      use ice_grid, only: tmask
+      use ice_flux, only: sst, Tf, Tair, salinz, Tmltz
       use ice_restart, only: restart_ext
 
    integer (int_kind) :: &
      i,j,iblk,nt,n,      &! dummy loop indices
      ilo,ihi,jlo,jhi,    &! beginning and end of physical domain
+     iglob(nx_block),    &! global indices
+     jglob(ny_block),    &! global indices
+     iblock, jblock,     &! block indices
      ibc,                &! ghost cell column or row
      npad                 ! padding column/row counter
+
+   character (len=7), parameter :: &
+     restore_ic = "defined" ! otherwise restore to initial ice state
 
    type (block) :: &
      this_block  ! block info for current block
@@ -99,20 +107,58 @@
              trcrn_rest(nx_block,ny_block,ntrcr,ncat,max_blocks))
 
 !-----------------------------------------------------------------------
-! initialize to the default initial ice state
+! initialize
 ! halo cells have to be filled manually at this stage
 ! these arrays could be set to values read from a file...
 !-----------------------------------------------------------------------
+
+   if (trim(restore_ic) == 'defined') then
+
+      ! restore to defined ice state
+      do iblk = 1, nblocks
+      this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+         iglob = this_block%i_glob
+         jglob = this_block%j_glob
+         iblock = this_block%iblock
+         jblock = this_block%jblock
+
+         call set_restore_var (nx_block,            ny_block,            &
+                               ilo, ihi,            jlo, jhi,            &
+                               iglob,               jglob,               &
+                               iblock,              jblock,              &
+                               Tair (:,:,    iblk), sst  (:,:,    iblk), &
+                               Tf   (:,:,    iblk),                      &
+                               salinz(:,:,:, iblk), Tmltz(:,:,:,  iblk), &
+                               tmask(:,:,    iblk),                      &
+                               aicen_rest(:,:,  :,iblk), &
+                               trcrn_rest(:,:,:,:,iblk), ntrcr,         &
+                               vicen_rest(:,:,  :,iblk), &
+                               vsnon_rest(:,:,  :,iblk))
+      enddo ! iblk
+
+      ! reset initial ice state to be the same as the restoring
+      ! necessary for ice_ic='none'
+      aicen(:,:,:,:) = aicen_rest(:,:,:,:)
+      vicen(:,:,:,:) = vicen_rest(:,:,:,:)
+      vsnon(:,:,:,:) = vsnon_rest(:,:,:,:)
+      trcrn(:,:,1:ntrcr,:,:) = trcrn_rest(:,:,:,:,:)
+
+   else  ! restore_ic
+
+   ! restore to initial ice state
+   aicen_rest(:,:,:,:) = aicen(:,:,:,:)
+   vicen_rest(:,:,:,:) = vicen(:,:,:,:)
+   vsnon_rest(:,:,:,:) = vsnon(:,:,:,:)
+   trcrn_rest(:,:,:,:,:) = trcrn(:,:,1:ntrcr,:,:)
 
       call ice_timer_start(timer_bound)
       call bound_state (aicen, trcrn, &
                         vicen, vsnon)
       call ice_timer_stop(timer_bound)
-
-   aicen_rest(:,:,:,:) = aicen(:,:,:,:)
-   vicen_rest(:,:,:,:) = vicen(:,:,:,:)
-   vsnon_rest(:,:,:,:) = vsnon(:,:,:,:)
-   trcrn_rest(:,:,:,:,:) = trcrn(:,:,1:ntrcr,:,:)
 
    !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block, &
    !$OMP                     i,j,n,nt,ibc,npad)
@@ -127,7 +173,7 @@
          if (trim(ew_boundary_type) /= 'cyclic') then
             do n = 1, ncat
             do j = 1, ny_block
-            do i = 1, ilo-1
+            do i = 1, ilo
                aicen_rest(i,j,n,iblk) = aicen(ilo,j,n,iblk)
                vicen_rest(i,j,n,iblk) = vicen(ilo,j,n,iblk)
                vsnon_rest(i,j,n,iblk) = vsnon(ilo,j,n,iblk)
@@ -138,8 +184,9 @@
             enddo
             enddo
          endif
+      endif
 
-      elseif (this_block%iblock == nblocks_x) then  ! east edge
+      if (this_block%iblock == nblocks_x) then  ! east edge
          if (trim(ew_boundary_type) /= 'cyclic') then
             ! locate ghost cell column (avoid padding)
             ibc = nx_block
@@ -155,7 +202,7 @@
 
             do n = 1, ncat
             do j = 1, ny_block
-            do i = ihi+1, ibc
+            do i = ihi, ibc
                aicen_rest(i,j,n,iblk) = aicen(ihi,j,n,iblk)
                vicen_rest(i,j,n,iblk) = vicen(ihi,j,n,iblk)
                vsnon_rest(i,j,n,iblk) = vsnon(ihi,j,n,iblk)
@@ -171,7 +218,7 @@
       if (this_block%jblock == 1) then              ! south edge
          if (trim(ns_boundary_type) /= 'cyclic') then
             do n = 1, ncat
-            do j = 1, jlo-1
+            do j = 1, jlo
             do i = 1, nx_block
                aicen_rest(i,j,n,iblk) = aicen(ilo,j,n,iblk)
                vicen_rest(i,j,n,iblk) = vicen(ilo,j,n,iblk)
@@ -183,8 +230,9 @@
             enddo
             enddo
          endif
+      endif
 
-      elseif (this_block%jblock == nblocks_y) then  ! north edge
+      if (this_block%jblock == nblocks_y) then  ! north edge
          if (trim(ns_boundary_type) /= 'cyclic' .and. &
              trim(ns_boundary_type) /= 'tripole' .and. &
              trim(ns_boundary_type) /= 'tripoleT') then
@@ -201,7 +249,7 @@
             enddo
 
             do n = 1, ncat
-            do j = jhi+1, ibc
+            do j = jhi, ibc
             do i = 1, nx_block
                aicen_rest(i,j,n,iblk) = aicen(ihi,j,n,iblk)
                vicen_rest(i,j,n,iblk) = vicen(ihi,j,n,iblk)
@@ -218,10 +266,286 @@
    enddo ! iblk
    !$OMP END PARALLEL DO
 
+   endif ! restore_ic
+
    if (my_task == master_task) &
       write (nu_diag,*) 'ice restoring timescale = ',trestore,' days' 
 
  end subroutine ice_HaloRestore_init
+
+!=======================================================================
+
+! initialize restoring variables, based on set_state_var
+! this routine assumes boundaries are not cyclic
+
+    subroutine set_restore_var (nx_block, ny_block, &
+                                ilo, ihi, jlo, jhi, &
+                                iglob,    jglob,    &
+                                iblock,   jblock,   &
+                                Tair,     sst,      &
+                                Tf,                 &
+                                salinz,   Tmltz,    &
+                                tmask,    aicen,    &
+                                trcrn,    ntrcr,    &
+                                vicen,    vsnon)
+
+! authors: E. C. Hunke, LANL
+
+      use ice_blocks, only: nblocks_x, nblocks_y
+      use ice_constants, only: c0, c1, c2, p2, p5, rhoi, rhos, Lfresh, &
+           cp_ice, cp_ocn, Tsmelt, Tffresh
+      use ice_domain_size, only: nilyr, nslyr, ncat
+      use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_fbri, hbrine
+      use ice_itd, only: hin_max
+      use ice_therm_mushy, only: enthalpy_mush
+      use ice_therm_shared, only: ktherm
+
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         ilo, ihi          , & ! physical domain indices
+         jlo, jhi          , & !
+         iglob(nx_block)   , & ! global indices
+         jglob(ny_block)   , & !
+         iblock            , & ! block indices
+         jblock            , & !
+         ntrcr                 ! number of tracers in use
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
+         Tair    , & ! air temperature  (K)
+         Tf      , & ! freezing temperature (C) 
+         sst         ! sea surface temperature (C) ! currently not used
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
+         intent(in) :: &
+         salinz  , & ! initial salinity profile
+         Tmltz       ! initial melting temperature profile
+
+      logical (kind=log_kind), dimension (nx_block,ny_block), &
+         intent(in) :: &
+         tmask      ! true for ice/ocean cells
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
+         intent(out) :: &
+         aicen , & ! concentration of ice
+         vicen , & ! volume per unit area of ice          (m)
+         vsnon     ! volume per unit area of snow         (m)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
+         intent(out) :: &
+         trcrn     ! ice tracers
+                   ! 1: surface temperature of ice/snow (C)
+
+      ! local variables
+
+      integer (kind=int_kind) :: &
+         i, j        , & ! horizontal indices
+         ij          , & ! horizontal index, combines i and j loops
+         ibc         , & ! ghost cell column or row
+         npad        , & ! padding column/row counter
+         k           , & ! ice layer index
+         n           , & ! thickness category index
+         it          , & ! tracer index
+         icells          ! number of cells initialized with ice
+
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
+         indxi, indxj    ! compressed indices for cells with restoring
+
+      real (kind=dbl_kind) :: &
+         slope, Ti, hbar, &
+         ainit(ncat), &  ! initial ice concentration
+         hinit(ncat), &  ! initial ice thickness
+         hsno_init       ! initial snow thickness
+
+      indxi(:) = 0
+      indxj(:) = 0
+
+      !-----------------------------------------------------------------
+      ! Initialize restoring variables everywhere on grid
+      !-----------------------------------------------------------------
+
+      do n = 1, ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            aicen(i,j,n) = c0
+            vicen(i,j,n) = c0
+            vsnon(i,j,n) = c0
+            trcrn(i,j,nt_Tsfc,n) = Tf(i,j)  ! surface temperature 
+            if (ntrcr >= 2) then
+               do it = 2, ntrcr
+                  trcrn(i,j,it,n) = c0
+               enddo
+            endif
+            if (hbrine) trcrn(i,j,nt_fbri,n) = c1
+            do k = 1, nilyr
+               trcrn(i,j,nt_sice+k-1,n) = salinz(i,j,k)
+            enddo
+            do k = 1, nslyr
+               trcrn(i,j,nt_qsno+k-1,n) = -rhos * Lfresh
+            enddo
+         enddo
+         enddo
+      enddo
+
+      !-----------------------------------------------------------------
+      ! initial area and thickness in ice regions
+      !-----------------------------------------------------------------
+
+      hbar = c2  ! initial ice thickness
+      hsno_init = 0.20_dbl_kind ! initial snow thickness (m)
+      do n = 1, ncat
+         hinit(n) = c0
+         ainit(n) = c0
+         if (hbar > hin_max(n-1) .and. hbar < hin_max(n)) then
+            hinit(n) = hbar
+            ainit(n) = 0.95_dbl_kind ! initial ice concentration
+         endif
+      enddo
+
+      !-----------------------------------------------------------------
+      ! Define cells where ice is placed (or other values are used)
+      ! Edges using initial values (above) are commented out
+      !-----------------------------------------------------------------
+
+      icells = 0
+      if (iblock == 1) then              ! west edge
+            do n = 1, ncat
+            do j = 1, ny_block
+            do i = 1, ilo
+!               icells = icells + 1
+!               indxi(icells) = i
+!               indxj(icells) = j
+            enddo
+            enddo
+            enddo
+      endif
+
+      if (iblock == nblocks_x) then      ! east edge
+            ! locate ghost cell column (avoid padding)
+            ibc = nx_block
+            do i = nx_block, 1, -1
+               npad = 0
+               if (iglob(i) == 0) then
+                  do j = 1, ny_block
+                     npad = npad + jglob(j)
+                  enddo
+               endif
+               if (npad /= 0) ibc = ibc - 1
+            enddo
+
+            do n = 1, ncat
+            do j = 1, ny_block
+            do i = ihi, ibc
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
+            enddo
+            enddo
+            enddo
+      endif
+
+      if (jblock == 1) then              ! south edge
+            do n = 1, ncat
+            do j = 1, jlo
+            do i = 1, nx_block
+ !              icells = icells + 1
+ !              indxi(icells) = i
+ !              indxj(icells) = j
+            enddo
+            enddo
+            enddo
+      endif
+
+      if (jblock == nblocks_y) then      ! north edge
+            ! locate ghost cell row (avoid padding)
+            ibc = ny_block
+            do j = ny_block, 1, -1
+               npad = 0
+               if (jglob(j) == 0) then
+                  do i = 1, nx_block
+                     npad = npad + iglob(i)
+                  enddo
+               endif
+               if (npad /= 0) ibc = ibc - 1
+            enddo
+
+            do n = 1, ncat
+            do j = jhi, ibc
+            do i = 1, nx_block
+!               icells = icells + 1
+!               indxi(icells) = i
+!               indxj(icells) = j
+            enddo
+            enddo
+            enddo
+      endif
+
+      !-----------------------------------------------------------------
+      ! Set restoring variables
+      !-----------------------------------------------------------------
+
+         do n = 1, ncat
+
+            ! ice volume, snow volume
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+
+               aicen(i,j,n) = ainit(n)
+               vicen(i,j,n) = hinit(n) * ainit(n) ! m
+               vsnon(i,j,n) = min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
+            enddo               ! ij
+
+               ! surface temperature
+               do ij = 1, icells
+                  i = indxi(ij)
+                  j = indxj(ij)
+                  trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) !deg C
+               enddo
+
+               ! ice enthalpy, salinity 
+               do k = 1, nilyr
+                  do ij = 1, icells
+                     i = indxi(ij)
+                     j = indxj(ij)
+
+                     ! assume linear temp profile and compute enthalpy
+                     slope = Tf(i,j) - trcrn(i,j,nt_Tsfc,n)
+                     Ti = trcrn(i,j,nt_Tsfc,n) &
+                        + slope*(real(k,kind=dbl_kind)-p5) &
+                                /real(nilyr,kind=dbl_kind)
+
+                     if (ktherm == 2) then
+                        ! enthalpy
+                        trcrn(i,j,nt_qice+k-1,n) = &
+                             enthalpy_mush(Ti, salinz(i,j,k))
+                     else
+                        trcrn(i,j,nt_qice+k-1,n) = &
+                            -(rhoi * (cp_ice*(Tmltz(i,j,k)-Ti) &
+                            + Lfresh*(c1-Tmltz(i,j,k)/Ti) - cp_ocn*Tmltz(i,j,k)))
+                     endif
+
+                     ! salinity
+                     trcrn(i,j,nt_sice+k-1,n) = salinz(i,j,k)
+                  enddo            ! ij
+               enddo               ! nilyr
+
+               ! snow enthalpy
+               do k = 1, nslyr
+                  do ij = 1, icells
+                     i = indxi(ij)
+                     j = indxj(ij)
+                     Ti = min(c0, trcrn(i,j,nt_Tsfc,n))
+                     trcrn(i,j,nt_qsno+k-1,n) = -rhos*(Lfresh - cp_ice*Ti)
+                     
+                  enddo            ! ij
+               enddo               ! nslyr
+
+         enddo                  ! ncat
+
+   end subroutine set_restore_var
 
 !=======================================================================
 
@@ -317,8 +641,9 @@
             enddo
             enddo
          endif
+      endif
 
-      elseif (this_block%iblock == nblocks_x) then  ! east edge
+      if (this_block%iblock == nblocks_x) then  ! east edge
          if (trim(ew_boundary_type) /= 'cyclic') then
             ! locate ghost cell column (avoid padding)
             ibc = nx_block
@@ -370,8 +695,9 @@
             enddo
             enddo
          endif
+      endif
 
-      elseif (this_block%jblock == nblocks_y) then  ! north edge
+      if (this_block%jblock == nblocks_y) then  ! north edge
          if (trim(ns_boundary_type) /= 'cyclic' .and. &
              trim(ns_boundary_type) /= 'tripole' .and. &
              trim(ns_boundary_type) /= 'tripoleT') then
