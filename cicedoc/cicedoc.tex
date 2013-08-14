@@ -258,6 +258,7 @@ In some coupled climate models (for example, recent versions of the U.K. Hadley 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Atmosphere}
 \markboth{Coupling with other climate model components}{Atmosphere}
+\label{sec:atmo}
 
 The 
 \index{wind!velocity}%
@@ -366,12 +367,15 @@ specific humidity, respectively.  The
 latter is calculated by assuming a saturated surface, as described in 
 Section~\ref{subsubsec:sfc_forcing}.
 
-The exchange coefficients $c_u$, $c_\theta$ and $c_q$ are initialized as
+Neglecting form drag,\index{form drag}%
+the exchange coefficients $c_u$, $c_\theta$ and $c_q$ are initialized as
 \[\kappa\over \ln(z_{\mathit {ref}}/z_{\mathit {ice}})\]
 and updated during a short iteration, as they depend upon the
-turbulent scales.  Here, $z_{\mathit {ref}}$ is a 
+turbulent scales. (For the case with form drag, see section~\ref{sec:formdrag}.)  Here, $z_{\mathit {ref}}$ is a 
 \index{height!reference}%
-reference height of 10\,m and $z_{\mathit {ice}}$ is the roughness length scale for the
+reference height of 10\,m and $z_{\mathit {ice}}$ is the roughness
+\index{roughness}
+length scale for the
 given sea ice category.   $\Upsilon$ is constrained to have magnitude
 less than 10. Further, defining $\chi = \left(1-16\Upsilon\right)^{0.25}$
 and  $\chi \geq 1$,
@@ -457,6 +461,7 @@ Section~\ref{subsubsec:sfc_forcing}.
 \subsection{Ocean}
 \markboth{Coupling with other climate model components}{Ocean}
 \index{ocean|(emph}
+\label{sec:ocean}
 
 New sea ice forms when the ocean 
 \index{temperature!ocean}%
@@ -586,12 +591,72 @@ boundary layer.  If the top layer
 is sufficiently thin compared to the typical depth of the Ekman
 spiral, then $\theta=0$ is a good approximation.  Here we assume
 that the top layer is thin enough.
-\index{flux coupler|)}
 \index{ocean|)}
+\index{flux coupler|)}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Variable exchange coefficients}
+\label{sec:formdrag}
+\index{form drag|emph}%
+\index{roughness|}
+
+In the default CICE setup, atmospheric and oceanic neutral drag coefficients ($c_u$ and $c_w$) are assumed constant in time and space. These constants are chosen to reflect friction associated with an effective sea ice surface roughness  
+at the ice-atmosphere and ice-ocean interfaces. Sea ice (in both Arctic and Antarctic) contains pressure ridges as well as floe and melt pond edges that act as discrete obstructions to the flow of air or water past the ice, and are a source of form drag. Following \cite{TFSFFKLB:13} and based on recent theoretical developments \cite{LGHA:12,LLCL:11}, the neutral drag coefficients can now be estimated from properties of the ice cover such as ice concentration, vertical extent and area of the ridges, freeboard and floe draft, and size of floes and melt ponds. The new parameterization allows the drag coefficients to be coupled to the sea ice state and therefore to evolve spatially and temporally.  This parameterization is contained in the subroutine {\it neutral\_drag\_coeffs} and is accessed by setting {\tt calc\_formdrag = .true.} in the namelist.
+
+Following \cite{TFSFFKLB:13},  consider the general case of  fluid flow obstructed by N randomly oriented obstacles of height $H$ and transverse length $L_y$, distributed on a domain surface area $S_T$. Under the assumption of a logarithmic fluid velocity profile, the general formulation of the form drag coefficient can be expressed as
+\begin{equation}
+C_d=\frac{N c S_c^2 \gamma L_y  H}{2 S_T}\left[\frac{\ln(H/z_0)}{\ln(z_{ref}/z_0)}\right]^2,\label{FormulaDragCoeff}
+\end{equation}
+where $z_0$ is a roughness length parameter at the top or bottom surface of the ice, $\gamma$ is a geometric factor, $c$ is the resistance coefficient of a single obstacle, and $S_c$ is a sheltering function that takes into account the shielding effect of the obstacle,
+\begin{equation}
+S_{c}=\left(1-\exp(-s_l D/H)\right)^{1/2},\label{shelter}
+\end{equation}
+with $D$ the distance between two obstacles and $s_l$ an attenuation parameter.
+
+As in the original drag formulation in CICE (sections \ref{sec:atmo} and \ref{sec:ocean}), $c_u$ and $c_w$ along with the transfer coefficients for sensible heat, $c_{\theta}$, and latent heat, $c_{q}$,  are initialized to a situation corresponding to neutral atmosphere-ice and ocean-ice boundary layers. The corresponding  neutral exchange coefficients are then replaced by coefficients that explicitly account for form drag, expressed in terms of  various contributions as
+\begin{eqnarray}
+\begin{array}{lrc}
+\vspace{0.3cm}
+\tt{Cdn\_atm}  = \tt{Cdn\_atm\_rdg} + \tt{Cdn\_atm\_floe} + \tt{Cdn\_atm\_skin} + \tt{Cdn\_atm\_pond} , \label{Cda} \\
+\vspace{0.2cm}
+\tt{Cdn\_ocn}  =  \tt{Cdn\_ocn\_rdg} + \tt{Cdn\_ocn\_floe} + \tt{Cdn\_ocn\_skin} \label{Cdw}.
+\end{array}
+\end{eqnarray}
+\index{ridging}%
+\index{melt pond}%
+The contributions to form drag from ridges (and keels underneath the ice), floe edges  and  melt pond edges can be expressed using the general formulation of equation \eqref{FormulaDragCoeff} (see \cite{TFSFFKLB:13} for details). Individual terms in equation \eqref{Cda} are fully described in [Tsamados et al, 2013]. Following [Arya, 1975] the skin drag coefficient is parametrized as 
+\begin{equation}
+ \tt{Cdn\_(atm/ocn)\_skin}=a_{i} \left(1-m_{(s/k)} \frac{H_{(s/k)}}{D_{(s/k)}}\right)c_{s(s/k)}, \mbox{       if  $\displaystyle\frac{H_{(s/k)}}{D_{(s/k)}}\ge\frac{1}{m_{(s/k)}}$,} \label{SkinDragCoeff}
+\end{equation}
+where $m_s$ ($m_k$) is a sheltering parameter that depends on the average sail (keel) height, $H_s$ ($H_k$), but is often assumed constant, $D_s$ ($D_k$) is the average distance between sails (keels), and $c_{ss}$ ($c_{sk}$) is the unobstructed atmospheric (oceanic) skin drag that would be attained in the absence of sails (keels) and with complete ice coverage, $a_{ice}=1$.
+
+Calculation of equations \eqref{FormulaDragCoeff}--\eqref{SkinDragCoeff} requires that  small-scale geometrical properties of the ice cover be related to average grid cell quantities already computed in the sea ice model. These intermediate quantities are briefly presented here and described in more detail in \cite{TFSFFKLB:13}. The sail height is given by
+\begin{equation*}
+H_{s} = \displaystyle 2\frac{v_{rdg}}{a_{rdg}}\left(\frac{\alpha\tan \alpha_{k} R_d+\beta \tan \alpha_{s} R_h}{\phi_r\tan \alpha_{k} R_d+\phi_k \tan \alpha_{s} R_h^2}\right),\label{Hs}\\
+\end{equation*}
+and the distance between sails% ASSUMPTION FOR DR PROBABLY BREAKS DOWN WHEN AI DECREASES. LINEAR RIDGES NOT TRUE AND EQUATION 22 NOT TRUE !
+\begin{equation*}
+D_{s} = \displaystyle 2 H_s\frac{a_{i}}{a_{rdg}} \left(\frac{\alpha}{\tan \alpha_s}+\frac{\beta}{\tan \alpha_k}\frac{R_h}{R_d}\right),\label{Ds}\\
+\end{equation*}
+where $0<\alpha<1$ and $0<\beta<1$ are weight functions, $\alpha_{s}$ and $\alpha_{k}$ are the sail and keel slope, $\phi_s$ and $\phi_k$ are constant porosities for the sails and keels, and  we assume constant ratios for the average keel depth and sail height ($H_k/H_s=R_h$) and for the average distances between keels and between sails  ($D_k/D_s=R_d$).  With the assumption of hydrostatic equilibrium, the effective ice plus snow freeboard is 
+$
+H_{f}=\bar{h_i}(1-\rho_i/\rho_w)+\bar{h_s}(1-\rho_s/\rho_w),\label{Freeboard}
+$
+where $\rho_i$, $\rho_w$ and $\rho_s$ are respectively the densities of sea ice, water and snow, $\bar{h_i}$ is the mean ice thickness and $\bar{h_s}$ is the mean snow thickness (means  taken over the ice covered regions). For the melt pond
+\index{melt pond}
+edge elevation we assume that the melt pond surface is at the same level as the ocean surface surrounding the floes \cite{FF:07,FFT:10,FSFH:12} and use the simplification $H_p = H_f$. Finally to estimate the typical floe size
+\index{floe size}
+$L_A$, distance between floes, $D_F$, and melt pond size, $L_P$ we use the parameterizations of \cite{LGHA:12} to relate these quantities to the ice and pond concentrations. All of these intermediate quantities are available as history output, along with {\tt Cdn\_atm}, {\tt Cdn\_ocn} and the ratio {\tt Cdn\_atm\_ocn\_n} between the total atmospheric drag and the atmospheric neutral drag coefficient.
+
+We assume that the total neutral drag coefficients are thickness category independent, but through their dependance on the diagnostic variables described above, they vary both spatially and temporally.  The total drag coefficients and heat transfer coefficients will also depend on the type of stratification of the atmosphere and the ocean, and we use the parameterization described in section~\ref{sec:atmo} that accounts for both stable
+\index{stability}%
+and unstable atmosphere-ice boundary layers. In contrast to the neutral drag coefficients the stability effect of the atmospheric boundary layer is calculated separately for each ice thickness category. The stability of the ice-ocean boundary layer is currently not accounted for.
+\index{form drag|}%
+\index{roughness|}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\markright{Ocean}
+\markright{Form drag}
 %\markboth{Model components}{Ocean}
 \section{Model components}
 \markboth{Model components}{Model components}
@@ -4708,7 +4773,7 @@ ferrmax & max allowed energy flux error (thermodynamics) {\dotfill\ } & 1.$\time
  field\_type\_unknown & unknown field type{\dotfill\ }  & 0 \\
  field\_type\_vector & vector field type {\dotfill\ } & 2 \\
  flat     & latent heat flux   &W/m$^2$ \\
- floediam & effective floe diameter for lateral melt {\dotfill\ } &300. m \\
+ floediam & effective floe diameter for lateral melt {\dotfill\ } &300. m \index{floe size} \\
  flw     & incoming longwave radiation &W/m$^2$ \\
  flwout      & outgoing longwave radiation &W/m$^2$ \\
  fm & Coriolis parameter * mass in U cell & kg/s \\
@@ -4785,7 +4850,7 @@ i(j)block & Cartesian i,j position of block & \\
 ice\_ic &  {$\bullet$}  choice of initial conditions (see Table~\ref{table:ic}) & \\
  ice\_ref\_salinity  & reference salinity for ice-ocean exchanges {\dotfill\ }& 4. ppt \\
 icells & number of grid cells with specified property (for vectorization) & \\
- iceruf & ice surface roughness {\dotfill\ }& 5.$\times$10$^{-4}$ m \\
+ iceruf & ice surface roughness {\dotfill\ }& 5.$\times$10$^{-4}$ m \index{roughness} \\
 \end{tabular*}
 \end{center}
 \begin{center}
