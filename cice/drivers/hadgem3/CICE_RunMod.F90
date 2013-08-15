@@ -185,7 +185,7 @@
          enddo ! iblk
          !$OMP END PARALLEL DO
 
-         call post_thermo               ! finalize thermo update
+         call post_thermo (dt)             ! finalize thermo update
 
          call ice_timer_stop(timer_thermo) ! thermodynamics
          call ice_timer_stop(timer_column) ! column physics

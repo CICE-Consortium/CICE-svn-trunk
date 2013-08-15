@@ -120,7 +120,7 @@
 
       subroutine init_calendar
 
-      use ice_fileunits
+      use ice_fileunits, only: nu_diag
 
       istep = 0         ! local timestep number
       time=istep0*dt    ! s
@@ -182,7 +182,7 @@
 
       subroutine calendar(ttime)
 
-      use ice_fileunits
+      use ice_fileunits, only: nu_diag
       use ice_communicate, only: my_task, master_task
 
       real (kind=dbl_kind), intent(in) :: &

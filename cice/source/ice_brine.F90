@@ -659,13 +659,12 @@
 ! Reads all values needed for hbrine
 ! author Elizabeth C. Hunke, LANL
 
-      use ice_domain_size
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init, &
                               istep0
       use ice_domain, only: nblocks
       use ice_flux, only: sss  
-      use ice_state
+      use ice_state, only: trcrn, nt_fbri
       use ice_exit, only: abort_ice
       use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
       use ice_read_write, only: ice_open, ice_read
@@ -743,11 +742,10 @@
 ! Dumps all values needed for a hbrine restart
 ! author Elizabeth C. Hunke, LANL
 
-      use ice_domain_size
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init
       use ice_domain, only: nblocks
-      use ice_state
+      use ice_state, only: trcrn, nt_fbri
       use ice_flux, only: sss  
       use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
       use ice_read_write, only: ice_open, ice_write

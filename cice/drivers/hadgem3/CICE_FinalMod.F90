@@ -11,10 +11,7 @@
 
       module CICE_FinalMod
 
-      use ice_exit
-      use ice_fileunits
       use ice_kinds_mod
-      use ice_timers
 
       implicit none
       private
@@ -31,7 +28,10 @@
 
       subroutine CICE_Finalize
 
+      use ice_exit, only: end_run
+      use ice_fileunits, only: nu_diag, release_all_fileunits
       use ice_restart, only: runid
+      use ice_timers, only: ice_timer_stop, ice_timer_print_all, timer_total
 
    !-------------------------------------------------------------------
    ! stop timers and print timer info
