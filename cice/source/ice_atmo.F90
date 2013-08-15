@@ -1,35 +1,22 @@
-!=======================================================================
-!BOP
-!
-! !MODULE: ice_atmo - atm-ice interface: stability based flux calculations
-!
-! !DESCRIPTION:
-!
-! Atmospheric boundary interface (stability based flux calculations)
-!
-! !REVISION HISTORY:
 !  SVN:$Id$
-!
+!=======================================================================
+
+! Atmospheric boundary interface (stability based flux calculations)
+
 ! author: Elizabeth C. Hunke, LANL
 !
 ! 2003: Vectorized by Clifford Chen (Fujitsu) and William Lipscomb
 ! 2004: Block structure added by William Lipscomb
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
 ! 2013: Form drag routine added (neutral_drag_coeffs) by David Schroeder 
-!
-! !INTERFACE:
-!
+
       module ice_atmo
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_blocks, only: nx_block, ny_block
       use ice_constants
       use ice_domain_size, only: max_blocks
-!
-!EOP
-!
+
       implicit none
       save
 
@@ -63,20 +50,25 @@
          Cdn_ocn_skin, & ! skin drag coefficient
          Cdn_ocn_floe, & ! floe edge drag coefficient
          Cdn_ocn_keel, & ! keel drag coefficient
-         Cdn_atm_ocn     !  ratio drag atm / neutral drag atm
+         Cdn_atm_ocn     ! ratio drag atm / neutral drag atm
 
 !=======================================================================
 
       contains
 
 !=======================================================================
-!BOP
+
+! Compute coefficients for atm/ice fluxes, stress, and reference
+! temperature and humidity. NOTE: \\
+! (1) all fluxes are positive downward,  \\
+! (2) here, tstar = (WT)/U*, and qstar = (WQ)/U*,  \\
+! (3) wind speeds should all be above a minimum speed (eg. 1.0 m/s). \\
 !
-! !IROUTINE: atmo_boundary_layer - compute coefficients for atm-ice fluxes, 
-!                                  stress and Tref/Qref
+! ASSUME:
+!  The saturation humidity of air at T(K): qsat(T)  (kg/m**3)
 !
-! !INTERFACE:
-!
+! Code originally based on CSM1
+
       subroutine atmo_boundary_layer (nx_block, ny_block, &
                                       sfctype,  icells,   &
                                       indxi,    indxj,    & 
@@ -90,25 +82,6 @@
                                       lhcoef,   shcoef,   &
                                       Cdn_atm,  Cdn_atm_ocn_n)     
 
-! !DESCRIPTION:
-!
-! Compute coefficients for atm/ice fluxes, stress, and reference
-! temperature and humidity. NOTE: \\
-! (1) all fluxes are positive downward,  \\
-! (2) here, tstar = (WT)/U*, and qstar = (WQ)/U*,  \\
-! (3) wind speeds should all be above a minimum speed (eg. 1.0 m/s). \\
-!
-! ASSUME:
-!  The saturation humidity of air at T(K): qsat(T)  (kg/m**3)
-!
-! Code originally based on CSM1
-!
-! !REVISION HISTORY: same as module
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells                ! number of cells that require atmo fluxes
@@ -148,9 +121,9 @@
          delq     , & ! humidity difference      (kg/kg)
          shcoef   , & ! transfer coefficient for sensible heat
          lhcoef       ! transfer coefficient for latent heat
-!
-!EOP
-!
+
+       !local variables
+
        integer (kind=int_kind) :: &
          k     , & ! iteration index
          i, j  , & ! horizontal indices
@@ -414,13 +387,12 @@
       end subroutine atmo_boundary_layer
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: atmo_boundary_const - compute coeeficients for atm-ice fluxes
-!
-!
-! !INTERFACE:
-!
+
+! Compute coefficients for atm/ice fluxes, stress
+! NOTE: \\
+! (1) all fluxes are positive downward,  \\
+! (2) reference temperature and humidity are NOT computed
+
       subroutine atmo_boundary_const (nx_block, ny_block, &
                                       sfctype,  icells,   &
                                       indxi,    indxj,    & 
@@ -433,19 +405,6 @@
                                       lhcoef,   shcoef,   &
                                       Cdn_atm)  
 
-! !DESCRIPTION:
-!
-! Compute coefficients for atm/ice fluxes, stress
-! NOTE: \\
-! (1) all fluxes are positive downward,  \\
-! (2) reference temperature and humidity are NOT computed
-!
-! !REVISION HISTORY: same as module
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells                ! number of cells that require atmo fluxes
@@ -478,9 +437,9 @@
          delq     , & ! humidity difference      (kg/kg)
          shcoef   , & ! transfer coefficient for sensible heat
          lhcoef       ! transfer coefficient for latent heat
-!
-!EOP
-!
+
+       ! local variables
+
        integer (kind=int_kind) :: &
          i, j, & ! horizontal indices
          ij      ! combined ij index
@@ -574,12 +533,14 @@
       end subroutine atmo_boundary_const
 
 !=======================================================================
-!BOP
-!
+
 ! neutral drag coefficients for ocean and atmosphere 
 ! also compute the intermediate necessary variables ridge height, 
 ! distance, floe size...	 
-!	
+!
+! authors: Michel Tsamados, CPOM
+!          David Schroeder, CPOM
+
       subroutine neutral_drag_coeffs (nx_block, ny_block, &
                                       ilo, ihi, jlo, jhi, &
                                       apnd,     hpnd,     &
@@ -597,9 +558,6 @@
                                       distrdg,  hkeel,           &
                                       dkeel,    lfloe,           &
                                       dfloe,    ncat)
-
-! authors: Michel Tsamados, CPOM
-!          David Schroeder, CPOM
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -684,12 +642,10 @@
        integer (kind=int_kind) :: &
          icells, & ! number of cells that require atmo fluxes
          n     , & ! category index       
-         k     , & ! iteration index
          i, j  , & ! horizontal indices
          ij        ! combined ij index
 
       real (kind=dbl_kind) :: &
-         tau   ,    & ! stress at zlvl      
          astar,     & ! new constant for form drag
          ctecaf,    & ! constante
          ctecwf,    & ! constante
@@ -758,7 +714,7 @@
         Cdn_ocn_keel(i,j) = c0
 
         ai  = aice(i,j)
-        aii = c1/aice(i,j)
+        aii = c1/ai
 
       !------------------------------------------------------------
       ! Compute average quantities
@@ -772,7 +728,6 @@
           ! area of pond per unit area of grid cell 
           apond = apond+apnd(i,j,n)*aicen(i,j,n)  
           ! volume of pond per unit area of grid cell
-          ! see volp in ice_meltpond_topo
           vpond = vpond+apnd(i,j,n)*hpnd(i,j,n)*aicen(i,j,n)
           ! volume of lid per unit area of grid cell
           ipond = ipond+apnd(i,j,n)*ipnd(i,j,n)*aicen(i,j,n)
@@ -842,7 +797,7 @@
           ctecar = cra*p5
           ! hridge relative to sea level
           Cdn_atm_rdg(i,j) = ai * ctecar*tmp1/distrdg(i,j)*sca* &
-                     (log(tmp1*icerufi)/log(c10*icerufi))**c2
+                     (log(tmp1*icerufi)/log(zref*icerufi))**c2
           Cdn_atm_rdg(i,j) = min(Cdn_atm_rdg(i,j),camax)
 
           tmp1 = hkeel(i,j) - hdraft(i,j)
@@ -864,7 +819,7 @@
           ctecwk = crw*p5
           ! hkeel relative to sea level
           Cdn_ocn_keel(i,j) = ctecwk*ai*tmp1/dkeel(i,j)*scw* &
-                     (log(tmp1*icerufi)/log(c10*icerufi))**c2  
+                     (log(tmp1*icerufi)/log(zref*icerufi))**c2  
           Cdn_ocn_keel(i,j) = max(min(Cdn_ocn_keel(i,j),cwmax),c0)
 !         Cdn_ocn_keel(i,j) = c0
   
@@ -876,7 +831,7 @@
 
         if (hfreebd(i,j) > puny) then
           sca = c1 - exp(-sl*beta*(c1-ai))
-          ctecaf = cfa*p5*(log(hfreebd(i,j)*ocnrufi)/log(c10*ocnrufi))**c2*sca
+          ctecaf = cfa*p5*(log(hfreebd(i,j)*ocnrufi)/log(zref*ocnrufi))**c2*sca
           Cdn_atm_floe(i,j) = ctecaf * hfreebd(i,j) * ai / lfloe(i,j)  
           Cdn_atm_floe(i,j) = max(min(Cdn_atm_floe(i,j),camax),c0)
         endif
@@ -887,10 +842,10 @@
       !------------------------------------------------------------
 
         if (hfreebd(i,j) > puny) then
-          sca = (apond)**(c1/(c10*beta))
+          sca = (apond)**(c1/(zref*beta))
           lp  = lpmin*(1-apond)+lpmax*apond
           Cdn_atm_pond(i,j) = ai * cpa*p5*sca*apond*hfreebd(i,j)/lp &
-                   * (log(hfreebd(i,j)*ocnrufi)/log(c10*ocnrufi))**c2
+                   * (log(hfreebd(i,j)*ocnrufi)/log(zref*ocnrufi))**c2
           Cdn_atm_pond(i,j) = min(Cdn_atm_pond(i,j),camax)
         endif
 !       Cdn_atm_pond(i,j) = c0
@@ -901,7 +856,7 @@
 
         if (hdraft(i,j) > puny) then
           scw = c1 - exp(-sl*beta*(c1-ai))
-          ctecwf = cfw*p5*(log(hdraft(i,j)*ocnrufi)/log(c10*ocnrufi))**c2*scw
+          ctecwf = cfw*p5*(log(hdraft(i,j)*ocnrufi)/log(zref*ocnrufi))**c2*scw
           Cdn_ocn_floe(i,j) = ctecwf * hdraft(i,j) * ai / lfloe(i,j)
           Cdn_ocn_floe(i,j) = max(min(Cdn_ocn_floe(i,j),cwmax),c0)
         endif

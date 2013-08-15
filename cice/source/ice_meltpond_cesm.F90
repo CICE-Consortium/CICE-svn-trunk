@@ -1,10 +1,7 @@
+!  SVN:$Id$
 !=======================================================================
-!
-!BOP
-!
-! !MODULE: ice_meltpond_cesm - CESM meltpond parameterization
-!
-! !DESCRIPTION:
+
+! CESM meltpond parameterization
 !
 ! This meltpond parameterization was developed for use with the delta-
 ! Eddington radiation scheme, and only affects the radiation budget in
@@ -12,24 +9,15 @@
 ! water is not used elsewhere in the model for mass budgets or other
 ! physical processes.
 !
-! !REVISION HISTORY:
-!  SVN:$$
-!
 ! authors David A. Bailey (NCAR)
 !         Marika M. Holland (NCAR)
 !         Elizabeth C. Hunke (LANL)
-!
-! !INTERFACE:
-!
+
       module ice_meltpond_cesm
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_constants
-!
-!EOP
-!
+
       implicit none
 
       private
@@ -40,49 +28,29 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: init_meltponds
-!
-! !DESCRIPTION:
-!
+
 !  Initialize melt ponds.
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine init_meltponds_cesm(nx_block, ny_block, ncat, &
                                      apnd, hpnd)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-        integer(kind=int_kind), intent(in) :: &
+
+      integer(kind=int_kind), intent(in) :: &
              nx_block , &
              ny_block , &
              ncat
 
-        real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+      real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
              intent(out) :: &
              apnd , & ! melt pond area fraction
              hpnd     ! melt pond depth
-!
-!EOP
-!
+
       apnd(:,:,:) = c0
       hpnd(:,:,:) = c0
 
       end subroutine init_meltponds_cesm
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: 
-!
-! !INTERFACE:
-!
+
       subroutine compute_ponds_cesm(nx_block,ny_block,  &
                                    ilo, ihi, jlo, jhi,  &
                                    dt,    hi_min,       &
@@ -91,15 +59,7 @@
                                    melts, frain,        &
                                    aicen, vicen, vsnon, &
                                    Tsfcn, apnd,  hpnd)
-!
-! !DESCRIPTION:
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
@@ -231,27 +191,16 @@
       end subroutine compute_ponds_cesm
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: 
-!
-! !INTERFACE:
-!
+
+! author: Adrian Turner, LANL
+
       subroutine compute_ponds_simple(nx_block,ny_block,   &
                                       ilo, ihi, jlo, jhi,  &
                                       dt,    rfrac, hi_min,&
                                       meltt, melts, frain, &
                                       aicen, vicen, vsnon, &
                                       Tsfcn, apnd,  hpnd)
-!
-! !DESCRIPTION:
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain

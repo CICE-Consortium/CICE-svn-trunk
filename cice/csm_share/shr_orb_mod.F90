@@ -29,7 +29,7 @@ MODULE shr_orb_mod
    !----------------------------------------------------------------------------
    ! PUBLIC: Interfaces and global data
    !----------------------------------------------------------------------------
-   public :: shr_orb_cosz
+!   public :: shr_orb_cosz
    public :: shr_orb_params
    public :: shr_orb_decl
    public :: shr_orb_print
@@ -54,7 +54,8 @@ MODULE shr_orb_mod
 CONTAINS
 !===============================================================================
 
-real(SHR_KIND_R8) FUNCTION shr_orb_cosz(jday,lat,lon,declin)
+!echmod - this is computed in ice_orbital.F90
+!real(SHR_KIND_R8) FUNCTION shr_orb_cosz(jday,lat,lon,declin)
 
    !----------------------------------------------------------------------------
    !
@@ -69,18 +70,17 @@ real(SHR_KIND_R8) FUNCTION shr_orb_cosz(jday,lat,lon,declin)
    !
    !----------------------------------------------------------------------------
 
-   real   (SHR_KIND_R8),intent(in) :: jday   ! Julian cal day (1.xx to 365.xx)
-   real   (SHR_KIND_R8),intent(in) :: lat    ! Centered latitude (radians)
-   real   (SHR_KIND_R8),intent(in) :: lon    ! Centered longitude (radians)
-   real   (SHR_KIND_R8),intent(in) :: declin ! Solar declination (radians)
+!   real   (SHR_KIND_R8),intent(in) :: jday   ! Julian cal day (1.xx to 365.xx)
+!   real   (SHR_KIND_R8),intent(in) :: lat    ! Centered latitude (radians)
+!   real   (SHR_KIND_R8),intent(in) :: lon    ! Centered longitude (radians)
+!   real   (SHR_KIND_R8),intent(in) :: declin ! Solar declination (radians)
 
    !----------------------------------------------------------------------------
 
-!echmod - this is computed in ice_orbital.F90
 !echmod    shr_orb_cosz = sin(lat)*sin(declin) - &
 !echmod    &              cos(lat)*cos(declin)*cos(jday*2.0_SHR_KIND_R8*pi + lon)
 
-END FUNCTION shr_orb_cosz
+!END FUNCTION shr_orb_cosz
 
 !===============================================================================
 

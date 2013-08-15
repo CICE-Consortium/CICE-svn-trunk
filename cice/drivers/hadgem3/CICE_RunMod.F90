@@ -1,8 +1,7 @@
+!  SVN:$Id$
 !=======================================================================
 !
 !  Main driver for time stepping of CICE.
-!
-!  SVN:$Id: CICE_RunMod.F90 607 2013-03-29 15:49:42Z eclare $
 !
 !  authors Elizabeth C. Hunke, LANL
 !          Philip W. Jones, LANL
@@ -517,11 +516,6 @@
       end subroutine sfcflux_to_ocn
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: da_state_update
-!
-! !DESCRIPTION:
 !
 ! Update the ice state variables using the ice concentration increment rate 
 ! calculated in the NEMO data assimilation (DA) scheme.
@@ -532,23 +526,13 @@
 ! thickness. Ice area is first removed from the lowest category, and then 
 ! removed from higher categories as needed.
 !
-! !INTERFACE:
-!
-       subroutine da_state_update
-!
-! !REVISION HISTORY:
-!
 ! authors: D. Peterson, Met Office
 !          A. McLaren,  Met Office
-!
-! !USES:
+
+      subroutine da_state_update
 
       use ice_constants, only: c1, puny
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
 #ifdef ICE_DA
 
       integer (kind=int_kind) :: &

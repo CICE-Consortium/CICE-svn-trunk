@@ -1,15 +1,8 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_ocean - ocean mixed layer internal to sea ice model
-!
-! !DESCRIPTION:
-!
+
 ! Ocean mixed layer calculation (internal to sea ice model).
 ! Allows heat storage in ocean for uncoupled runs.
-!
-! !REVISION HISTORY:
-!  SVN:$Id$
 !
 ! authors:   John Weatherly, CRREL
 !            C.M. Bitz, UW
@@ -20,18 +13,12 @@
 ! 2004: Block structure added by William Lipscomb
 ! 2005: Ocean-to-atmosphere fluxes added as 3D arrays, William Lipscomb
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
-!
-! !INTERFACE:
-!
+
       module ice_ocean
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_constants
-!
-!EOP
-!
+
       implicit none
       save
 
@@ -49,25 +36,14 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: ocean_mixed_layer - compute SST and freeze/melt potential
-!
-! !DESCRIPTION:
-!
+
 ! Compute the mixed layer heat balance and update the SST.
 ! Compute the energy available to freeze or melt ice.
 ! NOTE: SST changes due to fluxes through the ice are computed in
 !       ice_therm_vertical.
-!
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine ocean_mixed_layer (dt, iblk)
-!
-! !USES:
-!
+
       use ice_blocks, only: nx_block, ny_block
       use ice_state, only: aice
       use ice_flux, only: sst, Tf, Qa, uatm, vatm, wind, potT, rhoa, zlvl, &
@@ -77,17 +53,15 @@
       use ice_grid, only: tmask
       use ice_atmo, only: atmo_boundary_layer, atmbndy, atmo_boundary_const, &
            Cdn_atm, Cdn_atm_ocn
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
 
       integer (kind=int_kind), intent(in) :: &
          iblk    ! block index
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind) :: &
          TsfK , & ! surface temperature (K)
          swabs    ! surface absorbed shortwave heat flux (W/m^2)
@@ -97,8 +71,7 @@
 
       integer (kind=int_kind) :: &
          i, j           , & ! horizontal indices
-         ij             , & ! combined ij index
-         ilo,ihi,jlo,jhi    ! beginning and end of physical domain
+         ij                 ! combined ij index
 
       real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
          delt  , & ! potential temperature difference   (K)

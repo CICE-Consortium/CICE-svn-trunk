@@ -1,20 +1,13 @@
+!  SVN:$Id$
 !|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-!BOP
 
  module ice_communicate
 
-! !MODULE: ice_communicate
-! !DESCRIPTION:
 !  This module contains the necessary routines and variables for
 !  communicating between processors.
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
 ! author: Phil Jones, LANL
 ! Oct. 2004: Adapted from POP version by William H. Lipscomb, LANL
-!
-! !USES:
 
    use ice_kinds_mod
 #if (defined CCSM) || (defined SEQ_MCT)
@@ -34,13 +27,9 @@
    private
    save
 
-! !PUBLIC MEMBER FUNCTIONS:
-
    public  :: init_communicate,          &
               get_num_procs,             &
               create_communicator
-
-! !PUBLIC DATA MEMBERS:
 
    integer (int_kind), public :: &
       MPI_COMM_ICE,             &! MPI communicator for ice comms
@@ -54,29 +43,17 @@
       mpitagHalo            = 1,    &! MPI tags for various
       mpitag_gs             = 1000   ! communication patterns
 
-!EOP
-!BOC
-!EOC
 !***********************************************************************
 
  contains
 
 !***********************************************************************
-!BOP
-! !IROUTINE: init_communicate
-! !INTERFACE:
 
  subroutine init_communicate
 
-! !DESCRIPTION:
 !  This routine sets up MPI environment and defines ice
 !  communicator.
-!
-! !REVISION HISTORY:
-!  same as module
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -126,30 +103,18 @@
    mpiR4  = MPI_REAL4
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine init_communicate
 
 !***********************************************************************
-!BOP
-! !IROUTINE: get_num_procs
-! !INTERFACE:
 
  function get_num_procs()
 
-! !DESCRIPTION:
 !  This function returns the number of processor assigned to
 !  MPI_COMM_ICE
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !OUTPUT PARAMETERS:
 
    integer (int_kind) :: get_num_procs
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -163,43 +128,27 @@
    call MPI_COMM_SIZE(MPI_COMM_ICE, get_num_procs, ierr)
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function get_num_procs
 
 !***********************************************************************
-!BOP
-! !IROUTINE: create_communicator
-! !INTERFACE:
 
  subroutine create_communicator(new_comm, num_procs)
 
-! !DESCRIPTION:
 !  This routine creates a separate communicator for a subset of
 !  processors under default ice communicator.
 !
 !  this routine should be called from init_domain1 when the
 !  domain configuration (e.g. nprocs_btrop) has been determined
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INCLUDES:
 
    include 'mpif.h'
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       num_procs         ! num of procs in new distribution
 
-! !OUTPUT PARAMETERS:
-
    integer (int_kind), intent(out) :: &
       new_comm          ! new communicator for this distribution
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -243,7 +192,6 @@
                          new_comm, ierr)
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine create_communicator
 

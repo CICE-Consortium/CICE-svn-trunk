@@ -1,33 +1,20 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_dyn_shared - 
-!
-! !DESCRIPTION:
-!
+
 ! Elastic-viscous-plastic sea ice dynamics model code shared with other
 ! approaches
-!
-! !REVISION HISTORY:
-!  SVN:$Id$
 !
 ! author: Elizabeth C. Hunke, LANL
 !
 ! 2013: Split from ice_dyn_evp.F90 by Elizabeth Hunke
-! 
-! !INTERFACE:
-!
+
       module ice_dyn_shared
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_constants, only: c0, c1, p01, p001, dragio, rhow
       use ice_blocks, only: nx_block, ny_block
       use ice_domain_size, only: max_blocks
-!
-!EOP
-!
+
       implicit none
       private
       public :: init_evp, set_evp_parameters, stepu, principal_stress, &
@@ -79,24 +66,12 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_evp - initialize parameters needed for evp dynamics
-!
-! !INTERFACE:
-!
-      subroutine init_evp (dt)
-!
-! !DESCRIPTION:
-!
+
 ! Initialize parameters and variables needed for the evp dynamics
-!
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine init_evp (dt)
+
       use ice_blocks, only: nx_block, ny_block
       use ice_communicate, only: my_task, master_task
       use ice_constants, only: c0, c2, omega
@@ -109,22 +84,15 @@
       use ice_state, only: uvel, vvel, divu, shear
       use ice_grid, only: ULAT, ULON
       use ice_fileunits, only: nu_diag
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
-!
-!EOP
-!
-      integer (kind=int_kind) :: &
-         i, j, k, &
-         iblk            ! block index
 
-      real (kind=dbl_kind) :: &
-         dte         , & ! subcycling timestep for EVP dynamics, s
-         ecc         , & ! (ratio of major to minor ellipse axes)^2
-         tdamp2          ! 2(wave damping time scale T)
+      ! local variables
+
+      integer (kind=int_kind) :: &
+         i, j, &
+         iblk            ! block index
 
       call set_evp_parameters (dt)
 
@@ -180,41 +148,28 @@
       end subroutine init_evp
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: set_evp_parameters - set parameters for evp dynamics
-!
-! !INTERFACE:
-!
-      subroutine set_evp_parameters (dt)
-!
-! !DESCRIPTION:
-!
+
 ! Set parameters needed for the evp dynamics.
 ! Note: This subroutine is currently called only during initialization.
 !       If the dynamics time step can vary during runtime, it should
 !        be called whenever the time step changes.
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine set_evp_parameters (dt)
+
       use ice_communicate, only: my_task, master_task
       use ice_constants, only: p25, c1, c2, c4, p5
       use ice_domain, only: distrb_info
       use ice_global_reductions, only: global_minval, global_maxval
       use ice_grid, only: dxt, dyt, tmask, tarea
       use ice_fileunits, only: nu_diag
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind) :: &
          Se          , & ! stability parameter for revised EVP
          xi          , & ! stability parameter for revised EVP
@@ -278,12 +233,14 @@
       end subroutine set_evp_parameters
 
 !=======================================================================
-!BOP
+
+! Computes quantities needed in the stress tensor (sigma)
+! and momentum (u) equations, but which do not change during
+! the thermodynamics/transport time step:
+! ice mass and ice extent masks
 !
-! !IROUTINE: evp_prep1 - compute quantities needed for stress tensor and mom eqns
-!
-! !INTERFACE:
-!
+! author: Elizabeth C. Hunke, LANL
+
       subroutine evp_prep1 (nx_block,  ny_block, & 
                             ilo, ihi,  jlo, jhi, &
                             aice,      vice,     & 
@@ -292,23 +249,8 @@
                             strairx,   strairy,  & 
                             tmass,     icetmask)
 
-! !DESCRIPTION:
-!
-! Computes quantities needed in the stress tensor (sigma)
-! and momentum (u) equations, but which do not change during
-! the thermodynamics/transport time step:
-! ice mass and ice extent masks
-!
-! !REVISION HISTORY:
-!
-! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
       use ice_constants, only: c0, rhoi, rhos
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
@@ -334,9 +276,9 @@
       integer (kind=int_kind), dimension (nx_block,ny_block), & 
          intent(out) :: &
          icetmask    ! ice extent mask (T-cell)
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j
 
@@ -397,12 +339,15 @@
       end subroutine evp_prep1
 
 !=======================================================================
-!BOP
+! Computes quantities needed in the stress tensor (sigma)
+! and momentum (u) equations, but which do not change during
+! the thermodynamics/transport time step:
+! --wind stress shift to U grid,
+! --ice mass and ice extent masks,
+! initializes ice velocity for new points to ocean sfc current
 !
-! !IROUTINE: evp_prep2 - compute quantities needed for stress tensor and mom eqns
-!
-! !INTERFACE:
-!
+! author: Elizabeth C. Hunke, LANL
+
       subroutine evp_prep2 (nx_block,   ny_block,   & 
                             ilo, ihi,   jlo, jhi,   &
                             icellt,     icellu,     & 
@@ -430,25 +375,8 @@
                             uvel_init,  vvel_init,  &
                             uvel,       vvel)
 
-! !DESCRIPTION:
-!
-! Computes quantities needed in the stress tensor (sigma)
-! and momentum (u) equations, but which do not change during
-! the thermodynamics/transport time step:
-! --wind stress shift to U grid,
-! --ice mass and ice extent masks,
-! initializes ice velocity for new points to ocean sfc current
-!
-! !REVISION HISTORY:
-!
-! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
       use ice_constants, only: c0, c1, gravit
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
@@ -514,9 +442,9 @@
          strocny , & ! ice-ocean stress, y-direction
          strintx , & ! divergence of internal ice stress, x (N/m^2)
          strinty     ! divergence of internal ice stress, y (N/m^2)
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, ij
 
@@ -654,12 +582,12 @@
       end subroutine evp_prep2
 
 !=======================================================================
-!BOP
+
+! Calculation of the surface stresses
+! Integration of the momentum equation to find velocity (u,v)
 !
-! !IROUTINE: stepu - integrates mom eqn for u,v
-!
-! !INTERFACE:
-!
+! author: Elizabeth C. Hunke, LANL
+
       subroutine stepu (nx_block,   ny_block, &
                         icellu,     Cw,       &
                         indxui,     indxuj,   &
@@ -673,20 +601,7 @@
                         strintx,    strinty,  &
                         uvel_init,  vvel_init,&
                         uvel,       vvel)
-!
-! !DESCRIPTION:
-!
-! Calculation of the surface stresses
-! Integration of the momentum equation to find velocity (u,v)
-!
-! !REVISION HISTORY:
-!
-! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icellu                ! total count when iceumask is true
@@ -729,9 +644,9 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
          Cw                   ! ocean-ice neutral drag coefficient
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, ij
 
@@ -792,12 +707,12 @@
       end subroutine stepu
 
 !=======================================================================
-!BOP
+
+! Calculation of the ice-ocean stress.
+! ...the sign will be reversed later...
 !
-! !IROUTINE: evp_finish - calculates ice-ocean stress
-!
-! !INTERFACE:
-!
+! author: Elizabeth C. Hunke, LANL
+
       subroutine evp_finish (nx_block, ny_block, &
                              icellu,   Cw,       &
                              indxui,   indxuj,   &
@@ -808,20 +723,7 @@
                              strairx,  strairy,& ! echmod - HB87
                              strocnx,  strocny,  &
                              strocnxT, strocnyT) 
-!
-! !DESCRIPTION:
-!
-! Calculation of the ice-ocean stress.
-! ...the sign will be reversed later...
-!
-! !REVISION HISTORY:
-!
-! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icellu                ! total count when iceumask is true
@@ -849,9 +751,9 @@
          strocny , & ! ice-ocean stress, y-direction
          strocnxT, & ! ice-ocean stress, x-direction
          strocnyT    ! ice-ocean stress, y-direction
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, ij
 
@@ -901,32 +803,19 @@
       end subroutine evp_finish
 
 !=======================================================================
-!BOP
+
+! Computes principal stresses for comparison with the theoretical
+! yield curve; northeast values
 !
-! !IROUTINE: principal_stress - computes principal stress for yield curve
-!
-! !INTERFACE:
-!
+! author: Elizabeth C. Hunke, LANL
+
       subroutine principal_stress(nx_block,   ny_block,  &
                                   stressp_1,  stressm_1, &
                                   stress12_1, prs_sig,   &
                                   sig1,       sig2)
-!
-! !DESCRIPTION:
-!
-! Computes principal stresses for comparison with the theoretical
-! yield curve; northeast values
-!
-! !REVISION HISTORY:
-!
-! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
 
       use ice_constants, only: spval_dbl, puny, p5, c4
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block  ! block dimensions
 
@@ -939,9 +828,9 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
          sig1    , & ! principal stress component
          sig2        ! principal stress component
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: i, j
 
       do j = 1, ny_block

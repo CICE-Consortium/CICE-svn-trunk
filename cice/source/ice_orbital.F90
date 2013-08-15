@@ -1,29 +1,15 @@
-!=======================================================================
-!BOP
-!
-! !MODULE: ice_orbital - computes orbital parameters for solar zenith angle
-!
-! !DESCRIPTION:
-!
-! Orbital parameters computed from date
-!
-! !REVISION HISTORY:
 !  SVN:$Id$
-!
+!=======================================================================
+
+! Orbital parameters computed from date
 ! author:  Bruce P. Briegleb, NCAR 
 !
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
-!
-! !INTERFACE:
-!
+
       module ice_orbital
-!
-! !USES:
-!
+
       use ice_kinds_mod
-!
-!EOP
-!
+
       implicit none
       private
       public :: init_orbit, compute_coszen
@@ -49,67 +35,41 @@
       contains
  
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_orbit - initialize orbital parameters
-!
-! !INTERFACE:
-!
-      subroutine init_orbit
-!
-! !DESCRIPTION:
-!
+
 ! Uses share routines to compute orbital parameters
 ! for the specified date.
 !
-! !REVISION HISTORY:
-!
 ! author:  Bruce P. Briegleb, NCAR 
-!
-! !USES: none
+
+      subroutine init_orbit
 
       use shr_orb_mod, only: shr_orb_params
-!
-! !INPUT/OUTPUT PARAMETERS: none
-!
-!EOP
-!
+
       iyear_AD  = 1950
       log_print = .false.   ! if true, write out orbital parameters
-!
+
       call shr_orb_params( iyear_AD , eccen  , obliq , mvelp     , &
                            obliqr   , lambm0 , mvelpp, log_print )
  
       end subroutine init_orbit
  
 !=======================================================================
-!BOP
+
+! Uses orbital and lat/lon info to compute cosine solar zenith angle
+! for the specified date.
 !
-! !IROUTINE: compute_coszen - computes cosine solar zenith angle
-!
-! !INTERFACE:
-!
+! author:  Bruce P. Briegleb, NCAR 
+
       subroutine compute_coszen (nx_block, ny_block, &
                                  icells,             &
                                  indxi,    indxj,    &
                                  tlat,     tlon,     &
                                  coszen,   dt)
-!
-! !DESCRIPTION:
-!
-! Uses orbital and lat/lon info to compute cosine solar zenith angle
-! for the specified date.
-!
-! author:  Bruce P. Briegleb, NCAR 
-!
-! !USES:
-!
+
       use ice_calendar, only: yday, sec
       use ice_constants, only: c0, c2, p5, pi, secday
       use shr_orb_mod, only: shr_orb_decl
-! 
-! !INPUT/OUTPUT PARAMETERS: 
-! 
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells                ! number of ice-covered grid cells
@@ -126,9 +86,9 @@
  
       real (kind=dbl_kind), intent(in) :: &
          dt                  ! thermodynamic time step
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind) :: ydayp1 ! day of year plus one time step
  
       integer (kind=int_kind) :: &

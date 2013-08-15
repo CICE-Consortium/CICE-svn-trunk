@@ -1,26 +1,18 @@
+!  SVN:$Id$
 !|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
  module ice_domain
 
-!BOP
-! !MODULE: ice_domain
-!
-! !DESCRIPTION:
 !  This module contains the model domain and routines for initializing
 !  the domain.  It also initializes the decompositions and
 !  distributions across processors/threads by calling relevant
 !  routines in the block, distribution modules.
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
 ! author: Phil Jones, LANL
 ! Oct. 2004: Adapted from POP by William H. Lipscomb, LANL
 ! Feb. 2007: E. Hunke removed NE and SW boundary options (they were buggy
 !  and not used anyhow).
-!
-! !USES:
-!
+
    use ice_kinds_mod
    use ice_constants, only: puny, shlat, nhlat, rad_to_deg
    use ice_communicate, only: my_task, master_task, get_num_procs
@@ -37,12 +29,8 @@
    private
    save
 
-! !PUBLIC MEMBER FUNCTIONS
-
    public  :: init_domain_blocks ,&
               init_domain_distribution
-
-! !PUBLIC DATA MEMBERS:
 
    integer (int_kind), public :: &
       nblocks            ! actual number of blocks on this processor
@@ -65,8 +53,6 @@
       maskhalo_remap , & ! if true, use masked halo updates for transport
       maskhalo_bound     ! if true, use masked halo updates for bound_state
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !   module private variables - for the most part these appear as
@@ -86,29 +72,17 @@
     integer (int_kind) :: &
        nprocs                ! num of processors
 
-!EOC
 !***********************************************************************
 
  contains
 
 !***********************************************************************
-!BOP
-! !IROUTINE: init_domain_blocks
-! !INTERFACE:
 
  subroutine init_domain_blocks
 
-! !DESCRIPTION:
 !  This routine reads in domain information and calls the routine
 !  to set up the block decomposition.
-!
-! !REVISION HISTORY:
-!  same as module
 
-! !USES:
-!
-!EOP
-!BOC
 !----------------------------------------------------------------------
 !
 !  local variables
@@ -248,34 +222,22 @@
    endif
 
 !----------------------------------------------------------------------
-!EOC
 
  end subroutine init_domain_blocks
 
 !***********************************************************************
-!BOP
-! !IROUTINE: init_domain_distribution
-! !INTERFACE:
 
  subroutine init_domain_distribution(KMTG,ULATG)
 
-! !DESCRIPTION:
 !  This routine calls appropriate setup routines to distribute blocks
 !  across processors and defines arrays with block ids for any local
 !  blocks. Information about ghost cell update routines is also
 !  initialized here through calls to the appropriate boundary routines.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    real (dbl_kind), dimension(nx_global,ny_global), intent(in) :: &
       KMTG           ,&! global topography
       ULATG            ! global latitude field (radians)
 
-!EOP
-!BOC
 !----------------------------------------------------------------------
 !
 !  local variables
@@ -291,7 +253,7 @@
       max_work_unit=10    ! quantize the work into values from 1,max
 
    integer (int_kind) :: &
-      i,j,k,n            ,&! dummy loop indices
+      i,j,n              ,&! dummy loop indices
       ig,jg              ,&! global indices
       work_unit          ,&! size of quantized work unit
       nblocks_tmp        ,&! temporary value of nblocks
@@ -506,7 +468,6 @@
                         nx_global)
 
 !----------------------------------------------------------------------
-!EOC
 
  end subroutine init_domain_distribution
 

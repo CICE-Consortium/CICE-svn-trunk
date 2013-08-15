@@ -1,40 +1,15 @@
+!  SVN:$Id$
 !=======================================================================
-!
-!BOP
-!
-! !MODULE: ice_history - ice model history files
-!
+
 ! Mechanical redistribution history output
 !
-! The following variables are currently hard-wired as snapshots 
-!   (instantaneous rather than time-averages):
-!   divu, shear, sig1, sig2, trsig, mlt_onset, frz_onset, hisnap, aisnap
-!
-! The flags (f_<field>) can be set to '1','h','d','m','y' or 'x', where
-!   n means the field will not be written.  To output the same field at
-!   more than one frequency, for instance monthy and daily, set 
-!   f_<field> = 'md'.
-!
-! !REVISION HISTORY:
-!  SVN:$Id: ice_history.F90 569 2013-01-10 15:28:29Z eclare $
-!
-! authors Tony Craig and Bruce Briegleb, NCAR
-!         Elizabeth C. Hunke and William H. Lipscomb, LANL
-!         C. M. Bitz, UW
-!
 ! 2012 Elizabeth Hunke split code from ice_history.F90
-!
-! !INTERFACE:
-!
+
       module ice_history_mechred
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_domain_size, only: max_nstrm
-!
-!EOP
-!
+
       implicit none
       private
       public :: accum_hist_mechred, init_hist_mechred_2D, init_hist_mechred_3Dc
@@ -93,25 +68,12 @@
       contains
 
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: init_hist - initialize history files
-!
-! !INTERFACE:
-!
-      subroutine init_hist_mechred_2D
-!
-! !DESCRIPTION:
-!
+
 ! Initialize history files
-!
-! !REVISION HISTORY:
-!
 ! authors Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine init_hist_mechred_2D
+
       use ice_broadcast, only: broadcast_scalar
       use ice_calendar, only: nstreams
       use ice_communicate, only: my_task, master_task
@@ -121,12 +83,8 @@
           get_fileunit, release_fileunit
       use ice_history_shared, only: tstr2D, tcstr, define_hist_field
       use ice_state, only: tr_lvl
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      integer (kind=int_kind) :: n, k, ns
+
+      integer (kind=int_kind) :: ns
       integer (kind=int_kind) :: nml_error ! namelist i/o error flag
 
       !-----------------------------------------------------------------
@@ -240,34 +198,14 @@
       end subroutine init_hist_mechred_2D
 
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: init_hist - initialize history files
-!
-! !INTERFACE:
-!
+
       subroutine init_hist_mechred_3Dc
-!
-! !DESCRIPTION:
-!
-! Initialize history files
-!
-! !REVISION HISTORY:
-!
-! authors Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
       use ice_constants, only: c0, c1, secday, c100, mps_to_cmpdy
       use ice_calendar, only: nstreams
       use ice_exit, only: abort_ice
       use ice_history_shared, only: tstr3Dc, tcstr, define_hist_field
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       integer (kind=int_kind) :: ns
 
       !-----------------------------------------------------------------
@@ -347,25 +285,12 @@
       end subroutine init_hist_mechred_3Dc
 
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: accum_hist - accumulate average ice quantities or snapshots
-!
-! !INTERFACE:
-!
-      subroutine accum_hist_mechred (iblk)
-!
-! !DESCRIPTION:
-!
-! write average ice quantities or snapshots
-!
-! !REVISION HISTORY:
-!
+
+! accumulate average ice quantities or snapshots
 ! author:   Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine accum_hist_mechred (iblk)
+
       use ice_constants, only: c1
       use ice_history_shared, only: n2D, a2D, a3Dc, ncat_hist, &
           accum_hist_field
@@ -374,16 +299,9 @@
       use ice_flux, only: dardg1dt, dardg2dt, dvirdgdt, dardg1ndt,&
           dardg2ndt, dvirdgndt, krdgn, aparticn, aredistn, vredistn, &
           araftn, vraftn, opening
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
            iblk                 ! block index
-!
-!EOP
-!
-      integer (kind=int_kind) :: &
-           i,j
 
       !---------------------------------------------------------------
       ! increment field

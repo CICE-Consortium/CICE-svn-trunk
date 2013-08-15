@@ -1,34 +1,22 @@
+!  SVN:$Id$
 !=========================================================================
-!BOP
-!
-! !MODULE: ice_therm_0layer - zero-layer thermodynamics
-!
-! !DESCRIPTION:
 !
 ! Update ice and snow internal temperatures
-!
-! !REVISION HISTORY:
-!  SVN:$Id$
+! using zero-layer thermodynamics
 !
 ! authors: Alison McLaren, UK MetOffice
 !          Elizabeth C. Hunke, LANL
 !
 ! 2012: Split from ice_therm_vertical.F90
-!
-! !INTERFACE:
-!
+
       module ice_therm_0layer
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_domain_size, only: nilyr, nslyr, max_ntrcr
       use ice_constants
       use ice_fileunits, only: nu_diag
       use ice_therm_bl99, only: surface_fluxes
-!
-!EOP
-!
+
       implicit none
 
       private
@@ -39,11 +27,6 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: zerolayer_temperature  - new surface temperature calculation
-!
-! !DESCRIPTION:
 !
 ! Compute new surface temperature using zero layer model of Semtner
 ! (1976).
@@ -52,13 +35,9 @@
 ! surface flux balance equation (i.e. net surface flux from atmos
 ! equals conductive flux from the top to the bottom surface).
 !
-! !REVISION HISTORY:
-!
 ! author:  Alison McLaren, Met Office
 !         (but largely taken from temperature_changes)
-!
-! !INTERFACE:
-!
+
       subroutine zerolayer_temperature(nx_block, ny_block, &
                                        my_task,  istep1,   &
                                        dt,       icells,   & 
@@ -75,11 +54,7 @@
                                        fcondtopn,fcondbot, &
                                        l_stop,             &
                                        istop,    jstop)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          my_task     , & ! task number (diagnostic only)
@@ -128,9 +103,9 @@
 
       integer (kind=int_kind), intent(inout) :: &
          istop, jstop    ! i and j indices of cell where model fails
-!
-!EOP
-!
+
+      ! local variables
+
       logical (kind=log_kind), parameter :: &
          l_zerolayerchecks = .true.
 

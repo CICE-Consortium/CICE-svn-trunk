@@ -1,8 +1,5 @@
+!  SVN:$Id$
 !=======================================================================
-!
-!BOP
-!
-! !MODULE: ice_history_shared - common ice model history files
 !
 ! Output files: netCDF or binary data, Fortran unformatted dumps
 !
@@ -19,26 +16,17 @@
 !   more than one frequency, for instance monthy and daily, set 
 !   f_<field> = 'md'.
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
 ! authors Tony Craig and Bruce Briegleb, NCAR
 !         Elizabeth C. Hunke and William H. Lipscomb, LANL
 !         C. M. Bitz, UW
 !
 ! 2012 Elizabeth Hunke split code from ice_history.F90
-!
-! !INTERFACE:
-!
+
       module ice_history_shared
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_domain_size, only: ncat, nilyr, nslyr, nblyr, max_nstrm
-!
-!EOP
-!
+
       implicit none
       save
 
@@ -448,8 +436,6 @@
 
       integer (kind=int_kind) :: iyear, imonth, iday, isec
 
-      character (char_len_long) :: tmpfile
-
         iyear = nyr + year_init - 1 ! set year_init=1 in ice_in to get iyear=nyr
         imonth = month
         iday = mday
@@ -512,29 +498,22 @@
 
 !=======================================================================
 
+!     Initializes description of an available field and returns location
+!     in the available fields array for use in later calls.
+!
+!     2009 Created by D. Bailey following POP
+
       subroutine define_hist_field(id, vname, vunit, vcoord, vcellmeas, &
                                    vdesc, vcomment, cona, conb, &
                                    ns1, vhistfreq)
 
-!     !DESCRIPTION:
-!     Initializes description of an available field and returns location
-!     in the available fields array for use in later calls.
-!
-!     !REVISION HISTORY:
-!     2009 Created by D. Bailey following POP
-
-!     !USES:
       use ice_calendar, only: histfreq, histfreq_n, nstreams
       use ice_domain_size, only: max_nstrm
       use ice_exit, only: abort_ice
 
-!     !OUTPUT PARAMETERS:
-
       integer (int_kind), dimension(max_nstrm), intent(out) :: &
          id                ! location in avail_fields array for use in
                            ! later routines
-
-!     !INPUT PARAMETERS
 
       character (len=*), intent(in) :: &
          vname      , & ! variable names
@@ -621,23 +600,18 @@
 
 !=======================================================================
 
-      subroutine accum_hist_field_2D(id, iblk, field_accum, field)
-
-!     !DESCRIPTION:
 !     Accumulates a history field
 !
-!     !REVISION HISTORY:
 !     2009 Created by D. Bailey following POP
 !     2010 Generalized dimension of variables by N. Jeffery, E. Hunke
 
+      subroutine accum_hist_field_2D(id, iblk, field_accum, field)
 
       use ice_blocks, only: block, get_block
       use ice_calendar, only: nstreams
       use ice_domain, only: blocks_ice
       use ice_domain_size, only: max_nstrm
       use ice_grid, only: tmask
-
-!     !OUTPUT PARAMETERS:
 
       integer (int_kind), dimension(max_nstrm), intent(in) :: &
          id                ! location in avail_fields array for use in
@@ -685,22 +659,18 @@
 
 !=======================================================================
 
-      subroutine accum_hist_field_3D(id, iblk, ndim, field_accum, field)
-
-!     !DESCRIPTION:
 !     Accumulates a history field
 !
-!     !REVISION HISTORY:
 !     2009 Created by D. Bailey following POP
 !     2010 Generalized dimension of variables by N. Jeffery, E. Hunke
+
+      subroutine accum_hist_field_3D(id, iblk, ndim, field_accum, field)
 
       use ice_blocks, only: block, get_block
       use ice_calendar, only: nstreams
       use ice_domain, only: blocks_ice
       use ice_domain_size, only: max_nstrm
       use ice_grid, only: tmask
-
-!     !OUTPUT PARAMETERS:
 
       integer (int_kind), dimension(max_nstrm), intent(in) :: &
          id                ! location in avail_fields array for use in
@@ -753,22 +723,18 @@
 
 !=======================================================================
 
-      subroutine accum_hist_field_4D(id, iblk, ndim3, ndim4, field_accum, field)
-
-!     !DESCRIPTION:
 !     Accumulates a history field
 !
-!     !REVISION HISTORY:
 !     2009 Created by D. Bailey following POP
 !     2010 Generalized dimension of variables by N. Jeffery, E. Hunke
+
+      subroutine accum_hist_field_4D(id, iblk, ndim3, ndim4, field_accum, field)
 
       use ice_blocks, only: block, get_block
       use ice_calendar, only: nstreams
       use ice_domain, only: blocks_ice
       use ice_domain_size, only: max_nstrm
       use ice_grid, only: tmask
-
-!     !OUTPUT PARAMETERS:
 
       integer (int_kind), dimension(max_nstrm), intent(in) :: &
          id                ! location in avail_fields array for use in

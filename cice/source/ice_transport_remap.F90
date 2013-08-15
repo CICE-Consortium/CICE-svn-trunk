@@ -1,9 +1,5 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_transport_remap - horizontal transport via incremental remapping
-!
-! !DESCRIPTION:
 !
 ! Transports quantities using the second-order conservative remapping
 ! scheme developed by John Dukowicz and John Baumgardner (DB) and modified
@@ -19,9 +15,6 @@
 !  transport using incremental remapping, Mon. Wea. Rev., 132,
 !  1341-1354.
 !
-! !REVISION HISTORY:
-!  SVN:$Id: ice_transport_remap.F 33 2006-11-13 19:51:14Z eclare $
-!
 ! authors William H. Lipscomb, LANL
 !         John Baumgardner, LANL
 !
@@ -34,21 +27,14 @@
 !           can be specified (following an idea of Mats Bentsen)
 ! 2010: ECH removed unnecessary grid arrays and optional arguments from 
 !       horizontal_remap
-!
-! !INTERFACE:
-!
+
       module ice_transport_remap
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_communicate, only: my_task, master_task
       use ice_domain_size, only: max_blocks, ncat
-!      use ice_constants
       use ice_fileunits, only: nu_diag
-!
-!EOP
-!
+
       implicit none
       save
       private
@@ -252,39 +238,23 @@
 
 !=======================================================================
 !
-!BOP
-!
-! !IROUTINE: init_remap - initialize grid quantities used for remapping
-!
-! !INTERFACE:
-!
-      subroutine init_remap
-!
-! !DESCRIPTION:
-!
 ! Grid quantities used by the remapping transport scheme
 !
 ! Note:  the arrays xyav, xxxav, etc are not needed for rectangular grids
 ! but may be needed in the future for other nonuniform grids.  They have 
 ! been commented out here to save memory and flops.
 !
-! !REVISION HISTORY:
-!
 ! author William H. Lipscomb, LANL
-!
-! !USES:
-!
+
+      subroutine init_remap
+
       use ice_constants, only: c0, c1, c12
       use ice_domain, only: nblocks
       use ice_blocks, only: nx_block, ny_block
       use ice_grid, only: xav, yav, xxav, yyav
 !                          dxt, dyt, xyav, &
 !                          xxxav, xxyav, xyyav, yyyav
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       integer (kind=int_kind) ::     &
  	 i, j, iblk     ! standard indices
 
@@ -319,23 +289,7 @@
       end subroutine init_remap
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: horizontal_remap - incremental remapping transport scheme
-!
-! !INTERFACE:
-!
-      subroutine horizontal_remap (dt,                ntrace,     &
-                                   uvel,              vvel,       &
-                                   mm,                tm,         &
-                                   l_fixed_area,                  &
-                                   tracer_type,       depend,  &
-                                   has_dependents,             &
-                                   integral_order,             &
-                                   l_dp_midpt)
-!
-! !DESCRIPTION:
-
 ! Solve the transport equations for one timestep using the incremental
 ! remapping scheme developed by John Dukowicz and John Baumgardner (DB)
 ! and modified for sea ice by William Lipscomb and Elizabeth Hunke.
@@ -347,15 +301,20 @@
 ! This version of the remapping allows the user to specify the areal
 ! flux across each edge, based on an idea developed by Mats Bentsen.
 !
-! !REVISION HISTORY:
-!
 ! author William H. Lipscomb, LANL
 ! 2006: Moved driver (subroutine transport_remap) into separate module. 
 !       Geometry changes (logically rectangular coordinates, fixed
 !        area fluxes)
-!       
-! !USES:
-!
+
+      subroutine horizontal_remap (dt,                ntrace,     &
+                                   uvel,              vvel,       &
+                                   mm,                tm,         &
+                                   l_fixed_area,                  &
+                                   tracer_type,       depend,  &
+                                   has_dependents,             &
+                                   integral_order,             &
+                                   l_dp_midpt)
+
       use ice_boundary, only: ice_halo, ice_HaloMask, ice_HaloUpdate, &
           ice_HaloDestroy
       use ice_constants, only: c0, p5, &
@@ -370,9 +329,7 @@
       use ice_exit, only: abort_ice
       use ice_calendar, only: istep1
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bound
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) ::     &
          dt      ! time step
 
@@ -417,9 +374,6 @@
       logical (kind=log_kind), intent(in) :: &
          l_dp_midpt          ! if true, find departure points using
                              ! corrected midpoint velocity
-!
-!EOP
-!
       ! local variables
 
       integer (kind=int_kind) ::     &
@@ -891,24 +845,6 @@
 
 !=======================================================================
 !
-!BOP
-!
-! !IROUTINE: make_masks - make area and tracer masks
-!
-! !INTERFACE:
-!
-      subroutine make_masks (nx_block, ny_block,           &
-                             ilo, ihi, jlo, jhi,           &
-                             nghost,   ntrace,             &
-                             has_dependents,               &
-                             icells,                       &
-                             indxi,    indxj,              &
-                             mm,       mmask,              &
-                             tm,       tmask)
-
-!
-! !DESCRIPTION:
-!
 ! Make area and tracer masks.
 !
 ! If an area is masked out (mm < puny), then the values of tracers
@@ -920,17 +856,19 @@
 ! For example, the enthalpy value has no meaning if the thickness
 !  is zero.
 !
-! !REVISION HISTORY:
-!
 ! author William H. Lipscomb, LANL
-!
-! !USES:
+
+      subroutine make_masks (nx_block, ny_block,           &
+                             ilo, ihi, jlo, jhi,           &
+                             nghost,   ntrace,             &
+                             has_dependents,               &
+                             icells,                       &
+                             indxi,    indxj,              &
+                             mm,       mmask,              &
+                             tm,       tmask)
 
       use ice_constants, only: c0, c1, puny
 
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent(in) ::     &
            nx_block, ny_block  ,&! block dimensions
            ilo,ihi,jlo,jhi     ,&! beginning and end of physical domain
@@ -964,9 +902,9 @@
       real (kind=dbl_kind), dimension (nx_block, ny_block, ntrace, ncat),  &
            intent(out), optional ::     &
            tmask         ! = 1. if tracer is present, else = 0.
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::     &
            i, j, ij       ,&! horizontal indices
            n              ,&! ice category index
@@ -1072,12 +1010,11 @@
 
 !=======================================================================
 !
-!BOP
+! Construct fields of ice area and tracers.
 !
-! !IROUTINE: construct_fields - construct fields of ice area and tracers
-!
-! !INTERFACE:
-!
+! authors William H. Lipscomb, LANL
+!         John R. Baumgardner, LANL
+
       subroutine construct_fields (nx_block,       ny_block,   &
                                    ilo, ihi,       jlo, jhi,   &
                                    nghost,         ntrace,     &
@@ -1096,23 +1033,9 @@
                                    tm,             tc,         &
                                    tx,             ty,         &
                                    tmask)
-!
-! !DESCRIPTION:
-!
-! Construct fields of ice area and tracers.
-!
-! !REVISION HISTORY:
-!
-! authors William H. Lipscomb, LANL
-!         John R. Baumgardner, LANL
-!
-! !USES:
 
       use ice_constants, only: c0, c1, puny
 
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent(in) ::   &
          nx_block, ny_block  ,&! block dimensions
          ilo,ihi,jlo,jhi     ,&! beginning and end of physical domain
@@ -1158,9 +1081,9 @@
          intent(out), optional ::   &
          tc             ,&! tracer at geometric center of cell
          tx, ty           ! limited derivative of tracer wrt x and y
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::   &
          i, j           ,&! horizontal indices
          nt, nt1        ,&! tracer indices
@@ -1403,39 +1326,24 @@
 
 !=======================================================================
 !
-!BOP
-!
-! !IROUTINE: limited_gradient - limited gradient of a scalar field
-!
-! !INTERFACE:
-!
-      subroutine limited_gradient (nx_block, ny_block,   &
-                                   ilo, ihi, jlo, jhi,   &
-                                   nghost,               &
-                                   phi,      phimask,    &
-                                   cnx,      cny,        &
-                                   gx,       gy)
-!
-! !DESCRIPTION:
-!
 ! Compute a limited gradient of the scalar field phi in scaled coordinates.
 ! "Limited" means that we do not create new extrema in phi.  For
 ! instance, field values at the cell corners can neither exceed the
 ! maximum of phi(i,j) in the cell and its eight neighbors, nor fall
 ! below the minimum.
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         John R. Baumgardner, LANL
-!
-! !USES:
+
+      subroutine limited_gradient (nx_block, ny_block,   &
+                                   ilo, ihi, jlo, jhi,   &
+                                   nghost,               &
+                                   phi,      phimask,    &
+                                   cnx,      cny,        &
+                                   gx,       gy)
 
       use ice_constants, only: c0, c1, p5, puny
 
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent(in) ::   &
           nx_block, ny_block,&! block dimensions
           ilo,ihi,jlo,jhi ,&! beginning and end of physical domain
@@ -1455,9 +1363,9 @@
           intent(out) ::   &
           gx     ,&! limited x-direction gradient
           gy       ! limited y-direction gradient
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::   &
           i, j, ij        ,&! standard indices
           icells            ! number of cells to limit
@@ -1570,12 +1478,12 @@
       end subroutine limited_gradient
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: departure_points - compute departure points of trajectories
+! Given velocity fields on cell corners, compute departure points
+! of back trajectories in nondimensional coordinates.
 !
-! !INTERFACE:
-!
+! author William H. Lipscomb, LANL
+
       subroutine departure_points (nx_block,   ny_block,   &
                                    ilo, ihi,   jlo, jhi,   &
                                    nghost,     dt,   &
@@ -1585,23 +1493,9 @@
                                    dpx,        dpy,     &
                                    l_dp_midpt, l_stop,   &
                                    istop,      jstop)
-!
-! !DESCRIPTION:
-!
-! Given velocity fields on cell corners, compute departure points
-! of back trajectories in nondimensional coordinates.
-!
-! !REVISION HISTORY:
-!
-! author William H. Lipscomb, LANL
-!
-! !USES:
 
       use ice_constants, only: c0, p5
 
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent(in) ::   &
          nx_block, ny_block,&! block dimensions
          ilo,ihi,jlo,jhi,   &! beginning and end of physical domain
@@ -1631,9 +1525,9 @@
 
       integer (kind=int_kind), intent(inout) ::   &
          istop, jstop     ! indices of grid cell where model aborts 
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::   &
          i, j, i2, j2     ! horizontal indices
 
@@ -1768,12 +1662,12 @@
 
 !=======================================================================
 !
-!BOP
+! Compute areas and vertices of transport triangles for north or
+!  east cell edges.
 !
-! !IROUTINE: locate_triangles - triangle info for cell edges
-!
-! !INTERFACE:
-!
+! authors William H. Lipscomb, LANL
+!         John R. Baumgardner, LANL
+
       subroutine locate_triangles (nx_block,     ny_block,   &
                                    ilo, ihi,     jlo, jhi,   &
                                    nghost,       edge,       &
@@ -1785,24 +1679,9 @@
                                    iflux,        jflux,      &
                                    triarea,                  &
                                    l_fixed_area, edgearea)
-!
-! !DESCRIPTION:
-!
-! Compute areas and vertices of transport triangles for north or
-!  east cell edges.
-!
-! !REVISION HISTORY:
-!
-! authors William H. Lipscomb, LANL
-!         John R. Baumgardner, LANL
-!
-! !USES:
 
       use ice_constants, only: c0, c1, c2, p5, puny, eps13, eps16
 
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent(in) ::   &
          nx_block, ny_block,&! block dimensions
          ilo,ihi,jlo,jhi   ,&! beginning and end of physical domain
@@ -1847,9 +1726,9 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(inout) ::   &
          edgearea         ! area of departure region for each edge
                           ! edgearea > 0 for eastward/northward flow
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::   &
          i, j, ij, ic   ,&! horizontal indices
          ib, ie, jb, je ,&! limits for loops over edges
@@ -3162,18 +3041,6 @@
 
 !=======================================================================
 !
-!BOP
-! !IROUTINE: triangle_coordinates - find coordinates of quadrature points
-!
-! !INTERFACE:
-!
-      subroutine triangle_coordinates (nx_block,       ny_block,  &
-                                       integral_order, icells,    &
-                                       indxi,          indxj,     &
-                                       xp,             yp)
-!
-! !DESCRIPTION:
-!
 ! For each triangle, find the coordinates of the quadrature points needed
 !  to compute integrals of linear, quadratic, or cubic polynomials,
 !  using formulas from A.H. Stroud, Approximate Calculation of Multiple
@@ -3199,17 +3066,15 @@
 ! where (x0,y0) is the midpoint, and the other three points are
 ! located 2/5 of the way from the midpoint to the three vertices.
 !
-! !REVISION HISTORY:
-!
 ! author William H. Lipscomb, LANL
-!
-! !USES:
+
+      subroutine triangle_coordinates (nx_block,       ny_block,  &
+                                       integral_order, icells,    &
+                                       indxi,          indxj,     &
+                                       xp,             yp)
 
       use ice_constants, only: p333, p4, p5, p6
 
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent(in) ::   &
            nx_block, ny_block,&! block dimensions
            integral_order      ! polynomial order for quadrature integrals 
@@ -3225,9 +3090,9 @@
       real (kind=dbl_kind), intent(inout),   &
            dimension (nx_block, ny_block, 0:nvert, ngroups) ::   &
            xp, yp          ! coordinates of triangle points
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::   &
            i, j, ij          ,&! horizontal indices
            ng                  ! triangle index
@@ -3316,12 +3181,14 @@
 
 !=======================================================================
 !
-!BOP
+! Compute the transports across each edge by integrating the mass
+! and tracers over each departure triangle.
+! Input variables have the same meanings as in the main subroutine.
+! Repeated use of certain sums makes the calculation more efficient.
+! Integral formulas are described in triangle_coordinates subroutine.
 !
-! !IROUTINE: transport_integrals - compute transports across each edge
-!
-! !INTERFACE:
-!
+! author William H. Lipscomb, LANL
+
       subroutine transport_integrals (nx_block,       ny_block,    &
                                       ntrace,         icells,      &
                                       indxi,          indxj,       &
@@ -3333,26 +3200,9 @@
                                       my,             mflx,        &
                                       tc,             tx,          &
                                       ty,             mtflx)
-!
-! !DESCRIPTION:
-!
-! Compute the transports across each edge by integrating the mass
-! and tracers over each departure triangle.
-! Input variables have the same meanings as in the main subroutine.
-! Repeated use of certain sums makes the calculation more efficient.
-! Integral formulas are described in triangle_coordinates subroutine.
-!
-! !REVISION HISTORY:
-!
-! author William H. Lipscomb, LANL
-!
-! !USES:
 
       use ice_constants, only: c0, p333
 
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent(in) ::   &
            nx_block, ny_block  ,&! block dimensions
            ntrace              ,&! number of tracers in use
@@ -3398,9 +3248,9 @@
       real (kind=dbl_kind), intent(out),   &
            dimension (nx_block, ny_block, ntrace), optional ::   &
            mtflx
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::   &
            i, j, ij      ,&! horizontal indices of edge
            i2, j2        ,&! horizontal indices of cell contributing transport
@@ -3654,12 +3504,10 @@
 
 !=======================================================================
 !
-!BOP
+! Given transports through cell edges, compute new area and tracers.
 !
-! !IROUTINE: update_fields - compute new area and tracers
-!
-! !INTERFACE:
-!
+! author William H. Lipscomb, LANL
+
       subroutine update_fields (nx_block,    ny_block,   &
                                 ilo, ihi,    jlo, jhi,   &
                                 ntrace,                  &
@@ -3670,22 +3518,9 @@
                                 mm,                      &
                                 mtflxe,      mtflxn,     &
                                 tm)
-!
-! !DESCRIPTION:
-!
-! Given transports through cell edges, compute new area and tracers.
-!
-! !REVISION HISTORY:
-!
-! author William H. Lipscomb, LANL
-!
-! !USES:
 
       use ice_constants, only: c0, puny
 
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent(in) ::   &
          nx_block, ny_block,&! block dimensions
          ilo,ihi,jlo,jhi   ,&! beginning and end of physical domain
@@ -3718,9 +3553,8 @@
       integer (kind=int_kind), intent(inout) ::   &
          istop, jstop     ! indices of grid cell where model aborts 
 
-!
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) ::   &
          i, j           ,&! horizontal indices
          nt, nt1, nt2     ! tracer indices

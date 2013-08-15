@@ -1,36 +1,23 @@
-!=======================================================================
-!BOP
-!
-! !MODULE: ice_diagnostics - diagnostic information output during run
-!
-! !DESCRIPTION:
-!
-! Diagnostic information output during run
-!
-! !REVISION HISTORY:
 !  SVN:$Id$
+!=======================================================================
+
+! Diagnostic information output during run
 !
 ! authors: Elizabeth C. Hunke, LANL
 !          Bruce P. Briegleb, NCAR
 !
 ! 2004: Block structure added by William Lipscomb
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
-!
-! !INTERFACE:
-!
+
       module ice_diagnostics
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_communicate, only: my_task, master_task
       use ice_constants, only: c0
       use ice_calendar, only: diagfreq, istep1, istep
       use ice_domain_size, only: max_aero
       use ice_fileunits, only: nu_diag
-!
-!EOP
-!
+
       implicit none
       private
       public :: runtime_diags, init_mass_diags, init_diags, print_state
@@ -106,26 +93,15 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: runtime_diags - writes max,min,global sums to standard out
-!
-! !INTERFACE:
-!
-      subroutine runtime_diags (dt)
-!
-! !DESCRIPTION:
-!
+
 ! Writes diagnostic info (max, min, global sums, etc) to standard out
-!
-! !REVISION HISTORY:
 !
 ! authors: Elizabeth C. Hunke, LANL
 !          Bruce P. Briegleb, NCAR
 !          Cecilia M. Bitz, UW
-!
-! !USES:
-!
+
+      subroutine runtime_diags (dt)
+
       use ice_blocks, only: nx_block, ny_block
       use ice_broadcast, only: broadcast_scalar
       use ice_constants, only: c1, c1000, c2, p001, p5, puny, rhoi, rhos, rhow, &
@@ -148,16 +124,13 @@
 #if (defined CCSM) || (defined SEQ_MCT)
       use ice_prescribed_mod, only : prescribed_ice
 #endif
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
-         i, j, k, n, nn, ii,jj, iblk
+         i, j, n, iblk
 
       ! hemispheric state quantities
       real (kind=dbl_kind) :: &
@@ -940,24 +913,13 @@
       end subroutine runtime_diags
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_mass_diags - computes global combined ice and snow mass sum
-!
-! !INTERFACE:
-!
-      subroutine init_mass_diags
-!
-! !DESCRIPTION:
-!
+
 ! Computes global combined ice and snow mass sum
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-! 
+
+      subroutine init_mass_diags
+
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: field_loc_center, rhofresh, rhoi, rhos
       use ice_domain, only: distrb_info, nblocks
@@ -966,12 +928,8 @@
       use ice_grid, only: tareas, tarean
       use ice_state, only: aicen, vice, vsno, trcrn, trcr, &
           tr_aero, nt_aero, tr_pond_topo, nt_apnd, nt_hpnd
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      integer (kind=int_kind) :: n, k, ii, jj, i, j, iblk
+
+      integer (kind=int_kind) :: n, i, j, iblk
 
       real (kind=dbl_kind) :: &
          shmaxn, snwmxn,  shmaxs, snwmxs, totpn, totps
@@ -1066,39 +1024,25 @@
       end subroutine init_mass_diags
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: total_energy
-!
-! !INTERFACE:
-!
-      subroutine total_energy (work)
-!
-! !DESCRIPTION:
-!
+
 ! Computes total energy of ice and snow in a grid cell.
 !
-! !REVISION HISTORY:
-!
 ! authors: E. C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine total_energy (work)
+
       use ice_blocks, only: nx_block, ny_block
       use ice_domain, only: nblocks
       use ice_domain_size, only: ncat, nilyr, nslyr, max_blocks
       use ice_grid, only: tmask
       use ice_state, only: vicen, vsnon, trcrn, nt_qice, nt_qsno
-!
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks),  &
          intent(out) :: &
          work      ! total energy
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
         icells                ! number of ocean/ice cells
 
@@ -1167,6 +1111,7 @@
       end subroutine total_energy
 
 !=======================================================================
+
 ! Computes bulk salinity of ice and snow in a grid cell.
 ! author: E. C. Hunke, LANL
 
@@ -1239,34 +1184,19 @@
       end subroutine total_salt
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_diags - find tasks for diagnostic points
-!
-! !INTERFACE:
-!
-      subroutine init_diags
-!
-! !DESCRIPTION:
-!
+
 !  Find tasks for diagnostic points.
 !
-!
-! !REVISION HISTORY:
-!
 ! authors: Elizabeth C. Hunke and William H. Lipscomb, LANL
-!
-! !USES:
+
+      subroutine init_diags
+
       use ice_grid, only: hm, TLAT, TLON
       use ice_blocks, only: block, get_block
       use ice_constants, only: c180, c360, p5, rad_to_deg, puny
       use ice_domain, only: blocks_ice, distrb_info, nblocks
       use ice_global_reductions, only: global_minval, global_maxval
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       real (kind=dbl_kind) :: &
          latdis  , & ! latitude distance
          londis  , & ! longitude distance
@@ -1376,16 +1306,7 @@
       end subroutine init_diags
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: print_state - print ice state for specified grid point
-!
-! !INTERFACE:
-!
-      subroutine print_state(plabel,i,j,iblk)
-!
-! !DESCRIPTION:
-!
+
 ! This routine is useful for debugging.
 ! Calls to it should be inserted in the form (after thermo, for example)
 !      do iblk = 1, nblocks
@@ -1400,13 +1321,10 @@
 !      enddo
 !
 ! 'use ice_diagnostics' may need to be inserted also
-!
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine print_state(plabel,i,j,iblk)
+
       use ice_blocks, only: block, get_block
       use ice_constants, only: puny, rhoi, rhos, Lfresh, cp_ice
       use ice_domain, only: blocks_ice
@@ -1416,17 +1334,15 @@
       use ice_flux, only: uatm, vatm, potT, Tair, Qa, flw, frain, fsnow, &
           fsens, flat, evap, flwout, swvdr, swvdf, swidr, swidf, rhoa, &
           frzmlt, sst, sss, Tf, Tref, Qref, uocn, vocn, strtltx, strtlty
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character (len=20), intent(in) :: plabel
 
       integer (kind=int_kind), intent(in) :: & 
           i, j       , & ! horizontal indices
           iblk           ! block index
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind) :: &
            eidebug, esdebug, &
            qi, qs, Tsnow

@@ -1,28 +1,16 @@
+!  SVN:$Id$
 !=======================================================================
 !
-!BOP
-!
-! !MODULE: ice_step_mod
-!
-! !DESCRIPTION:
-!
 !  Contains CICE component driver routines common to all drivers.
-!
-! !REVISION HISTORY:
-!  SVN:$Id$
 !
 !  authors Elizabeth C. Hunke, LANL
 !          Philip W. Jones, LANL
 !          William H. Lipscomb, LANL
 !
 ! 2008 ECH: created module by moving subroutines from drivers/cice4/
-!
-! !INTERFACE:
-!
+
       module ice_step_mod
-!
-! !USES:
-!
+
       use ice_atmo
       use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_calendar
@@ -66,46 +54,29 @@
       private
       save
 
-! !PUBLIC MEMBER FUNCTIONS:
-
       public :: step_therm1, step_therm2, step_dynamics, &
                 prep_radiation, step_radiation, post_thermo
-!
-!EOP
-!
+
 !=======================================================================
 
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: prep_radiation
-!
-! !DESCRIPTION:
 !
 ! Scales radiation fields computed on the previous time step.
 !
-! !REVISION HISTORY:
-!
 ! authors: David A. Bailey, NCAR
-!
-! !INTERFACE:
 
       subroutine prep_radiation (dt, iblk)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
 
       integer (kind=int_kind), intent(in) :: &
          iblk    ! block index
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, ij    , & ! horizontal indices
          k           , & ! vertical index       
@@ -195,40 +166,27 @@
       end subroutine prep_radiation
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: step_therm1 - step pre-coupler thermodynamics
-!
-! !DESCRIPTION:
 !
 ! Driver for updating ice and snow internal temperatures and
 ! computing thermodynamic growth rates and coupler fluxes.
 !
-! !REVISION HISTORY:
-!
 ! authors: William H. Lipscomb, LANL
-!
-! !INTERFACE:
 
       subroutine step_therm1 (dt, iblk)
-!
-! !USES:
-!
+
       use ice_aerosol
       use ice_age, only: increment_age
       use ice_blocks, only: nx_block, ny_block
       use ice_firstyear, only: update_FYarea
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
 
       integer (kind=int_kind), intent(in) :: &
          iblk    ! block index
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, ij    , & ! horizontal indices
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
@@ -744,42 +702,25 @@
       end subroutine step_therm1
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: step_therm2 - step post-coupler thermodynamics
-!
-! !DESCRIPTION:
-!
-!-----------------------------------------------------------------------
 ! Driver for thermodynamic changes not needed for coupling:
 ! transport in thickness space, lateral growth and melting.
 !
-! NOTE: Ocean fluxes are initialized here.
-!
-! !REVISION HISTORY:
-!
 ! author: William H. Lipscomb, LANL
-!
-! !INTERFACE:
 
       subroutine step_therm2 (dt, iblk)
-!
-! !USES:
-!
+
       use ice_itd, only: reduce_area
       use ice_therm_itd, only: add_new_ice
       use ice_zbgc_shared, only: ocean_bio, flux_bio
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
 
       integer (kind=int_kind), intent(in) :: &
          iblk    ! block index
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          i, j, ij
@@ -1007,26 +948,13 @@
       end subroutine step_therm2
 
 !=======================================================================
-!BOP
 !
-! !ROUTINE: post_thermo: finalize thermo updates
-!
-! !DESCRIPTION:
-!
-! !REVISION HISTORY:
+! finalize thermo updates
 !
 ! authors: Elizabeth Hunke, LANL
-!
-! !INTERFACE:
 
       subroutine post_thermo
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       integer (kind=int_kind) :: & 
          iblk        , & ! block index 
          i,j             ! horizontal indices
@@ -1074,11 +1002,6 @@
       end subroutine post_thermo
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: step_dynamics - step ice dynamics, transport, and ridging
-!
-! !DESCRIPTION:
 !
 ! Run one time step of dynamics, horizontal transport, and ridging.
 ! NOTE: The evp and transport modules include boundary updates, so
@@ -1087,30 +1010,22 @@
 !       They are called with argument lists inside block loops
 !       to increase modularity.
 !
-! !REVISION HISTORY:
-!
 ! authors: William H. Lipscomb, LANL
-!
-! !INTERFACE:
 
       subroutine step_dynamics (dt, ndtd)
 
       use ice_state, only: nt_qsno, trcrn, vsnon, aicen
       use ice_domain_size, only: nslyr
       use ice_calendar, only: istep
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
 
       integer (kind=int_kind), intent(in) :: &
          ndtd    ! number of dynamics subcycles
-!
-!EOP
-!
+
+      ! local variables
+
       type (block) :: &
          this_block      ! block information for current block
 
@@ -1206,36 +1121,25 @@
       end subroutine step_dynamics
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: step_ridge
-!
-! !DESCRIPTION:
 !
 ! Computes sea ice mechanical deformation
 !
-! !REVISION HISTORY:
-!
 ! authors: William H. Lipscomb, LANL
 !          Elizabeth C. Hunke, LANL
-!
-! !INTERFACE:
 
       subroutine step_ridge (dt, ndtd, iblk)
 
-        use ice_zbgc_shared, only: flux_bio
+      use ice_zbgc_shared, only: flux_bio
 
-! !INPUT/OUTPUT PARAMETERS:
-!
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
 
       integer (kind=int_kind), intent(in) :: &
          ndtd, & ! number of dynamics subcycles
          iblk            ! block index
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind) :: &
          dtt      ! thermo time step
 
@@ -1358,34 +1262,23 @@
       end subroutine step_ridge
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: step_radiation
-!
-! !DESCRIPTION:
 !
 ! Computes radiation fields
-!
-! !REVISION HISTORY:
 !
 ! authors: William H. Lipscomb, LANL
 !          David Bailey, NCAR
 !          Elizabeth C. Hunke, LANL
-!
-! !INTERFACE:
 
       subroutine step_radiation (dt, iblk)
 
-! !INPUT/OUTPUT PARAMETERS:
-!
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
 
       integer (kind=int_kind), intent(in) :: &
          iblk            ! block index
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, ij    ,    & ! horizontal indices
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain

@@ -1,9 +1,5 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_state - primary state variables
-!
-! !DESCRIPTION:
 !
 ! Primary state variables in various configurations
 ! Note: other state variables are at the end of this...
@@ -32,27 +28,18 @@
 !     at the end: e.g. hin, hsn.  These are not declared here
 !     but in individual modules (e.g., ice_therm_vertical).
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
 ! authors C. M. Bitz, UW
 !         Elizabeth C. Hunke and William H. Lipscomb, LANL
 !
 ! 2004: Block structure added by William Lipscomb
 ! 2006: Converted to free form source (F90) by Elizabeth Hunke
-!
-! !INTERFACE:
-!
+
       module ice_state
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_domain_size, only: max_blocks, ncat, max_ntrcr, n_aero
       use ice_blocks, only: nx_block, ny_block
-!
-!EOP
-!
+
       implicit none
       private
       public :: bound_state
@@ -179,33 +166,20 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: bound_state - bound calls for ice state variables
-!
-! !INTERFACE:
-!
-      subroutine bound_state (aicen, trcrn, &
-                              vicen, vsnon)
-!
-! !DESCRIPTION:
 !
 ! Get ghost cell values for ice state variables in each thickness category.
 ! NOTE: This subroutine cannot be called from inside a block loop!
 !
-! !REVISION HISTORY:
-!
 ! author: William H. Lipscomb, LANL
-!
-! !USES:
-!
+
+      subroutine bound_state (aicen, trcrn, &
+                              vicen, vsnon)
+
       use ice_boundary, only: ice_halo, ice_HaloMask, ice_HaloUpdate, &
           ice_HaloDestroy
       use ice_domain, only: halo_info, maskhalo_bound, nblocks
       use ice_constants, only: field_loc_center, field_type_scalar, c0
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), &
          dimension(nx_block,ny_block,ncat,max_blocks), intent(inout) :: &
          aicen , & ! fractional ice area
@@ -216,9 +190,9 @@
          dimension(nx_block,ny_block,max_ntrcr,ncat,max_blocks), &
          intent(inout) :: &
          trcrn     ! ice tracers
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: i, j, n, iblk
 
       integer (kind=int_kind), &

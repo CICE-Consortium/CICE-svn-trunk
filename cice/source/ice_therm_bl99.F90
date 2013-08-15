@@ -1,35 +1,23 @@
+!  SVN:$Id$
 !=========================================================================
-!BOP
-!
-! !MODULE: ice_therm_bl99 - Bitz and Lipscomb 1999 thermodynamics
-!
-! !DESCRIPTION:
 !
 ! Update ice and snow internal temperatures
-!
-! !REVISION HISTORY:
-!  SVN:$Id$
+! using Bitz and Lipscomb 1999 thermodynamics
 !
 ! authors: William H. Lipscomb, LANL
 !          C. M. Bitz, UW
 !          Elizabeth C. Hunke, LANL
 !
 ! 2012: Split from ice_therm_vertical.F90
-!
-! !INTERFACE:
-!
+
       module ice_therm_bl99
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_domain_size, only: nilyr, nslyr, max_ntrcr, n_aero, ncat
       use ice_constants
       use ice_fileunits, only: nu_diag
       use ice_therm_shared, only: conduct, calc_Tsfc, ferrmax, l_brine, hfrazilmin
-!
-!EOP
-!
+
       implicit none
       save
 
@@ -48,11 +36,6 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: temperature_changes  - new vertical temperature profile
-!
-! !DESCRIPTION:
 !
 ! Compute new surface temperature and internal ice and snow
 ! temperatures.  Include effects of salinity on sea ice heat
@@ -66,13 +49,9 @@
 ! An energy-conserving thermodynamic model of sea ice,
 ! J. Geophys. Res., 104, 15,669-15,677.
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
-!
-! !INTERFACE:
-!
+
       subroutine temperature_changes (nx_block, ny_block, &
                                       my_task,  istep1,   &
                                       dt,       icells,   & 
@@ -95,11 +74,9 @@
                                       einit,    l_stop,   &
                                       istop,    jstop,    &
                                       hin,      einex)
-!
+
       use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          my_task     , & ! task number (diagnostic only)
@@ -177,9 +154,9 @@
 
       integer (kind=int_kind), intent(inout) :: &
          istop, jstop    ! i and j indices of cell where model fails
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind), parameter :: &
          nitermax = 100, & ! max number of iterations in temperature solver
          nmat = nslyr + nilyr + 1  ! matrix dimension
@@ -964,34 +941,21 @@
       end subroutine temperature_changes
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: conductivity - compute ice thermal conductivity
-!
-! !DESCRIPTION:
 !
 ! Compute thermal conductivity at interfaces (held fixed during
 !  the subsequent iteration).
 !
 ! NOTE: Ice conductivity must be >= kimin
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
-!
-! !INTERFACE:
-!
+
       subroutine conductivity (nx_block, ny_block,         &
                                l_snow,   icells,           &
                                indxi,    indxj,    indxij, &
                                hilyr,    hslyr,            &
                                Tin,      kh,       Sin)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells          ! number of cells with aicen > puny
@@ -1020,9 +984,9 @@
       real (kind=dbl_kind), dimension (icells,nilyr+nslyr+1), &
          intent(out) :: &
          kh              ! effective conductivity at interfaces (W m-2 deg-1)
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij, m       , & ! horizontal indices, combine i and j loops
@@ -1112,22 +1076,13 @@
       end subroutine conductivity
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: surface_fluxes - surface radiative and turbulent fluxes
-!
-! !DESCRIPTION:
 !
 ! Compute radiative and turbulent fluxes and their derivatives
 ! with respect to Tsf.
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
-!
-! !INTERFACE:
-!
+
       subroutine surface_fluxes (nx_block,   ny_block,          &
                                  isolve,     icells,            &
                                  indxii,     indxjj,    indxij, &
@@ -1139,11 +1094,9 @@
                                  flatn,      fsurfn,            &
                                  dflwout_dT, dfsens_dT,         &
                                  dflat_dT,   dfsurf_dT)
-!
+
       use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          isolve            , & ! number of cells with temps not converged
@@ -1184,9 +1137,9 @@
       real (kind=dbl_kind), dimension (isolve), &
          intent(inout) :: &
          dfsurf_dT       ! derivative of fsurfn wrt Tsf
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij, m       , & ! horizontal indices, combine i and j loops
@@ -1228,27 +1181,17 @@
       end subroutine surface_fluxes
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: get_matrix_elements - compute tridiagonal matrix elements
-!
-! !DESCRIPTION:
 !
 ! Compute terms in tridiagonal matrix that will be solved to find
 !  the new vertical temperature profile
 ! This routine is for the case in which Tsfc is being computed.
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
 !
-!
 ! March 2004 by William H. Lipscomb for multiple snow layers
 ! April 2008 by E. C. Hunke, divided into two routines based on calc_Tsfc 
-!
-! !INTERFACE:
-!
+
       subroutine get_matrix_elements_calc_Tsfc &
                                      (nx_block, ny_block,         &
                                       isolve,   icells,           &
@@ -1262,11 +1205,7 @@
                                       etai,     etas,             &
                                       sbdiag,   diag,             &
                                       spdiag,   rhs)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          isolve            , & ! number of cells with temps not converged
@@ -1327,9 +1266,9 @@
          diag        , & ! diagonal matrix elements
          spdiag      , & ! super-diagonal matrix elements
          rhs             ! rhs of tri-diagonal matrix eqn.
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij, m       , & ! horizontal indices, combine i and j loops
@@ -1554,27 +1493,17 @@
       end subroutine get_matrix_elements_calc_Tsfc
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: get_matrix_elements - compute tridiagonal matrix elements
-!
-! !DESCRIPTION:
 !
 ! Compute terms in tridiagonal matrix that will be solved to find
 !  the new vertical temperature profile
 ! This routine is for the case in which Tsfc is already known.
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
 !
-!
 ! March 2004 by William H. Lipscomb for multiple snow layers
 ! April 2008 by E. C. Hunke, divided into two routines based on calc_Tsfc 
-!
-! !INTERFACE:
-!
+
       subroutine get_matrix_elements_know_Tsfc &
                                      (nx_block, ny_block,         &
                                       isolve,   icells,           &
@@ -1587,11 +1516,7 @@
                                       sbdiag,   diag,             &
                                       spdiag,   rhs,              &
                                       fcondtopn)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          isolve            , & ! number of cells with temps not converged
@@ -1648,9 +1573,9 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in),  &
          optional :: &
          fcondtopn       ! conductive flux at top sfc, positive down (W/m^2)
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij, m       , & ! horizontal indices, combine i and j loops
@@ -1851,33 +1776,20 @@
       end subroutine get_matrix_elements_know_Tsfc
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: tridiag_solver - tridiagonal matrix solver
-!
-! !DESCRIPTION:
 !
 ! Tridiagonal matrix solver--used to solve the implicit vertical heat
 ! equation in ice and snow
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
-!
-! !INTERFACE:
-!
+
       subroutine tridiag_solver (nx_block, ny_block, &
                                  isolve,   icells,   &
                                  indxii,   indxjj,   &
                                  nmat,     sbdiag,   &
                                  diag,     spdiag,   &
                                  rhs,      xout)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          isolve            , & ! number of cells with temps not converged
@@ -1900,9 +1812,9 @@
       real (kind=dbl_kind), dimension (isolve,nmat), &
            intent(inout) :: &
          xout            ! solution vector
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij          , & ! horizontal index, combines i and j loops

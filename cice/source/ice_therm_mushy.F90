@@ -1,3 +1,5 @@
+!  SVN:$Id$
+
 #define debug 0
 #define diag 0
 
@@ -6,6 +8,8 @@
 #define flushing_up 0
  
 #define load_save_state 0
+
+!=======================================================================
 
 module ice_therm_mushy
 
@@ -4448,9 +4452,6 @@ contains
          flatn_in,     flatn_sv      , & ! surface downward latent heat (W m-2)
          fswabsn_in,   fswabsn_sv    , & ! shortwave absorbed by ice (W m-2)
          flwoutn_in,   flwoutn_sv    , & ! upward LW at surface (W m-2)
-         fcondbot_in,  fcondbot_sv   , & ! downward cond flux at bottom surface (W m-2)
-         fadvocn_in,   fadvocn_sv    , & ! flow of heat to ocean due to advection
-         snoice_in,    snoice_sv     , & ! snow-ice formation
          Tsf_in,       Tsf_sv        , & ! ice/snow surface temperature (C)
          hpond_in,     hpond_sv      , & ! melt pond thickness (m)
          apond_in,     apond_sv          ! melt pond area
@@ -4518,9 +4519,6 @@ contains
        flatn_in     = flatn     ; flatn_sv     = flatn
        fswabsn_in   = fswabsn   ; fswabsn_sv   = fswabsn
        flwoutn_in   = flwoutn   ; flwoutn_sv   = flwoutn
-       fcondbot_in  = fcondbot  ; fcondbot_sv  = fcondbot
-       fadvocn_in   = fadvocn   ; fadvocn_sv   = fadvocn
-       snoice_in    = snoice    ; snoice_sv    = snoice
        Tsf_in       = Tsf       ; Tsf_sv       = Tsf
        qin_in       = qin       ; qin_sv       = qin
        Tin_in       = Tin       ; Tin_sv       = Tin
@@ -4563,9 +4561,6 @@ contains
           read(nu_jfnkdiag,*) flatn_in     ; flatn_sv     = flatn_in
           read(nu_jfnkdiag,*) fswabsn_in   ; fswabsn_sv   = fswabsn_in
           read(nu_jfnkdiag,*) flwoutn_in   ; flwoutn_sv   = flwoutn_in
-          read(nu_jfnkdiag,*) fcondbot_in  ; fcondbot_sv  = fcondbot_in
-          read(nu_jfnkdiag,*) fadvocn_in   ; fadvocn_sv   = fadvocn
-          read(nu_jfnkdiag,*) snoice_in    ; snoice_sv    = snoice
           read(nu_jfnkdiag,*) Tsf_in       ; Tsf_sv       = Tsf_in
           read(nu_jfnkdiag,*) qin_in       ; qin_sv       = qin_in
           read(nu_jfnkdiag,*) Tin_in       ; Tin_sv       = Tin_in
@@ -4607,9 +4602,6 @@ contains
           read(nu_jfnkdiag) flatn_in     ; flatn_sv     = flatn_in
           read(nu_jfnkdiag) fswabsn_in   ; fswabsn_sv   = fswabsn_in
           read(nu_jfnkdiag) flwoutn_in   ; flwoutn_sv   = flwoutn_in
-          read(nu_jfnkdiag) fcondbot_in  ; fcondbot_sv  = fcondbot_in
-          read(nu_jfnkdiag) fadvocn_in   ; fadvocn_sv   = fadvocn
-          read(nu_jfnkdiag) snoice_in    ; snoice_sv    = snoice
           read(nu_jfnkdiag) Tsf_in       ; Tsf_sv       = Tsf_in
           read(nu_jfnkdiag) qin_in       ; qin_sv       = qin_in
           read(nu_jfnkdiag) Tin_in       ; Tin_sv       = Tin_in
@@ -4642,8 +4634,8 @@ contains
                                     fsensn_in,    flatn_in,    &
                                     fswabsn_in,   flwoutn_in,  &
                                     fsurfn_in,                 &
-                                    fcondtopn_in, fcondbot_in, &
-                                    fadvocn_in,   snoice_in,   &
+                                    fcondtopn_in, fcondbot,    &
+                                    fadvocn,      snoice,      &
                                     einit_in,     lstop)
 
     ! normal running conditions
@@ -4664,9 +4656,6 @@ contains
           flatn     = flatn_in    
           fswabsn   = fswabsn_in  
           flwoutn   = flwoutn_in  
-          fcondbot  = fcondbot_in 
-          fadvocn   = fadvocn_in
-          snoice    = snoice_in
           Tsf       = Tsf_in      
           qin       = qin_in      
           Tin       = Tin_in      
@@ -4719,9 +4708,9 @@ contains
              write(nu_jfnkdiag,*) flatn_sv    
              write(nu_jfnkdiag,*) fswabsn_sv  
              write(nu_jfnkdiag,*) flwoutn_sv  
-             write(nu_jfnkdiag,*) fcondbot_sv 
-             write(nu_jfnkdiag,*) fadvocn_sv
-             write(nu_jfnkdiag,*) snoice_sv
+             write(nu_jfnkdiag,*) fcondbot
+             write(nu_jfnkdiag,*) fadvocn
+             write(nu_jfnkdiag,*) snoice
              write(nu_jfnkdiag,*) Tsf_sv      
              write(nu_jfnkdiag,*) qin_sv      
              write(nu_jfnkdiag,*) Tin_sv      
@@ -4773,9 +4762,9 @@ contains
              write(nu_jfnkdiag) flatn_sv    
              write(nu_jfnkdiag) fswabsn_sv  
              write(nu_jfnkdiag) flwoutn_sv  
-             write(nu_jfnkdiag) fcondbot_sv 
-             write(nu_jfnkdiag) fadvocn_sv
-             write(nu_jfnkdiag) snoice_sv
+             write(nu_jfnkdiag) fcondbot
+             write(nu_jfnkdiag) fadvocn
+             write(nu_jfnkdiag) snoice
              write(nu_jfnkdiag) Tsf_sv      
              write(nu_jfnkdiag) qin_sv      
              write(nu_jfnkdiag) Tin_sv      

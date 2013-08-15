@@ -1,3 +1,4 @@
+!  SVN:$Id$
 !=======================================================================
 ! Copyright 2013, LANSLLC. All rights reserved.
 ! Unless otherwise indicated, this information has been authored by an 
@@ -29,8 +30,6 @@
 ! Main driver routine for CICE.  Initializes and steps through the model.
 ! This program should be compiled if CICE is run as a separate executable,
 !  but not if CICE subroutines are called from another program (e.g., CAM).
-!
-!  SVN:$Id$
 !
 ! authors Elizabeth C. Hunke and William H. Lipscomb, LANL
 !

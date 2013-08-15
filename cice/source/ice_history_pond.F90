@@ -1,40 +1,15 @@
+!  SVN:$Id$
 !=======================================================================
-!
-!BOP
-!
-! !MODULE: ice_history - ice model history files
-!
+
 ! Melt pond history output
 !
-! The following variables are currently hard-wired as snapshots 
-!   (instantaneous rather than time-averages):
-!   divu, shear, sig1, sig2, trsig, mlt_onset, frz_onset, hisnap, aisnap
-!
-! The flags (f_<field>) can be set to '1','h','d','m','y' or 'x', where
-!   n means the field will not be written.  To output the same field at
-!   more than one frequency, for instance monthy and daily, set 
-!   f_<field> = 'md'.
-!
-! !REVISION HISTORY:
-!  SVN:$Id: ice_history.F90 569 2013-01-10 15:28:29Z eclare $
-!
-! authors Tony Craig and Bruce Briegleb, NCAR
-!         Elizabeth C. Hunke and William H. Lipscomb, LANL
-!         C. M. Bitz, UW
-!
 ! 2012 Elizabeth Hunke split code from ice_history.F90
-!
-! !INTERFACE:
-!
+
       module ice_history_pond
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_domain_size, only: max_nstrm
-!
-!EOP
-!
+
       implicit none
       private
       public :: accum_hist_pond, init_hist_pond_2D, init_hist_pond_3Dc
@@ -81,25 +56,9 @@
       contains
 
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: init_hist - initialize history files
-!
-! !INTERFACE:
-!
+
       subroutine init_hist_pond_2D
-!
-! !DESCRIPTION:
-!
-! Initialize history files
-!
-! !REVISION HISTORY:
-!
-! authors Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
       use ice_broadcast, only: broadcast_scalar
       use ice_calendar, only: nstreams
       use ice_communicate, only: my_task, master_task
@@ -109,12 +68,8 @@
           get_fileunit, release_fileunit
       use ice_history_shared, only: tstr2D, tcstr, define_hist_field
       use ice_state, only: tr_pond
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      integer (kind=int_kind) :: n, k, ns
+
+      integer (kind=int_kind) :: ns
       integer (kind=int_kind) :: nml_error ! namelist i/o error flag
 
       !-----------------------------------------------------------------
@@ -224,34 +179,14 @@
       end subroutine init_hist_pond_2D
 
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: init_hist - initialize history files
-!
-! !INTERFACE:
-!
+
       subroutine init_hist_pond_3Dc
-!
-! !DESCRIPTION:
-!
-! Initialize history files
-!
-! !REVISION HISTORY:
-!
-! authors Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
       use ice_calendar, only: nstreams
       use ice_constants, only: c0, c1
       use ice_history_shared, only: tstr3Dc, tcstr, define_hist_field
       use ice_state, only: tr_pond
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       integer (kind=int_kind) :: ns
       
       ! 3D (category) variables must be looped separately
@@ -278,25 +213,11 @@
       end subroutine init_hist_pond_3Dc
 
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: accum_hist - accumulate average ice quantities or snapshots
-!
-! !INTERFACE:
-!
+
+! accumulate average ice quantities or snapshots
+
       subroutine accum_hist_pond (iblk)
-!
-! !DESCRIPTION:
-!
-! write average ice quantities or snapshots
-!
-! !REVISION HISTORY:
-!
-! author:   Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
       use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_constants, only: c0, puny
       use ice_domain, only: blocks_ice
@@ -306,14 +227,12 @@
       use ice_shortwave, only: apeffn
       use ice_state, only: tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
           aice, trcr, trcrn, nt_apnd, nt_hpnd, nt_ipnd, nt_alvl
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
            iblk                 ! block index
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
            i,j, &
            ilo,ihi,jlo,jhi      ! beginning and end of physical domain

@@ -1,14 +1,7 @@
-!=======================================================================
-!BOP
-!
-! !MODULE:   ice_init - parameter and variable initializations
-!
-! !DESCRIPTION:
-!
-! parameter and variable initializations
-!
-! !REVISION HISTORY:
 !  SVN:$Id$
+!=======================================================================
+
+! parameter and variable initializations
 !
 ! authors Elizabeth C. Hunke and William H. Lipscomb, LANL
 !         C. M. Bitz, UW
@@ -17,18 +10,12 @@
 ! 2006 ECH: Added namelist variables, warnings.
 !           Replaced old default initial ice conditions with 3.14 version.
 !           Converted to free source form (F90).
-!
-! !INTERFACE:
-!
+
       module ice_init
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_communicate, only: my_task, master_task
-!
-!EOP
-!
+
       implicit none
       save
 
@@ -43,25 +30,14 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: input_data - namelist variables
-!
-! !INTERFACE:
-!
-      subroutine input_data
-!
-! !DESCRIPTION:
-!
+
 ! Namelist variables, set to default values; may be altered
 ! at run time
 !
-! !REVISION HISTORY:
-!
 ! author Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine input_data
+
       use ice_broadcast, only: broadcast_scalar, broadcast_array
       use ice_constants, only: c0, c1, puny
       use ice_diagnostics, only: diag_file, print_global, print_points, latpnt, lonpnt
@@ -114,11 +90,9 @@
                                  dSdt_slow_mode, phi_c_slow_mode, &
                                  phi_i_mushy
       use ice_restoring, only: restore_ice
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
         nml_error, & ! namelist i/o error flag
         n            ! loop index
@@ -952,25 +926,14 @@
       end subroutine input_data
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_state - initialize ice state variables
-!
-! !INTERFACE:
-!
-      subroutine init_state
-!
-! !DESCRIPTION:
-!
+
 ! Initialize state for the itd model
-!
-! !REVISION HISTORY:
 !
 ! authors: C. M. Bitz, UW
 !          William H. Lipscomb, LANL
-!
-! !USES:
-!
+
+      subroutine init_state
+
       use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_constants, only: c0
       use ice_domain, only: nblocks, blocks_ice
@@ -986,11 +949,7 @@
       use ice_itd, only: aggregate
       use ice_exit, only: abort_ice
       use ice_therm_shared, only: ktherm, heat_capacity
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       integer (kind=int_kind) :: &
          ilo, ihi    , & ! physical domain indices
          jlo, jhi    , & ! physical domain indices
@@ -1149,12 +1108,12 @@
       end subroutine init_state
 
 !=======================================================================
-!BOP
+
+! Initialize state in each ice thickness category
 !
-! !IROUTINE: set_state_var - initialize single-category state variables
-!
-! !INTERFACE:
-!
+! authors: C. M. Bitz
+!          William H. Lipscomb, LANL
+
       subroutine set_state_var (nx_block, ny_block, &
                                 ilo, ihi, jlo, jhi, &
                                 iglob,    jglob,    &
@@ -1165,18 +1124,7 @@
                                 salinz,   Tmltz, &
                                 aicen,    trcrn, &
                                 vicen,    vsnon)
-!
-! !DESCRIPTION:
-!
-! Initialize state in each ice thickness category
-!
-! !REVISION HISTORY:
-!
-! authors: C. M. Bitz
-!          William H. Lipscomb, LANL
-!
-! !USES:
-!
+
       use ice_constants, only: c0, c1, c2, c3, p2, p5, rhoi, rhos, Lfresh, &
            cp_ice, cp_ocn, Tsmelt, Tffresh, rad_to_deg, puny
       use ice_domain_size, only: nilyr, nslyr, nx_global, ny_global, max_ntrcr, ncat
@@ -1190,9 +1138,7 @@
       use ice_therm_shared, only: heat_capacity, calc_Tsfc, ktherm
       use ice_grid, only: grid_type
       use ice_forcing, only: atm_data_type
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo, ihi          , & ! physical domain indices
@@ -1232,9 +1178,9 @@
          intent(out) :: &
          trcrn     ! ice tracers
                    ! 1: surface temperature of ice/snow (C)
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij          , & ! horizontal index, combines i and j loops

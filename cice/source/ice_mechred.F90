@@ -1,10 +1,6 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_mechred - driver for mechanical redestribution
-!
-! !DESCRIPTION:
-!
+
 ! Driver for ice mechanical redistribution (ridging)
 !
 ! See these references:
@@ -27,9 +23,6 @@
 !  1975: The thickness distribution of sea ice, J. Geophys. Res., 
 !  80, 4501-4513. 
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
 ! authors: William H. Lipscomb, LANL
 !          Elizabeth C. Hunke, LANL
 !
@@ -38,22 +31,16 @@
 ! 2006: New options for participation and redistribution (WHL)
 ! 2006: Streamlined for efficiency by Elizabeth Hunke
 !       Converted to free source form (F90)
-!
-! !INTERFACE:
-!
+
       module ice_mechred
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_constants
       use ice_domain_size, only: ncat, max_aero, n_aero, nilyr, nslyr, nblyr
       use ice_fileunits, only: nu_diag
       use ice_itd, only: hin_max, column_sum, &
                          column_conservation_check, compute_tracers
-!
-!EOP
-!
+
       implicit none
       save
 
@@ -105,22 +92,12 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: ridge_ice - driver for mechanical redistribution
-!
-! !DESCRIPTION:
-!
+
 ! Compute changes in the ice thickness distribution due to divergence
 ! and shear.
-! NOTE: This subroutine operates over a single block.
-!
-! !REVISION HISTORY:
 !
 ! author: William H. Lipscomb, LANL
-!
-! !INTERFACE:
-!
+
       subroutine ridge_ice (nx_block,    ny_block,   &
                             dt,          ndtd,       &
                             ntrcr,       icells,     &
@@ -141,13 +118,9 @@
                             dardg1ndt,   dardg2ndt,  &
                             dvirdgndt,               &
                             araftn,      vraftn)
-!
-! !USES:
-!                            
+
       use ice_state, only: nt_qice, nt_qsno, hbrine, nt_fbri, nt_sice
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells            , & ! number of cells with ice present
@@ -214,9 +187,9 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
          intent(inout), optional :: &
          faero_ocn     ! aerosol flux to ocean (kg/m^2/s)
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
          eicen     ! energy of melting for each ice layer (J/m^2)
  
@@ -282,11 +255,10 @@
          dti              ! 1 / dt
 
       logical (kind=log_kind) :: &
-         iterate_ridging, & ! if true, repeat the ridging
-         asum_error         ! flag for asum .ne. 1
+         iterate_ridging  ! if true, repeat the ridging
 
       character (len=char_len) :: &
-         fieldid            ! field identifier
+         fieldid          ! field identifier
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -776,33 +748,20 @@
       end subroutine ridge_ice
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: asum_ridging - find total fractional area
-!
-! !DESCRIPTION:
-!
+
 ! Find the total area of ice plus open water in each grid cell.
 !
 ! This is similar to the aggregate_area subroutine except that the
 ! total area can be greater than 1, so the open water area is
 ! included in the sum instead of being computed as a residual.
 !
-! !REVISION HISTORY:
-!
 ! author: William H. Lipscomb, LANL
-!
-! !INTERFACE:
-!
+
       subroutine asum_ridging (nx_block, ny_block,        &
                                icells,   indxi,    indxj, &
                                aicen,    aice0,           &
                                asum)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells                ! number of cells with ice present
@@ -821,9 +780,9 @@
 
       real (kind=dbl_kind), dimension (icells), intent(out):: &
          asum           ! sum of ice and open water area
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, n, &
          ij               ! horizontal index, combines i and j loops
@@ -855,30 +814,18 @@
       end subroutine asum_ridging
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: ridge_prep - preparation for ridging
-!
-! !DESCRIPTION: Initialize arrays, compute area of closing and opening
-!
-!
-! !REVISION HISTORY:
+
+! Initialize arrays, compute area of closing and opening
 !
 ! author: William H. Lipscomb, LANL
-!
-! !INTERFACE:
-!
+
       subroutine ridge_prep (nx_block,   ny_block,        &
                              icells,     indxi,    indxj, &
                              dt,                          &
                              rdg_conv,   rdg_shear,       &
                              asum,       closing_net,     &
                              divu_adv,   opning)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells                ! number of cells with ice present
@@ -904,9 +851,9 @@
          closing_net, & ! net rate at which area is removed    (1/s)
          divu_adv   , & ! divu as implied by transport scheme  (1/s)
          opning         ! rate of opening due to divergence/shear
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind), parameter :: &
          big = 1.0e+8_dbl_kind
 
@@ -972,12 +919,7 @@
       end subroutine ridge_prep
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: ridge_itd - thickness distribution of ridging and ridged ice
-!
-! !DESCRIPTION:
-!
+
 ! Compute the thickness distribution of the ice and open water
 ! participating in ridging and of the resulting ridges.
 !
@@ -988,15 +930,11 @@
 ! The new exponential redistribution function (krdg_redist = 1) improves 
 !  agreement between ITDs of modeled and observed ridges.   
 !
-! !REVISION HISTORY:
-!
 ! author: William H. Lipscomb, LANL
 !
 ! 2006: Changed subroutine name to ridge_itd
 !       Added new options for ridging participation and redistribution.  
-!
-! !INTERFACE:
-!
+
       subroutine ridge_itd (nx_block,    ny_block,        &
                             icells,      indxi,    indxj, &
                             aicen,       vicen,           &
@@ -1005,11 +943,7 @@
                             hrmin,       hrmax,           &
                             hrexp,       krdg,            &
                             aparticn,    krdgn,    mraft)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells                ! number of cells with ice present
@@ -1050,9 +984,9 @@
       real (kind=dbl_kind), dimension (icells,ncat), &
          intent(out), optional :: &
          mraft            ! rafting ice mask 
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i,j          , & ! horizontal indices
          n            , & ! thickness category index
@@ -1070,7 +1004,6 @@
 
       real (kind=dbl_kind) :: &
          hi           , & ! ice thickness for each cat (m)
-         hieff        , & ! effective ice thickness (m) (krdg_redist = 2)
          hrmean       , & ! mean ridge thickness (m)
          xtmp             ! temporary variable
 
@@ -1354,12 +1287,7 @@
       end subroutine ridge_itd
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: ridge_shift - shift ridging ice among thickness categories
-!
-! !DESCRIPTION:
-!
+
 ! Remove area, volume, and energy from each ridging category
 ! and add to thicker ice categories.
 !
@@ -1372,12 +1300,8 @@
 ! (e.g. snow, ponds) or if they are being carried only on the level ice 
 ! area. 
 !
-! !REVISION HISTORY:
-!
 ! author: William H. Lipscomb, LANL
-!
-! !INTERFACE:
-!
+
       subroutine ridge_shift (nx_block,    ny_block,        &
                               icells,      indxi,    indxj, &
                               ntrcr,       dt,              &
@@ -1397,17 +1321,13 @@
                               l_stop,                       &
                               istop,       jstop,           &
                               aredistn,    vredistn)
-!
-! !USES:
-!
+
       use ice_state, only: nt_qsno, &
                            nt_alvl, nt_vlvl, nt_aero, tr_lvl, tr_aero, &
                            nt_apnd, nt_hpnd, nt_ipnd, tr_pond, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
                            nt_fbri
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells            , & ! number of cells with ice present
@@ -1481,9 +1401,9 @@
          intent(inout), optional :: &
          aredistn  , & ! redistribution function: fraction of new ridge area
          vredistn      ! redistribution function: fraction of new ridge volume
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i,j           , & ! horizontal indices
          n, nr         , & ! thickness category indices
@@ -1495,10 +1415,6 @@
       integer (kind=int_kind), dimension (icells) :: &
          indxii, indxjj, & ! compressed indices
          indxij            ! compressed indices
-
-      integer (kind=int_kind), dimension (icells) :: &
-         rndxii, rndxjj, & ! more compressed indices
-         rndxij             
 
       real (kind=dbl_kind), dimension (icells,ncat) :: &
          aicen_init    , & ! ice area before ridging
@@ -1518,7 +1434,6 @@
          ardg1n        , & ! area of ice ridged
          ardg2n        , & ! area of new ridges
          virdgn        , & ! ridging ice volume
-         vbrdgn        , & ! ridging brine volume
          vsrdgn        , & ! ridging snow volume 
          dhr           , & ! hrmax - hrmin
          dhr2          , & ! hrmax^2 - hrmin^2
@@ -2121,29 +2036,18 @@
       end subroutine ridge_shift
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: ridge_check - check for ice area > 1
-!
-! !DESCRIPTION: Make sure ice area <=1.  If not, prepare to repeat ridging.
-!
-! !REVISION HISTORY:
+
+! Make sure ice area <=1.  If not, prepare to repeat ridging.
 !
 ! authors William H. Lipscomb, LANL
-!
-! !INTERFACE:
-!
+
       subroutine ridge_check (nx_block,  ny_block,        &
                               icells,    indxi,    indxj, &
                               dt,                         &
                               asum,      closing_net,     &
                               divu_adv,  opning,          &
                               iterate_ridging)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells                ! number of cells with ice present
@@ -2167,9 +2071,9 @@
 
       logical (kind=log_kind), intent(out) :: &
          iterate_ridging      ! if true, repeat the ridging
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          ij               ! horizontal index, combines i and j loops
 
@@ -2190,12 +2094,7 @@
       end subroutine ridge_check
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: ice_strength - compute ice strength
-!
-! !DESCRIPTION:
-!
+
 ! Compute the strength of the ice pack, defined as the energy (J m-2)
 ! dissipated per unit area removed from the ice pack under compression,
 ! and assumed proportional to the change in potential energy caused
@@ -2207,13 +2106,9 @@
 ! Hibler, W. D. III, 1979: A dynamic-thermodynamic sea ice model,
 !  J. Phys. Oceanog., 9, 817-846.
 !
-! !REVISION HISTORY:
-!
 ! authors: William H. Lipscomb, LANL
 !          Elizabeth C. Hunke, LANL
-!
-! !INTERFACE:
-!
+
       subroutine ice_strength (nx_block, ny_block, &
                                ilo, ihi, jlo, jhi, &
                                icells,             &
@@ -2221,11 +2116,7 @@
                                aice,     vice,     &
                                aice0,    aicen,    &
                                vicen,    strength)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beg and end of physical domain
@@ -2250,11 +2141,9 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out) :: &
          strength   ! ice strength (N/m)
-!
-!EOP
-!
-! LOCAL VARIABLES
-!
+
+      ! local variables
+
       real (kind=dbl_kind), dimension (icells) :: &
          asum         , & ! sum of ice and open water area
          aksum            ! ratio of area removed to area ridged

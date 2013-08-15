@@ -1,9 +1,6 @@
+!  SVN:$Id$
 !=======================================================================
-!
-!BOP
-!
-! !MODULE: ice_history - ice model history files
-!
+
 ! Driver for core history output
 !
 ! The following variables are currently hard-wired as snapshots 
@@ -19,9 +16,6 @@
 !   more than one frequency, for instance monthy and daily, set 
 !   f_<field> = 'md'.
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
 ! authors Tony Craig and Bruce Briegleb, NCAR
 !         Elizabeth C. Hunke and William H. Lipscomb, LANL
 !         C. M. Bitz, UW
@@ -34,17 +28,11 @@
 !           Added option for binary output instead of netCDF
 ! 2009 D Bailey and ECH: Generalized for multiple frequency output
 ! 2010 Alison McLaren and ECH: Added 3D capability
-!
-! !INTERFACE:
-!
+
       module ice_history
-!
-! !USES:
-!
+
       use ice_kinds_mod
-!
-!EOP
-!
+
       implicit none
       private
       public :: init_hist, accum_hist
@@ -55,29 +43,17 @@
       contains
 
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: init_hist - initialize history files
-!
-! !INTERFACE:
-!
-      subroutine init_hist (dt)
-!
-! !DESCRIPTION:
-!
+
 ! Initialize history files
-!
-! !REVISION HISTORY:
 !
 ! authors Tony Craig, NCAR
 !         Elizabeth C. Hunke, LANL
 !         C.M. Bitz, UW
 !         Bruce P. Briegleb, NCAR
 !         William H. Lipscomb, LANL
-!
-! !USES:
-!
+
+      subroutine init_hist (dt)
+
       use ice_atmo, only: calc_formdrag
       use ice_blocks, only: nx_block, ny_block
       use ice_broadcast, only: broadcast_scalar, broadcast_array
@@ -101,14 +77,12 @@
       use ice_restart, only: restart
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero, hbrine
       use ice_zbgc_shared, only: solve_skl_bgc
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: n, k, ns, ns1, ns2, lenf
       integer (kind=int_kind) :: hfreqn
       integer (kind=int_kind), dimension(max_nstrm) :: &
@@ -1153,25 +1127,13 @@
       end subroutine init_hist
 
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: accum_hist - accumulate average ice quantities or snapshots
-!
-! !INTERFACE:
-!
-      subroutine accum_hist (dt)
-!
-! !DESCRIPTION:
-!
-! write average ice quantities or snapshots
-!
-! !REVISION HISTORY:
+
+! accumulate average ice quantities or snapshots
 !
 ! author:   Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine accum_hist (dt)
+
       use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_constants, only: c0, c1, p25, puny, secday, depressT, &
           awtvdr, awtidr, awtvdf, awtidf, Lfresh, rhos, cp_ice, spval
@@ -1209,13 +1171,12 @@
       use ice_therm_mushy, only: temperature_mush, temperature_snow
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
       use ice_zbgc_shared, only: solve_skl_bgc
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
            i,j,k,ic,n,ns,nn, &
            iblk             , & ! block index

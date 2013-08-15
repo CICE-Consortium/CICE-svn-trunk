@@ -1,9 +1,8 @@
+!  SVN:$Id$
 !=======================================================================
 !
 !  This module contains the CICE initialization routine that sets model
 !  parameters and initializes the grid and CICE state variables.
-!
-!  SVN:$Id: CICE_InitMod.F90 607 2013-03-29 15:49:42Z eclare $
 !
 !  authors Elizabeth C. Hunke, LANL
 !          William H. Lipscomb, LANL

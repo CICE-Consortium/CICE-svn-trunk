@@ -1,26 +1,14 @@
+!  SVN:$Id$
 !=======================================================================
 !
-!BOP
-!
-! !MODULE: ice_restart_lvl - Ridged ice tracers for sea ice
-!
-! !DESCRIPTION:
-!
-! !REVISION HISTORY:
-!  SVN:$$
+! Ridged ice tracers for sea ice
 !
 ! authors Elizabeth Hunke
-!
-! !INTERFACE:
-!
+
       module ice_restart_lvl
-!
-! !USES:
-!
+
       use ice_kinds_mod
-!
-!EOP
-!
+
       implicit none
       private
       public :: write_restart_lvl, read_restart_lvl
@@ -35,25 +23,13 @@
 !=======================================================================
 !---! these subroutines write/read Fortran unformatted data files ..
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: write_restart_lvl - dumps all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine write_restart_lvl(filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Dumps all values needed for restarting
 !
-! !REVISION HISTORY:
-!
 ! author Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine write_restart_lvl(filename_spec)
+
       use ice_communicate, only: my_task, master_task
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, year_init
@@ -62,13 +38,11 @@
       use ice_read_write, only: ice_open, ice_write
       use ice_restart, only: lenstr, restart_dir, restart_file
       use ice_state, only: nt_alvl, nt_vlvl, trcrn
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
           i, j, k, n, it, iblk, & ! counting indices
           iyear, imonth, iday     ! year, month, day
@@ -113,24 +87,12 @@
       end subroutine write_restart_lvl
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: read_restart_lvl - reads all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine read_restart_lvl(filename_spec)
-!
-! !DESCRIPTION:
-!
 ! Reads all values needed for an ice lvl restart
 !
-! !REVISION HISTORY:
-!
 ! author Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine read_restart_lvl(filename_spec)
+
       use ice_communicate, only: my_task, master_task
       use ice_domain_size, only: ncat
       use ice_calendar, only: istep1, time, time_forc
@@ -139,13 +101,11 @@
       use ice_restart, only: lenstr, restart_file, pointer_file
       use ice_state, only: nt_alvl, nt_vlvl, trcrn
       use ice_exit, only: abort_ice
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, k, n, it, iblk, & ! counting indices
          iyear, imonth, iday , & ! year, month, day

@@ -1,15 +1,11 @@
+!  SVN:$Id$
 !|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-!BOP
-! !MODULE: ice_boundary
 
  module ice_boundary
 
-! !DESCRIPTION:
 !  This module contains data types and routines for updating halo
 !  regions (ghost cells) using MPI calls
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
 !  2007-07-19: Phil Jones, Yoshi Yoshida, John Dennis
 !              new naming conventions, optimizations during
 !              initialization, true multi-dimensional updates 
@@ -17,8 +13,6 @@
 !              fixes for non-existent blocks
 !  2008-01-28: Elizabeth Hunke replaced old routines with new POP
 !              infrastructure
-
-! !USES:
 
    use ice_kinds_mod
    use ice_communicate, only: my_task, mpiR4, mpiR8, mpitagHalo
@@ -45,8 +39,6 @@
    save
 
    include 'mpif.h'
-
-! !PUBLIC TYPES:
 
    type, public :: ice_halo
       integer (int_kind) ::  &
@@ -77,8 +69,6 @@
 
    end type
 
-! !PUBLIC MEMBER FUNCTIONS:
-
    public :: ice_HaloCreate, &
              ice_HaloMask, &
              ice_HaloUpdate, &
@@ -103,8 +93,6 @@
 !                       ice_HaloExtrapolate2DI4, &  ! implemented
    end interface
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  to prevent frequent allocate-deallocate for 2d halo updates, create
@@ -144,28 +132,18 @@
    real (dbl_kind), dimension(:,:), allocatable :: &
       bufTripoleR8
 
-!EOC
 !***********************************************************************
 
 contains
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloCreate
-! !INTERFACE:
 
  function ice_HaloCreate(dist, nsBoundaryType, ewBoundaryType, &
                          nxGlobal)  result(halo)
 
-! !DESCRIPTION:
 !  This routine creates a halo type with info necessary for
 !  performing a halo (ghost cell) update. This info is computed
 !  based on the input block distribution.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    type (distrb), intent(in) :: &
       dist             ! distribution of blocks across procs
@@ -177,13 +155,9 @@ contains
    integer (int_kind), intent(in) :: &
       nxGlobal           ! global grid extent for tripole grids
 
-! !OUTPUT PARAMETERS:
-
    type (ice_halo) :: &
       halo               ! a new halo type with info for halo updates
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -191,7 +165,6 @@ contains
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::             &
-      i,j,k,l,n,m,&
       istat,                       &! allocate status flag
       numProcs,                    &! num of processors involved
       communicator,                &! communicator for message passing
@@ -1024,41 +997,27 @@ contains
    end do msgConfigLoop
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function ice_HaloCreate
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloMask
-! !INTERFACE:
 
  subroutine ice_HaloMask(halo, basehalo, mask)
 
-! !DESCRIPTION:
 !  This routine creates a halo type with info necessary for
 !  performing a halo (ghost cell) update. This info is computed
 !  based on a base halo already initialized and a mask
-!
-! !REVISION HISTORY:
-!  same as module
 
    use ice_domain_size, only: max_blocks
-
-! !INPUT PARAMETERS:
 
    type (ice_halo) :: &
       basehalo            ! basehalo to mask
    integer (int_kind), intent(in) ::  &
       mask(nx_block,ny_block,max_blocks)   ! mask of live points
 
-! !OUTPUT PARAMETERS:
-
    type (ice_halo) :: &
       halo               ! a new halo type with info for halo updates
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1167,31 +1126,19 @@ contains
    halo%numMsgRecv = numMsgRecv     
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_HaloMask
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloUpdate2DR8
-! !INTERFACE:
 
  subroutine ice_HaloUpdate2DR8(array, halo,                    &
                                fieldLoc, fieldKind, &
                                fillValue)
 
-! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
 !  ice\_HaloUpdate.  This routine is the specific interface
 !  for 2d horizontal arrays of double precision.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT PARAMETERS:
 
    type (ice_halo), intent(in) :: &
       halo                 ! precomputed halo structure containing all
@@ -1208,16 +1155,10 @@ contains
                            !  (e.g. eliminated land blocks or
                            !   closed boundaries)
 
-! !INPUT/OUTPUT PARAMETERS:
-
    real (dbl_kind), dimension(:,:,:), intent(inout) :: &
       array                ! array containing field for which halo
                            ! needs to be updated
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1225,7 +1166,7 @@ contains
 !-----------------------------------------------------------------------
 
    integer (int_kind) ::           &
-      i,j,n,nmsg,                &! dummy loop indices
+      i,j,n,nmsg,                    &! dummy loop indices
       ierr,                      &! error or status flag for MPI,alloc
       nxGlobal,                  &! global domain size in x (tripole)
       iSrc,jSrc,                 &! source addresses for message
@@ -1580,31 +1521,19 @@ contains
    endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_HaloUpdate2DR8
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloUpdate2DR4
-! !INTERFACE:
 
  subroutine ice_HaloUpdate2DR4(array, halo,                    &
                                fieldLoc, fieldKind, &
                                fillValue)
 
-! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
 !  ice\_HaloUpdate.  This routine is the specific interface
 !  for 2d horizontal arrays of single precision.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT PARAMETERS:
 
    type (ice_halo), intent(in) :: &
       halo                 ! precomputed halo structure containing all
@@ -1621,16 +1550,10 @@ contains
                            !  (e.g. eliminated land blocks or
                            !   closed boundaries)
 
-! !INPUT/OUTPUT PARAMETERS:
-
    real (real_kind), dimension(:,:,:), intent(inout) :: &
       array                ! array containing field for which halo
                            ! needs to be updated
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1993,31 +1916,19 @@ contains
    endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_HaloUpdate2DR4
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloUpdate2DI4
-! !INTERFACE:
 
  subroutine ice_HaloUpdate2DI4(array, halo,                    &
                                fieldLoc, fieldKind, &
                                fillValue)
 
-! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
 !  ice\_HaloUpdate.  This routine is the specific interface
 !  for 2d horizontal integer arrays.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT PARAMETERS:
 
    type (ice_halo), intent(in) :: &
       halo                 ! precomputed halo structure containing all
@@ -2034,16 +1945,10 @@ contains
                            !  (e.g. eliminated land blocks or
                            !   closed boundaries)
 
-! !INPUT/OUTPUT PARAMETERS:
-
    integer (int_kind), dimension(:,:,:), intent(inout) :: &
       array                ! array containing field for which halo
                            ! needs to be updated
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -2406,31 +2311,19 @@ contains
    endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_HaloUpdate2DI4
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloUpdate3DR8
-! !INTERFACE:
 
  subroutine ice_HaloUpdate3DR8(array, halo,                    &
                                fieldLoc, fieldKind, &
                                fillValue)
 
-! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
 !  ice\_HaloUpdate.  This routine is the specific interface
 !  for 3d horizontal arrays of double precision.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT PARAMETERS:
 
    type (ice_halo), intent(in) :: &
       halo                 ! precomputed halo structure containing all
@@ -2447,16 +2340,10 @@ contains
                            !  (e.g. eliminated land blocks or
                            !   closed boundaries)
 
-! !INPUT/OUTPUT PARAMETERS:
-
    real (dbl_kind), dimension(:,:,:,:), intent(inout) :: &
       array                ! array containing field for which halo
                            ! needs to be updated
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -2880,31 +2767,19 @@ contains
    endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_HaloUpdate3DR8
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloUpdate3DR4
-! !INTERFACE:
 
  subroutine ice_HaloUpdate3DR4(array, halo,                    &
                                fieldLoc, fieldKind, &
                                fillValue)
 
-! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
 !  ice\_HaloUpdate.  This routine is the specific interface
 !  for 3d horizontal arrays of single precision.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT PARAMETERS:
 
    type (ice_halo), intent(in) :: &
       halo                 ! precomputed halo structure containing all
@@ -2921,16 +2796,10 @@ contains
                            !  (e.g. eliminated land blocks or
                            !   closed boundaries)
 
-! !INPUT/OUTPUT PARAMETERS:
-
    real (real_kind), dimension(:,:,:,:), intent(inout) :: &
       array                ! array containing field for which halo
                            ! needs to be updated
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -3354,31 +3223,19 @@ contains
    endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_HaloUpdate3DR4
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloUpdate3DI4
-! !INTERFACE:
 
  subroutine ice_HaloUpdate3DI4(array, halo,                    &
                                fieldLoc, fieldKind, &
                                fillValue)
 
-! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
 !  ice\_HaloUpdate.  This routine is the specific interface
 !  for 3d horizontal arrays of double precision.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT PARAMETERS:
 
    type (ice_halo), intent(in) :: &
       halo                 ! precomputed halo structure containing all
@@ -3395,16 +3252,10 @@ contains
                            !  (e.g. eliminated land blocks or
                            !   closed boundaries)
 
-! !INPUT/OUTPUT PARAMETERS:
-
    integer (int_kind), dimension(:,:,:,:), intent(inout) :: &
       array                ! array containing field for which halo
                            ! needs to be updated
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -3828,31 +3679,19 @@ contains
    endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_HaloUpdate3DI4
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloUpdate4DR8
-! !INTERFACE:
 
  subroutine ice_HaloUpdate4DR8(array, halo,                    &
                                fieldLoc, fieldKind, &
                                fillValue)
 
-! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
 !  ice\_HaloUpdate.  This routine is the specific interface
 !  for 4d horizontal arrays of double precision.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT PARAMETERS:
 
    type (ice_halo), intent(in) :: &
       halo                 ! precomputed halo structure containing all
@@ -3869,16 +3708,10 @@ contains
                            !  (e.g. eliminated land blocks or
                            !   closed boundaries)
 
-! !INPUT/OUTPUT PARAMETERS:
-
    real (dbl_kind), dimension(:,:,:,:,:), intent(inout) :: &
       array                ! array containing field for which halo
                            ! needs to be updated
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -4326,31 +4159,19 @@ contains
    endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_HaloUpdate4DR8
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloUpdate4DR4
-! !INTERFACE:
 
  subroutine ice_HaloUpdate4DR4(array, halo,                    &
                                fieldLoc, fieldKind, &
                                fillValue)
 
-! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
 !  ice\_HaloUpdate.  This routine is the specific interface
 !  for 4d horizontal arrays of single precision.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT PARAMETERS:
 
    type (ice_halo), intent(in) :: &
       halo                 ! precomputed halo structure containing all
@@ -4367,16 +4188,10 @@ contains
                            !  (e.g. eliminated land blocks or
                            !   closed boundaries)
 
-! !INPUT/OUTPUT PARAMETERS:
-
    real (real_kind), dimension(:,:,:,:,:), intent(inout) :: &
       array                ! array containing field for which halo
                            ! needs to be updated
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -4824,31 +4639,19 @@ contains
    endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_HaloUpdate4DR4
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloUpdate4DI4
-! !INTERFACE:
 
  subroutine ice_HaloUpdate4DI4(array, halo,                    &
                                fieldLoc, fieldKind, &
                                fillValue)
 
-! !DESCRIPTION:
 !  This routine updates ghost cells for an input array and is a
 !  member of a group of routines under the generic interface
 !  ice\_HaloUpdate.  This routine is the specific interface
 !  for 4d horizontal integer arrays.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !USER:
-
-! !INPUT PARAMETERS:
 
    type (ice_halo), intent(in) :: &
       halo                 ! precomputed halo structure containing all
@@ -4865,16 +4668,10 @@ contains
                            !  (e.g. eliminated land blocks or
                            !   closed boundaries)
 
-! !INPUT/OUTPUT PARAMETERS:
-
    integer (int_kind), dimension(:,:,:,:,:), intent(inout) :: &
       array                ! array containing field for which halo
                            ! needs to be updated
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -5322,44 +5119,28 @@ contains
    endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_HaloUpdate4DI4
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloIncrementMsgCount
-! !INTERFACE:
 
    subroutine ice_HaloIncrementMsgCount(sndCounter, rcvCounter,    &
                                         srcProc, dstProc, msgSize)
 
-! !DESCRIPTION:
 !  This is a utility routine to increment the arrays for counting
 !  whether messages are required.  It checks the source and destination
 !  task to see whether the current task needs to send, receive or
 !  copy messages to fill halo regions (ghost cells).
-
-! !REVISION HISTORY:
-!  Same as module.
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       srcProc,               &! source processor for communication
       dstProc,               &! destination processor for communication
       msgSize                 ! number of words for this message
 
-! !INPUT/OUTPUT PARAMETERS:
-
    integer (int_kind), dimension(:), intent(inout) :: &
       sndCounter,       &! array for counting messages to be sent
       rcvCounter         ! array for counting messages to be received
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  error check
@@ -5417,27 +5198,17 @@ contains
       endif
    endif
 !-----------------------------------------------------------------------
-!EOC
 
    end subroutine ice_HaloIncrementMsgCount
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloMsgCreate
-! !INTERFACE:
 
    subroutine ice_HaloMsgCreate(halo, srcBlock, srcProc, srcLocalID, &
                                       dstBlock, dstProc, dstLocalID, &
                                       direction)
 
-! !DESCRIPTION:
 !  This is a utility routine to determine the required address and
 !  message information for a particular pair of blocks.
-
-! !REVISION HISTORY:
-!  Same as module.
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       srcBlock,   dstBlock,   & ! source,destination block id
@@ -5449,15 +5220,9 @@ contains
                              !  (north,south,east,west,
                              !   and NE, NW, SE, SW)
 
-! !INPUT/OUTPUT PARAMETERS:
-
    type (ice_halo), intent(inout) :: &
       halo                   ! data structure containing halo info
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -6560,18 +6325,13 @@ contains
    endif
 
 !-----------------------------------------------------------------------
-!EOC
 
    end subroutine ice_HaloMsgCreate
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloExtrapolate
-! !INTERFACE:
 
  subroutine ice_HaloExtrapolate2DR8(ARRAY,dist,ew_bndy_type,ns_bndy_type)
 
-! !DESCRIPTION:
 !  This subroutine extrapolates ARRAY values into the first row or column 
 !  of ghost cells, and is intended for grid variables whose ghost cells 
 !  would otherwise be set using the default boundary conditions (Dirichlet 
@@ -6579,35 +6339,23 @@ contains
 !  Note: This routine will need to be modified for nghost > 1.
 !        We assume padding occurs only on east and north edges.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is the specific interface for double precision arrays 
 !  corresponding to the generic interface ice_HaloExtrapolate
-
-! !USES:
 
    use ice_blocks, only: block, nblocks_x, nblocks_y, get_block
    use ice_constants, only: c2
    use ice_distribution, only: ice_distributionGetBlockID
 
-! !INPUT PARAMETERS:
-
-    character (char_len) :: &
+   character (char_len) :: &
        ew_bndy_type,    &! type of domain bndy in each logical
        ns_bndy_type      !    direction (ew is i, ns is j)
 
    type (distrb), intent(in) :: &
       dist                 ! block distribution for array X
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind), dimension(:,:,:), intent(inout) :: &
      ARRAY          ! array containing distributed field
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -6618,8 +6366,7 @@ contains
      i,j,iblk,           &! dummy loop indices
      numBlocks,       &! number of local blocks
      blockID,            &! block location
-     ibc,                &! ghost cell column or row
-     npad                 ! padding column/row counter
+     ibc                  ! ghost cell column or row
 
    type (block) :: &
      this_block  ! block info for current block
@@ -6688,29 +6435,16 @@ contains
  end subroutine ice_HaloExtrapolate2DR8
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_HaloDestroy
-! !INTERFACE:
 
  subroutine ice_HaloDestroy(halo)
 
-! !DESCRIPTION:
 !  This routine creates a halo type with info necessary for
 !  performing a halo (ghost cell) update. This info is computed
 !  based on the input block distribution.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
-
-! !OUTPUT PARAMETERS:
 
    type (ice_halo) :: &
       halo               ! a new halo type with info for halo updates
 
-!EOP
-!BOC
    integer (int_kind) ::           &
       istat                      ! error or status flag for MPI,alloc
 !-----------------------------------------------------------------------

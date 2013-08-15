@@ -1,10 +1,8 @@
+!  SVN:$Id$
 !|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-!BOP
-! !MODULE: ice_gather_scatter
 
  module ice_gather_scatter
 
-! !DESCRIPTION:
 !  This module contains routines for gathering data to a single
 !  processor from a distributed array, and scattering data from a
 !  single processor to a distributed array.
@@ -12,15 +10,10 @@
 !  NOTE: The arrays gathered and scattered are assumed to have
 !        horizontal dimensions (nx_block, ny_block).
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
 ! author: Phil Jones, LANL
 ! Oct. 2004: Adapted from POP version by William H. Lipscomb, LANL
 ! Jan. 2008: Elizabeth Hunke replaced old routines with new POP
 !              infrastructure, added specialized routine scatter_global_stress
-
-! !USES:
 
    use ice_kinds_mod
    use ice_communicate, only: my_task, mpiR8, mpiR4, mpitag_gs, MPI_COMM_ICE
@@ -39,16 +32,12 @@
    private
    save
 
-! !PUBLIC MEMBER FUNCTIONS:
-
    public :: gather_global,      &
              gather_global_ext,  &
              scatter_global,     &
              scatter_global_ext, &
              scatter_global_stress
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  overload module functions
@@ -73,38 +62,24 @@
 !
 !-----------------------------------------------------------------------
 
-!EOC
 !***********************************************************************
 
  contains
 
 !***********************************************************************
-!BOP
-! !IROUTINE: gather_global
-! !INTERFACE:
 
  subroutine gather_global_dbl(ARRAY_G, ARRAY, dst_task, src_dist, spc_val)
 
-! !DESCRIPTION:
 !  This subroutine gathers a distributed array to a global-sized
 !  array on the processor dst_task.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is the specific inteface for double precision arrays 
 !  corresponding to the generic interface gather_global.  It is shown
 !  to provide information on the generic interface (the generic
 !  interface is identical, but chooses a specific inteface based
 !  on the data type of the input argument).
 
-
-! !USES:
-
    include 'mpif.h'
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
      dst_task   ! task to which array should be gathered
@@ -118,13 +93,9 @@
    real (dbl_kind), intent(in), optional :: &
      spc_val
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind), dimension(:,:), intent(inout) :: &
      ARRAY_G    ! array containing global horizontal field on dst_task
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -586,28 +557,14 @@
 
  end subroutine gather_global_int
 
-!EOC
 !***********************************************************************
-!BOP
-! !IROUTINE: gather_global
-! !INTERFACE:
 
  subroutine gather_global_ext(ARRAY_G, ARRAY, dst_task, src_dist, spc_val)
 
-! !DESCRIPTION:
 !  This subroutine gathers a distributed array to a global-sized
 !  array on the processor dst_task, including ghost cells.
-!
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
-!
-! !USES:
 
    include 'mpif.h'
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
      dst_task   ! task to which array should be gathered
@@ -618,16 +575,12 @@
    real (dbl_kind), dimension(:,:,:), intent(in) :: &
      ARRAY      ! array containing horizontal slab of distributed field
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind), dimension(:,:), intent(inout) :: &
      ARRAY_G    ! array containing global horizontal field on dst_task
 
    real (dbl_kind), optional :: &
      spc_val
      
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -923,28 +876,16 @@
  end subroutine gather_global_ext
 
 !***********************************************************************
-!BOP
-! !IROUTINE: scatter_global
-! !INTERFACE:
 
  subroutine scatter_global_dbl(ARRAY, ARRAY_G, src_task, dst_dist, &
                                field_loc, field_type)
 
-! !DESCRIPTION:
 !  This subroutine scatters a global-sized array to a distributed array.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is the specific interface for double precision arrays 
 !  corresponding to the generic interface scatter_global.
 
-! !USES:
-
    include 'mpif.h'
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
      src_task       ! task from which array should be scattered
@@ -960,13 +901,9 @@
       field_loc                  ! id for location on horizontal grid
                                  !  (center, NEcorner, Nface, Eface)
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind), dimension(:,:,:), intent(inout) :: &
      ARRAY          ! array containing distributed field
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -974,7 +911,7 @@
 !-----------------------------------------------------------------------
 
    integer (int_kind) :: &
-     i,j,n,bid,          &! dummy loop indices
+     i,j,n,              &! dummy loop indices
      nrecvs,             &! actual number of messages received
      isrc, jsrc,         &! source addresses
      dst_block,          &! location of block in dst array
@@ -1359,7 +1296,7 @@
 !-----------------------------------------------------------------------
 
    integer (int_kind) :: &
-     i,j,n,bid,          &! dummy loop indices
+     i,j,n,              &! dummy loop indices
      nrecvs,             &! actual number of messages received
      isrc, jsrc,         &! source addresses
      dst_block,          &! location of block in dst array
@@ -1744,7 +1681,7 @@
 !-----------------------------------------------------------------------
 
    integer (int_kind) :: &
-     i,j,n,bid,          &! dummy loop indices
+     i,j,n,              &! dummy loop indices
      nrecvs,             &! actual number of messages received
      isrc, jsrc,         &! source addresses
      dst_block,          &! location of block in dst array
@@ -2080,29 +2017,16 @@
 
  end subroutine scatter_global_int
 
-!EOC
 !***********************************************************************
-!BOP
-! !IROUTINE: scatter_global
-! !INTERFACE:
 
  subroutine scatter_global_ext(ARRAY, ARRAY_G, src_task, dst_dist)
 
-! !DESCRIPTION:
 !  This subroutine scatters a global-sized array to a distributed array.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is the specific interface for double precision arrays 
 !  corresponding to the generic interface scatter_global.
 
-! !USES:
-
    include 'mpif.h'
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
      src_task       ! task from which array should be scattered
@@ -2113,13 +2037,9 @@
    real (dbl_kind), dimension(:,:), intent(in) :: &
      ARRAY_G        ! array containing global field on src_task
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind), dimension(:,:,:), intent(inout) :: &
      ARRAY          ! array containing distributed field
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -2127,7 +2047,7 @@
 !-----------------------------------------------------------------------
 
    integer (int_kind) :: &
-     i,j,n,bid,          &! dummy loop indices
+     i,j,n,              &! dummy loop indices
      iblk, jblk,         &! block indices
      iglb, jglb,         &! global indices
      nrecvs,             &! actual number of messages received
@@ -2423,28 +2343,16 @@
  end subroutine scatter_global_ext
 
 !***********************************************************************
-!BOP
-! !IROUTINE: scatter_global_stress
-! !INTERFACE:
 
  subroutine scatter_global_stress(ARRAY, ARRAY_G1, ARRAY_G2, &
                                   src_task, dst_dist)
 
-! !DESCRIPTION:
 !  This subroutine scatters global stresses to a distributed array.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  Ghost cells in the stress tensor must be handled separately on tripole
 !  grids, because matching the corner values requires 2 different arrays.
 
-! !USES:
-
    include 'mpif.h'
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
      src_task       ! task from which array should be scattered
@@ -2456,13 +2364,9 @@
      ARRAY_G1,     &! array containing global field on src_task
      ARRAY_G2       ! array containing global field on src_task
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind), dimension(:,:,:), intent(inout) :: &
      ARRAY          ! array containing distributed field
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -2470,7 +2374,7 @@
 !-----------------------------------------------------------------------
 
    integer (int_kind) :: &
-     i,j,n,bid,          &! dummy loop indices
+     i,j,n,              &! dummy loop indices
      nrecvs,             &! actual number of messages received
      isrc, jsrc,         &! source addresses
      dst_block,          &! location of block in dst array

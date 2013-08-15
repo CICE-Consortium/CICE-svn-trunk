@@ -1,14 +1,7 @@
 ! $Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_calendar - calendar routines for managing time
-!
-! !DESCRIPTION:
-!
+
 ! Calendar routines for managing time
-!
-! !REVISION HISTORY:
 !
 ! authors: Elizabeth C. Hunke, LANL
 !          Tony Craig, NCAR
@@ -18,21 +11,15 @@
 !           Converted to free form source (F90).
 ! 2010 CM : Fixed support for Gregorian calendar: subroutines
 !           sec2time, time2sec and set_calendar added.
-!
-! !INTERFACE:
-!
+
       module ice_calendar
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_constants, only: c0, c1, c100, c30, c360, c365, c3600, &
           c4, c400, secday
       use ice_domain_size, only: max_nstrm
       use ice_exit, only: abort_ice
-!
-!EOP
-!
+
       implicit none
       private
       save
@@ -124,33 +111,16 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_calendar - initialize calendar variables
-!
-! !INTERFACE:
-!
-      subroutine init_calendar
-!
-! !DESCRIPTION:
-!
+
 ! Initialize calendar variables
-!
-! !REVISION HISTORY:
 !
 ! authors: Elizabeth C. Hunke, LANL
 !          Tony Craig, NCAR
 !          Craig MacLachlan, UK Met Office
-!
-! !USES:
+
+      subroutine init_calendar
+
       use ice_fileunits
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      integer (kind=int_kind) :: &
-         k
 
       istep = 0         ! local timestep number
       time=istep0*dt    ! s
@@ -203,37 +173,25 @@
       end subroutine init_calendar
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: calendar - computes date at the end of the time step
-!
-! !INTERFACE:
-!
-      subroutine calendar(ttime)
-!
-! !DESCRIPTION:
-!
+
 ! Determine the date at the end of the time step
-!
-! !REVISION HISTORY:
 !
 ! authors: Elizabeth C. Hunke, LANL
 !          Tony Craig, NCAR
 !          Craig MacLachlan, UK Met Office
-!
-! !USES:
+
+      subroutine calendar(ttime)
+
       use ice_fileunits
       use ice_communicate, only: my_task, master_task
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          ttime                          ! time variable
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
-         k, ileap, ns               , &
+         ns                         , & ! loop index
          nyrp,mdayp,hourp           , & ! previous year, day, hour
          elapsed_days               , & ! since beginning this run
          elapsed_months             , & ! since beginning this run
@@ -339,33 +297,21 @@
       end subroutine calendar
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: time2sec - convert the date to seconds since calendar zero
-!
-! !INTERFACE:
-!
-      subroutine time2sec(year,month,day,tsec)
-!
-! !DESCRIPTION:
-!
+
 ! Convert the date to seconds since calendar zero.
 !  ** This is based on the UM routine TIME2SEC **
 !
-! !REVISION HISTORY:
-!
 ! authors: Craig MacLachlan, UK Met Office
-!
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      subroutine time2sec(year,month,day,tsec)
+
       integer (kind=int_kind), intent(in) :: year  ! year
       integer (kind=int_kind), intent(in) :: month ! month
       integer (kind=int_kind), intent(in) :: day   ! year
       real (kind=dbl_kind),   intent(out) :: tsec  ! seconds since calendar zero
-!
-!EOP
-!
+
+      ! local variables
+
       real    (kind=dbl_kind) :: days_since_calz   ! days since calendar zero
       integer (kind=int_kind) :: years_since_calz  ! days since calendar zero
 
@@ -418,33 +364,20 @@
       end subroutine time2sec
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: sec2time - convert the time in seconds since calendar zero
-!                       to a date
-!
-! !INTERFACE:
-!
-      subroutine sec2time(year,month,day,tsec)
-!
-! !DESCRIPTION:
-!
+
 ! Convert the time in seconds since calendar zero to a date.
 !
-! !REVISION HISTORY:
-!
 ! authors: Craig MacLachlan, UK Met Office
-!
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      subroutine sec2time(year,month,day,tsec)
+
       integer (kind=int_kind), intent(out) :: year     ! year
       integer (kind=int_kind), intent(out) :: month    ! month
       integer (kind=int_kind), intent(out) :: day      ! year
       real (kind=dbl_kind),    intent(in)  :: tsec     ! seconds since calendar zero      
-!
-!EOP
-!
+
+      ! local variables
+
       real    (kind=dbl_kind) :: days_since_calz  ! days since calendar zero
       integer (kind=int_kind) :: k                ! counter
 
@@ -519,31 +452,16 @@
       end subroutine sec2time
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: set_calendar - Set the calendar variables to the correct 
-!                           values for the current year
-!
-! !INTERFACE:
-!
-      subroutine set_calendar(year)
-!
-! !DESCRIPTION:
-!
+
 ! Set the "days per month", "days per year", etc variables for the 
 ! current year.
 !
-! !REVISION HISTORY:
-!
 ! authors: Craig MacLachlan, UK Met Office
-!
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      subroutine set_calendar(year)
+
       integer (kind=int_kind), intent(in) :: year   ! current year
-!
-!EOP
-!
+
       ! Internal variable
       logical (kind=log_kind) :: isleap   ! Leap year logical
 

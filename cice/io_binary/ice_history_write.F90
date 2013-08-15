@@ -1,13 +1,7 @@
+!  SVN:$Id: ice_history_write.F90 567 2013-01-07 02:57:36Z eclare $
 !=======================================================================
 !
-!BOP
-!
-! !MODULE: ice_history - ice model history files
-!
 ! Writes history in binary format
-!
-! !REVISION HISTORY:
-!  SVN:$Id: ice_history_write.F90 567 2013-01-07 02:57:36Z eclare $
 !
 ! authors Tony Craig and Bruce Briegleb, NCAR
 !         Elizabeth C. Hunke and William H. Lipscomb, LANL
@@ -21,16 +15,10 @@
 !           Added option for binary output instead of netCDF
 ! 2009 D Bailey and ECH: Generalized for multiple frequency output
 ! 2010 Alison McLaren and ECH: Added 3D capability
-!
-! !INTERFACE:
-!
+! 2013 ECH split from ice_history.F90
+
       module ice_history_write
-!
-! !USES:
-!
-!
-!EOP
-!
+
       implicit none
       private
       public :: ice_write_hist
@@ -42,26 +30,16 @@
 
 !=======================================================================
 !
-!BOP
+! write binary history file
 !
 ! This routine writes fewer grid variables compared with the netcdf
 ! version, to reduce file size.  Grid variables can be obtained from
 ! the original grid input files.
 !
-! !INTERFACE:
-!
-      subroutine ice_write_hist(ns)
-!
-! !DESCRIPTION:
-!
-! write binary history file
-!
-! !REVISION HISTORY:
-!
 ! authors:   E.C.Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine ice_write_hist(ns)
+
       use ice_kinds_mod
       use ice_calendar, only: write_ic, dayyr, histfreq, use_leap_years
       use ice_communicate, only: my_task, master_task
@@ -73,14 +51,12 @@
       use ice_history_shared
       use ice_itd, only: c_hi_range
       use ice_restart, only: lenstr, runid
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: ns
-!
-!EOP
-!
-      integer (kind=int_kind) :: i,j,k,n,nn,nrec,nbits
+
+      ! local variables
+
+      integer (kind=int_kind) :: i,k,n,nn,nrec,nbits
       character (char_len) :: title
       character (char_len_long) :: ncfile(max_nstrm), hdrfile
 

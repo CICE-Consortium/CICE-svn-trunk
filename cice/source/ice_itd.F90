@@ -1,10 +1,6 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_itd - initialize and redistribute ice in the ITD
-!
-! !DESCRIPTION:
-!
+
 ! Routines to initialize the ice thickness distribution and
 ! utilities to redistribute ice among categories. These routines
 ! are not specific to a particular numerical implementation.
@@ -17,9 +13,6 @@
 ! Simulating the ice-thickness distribution in a climate model,
 ! J. Geophys. Res., 106, 2441--2464.
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
 ! authors: C. M. Bitz, UW
 !          William H. Lipscomb and Elizabeth C. Hunke, LANL
 !
@@ -29,21 +22,15 @@
 ! 2006 ECH: Added WMO standard ice thickness categories as kcatbound=2
 !           Streamlined for efficiency 
 !           Converted to free source form (F90)
-!
-! !INTERFACE:
-!
+
       module ice_itd
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_constants
       use ice_communicate, only: my_task, master_task
       use ice_domain_size, only: ncat, max_aero, nilyr, nslyr, n_aero, nblyr
       use ice_fileunits, only: nu_diag
-!
-!EOP
-!
+
       implicit none
       save
 
@@ -87,29 +74,14 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_itd - initalize area fraction and thickness boundaries for ITD
-!
-! !INTERFACE:
-!
-      subroutine init_itd
-!
-! !DESCRIPTION:
-!
+
 ! Initialize area fraction and thickness boundaries for the itd model
-!
-! !REVISION HISTORY:
 !
 ! authors: William H. Lipscomb and Elizabeth C. Hunke, LANL
 !          C. M. Bitz, UW
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
+      subroutine init_itd
+
       integer (kind=int_kind) :: &
            n    ! thickness category index
 
@@ -268,12 +240,12 @@
       end subroutine init_itd
 
 !=======================================================================
-!BOP
+
+! Aggregate ice state variables over thickness categories.
 !
-! !IROUTINE: aggregate - aggregate ice state variables
-!
-! !INTERFACE:
-!
+! authors: C. M. Bitz, UW
+!          W. H. Lipscomb, LANL
+
       subroutine aggregate (nx_block, ny_block, &
                             aicen,    trcrn,    &
                             vicen,    vsnon,    &
@@ -281,23 +253,10 @@
                             vice,     vsno,     &
                             aice0,    tmask,    &
                             ntrcr,    trcr_depend)
-!
-! !DESCRIPTION:
-!
-! Aggregate ice state variables over thickness categories.
-!
-! !REVISION HISTORY:
-!
-! authors: C. M. Bitz, UW
-!          W. H. Lipscomb, LANL
-!
-! !USES:
-!
+
     use ice_state, only: nt_apnd, nt_alvl, nt_fbri, &
                          tr_pond_cesm, tr_pond_lvl, tr_pond_topo
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ntrcr                 ! number of tracers in use
@@ -329,9 +288,9 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr),  &
          intent(out) :: &
          trcr      ! ice tracers
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
         icells                ! number of ocean/ice cells
 
@@ -340,7 +299,7 @@
         indxj
 
       integer (kind=int_kind) :: &
-        i, j, k, n, it, &
+        i, j, n, it, &        ! loop indices
         ij                    ! combined i/j horizontal index
 
       real (kind=dbl_kind), dimension (:,:), allocatable :: &
@@ -499,29 +458,16 @@
       end subroutine aggregate
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: aggregate_area - aggregate ice area
-!
-! !INTERFACE:
-!
-      subroutine aggregate_area (nx_block, ny_block,        &
-                                 aicen,    aice,     aice0)
-!
-! !DESCRIPTION:
-!
+
 ! Aggregate ice area (but not other state variables) over thickness 
 ! categories.
 !
-! !REVISION HISTORY:
-!
 ! authors: William H. Lipscomb, LANL
 !          modified Jan 2004 by Clifford Chen, Fujitsu
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      subroutine aggregate_area (nx_block, ny_block,        &
+                                 aicen,    aice,     aice0)
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block  ! block dimensions
 
@@ -531,9 +477,9 @@
       real (kind=dbl_kind), dimension (:,:), intent(inout) :: &
          aice, &   ! concentration of ice
          aice0     ! concentration of open water
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: i, j, n
 
       !-----------------------------------------------------------------
@@ -562,12 +508,11 @@
       end subroutine aggregate_area
 
 !=======================================================================
-!BOP
+
+! Rebins thicknesses into defined categories
 !
-! !IROUTINE: rebin - rebins thicknesses into defined categories
-!
-! !INTERFACE:
-!
+! authors: William H. Lipscomb and Elizabeth C. Hunke, LANL
+
       subroutine rebin (nx_block, ny_block,        &
                         icells,   indxi,    indxj, &
                         ntrcr,    trcr_depend,     &
@@ -575,19 +520,7 @@
                         vicen,    vsnon,           &
                         l_stop,                    &
                         istop,    jstop)
-!
-! !DESCRIPTION:
-!
-! Rebins thicknesses into defined categories
-!
-! !REVISION HISTORY:
-!
-! authors: William H. Lipscomb and Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells            , & ! number of grid cells with ice
@@ -615,9 +548,9 @@
 
       integer (kind=int_kind), intent(out) :: &
          istop, jstop    ! indices of grid cell where model aborts
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i,j          , & ! horizontal indices
          n            , & ! category index
@@ -796,20 +729,7 @@
       end subroutine rebin
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: reduce_area - reduce area when ice melts for special case ncat=1
-!
-! !INTERFACE:
-!
-      subroutine reduce_area (nx_block, ny_block, &
-                              ilo, ihi, jlo, jhi, &
-                              tmask,              &
-                              aicen,     vicen,   &
-                              aicen_init,vicen_init)
-!
-! !DESCRIPTION:
-!
+
 ! Reduce area when ice melts for special case of ncat=1
 !
 ! Use CSM 1.0-like method of reducing ice area
@@ -817,15 +737,15 @@
 ! change goes to thickness decrease, the other half
 ! to reduction in ice fraction
 !
-! !REVISION HISTORY:
-!
 ! authors: C. M. Bitz, UW
 ! modified by: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      subroutine reduce_area (nx_block, ny_block, &
+                              ilo, ihi, jlo, jhi, &
+                              tmask,              &
+                              aicen,     vicen,   &
+                              aicen_init,vicen_init)
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
@@ -842,9 +762,9 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) :: &
          aicen_init, & ! old ice area for category 1 (m)
          vicen_init    ! old ice volume for category 1 (m)
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        ! horizontal indices
 
@@ -886,12 +806,12 @@
       end subroutine reduce_area
 
 !=======================================================================
-!BOP
+
+! Shift ice across category boundaries, conserving area, volume, and
+! energy.
 !
-! !IROUTINE: shift_ice - shift ice across category boundaries
-!
-! !INTERFACE:
-!
+! authors: William H. Lipscomb and Elizabeth C. Hunke, LANL
+
       subroutine shift_ice (nx_block, ny_block,    &
                             indxi,    indxj,       &
                             icells,                &
@@ -902,23 +822,10 @@
                             daice,    dvice,       &
                             l_stop,                &
                             istop,    jstop)
-!
-! !DESCRIPTION:
-!
-! Shift ice across category boundaries, conserving area, volume, and
-! energy.
-!
-! !REVISION HISTORY:
-!
-! authors: William H. Lipscomb and Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
       use ice_state, only: nt_apnd, nt_alvl, nt_fbri, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells            , & ! number of ocean/ice cells
@@ -959,17 +866,15 @@
 
       integer (kind=int_kind), intent(out) :: &
          istop, jstop    ! indices of grid cell where model aborts
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, m       , & ! horizontal indices
          n             , & ! thickness category index
          nr            , & ! receiver category
          nd            , & ! donor category
-         k             , & ! ice layer index
-         it            , & ! tracer index
-         ilo,ihi,jlo,jhi   ! beginning and end of physical domain
+         it                ! tracer index
 
       real (kind=dbl_kind), dimension(icells,ntrcr,ncat) :: &
          atrcrn            ! aicen*trcrn   
@@ -1338,29 +1243,16 @@
       end subroutine shift_ice
 
 !=======================================================================
-!BOP
+
+! For each grid cell, sum field over all ice categories.
 !
-! !IROUTINE: column_sum - sum field over all ice categories
-!
-! !INTERFACE:
-!
+! author: William H. Lipscomb, LANL
+
       subroutine column_sum (nx_block, ny_block,       &
                              icells,   indxi,   indxj, &
                              nsum,                     &
                              xin,      xout)
-!
-! !DESCRIPTION:
-!
-! For each grid cell, sum field over all ice categories.
-!
-! !REVISION HISTORY:
-!
-! author: William H. Lipscomb, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          nsum              , & ! number of categories/layers
@@ -1376,9 +1268,9 @@
 
       real (kind=dbl_kind), dimension (icells), intent(out) :: &
            xout             ! output field
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
            i, j, ij     , & ! horizontal indices
            n                ! category/layer index
@@ -1398,32 +1290,19 @@
       end subroutine column_sum
 
 !=======================================================================
-!BOP
+
+! For each physical grid cell, check that initial and final values
+! of a conserved field are equal to within a small value.
 !
-! !IROUTINE: column_conservation_check
-!
-! !INTERFACE:
-!
+! author: William H. Lipscomb, LANL
+
       subroutine column_conservation_check (nx_block, ny_block,       &
                                             icells,   indxi,   indxj, &
                                             fieldid,                  &
                                             x1,       x2,             &
                                             max_err,  l_stop,         &
                                             istop,    jstop)
-!
-! !DESCRIPTION:
-!
-! For each physical grid cell, check that initial and final values
-! of a conserved field are equal to within a small value.
-!
-! !REVISION HISTORY:
-!
-! author: William H. Lipscomb, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells                ! number of ice/ocean grid cells
@@ -1447,9 +1326,9 @@
 
       integer (kind=int_kind), intent(inout) :: &
          istop, jstop      ! indices of grid cell where model aborts
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          ij                    ! horizontal indices
 
@@ -1471,35 +1350,22 @@
       end subroutine column_conservation_check
 
 !=======================================================================
-!BOP
+
+! Compute tracer fields.
+! Given atrcrn = aicen*trcrn (or vicen*trcrn, vsnon*trcrn), compute trcrn.
 !
-! !IROUTINE: compute_tracers - compute tracer fields
-!
-! !INTERFACE:
-!
+! author: William H. Lipscomb, LANL
+
       subroutine compute_tracers (nx_block, ny_block,       &
                                   icells,   indxi,   indxj, &
                                   ntrcr,    trcr_depend,    &
                                   atrcrn,   aicen,          &
                                   vicen,    vsnon,          &
                                   trcrn)
-!
-! !DESCRIPTION:
-!
-! Compute tracer fields.
-! Given atrcrn = aicen*trcrn (or vicen*trcrn, vsnon*trcrn), compute trcrn.
-!
-! !REVISION HISTORY:
-!
-! author: William H. Lipscomb, LANL
-!          
-! !USES:
-!
+
       use ice_state, only: nt_Tsfc, nt_alvl, nt_apnd, nt_fbri, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells            , & ! number of ice/ocean grid cells
@@ -1525,9 +1391,9 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr), &
          intent(out) :: &
          trcrn     ! ice tracers
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, it, ij       ! counting indices
 
@@ -1635,13 +1501,16 @@
       end subroutine compute_tracers
 
 !=======================================================================
-!BOP
+
+! Cleanup subroutine that rebins thickness categories if necessary,
+!  eliminates very small ice areas while conserving mass and energy, 
+!  aggregates state variables, and does a boundary call.  
+! It is a good idea to call this subroutine after the thermodynamics
+!  (thermo_vertical/thermo_itd) and again after the dynamics 
+!  (evp/transport/ridging).
 !
-! !IROUTINE: cleanup_itd - rebin if needed, eliminate small ice areas,
-!                          and aggregate over categories
-!
-! !INTERFACE:
-!
+! author: William H. Lipscomb, LANL
+
       subroutine cleanup_itd (nx_block,    ny_block,   &
                               ilo, ihi,    jlo, jhi,   &
                               dt,          ntrcr,      &
@@ -1659,24 +1528,7 @@
                               l_stop,                  &
                               istop,         jstop,    &
                               limit_aice_in)
-!
-! !DESCRIPTION:
-!
-! Cleanup subroutine that rebins thickness categories if necessary,
-!  eliminates very small ice areas while conserving mass and energy, 
-!  aggregates state variables, and does a boundary call.  
-! It is a good idea to call this subroutine after the thermodynamics
-!  (thermo_vertical/thermo_itd) and again after the dynamics 
-!  (evp/transport/ridging).
-!
-! !REVISION HISTORY:
-!
-! author: William H. Lipscomb, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: & 
          nx_block, ny_block, & ! block dimensions 
          ilo,ihi,jlo,jhi   , & ! beginning and end of physical domain
@@ -1740,9 +1592,9 @@
       logical (kind=log_kind), intent(in), optional ::   &
          limit_aice_in      ! if false, allow aice to be out of bounds
                             ! may want to allow this for unit tests
-!    
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j             , & ! horizontal indices
          n                , & ! category index
@@ -1905,12 +1757,12 @@
       end subroutine cleanup_itd
 
 !=======================================================================
-!BOP
+
+! For each ice category in each grid cell, remove ice if the fractional
+! area is less than puny.
 !
-! !IROUTINE: zap_small_areas - eliminate very small ice areas
-!
-! !INTERFACE:
-!
+! author: William H. Lipscomb, LANL
+
       subroutine zap_small_areas (nx_block, ny_block,   &
                                   ilo, ihi, jlo, jhi,  &
                                   dt,       ntrcr,     &
@@ -1924,24 +1776,11 @@
                                   first_ice,nbtrcr,    &
                                   flux_bio, l_stop,    &
                                   istop,    jstop)
-!
-! !DESCRIPTION:
-!
-! For each ice category in each grid cell, remove ice if the fractional
-! area is less than puny.
-!
-! !REVISION HISTORY:
-!
-! author: William H. Lipscomb, LANL
-!
-! !USES:
-!
+
       use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_aero, nt_apnd, nt_hpnd, &
                            nt_fbri, hbrine
       use ice_zbgc_shared, only: rhosi, min_salin
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi   , & ! beginning and end of physical domain
@@ -1994,9 +1833,9 @@
 
       integer (kind=int_kind), intent(out) :: &
          istop, jstop ! indices of grid cell where model aborts
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i,j, n, k, it  , & ! counting indices
          icells         , & ! number of cells with ice to zap
@@ -2007,8 +1846,6 @@
         indxj
 
       real (kind=dbl_kind) :: xtmp, zspace      ! temporary variable
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: worka
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -2330,13 +2167,17 @@
       end subroutine zap_small_areas
 
 !=======================================================================
-!BOP
+
+! Checks that the snow and ice energy in the zero layer thermodynamics
+! model still agrees with the snow and ice volume.
+! If there is an error, the model will abort.
+! This subroutine is only called if heat_capacity = .false.
 !
-! !IROUTINE: zerolayer_check - check that snow and ice energy is
-!                         correct when using zero layer thermodynamics
-!
-! !INTERFACE:
-!
+! author: Alison McLaren, Met Office
+!         May 2010:  ECH replaced eicen, esnon with trcrn but did not test 
+! the changes.  The loop below runs over n=1,ncat and I added loops 
+! over k, making the test more stringent.
+
       subroutine zerolayer_check (nx_block,    ny_block,   &
                                   ntrcr,                   &
                                   icells,  indxi,   indxj, &
@@ -2344,27 +2185,9 @@
                                   vicen,       vsnon,      &
                                   trcrn,       l_stop,     &
                                   istop,       jstop)
-!
-! !DESCRIPTION:
-!
-! Checks that the snow and ice energy in the zero layer thermodynamics
-! model still agrees with the snow and ice volume.
-! If there is an error, the model will abort.
-! This subroutine is only called if heat_capacity = .false.
-!
-! !REVISION HISTORY:
-!
-! author: Alison McLaren, Met Office
-!         May 2010:  ECH replaced eicen, esnon with trcrn but did not test 
-! the changes.  The loop below runs over n=1,ncat and I added loops 
-! over k, making the test more stringent.
-!
-! !USES:
-!
+
       use ice_state, only: nt_qice, nt_qsno
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: & 
          nx_block, ny_block, & ! block dimensions 
          ntrcr             , & ! number of tracers in use
@@ -2389,9 +2212,9 @@
 
       integer (kind=int_kind), intent(out) :: &
          istop, jstop ! indices of grid cell where model aborts
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, k          , & ! horizontal, vertical indices
          n                , & ! category index

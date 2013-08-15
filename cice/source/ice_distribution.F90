@@ -1,22 +1,14 @@
+!  SVN:$Id$
 !|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-!BOP
-! !MODULE: ice_distribution
 
  module ice_distribution
 
-!
-! !DESCRIPTION:
 !  This module provides data types and routines for distributing
 !  blocks across processors.
-!
-! !REVISION HISTORY:
-!  SVN:$Id$
 !
 ! author: Phil Jones, LANL
 ! Oct. 2004: Adapted from POP by William H. Lipscomb, LANL
 ! Jan. 2008: Elizabeth Hunke updated to new POP infrastructure
-!
-! !USES:
 
    use ice_kinds_mod
    use ice_domain_size, only: max_blocks
@@ -28,8 +20,6 @@
    implicit none
    private
    save
-
-! !PUBLIC TYPES:
 
    type, public :: distrb  ! distribution data type
       integer (int_kind) :: &
@@ -48,15 +38,11 @@
 
    end type
 
-! !PUBLIC MEMBER FUNCTIONS:
-
    public :: create_distribution, &
              ice_distributionGet,         &
              ice_distributionGetBlockLoc, &
              ice_distributionGetBlockID, &
              create_local_block_ids
-
-! !PUBLIC DATA MEMBERS:
 
    character (char_len), public :: &
        processor_shape       ! 'square-pop' (approx) POP default config
@@ -64,32 +50,20 @@
                              ! 'slenderX1' (NPX x 1)
                              ! 'slenderX2' (NPX x 2)
 
-!EOP
-!BOC
-!EOC
 !***********************************************************************
 
  contains
 
 !***********************************************************************
-!BOP
-! !IROUTINE: create_distribution
-! !INTERFACE:
 
  function create_distribution(dist_type, nprocs, work_per_block)
 
-! !DESCRIPTION:
 !  This routine determines the distribution of blocks across processors
 !  by call the appropriate subroutine based on distribution type
 !  requested.  Currently three distributions are supported:
 !  2-d Cartesian distribution (cartesian), a load-balanced
 !  distribution using a rake algorithm based on an input amount of work 
 !  per block, and a space-filling-curve algorithm.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    character (*), intent(in) :: &
       dist_type             ! method for distributing blocks
@@ -101,14 +75,9 @@
    integer (int_kind), dimension(:), intent(in) :: &
       work_per_block        ! amount of work per block
 
-! !OUTPUT PARAMETERS:
-
    type (distrb) :: &
       create_distribution   ! resulting structure describing
                             !  distribution of blocks
-
-!EOP
-!BOC
 !----------------------------------------------------------------------
 !
 !  select the appropriate distribution type
@@ -149,38 +118,24 @@
    end select
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function create_distribution
 
 !***********************************************************************
-!BOP
-! !IROUTINE: create_local_block_ids
-! !INTERFACE:
 
  subroutine create_local_block_ids(block_ids, distribution)
 
-! !DESCRIPTION:
 !  This routine determines which blocks in an input distribution are
 !  located on the local processor and creates an array of block ids
 !  for all local blocks.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    type (distrb), intent(in) :: &
       distribution           ! input distribution for which local
                              !  blocks required
 
-! !OUTPUT PARAMETERS:
-
    integer (int_kind), dimension(:), pointer :: &
       block_ids              ! array of block ids for every block
                              ! that resides on the local processor
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -188,7 +143,7 @@
 !-----------------------------------------------------------------------
 
    integer (int_kind) :: &
-      n, bid, bcount        ! dummy counters
+      n, bcount              ! dummy counters
 
    logical (log_kind) :: dbug
 
@@ -229,38 +184,21 @@
       end do
    endif
 
-!EOC
-
  end subroutine create_local_block_ids
 
 !***********************************************************************
-!BOP
-! !IROUTINE: proc_decomposition
-! !INTERFACE:
 
  subroutine proc_decomposition(nprocs, nprocs_x, nprocs_y)
 
-! !DESCRIPTION:
 !  This subroutine attempts to find an optimal (nearly square)
 !  2d processor decomposition for a given number of processors.
-!
-! !REVISION HISTORY:
-!  same as module
-!
-! !USES:
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       nprocs                       ! total number or processors
 
-! !OUTPUT PARAMETERS:
-
    integer (int_kind), intent(out) :: &
       nprocs_x, nprocs_y           ! number of procs in each dimension
 
-!EOP
-!BOC
 !----------------------------------------------------------------------
 !
 !  local variables
@@ -383,33 +321,19 @@
    endif
 
 !----------------------------------------------------------------------
-!EOC
 
  end subroutine proc_decomposition
 
 !**********************************************************************
-!BOP
-! !IROUTINE: ice_distributionDestroy
-! !INTERFACE:
 
  subroutine ice_distributionDestroy(distribution)
 
-! !DESCRIPTION:
 !  This routine destroys a defined distribution by deallocating
 !  all memory associated with the distribution.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT/OUTPUT PARAMETERS:
 
    type (distrb), intent(inout) :: &
       distribution          ! distribution to destroy
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !----------------------------------------------------------------------
 !
 !  local variables
@@ -439,33 +363,20 @@
    deallocate(distribution%blockGlobalID, stat=istat)
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_distributionDestroy
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_distributionGet
-! !INTERFACE:
 
  subroutine ice_distributionGet(distribution,&
                             nprocs, communicator, numLocalBlocks, &
                             blockLocation, blockLocalID, blockGlobalID)
 
-
-! !DESCRIPTION:
 !  This routine extracts information from a distribution.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    type (distrb), intent(in) :: &
       distribution           ! input distribution for which information
                              !  is requested
-
-! !OUTPUT PARAMETERS:
 
       integer (int_kind), intent(out), optional ::   &
          nprocs          ,&! number of processors in this dist
@@ -478,8 +389,6 @@
          blockLocalID      ,&! local  block id for all blocks
          blockGlobalID       ! global block id for each local block
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  depending on which optional arguments are present, extract the
@@ -522,29 +431,18 @@
    endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_distributionGet
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_distributionGetBlockLoc
-! !INTERFACE:
 
  subroutine ice_distributionGetBlockLoc(distribution, blockID, &
                                         processor, localID)
 
-
-! !DESCRIPTION:
 !  Given a distribution of blocks and a global block ID, return
 !  the processor and local index for the block.  A zero for both
 !  is returned in the case that the block has been eliminated from
 !  the distribution (i.e. has no active points).
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    type (distrb), intent(in) :: &
       distribution           ! input distribution for which information
@@ -553,14 +451,10 @@
    integer (int_kind), intent(in) :: &
       blockID                ! global block id for which location requested
 
-! !OUTPUT PARAMETERS:
-
    integer (int_kind), intent(out) ::  &
       processor,            &! processor on which block resides
       localID                ! local index for this block on this proc
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  check for valid blockID
@@ -583,27 +477,16 @@
    localID   = distribution%blockLocalID (blockID)
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_distributionGetBlockLoc
 
 !***********************************************************************
-!BOP
-! !IROUTINE: ice_distributionGetBlockID
-! !INTERFACE:
 
  subroutine ice_distributionGetBlockID(distribution, localID, &
                                        blockID)
 
-
-! !DESCRIPTION:
 !  Given a distribution of blocks and a local block index, return
 !  the global block id for the block.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    type (distrb), intent(in) :: &
       distribution           ! input distribution for which information
@@ -612,13 +495,9 @@
    integer (int_kind), intent(in) ::  &
       localID                ! local index for this block on this proc
 
-! !OUTPUT PARAMETERS:
-
    integer (int_kind), intent(out) :: &
       blockID                ! global block id for this local block
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  check for valid localID
@@ -640,25 +519,15 @@
    blockID   = distribution%blockGlobalID (localID)
 
 !-----------------------------------------------------------------------
-!EOC
 
  end subroutine ice_distributionGetBlockID
 
 !***********************************************************************
-!BOP
-! !IROUTINE: create_distrb_cart
-! !INTERFACE:
 
  function create_distrb_cart(nprocs, workPerBlock) result(newDistrb)
 
-! !DESCRIPTION:
 !  This function creates a distribution of blocks across processors
 !  using a 2-d Cartesian distribution.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       nprocs            ! number of processors in this distribution
@@ -666,14 +535,10 @@
    integer (int_kind), dimension(:), intent(in) :: &
       workPerBlock        ! amount of work per block
 
-! !OUTPUT PARAMETERS:
-
    type (distrb) :: &
       newDistrb           ! resulting structure describing Cartesian
                           !  distribution of blocks
 
-!EOP
-!BOC
 !----------------------------------------------------------------------
 !
 !  local variables
@@ -806,28 +671,18 @@
    endif
 
 !----------------------------------------------------------------------
-!EOC
 
  end function create_distrb_cart
 
 !**********************************************************************
-!BOP
-! !IROUTINE: create_distrb_rake
-! !INTERFACE:
 
  function create_distrb_rake(nprocs, workPerBlock) result(newDistrb)
 
-! !DESCRIPTION:
 !  This  function distributes blocks across processors in a
 !  load-balanced manner based on the amount of work per block.
 !  A rake algorithm is used in which the blocks are first distributed
 !  in a Cartesian distribution and then a rake is applied in each
 !  Cartesian direction.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       nprocs                ! number of processors in this distribution
@@ -835,14 +690,10 @@
    integer (int_kind), dimension(:), intent(in) :: &
       workPerBlock        ! amount of work per block
 
-! !OUTPUT PARAMETERS:
-
    type (distrb) :: &
       newDistrb           ! resulting structure describing
                           ! load-balanced distribution of blocks
 
-!EOP
-!BOC
 !----------------------------------------------------------------------
 !
 !  local variables
@@ -1084,26 +935,16 @@
    call ice_distributionDestroy(dist)
 
 !----------------------------------------------------------------------
-!EOC
 
  end function create_distrb_rake
 
 !***********************************************************************
-!BOP
-! !IROUTINE: create_distrb_roundrobin
-! !INTERFACE:
 
  function create_distrb_roundrobin(nprocs, workPerBlock) result(newDistrb)
 
-! !DESCRIPTION:
 !  This function creates a distribution of blocks across processors
 !  using a simple roundrobin algorithm. Mean for prescribed ice or
 !  standalone CAM mode.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       nprocs            ! number of processors in this distribution
@@ -1111,14 +952,10 @@
    integer (int_kind), dimension(:), intent(in) :: &
       workPerBlock        ! amount of work per block
 
-! !OUTPUT PARAMETERS:
-
    type (distrb) :: &
       newDistrb           ! resulting structure describing Cartesian
                           !  distribution of blocks
 
-!EOP
-!BOC
 !----------------------------------------------------------------------
 !
 !  local variables
@@ -1128,7 +965,6 @@
    integer (int_kind) :: &
       i, j,                  &! dummy loop indices
       istat,                 &! status flag for allocation
-      iblock, jblock,        &!
       processor,             &! processor position in cartesian decomp
       globalID,              &! global block ID
       localID                 ! block location on this processor
@@ -1136,8 +972,6 @@
    integer (int_kind), dimension(:), allocatable :: &
       proc_tmp           ! temp processor id
    
-   integer (int_kind) :: pid,n
-
 !----------------------------------------------------------------------
 !
 !  create communicator for this distribution
@@ -1225,25 +1059,16 @@
    endif
 
 !----------------------------------------------------------------------
-!EOC
+
  end function create_distrb_roundrobin
  
 !***********************************************************************
-!BOP
-! !IROUTINE: create_distrb_sectrobin
-! !INTERFACE:
 
  function create_distrb_sectrobin(nprocs, workPerBlock) result(newDistrb)
 
-! !DESCRIPTION:
 !  This function creates a distribution of blocks across processors
 !  using a simple sectrobin algorithm. Mean for prescribed ice or
 !  standalone CAM mode.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       nprocs            ! number of processors in this distribution
@@ -1251,14 +1076,10 @@
    integer (int_kind), dimension(:), intent(in) :: &
       workPerBlock        ! amount of work per block
 
-! !OUTPUT PARAMETERS:
-
    type (distrb) :: &
       newDistrb           ! resulting structure describing Cartesian
                           !  distribution of blocks
 
-!EOP
-!BOC
 !----------------------------------------------------------------------
 !
 !  local variables
@@ -1268,7 +1089,6 @@
    integer (int_kind) :: &
       i, j,                  &! dummy loop indices
       istat,                 &! status flag for allocation
-      iblock, jblock,        &!
       mblocks,               &! estimate of max blocks per pe
       processor,             &! processor position in cartesian decomp
       globalID,              &! global block ID
@@ -1280,7 +1100,7 @@
    logical (log_kind), dimension(:), allocatable :: &
       bfree              ! map of assigned blocks
    
-   integer (int_kind) :: pid,n,cnt, blktogether, i2, j2
+   integer (int_kind) :: cnt, blktogether, i2
    integer (int_kind) :: totblocks, nchunks
    logical (log_kind) :: keepgoing
 
@@ -1310,6 +1130,7 @@
              newDistrb%blockLocalID (nblocks_tot), stat=istat)
 
    allocate (newDistrb%blockCnt(nprocs))
+
 !----------------------------------------------------------------------
 !
 !  distribute blocks linearly across processors in each direction
@@ -1521,25 +1342,16 @@
    endif
 
 !----------------------------------------------------------------------
-!EOC
+
  end function create_distrb_sectrobin
  
 !***********************************************************************
-!BOP
-! !IROUTINE: create_distrb_sectcart
-! !INTERFACE:
 
  function create_distrb_sectcart(nprocs, workPerBlock) result(newDistrb)
 
-! !DESCRIPTION:
 !  This function creates a distribution of blocks across processors
 !  using a simple sectcart algorithm. Mean for prescribed ice or
 !  standalone CAM mode.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       nprocs            ! number of processors in this distribution
@@ -1547,14 +1359,10 @@
    integer (int_kind), dimension(:), intent(in) :: &
       workPerBlock        ! amount of work per block
 
-! !OUTPUT PARAMETERS:
-
    type (distrb) :: &
       newDistrb           ! resulting structure describing Cartesian
                           !  distribution of blocks
 
-!EOP
-!BOC
 !----------------------------------------------------------------------
 !
 !  local variables
@@ -1564,7 +1372,6 @@
    integer (int_kind) :: &
       i, j, i2, j2,          &! dummy loop indices
       istat,                 &! status flag for allocation
-      iblock, jblock,        &!
       processor,             &! processor position in cartesian decomp
       globalID,              &! global block ID
       localID,               &! block location on this processor
@@ -1574,7 +1381,7 @@
    integer (int_kind), dimension(:), allocatable :: &
       proc_tmp           ! temp processor id
    
-   integer (int_kind) :: pid,n
+   integer (int_kind) :: n
 
 !----------------------------------------------------------------------
 !
@@ -1689,26 +1496,18 @@
    endif
 
 !----------------------------------------------------------------------
-!EOC
+
  end function create_distrb_sectcart
  
 !**********************************************************************
-!BOP
-! !IROUTINE: create_distrb_spacecurve
-! !INTERFACE:
 
  function create_distrb_spacecurve(nprocs,work_per_block)
 
-! !Description:
 !  This function distributes blocks across processors in a
 !  load-balanced manner using space-filling curves
-!
-! !REVISION HISTORY:
 !  added by J. Dennis 3/10/06
 
    use ice_spacecurve, only: IsFactorable, GenSpaceCurve, PrintCurve
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       nprocs                ! number of processors in this distribution
@@ -1716,34 +1515,27 @@
    integer (int_kind), dimension(:), intent(in) :: &
       work_per_block        ! amount of work per block
 
-! !OUTPUT PARAMETERS:
-
    type (distrb) :: &
       create_distrb_spacecurve  ! resulting structure describing
                                 ! load-balanced distribution of blocks
-!EOP
-!BOC
-!----------------------------------------------------------------------
 
+!----------------------------------------------------------------------
 !
 !  local variables
 !
 !----------------------------------------------------------------------
 
    integer (int_kind) :: &
-      i,j,k,n              ,&! dummy loop indices
-      pid                  ,&! dummy for processor id
-      localID              ,&! local block position on processor
-      max_work             ,&! max amount of work in any block
-      nprocs_x             ,&! num of procs in x for global domain
-      nprocs_y               ! num of procs in y for global domain
+      i,j,n              ,&! dummy loop indices
+      pid                ,&! dummy for processor id
+      localID              ! local block position on processor
 
    integer (int_kind), dimension(:),allocatable :: &
-        idxT_i,idxT_j       ! Temporary indices for SFC
+        idxT_i,idxT_j      ! Temporary indices for SFC
 
    integer (int_kind), dimension(:,:),allocatable :: &
-        Mesh            ,&!   !arrays to hold Space-filling curve
-        Mesh2             !
+        Mesh             ,&!   !arrays to hold Space-filling curve
+        Mesh2              !
 
    integer (int_kind) :: &
         nblocksL,nblocks, &! Number of blocks local and total
@@ -1753,12 +1545,9 @@
    logical, parameter :: Debug = .FALSE.
 
    integer (int_kind), dimension(:), allocatable :: &
-      priority           ,&! priority for moving blocks
-      work_tmp           ,&! work per row or column for rake algrthm
-      proc_tmp           ,&! temp processor id for rake algrthm
-      block_count          ! counter to determine local block indx
+      proc_tmp             ! temp processor id for rake algrthm
 
-   type (distrb) :: dist  ! temp hold distribution
+   type (distrb) :: dist   ! temp hold distribution
 
 !------------------------------------------------------
 ! Space filling curves only work if:
@@ -1924,22 +1713,18 @@
    deallocate(Mesh,Mesh2)
    deallocate(idxT_i,idxT_j)
 !----------------------------------------------------------------------
+
    create_distrb_spacecurve = dist  ! return the result
 
 !----------------------------------------------------------------------
-!EOC
 
  end function create_distrb_spacecurve
 
 !**********************************************************************
-!BOP
-! !IROUTINE: ice_distributionRake
-! !INTERFACE:
 
  subroutine ice_distributionRake (procWork, procID, blockWork, &
                                   priority, distribution)
 
-! !DESCRIPTION:
 !  This subroutine performs a rake algorithm to distribute the work
 !  along a vector of processors.  In the rake algorithm, a work
 !  threshold is first set.  Then, moving from left to right, work
@@ -1951,17 +1736,10 @@
 !  block to be moved to the next processor.  This can be used
 !  for example to always choose the eastern-most block or to
 !  ensure a block does not stray too far from its neighbors.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in), dimension(:) :: &
       blockWork          ,&! amount of work per block
       procID               ! global processor number
-
-! !INPUT/OUTPUT PARAMETERS:
 
    integer (int_kind), intent(inout), dimension(:) :: &
       procWork           ,&! amount of work per processor
@@ -1970,10 +1748,6 @@
    type (distrb), intent(inout) :: &
       distribution         ! distribution to change
 
-! !OUTPUT PARAMETERS:
-
-!EOP
-!BOC
 !----------------------------------------------------------------------
 !
 !  local variables
@@ -2088,7 +1862,6 @@
    end do transferLoop
 
 !----------------------------------------------------------------------
-!EOC
 
 end subroutine ice_distributionRake
 
