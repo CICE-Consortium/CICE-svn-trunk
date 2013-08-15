@@ -117,7 +117,7 @@
           dsnow, congel, sst, sss, Tf, fhocn
       use ice_global_reductions, only: global_sum, global_sum_prod, global_maxval
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
-      use ice_state
+      use ice_state ! everything
       use ice_therm_shared, only: calc_Tsfc
       use ice_zbgc_shared, only: rhosi
 

@@ -28,7 +28,6 @@
       use ice_exit, only: abort_ice
       use ice_read_write, only: ice_open, ice_read, &
                                 ice_open_nc, ice_read_nc, ice_close_nc
-      use ice_timers
       use ice_therm_shared, only: ktherm
 
       implicit none
@@ -395,6 +394,7 @@
           potT, sst
       use ice_state, only: aice, trcr, nt_Tsfc
       use ice_grid, only: ANGLET, hm
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bound
 
       integer (kind=int_kind) :: &
          iblk, &              ! block index
@@ -536,6 +536,7 @@
 !   is missing.
 
       use ice_diagnostics, only: check_step
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
 
       logical (kind=log_kind), intent(in) :: flag
 
@@ -684,6 +685,7 @@
 
       use ice_constants, only: c0
       use ice_diagnostics, only: check_step
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
 
       logical (kind=log_kind), intent(in) :: flag
 
@@ -828,6 +830,7 @@
 !  the forcing time period.
 
       use ice_diagnostics, only: check_step
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
 
       logical (kind=log_kind),intent(in) :: readflag
 
@@ -909,6 +912,7 @@
 !  the forcing time period.
 
       use ice_diagnostics, only: check_step
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
 
       logical (kind=log_kind),intent(in) :: readflag
 
@@ -2687,8 +2691,7 @@
       use ice_blocks, only: block, get_block
       use ice_constants, only: p001, p01, p25, c0, c1, depressT
       use ice_domain, only: nblocks, blocks_ice
-      use ice_read_write
-      use ice_flux
+      use ice_flux, only: uatm, vatm, Tair, fsw, fsnow, Qa, rhoa, frain
 
 #ifdef ncdf 
       use netcdf

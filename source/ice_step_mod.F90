@@ -11,45 +11,8 @@
 
       module ice_step_mod
 
-      use ice_atmo
-      use ice_blocks, only: block, get_block, nx_block, ny_block
-      use ice_calendar
-      use ice_communicate
       use ice_constants
-      use ice_diagnostics
-      use ice_domain
-      use ice_domain_size
-      use ice_dyn_evp
-      use ice_dyn_eap
-      use ice_dyn_shared, only: kdyn
-      use ice_exit, only: abort_ice
-      use ice_fileunits
-      use ice_flux
-      use ice_forcing
-      use ice_grid
-      use ice_history
-      use ice_restart
-      use ice_itd, only: cleanup_itd, kitd, hi_min, aggregate, aggregate_area
       use ice_kinds_mod
-      use ice_mechred
-      use ice_meltpond_cesm, only: compute_ponds_cesm, compute_ponds_simple
-      use ice_meltpond_lvl, only: compute_ponds_lvl
-      use ice_meltpond_topo, only: compute_ponds_topo
-      use ice_restart_meltpond_lvl, only: ffracn, dhsn, rfracmin, rfracmax, dpscale, pndaspect, frzpnd
-      use ice_ocean
-      use ice_orbital
-      use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswthruln, &
-                               Sswabsn, Iswabsn, shortwave, &
-                               albicen, albsnon, albpndn, alvdrn, alidrn, alvdfn, alidfn, &
-                               run_dedd, shortwave_ccsm3, apeffn
-      use ice_state
-      use ice_therm_itd, only: lateral_melt, linear_itd
-      use ice_therm_shared, only: ktherm, heat_capacity, calc_Tsfc
-      use ice_therm_vertical
-      use ice_timers
-      use ice_transport_driver
-      use ice_transport_remap
-      use ice_zbgc_shared, only: first_ice
       implicit none
       private
       save
@@ -65,9 +28,19 @@
 !
 ! Scales radiation fields computed on the previous time step.
 !
-! authors: David A. Bailey, NCAR
+! authors: Elizabeth Hunke, LANL
 
       subroutine prep_radiation (dt, iblk)
+
+      use ice_blocks, only: block, get_block, nx_block, ny_block
+      use ice_domain, only: blocks_ice
+      use ice_domain_size, only: ncat, nilyr
+      use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
+          alvdr_ai, alvdf_ai, alidr_ai, alidf_ai, fswfac
+      use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswthruln, &
+                               Sswabsn, Iswabsn
+      use ice_state, only: aice, aicen
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_sw
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -176,8 +149,45 @@
 
       use ice_aerosol
       use ice_age, only: increment_age
-      use ice_blocks, only: nx_block, ny_block
+      use ice_atmo, only: calc_strair, &
+          atmbndy, atmo_boundary_const, atmo_boundary_layer, &
+          calc_formdrag, neutral_drag_coeffs, &
+          Cdn_ocn, Cdn_ocn_skin, Cdn_ocn_floe, Cdn_ocn_keel, Cdn_atm_ocn, &
+          Cdn_atm, Cdn_atm_skin, Cdn_atm_floe, Cdn_atm_rdg, Cdn_atm_pond, &
+          hfreebd, hdraft, hridge, distrdg, hkeel, dkeel, lfloe, dfloe
+      use ice_blocks, only: block, get_block, nx_block, ny_block
+      use ice_calendar, only: yday, istep1
+      use ice_communicate, only: my_task
+      use ice_domain, only: blocks_ice
+      use ice_domain_size, only: ncat, nilyr
+      use ice_exit, only: abort_ice
+      use ice_fileunits, only: nu_diag
+      use ice_flux, only: frzmlt, sst, Tf, strocnxT, strocnyT, rside, &
+          meltsn, melttn, meltbn, congeln, snoicen, dsnown, uatm, vatm, &
+          wind, rhoa, potT, Qa, zlvl, strax, stray, flatn, fsurfn, fcondtopn, &
+          flw, fsnow, fpond, sss, mlt_onset, frz_onset, faero_atm, faero_ocn, &
+          frain, Tair, coszen, strairxT, strairyT, fsurf, fcondtop, fsens, &
+          flat, fswabs, flwout, evap, Tref, Qref, fresh, fsalt, fhocn, &
+          fswthru, meltt, melts, meltb, meltl, congel, snoice, &
+          set_sfcflux, merge_fluxes
       use ice_firstyear, only: update_FYarea
+      use ice_grid, only: lmask_n, lmask_s, TLAT, TLON
+      use ice_itd, only: hi_min
+      use ice_meltpond_cesm, only: compute_ponds_cesm, compute_ponds_simple
+      use ice_meltpond_lvl, only: compute_ponds_lvl
+      use ice_meltpond_topo, only: compute_ponds_topo
+      use ice_restart_meltpond_lvl, only: ffracn, dhsn, &
+          rfracmin, rfracmax, dpscale, pndaspect, frzpnd
+      use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswthruln, &
+                               Sswabsn, Iswabsn, shortwave
+      use ice_state, only: aice, aicen, aice_init, aicen_init, vicen_init, &
+          vice, vicen, vsno, vsnon, ntrcr, trcrn, &
+          nt_apnd, nt_hpnd, nt_ipnd, nt_alvl, nt_vlvl, nt_Tsfc, &
+          tr_iage, nt_iage, tr_FY, nt_FY, tr_aero, tr_pond, tr_pond_cesm, &
+          tr_pond_lvl, nt_qice, nt_sice, tr_pond_topo
+      use ice_therm_shared, only: calc_Tsfc
+      use ice_therm_vertical, only: frzmlt_bottom_lateral, thermo_vertical
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_ponds
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -709,9 +719,27 @@
 
       subroutine step_therm2 (dt, iblk)
 
-      use ice_itd, only: reduce_area
-      use ice_therm_itd, only: add_new_ice
+      use ice_blocks, only: block, get_block, nx_block, ny_block
+      use ice_calendar, only: istep1, yday
+      use ice_communicate, only: my_task
+      use ice_domain, only: blocks_ice
+      use ice_domain_size, only: ncat
+      use ice_exit, only: abort_ice
+      use ice_flux, only: fresh, frain, fpond, frzmlt, frazil, frz_onset, &
+          update_ocn_f, fsalt, Tf, sss, salinz, fhocn, faero_ocn, rside, &
+          meltl
+      use ice_fileunits, only: nu_diag
+      use ice_grid, only: tmask
+      use ice_itd, only: cleanup_itd, kitd, aggregate_area, reduce_area
+      use ice_therm_itd, only: lateral_melt, linear_itd, add_new_ice
       use ice_zbgc_shared, only: ocean_bio, flux_bio
+      use ice_state, only: aice, aicen, aice0, ntrcr, trcr_depend, &
+          aicen_init, vicen_init, trcrn, vicen, vsnon, nbtrcr, tr_aero, &
+          tr_pond_topo
+      use ice_therm_shared, only: heat_capacity
+      use ice_therm_vertical, only: phi_init, dSin0_frazil
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_catconv
+      use ice_zbgc_shared, only: first_ice
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -953,7 +981,20 @@
 !
 ! authors: Elizabeth Hunke, LANL
 
-      subroutine post_thermo
+      subroutine post_thermo (dt)
+
+      use ice_blocks, only: nx_block, ny_block
+      use ice_domain, only: nblocks
+      use ice_flux, only: daidtt, dvidtt
+      use ice_grid, only: tmask
+      use ice_itd, only: aggregate
+      use ice_state, only: aicen, trcrn, vicen, vsnon, ntrcr, &
+                           aice,  trcr,  vice,  vsno, aice0, trcr_depend, &
+                           bound_state
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bound
+
+      real (kind=dbl_kind), intent(in) :: &
+         dt      ! time step
 
       integer (kind=int_kind) :: & 
          iblk        , & ! block index 
@@ -1014,9 +1055,21 @@
 
       subroutine step_dynamics (dt, ndtd)
 
-      use ice_state, only: nt_qsno, trcrn, vsnon, aicen
-      use ice_domain_size, only: nslyr
+      use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_calendar, only: istep
+      use ice_domain, only: blocks_ice, nblocks
+      use ice_domain_size, only: nslyr
+      use ice_dyn_evp, only: evp
+      use ice_dyn_eap, only: eap
+      use ice_dyn_shared, only: kdyn
+      use ice_flux, only: daidtd, dvidtd, init_history_dyn
+      use ice_grid, only: tmask
+      use ice_itd, only: aggregate
+      use ice_state, only: nt_qsno, trcrn, vsnon, aicen, vicen, ntrcr, &
+          aice, trcr, vice, vsno, aice0, trcr_depend, bound_state
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_column, &
+          timer_ridge, timer_bound
+      use ice_transport_driver, only: advection, transport_upwind, transport_remap
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -1129,7 +1182,23 @@
 
       subroutine step_ridge (dt, ndtd, iblk)
 
-      use ice_zbgc_shared, only: flux_bio
+      use ice_blocks, only: block, get_block, nx_block, ny_block
+      use ice_calendar, only: istep1
+      use ice_communicate, only: my_task
+      use ice_domain, only: blocks_ice
+      use ice_exit, only: abort_ice
+      use ice_fileunits, only: nu_diag
+      use ice_flux, only: rdg_conv, rdg_shear, dardg1dt, dardg2dt, &
+          dvirdgdt, opening, fpond, fresh, fhocn, faero_ocn, &
+          aparticn, krdgn, aredistn, vredistn, dardg1ndt, dardg2ndt, &
+          dvirdgndt, araftn, vraftn, fsalt
+      use ice_grid, only: tmask
+      use ice_itd, only: cleanup_itd
+      use ice_mechred, only: ridge_ice
+      use ice_state, only: ntrcr, aicen, trcrn, vicen, vsnon, aice0, &
+          trcr_depend, aice, tr_aero, tr_pond_topo, nbtrcr
+      use ice_therm_shared, only: heat_capacity
+      use ice_zbgc_shared, only: flux_bio, first_ice
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -1271,6 +1340,20 @@
 
       subroutine step_radiation (dt, iblk)
 
+      use ice_blocks, only: block, get_block, nx_block, ny_block
+      use ice_domain, only: blocks_ice
+      use ice_domain_size, only: ncat
+      use ice_flux, only: swvdr, swvdf, swidr, swidf, coszen, fsnow
+      use ice_grid, only: TLAT, TLON, tmask
+      use ice_restart_meltpond_lvl, only: ffracn, dhsn
+      use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswthruln, &
+                               Sswabsn, Iswabsn, shortwave, &
+                               albicen, albsnon, albpndn, &
+                               alvdrn, alidrn, alvdfn, alidfn, &
+                               run_dedd, shortwave_ccsm3, apeffn
+      use ice_state, only: aicen, vicen, vsnon, trcrn, nt_Tsfc
+      use ice_timers, only: ice_timer_start, ice_timer_stop, timer_sw
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
 
@@ -1321,7 +1404,7 @@
          call run_dEdd(ilo, ihi, jlo, jhi,                             &
                        aicen(:,:,:,iblk),     vicen(:,:,:,iblk),       &
                        vsnon(:,:,:,iblk),     trcrn(:,:,:,:,iblk),     &
-                       tlat(:,:,iblk),        tlon(:,:,iblk),          &
+                       TLAT(:,:,iblk),        TLON(:,:,iblk),          &
                        tmask(:,:,iblk),                                & 
                        swvdr(:,:,iblk),       swvdf(:,:,iblk),         &
                        swidr(:,:,iblk),       swidf(:,:,iblk),         &

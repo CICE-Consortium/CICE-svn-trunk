@@ -19,11 +19,8 @@
    use ice_broadcast, only: broadcast_scalar
    use ice_blocks, only: block, get_block, create_blocks, nghost, &
        nblocks_x, nblocks_y, nblocks_tot, nx_block, ny_block
-   use ice_distribution
-   use ice_exit
-   use ice_fileunits
-   use ice_boundary
-   use ice_domain_size
+   use ice_distribution, only: distrb
+   use ice_boundary, only: ice_halo
 
    implicit none
    private
@@ -82,6 +79,13 @@
 
 !  This routine reads in domain information and calls the routine
 !  to set up the block decomposition.
+
+   use ice_distribution, only: processor_shape
+   use ice_domain_size, only: ncat, nilyr, nslyr, max_blocks, &
+       nx_global, ny_global
+   use ice_exit, only: abort_ice
+   use ice_fileunits, only: nu_nml, nml_filename, nu_diag, &
+       get_fileunit, release_fileunit
 
 !----------------------------------------------------------------------
 !
@@ -233,6 +237,12 @@
 !  across processors and defines arrays with block ids for any local
 !  blocks. Information about ghost cell update routines is also
 !  initialized here through calls to the appropriate boundary routines.
+
+   use ice_boundary, only: ice_HaloCreate
+   use ice_distribution, only: create_distribution, create_local_block_ids
+   use ice_domain_size, only: max_blocks, nx_global, ny_global
+   use ice_exit, only: abort_ice
+   use ice_fileunits, only: nu_diag
 
    real (dbl_kind), dimension(nx_global,ny_global), intent(in) :: &
       KMTG           ,&! global topography

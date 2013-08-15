@@ -17,7 +17,7 @@
       use ice_read_write, only: ice_open, ice_read, ice_write
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
-      use ice_zbgc_shared
+      use ice_zbgc_shared ! everything
       use ice_state, only: vicen, vice, trcr, ntrcr, nt_bgc_am_sk, &
           nt_bgc_c_sk, nt_bgc_chl_sk, nt_bgc_DMS_sk, nt_bgc_DMSPd_sk, &
           nt_bgc_DMSPp_sk, nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_Sil_sk, &
