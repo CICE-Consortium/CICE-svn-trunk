@@ -1,10 +1,6 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
 !
-! !MODULE: ice_fileunits
-!
-! !DESCRIPTION:
-
 !  This module contains an I/O unit manager for tracking, assigning
 !  and reserving I/O unit numbers.
 !
@@ -19,22 +15,13 @@
 !  The maximum number of I/O units per node is currently set by
 !  the parameter ice\_IOMaxUnit.
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
 ! author: Elizabeth C. Hunke, LANL
 ! 2006: ECH converted to free source form (F90)
 ! 2007: ECH added dynamic file units, modified from POP_IOUnitsMod.F90
-!
-! !INTERFACE:
-!
+
       module ice_fileunits
-!
-! !USES:
+
       use ice_kinds_mod
-!
-!EOP
-!=======================================================================
 
       implicit none
       private
@@ -93,22 +80,17 @@
       logical (kind=log_kind), dimension(ice_IOUnitsMaxUnit) :: &
          ice_IOUnitsInUse   ! flag=.true. if unit currently open
 
-!EOC
 !=======================================================================
 
       contains
 
 !=======================================================================
-!BOP
-! !IROUTINE: init_fileunits
-! !INTERFACE:
 
-      subroutine init_fileunits
-
-! !DESCRIPTION:
 !  This routine grabs needed unit numbers. 
 !  nu_diag is set to 6 (stdout) but may be reset later by the namelist. 
 !  nu_nml is obtained separately.
+
+      subroutine init_fileunits
 
          nu_diag = ice_stdout  ! default
 
@@ -146,28 +128,19 @@
       end subroutine init_fileunits
 
 !=======================================================================
-!BOP
-! !IROUTINE: get_fileunit
-! !INTERFACE:
 
-      subroutine get_fileunit(iunit)
-
-! !DESCRIPTION:
 !  This routine returns the next available I/O unit and marks it as
 !  in use to prevent any later use.
 !  Note that {\em all} processors must call this routine even if only
 !  the master task is doing the I/O.  This is necessary insure that
 !  the units remain synchronized for other parallel I/O functions.
-!
-! !REVISION HISTORY:
-!  same as module
 
-! !OUTPUT PARAMETERS:
+      subroutine get_fileunit(iunit)
 
    integer (kind=int_kind), intent(out) :: &
       iunit                     ! next free I/O unit
-!EOP
-!BOC
+
+   ! local variables
 
    integer (kind=int_kind) :: n  ! dummy loop index
 
@@ -199,18 +172,13 @@
 
 #endif
 
-!EOC
       end subroutine get_fileunit
 
 !=======================================================================
-!BOP
-! !IROUTINE: release_all_fileunits
-! !INTERFACE:
+
+!  This routine releases unit numbers at the end of a run. 
 
       subroutine release_all_fileunits
-
-! !DESCRIPTION:
-!  This routine releases unit numbers at the end of a run. 
 
          call release_fileunit(nu_grid)
          call release_fileunit(nu_kmt)
@@ -242,27 +210,16 @@
       end subroutine release_all_fileunits
 
 !=======================================================================
-!BOP
-! !IROUTINE: release_fileunit
-! !INTERFACE:
 
-      subroutine release_fileunit(iunit)
-
-! !DESCRIPTION:
 !  This routine releases an I/O unit (marks it as available).
 !  Note that {\em all} processors must call this routine even if only
 !  the master task is doing the I/O.  This is necessary insure that
 !  the units remain synchronized for other parallel I/O functions.
-!
-! !REVISION HISTORY:
-!  same as module
 
-! !INPUT PARAMETER:
+      subroutine release_fileunit(iunit)
 
    integer (kind=int_kind), intent(in) :: &
       iunit                    ! I/O unit to be released
-!EOP
-!BOC
 
 #ifdef SEQ_MCT
          call shr_file_freeUnit(iunit)
@@ -276,17 +233,11 @@
    ice_IOUnitsInUse(iunit) = .false.  !  that was easy...
 #endif
 
-!EOC
       end subroutine release_fileunit
 
 !=======================================================================
-!BOP
-! !IROUTINE: flush_fileunit
-! !INTERFACE:
 
-      subroutine flush_fileunit(iunit)
 
-! !DESCRIPTION:
 !  This routine enables a user to flush the output from an IO unit
 !  (typically stdout) to force output when the system is buffering
 !  such output.  Because this system function is system dependent,
@@ -294,22 +245,16 @@
 !  code relevant to their local machine.  In the case where the CCSM
 !  libraries are available, the shared routine for sys flush can be
 !  used (and is provided here under a preprocessor option).
-!
-! !REVISION HISTORY:
-!  same as module
-!
-! !USES:
+
+      subroutine flush_fileunit(iunit)
 
 #ifdef CCSM
       use shr_sys_mod, only : shr_sys_flush
 #endif
 
-! !INPUT PARAMETER:
-
    integer (kind=int_kind), intent(in) :: &
       iunit                    ! I/O unit to be flushed
-!EOP
-!BOC
+
 !-----------------------------------------------------------------------
 !
 !  insert your system code here
@@ -327,7 +272,6 @@
    call shr_sys_flush(iunit)
 #endif
 
-!EOC
       end subroutine flush_fileunit
 
 !=======================================================================

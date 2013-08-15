@@ -1,9 +1,8 @@
+!  SVN:$Id$
 !=======================================================================
 !
 ! This module defines a variety of physical and numerical constants
 ! used throughout the ice model 
-!
-!  SVN:$Id$
 !
 ! author Elizabeth C. Hunke, LANL
 

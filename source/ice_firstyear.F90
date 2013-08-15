@@ -1,34 +1,22 @@
+!  SVN:$Id$
 !=======================================================================
 !
-!BOP
-!
-! !MODULE: ice_firstyear - First year concentration tracer for sea ice
-!
-! !DESCRIPTION:
+! First year concentration tracer for sea ice
 !
 ! see 
 ! Armour, K. C., C. M. Bitz, L. Thompson and E. C. Hunke (2011). Controls
 ! on Arctic sea ice from first-year and multi-year ice survivability.
 ! J. Climate, 24, 23782390. doi: 10.1175/2010JCLI3823.1.
 !
-! !REVISION HISTORY:
-!  SVN:$$
-!
 ! authors C. Bitz, University of Washington, modified from ice_age module
 !
 ! 2012: E. Hunke adopted from CESM into CICE, changed name from ice_FY.F90
 !
-! !INTERFACE:
-!
       module ice_firstyear
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_constants
-!
-!EOP
-!
+
       implicit none
 
       private
@@ -39,24 +27,11 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: init_FY
-!
-! !DESCRIPTION:
-!
+
 !  Initialize ice FY tracer (call prior to reading restart data)
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine init_FY(nx_block, ny_block, ncat, firstyear)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
         integer(kind=int_kind), intent(in) :: &
              nx_block , &
              ny_block , &
@@ -64,40 +39,24 @@
 
         real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
              intent(out) :: firstyear
-!
-!EOP
-!
+
         firstyear(:,:,:) = c0
 
       end subroutine init_FY
 
 !=======================================================================
 
-!BOP
-!
-! !ROUTINE: update_FYarea 
-!
-! !DESCRIPTION:
-!
 !  Zero ice FY tracer on fixed day of year. Zeroing FY ice tracer promotes
 !  ice to MY ice. Unfortunately some frazil ice may grow before the 
 !  zeroing date and thus get promoted to MY ice too soon.
 !  Bummer.
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine update_FYarea (nx_block, ny_block, &
                                 dt,       icells,   &
                                 indxi,    indxj,    &
                                 nhmask,   shmask,   &
                                 yday,     FYarea)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells                ! number of cells with ice present
@@ -117,14 +76,12 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(inout) :: &
          FYarea
-!
-!  local variables
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: i, j, ij
-!
-!EOP
-!
-     if ((yday >= 259._dbl_kind) .and. &
+
+      if ((yday >= 259._dbl_kind) .and. &
            (yday <  259._dbl_kind+dt/secday)) then
         do ij = 1, icells
            i = indxi(ij)
@@ -133,7 +90,7 @@
         enddo
       endif
 
-     if ((yday >= 75._dbl_kind) .and. &
+      if ((yday >= 75._dbl_kind) .and. &
            (yday <  75._dbl_kind+dt/secday)) then
         do ij = 1, icells
            i = indxi(ij)

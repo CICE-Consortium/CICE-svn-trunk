@@ -1,3 +1,4 @@
+!  SVN:$Id$
 !=======================================================================
 !
 ! Computes ice microstructural information for use in biogeochemistry

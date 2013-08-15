@@ -1,3 +1,4 @@
+!  SVN:$Id$
 !=======================================================================
 ! Biogeochemistry history output
 !
@@ -136,7 +137,7 @@
           vname_in
       use ice_state, only: tr_aero, hbrine
 
-      integer (kind=int_kind) :: n, k, ns
+      integer (kind=int_kind) :: n, ns
       integer (kind=int_kind) :: nml_error ! namelist i/o error flag
       character (len=3) :: nchar
 
@@ -569,11 +570,8 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-         i,j,k,n, &
+         i, j, n,           & ! loop indices
          ilo,ihi,jlo,jhi      ! beginning and end of physical domain
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2) :: &
-         workz 
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2,ncat) :: &
          workzn 

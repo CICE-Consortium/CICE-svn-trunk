@@ -1,3 +1,4 @@
+!  SVN:$Id$
 !=======================================================================
 !
 ! Thermo calculations after call to coupler, related to ITD:
@@ -8,8 +9,6 @@
 !       fluxes.  Then ice_therm_itd does thermodynamic calculations not
 !       needed for coupling.
 !       
-!  SVN:$Id$
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
 !         Elizabeth C. Hunke, LANL

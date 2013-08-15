@@ -1,10 +1,7 @@
+!  SVN:$Id$
 !=======================================================================
 !
-!BOP
-!
-! !MODULE: ice_restart_meltpond_cesm - CESM meltpond parameterization
-!
-! !DESCRIPTION:
+! CESM meltpond parameterization
 !
 ! This meltpond parameterization was developed for use with the delta-
 ! Eddington radiation scheme, and only affects the radiation budget in
@@ -12,23 +9,14 @@
 ! water is not used elsewhere in the model for mass budgets or other
 ! physical processes.
 !
-! !REVISION HISTORY:
-!  SVN:$$
-!
 ! authors David A. Bailey (NCAR)
 !         Marika M. Holland (NCAR)
 !         Elizabeth C. Hunke (LANL)
-!
-! !INTERFACE:
-!
+
       module ice_restart_meltpond_cesm
-!
-! !USES:
-!
+
       use ice_kinds_mod
-!
-!EOP
-!
+
       implicit none
       private
       public :: write_restart_pond_cesm, read_restart_pond_cesm
@@ -45,25 +33,13 @@
 
 !=======================================================================
 !
-!BOP
-!
-! !IROUTINE: write_restart_pond - dumps all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine write_restart_pond_cesm(filename_spec)
-!
-! !DESCRIPTION:
-!
 ! Dumps all values needed for restarting
-!
-! !REVISION HISTORY:
 !
 ! authors Elizabeth C. Hunke, LANL
 !         David A. Bailey, NCAR
-!
-! !USES:
-!
+
+      subroutine write_restart_pond_cesm(filename_spec)
+
       use ice_communicate, only: my_task, master_task
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, year_init
@@ -72,15 +48,13 @@
       use ice_read_write, only: ice_open, ice_write
       use ice_restart, only: lenstr, restart_dir, restart_file
       use ice_state, only: trcrn, nt_apnd, nt_hpnd
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
+          n,                    & ! loop index
           iyear, imonth, iday     ! year, month, day
 
       character(len=char_len_long) :: filename
@@ -121,25 +95,14 @@
       end subroutine write_restart_pond_cesm
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: read_restart_pond - reads all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine read_restart_pond_cesm(filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Reads all values needed for a meltpond volume restart
-!
-! !REVISION HISTORY:
 !
 ! authors Elizabeth C. Hunke, LANL
 !         David A. Bailey, NCAR
-!
-! !USES:
-!
+
+      subroutine read_restart_pond_cesm(filename_spec)
+
       use ice_communicate, only: my_task, master_task
       use ice_domain_size, only: ncat
       use ice_calendar, only: istep1, time, time_forc
@@ -148,16 +111,13 @@
       use ice_restart, only: lenstr, restart_file, pointer_file
       use ice_state, only: trcrn, nt_apnd, nt_hpnd
       use ice_exit, only: abort_ice
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
-         i, j, k, n, it, iblk, & ! counting indices
-         iyear, imonth, iday , & ! year, month, day
+         n,                    & ! loop index
          iignore                 ! dummy variable
 
       real (kind=real_kind) :: &

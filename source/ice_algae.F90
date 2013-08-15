@@ -1,3 +1,4 @@
+!  SVN:$Id$
 !=======================================================================
 !
 ! Compute biogeochemistry in the skeletal layer
@@ -663,7 +664,6 @@
          C_s       , &  ! net algal carbon sources (mmol/m^3)
          C_r       , &  ! net algal carbon removal (mmol/m^3)
          NO_s_n    , &  ! skl nitrate from nitrification (mmol/m^3)
-         NO_s_r    , &  ! skl nitrate from respiration (mmol/m^3)
          NO_r_p    , &  ! skl nitrate uptake by algae (mmol/m^3)
          NO_s      , &  ! net skl nitrate sources (mmol/m^3)
          NO_r      , &  ! net skl nitrate removal (mmol/m^3)
@@ -674,7 +674,6 @@
          NH_r_n    , &  ! skl ammonium removal to nitrification (mmol/m^3)
          NH_s      , &  ! net skl ammonium sources (mmol/m^3)
          NH_r      , &  ! net skl ammonium removal (mmol/m^3)
-         Sil_s_r   , &  ! skl silicon from respiration (mmol/m^3)
          Sil_r_p   , &  ! skl silicon uptake by algae (mmol/m^3)
          Sil_s     , &  ! net skl silicon sources (mmol/m^3)
          Sil_r          ! net skl silicon removal (mmol/m^3)
@@ -1235,8 +1234,7 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-          n,  & ! category index
-          iyear ! year
+          n   ! category index
 
       character(len=char_len_long) :: &
          filename, filename0, string1, string2

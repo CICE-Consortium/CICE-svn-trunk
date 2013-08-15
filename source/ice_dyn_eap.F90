@@ -1,10 +1,5 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_dyn_eap - elastic-anisotropic-plastic sea ice 
-!                        dynamics model
-!
-! !DESCRIPTION:
 !
 ! Elastic-anisotropic sea ice dynamics model
 ! Computes ice velocity and deformation
@@ -18,24 +13,15 @@
 ! Tsamados, M., D.L. Feltham, and A.V. Wilchinsky (2012). Impact on new
 ! anisotropic rheology on simulations of Arctic sea ice. JGR, in press.
 !
-! !REVISION HISTORY:
-!  SVN:$Id: ice_dyn_eap.F90 $
-!
 ! authors: Michel Tsamados, CPOM 
 !          David Schroeder, CPOM
-!
-! !INTERFACE:
-!
+
       module ice_dyn_eap
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_blocks, only: nx_block, ny_block
       use ice_domain_size, only: max_blocks
-!
-!EOP
-!
+
       implicit none
       private
       public :: eap, init_eap, write_restart_eap
@@ -73,32 +59,20 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: eap - elastic-anisotropic-plastic dynamics driver
-!
-! !INTERFACE:
-!
-      subroutine eap (dt)
-!
-! !DESCRIPTION:
 !
 ! Elastic-anisotropic-plastic dynamics driver
 ! based on subroutine evp
-!
+
+      subroutine eap (dt)
+
 #ifdef CICE_IN_NEMO
+! Wind stress is set during this routine from the values supplied
 ! via NEMO (unless calc_strair is true).  These values are supplied  
 ! rotated on u grid and multiplied by aice.  strairxT = 0 in this  
 ! case so operations in evp_prep1 are pointless but carried out to  
 ! minimise code changes.
 #endif
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-!
+
       use ice_atmo, only: Cdn_ocn
       use ice_boundary, only: ice_halo, ice_HaloMask, ice_HaloUpdate, &
           ice_HaloDestroy
@@ -126,14 +100,12 @@
 #ifdef CICE_IN_NEMO
       use ice_atmo, only: calc_strair
 #endif
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
-!
-! local variables
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: & 
          ksub           , & ! subcycle step
          iblk           , & ! block index
@@ -167,9 +139,6 @@
 
       integer (kind=int_kind), dimension (nx_block,ny_block,max_blocks) :: &
          icetmask   ! ice extent mask (T-cell)
-
-      integer (kind=int_kind), dimension (nx_block,ny_block,max_blocks) :: &
-         halomask     ! mask for masked halo creation
 
       type (ice_halo) :: &
          halo_info_mask !  ghost cell update info for masked halo
@@ -502,25 +471,12 @@
       end subroutine eap
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_eap - initialize parameters needed for eap dynamics
-!
-! !INTERFACE:
-!
-      subroutine init_eap (dt)
-!
-! !DESCRIPTION:
-!
+
 ! Initialize parameters and variables needed for the eap dynamics
 ! (based on init_evp)
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-!
+
+      subroutine init_eap (dt)
+
       use ice_blocks, only: nx_block, ny_block
       use ice_communicate, only: my_task, master_task
       use ice_constants, only: c0, p5
@@ -530,14 +486,12 @@
       use ice_restart, only: runtype
       use ice_fileunits, only: nu_diag, nu_eap, eap_filename, &
           get_fileunit, release_fileunit
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
-!
-! local variables
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, k, &
          iblk, &         ! block index
@@ -599,13 +553,12 @@
       end subroutine init_eap
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: stress_eap - computes strain rates and 
-!                         internal stress components
-!
-! !INTERFACE:
-!
+
+! Computes the rates of strain and internal stress components for
+! each of the four corners on each T-grid cell.
+! Computes stress terms for the momentum equation
+! (based on subroutine stress)
+
       subroutine stress_eap  (nx_block,   ny_block,       &
                               ksub,       ndte,           &
                               icellt,                     &
@@ -639,25 +592,9 @@
                               rdg_conv,   rdg_shear,      &
                               str)
 
-!
-! !DESCRIPTION:
-!
-! Computes the rates of strain and internal stress components for
-! each of the four corners on each T-grid cell.
-! Computes stress terms for the momentum equation
-! (based on subroutine stress)
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES
-!
       use ice_constants, only: c0, p027, p055, p111, p166, &
           p2, p222, p25, p333, p5, puny
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: & 
          nx_block, ny_block, & ! block dimensions
          ksub              , & ! subcycling step
@@ -719,13 +656,13 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,8), & 
          intent(out) :: &
          str          ! stress combinations
-!
-! local variables
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, ij
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block):: &
+      real (kind=dbl_kind) :: &
          stressptmp_1, stressptmp_2, stressptmp_3, stressptmp_4, & ! sigma11+sigma22
          stressmtmp_1, stressmtmp_2, stressmtmp_3, stressmtmp_4, & ! sigma11-sigma22
          stress12tmp_1,stress12tmp_2,stress12tmp_3,stress12tmp_4   ! sigma12
@@ -802,26 +739,26 @@
          ! ne
          call update_stress_rdg (ksub, ndte, divune, tensionne, &
                                  shearne, a11_1(i,j), a12_1(i,j), &
-                                 stressptmp_1(i,j), stressmtmp_1(i,j), &
-                                 stress12tmp_1(i,j), strength(i,j), &
+                                 stressptmp_1, stressmtmp_1, &
+                                 stress12tmp_1, strength(i,j), &
                                  alpharne, alphasne)
          ! nw
          call update_stress_rdg (ksub, ndte, divunw, tensionnw, &
                                  shearnw, a11_2(i,j), a12_2(i,j), &
-                                 stressptmp_2(i,j), stressmtmp_2(i,j), &
-                                 stress12tmp_2(i,j), strength(i,j), &
+                                 stressptmp_2, stressmtmp_2, &
+                                 stress12tmp_2, strength(i,j), &
                                  alpharnw, alphasnw)
          ! sw
          call update_stress_rdg (ksub, ndte, divusw, tensionsw, &
                                  shearsw, a11_3(i,j), a12_3(i,j), &
-                                 stressptmp_3(i,j), stressmtmp_3(i,j), &
-                                 stress12tmp_3(i,j), strength(i,j), &
+                                 stressptmp_3, stressmtmp_3, &
+                                 stress12tmp_3, strength(i,j), &
                                  alpharsw, alphassw)
          ! se
          call update_stress_rdg (ksub, ndte, divuse, tensionse, &
                                  shearse, a11_4(i,j), a12_4(i,j), &
-                                 stressptmp_4(i,j), stressmtmp_4(i,j), &
-                                 stress12tmp_4(i,j), strength(i,j), &
+                                 stressptmp_4, stressmtmp_4, &
+                                 stress12tmp_4, strength(i,j), &
                                  alpharse, alphasse)
 
       !-----------------------------------------------------------------
@@ -857,31 +794,31 @@
       ! elastic relaxation, see Eq. A12-A14
       !-----------------------------------------------------------------
 
-         stressp_1(i,j) = (stressp_1(i,j) + stressptmp_1(i,j)*arlx1i) &
+         stressp_1(i,j) = (stressp_1(i,j) + stressptmp_1*arlx1i) &
                           * denom1
-         stressp_2(i,j) = (stressp_2(i,j) + stressptmp_2(i,j)*arlx1i) &
+         stressp_2(i,j) = (stressp_2(i,j) + stressptmp_2*arlx1i) &
                           * denom1
-         stressp_3(i,j) = (stressp_3(i,j) + stressptmp_3(i,j)*arlx1i) &
+         stressp_3(i,j) = (stressp_3(i,j) + stressptmp_3*arlx1i) &
                           * denom1
-         stressp_4(i,j) = (stressp_4(i,j) + stressptmp_4(i,j)*arlx1i) &
-                          * denom1
-
-         stressm_1(i,j) = (stressm_1(i,j) + stressmtmp_1(i,j)*arlx1i) &
-                          * denom1
-         stressm_2(i,j) = (stressm_2(i,j) + stressmtmp_2(i,j)*arlx1i) &
-                          * denom1
-         stressm_3(i,j) = (stressm_3(i,j) + stressmtmp_3(i,j)*arlx1i) &
-                          * denom1
-         stressm_4(i,j) = (stressm_4(i,j) + stressmtmp_4(i,j)*arlx1i) &
+         stressp_4(i,j) = (stressp_4(i,j) + stressptmp_4*arlx1i) &
                           * denom1
 
-         stress12_1(i,j) = (stress12_1(i,j) + stress12tmp_1(i,j)*arlx1i) &
+         stressm_1(i,j) = (stressm_1(i,j) + stressmtmp_1*arlx1i) &
                           * denom1
-         stress12_2(i,j) = (stress12_2(i,j) + stress12tmp_2(i,j)*arlx1i) &
+         stressm_2(i,j) = (stressm_2(i,j) + stressmtmp_2*arlx1i) &
                           * denom1
-         stress12_3(i,j) = (stress12_3(i,j) + stress12tmp_3(i,j)*arlx1i) &
+         stressm_3(i,j) = (stressm_3(i,j) + stressmtmp_3*arlx1i) &
                           * denom1
-         stress12_4(i,j) = (stress12_4(i,j) + stress12tmp_4(i,j)*arlx1i) &
+         stressm_4(i,j) = (stressm_4(i,j) + stressmtmp_4*arlx1i) &
+                          * denom1
+
+         stress12_1(i,j) = (stress12_1(i,j) + stress12tmp_1*arlx1i) &
+                          * denom1
+         stress12_2(i,j) = (stress12_2(i,j) + stress12tmp_2*arlx1i) &
+                          * denom1
+         stress12_3(i,j) = (stress12_3(i,j) + stress12tmp_3*arlx1i) &
+                          * denom1
+         stress12_4(i,j) = (stress12_4(i,j) + stress12tmp_4*arlx1i) &
                           * denom1
 
           s11(i,j) = p5 * p25 * (stressp_1(i,j) + stressp_2(i,j) &
@@ -895,16 +832,16 @@
           s12(i,j) = p25 *      (stress12_1(i,j) + stress12_2(i,j) &
                                + stress12_3(i,j) + stress12_4(i,j))
 
-          yieldstress11(i,j) = p5 * p25 * (stressptmp_1(i,j) + stressptmp_2(i,j) &
-                                         + stressptmp_3(i,j) + stressptmp_4(i,j) &
-                                         + stressmtmp_1(i,j) + stressmtmp_2(i,j) &
-                                         + stressmtmp_3(i,j) + stressmtmp_4(i,j))
-          yieldstress22(i,j) = p5 * p25 * (stressptmp_1(i,j) + stressptmp_2(i,j) &
-                                         + stressptmp_3(i,j) + stressptmp_4(i,j) &
-                                         - stressmtmp_1(i,j) - stressmtmp_2(i,j) &
-                                         - stressmtmp_3(i,j) - stressmtmp_4(i,j))
-          yieldstress12(i,j) = p25 *      (stress12tmp_1(i,j) + stress12tmp_2(i,j) &
-                                         + stress12tmp_3(i,j) + stress12tmp_4(i,j))
+          yieldstress11(i,j) = p5 * p25 * (stressptmp_1 + stressptmp_2 &
+                                         + stressptmp_3 + stressptmp_4 &
+                                         + stressmtmp_1 + stressmtmp_2 &
+                                         + stressmtmp_3 + stressmtmp_4)
+          yieldstress22(i,j) = p5 * p25 * (stressptmp_1 + stressptmp_2 &
+                                         + stressptmp_3 + stressptmp_4 &
+                                         - stressmtmp_1 - stressmtmp_2 &
+                                         - stressmtmp_3 - stressmtmp_4)
+          yieldstress12(i,j) = p25 *      (stress12tmp_1 + stress12tmp_2 &
+                                         + stress12tmp_3 + stress12tmp_4)
 
       !-----------------------------------------------------------------
       ! Eliminate underflows.
@@ -1035,32 +972,19 @@
       end subroutine stress_eap
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: update_stress_rdg
-!
-! !INTERFACE:
-!
+
+! Updates the stress depending on values of strain rate and structure
+! tensor and for ksub=ndte it computes closing and sliding rate
+
       subroutine update_stress_rdg (ksub, ndte, divu, tension, &
                                    shear, a11, a12, &
                                    stressp,  stressm, &
                                    stress12, strength, &
                                    alphar, alphas)
-!
-! !DESCRIPTION:
-!
-! Updates the stress depending on values of strain rate and structure
-! tensor and for ksub=ndte it computes closing and sliding rate
-!
-! !REVISION HISTORY:
-!
-! same as module
 
       use ice_constants, only: c0, p025, p05, p1, p5, c1, c2, c12, puny, &
           pi, pih, pi2, piq
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          ksub, &
          ndte
@@ -1073,9 +997,9 @@
       real (kind=dbl_kind), intent(out) :: &
          stressp, stressm, stress12, &
          alphar, alphas     
-!
-!     local variables
-!
+
+      ! local variables
+
       real (kind=dbl_kind), dimension(2,2) :: &
          Q, Qd, atemp,                   &
          dtemp,               &
@@ -1306,12 +1230,9 @@
       end subroutine update_stress_rdg
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: stepa - computes structure tensor
-!
-! !INTERFACE:
-!
+
+! Solves evolution equation for structure tensor (A19, A20) 
+
       subroutine stepa  (nx_block,   ny_block,       &
                          dtei,       icellt,         &
                          indxti,     indxtj,         &
@@ -1324,20 +1245,9 @@
                          stressm_3,  stressm_4,      &
                          stress12_1, stress12_2,     &
                          stress12_3, stress12_4)
-! !DESCRIPTION:
-!
-! Solves evolution equation for structure tensor (A19, A20) 
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES
-!
+
       use ice_constants, only: p001, p2, p25, p5
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icellt                ! no. of cells where icetmask = 1
@@ -1362,9 +1272,9 @@
          ! structure tensor () in each corner of T cell
          a11, a12, a11_1, a11_2, a11_3, a11_4, & ! components of 
          a12_1, a12_2, a12_3, a12_4              ! structure tensor ()
-!
-! local variables
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, ij
 
@@ -1449,33 +1359,18 @@
       end subroutine stepa
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: calc_ffrac 
-!
-! !INTERFACE:
-!
+
+! computes term in evolution equation for structure tensor which determines
+! the ice floe re-orientation due to fracture
+! Eq. 7: Ffrac = -kf(A-S) or = 0 depending on sigma_1 and sigma_2
+
       subroutine calc_ffrac (blockno, stressp, stressm, &
                              stress12,                  &
                              a1x,                       &
                              mresult)
-!
-! !DESCRIPTION:
-!
-! computes term in evolution equation for structure tensor which determines
-! the ice floe re-orientation due to fracture
-! Eq. 7: Ffrac = -kf(A-S) or = 0 depending on sigma_1 and sigma_2
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-!
+
       use ice_constants, only: c0, p001, p1, p5, c2, c3
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer(kind=int_kind), intent(in) :: &
          blockno
 
@@ -1484,14 +1379,14 @@
 
       real (kind=dbl_kind), intent(out) :: &
          mresult
-!
-! local variables
-!
+
+      ! local variables
+
       real (kind=dbl_kind), dimension(2,2) :: &
          Q, sigma
 
       real (kind=dbl_kind) :: &
-         gamma, sigma_1, sigma_2, m
+         gamma, sigma_1, sigma_2
 
       real (kind=dbl_kind), parameter :: &
          kfrac = p001, &
@@ -1543,40 +1438,23 @@
 !=======================================================================
 !---! these subroutines write/read Fortran unformatted data files ..
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: dumpfile - dumps all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine write_restart_eap (filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Dumps all values needed for a restart
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-!
+
+      subroutine write_restart_eap (filename_spec)
+
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init
       use ice_communicate, only: my_task, master_task
       use ice_fileunits, only: nu_diag, nu_dump_eap
       use ice_read_write, only: ice_open, ice_write
       use ice_restart, only: lenstr, restart_dir, restart_file
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
           iyear, imonth, iday     ! year, month, day
 
       character(len=char_len_long) :: filename
@@ -1625,24 +1503,11 @@
       end subroutine write_restart_eap
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: read_restart_eap - reads all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine read_restart_eap(filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Reads all values needed for elastic anisotropic plastic dynamics restart
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-! 
+
+      subroutine read_restart_eap(filename_spec)
+
       use ice_blocks, only: nghost
       use ice_calendar, only: istep1, time, time_forc
       use ice_communicate, only: my_task, master_task
@@ -1655,15 +1520,13 @@
       use ice_restart, only: lenstr, restart_file, &
                              pointer_file, runtype
       use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_restart_eap
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk ! counting indices
+          i, j, n, iblk ! counting indices
 
       character(len=char_len_long) :: &
          filename, filename0, string1, string2

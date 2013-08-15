@@ -1,27 +1,16 @@
-!=======================================================================
-!BOP
-!
-! !MODULE: ice_read_write
-!
-! !DESCRIPTION:
-!
-! Routines for opening, reading and writing external files
-!
-! !REVISION HISTORY:
 !  SVN:$Id$
+!=======================================================================
+
+! Routines for opening, reading and writing external files
 !
 ! author: Tony Craig, NCAR
 !
 ! 2004: Block structure added by William Lipscomb, LANL
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
 ! 2007: netcdf versions added by Alison McLaren & Ann Keen, Met Office
-!
-! !INTERFACE:
-!
+
       module ice_read_write
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_constants, only: c0, spval_dbl, &
           field_loc_noupdate, field_type_noupdate
@@ -50,8 +39,6 @@
                 ice_write_ext,      &
                 ice_close_nc
 
-!EOP
-!BOC
       interface ice_write
         module procedure ice_write_xyt,  &
                          ice_write_xyzt
@@ -74,36 +61,20 @@
       contains
 
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: ice_open - opens an unformatted file for reading
-!
-! !INTERFACE:
-!
-      subroutine ice_open(nu, filename, nbits)
-!
-! !DESCRIPTION:
-!
+
 ! Opens an unformatted file for reading.
 ! nbits indicates whether the file is sequential or direct access.
 !
-! !REVISION HISTORY:
-!
 ! author: Tony Craig, NCAR
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      subroutine ice_open(nu, filename, nbits)
+
       integer (kind=int_kind), intent(in) :: &
            nu        , & ! unit number
            nbits         ! no. of bits per variable (0 for sequential access)
 
       character (*) :: filename
-!
-!EOP
-!
+
       if (my_task == master_task) then
 
          if (nbits == 0) then   ! sequential access
@@ -120,18 +91,7 @@
       end subroutine ice_open
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: ice_read - read and scatter an unformatted file
-!
-! !INTERFACE:
-!
-      subroutine ice_read_xyt(nu, nrec, work, atype, diag, &
-                          field_loc, field_type, &
-                          ignore_eof, hit_eof)
-!
-! !DESCRIPTION:
-!
+
 ! Read an unformatted file and scatter to processors.
 ! work is a real array, atype indicates the format of the data.
 ! If the optional variables field_loc and field_type are present,
@@ -139,16 +99,14 @@
 ! This prevents them from being filled with zeroes in land cells
 ! (subroutine ice_HaloUpdate need not be called).
 !
-! !REVISION HISTORY:
-!
 ! author: Tony Craig, NCAR
-!
-! !USES:
-!
+
+      subroutine ice_read_xyt(nu, nrec, work, atype, diag, &
+                          field_loc, field_type, &
+                          ignore_eof, hit_eof)
+
       use ice_gather_scatter, only: scatter_global
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
            nu            , & ! unit number
            nrec              ! record number (0 for sequential access)
@@ -170,9 +128,9 @@
 
       logical (kind=log_kind), optional, intent(in)  :: ignore_eof
       logical (kind=log_kind), optional, intent(out) :: hit_eof
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: i, j, ios
 
       real (kind=dbl_kind) :: &
@@ -277,18 +235,6 @@
       end subroutine ice_read_xyt
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: ice_read - read and scatter an unformatted file
-!
-! !INTERFACE:
-!
-      subroutine ice_read_xyzt(nu,  nrec,  work, atype, diag, &
-                          field_loc, field_type, &
-                          ignore_eof, hit_eof)
-!
-! !DESCRIPTION:
-!
 ! Read an unformatted file and scatter to processors.
 ! work is a real array, atype indicates the format of the data.
 ! If the optional variables field_loc and field_type are present,
@@ -296,17 +242,15 @@
 ! This prevents them from being filled with zeroes in land cells
 ! (subroutine ice_HaloUpdate need not be called).
 !
-! !REVISION HISTORY:
-!
 ! author: Tony Craig, NCAR
-!
-! !USES:
-!
+
+      subroutine ice_read_xyzt(nu,  nrec,  work, atype, diag, &
+                          field_loc, field_type, &
+                          ignore_eof, hit_eof)
+
       use ice_gather_scatter, only: scatter_global
       use ice_domain_size, only: nblyr
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
            nu            , & ! unit number
            nrec              ! record number (0 for sequential access)
@@ -328,9 +272,9 @@
 
       logical (kind=log_kind), optional, intent(in)  :: ignore_eof
       logical (kind=log_kind), optional, intent(out) :: hit_eof
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: i, j, k, ios
 
       real (kind=dbl_kind) :: &
@@ -443,28 +387,16 @@
      end subroutine ice_read_xyzt
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: ice_read_global - read an unformatted file
-!
-! !INTERFACE:
-!
-      subroutine ice_read_global (nu,  nrec,  work_g, atype, diag, &
-                                  ignore_eof, hit_eof)
-!
-! !DESCRIPTION:
-!
+
 ! Read an unformatted file
 ! Just like ice_read except that it returns a global array.
 ! work_g is a real array, atype indicates the format of the data
 !
-! !REVISION HISTORY:
 ! Adapted by William Lipscomb, LANL, from ice_read
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      subroutine ice_read_global (nu,  nrec,  work_g, atype, diag, &
+                                  ignore_eof, hit_eof)
+
       integer (kind=int_kind), intent(in) :: &
            nu            , & ! unit number
            nrec              ! record number (0 for sequential access)
@@ -482,9 +414,9 @@
 
       logical (kind=log_kind), optional, intent(in)  :: ignore_eof
       logical (kind=log_kind), optional, intent(out) :: hit_eof
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: i, j, ios
 
       real (kind=dbl_kind) :: &
@@ -563,32 +495,17 @@
       end subroutine ice_read_global
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: ice_read - read and scatter an unformatted file incl ghost cells
-!
-! !INTERFACE:
-!
-      subroutine ice_read_ext(nu,  nrec,  work, atype, diag, &
-                          field_loc, field_type, &
-                          ignore_eof, hit_eof)
-!
-! !DESCRIPTION:
-!
+
 ! Read an unformatted file and scatter to processors, incl ghost cells.
 ! work is a real array, atype indicates the format of the data.
 ! (subroutine ice_HaloUpdate need not be called).
-!
-! !REVISION HISTORY:
-!
-! author: Tony Craig, NCAR
-!
-! !USES:
-!
+
+      subroutine ice_read_ext(nu,  nrec,  work, atype, diag, &
+                          field_loc, field_type, &
+                          ignore_eof, hit_eof)
+
       use ice_gather_scatter, only: scatter_global_ext
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
            nu            , & ! unit number
            nrec              ! record number (0 for sequential access)
@@ -610,9 +527,9 @@
 
       logical (kind=log_kind), optional, intent(in)  :: ignore_eof
       logical (kind=log_kind), optional, intent(out) :: hit_eof
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: i, j, ios, nx, ny
 
       real (kind=dbl_kind) :: &
@@ -713,29 +630,14 @@
       end subroutine ice_read_ext
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: ice_write - writes an unformatted file
-!
-! !INTERFACE:
-!
-      subroutine ice_write_xyt(nu, nrec, work, atype, diag)
-!
-! !DESCRIPTION:
-!
+
 ! Writes an unformatted file
 ! work is a real array, atype indicates the format of the data
-!
-! !REVISION HISTORY:
-!
-! author: Tony Craig, NCAR
-!
-! !USES:
-!
+
+      subroutine ice_write_xyt(nu, nrec, work, atype, diag)
+
       use ice_gather_scatter, only: gather_global
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
            nu            , & ! unit number
            nrec              ! record number (0 for sequential access)
@@ -750,9 +652,9 @@
 
       logical (kind=log_kind), intent(in) :: &
            diag              ! if true, write diagnostic output
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: i, j
 
       real (kind=dbl_kind) :: &
@@ -826,30 +728,15 @@
       end subroutine ice_write_xyt
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: ice_write - writes an unformatted file
-!
-! !INTERFACE:
-!
-      subroutine ice_write_xyzt(nu, nrec, work, atype, diag)
-!
-! !DESCRIPTION:
-!
+
 ! Writes an unformatted file 
 ! work is a real array, atype indicates the format of the data
-!
-! !REVISION HISTORY:
-!
-! author: Tony Craig, NCAR
-!
-! !USES:
-!
+
+      subroutine ice_write_xyzt(nu, nrec, work, atype, diag)
+
       use ice_gather_scatter, only: gather_global
       use ice_domain_size, only: nblyr
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
            nu            , & ! unit number
            nrec              ! record number (0 for sequential access)
@@ -864,9 +751,9 @@
 
       logical (kind=log_kind), intent(in) :: &
            diag              ! if true, write diagnostic output
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: i, j, k
 
       real (kind=dbl_kind) :: &
@@ -944,27 +831,15 @@
 
 !=======================================================================
 !
-! !IROUTINE: ice_write - writes an unformatted file incl ghost cells
-!
-! !INTERFACE:
-!
-      subroutine ice_write_ext(nu, nrec, work, atype, diag)
-!
-! !DESCRIPTION:
-!
 ! Writes an unformatted file, including ghost cells
 ! work is a real array, atype indicates the format of the data
 !
-! !REVISION HISTORY:
-!
 ! author: Tony Craig, NCAR
-!
-! !USES:
-!
+
+      subroutine ice_write_ext(nu, nrec, work, atype, diag)
+
       use ice_gather_scatter, only: gather_global_ext
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
            nu            , & ! unit number
            nrec              ! record number (0 for sequential access)
@@ -979,9 +854,9 @@
 
       logical (kind=log_kind), intent(in) :: &
            diag              ! if true, write diagnostic output
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: i, j, nx, ny
 
       real (kind=dbl_kind) :: &
@@ -1058,35 +933,20 @@
       end subroutine ice_write_ext
 
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: ice_open_nc - opens a netCDF file for reading
-!
-! !INTERFACE:
-!
-      subroutine ice_open_nc(filename, fid)
-!
-! !DESCRIPTION:
-!
+
 ! Opens a netCDF file for reading
-!
-! !REVISION HISTORY:
-!
 ! Adapted by Alison McLaren, Met Office from ice_open
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      subroutine ice_open_nc(filename, fid)
+
       character (char_len_long), intent(in) :: & 
            filename      ! netCDF filename
 
       integer (kind=int_kind), intent(out) :: &
            fid           ! unit number
-!
-!EOP
-!
+
+      ! local variables
+
 #ifdef ncdf
       integer (kind=int_kind) :: &
         status        ! status variable from netCDF routine 
@@ -1107,33 +967,20 @@
       end subroutine ice_open_nc
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: ice_read_nc - read and scatter one field from a netCDF file
-!
-! !INTERFACE:
-!
-      subroutine ice_read_nc_xy(fid,  nrec,  varname, work,  diag, &
-                             field_loc, field_type)
-!
-! !DESCRIPTION:
-!
+
 ! Read a netCDF file and scatter to processors.
 ! If the optional variables field_loc and field_type are present,
 ! the ghost cells are filled using values from the global array.
 ! This prevents them from being filled with zeroes in land cells
 ! (subroutine ice_HaloUpdate need not be called).
 !
-! !REVISION HISTORY:
-!
 ! Adapted by Alison McLaren, Met Office from ice_read
-!
-! !USES:
-!
+
+      subroutine ice_read_nc_xy(fid,  nrec,  varname, work,  diag, &
+                             field_loc, field_type)
+
       use ice_gather_scatter, only: scatter_global
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
            fid           , & ! file id
            nrec              ! record number 
@@ -1151,9 +998,9 @@
       integer (kind=int_kind), optional, intent(in) :: &
            field_loc, &      ! location of field on staggered grid
            field_type        ! type of field (scalar, vector, angle)
-!
-!EOP
-!
+
+      ! local variables
+
 #ifdef ncdf
 ! netCDF file diagnostics:
       integer (kind=int_kind) :: & 
@@ -1171,7 +1018,7 @@
 
       real (kind=dbl_kind), dimension(:,:), allocatable :: &
          work_g1
-!
+
 #ifdef ORCA_GRID
       real (kind=dbl_kind), dimension(:,:), allocatable :: &
          work_g2
@@ -1265,27 +1112,13 @@
       end subroutine ice_read_nc_xy
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: ice_read_nc - read field from a netCDF file for a single location
-!
-! !INTERFACE:
-!
+
+! Read a netCDF file
+! Adapted by Alison McLaren, Met Office from ice_read
+
       subroutine ice_read_nc_point(fid,  nrec,  varname, work,  diag, &
                              field_loc, field_type)
-!
-! !DESCRIPTION:
-!
-! Read a netCDF file
-!
-! !REVISION HISTORY:
-!
-! Adapted by Alison McLaren, Met Office from ice_read
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
            fid           , & ! file id
            nrec              ! record number 
@@ -1303,9 +1136,9 @@
       integer (kind=int_kind), optional, intent(in) :: &
            field_loc, &      ! location of field on staggered grid
            field_type        ! type of field (scalar, vector, angle)
-!
-!EOP
-!
+
+      ! local variables
+
 #ifdef ncdf
 ! netCDF file diagnostics:
       integer (kind=int_kind) :: & 
@@ -1378,27 +1211,14 @@
       end subroutine ice_read_nc_point
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: ice_read_nc - read one field from a netCDF file
-!                          for a single location with nilyr vertical points
-! !INTERFACE:
-!
+
+! Adapted by Nicole Jeffery, LANL
+
       subroutine ice_read_nc_z(fid,  nrec,  varname, work,  diag, &
                              field_loc, field_type)
-!
-! !DESCRIPTION:
-!
-! !REVISION HISTORY:
-!
-! Adapted by Nicole Jeffery, LANL
-!
-! !USES:
-!
+
       use ice_domain_size, only: nilyr
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
            fid           , & ! file id
            nrec              ! record number 
@@ -1416,9 +1236,9 @@
       integer (kind=int_kind), optional, intent(in) :: &
            field_loc, &      ! location of field on staggered grid
            field_type        ! type of field (scalar, vector, angle)
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind), dimension(:), allocatable :: &
          work_z
 
@@ -1430,9 +1250,6 @@
          ndim, nvar,      & ! sizes of netcdf file
          id,              & ! dimension index
          dimlen             ! size of dimension
-
-      real (kind=dbl_kind) :: &
-         amin, amax         ! min and max values of input array
 
       character (char_len) :: &
          dimname            ! dimension name            
@@ -1489,28 +1306,16 @@
       end subroutine ice_read_nc_z
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: ice_read_global_nc - read one field from a netcdf file
-!
-! !INTERFACE:
-!
-      subroutine ice_read_global_nc (fid,  nrec, varname, work_g, diag)
-!
-! !DESCRIPTION:
-!
+
 ! Read a netcdf file.
 ! Just like ice_read_nc except that it returns a global array.
 ! work_g is a real array
 !
-! !REVISION HISTORY:
 ! Adapted by William Lipscomb, LANL, from ice_read
 ! Adapted by Ann Keen, Met Office, to read from a netcdf file 
-!
-! !USES:
-! 
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      subroutine ice_read_global_nc (fid,  nrec, varname, work_g, diag)
+
       integer (kind=int_kind), intent(in) :: &
            fid           , & ! file id
            nrec              ! record number 
@@ -1524,9 +1329,9 @@
 
       logical (kind=log_kind) :: &
            diag              ! if true, write diagnostic output
-!
-!EOP
-!
+
+      ! local variables
+
 #ifdef ncdf
 ! netCDF file diagnostics:
       integer (kind=int_kind) :: & 
@@ -1617,31 +1422,17 @@
       end subroutine ice_read_global_nc
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: ice_close_nc - closes a netCDF file
-!
-! !INTERFACE:
-!
-      subroutine ice_close_nc(fid)
-!
-! !DESCRIPTION:
-!
+
 ! Closes a netCDF file
-!
-! !REVISION HISTORY:
-!
 ! author: Alison McLaren, Met Office
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      subroutine ice_close_nc(fid)
+
       integer (kind=int_kind), intent(in) :: &
            fid           ! unit number
-!
-!EOP
-!
+
+      ! local variables
+
 #ifdef ncdf
       integer (kind=int_kind) :: &
         status        ! status variable from netCDF routine 

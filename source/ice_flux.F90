@@ -1,30 +1,18 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_flux - flux variable declarations: coupler, diagnostic and
-!          internal
-!
-! !DESCRIPTION:
-!
+
 ! Flux variable declarations; these include fields sent from the coupler
 ! ("in"), sent to the coupler ("out"), written to diagnostic history files
 ! ("diagnostic"), and used internally ("internal").
-!
-! !REVISION HISTORY:
-!  SVN:$Id$
 !
 ! author Elizabeth C. Hunke, LANL
 !
 ! 2004: Block structure added by William Lipscomb
 !       Swappped, revised, and added some subroutines
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
-!
-! !INTERFACE:
-!
+
       module ice_flux
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_blocks, only: nx_block, ny_block
       use ice_domain_size, only: max_blocks, ncat, max_aero, max_nstrm, nilyr
@@ -34,9 +22,7 @@
           hfreebd, hdraft, hridge, distrdg, hkeel, dkeel, lfloe, dfloe, &
           Cdn_atm_skin, Cdn_atm_floe, Cdn_atm_pond, Cdn_atm_rdg, &
           Cdn_ocn_skin, Cdn_ocn_floe, Cdn_ocn_keel, Cdn_atm_ocn
-!
-!EOP
-!
+
       implicit none
       private
       public :: init_coupler_flux, init_history_therm, init_history_dyn, &
@@ -332,32 +318,17 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_coupler_flux - initialize fluxes exchanged with coupler
-!
-! !INTERFACE:
-!
-      subroutine init_coupler_flux
-!
-! !DESCRIPTION:
-!
+
 ! Initialize all fluxes exchanged with flux coupler
 ! and some data-derived fields
 !
-! !REVISION HISTORY:
-!
 ! author Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine init_coupler_flux
+
         use ice_zbgc_shared, only: flux_bio, upNO, upNH, growN
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      integer (kind=int_kind) :: i, j, n, iblk
+
+      integer (kind=int_kind) :: n
 
       logical (kind=log_kind), parameter ::     & 
          l_winter = .false. , &  ! winter/summer default switch
@@ -504,29 +475,13 @@
       end subroutine init_coupler_flux
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_flux_atm - initialize all atmospheric fluxes sent to coupler
-!
-! !INTERFACE:
-!
-      subroutine init_flux_atm
-!
-! !DESCRIPTION:
-!
+
 ! Initialize some fluxes sent to coupler for use by the atm model
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!
-!EOP
-!
+
+      subroutine init_flux_atm
+
       !-----------------------------------------------------------------
       ! initialize albedo and fluxes
       !-----------------------------------------------------------------
@@ -548,16 +503,6 @@
       end subroutine init_flux_atm
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_flux_ocn - initialize ocean fluxes sent to coupler
-!
-! !INTERFACE:
-!
-      subroutine init_flux_ocn
-!
-! !DESCRIPTION:
-!
 ! Initialize some fluxes sent to coupler for use by the ocean model
 !
 ! NOTE: These fluxes should be initialized immediately after the
@@ -566,19 +511,12 @@
 !       not modified by any subroutines between the call to_coupler
 !       and the end of the time step.
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
-        use ice_zbgc_shared, only: flux_bio, upNO, upNH
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!
-!EOP
-!
+
+      subroutine init_flux_ocn
+
+      use ice_zbgc_shared, only: flux_bio, upNO, upNH
+
       !-----------------------------------------------------------------
       ! fluxes sent
       !-----------------------------------------------------------------
@@ -597,36 +535,21 @@
       end subroutine init_flux_ocn
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_history_therm - initialize thermo history fields
-!
-! !INTERFACE:
-!
-      subroutine init_history_therm
-!
-! !DESCRIPTION:
-!
+
 ! Initialize thermodynamic fields written to history files.
-!
-! !REVISION HISTORY:
 !
 ! authors: William H. Lipscomb, LANL
 !          Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine init_history_therm
+
       use ice_atmo, only: hfreebd, hdraft, hridge, distrdg, hkeel, &
                           dkeel, lfloe, dfloe, Cdn_atm, Cdn_atm_rdg, &
                           Cdn_atm_floe, Cdn_atm_pond, Cdn_atm_skin, &
                           Cdn_atm_ocn, Cdn_ocn, Cdn_ocn_keel, &
                           Cdn_ocn_floe, Cdn_ocn_skin
       use ice_state, only: aice, vice
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       fsurf  (:,:,:) = c0
       fcondtop(:,:,:)= c0
       congel (:,:,:) = c0
@@ -677,31 +600,16 @@
       end subroutine init_history_therm
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_history_dyn - initialize dynamic history fields
-!
-! !INTERFACE:
-!
-      subroutine init_history_dyn
-!
-! !DESCRIPTION:
-!
+
 ! Initialize dynamic fields written to history files.
-!
-! !REVISION HISTORY:
 !
 ! authors: William H. Lipscomb, LANL
 !          Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine init_history_dyn
+
       use ice_state, only: aice, vice
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       sig1    (:,:,:) = c0
       sig2    (:,:,:) = c0
       strocnx (:,:,:) = c0
@@ -733,12 +641,11 @@
       end subroutine init_history_dyn
 
 !=======================================================================
-!BOP
+
+! Aggregate flux information from all ice thickness categories
 !
-! !IROUTINE: merge_fluxes - aggregate flux information over ITD
-!
-! !INTERFACE:
-!
+! author: Elizabeth C. Hunke and William H. Lipscomb, LANL
+
       subroutine merge_fluxes (nx_block, ny_block,   &
                                icells,               &
                                indxi,    indxj,      &
@@ -767,20 +674,6 @@
                                meltb,                       &
                                congel,  snoice)
                                
-
-!
-! !DESCRIPTION:
-!
-! Aggregate flux information from all ice thickness categories
-!
-! !REVISION HISTORY:
-!
-! author: Elizabeth C. Hunke and William H. Lipscomb, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent(in) :: &
           nx_block, ny_block, & ! block dimensions
           icells                ! number of cells with aicen > puny
@@ -840,9 +733,7 @@
           melts   , & ! snow melt                       (m)
           congel  , & ! congelation ice growth          (m)
           snoice      ! snow-ice growth                 (m)
-!
-!EOP
-!
+
       integer (kind=int_kind) :: &
           ij, i, j    ! horizontal indices
 
@@ -897,17 +788,12 @@
       end subroutine merge_fluxes
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: scale_fluxes
-!
-! !DESCRIPTION:
-!
+
 !  Divide ice fluxes by ice area before sending them to the
 !  coupler, since the coupler multiplies by ice area.
 !
-! !INTERFACE:
-!
+! authors: C.M.Bitz, William H. Lipscomb
+
       subroutine scale_fluxes (nx_block, ny_block, &
                                tmask,    nbtrcr,   &
                                aice,     Tf,       &
@@ -924,15 +810,7 @@
                                alvdf,    alidf,    &
                                flux_bio,           &
                                fsurf,    fcondtop)
-!
-! !REVISION HISTORY:
-!
-! authors: C.M.Bitz, William H. Lipscomb
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
           nx_block, ny_block, &    ! block dimensions
           nbtrcr                   ! number of biology tracers
@@ -982,9 +860,9 @@
           intent(inout), optional :: &
           fsurf   , & ! surface heat flux               (W/m**2)
           fcondtop    ! top surface conductive flux     (W/m**2)
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind) :: ar   ! 1/aice
 
       integer (kind=int_kind) :: &
@@ -1065,12 +943,7 @@
       end subroutine scale_fluxes
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: set_sfcflux - set surface fluxes from forcing fields
-!
-! !DESCRIPTION:
-!
+
 ! If model is not calculating surface temperature, set the surface
 ! flux values using values read in from forcing data or supplied via
 ! coupling (stored in ice_flux).
@@ -1079,12 +952,8 @@
 ! to per unit ice area values. If model is not running in NEMO environment, 
 ! the forcing is supplied as per unit ice area values.
 !
-! !REVISION HISTORY:
-!
 ! authors Alison McLaren, Met Office
-!
-! !INTERFACE:
-!
+
       subroutine set_sfcflux (nx_block,  ny_block, &
                               n,         iblk,     &
                               icells,              & 
@@ -1093,13 +962,9 @@
                               flatn,               &
                               fsurfn,              &
                               fcondtopn)
-!
-! !USES:
-!
+
       use ice_fileunits, only: nu_diag
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          n,                  & ! thickness category index
@@ -1120,6 +985,8 @@
          fsurfn      , & ! net flux to top surface, not including fcondtopn
          fcondtopn       ! downward cond flux at top surface (W m-2)
 
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij              ! horizontal indices, combine i and j loops
@@ -1132,9 +999,7 @@
 
       logical (kind=log_kind), parameter :: & 
          extreme_test=.false. ! test and write out extreme forcing data
-!
-!EOP
-!
+
          raicen        = c1
          do ij = 1, icells
             i = indxi(ij)

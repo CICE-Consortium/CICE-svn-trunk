@@ -1,10 +1,7 @@
+!  SVN:$Id$
 !=======================================================================
-!
-!BOP
-!
-! !MODULE: ice_meltpond_lvl - Meltpond parameterization
-!
-! !DESCRIPTION:
+
+! Level-ice meltpond parameterization
 !
 ! This meltpond parameterization was developed for use with the delta-
 ! Eddington radiation scheme, and only affects the radiation budget in
@@ -12,24 +9,15 @@
 ! water is not used elsewhere in the model for mass budgets or other
 ! physical processes.
 !
-! !REVISION HISTORY:
-!  SVN:$$
-!
 ! authors Elizabeth Hunke (LANL)
 !         David Hebert (NRL Stennis)
 !         Olivier Lecomte (Univ. Louvain)
-!
-! !INTERFACE:
-!
+
       module ice_meltpond_lvl
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_constants
-!
-!EOP
-!
+
       implicit none
 
       private
@@ -40,39 +28,24 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: init_meltponds
-!
-! !DESCRIPTION:
-!
+
 !  Initialize melt ponds.
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine init_meltponds_lvl(nx_block, ny_block, ncat, &
                                     apnd, hpnd, ipnd, dhsn)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-        integer(kind=int_kind), intent(in) :: &
+
+      integer(kind=int_kind), intent(in) :: &
              nx_block , &
              ny_block , &
              ncat
 
-        real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+      real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
              intent(out) :: &
              apnd , & ! melt pond area fraction
              hpnd , & ! melt pond depth
              ipnd , & ! melt pond refrozen lid thickness
              dhsn     ! depth difference for snow on sea ice and pond ice
-!
-!EOP
-!
+
       apnd(:,:,:) = c0
       hpnd(:,:,:) = c0
       ipnd(:,:,:) = c0
@@ -81,12 +54,7 @@
       end subroutine init_meltponds_lvl
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: 
-!
-! !INTERFACE:
-!
+
       subroutine compute_ponds_lvl(nx_block,ny_block,   &
                                    ilo, ihi, jlo, jhi,  &
                                    dt,    hi_min,       &
@@ -99,15 +67,7 @@
                                    qicen, sicen,        &
                                    Tsfcn, alvl, &
                                    apnd,  hpnd, ipnd)
-!
-! !DESCRIPTION:
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-!
+
       use ice_domain_size, only: nilyr
       use ice_therm_shared, only: ktherm
 
@@ -372,26 +332,13 @@
       end subroutine compute_ponds_lvl
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: brine_permeability
-!
-! !DESCRIPTION:
-!
+
 ! determine the liquid fraction of brine in the ice and the permeability
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine brine_permeability(nilyr, qicen, vicen, salin, Tmlt, perm)
-!
-! !USES:
-!
+
       use ice_therm_shared, only: calculate_Tin_from_qin
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nilyr     ! number of ice layers
 
@@ -405,9 +352,9 @@
     
       real (kind=dbl_kind), intent(out) :: &
          perm      ! permeability (m^2)
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind) ::   &
          Sbr       ! brine salinity
 

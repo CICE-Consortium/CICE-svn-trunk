@@ -1,20 +1,10 @@
-!BOP ===========================================================================
-!
-! !MODULE: ice_pio -- reads and writes driver files
-!
-! !DESCRIPTION:
+!  SVN:$Id: $
+!===============================================================================
 !  Writes netcdf files
-!
-! !REMARKS:
-!
-! !REVISION HISTORY:
 !    Created by Mariana Vertenstein, June 2009
 !
-! !INTERFACE: ------------------------------------------------------------------
 
 module ice_pio
-
-  ! !USES:
 
 !echmod not used:  use shr_kind_mod, only: r8 => shr_kind_r8, in=>shr_kind_in
 !echmod not used:  use shr_kind_mod, only: cl => shr_kind_cl
@@ -29,12 +19,6 @@ module ice_pio
   private
   save
 
-  ! !PUBLIC TYPES:
-
-  ! none
-
-  !PUBLIC MEMBER FUNCTIONS:
-
   interface ice_pio_initdecomp
      module procedure ice_pio_initdecomp_2d
      module procedure ice_pio_initdecomp_3d
@@ -45,48 +29,33 @@ module ice_pio
   public ice_pio_init
   public ice_pio_initdecomp
 
-  ! !PUBLIC DATA MEMBERS
-
 !echmod  type(iosystem_desc_t), pointer, public :: ice_pio_subsystem
   type(iosystem_desc_t), public :: ice_pio_subsystem
-
-  !EOP
 
 !===============================================================================
 
 contains
 
 !===============================================================================
-!BOP
-!
-! !IROUTINE: ice_pio_init - initialize io for input or output
-!
-! !INTERFACE: 
+!    Initialize the io subsystem
+!    2009-Feb-17 - J. Edwards - initial version
+
    subroutine ice_pio_init(mode, filename, File, clobber, cdf64)
 
 !echmod     use shr_pio_mod, only: shr_pio_getiosys, shr_pio_getiotype
   use ice_communicate, only: my_task, master_task, MPI_COMM_ICE
   use ice_fileunits, only: nu_diag
   use ice_exit, only: abort_ice
-!
-! !DESCRIPTION:
-!    Initialize the io subsystem
-!
-! !REVISION HISTORY:
-!    2009-Feb-17 - J. Edwards - initial version
-!
 
-! !INPUT/OUTPUT PARAMETERS:
-!
    implicit none
    character(len=*)     , intent(in),    optional :: mode
    character(len=*)     , intent(in),    optional :: filename
    type(file_desc_t)    , intent(inout), optional :: File
    logical              , intent(in),    optional :: clobber
    logical              , intent(in),    optional :: cdf64
-!
-!EOP
-!
+
+   ! local variables
+
    integer (int_kind) :: &
       nml_error          ! namelist read error flag
 

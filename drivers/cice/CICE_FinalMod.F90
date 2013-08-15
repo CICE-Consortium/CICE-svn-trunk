@@ -1,10 +1,9 @@
+!  SVN:$Id$
 !=======================================================================
 !
 !  This module contains routines for the final exit of the CICE model,
 !  including final output and clean exit from any message passing
 !  environments and frameworks.
-!
-!  SVN:$Id$
 !
 !  authors: Philip W. Jones, LANL
 !  2006: Converted to free source form (F90) by Elizabeth Hunke

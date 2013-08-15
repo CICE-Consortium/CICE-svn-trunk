@@ -1,10 +1,7 @@
+!  SVN:$Id$
 !=======================================================================
 !
-!BOP
-!
-! !MODULE: ice_restart_meltpond_lvl - Meltpond parameterization
-!
-! !DESCRIPTION:
+! Level-ice melt pond scheme
 !
 ! This meltpond parameterization was developed for use with the delta-
 ! Eddington radiation scheme, and only affects the radiation budget in
@@ -12,25 +9,16 @@
 ! water is not used elsewhere in the model for mass budgets or other
 ! physical processes.
 !
-! !REVISION HISTORY:
-!  SVN:$$
-!
 ! authors Elizabeth Hunke (LANL)
 !         David Hebert (NRL Stennis)
 !         Olivier Lecomte (Univ. Louvain)
-!
-! !INTERFACE:
-!
+
       module ice_restart_meltpond_lvl
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_blocks, only: nx_block, ny_block
       use ice_domain_size, only: max_blocks, ncat
-!
-!EOP
-!
+
       implicit none
       private
       public :: write_restart_pond_lvl, read_restart_pond_lvl
@@ -61,24 +49,12 @@
   
 !=======================================================================
 !
-!BOP
-!
-! !IROUTINE: write_restart_pond - dumps all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine write_restart_pond_lvl(filename_spec)
-!
-! !DESCRIPTION:
-!
 ! Dumps all values needed for restarting
 !
-! !REVISION HISTORY:
-!
 ! authors Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine write_restart_pond_lvl(filename_spec)
+
       use ice_communicate, only: my_task, master_task
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, year_init
@@ -87,15 +63,13 @@
       use ice_read_write, only: ice_open, ice_write
       use ice_restart, only: lenstr, restart_dir, restart_file
       use ice_state, only: trcrn, nt_apnd, nt_hpnd, nt_ipnd
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
+          n,                    & ! loop index
           iyear, imonth, iday     ! year, month, day
 
       character(len=char_len_long) :: filename
@@ -139,24 +113,13 @@
       end subroutine write_restart_pond_lvl
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: read_restart_pond - reads all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine read_restart_pond_lvl(filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Reads all values needed for a meltpond volume restart
 !
-! !REVISION HISTORY:
-!
 ! authors Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine read_restart_pond_lvl(filename_spec)
+
       use ice_communicate, only: my_task, master_task
       use ice_domain_size, only: ncat
       use ice_calendar, only: istep1, time, time_forc
@@ -165,16 +128,13 @@
       use ice_restart, only: lenstr, restart_file, pointer_file
       use ice_state, only: trcrn, nt_apnd, nt_hpnd, nt_ipnd
       use ice_exit, only: abort_ice
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
-         i, j, k, n, it, iblk, & ! counting indices
-         iyear, imonth, iday , & ! year, month, day
+         n,                    & ! loop index
          iignore                 ! dummy variable
 
       real (kind=real_kind) :: &

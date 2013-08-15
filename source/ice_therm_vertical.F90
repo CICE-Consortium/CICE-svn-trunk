@@ -1,9 +1,5 @@
+!  SVN:$Id$
 !=========================================================================
-!BOP
-!
-! !MODULE: ice_therm_vertical - thermo calculations before call to coupler
-!
-! !DESCRIPTION:
 !
 ! Update ice and snow internal temperatures and compute
 ! thermodynamic growth rates and atmospheric fluxes.
@@ -13,9 +9,6 @@
 !       fluxes.  Then ice_therm_itd does thermodynamic calculations not
 !       needed for coupling.
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
 ! authors: William H. Lipscomb, LANL
 !          C. M. Bitz, UW
 !          Elizabeth C. Hunke, LANL
@@ -24,13 +17,9 @@
 ! 2004: Block structure added by William Lipscomb
 ! 2006: Streamlined for efficiency by Elizabeth Hunke
 !       Converted to free source form (F90)
-!
-! !INTERFACE:
-!
+
       module ice_therm_vertical
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_domain_size, only: ncat, nilyr, nslyr, max_ntrcr, max_blocks 
       use ice_calendar, only: istep1
@@ -45,9 +34,7 @@
       use ice_therm_0layer, only: zerolayer_temperature
       use ice_flux, only: Tf
       use ice_zbgc_shared, only: min_salin
-!
-!EOP
-!
+
       implicit none
       save
 
@@ -67,22 +54,12 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: thermo_vertical - driver for pre-coupler thermodynamics
-!
-! !DESCRIPTION:
 !
 ! Driver for updating ice and snow internal temperatures and
 ! computing thermodynamic growth rates and atmospheric fluxes.
 !
-!
-! !REVISION HISTORY:
-!
 ! authors: William H. Lipscomb, LANL
 !          C. M. Bitz, UW
-!
-! !INTERFACE:
 
       subroutine thermo_vertical (nx_block,    ny_block,  &
                                   dt,          icells,    &
@@ -110,15 +87,11 @@
                                   yday,        l_stop,    &
                                   istop,       jstop,     &
                                   dsnow)
-! 
-! !USES:
-!
+
       use ice_communicate, only: my_task
       use ice_state, only: nt_fbri, hbrine
       use ice_therm_mushy, only: temperature_changes_salinity
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells                ! number of cells with ice present
@@ -212,9 +185,9 @@
 
       integer (kind=int_kind), intent(out) :: &
          istop, jstop    ! indices of grid cell where code aborts
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij          , & ! horizontal index, combines i and j loops
@@ -576,33 +549,18 @@
     end subroutine thermo_vertical
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: init_thermo_vertical - initialize salinity and melting temp
-!
-! !DESCRIPTION:
 !
 ! Initialize the vertical profile of ice salinity and melting temperature.
 !
-! !REVISION HISTORY:
-!
 ! authors: C. M. Bitz, UW
 !          William H. Lipscomb, LANL
-!
-! !INTERFACE:
-!
+
       subroutine init_thermo_vertical
-!
-! !USES:
-!
-   use ice_blocks, only: nx_block, ny_block
-   use ice_flux, only: salinz, Tmltz, sss
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!     
-     integer (kind=int_kind) :: &
+
+      use ice_blocks, only: nx_block, ny_block
+      use ice_flux, only: salinz, Tmltz, sss
+
+      integer (kind=int_kind) :: &
            i, j, iblk           ! horizontal indices
 
       real (kind=dbl_kind), parameter :: &
@@ -660,24 +618,15 @@
       end subroutine init_thermo_vertical
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: frzmlt_bottom_lateral - bottom and lateral heat fluxes
-!
-! !DESCRIPTION:
 !
 ! Adjust frzmlt to account for changes in fhocn since from_coupler.
 ! Compute heat flux to bottom surface.
 ! Compute fraction of ice that melts laterally.
 !
-! !REVISION HISTORY:
-!
 ! authors C. M. Bitz, UW
 !         William H. Lipscomb, LANL
 !         Elizabeth C. Hunke, LANL
-!
-! !INTERFACE:
-!
+
       subroutine frzmlt_bottom_lateral (nx_block, ny_block, &
                                         ilo, ihi, jlo, jhi, &
                                         ntrcr,    dt,       &
@@ -688,10 +637,6 @@
                                         strocnxT, strocnyT, &
                                         Tbot,     fbot,     &
                                         rside)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -723,9 +668,9 @@
          Tbot    , & ! ice bottom surface temperature (deg C)
          fbot    , & ! heat flux to ice bottom  (W/m^2)
          rside       ! fraction of ice that melts laterally
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j           , & ! horizontal indices
          n              , & ! thickness category index
@@ -896,23 +841,14 @@
       end subroutine frzmlt_bottom_lateral
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: init_vertical_profile - initial thickness, enthalpy, temperature
-!
-! !DESCRIPTION:
 !
 ! Given the state variables (vicen, vsnon, trcrn)
 ! compute variables needed for the vertical thermodynamics
 ! (hin, hsn, qin, qsn, Tin, Tsn, Tsf).
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
-!
-! !INTERFACE:
-!
+
       subroutine init_vertical_profile(nx_block, ny_block, &
                                        my_task,  istep1,   &
                                        icells,             &
@@ -927,12 +863,11 @@
                                        Tsf,      einit,    &
                                        Tbot,     l_stop,   &
                                        istop,    jstop)
-!
-! !USES:
-        use ice_therm_mushy, only: temperature_mush, liquidus_temperature_mush, enthalpy_of_melting
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      use ice_therm_mushy, only: temperature_mush, &
+                                 liquidus_temperature_mush, &
+                                 enthalpy_of_melting
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          my_task           , & ! task number (diagnostic only)
@@ -981,9 +916,9 @@
 
       integer (kind=int_kind), intent(inout) :: &
          istop, jstop    ! i and j indices of cell where model fails
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind), parameter :: &
          Tmin = -100._dbl_kind ! min allowed internal temperature (deg C)
 
@@ -1350,21 +1285,13 @@
       end subroutine init_vertical_profile
 
 !=======================================================================
-
-! !ROUTINE: thickness changes - top and bottom growth/melting
-!
-! !DESCRIPTION:
 !
 ! Compute growth and/or melting at the top and bottom surfaces.
 ! Convert snow to ice if necessary.
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
-!
-! !INTERFACE:
-!
+
       subroutine thickness_changes (nx_block,  ny_block, &
                                     dt,                  &
                                     yday,      icells,   &
@@ -1385,14 +1312,12 @@
                                     Sin,       sss,      &
                                     dsnow,     einex,    &
                                     fbri)
-!
-! !USES:
-!
-        use ice_state,       only: hbrine
-        use ice_therm_mushy, only: enthalpy_mush, enthalpy_of_melting, phi_i_mushy, temperature_mush, liquidus_temperature_mush, liquid_fraction
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      use ice_state,       only: hbrine
+      use ice_therm_mushy, only: enthalpy_mush, enthalpy_of_melting, &
+                           phi_i_mushy, temperature_mush, &
+                           liquidus_temperature_mush, liquid_fraction
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells          ! number of cells with aicen > puny
@@ -1467,9 +1392,9 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
          sss             ! ocean salinity (PSU) 
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind), parameter :: &
          qbotmax = -p5*rhoi*Lfresh  ! max enthalpy of ice growing at bottom
 
@@ -2105,23 +2030,14 @@
       end subroutine thickness_changes
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: freeboard - snow-ice conversion
-!
-! !DESCRIPTION:
 !
 ! If there is enough snow to lower the ice/snow interface below
 ! sea level, convert enough snow to ice to bring the interface back
 ! to sea level.
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         Elizabeth C. Hunke, LANL
-!
-! !INTERFACE:
-!
+
       subroutine freeboard (nx_block, ny_block, &
                             icells,             &
                             indxi,    indxj,    &
@@ -2132,11 +2048,7 @@
                             qin,      qsn,      &
                             dzi,      dzs,      &
                             dsnow)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells              ! number of cells with aicen > puny
@@ -2174,9 +2086,9 @@
       real (kind=dbl_kind), dimension (icells,nslyr), &
          intent(inout) :: &
          dzs         ! snow layer thicknesses (m)
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij          , & ! horizontal index, combines i and j loops
@@ -2265,33 +2177,20 @@
       end subroutine freeboard
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: adjust_enthalpy -- enthalpy of new layers
-!
-! !DESCRIPTION:
 !
 ! Conserving energy, compute the new enthalpy of equal-thickness ice
 ! or snow layers.
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
-!
-! !INTERFACE:
-!
+
       subroutine adjust_enthalpy (nx_block, ny_block, &
                                   nlyr,     icells,   &
                                   indxi,    indxj,    &
                                   z1,       z2,       &
                                   hlyr,     hn,       &
                                   qn)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          nlyr              , & ! number of layers (nilyr or nslyr)
@@ -2315,9 +2214,9 @@
       real (kind=dbl_kind), dimension (icells,nlyr), &
          intent(inout) :: &
          qn              ! layer quantity (enthalpy, salinity...)
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij          , & ! horizontal index, combines i and j loops
@@ -2380,23 +2279,14 @@
       end subroutine adjust_enthalpy
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: conservation_check_vthermo - energy conservation check
-!
-! !DESCRIPTION:
 !
 ! Check for energy conservation by comparing the change in energy
 ! to the net energy input.
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
 !         Adrian K. Turner, LANL
-!
-! !INTERFACE:
-!
+
       subroutine conservation_check_vthermo(nx_block, ny_block, &
                                             my_task,  istep1,   &
                                             dt,       icells,   &
@@ -2411,11 +2301,7 @@
                                             fbot,  einex,       &
                                             l_stop,             &
                                             istop,    jstop)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          my_task         , & ! task number (diagnostic only)
@@ -2451,9 +2337,9 @@
 
       integer (kind=int_kind), intent(inout) :: &
          istop, jstop    ! i and j indices of cell where model fails
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij              ! horizontal index, combines i and j loops
@@ -2530,23 +2416,14 @@
       end subroutine conservation_check_vthermo
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: update_state_vthermo - new state variables
-!
-! !DESCRIPTION:
 !
 ! Given the vertical thermo state variables (hin, hsn, qin,
 !  qsn, Tsf), compute the new ice state variables (vicen, vsnon, trcrn).
 ! Zero out state variables if ice has melted entirely.
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
-!
-! !INTERFACE:
-!
+
       subroutine update_state_vthermo(nx_block, ny_block, &
                                       icells,             &
                                       indxi,    indxj,    &
@@ -2556,13 +2433,7 @@
                                       qsn,                &
                                       aicen,    vicen,    &
                                       vsnon,    trcrn)
-!
-! !USES:
 
-!      use ice_state, only: hbrine
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells              ! number of cells with aicen > puny
@@ -2599,9 +2470,9 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_ntrcr), &
          intent(inout) :: &
          trcrn
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij          , & ! horizontal index, combines i and j loops

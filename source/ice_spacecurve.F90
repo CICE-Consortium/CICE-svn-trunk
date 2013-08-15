@@ -1,37 +1,26 @@
-!BOP
-! !MODULE: ice_spacecurve
+!  SVN:$Id$
+!|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
-module ice_spacecurve
-
-! !DESCRIPTION:
 !  This module contains routines necessary to 
 !  create space-filling curves.   
 !
-! !REVISION HISTORY:
-!  SVN:$Id: $
-!
 ! author: John Dennis, NCAR
 
-! !USES:
+module ice_spacecurve
+
    use ice_kinds_mod
 
    implicit none
-
-! !PUBLIC TYPES: 
 
    type, public :: factor_t
         integer(int_kind)        :: numfact ! The # of factors for a value
         integer(int_kind), dimension(:),pointer :: factors ! The factors
    end type
 
-! !PUBLIC MEMBER FUNCTIONS: 
-
    public :: Factor, 		&
 	     IsFactorable, 	&
 	     GenSpaceCurve,     &
 	     IsLoadBalanced
-
-! !PRIVATE MEMBER FUNCTIONS:
 
    private :: map,    		&
 	      PeanoM, 		&
@@ -53,31 +42,19 @@ module ice_spacecurve
    
    type (factor_t),  public,save :: fact  ! stores the factorization
 
-!EOP
-!EOC
 !***********************************************************************
 
 contains 
 
 !***********************************************************************
-!BOP
-! !IROUTINE: Cinco
-! !INTERFACE:
 
-   recursive function Cinco(l,type,ma,md,ja,jd) result(ierr)
-
-! !DESCRIPTION:
 !  This subroutine implements a Cinco space-filling curve.
 !  Cinco curves connect a Nb x Nb block of points where 
 !  		
 !        Nb = 5^p 
 !
-! !REVISION HISTORY:
-!  same as module
-!
 
-
-! !INPUT PARAMETERS 
+   recursive function Cinco(l,type,ma,md,ja,jd) result(ierr)
 
    integer(int_kind), intent(in) ::  &
 	l, 	& ! level of the space-filling curve 
@@ -87,12 +64,8 @@ contains
 	ja,	& ! joiner axis [0,1]
 	jd	  ! direction of joiner axis [-1,1]
 
-! !OUTPUT PARAMETERS
-
    integer(int_kind) :: ierr  ! error return code
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -564,30 +537,19 @@ contains
  44   format('Call Cinco Pos [3,0] Level ',i1,' at (',i2,',',i2,')',4(i3))
  45   format('Call Cinco Pos [4,0] Level ',i1,' at (',i2,',',i2,')',4(i3))
 
-!EOC
 !-----------------------------------------------------------------------
 
    end function Cinco
 
 !***********************************************************************
-!BOP
-! !IROUTINE: PeanoM
-! !INTERFACE:
 
-   recursive function PeanoM(l,type,ma,md,ja,jd) result(ierr)
-
-! !DESCRIPTION:
 !  This function implements a meandering Peano 
 !  space-filling curve. A meandering Peano curve 
 !  connects a Nb x Nb block of points where
 !
 !        Nb = 3^p
-!
-! !REVISION HISTORY:
-!  same as module
-!
 
-! !INPUT PARAMETERS
+   recursive function PeanoM(l,type,ma,md,ja,jd) result(ierr)
 
    integer(int_kind), intent(in) ::  &
         l,      & ! level of the space-filling curve
@@ -597,18 +559,13 @@ contains
         ja,     & ! joiner axis [0,1]
         jd        ! direction of joiner axis [-1,1]
 
-! !OUTPUT PARAMETERS
-
    integer(int_kind) :: ierr  ! error return code
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
 !
 !-----------------------------------------------------------------------
-
 
    integer(int_kind) :: &
         lma,            &! local major axis (next level)
@@ -787,30 +744,18 @@ contains
  28   format('Call PeanoM Pos [1,0] Level ',i1,' at (',i2,',',i2,')',4(i3))
  29   format('Call PeanoM Pos [2,0] Level ',i1,' at (',i2,',',i2,')',4(i3))
 
-!EOC
 !-----------------------------------------------------------------------
 
    end function PeanoM
 
 !***********************************************************************
-!BOP
-! !IROUTINE: Hilbert
-! !INTERFACE:
 
-   recursive function Hilbert(l,type,ma,md,ja,jd) result(ierr)
-
-! !DESCRIPTION:
 !  This function implements a Hilbert space-filling curve.
 !  A Hilbert curve connect a Nb x Nb block of points where
 !
 !        Nb = 2^p
-!
-! !REVISION HISTORY:
-!  same as module
-!
 
-
-! !INPUT PARAMETERS
+   recursive function Hilbert(l,type,ma,md,ja,jd) result(ierr)
 
    integer(int_kind), intent(in) ::  &
         l,      & ! level of the space-filling curve
@@ -820,18 +765,13 @@ contains
         ja,     & ! joiner axis [0,1]
         jd        ! direction of joiner axis [-1,1]
 
-! !OUTPUT PARAMETERS
-
    integer(int_kind) :: ierr  ! error return code
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
 !
 !-----------------------------------------------------------------------
-
 
    integer(int_kind) :: &
         lma,            &! local major axis (next level)
@@ -920,33 +860,22 @@ contains
  23   format('Call Hilbert Pos [1,1] Level ',i1,' at (',i2,',',i2,')',4(i3))
  24   format('Call Hilbert Pos [1,0] Level ',i1,' at (',i2,',',i2,')',4(i3))
 
-!EOC
 !-----------------------------------------------------------------------
 
    end function hilbert
 
 !***********************************************************************
-!BOP
-! !IROUTINE: IncrementCurve
-! !INTERFACE:
 
-   function IncrementCurve(ja,jd) result(ierr)
-
-! !DESCRIPTION:
 !   This function creates the curve which is stored in the 
 !   the ordered array.  The curve is implemented by 
 !   incrementing the curve in the direction [jd] of axis [ja].
-!
-! !REVISION HISTORY:
-!  same as module
-!
 
-! !INPUT PARAMETERS:
+   function IncrementCurve(ja,jd) result(ierr)
+
      integer(int_kind)  :: &
 	ja, 	&! axis to increment
 	jd	 ! direction along axis
 
-! !OUTPUT PARAMETERS:
      integer(int_kind) :: ierr ! error return code
 
      !-----------------------------
@@ -961,35 +890,21 @@ contains
      pos(ja) = pos(ja) + jd
 
      ierr = 0
-!EOC
 !-----------------------------------------------------------------------
 
    end function IncrementCurve
 
 !***********************************************************************
-!BOP
-! !IROUTINE: log2
-! !INTERFACE:
+
+!  This function calculates the log2 of its integer 
+!  input.
 
    function log2( n)
 
-! !DESCRIPTION:
-!  This function calculates the log2 of its integer 
-!  input.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
-
    integer(int_kind), intent(in) :: n  ! integer value to find the log2
    
-! !OUTPUT PARAMETERS: 
-
    integer(int_kind) :: log2
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1008,36 +923,23 @@ contains
       log2=log2+1
    enddo 
 
-!EOP
 !-----------------------------------------------------------------------
 
    end function log2
 
 !***********************************************************************
-!BOP
-! !IROUTINE: IsLoadBalanced
-! !INTERFACE:
-
-   function  IsLoadBalanced(nelem,npart)
    
-! !DESCRIPTION:
 !  This function determines if we can create 
 !  a perfectly load-balanced partitioning.
-!
-! !REVISION HISTORY:
-!  same as module
 
-! !INTPUT PARAMETERS:
+   function  IsLoadBalanced(nelem,npart)
 
    integer(int_kind), intent(in) ::  &
 	nelem,		&  ! number of blocks/elements to partition
 	npart              ! size of partition
 
-! !OUTPUT PARAMETERS:
    logical        :: IsLoadBalanced   ! .TRUE. if a perfectly load balanced 
 				      ! partition is possible
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1055,27 +957,16 @@ contains
         IsLoadBalanced=.FALSE.
    endif
 
-!EOP
 !-----------------------------------------------------------------------
 
    end function IsLoadBalanced
 
 !***********************************************************************
-!BOP
-! !IROUTINE: GenCurve
-! !INTERFACE:
 
-   function GenCurve(l,type,ma,md,ja,jd) result(ierr)
-
-! !DESCRIPTION:
 !  This subroutine generates the next level down
 !  space-filling curve
-!
-! !REVISION HISTORY:
-!  same as module
-!
 
-! !INPUT PARAMETERS
+   function GenCurve(l,type,ma,md,ja,jd) result(ierr)
 
    integer(int_kind), intent(in) ::  &
         l,      & ! level of the space-filling curve
@@ -1085,12 +976,8 @@ contains
         ja,     & ! joiner axis [0,1]
         jd        ! direction of joiner axis [-1,1]
 
-! !OUTPUT PARAMETERS
-
    integer(int_kind) :: ierr  ! error return code
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 
    !-------------------------------------------------
@@ -1104,36 +991,21 @@ contains
       ierr = Cinco(l,type,ma,md,ja,jd)
    endif
 
-!EOP
 !-----------------------------------------------------------------------
 
    end function GenCurve
 
 !***********************************************************************
-!BOP
-! !IROUTINE: Factor
-! !INTERFACE:
+
+!  This function factors the input value num into a 
+!  product of 2,3, and 5.
 
    function Factor(num) result(res)
 
-! !DESCRIPTION:
-!  This function factors the input value num into a 
-!  product of 2,3, and 5.
-!
-! !REVISION HISTORY:
-!  same as module
-!
-
-! !INPUT PARAMETERS:
-
    integer(int_kind), intent(in)  :: num  ! number to factor
-
-! !OUTPUT PARAMETERS:
 
    type (factor_t)     :: res
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1215,34 +1087,21 @@ contains
      res%numfact = -1
    endif
 
-!EOP
 !---------------------------------------------------------
+
    end function Factor
 
 !***********************************************************************
-!BOP
-! !IROUTINE: IsFactorable
-! !INTERFACE:
 
-   function IsFactorable(n)
-   
-! !DESCRIPTION:
 !  This function determines if we can factor
 !   n into 2,3,and 5.  
-!
-! !REVISION HISTORY:
-!  same as module
 
-
-! !INTPUT PARAMETERS:
+   function IsFactorable(n)
 
    integer(int_kind), intent(in)  :: n  ! number to factor
 
-! !OUTPUT PARAMETERS:
    logical  :: IsFactorable  ! .TRUE. if it is factorable
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1258,31 +1117,19 @@ contains
      IsFactorable = .FALSE.
    endif
 
-!EOP
 !-----------------------------------------------------------------------
 
    end function IsFactorable
 
 !***********************************************************************
-!BOP
-! !IROUTINE: map
-! !INTERFACE:
+
+!   Interface routine between internal subroutines and public 
+!   subroutines.
 
    subroutine map(l)
 
-! !DESCRIPTION:
-!   Interface routine between internal subroutines and public 
-!   subroutines.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
    integer(int_kind)  :: l   ! level of space-filling curve
 
-
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1303,33 +1150,19 @@ contains
    type = fact%factors(l)
    ierr = GenCurve(l,type,0,1,0,1)
 
-
-!EOP
 !-----------------------------------------------------------------------
 
    end subroutine map
 
 !***********************************************************************
-!BOP
-! !IROUTINE: PrintCurve
-! !INTERFACE:
+
+!  This subroutine prints the several low order 
+!  space-filling curves in an easy to read format
 
    subroutine PrintCurve(Mesh)
 
-
-! !DESCRIPTION:
-!  This subroutine prints the several low order 
-!  space-filling curves in an easy to read format
-!
-! !REVISION HISTORY:
-!  same as module
-!
-! !INPUT PARAMETERS:
-
      integer(int_kind), intent(in), target ::  Mesh(:,:) ! SFC to be printed
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1510,32 +1343,20 @@ contains
 27 format('|',27(i3,'|'))
 32 format('|',32(i4,'|'))
 
-!EOC
 !-----------------------------------------------------------------------
 
    end subroutine PrintCurve
 
 !***********************************************************************
-!BOP
-! !IROUTINE: GenSpaceCurve
-! !INTERFACE:
+
+!  This subroutine is the public interface into the 
+!  space-filling curve functionality
 
   subroutine  GenSpaceCurve(Mesh)
 
-! !DESCRIPTION:
-!  This subroutine is the public interface into the 
-!  space-filling curve functionality
-!
-! !REVISION HISTORY:
-!  same as module
-!
-
-! !INPUT/OUTPUT PARAMETERS:
    integer(int_kind), target,intent(inout) :: &
 	Mesh(:,:)		! The SFC ordering in 2D array
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1577,7 +1398,6 @@ contains
 
    deallocate(pos,ordered)
 
-!EOP
 !-----------------------------------------------------------------------
 
   end subroutine GenSpaceCurve 

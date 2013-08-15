@@ -1,10 +1,7 @@
+!  SVN:$Id$
 !=======================================================================
 !
-!BOP
-!
-! !MODULE: ice_restart_meltpond_topo - Meltpond parameterization
-!
-! !DESCRIPTION:
+! Topo melt pond parameterization
 !
 ! Melt pond evolution based on the ice topography as inferred from
 ! the ice thickness distribution.  This code is based on (but differs
@@ -18,24 +15,15 @@
 ! physically based melt pond scheme into the sea ice component of a
 ! climate model.  J. Geophys. Res. 115, C08012, doi: 10.1029/2009JC005568.
 !
-! !REVISION HISTORY:
-!  SVN:$$
-!
 ! authors Daniela Flocco (UCL)
 !         Adrian Turner (UCL)
 ! 2010 ECH added module based on original code from Daniela Flocco, UCL
 ! 2012 DSCHR modifications
-!
-! !INTERFACE:
-!
+
       module ice_restart_meltpond_topo
-!
-! !USES:
-!
+
       use ice_kinds_mod
-!
-!EOP
-!
+
       implicit none
       private
       public :: write_restart_pond_topo, read_restart_pond_topo
@@ -49,26 +37,14 @@
       contains
   
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: write_restart_pond - dumps all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine write_restart_pond_topo(filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Dumps all values needed for restarting
-!
-! !REVISION HISTORY:
 !
 ! authors Elizabeth C. Hunke, LANL
 !         David A. Bailey, NCAR
-!
-! !USES:
-!
+
+      subroutine write_restart_pond_topo(filename_spec)
+
       use ice_communicate, only: my_task, master_task
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, year_init
@@ -77,13 +53,11 @@
       use ice_read_write, only: ice_open, ice_write
       use ice_restart, only: lenstr, restart_dir, restart_file
       use ice_state, only: trcrn, nt_apnd, nt_hpnd, nt_ipnd
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
           i, j, k, n, it, iblk, & ! counting indices
           iyear, imonth, iday     ! year, month, day
@@ -127,25 +101,14 @@
       end subroutine write_restart_pond_topo
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: read_restart_pond - reads all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine read_restart_pond_topo(filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Reads all values needed for a meltpond volume restart
-!
-! !REVISION HISTORY:
 !
 ! authors Elizabeth C. Hunke, LANL
 !         David A. Bailey, NCAR
-!
-! !USES:
-!
+
+      subroutine read_restart_pond_topo(filename_spec)
+
       use ice_communicate, only: my_task, master_task
       use ice_domain_size, only: ncat
       use ice_calendar, only: istep1, time, time_forc
@@ -154,13 +117,11 @@
       use ice_restart, only: lenstr, restart_file, pointer_file
       use ice_state, only: trcrn, nt_apnd, nt_hpnd, nt_ipnd
       use ice_exit, only: abort_ice
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, k, n, it, iblk, & ! counting indices
          iyear, imonth, iday , & ! year, month, day

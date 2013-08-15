@@ -1,14 +1,7 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_transport_driver - drivers for ice transport
-!
-! !DESCRIPTION:
 !
 ! Drivers for remapping and upwind ice transport
-!
-! !REVISION HISTORY:
-!  SVN:$Id: ice_transport_upwind.F 28 2006-11-03 20:32:53Z eclare $
 !
 ! authors: Elizabeth C. Hunke and William H. Lipscomb, LANL 
 !
@@ -17,19 +10,13 @@
 ! 2006: Incorporated remap transport driver and renamed from
 !       ice_transport_upwind.  
 ! 2011: ECH moved edgearea arrays into ice_transport_remap.F90
-!
-! !INTERFACE:
 
       module ice_transport_driver
-!
-! !USES:
+
       use ice_kinds_mod
       use ice_communicate, only: my_task, master_task
-!      use ice_constants
       use ice_fileunits, only: nu_diag
-!
-!EOP
-!
+
       implicit none
       private
       public :: init_transport, transport_remap, transport_upwind
@@ -69,36 +56,22 @@
       contains
 
 !=======================================================================
-
-!BOP
-!
-! !IROUTINE: init_transport - initializations for horizontal transport
-!
-! !INTERFACE:
-!
-      subroutine init_transport
-!
-! !DESCRIPTION:
 !
 ! This subroutine is a wrapper for init_remap, which initializes the
 ! remapping transport scheme.  If the model is run with upwind
 ! transport, no initializations are necessary.
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
-!
-! !USES:
-!
+
+      subroutine init_transport
+
       use ice_state, only: ntrcr, trcr_depend, nt_Tsfc, nt_qice, nt_qsno, &
           nt_sice, nt_fbri, nt_iage, nt_FY, nt_alvl, nt_vlvl, &
           nt_apnd, nt_hpnd, nt_ipnd, nt_bgc_n_sk
       use ice_exit, only: abort_ice
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_advect
       use ice_transport_remap, only: init_remap
-!
-!EOP
-!
+
       integer (kind=int_kind) ::       &
          k, nt, nt1     ! tracer indices
 
@@ -221,15 +194,6 @@
       end subroutine init_transport
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: transport_remap - wrapper for remapping transport scheme
-!
-! !INTERFACE:
-!
-      subroutine transport_remap (dt)
-!
-! !DESCRIPTION:
 !
 ! This subroutine solves the transport equations for one timestep
 ! using the conservative remapping scheme developed by John Dukowicz
@@ -240,12 +204,10 @@
 ! it does not produce new extrema.  It is second-order accurate in space,
 ! except where gradients are limited to preserve monotonicity. 
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
-!
-! !USES:
-!
+
+      subroutine transport_remap (dt)
+
       use ice_blocks, only: nx_block, ny_block
       use ice_boundary, only: ice_HaloUpdate
       use ice_constants, only: c0, &
@@ -263,14 +225,10 @@
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_advect, timer_bound
       use ice_transport_remap, only: horizontal_remap, make_masks
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) ::     &
          dt      ! time step
-!
-!EOP
-!
+
       ! local variables
 
       integer (kind=int_kind) ::     &
@@ -675,25 +633,12 @@
       end subroutine transport_remap
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: transport_upwind - upwind transport
-!
-! !INTERFACE:
-!
-      subroutine transport_upwind (dt)
-!
-! !DESCRIPTION:
 !
 ! Computes the transport equations for one timestep using upwind. Sets
 ! several fields into a work array and passes it to upwind routine.
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-!
+
+      subroutine transport_upwind (dt)
+
       use ice_boundary, only: ice_HaloUpdate
       use ice_blocks, only: nx_block, ny_block, block, get_block, nx_block, ny_block
       use ice_constants, only: p5, &
@@ -705,14 +650,12 @@
       use ice_grid, only: HTE, HTN, tarea
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_bound, timer_advect
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) ::     &
          dt      ! time step
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::     &
          narr               ! max number of state variable arrays
 
@@ -839,21 +782,6 @@
 ! by transport_remap.
 !=======================================================================
 !
-!BOP
-!
-! !IROUTINE: state_to_tracers -fill ice area and tracer arrays
-!
-! !INTERFACE:
-!
-      subroutine state_to_tracers (nx_block, ny_block,   &
-                                   ntrcr,    ntrace,     &
-                                   aice0,    aicen,      &
-                                   trcrn,                &
-                                   vicen,    vsnon,      &
-                                   aim,      trm)
-!
-! !DESCRIPTION:
-!
 ! Fill ice area and tracer arrays.
 ! Assume that the advected tracers are hicen, hsnon, trcrn, 
 !  qicen(1:nilyr), and qsnon(1:nslyr).
@@ -862,18 +790,19 @@
 !   is that a dependent tracer (such as qice) must have a larger
 !   tracer index than the tracer it depends on (i.e., hice).
 !
-! !REVISION HISTORY:
-!
 ! author William H. Lipscomb, LANL
-!
-! !USES:
-!
+
+      subroutine state_to_tracers (nx_block, ny_block,   &
+                                   ntrcr,    ntrace,     &
+                                   aice0,    aicen,      &
+                                   trcrn,                &
+                                   vicen,    vsnon,      &
+                                   aim,      trm)
+
       use ice_constants, only: c0, c1, rhos, Lfresh, puny
       use ice_domain_size, only: ncat, nslyr
       use ice_state, only: nt_qsno
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) ::     &
            nx_block, ny_block, & ! block dimensions
            ntrcr             , & ! number of tracers in use
@@ -900,9 +829,9 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrace,ncat),  &
            intent(out) ::     &
            trm       ! mean tracer values in each grid cell
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::     &
            i, j, k, n   ,&! standard indices
            it, kt       ,&! tracer indices
@@ -977,35 +906,22 @@
       end subroutine state_to_tracers
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: tracers_to_state - convert tracer array to state variables
+! Convert area and tracer arrays back to state variables.
 !
-! !INTERFACE:
-!
+! author William H. Lipscomb, LANL
+
       subroutine tracers_to_state (nx_block, ny_block,   &
                                    ntrcr,    ntrace,     &
                                    aim,      trm,        &
                                    aice0,    aicen,      &
                                    trcrn,                &
                                    vicen,    vsnon)
-!
-! !DESCRIPTION:
-!
-! Convert area and tracer arrays back to state variables.
-!
-! !REVISION HISTORY:
-!
-! author William H. Lipscomb, LANL
-!
-! !USES:
-!
+
       use ice_constants, only: c0, rhos, Lfresh
       use ice_domain_size, only: ncat, nslyr
       use ice_state, only: nt_qsno
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) ::     &
            nx_block, ny_block, & ! block dimensions
            ntrcr             , & ! number of tracers in use
@@ -1032,9 +948,9 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat),  &
            intent(inout) ::     &
            trcrn     ! tracers
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::     &
            i, j, k, n      ,&! standard indices
            it, kt          ,&! tracer indices
@@ -1093,32 +1009,17 @@
 
 !=======================================================================
 !
-!BOP
-!
-! !IROUTINE: global_conservation - check for changes in conserved quantities
-!
-! !INTERFACE:
-!
-      subroutine global_conservation (l_stop,                     &
-                                      asum_init,  asum_final,     &
-                                      atsum_init, atsum_final)
-!
-! !DESCRIPTION:
-!
 ! Check whether values of conserved quantities have changed.
 ! An error probably means that ghost cells are treated incorrectly.
 !
-! !REVISION HISTORY:
-!
 ! author William H. Lipscomb, LANL
-!
-! !USES:
+
+      subroutine global_conservation (l_stop,                     &
+                                      asum_init,  asum_final,     &
+                                      atsum_init, atsum_final)
 
       use ice_constants, only: puny
 
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       real (kind=dbl_kind), intent(in) ::     &
          asum_init   ,&! initial global ice area
          asum_final    ! final global ice area
@@ -1129,9 +1030,9 @@
 
       logical (kind=log_kind), intent(inout) ::     &
          l_stop    ! if true, abort on return
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::     &
            nt            ! tracer index
 
@@ -1176,19 +1077,6 @@
       end subroutine global_conservation
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: local_max_min - compute local max and min of a scalar field
-!
-! !INTERFACE:
-!
-      subroutine local_max_min (nx_block, ny_block,     &
-                                ilo, ihi, jlo, jhi,     &
-                                trm,                    &
-                                tmin,     tmax,         &
-                                aimask,   trmask)
-!
-! !DESCRIPTION:
 !
 ! At each grid point, compute the local max and min of a scalar
 ! field phi: i.e., the max and min values in the nine-cell region
@@ -1197,16 +1085,16 @@
 ! To extend to the neighbors of the neighbors (25 cells in all),
 ! follow this call with a call to quasilocal_max_min.
 !
-! !REVISION HISTORY:
-!
 ! author William H. Lipscomb, LANL
-!
-! !USES:
+
+      subroutine local_max_min (nx_block, ny_block,     &
+                                ilo, ihi, jlo, jhi,     &
+                                trm,                    &
+                                tmin,     tmax,         &
+                                aimask,   trmask)
 
       use ice_constants, only: c1
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) ::     &
            nx_block, ny_block,&! block dimensions
            ilo,ihi,jlo,jhi     ! beginning and end of physical domain
@@ -1224,9 +1112,9 @@
            dimension (nx_block,ny_block,ntrace) ::    &
            tmin         ,&! local min tracer
            tmax           ! local max tracer
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::     &
            i, j         ,&! horizontal indices
            nt, nt1        ! tracer indices
@@ -1304,30 +1192,17 @@
       end subroutine local_max_min
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: quasilocal_max_min - look one grid cell farther away
-!
-! !INTERFACE:
-!
-      subroutine quasilocal_max_min (nx_block, ny_block,     &
-                                     ilo, ihi, jlo, jhi,     &
-                                     tmin,     tmax)
-!
-! !DESCRIPTION:
 !
 ! Extend the local max and min by one grid cell in each direction.
 ! Incremental remapping is monotone for the "quasilocal" max and min,
 ! but in rare cases may violate monotonicity for the local max and min.
 !
-! !REVISION HISTORY:
-!
 ! author William H. Lipscomb, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      subroutine quasilocal_max_min (nx_block, ny_block,     &
+                                     ilo, ihi, jlo, jhi,     &
+                                     tmin,     tmax)
+
       integer (kind=int_kind), intent(in) ::     &
          nx_block, ny_block,&! block dimensions
          ilo,ihi,jlo,jhi     ! beginning and end of physical domain
@@ -1336,9 +1211,9 @@
            dimension (nx_block,ny_block,ntrace) ::     &
            tmin         ,&! local min tracer
            tmax           ! local max tracer
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::     &
            i, j          ,&! horizontal indices
            nt              ! tracer index
@@ -1367,34 +1242,20 @@
 
 !======================================================================
 !
-!BOP
+! At each grid point, make sure that the new tracer values
+! fall between the local max and min values before transport.
 !
-! !IROUTINE: check_monotonicity - check bounds on new tracer values
-!
-! !INTERFACE:
-!
+! author William H. Lipscomb, LANL
+
       subroutine check_monotonicity (nx_block, ny_block,     &
                                      ilo, ihi, jlo, jhi,     &
                                      tmin,     tmax,         &
                                      aim,      trm,          &
                                      l_stop,                 &
                                      istop,    jstop)
-!
-! !DESCRIPTION:
-!
-! At each grid point, make sure that the new tracer values
-! fall between the local max and min values before transport.
-!
-! !REVISION HISTORY:
-!
-! author William H. Lipscomb, LANL
-!
-! !USES:
 
       use ice_constants, only: c1, puny
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) ::     &
            nx_block, ny_block,&! block dimensions
            ilo,ihi,jlo,jhi     ! beginning and end of physical domain
@@ -1417,9 +1278,9 @@
 
       integer (kind=int_kind), intent(inout) ::     &
          istop, jstop     ! indices of grid cell where model aborts 
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::     &
            i, j           ,&! horizontal indices
            nt, nt1, nt2     ! tracer indices
@@ -1521,12 +1382,9 @@
 !=======================================================================
 ! The remaining subroutines are called by transport_upwind.
 !=======================================================================
-!BOP
 !
-! !IROUTINE: state_to_work - fill work arrays with state variables
-!
-! !INTERFACE:
-!
+! Fill work array with state variables in preparation for upwind transport
+
       subroutine state_to_work (nx_block, ny_block,        &
                                 ntrcr,                     &
                                 narr,     trcr_depend,     &
@@ -1534,23 +1392,10 @@
                                 vicen,    vsnon,           &
                                 aice0,    works)
 
-!
-! !DESCRIPTION:
-!
-! Fill work array with state variables in preparation for upwind transport
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-!
       use ice_domain_size, only: ncat
       use ice_state, only: nt_alvl, nt_apnd, nt_fbri, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) ::     &
          nx_block, ny_block, & ! block dimensions
          ntrcr             , & ! number of tracers in use
@@ -1576,9 +1421,9 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,narr),     &
          intent (out) ::      &
          works     ! work array
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::      &
          i, j, k, n, it ,&! counting indices
          narrays          ! counter for number of state variable arrays
@@ -1674,12 +1519,9 @@
       end subroutine state_to_work
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: work_to_state - convert work arrays back to state variables
-!
-! !INTERFACE:
-!
+! Convert work array back to state variables
+
       subroutine work_to_state (nx_block, ny_block,        &
                                 ntrcr,                     &
                                 narr,     trcr_depend,     &
@@ -1687,24 +1529,10 @@
                                 vicen,    vsnon,           &
                                 aice0,    works)
 
-!
-! !DESCRIPTION:
-!
-! Convert work array back to state variables
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-!
       use ice_domain_size, only: ncat
       use ice_blocks, only: 
       use ice_itd, only: compute_tracers
 
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
       integer (kind=int_kind), intent (in) ::                       &
          nx_block, ny_block, & ! block dimensions
          ntrcr             , & ! number of tracers in use
@@ -1729,9 +1557,9 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block),          &
          intent(out) ::     &
          aice0     ! concentration of open water
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::      &
          i, j, k, n , it,&! counting indices
          narrays        ,&! counter for number of state variable arrays
@@ -1787,12 +1615,9 @@
       end subroutine work_to_state
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: upwind_field - advection according to upwind
-!
-! !INTERFACE:
-!
+! upwind transport algorithm
+
       subroutine upwind_field (nx_block, ny_block,   &
                                ilo, ihi, jlo, jhi,   &
                                dt,                   &
@@ -1800,21 +1625,9 @@
                                uee,      vnn,        &
                                HTE,      HTN,        &
                                tarea)
-!
-! !DESCRIPTION:
-!
-! upwind transport algorithm
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-!
+
       use ice_constants, only: p5
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent (in) ::     &
          nx_block, ny_block ,&! block dimensions
          ilo,ihi,jlo,jhi    ,&! beginning and end of physical domain
@@ -1835,9 +1648,9 @@
          HTE                ,&! length of east cell edge 
          HTN                ,&! length of north cell edge
          tarea                ! grid cell area
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) ::     &
          i, j, k, n           ! standard indices
 

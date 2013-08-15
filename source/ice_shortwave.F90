@@ -1,9 +1,5 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_shortwave - reflected, transmitted, and absorbed solar rad
-!
-! !DESCRIPTION:
 !
 ! The albedo and absorbed/transmitted flux parameterizations for
 ! snow over ice, bare ice and ponded ice.
@@ -20,9 +16,6 @@
 !    Scattering Parameterization for Solar Radiation in the Sea Ice 
 !    Component of the Community Climate System Model, NCAR Technical 
 !    Note  NCAR/TN-472+STR  February 2007
-!
-! !REVISION HISTORY:
-!  SVN:$Id$
 !
 ! name: originally ice_albedo
 !
@@ -45,13 +38,9 @@
 ! 2007, ECH: Improved efficiency
 ! 2008, BPB: Added aerosols to Delta Eddington code
 ! 2013, ECH: merged with NCAR version, cleaned up
-!
-! !INTERFACE:
-!
+
       module ice_shortwave
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_domain_size, only: nilyr, nslyr, ncat, n_aero, max_blocks, max_aero
       use ice_constants
@@ -60,9 +49,7 @@
       use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc
       use ice_fileunits, only: nu_diag
       use ice_communicate, only: my_task
-!
-!EOP
-!
+
       implicit none
       save
 
@@ -147,22 +134,11 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: init_shortwave
-!
-! !DESCRIPTION:
 !
 !  Initialize shortwave
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine init_shortwave
-!
-! !USES:
-!
+
       use ice_calendar, only: nstreams
       use ice_domain, only: nblocks, blocks_ice
       use ice_flux, only: alvdf, alidf, alvdr, alidr, &
@@ -174,12 +150,6 @@
       use ice_blocks, only: block, get_block
       use ice_grid, only: tmask, tlat, tlon
       use ice_restart_meltpond_lvl, only: dhsn, ffracn
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-!     local temporary variables
 
       integer (kind=int_kind) :: &
          icells          ! number of cells with aicen > puny
@@ -369,12 +339,9 @@
       end subroutine init_shortwave
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: shortwave_ccsm3 - driver for CCSM3 shortwave radiation
-!
-! !INTERFACE:
-!
+! Driver for basic solar radiation from CCSM3.  Albedos and absorbed solar.
+
       subroutine shortwave_ccsm3 (nx_block, ny_block, &
                                   ilo, ihi, jlo, jhi, &
                                   aicen,    vicen,    &
@@ -389,21 +356,7 @@
                                   Iswabs,   SSwabs,   &
                                   albin,    albsn,    &
                                   coszen)
-!
-! !DESCRIPTION:
-!
-! Driver for basic solar radiation from CCSM3.  Albedos and absorbed solar.
-!
-! !REVISION HISTORY:
-!
-! authors:  same as module
-!
-! !USES:
-!
-      !use ice_domain, only: blocks_ice
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
@@ -449,9 +402,9 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr,ncat), &
            intent(out) :: &
          Sswabs       ! SW absorbed in particular layer (W m-2)
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j           , & ! horizontal indices
          icells         , & ! number of ice-covered grid cells
@@ -563,12 +516,9 @@
       end subroutine shortwave_ccsm3
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: compute_albedos - compute albedos for each thickness ategory
-!
-! !INTERFACE:
-!
+! Compute albedos for each thickness category
+
       subroutine compute_albedos (nx_block, ny_block, &
                                   icells,             &
                                   indxi,    indxj,    &
@@ -581,19 +531,7 @@
                                   alvdrn,   alidrn,   &
                                   alvdfn,   alidfn,   &
                                   albin,    albsn)
-!
-! !DESCRIPTION:
-!
-! Compute albedos for each thickness category
-!
-! !REVISION HISTORY:
-!
-! authors:  same as module
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells              ! number of ice-covered grid cells
@@ -626,9 +564,9 @@
          alidfn   , & ! near-ir, diffuse, avg  (fraction)
          albin    , & ! bare ice 
          albsn        ! snow 
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind), parameter :: &
          dT_mlt    = c1          , & ! change in temp to give dalb_mlt 
                                      ! albedo change
@@ -640,7 +578,7 @@
                                      ! in temp for snow
 
       integer (kind=int_kind) :: &
-         i, j, n
+         i, j
 
       real (kind=dbl_kind) :: &
          hi  , & ! ice thickness  (m)
@@ -755,12 +693,9 @@
       end subroutine compute_albedos
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: constant_albedos - set albedos for each thickness ategory
-!
-! !INTERFACE:
-!
+! Compute albedos for each thickness category
+
       subroutine constant_albedos (nx_block, ny_block, &
                                   icells,             &
                                   indxi,    indxj,    &
@@ -773,19 +708,7 @@
                                   alvdrn,   alidrn,   &
                                   alvdfn,   alidfn,   &
                                   albin,    albsn)
-!
-! !DESCRIPTION:
-!
-! Compute albedos for each thickness category
-!
-! !REVISION HISTORY:
-!
-! authors:  same as module
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells              ! number of ice-covered grid cells
@@ -817,9 +740,9 @@
          alidfn   , & ! near-ir, diffuse, avg  (fraction)
          albin    , & ! bare ice 
          albsn        ! snow 
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind), parameter :: &
          warmice  = 0.68_dbl_kind, &
          coldice  = 0.70_dbl_kind, &
@@ -904,21 +827,12 @@
       end subroutine constant_albedos
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: absorbed_solar - shortwave radiation absorbed by ice, ocean
-!
-! !DESCRIPTION:
 !
 ! Compute solar radiation absorbed in ice and penetrating to ocean
 !
-! !REVISION HISTORY:
-!
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
-!
-! !INTERFACE:
-!
+
       subroutine absorbed_solar (nx_block, ny_block, &
                                  icells,             &
                                  indxi,    indxj,    &
@@ -933,13 +847,9 @@
                                  fswsfc,   fswint,   &
                                  fswthru,  fswthrul, &
                                  Iswabs)
-!
-! !USES:
-!
-	use ice_therm_shared, only: heat_capacity
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      use ice_therm_shared, only: heat_capacity
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells          ! number of cells with aicen > puny
@@ -979,9 +889,9 @@
          intent(out) :: &
          fswthrul        ! visible SW through each layer (W m-2)
 
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind), parameter :: &
          i0vis = 0.70_dbl_kind  ! fraction of penetrating solar rad (visible)
 
@@ -1147,12 +1057,14 @@
 ! End ccsm3 shortwave method
 !=======================================================================
 ! Begin Delta-Eddington shortwave method
-!BOP
+
+! Compute initial data for Delta-Eddington method, specifically, 
+! the approximate exponential look-up table.
 !
-! !IROUTINE: run_dEdd - initialize/run Delta-Eddington
-!
-! !INTERFACE:
-!
+! author:  Bruce P. Briegleb, NCAR
+! 2011 ECH modified for melt pond tracers
+! 2013 ECH merged with NCAR version
+
       subroutine run_dEdd(ilo,ihi,jlo,jhi,     &
                           aicen,    vicen,     &
                           vsnon,    trcrn,     &
@@ -1169,20 +1081,7 @@
                           albicen,  albsnon,   &
                           albpndn,  apeffn,    &
                           dhsn,     ffracn)
-!
-! !DESCRIPTION:
-!
-! Compute initial data for Delta-Eddington method, specifically, 
-! the approximate exponential look-up table.
-!
-! !REVISION HISTORY:
-!
-! author:  Bruce P. Briegleb, NCAR
-! 2011 ECH modified for melt pond tracers
-! 2013 ECH merged with NCAR version
-!
-! !USES:
-!
+
       use ice_calendar, only: dt
       use ice_restart_meltpond_cesm, only: hs0
       use ice_restart_meltpond_lvl, only: hs1, pndaspect, snowinfil
@@ -1190,9 +1089,7 @@
       use ice_state, only: ntrcr, nt_Tsfc, nt_alvl, nt_apnd, nt_hpnd, nt_ipnd, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo
       use ice_domain_size, only: max_ntrcr
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
            ilo,ihi,jlo,jhi
 
@@ -1244,10 +1141,8 @@
 
       real(kind=dbl_kind), dimension(nx_block,ny_block,nilyr+1,ncat), intent(out) :: &
            fswthruln   ! visible SW  at ice interior (W m-2)
-!
-!EOP
-!
-!     local temporary variables
+
+      ! local temporary variables
 
       integer (kind=int_kind) :: &
          icells          ! number of cells with aicen > puny
@@ -1475,32 +1370,6 @@
       end subroutine run_dEdd
  
 !=======================================================================
-!BOP
-!
-! !IROUTINE: shortwave_dEdd - driver for Delta-Eddington shortwave
-!
-! !INTERFACE:
-!
-      subroutine shortwave_dEdd  (nx_block, ny_block,    &
-                                  ntrcr,    icells,      &
-                                  indxi,    indxj,       &
-                                  coszen,                &
-                                  aice,     vice,        &
-                                  hs,       fs,          & 
-                                  rhosnw,   rsnw,        &
-                                  fp,       hp,          &
-                                  trcr,                  &
-                                  swvdr,    swvdf,       &
-                                  swidr,    swidf,       &
-                                  alvdr,    alvdf,       &
-                                  alidr,    alidf,       &
-                                  fswsfc,   fswint,      &
-                                  fswthru,  Sswabs,      &
-                                  Iswabs,   albice,      &
-                                  albsno,   albpnd,      &
-                                  fswthrul)
-!
-! !DESCRIPTION:
 !
 !   Compute snow/bare ice/ponded ice shortwave albedos, absorbed and transmitted 
 !   flux using the Delta-Eddington solar radiation method as described in:
@@ -1525,17 +1394,30 @@
 !   output (post-processing), compute ice albedo using
 !   (1 - albedo)*swdn = swabs. -ECH
 !
-! !REVISION HISTORY:
-!
 ! author:  Bruce P. Briegleb, NCAR 
 !   2013:  E Hunke merged with NCAR version
 !
-! !USES:
-!
+      subroutine shortwave_dEdd  (nx_block, ny_block,    &
+                                  ntrcr,    icells,      &
+                                  indxi,    indxj,       &
+                                  coszen,                &
+                                  aice,     vice,        &
+                                  hs,       fs,          & 
+                                  rhosnw,   rsnw,        &
+                                  fp,       hp,          &
+                                  trcr,                  &
+                                  swvdr,    swvdf,       &
+                                  swidr,    swidf,       &
+                                  alvdr,    alvdf,       &
+                                  alidr,    alidf,       &
+                                  fswsfc,   fswint,      &
+                                  fswthru,  Sswabs,      &
+                                  Iswabs,   albice,      &
+                                  albsno,   albpnd,      &
+                                  fswthrul)
+
       use ice_state, only: nt_aero, tr_aero
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), &
          intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -1600,11 +1482,9 @@
          albice  , & ! bare ice albedo, for history  
          albsno  , & ! snow albedo, for history  
          albpnd      ! pond albedo, for history  
-!      
-!EOP
-! 
-! !LOCAL PARAMETERS:
-!
+
+      ! local variables
+
       real (kind=dbl_kind),dimension (nx_block,ny_block) :: &
          fnidr        ! fraction of direct to total down surface flux in nir
 
@@ -1632,8 +1512,7 @@
          indxj_DE  
 
       real (kind=dbl_kind) :: &
-         vsno     , & ! volume of snow 
-         hsmax        ! maximum snow depth below which Sswabs adjustment
+         vsno         ! volume of snow 
 
       ! for printing points
       integer (kind=int_kind) :: &
@@ -1931,12 +1810,13 @@
       end subroutine shortwave_dEdd
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: compute_dEdd - evaluate Delta-Edd IOPs and compute solution
+! Evaluate snow/ice/ponded ice inherent optical properties (IOPs), and 
+! then calculate the multiple scattering solution by calling solution_dEdd.
 !
-! !INTERFACE:
-!
+! author:  Bruce P. Briegleb, NCAR 
+!   2013:  E Hunke merged with NCAR version
+
       subroutine compute_dEdd                              &
             (nx_block,ny_block,                            &
              icells_DE, indxi_DE, indxj_DE, fnidr, coszen, &
@@ -1947,24 +1827,10 @@
                                   fswsfc,   fswint,        &
                                   fswthru,  Sswabs,        &
                                   Iswabs,   fswthrul)
-!
-! !DESCRIPTION:
-!
-! Evaluate snow/ice/ponded ice inherent optical properties (IOPs), and 
-! then calculate the multiple scattering solution by calling solution_dEdd.
-!
-! !REVISION HISTORY:
-!
-! author:  Bruce P. Briegleb, NCAR 
-!   2013:  E Hunke merged with NCAR version
-!
-! !USES:
-!
+
       use ice_therm_shared, only: heat_capacity
       use ice_state, only: tr_aero
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), &
          intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -2027,8 +1893,7 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
          intent(inout) :: &
          Iswabs      ! SW absorbed in ice layer (W m-2)
-! 
-!EOP
+
 !-----------------------------------------------------------------------
 !
 ! Set up optical property profiles, based on snow, sea ice and ponded 
@@ -2130,9 +1995,9 @@
 ! in this routine.
 !
 !-----------------------------------------------------------------------
-!
-! !LOCAL PARAMETERS
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i       , & ! longitude index
          j       , & ! latitude index
@@ -3186,32 +3051,18 @@
       end subroutine compute_dEdd
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: solution_dEdd - evaluate solution for Delta-Edddington solar
+! Given input vertical profiles of optical properties, evaluate the 
+! monochromatic Delta-Eddington solution.
 !
-! !INTERFACE:
-!
+! author:  Bruce P. Briegleb, NCAR
+!   2013:  E Hunke merged with NCAR version
       subroutine solution_dEdd                                 &
             (nx_block, ny_block,                               &
              icells_DE,  indxi_DE,  indxj_DE,  coszen, srftyp, &
              tau,        w0,        g,         albodr, albodf, &
              trndir,     trntdr,    trndif,    rupdir, rupdif, &
              rdndif)
-!
-! !DESCRIPTION:
-!
-! Given input vertical profiles of optical properties, evaluate the 
-! monochromatic Delta-Eddington solution.
-!
-! !REVISION HISTORY:
-!
-! author:  Bruce P. Briegleb, NCAR
-!   2013:  E Hunke merged with NCAR version
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
 
       integer (kind=int_kind), &
          intent(in) :: &
@@ -3255,8 +3106,7 @@
          rupdir  , & ! reflectivity to direct radiation for layers below
          rupdif  , & ! reflectivity to diffuse radiation for layers below
          rdndif      ! reflectivity to diffuse radiation for layers above
-!
-!EOP
+
 !-----------------------------------------------------------------------
 !
 ! Delta-Eddington solution for snow/air/pond over sea ice
@@ -3308,7 +3158,7 @@
 !
 !-----------------------------------------------------------------------
 
-! Local
+      ! local variables
 
       integer (kind=int_kind) :: &
          kfrsnl      ! radiation interface index for fresnel layer
@@ -3405,7 +3255,6 @@
          alp      , & ! temporary for alpha
          gam      , & ! temporary for gamma
          ue       , & ! temporary for u
-         arg      , & ! exponential argument
          extins   , & ! extinction
          amg      , & ! alp - gam
          apg          ! alp + gam
@@ -3715,35 +3564,22 @@
       end subroutine solution_dEdd
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: shortwave_dEdd_set_snow - routine for Delta-Eddington shortwave
-!            that sets snow density and snow grain radius.
+!   Set snow horizontal coverage, density and grain radius diagnostically 
+!   for the Delta-Eddington solar radiation method.
 !
-! !INTERFACE:
-!
+! author:  Bruce P. Briegleb, NCAR 
+!   2013:  E Hunke merged with NCAR version
+
       subroutine shortwave_dEdd_set_snow(nx_block, ny_block, &
                                          icells,             &
                                          indxi,    indxj,    &
                                          aice,     vsno,     &
                                          Tsfc,     fs,  hs,  &
                                          rhosnw,   rsnw)
-! !USES:
-!
+
       use ice_restart_meltpond_cesm, only: hs0
-!
-! !DESCRIPTION:
-!
-!   Set snow horizontal coverage, density and grain radius diagnostically 
-!   for the Delta-Eddington solar radiation method.
-!
-! !REVISION HISTORY:
-!
-! author:  Bruce P. Briegleb, NCAR 
-!   2013:  E Hunke merged with NCAR version
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), &
          intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -3769,11 +3605,8 @@
          intent(out) :: &
          rhosnw , & ! density in snow layer (kg/m3)
          rsnw       ! grain radius in snow layer (micro-meters)
-!      
-!EOP
-! 
-! !LOCAL PARAMETERS:
-!
+
+      ! local variables
 
       integer (kind=int_kind) :: &
          i        , & ! longitude index
@@ -3850,32 +3683,20 @@
       end subroutine shortwave_dEdd_set_snow
 
 !=======================================================================
-!BOP
 !
-! !IROUTINE: shortwave_dEdd_set_pond - routine for Delta-Eddington shortwave
-!            that sets pond fraction and depth.
+!   Set pond fraction and depth diagnostically for
+!   the Delta-Eddington solar radiation method.
 !
-! !INTERFACE:
-!
+! author:  Bruce P. Briegleb, NCAR 
+!   2013:  E Hunke merged with NCAR version
+
       subroutine shortwave_dEdd_set_pond(nx_block, ny_block, &
                                          icells,             &
                                          indxi,    indxj,    &
                                          Tsfc,               &
                                          fs,       fp,       &
                                          hp)
-!
-! !DESCRIPTION:
-!
-!   Set pond fraction and depth diagnostically for
-!   the Delta-Eddington solar radiation method.
-!
-! !REVISION HISTORY:
-!
-! author:  Bruce P. Briegleb, NCAR 
-!   2013:  E Hunke merged with NCAR version
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), &
          intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -3896,11 +3717,7 @@
          fp     , & ! pond fractional coverage (0 to 1)
          hp         ! pond depth (m)
 
-!      
-!EOP
-! 
-! !LOCAL PARAMETERS:
-!
+      ! local variables
 
       integer (kind=int_kind) :: &
          i   , & ! longitude index

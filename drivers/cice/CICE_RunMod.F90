@@ -1,8 +1,7 @@
+!  SVN:$Id$
 !=======================================================================
 !
 !  Main driver for time stepping of CICE.
-!
-!  SVN:$Id$
 !
 !  authors Elizabeth C. Hunke, LANL
 !          Philip W. Jones, LANL

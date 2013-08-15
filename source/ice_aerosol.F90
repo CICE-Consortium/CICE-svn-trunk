@@ -1,23 +1,13 @@
+!  SVN:$Id$
 !=======================================================================
-!
-!BOP
-!
-! !MODULE: ice_aerosol - Aerosol tracer within sea ice
-!
-! !DESCRIPTION:
-!
-! !REVISION HISTORY:
-!  SVN:$$
+
+! Aerosol tracer within sea ice
 !
 ! authors Marika Holland, NCAR
 !         David Bailey, NCAR
-!
-! !INTERFACE:
-!
+
       module ice_aerosol
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_constants
       use ice_fileunits, only: nu_diag
@@ -25,9 +15,7 @@
                              pointer_file, runtype
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
-!
-!EOP
-!
+
       implicit none
 
       private
@@ -41,27 +29,14 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: init_aerosol
-!
-! !DESCRIPTION:
-!
+
 !  Initialize ice aerosol tracer (call prior to reading restart data)
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine init_aerosol
-!
-! !USES:
-!
+
       use ice_domain_size, only: n_aero
       use ice_state, only: trcrn, nt_aero
-!
-!EOP
-!
+
       if (restart_aero) then
          call read_restart_aero
       else
@@ -71,26 +46,15 @@
       end subroutine init_aerosol
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: faero_default - constant values for atmospheric aerosols
-!
-! !INTERFACE:
-!
-      subroutine faero_default
-!
-! !DESCRIPTION:
-!
-! !REVISION HISTORY:
+
+! constant values for atmospheric aerosols
 !
 ! authors: Elizabeth Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine faero_default
+
       use ice_flux, only: faero_atm
-!
-! EOP
-! 
+
       faero_atm(:,:,1,:) = 1.e-15_dbl_kind ! W/m^2 s
       faero_atm(:,:,2,:) = 1.e-13_dbl_kind
       faero_atm(:,:,3,:) = 1.e-11_dbl_kind
@@ -98,67 +62,37 @@
       end subroutine faero_default
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: faero_data - read atmospheric aerosols
-!
-! !INTERFACE:
-!
-      subroutine faero_data
-!
-! !DESCRIPTION:
-!
-! !REVISION HISTORY:
+
+! read atmospheric aerosols
 !
 ! authors: Elizabeth Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine faero_data
+
       use ice_calendar, only: month, mday, istep, sec
       use ice_domain_size, only: max_blocks
       use ice_blocks, only: nx_block, ny_block
       use ice_flux, only: faero_atm
       use ice_forcing, only: interp_coeff_monthly, read_clim_data_nc, interpolate_data
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-! EOP
-! 
+
 #ifdef ncdf 
-!local parameters
+      ! local parameters
 
-    real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
-       save :: &
-       aero1_data    , & ! field values at 2 temporal data points
-       aero2_data    , & ! field values at 2 temporal data points
-       aero3_data        ! field values at 2 temporal data points
+      real (kind=dbl_kind), dimension(nx_block,ny_block,2,max_blocks), &
+         save :: &
+         aero1_data    , & ! field values at 2 temporal data points
+         aero2_data    , & ! field values at 2 temporal data points
+         aero3_data        ! field values at 2 temporal data points
 
-    character (char_len_long) :: & 
-       aero_file,   &   ! netcdf filename
-       fieldname        ! field name in netcdf file
-
-    integer (kind=int_kind) :: &
-       fid              ! file id for netCDF file 
-
-    real (kind=dbl_kind):: &
-       work             ! temporary variable
-
-    logical (kind=log_kind) :: diag
-
-    integer (kind=int_kind) :: &
-       status           ! status flag
+      character (char_len_long) :: & 
+         aero_file,   &   ! netcdf filename
+         fieldname        ! field name in netcdf file
 
       integer (kind=int_kind) :: & 
-          i, j        , &
-          ixm,ixx,ixp , & ! record numbers for neighboring months
-          recnum      , & ! record number
-          maxrec      , & ! maximum record number
-          recslot     , & ! spline slot for current record
-          midmonth    , & ! middle day of month
-          dataloc     , & ! = 1 for data located in middle of time interval
-                          ! = 2 for date located at end of time interval
-          iblk        , & ! block index
-          ilo,ihi,jlo,jhi ! beginning and end of physical domain
+         ixm,ixp     , & ! record numbers for neighboring months
+         maxrec      , & ! maximum record number
+         recslot     , & ! spline slot for current record
+         midmonth        ! middle day of month
 
       logical (kind=log_kind) :: readm
 
@@ -224,19 +158,9 @@
 
 !=======================================================================
 
-!BOP
-!
-! !ROUTINE: update_aerosol
-!
-! !DESCRIPTION:
-!
 !  Increase aerosol in ice or snow surface due to deposition
 !  and vertical cycling
-!
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine update_aerosol (nx_block, ny_block,  &
                                 dt,       icells,     &
                                 indxi,    indxj,      &
@@ -249,15 +173,11 @@
                                 vice_old, vsno_old,   &
                                 vicen, vsnon, aicen,  &
                                 faero_atm, faero_ocn)
-!
-! !USES:
-!
+
       use ice_domain_size, only: max_ntrcr, nilyr, nslyr, n_aero, max_aero
       use ice_state, only: nt_aero 
       use ice_shortwave, only: hi_ssl, hs_ssl
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells                ! number of cells with ice present
@@ -295,9 +215,9 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_ntrcr), &
          intent(inout) :: &
          trcrn       ! ice/snow tracer array
-!
-!  local variables
-!
+
+      !  local variables
+
       integer (kind=int_kind) :: i, j, ij, k, n
 
       real (kind=dbl_kind) :: &
@@ -307,7 +227,6 @@
          dzinti, dzinti_new,     & ! ice interior thickness
          dznew,                  & ! tracks thickness changes
          hs, hi,                 & ! snow/ice thickness (m)
-         dhs, dhi,               & ! snow/ice thickness change (m)
          dhs_evap, dhi_evap,     & ! snow/ice thickness change due to evap
          dhs_melts, dhi_meltt,   & ! ... due to surface melt
          dhs_snoice, dhi_snoice, & ! ... due to snow-ice formation
@@ -711,27 +630,15 @@
 !=======================================================================
 !---! these subroutines write/read Fortran unformatted data files ..
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: write_restart_aero - dumps all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine write_restart_aero(filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Dumps all values needed for restarting
-!
-! !REVISION HISTORY:
 !
 ! authors Elizabeth Hunke, LANL (original version)
 !         David Bailey, NCAR
 !         Marika Holland, NCAR
-!
-! !USES:
-!
+
+      subroutine write_restart_aero(filename_spec)
+
       use ice_domain_size, only: ncat, n_aero
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init
@@ -739,15 +646,13 @@
       use ice_read_write, only: ice_open, ice_write
       use ice_fileunits, only: nu_dump_aero
       use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
+          k, n,                 & ! loop indices
           iyear, imonth, iday     ! year, month, day
 
       character(len=char_len_long) :: filename
@@ -794,26 +699,15 @@
       end subroutine write_restart_aero
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: read_restart_aero - reads all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine read_restart_aero(filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Reads all values needed for an ice aerosol restart
-!
-! !REVISION HISTORY:
 !
 ! authors Elizabeth Hunke, LANL (original version)
 !         David Bailey, NCAR
 !         Marika Holland, NCAR
-!
-! !USES:
-!
+
+      subroutine read_restart_aero(filename_spec)
+
       use ice_domain_size, only: n_aero, ncat
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, idate, year_init
@@ -821,16 +715,13 @@
       use ice_fileunits, only: nu_restart_aero, nu_rst_pointer
       use ice_read_write, only: ice_read, ice_open
       use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
-          iyear, imonth, iday     ! year, month, day
+         k, n                    ! loop indices
 
       character(len=char_len_long) :: &
          filename, filename0, string1, string2

@@ -1,28 +1,15 @@
+!  SVN:$Id$
 !=========================================================================
-!BOP
-!
-! !MODULE: ice_therm_shared
-!
-! !DESCRIPTION:
 !
 ! Shared thermo variables, subroutines
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
 ! authors: Elizabeth C. Hunke, LANL
-!
-! !INTERFACE:
-!
+
       module ice_therm_shared
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_domain_size, only: ncat, nilyr, nslyr, max_ntrcr
-!
-!EOP
-!
+
       implicit none
       save
 
@@ -68,39 +55,24 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: calculate_Tin_from_qin  - calculate internal ice temperatures
-!
-! !DESCRIPTION:
 !
 !  Compute the internal ice temperatures from enthalpy using
 !  quadratic formula
-!
-! !REVISION HISTORY:
-!
-! !INTERFACE:
-!
+
       function calculate_Tin_from_qin (qin, Tmltk) &
                result(Tin)
-!
-! !USES:
-!
+
       use ice_constants
-!
-! !INPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          qin   , &              ! enthalpy
          Tmltk                  ! melting temperature at one level
-!
-! !OUTPUT PARAMETERS
-!
-     real (kind=dbl_kind) :: &
+
+      real (kind=dbl_kind) :: &
          Tin                 ! internal temperature
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind) :: &
          aa1,bb1,cc1         ! quadratic solvers
 
@@ -121,24 +93,24 @@
 ! Surface heat flux
 !=======================================================================
 
-    ! heat flux into ice
+! heat flux into ice
     
-  subroutine surface_heat_flux(Tsf,     fswsfc, &
-                               rhoa,    flw,    &
-                               potT,    Qa,     &
-                               shcoef,  lhcoef, &
-                               flwoutn, fsensn, &
-                               flatn,   fsurfn)
+      subroutine surface_heat_flux(Tsf,     fswsfc, &
+                                   rhoa,    flw,    &
+                                   potT,    Qa,     &
+                                   shcoef,  lhcoef, &
+                                   flwoutn, fsensn, &
+                                   flatn,   fsurfn)
 
-    use ice_constants, only:  c1, Tffresh, TTTice, qqqice, &
-         stefan_boltzmann, emissivity
+      use ice_constants, only:  c1, Tffresh, TTTice, qqqice, &
+          stefan_boltzmann, emissivity
     
-    ! input surface temperature
-    real(kind=dbl_kind), intent(in) :: &
+      ! input surface temperature
+      real(kind=dbl_kind), intent(in) :: &
          Tsf             ! ice/snow surface temperature (C)
     
-    ! input variables
-    real(kind=dbl_kind), intent(in) :: &
+      ! input variables
+      real(kind=dbl_kind), intent(in) :: &
          fswsfc      , & ! SW absorbed at ice/snow surface (W m-2)
          rhoa        , & ! air density (kg/m^3)
          flw         , & ! incoming longwave radiation (W/m^2)
@@ -147,61 +119,61 @@
          shcoef      , & ! transfer coefficient for sensible heat
          lhcoef          ! transfer coefficient for latent heat
     
-    ! output
-    real(kind=dbl_kind), intent(out) :: &
+      ! output
+      real(kind=dbl_kind), intent(out) :: &
          fsensn      , & ! surface downward sensible heat (W m-2)
          flatn       , & ! surface downward latent heat (W m-2)
          flwoutn     , & ! upward LW at surface (W m-2)
          fsurfn          ! net flux to top surface, excluding fcondtopn
     
-    ! local variables
-    real(kind=dbl_kind) :: &
+      ! local variables
+      real(kind=dbl_kind) :: &
          TsfK        , & ! ice/snow surface temperature (K)
          Qsfc        , & ! saturated surface specific humidity (kg/kg)
          qsat        , & ! the saturation humidity of air (kg/m^3)
          flwdabs     , & ! downward longwave absorbed heat flx (W/m^2)
          tmpvar          ! 1/TsfK
     
-    ! ice surface temperature in Kelvin
-    TsfK = Tsf + Tffresh
-!    TsfK = max(Tsf + Tffresh, c1)
-    tmpvar = c1/TsfK
+      ! ice surface temperature in Kelvin
+      TsfK = Tsf + Tffresh
+!      TsfK = max(Tsf + Tffresh, c1)
+      tmpvar = c1/TsfK
     
-    ! saturation humidity
-    qsat    = qqqice * exp(-TTTice*tmpvar)
-    Qsfc    = qsat / rhoa
+      ! saturation humidity
+      qsat    = qqqice * exp(-TTTice*tmpvar)
+      Qsfc    = qsat / rhoa
     
-    ! longwave radiative flux
-    flwdabs =  emissivity * flw
-    flwoutn = -emissivity * stefan_boltzmann * TsfK**4
+      ! longwave radiative flux
+      flwdabs =  emissivity * flw
+      flwoutn = -emissivity * stefan_boltzmann * TsfK**4
     
-    ! downward latent and sensible heat fluxes
-    fsensn = shcoef * (potT - TsfK)
-    flatn  = lhcoef * (Qa - Qsfc)
+      ! downward latent and sensible heat fluxes
+      fsensn = shcoef * (potT - TsfK)
+      flatn  = lhcoef * (Qa - Qsfc)
     
-    ! combine fluxes
-    fsurfn = fswsfc + flwdabs + flwoutn + fsensn + flatn
+      ! combine fluxes
+      fsurfn = fswsfc + flwdabs + flwoutn + fsensn + flatn
 
-  end subroutine surface_heat_flux
+      end subroutine surface_heat_flux
 
   !=======================================================================
   
-  subroutine dsurface_heat_flux_dTsf(Tsf,     fswsfc, &
-                                     rhoa,    flw,    &
-                                     potT,    Qa,     &
-                                     shcoef,  lhcoef, &
-                                     dfsurfn_dTsf, dflwoutn_dTsf, &
-                                     dfsensn_dTsf, dflatn_dTsf)
+      subroutine dsurface_heat_flux_dTsf(Tsf,     fswsfc, &
+                                         rhoa,    flw,    &
+                                         potT,    Qa,     &
+                                         shcoef,  lhcoef, &
+                                         dfsurfn_dTsf, dflwoutn_dTsf, &
+                                         dfsensn_dTsf, dflatn_dTsf)
     
-    use ice_constants, only:  c1, c4, Tffresh, TTTice, qqqice, &
-         stefan_boltzmann, emissivity
+      use ice_constants, only:  c1, c4, Tffresh, TTTice, qqqice, &
+          stefan_boltzmann, emissivity
     
-    ! input surface temperature
-    real(kind=dbl_kind), intent(in) :: &
+      ! input surface temperature
+      real(kind=dbl_kind), intent(in) :: &
          Tsf               ! ice/snow surface temperature (C)
     
-    ! input variables
-    real(kind=dbl_kind), intent(in) :: &
+      ! input variables
+      real(kind=dbl_kind), intent(in) :: &
          fswsfc        , & ! SW absorbed at ice/snow surface (W m-2)
          rhoa          , & ! air density (kg/m^3)
          flw           , & ! incoming longwave radiation (W/m^2)
@@ -210,43 +182,42 @@
          shcoef        , & ! transfer coefficient for sensible heat
          lhcoef            ! transfer coefficient for latent heat
     
-    ! output
-    real(kind=dbl_kind), intent(out) :: &
+      ! output
+      real(kind=dbl_kind), intent(out) :: &
          dfsurfn_dTsf      ! derivative of net flux to top surface, excluding fcondtopn
     
-    real(kind=dbl_kind), intent(out) :: &
+      real(kind=dbl_kind), intent(out) :: &
          dflwoutn_dTsf , & ! derivative of longwave flux wrt surface temperature
          dfsensn_dTsf  , & ! derivative of sensible heat flux wrt surface temperature
          dflatn_dTsf       ! derivative of latent heat flux wrt surface temperature
     
-    ! local variables
-    real(kind=dbl_kind) :: &
+      ! local variables
+      real(kind=dbl_kind) :: &
          TsfK          , & ! ice/snow surface temperature (K)
          dQsfc_dTsf    , & ! saturated surface specific humidity (kg/kg)
          qsat          , & ! the saturation humidity of air (kg/m^3)
-         flwdabs       , & ! downward longwave absorbed heat flx (W/m^2)
          tmpvar            ! 1/TsfK
     
-    ! ice surface temperature in Kelvin
-!    TsfK = max(Tsf + Tffresh, c1)
-    TsfK = Tsf + Tffresh
-    tmpvar = c1/TsfK
+      ! ice surface temperature in Kelvin
+!      TsfK = max(Tsf + Tffresh, c1)
+      TsfK = Tsf + Tffresh
+      tmpvar = c1/TsfK
     
-    ! saturation humidity
-    qsat          = qqqice * exp(-TTTice*tmpvar)
-    dQsfc_dTsf    = TTTice * tmpvar * tmpvar * (qsat / rhoa)
+      ! saturation humidity
+      qsat          = qqqice * exp(-TTTice*tmpvar)
+      dQsfc_dTsf    = TTTice * tmpvar * tmpvar * (qsat / rhoa)
     
-    ! longwave radiative flux
-    dflwoutn_dTsf = -emissivity * stefan_boltzmann * c4*TsfK**3
+      ! longwave radiative flux
+      dflwoutn_dTsf = -emissivity * stefan_boltzmann * c4*TsfK**3
     
-    ! downward latent and sensible heat fluxes
-    dfsensn_dTsf = -shcoef
-    dflatn_dTsf  = -lhcoef * dQsfc_dTsf
+      ! downward latent and sensible heat fluxes
+      dfsensn_dTsf = -shcoef
+      dflatn_dTsf  = -lhcoef * dQsfc_dTsf
     
-    ! combine fluxes
-    dfsurfn_dTsf = dflwoutn_dTsf + dfsensn_dTsf + dflatn_dTsf
+      ! combine fluxes
+      dfsurfn_dTsf = dflwoutn_dTsf + dfsensn_dTsf + dflatn_dTsf
     
-  end subroutine dsurface_heat_flux_dTsf
+      end subroutine dsurface_heat_flux_dTsf
 
 !=======================================================================
 

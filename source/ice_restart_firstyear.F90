@@ -1,33 +1,13 @@
+!  SVN:$Id$
 !=======================================================================
-!
-!BOP
-!
-! !MODULE: ice_restart_firstyear - First year concentration tracer for sea ice
-!
-! !DESCRIPTION:
-!
-! see 
-! Armour, K. C., C. M. Bitz, L. Thompson and E. C. Hunke (2011). Controls
-! on Arctic sea ice from first-year and multi-year ice survivability.
-! J. Climate, 24, 23782390. doi: 10.1175/2010JCLI3823.1.
-!
-! !REVISION HISTORY:
-!  SVN:$$
-!
-! authors C. Bitz, University of Washington, modified from ice_age module
-!
-! 2012: E. Hunke adopted from CESM into CICE, changed name from ice_FY.F90
-!
-! !INTERFACE:
-!
+
+! First year concentration tracer restart files
+! author: E. C. Hunke, LANL
+
       module ice_restart_firstyear
-!
-! !USES:
-!
+
       use ice_kinds_mod
-!
-!EOP
-!
+
       implicit none
       private
       public :: write_restart_FY, read_restart_FY
@@ -42,25 +22,12 @@
 !=======================================================================
 !---! these subroutines write/read Fortran unformatted data files ..
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: write_restart_FY - dumps all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine write_restart_FY(filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Dumps all values needed for restarting
-!
-! !REVISION HISTORY:
-!
 ! author Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine write_restart_FY(filename_spec)
+
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, year_init
       use ice_communicate, only: my_task, master_task
@@ -70,13 +37,11 @@
       use ice_read_write, only: ice_open, ice_write
       use ice_restart, only: lenstr, restart_dir, restart_file
       use ice_state, only: trcrn, nt_FY
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
           i, j, k, n, it, iblk, & ! counting indices
           iyear, imonth, iday     ! year, month, day
@@ -121,24 +86,12 @@
       end subroutine write_restart_FY
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: read_restart_FY - reads all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine read_restart_FY(filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Reads all values needed for an ice FY restart
-!
-! !REVISION HISTORY:
-!
 ! author Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine read_restart_FY(filename_spec)
+
       use ice_communicate, only: my_task, master_task
       use ice_domain_size, only: ncat
       use ice_calendar, only: istep1, time, time_forc
@@ -148,13 +101,11 @@
       use ice_restart, only: lenstr, restart_file, pointer_file
       use ice_state, only: trcrn, nt_FY
       use ice_exit, only: abort_ice
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, k, n, it, iblk, & ! counting indices
          iyear, imonth, iday , & ! year, month, day

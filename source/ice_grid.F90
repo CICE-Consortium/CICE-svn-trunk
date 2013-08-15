@@ -1,14 +1,7 @@
-!=======================================================================
-!BOP
-!
-! !MODULE: ice_grid - spatial grids, masks and boundary conditions
-!
-! !DESCRIPTION:
-!
-! Spatial grids, masks, and boundary conditions
-!
-! !REVISION HISTORY:
 !  SVN:$Id$
+!=======================================================================
+
+! Spatial grids, masks, and boundary conditions
 !
 ! authors: Elizabeth C. Hunke and William H. Lipscomb, LANL
 !          Tony Craig, NCAR
@@ -19,13 +12,9 @@
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
 ! 2007: Option to read from netcdf files (A. Keen, Met Office)
 !       Grid reading routines reworked by E. Hunke for boundary values
-!
-! !INTERFACE:
-!
+
       module ice_grid
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_boundary, only: ice_HaloUpdate, ice_HaloExtrapolate
       use ice_communicate, only: my_task, master_task
@@ -38,9 +27,7 @@
       use ice_read_write, only: ice_read, ice_read_nc, ice_read_global, &
           ice_read_global_nc, ice_open, ice_open_nc, ice_close_nc
       use ice_timers, only: timer_bound, ice_timer_start, ice_timer_stop
-!
-!EOP
-!
+
       implicit none
       private
       public :: init_grid1, init_grid2, &
@@ -136,37 +123,20 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_grid1 - - distribute blocks across processors
-!
-! !INTERFACE:
-!
-      subroutine init_grid1 
-!
-! !DESCRIPTION:
-!
+
 ! Distribute blocks across processors.  The distribution is optimized
 ! based on latitude and topography, contained in the ULAT and KMT arrays. 
 !
-! !REVISION HISTORY:
-!
 ! authors: William Lipscomb and Phil Jones, LANL
-!
-! !USES:
-!
+
+      subroutine init_grid1 
+
       use ice_blocks, only: nx_block, ny_block
       use ice_broadcast, only: broadcast_array
       use ice_constants, only: c1, rad_to_deg, puny
       use ice_domain_size, only: max_blocks
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
 
       integer (kind=int_kind) :: &
-         i, j, &
          fid_grid, &     ! file id for netCDF grid file
          fid_kmt         ! file id for netCDF kmt file
 
@@ -247,16 +217,7 @@
       end subroutine init_grid1
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: init_grid2 - horizontal grid initialization
-!
-! !INTERFACE:
-!
-      subroutine init_grid2
-!
-! !DESCRIPTION:
-!
+
 ! Horizontal grid initialization:
 !
 !     U{LAT,LONG} = true {latitude,longitude} of U points
@@ -267,23 +228,17 @@
 !     T-grid and ghost cell values
 !     Various grid quantities needed for dynamics and transport
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine init_grid2
+
       use ice_blocks, only: get_block, block, nx_block, ny_block
       use ice_constants, only: c0, c1, pi, pi2, puny, p5, p25, c1p5, &
           field_loc_center, field_loc_NEcorner, &
           field_type_scalar, field_type_vector, field_type_angle
       use ice_domain_size, only: max_blocks
       use ice_exit, only: abort_ice
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       integer (kind=int_kind) :: &
          i, j, iblk, &
          ilo,ihi,jlo,jhi      ! beginning and end of physical domain
@@ -490,18 +445,8 @@
       end subroutine init_grid2
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: popgrid - read and set POP displaced pole (or tripole)
-!                      grid and land mask
-!
-! !INTERFACE:
-!
-      subroutine popgrid
-!
-! !DESCRIPTION:
-!
-! POP displaced pole grid and land mask. 
+
+! POP displaced pole grid and land mask (or tripole). 
 ! Grid record number, field and units are: \\
 ! (1) ULAT  (radians)    \\
 ! (2) ULON  (radians)    \\
@@ -513,23 +458,16 @@
 !
 ! Land mask record number and field is (1) KMT.
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine popgrid
+
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, c1, pi, &
           field_loc_center, field_loc_NEcorner, &
           field_type_scalar, field_type_angle
       use ice_domain_size, only: max_blocks
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!
-!EOP
-!
+
       integer (kind=int_kind) :: &
          i, j, iblk, &
          ilo,ihi,jlo,jhi      ! beginning and end of physical domain
@@ -622,19 +560,7 @@
       end subroutine popgrid
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: popgrid_nc - read and set POP tripole
-!                      grid and land mask from netCDF file 
-!
-! !INTERFACE:
-!
-      subroutine popgrid_nc
 
-#ifdef ncdf
-!
-! !DESCRIPTION:
-!
 ! POP displaced pole grid and land mask.
 ! Grid record number, field and units are: \\
 ! (1) ULAT  (radians)    \\
@@ -647,24 +573,18 @@
 !
 ! Land mask record number and field is (1) KMT.
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
 ! Revised for netcdf input: Ann Keen, Met Office, May 2007
-!
-! !USES:
-!
+
+      subroutine popgrid_nc
+
+#ifdef ncdf
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, c1, pi, pi2, rad_to_deg, puny, p5, p25, &
           field_loc_center, field_loc_NEcorner, &
           field_type_scalar, field_type_angle
       use ice_domain_size, only: max_blocks
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!
-!EOP
-!
+
       integer (kind=int_kind) :: &
          i, j, iblk, &
          ilo,ihi,jlo,jhi, &     ! beginning and end of physical domain
@@ -773,34 +693,19 @@
       end subroutine popgrid_nc
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: rectgrid - regular rectangular grid and mask
-!
-! !INTERFACE:
-!
-      subroutine rectgrid
-!
-! !DESCRIPTION:
-!
+
 ! Regular rectangular grid and mask
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine rectgrid
+
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, c1, rad_to_deg, c2, radius, cm_to_m, &
           field_loc_center, field_loc_NEcorner, field_type_scalar
       use ice_domain_size, only: max_blocks
       use ice_exit, only: abort_ice
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       integer (kind=int_kind) :: &
          i, j, iblk, &
          imid, jmid
@@ -948,17 +853,7 @@
       end subroutine rectgrid
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: cpomgrid - read and set cpom ORCA1 like grid - AKT, 09/08/06
-!                      grid and land mask
-!
-! !INTERFACE:
-!
-      subroutine cpomgrid
-!
-! !DESCRIPTION:
-!
+
 ! CPOM displaced pole grid and land mask. \\
 ! Grid record number, field and units are: \\
 ! (1) ULAT  (degrees)    \\
@@ -969,22 +864,15 @@
 !
 ! Land mask record number and field is (1) KMT.
 !
-! !REVISION HISTORY:
-!
-! author: Adrian K. Turner, CPOM, UCL
-!
-! !USES:
-!
+! author: Adrian K. Turner, CPOM, UCL, 09/08/06
+
+      subroutine cpomgrid
+
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, c1, rad_to_deg, m_to_cm, &
           field_loc_NEcorner, field_type_scalar
       use ice_domain_size, only: max_blocks
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!
-!EOP
-!
+
       integer (kind=int_kind) :: &
            i, j, iblk,           &
            ilo,ihi,jlo,jhi      ! beginning and end of physical domain
@@ -1067,39 +955,24 @@
       end subroutine cpomgrid
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: primary_grid_lengths_HTN
-!
-! !INTERFACE:
-!
-      subroutine primary_grid_lengths_HTN(work_g)
-!
-! !DESCRIPTION:
-!
+
 ! Calculate dxu and dxt from HTN on the global grid, to preserve
 ! ghost cell and/or land values that might otherwise be lost. Scatter
 ! dxu, dxt and HTN to all processors.
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine primary_grid_lengths_HTN(work_g)
+
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: p5, c2, cm_to_m, &
           field_loc_center, field_loc_NEcorner, &
           field_loc_Nface, field_type_scalar
       use ice_domain_size, only: max_blocks
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-! work_g is the global array holding HTN.
-!
-!EOP
 
-      real (kind=dbl_kind), dimension(:,:) :: work_g
+      real (kind=dbl_kind), dimension(:,:) :: work_g ! global array holding HTN
+
+      ! local variables
 
       integer (kind=int_kind) :: &
          i, j, &
@@ -1153,39 +1026,23 @@
       end subroutine primary_grid_lengths_HTN
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: primary_grid_lengths_HTE
-!
-! !INTERFACE:
-!
-      subroutine primary_grid_lengths_HTE(work_g)
-!
-! !DESCRIPTION:
-!
 ! Calculate dyu and dyt from HTE on the global grid, to preserve
 ! ghost cell and/or land values that might otherwise be lost. Scatter
 ! dyu, dyt and HTE to all processors.
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine primary_grid_lengths_HTE(work_g)
+
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: p5, c2, cm_to_m, &
           field_loc_center, field_loc_NEcorner, &
           field_loc_Eface, field_type_scalar
       use ice_domain_size, only: max_blocks
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-! work_g is the global array holding HTE.
-!
-!EOP
 
-      real (kind=dbl_kind), dimension(:,:) :: work_g
+      real (kind=dbl_kind), dimension(:,:) :: work_g ! global array holding HTE
+
+      ! local variables
 
       integer (kind=int_kind) :: &
          i, j, &
@@ -1240,33 +1097,18 @@
       end subroutine primary_grid_lengths_HTE
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: makemask - makes logical land masks (T,U) and hemispheric masks
-!
-! !INTERFACE:
-!
-      subroutine makemask
-!
-! !DESCRIPTION:
-!
+
 ! Sets the boundary values for the T cell land mask (hm) and
 ! makes the logical land masks for T and U cells (tmask, umask).
 ! Also creates hemisphere masks (mask-n northern, mask-s southern)
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine makemask
+
       use ice_constants, only: c0, puny, p5, &
           field_loc_center, field_loc_NEcorner, field_type_scalar
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       integer (kind=int_kind) :: &
          i, j, iblk, &
          ilo,ihi,jlo,jhi      ! beginning and end of physical domain
@@ -1349,39 +1191,21 @@
       end subroutine makemask
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: Tlatlon - initializes latitude and longitudes on T grid
-!
-! !INTERFACE:
-!
-      subroutine Tlatlon
-!
-! !DESCRIPTION:
-!
+
 ! Initializes latitude and longitude on T grid
-!
-! !REVISION HISTORY:
 !
 ! author: Elizabeth C. Hunke, LANL; code originally based on POP grid
 ! generation routine
-!
-! !USES:
-!
+
+      subroutine Tlatlon
+
       use ice_constants, only: c0, c1, rad_to_deg, c4, &
           field_loc_center, field_type_scalar
       use ice_global_reductions, only: global_minval, global_maxval
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
       save 
 
       integer (kind=int_kind) :: &
            i, j, iblk       , & ! horizontal indices
-           ig, jg           , & ! global horizontal indices
-           im1              , & ! ig - 1
            ilo,ihi,jlo,jhi      ! beginning and end of physical domain
 
       real (kind=dbl_kind) :: &
@@ -1481,36 +1305,23 @@
       end subroutine Tlatlon
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: t2ugrid_vector - transfer vector from T-cells to U-cells
-!
-! !INTERFACE:
-!
-      subroutine t2ugrid_vector (work)
-!
-! !DESCRIPTION:
-!
+
 ! Transfer vector component from T-cell centers to U-cell centers.
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine t2ugrid_vector (work)
+
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: field_loc_center, field_type_vector
       use ice_domain_size, only: max_blocks
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
            intent(inout) :: & 
            work
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          work1
 
@@ -1526,31 +1337,18 @@
       end subroutine t2ugrid_vector
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: to_ugrid - shift from T-cell to U-cell midpoints
-!
-! !INTERFACE:
-!
-      subroutine to_ugrid(work1,work2)
-!
-! !DESCRIPTION:
-!
+
 ! Shifts quantities from the T-cell midpoint (work1) to the U-cell
 ! midpoint (work2)
 ! NOTE: Input array includes ghost cells that must be updated before
 !       calling this routine.
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine to_ugrid(work1,work2)
+
       use ice_constants, only: c0, p25
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          work1(nx_block,ny_block,max_blocks)
 
@@ -1559,9 +1357,9 @@
 
       type (block) :: &
          this_block           ! block information for current block
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, iblk, &
          ilo,ihi,jlo,jhi      ! beginning and end of physical domain
@@ -1592,38 +1390,25 @@
       end subroutine to_ugrid
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: u2tgrid_vector - transfer vector from U-cells to T-cells
-!
-! !INTERFACE:
-!
-      subroutine u2tgrid_vector (work)
-!
-! !DESCRIPTION:
-!
+
 ! Transfer from U-cell centers to T-cell centers. Writes work into
 ! another array that has ghost cells
 ! NOTE: Input array is dimensioned only over physical cells.
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine u2tgrid_vector (work)
+
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: field_loc_NEcorner, field_type_vector
       use ice_domain_size, only: max_blocks
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), &
          intent(inout) :: &
          work
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          work1
 
@@ -1639,36 +1424,23 @@
       end subroutine u2tgrid_vector
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: to_tgrid - shifts array from U-cell to T-cell midpoints
-!
-! !INTERFACE:
-!
-      subroutine to_tgrid(work1, work2)
-!
-! !DESCRIPTION:
-!
+
 ! Shifts quantities from the U-cell midpoint (work1) to the T-cell
 ! midpoint (work2)
 ! NOTE: Input array includes ghost cells that must be updated before
 !       calling this routine.
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine to_tgrid(work1, work2)
+
       use ice_constants, only: p25
 
-! !INPUT/OUTPUT PARAMETERS:
-!
       real (kind=dbl_kind) :: work1(nx_block,ny_block,max_blocks), &
                               work2(nx_block,ny_block,max_blocks)
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, iblk, &
          ilo,ihi,jlo,jhi      ! beginning and end of physical domain
@@ -1700,246 +1472,24 @@
       end subroutine to_tgrid
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: sinlat - calculates sin of latitudes
-!
-! !INTERFACE:
-!
-      subroutine sinlat(a, k)
-!
-! !DESCRIPTION:
-!
-! Calculates the sin of latitudes on the grid based on ny_global and
-! using code from CAM (/control/gauaw_mod.F90)  In CAM, gauaw_mod.F90 is
-! only used to calculate the sin of latitudes (and thence latitude) if
-! the dynamical core is set to eul.  If using one of the other dynamical
-! cores and coupling to stand alone CAM the latitudes calculated in this
-! way may not match the grid from CAM.
-!
-! !REVISION HISTORY:
-!
-! author: Jacob Sewall
-!
-! !USES:
-
-      use ice_constants, only:  c1, c2, pi, p5, p25, c100
-      use ice_exit, only: abort_ice
-
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-
-      real (kind=dbl_kind), dimension(ny_global), intent(out) :: & 
-           a            ! sin of latitudes
-
-      integer (kind=int_kind), intent(in) :: &
-           k            ! number of latitudes (ny_global)
-!
-!EOP
-!
-      real (kind=dbl_kind), dimension(k) :: &
-           sinlats      ! sine of latitudes
-
-      real (kind=dbl_kind) :: &
-           eps      , & ! convergence criterion
-           c        , & ! constant combination
-           fk       , & ! real k
-           xz       , & ! abscissa estimate
-           pkm1     , & ! |
-           pkm2     , & ! |-polynomials
-           pkmrk    , & ! |
-           pk       , & ! |
-           sp       , & ! current iteration latitude increment
-           avsp     , & ! |sp|
-           fn       , & ! real n
-           avsp_prev, &
-           testdiff
-
-      real (kind=dbl_kind), parameter :: &
-           eps27 = 1.e-27_dbl_kind
-
-      integer (kind=int_kind) :: &
-           n, l     , &
-           iter     , & ! iteration counter
-           is       , & ! latitude index
-           kk           ! k/2 (number of latitudes in a hemisphere)
-
-!
-!----------------------------------------------------------------------
-!
-
-      c = (c1-(c2/pi)**2)*p25
-      fk = k
-      kk = k/2
-      call bsslzr(sinlats,kk)
-      do is=1,kk
-        xz = cos(sinlats(is)/sqrt((fk+p5)**2+c))
-!
-! This is the first approximation to xz
-!
-        iter = 0
-        avsp = c100     !initialize avsp to a very large number
-10      continue
-        avsp_prev = avsp
-        pkm2 = c1
-        pkm1 = xz
-        iter = iter + 1
-        if (iter > 100) then  ! Error exit
-           call abort_ice('SINLAT: no convergence in 100 iterations')
-        end if
-!
-! Computation of the legendre polynomial
-!
-        do n=2,k
-          fn = n
-          pk = ((c2*fn-1._dbl_kind)*xz*pkm1-(fn-c1)*pkm2)/fn
-          pkm2 = pkm1
-          pkm1 = pk
-        enddo
-        pkm1 = pkm2
-        pkmrk = (fk*(pkm1-xz*pk))/(c1-xz**2)
-        sp = pk/pkmrk
-        xz = xz - sp
-        avsp = abs(sp)
-        testdiff = avsp_prev - avsp
-        if (testdiff > eps27) go to 10
-        sinlats(is) = xz
-      end do
-!
-! Complete the sets of abscissas and weights, using the symmetry.
-! Also note truncation from real(r8) to real*8
-!
-      do n=1,kk
-        l = k + 1 - n
-        a(n) = sinlats(n)
-        a(l) = -sinlats(n)
-      end do
- 
-      end subroutine sinlat
-
-!=======================================================================
-!BOP
-!
-! !IROUTINE: bsslzr - Return n zeros (if n<50) of the Bessel function
-!
-! !INTERFACE:
-!
-      subroutine bsslzr(bes, n)
-!
-! !DESCRIPTION:
-!
-!
-! Return n zeros (or if n>50, approximate zeros), of the Bessel function
-! j0,in the array bes. The first 50 zeros will be given exactly, and the
-! remaining zeros are computed by extrapolation,and therefore not exact.
-!
-! Modified 1/23/97 by Jim Rosinski to use real*16 arithmetic
-! placed in ice_grid.F 4/26/2006 by Jacob Sewall
-
-! !REVISION HISTORY:
-!
-! Original version:  CCM1
-! Standardized:      J. Rosinski, June 1992
-! Reviewed:          J. Hack, D. Williamson, August 1992
-! Reviewed:          J. Hack, D. Williamson, April 1996
-!
-!
-! !USES:
-!
-      use ice_constants, only: pi
-
-! !INPUT/OUTPUT PARAMETERS:
-!
-
-      integer (kind=int_kind), intent(in) :: &
-           n          ! number of latitudes in hemisphere (ny_global/2)
-
-      real (kind=dbl_kind), dimension(n), intent(inout) :: & 
-           bes        ! sin of latitudes
-!
-!EOP
-!
-!----------------------------------------
-! Local Variables
-!----------------------------------------
-
-      integer (kind=int_kind) :: &
-         nn, j
-     
-      real (kind=dbl_kind), dimension(50) :: bz
-      
-      save bz
-!
-!-----------------------------------------
-! Local Workspace
-!-----------------------------------------
-
-      data bz/ &
-        2.4048255577_dbl_kind,   5.5200781103_dbl_kind,   8.6537279129_dbl_kind, &
-       11.7915344391_dbl_kind,  14.9309177086_dbl_kind,  18.0710639679_dbl_kind, &
-       21.2116366299_dbl_kind,  24.3524715308_dbl_kind,  27.4934791320_dbl_kind, &
-       30.6346064684_dbl_kind,  33.7758202136_dbl_kind,  36.9170983537_dbl_kind, &
-       40.0584257646_dbl_kind,  43.1997917132_dbl_kind,  46.3411883717_dbl_kind, &
-       49.4826098974_dbl_kind,  52.6240518411_dbl_kind,  55.7655107550_dbl_kind, &
-       58.9069839261_dbl_kind,  62.0484691902_dbl_kind,  65.1899648002_dbl_kind, &
-       68.3314693299_dbl_kind,  71.4729816036_dbl_kind,  74.6145006437_dbl_kind, &
-       77.7560256304_dbl_kind,  80.8975558711_dbl_kind,  84.0390907769_dbl_kind, &
-       87.1806298436_dbl_kind,  90.3221726372_dbl_kind,  93.4637187819_dbl_kind, &
-       96.6052679510_dbl_kind,  99.7468198587_dbl_kind, 102.8883742542_dbl_kind, &
-      106.0299309165_dbl_kind, 109.1714896498_dbl_kind, 112.3130502805_dbl_kind, &
-      115.4546126537_dbl_kind, 118.5961766309_dbl_kind, 121.7377420880_dbl_kind, &
-      124.8793089132_dbl_kind, 128.0208770059_dbl_kind, 131.1624462752_dbl_kind, &
-      134.3040166383_dbl_kind, 137.4455880203_dbl_kind, 140.5871603528_dbl_kind, &
-      143.7287335737_dbl_kind, 146.8703076258_dbl_kind, 150.0118824570_dbl_kind, &
-      153.1534580192_dbl_kind, 156.2950342685_dbl_kind/  
-
-      nn = n 
-      if (n > 50) then 
-         bes(50) = bz(50) 
-         do j = 51, n 
-            bes(j) = bes(j-1) + pi 
-         end do 
-         nn = 49 
-      endif 
-      bes(:nn) = bz(:nn) 
-
-      end subroutine bsslzr 
-
-!=======================================================================
 ! The following code is used for obtaining the coordinates of the grid
 ! vertices for CF-compliant netCDF history output. Approximate!
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: gridbox_corners - get coordinates of grid box corners
-!
-! !INTERFACE:
-!
-      subroutine gridbox_corners
-!
-! !DESCRIPTION:
-!
+
 ! These fields are only used for netcdf history output, and the
 ! ghost cell values are not needed.
 ! NOTE:  Extrapolations were used: these fields are approximate!
 !
-! !REVISION HISTORY:
-!
 ! authors:   A. McLaren, Met Office
 !            E. Hunke, LANL
-!
-! !USES:
+
+      subroutine gridbox_corners
+
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0,  rad_to_deg, c2, c360, &
           field_loc_NEcorner, field_type_scalar
       use ice_domain_size, only: max_blocks
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       integer (kind=int_kind) :: &
           i,j,iblk,icorner,& ! index counters
           ilo,ihi,jlo,jhi    ! beginning and end of physical domain
@@ -2105,36 +1655,21 @@
       end subroutine gridbox_corners
 
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: gridbox_verts - coordinates of grid box vertices
-!
-! !INTERFACE:
-!
-      subroutine gridbox_verts(work_g,vbounds)
-!
-! !DESCRIPTION:
-!
+
 ! NOTE:  Boundary conditions for fields on NW, SW, SE corners
 !        have not been implemented; using NE corner location for all.
 !        Extrapolations are also used: these fields are approximate!
 !
-! !REVISION HISTORY:
-!
 ! authors:   A. McLaren, Met Office
 !            E. Hunke, LANL
-!
-! !USES:
+
+      subroutine gridbox_verts(work_g,vbounds)
+
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: c0, rad_to_deg, c2, &
           field_loc_NEcorner, field_type_scalar
       use ice_domain_size, only: max_blocks
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       real (kind=dbl_kind), dimension(:,:), intent(in) :: work_g
 
       real (kind=dbl_kind), &
@@ -2142,17 +1677,13 @@
           intent(out) :: vbounds
 
       integer (kind=int_kind) :: &
-          i,j,             & ! index counters
-          ilo,ihi,jlo,jhi    ! beginning and end of physical domain
+          i,j                 ! index counters
 
       real (kind=dbl_kind), dimension(:,:), allocatable :: &
          work_g2
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          work1
-
-      type (block) :: &
-         this_block           ! block information for current block
 
       if (my_task == master_task) then
          allocate(work_g2(nx_global,ny_global))

@@ -1,31 +1,19 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_domain_size
-!
-! !DESCRIPTION:
-!
+
 ! Defines the global domain size and number of categories and layers.
 ! Code originally based on domain_size.F in POP
-!
-! !REVISION HISTORY:
-!  SVN:$Id$
 !
 ! author Elizabeth C. Hunke, LANL
 ! 2004: Block structure and snow parameters added by William Lipscomb
 !       Renamed (used to be ice_model_size)
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
 !       Removed hardwired sizes (NX...can now be set in compile scripts)
-!
-! !INTERFACE:
-!
+
       module ice_domain_size
-!
-! !USES:
-!
+
       use ice_kinds_mod
-!
-!EOP
+
 !=======================================================================
 
       implicit none

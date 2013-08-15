@@ -1,22 +1,14 @@
+!  SVN:$Id$
 !|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-
-!BOP
-! !MODULE: ice_global_reductions
 
  module ice_global_reductions
 
-! !DESCRIPTION:
 !  This module contains all the routines for performing global
 !  reductions like global sums, minvals, maxvals, etc.
-!
-! !REVISION HISTORY:
-!  SVN:$Id: ice_global_reductions.F90 100 2008-01-29 00:25:32Z eclare $
 !
 ! author: Phil Jones, LANL
 ! Oct. 2004: Adapted from POP version by William H. Lipscomb, LANL
 ! Feb. 2008: Updated from POP version by Elizabeth C. Hunke, LANL
-!
-! !USES:
 
    use ice_kinds_mod
    use ice_constants, only: field_loc_Nface, field_loc_NEcorner
@@ -29,15 +21,11 @@
    private
    save
 
-! !PUBLIC MEMBER FUNCTIONS:
-
    public :: global_sum,      &
              global_sum_prod, &
              global_maxval,   &
              global_minval
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  generic interfaces for module procedures
@@ -77,34 +65,21 @@
                       global_minval_scalar_int
    end interface
 
-!EOC
 !***********************************************************************
 
  contains
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_sum
-! !INTERFACE:
 
  function global_sum_dbl(array, dist, field_loc, mMask, lMask) &
           result(globalSum)
 
-! !DESCRIPTION:
 !  Computes the global sum of the physical domain of a 2-d array.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_sum
 !  function corresponding to double precision arrays.  The generic
 !  interface is identical but will handle real and integer 2-d slabs
 !  and real, integer, and double precision scalars.
-
-! !USES:
-
-! !INPUT PARAMETERS:
 
    real (dbl_kind), dimension(:,:,:), intent(in) :: &
       array                ! array to be summed
@@ -121,13 +96,9 @@
    logical (log_kind), dimension(:,:,:), intent(in), optional :: &
       lMask                ! optional logical mask
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind) :: &
       globalSum            ! resulting global sum
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -265,33 +236,20 @@
 #endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_sum_dbl
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_sum
-! !INTERFACE:
 
  function global_sum_real(array, dist, field_loc, mMask, lMask) &
           result(globalSum)
 
-! !DESCRIPTION:
 !  Computes the global sum of the physical domain of a 2-d array.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_sum
 !  function corresponding to real arrays.  The generic
 !  interface is identical but will handle real and integer 2-d slabs
 !  and real, integer, and double precision scalars.
-
-! !USES:
-
-! !INPUT PARAMETERS:
 
    real (real_kind), dimension(:,:,:), intent(in) :: &
       array                ! array to be summed
@@ -308,13 +266,9 @@
    logical (log_kind), dimension(:,:,:), intent(in), optional :: &
       lMask                ! optional logical mask
 
-! !OUTPUT PARAMETERS:
-
    real (real_kind) :: &
       globalSum            ! resulting global sum
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -452,33 +406,20 @@
 #endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_sum_real
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_sum
-! !INTERFACE:
 
  function global_sum_int(array, dist, field_loc, mMask, lMask) &
           result(globalSum)
 
-! !DESCRIPTION:
 !  Computes the global sum of the physical domain of a 2-d array.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_sum
 !  function corresponding to integer arrays.  The generic
 !  interface is identical but will handle real and integer 2-d slabs
 !  and real, integer, and double precision scalars.
-
-! !USES:
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), dimension(:,:,:), intent(in) :: &
       array                ! array to be summed
@@ -495,13 +436,9 @@
    logical (log_kind), dimension(:,:,:), intent(in), optional :: &
       lMask                ! optional logical mask
 
-! !OUTPUT PARAMETERS:
-
    integer (int_kind) :: &
       globalSum            ! resulting global sum
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -617,34 +554,21 @@
    end do
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_sum_int
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_sum
-! !INTERFACE:
 
  function global_sum_scalar_dbl(scalar, dist) &
           result(globalSum)
 
-! !DESCRIPTION:
 !  Computes the global sum of a set of scalars distributed across
 !  a parallel machine.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_sum
 !  function corresponding to double precision scalars.  The generic
 !  interface is identical but will handle real and integer 2-d slabs
 !  and real, integer, and double precision scalars.
-
-! !USES:
-
-! !INPUT PARAMETERS:
 
    real (dbl_kind), intent(in) :: &
       scalar               ! scalar to be summed
@@ -652,13 +576,9 @@
    type (distrb), intent(in) :: &
       dist                 ! block distribution 
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind) :: &
       globalSum            ! resulting global sum
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  no operation needed for serial execution
@@ -668,34 +588,21 @@
    globalSum = scalar
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_sum_scalar_dbl
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_sum
-! !INTERFACE:
 
  function global_sum_scalar_real(scalar, dist) &
           result(globalSum)
 
-! !DESCRIPTION:
 !  Computes the global sum of a set of scalars distributed across
 !  a parallel machine.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_sum
 !  function corresponding to real scalars.  The generic
 !  interface is identical but will handle real and integer 2-d slabs
 !  and real, integer, and double precision scalars.
-
-! !USES:
-
-! !INPUT PARAMETERS:
 
    real (real_kind), intent(in) :: &
       scalar               ! scalar to be summed
@@ -703,13 +610,9 @@
    type (distrb), intent(in) :: &
       dist                 ! block distribution 
 
-! !OUTPUT PARAMETERS:
-
    real (real_kind) :: &
       globalSum            ! resulting global sum
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  no operation needed for serial execution
@@ -719,34 +622,21 @@
    globalSum = scalar
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_sum_scalar_real
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_sum
-! !INTERFACE:
 
  function global_sum_scalar_int(scalar, dist) &
           result(globalSum)
 
-! !DESCRIPTION:
 !  Computes the global sum of a set of scalars distributed across
 !  a parallel machine.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_sum
 !  function corresponding to integer scalars.  The generic
 !  interface is identical but will handle real and integer 2-d slabs
 !  and real, integer, and double precision scalars.
-
-! !USES:
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       scalar               ! scalar to be summed
@@ -754,13 +644,9 @@
    type (distrb), intent(in) :: &
       dist                 ! block distribution 
 
-! !OUTPUT PARAMETERS:
-
    integer (int_kind) :: &
       globalSum            ! resulting global sum
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  no operation needed for serial execution
@@ -770,35 +656,22 @@
    globalSum = scalar
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_sum_scalar_int
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_sum_prod
-! !INTERFACE:
 
  function global_sum_prod_dbl (array1, array2, dist, field_loc, &
                                mMask, lMask) &
           result(globalSum)
 
-! !DESCRIPTION:
 !  Computes the global sum of the physical domain of a product of
 !  two 2-d arrays.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic 
 !  global_sum_prod function corresponding to double precision arrays.
 !  The generic interface is identical but will handle real and integer 
 !  2-d slabs.
-
-! !USES:
-
-! !INPUT PARAMETERS:
 
    real (dbl_kind), dimension(:,:,:), intent(in) :: &
       array1, array2       ! arrays whose product is to be summed
@@ -815,13 +688,9 @@
    logical (log_kind), dimension(:,:,:), intent(in), optional :: &
       lMask                ! optional logical mask
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind) :: &
       globalSum            ! resulting global sum
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -963,35 +832,22 @@
 #endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_sum_prod_dbl
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_sum_prod
-! !INTERFACE:
 
  function global_sum_prod_real (array1, array2, dist, field_loc, &
                                 mMask, lMask) &
           result(globalSum)
 
-! !DESCRIPTION:
 !  Computes the global sum of the physical domain of a product of
 !  two 2-d arrays.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic 
 !  global_sum_prod function corresponding to single precision arrays.
 !  The generic interface is identical but will handle real and integer 
 !  2-d slabs.
-
-! !USES:
-
-! !INPUT PARAMETERS:
 
    real (real_kind), dimension(:,:,:), intent(in) :: &
       array1, array2       ! arrays whose product is to be summed
@@ -1008,13 +864,9 @@
    logical (log_kind), dimension(:,:,:), intent(in), optional :: &
       lMask                ! optional logical mask
 
-! !OUTPUT PARAMETERS:
-
    real (real_kind) :: &
       globalSum            ! resulting global sum
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1156,35 +1008,22 @@
 #endif
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_sum_prod_real
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_sum_prod
-! !INTERFACE:
 
  function global_sum_prod_int (array1, array2, dist, field_loc, &
                                mMask, lMask) &
           result(globalSum)
 
-! !DESCRIPTION:
 !  Computes the global sum of the physical domain of a product of
 !  two 2-d arrays.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic 
 !  global_sum_prod function corresponding to integer arrays.
 !  The generic interface is identical but will handle real and integer 
 !  2-d slabs.
-
-! !USES:
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), dimension(:,:,:), intent(in) :: &
       array1, array2       ! arrays whose product is to be summed
@@ -1201,13 +1040,9 @@
    logical (log_kind), dimension(:,:,:), intent(in), optional :: &
       lMask                ! optional logical mask
 
-! !OUTPUT PARAMETERS:
-
    integer (int_kind) :: &
       globalSum            ! resulting global sum
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1327,29 +1162,18 @@
    end do
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_sum_prod_int
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_maxval
-! !INTERFACE:
 
  function global_maxval_dbl (array, dist, lMask) &
           result(globalMaxval)
 
-! !DESCRIPTION:
 !  Computes the global maximum value of the physical domain of a 2-d field
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_maxval
 !  function corresponding to double precision arrays.  
-
-! !INPUT PARAMETERS:
 
    real (dbl_kind), dimension(:,:,:), intent(in) :: &
       array                ! array for which max value needed
@@ -1360,13 +1184,9 @@
    logical (log_kind), dimension(:,:,:), intent(in), optional :: &
       lMask                ! optional logical mask
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind) :: &
       globalMaxval         ! resulting maximum value of array
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1425,29 +1245,18 @@
    end do
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_maxval_dbl
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_maxval
-! !INTERFACE:
 
  function global_maxval_real (array, dist, lMask) &
           result(globalMaxval)
 
-! !DESCRIPTION:
 !  Computes the global maximum value of the physical domain of a 2-d field
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_maxval
 !  function corresponding to single precision arrays.  
-
-! !INPUT PARAMETERS:
 
    real (real_kind), dimension(:,:,:), intent(in) :: &
       array                ! array for which max value needed
@@ -1458,13 +1267,9 @@
    logical (log_kind), dimension(:,:,:), intent(in), optional :: &
       lMask                ! optional logical mask
 
-! !OUTPUT PARAMETERS:
-
    real (real_kind) :: &
       globalMaxval         ! resulting maximum value of array
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1523,29 +1328,18 @@
    end do
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_maxval_real
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_maxval
-! !INTERFACE:
 
  function global_maxval_int (array, dist, lMask) &
           result(globalMaxval)
 
-! !DESCRIPTION:
 !  Computes the global maximum value of the physical domain of a 2-d field
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_maxval
 !  function corresponding to integer arrays.  
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), dimension(:,:,:), intent(in) :: &
       array                ! array for which max value needed
@@ -1556,13 +1350,9 @@
    logical (log_kind), dimension(:,:,:), intent(in), optional :: &
       lMask                ! optional logical mask
 
-! !OUTPUT PARAMETERS:
-
    integer (int_kind) :: &
       globalMaxval         ! resulting maximum value of array
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1621,30 +1411,19 @@
    end do
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_maxval_int
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_maxval
-! !INTERFACE:
 
  function global_maxval_scalar_dbl (scalar, dist) &
           result(globalMaxval)
 
-! !DESCRIPTION:
 !  Computes the global maximum value of a scalar value across
 !  a distributed machine.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_maxval
 !  function corresponding to double precision scalars.  
-
-! !INPUT PARAMETERS:
 
    real (dbl_kind), intent(in) :: &
       scalar               ! scalar for which max value needed
@@ -1652,13 +1431,9 @@
    type (distrb), intent(in) :: &
       dist                 ! block distribution 
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind) :: &
       globalMaxval         ! resulting maximum value
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  no operations required for serial execution
@@ -1668,30 +1443,19 @@
    globalMaxval = scalar
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_maxval_scalar_dbl
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_maxval
-! !INTERFACE:
 
  function global_maxval_scalar_real (scalar, dist) &
           result(globalMaxval)
 
-! !DESCRIPTION:
 !  Computes the global maximum value of a scalar value across
 !  a distributed machine.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_maxval
 !  function corresponding to single precision scalars.  
-
-! !INPUT PARAMETERS:
 
    real (real_kind), intent(in) :: &
       scalar               ! scalar for which max value needed
@@ -1699,13 +1463,9 @@
    type (distrb), intent(in) :: &
       dist                 ! block distribution 
 
-! !OUTPUT PARAMETERS:
-
    real (real_kind) :: &
       globalMaxval         ! resulting maximum value
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  no operations required for serial execution
@@ -1715,30 +1475,19 @@
    globalMaxval = scalar
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_maxval_scalar_real
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_maxval
-! !INTERFACE:
 
  function global_maxval_scalar_int (scalar, dist) &
           result(globalMaxval)
 
-! !DESCRIPTION:
 !  Computes the global maximum value of a scalar value across
 !  a distributed machine.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_maxval
 !  function corresponding to single precision scalars.  
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       scalar               ! scalar for which max value needed
@@ -1746,13 +1495,9 @@
    type (distrb), intent(in) :: &
       dist                 ! block distribution 
 
-! !OUTPUT PARAMETERS:
-
    integer (int_kind) :: &
       globalMaxval         ! resulting maximum value
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  no operations required for serial execution
@@ -1762,29 +1507,18 @@
    globalMaxval = scalar
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_maxval_scalar_int
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_minval
-! !INTERFACE:
 
  function global_minval_dbl (array, dist, lMask) &
           result(globalMinval)
 
-! !DESCRIPTION:
 !  Computes the global minimum value of the physical domain of a 2-d field
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_minval
 !  function corresponding to double precision arrays.  
-
-! !INPUT PARAMETERS:
 
    real (dbl_kind), dimension(:,:,:), intent(in) :: &
       array                ! array for which min value needed
@@ -1795,13 +1529,9 @@
    logical (log_kind), dimension(:,:,:), intent(in), optional :: &
       lMask                ! optional logical mask
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind) :: &
       globalMinval         ! resulting minimum value of array
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1860,29 +1590,18 @@
    end do
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_minval_dbl
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_minval
-! !INTERFACE:
 
  function global_minval_real (array, dist, lMask) &
           result(globalMinval)
 
-! !DESCRIPTION:
 !  Computes the global minimum value of the physical domain of a 2-d field
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_minval
 !  function corresponding to single precision arrays.  
-
-! !INPUT PARAMETERS:
 
    real (real_kind), dimension(:,:,:), intent(in) :: &
       array                ! array for which min value needed
@@ -1893,13 +1612,9 @@
    logical (log_kind), dimension(:,:,:), intent(in), optional :: &
       lMask                ! optional logical mask
 
-! !OUTPUT PARAMETERS:
-
    real (real_kind) :: &
       globalMinval         ! resulting minimum value of array
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -1958,29 +1673,18 @@
    end do
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_minval_real
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_minval
-! !INTERFACE:
 
  function global_minval_int (array, dist, lMask) &
           result(globalMinval)
 
-! !DESCRIPTION:
 !  Computes the global minimum value of the physical domain of a 2-d field
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_minval
 !  function corresponding to integer arrays.  
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), dimension(:,:,:), intent(in) :: &
       array                ! array for which min value needed
@@ -1991,13 +1695,9 @@
    logical (log_kind), dimension(:,:,:), intent(in), optional :: &
       lMask                ! optional logical mask
 
-! !OUTPUT PARAMETERS:
-
    integer (int_kind) :: &
       globalMinval         ! resulting minimum value of array
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  local variables
@@ -2056,30 +1756,19 @@
    end do
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_minval_int
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_minval
-! !INTERFACE:
 
  function global_minval_scalar_dbl (scalar, dist) &
           result(globalMinval)
 
-! !DESCRIPTION:
 !  Computes the global minimum value of a scalar value across
 !  a distributed machine.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_minval
 !  function corresponding to double precision scalars.  
-
-! !INPUT PARAMETERS:
 
    real (dbl_kind), intent(in) :: &
       scalar               ! scalar for which min value needed
@@ -2087,13 +1776,9 @@
    type (distrb), intent(in) :: &
       dist                 ! block distribution 
 
-! !OUTPUT PARAMETERS:
-
    real (dbl_kind) :: &
       globalMinval         ! resulting minimum value
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  no operations required for serial execution
@@ -2103,30 +1788,19 @@
    globalMinval = scalar
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_minval_scalar_dbl
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_minval
-! !INTERFACE:
 
  function global_minval_scalar_real (scalar, dist) &
           result(globalMinval)
 
-! !DESCRIPTION:
 !  Computes the global minimum value of a scalar value across
 !  a distributed machine.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_minval
 !  function corresponding to single precision scalars.  
-
-! !INPUT PARAMETERS:
 
    real (real_kind), intent(in) :: &
       scalar               ! scalar for which min value needed
@@ -2134,13 +1808,9 @@
    type (distrb), intent(in) :: &
       dist                 ! block distribution 
 
-! !OUTPUT PARAMETERS:
-
    real (real_kind) :: &
       globalMinval         ! resulting minimum value
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  no operations required for serial execution
@@ -2150,30 +1820,19 @@
    globalMinval = scalar
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_minval_scalar_real
 
 !***********************************************************************
-!BOP
-! !IROUTINE: global_minval
-! !INTERFACE:
 
  function global_minval_scalar_int (scalar, dist) &
           result(globalMinval)
 
-! !DESCRIPTION:
 !  Computes the global minimum value of a scalar value across
 !  a distributed machine.
 !
-! !REVISION HISTORY:
-!  same as module
-!
-! !REMARKS:
 !  This is actually the specific interface for the generic global_minval
 !  function corresponding to single precision scalars.  
-
-! !INPUT PARAMETERS:
 
    integer (int_kind), intent(in) :: &
       scalar               ! scalar for which min value needed
@@ -2181,13 +1840,9 @@
    type (distrb), intent(in) :: &
       dist                 ! block distribution 
 
-! !OUTPUT PARAMETERS:
-
    integer (int_kind) :: &
       globalMinval         ! resulting minimum value
 
-!EOP
-!BOC
 !-----------------------------------------------------------------------
 !
 !  no operations required for serial execution
@@ -2197,7 +1852,6 @@
    globalMinval = scalar
 
 !-----------------------------------------------------------------------
-!EOC
 
  end function global_minval_scalar_int
 

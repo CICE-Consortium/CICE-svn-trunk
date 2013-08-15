@@ -1,13 +1,7 @@
+!  SVN:$Id: ice_history_write.F90 567 2013-01-07 02:57:36Z eclare $
 !=======================================================================
 !
-!BOP
-!
-! !MODULE: ice_history - ice model history files
-!
 ! Writes history in netCDF format
-!
-! !REVISION HISTORY:
-!  SVN:$Id: ice_history.F90 567 2013-01-07 02:57:36Z eclare $
 !
 ! authors Tony Craig and Bruce Briegleb, NCAR
 !         Elizabeth C. Hunke and William H. Lipscomb, LANL
@@ -21,16 +15,10 @@
 !           Added option for binary output instead of netCDF
 ! 2009 D Bailey and ECH: Generalized for multiple frequency output
 ! 2010 Alison McLaren and ECH: Added 3D capability
-!
-! !INTERFACE:
-!
+! 2013 ECH split from ice_history.F90
+
       module ice_history_write
-!
-! !USES:
-!
-!
-!EOP
-!
+
       implicit none
       private
       public :: ice_write_hist
@@ -42,24 +30,12 @@
 
 !=======================================================================
 !
-!BOP
-!
-! !IROUTINE: ice_write_hist - write average ice quantities or snapshots
-!
-! !INTERFACE:
-!
-      subroutine ice_write_hist (ns)
-!
-! !DESCRIPTION:
-!
 ! write average ice quantities or snapshots
 !
-! !REVISION HISTORY:
-!
 ! author:   Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine ice_write_hist (ns)
+
       use ice_kinds_mod
 #ifdef ncdf
       use ice_blocks, only: nx_block, ny_block
@@ -81,13 +57,11 @@
       use ice_restart, only: runid
       use netcdf
 #endif
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: ns
-!
-!EOP
-!
+
+      ! local variables
+
 #ifdef ncdf
       real (kind=dbl_kind),  dimension(:,:),   allocatable :: work_g1
       real (kind=real_kind), dimension(:,:),   allocatable :: work_gr
@@ -95,9 +69,9 @@
       real (kind=dbl_kind),  dimension(nx_block,ny_block,max_blocks) :: &
          work1
 
-      integer (kind=int_kind) :: i,j,k,ic,n,nn, &
+      integer (kind=int_kind) :: i,k,ic,n,nn, &
          ncid,status,imtid,jmtid,kmtidi,kmtids,kmtidb, cmtid,timid,varid, &
-         length,nvertexid,ivertex
+         nvertexid,ivertex
       integer (kind=int_kind), dimension(3) :: dimid
       integer (kind=int_kind), dimension(4) :: dimidz
       integer (kind=int_kind), dimension(5) :: dimidcz
@@ -107,11 +81,9 @@
       character (char_len) :: title
       character (char_len_long) :: ncfile(max_nstrm)
 
-      integer (kind=int_kind) :: iyear, iday
-      integer (kind=int_kind) :: icategory,ind,i_aice,boundid
+      integer (kind=int_kind) :: ind,boundid
 
       character (char_len) :: start_time,current_date,current_time
-      character (len=16) :: c_aice
       character (len=8) :: cdate
 
       ! 4 coordinate variables: TLON, TLAT, ULON, ULAT

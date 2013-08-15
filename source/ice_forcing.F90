@@ -1,8 +1,7 @@
+!  SVN:$Id$
 !=======================================================================
 !
 ! Reads and interpolates forcing data for atmosphere and ocean quantities.
-!
-!  SVN:$Id$
 !
 ! authors: Elizabeth C. Hunke and William H. Lipscomb, LANL
 !
@@ -212,33 +211,29 @@
 #endif
 
       real (kind=dbl_kind), intent(in) :: &
-           dt                   ! time step
+         dt                   ! time step
 
       ! local variables
 
       integer (kind=int_kind) :: &
-           i, j, iblk       , & ! horizontal indices
-           k                , & ! month index
-           fid              , & ! file id for netCDF file 
-          nbits, &
-          status
+         i, j, iblk       , & ! horizontal indices
+         k                , & ! month index
+         fid              , & ! file id for netCDF file 
+         nbits
 
       logical (kind=log_kind) :: diag
 
-      real (kind=dbl_kind):: &
-         work             ! temporary variable
-
       character (char_len) :: & 
-            fieldname    ! field name in netcdf file
+         fieldname            ! field name in netcdf file
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          work1
 
-      nbits = 64                ! double precision data
+      nbits = 64              ! double precision data
 
       if (restore_sst .or. restore_bgc) then
          if (trestore == 0) then
-            trest = dt          ! use data instantaneously
+            trest = dt        ! use data instantaneously
          else
             trest = real(trestore,kind=dbl_kind) * secday ! seconds
          endif
@@ -1217,7 +1212,7 @@
          i, j
 
       real (kind=dbl_kind) :: workx, worky, &
-         fcc, sstk, rtea, ptem, qlwm, precip_factor, zlvl0
+         precip_factor, zlvl0
 
       do j = jlo, jhi
       do i = ilo, ihi
@@ -1540,7 +1535,6 @@
       use ice_flux, only: fsw, fsnow, Tair, uatm, vatm, rhoa, Qa
 
       integer (kind=int_kind) :: &
-          i, j        , &
           ixm,ixx,ixp , & ! record numbers for neighboring months
           recnum      , & ! record number
           maxrec      , & ! maximum record number
@@ -2242,11 +2236,9 @@
           i, j        , & ! horizontal indices
           n           , & ! thickness category index
           iblk        , & ! block index
-          ixm,ixx,ixp , & ! record numbers for neighboring months
+          ixm,ixp     , & ! record numbers for neighboring months
           maxrec      , & ! maximum record number
           recslot     , & ! spline slot for current record
-          dataloc     , & ! = 1 for data located in middle of time interval
-                          ! = 2 for date located at end of time interval
           midmonth        ! middle day of month
 
       logical (kind=log_kind) :: readm
@@ -2701,64 +2693,46 @@
 #ifdef ncdf 
       use netcdf
 
-    !local parameters
+      ! local parameters
 
-    character (char_len_long) :: & 
-       met_file,   &    ! netcdf filename
-       fieldname        ! field name in netcdf file
+      character (char_len_long) :: & 
+         met_file,   &    ! netcdf filename
+         fieldname        ! field name in netcdf file
 
-    integer (kind=int_kind) :: &
-       fid              ! file id for netCDF file 
-
-    real (kind=dbl_kind):: &
-       work             ! temporary variable
-
-    logical (kind=log_kind) :: diag
-
-    integer (kind=int_kind) :: &
-       status           ! status flag
-
-    integer (kind=int_kind) :: &
-       iblk, &          ! block index
-       ilo,jlo          ! beginning of physical domain
-
-    type (block) :: &
-       this_block       ! block information for current block
-      
-    real (kind=dbl_kind) :: & ! used to determine specific humidity
-       Temp               , & ! air temperature (K)
-       rh                 , & ! relative humidity (%)
-       Psat               , & ! saturation vapour pressure (hPa)
-       ws                     ! saturation mixing ratio
-
-    real (kind=dbl_kind), dimension(2) :: &
-       Tair_data_p            ! air temperature (K) for interpolation
-
-    real (kind=dbl_kind), parameter :: & ! coefficients for Hyland-Wexler Qa 
-       ps1 = 0.58002206e4_dbl_kind,    & ! (K) 
-       ps2 = 1.3914993_dbl_kind,       & !
-       ps3 = 0.48640239e-1_dbl_kind,   & ! (K^-1) 
-       ps4 = 0.41764768e-4_dbl_kind,   & ! (K^-2)
-       ps5 = 0.14452093e-7_dbl_kind,   & ! (K^-3)
-       ps6 = 6.5459673_dbl_kind,       & !
-       ws1 = 621.97_dbl_kind,          & ! for saturation mixing ratio 
-       Pair = 1020._dbl_kind             ! Sea level pressure (hPa) 
-       
-      ! for interpolation of hourly data                
       integer (kind=int_kind) :: &
-          i, j        , &
-          ixm,ixx,ixp , & ! record numbers for neighboring months
-          recnum      , & ! record number
-          maxrec      , & ! maximum record number
-          recslot     , & ! spline slot for current record
-          dataloc         ! = 1 for data located in middle of time interval
-                          ! = 2 for date located at end of time interval
+         fid              ! file id for netCDF file 
 
-      real (kind=dbl_kind) :: &
-          sec1hr              ! number of seconds in 1 hour
+      real (kind=dbl_kind):: &
+         work             ! temporary variable
 
-      logical (kind=log_kind) :: readm, read1
-                  
+      logical (kind=log_kind) :: diag
+
+      integer (kind=int_kind) :: &
+         status           ! status flag
+
+      integer (kind=int_kind) :: &
+         iblk, &          ! block index
+         ilo,jlo          ! beginning of physical domain
+
+      type (block) :: &
+         this_block       ! block information for current block
+      
+      real (kind=dbl_kind) :: & ! used to determine specific humidity
+         Temp               , & ! air temperature (K)
+         rh                 , & ! relative humidity (%)
+         Psat               , & ! saturation vapour pressure (hPa)
+         ws                     ! saturation mixing ratio
+
+      real (kind=dbl_kind), parameter :: & ! coefficients for Hyland-Wexler Qa 
+         ps1 = 0.58002206e4_dbl_kind,    & ! (K) 
+         ps2 = 1.3914993_dbl_kind,       & !
+         ps3 = 0.48640239e-1_dbl_kind,   & ! (K^-1) 
+         ps4 = 0.41764768e-4_dbl_kind,   & ! (K^-2)
+         ps5 = 0.14452093e-7_dbl_kind,   & ! (K^-3)
+         ps6 = 6.5459673_dbl_kind,       & !
+         ws1 = 621.97_dbl_kind,          & ! for saturation mixing ratio 
+         Pair = 1020._dbl_kind             ! Sea level pressure (hPa) 
+       
       diag = .false.   ! write diagnostic information 
    
       do iblk = 1, nblocks
@@ -3206,9 +3180,7 @@
 
       integer (kind=int_kind) :: & 
         n   , & ! field index
-        m   , & ! month index
-        nrec, & ! record number for direct access
-        nbits
+        m       ! month index
 
       character(char_len) :: &
         vname(nfld) ! variable names to search for in file
@@ -3566,13 +3538,10 @@
  
      integer (kind=int_kind) :: &
           i, j        , & ! horizontal indices
-          n           , & ! thickness category index
           iblk        , & ! block index
-          ixm,ixx,ixp , & ! record numbers for neighboring months
+          ixm,ixp     , & ! record numbers for neighboring months
           maxrec      , & ! maximum record number
           recslot     , & ! spline slot for current record
-          dataloc     , & ! = 1 for data located in middle of time interval
-                          ! = 2 for date located at end of time interval
           midmonth        ! middle day of month
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &

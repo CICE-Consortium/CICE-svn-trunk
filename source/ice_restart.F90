@@ -1,15 +1,7 @@
-!=======================================================================
-!
-!BOP
-!
-! !MODULE: ice_restart - ice model restart files
-!
-! !DESCRIPTION:
-!
-! Read and write ice model restart files
-!
-! !REVISION HISTORY:
 !  SVN:$Id$
+!=======================================================================
+
+! Read and write ice model restart files
 !
 ! authors Elizabeth C. Hunke, LANL
 !         William H. Lipscomb LANL
@@ -22,16 +14,10 @@
 ! 2010 ECH: Changed eice, esno to qice, qsno
 ! 2012 ECH: Added routines for reading/writing extended grid
 ! 
-! !INTERFACE:
-!
       module ice_restart
-!
-! !USES:
-!
+
       use ice_kinds_mod
-!
-!EOP
-!
+
       implicit none
       private
       public :: lenstr, dumpfile, restartfile, dumpfile_ext, restartfile_ext
@@ -62,25 +48,12 @@
 !=======================================================================
 !---! these subroutines write/read Fortran unformatted data files ..
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: dumpfile - dumps all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine dumpfile(filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Dumps all values needed for a restart
-!
-! !REVISION HISTORY:
-!
 ! author Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine dumpfile(filename_spec)
+
       use ice_blocks, only: nx_block, ny_block
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, year_init
@@ -98,15 +71,13 @@
       use ice_read_write, only: ice_open, ice_write
       use ice_state, only: aicen, vicen, vsnon, trcrn, &
           nt_Tsfc, nt_sice, nt_qice, nt_qsno, uvel, vvel
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
+          i, j, k, n, iblk, &     ! counting indices
           iyear, imonth, iday     ! year, month, day
 
       character(len=char_len_long) :: filename
@@ -240,24 +211,12 @@
       end subroutine dumpfile
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: restartfile  - restarts from a dumpfile
-!
-! !INTERFACE:
-!
-      subroutine restartfile (ice_ic)
-!
-! !DESCRIPTION:
-!
+
 ! Restarts from a dump
-!
-! !REVISION HISTORY:
-!
 ! author Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine restartfile (ice_ic)
+
       use ice_broadcast, only: broadcast_scalar
       use ice_blocks, only: nghost, nx_block, ny_block
       use ice_calendar, only: istep0, istep1, time, time_forc, calendar, npt
@@ -282,15 +241,13 @@
       use ice_state, only: trcr_depend, aice, vice, vsno, trcr, &
           aice0, aicen, vicen, vsnon, trcrn, aice_init, &
           nt_Tsfc, nt_sice, nt_qice, nt_qsno, uvel, vvel
-!
-! !INPUT/OUTPUT PARAMETERS:
 
       character (*), optional :: ice_ic
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
-         i, j, k, n, it, iblk, & ! counting indices
+         i, j, k, n, iblk, &     ! counting indices
          iignore                 ! dummy variable
 
       real (kind=real_kind) :: &
@@ -600,25 +557,12 @@
 ! These subroutines write out the full grid plus ghost cells
 ! around the global grid edges
 !=======================================================================
-!
-!BOP
-!
-! !IROUTINE: dumpfile - dumps all fields required for restart
-!
-! !INTERFACE:
-!
-      subroutine dumpfile_ext(filename_spec)
-!
-! !DESCRIPTION:
-!
+
 ! Dumps all values needed for a restart on regional grids (open boundaries)
-!
-! !REVISION HISTORY:
-!
 ! author Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine dumpfile_ext(filename_spec)
+
       use ice_blocks, only: nx_block, ny_block
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, year_init
@@ -636,15 +580,13 @@
       use ice_read_write, only: ice_open, ice_write_ext
       use ice_state, only: aicen, vicen, vsnon, trcrn, &
           nt_Tsfc, nt_sice, nt_qice, nt_qsno, uvel, vvel
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       character(len=char_len_long), intent(in), optional :: filename_spec
 
-!EOP
-!
+      ! local variables
+
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
+          i, j, k, n, iblk, &     ! counting indices
           iyear, imonth, iday     ! year, month, day
 
       character(len=char_len_long) :: filename
@@ -785,25 +727,13 @@
       end subroutine dumpfile_ext
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: restartfile  - restarts from a dumpfile
-!
-! !INTERFACE:
-!
-      subroutine restartfile_ext (ice_ic)
-!
-! !DESCRIPTION:
-!
+
 ! Reads and scatters all values needed for a restart on regional grids 
 ! (open boundaries)
-!
-! !REVISION HISTORY:
-!
 ! author Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine restartfile_ext (ice_ic)
+
       use ice_broadcast, only: broadcast_scalar
       use ice_blocks, only: nx_block, ny_block
       use ice_calendar, only: istep0, istep1, time, time_forc, calendar
@@ -826,15 +756,13 @@
       use ice_state, only: trcr_depend, aice, vice, vsno, trcr, &
           aice0, aicen, vicen, vsnon, trcrn, aice_init, &
           nt_Tsfc, nt_sice, nt_qice, nt_qsno, uvel, vvel
-!
-! !INPUT/OUTPUT PARAMETERS:
 
       character (*), optional :: ice_ic
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
-         i, j, k, n, it, iblk ! counting indices
+         i, j, k, n, iblk ! counting indices
 
       character(len=char_len_long) :: &
          filename, filename0
@@ -1063,29 +991,16 @@
 
 !=======================================================================
 !=======================================================================
-!BOP
-!
-! !IROUTINE: integer function lenstr(label) - compute length string
-!
-! !INTERFACE:
-!
-      integer function lenstr(label)
-!
-! !DESCRIPTION:
-!
+
 ! Compute length of string by finding first non-blank
 ! character from the right.
-!
-! !REVISION HISTORY:
-!
-! author:   ?
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
+      integer function lenstr(label)
+
       character*(*) label
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          length, & ! length of character string
          n         ! loop index

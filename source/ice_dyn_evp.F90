@@ -1,9 +1,5 @@
+!  SVN:$Id$
 !=======================================================================
-!BOP
-!
-! !MODULE: ice_dyn_evp - elastic-viscous-plastic sea ice dynamics model
-!
-! !DESCRIPTION:
 !
 ! Elastic-viscous-plastic sea ice dynamics model
 ! Computes ice velocity and deformation
@@ -28,9 +24,6 @@
 ! Bouillon, S., T. Fichefet, V. Legat and G. Madec (submitted 2013).  The 
 ! revised elastic-viscous-plastic method.  Ocean Modelling.
 !
-! !REVISION HISTORY:
-!  SVN:$Id$
-!
 ! author: Elizabeth C. Hunke, LANL
 !
 ! 2003: Vectorized by Clifford Chen (Fujitsu) and William Lipscomb (LANL)
@@ -38,18 +31,12 @@
 ! 2005: Removed boundary calls for stress arrays (WHL)
 ! 2006: Streamlined for efficiency by Elizabeth Hunke
 !       Converted to free source form (F90)
-! 
-! !INTERFACE:
-!
+
       module ice_dyn_evp
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_dyn_shared ! everything
-!
-!EOP
-!
+
       implicit none
       private
       public :: evp
@@ -60,16 +47,7 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: evp - elastic-viscous-plastic dynamics driver
-!
-! !INTERFACE:
-!
-      subroutine evp (dt)
-!
-! !DESCRIPTION:
-!
+
 ! Elastic-viscous-plastic dynamics driver
 !
 #ifdef CICE_IN_NEMO
@@ -80,12 +58,10 @@
 ! minimise code changes.
 #endif
 !
-! !REVISION HISTORY:
-!
 ! author: Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine evp (dt)
+
       use ice_atmo, only: Cdn_ocn
       use ice_boundary, only: ice_halo, ice_HaloMask, ice_HaloUpdate, &
           ice_HaloDestroy
@@ -111,14 +87,12 @@
 #ifdef CICE_IN_NEMO
       use ice_atmo, only: calc_strair
 #endif
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: & 
          ksub           , & ! subcycle step
          iblk           , & ! block index
@@ -152,9 +126,6 @@
 
       integer (kind=int_kind), dimension (nx_block,ny_block,max_blocks) :: &
          icetmask     ! ice extent mask (T-cell)
-
-      integer (kind=int_kind), dimension (nx_block,ny_block,max_blocks) :: &
-         halomask     ! mask for masked halo creation
 
       type (ice_halo) :: &
          halo_info_mask !  ghost cell update info for masked halo
@@ -441,12 +412,13 @@
       end subroutine evp
 
 !=======================================================================
-!BOP
+
+! Computes the rates of strain and internal stress components for
+! each of the four corners on each T-grid cell.
+! Computes stress terms for the momentum equation
 !
-! !IROUTINE: stress - computes strain rates and internal stress components
-!
-! !INTERFACE:
-!
+! author: Elizabeth C. Hunke, LANL
+
       subroutine stress (nx_block,   ny_block,   & 
                          ksub,       icellt,     & 
                          indxti,     indxtj,     & 
@@ -467,24 +439,10 @@
                          prs_sig,                & 
                          rdg_conv,   rdg_shear,  & 
                          str )
-!
-! !DESCRIPTION:
-!
-! Computes the rates of strain and internal stress components for
-! each of the four corners on each T-grid cell.
-! Computes stress terms for the momentum equation
-!
-! !REVISION HISTORY:
-!
-! author: Elizabeth C. Hunke, LANL
-!
-! !USES
-!
+
       use ice_constants, only: c0, c4, p027, p055, p111, p166, &
           p2, p222, p25, p333, p5, puny
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: & 
          nx_block, ny_block, & ! block dimensions
          ksub              , & ! subcycling step
@@ -527,9 +485,9 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,8), & 
          intent(out) :: &
          str          ! stress combinations
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          i, j, ij
 

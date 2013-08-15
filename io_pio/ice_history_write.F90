@@ -1,16 +1,11 @@
+!  SVN:$Id: ice_history_write.F90 567 2013-01-07 02:57:36Z eclare $
+
 ! NOTE 4D variables are not available with PIO.
 ! Search for '1==0' to find related code
 
 !=======================================================================
 !
-!BOP
-!
-! !MODULE: ice_history - ice model history files
-!
 ! Writes history in netCDF format
-!
-! !REVISION HISTORY:
-!  SVN:$Id: ice_history.F90 567 2013-01-07 02:57:36Z eclare $
 !
 ! authors Tony Craig and Bruce Briegleb, NCAR
 !         Elizabeth C. Hunke and William H. Lipscomb, LANL
@@ -25,16 +20,10 @@
 ! 2009 D Bailey and ECH: Generalized for multiple frequency output
 ! 2010 Alison McLaren and ECH: Added 3D capability
 !
-! !INTERFACE:
-!
       module ice_history_write
-!
-! !USES:
-!
+
       use ice_kinds_mod
-!
-!EOP
-!
+
       implicit none
       private
       public :: ice_write_hist
@@ -48,24 +37,12 @@
 
 !=======================================================================
 !
-!BOP
-!
-! !IROUTINE: ice_write_hist - write average ice quantities or snapshots
-!
-! !INTERFACE:
-!
-      subroutine ice_write_hist (ns)
-!
-! !DESCRIPTION:
-!
 ! write average ice quantities or snapshots
 !
-! !REVISION HISTORY:
-!
 ! author:   Elizabeth C. Hunke, LANL
-!
-! !USES:
-!
+
+      subroutine ice_write_hist (ns)
+
 #ifdef ncdf
       use ice_blocks, only: nx_block, ny_block
       use ice_broadcast, only: broadcast_scalar
@@ -88,13 +65,11 @@
 #endif
       use ice_pio	
       use pio
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: ns
-!
-!EOP
-!
+
+      ! local variables
+
 #ifdef ncdf
       real (kind=dbl_kind),  dimension(:,:),   allocatable :: work_g1
       real (kind=real_kind), dimension(:,:),   allocatable :: work_gr

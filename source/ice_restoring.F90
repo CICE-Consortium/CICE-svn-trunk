@@ -1,33 +1,19 @@
+!  SVN:$Id$
 !=======================================================================
-!
-!BOP
-!
-! !MODULE: ice_restoring
-!
-! !DESCRIPTION:
 !
 ! Reads and interpolates forcing data for atmosphere and ocean quantities.
 !
-! !REVISION HISTORY:
-!  SVN:$Id: $
-!
 ! authors: Elizabeth C. Hunke, LANL
-!
-! !INTERFACE:
-!
+
       module ice_restoring
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_blocks, only: nx_block, ny_block
       use ice_domain_size, only: ncat, max_blocks
       use ice_forcing, only: trestore, trest
       use ice_state, only: aicen, vicen, vsnon, trcrn, ntrcr, bound_state
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bound
-!
-!EOP
-!
+
       implicit none
       private
       public :: ice_HaloRestore_init, ice_HaloRestore
@@ -53,20 +39,12 @@
       contains
 
 !=======================================================================
-!BOP
-! !IROUTINE: ice_HaloRestore_init
-! !INTERFACE:
 
- subroutine ice_HaloRestore_init
-
-! !DESCRIPTION:
 !  Allocates and initializes arrays needed for restoring the ice state 
 !  in cells surrounding the grid.
-!
-! !REVISION HISTORY:
-!  same as module
 
-! !USES:
+
+ subroutine ice_HaloRestore_init
 
       use ice_blocks, only: block, get_block, nblocks_x, nblocks_y
       use ice_communicate, only: my_task, master_task
@@ -549,30 +527,19 @@
 
 !=======================================================================
 
-!BOP
-! !IROUTINE: ice_HaloRestore
-! !INTERFACE:
-
- subroutine ice_HaloRestore
-
-! !DESCRIPTION:
 !  This subroutine is intended for restoring the ice state to desired
 !  values in cells surrounding the grid.
 !  Note: This routine will need to be modified for nghost > 1.
 !        We assume padding occurs only on east and north edges.
-!
-! !REVISION HISTORY:
-!  same as module
-!
-! !USES:
+
+ subroutine ice_HaloRestore
 
       use ice_blocks, only: block, get_block, nblocks_x, nblocks_y
       use ice_calendar, only: dt
       use ice_constants, only: secday
       use ice_domain, only: ew_boundary_type, ns_boundary_type, &
           nblocks, blocks_ice
-!EOP
-!BOC
+
 !-----------------------------------------------------------------------
 !
 !  local variables

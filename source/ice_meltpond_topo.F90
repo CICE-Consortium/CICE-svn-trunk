@@ -1,11 +1,6 @@
+!  SVN:$Id$
 !=======================================================================
-!
-!BOP
-!
-! !MODULE: ice_meltpond_topo - Meltpond parameterization
-!
-! !DESCRIPTION:
-!
+
 ! Melt pond evolution based on the ice topography as inferred from
 ! the ice thickness distribution.  This code is based on (but differs
 ! from) that described in
@@ -18,26 +13,17 @@
 ! physically based melt pond scheme into the sea ice component of a
 ! climate model.  J. Geophys. Res. 115, C08012, doi: 10.1029/2009JC005568.
 !
-! !REVISION HISTORY:
-!  SVN:$$
-!
 ! authors Daniela Flocco (UCL)
 !         Adrian Turner (UCL)
 ! 2010 ECH added module based on original code from Daniela Flocco, UCL
 ! 2012 DSCHR modifications
-!
-! !INTERFACE:
-!
+
       module ice_meltpond_topo
-!
-! !USES:
-!
+
       use ice_kinds_mod
       use ice_constants
       use ice_domain_size, only: nilyr, ncat
-!
-!EOP
-!
+
       implicit none
 
       private
@@ -48,51 +34,31 @@
       contains
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: init_meltponds_topo
-!
-! !DESCRIPTION:
-!
+
 !  Initialize melt ponds.
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine init_meltponds_topo(nx_block, ny_block, ncat, &
                                      apnd, hpnd, ipnd)
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-        integer(kind=int_kind), intent(in) :: &
+
+      integer(kind=int_kind), intent(in) :: &
              nx_block , &
              ny_block , &
              ncat
 
-        real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+      real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
              intent(out) :: &
              apnd , & ! melt pond area fraction
              hpnd , & ! melt pond depth
              ipnd     ! melt pond refrozen lid thickness
-!
-!EOP
-!
-        apnd(:,:,:) = c0
-        hpnd(:,:,:) = c0
-        ipnd(:,:,:) = c0
+
+      apnd(:,:,:) = c0
+      hpnd(:,:,:) = c0
+      ipnd(:,:,:) = c0
         
       end subroutine init_meltponds_topo
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE:   compute_ponds_topo
-!
-! !INTERFACE:
-!
+
       subroutine compute_ponds_topo(nx_block,ny_block,  &
                                     ilo, ihi, jlo, jhi, &
                                     dt,                 &
@@ -104,17 +70,7 @@
                                     Tsfcn,              &
                                     qicen, sicen,       &
                                     apnd,  hpnd, ipnd)
-!
-! !DESCRIPTION:
-!
-! !REVISION HISTORY:
-!
-! same as module
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi       ! beginning and end of physical domain
@@ -161,10 +117,9 @@
          potT,  &   ! air potential temperature
          meltt, &   ! total surface meltwater flux
          fsurf      ! thermodynamic heat flux at ice/snow surface (W/m^2)
-!
-!EOP
-!
+
       ! local variables
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
          volpn, & ! pond volume per unit area, per category (m)
          vuin     ! water-equivalent volume of ice lid on melt pond ('upper ice', m) 
@@ -420,35 +375,22 @@
  end subroutine compute_ponds_topo
 
 !=======================================================================
-!BOP
-!
-! !ROUTINE: pond_area
-!
-! !DESCRIPTION:
-!
+
 ! Computes melt pond area, pond depth and melting rates
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine pond_area(dt,aice,vice,vsno, &
                            aicen, vicen, vsnon, qicen, sicen, &
                            volpn, volp,  &
                            apondn,hpondn,dvolp)
-!
-! !USES:
-!
+
       use ice_exit, only: abort_ice
-!
-! !INPUT/OUTPUT PARAMETERS:
     
       real (kind=dbl_kind), intent(in) :: &
          dt,aice,vice,vsno
 
       real (kind=dbl_kind), dimension(ncat), intent(in) :: &
          aicen, vicen, vsnon
-!nilyr,ncat
+
       real (kind=dbl_kind), dimension(nilyr,ncat), intent(in) :: &
          qicen, &
          sicen
@@ -461,9 +403,9 @@
 
       real (kind=dbl_kind), dimension(ncat), intent(out) :: &
          apondn, hpondn
-!
-!EOP
-!
+
+      ! local variables
+
       integer (kind=int_kind) :: &
          n, ns,   &
 	 m_index, &
@@ -863,26 +805,13 @@
   end subroutine calc_hpond
   
 !=======================================================================
-!BOP
-!
-! !ROUTINE: permeability_phi
-!
-! !DESCRIPTION:
-!
+
 ! determine the liquid fraction of brine in the ice and the permeability
-! 
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
+
       subroutine permeability_phi(qicen, sicen, vicen, perm)
-!
-! !USES:
-!
+
       use ice_therm_shared, only: calculate_Tin_from_qin
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
+
       real (kind=dbl_kind), dimension(nilyr), intent(in) :: &
          qicen, &  ! energy of melting for each ice layer (J/m2)
          sicen     ! salinity (ppt)   
@@ -892,9 +821,9 @@
     
       real (kind=dbl_kind), intent(out) :: &
          perm      ! permeability
-!
-!EOP
-!
+
+      ! local variables
+
       real (kind=dbl_kind) ::   &
          Tmlt, &   ! melting temperature 
          Sbr       ! brine salinity
