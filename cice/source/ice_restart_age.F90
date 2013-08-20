@@ -40,7 +40,7 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
+          n,                    & ! category index
           iyear, imonth, iday     ! year, month, day
 
       character(len=char_len_long) :: filename
@@ -102,8 +102,7 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-         i, j, k, n, it, iblk, & ! counting indices
-         iyear, imonth, iday , & ! year, month, day
+         n,                    & ! category index
          iignore                 ! dummy variable
 
       real (kind=real_kind) :: &

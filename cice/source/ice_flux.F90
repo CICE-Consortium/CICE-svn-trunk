@@ -156,6 +156,7 @@
          sss     , & ! sea surface salinity (ppt)
          sst     , & ! sea surface temperature (C)
          frzmlt  , & ! freezing/melting potential (W/m^2)
+         frzmlt_init, & ! frzmlt used in current time step (W/m^2)
          Tf      , & ! freezing temperature (C)
          qdp     , & ! deep ocean heat flux (W/m^2), negative upward
          hmix    , & ! mixed layer depth (m)

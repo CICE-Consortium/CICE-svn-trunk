@@ -143,24 +143,13 @@
       integer (kind=int_kind), dimension (nx_block*ny_block) :: &
          indxi, indxj    ! compressed indices for cells with ice melting
 
-      integer (kind=int_kind) :: n,k,i,j,ij,icells,indxij ! loop indices
+      integer (kind=int_kind) :: n,i,j,ij,icells,indxij ! loop indices
 
       integer (kind=int_kind), dimension (ncat) :: &
          kcells          ! cells where ice lid combines with vice
 
-      real (kind=dbl_kind), dimension (nx_block*ny_block,nilyr+1) :: &
-         zi1         , & ! depth of ice layer boundaries (m)
-         zi2             ! adjusted depths, with equal hilyr (m)
-
-      real (kind=dbl_kind) :: &
-         dzi             ! ice layer thickness after growth/melting
-
       integer (kind=int_kind), dimension (nx_block*ny_block,ncat) :: &
          indxii, indxjj  ! i,j indices for kcells loop
-
-      real (kind=dbl_kind), dimension (nx_block*ny_block) :: &
-         hin         , & ! total ice thickness (m)
-         hilyr           ! ice layer thickness (m)
 
       real (kind=dbl_kind), parameter :: &
          hicemin = p1           , & ! minimum ice thickness with ponds (m) 

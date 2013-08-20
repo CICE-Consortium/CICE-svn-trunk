@@ -499,12 +499,12 @@
                                 sss  (:,:,iblk),                          &
                                 lhcoef,              shcoef,              &
                                 fswsfcn(:,:,n,iblk), fswintn(:,:,n,iblk), &
-                                fswthrun(:,:,n,iblk),                     &
                                 Sswabsn(:,:,:,n,iblk),                    &
                                 Iswabsn(:,:,:,n,iblk),                    &
-                                fsurfn(:,:,n,iblk),  fcondtopn(:,:,n,iblk),&
+                                fsurfn(:,:,n,iblk),                       &
+                                fcondtopn(:,:,n,iblk),                    &
                                 fsensn,              flatn(:,:,n,iblk),   &
-                                fswabsn,             flwoutn,             &
+                                flwoutn,                                  &
                                 evapn,               freshn,              &
                                 fsaltn,              fhocnn,              &
                                 melttn(:,:,n,iblk),  meltsn(:,:,n,iblk),  &
@@ -530,6 +530,17 @@
          
             call abort_ice ('ice: Vertical thermo error')
          endif
+
+      !-----------------------------------------------------------------
+      ! Total absorbed shortwave radiation
+      !-----------------------------------------------------------------
+         do j = 1, ny_block
+         do i = 1, nx_block
+            fswabsn(i,j) = fswsfcn (i,j,n,iblk) &
+                         + fswintn (i,j,n,iblk) &
+                         + fswthrun(i,j,n,iblk)
+         enddo
+         enddo
 
       !-----------------------------------------------------------------
       ! Aerosol update
@@ -751,7 +762,7 @@
 
       integer (kind=int_kind) :: &
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
-         i, j, ij
+         i, j
 
       integer (kind=int_kind) :: &
          icells          ! number of ice/ocean cells 
@@ -1363,12 +1374,9 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-         i, j, ij    ,    & ! horizontal indices
+         i, j,            & ! horizontal indices
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          n                  ! thickness category index
-
-      integer (kind=int_kind) :: &
-         icells          ! number of cells with aicen > puny
 
       type (block) :: &
          this_block      ! block information for current block

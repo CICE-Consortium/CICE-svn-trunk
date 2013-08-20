@@ -33,6 +33,10 @@
       public :: update_vertical_tracers, lateral_melt, linear_itd, &
                 add_new_ice
 
+      logical (kind=log_kind), parameter :: &
+         l_conservation_check = .false.   ! if true, check conservation
+                                          ! (useful for debugging)
+
 !=======================================================================
 
       contains
@@ -187,9 +191,7 @@
          fieldid           ! field identifier
 
       logical (kind=log_kind), parameter :: &
-         print_diags = .false.        , & ! if true, prints when remap_flag=F
-         l_conservation_check = .false.   ! if true, check conservation
-                                          ! (useful for debugging)
+         print_diags = .false.    ! if true, prints when remap_flag=F
 
        integer (kind=int_kind) :: &
          iflag         , & ! number of grid cells with remap_flag = .true.
@@ -1349,13 +1351,13 @@
 
       real (kind=dbl_kind), dimension (icells) :: &
          vice1        , & ! starting volume of existing ice
-         vice_init, vice_final  ! ice volume summed over categories
+         vice_init, vice_final, & ! ice volume summed over categories
+         eice_init, eice_final    ! ice energy summed over categories
 
       real (kind=dbl_kind) :: &
          fnew         , & ! heat flx to open water for new ice (W/m^2)
          hi0new       , & ! thickness of new ice
          hi0max       , & ! max allowed thickness of new ice
-         Si0(nilyr)   , & ! frazil ice salinity
          vsurp        , & ! volume of new ice added to each cat
          vtmp         , & ! total volume of new and old ice
          area1        , & ! starting fractional area of existing ice
@@ -1386,6 +1388,7 @@
 
       ! BGC
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
+         eicen, &     ! energy of melting for each ice layer (J/m^2)
          aicen_init, &    ! fractional area of ice
          vicen_init       ! volume per unit area of ice (m)
 
@@ -1415,11 +1418,32 @@
       aicen_init(:,:,:) = aicen(:,:,:)
       vicen_init(:,:,:) = vicen(:,:,:)
 
-      ! initial ice volume in each grid cell
+      if (l_conservation_check) then
+
+      ! initial ice volume and energy in each grid cell
+      eicen(:,:,:) = c0
+      do n = 1, ncat
+      do k = 1, nilyr
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+         eicen(i,j,n) = eicen(i,j,n) + trcrn(i,j,nt_qice+k-1,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+
       call column_sum (nx_block, ny_block,       &
                        icells,   indxi,   indxj, &
                        ncat,                     &
                        vicen,    vice_init)
+
+      call column_sum (nx_block, ny_block,       &
+                       icells,   indxi,   indxj, &
+                       ncat,                     &
+                       eicen,    eice_init)
+
+      endif ! l_conservation_check
 
       !-----------------------------------------------------------------
       ! Compute average enthalpy of new ice.
@@ -1474,8 +1498,9 @@
          vi0new(ij) = -fnew*dt / qi0new(ij) ! note sign convention, qi < 0
          vi0_init(ij) = vi0new(ij)          ! for bgc
 
-         ! increment ice volume
+         ! increment ice volume and energy
          vice_init(ij) = vice_init(ij) + vi0new(ij)
+         eice_init(ij) = eice_init(ij) + vi0new(ij)*qi0new(ij)
 
          ! history diagnostics
          frazil(i,j) = vi0new(ij)
@@ -1743,10 +1768,30 @@
          enddo
       enddo
 
+      if (l_conservation_check) then
+
+      ! initial ice volume in each grid cell
+      eicen(:,:,:) = c0
+      do n = 1, ncat
+      do k = 1, nilyr
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+         eicen(i,j,n) = eicen(i,j,n) + trcrn(i,j,nt_qice+k-1,n) &
+                      * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
+      enddo
+      enddo
+      enddo
+
       call column_sum (nx_block, ny_block,       &
                        icells,   indxi,   indxj, &
                        ncat,                     &
                        vicen,    vice_final)
+
+      call column_sum (nx_block, ny_block,       &
+                       icells,   indxi,   indxj, &
+                       ncat,                     &
+                       eicen,    eice_final)
 
       fieldid = 'vice, add_new_ice'
       call column_conservation_check (nx_block,  ny_block,      &
@@ -1755,7 +1800,17 @@
                                       vice_init, vice_final,    &
                                       puny,      l_stop,        &
                                       istop,     jstop)
+
+      fieldid = 'eice, add_new_ice'
+      call column_conservation_check (nx_block,  ny_block,      &
+                                      icells,   indxi,   indxj, &
+                                      fieldid,                  &
+                                      eice_init, eice_final,    &
+                                      puny*Lfresh*rhoi, l_stop, &
+                                      istop,     jstop)
       if (l_stop) return
+
+      endif ! l_conservation_check
 
       !-----------------------------------------------------------------
       ! Biogeochemistry

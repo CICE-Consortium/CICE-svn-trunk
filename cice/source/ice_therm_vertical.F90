@@ -73,15 +73,13 @@
                                   sss,                    &
                                   lhcoef,      shcoef,    &
                                   fswsfc,      fswint,    &
-                                  fswthrun,               &
                                   Sswabs,      Iswabs,    &
                                   fsurfn,      fcondtopn, &
                                   fsensn,      flatn,     &
-                                  fswabsn,     flwoutn,   &
-                                  evapn,       freshn,    &
-                                  fsaltn,      fhocnn,    &
-                                  meltt,       melts,     &
-                                  meltb,                  &
+                                  flwoutn,     evapn,     &
+                                  freshn,      fsaltn,    &
+                                  fhocnn,      meltt,     &
+                                  melts,       meltb,     &
                                   congel,      snoice,    &
                                   mlt_onset,   frz_onset, &
                                   yday,        l_stop,    &
@@ -129,7 +127,6 @@
          intent(inout) :: &
          fswsfc  , & ! SW absorbed at ice/snow surface (W m-2)
          fswint  , & ! SW absorbed in ice interior, below surface (W m-2)
-         fswthrun, & ! SW through ice to ocean         (W/m^2)
          fpond       ! fresh water flux to ponds (kg/m^2/s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
@@ -149,7 +146,6 @@
       ! coupler fluxes to atmosphere
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
          fsensn  , & ! sensible heat flux (W/m^2) 
-         fswabsn , & ! shortwave flux absorbed in ice and ocean (W/m^2) 
          flwoutn , & ! outgoing longwave radiation (W/m^2) 
          evapn       ! evaporative water flux (kg/m^2/s) 
 
@@ -191,7 +187,6 @@
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij          , & ! horizontal index, combines i and j loops
-         ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          k               ! ice layer index
 
       real (kind=dbl_kind) :: &
@@ -213,8 +208,7 @@
       real (kind=dbl_kind), dimension (icells,nilyr) :: &
          qin         , & ! ice layer enthalpy, qin < 0 (J m-3)
          Tin         , & ! internal ice layer temperatures
-         Sin         , & ! internal ice layer salinities
-         dqmat           ! excess q from melted interior layers
+         Sin             ! internal ice layer salinities
 
       real (kind=dbl_kind), dimension (icells,nslyr) :: &
          qsn         , & ! snow layer enthalpy, qsn < 0 (J m-3)
@@ -226,20 +220,15 @@
          fcondbot    , & ! downward cond flux at bottom surface (W m-2)
          einit       , & ! initial energy of melting (J m-2)
          efinal      , & ! final energy of melting (J m-2)
-         einter      , & ! intermediate energy
-         einex           ! excess energy from melted interior layers to ocean
+         einter          ! intermediate energy
 
 ! ech: the size of these arrays should be reduced to icells
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         Tsfcn, & ! temperature of ice/snow top surface  (C)
          iage , & ! ice age (s)
          fbri     ! brine height to ice thickness fraction
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          fadvocn ! advective heat flux to ocean
-
-      ! diagnostic
-      real(kind=dbl_kind), dimension(nx_block,ny_block) :: trc_hpnd, trc_apnd
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -252,7 +241,6 @@
       do j=1, ny_block
       do i=1, nx_block
          fsensn (i,j) = c0
-         fswabsn(i,j) = c0
          flwoutn(i,j) = c0
          evapn  (i,j) = c0
 
@@ -327,8 +315,7 @@
                                               potT,          Qa,       &
                                               shcoef,        lhcoef,   &
                                               fswsfc,        fswint,   &
-                                              fswthrun,      Sswabs,   &
-                                              Iswabs,                  &
+                                              Sswabs,        Iswabs,   &
                                               hilyr,         hslyr,    &
                                               qin,           Tin,      &
                                               qsn,           Tsn,      &
@@ -337,16 +324,11 @@
                                               Tsf,           Tbot,     &
                                               sss,                     &
                                               fsensn,        flatn,    &
-                                              fswabsn,       flwoutn,  &
-                                              fsurfn,                  &
+                                              flwoutn,       fsurfn,   &
                                               fcondtopn,     fcondbot, &
                                               fadvocn,       snoice,   &
                                               einit,         l_stop,   &
                                               istop,         jstop)
-
-            do ij = 1, icells
-               einex(ij) = c0
-            enddo
 
          else ! ktherm
 
@@ -358,20 +340,18 @@
                                      potT,          Qa,       &
                                      shcoef,        lhcoef,   &
                                      fswsfc,        fswint,   &
-                                     fswthrun,      Sswabs,   &
-                                     Iswabs,                  &
+                                     Sswabs,        Iswabs,   &
                                      hilyr,         hslyr,    &
                                      qin,           Tin,      &
                                      qsn,           Tsn,      &
                                      Sin,                     &
                                      Tsf,           Tbot,     &
                                      fsensn,        flatn,    &
-                                     fswabsn,       flwoutn,  &
-                                     fsurfn,                  &
+                                     flwoutn,       fsurfn,   &
                                      fcondtopn,     fcondbot, &
                                      einit,         l_stop,   &
                                      istop,         jstop,    &
-                                     hin,           einex) 
+                                     hin)
 
          endif ! ktherm
             
@@ -386,12 +366,11 @@
                                        rhoa,          flw,      &
                                        potT,          Qa,       &
                                        shcoef,        lhcoef,   &
-                                       fswsfc,        fswthrun, &
+                                       fswsfc,                  &
                                        hilyr,         hslyr,    &
                                        Tsf,           Tbot,     &
                                        fsensn,        flatn,    &
-                                       fswabsn,       flwoutn,  &
-                                       fsurfn,                  &
+                                       flwoutn,       fsurfn,   &
                                        fcondtopn,     fcondbot, &
                                        l_stop,                  &
                                        istop,         jstop)
@@ -450,8 +429,7 @@
                                 congel,       snoice,   &
                                 mlt_onset,    frz_onset,&
                                 Sin,          sss,      &
-                                dsnow,        einex,    &
-                                fbri)
+                                dsnow,        fbri)
 
       !-----------------------------------------------------------------
       ! Check for energy conservation by comparing the change in energy
@@ -468,8 +446,7 @@
                                         einter,   efinal,   &
                                         fcondtopn,fcondbot, &
                                         fadvocn,            &
-                                        fbot, einex,        &
-                                        l_stop,             &
+                                        fbot,     l_stop,   &
                                         istop,    jstop)
 
       if (l_stop) return
@@ -490,6 +467,7 @@
          freshn(i,j) = evapn(i,j) - &
                        (rhoi*dhi + rhos*dhs) / dt
          fsaltn(i,j) = -rhoi*dhi*ice_ref_salinity*p001/dt
+         fhocnn(i,j) = fhocnn(i,j) + fadvocn(i,j) ! for ktherm=2
 
          if (hin(ij) == c0) then
             if (tr_pond_topo) &
@@ -524,27 +502,6 @@
          if (tr_iage) trcrn(i,j,nt_iage) = iage(i,j)
       enddo
       enddo
-
-#if defined oned
-      ! any diagnostics that need to be done at end of vertical thermo
-      if (tr_pond) then
-         trc_hpnd = trcrn(:,:,nt_hpnd)
-         trc_apnd = trcrn(:,:,nt_apnd)
-         call thermo_vertical_diag(nx_block, ny_block, indxi, indxj, icells, n, istep, istep1, dt, &
-              aicen, vicen, vsnon, hin, hsn, Tsf, qin, qsn, Sin, Tin, Tsn, Tbot, fbot, &
-              meltt, melts, meltb, congel, evapn, snoice, worki, works, fsnow, &
-              fsurfn, fsensn, flatn, flw, flwoutn, fswsfc, fswint, shcoef, lhcoef, trc_hpnd, trc_apnd, &
-              potT, sss)
-      else
-         trc_hpnd = c0
-         trc_apnd = c0
-         call thermo_vertical_diag(nx_block, ny_block, indxi, indxj, icells, n, istep, istep1, dt, &
-              aicen, vicen, vsnon, hin, hsn, Tsf, qin, qsn, Sin, Tin, Tsn, Tbot, fbot, &
-              meltt, melts, meltb, congel, evapn, snoice, worki, works, fsnow, &
-              fsurfn, fsensn, flatn, flw, flwoutn, fswsfc, fswint, shcoef, lhcoef, trc_hpnd, trc_apnd, &
-              potT, sss)
-      endif
-#endif
 
     end subroutine thermo_vertical
 
@@ -619,7 +576,6 @@
 
 !=======================================================================
 !
-! Adjust frzmlt to account for changes in fhocn since from_coupler.
 ! Compute heat flux to bottom surface.
 ! Compute fraction of ice that melts laterally.
 !
@@ -928,11 +884,10 @@
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij          , & ! horizontal index, combines i and j loops
-         k, kk           ! ice layer index
+         k               ! ice layer index
 
       real (kind=dbl_kind) :: &
          rnslyr,        & ! real(nslyr)
-         aa1, bb1, cc1, & ! terms in quadratic formula
          Tmax             ! maximum allowed snow/ice temperature (deg C)
 
       logical (kind=log_kind) :: &   ! for vector-friendly error checks
@@ -1310,8 +1265,7 @@
                                     congel,    snoice,   &  
                                     mlt_onset, frz_onset,&
                                     Sin,       sss,      &
-                                    dsnow,     einex,    &
-                                    fbri)
+                                    dsnow,     fbri)
 
       use ice_state,       only: hbrine
       use ice_therm_mushy, only: enthalpy_mush, enthalpy_of_melting, &
@@ -1340,8 +1294,7 @@
          fbri            ! brine height to ice height fraction
 
       real (kind=dbl_kind), dimension (icells), intent(inout) :: &
-         fcondbot     ,&  ! downward cond flux at bottom surface (W m-2)
-         einex              ! excess energy from too much interior melt
+         fcondbot        ! downward cond flux at bottom surface (W m-2)
 
       real (kind=dbl_kind), dimension (icells,nilyr), &
          intent(inout) :: &
@@ -1408,7 +1361,9 @@
          econ        , & ! energy for condensation, < 0   (J m-2)
          etop_mlt    , & ! energy for top melting, > 0    (J m-2)
          ebot_mlt    , & ! energy for bottom melting, > 0 (J m-2)
-         ebot_gro        ! energy for bottom growth, < 0  (J m-2)
+         ebot_gro    , & ! energy for bottom growth, < 0  (J m-2)
+         emlt_atm    , & ! total energy of brine, from atmosphere (J m-2)
+         emlt_ocn        ! total energy of brine, to ocean        (J m-2)
 
       real (kind=dbl_kind) :: &
          dhi         , & ! change in ice thickness
@@ -1446,9 +1401,6 @@
          qbotp       , &
          qbot0
 
-      real (kind=dbl_kind), dimension (icells) :: &
-         mlt_enthalpy    ! total enthalpy of melted ice for conservation check
-
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
@@ -1475,7 +1427,8 @@
                qmlt(ij,k) = c0
             endif
             qm(ij,k) = qin(ij,k) - qmlt(ij,k)
-            mlt_enthalpy(ij) = c0
+            emlt_atm(ij) = c0
+            emlt_ocn(ij) = c0
          enddo
       enddo
 
@@ -1540,6 +1493,8 @@
          !--------------------------------------------------------------
          ! Condensation (evapn > 0)
          ! Note: evapn here has unit of kg/m^2.  Divide by dt later.
+         ! This is the only case in which energy from the atmosphere
+         ! is used for changes in the brine energy (emlt_atm).
          !--------------------------------------------------------------
 
          evapn   (i,j) = c0          ! initialize
@@ -1553,7 +1508,7 @@
             dzi(ij,1) = dzi(ij,1) + dhi
             evapn(i,j) = evapn(i,j) + dhi*rhoi
             ! enthalpy of melt water
-            mlt_enthalpy(ij) = mlt_enthalpy(ij) - qmlt(ij,1) * dhi 
+            emlt_atm(ij) = emlt_atm(ij) - qmlt(ij,1) * dhi 
          endif
 
          !--------------------------------------------------------------
@@ -1561,17 +1516,16 @@
          !--------------------------------------------------------------
 
          if (ktherm == 2) then
-            einex(ij) = c0
 
             qbotm = enthalpy_mush(Tbot(i,j), sss(i,j))
-            qbotp = -Lfresh * rhoi * (c1 - phi_i_mushy)!0.15_dbl_kind
+            qbotp = -Lfresh * rhoi * (c1 - phi_i_mushy)
             qbot0 = qbotm - qbotp
 
             dhi  = ebot_gro(ij) / qbotp     ! dhi > 0
 
             hqtot = dzi(ij,nilyr)*qin(ij,nilyr) + dhi*qbotm
             hstot = dzi(ij,nilyr)*Sin(ij,nilyr) + dhi*sss(i,j)
-            mlt_enthalpy(ij) = mlt_enthalpy(ij) - qbot0 * dhi
+            emlt_ocn(ij) = emlt_ocn(ij) - qbot0 * dhi
 
          else
 
@@ -1599,11 +1553,10 @@
          endif ! ktherm
 
          dzi(ij,nilyr) = dzi(ij,nilyr) + dhi
-         if (dzi(ij,nilyr) > puny) then !!!AKT!!!
-            qin(ij,nilyr) = hqtot / dzi(ij,nilyr) !!!AKT!!!
-            if (ktherm == 2) &
-            Sin(ij,nilyr) = hstot / dzi(ij,nilyr) !!!AKT!!!
+         if (dzi(ij,nilyr) > puny) then
+            qin(ij,nilyr) = hqtot / dzi(ij,nilyr)
             if (ktherm == 2) then
+               Sin(ij,nilyr) = hstot / dzi(ij,nilyr)
                qmlt(ij,nilyr) = enthalpy_of_melting(Sin(ij,nilyr))
             else
                qmlt(ij,nilyr) = c0
@@ -1690,7 +1643,7 @@
             esub(ij) = esub(ij) - dhi*qsub
             esub(ij) = max(esub(ij), c0)
             evapn(i,j) = evapn(i,j) + dhi*rhoi
-            mlt_enthalpy(ij) = mlt_enthalpy(ij) - qmlt(ij,k) * dhi 
+            emlt_ocn(ij) = emlt_ocn(ij) - qmlt(ij,k) * dhi 
 
          !--------------------------------------------------------------
          ! Melt ice (top)
@@ -1702,7 +1655,7 @@
                qm(ij,k) = c0
                dhi = -dzi(ij,k)
             endif
-            mlt_enthalpy(ij) = mlt_enthalpy(ij) - max(qin(ij,k),qmlt(ij,k)) * dhi
+            emlt_ocn(ij) = emlt_ocn(ij) - max(qin(ij,k),qmlt(ij,k)) * dhi
 
             dzi(ij,k) = dzi(ij,k) + dhi         ! qin < 0, dhi < 0
             etop_mlt(ij) = max(etop_mlt(ij) - dhi*qm(ij,k), c0)
@@ -1733,7 +1686,7 @@
                qm(ij,k) = c0
                dhi = -dzi(ij,k)
             endif
-            mlt_enthalpy(ij) = mlt_enthalpy(ij) - max(qin(ij,k),qmlt(ij,k)) * dhi
+            emlt_ocn(ij) = emlt_ocn(ij) - max(qin(ij,k),qmlt(ij,k)) * dhi
 
             dzi(ij,k) = dzi(ij,k) + dhi         ! qin < 0, dhi < 0
             ebot_mlt(ij) = max(ebot_mlt(ij) - dhi*qm(ij,k), c0)
@@ -1765,6 +1718,7 @@
 
       !-----------------------------------------------------------------
       ! Compute heat flux used by the ice (<=0).
+      ! fhocn is the available ocean heat that is left after use by ice
       !-----------------------------------------------------------------
 
       do ij = 1, icells
@@ -1976,10 +1930,10 @@
                i = indxi(ij)
                j = indxj(ij)
                if (hsn(ij) <= puny) then
-!echmod                  fhocnn(i,j) = fhocnn(i,j) &
-!check                    + qsn(ij,k)*hsn(ij)/(real(nslyr,kind=dbl_kind)*dt)
+                  fhocnn(i,j) = fhocnn(i,j) &
+                    + qsn(ij,k)*hsn(ij)/(real(nslyr,kind=dbl_kind)*dt)
                   qsn(ij,k) = -rhos*Lfresh
-                  if (k == nslyr) hsn(ij) = c0
+                  hslyr(ij) = c0 ! echmod
                endif
             enddo
          enddo
@@ -2015,16 +1969,19 @@
          enddo                  ! ij
       enddo                     ! k
 
-      if (ktherm == 0) then
-         do ij = 1, icells
-            einex(ij) = c0
-            mlt_enthalpy(ij) = c0
+      if (ktherm < 2) then
+         do ij = 1, icells 
+           emlt_atm(ij) = c0
+           emlt_ocn(ij) = c0
          enddo
       endif
 
-      ! melt water is no longer zero enthalpy since change in definition
+      ! melt water is no longer zero enthalpy with ktherm=2
       do ij = 1, icells
-         efinal(ij) = efinal(ij) + mlt_enthalpy(ij)
+         i = indxi(ij)
+         j = indxj(ij)
+         fhocnn(i,j) = fhocnn(i,j) + emlt_ocn(ij)/dt
+         efinal(ij)  = efinal(ij)  + emlt_atm(ij) ! for conservation check
       enddo                  ! ij
 
       end subroutine thickness_changes
@@ -2296,10 +2253,9 @@
                                             fsnow,              &
                                             einit,    einter,   &
                                             efinal,             &
-                                            fcondtopn, fcondbot,&
+                                            fcondtopn,fcondbot, &
                                             fadvocn,            &
-                                            fbot,  einex,       &
-                                            l_stop,             &
+                                            fbot,     l_stop,   &
                                             istop,    jstop)
 
       integer (kind=int_kind), intent(in) :: &
@@ -2329,8 +2285,7 @@
          einit       , & ! initial energy of melting (J m-2)
          einter      , & ! intermediate energy of melting (J m-2)
          efinal      , & ! final energy of melting (J m-2)
-         fcondbot    , & ! 
-         einex           ! excess energy from dqmat to ocean  (J m-2)
+         fcondbot
 
       logical (kind=log_kind), intent(inout) :: &
          l_stop          ! if true, print diagnostics and abort model
@@ -2388,7 +2343,6 @@
          write(nu_diag,*) 'Input energy =', einp
          write(nu_diag,*) 'fbot(i,j),fcondbot(ij):'
          write(nu_diag,*) fbot(i,j),fcondbot(ij)
-         write(nu_diag,*) 'Excess energy to ocean (J/m^2)', einex(ij)
 
 !         if (ktherm == 2) then
             write(nu_diag,*) 'Intermediate energy =', einter(ij)

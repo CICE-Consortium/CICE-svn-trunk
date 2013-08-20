@@ -111,7 +111,7 @@
       use ice_domain_size, only: ncat, n_aero, max_blocks
       use ice_fileunits, only: flush_fileunit
       use ice_flux, only: alvdr, alidr, alvdf, alidf, evap, fsnow, frazil, &
-          fswabs, fswthru, flw, flwout, fsens, fsurf, flat, frzmlt, frain, fpond, &
+          fswabs, fswthru, flw, flwout, fsens, fsurf, flat, frzmlt_init, frain, fpond, &
           coszen, faero_atm, faero_ocn, fhocn_ai, fsalt_ai, fresh_ai, &
           update_ocn_f, Tair, Qa, fsw, fcondtop, meltt, meltb, meltl, snoice, &
           dsnow, congel, sst, sss, Tf, fhocn
@@ -469,9 +469,10 @@
                do j = 1, ny_block
                do i = 1, nx_block
                   work1(i,j,iblk) = &
-                            (fswabs(i,j,iblk) - fswthru   (i,j,iblk) &
-                           + flw   (i,j,iblk) + flwout    (i,j,iblk) &
-                           + fsens (i,j,iblk)) * aice(i,j,iblk)
+                     (fswabs(i,j,iblk) - fswthru(i,j,iblk) &
+                    + fsens (i,j,iblk) + flwout (i,j,iblk)) &
+                                                  * aice      (i,j,iblk) &
+                    + flw   (i,j,iblk) * aice_init (i,j,iblk)
                enddo
                enddo
             enddo
@@ -503,7 +504,7 @@
          do iblk = 1, nblocks
             do j = 1, ny_block
             do i = 1, nx_block
-               work1(i,j,iblk) = max(c0,frzmlt(i,j,iblk))
+               work1(i,j,iblk) = max(c0,frzmlt_init(i,j,iblk))
             enddo
             enddo
          enddo
@@ -534,8 +535,8 @@
          work1(:,:,:) = frazil(:,:,:)*rhoi/dt
          frzn = global_sum(work1, distrb_info, &
                            field_loc_center, tarean)
-         frzs = global_sum(work1, distrb_info, field_loc_center, &
-                           tareas)
+         frzs = global_sum(work1, distrb_info, &
+                           field_loc_center, tareas)
          frzn = frzn*dt
          frzs = frzs*dt
 

@@ -1761,8 +1761,6 @@
          xicr, yicr     ,&! right-hand x-axis intersection point
          xdm, ydm       ,&! midpoint of segment connecting DL and DR;
                           ! shifted if l_fixed_area = T
-         dxc            ,&! xcr - xcl
-         dxd            ,&! xdr - xdl
          md             ,&! slope of line connecting DL and DR
          mdl            ,&! slope of line connecting DL and DM
          mdr            ,&! slope of line connecting DR and DM
@@ -3255,8 +3253,7 @@
            i, j, ij      ,&! horizontal indices of edge
            i2, j2        ,&! horizontal indices of cell contributing transport
            ng            ,&! triangle index
-           nt, nt1       ,&! tracer indices
-           ilo,ihi,jlo,jhi ! beginning and end of physical domain
+           nt, nt1         ! tracer indices
 
       real (kind=dbl_kind) ::   &
            m0, m1, m2, m3         ,&! mass field at internal points
@@ -3563,7 +3560,7 @@
          mtold            ! old mass*tracer
 
       real (kind=dbl_kind) ::   &
-         w1, w2           ! work variables
+         w1               ! work variable
 
       integer (kind=int_kind), dimension(nx_block*ny_block) ::   &
          indxi          ,&! compressed indices in i and j directions

@@ -46,9 +46,6 @@
           timer_couple, timer_step
       use ice_zbgc_shared, only: solve_skl_bgc
 
-      ! local variables
-      integer (kind=int_kind) :: k
-
    !--------------------------------------------------------------------
    !  initialize error code and step timer
    !--------------------------------------------------------------------
