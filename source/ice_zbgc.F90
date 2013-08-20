@@ -39,21 +39,20 @@
       use ice_fileunits, only: nu_nml, nml_filename, get_fileunit, &
                                release_fileunit, nu_diag
       use ice_restart, only: runtype
-      use ice_state, only: hbrine, nt_fbri, ntrcr, nbtrcr, trcr_depend, &
+      use ice_state, only: tr_brine, nt_fbri, ntrcr, nbtrcr, trcr_depend, &
           nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_chl_sk, nt_bgc_Am_sk, &
           nt_bgc_Sil_sk, nt_bgc_DMSPp_sk, nt_bgc_DMSPd_sk, &
           nt_bgc_DMS_sk, nt_bgc_C_sk
 
       integer (kind=int_kind) :: &
-        nml_error, & ! namelist i/o error flag
-        ntd          ! for tracer dependency calculation
+        nml_error ! namelist i/o error flag
 
       !-----------------------------------------------------------------
       ! namelist variables
       !-----------------------------------------------------------------
 
       namelist /zbgc_nml/  &
-         hbrine, bgc_data_dir, sil_data_type, nit_data_type, &
+         tr_brine, bgc_data_dir, sil_data_type, nit_data_type, &
          restore_bgc, solve_skl_bgc, &
          tr_bgc_N_sk, tr_bgc_C_sk, tr_bgc_chl_sk, &
          tr_bgc_Nit_sk, tr_bgc_Am_sk, tr_bgc_Sil_sk, &
@@ -64,7 +63,7 @@
       ! default values
       !-----------------------------------------------------------------
 
-      hbrine          = .false.  ! brine height differs from ice height
+      tr_brine        = .false.  ! brine height differs from ice height
       restore_bgc     = .false.  ! restore bgc if true
       solve_skl_bgc   = .false.  ! solve skeletal biochemistry in diffuse bio
       bgc_data_dir    = 'unknown_bgc_data_dir'
@@ -117,24 +116,21 @@
 
       if (trim(runtype) == 'continue') restart_hbrine = .true.
 
-      call broadcast_scalar(hbrine,             master_task)
+      call broadcast_scalar(tr_brine,           master_task)
       call broadcast_scalar(restart_hbrine,     master_task)
       call broadcast_scalar(phi_snow,           master_task)
 
       nt_fbri = c0
-      if (hbrine) then
+      if (tr_brine) then
           nt_fbri = ntrcr + 1   ! ice volume fraction with salt
           ntrcr = ntrcr + 1
       endif
-      if (hbrine) trcr_depend(nt_fbri) = 1
-
-      ntd = 0                    ! if nt_fbri /= 0 then use fbri dependency
-      if (nt_fbri == 0) ntd = -1 ! otherwise make tracers depend on ice volume
+      if (tr_brine) trcr_depend(nt_fbri) = 1
 
       if (phi_snow .le. c0) phi_snow = c1-rhos/rhoi
 
       if (my_task == master_task) then
-         write(nu_diag,1010) ' hbrine                    = ', hbrine
+         write(nu_diag,1010) ' tr_brine                  = ', tr_brine
          write(nu_diag,1010) ' restart_hbrine            = ', restart_hbrine
          write(nu_diag,1005) ' phi_snow                  = ', phi_snow
          write(nu_diag,1010) ' solve_skl_bgc             = ', solve_skl_bgc
@@ -187,7 +183,7 @@
       call broadcast_scalar(tr_bgc_DMS_sk,      master_task)
       call broadcast_scalar(initbio_frac,       master_task)
 
-      if (.not. solve_skl_bgc) return
+      if (solve_skl_bgc) then
 
       if (my_task == master_task) then
 
@@ -215,8 +211,6 @@
       !-----------------------------------------------------------------
       ! assign tracer indices and dependencies
       !-----------------------------------------------------------------
-
-      if (solve_skl_bgc) then
 
          nbtrcr = 0
          nlt_bgc_NO = 0
@@ -297,7 +291,7 @@
          call abort_ice('max_ntrcr < number of namelist tracers')
       endif                               
 
-      if (TRBGCS < 2) then
+      if (solve_skl_bgc .and. TRBGCS < 2) then
          write (nu_diag,*) ' '
          write (nu_diag,*) 'comp_ice must have number of bgc tracers >= 2'
          write (nu_diag,*) 'number of bgc tracers compiled:',TRBGCS
@@ -305,10 +299,15 @@
       endif
 
       if (my_task == master_task) then
-         write(nu_diag,1020)'nt_bgc_N_sk = ', nt_bgc_N_sk
-         write(nu_diag,1020)'nt_bgc_Nit_sk = ', nt_bgc_Nit_sk
+         if (solve_skl_bgc) then
+            write(nu_diag,1020)'nt_bgc_N_sk = ', nt_bgc_N_sk
+            write(nu_diag,1020)'nt_bgc_Nit_sk = ', nt_bgc_Nit_sk
+         endif
          write(nu_diag,*)' '
-         write(nu_diag,1020)'nblyr', nblyr
+         if (tr_brine .or. solve_skl_bgc) then
+            write(nu_diag,1020)'nblyr = ', nblyr
+            write(nu_diag,1020) 'ntrcr (w/ bgc) = ', ntrcr
+         endif
       endif
 
       ! BGC layer model (on bottom "skeletal" layer)
@@ -534,7 +533,7 @@
                           sss, sst, meltsn, hmix
       use ice_shortwave, only:  fswthrun
       use ice_state, only: aicen_init, vicen_init, aicen, vicen, vsnon, &
-          trcrn, nt_fbri, hbrine, ntrcr, nbtrcr, &
+          trcrn, nt_fbri, tr_brine, ntrcr, nbtrcr, &
           nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_chl_sk, nt_bgc_Am_sk, &
           nt_bgc_Sil_sk, nt_bgc_DMSPp_sk, nt_bgc_DMSPd_sk, &
           nt_bgc_DMS_sk, nt_bgc_C_sk
@@ -588,7 +587,7 @@
       type (block) :: &
          this_block      ! block information for current block
 
-      if (hbrine .or. solve_skl_bgc) then
+      if (tr_brine .or. solve_skl_bgc) then
 
          call ice_timer_start(timer_bgc) ! biogeochemistry
 
@@ -628,7 +627,7 @@
                                       / aicen_init(i,j,n,iblk)
                else
                   first_ice(i,j,n,iblk) = .true.
-                  if (hbrine) trcrn(i,j,nt_fbri,n,iblk) = c1
+                  if (tr_brine) trcrn(i,j,nt_fbri,n,iblk) = c1
                endif
             enddo
             enddo
@@ -659,7 +658,7 @@
       ! brine dynamics
       !-----------------------------------------------------------------
 
-            if (hbrine) then 
+            if (tr_brine) then 
 
                call preflushing_changes (nx_block,   ny_block,            &
                                 icells,              n,                   &
@@ -712,7 +711,7 @@
                hbri(i,j,iblk) = hbri(i,j,iblk) + hbrin(i,j)*aicen_init(i,j,n,iblk)  
                enddo                     ! ij
 
-            endif ! hbrine
+            endif ! tr_brine
 
       !-----------------------------------------------------------------
       ! biogeochemistry
@@ -758,7 +757,7 @@
 
          call ice_timer_stop(timer_bgc) ! biogeochemistry
 
-      endif  ! hbrine .or. solve_skl_bgc
+      endif  ! tr_brine .or. solve_skl_bgc
 
       end subroutine biogeochemistry
 
@@ -887,7 +886,7 @@
       use ice_domain_size, only: ncat
       use ice_itd, only: column_sum, &
                          column_conservation_check
-      use ice_state, only: hbrine, nt_fbri
+      use ice_state, only: tr_brine, nt_fbri
       use ice_timers, only: timer_bgc, ice_timer_start, ice_timer_stop
 
       integer (kind=int_kind), intent(in) :: &
@@ -992,7 +991,7 @@
          i = indxi(ij)
          j = indxj(ij)
          vbrin(i,j,n) = vicen_init(i,j,n)
-         if (hbrine) vbrin(i,j,n) =  trcrn(i,j,nt_fbri,n)*vicen_init(i,j,n)
+         if (tr_brine) vbrin(i,j,n) =  trcrn(i,j,nt_fbri,n)*vicen_init(i,j,n)
       enddo
       enddo
 
@@ -1038,7 +1037,7 @@
            vtmp(m) = vbrin(i,j,n)
            vsurp(m) = hsurp(m) * aicen_init(i,j,n) 
            vbrin(i,j,n) = vbrin(i,j,n) + vsurp(m)
-           if (hbrine) then
+           if (tr_brine) then
               trcrn(i,j,nt_fbri,n) = c1
               if (vicen(i,j,n) > c0)  trcrn(i,j,nt_fbri,n) = vbrin(i,j,n)/vicen(i,j,n)
            endif
@@ -1061,7 +1060,7 @@
 
          vbri1(m)     = vbrin(i,j,1) 
          vbrin(i,j,1) = vbrin(i,j,1) + vi0new(m)
-         if (hbrine) then
+         if (tr_brine) then
             trcrn(i,j,nt_fbri,1) = c1
             if (vicen(i,j,1) > c0) trcrn(i,j,nt_fbri,1) = vbrin(i,j,1)/vicen(i,j,1)
          endif
@@ -1071,7 +1070,7 @@
       ! ice area changes for jcells
       ! add salt throughout
         
-      if (hbrine) then
+      if (tr_brine) then
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
                           ncat,                     &

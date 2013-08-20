@@ -195,7 +195,7 @@
       use ice_restart_meltpond_topo, only: restart_pond_topo, read_restart_pond_topo
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond_cesm, &
           tr_pond_lvl, tr_pond_topo, tr_aero, trcrn, &
-          nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd, hbrine
+          nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd, tr_brine
       use ice_zbgc, only: init_bgc
       use ice_zbgc_shared, only: solve_skl_bgc
 
@@ -297,7 +297,7 @@
          endif ! .not restart_pond
       endif
       if (tr_aero)       call init_aerosol ! ice aerosol
-      if (hbrine)        call init_hbrine  ! brine height tracer
+      if (tr_brine)      call init_hbrine  ! brine height tracer
       if (solve_skl_bgc) call init_bgc     ! biogeochemistry
 
       end subroutine init_restart

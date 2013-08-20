@@ -408,7 +408,7 @@
          ! total brine tracer
          shmaxnt = c0
          shmaxst = c0
-         if (hbrine) then
+         if (tr_brine) then
          shmaxnt = global_sum(vice(:,:,:)*trcr(:,:,nt_fbri,:), distrb_info, &
                                    field_loc_center, tarean)
          shmaxst = global_sum(vice(:,:,:)*trcr(:,:,nt_fbri,:), distrb_info, &
@@ -684,7 +684,7 @@
                if (paice(n) /= c0) then
                   hiavg(n) = vice(i,j,iblk)/paice(n)
                   hsavg(n) = vsno(i,j,iblk)/paice(n)
-                  if (hbrine) hbravg(n) = trcr(i,j,nt_fbri,iblk)* hiavg(n)
+                  if (tr_brine) hbravg(n) = trcr(i,j,nt_fbri,iblk)* hiavg(n)
                endif
                psalt(n) = work2(i,j,iblk)
                pTsfc(n) = trcr(i,j,nt_Tsfc,iblk)   ! ice/snow sfc temperature

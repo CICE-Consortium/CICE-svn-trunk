@@ -135,7 +135,7 @@
           get_fileunit, release_fileunit
       use ice_history_shared, only: tstr2D, tcstr, define_hist_field, &
           vname_in
-      use ice_state, only: tr_aero, hbrine
+      use ice_state, only: tr_aero, tr_brine
 
       integer (kind=int_kind) :: n, ns
       integer (kind=int_kind) :: nml_error ! namelist i/o error flag
@@ -173,7 +173,7 @@
          f_aeron     = 'x' ! NOTE not implemented
       endif
       
-      if (.not. hbrine)  then
+      if (.not. tr_brine)  then
               f_fbri  = 'x'
               f_hbri  = 'x'
       endif

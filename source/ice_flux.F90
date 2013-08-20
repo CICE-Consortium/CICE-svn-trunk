@@ -163,10 +163,6 @@
          daice_da    ! data assimilation concentration increment rate 
                      ! (concentration s-1)(only used in hadgem drivers)
 
-      character (char_len), public :: &
-         Tfrzpt      ! ocean freezing temperature formulation
-                     ! 'constant' (-1.8C), 'linear_S'
-
        ! out to atmosphere (if calc_Tsfc)
        ! note Tsfc is in ice_state.F
 
@@ -327,7 +323,9 @@
 
       subroutine init_coupler_flux
 
-        use ice_zbgc_shared, only: flux_bio, upNO, upNH, growN
+      use ice_constants, only: p001
+      use ice_therm_shared, only: ktherm
+      use ice_zbgc_shared, only: flux_bio, upNO, upNH, growN
 
       integer (kind=int_kind) :: n
 
@@ -415,10 +413,12 @@
       vocn  (:,:,:) = c0
       frzmlt(:,:,:) = c0              ! freezing/melting potential (W/m^2)
       sss   (:,:,:) = 34.0_dbl_kind   ! sea surface salinity (ppt)
-      if (trim(Tfrzpt) == 'constant') then
-         Tf    (:,:,:) = -1.8_dbl_kind   ! freezing temp (C)
-      else ! default:  Tfrzpt = 'linear_S'
-         Tf    (:,:,:) = -depressT*sss(:,:,:)  ! freezing temp (C)
+      if (ktherm == 2) then           ! freezing temp (C)
+         ! liquidus_temperature_mush(sss)
+         Tf (:,:,:) = sss(:,:,:) / (-18.48_dbl_kind &
+                                 + ((18.48_dbl_kind*p001)*sss(:,:,:)))
+      else
+         Tf (:,:,:) = -depressT*sss(:,:,:)
       endif
 #ifndef CICE_IN_NEMO
       sst   (:,:,:) = Tf(:,:,:)       ! sea surface temp (C)

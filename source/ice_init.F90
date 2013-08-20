@@ -56,7 +56,7 @@
       use ice_exit, only: abort_ice
       use ice_itd, only: kitd, kcatbound
       use ice_ocean, only: oceanmixed_ice
-      use ice_flux, only: Tfrzpt, update_ocn_f
+      use ice_flux, only: update_ocn_f
       use ice_forcing, only: &
           ycycle,          fyear_init,    dbug, &
           atm_data_type,   atm_data_dir,  precip_units, &
@@ -75,7 +75,7 @@
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_aero, &
                            nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_iage, nt_FY, &
                            nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd, nt_aero, &
-                           ntrcr, hbrine
+                           ntrcr
       use ice_restart_age, only: restart_age
       use ice_restart_firstyear, only: restart_FY
       use ice_restart_lvl, only: restart_lvl
@@ -133,8 +133,7 @@
         rfracmin,       rfracmax,        pndaspect,     hs1,            &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
         atm_data_type,  atm_data_dir,    calc_strair,   calc_Tsfc,      &
-        calc_formdrag, &
-        precip_units,   Tfrzpt,          update_ocn_f,  ustar_min,      &
+        calc_formdrag,  precip_units,    update_ocn_f,  ustar_min,      &
         oceanmixed_ice, ocn_data_format, sss_data_type, sst_data_type,  &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
         restore_ice
@@ -216,7 +215,6 @@
       ktherm = 1             ! 0 = 0-layer, 1 = BL99, 2 = mushy thermo
       conduct = 'bubbly'     ! 'MU71' or 'bubbly' (Pringle et al 2007)
       calc_Tsfc = .true.     ! calculate surface temperature
-      Tfrzpt    = 'linear_S' ! ocean freezing temperature, 'constant'=-1.8C
       update_ocn_f = .false. ! include fresh water and salt fluxes for frazil
       ustar_min = 0.005      ! minimum friction velocity for ocean heat flux (m/s)
       R_ice     = 0.00_dbl_kind   ! tuning parameter for sea ice
@@ -591,7 +589,6 @@
       call broadcast_scalar(calc_strair,        master_task)
       call broadcast_scalar(calc_Tsfc,          master_task)
       call broadcast_scalar(calc_formdrag,      master_task)
-      call broadcast_scalar(Tfrzpt,             master_task)
       call broadcast_scalar(update_ocn_f,       master_task)
       call broadcast_scalar(ustar_min,          master_task)
       call broadcast_scalar(precip_units,       master_task)
@@ -747,7 +744,6 @@
          write(nu_diag,1010) ' calc_strair               = ', calc_strair
          write(nu_diag,1010) ' calc_Tsfc                 = ', calc_Tsfc
          write(nu_diag,1010) ' calc_formdrag             = ', calc_formdrag
-         write(nu_diag,*)    ' Tfrzpt                    = ', trim(Tfrzpt)
          write(nu_diag,1010) ' update_ocn_f              = ', update_ocn_f
          write(nu_diag,1005) ' ustar_min                 = ', ustar_min
          if (trim(atm_data_type) /= 'default') then
@@ -1126,7 +1122,7 @@
       use ice_constants, only: c0, c1, c2, c3, p2, p5, rhoi, rhos, Lfresh, &
            cp_ice, cp_ocn, Tsmelt, Tffresh, rad_to_deg, puny
       use ice_domain_size, only: nilyr, nslyr, nx_global, ny_global, max_ntrcr, ncat
-      use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_fbri, hbrine
+      use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_fbri, tr_brine
       use ice_itd, only: hin_max
       use ice_therm_vertical, only: phi_init
       use ice_therm_mushy, only: &
@@ -1218,7 +1214,7 @@
                   trcrn(i,j,it,n) = c0
                enddo
             endif
-            if (hbrine) trcrn(i,j,nt_fbri,n) = c1
+            if (tr_brine) trcrn(i,j,nt_fbri,n) = c1
             do k = 1, nilyr
                trcrn(i,j,nt_sice+k-1,n) = salinz(i,j,k)
             enddo
@@ -1357,7 +1353,7 @@
                   vicen(i,j,n) = hinit(n) * ainit(n) ! m
                endif
                vsnon(i,j,n) = min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
-               if (hbrine) trcrn(i,j,nt_fbri,n) = c1
+               if (tr_brine) trcrn(i,j,nt_fbri,n) = c1
             enddo               ! ij
 
             ! surface temperature

@@ -1778,7 +1778,7 @@
                                   istop,    jstop)
 
       use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_aero, nt_apnd, nt_hpnd, &
-                           nt_fbri, hbrine
+                           nt_fbri
       use ice_zbgc_shared, only: rhosi, min_salin
 
       integer (kind=int_kind), intent(in) :: &
