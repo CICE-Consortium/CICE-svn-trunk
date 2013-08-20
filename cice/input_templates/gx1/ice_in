@@ -84,7 +84,7 @@
 /
 
 &zbgc_nml
-    hbrine          = .false.
+    tr_brine        = .false.
   , solve_skl_bgc   = .false.
   , restore_bgc     = .false.
   , bgc_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/gx1v3/forcing/'
@@ -143,7 +143,6 @@
   , calc_Tsfc       = .true.
   , calc_formdrag   = .false.
   , precip_units    = 'mm_per_sec'
-  , Tfrzpt          = 'linear_S'
   , ustar_min       = 0.0005
   , update_ocn_f    = .false.
   , oceanmixed_ice  = .true.

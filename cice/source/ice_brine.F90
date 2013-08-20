@@ -824,7 +824,7 @@
                                 plat, plon
       use ice_domain_size, only: ncat
       use ice_state, only: aice, aicen, vicen, vice, trcr, nt_fbri, &
-                          trcrn, hbrine, nt_sice
+                          trcrn, nt_sice
       use ice_zbgc_shared, only: darcy_V
 
       real (kind=dbl_kind), intent(in) :: &

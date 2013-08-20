@@ -373,6 +373,7 @@
                            apondn,hpondn,dvolp)
 
       use ice_exit, only: abort_ice
+      use ice_therm_shared, only: ktherm
     
       real (kind=dbl_kind), intent(in) :: &
          dt,aice,vice,vsno
@@ -560,7 +561,7 @@
 
       ! drain if ice is permeable    
       permflag = 0
-      if (pressure_head > c0) then
+      if (ktherm /= 2 .and. pressure_head > c0) then
       do n = 1, ncat-1
          if (hicen(n) > c0) then
             call permeability_phi(qicen(:,n),sicen(:,n),vicen(n),perm)

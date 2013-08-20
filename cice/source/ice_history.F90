@@ -75,7 +75,7 @@
           init_hist_bgc_3Db, init_hist_bgc_4Db
       use ice_history_drag, only: init_hist_drag_2D
       use ice_restart, only: restart
-      use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero, hbrine
+      use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero, tr_brine
       use ice_zbgc_shared, only: solve_skl_bgc
 
       real (kind=dbl_kind), intent(in) :: &
@@ -898,7 +898,7 @@
       if (tr_pond) call init_hist_pond_2D
 
       ! biogeochemistry
-      if (tr_aero .or. hbrine .or. solve_skl_bgc) call init_hist_bgc_2D
+      if (tr_aero .or. tr_brine .or. solve_skl_bgc) call init_hist_bgc_2D
 
       if (calc_formdrag) call init_hist_drag_2D
 
@@ -948,7 +948,7 @@
       if (tr_pond) call init_hist_pond_3Dc
 
       ! biogeochemistry
-      if (hbrine) call init_hist_bgc_3Dc
+      if (tr_brine) call init_hist_bgc_3Dc
 
       !-----------------------------------------------------------------
       ! 3D (vertical) variables must be looped separately
@@ -1014,7 +1014,7 @@
       ! other 4D history variables
 
       ! biogeochemistry
-      if (hbrine) call init_hist_bgc_4Db
+      if (tr_brine) call init_hist_bgc_4Db
 
       !-----------------------------------------------------------------
       ! fill igrd array with namelist values
@@ -1143,7 +1143,7 @@
           yieldstress11, yieldstress12, yieldstress22
       use ice_dyn_shared, only: kdyn, principal_stress
       use ice_flux, only: fsw, flw, fsnow, frain, sst, sss, uocn, vocn, &
-          frzmlt, fswfac, fswabs, fswthru, alvdr, alvdf, alidr, alidf, &
+          frzmlt_init, fswfac, fswabs, fswthru, alvdr, alvdf, alidr, alidf, &
           albice, albsno, albpnd, coszen, flat, fsens, flwout, evap, &
           Tair, Tref, Qref, congel, frazil, snoice, dsnow, &
           melts, meltb, meltt, meltl, fresh, fsalt, fresh_ai, fsalt_ai, &
@@ -1299,7 +1299,7 @@
          if (f_vocn   (1:1) /= 'x') &
              call accum_hist_field(n_vocn,   iblk, vocn(:,:,iblk), a2D)
          if (f_frzmlt (1:1) /= 'x') &
-             call accum_hist_field(n_frzmlt, iblk, frzmlt(:,:,iblk), a2D)
+             call accum_hist_field(n_frzmlt, iblk, frzmlt_init(:,:,iblk), a2D)
 
          if (f_fswfac (1:1) /= 'x') &
              call accum_hist_field(n_fswfac, iblk, fswfac(:,:,iblk), a2D)
@@ -1594,7 +1594,7 @@
          if (tr_pond) call accum_hist_pond (iblk)
 
          ! biogeochemistry
-         if (tr_aero .or. hbrine .or. solve_skl_bgc) call accum_hist_bgc (iblk)
+         if (tr_aero .or. tr_brine .or. solve_skl_bgc) call accum_hist_bgc (iblk)
 
          ! form drag
          if (calc_formdrag) call accum_hist_drag (iblk)

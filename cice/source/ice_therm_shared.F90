@@ -27,7 +27,7 @@
       !   salin        ! salinity (ppt)   
 
       real (kind=dbl_kind), dimension(nilyr+1), public :: &
-         Tmlt            ! melting temp, -depressT * salinity
+         Tmlt            ! melting temperature
                          ! nilyr + 1 index is for bottom surface
 
       real (kind=dbl_kind), parameter, public :: &

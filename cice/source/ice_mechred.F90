@@ -119,7 +119,7 @@
                             dvirdgndt,               &
                             araftn,      vraftn)
 
-      use ice_state, only: nt_qice, nt_qsno, hbrine, nt_fbri, nt_sice
+      use ice_state, only: nt_qice, nt_qsno, tr_brine, nt_fbri, nt_sice
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -318,7 +318,7 @@
       do j = 1, ny_block
       do i = 1, nx_block     
         vbrin(i,j,n) = vicen(i,j,n)
-        if (hbrine) vbrin(i,j,n) =  trcrn(i,j,nt_fbri,n) * vicen(i,j,n)
+        if (tr_brine) vbrin(i,j,n) =  trcrn(i,j,nt_fbri,n) * vicen(i,j,n)
       enddo
       enddo     
 
@@ -497,7 +497,7 @@
       do j = 1, ny_block
       do i = 1, nx_block
          vbrin(i,j,n) =  vicen(i,j,n)
-         if (hbrine)  vbrin(i,j,n) =  trcrn(i,j,nt_fbri,n) * vbrin(i,j,n)
+         if (tr_brine)  vbrin(i,j,n) =  trcrn(i,j,nt_fbri,n) * vbrin(i,j,n)
       enddo
       enddo
       

@@ -84,7 +84,7 @@
 /
 
 &zbgc_nml
-    hbrine          = .false.
+    tr_brine        = .false.
   , solve_skl_bgc   = .false.
   , restore_bgc     = .false.
   , bgc_data_dir    = 'unknown_bgc_data_dir'
@@ -145,7 +145,6 @@
   , calc_Tsfc       = .true.
   , calc_formdrag   = .false.
   , precip_units    = 'mm_per_month'
-  , Tfrzpt          = 'linear_S'
   , ustar_min       = 0.05
   , update_ocn_f    = .false.
   , oceanmixed_ice  = .true.

@@ -80,7 +80,7 @@
       use ice_itd, only: hin_max, hi_min, aggregate_area, shift_ice, & 
                          column_sum, column_conservation_check
       use ice_state, only: nt_qice, nt_qsno, nt_fbri, nt_sice, &
-                           tr_pond_topo, nt_apnd, nt_hpnd, hbrine
+                           tr_pond_topo, nt_apnd, nt_hpnd, tr_brine
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -237,7 +237,7 @@
       enddo
       enddo
 
-      if (hbrine) then
+      if (tr_brine) then
       do j = 1, ny_block
       do i = 1, nx_block
          vbrin(i,j,n) = vbrin(i,j,n) + trcrn(i,j,nt_fbri,n) &
@@ -755,7 +755,7 @@
       enddo
       enddo
 
-      if (hbrine) then
+      if (tr_brine) then
       do j = 1, ny_block
       do i = 1, nx_block
          vbrin(i,j,n) = vbrin(i,j,n) + trcrn(i,j,nt_fbri,n) &
@@ -1260,7 +1260,7 @@
       use ice_state, only: nt_Tsfc, nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_aero, &
                            nt_sice, nt_qice, &
                            nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
-                           tr_iage, tr_FY, tr_lvl, tr_aero, hbrine
+                           tr_iage, tr_FY, tr_lvl, tr_aero, tr_brine
       use ice_therm_mushy, only: liquidus_temperature_mush, enthalpy_mush
       use ice_therm_shared, only: ktherm, hfrazilmin
       use ice_zbgc, only: add_new_ice_bgc
@@ -1815,7 +1815,7 @@
       !-----------------------------------------------------------------
       ! Biogeochemistry
       !-----------------------------------------------------------------     
-      if (hbrine .or. solve_skl_bgc) &
+      if (tr_brine .or. solve_skl_bgc) &
       call add_new_ice_bgc (nx_block,  ny_block,   dt,       &
                            icells,     jcells,     kcells,   &
                            indxi,      indxj,                &

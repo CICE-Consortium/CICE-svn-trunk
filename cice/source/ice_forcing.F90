@@ -203,7 +203,7 @@
           field_loc_center, field_type_scalar
       use ice_domain, only: nblocks
       use ice_domain_size, only: max_blocks
-      use ice_flux, only: sss, sst, Tf, Tfrzpt
+      use ice_flux, only: sss, sst, Tf
       use ice_zbgc_shared, only: restore_bgc
 #ifdef ncdf
       use netcdf
@@ -278,15 +278,11 @@
             do i = 1, nx_block
                sss(i,j,iblk) = sss(i,j,iblk) / c12   ! annual average
                sss(i,j,iblk) = max(sss(i,j,iblk),c0)
-               if (trim(Tfrzpt) == 'constant') then
-                  Tf (i,j,iblk) = -1.8_dbl_kind ! deg C
-               else ! default:  Tfrzpt = 'linear_S'
-                  if (ktherm == 2) then
-                     Tf(i,j,iblk) = sss(i,j,iblk) / (-18.48_dbl_kind &
-                                  + ((18.48_dbl_kind/c1000) * sss(i,j,iblk)))
-                  else
-                     Tf(i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
-                  endif
+               if (ktherm == 2) then
+                  Tf(i,j,iblk) = sss(i,j,iblk) / (-18.48_dbl_kind &
+                               + ((18.48_dbl_kind/c1000) * sss(i,j,iblk)))
+               else
+                  Tf(i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
                endif
             enddo
             enddo
@@ -2689,7 +2685,7 @@
       subroutine oned_data
 
       use ice_blocks, only: block, get_block
-      use ice_constants, only: p001, p01, p25, c0, c1, depressT
+      use ice_constants, only: p001, p01, p25, c0, c1
       use ice_domain, only: nblocks, blocks_ice
       use ice_flux, only: uatm, vatm, Tair, fsw, fsnow, Qa, rhoa, frain
 
@@ -2867,7 +2863,7 @@
       use ice_constants, only: c0, p5, c1000, depressT, &
           field_loc_center, field_type_scalar
       use ice_domain, only: nblocks
-      use ice_flux, only: Tf, sss, sst, uocn, vocn, ss_tltx, ss_tlty, Tfrzpt
+      use ice_flux, only: Tf, sss, sst, uocn, vocn, ss_tltx, ss_tlty
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -2956,9 +2952,7 @@
                if (ktherm == 2) then
                   Tf(i,j,iblk) =  sss(i,j,iblk) / (-18.48_dbl_kind &
                                + ((18.48_dbl_kind/c1000) * sss(i,j,iblk)))
-               elseif (trim(Tfrzpt) == 'constant') then
-                  Tf (i,j,iblk) = -1.8_dbl_kind ! deg C
-               else ! default:  Tfrzpt = 'linear_S'
+               else
                   Tf(i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
                endif
             enddo
@@ -3308,7 +3302,7 @@
       use ice_domain, only: nblocks, distrb_info
       use ice_domain_size, only: max_blocks
       use ice_flux, only: sss, sst, Tf, uocn, vocn, ss_tltx, ss_tlty, &
-            qdp, hmix, Tfrzpt
+            qdp, hmix
       use ice_restart, only: restart
       use ice_grid, only: hm, tmask, umask
 
@@ -3396,19 +3390,15 @@
       enddo
 
       do j = 1, ny_block 
-        do i = 1, nx_block 
-          sss (i,j,:) = max (sss(i,j,:), c0) 
-            if (trim(Tfrzpt) == 'constant') then
-               Tf (i,j,:) = -1.8_dbl_kind ! deg C
-            else ! default:  Tfrzpt = 'linear_S'
-               if (ktherm == 2) then
-                  Tf(i,j,:) =  sss(i,j,:) / (-18.48_dbl_kind + ((18.48_dbl_kind/1000.0_dbl_kind) * sss(i,j,:)))
-               else
-                  Tf(i,j,:) = -depressT * sss(i,j,:) ! deg C
-               endif
+         do i = 1, nx_block 
+            sss (i,j,:) = max (sss(i,j,:), c0) 
+            if (ktherm == 2) then
+               Tf(i,j,:) =  sss(i,j,:) / (-18.48_dbl_kind + ((18.48_dbl_kind/1000.0_dbl_kind) * sss(i,j,:)))
+            else
+               Tf(i,j,:) = -depressT * sss(i,j,:) ! deg C
             endif
-          hmix(i,j,:) = max(hmix(i,j,:), c0) 
-        enddo 
+            hmix(i,j,:) = max(hmix(i,j,:), c0) 
+         enddo 
       enddo 
 
       if (restore_sst) then
@@ -3489,7 +3479,7 @@
 
       use ice_constants, only: c0, c20, p001, depressT
       use ice_flux, only: sss, sst, Tf, uocn, vocn, ss_tltx, ss_tlty, &
-            qdp, hmix, frzmlt, Tfrzpt
+            qdp, hmix, frzmlt
       !use ice_therm_mushy, only: liquidus_temperature_mush
 
       real (kind=dbl_kind), intent(in) :: &
@@ -3502,9 +3492,7 @@
          ! liquidus_temperature_mush(sss)
          Tf (:,:,:) = sss(:,:,:) / (-18.48_dbl_kind &
                                  + ((18.48_dbl_kind*p001)*sss(:,:,:)))
-      elseif (trim(Tfrzpt) == 'constant') then
-         Tf (:,:,:) = -1.8_dbl_kind
-      else ! default:  Tfrzpt = 'linear_S'
+      else
          Tf (:,:,:) = -depressT*sss(:,:,:)
       endif
 

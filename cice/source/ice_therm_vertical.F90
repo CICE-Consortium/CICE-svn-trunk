@@ -87,7 +87,7 @@
                                   dsnow)
 
       use ice_communicate, only: my_task
-      use ice_state, only: nt_fbri, hbrine
+      use ice_state, only: nt_fbri, tr_brine
       use ice_therm_mushy, only: temperature_changes_salinity
 
       integer (kind=int_kind), intent(in) :: &
@@ -256,7 +256,7 @@
          snoice (i,j) = c0
          dsnow  (i,j) = c0
          fbri   (i,j) = c1
-         if (hbrine) fbri(i,j) = trcrn(i,j,nt_fbri)
+         if (tr_brine) fbri(i,j) = trcrn(i,j,nt_fbri)
          if (tr_iage) iage(i,j) = trcrn(i,j,nt_iage)
       enddo
       enddo
@@ -879,7 +879,7 @@
          Tmin = -100._dbl_kind ! min allowed internal temperature (deg C)
 
       real (kind=dbl_kind), dimension(icells,nilyr) :: &
-         Tmlts           ! melting temp, -depressT * salinity
+         Tmlts           ! melting temperature
 
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
@@ -1267,7 +1267,6 @@
                                     Sin,       sss,      &
                                     dsnow,     fbri)
 
-      use ice_state,       only: hbrine
       use ice_therm_mushy, only: enthalpy_mush, enthalpy_of_melting, &
                            phi_i_mushy, temperature_mush, &
                            liquidus_temperature_mush, liquid_fraction
@@ -1376,7 +1375,7 @@
          wk1         , & ! temporary variable
          qsnew       , & ! enthalpy of new snow (J m-3)
          hstot       , & ! snow thickness including new snow (m)
-         Tmlts           ! melting temp, -depressT * salinity
+         Tmlts           ! melting temperature
 
       real (kind=dbl_kind), dimension (icells,nilyr+1) :: &
          zi1         , & ! depth of ice layer boundaries (m)

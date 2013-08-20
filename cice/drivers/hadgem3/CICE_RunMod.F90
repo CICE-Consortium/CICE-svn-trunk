@@ -121,7 +121,7 @@
       use ice_restart_meltpond_topo, only: write_restart_pond_topo
       use ice_restoring, only: restore_ice, ice_HaloRestore
       use ice_state, only: nt_qsno, trcrn, tr_iage, tr_FY, tr_lvl, &
-          tr_pond_cesm, tr_pond_lvl, tr_pond_topo, hbrine
+          tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_brine
       use ice_step_mod, only: prep_radiation, step_therm1, step_therm2, &
           post_thermo, step_dynamics, step_radiation
       use ice_therm_shared, only: calc_Tsfc
@@ -232,7 +232,7 @@
          if (mod(istep,diagfreq) == 0) then
             call runtime_diags(dt)          ! log file
             if (solve_skl_bgc) call bgc_diags (dt)
-            if (hbrine)        call hbrine_diags (dt)
+            if (tr_brine)      call hbrine_diags (dt)
          endif
          call ice_timer_stop(timer_diags)   ! diagnostics
 
@@ -254,7 +254,7 @@
             if (tr_pond_lvl)  call write_restart_pond_lvl
             if (tr_pond_topo) call write_restart_pond_topo
             if (solve_skl_bgc)call write_restart_bgc  
-            if (hbrine)       call write_restart_hbrine
+            if (tr_brine)     call write_restart_hbrine
             if (kdyn == 2)    call write_restart_eap
          endif
 
@@ -281,7 +281,7 @@
           fswthru_ai, fhocn, fswthru, scale_factor, &
           swvdr, swidr, swvdf, swidf, Tf, Tair, Qa, strairxT, strairyt, &
           fsens, flat, fswabs, flwout, evap, Tref, Qref, faero_ocn, &
-          fsurfn_f, flatn_f, scale_fluxes
+          fsurfn_f, flatn_f, scale_fluxes, frzmlt_init, frzmlt
       use ice_grid, only: tmask
       use ice_ocean, only: oceanmixed_ice, ocean_mixed_layer
       use ice_shortwave, only: alvdfn, alidfn, alvdrn, alidrn, &
@@ -306,8 +306,15 @@
       real (kind=dbl_kind) :: cszn ! counter for history averaging
 
       !-----------------------------------------------------------------
+      ! Save current value of frzmlt for diagnostics.
       ! Update mixed layer with heat and radiation from ice.
       !-----------------------------------------------------------------
+
+         do j = 1, ny_block
+         do i = 1, nx_block
+            frzmlt_init  (i,j,iblk) = frzmlt(i,j,iblk)
+         enddo
+         enddo
 
          if (oceanmixed_ice) &
          call ocean_mixed_layer (dt,iblk) ! ocean surface fluxes and sst

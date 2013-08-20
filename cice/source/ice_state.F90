@@ -131,7 +131,8 @@
          tr_pond_cesm,& ! if .true., use cesm pond tracer
          tr_pond_lvl, & ! if .true., use level-ice pond tracer
          tr_pond_topo,& ! if .true., use explicit topography-based ponds
-         tr_aero      ! if .true., use aerosol tracers
+         tr_aero     ,& ! if .true., use aerosol tracers
+         tr_brine       ! if .true., brine height differs from ice thickness
 
       !-----------------------------------------------------------------
       ! dynamic variables closely related to the state of the ice
@@ -157,9 +158,6 @@
          dimension(nx_block,ny_block,ncat,max_blocks), public :: &
          aicen_init  , & ! initial ice concentration, for linear ITD
          vicen_init      ! initial ice volume (m), for linear ITD
-
-       logical (kind=log_kind), public :: &
-         hbrine          ! if .true., brine height differs from ice thickness
 
 !=======================================================================
 
