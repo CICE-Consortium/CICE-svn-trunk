@@ -103,7 +103,6 @@
          hs                     , & ! snow depth (m)
          dTs                    , & ! surface temperature diff for freeze-up (C)
          Tp                     , & ! pond freezing temperature (C)
-         asnow                  , & ! area fraction of snow on ice
          apondn, &
          hpondn   
 
@@ -241,9 +240,6 @@
       real (kind=dbl_kind) :: &
          hi                     , & ! ice thickness (m)
          hs                     , & ! snow depth (m)
-         dTs                    , & ! surface temperature diff for freeze-up (C)
-         Tp                     , & ! pond freezing temperature (C)
-         asnow                  , & ! area fraction of snow on ice
          apondn, &
          hpondn   
 

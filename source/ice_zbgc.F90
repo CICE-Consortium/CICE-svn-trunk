@@ -565,11 +565,8 @@
          hinS_old    , & ! old brine thickness before growh/melt
          zphi_o      , & ! surface ice porosity 
          kavg        , & ! average ice permeability (m^2)
-         sloss       , & ! brine flux contribution from surface runoff (g/m^2)
-         Iavgn       , & ! Iavg (W/m^2)
-         grow_Cn,& ! C growth
-         fN_partn, &  ! N down flux (mmol/m^2/s)
-         hbrin  ! brine height
+         grow_Cn     , & ! C growth
+         hbrin           ! brine height
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2) :: &
       ! Defined on Bio Grid points
@@ -581,9 +578,6 @@
          ibrine_sal  , & ! brine salinity  (ppt)
          ibrine_rho      ! brine_density (kg/m^3)
 
-      real (kind=dbl_kind) :: &
-         pond            ! flux of water retained in ponds (kg/m^2/s)
-
       real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr) :: &
          flux_bion       ! tracer flux to ocean
 
@@ -593,12 +587,6 @@
     
       type (block) :: &
          this_block      ! block information for current block
-
-      logical (kind=log_kind) :: &
-         l_stop          ! if true, abort the model
-
-      integer (kind=int_kind) :: &
-         istop, jstop    ! indices of grid cell where model aborts 
 
       if (hbrine .or. solve_skl_bgc) then
 

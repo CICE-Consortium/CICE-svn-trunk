@@ -60,20 +60,18 @@
                                       potT,     Qa,       &
                                       shcoef,   lhcoef,   &
                                       fswsfc,   fswint,   &
-                                      fswthrun, Sswabs,   &
-                                      Iswabs,             &
+                                      Sswabs,   Iswabs,   &
                                       hilyr,    hslyr,    &
                                       qin,      Tin,      &
                                       qsn,      Tsn,      &
                                       Sin,                &
                                       Tsf,      Tbot,     &
                                       fsensn,   flatn,    &
-                                      fswabsn,  flwoutn,  &
-                                      fsurfn,             &
+                                      flwoutn,  fsurfn,   &
                                       fcondtopn,fcondbot, &
                                       einit,    l_stop,   &
                                       istop,    jstop,    &
-                                      hin,      einex)
+                                      hin)
 
       use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
 
@@ -103,11 +101,7 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
          fswsfc      , & ! SW absorbed at ice/snow surface (W m-2)
-         fswint      , & ! SW absorbed in ice interior below surface (W m-2)
-         fswthrun        ! SW through ice to ocean         (W m-2)
-
-      real (kind=dbl_kind), dimension (icells), intent(inout) :: &
-         einex           ! excess energy from dqmat to ocean
+         fswint          ! SW absorbed in ice interior below surface (W m-2)
 
       real (kind=dbl_kind), dimension (icells), intent(in) :: &
          hilyr       , & ! ice layer thickness (m)
@@ -128,7 +122,6 @@
          fcondtopn   , & ! downward cond flux at top surface (W m-2)
          fsensn      , & ! surface downward sensible heat (W m-2)
          flatn       , & ! surface downward latent heat (W m-2)
-         fswabsn     , & ! shortwave absorbed by ice (W m-2)
          flwoutn         ! upward LW at surface (W m-2)
 
       real (kind=dbl_kind), dimension (icells), intent(out):: &
@@ -199,6 +192,7 @@
          dflat_dT    , & ! deriv of flat wrt Tsf (W m-2 deg-1)
          dflwout_dT  , & ! deriv of flwout wrt Tsf (W m-2 deg-1)
          dt_rhoi_hlyr, & ! dt/(rhoi*hilyr)
+         einex       , & ! excess energy from dqmat to ocean
          ferr            ! energy conservation error (W m-2)
 
       real (kind=dbl_kind), dimension (icells,nilyr) :: &
@@ -259,7 +253,7 @@
          dfsens_dT (ij) = c0
          dflat_dT  (ij) = c0
          dflwout_dT(ij) = c0  
-         einex    (ij) = c0
+         einex     (ij) = c0
          dt_rhoi_hlyr(ij) = dt / (rhoi*hilyr(ij))  ! hilyr > 0
          if (hslyr(ij) > hs_min/real(nslyr,kind=dbl_kind)) &
             l_snow(ij) = .true.
@@ -364,16 +358,6 @@
          enddo
       enddo
 
-!lipscomb - This could be done in the shortwave module instead.
-!           (Change zerolayer routine also)
-      ! absorbed shortwave flux for coupler
-
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-         fswabsn(i,j) = fswsfc(i,j) + fswint(i,j) + fswthrun(i,j)
-      enddo
-
       !-----------------------------------------------------------------
       ! Solve for new temperatures.
       ! Iterate until temperatures converge with minimal energy error.
@@ -426,7 +410,7 @@
             dfsurf_dT(ij) = c0
             avg_Tsi  (ij) = c0
             enew     (ij) = c0
-            einex    (m) = c0
+            einex    (m)  = c0
          enddo
 
       !-----------------------------------------------------------------
@@ -885,8 +869,7 @@
                write(nu_diag,*) 'fsurf:', fsurfn(i,j)
                write(nu_diag,*) 'fcondtop, fcondbot, fswint', &
                                  fcondtopn(i,j), fcondbot(ij), fswint(i,j)
-               write(nu_diag,*) 'fswsfc, fswthrun', &
-                                 fswsfc(i,j), fswthrun(i,j)
+               write(nu_diag,*) 'fswsfc', fswsfc(i,j)
                write(nu_diag,*) 'Iswabs',(Iswabs(i,j,k),k=1,nilyr)
                write(nu_diag,*) 'Flux conservation error =', ferr(ij)
                write(nu_diag,*) 'Initial snow temperatures:'
@@ -988,8 +971,7 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-         i, j        , & ! horizontal indices
-         ij, m       , & ! horizontal indices, combine i and j loops
+         ij          , & ! horizontal index, combines i and j loops
          k               ! vertical index
 
       real (kind=dbl_kind), dimension (icells,nilyr) :: &
@@ -1142,16 +1124,7 @@
 
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
-         ij, m       , & ! horizontal indices, combine i and j loops
-         k               ! ice layer index
-
-      real (kind=dbl_kind) :: &
-         TsfK        , & ! ice/snow surface temperature (K)
-         Qsfc        , & ! saturated surface specific humidity (kg/kg)
-         dQsfcdT     , & ! derivative of Qsfc wrt surface temperature
-         qsat        , & ! the saturation humidity of air (kg/m^3)
-         flwdabs     , & ! downward longwave absorbed heat flx (W/m^2)
-         tmpvar          ! 1/TsfK
+         ij, m           ! horizontal indices, combine i and j loops
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1272,7 +1245,7 @@
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij, m       , & ! horizontal indices, combine i and j loops
-         k, ks, ki, kr   ! vertical indices and row counters
+         k, ki, kr       ! vertical indices and row counters
 
       !-----------------------------------------------------------------
       ! Initialize matrix elements.
@@ -1579,7 +1552,7 @@
       integer (kind=int_kind) :: &
          i, j        , & ! horizontal indices
          ij, m       , & ! horizontal indices, combine i and j loops
-         k, ks, ki, kr   ! vertical indices and row counters
+         k, ki, kr       ! vertical indices and row counters
 
       !-----------------------------------------------------------------
       ! Initialize matrix elements.
@@ -1816,7 +1789,6 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-         i, j        , & ! horizontal indices
          ij          , & ! horizontal index, combines i and j loops
          k               ! row counter
 

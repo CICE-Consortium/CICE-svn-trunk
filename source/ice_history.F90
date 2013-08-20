@@ -83,13 +83,10 @@
 
       ! local variables
 
-      integer (kind=int_kind) :: n, k, ns, ns1, ns2, lenf
-      integer (kind=int_kind) :: hfreqn
+      integer (kind=int_kind) :: n, ns, ns1, ns2
       integer (kind=int_kind), dimension(max_nstrm) :: &
          ntmp
       integer (kind=int_kind) :: nml_error ! namelist i/o error flag
-
-      character (len=40) :: stmp
 
       !-----------------------------------------------------------------
       ! read namelist
@@ -1185,9 +1182,7 @@
 
       real (kind=dbl_kind) :: &
            ravgct           , & ! 1/avgct
-           ravgctz          , & ! 1/avgct
-           ai               , & ! aice_init
-           ain                  ! aicen_init
+           ravgctz              ! 1/avgct
 
       real (kind=dbl_kind) :: & 
            qn                , & ! temporary variable for enthalpy

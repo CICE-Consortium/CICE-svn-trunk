@@ -449,7 +449,7 @@
           igrp, igrm, rigr
      
       integer (kind=int_kind) :: &
-           k,m, i, j, ij   ! tracer indice
+           k, i, j, ij   ! tracer indices
 
       !-----------------------------------------------------------------
       ! calculate equilibrium brine density and gradients 
@@ -674,15 +674,13 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
-          iyear, imonth, iday  , &   ! year, month, day
-          nsize, nr0 , nt              
+         i, j, n, iblk          ! counting indices
 
       character(len=char_len_long) :: &
          filename, filename0, string1, string2
 
       logical (kind=log_kind) :: &
-         diag, hit_eof
+         diag
 
       if (my_task == master_task) then
          open(nu_rst_pointer,file=pointer_file)
@@ -755,8 +753,8 @@
       ! local variables
 
       integer (kind=int_kind) :: &
-          i, j, k, n, it, iblk, & ! counting indices
-          iyear, imonth, iday     ! year, month, day
+         i, j, n, iblk          , & ! counting indices
+         iyear, imonth, iday        ! year, month, day
 
       character(len=char_len_long) :: filename
 

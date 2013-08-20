@@ -175,8 +175,7 @@ contains
                                           potT,     Qa,       &
                                           shcoef,   lhcoef,   &
                                           fswsfc,   fswint,   &
-                                          fswthrun, Sswabs,   &
-                                          Iswabs,             &
+                                          Sswabs,   Iswabs,   &
                                           hilyr,    hslyr,    &
                                           qin,      Tin,      &
                                           qsn,      Tsn,      &
@@ -185,8 +184,7 @@ contains
                                           Tsf,      Tbot,     &
                                           sss,                &
                                           fsensn,   flatn,    &
-                                          fswabsn,  flwoutn,  &
-                                          fsurfn,             &
+                                          flwoutn,  fsurfn,   &
                                           fcondtopn,fcondbot, &
                                           fadvocn,  snoice,   &
                                           einit,    l_stop,   &
@@ -221,8 +219,7 @@ contains
     real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
          fswsfc      , & ! SW absorbed at ice/snow surface (W m-2)
-         fswint      , & ! SW absorbed in ice interior below surface (W m-2)
-         fswthrun        ! SW through ice to ocean         (W m-2)
+         fswint          ! SW absorbed in ice interior below surface (W m-2)
     
     real (kind=dbl_kind), dimension (icells), intent(inout) :: &
          hilyr       , & ! ice layer thickness (m)
@@ -244,7 +241,6 @@ contains
          fcondtopn   , & ! downward cond flux at top surface (W m-2)
          fsensn      , & ! surface downward sensible heat (W m-2)
          flatn       , & ! surface downward latent heat (W m-2)
-         fswabsn     , & ! shortwave absorbed by ice (W m-2)
          flwoutn     , & ! upward LW at surface (W m-2)
          fadvocn         ! advection heat flux to ocean
     
@@ -310,7 +306,6 @@ contains
        !                                potT(i,j),     Qa(i,j),       &
        !                                shcoef(i,j),   lhcoef(i,j),   &
        !                                fswsfc(i,j),   fswint(i,j),   &
-       !                                fswthrun(i,j),                &
        !                                Sswabs(i,j,:), Iswabs(i,j,:), &
        !                                hilyr(ij),     hslyr(ij),     &
        !                                qin(ij,:),     Tin(ij,:),     &
@@ -320,8 +315,7 @@ contains
        !                                Tsf(ij),       Tbot(i,j),     &
        !                                sss(i,j),                     &
        !                                fsensn(i,j),   flatn(i,j),    &
-       !                                fswabsn(i,j),  flwoutn(i,j),  &
-       !                                fsurfn(i,j),                  &
+       !                                flwoutn(i,j),  fsurfn(i,j),   &
        !                                fcondtopn(i,j),fcondbot(ij),  &
        !                                fadvocn(i,j),  snoice(i,j),   &
        !                                einit(ij),     l_stop)
@@ -333,7 +327,6 @@ contains
                                              potT(i,j),     Qa(i,j),       &
                                              shcoef(i,j),   lhcoef(i,j),   &
                                              fswsfc(i,j),   fswint(i,j),   &
-                                             fswthrun(i,j),                &
                                              Sswabs(i,j,:), Iswabs(i,j,:), &
                                              hilyr(ij),     hslyr(ij),     &
                                              qin(ij,:),     Tin(ij,:),     &
@@ -343,8 +336,7 @@ contains
                                              Tsf(ij),       Tbot(i,j),     &
                                              sss(i,j),                     &
                                              fsensn(i,j),   flatn(i,j),    &
-                                             fswabsn(i,j),  flwoutn(i,j),  &
-                                             fsurfn(i,j),                  &
+                                             flwoutn(i,j),  fsurfn(i,j),   &
                                              fcondtopn(i,j),fcondbot(ij),  &
                                              fadvocn(i,j),  snoice(i,j),   &
                                              einit(ij),     l_stop)
@@ -376,8 +368,7 @@ contains
                                         potT,     Qa,       &
                                         shcoef,   lhcoef,   &
                                         fswsfc,   fswint,   &
-                                        fswthrun, Sswabs,   &
-                                        Iswabs,             &
+                                        Sswabs,   Iswabs,   &
                                         hilyr,    hslyr,    &
                                         qin,      Tin,      &
                                         qsn,      Tsn,      &
@@ -386,11 +377,10 @@ contains
                                         Tsf,      Tbot,     &
                                         sss,                &
                                         fsensn,   flatn,    &
-                                        fswabsn,  flwoutn,  &
-                                        fsurfn,             &
+                                        flwoutn,  fsurfn,   &
                                         fcondtop, fcondbot, &
                                         fadvheat, snoice,   &
-                                        einit_old, lstop)
+                                        einit_old,lstop)
 
     ! solve the enthalpy and bulk salinity of the ice for a single column
 
@@ -412,8 +402,7 @@ contains
          
     real (kind=dbl_kind), intent(inout) :: &
          fswsfc      , & ! SW absorbed at ice/snow surface (W m-2)
-         fswint      , & ! SW absorbed in ice interior below surface (W m-2)
-         fswthrun        ! SW through ice to ocean  (W m-2)
+         fswint          ! SW absorbed in ice interior below surface (W m-2)
     
     real (kind=dbl_kind), intent(inout) :: &
          hilyr       , & ! ice layer thickness (m)
@@ -435,7 +424,6 @@ contains
          fcondtop    , & ! downward cond flux at top surface (W m-2)
          fsensn      , & ! surface downward sensible heat (W m-2)
          flatn       , & ! surface downward latent heat (W m-2)
-         fswabsn     , & ! shortwave absorbed by ice (W m-2)
          flwoutn         ! upward LW at surface (W m-2)
     
     real (kind=dbl_kind), intent(out):: &
@@ -490,10 +478,6 @@ contains
          wdown       , & ! downwards vertical flushing Darcy velocity (m/s)
          wup         , & ! upwards vertical flushing Darcy velocity (m/s)
          w_scaling   , & !
-         einit       , & ! initial total energy (J)
-         efinal      , & ! final total energy (J)
-         sinit       , & ! initial total salt content (ppt m)
-         sfinal      , & ! final total salt content
          fadvsalt    , & ! heat flux to ocean from brine advection (W m-2)
          snowice_en  , & ! energy added as snowice
          snowice_st  , & ! salt added as snowice
@@ -1381,8 +1365,7 @@ contains
     real(kind=dbl_kind), intent(out) :: &
          einit      ! initial total energy (J)
 
-    integer :: &
-         k          ! vertical layer index
+    integer(kind=int_kind) :: k
 
     ! calculate initial ice temperatures
     do k = 1, nilyr
@@ -1531,8 +1514,7 @@ contains
          lconverged        ! has Picard solver converged?
 
     integer :: &
-         nit           , & ! Picard iteration count
-         k                 ! vertical layer index
+         nit               ! Picard iteration count
 
     integer, parameter :: &
          nit_max = 100     ! maximum number of Picard iterations
@@ -1910,9 +1892,6 @@ contains
          dTsn     , & ! change in snow temperature (C) between iterations
          dTin         ! change in surface temperature (C) between iterations
 
-    integer :: &
-         k            ! vertical layer index
-    
     dTsf = abs(Tsf - Tsf_prev)
 
     if (lsnow) then
@@ -2267,8 +2246,6 @@ contains
          wdown            ! downwards vertical flushing Darcy velocity (m/s)
 
     integer :: &
-         k            , & ! vertical layer index
-         l            , & ! vertical index
          nyn              ! matrix size
 
     wdown = -min(w,c0)
@@ -3434,8 +3411,7 @@ contains
          hbrine     , & ! brine surface height above ice base (m)
          w_down_max , & ! maximum downward flushing Darcy flow rate (m s-1) 
          phi_min    , & ! minimum porosity in the mush
-         wlimit     , & ! limit to w to avoid advecting all brine in layer
-         rtmp
+         wlimit         ! limit to w to avoid advecting all brine in layer
 
     integer(kind=int_kind) :: &
          k             ! ice layer index
@@ -3609,9 +3585,6 @@ contains
     real(kind=dbl_kind), intent(inout) :: &
          hpond     ! melt pond thickness (m)
     
-    real(kind=dbl_kind), dimension(1:nilyr) ::&
-         phi       ! ice layer liquid fraction
-
     real(kind=dbl_kind), parameter :: &
          lambda_pond = c1 / (10.0_dbl_kind * 24.0_dbl_kind * 3600.0_dbl_kind), &
          hpond0 = 0.01_dbl_kind
@@ -3692,16 +3665,10 @@ contains
          qin_snowice , & ! ice enthalpy of new snowice (J m-2)
          qsn_snowice , & ! snow enthalpy of snow thats becoming snowice (J m-2)
          w_lateral   , &
-         w_combined, &
-         w_lateral_limit
+         w_combined
 
     real(kind=dbl_kind), parameter :: &
          dhhead_lateral = -0.1_dbl_kind
-
-    integer :: k
-    real(kind=dbl_kind) :: einit, sinit
-    real(kind=dbl_kind) :: efinal, sfinal
-    real(kind=dbl_kind) :: euncon, suncon
 
     eadded = c0
     sadded = c0
@@ -4336,7 +4303,6 @@ contains
                                               potT,     Qa,       &
                                               shcoef,   lhcoef,   &
                                               fswsfc,   fswint,   &
-                                              fswthrun,           &
                                               Sswabs,   Iswabs,   &
                                               hilyr,    hslyr,    &
                                               qin,      Tin,      &
@@ -4346,8 +4312,7 @@ contains
                                               Tsf,      Tbot,     &
                                               sss,                & !!
                                               fsensn,   flatn,    &
-                                              fswabsn,  flwoutn,  &
-                                              fsurfn,             &
+                                              flwoutn,  fsurfn,   &
                                               fcondtopn,fcondbot, &
                                               fadvocn,  snoice,   & !!
                                               einit,    l_stop)
@@ -4378,8 +4343,7 @@ contains
 
     real(kind=dbl_kind), intent(inout) :: &
          fswsfc      , & ! SW absorbed at ice/snow surface (W m-2)
-         fswint      , & ! SW absorbed in ice interior below surface (W m-2)
-         fswthrun        ! SW through ice to ocean         (W m-2)
+         fswint          ! SW absorbed in ice interior below surface (W m-2)
     
     real(kind=dbl_kind), intent(inout) :: &
          hilyr       , & ! ice layer thickness (m)
@@ -4401,7 +4365,6 @@ contains
          fcondtopn   , & ! downward cond flux at top surface (W m-2)
          fsensn      , & ! surface downward sensible heat (W m-2)
          flatn       , & ! surface downward latent heat (W m-2)
-         fswabsn     , & ! shortwave absorbed by ice (W m-2)
          flwoutn         ! upward LW at surface (W m-2)
     
     real(kind=dbl_kind), intent(out):: &
@@ -4442,7 +4405,6 @@ contains
          sss_in,       sss_sv        , & ! sea surface salinity
          fswsfc_in,    fswsfc_sv     , & ! SW absorbed at ice/snow surface (W m-2)
          fswint_in,    fswint_sv     , & ! SW absorbed in ice interior below surface (W m-2)
-         fswthrun_in,  fswthrun_sv   , & ! SW through ice to ocean         (W m-2)
          hilyr_in,     hilyr_sv      , & ! ice layer thickness (m)
          hslyr_in,     hslyr_sv      , & ! snow layer thickness (m)
          einit_in,     einit_sv      , & ! initial energy of melting (J m-2)
@@ -4450,7 +4412,6 @@ contains
          fcondtopn_in, fcondtopn_sv  , & ! downward cond flux at top surface (W m-2)
          fsensn_in,    fsensn_sv     , & ! surface downward sensible heat (W m-2)
          flatn_in,     flatn_sv      , & ! surface downward latent heat (W m-2)
-         fswabsn_in,   fswabsn_sv    , & ! shortwave absorbed by ice (W m-2)
          flwoutn_in,   flwoutn_sv    , & ! upward LW at surface (W m-2)
          Tsf_in,       Tsf_sv        , & ! ice/snow surface temperature (C)
          hpond_in,     hpond_sv      , & ! melt pond thickness (m)
@@ -4505,7 +4466,6 @@ contains
        sss_in       = sss       ; sss_sv       = sss
        fswsfc_in    = fswsfc    ; fswsfc_sv    = fswsfc
        fswint_in    = fswint    ; fswint_sv    = fswint
-       fswthrun_in  = fswthrun  ; fswthrun_sv  = fswthrun
        hilyr_in     = hilyr     ; hilyr_sv     = hilyr
        hslyr_in     = hslyr     ; hslyr_sv     = hslyr
        einit_in     = einit     ; einit_sv     = einit
@@ -4517,7 +4477,6 @@ contains
        fcondtopn_in = fcondtopn ; fcondtopn_sv = fcondtopn
        fsensn_in    = fsensn    ; fsensn_sv    = fsensn
        flatn_in     = flatn     ; flatn_sv     = flatn
-       fswabsn_in   = fswabsn   ; fswabsn_sv   = fswabsn
        flwoutn_in   = flwoutn   ; flwoutn_sv   = flwoutn
        Tsf_in       = Tsf       ; Tsf_sv       = Tsf
        qin_in       = qin       ; qin_sv       = qin
@@ -4547,7 +4506,6 @@ contains
           read(nu_jfnkdiag,*) sss_in       ; sss_sv       = sss_in
           read(nu_jfnkdiag,*) fswsfc_in    ; fswsfc_sv    = fswsfc_in
           read(nu_jfnkdiag,*) fswint_in    ; fswint_sv    = fswint_in
-          read(nu_jfnkdiag,*) fswthrun_in  ; fswthrun_sv  = fswthrun_in
           read(nu_jfnkdiag,*) hilyr_in     ; hilyr_sv     = hilyr_in
           read(nu_jfnkdiag,*) hslyr_in     ; hslyr_sv     = hslyr_in
           read(nu_jfnkdiag,*) einit_in     ; einit_sv     = einit_in
@@ -4559,7 +4517,6 @@ contains
           read(nu_jfnkdiag,*) fcondtopn_in ; fcondtopn_sv = fcondtopn_in
           read(nu_jfnkdiag,*) fsensn_in    ; fsensn_sv    = fsensn_in
           read(nu_jfnkdiag,*) flatn_in     ; flatn_sv     = flatn_in
-          read(nu_jfnkdiag,*) fswabsn_in   ; fswabsn_sv   = fswabsn_in
           read(nu_jfnkdiag,*) flwoutn_in   ; flwoutn_sv   = flwoutn_in
           read(nu_jfnkdiag,*) Tsf_in       ; Tsf_sv       = Tsf_in
           read(nu_jfnkdiag,*) qin_in       ; qin_sv       = qin_in
@@ -4588,7 +4545,6 @@ contains
           read(nu_jfnkdiag) sss_in       ; sss_sv       = sss_in
           read(nu_jfnkdiag) fswsfc_in    ; fswsfc_sv    = fswsfc_in
           read(nu_jfnkdiag) fswint_in    ; fswint_sv    = fswint_in
-          read(nu_jfnkdiag) fswthrun_in  ; fswthrun_sv  = fswthrun_in
           read(nu_jfnkdiag) hilyr_in     ; hilyr_sv     = hilyr_in
           read(nu_jfnkdiag) hslyr_in     ; hslyr_sv     = hslyr_in
           read(nu_jfnkdiag) einit_in     ; einit_sv     = einit_in
@@ -4600,7 +4556,6 @@ contains
           read(nu_jfnkdiag) fcondtopn_in ; fcondtopn_sv = fcondtopn_in
           read(nu_jfnkdiag) fsensn_in    ; fsensn_sv    = fsensn_in
           read(nu_jfnkdiag) flatn_in     ; flatn_sv     = flatn_in
-          read(nu_jfnkdiag) fswabsn_in   ; fswabsn_sv   = fswabsn_in
           read(nu_jfnkdiag) flwoutn_in   ; flwoutn_sv   = flwoutn_in
           read(nu_jfnkdiag) Tsf_in       ; Tsf_sv       = Tsf_in
           read(nu_jfnkdiag) qin_in       ; qin_sv       = qin_in
@@ -4622,7 +4577,6 @@ contains
                                     potT_in,      Qa_in,       &
                                     shcoef_in,    lhcoef_in,   &
                                     fswsfc_in,    fswint_in,   &
-                                    fswthrun_in,               &
                                     Sswabs_in,    Iswabs_in,   &
                                     hilyr_in,     hslyr_in,    &
                                     qin_in,       Tin_in,      &
@@ -4632,8 +4586,7 @@ contains
                                     Tsf_in,       Tbot_in,     &
                                     sss_in,                    &
                                     fsensn_in,    flatn_in,    &
-                                    fswabsn_in,   flwoutn_in,  &
-                                    fsurfn_in,                 &
+                                    flwoutn_in,   fsurfn_in,   &
                                     fcondtopn_in, fcondbot,    &
                                     fadvocn,      snoice,      &
                                     einit_in,     lstop)
@@ -4645,7 +4598,6 @@ contains
           ! Solution found - copy out solution to output
           fswsfc    = fswsfc_in   
           fswint    = fswint_in   
-          fswthrun  = fswthrun_in  
           Sswabs    = Sswabs_in   
           Iswabs    = Iswabs_in
           hpond     = hpond_in
@@ -4654,7 +4606,6 @@ contains
           fcondtopn = fcondtopn_in
           fsensn    = fsensn_in   
           flatn     = flatn_in    
-          fswabsn   = fswabsn_in  
           flwoutn   = flwoutn_in  
           Tsf       = Tsf_in      
           qin       = qin_in      
@@ -4694,7 +4645,6 @@ contains
              write(nu_jfnkdiag,*) sss_sv     
              write(nu_jfnkdiag,*) fswsfc_sv   
              write(nu_jfnkdiag,*) fswint_sv   
-             write(nu_jfnkdiag,*) fswthrun_sv 
              write(nu_jfnkdiag,*) hilyr_sv    
              write(nu_jfnkdiag,*) hslyr_sv    
              write(nu_jfnkdiag,*) einit_sv    
@@ -4706,7 +4656,6 @@ contains
              write(nu_jfnkdiag,*) fcondtopn_sv
              write(nu_jfnkdiag,*) fsensn_sv   
              write(nu_jfnkdiag,*) flatn_sv    
-             write(nu_jfnkdiag,*) fswabsn_sv  
              write(nu_jfnkdiag,*) flwoutn_sv  
              write(nu_jfnkdiag,*) fcondbot
              write(nu_jfnkdiag,*) fadvocn
@@ -4748,7 +4697,6 @@ contains
              write(nu_jfnkdiag) sss_sv     
              write(nu_jfnkdiag) fswsfc_sv   
              write(nu_jfnkdiag) fswint_sv   
-             write(nu_jfnkdiag) fswthrun_sv 
              write(nu_jfnkdiag) hilyr_sv    
              write(nu_jfnkdiag) hslyr_sv    
              write(nu_jfnkdiag) einit_sv    
@@ -4760,7 +4708,6 @@ contains
              write(nu_jfnkdiag) fcondtopn_sv
              write(nu_jfnkdiag) fsensn_sv   
              write(nu_jfnkdiag) flatn_sv    
-             write(nu_jfnkdiag) fswabsn_sv  
              write(nu_jfnkdiag) flwoutn_sv  
              write(nu_jfnkdiag) fcondbot
              write(nu_jfnkdiag) fadvocn

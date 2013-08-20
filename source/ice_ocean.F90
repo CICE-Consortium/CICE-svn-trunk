@@ -49,7 +49,7 @@
       use ice_flux, only: sst, Tf, Qa, uatm, vatm, wind, potT, rhoa, zlvl, &
            frzmlt, fhocn, fswthru, flw, flwout_ocn, fsens_ocn, flat_ocn, evap_ocn, &
            alvdr_ocn, alidr_ocn, alvdf_ocn, alidf_ocn, swidf, swvdf, swidr, swvdr, &
-           qdp, hmix, strairx_ocn, strairy_ocn, Tref_ocn, Qref_ocn
+           qdp, hmix, strairx_ocn, strairy_ocn, Tref_ocn, Qref_ocn, frzmlt_init
       use ice_grid, only: tmask
       use ice_atmo, only: atmo_boundary_layer, atmbndy, atmo_boundary_const, &
            Cdn_atm, Cdn_atm_ocn
@@ -93,6 +93,7 @@
          icells = 0
          do j = 1, ny_block
          do i = 1, nx_block
+            frzmlt_init  (i,j,iblk) = frzmlt(i,j,iblk) ! save for diags
             if (tmask(i,j,iblk)) then
                icells = icells + 1
                indxi(icells) = i
@@ -212,10 +213,6 @@
 
          ! if sst is below freezing, reset sst to Tf
          if (sst(i,j,iblk) <= Tf(i,j,iblk)) sst(i,j,iblk) = Tf(i,j,iblk)
-
-#if (defined pond_barrow || defined snowice_maksym)
-         frzmlt = c0
-#endif
 
       enddo                     ! ij
 

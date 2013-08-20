@@ -1019,7 +1019,7 @@
       real (kind=dbl_kind) :: &
          invleng, dtemp1, dtemp2, atempprime
 
-      real (kind=dbl_kind) :: &
+      integer (kind=int_kind) :: &
          kx ,ky, ka, fx, fy, fa
 
       real (kind=dbl_kind) :: &

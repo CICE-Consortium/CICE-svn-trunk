@@ -99,8 +99,6 @@
 
       character (len=6) :: chartmp
 
-      logical (kind=log_kind), dimension(max_ntrcr) :: lwork
-
       real (kind=real_kind) :: rpcesm, rplvl, rptopo 
 
       !-----------------------------------------------------------------
@@ -955,7 +953,7 @@
          jlo, jhi    , & ! physical domain indices
          iglob(nx_block), & ! global indices
          jglob(ny_block), & ! global indices
-         i, j, k     , & ! horizontal, vertical indices
+         k           , & ! vertical index
          it          , & ! tracer index
          iblk            ! block index
 

@@ -46,9 +46,6 @@
           timer_couple, timer_step
       use ice_zbgc_shared, only: solve_skl_bgc
 
-      ! local variables
-      integer (kind=int_kind) :: k
-
    !--------------------------------------------------------------------
    !  initialize error code and step timer
    !--------------------------------------------------------------------
@@ -290,14 +287,11 @@
          iblk            ! block index 
 
       ! local variables
-      type (block) :: &
-         this_block      ! block information for current block
 
       integer (kind=int_kind) :: & 
          n           , & ! thickness category index
          i,j         , & ! horizontal indices
-         k           , & ! tracer index
-         ilo,ihi,jlo,jhi ! beginning and end of physical domain
+         k               ! tracer index
 
       real (kind=dbl_kind) :: cszn ! counter for history averaging
 

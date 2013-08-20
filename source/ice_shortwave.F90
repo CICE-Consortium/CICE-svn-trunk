@@ -351,8 +351,7 @@
                                   alvdrn,   alidrn,   &
                                   alvdfn,   alidfn,   &
                                   fswsfc,   fswint,   &
-                                  fswthru,            &
-                                  fswthrul,           &
+                                  fswthru,  fswthrul, &
                                   Iswabs,   SSwabs,   &
                                   albin,    albsn,    &
                                   coszen)
@@ -750,7 +749,7 @@
          coldsnow = 0.81_dbl_kind
 
       integer (kind=int_kind) :: &
-         i, j, n
+         i, j
 
       real (kind=dbl_kind) :: &
          hs      ! snow thickness  (m)

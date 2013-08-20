@@ -232,7 +232,6 @@
       ! local variables
 
       integer (kind=int_kind) ::     &
-         i, j           ,&! horizontal indices
          iblk           ,&! block index
          ilo,ihi,jlo,jhi,&! beginning and end of physical domain
          n              ,&! ice category index
@@ -833,7 +832,7 @@
       ! local variables
 
       integer (kind=int_kind) ::     &
-           i, j, k, n   ,&! standard indices
+           i, j, n      ,&! standard indices
            it, kt       ,&! tracer indices
            ij             ! combined i/j index
 
@@ -1425,7 +1424,7 @@
       ! local variables
 
       integer (kind=int_kind) ::      &
-         i, j, k, n, it ,&! counting indices
+         i, j, n, it    ,&! counting indices
          narrays          ! counter for number of state variable arrays
 
       !-----------------------------------------------------------------
@@ -1561,7 +1560,7 @@
       ! local variables
 
       integer (kind=int_kind) ::      &
-         i, j, k, n , it,&! counting indices
+         i, j, n        ,&! counting indices
          narrays        ,&! counter for number of state variable arrays
          icells           ! number of ocean/ice cells
 
@@ -1651,11 +1650,11 @@
 
       ! local variables
 
-      integer (kind=int_kind) ::     &
-         i, j, k, n           ! standard indices
+      integer (kind=int_kind) :: &
+         i, j, n              ! standard indices
 
-      real (kind=dbl_kind) ::        &
-         upwind, y1, y2, a, h   ! function
+      real (kind=dbl_kind) :: &
+         upwind, y1, y2, a, h ! function
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          worka, workb

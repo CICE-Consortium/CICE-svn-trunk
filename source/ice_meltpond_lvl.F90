@@ -125,7 +125,7 @@
       integer (kind=int_kind), dimension (nx_block*ny_block) :: &
          indxi, indxj     ! compressed indices for cells with ice melting
 
-      integer (kind=int_kind) :: i,j,ij,icells,k
+      integer (kind=int_kind) :: i,j,ij,icells
 
       real (kind=dbl_kind) :: &
          hi                     , & ! ice thickness (m)
@@ -133,7 +133,6 @@
          dTs                    , & ! surface temperature diff for freeze-up (C)
          Tp                     , & ! pond freezing temperature (C)
          Ts                     , & ! surface air temperature (C)
-         asnow                  , & ! area fraction of snow on ice
          apondn, &
          hpondn, &
          dvn   , &

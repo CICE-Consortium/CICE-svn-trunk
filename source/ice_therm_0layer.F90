@@ -45,12 +45,11 @@
                                        rhoa,     flw,      &
                                        potT,     Qa,       &
                                        shcoef,   lhcoef,   &
-                                       fswsfc,   fswthrun, &
+                                       fswsfc,             &
                                        hilyr,    hslyr,    &
                                        Tsf,      Tbot,     &
                                        fsensn,   flatn,    &
-                                       fswabsn,  flwoutn,  &
-                                       fsurfn,             &
+                                       flwoutn,  fsurfn,   &
                                        fcondtopn,fcondbot, &
                                        l_stop,             &
                                        istop,    jstop)
@@ -76,8 +75,7 @@
          shcoef      , & ! transfer coefficient for sensible heat
          lhcoef      , & ! transfer coefficient for latent heat
          Tbot        , & ! ice bottom surface temperature (deg C)
-         fswsfc      , & ! SW absorbed at ice/snow surface (W m-2)
-         fswthrun        ! SW through ice to ocean         (W m-2)
+         fswsfc          ! SW absorbed at ice/snow surface (W m-2)
 
       real (kind=dbl_kind), dimension (icells), intent(in) :: &
          hilyr       , & ! ice layer thickness (m)
@@ -85,7 +83,6 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(inout):: &
          fsensn      , & ! surface downward sensible heat (W m-2)
-         fswabsn     , & ! shortwave flux absorbed by ice (W/m-2) 
          flatn       , & ! surface downward latent heat (W m-2)
          flwoutn     , & ! upward LW at surface (W m-2)
          fsurfn      , & ! net flux to top surface, excluding fcondtopn
@@ -461,9 +458,6 @@
          flwoutn(i,j) = flwoutn(i,j) + dTsf_prev(ij) * dflwout_dT(ij)
          fsensn(i,j)  = fsensn(i,j)  + dTsf_prev(ij) * dfsens_dT(ij)
          flatn(i,j)   = flatn(i,j)   + dTsf_prev(ij) * dflat_dT(ij)
-
-         ! absorbed shortwave flux for coupler
-         fswabsn(i,j) = fswsfc(i,j) + fswthrun(i,j)
 
       enddo                     ! ij
 
