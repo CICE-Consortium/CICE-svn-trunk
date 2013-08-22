@@ -325,7 +325,7 @@
 
       use ice_constants, only: p001
       use ice_therm_shared, only: ktherm
-      use ice_zbgc_shared, only: flux_bio, growN
+      use ice_zbgc_shared, only: flux_bio
 
       integer (kind=int_kind) :: n
 
@@ -460,7 +460,6 @@
       fresh_da(:,:,:) = c0    ! data assimilation
       fsalt_da(:,:,:) = c0
       flux_bio (:,:,:,:) = c0 ! bgc
-      growN (:,:,:,:,:) = c0
 
       !-----------------------------------------------------------------
       ! derived or computed fields
@@ -487,9 +486,9 @@
 
       strairxT(:,:,:) = c0      ! wind stress, T grid
       strairyT(:,:,:) = c0
-!echmod - for rectangular grid tests without thermo
-!      strairxT(:,:,:) = 0.15_dbl_kind
-!      strairyT(:,:,:) = 0.15_dbl_kind
+      ! for rectangular grid tests without thermo
+      ! strairxT(:,:,:) = 0.15_dbl_kind
+      ! strairyT(:,:,:) = 0.15_dbl_kind
 
       fsens   (:,:,:) = c0
       flat    (:,:,:) = c0

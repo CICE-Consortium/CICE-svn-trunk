@@ -841,13 +841,10 @@
 
       use ice_constants, only: c0
 
-!      chl_net  (:,:,:)     = c0
-      PP_net   (:,:,:)     = c0
-!      NO_net   (:,:,:)     = c0
-      grow_net (:,:,:)     = c0
-      hbri     (:,:,:)     = c0
-      growN    (:,:,:,:,:) = c0
-      flux_bio (:,:,:,:)   = c0
+      PP_net     (:,:,:)   = c0
+      grow_net   (:,:,:)   = c0
+      hbri       (:,:,:)   = c0
+      flux_bio   (:,:,:,:) = c0
       flux_bio_ai(:,:,:,:) = c0
 
       end subroutine init_history_bgc

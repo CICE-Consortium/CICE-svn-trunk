@@ -281,6 +281,7 @@
                                albicen, albsnon, albpndn, apeffn
       use ice_state, only: aicen, aice, aice_init, nbtrcr
       use ice_therm_shared, only: calc_Tsfc
+      use ice_timers, only: timer_couple, ice_timer_start, ice_timer_stop
       use ice_zbgc_shared, only: flux_bio, flux_bio_ai
 
       integer (kind=int_kind), intent(in) :: & 
@@ -305,6 +306,8 @@
             frzmlt_init  (i,j,iblk) = frzmlt(i,j,iblk)
          enddo
          enddo
+
+         call ice_timer_start(timer_couple)   ! atm/ocn coupling
 
          if (oceanmixed_ice) &
          call ocean_mixed_layer (dt,iblk) ! ocean surface fluxes and sst
@@ -438,6 +441,8 @@
                           fresh    (:,:,iblk),   fhocn    (:,:,iblk))
          endif                 
 !echmod
+
+         call ice_timer_stop(timer_couple)   ! atm/ocn coupling
 
       end subroutine coupling_prep
 

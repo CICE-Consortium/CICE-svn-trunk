@@ -759,6 +759,8 @@
       enddo                     ! iblk
       !$OMP END PARALLEL DO
  
+      deallocate (works)
+
     !-------------------------------------------------------------------
     ! Ghost cell updates for state variables.
     !-------------------------------------------------------------------
@@ -771,8 +773,6 @@
       call ice_timer_stop(timer_bound)
 
       call ice_timer_stop(timer_advect)  ! advection 
-
-      deallocate (works)
 
       end subroutine transport_upwind
 

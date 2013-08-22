@@ -33,7 +33,6 @@
       public :: init_grid1, init_grid2, &
                 t2ugrid_vector, u2tgrid_vector, &
                 to_ugrid, to_tgrid
-!echmod      save
 
       character (len=char_len_long), public, save :: &
          grid_format  , & ! file format ('bin'=binary or 'nc'=netcdf)

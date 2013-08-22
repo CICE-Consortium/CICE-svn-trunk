@@ -574,8 +574,8 @@
       ! the surface fluxes are merged, below.
       !-----------------------------------------------------------------
 
+         call ice_timer_start(timer_ponds)
          if (tr_pond) then
-            call ice_timer_start(timer_ponds)
 
             if (tr_pond_cesm) then
 !               rfrac(:,:) = 0.15_dbl_kind + 0.7_dbl_kind * aicen(:,:,n,iblk)
@@ -640,11 +640,9 @@
                enddo
             endif
 
-            call ice_timer_stop(timer_ponds)
          endif
 
          if (tr_pond .and. trim(shortwave) /= 'dEdd') then
-            call ice_timer_start(timer_ponds)
 
             rfrac(:,:) = c1
 
@@ -659,8 +657,8 @@
                                    trcrn(:,:,nt_apnd,n,iblk),                   &
                                    trcrn(:,:,nt_hpnd,n,iblk))
 
-            call ice_timer_stop(timer_ponds)
          endif
+         call ice_timer_stop(timer_ponds)
 
       !-----------------------------------------------------------------
       ! Increment area-weighted fluxes.
@@ -701,8 +699,8 @@
       !-----------------------------------------------------------------
       ! Calculate ponds from the topographic scheme
       !-----------------------------------------------------------------
+            call ice_timer_start(timer_ponds)
             if (tr_pond_topo) then
-               call ice_timer_start(timer_ponds)
                call compute_ponds_topo(nx_block, ny_block,                     &
                                     ilo, ihi, jlo, jhi,                        &
                                     dt,                                        &
@@ -717,8 +715,8 @@
                                     trcrn(:,:,nt_apnd,:,iblk),                 &
                                     trcrn(:,:,nt_hpnd,:,iblk),                 &
                                     trcrn(:,:,nt_ipnd,:,iblk))
-               call ice_timer_stop(timer_ponds)
             endif
+            call ice_timer_stop(timer_ponds)
 
       end subroutine step_therm1
 
@@ -1123,7 +1121,6 @@
 
       call ice_timer_start(timer_column)
       call ice_timer_start(timer_ridge)
-
 
       !$OMP PARALLEL DO PRIVATE(iblk)
       do iblk = 1, nblocks

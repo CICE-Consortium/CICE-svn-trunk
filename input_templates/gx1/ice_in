@@ -85,6 +85,7 @@
 
 &zbgc_nml
     tr_brine        = .false.
+  , restart_hbrine  = .false.
   , solve_skl_bgc   = .false.
   , restore_bgc     = .false.
   , bgc_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/gx1v3/forcing/'
@@ -98,7 +99,6 @@
   , tr_bgc_DMSPd_sk = .false.
   , tr_bgc_DMS_sk   = .false.
   , restart_bgc     = .false.
-  , restart_hbrine  = .false.
   , phi_snow        = 0.5
   , initbio_frac    = 0.55
 /
@@ -125,6 +125,8 @@
   , R_ice           = 0.
   , R_pnd           = 0.
   , R_snw           = 1.5
+  , dT_mlt          = 1.5
+  , rsnw_mlt        = 1500.
   , hs0             = 0.
   , hs1             = 0.03
   , dpscale         = 1.e-3

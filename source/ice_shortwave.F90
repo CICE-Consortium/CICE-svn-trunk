@@ -94,25 +94,24 @@
          dimension (nx_block,ny_block,nslyr,ncat,max_blocks), public :: &
          Sswabsn         ! SW radiation absorbed in snow layers (W m-2)
 
-
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks), &
          public :: &
          fswsfcn     , & ! SW absorbed at ice/snow surface (W m-2)
          fswthrun    , & ! SW through ice to ocean            (W/m^2)
          fswintn         ! SW absorbed in ice interior, below surface (W m-2)
 
-
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1,ncat,max_blocks), &
          public :: &
          fswthruln       ! visible SW  at ice interior (W m-2)
 
-      ! melt pond tuning parameters, set in namelist
+      ! dEdd tuning parameters, set in namelist
       real (kind=dbl_kind), public :: &
          R_ice , & ! sea ice tuning parameter; +1 > 1sig increase in albedo
          R_pnd , & ! ponded ice tuning parameter; +1 > 1sig increase in albedo
-         R_snw     ! snow tuning parameter; +1 > ~.01 change in broadband albedo
+         R_snw , & ! snow tuning parameter; +1 > ~.01 change in broadband albedo
+         dT_mlt, & ! change in temp for non-melt to melt snow grain radius change (C)
+         rsnw_mlt  ! maximum melting snow grain radius (10^-6 m)
 
-      ! for delta Eddington
       real (kind=dbl_kind), parameter, public :: &
          hi_ssl = 0.050_dbl_kind, & ! ice surface scattering layer thickness (m)
          hs_ssl = 0.040_dbl_kind    ! snow surface scattering layer thickness (m)
@@ -120,11 +119,6 @@
       real (kind=dbl_kind), parameter :: &
          hpmin  = 0.005_dbl_kind, & ! minimum allowed melt pond depth (m)
          hp0    = 0.200_dbl_kind    ! pond depth below which transition to bare ice
-
-      ! non public variables
-      real (kind=dbl_kind) :: &
-         dT_mlt_in          , &  ! temperature at which melt begins (tuning)
-         rsnw_melt_in            ! maximum snow grain radius (tuning)
 
       real (kind=dbl_kind) :: &
          exp_min              ! minimum exponential value
@@ -167,12 +161,6 @@
 
       type (block) :: &
          this_block      ! block information for current block
-
-!echmod temporary (will move to namelist)
-         dT_mlt_in    = 1.5_dbl_kind   ! change in temp to give non-melt to melt change
-                                       ! in snow grain radius
-         rsnw_melt_in = 1500._dbl_kind ! maximum melting snow grain radius
-!echmod
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j)
       do iblk=1,nblocks
@@ -567,13 +555,13 @@
       ! local variables
 
       real (kind=dbl_kind), parameter :: &
-         dT_mlt    = c1          , & ! change in temp to give dalb_mlt 
+         dT_melt    = c1          , & ! change in temp to give dalb_mlt 
                                      ! albedo change
-         dalb_mlt  = -0.075_dbl_kind, & ! albedo change per dT_mlt change
+         dalb_mlt  = -0.075_dbl_kind, & ! albedo change per dT_melt change
                                      ! in temp for ice
-         dalb_mltv = -p1         , & ! albedo vis change per dT_mlt change
+         dalb_mltv = -p1         , & ! albedo vis change per dT_melt change
                                      ! in temp for snow
-         dalb_mlti = -p15            ! albedo nir change per dT_mlt change
+         dalb_mlti = -p15            ! albedo nir change per dT_melt change
                                      ! in temp for snow
 
       integer (kind=int_kind) :: &
@@ -638,7 +626,7 @@
 
          ! bare ice, temperature dependence
          dTs = Timelt - Tsfcn(i,j)
-         fT = min(dTs/dT_mlt-c1,c0)
+         fT = min(dTs/dT_melt-c1,c0)
          alvdfni(i,j) = alvdfni(i,j) - dalb_mlt*fT
          alidfni(i,j) = alidfni(i,j) - dalb_mlt*fT
 
@@ -3624,15 +3612,7 @@
          rsnw_nonmelt  =  500._dbl_kind, & ! nonmelt snow grain radius
          rsnw_sig      =  250._dbl_kind    ! assumed sigma for snow grain radius
 
-       real (kind=dbl_kind) :: &
-         dT_mlt            , & ! change in temp to give non-melt to melt change
-                               ! in snow grain radius
-         rsnw_melt             ! melting snow grain radius
-
 !-----------------------------------------------------------------------
-
-      dT_mlt    = dT_mlt_in    ! from namelist
-      rsnw_melt = rsnw_melt_in
 
       fs(:,:)       = c0
       hs(:,:)       = c0
@@ -3668,14 +3648,14 @@
            ! snow grain radius is reduced and thus albedo increased.
            rsnw_nm = rsnw_nonmelt - R_snw*rsnw_sig
            rsnw_nm = max(rsnw_nm, rsnw_fresh)
-           rsnw_nm = min(rsnw_nm, rsnw_melt) 
+           rsnw_nm = min(rsnw_nm, rsnw_mlt) 
            do ks = 1, nslyr
              ! snow density ccsm3 constant value
              rhosnw(i,j,ks) = rhos
-             ! snow grain radius between rsnw_nonmelt and rsnw_melt
-             rsnw(i,j,ks) = rsnw_nm + (rsnw_melt-rsnw_nm)*fT
+             ! snow grain radius between rsnw_nonmelt and rsnw_mlt
+             rsnw(i,j,ks) = rsnw_nm + (rsnw_mlt-rsnw_nm)*fT
              rsnw(i,j,ks) = max(rsnw(i,j,ks), rsnw_fresh)
-             rsnw(i,j,ks) = min(rsnw(i,j,ks), rsnw_melt) 
+             rsnw(i,j,ks) = min(rsnw(i,j,ks), rsnw_mlt)
            enddo        ! ks
       enddo          ! ij
 
@@ -3728,7 +3708,7 @@
          dTs     ! difference of Tsfc and Timelt
 
       real (kind=dbl_kind), parameter :: &
-         dT_mlt    = c1   ! change in temp for pond fraction and depth
+         dT_pnd = c1   ! change in temp for pond fraction and depth
 
 !-----------------------------------------------------------------------
 
@@ -3748,7 +3728,7 @@
          j = indxj(ij)
          ! bare ice, temperature dependence
          dTs = Timelt - Tsfc(i,j)
-         fT  = -min(dTs/dT_mlt-c1,c0)
+         fT  = -min(dTs/dT_pnd-c1,c0)
          ! pond
          fp(i,j) = 0.3_dbl_kind*fT*(c1-fs(i,j))
          hp(i,j) = 0.3_dbl_kind*fT*(c1-fs(i,j))
