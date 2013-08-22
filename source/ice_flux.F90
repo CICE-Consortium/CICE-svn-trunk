@@ -325,7 +325,7 @@
 
       use ice_constants, only: p001
       use ice_therm_shared, only: ktherm
-      use ice_zbgc_shared, only: flux_bio, upNO, upNH, growN
+      use ice_zbgc_shared, only: flux_bio, growN
 
       integer (kind=int_kind) :: n
 
@@ -460,8 +460,6 @@
       fresh_da(:,:,:) = c0    ! data assimilation
       fsalt_da(:,:,:) = c0
       flux_bio (:,:,:,:) = c0 ! bgc
-      upNO  (:,:,:,:) = c0
-      upNH  (:,:,:,:) = c0
       growN (:,:,:,:,:) = c0
 
       !-----------------------------------------------------------------
@@ -516,7 +514,7 @@
 
       subroutine init_flux_ocn
 
-      use ice_zbgc_shared, only: flux_bio, upNO, upNH
+      use ice_zbgc_shared, only: flux_bio
 
       !-----------------------------------------------------------------
       ! fluxes sent
@@ -529,9 +527,6 @@
       faero_ocn(:,:,:,:) = c0
  
       flux_bio (:,:,:,:) = c0  ! bgc
-
-      upNO  (:,:,:,:) = c0
-      upNH  (:,:,:,:) = c0
 
       end subroutine init_flux_ocn
 

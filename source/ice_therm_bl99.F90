@@ -25,7 +25,7 @@
       public :: surface_fluxes, temperature_changes
 
       real (kind=dbl_kind), parameter, public :: &
-         hs_min = 1.e-4_dbl_kind    ! min snow thickness for computing Tsno (m)
+         hs_min = 1.e-4_dbl_kind    ! min snow thickness for computing zTsn (m)
 
       real (kind=dbl_kind), parameter :: &
          betak   = 0.13_dbl_kind, & ! constant in formula for k (W m-1 ppt-1)
@@ -62,9 +62,9 @@
                                       fswsfc,   fswint,   &
                                       Sswabs,   Iswabs,   &
                                       hilyr,    hslyr,    &
-                                      qin,      Tin,      &
-                                      qsn,      Tsn,      &
-                                      Sin,                &
+                                      zqin,     zTin,     &
+                                      zqsn,     zTsn,     &
+                                      zSin,               &
                                       Tsf,      Tbot,     &
                                       fsensn,   flatn,    &
                                       flwoutn,  fsurfn,   &
@@ -133,14 +133,14 @@
 
       real (kind=dbl_kind), dimension (icells,nilyr), &
          intent(inout) :: &
-         qin         , & ! ice layer enthalpy (J m-3)
-         Tin         , & ! internal ice layer temperatures
-         Sin             ! internal ice layer salinities
+         zqin        , & ! ice layer enthalpy (J m-3)
+         zTin        , & ! internal ice layer temperatures
+         zSin            ! internal ice layer salinities
 
       real (kind=dbl_kind), dimension (icells,nslyr), &
          intent(inout) :: &
-         qsn         , & ! snow layer enthalpy (J m-3)
-         Tsn             ! internal snow layer temperatures
+         zqsn        , & ! snow layer enthalpy (J m-3)
+         zTsn            ! internal snow layer temperatures
 
       logical (kind=log_kind), intent(inout) :: &
          l_stop          ! if true, print diagnostics and abort model
@@ -196,15 +196,15 @@
          ferr            ! energy conservation error (W m-2)
 
       real (kind=dbl_kind), dimension (icells,nilyr) :: &
-         Tin_init    , & ! Tin at beginning of time step
-         Tin_start   , & ! Tin at start of iteration
-         dTmat       , & ! Tin - matrix solution before limiting
+         Tin_init    , & ! zTin at beginning of time step
+         Tin_start   , & ! zTin at start of iteration
+         dTmat       , & ! zTin - matrix solution before limiting
          dqmat       , & ! associated enthalpy difference
          Tmlts           ! melting temp, -depressT * salinity
 
       real (kind=dbl_kind), dimension (icells,nslyr) :: &
-         Tsn_init    , & ! Tsn at beginning of time step
-         Tsn_start   , & ! Tsn at start of iteration
+         Tsn_init    , & ! zTsn at beginning of time step
+         Tsn_start   , & ! zTsn at start of iteration
          etas            ! dt / (rho * cp * h) for snow layers
 
       real (kind=dbl_kind), dimension (:,:), allocatable :: &
@@ -261,8 +261,8 @@
 
       do k = 1, nslyr
          do ij = 1, icells
-            Tsn_init (ij,k) = Tsn(ij,k) ! beginning of time step
-            Tsn_start(ij,k) = Tsn(ij,k) ! beginning of iteration
+            Tsn_init (ij,k) = zTsn(ij,k) ! beginning of time step
+            Tsn_start(ij,k) = zTsn(ij,k) ! beginning of iteration
             if (l_snow(ij)) then
                etas(ij,k) = dt/(rhos*cp_ice*hslyr(ij))
             else
@@ -273,9 +273,9 @@
 
       do k = 1, nilyr
          do ij = 1, icells
-            Tin_init (ij,k) =  Tin(ij,k)   ! beginning of time step
-            Tin_start(ij,k) =  Tin(ij,k)   ! beginning of iteration
-            Tmlts    (ij,k) = -Sin(ij,k) * depressT
+            Tin_init (ij,k) =  zTin(ij,k)   ! beginning of time step
+            Tin_start(ij,k) =  zTin(ij,k)   ! beginning of iteration
+            Tmlts    (ij,k) = -zSin(ij,k) * depressT
          enddo
       enddo
 
@@ -290,7 +290,7 @@
                          l_snow,   icells,           &
                          indxi,    indxj,    indxij, &
                          hilyr,    hslyr,            &
-                         Tin,      kh,       Sin)
+                         zTin,     kh,       zSin)
 
       !-----------------------------------------------------------------
       ! Check for excessive absorbed solar radiation that may result in
@@ -428,7 +428,7 @@
 
                if (l_brine) then
                   ci = cp_ice - Lfresh*Tmlts(m,k) /  &
-                                (Tin(m,k)*Tin_init(m,k))
+                                (zTin(m,k)*Tin_init(m,k))
                else
                   ci = cp_ice
                endif
@@ -475,9 +475,9 @@
       !-----------------------------------------------------------------
 
             if (l_snow(m)) then
-               fcondtopn(i,j) = kh(m,1) * (Tsf(m) - Tsn(m,1))
+               fcondtopn(i,j) = kh(m,1) * (Tsf(m) - zTsn(m,1))
             else
-               fcondtopn(i,j) = kh(m,1+nslyr) * (Tsf(m) - Tin(m,1))
+               fcondtopn(i,j) = kh(m,1+nslyr) * (Tsf(m) - zTin(m,1))
             endif
 
             if (fsurfn(i,j) < fcondtopn(i,j)) &
@@ -557,12 +557,12 @@
       !        the net change in internal ice energy per unit time,
       !        within the prescribed error ferrmax.
       !
-      ! For briny ice (the standard case), Tsn and Tin are limited
+      ! For briny ice (the standard case), zTsn and zTin are limited
       !  to prevent them from exceeding their melting temperatures.
       !  (Note that the specific heat formula for briny ice assumes
       !  that T < Tmlt.)  
       ! For fresh ice there is no limiting, since there are cases
-      !  when the only convergent solution has Tsn > 0 and/or Tin > 0.
+      !  when the only convergent solution has zTsn > 0 and/or zTin > 0.
       !  Above-zero temperatures are then reset to zero (with melting 
       !  to conserve energy) in the thickness_changes subroutine.
       !-----------------------------------------------------------------
@@ -601,7 +601,7 @@
 
       !-----------------------------------------------------------------
       ! Condition 1: check for Tsf > 0
-      ! If Tsf > 0, set Tsf = 0, then average Tsn and Tin to force
+      ! If Tsf > 0, set Tsf = 0, then average zTsn and zTin to force
       ! internal temps below their melting temps.
       !-----------------------------------------------------------------
 
@@ -653,30 +653,30 @@
                m = indxij(ij)
 
       !-----------------------------------------------------------------
-      ! Reload Tsn from matrix solution
+      ! Reload zTsn from matrix solution
       !-----------------------------------------------------------------
 
                if (l_snow(m)) then
-                  Tsn(m,k) = Tmat(ij,k+1)
+                  zTsn(m,k) = Tmat(ij,k+1)
                else
-                  Tsn(m,k) = c0
+                  zTsn(m,k) = c0
                endif
-               if (l_brine) Tsn(m,k) = min(Tsn(m,k), c0)
+               if (l_brine) zTsn(m,k) = min(zTsn(m,k), c0)
 
       !-----------------------------------------------------------------
       ! If condition 1 or 2 failed, average new snow layer
       !  temperatures with their starting values.
       !-----------------------------------------------------------------
-               Tsn(m,k) = Tsn(m,k) &
-                         + avg_Tsi(ij)*p5*(Tsn_start(m,k)-Tsn(m,k))
+               zTsn(m,k) = zTsn(m,k) &
+                         + avg_Tsi(ij)*p5*(Tsn_start(m,k)-zTsn(m,k))
 
       !-----------------------------------------------------------------
-      ! Compute qsn and increment new energy.
+      ! Compute zqsn and increment new energy.
       !-----------------------------------------------------------------
-               qsn(m,k) = -rhos * (Lfresh - cp_ice*Tsn(m,k))
-               enew(ij) = enew(ij) + hslyr(m) * qsn(m,k)
+               zqsn(m,k) = -rhos * (Lfresh - cp_ice*zTsn(m,k))
+               enew(ij)  = enew(ij) + hslyr(m) * zqsn(m,k)
 
-               Tsn_start(m,k) = Tsn(m,k) ! for next iteration
+               Tsn_start(m,k) = zTsn(m,k) ! for next iteration
 
             enddo               ! ij
          enddo                  ! nslyr
@@ -692,30 +692,30 @@
                m = indxij(ij)
 
       !-----------------------------------------------------------------
-      ! Reload Tin from matrix solution
+      ! Reload zTin from matrix solution
       !-----------------------------------------------------------------
 
-               Tin(m,k) = Tmat(ij,k+1+nslyr)
+               zTin(m,k) = Tmat(ij,k+1+nslyr)
 
-               if (l_brine .and. Tin(m,k) > Tmlts(m,k) - puny) then
-                  dTmat(m,k) = Tin(m,k) - Tmlts(m,k)
+               if (l_brine .and. zTin(m,k) > Tmlts(m,k) - puny) then
+                  dTmat(m,k) = zTin(m,k) - Tmlts(m,k)
 !echmod: return this energy to the ocean
                   dqmat(m,k) = rhoi * dTmat(m,k) &
-                             * (cp_ice - Lfresh * Tmlts(m,k)/Tin(m,k)**2)
+                             * (cp_ice - Lfresh * Tmlts(m,k)/zTin(m,k)**2)
 ! use this for the case that Tmlt changes by an amount dTmlt=Tmltnew-Tmlt(k)
 !                             + rhoi * dTmlt &
-!                             * (cp_ocn - cp_ice + Lfresh/Tin(m,k))
-                  Tin(m,k) = Tmlts(m,k)
+!                             * (cp_ocn - cp_ice + Lfresh/zTin(m,k))
+                  zTin(m,k) = Tmlts(m,k)
                   reduce_kh(m,k) = .true.
                endif
 
       !-----------------------------------------------------------------
-      ! Condition 2b: check for oscillating Tin(1)
+      ! Condition 2b: check for oscillating zTin(1)
       ! If oscillating, average all ice temps to increase rate of convergence.
       !-----------------------------------------------------------------
 
                if (k==1 .and. .not.calc_Tsfc) then
-                  dTi1(ij) = Tin(m,k) - Tin_start(m,k)
+                  dTi1(ij) = zTin(m,k) - Tin_start(m,k)
 
                   if (niter > 1 &                    ! condition 2b    
                       .and. abs(dTi1(ij)) > puny &
@@ -734,23 +734,23 @@
       ! If condition 1 or 2 failed, average new ice layer
       !  temperatures with their starting values.
       !-----------------------------------------------------------------
-               Tin(m,k) = Tin(m,k) &
-                         + avg_Tsi(ij)*p5*(Tin_start(m,k)-Tin(m,k))
+               zTin(m,k) = zTin(m,k) &
+                         + avg_Tsi(ij)*p5*(Tin_start(m,k)-zTin(m,k))
 
       !-----------------------------------------------------------------
-      ! Compute qin and increment new energy.
+      ! Compute zqin and increment new energy.
       !-----------------------------------------------------------------
                if (l_brine) then
-                  qin(m,k) = -rhoi * (cp_ice*(Tmlts(m,k)-Tin(m,k)) &
-                                      + Lfresh*(c1-Tmlts(m,k)/Tin(m,k)) &
+                  zqin(m,k) = -rhoi * (cp_ice*(Tmlts(m,k)-zTin(m,k)) &
+                                      + Lfresh*(c1-Tmlts(m,k)/zTin(m,k)) &
                                       - cp_ocn*Tmlts(m,k))
                else
-                  qin(m,k) = -rhoi * (-cp_ice*Tin(m,k) + Lfresh)
+                  zqin(m,k) = -rhoi * (-cp_ice*zTin(m,k) + Lfresh)
                endif
-               enew(ij) = enew(ij) + hilyr(m) * qin(m,k)
+               enew(ij) = enew(ij) + hilyr(m) * zqin(m,k)
                einex(m) = einex(m) + hilyr(m) * dqmat(m,k)
 
-               Tin_start(m,k) = Tin(m,k) ! for next iteration
+               Tin_start(m,k) = zTin(m,k) ! for next iteration
 
             enddo               ! ij
          enddo                  ! nilyr
@@ -780,9 +780,9 @@
 
             fsurfn(i,j) = fsurfn(i,j) + dTsf(ij)*dfsurf_dT(ij)
             if (l_snow(m)) then
-               fcondtopn(i,j) = kh(m,1) * (Tsf(m)-Tsn(m,1))
+               fcondtopn(i,j) = kh(m,1) * (Tsf(m)-zTsn(m,1))
             else
-               fcondtopn(i,j) = kh(m,1+nslyr) * (Tsf(m)-Tin(m,1))
+               fcondtopn(i,j) = kh(m,1+nslyr) * (Tsf(m)-zTin(m,1))
             endif
 
             if (Tsf(m) > -puny .and. fsurfn(i,j) < fcondtopn(i,j)) then
@@ -806,7 +806,7 @@
             m = indxij(ij)
 
             fcondbot(m) = kh(m,1+nslyr+nilyr) * &
-                          (Tin(m,nilyr) - Tbot(i,j))
+                          (zTin(m,nilyr) - Tbot(i,j))
 
             ! Flux extra energy out of the ice
             fcondbot(m) = fcondbot(m) + einex(m)/dt 
@@ -881,22 +881,22 @@
                write(nu_diag,*) 'dqmat*hilyr/dt:'
                write(nu_diag,*) (hilyr(ij)*dqmat(ij,k)/dt,k=1,nilyr)
                write(nu_diag,*) 'Final snow temperatures:'
-               write(nu_diag,*) (Tsn(ij,k),k=1,nslyr)
+               write(nu_diag,*) (zTsn(ij,k),k=1,nslyr)
                write(nu_diag,*) 'Matrix ice temperature diff:'
                write(nu_diag,*) (dTmat(ij,k),k=1,nilyr)
                write(nu_diag,*) 'dqmat*hilyr/dt:'
                write(nu_diag,*) (hilyr(ij)*dqmat(ij,k)/dt,k=1,nilyr)
                write(nu_diag,*) 'Final ice temperatures:'
-               write(nu_diag,*) (Tin(ij,k),k=1,nilyr)
+               write(nu_diag,*) (zTin(ij,k),k=1,nilyr)
                write(nu_diag,*) 'Ice melting temperatures:'
                write(nu_diag,*) (Tmlts(ij,k),k=1,nilyr)
                write(nu_diag,*) 'Ice bottom temperature:', Tbot(i,j)
                write(nu_diag,*) 'dT initial:'
                write(nu_diag,*) (Tmlts(ij,k)-Tin_init(ij,k),k=1,nilyr)
                write(nu_diag,*) 'dT final:'
-               write(nu_diag,*) (Tmlts(ij,k)-Tin(ij,k),k=1,nilyr)
-               write(nu_diag,*) 'Sin'
-               write(nu_diag,*) (Sin(ij,k),k=1,nilyr)
+               write(nu_diag,*) (Tmlts(ij,k)-zTin(ij,k),k=1,nilyr)
+               write(nu_diag,*) 'zSin'
+               write(nu_diag,*) (zSin(ij,k),k=1,nilyr)
                l_stop = .true.
                istop = i
                jstop = j
@@ -937,7 +937,7 @@
                                l_snow,   icells,           &
                                indxi,    indxj,    indxij, &
                                hilyr,    hslyr,            &
-                               Tin,      kh,       Sin)
+                               zTin,      kh,       zSin)
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -961,8 +961,8 @@
 
       real (kind=dbl_kind), dimension (icells,nilyr), &
          intent(in) :: &
-         Tin         , & ! internal ice layer temperatures
-         Sin             ! internal ice layer salinities
+         zTin         , & ! internal ice layer temperatures
+         zSin             ! internal ice layer salinities
 
       real (kind=dbl_kind), dimension (icells,nilyr+nslyr+1), &
          intent(out) :: &
@@ -995,7 +995,7 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             do ij = 1, icells
-               kilyr(ij,k) = kice + betak*Sin(ij,k)/min(-puny,Tin(ij,k))
+               kilyr(ij,k) = kice + betak*zSin(ij,k)/min(-puny,zTin(ij,k))
                kilyr(ij,k) = max (kilyr(ij,k), kimin)
             enddo
          enddo                     ! nilyr
@@ -1006,8 +1006,8 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             do ij = 1, icells
-               kilyr(ij,k) = (2.11_dbl_kind - 0.011_dbl_kind*Tin(ij,k) &
-                            + 0.09_dbl_kind*Sin(ij,k)/min(-puny,Tin(ij,k))) &
+               kilyr(ij,k) = (2.11_dbl_kind - 0.011_dbl_kind*zTin(ij,k) &
+                            + 0.09_dbl_kind*zSin(ij,k)/min(-puny,zTin(ij,k))) &
                             * rhoi / 917._dbl_kind
                kilyr(ij,k) = max (kilyr(ij,k), kimin)
             enddo

@@ -196,8 +196,7 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) :: &
          esnon , &    ! energy of melting for each snow layer (J/m^2)
          vbrin, &     ! ice volume with defined by brine height (m)
-         Shin, &      ! Bulk salt in h ice (ppt*m)
-         hinS, SinS   ! save initial brine height, salt content
+         sicen        ! Bulk salt in h ice (ppt*m)
 
       real (kind=dbl_kind), dimension (icells) :: &
          asum       , & ! sum of ice and open water area
@@ -304,15 +303,12 @@
       ! Compute initial values of conserved quantities. 
       !-----------------------------------------------------------------
 
-      hinS(:,:,:) = c0
-
       if (l_conservation_check) then
 
       eicen(:,:,:) = c0
       esnon(:,:,:) = c0
       vbrin(:,:,:) = c0
-      Shin(:,:,:) = c0
-      SinS(:,:,:) = c0
+      sicen(:,:,:) = c0
 
       do n = 1, ncat
       do j = 1, ny_block
@@ -343,7 +339,7 @@
       do k = 1, nilyr
       do j = 1, ny_block
       do i = 1, nx_block
-         Shin(i,j,n) = Shin(i,j,n) + trcrn(i,j,nt_sice+k-1,n) &
+         sicen(i,j,n) = sicen(i,j,n) + trcrn(i,j,nt_sice+k-1,n) &
                       * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
       enddo
       enddo
@@ -379,7 +375,7 @@
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
                           ncat,                     &
-                          Shin,    Shi_init)
+                          sicen,    Shi_init)
 
       endif            
 
@@ -472,7 +468,7 @@
 
       eicen(:,:,:) = c0
       esnon(:,:,:) = c0
-      Shin(:,:,:) = c0
+      sicen(:,:,:) = c0
       vbrin(:,:,:) = c0
 
       do n = 1, ncat
@@ -505,7 +501,7 @@
       do k = 1, nilyr
       do j = 1, ny_block
       do i = 1, nx_block
-         Shin(i,j,n) = Shin(i,j,n) + trcrn(i,j,nt_sice+k-1,n) &
+         sicen(i,j,n) = sicen(i,j,n) + trcrn(i,j,nt_sice+k-1,n) &
                       * vicen(i,j,n)/real(nilyr,kind=dbl_kind)
       enddo
       enddo
@@ -536,7 +532,7 @@
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
                           ncat,                     &
-                          Shin,    Shi_final)
+                          sicen,    Shi_final)
 
          call column_sum (nx_block, ny_block,       &
                           icells,   indxi,   indxj, &
@@ -586,7 +582,7 @@
                                          istop,     jstop)
          if (l_stop) return         
 
-         fieldid = 'Shin, ridging'
+         fieldid = 'sice, ridging'
          call column_conservation_check (nx_block,  ny_block,      &
                                          icells,    indxi,  indxj, &
                                          fieldid,                  &

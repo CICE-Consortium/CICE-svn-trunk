@@ -253,10 +253,6 @@
          cinit  , & ! initial concentration (mmol/m^2)
          congel_alg ! congelation flux contribution to ice algae (mmol/m^2 s) 
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         upNOn      ,&  !  algal NO uptake rate (mmol/m^3/s)
-         upNHn          !  algal NH uptake rate (mmol/m^3/s)
-
       real (kind=dbl_kind), dimension (nbtrcr):: &
          flux_bio_temp, & ! tracer flux to ocean (mmol/m^2 s)
          PVflag       , & ! 1 for tracers that flow with the brine, 0 otherwise
@@ -429,15 +425,12 @@
       ! begin building biogeochemistry terms
       !-----------------------------------------------------------------------
 
-!echmod note upNOn and upNHn are not used
-            
       call algal_dyn (nx_block,        ny_block,        &
                       icells,          dt,              &
                       indxi,           indxj,           &
                       fswthrul,        react,           & 
                       cinit,           nbtrcr,          &
-                      grow_Cn,         upNOn,           &
-                      upNHn,                            &
+                      grow_Cn,                          &
                       tr_bgc_N_sk,     tr_bgc_Nit_sk,   &
                       tr_bgc_Am_sk,    tr_bgc_Sil_sk,   &
                       tr_bgc_C_sk,     tr_bgc_chl_sk,   &
@@ -521,8 +514,7 @@
                             indxi,        indxj,        &
                             fswthrul,     reactb,       & 
                             ltrcrn,       nbtrcr,       &
-                            growN,        upNOn,        &
-                            upNHn,                      &
+                            growN,                      &
                             tr_bio_N,     tr_bio_NO,    &
                             tr_bio_NH,    tr_bio_Sil,   &
                             tr_bio_C,     tr_bio_chl,   &
@@ -547,9 +539,7 @@
          fswthrul   ! average shortwave passing through current ice layer (W/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(inout) :: &
-         growN,  &  !  algal specific growth rate   (1/s)
-         upNOn,  &  !  algal NO uptake  rate   (mmol/m^3 s)
-         upNHn      !  algal NH uptake rate    (mmol/m^3 s)
+         growN      !  algal specific growth rate   (1/s)
 
       real (kind=dbl_kind), dimension(icells,nbtrcr), intent(inout) :: &
          reactb     ! biological reaction terms (mmol/m^3)
@@ -809,8 +799,6 @@
 
          growN(i,j) = grow_N 
          if (Nin > c0) growN(i,j) = grow_N/Nin  ! specific growth rate (per s)
-         upNOn(i,j) = U_Nit
-         upNHn(i,j) = U_Am
 
       !-----------------------------------------------------------------------
       ! Define reaction terms
