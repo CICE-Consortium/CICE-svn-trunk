@@ -944,6 +944,7 @@
       use ice_broadcast, only: broadcast_scalar
       use ice_constants, only: c0, mps_to_cmpdy, c100
       use ice_diagnostics, only: npnt, print_points, pmloc, piloc, pjloc, pbloc
+      use ice_timers, only: timer_bgc, ice_timer_start, ice_timer_stop
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -959,6 +960,8 @@
          pDMSPp_sk, pDMSPd_sk, pDMS_sk, pN_ac, &
          pNit_ac, pAm_ac, pSil_ac, pDMSP_ac, pDMS_ac, &
          pflux_NO, pflux_N, pflux_Sil, pflux_NH
+
+      call ice_timer_start(timer_bgc) ! biogeochemistry
 
       if (print_points) then
 
@@ -1102,6 +1105,8 @@
       endif                   ! print_points
 
       endif                   ! my_task = master_task 
+
+      call ice_timer_stop(timer_bgc) ! biogeochemistry
 
   900 format (a25,2x,f24.17,2x,f24.17)
 

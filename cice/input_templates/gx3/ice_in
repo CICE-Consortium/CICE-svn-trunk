@@ -85,6 +85,7 @@
 
 &zbgc_nml
     tr_brine        = .false.
+  , restart_hbrine  = .false.
   , solve_skl_bgc   = .false.
   , restore_bgc     = .false.
   , bgc_data_dir    = 'unknown_bgc_data_dir'
@@ -100,7 +101,6 @@
   , tr_bgc_DMSPd_sk = .false.
   , tr_bgc_DMS_sk   = .false.
   , restart_bgc     = .false.
-  , restart_hbrine  = .false.
   , phi_snow        = 0.5
   , initbio_frac    = 0.55
 /
@@ -110,30 +110,32 @@
   , kdyn            = 1
   , ndte            = 120
   , revised_evp     = .false.
+  , advection       = 'remap'
   , kstrength       = 1
   , krdg_partic     = 1
   , krdg_redist     = 1
-  , mu_rdg          = 4
-  , advection       = 'remap'
+  , mu_rdg          = 3
   , ktherm          = 1
-  , conduct         = 'MU71'
-  , shortwave       = 'default'
+  , conduct         = 'bubbly'
+  , shortwave       = 'dEdd'
   , albedo_type     = 'default'
   , albicev         = 0.78
   , albicei         = 0.36
   , albsnowv        = 0.98
   , albsnowi        = 0.70 
-  , ahmax           = 0.5
+  , ahmax           = 0.3
   , R_ice           = 0.
   , R_pnd           = 0.
   , R_snw           = 1.5
-  , hs0             = 0.03
+  , dT_mlt          = 1.5
+  , rsnw_mlt        = 1500.
+  , hs0             = 0.
   , hs1             = 0.03
   , dpscale         = 1.e-3
-  , frzpnd          = 'cesm'
-  , snowinfil       = .false.
+  , frzpnd          = 'hlid'
+  , snowinfil       = .true.
   , rfracmin        = 0.15
-  , rfracmax        = 0.85
+  , rfracmax        = 1.
   , pndaspect       = 0.8
   , atmbndy         = 'default'
   , fyear_init      = 1997

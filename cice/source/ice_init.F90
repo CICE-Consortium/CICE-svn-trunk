@@ -68,7 +68,7 @@
       use ice_dyn_shared, only: ndte, kdyn, revised_evp, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, ahmax, &
                                shortwave, albedo_type, R_ice, R_pnd, &
-                               R_snw
+                               R_snw, dT_mlt, rsnw_mlt
       use ice_atmo, only: atmbndy, calc_strair, calc_formdrag
       use ice_transport_driver, only: advection
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, &
@@ -129,6 +129,7 @@
         ktherm,         conduct,         shortwave,     albedo_type,    &
         albicev,        albicei,         albsnowv,      albsnowi,       &
         ahmax,          R_ice,           R_pnd,         R_snw,          &
+        dT_mlt,         rsnw_mlt,                                       &
         hs0,            dpscale,         frzpnd,        snowinfil,      &
         rfracmin,       rfracmax,        pndaspect,     hs1,            &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
@@ -220,6 +221,9 @@
       R_ice     = 0.00_dbl_kind   ! tuning parameter for sea ice
       R_pnd     = 0.00_dbl_kind   ! tuning parameter for ponded sea ice
       R_snw     = 1.50_dbl_kind   ! tuning parameter for snow over sea ice
+      dT_mlt    = 1.5_dbl_kind    ! change in temp to give non-melt to melt change
+                                  ! in snow grain radius
+      rsnw_mlt  = 1500._dbl_kind  ! maximum melting snow grain radius
       hs0       = 0.03_dbl_kind   ! snow depth for transition to bare sea ice (m)
       hs1       = 0.03_dbl_kind   ! snow depth for transition to bare pond ice (m)
       dpscale   = c1              ! alter e-folding time scale for flushing 

@@ -72,7 +72,7 @@
       use ice_history_mechred, only: init_hist_mechred_2D, init_hist_mechred_3Dc
       use ice_history_pond, only: init_hist_pond_2D, init_hist_pond_3Dc
       use ice_history_bgc, only: init_hist_bgc_2D, init_hist_bgc_3Dc, &
-          init_hist_bgc_3Db, init_hist_bgc_4Db
+          init_hist_bgc_4Db
       use ice_history_drag, only: init_hist_drag_2D
       use ice_restart, only: restart
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero, tr_brine

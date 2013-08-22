@@ -1214,9 +1214,9 @@
 
 ! echmod: is this necessary?
 !         if (ktherm == 1) then
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
+!!DIR$ CONCURRENT !Cray
+!!cdir nodep      !NEC
+!!ocl novrec      !Fujitsu
 !            do ij = 1, icells
 !               if (zTin(ij,k)>= -zSin(ij,k)*depressT) then
 !                   zTin(ij,k) = -zSin(ij,k)*depressT - puny

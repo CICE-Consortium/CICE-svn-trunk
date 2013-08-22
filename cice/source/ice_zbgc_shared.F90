@@ -91,10 +91,6 @@
          R_S2N      = 0.03_dbl_kind , & ! algal S to N (mole/mole)
          fr_resp    = 0.05_dbl_kind     ! respiration fraction
 
-      real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,nblyr,ncat,max_blocks), public :: &
-         growN              ! algal growth rate (mmol/m^3/s)
-
       !-----------------------------------------------------------------
       ! skeletal layer biogeochemistry
       !-----------------------------------------------------------------
@@ -145,10 +141,8 @@
 
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,max_blocks), public :: &
-!         chl_net        , & ! Total chla (mg chla/m^2) per grid cell
          grow_net       , & ! Specific growth rate (/s) per grid cell
          PP_net         , & ! Total production (mg C/m^2/s) per grid cell
-!         NO_net         , & ! Total production (mg C/m^2/s) per grid cell
          hbri               ! brine height
 
       real (kind=dbl_kind), dimension (nblyr+2), public :: &

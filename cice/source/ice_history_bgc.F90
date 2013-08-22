@@ -15,7 +15,7 @@
 
       implicit none
       private
-      public :: init_hist_bgc_2D, init_hist_bgc_3Dc, init_hist_bgc_3Db, &
+      public :: init_hist_bgc_2D, init_hist_bgc_3Dc, &
                 init_hist_bgc_4Db, accum_hist_bgc
       save
       
@@ -37,7 +37,6 @@
            f_bgc_DMS_sk   = 'x', f_bgc_Sil_ml   = 'x', &
            f_bgc_Nit_ml   = 'x', f_bgc_Am_ml    = 'x', &
            f_bgc_DMSP_ml  = 'x', f_bgc_DMS_ml   = 'x', &
-           f_upNO         = 'x', f_upNH         = 'x', &
            f_bTin         = 'x', f_bphi         = 'x', &
            f_bgc_NO       = 'x', &
            f_bgc_N        = 'x', f_bgc_NH       = 'x', &
@@ -46,9 +45,7 @@
            f_bgc_DMS      = 'x', f_bgc_Sil      = 'x', &
            f_bgc_PON      = 'x', f_bgc_S        = 'x', &
            f_fbri         = 'x', f_hbri         = 'x', &
-           f_growN        = 'x', f_chlnet       = 'x', &
-           f_PPnet        = 'x', f_NOnet        = 'x', &
-           f_grownet      = 'x'
+           f_grownet      = 'x', f_PPnet        = 'x'
 
       !---------------------------------------------------------------
       ! namelist variables
@@ -68,7 +65,6 @@
            f_bgc_DMS_sk  , f_bgc_Sil_ml  , &
            f_bgc_Nit_ml  , f_bgc_Am_ml   , &
            f_bgc_DMSP_ml , f_bgc_DMS_ml  , &
-           f_upNO        , f_upNH        , &
            f_bTin        , f_bphi        , &
            f_bgc_NO      , &
            f_bgc_N       , f_bgc_NH      , &
@@ -77,9 +73,7 @@
            f_bgc_DMS     , f_bgc_Sil     , &
            f_bgc_PON     , f_bgc_S       , &
            f_fbri        , f_hbri        , &
-           f_growN       , f_chlnet      , &
-           f_PPnet       , f_NOnet       , &
-           f_grownet     
+           f_grownet     , f_PPnet       
 
       !---------------------------------------------------------------
       ! field indices
@@ -105,7 +99,6 @@
            n_bgc_DMS_sk  , n_bgc_Sil_ml  , &
            n_bgc_Nit_ml  , n_bgc_Am_ml   , &
            n_bgc_DMSP_ml , n_bgc_DMS_ml  , &
-           n_upNO        , n_upNH        , &
            n_bTin        , n_bphi        , &
            n_bgc_NO      , &
            n_bgc_N       , n_bgc_NH      , &
@@ -114,9 +107,7 @@
            n_bgc_DMS     , n_bgc_Sil     , &
            n_bgc_PON     , n_bgc_S       , &
            n_fbri        , n_hbri        , &
-           n_growN       , n_chlnet      , &
-           n_PPnet       , n_NOnet       , &
-           n_grownet     
+           n_grownet     , n_PPnet       
 
 !=======================================================================
 
@@ -201,12 +192,7 @@
           f_fN_ai = 'x'
           f_fSil = 'x'
           f_fSil_ai = 'x'
-          f_upNO = 'x'
-          f_upNH = 'x'
-          f_growN = 'x'
-          f_chlnet = 'x'
           f_PPnet = 'x'
-          f_NOnet = 'x'
       endif
       if (.not. tr_bgc_C_sk) f_bgc_C_sk = 'x'
       if (.not. tr_bgc_chl_sk) f_bgc_chl_sk = 'x'
@@ -262,13 +248,8 @@
       call broadcast_scalar (f_bgc_DMS_ml,   master_task)     
       call broadcast_scalar (f_bTin,         master_task)
       call broadcast_scalar (f_bphi,         master_task)
-      call broadcast_scalar (f_growN,        master_task)
-      call broadcast_scalar (f_chlnet,       master_task)
       call broadcast_scalar (f_PPnet,        master_task)
-      call broadcast_scalar (f_NOnet,        master_task)
       call broadcast_scalar (f_grownet,      master_task)
-      call broadcast_scalar (f_upNO,         master_task)
-      call broadcast_scalar (f_upNH,         master_task)
 
       ! 2D variables
       do ns = 1, nstreams
@@ -437,18 +418,6 @@
              "weighted by ice area", c1, c0,                                    &
              ns, f_fSil_ai)
       
-      if (f_chlnet(1:1) /= 'x') &
-         call define_hist_field(n_chlnet,"chl_net","mg chl/m^2",tstr2D, tcstr, &
-             "Net Chlorophyll",                                                &
-             "weighted by ice area ", c1, c0,                                  &
-             ns, f_chlnet)
-
-      if (f_NOnet(1:1) /= 'x') &
-         call define_hist_field(n_NOnet,"NO_net","mmol NO/m^2",tstr2D, tcstr, &
-             "Net Nitrate",                                                   &
-             "weighted by ice area", c1, c0,                                  &
-             ns, f_NOnet)
-
      ! both skl and zbgc
        
       if (f_PPnet(1:1) /= 'x') &
@@ -497,35 +466,6 @@
 
 !=======================================================================
 
-      subroutine init_hist_bgc_3Db
-
-      use ice_calendar, only: nstreams
-      use ice_constants, only: c0, secday
-      use ice_history_shared, only: tstr3Db, tcstr, define_hist_field
-
-      integer (kind=int_kind) :: ns
-      
-      ! 3D (vertical) ice biology variables
-
-      do ns = 1, nstreams
-      
-       if (f_upNO(1:1) /= 'x') &
-         call define_hist_field(n_upNO,"upNO","mmol/m^3/d",tstr3Db, tcstr, &
-             "Algal NO uptake rate",                      &
-             "Positive flux is NO to N pool", secday, c0, &
-             ns, f_upNO)
-
-       if (f_upNH(1:1) /= 'x') &
-         call define_hist_field(n_upNH,"upNH","mmol/m^3/d",tstr3Db, tcstr, &
-             "Algal NH uptake rate",                      &
-             "Positive flux is NH to N pool", secday, c0, &
-             ns, f_upNH)
-      enddo   !ns
-
-      end subroutine init_hist_bgc_3Db
-
-!=======================================================================
-
       subroutine init_hist_bgc_4Db
 
       use ice_calendar, only: nstreams
@@ -549,12 +489,6 @@
                 "porosity", "brine volume fraction", c100, c0, &
                 ns, f_bphi)
          
-       if (f_growN(1:1) /= 'x') &
-            call define_hist_field(n_growN,"growN","d^-1",tstr4Db, tcstr, &
-                "Specific algal growth rate",                      &
-                "on bio grid valid for (2:nblyr+1)", secday , c0,  &
-                ns, f_growN)
-      
       enddo  !ns
 
       end subroutine init_hist_bgc_4Db
@@ -704,15 +638,9 @@
       if (f_fSil_ai(1:1)/= 'x') &
          call accum_hist_field(n_fSil_ai, iblk, &
               flux_bio_ai(:,:,nlt_bgc_Sil,iblk), a2D)
-!      if (f_chlnet  (1:1) /= 'x') &
-!         call accum_hist_field(n_chlnet,  iblk, &
-!                              chl_net(:,:,iblk), a2D)
       if (f_PPnet  (1:1) /= 'x') &
          call accum_hist_field(n_PPnet,   iblk, &
                                PP_net(:,:,iblk), a2D)
-!      if (f_NOnet  (1:1) /= 'x') &
-!         call accum_hist_field(n_NOnet,   iblk, &
-!                               NO_net(:,:,iblk), a2D)
       if (f_grownet  (1:1) /= 'x') &
          call accum_hist_field(n_grownet, iblk, &
                              grow_net(:,:,iblk), a2D)
@@ -729,23 +657,6 @@
       if (f_bTin  (1:1) /= 'x')  &
          call accum_hist_field(n_bTin-n4Dscum, iblk, nzblyr, ncat_hist, &
                                bTiz(:,:,1:nzblyr,1:ncat_hist,iblk), a4Db)
-
-      if (f_growN   (1:1) /= 'x') then
-         workzn(:,:,:,:) = c0
-         do n = 1, ncat_hist
-            do j = jlo, jhi
-               do i = ilo, ihi
-                  if (aicen(i,j,n,iblk) > puny) then
-                     workzn(i,j,1,n) = growN(i,j,1,n,iblk) 
-                     workzn(i,j,2:nblyr+1,n) = growN(i,j,1:nblyr,n,iblk)
-                     workzn(i,j,nblyr+2,n) = growN(i,j,nblyr,n,iblk) 
-                  endif
-               enddo    ! j
-            enddo       ! i 
-         enddo          ! n
-         call accum_hist_field(n_growN-n4Dscum, iblk, nzblyr, ncat_hist, &
-                               workzn(:,:,1:nzblyr,1:ncat_hist), a4Db)
-      endif
 
       if (f_bphi  (1:1) /= 'x') then
          workzn(:,:,:,:) = c0

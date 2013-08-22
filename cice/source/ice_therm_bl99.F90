@@ -699,7 +699,6 @@
 
                if (l_brine .and. zTin(m,k) > Tmlts(m,k) - puny) then
                   dTmat(m,k) = zTin(m,k) - Tmlts(m,k)
-!echmod: return this energy to the ocean
                   dqmat(m,k) = rhoi * dTmat(m,k) &
                              * (cp_ice - Lfresh * Tmlts(m,k)/zTin(m,k)**2)
 ! use this for the case that Tmlt changes by an amount dTmlt=Tmltnew-Tmlt(k)

@@ -719,8 +719,8 @@
                              uvel,     vvel,     &
                              uocn,     vocn,     &
                              aiu,      fm,       &
-                             strintx,  strinty,& ! echmod - HB87
-                             strairx,  strairy,& ! echmod - HB87
+                             strintx,  strinty,  &
+                             strairx,  strairy,  &
                              strocnx,  strocny,  &
                              strocnxT, strocnyT) 
 

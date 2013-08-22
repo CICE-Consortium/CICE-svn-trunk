@@ -172,7 +172,7 @@
    end do
 
    call get_ice_timer(timer_total,    'Total',    nblocks,distrb_info%nprocs)
-   call get_ice_timer(timer_step,     'Step',     nblocks,distrb_info%nprocs)
+   call get_ice_timer(timer_step,     'TimeLoop', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_dynamics, 'Dynamics', nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_advect,   'Advection',nblocks,distrb_info%nprocs)
    call get_ice_timer(timer_column,   'Column',   nblocks,distrb_info%nprocs)
