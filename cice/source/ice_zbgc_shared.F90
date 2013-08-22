@@ -95,11 +95,6 @@
          dimension (nx_block,ny_block,nblyr,ncat,max_blocks), public :: &
          growN              ! algal growth rate (mmol/m^3/s)
 
-      real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,nblyr,max_blocks), public :: &
-         upNO           , & ! nitrate uptake rate (mmol/m^3/s)
-         upNH               ! ammonium uptake rate (mmol/m^3/s)
-
       !-----------------------------------------------------------------
       ! skeletal layer biogeochemistry
       !-----------------------------------------------------------------
@@ -146,15 +141,14 @@
          dh_top     , & ! brine top change
          dh_bot     , & ! brine bottom change
          dhi_top    , & ! ice top change
-         dhi_bot    , & ! ice bottom change
-         sice_rho       ! avg sea ice density  (kg/m^3)  ! ech: diagnostic only?
+         dhi_bot        ! ice bottom change
 
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,max_blocks), public :: &
-         chl_net        , & ! Total chla (mg chla/m^2) per grid cell
+!         chl_net        , & ! Total chla (mg chla/m^2) per grid cell
          grow_net       , & ! Specific growth rate (/s) per grid cell
          PP_net         , & ! Total production (mg C/m^2/s) per grid cell
-         NO_net         , & ! Total production (mg C/m^2/s) per grid cell
+!         NO_net         , & ! Total production (mg C/m^2/s) per grid cell
          hbri               ! brine height
 
       real (kind=dbl_kind), dimension (nblyr+2), public :: &
@@ -168,8 +162,8 @@
 
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,nblyr+2,ncat,max_blocks), public :: &
-         zphi           , & ! porosity of layers    
-         zTin               ! layer temperatures interpolated on bio grid (C)
+         bphi           , & ! porosity of layers    
+         bTiz               ! layer temperatures interpolated on bio grid (C)
 
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,ncat,max_blocks), public :: &

@@ -154,9 +154,9 @@
       call broadcast_scalar(restart_bgc,        master_task)
 
       if (solve_skl_bgc) then
-            tr_bgc_N_sk      = .true.   !minimum NP biogeochemistry
+            tr_bgc_N_sk      = .true.   ! minimum NP biogeochemistry
             tr_bgc_Nit_sk    = .true.
-      else                              ! 
+      else
             tr_bgc_N_sk      = .false.
             tr_bgc_C_sk      = .false.
             tr_bgc_chl_sk    = .false.
@@ -558,18 +558,17 @@
       integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
          indxi, indxj    ! indirect indices for cells with aicen > puny
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+      real (kind=dbl_kind), dimension (nx_block*ny_block) :: &
          hin         , & ! new ice thickness
-         hsn         , & !snow thickness  (m)
+         hsn         , & ! snow thickness  (m)
          hinS_old    , & ! old brine thickness before growh/melt
-         zphi_o      , & ! surface ice porosity 
          kavg        , & ! average ice permeability (m^2)
-         grow_Cn     , & ! C growth
+         zphi_o      , & ! surface ice porosity 
          hbrin           ! brine height
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr+2) :: &
+      real (kind=dbl_kind), dimension (nx_block*ny_block,nblyr+2) :: &
       ! Defined on Bio Grid points
-         Sinn        , & ! salinity on the bio grid  (ppt)
+         bSin        , & ! salinity on the bio grid  (ppt)
          brine_sal   , & ! brine salinity (ppt)
          brine_rho   , & ! brine_density (kg/m^3)
       ! Defined on Bio Grid interfaces
@@ -577,13 +576,12 @@
          ibrine_sal  , & ! brine salinity  (ppt)
          ibrine_rho      ! brine_density (kg/m^3)
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         grow_Cn         ! C growth
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr) :: &
          flux_bion       ! tracer flux to ocean
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nblyr) :: &
-         upNOn       , & ! nitrate uptake rate (mmol/m^3/s)
-         upNHn           ! ammonium uptake rate (mmol/m^3/s)
-    
       type (block) :: &
          this_block      ! block information for current block
 
@@ -632,15 +630,6 @@
             enddo
             enddo
 
-            hsn(:,:)     = c0
-            hin(:,:)     = c0
-            Sinn(:,:,:)  = c0
-            upNOn(:,:,:) = c0
-            upNHn(:,:,:) = c0 
-            hbrin(:,:)   = c0
-            kavg(:,:)    = c0
-            zphi_o(:,:)  = c0
-      
             icells = 0
             do j = jlo, jhi
             do i = ilo, ihi
@@ -674,8 +663,8 @@
                                 hinS_old,            hin,                 &
                                 hsn,                 first_ice(:,:,n,iblk))
 
-               ! Requires the average ice permeability = kavg(:,:)
-               ! and the surface ice porosity = zphi_o(:,:)
+               ! Requires the average ice permeability = kavg(:)
+               ! and the surface ice porosity = zphi_o(:)
                ! computed in "compute_microS" or from "thermosaline_vertical"
 
                call compute_microS_mushy (nx_block,  ny_block,            &
@@ -684,12 +673,11 @@
                                 trcrn(:,:,:,n,iblk), hin_old(:,:,n,iblk), &
                                 hinS_old,                                 &
                                 sss  (:,:,iblk),     sst(:,:,iblk),       & 
-                                zTin (:,:,:,n,iblk), zphi(:,:,:,n,iblk),  &
+                                bTiz (:,:,:,n,iblk), bphi(:,:,:,n,iblk),  &
                                 kavg,                zphi_o,              &
-                                Sinn,                brine_sal,           &
+                                bSin,                brine_sal,           &
                                 brine_rho,           iphin,               &
-                                ibrine_rho,          ibrine_sal,          &
-                                sice_rho(:,:,n,iblk))
+                                ibrine_rho,          ibrine_sal)
  
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -700,15 +688,15 @@
 
                call update_hbrine (meltbn  (i,j,n,iblk), melttn(i,j,n,iblk), &
                                    meltsn  (i,j,n,iblk), dt,                 &
-                                   hin     (i,j),        hsn   (i,j),        &
-                                   hin_old (i,j,n,iblk), hbrin (i,j),        &
-                                   hinS_old(i,j),                            &
-                                   trcrn (i,j,nt_fbri,n,iblk),               &
+                                   hin     (ij),         hsn   (ij),        &
+                                   hin_old (i,j,n,iblk), hbrin (ij),        &
+                                   hinS_old(ij),                            &
+                                   trcrn   (i,j,nt_fbri,n,iblk),             &
                                    dh_top  (i,j,n,iblk), dh_bot(i,j,n,iblk), &
-                                   kavg    (i,j),        zphi_o(i,j),        &
+                                   kavg    (ij),         zphi_o(ij),        &
                                    darcy_V (i,j,n,iblk))
                     
-               hbri(i,j,iblk) = hbri(i,j,iblk) + hbrin(i,j)*aicen_init(i,j,n,iblk)  
+               hbri(i,j,iblk) = hbri(i,j,iblk) + hbrin(ij)*aicen_init(i,j,n,iblk)  
                enddo                     ! ij
 
             endif ! tr_brine
@@ -853,11 +841,9 @@
 
       use ice_constants, only: c0
 
-      upNO     (:,:,:,:)   = c0
-      upNH     (:,:,:,:)   = c0
-      chl_net  (:,:,:)     = c0
+!      chl_net  (:,:,:)     = c0
       PP_net   (:,:,:)     = c0
-      NO_net   (:,:,:)     = c0
+!      NO_net   (:,:,:)     = c0
       grow_net (:,:,:)     = c0
       hbri     (:,:,:)     = c0
       growN    (:,:,:,:,:) = c0

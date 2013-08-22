@@ -43,6 +43,7 @@
 
       real (kind=dbl_kind), parameter, public :: &
          saltmax = 3.2_dbl_kind,   & ! max salinity at ice base for BL99 (ppt)
+         ! phi_init and dSin0_frazil are used for ktherm=2
          phi_init = 0.75_dbl_kind, & ! initial liquid fraction of frazil
          dSin0_frazil = c3 ! bulk salinity reduction of newly formed frazil
 
@@ -206,13 +207,13 @@
          works           ! local work array
 
       real (kind=dbl_kind), dimension (icells,nilyr) :: &
-         qin         , & ! ice layer enthalpy, qin < 0 (J m-3)
-         Tin         , & ! internal ice layer temperatures
-         Sin             ! internal ice layer salinities
+         zqin        , & ! ice layer enthalpy, zqin < 0 (J m-3)
+         zTin        , & ! internal ice layer temperatures
+         zSin            ! internal ice layer salinities
 
       real (kind=dbl_kind), dimension (icells,nslyr) :: &
-         qsn         , & ! snow layer enthalpy, qsn < 0 (J m-3)
-         Tsn             ! internal snow layer temperatures
+         zqsn        , & ! snow layer enthalpy, zqsn < 0 (J m-3)
+         zTsn            ! internal snow layer temperatures
 
 ! other 2D flux and energy variables
 
@@ -284,9 +285,9 @@
                                   trcrn(:,:,:),               &
                                   hin,          hilyr,        &
                                   hsn,          hslyr,        &
-                                  qin,          Tin,          &
-                                  qsn,          Tsn,          &
-                                  Sin,                        &
+                                  zqin,         zTin,         &
+                                  zqsn,         zTsn,         &
+                                  zSin,                       &
                                   Tsf,          einit,        &
                                   Tbot,         l_stop,       &
                                   istop,        jstop)
@@ -317,9 +318,9 @@
                                               fswsfc,        fswint,   &
                                               Sswabs,        Iswabs,   &
                                               hilyr,         hslyr,    &
-                                              qin,           Tin,      &
-                                              qsn,           Tsn,      &
-                                              Sin,                     &
+                                              zqin,          zTin,     &
+                                              zqsn,          zTsn,     &
+                                              zSin,                    &
                                               trcrn,                   &
                                               Tsf,           Tbot,     &
                                               sss,                     &
@@ -342,9 +343,9 @@
                                      fswsfc,        fswint,   &
                                      Sswabs,        Iswabs,   &
                                      hilyr,         hslyr,    &
-                                     qin,           Tin,      &
-                                     qsn,           Tsn,      &
-                                     Sin,                     &
+                                     zqin,          zTin,     &
+                                     zqsn,          zTsn,     &
+                                     zSin,                    &
                                      Tsf,           Tbot,     &
                                      fsensn,        flatn,    &
                                      flwoutn,       fsurfn,   &
@@ -396,10 +397,10 @@
             do ij = 1, icells
                einter(ij) = c0
                do k = 1, nslyr
-                  einter(ij) = einter(ij) + hslyr(ij) * qsn(ij,k)
+                  einter(ij) = einter(ij) + hslyr(ij) * zqsn(ij,k)
                enddo ! k
                do k = 1, nilyr
-                  einter(ij) = einter(ij) + hilyr(ij) * qin(ij,k)
+                  einter(ij) = einter(ij) + hilyr(ij) * zqin(ij,k)
                enddo ! k
             enddo ! ij
 
@@ -418,7 +419,7 @@
                                 efinal,                 &
                                 hin,          hilyr,    &
                                 hsn,          hslyr,    &
-                                qin,          qsn,      &
+                                zqin,         zqsn,     &
                                 fbot,         Tbot,     &
                                 flatn,        fsurfn,   &
                                 fcondtopn,    fcondbot, &
@@ -428,7 +429,7 @@
                                 meltb,        iage,     &
                                 congel,       snoice,   &
                                 mlt_onset,    frz_onset,&
-                                Sin,          sss,      &
+                                zSin,         sss,      &
                                 dsnow,        fbri)
 
       !-----------------------------------------------------------------
@@ -487,8 +488,8 @@
                                    indxi,        indxj,      &
                                    Tbot,         Tsf,        &     
                                    hin,          hsn,        &
-                                   qin,          Sin,        &
-                                   qsn,                      &
+                                   zqin,         zSin,       &
+                                   zqsn,                     &
                                    aicen(:,:),               &
                                    vicen(:,:),   vsnon(:,:), &
                                    trcrn(:,:,:))
@@ -800,7 +801,7 @@
 !
 ! Given the state variables (vicen, vsnon, trcrn)
 ! compute variables needed for the vertical thermodynamics
-! (hin, hsn, qin, qsn, Tin, Tsn, Tsf).
+! (hin, hsn, zqin, zqsn, zTin, zTsn, Tsf).
 !
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
@@ -813,9 +814,9 @@
                                        vsnon,    trcrn,    &
                                        hin,      hilyr,    &
                                        hsn,      hslyr,    &
-                                       qin,      Tin,      &
-                                       qsn,      Tsn,      &
-                                       Sin,                &
+                                       zqin,     zTin,     &
+                                       zqsn,     zTsn,     &
+                                       zSin,               &
                                        Tsf,      einit,    &
                                        Tbot,     l_stop,   &
                                        istop,    jstop)
@@ -858,14 +859,14 @@
 
       real (kind=dbl_kind), dimension (icells,nilyr), &
          intent(out) :: &
-         qin         , & ! ice layer enthalpy (J m-3)
-         Tin         , & ! internal ice layer temperatures
-         Sin             ! internal ice layer salinities
+         zqin        , & ! ice layer enthalpy (J m-3)
+         zTin        , & ! internal ice layer temperatures
+         zSin            ! internal ice layer salinities
 
       real (kind=dbl_kind), dimension (icells,nslyr), &
          intent(out) :: &
-         qsn         , & ! snow enthalpy
-         Tsn             ! snow temperature
+         zqsn        , & ! snow enthalpy
+         zTsn            ! snow temperature
 
       logical (kind=log_kind), intent(inout) :: &
          l_stop          ! if true, print diagnostics and abort model
@@ -887,14 +888,14 @@
          k               ! ice layer index
 
       real (kind=dbl_kind) :: &
-         rnslyr,        & ! real(nslyr)
-         Tmax             ! maximum allowed snow/ice temperature (deg C)
+         rnslyr,       & ! real(nslyr)
+         Tmax            ! maximum allowed snow/ice temperature (deg C)
 
       logical (kind=log_kind) :: &   ! for vector-friendly error checks
-         tsno_high   , & ! flag for Tsn > Tmax
-         tice_high   , & ! flag for Tin > Tmlt
-         tsno_low    , & ! flag for Tsn < Tmin
-         tice_low        ! flag for Tin < Tmin
+         tsno_high   , & ! flag for zTsn > Tmax
+         tice_high   , & ! flag for zTin > Tmlt
+         tsno_low    , & ! flag for zTsn < Tmin
+         tice_low        ! flag for zTin < Tmin
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -937,7 +938,7 @@
 
       !-----------------------------------------------------------------
       ! Snow enthalpy and maximum allowed snow temperature
-      ! If heat_capacity = F, qsn and Tsn are used only for checking
+      ! If heat_capacity = F, zqsn and zTsn are used only for checking
       ! conservation.
       !-----------------------------------------------------------------
 
@@ -957,27 +958,27 @@
       !-----------------------------------------------------------------
 
             if (hslyr(ij) > hs_min/rnslyr .and. heat_capacity) then
-               ! qsn < 0              
-               qsn(ij,k) = trcrn(i,j,nt_qsno+k-1)
-               Tmax = -qsn(ij,k)*puny*rnslyr / &
+               ! zqsn < 0              
+               zqsn(ij,k) = trcrn(i,j,nt_qsno+k-1)
+               Tmax = -zqsn(ij,k)*puny*rnslyr / &
                        (rhos*cp_ice*vsnon(i,j))
             else
-               qsn  (ij,k) = -rhos * Lfresh
+               zqsn  (ij,k) = -rhos * Lfresh
                Tmax = puny
             endif
 
       !-----------------------------------------------------------------
       ! Compute snow temperatures from enthalpies.
-      ! Note: qsn <= -rhos*Lfresh, so Tsn <= 0.
+      ! Note: zqsn <= -rhos*Lfresh, so zTsn <= 0.
       !-----------------------------------------------------------------
-            Tsn(ij,k) = (Lfresh + qsn(ij,k)/rhos)/cp_ice
+            zTsn(ij,k) = (Lfresh + zqsn(ij,k)/rhos)/cp_ice
 
       !-----------------------------------------------------------------
-      ! Check for Tsn > Tmax (allowing for roundoff error) and Tsn < Tmin.
+      ! Check for zTsn > Tmax (allowing for roundoff error) and zTsn < Tmin.
       !-----------------------------------------------------------------
-            if (Tsn(ij,k) > Tmax) then
+            if (zTsn(ij,k) > Tmax) then
                tsno_high = .true.
-            elseif (Tsn(ij,k) < Tmin) then
+            elseif (zTsn(ij,k) < Tmin) then
                tsno_low  = .true.
             endif
 
@@ -985,7 +986,7 @@
       enddo                     ! nslyr
 
       !-----------------------------------------------------------------
-      ! If Tsn is out of bounds, print diagnostics and exit.
+      ! If zTsn is out of bounds, print diagnostics and exit.
       !-----------------------------------------------------------------
 
       if (tsno_high .and. heat_capacity) then
@@ -995,20 +996,20 @@
                j = indxj(ij)
 
                if (hslyr(ij) > hs_min/rnslyr) then
-                  Tmax = -qsn(ij,k)*puny*rnslyr / &
+                  Tmax = -zqsn(ij,k)*puny*rnslyr / &
                            (rhos*cp_ice*vsnon(i,j))
                else
                   Tmax = puny
                endif
 
-               if (Tsn(ij,k) > Tmax) then
+               if (zTsn(ij,k) > Tmax) then
                   write(nu_diag,*) ' '
-                  write(nu_diag,*) 'Starting thermo, Tsn > Tmax'
-                  write(nu_diag,*) 'Tsn=',Tsn(ij,k)
+                  write(nu_diag,*) 'Starting thermo, zTsn > Tmax'
+                  write(nu_diag,*) 'zTsn=',zTsn(ij,k)
                   write(nu_diag,*) 'Tmax=',Tmax
                   write(nu_diag,*) 'istep1, my_task, i, j:', &
                                     istep1, my_task, i, j
-                  write(nu_diag,*) 'qsn',qsn(ij,k), -Lfresh*rhos, qsn(ij,k)+Lfresh*rhos
+                  write(nu_diag,*) 'zqsn',zqsn(ij,k),-Lfresh*rhos,zqsn(ij,k)+Lfresh*rhos
                   l_stop = .true.
                   istop = i
                   jstop = j
@@ -1025,14 +1026,14 @@
                i = indxi(ij)
                j = indxj(ij)
 
-               if (Tsn(ij,k) < Tmin) then ! allowing for roundoff error
+               if (zTsn(ij,k) < Tmin) then ! allowing for roundoff error
                   write(nu_diag,*) ' '
-                  write(nu_diag,*) 'Starting thermo, Tsn < Tmin'
-                  write(nu_diag,*) 'Tsn=', Tsn(ij,k)
+                  write(nu_diag,*) 'Starting thermo, zTsn < Tmin'
+                  write(nu_diag,*) 'zTsn=', zTsn(ij,k)
                   write(nu_diag,*) 'Tmin=', Tmin
                   write(nu_diag,*) 'istep1, my_task, i, j:', &
                                     istep1, my_task, i, j
-                  write(nu_diag,*) 'qsn', qsn(ij,k)
+                  write(nu_diag,*) 'zqsn', zqsn(ij,k)
                   write(nu_diag,*) hin(ij)
                   write(nu_diag,*) hsn(ij)
                   write(nu_diag,*) 0, Tsf(ij)
@@ -1052,15 +1053,15 @@
 !ocl novrec      !Fujitsu
          do ij = 1, icells
 
-            if (Tsn(ij,k) > c0) then   ! correct roundoff error
-               Tsn(ij,k) = c0
-               qsn(ij,k) = -rhos*Lfresh
+            if (zTsn(ij,k) > c0) then   ! correct roundoff error
+               zTsn(ij,k) = c0
+               zqsn(ij,k) = -rhos*Lfresh
             endif
 
       !-----------------------------------------------------------------
       ! initial energy per unit area of ice/snow, relative to 0 C
       !-----------------------------------------------------------------
-            einit(ij) = einit(ij) + hslyr(ij)*qsn(ij,k)
+            einit(ij) = einit(ij) + hslyr(ij)*zqsn(ij,k)
 
          enddo                  ! ij
       enddo                     ! nslyr
@@ -1077,11 +1078,11 @@
       !  Use initial salinity profile for thin ice
       !---------------------------------------------------------------------
 
-            Sin(ij,k) = trcrn(i,j,nt_sice+k-1)
-            if (ktherm == 1 .and. Sin(ij,k) < min_salin-puny) then
+            zSin(ij,k) = trcrn(i,j,nt_sice+k-1)
+            if (ktherm == 1 .and. zSin(ij,k) < min_salin-puny) then
                   write(nu_diag,*) ' '
-                  write(nu_diag,*) 'Starting Sin < min_salin, layer', k
-                  write(nu_diag,*) 'Sin =', Sin(ij,k)
+                  write(nu_diag,*) 'Starting zSin < min_salin, layer', k
+                  write(nu_diag,*) 'zSin =', zSin(ij,k)
                   write(nu_diag,*) 'min_salin =', min_salin
                   write(nu_diag,*) 'istep1, my_task, i, j:', &
                                     istep1, my_task, i, j
@@ -1092,48 +1093,48 @@
             endif
 
             if (ktherm == 2) then
-               Tmlts(ij,k) = liquidus_temperature_mush(Sin(ij,k))
+               Tmlts(ij,k) = liquidus_temperature_mush(zSin(ij,k))
             else
-               Tmlts(ij,k) =  -Sin(ij,k) * depressT
+               Tmlts(ij,k) = -zSin(ij,k) * depressT
             endif
 
       !-----------------------------------------------------------------
       ! Compute ice enthalpy
-      ! If heat_capacity = F, qin and Tin are used only for checking
+      ! If heat_capacity = F, zqin and zTin are used only for checking
       ! conservation.
       !-----------------------------------------------------------------
-            ! qin < 0
-            qin(ij,k) = trcrn(i,j,nt_qice+k-1)
+            ! zqin < 0
+            zqin(ij,k) = trcrn(i,j,nt_qice+k-1)
 
       !-----------------------------------------------------------------
       ! Compute ice temperatures from enthalpies using quadratic formula
       !-----------------------------------------------------------------
 
             if (ktherm == 2) then
-               Tin(ij,k) = temperature_mush(qin(ij,k),Sin(ij,k))
+               zTin(ij,k) = temperature_mush(zqin(ij,k),zSin(ij,k))
             else
-               Tin(ij,k) = calculate_Tin_from_qin(qin(ij,k),Tmlts(ij,k))
+               zTin(ij,k) = calculate_Tin_from_qin(zqin(ij,k),Tmlts(ij,k))
             endif
 
             if (l_brine) then
                Tmax = Tmlts(ij,k)
             else                ! fresh ice
-               Tmax = -qin(ij,k)*puny/(rhos*cp_ice*vicen(i,j))
+               Tmax = -zqin(ij,k)*puny/(rhos*cp_ice*vicen(i,j))
             endif
 
       !-----------------------------------------------------------------
-      ! Check for Tin > Tmax and Tin < Tmin
+      ! Check for zTin > Tmax and zTin < Tmin
       !-----------------------------------------------------------------
-            if (Tin(ij,k) > Tmax) then
+            if (zTin(ij,k) > Tmax) then
                tice_high = .true.
-            elseif (Tin(ij,k) < Tmin) then
+            elseif (zTin(ij,k) < Tmin) then
                tice_low  = .true.
             endif
 
          enddo                  ! ij
 
       !-----------------------------------------------------------------
-      ! If Tin is out of bounds, print diagnostics and exit.
+      ! If zTin is out of bounds, print diagnostics and exit.
       !-----------------------------------------------------------------
 
          if (tice_high .and. heat_capacity) then
@@ -1144,27 +1145,27 @@
                if (l_brine) then
                   Tmax = Tmlts(ij,k)
                else             ! fresh ice
-                  Tmax = -qin(ij,k)*puny/(rhos*cp_ice*vicen(i,j))
+                  Tmax = -zqin(ij,k)*puny/(rhos*cp_ice*vicen(i,j))
                endif
 
-               if (Tin(ij,k) > Tmax) then
+               if (zTin(ij,k) > Tmax) then
                      write(nu_diag,*) ' '
                      write(nu_diag,*) 'Starting thermo, T > Tmax, layer', k
                      write(nu_diag,*) 'istep1, my_task, i, j, k:', &
                                        istep1, my_task, i, j, k
-                     write(nu_diag,*) 'Tin =',Tin(ij,k),', Tmax=',Tmax
-                     write(nu_diag,*) 'Sin =',Sin(ij,k)
+                     write(nu_diag,*) 'zTin =',zTin(ij,k),', Tmax=',Tmax
+                     write(nu_diag,*) 'zSin =',zSin(ij,k)
                      write(nu_diag,*) 'hin =',hin(ij)
-                     write(nu_diag,*) 'qin =',qin(ij,k)
-                     write(nu_diag,*) 'qmlt=',enthalpy_of_melting(Sin(ij,k))
+                     write(nu_diag,*) 'zqin =',zqin(ij,k)
+                     write(nu_diag,*) 'qmlt=',enthalpy_of_melting(zSin(ij,k))
                      write(nu_diag,*) 'Tmlt=',Tmlts(ij,k)
 
                   if (ktherm == 2) then
-                     qin(ij,k) = enthalpy_of_melting(Sin(ij,k)) - c1
-                     Tin(ij,k) = temperature_mush(qin(ij,k),Sin(ij,k))
+                     zqin(ij,k) = enthalpy_of_melting(zSin(ij,k)) - c1
+                     zTin(ij,k) = temperature_mush(zqin(ij,k),zSin(ij,k))
                      write(nu_diag,*) 'Corrected quantities'
-                     write(nu_diag,*) 'qin=',qin(ij,k)
-                     write(nu_diag,*) 'Tin=',Tin(ij,k)
+                     write(nu_diag,*) 'zqin=',zqin(ij,k)
+                     write(nu_diag,*) 'zTin=',zTin(ij,k)
                   else
                      l_stop = .true.
                      istop = i
@@ -1180,10 +1181,10 @@
                i = indxi(ij)
                j = indxj(ij)
 
-               if (Tin(ij,k) < Tmin) then
+               if (zTin(ij,k) < Tmin) then
                   write(nu_diag,*) ' '
                   write(nu_diag,*) 'Starting thermo T < Tmin, layer', k
-                  write(nu_diag,*) 'Tin =', Tin(ij,k)
+                  write(nu_diag,*) 'zTin =', zTin(ij,k)
                   write(nu_diag,*) 'Tmin =', Tmin
                   write(nu_diag,*) 'istep1, my_task, i, j:', &
                                     istep1, my_task, i, j
@@ -1204,9 +1205,9 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             do ij = 1, icells
-               if (Tin(ij,k) > c0) then
-                   Tin(ij,k) = c0
-                   qin(ij,k) = -rhoi*Lfresh
+               if (zTin(ij,k) > c0) then
+                   zTin(ij,k) = c0
+                   zqin(ij,k) = -rhoi*Lfresh
                endif
             enddo                  ! ij
          endif
@@ -1217,9 +1218,9 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
 !            do ij = 1, icells
-!               if (Tin(ij,k)>= -Sin(ij,k)*depressT) then
-!                   Tin(ij,k) = -Sin(ij,k)*depressT - puny
-!                   qin(ij,k) = -rhoi*cp_ocn*Sin(ij,k)*depressT
+!               if (zTin(ij,k)>= -zSin(ij,k)*depressT) then
+!                   zTin(ij,k) = -zSin(ij,k)*depressT - puny
+!                   zqin(ij,k) = -rhoi*cp_ocn*zSin(ij,k)*depressT
 !               endif
 !            enddo                  ! ij
 !         endif
@@ -1232,7 +1233,7 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            einit(ij) = einit(ij) + hilyr(ij)*qin(ij,k) 
+            einit(ij) = einit(ij) + hilyr(ij)*zqin(ij,k) 
          enddo                  ! ij
 
       enddo                     ! nilyr
@@ -1254,7 +1255,7 @@
                                     efinal,              & 
                                     hin,       hilyr,    &
                                     hsn,       hslyr,    &
-                                    qin,       qsn,      &
+                                    zqin,      zqsn,     &
                                     fbot,      Tbot,     &
                                     flatn,     fsurfn,   &
                                     fcondtopn, fcondbot, &
@@ -1264,7 +1265,7 @@
                                     meltb,     iage,     &
                                     congel,    snoice,   &  
                                     mlt_onset, frz_onset,&
-                                    Sin,       sss,      &
+                                    zSin,      sss,      &
                                     dsnow,     fbri)
 
       use ice_therm_mushy, only: enthalpy_mush, enthalpy_of_melting, &
@@ -1297,11 +1298,11 @@
 
       real (kind=dbl_kind), dimension (icells,nilyr), &
          intent(inout) :: &
-         qin             ! ice layer enthalpy (J m-3)
+         zqin            ! ice layer enthalpy (J m-3)
 
       real (kind=dbl_kind), dimension (icells,nslyr), &
          intent(inout) :: &
-         qsn             ! snow layer enthalpy (J m-3)
+         zqsn            ! snow layer enthalpy (J m-3)
 
       real (kind=dbl_kind), dimension (icells), &
          intent(inout) :: &
@@ -1335,11 +1336,11 @@
       real (kind=dbl_kind), dimension (icells), intent(out):: &
          hsn_new         ! thickness of new snow (m)
 
-      ! changes to Sin in this subroutine are not reloaded into the
+      ! changes to zSin in this subroutine are not reloaded into the
       ! trcrn array for ktherm /= 2, so we could remove ktherm=2 conditionals
       real (kind=dbl_kind), dimension (icells,nilyr), &
          intent(inout) :: &
-         Sin             ! ice layer salinity (ppt)
+         zSin            ! ice layer salinity (ppt)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
@@ -1373,7 +1374,7 @@
          qsub        , & ! energy/unit volume to sublimate ice/snow (J m-3)
          hqtot       , & ! sum of h*q for two layers
          wk1         , & ! temporary variable
-         qsnew       , & ! enthalpy of new snow (J m-3)
+         zqsnew      , & ! enthalpy of new snow (J m-3)
          hstot       , & ! snow thickness including new snow (m)
          Tmlts           ! melting temperature
 
@@ -1392,7 +1393,7 @@
          dzs             ! snow layer thickness after growth/melting
 
       real (kind=dbl_kind), dimension (icells,nilyr) :: &
-         qm          , & ! energy of melting (J m-3) = qin in BL99 formulation
+         qm          , & ! energy of melting (J m-3) = zqin in BL99 formulation
          qmlt            ! enthalpy of melted ice (J m-3) = zero in BL99 formulation
 
       real (kind=dbl_kind) :: &
@@ -1421,11 +1422,11 @@
       do k = 1, nilyr
          do ij = 1, icells
             if (ktherm == 2) then
-               qmlt(ij,k) = enthalpy_of_melting(Sin(ij,k))
+               qmlt(ij,k) = enthalpy_of_melting(zSin(ij,k))
             else
                qmlt(ij,k) = c0
             endif
-            qm(ij,k) = qin(ij,k) - qmlt(ij,k)
+            qm(ij,k) = zqin(ij,k) - qmlt(ij,k)
             emlt_atm(ij) = c0
             emlt_ocn(ij) = c0
          enddo
@@ -1444,11 +1445,11 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             do ij = 1, icells
-               Ts = (Lfresh + qsn(ij,k)/rhos) / cp_ice
+               Ts = (Lfresh + zqsn(ij,k)/rhos) / cp_ice
                if (Ts > c0) then
                   dhs = cp_ice*Ts*dzs(ij,k) / Lfresh
                   dzs(ij,k) = dzs(ij,k) - dhs
-                  qsn(ij,k) = -rhos*Lfresh
+                  zqsn(ij,k) = -rhos*Lfresh
                endif
             enddo
          enddo
@@ -1458,11 +1459,11 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
             do ij = 1, icells
-               Ti = (Lfresh + qin(ij,k)/rhoi) / cp_ice
+               Ti = (Lfresh + zqin(ij,k)/rhoi) / cp_ice
                if (Ti > c0) then
                   dhi = cp_ice*Ti*dzi(ij,k) / Lfresh
                   dzi(ij,k) = dzi(ij,k) - dhi
-                  qin(ij,k) = -rhoi*Lfresh
+                  zqin(ij,k) = -rhoi*Lfresh
                endif
             enddo               ! ij
          enddo                  ! k
@@ -1498,11 +1499,11 @@
 
          evapn   (i,j) = c0          ! initialize
 
-         if (hsn(ij) > puny) then    ! add snow with enthalpy qsn(ij,1)
-            dhs = econ(ij) / (qsn(ij,1) - rhos*Lvap) ! econ < 0, dhs > 0
+         if (hsn(ij) > puny) then    ! add snow with enthalpy zqsn(ij,1)
+            dhs = econ(ij) / (zqsn(ij,1) - rhos*Lvap) ! econ < 0, dhs > 0
             dzs(ij,1) = dzs(ij,1) + dhs
             evapn(i,j) = evapn(i,j) + dhs*rhos
-         else                        ! add ice with enthalpy qin(ij,1)
+         else                        ! add ice with enthalpy zqin(ij,1)
             dhi = econ(ij) / (qm(ij,1) - rhoi*Lvap) ! econ < 0, dhi > 0
             dzi(ij,1) = dzi(ij,1) + dhi
             evapn(i,j) = evapn(i,j) + dhi*rhoi
@@ -1522,13 +1523,13 @@
 
             dhi  = ebot_gro(ij) / qbotp     ! dhi > 0
 
-            hqtot = dzi(ij,nilyr)*qin(ij,nilyr) + dhi*qbotm
-            hstot = dzi(ij,nilyr)*Sin(ij,nilyr) + dhi*sss(i,j)
+            hqtot = dzi(ij,nilyr)*zqin(ij,nilyr) + dhi*qbotm
+            hstot = dzi(ij,nilyr)*zSin(ij,nilyr) + dhi*sss(i,j)
             emlt_ocn(ij) = emlt_ocn(ij) - qbot0 * dhi
 
          else
 
-            Tmlts = -Sin(ij,nilyr) * depressT 
+            Tmlts = -zSin(ij,nilyr) * depressT 
 
             ! enthalpy of new ice growing at bottom surface
             if (heat_capacity) then
@@ -1546,21 +1547,21 @@
 
             dhi  = ebot_gro(ij) / qbot     ! dhi > 0
 
-            hqtot = dzi(ij,nilyr)*qin(ij,nilyr) + dhi*qbot
+            hqtot = dzi(ij,nilyr)*zqin(ij,nilyr) + dhi*qbot
             hstot = c0
 
          endif ! ktherm
 
          dzi(ij,nilyr) = dzi(ij,nilyr) + dhi
          if (dzi(ij,nilyr) > puny) then
-            qin(ij,nilyr) = hqtot / dzi(ij,nilyr)
+            zqin(ij,nilyr) = hqtot / dzi(ij,nilyr)
             if (ktherm == 2) then
-               Sin(ij,nilyr) = hstot / dzi(ij,nilyr)
-               qmlt(ij,nilyr) = enthalpy_of_melting(Sin(ij,nilyr))
+               zSin(ij,nilyr) = hstot / dzi(ij,nilyr)
+               qmlt(ij,nilyr) = enthalpy_of_melting(zSin(ij,nilyr))
             else
                qmlt(ij,nilyr) = c0
             endif
-            qm(ij,nilyr) = qin(ij,nilyr) - qmlt(ij,nilyr)
+            qm(ij,nilyr) = zqin(ij,nilyr) - qmlt(ij,nilyr)
          endif
 
          ! update ice age due to freezing (new ice age = dt)
@@ -1586,13 +1587,14 @@
          ! Remove internal snow melt 
          !--------------------------------------------------------------
 
-            if (ktherm == 2 .and. qsn(ij,k) > -rhos * Lfresh) then
+            if (ktherm == 2 .and. zqsn(ij,k) > -rhos * Lfresh) then
 
-               dhs = max(-dzs(ij,k), -((qsn(ij,k) + rhos * Lfresh) / (rhos * Lfresh)) * dzs(ij,k))
+               dhs = max(-dzs(ij,k), &
+                         -((zqsn(ij,k) + rhos*Lfresh) / (rhos*Lfresh)) * dzs(ij,k))
                dzs(ij,k) = dzs(ij,k) + dhs
-               qsn(ij,k) = -rhos * Lfresh
+               zqsn(ij,k) = -rhos * Lfresh
                melts(i,j) = melts(i,j) - dhs
-               ! delta E = qsn(ij,k) + rhos * Lfresh
+               ! delta E = zqsn(ij,k) + rhos * Lfresh
 
             endif
 
@@ -1600,7 +1602,7 @@
          ! Sublimation of snow (evapn < 0)
          !--------------------------------------------------------------
 
-            qsub = qsn(ij,k) - rhos*Lvap ! qsub < 0
+            qsub = zqsn(ij,k) - rhos*Lvap ! qsub < 0
             dhs  = max (-dzs(ij,k), esub(ij)/qsub)  ! esub > 0, dhs < 0
             dzs(ij,k) = dzs(ij,k) + dhs
             esub(ij) = esub(ij) - dhs*qsub
@@ -1611,9 +1613,9 @@
          ! Melt snow (top)
          !--------------------------------------------------------------
 
-            dhs = max(-dzs(ij,k), etop_mlt(ij)/qsn(ij,k))
-            dzs(ij,k) = dzs(ij,k) + dhs         ! qsn < 0, dhs < 0
-            etop_mlt(ij) = etop_mlt(ij) - dhs*qsn(ij,k)
+            dhs = max(-dzs(ij,k), etop_mlt(ij)/zqsn(ij,k))
+            dzs(ij,k) = dzs(ij,k) + dhs         ! zqsn < 0, dhs < 0
+            etop_mlt(ij) = etop_mlt(ij) - dhs*zqsn(ij,k)
             etop_mlt(ij) = max(etop_mlt(ij), c0) ! in case of roundoff error
 
             ! history diagnostics
@@ -1654,9 +1656,9 @@
                qm(ij,k) = c0
                dhi = -dzi(ij,k)
             endif
-            emlt_ocn(ij) = emlt_ocn(ij) - max(qin(ij,k),qmlt(ij,k)) * dhi
+            emlt_ocn(ij) = emlt_ocn(ij) - max(zqin(ij,k),qmlt(ij,k)) * dhi
 
-            dzi(ij,k) = dzi(ij,k) + dhi         ! qin < 0, dhi < 0
+            dzi(ij,k) = dzi(ij,k) + dhi         ! zqin < 0, dhi < 0
             etop_mlt(ij) = max(etop_mlt(ij) - dhi*qm(ij,k), c0)
 
             ! history diagnostics
@@ -1685,9 +1687,9 @@
                qm(ij,k) = c0
                dhi = -dzi(ij,k)
             endif
-            emlt_ocn(ij) = emlt_ocn(ij) - max(qin(ij,k),qmlt(ij,k)) * dhi
+            emlt_ocn(ij) = emlt_ocn(ij) - max(zqin(ij,k),qmlt(ij,k)) * dhi
 
-            dzi(ij,k) = dzi(ij,k) + dhi         ! qin < 0, dhi < 0
+            dzi(ij,k) = dzi(ij,k) + dhi         ! zqin < 0, dhi < 0
             ebot_mlt(ij) = max(ebot_mlt(ij) - dhi*qm(ij,k), c0)
 
             ! history diagnostics 
@@ -1706,9 +1708,9 @@
          ! Melt snow (only if all the ice has melted)
          !--------------------------------------------------------------
 
-            dhs = max(-dzs(ij,k), ebot_mlt(ij)/qsn(ij,k))
-            dzs(ij,k) = dzs(ij,k) + dhs         ! qsn < 0, dhs < 0
-            ebot_mlt(ij) = ebot_mlt(ij) - dhs*qsn(ij,k)
+            dhs = max(-dzs(ij,k), ebot_mlt(ij)/zqsn(ij,k))
+            dzs(ij,k) = dzs(ij,k) + dhs         ! zqsn < 0, dhs < 0
+            ebot_mlt(ij) = ebot_mlt(ij) - dhs*zqsn(ij,k)
             ebot_mlt(ij) = max(ebot_mlt(ij), c0)
 
          enddo                  ! ij
@@ -1747,14 +1749,14 @@
          if (fsnow(i,j) > c0) then
 
             hsn_new(ij) = fsnow(i,j)/rhos * dt
-            qsnew = -rhos*Lfresh
+            zqsnew = -rhos*Lfresh
             hstot = dzs(ij,1) + hsn_new(ij)
 
             if (hstot > c0) then
-               qsn(ij,1) =  (dzs(ij,1) * qsn(ij,1) &
-                          + hsn_new(ij) * qsnew) / hstot
+               zqsn(ij,1) =  (dzs(ij,1) * zqsn(ij,1) &
+                          + hsn_new(ij) * zqsnew) / hstot
                ! avoid roundoff errors
-               qsn(ij,1) = min(qsn(ij,1), -rhos*Lfresh)
+               zqsn(ij,1) = min(zqsn(ij,1), -rhos*Lfresh)
 
                dzs(ij,1) = hstot
             endif
@@ -1793,14 +1795,14 @@
     ! Convert snow to ice if snow lies below freeboard.
     !-------------------------------------------------------------------
 
-           call freeboard (nx_block, ny_block, &
-                       icells,             &
+      call freeboard (nx_block, ny_block, &
+                      icells,             &
                       indxi,    indxj,    &
                       dt,                 &
                       snoice,             &
                       iage,               &
                       hin,      hsn,      &
-                      qin,      qsn,      &
+                      zqin,     zqsn,     &
                       dzi,      dzs,      &
                       dsnow)
 
@@ -1862,7 +1864,7 @@
                               indxi,    indxj,    &
                               zi1,      zi2,      &
                               hilyr,    hin,      &
-                              qin)
+                              zqin)
 
         if (ktherm == 2) &
              call adjust_enthalpy (nx_block, ny_block, &
@@ -1870,13 +1872,13 @@
                                    indxi,    indxj,    &
                                    zi1,      zi2,      &
                                    hilyr,    hin,      &
-                                   Sin)
+                                   zSin)
 
       else ! zero layer (nilyr=1)
 
          do ij = 1, icells
-            qin(ij,1) = -rhoi * Lfresh
-            qsn(ij,1) = -rhos * Lfresh
+            zqin(ij,1) = -rhoi * Lfresh
+            zqsn(ij,1) = -rhos * Lfresh
          end do
        
       endif
@@ -1915,7 +1917,7 @@
                                indxi,    indxj,    &
                                zs1,      zs2,      &
                                hslyr,    hsn,      &
-                               qsn)
+                               zqsn)
 
       endif   ! nslyr > 1
 
@@ -1930,9 +1932,9 @@
                j = indxj(ij)
                if (hsn(ij) <= puny) then
                   fhocnn(i,j) = fhocnn(i,j) &
-                    + qsn(ij,k)*hsn(ij)/(real(nslyr,kind=dbl_kind)*dt)
-                  qsn(ij,k) = -rhos*Lfresh
-                  hslyr(ij) = c0 ! echmod
+                    + zqsn(ij,k)*hsn(ij)/(real(nslyr,kind=dbl_kind)*dt)
+                  zqsn(ij,k) = -rhos*Lfresh
+                  hslyr(ij) = c0
                endif
             enddo
          enddo
@@ -1955,7 +1957,7 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            efinal(ij) = efinal(ij) + hslyr(ij)*qsn(ij,k)
+            efinal(ij) = efinal(ij) + hslyr(ij)*zqsn(ij,k)
          enddo                  ! ij
       enddo
 
@@ -1964,7 +1966,7 @@
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
          do ij = 1, icells
-            efinal(ij) = efinal(ij) + hilyr(ij)*qin(ij,k)
+            efinal(ij) = efinal(ij) + hilyr(ij)*zqin(ij,k)
          enddo                  ! ij
       enddo                     ! k
 
@@ -2001,7 +2003,7 @@
                             snoice,             &
                             iage,               &
                             hin,      hsn,      &
-                            qin,      qsn,      &
+                            zqin,     zqsn,     &
                             dzi,      dzs,      &
                             dsnow)
 
@@ -2029,7 +2031,7 @@
 
       real (kind=dbl_kind), dimension (icells,nilyr), &
          intent(inout) :: &
-         qin         ! ice layer enthalpy (J m-3)
+         zqin        ! ice layer enthalpy (J m-3)
 
       real (kind=dbl_kind), dimension (icells,nilyr), &
          intent(inout) :: &
@@ -2037,7 +2039,7 @@
 
       real (kind=dbl_kind), dimension (icells,nslyr), &
          intent(in) :: &
-         qsn         ! snow layer enthalpy (J m-3)
+         zqsn        ! snow layer enthalpy (J m-3)
 
       real (kind=dbl_kind), dimension (icells,nslyr), &
          intent(inout) :: &
@@ -2099,7 +2101,7 @@
                dzs(ij,k) = dzs(ij,k) - dhs
                dhsn(ij) = dhsn(ij) - dhs
                dhsn(ij) = max(dhsn(ij),c0)
-               hqs(ij) = hqs(ij) + dhs * qsn(ij,k)
+               hqs(ij) = hqs(ij) + dhs * zqsn(ij,k)
             endif               ! dhin > puny
          enddo
       enddo
@@ -2122,7 +2124,7 @@
 
             wk1 = dzi(ij,1) + dhin(ij)
             hin(ij) = hin(ij) + dhin(ij)
-            qin(ij,1) = (dzi(ij,1)*qin(ij,1) + hqs(ij)) / wk1
+            zqin(ij,1) = (dzi(ij,1)*zqin(ij,1) + hqs(ij)) / wk1
             dzi(ij,1) = wk1
 
             ! history diagnostic
@@ -2370,8 +2372,8 @@
 
 !=======================================================================
 !
-! Given the vertical thermo state variables (hin, hsn, qin,
-!  qsn, Tsf), compute the new ice state variables (vicen, vsnon, trcrn).
+! Given the vertical thermo state variables (hin, hsn, zqin,
+!  zqsn, Tsf), compute the new ice state variables (vicen, vsnon, trcrn).
 ! Zero out state variables if ice has melted entirely.
 !
 ! authors William H. Lipscomb, LANL
@@ -2382,8 +2384,8 @@
                                       indxi,    indxj,    &
                                       Tf,       Tsf,      &
                                       hin,      hsn,      &
-                                      qin,      Sin,      &
-                                      qsn,                &
+                                      zqin,     zSin,     &
+                                      zqsn,               &
                                       aicen,    vicen,    &
                                       vsnon,    trcrn)
 
@@ -2407,12 +2409,12 @@
 
       real (kind=dbl_kind), dimension (icells,nilyr), &
          intent(in) :: &
-         qin          , & ! ice layer enthalpy (J m-3)
-         Sin              ! ice salinity    (ppt)
+         zqin        , & ! ice layer enthalpy (J m-3)
+         zSin            ! ice salinity    (ppt)
 
       real (kind=dbl_kind), dimension (icells,nslyr), &
          intent(in) :: &
-         qsn             ! snow layer enthalpy (J m-3)
+         zqsn            ! snow layer enthalpy (J m-3)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
@@ -2457,8 +2459,8 @@
             j = indxj(ij)
 
             if (hin(ij) > c0) then
-               trcrn(i,j,nt_qice+k-1) = qin(ij,k)
-              ! trcrn(i,j,nt_sice+k-1) = Sin(ij,k)
+               trcrn(i,j,nt_qice+k-1) = zqin(ij,k)
+              ! trcrn(i,j,nt_sice+k-1) = zSin(ij,k)
             else
                trcrn(i,j,nt_qice+k-1) = c0
               ! trcrn(i,j,nt_sice+k-1) = c0
@@ -2474,7 +2476,7 @@
             j = indxj(ij)
 
             if (hin(ij) > c0) then
-               trcrn(i,j,nt_sice+k-1) = Sin(ij,k)
+               trcrn(i,j,nt_sice+k-1) = zSin(ij,k)
             else
                trcrn(i,j,nt_sice+k-1) = c0
             endif
@@ -2489,7 +2491,7 @@
             j = indxj(ij)
 
             if (hin(ij) > c0) then
-               trcrn(i,j,nt_qsno+k-1) = qsn(ij,k)
+               trcrn(i,j,nt_qsno+k-1) = zqsn(ij,k)
             else
                trcrn(i,j,nt_qsno+k-1) = c0
             endif
