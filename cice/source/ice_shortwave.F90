@@ -102,7 +102,7 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1,ncat,max_blocks), &
          public :: &
-         fswthruln       ! visible SW  at ice interior (W m-2)
+         fswpenln        ! visible SW entering ice layers (W m-2)
 
       ! dEdd tuning parameters, set in namelist
       real (kind=dbl_kind), public :: &
@@ -206,7 +206,7 @@
                           alvdrn(:,:,:,iblk),    alvdfn(:,:,:,iblk),      &
                           alidrn(:,:,:,iblk),    alidfn(:,:,:,iblk),      &
                           fswsfcn(:,:,:,iblk),   fswintn(:,:,:,iblk),     &
-                          fswthrun(:,:,:,iblk),  fswthruln(:,:,:,:,iblk), &
+                          fswthrun(:,:,:,iblk),  fswpenln(:,:,:,:,iblk),  &
                           Sswabsn(:,:,:,:,iblk), Iswabsn(:,:,:,:,iblk),   &
                           albicen(:,:,:,iblk),   albsnon(:,:,:,iblk),     &
                           albpndn(:,:,:,iblk),   apeffn(:,:,:,iblk),      &
@@ -237,7 +237,7 @@
                                  alvdfn(:,:,:,iblk),  alidfn(:,:,:,iblk),  &
                                  fswsfcn(:,:,:,iblk), fswintn(:,:,:,iblk), &
                                  fswthrun(:,:,:,iblk),                     &
-                                 fswthruln(:,:,:,:,iblk),                  &
+                                 fswpenln(:,:,:,:,iblk),                   &
                                  Iswabsn(:,:,:,:,iblk),                    &
                                  Sswabsn(:,:,:,:,iblk),                    &
                                  albicen(:,:,:,iblk), albsnon(:,:,:,iblk), &
@@ -339,7 +339,7 @@
                                   alvdrn,   alidrn,   &
                                   alvdfn,   alidfn,   &
                                   fswsfc,   fswint,   &
-                                  fswthru,  fswthrul, &
+                                  fswthru,  fswpenl,  &
                                   Iswabs,   SSwabs,   &
                                   albin,    albsn,    &
                                   coszen)
@@ -376,7 +376,7 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1,ncat), &
            intent(out) :: &
-         fswthrul       ! SW through  each ice  layer (W m-2)!
+         fswpenl      ! SW entering ice layers (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(out) :: &
@@ -495,7 +495,7 @@
                                fswsfc(:,:,n),        &
                                fswint(:,:,n),        &
                                fswthru(:,:,n),       &
-                               fswthrul(:,:,:,n),    &
+                               fswpenl(:,:,:,n),     &
                                Iswabs(:,:,:,n))
 
       enddo                  ! ncat
@@ -832,7 +832,7 @@
                                  alvdrns,  alvdfns,  &
                                  alidrns,  alidfns,  &
                                  fswsfc,   fswint,   &
-                                 fswthru,  fswthrul, &
+                                 fswthru,  fswpenl,  &
                                  Iswabs)
 
       use ice_therm_shared, only: heat_capacity
@@ -874,8 +874,7 @@
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1), &
          intent(out) :: &
-         fswthrul        ! visible SW through each layer (W m-2)
-
+         fswpenl         ! visible SW entering ice layers (W m-2)
 
       ! local variables
 
@@ -992,10 +991,10 @@
 
             ! bgc layer model
             if (k == 1) then   ! surface flux
-               fswthrul(i,j,k) = fswpen(i,j)
-               fswthrul(i,j,k+1) = fswpen(i,j) * tranbot(i,j)
+               fswpenl(i,j,k)   = fswpen(i,j)
+               fswpenl(i,j,k+1) = fswpen(i,j) * tranbot(i,j)
             else
-               fswthrul(i,j,k+1) = fswpen(i,j) * tranbot(i,j)
+               fswpenl(i,j,k+1) = fswpen(i,j) * tranbot(i,j)
             endif
          enddo                  ! ij
       enddo                     ! nilyr
@@ -1063,7 +1062,7 @@
                           alvdrn,   alvdfn,    &
                           alidrn,   alidfn,    &
                           fswsfcn,  fswintn,   &
-                          fswthrun, fswthruln, &
+                          fswthrun, fswpenln,  &
                           Sswabsn,  Iswabsn,   &
                           albicen,  albsnon,   &
                           albpndn,  apeffn,    &
@@ -1127,7 +1126,7 @@
            Iswabsn     ! SW radiation absorbed in ice layers (W m-2) 
 
       real(kind=dbl_kind), dimension(nx_block,ny_block,nilyr+1,ncat), intent(out) :: &
-           fswthruln   ! visible SW  at ice interior (W m-2)
+           fswpenln    ! visible SW entering ice layers (W m-2)
 
       ! local temporary variables
 
@@ -1350,7 +1349,7 @@
                              Iswabsn(:,:,:,n),                  &
                              albicen(:,:,n),                    &
                              albsnon(:,:,n),    albpndn(:,:,n), &
-                             fswthruln(:,:,:,n))
+                             fswpenln(:,:,:,n))
 
       enddo  ! ncat
  
@@ -1401,7 +1400,7 @@
                                   fswthru,  Sswabs,      &
                                   Iswabs,   albice,      &
                                   albsno,   albpnd,      &
-                                  fswthrul)
+                                  fswpenl)
 
       use ice_state, only: nt_aero, tr_aero
 
@@ -1454,7 +1453,7 @@
  
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1), &
          intent(out) :: &
-         fswthrul     ! visible SW through  ice layers (W m-2)
+         fswpenl     ! visible SW entering ice layers (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
          intent(out) :: &
@@ -1548,7 +1547,7 @@
          albpnd(i,j)    = c0
       enddo
       enddo
-      fswthrul(:,:,:) = c0
+      fswpenl(:,:,:) = c0
       Sswabs(:,:,:) = c0
       Iswabs(:,:,:) = c0
 
@@ -1614,7 +1613,7 @@
                                   aidrl,    aidfl,         &
                                   fswsfc,   fswint,        &
                                   fswthru,  Sswabs,        &
-                                  Iswabs,   fswthrul)
+                                  Iswabs,   fswpenl)
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1664,7 +1663,7 @@
                                   aidrl,    aidfl,         &
                                   fswsfc,   fswint,        &
                                   fswthru,  Sswabs,        &
-                                  Iswabs,   fswthrul)
+                                  Iswabs,   fswpenl)
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1716,7 +1715,7 @@
                                   aidrl,    aidfl,         &
                                   fswsfc,   fswint,        &
                                   fswthru,  Sswabs,        &
-                                  Iswabs,   fswthrul)
+                                  Iswabs,   fswpenl)
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1813,7 +1812,7 @@
                                   alidr,    alidf,         &
                                   fswsfc,   fswint,        &
                                   fswthru,  Sswabs,        &
-                                  Iswabs,   fswthrul)
+                                  Iswabs,   fswpenl)
 
       use ice_therm_shared, only: heat_capacity
       use ice_state, only: tr_aero
@@ -1871,7 +1870,7 @@
  
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1), &
          intent(inout) :: &
-         fswthrul      ! visible SW through each ice layer (W m-2)
+         fswpenl     ! visible SW entering ice layers (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
          intent(inout) :: &
@@ -3001,9 +3000,9 @@
             Iswabs(i,j,k) = Iswabs(i,j,k) + Iabs(ij,k)*fi(i,j)
 
             ! bgc layer 
-            fswthrul(i,j,k) = fswthrul(i,j,k) + fthrul(ij,k)* fi(i,j)
+            fswpenl(i,j,k) = fswpenl(i,j,k) + fthrul(ij,k)* fi(i,j)
             if (k == nilyr) then
-              fswthrul(i,j,k+1) = fswthrul(i,j,k+1) + fthrul(ij,k+1)*fi(i,j)
+              fswpenl(i,j,k+1) = fswpenl(i,j,k+1) + fthrul(ij,k+1)*fi(i,j)
             endif
          enddo                  ! ij
       enddo                     ! k

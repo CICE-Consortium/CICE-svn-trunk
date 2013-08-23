@@ -659,7 +659,6 @@
                                 hin_old(:,:,n,iblk),                      & 
                                 trcrn  (:,:,nt_fbri,n,iblk),              &
                                 dh_top (:,:,n,iblk), dh_bot (:,:,n,iblk), &
-                                dhi_top(:,:,n,iblk), dhi_bot(:,:,n,iblk), &
                                 hinS_old,            hin,                 &
                                 hsn,                 first_ice(:,:,n,iblk))
 

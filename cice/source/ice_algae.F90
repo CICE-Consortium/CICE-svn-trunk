@@ -202,7 +202,7 @@
                                       flux_bio, ocean_bio, &
                                       hmix,     aicen,     &
                                       meltb,    congel,    &
-                                      fswthrul, first_ice, &
+                                      fswthru,  first_ice, &
                                       trcrn,    grow_Cn)
 
       use ice_constants, only: p5, p05, p1, c1, c0, puny
@@ -228,7 +228,7 @@
          aicen  , & ! ice area 
          meltb  , & ! bottom ice melt (m)
          congel , & ! bottom ice growth (m)
-         fswthrul   ! shortwave passing through ice to ocean
+         fswthru    ! shortwave passing through ice to ocean
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr), &
          intent(inout) :: &
@@ -428,7 +428,7 @@
       call algal_dyn (nx_block,        ny_block,        &
                       icells,          dt,              &
                       indxi,           indxj,           &
-                      fswthrul,        react,           & 
+                      fswthru,         react,           & 
                       cinit,           nbtrcr,          &
                       grow_Cn,                          &
                       tr_bgc_N_sk,     tr_bgc_Nit_sk,   &
@@ -512,7 +512,7 @@
       subroutine algal_dyn (nx_block,     ny_block,     &
                             icells,       dt,           &
                             indxi,        indxj,        &
-                            fswthrul,     reactb,       & 
+                            fswthru,      reactb,       & 
                             ltrcrn,       nbtrcr,       &
                             growN,                      &
                             tr_bio_N,     tr_bio_NO,    &
@@ -536,7 +536,7 @@
          dt         ! time step 
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) :: &
-         fswthrul   ! average shortwave passing through current ice layer (W/m^2)
+         fswthru    ! average shortwave passing through current ice layer (W/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(inout) :: &
          growN      !  algal specific growth rate   (1/s)
@@ -618,7 +618,7 @@
 
       real (kind=dbl_kind) :: &
          op_dep     , &  ! bottom layer attenuation exponent (optical depth)
-         Iavg_loc        ! bottom layer attenuated Fswthrul (W/m^2)
+         Iavg_loc        ! bottom layer attenuated Fswthru (W/m^2)
 
       real (kind=dbl_kind) :: &
          L_lim    , &  ! overall light limitation 
@@ -736,16 +736,16 @@
          ! More than perhaps two efolds and light falls below half value.
 
          if (op_dep > op_dep_min) then
-            Iavg_loc   = fswthrul(i,j)*  (c1 - exp(-op_dep)) / op_dep
+            Iavg_loc = fswthru(i,j) * (c1 - exp(-op_dep)) / op_dep
          else
-            Iavg_loc   = fswthrul(i,j)
+            Iavg_loc = fswthru(i,j)
          endif
 
          ! With light inhibition
-         ! L_lim     = (c1 - exp(-alpha2max*Iavg_loc)) * exp(-beta2max*Iavg_loc)      
+         ! L_lim = (c1 - exp(-alpha2max*Iavg_loc)) * exp(-beta2max*Iavg_loc)      
 
          ! Without light inhibition
-         L_lim     = (c1 - exp(-alpha2max*Iavg_loc)) 
+         L_lim = (c1 - exp(-alpha2max*Iavg_loc)) 
 
       !-----------------------------------------------------------------------
       ! Nutrient limitation

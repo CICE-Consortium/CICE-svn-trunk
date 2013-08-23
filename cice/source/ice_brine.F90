@@ -119,7 +119,6 @@
                                       meltb,    meltt,    congel,     &
                                       snoice,   hice_old, fbri,       & 
                                       dh_top,   dh_bot,               &
-                                      dhi_top,  dhi_bot,              &
                                       hinS_o,   hin,hsn,  firstice)
 
       integer (kind=int_kind), intent(in) :: &
@@ -149,8 +148,6 @@
          fbri         , & ! trcrn(i,j,nt_fbri)
          dh_top       , & ! brine change in top for diagnostics (m)
          dh_bot       , & ! brine change in bottom for diagnostics (m)
-         dhi_top      , & ! ice change in top for diagnostics (m)
-         dhi_bot      , & ! ice change in bottom for diagnostics (m)
          hice_old         ! old ice thickness (m)
 
       logical (kind=log_kind), dimension (nx_block,ny_block), intent(in) :: &
@@ -174,8 +171,6 @@
 
       dh_top    (:,:) = c0
       dh_bot    (:,:) = c0
-      dhi_top   (:,:) = c0
-      dhi_bot   (:,:) = c0
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -184,32 +179,26 @@
       
          i = indxii(ij)
          j = indxjj(ij)
-!echmod would hin ever be <0? 
-         hin(ij) = max(c0, vicen(i,j) / aicen(i,j))
-         if (hin(ij) <= c0  .OR. fbri(i,j) <= c0) then
-            write(nu_diag, *) 'preflushing: hin <= 0 or fbri <= c0:',i,j
+         if (fbri(i,j) <= c0) then
+            write(nu_diag, *) 'preflushing: fbri <= c0:',i,j
             write(nu_diag, *) 'vicen, aicen', vicen(i,j), aicen(i,j)
             write(nu_diag, *) 'fbri, hice_old', fbri(i,j), hice_old(i,j)
             call abort_ice ('ice_brine error')
          endif
-         hsn(ij) = c0
-!echmod would hsn ever be <0? 
-         if (hin(ij) > c0) hsn(ij) = max(c0, vsnon(i,j) / aicen(i,j))
+
+         hin(ij) = vicen(i,j) / aicen(i,j)
+         hsn(ij) = vsnon(i,j) / aicen(i,j)
          hin_old = max(c0, hin(ij) + meltb (i,j) + meltt (i,j) &
                                    - congel(i,j) - snoice(i,j))
          dhice = hin_old - hice_old(i,j)   ! change due to subl/cond
-         dhi_top(i,j) = meltt (i,j) - dhice - snoice(i,j)
-         dhi_bot(i,j) = congel(i,j) - meltb(i,j)   
-         dh_top(i,j)  = dhi_top(i,j)
-         dh_bot(i,j)  = dhi_bot(i,j)
+         dh_top(i,j) = meltt (i,j) - dhice - snoice(i,j)
+         dh_bot(i,j) = congel(i,j) - meltb(i,j)   
 
          if ((hice_old(i,j) < puny) .OR. (hin_old < puny) &
                                     .OR. firstice(i,j)) then
             hin_old         = hin(ij) 
             dh_top    (i,j) = c0
             dh_bot    (i,j) = c0
-            dhi_bot   (i,j) = c0
-            dhi_top   (i,j) = c0
             fbri      (i,j) = c1 
          endif
 
@@ -597,7 +586,8 @@
          hbrn_new       ! hbrn after flushing
 
       real (kind=dbl_kind), parameter :: &
-         dh_min = 0.001_dbl_kind, &  !echmod WHAT IS THIS?
+         dh_min = p001, & ! brine remains within dh_min of sea level
+                          ! when ice thickness is less than thinS
 !echmod USE NAMELIST PARAMETERS rfracmin, rfracmax 
          run_off = c0   ! fraction of melt that runs off directly to the ocean
 
