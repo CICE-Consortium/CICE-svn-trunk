@@ -135,9 +135,7 @@
       real (kind=dbl_kind), & 
          dimension (nx_block,ny_block,ncat,max_blocks), public :: &
          dh_top     , & ! brine top change
-         dh_bot     , & ! brine bottom change
-         dhi_top    , & ! ice top change
-         dhi_bot        ! ice bottom change
+         dh_bot         ! brine bottom change
 
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,max_blocks), public :: &

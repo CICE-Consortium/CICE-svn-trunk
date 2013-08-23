@@ -37,7 +37,7 @@
       use ice_domain_size, only: ncat, nilyr
       use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
           alvdr_ai, alvdf_ai, alidr_ai, alidf_ai, fswfac
-      use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswthruln, &
+      use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswpenln, &
                                Sswabsn, Iswabsn
       use ice_state, only: aice, aicen
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_sw
@@ -123,8 +123,8 @@
                fswintn(i,j,n,iblk)  = scale_factor(i,j,iblk)*fswintn (i,j,n,iblk)
                fswthrun(i,j,n,iblk) = scale_factor(i,j,iblk)*fswthrun(i,j,n,iblk)
                do k = 1,nilyr+1
-                  fswthruln(i,j,k,n,iblk) &
-                                    = scale_factor(i,j,iblk)*fswthruln(i,j,k,n,iblk)
+                  fswpenln(i,j,k,n,iblk) &
+                                    = scale_factor(i,j,iblk)*fswpenln(i,j,k,n,iblk)
                enddo       !k
 
                Sswabsn(i,j,:,n,iblk) = &
@@ -178,7 +178,7 @@
       use ice_meltpond_topo, only: compute_ponds_topo
       use ice_restart_meltpond_lvl, only: ffracn, dhsn, &
           rfracmin, rfracmax, dpscale, pndaspect, frzpnd
-      use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswthruln, &
+      use ice_shortwave, only: fswsfcn, fswintn, fswthrun, &
                                Sswabsn, Iswabsn, shortwave
       use ice_state, only: aice, aicen, aice_init, aicen_init, vicen_init, &
           vice, vicen, vsno, vsnon, ntrcr, trcrn, &
@@ -1354,7 +1354,7 @@
       use ice_flux, only: swvdr, swvdf, swidr, swidf, coszen, fsnow
       use ice_grid, only: TLAT, TLON, tmask
       use ice_restart_meltpond_lvl, only: ffracn, dhsn
-      use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswthruln, &
+      use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswpenln, &
                                Sswabsn, Iswabsn, shortwave, &
                                albicen, albsnon, albpndn, &
                                alvdrn, alidrn, alvdfn, alidfn, &
@@ -1394,7 +1394,7 @@
       enddo   ! i
       enddo   ! j
       enddo   ! ncat
-      fswthruln(:,:,:,:,iblk) = c0
+      fswpenln(:,:,:,:,iblk) = c0
       Iswabsn(:,:,:,:,iblk) = c0
       Sswabsn(:,:,:,:,iblk) = c0
 
@@ -1413,11 +1413,11 @@
                        tmask(:,:,iblk),                                & 
                        swvdr(:,:,iblk),       swvdf(:,:,iblk),         &
                        swidr(:,:,iblk),       swidf(:,:,iblk),         &
-                       coszen(:,:,iblk),      fsnow(:,:,iblk),         &                        
+                       coszen(:,:,iblk),      fsnow(:,:,iblk),         &
                        alvdrn(:,:,:,iblk),    alvdfn(:,:,:,iblk),      &
                        alidrn(:,:,:,iblk),    alidfn(:,:,:,iblk),      &
                        fswsfcn(:,:,:,iblk),   fswintn(:,:,:,iblk),     &
-                       fswthrun(:,:,:,iblk),  fswthruln(:,:,:,:,iblk), &
+                       fswthrun(:,:,:,iblk),  fswpenln(:,:,:,:,iblk),  &
                        Sswabsn(:,:,:,:,iblk), Iswabsn(:,:,:,:,iblk),   &
                        albicen(:,:,:,iblk),   albsnon(:,:,:,iblk),     &
                        albpndn(:,:,:,iblk),   apeffn(:,:,:,iblk),      &
@@ -1436,7 +1436,7 @@
                               alvdfn(:,:,:,iblk),  alidfn(:,:,:,iblk),  &
                               fswsfcn(:,:,:,iblk), fswintn(:,:,:,iblk), &
                               fswthrun(:,:,:,iblk),                     &
-                              fswthruln(:,:,:,:,iblk),                  &
+                              fswpenln(:,:,:,:,iblk),                   &
                               Iswabsn(:,:,:,:,iblk),                    &
                               Sswabsn(:,:,:,:,iblk),                    &
                               albicen(:,:,:,iblk), albsnon(:,:,:,iblk), &
