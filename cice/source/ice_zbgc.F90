@@ -57,7 +57,7 @@
          tr_bgc_N_sk, tr_bgc_C_sk, tr_bgc_chl_sk, &
          tr_bgc_Nit_sk, tr_bgc_Am_sk, tr_bgc_Sil_sk, &
          tr_bgc_DMSPp_sk, tr_bgc_DMSPd_sk, tr_bgc_DMS_sk, &
-         restart_bgc, restart_hbrine, phi_snow, initbio_frac
+         restart_bgc, restart_hbrine, phi_snow
 
       !-----------------------------------------------------------------
       ! default values
@@ -80,7 +80,6 @@
       tr_bgc_DMS_sk   = .false.  ! biogeochemistry, trace gases (skeletal) 
       restart_bgc     = .false.  ! biogeochemistry restart
       restart_hbrine  = .false.  ! hbrine restart
-      initbio_frac    = c1       ! fraction of ocean tracer used for initialization
       phi_snow        = p5       ! snow porosity
 
       !-----------------------------------------------------------------
@@ -181,7 +180,6 @@
       call broadcast_scalar(tr_bgc_DMSPp_sk,    master_task)
       call broadcast_scalar(tr_bgc_DMSPd_sk,    master_task)
       call broadcast_scalar(tr_bgc_DMS_sk,      master_task)
-      call broadcast_scalar(initbio_frac,       master_task)
 
       if (solve_skl_bgc) then
 
@@ -203,9 +201,7 @@
          write(nu_diag,1010) ' tr_bgc_DMSPd_sk           = ', tr_bgc_DMSPd_sk
          write(nu_diag,1010) ' tr_bgc_DMS_sk             = ', tr_bgc_DMS_sk
          write(nu_diag,1010) ' restart_bgc               = ', restart_bgc
-         !bio parameters
-         write(nu_diag,1000) ' initbio_frac              = ', initbio_frac
-
+        
       endif   ! master_task
 
       !-----------------------------------------------------------------
