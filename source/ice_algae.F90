@@ -250,7 +250,7 @@
 
       real (kind=dbl_kind), dimension(icells,nbtrcr):: &
          react  , & ! biological sources and sinks (mmol/m^3)
-         cinit  , & ! initial concentration (mmol/m^2)
+         cinit  , & ! initial brine concentration (mmol/m^2)
          congel_alg ! congelation flux contribution to ice algae (mmol/m^2 s) 
 
       real (kind=dbl_kind), dimension (nbtrcr):: &
@@ -311,23 +311,23 @@
          ice_growth(ij) = (congel(i,j)-meltb(i,j))/dt
 
          if (first_ice(i,j)) then     
-               trcrn(i,j,nt_bgc_N_sk)     = ocean_bio(i,j,nlt_bgc_N)    *sk_l*rphi_sk
+               trcrn(i,j,nt_bgc_N_sk)     = ocean_bio(i,j,nlt_bgc_N)    *sk_l/phi_sk
             if (tr_bgc_Nit_sk) &
-               trcrn(i,j,nt_bgc_Nit_sk)   = ocean_bio(i,j,nlt_bgc_NO)   *sk_l*rphi_sk
+               trcrn(i,j,nt_bgc_Nit_sk)   = ocean_bio(i,j,nlt_bgc_NO)   *sk_l/phi_sk
             if (tr_bgc_Am_sk)  &
-               trcrn(i,j,nt_bgc_Am_sk)    = ocean_bio(i,j,nlt_bgc_NH)   *sk_l*rphi_sk
+               trcrn(i,j,nt_bgc_Am_sk)    = ocean_bio(i,j,nlt_bgc_NH)   *sk_l/phi_sk
             if (tr_bgc_Sil_sk) &
-               trcrn(i,j,nt_bgc_Sil_sk)   = ocean_bio(i,j,nlt_bgc_Sil)  *sk_l*rphi_sk
+               trcrn(i,j,nt_bgc_Sil_sk)   = ocean_bio(i,j,nlt_bgc_Sil)  *sk_l/phi_sk
             if (tr_bgc_C_sk)   &
-               trcrn(i,j,nt_bgc_C_sk)     = ocean_bio(i,j,nlt_bgc_C)    *sk_l*rphi_sk 
+               trcrn(i,j,nt_bgc_C_sk)     = ocean_bio(i,j,nlt_bgc_C)    *sk_l/phi_sk
             if (tr_bgc_chl_sk) &
-               trcrn(i,j,nt_bgc_chl_sk)   = ocean_bio(i,j,nlt_bgc_chl)  *sk_l*rphi_sk
+               trcrn(i,j,nt_bgc_chl_sk)   = ocean_bio(i,j,nlt_bgc_chl)  *sk_l/phi_sk
             if (tr_bgc_DMSPp_sk) &
-               trcrn(i,j,nt_bgc_DMSPp_sk) = ocean_bio(i,j,nlt_bgc_DMSPp)*sk_l*rphi_sk
+               trcrn(i,j,nt_bgc_DMSPp_sk) = ocean_bio(i,j,nlt_bgc_DMSPp)*sk_l/phi_sk
             if (tr_bgc_DMSPd_sk) &
-               trcrn(i,j,nt_bgc_DMSPd_sk) = ocean_bio(i,j,nlt_bgc_DMSPd)*sk_l*rphi_sk
+               trcrn(i,j,nt_bgc_DMSPd_sk) = ocean_bio(i,j,nlt_bgc_DMSPd)*sk_l/phi_sk
             if (tr_bgc_DMS_sk) &
-               trcrn(i,j,nt_bgc_DMS_sk)   = ocean_bio(i,j,nlt_bgc_DMS)  *sk_l*rphi_sk
+               trcrn(i,j,nt_bgc_DMS_sk)   = ocean_bio(i,j,nlt_bgc_DMS)  *sk_l/phi_sk
          endif ! first_ice
 
                               cinit(ij,nlt_bgc_N)     = trcrn(i,j,nt_bgc_N_sk)    
@@ -386,9 +386,9 @@
                ! Algae melt like nutrients
                f_meltn(ij) = PVt(ij)*cinit(ij,nlt_bgc_N)/sk_l  ! for algae only
             elseif (ice_growth(ij) > c0 .AND. &
-                   cinit(ij,nlt_bgc_N)/sk_l < ocean_bio(i,j,nlt_bgc_N)*rphi_sk) then
+                   cinit(ij,nlt_bgc_N) < ocean_bio(i,j,nlt_bgc_N)*sk_l/phi_sk) then
                ! Growth only contributes to seeding from ocean 
-               congel_alg(ij,nlt_bgc_N) = (ocean_bio(i,j,nlt_bgc_N)*rphi_sk &
+               congel_alg(ij,nlt_bgc_N) = (ocean_bio(i,j,nlt_bgc_N)*sk_l/phi_sk &
                                         - cinit(ij,nlt_bgc_N))/dt
             endif ! PVt > c0       
          enddo    ! ij
@@ -411,8 +411,8 @@
 
             if (ice_growth(ij) > c0) PVt(ij) = -PVc
             if (ice_growth(ij) >= c0 .AND. &
-                   cinit(ij,nlt_bgc_N)/sk_l < ocean_bio(i,j,nlt_bgc_N)*rphi_sk) then
-               congel_alg(ij,nlt_bgc_N) = (ocean_bio(i,j,nlt_bgc_N)*rphi_sk &
+                   cinit(ij,nlt_bgc_N)/sk_l < ocean_bio(i,j,nlt_bgc_N)/phi_sk) then
+               congel_alg(ij,nlt_bgc_N) = (ocean_bio(i,j,nlt_bgc_N)*sk_l/phi_sk &
                                         - cinit(ij,nlt_bgc_N))/dt
             elseif (ice_growth(ij) < c0) then
                f_meltn(ij) = min(c1, meltb(i,j)/sk_l)*cinit(ij,nlt_bgc_N)/dt

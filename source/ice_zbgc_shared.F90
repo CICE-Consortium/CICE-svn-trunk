@@ -79,11 +79,9 @@
          nlt_bgc_DMS    , & ! 
          nlt_bgc_PON        ! zooplankton and detritus
 
-      real (kind=dbl_kind), public :: & 
-         initbio_frac       ! fraction of ocean tracer used for initialization
-
       ! bio parameters for algal_dyn
       real (kind=dbl_kind), parameter, public :: &
+         initbio_frac = c1          , & ! fraction of ocean tracer used for initialization
          R_C2N      = 7.0_dbl_kind  , & ! algal C to N (mole/mole) 
                                         ! Kristiansen 1991 (Barents) 9.0
          R_gC2molC  = 12.01_dbl_kind, & ! mg/mmol C
