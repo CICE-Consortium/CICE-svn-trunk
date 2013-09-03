@@ -31,6 +31,9 @@
                          ! nilyr + 1 index is for bottom surface
 
       real (kind=dbl_kind), parameter, public :: &
+         hs_min = 5.e-4_dbl_kind    ! min snow thickness for computing zTsn (m)
+
+      real (kind=dbl_kind), parameter, public :: &
          ferrmax = 1.0e-3_dbl_kind    ! max allowed energy flux error (W m-2)
                                       ! recommend ferrmax < 0.01 W m-2
 

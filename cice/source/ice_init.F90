@@ -474,6 +474,15 @@
          call abort_ice('ice: aerosol tracer conflict: comp_ice, ice_in')
       endif
 
+      if (tr_aero .and. trim(shortwave) /= 'dEdd') then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'WARNING: aerosols activated but dEdd'
+            write (nu_diag,*) 'WARNING: shortwave is not.'
+            write (nu_diag,*) 'WARNING: Setting shortwave = dEdd'
+         endif
+         shortwave = 'dEdd'
+      endif
+
       rfracmin = min(max(rfracmin,c0),c1)
       rfracmax = min(max(rfracmax,c0),c1)
 
@@ -1039,7 +1048,7 @@
          enddo
       endif
 
-      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
+      !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block, &
       !$OMP                     iglob,jglob,it)
       do iblk = 1, nblocks
 
@@ -1276,15 +1285,6 @@
 
          if (trim(grid_type) == 'rectangular') then
 
-#ifdef oned
-         ! oned model - only middle grid cell to have ice
-         icells = 1
-         indxi(icells) = 4
-         indxj(icells) = 4
-         ainit(:) = c1
-         hinit(:) = c1
-#endif
-            
          ! place ice on left side of domain
          icells = 0
          do j = jlo, jhi

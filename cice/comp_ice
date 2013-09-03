@@ -66,7 +66,6 @@ setenv SHRDIR   csm_share # location of CCSM shared code
 setenv NETCDF   yes       # set to no if netcdf library is unavailable
                           # set to pio for parallel netcdf
 setenv DITTO    no        # reproducible diagnostics
-setenv ONED     no        # true 1D thermodynamic calculation
 setenv THRD     no        # set to yes for OpenMP threading
 
 if ( $THRD == 'yes') setenv OMP_NUM_THREADS 2 # positive integer 
@@ -104,7 +103,6 @@ cd $EXEDIR
 if !($RES == 'col') then
 if !(-e grid)    cp $SRCDIR/input_templates/$RES/global_$RES.grid grid
 if !(-e kmt)     cp $SRCDIR/input_templates/$RES/global_$RES.kmt kmt
-if !(-e eap_stresses) cp $SRCDIR/input_templates/eap_stresses eap_stresses
 endif
 if !(-e ice_in)  cp $SRCDIR/input_templates/$RES/ice_in .
 if !(-e run_ice) cp $SRCDIR/input_templates/run_ice.$ARCH run_ice

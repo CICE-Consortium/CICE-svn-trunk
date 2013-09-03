@@ -24,9 +24,6 @@
       private
       public :: surface_fluxes, temperature_changes
 
-      real (kind=dbl_kind), parameter, public :: &
-         hs_min = 1.e-4_dbl_kind    ! min snow thickness for computing zTsn (m)
-
       real (kind=dbl_kind), parameter :: &
          betak   = 0.13_dbl_kind, & ! constant in formula for k (W m-1 ppt-1)
          kimin   = 0.10_dbl_kind    ! min conductivity of saline ice (W m-1 deg-1)
@@ -73,7 +70,7 @@
                                       istop,    jstop,    &
                                       hin)
 
-      use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
+      use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf, hs_min
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions

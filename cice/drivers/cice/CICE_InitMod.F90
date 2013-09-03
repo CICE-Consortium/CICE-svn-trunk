@@ -140,9 +140,6 @@
    !--------------------------------------------------------------------
 
       call init_forcing_atmo    ! initialize atmospheric forcing (standalone)
-#ifdef oned
-      call init_therm_oned
-#endif
 
 #ifndef coupled
       call get_forcing_atmo     ! atmospheric forcing from data

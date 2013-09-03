@@ -364,11 +364,7 @@
             icells = 0
             do j = jlo, jhi
             do i = ilo, ihi
-#ifdef oned
-               if (i==4.and.j==4) then
-#else
                if (aicen(i,j,n,iblk) > puny) then
-#endif
                   icells = icells + 1
                   indxi(icells) = i
                   indxj(icells) = j
@@ -916,7 +912,6 @@
       ! Melt ice laterally.
       !-----------------------------------------------------------------
 
-#ifndef oned
          call lateral_melt (nx_block, ny_block,     &
                             ilo, ihi, jlo, jhi,     &
                             dt,                     &
@@ -947,7 +942,6 @@
                                vicen     (:,:,1,iblk), &
                                aicen_init(:,:,1,iblk), &
                                vicen_init(:,:,1,iblk))
-#endif
          
       !-----------------------------------------------------------------
       ! ITD cleanup: Rebin thickness categories if necessary, and remove

@@ -213,12 +213,6 @@
 
       endif ! kcatbound
 
-#ifdef oned
-      n = 1
-      hin_max(n-1) = c0
-      hin_max(n)   = 10.0_dbl_kind
-#endif
-
       if (my_task == master_task) then
          write (nu_diag,*) ' '
          write (nu_diag,*) 'hin_max(n-1) < Cat n < hin_max(n)'

@@ -1,27 +1,17 @@
 !  SVN:$Id$
 
-#define debug 0
-#define diag 0
-
 #define flushing 1
 #define flushing_down 1
 #define flushing_up 0
  
-#define load_save_state 0
-
 !=======================================================================
 
 module ice_therm_mushy
 
   use ice_kinds_mod
   use ice_constants
-  use ice_domain_size, only: ncat, nilyr, nslyr, max_ntrcr, n_aero
-  use ice_calendar, only: istep, istep1, dt
-  use ice_state, only: nt_apnd, nt_hpnd, tr_pond
-  use ice_exit, only: abort_ice
-  use ice_communicate, only: my_task, master_task
+  use ice_domain_size, only: nilyr, nslyr
   use ice_therm_shared, only: ferrmax
-  use ice_fileunits, only: nu_diag
 
   implicit none
 
@@ -147,19 +137,13 @@ module ice_therm_mushy
  !-----------------------------------------------------------------
 
   real(kind=dbl_kind), parameter :: &
-       serrmax = 1e-11_dbl_kind  ! max allowed salt flux error (ppt m s-1)
+       serrmax = 1.e-11_dbl_kind ! max allowed salt flux error (ppt m s-1)
 
   real(kind=dbl_kind), parameter :: &
-       dTsf_errmax = 5.e-4_dbl_kind  ! max allowed error in dTsf
-
-  real(kind=dbl_kind), parameter :: &
-       dTsf_errcon = dTsf_errmax  ! max allowed error in dTsf for consistency
+       dTsf_errcon = 5.e-4_dbl_kind ! max allowed error in dTsf
 
   real(kind=dbl_kind), parameter :: &
        ferrcon = ferrmax ! max allowed surface flux error for consistency
-
-  real(kind=dbl_kind), parameter :: &
-       hs_min = 1.e-4_dbl_kind  ! min snow thickness for computing zTsn (m)
 
 !=======================================================================
 
@@ -191,6 +175,11 @@ contains
                                           istop,    jstop)
 
     ! solve the changes in enthalpy and bulk salinity for the mushy vertical thermodynamics
+
+    use ice_domain_size, only: max_ntrcr
+    use ice_exit, only: abort_ice
+    use ice_fileunits, only: nu_diag
+    use ice_state, only: nt_apnd, nt_hpnd, tr_pond
 
     integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -301,45 +290,24 @@ contains
           trc_apnd = c0
        endif
           
-       !call temperature_changes_column(istep1,        dt,            & 
-       !                                rhoa(i,j),     flw(i,j),      &
-       !                                potT(i,j),     Qa(i,j),       &
-       !                                shcoef(i,j),   lhcoef(i,j),   &
-       !                                fswsfc(i,j),   fswint(i,j),   &
-       !                                Sswabs(i,j,:), Iswabs(i,j,:), &
-       !                                hilyr(ij),     hslyr(ij),     &
-       !                                zqin(ij,:),    zTin(ij,:),    &
-       !                                zqsn(ij,:),    zTsn(ij,:),    &
-       !                                zSin(ij,:),                   &
-       !                                trc_hpnd,      trc_apnd,      &
-       !                                Tsf(ij),       Tbot(i,j),     &
-       !                                sss(i,j),                     &
-       !                                fsensn(i,j),   flatn(i,j),    &
-       !                                flwoutn(i,j),  fsurfn(i,j),   &
-       !                                fcondtopn(i,j),fcondbot(ij),  &
-       !                                fadvocn(i,j),  snoice(i,j),   &
-       !                                einit(ij),     l_stop)
-
-
-       ! comment out above call and comment in this call for debugging
-       call temperature_changes_column_debug(istep1,        dt,            & 
-                                             rhoa(i,j),     flw(i,j),      &
-                                             potT(i,j),     Qa(i,j),       &
-                                             shcoef(i,j),   lhcoef(i,j),   &
-                                             fswsfc(i,j),   fswint(i,j),   &
-                                             Sswabs(i,j,:), Iswabs(i,j,:), &
-                                             hilyr(ij),     hslyr(ij),     &
-                                             zqin(ij,:),    zTin(ij,:),    &
-                                             zqsn(ij,:),    zTsn(ij,:),    &
-                                             zSin(ij,:),                   &
-                                             trc_hpnd,      trc_apnd,      &
-                                             Tsf(ij),       Tbot(i,j),     &
-                                             sss(i,j),                     &
-                                             fsensn(i,j),   flatn(i,j),    &
-                                             flwoutn(i,j),  fsurfn(i,j),   &
-                                             fcondtopn(i,j),fcondbot(ij),  &
-                                             fadvocn(i,j),  snoice(i,j),   &
-                                             einit(ij),     l_stop)
+       call temperature_changes_column(istep1,        dt,            & 
+                                       rhoa(i,j),     flw(i,j),      &
+                                       potT(i,j),     Qa(i,j),       &
+                                       shcoef(i,j),   lhcoef(i,j),   &
+                                       fswsfc(i,j),   fswint(i,j),   &
+                                       Sswabs(i,j,:), Iswabs(i,j,:), &
+                                       hilyr(ij),     hslyr(ij),     &
+                                       zqin(ij,:),    zTin(ij,:),    &
+                                       zqsn(ij,:),    zTsn(ij,:),    &
+                                       zSin(ij,:),                   &
+                                       trc_hpnd,      trc_apnd,      &
+                                       Tsf(ij),       Tbot(i,j),     &
+                                       sss(i,j),                     &
+                                       fsensn(i,j),   flatn(i,j),    &
+                                       flwoutn(i,j),  fsurfn(i,j),   &
+                                       fcondtopn(i,j),fcondbot(ij),  &
+                                       fadvocn(i,j),  snoice(i,j),   &
+                                       einit(ij),     l_stop)
 
        if (tr_pond) then
           trcrn(i,j,nt_hpnd) = trc_hpnd
@@ -349,9 +317,7 @@ contains
        if (l_stop) then
           istop = i
           jstop = j
-          if (my_task == master_task) then
-             write(nu_diag,*) "ice_therm_mushy solver failure: istep, n, i, j:", istep, ncat, i, j
-          endif
+          write(nu_diag,*) "ice_therm_mushy solver failure: istep1, my_task, i, j:", istep1, my_task, i, j
           call abort_ice("ice_therm_mushy solver failure")
        endif
        
@@ -383,6 +349,8 @@ contains
                                         einit_old,lstop)
 
     ! solve the enthalpy and bulk salinity of the ice for a single column
+
+    use ice_therm_shared, only: hs_min
 
     integer (kind=int_kind), intent(in) :: &
          istep1          ! time step index (diagnostic only)
@@ -500,10 +468,6 @@ contains
     snowice_en = c0
     snowice_st = c0
 
-#if defined oned
-    if (hilyr <= c0) return
-#endif
-
     Tsf0  = Tsf
     zqsn0 = zqsn
     zqin0 = zqin
@@ -543,9 +507,6 @@ contains
                            wdown,  wup,   &
                            dhhead, w_up_max)
 
-!    open(55,file='history/w.txt',position='append')
-!    write(55,*) istep, abs(max(w,c0)), abs(min(w,c0))
-!    close(55)
 #else
     w = c0
     wdown = c0
@@ -562,9 +523,7 @@ contains
                                   hilyr,  hin)
     !q = c0 ; dSdt = c0
     
-#if diag == 1
-    call diagnose_salt_flux(q, dSdt)
-#endif
+    !call diagnose_salt_flux(q, dSdt) ! for debugging
 
     ! calculate the conductivities
     call conductivity_mush_array(zqin0, zSin0, km)
@@ -585,7 +544,7 @@ contains
                                   phi,         Tbot,       &
                                   km,          ks,         &
                                   q,           dSdt,       &
-                                  w,                       &
+                                  w,           dt,         &
                                   fswint,      fswsfc,     &
                                   rhoa,        flw,        &
                                   potT,        Qa,         &
@@ -624,7 +583,7 @@ contains
                                     phi,         Tbot,       &
                                     km,          ks,         &
                                     q,           dSdt,       &
-                                    w,                       &
+                                    w,           dt,         &
                                     fswint,      fswsfc,     &
                                     rhoa,        flw,        &
                                     potT,        Qa,         &
@@ -694,7 +653,7 @@ contains
                                    phi,         Tbot,       &
                                    km,          ks,         &
                                    q,           dSdt,       &
-                                   w,                       &
+                                   w,           dt,         &
                                    fswint,      fswsfc,     &
                                    rhoa,        flw,        &
                                    potT,        Qa,         &
@@ -715,6 +674,9 @@ contains
     ! 3) check the consistency of the surface condition of the solution
     ! 4) If the surface condition is inconsistent resolve for the other surface condition
     ! 5) If neither solution is consistent the resolve the inconsistency
+
+    use ice_calendar, only: istep1
+    use ice_fileunits, only: nu_diag
 
     real(kind=dbl_kind), intent(inout) :: &
          Tsf             ! snow surface temperature (C)
@@ -759,6 +721,7 @@ contains
          q               ! upward interface vertical Darcy flow (m s-1)
 
     real(kind=dbl_kind), intent(in) :: &
+         dt          , & ! time step (s)
          Tbot        , & ! ice bottom surfce temperature (deg C)
          hilyr       , & ! ice layer thickness (m)
          hslyr       , & ! snow layer thickness (m)
@@ -784,16 +747,12 @@ contains
 
        ! initially cold
 
-#if debug == 1
-       write(*,*) istep1, "Two stage snow cold: 1"
-#endif
-
        ! solve the system for cold and snow
        call picard_solver(.true.,  .true.,    &
                           Tsf,      zqsn,     &
                           zqin,     zSin,     &
                           zTin,     zTsn,     &
-                          phi,                &
+                          phi,      dt,       &
                           hilyr,    hslyr,    &
                           km,       ks,       &
                           Iswabs,   Sswabs,   &
@@ -814,10 +773,6 @@ contains
        ! halt if solver failed
        if (lstop) return
 
-#if debug == 1
-       write(*,*) istep1, "Two stage snow: 1", Tsf, Tsf < c0
-#endif
-
        ! check if solution is consistent - surface should still be cold
        if (Tsf < dTsf_errcon) then
 
@@ -828,10 +783,6 @@ contains
           
           ! solution is inconsistent - surface is warmer than melting 
           ! resolve assuming surface is melting
-
-#if debug == 1
-          write(*,*) istep1, "Two stage snow melt: 2"
-#endif
 
           ! reset the solution to initial values
           Tsf  = c0
@@ -845,7 +796,7 @@ contains
                              Tsf,      zqsn,     &
                              zqin,     zSin,     &
                              zTin,     zTsn,     &
-                             phi,                &
+                             phi,      dt,       &
                              hilyr,    hslyr,    &
                              km,       ks,       &
                              Iswabs,   Sswabs,   &
@@ -866,11 +817,9 @@ contains
           ! halt if solver failed
           if (lstop) return
 
-#if debug == 1
-          write(*,*) istep1, "Two stage snow: 2", fsurfn, fcondtop, fsurfn > fcondtop
-#endif
-
-          ! check if solution is consistent - surface conductive heat flux should be less than incoming surface heat flux
+          ! check if solution is consistent 
+          ! surface conductive heat flux should be less than 
+          ! incoming surface heat flux
           if (fcondtop - fsurfn < ferrcon) then
 
              ! solution is consistent - have solution so finish
@@ -880,7 +829,7 @@ contains
 
              ! solution is inconsistent
 
-             write(*,*) istep1, "inconsistency! 1" ; stop
+             write(nu_diag,*) istep1, "inconsistency! 1" ; stop
 
           endif ! surface flux consistency
 
@@ -889,11 +838,6 @@ contains
     else
 
        ! initially melting
-
-#if debug == 1
-       write(*,*) istep1, "Two stage snow melt: 3"
-#endif
-
        Tsf = c0
 
        ! solve the system for melting and snow
@@ -901,7 +845,7 @@ contains
                           Tsf,      zqsn,     &
                           zqin,     zSin,     &
                           zTin,     zTsn,     &
-                          phi,                &
+                          phi,      dt,       &
                           hilyr,    hslyr,    &
                           km,       ks,       &
                           Iswabs,   Sswabs,   &
@@ -922,11 +866,9 @@ contains
        ! halt if solver failed
        if (lstop) return
        
-#if debug == 1
-       write(*,*) istep1, "Two stage snow: 3", fsurfn, fcondtop, fsurfn > fcondtop
-#endif
-       
-       ! check if solution is consistent - surface conductive heat flux should be less than incoming surface heat flux
+       ! check if solution is consistent 
+       ! surface conductive heat flux should be less than 
+       ! incoming surface heat flux
        if (fcondtop - fsurfn < ferrcon) then
 
           ! solution is consistent - have solution so finish
@@ -936,10 +878,6 @@ contains
 
           ! solution is inconsistent - resolve assuming other surface condition
           ! assume surface is cold
-
-#if debug == 1
-          write(*,*) istep1, "Two stage snow cold: 4"
-#endif
 
           ! reset the solution to initial values
           Tsf  = Tsf0
@@ -952,7 +890,7 @@ contains
                              Tsf,      zqsn,     &
                              zqin,     zSin,     &
                              zTin,     zTsn,     &
-                             phi,                &
+                             phi,      dt,       &
                              hilyr,    hslyr,    & 
                              km,       ks,       &
                              Iswabs,   Sswabs,   &
@@ -972,10 +910,6 @@ contains
 
           ! halt if solver failed
           if (lstop) return
-
-#if debug == 1
-          write(*,*) istep1, "Two stage snow: 4", Tsf, Tsf < c0
-#endif
 
           ! check if solution is consistent - surface should be cold
           if (Tsf < dTsf_errcon) then
@@ -1009,7 +943,7 @@ contains
                                      phi,         Tbot,       &
                                      km,          ks,         &
                                      q,           dSdt,       &
-                                     w,                       &
+                                     w,           dt,         &
                                      fswint,      fswsfc,     &
                                      rhoa,        flw,        &
                                      potT,        Qa,         &
@@ -1030,6 +964,8 @@ contains
     ! 3) check the consistency of the surface condition of the solution
     ! 4) If the surface condition is inconsistent resolve for the other surface condition
     ! 5) If neither solution is consistent the resolve the inconsistency
+
+    use ice_calendar, only: istep1
 
     real(kind=dbl_kind), intent(inout) :: &
          Tsf             ! ice surface temperature (C)
@@ -1074,6 +1010,7 @@ contains
          q               ! upward interface vertical Darcy flow (m s-1)
 
     real(kind=dbl_kind), intent(in) :: &
+         dt          , & ! time step (s)
          hilyr       , & ! ice layer thickness (m)
          hslyr       , & ! snow layer thickness (m)
          Tbot        , & ! ice bottom surfce temperature (deg C)
@@ -1105,16 +1042,12 @@ contains
 
        ! initially cold
 
-#if debug == 1
-       write(*,*) istep1, "Two stage nosnow cold: 1"
-#endif
-
        ! solve the system for cold and no snow          
        call picard_solver(.false.,  .true.,   &
                           Tsf,      zqsn,     &
                           zqin,     zSin,     &
                           zTin,     zTsn,     &
-                          phi,                &
+                          phi,      dt,       &
                           hilyr,    hslyr,    &
                           km,       ks,       &
                           Iswabs,   Sswabs,   &
@@ -1138,10 +1071,6 @@ contains
        ! surface melting temperature
        Tmlt = liquidus_temperature_mush(zSin(1))
 
-#if debug == 1
-       write(*,*) istep1, "Two stage nosnow: 1", Tsf, Tmlt, Tsf < Tmlt, Tsf - Tmlt
-#endif
-
        ! check if solution is consistent - surface should still be cold
        if (Tsf < Tmlt + dTsf_errcon) then
 
@@ -1151,10 +1080,6 @@ contains
        else
           ! solution is inconsistent - surface is warmer than melting 
           ! resolve assuming surface is melting
-
-#if debug == 1
-          write(*,*) istep1, "Two stage nosnow melt: 2: "
-#endif
 
           ! reset the solution to initial values
           Tsf  = liquidus_temperature_mush(zSin(1))
@@ -1167,7 +1092,7 @@ contains
                              Tsf,      zqsn,     &
                              zqin,     zSin,     &
                              zTin,     zTsn,     &
-                             phi,                &
+                             phi,      dt,       &
                              hilyr,    hslyr,    &
                              km,       ks,       &
                              Iswabs,   Sswabs,   &
@@ -1188,11 +1113,9 @@ contains
           ! halt if solver failed
           if (lstop) return
 
-#if debug == 1
-          write(*,*) istep1, "Two stage nosnow: 2", fsurfn, fcondtop, fsurfn > fcondtop, fsurfn - fcondtop
-#endif
-
-          ! check if solution is consistent - surface conductive heat flux should be less than incoming surface heat flux
+          ! check if solution is consistent 
+          ! surface conductive heat flux should be less than 
+          ! incoming surface heat flux
           if (fcondtop - fsurfn < ferrcon) then
 
              ! solution is consistent - have solution so finish
@@ -1211,10 +1134,6 @@ contains
     else
        ! initially melting
 
-#if debug == 1
-       write(*,*) istep1, "Two stage nosnow melt: 3"
-#endif
-
        ! solve the system for melt and no snow
        
        Tsf = liquidus_temperature_mush(zSin(1))
@@ -1223,7 +1142,7 @@ contains
                           Tsf,      zqsn,     &
                           zqin,     zSin,     &
                           zTin,     zTsn,     &
-                          phi,                &
+                          phi,      dt,       &
                           hilyr,    hslyr,    &
                           km,       ks,       &
                           Iswabs,   Sswabs,   &
@@ -1244,11 +1163,9 @@ contains
        ! halt if solver failed
        if (lstop) return
 
-#if debug == 1
-       write(*,*) istep1, "Two stage nosnow: 3", fsurfn, fcondtop, fsurfn > fcondtop
-#endif
-
-       ! check if solution is consistent - surface conductive heat flux should be less than incoming surface heat flux
+       ! check if solution is consistent 
+       ! surface conductive heat flux should be less than 
+       ! incoming surface heat flux
        if (fcondtop - fsurfn < ferrcon) then
 
           ! solution is consistent - have solution so finish
@@ -1258,10 +1175,6 @@ contains
 
           ! solution is inconsistent - resolve assuming other surface condition
           ! assume surface is cold
-
-#if debug == 1
-          write(*,*) istep1, "Two stage nosnow cold: 4"
-#endif
 
           ! reset the solution to initial values
           Tsf  = Tsf0
@@ -1273,7 +1186,7 @@ contains
                              Tsf,      zqsn,     &
                              zqin,     zSin,     &
                              zTin,     zTsn,     &
-                             phi,                &
+                             phi,      dt,       &
                              hilyr,    hslyr,    &
                              km,       ks,       &
                              Iswabs,   Sswabs,   &
@@ -1293,10 +1206,6 @@ contains
 
           ! halt if solver failed
           if (lstop) return
-
-#if debug == 1
-          write(*,*) istep1, "Two stage nosnow: 4", Tsf, Tsf < c0
-#endif
 
           ! surface melting temperature
           Tmlt = liquidus_temperature_mush(zSin(1))
@@ -1402,7 +1311,7 @@ contains
                            Tsf,      zqsn,     &
                            zqin,     zSin,     &
                            zTin,     zTsn,     &
-                           phi,                &
+                           phi,      dt,       &
                            hilyr,    hslyr,    &
                            km,       ks,       &
                            Iswabs,   Sswabs,   &
@@ -1463,6 +1372,7 @@ contains
          fsurfn            ! net flux to top surface, excluding fcondtop
 
     real(kind=dbl_kind), intent(in) :: &
+         dt            , & ! time step (s)
          hilyr         , & ! ice layer thickness (m)
          hslyr         , & ! snow layer thickness (m)
          Tbot          , & ! ice bottom surfce temperature (deg C)
@@ -1599,7 +1509,7 @@ contains
                                      km,         ks,       &
                                      hilyr,      hslyr,    &
                                      fswint,               &
-                                     einit,                &
+                                     einit,      dt,       &
                                      fcondtop,   fcondbot, &
                                      fadvheat_nit)
 
@@ -1656,6 +1566,9 @@ contains
                                    zqsn0, zqsn, &
                                    zqin0, phi)
 
+    use ice_calendar, only: istep1
+    use ice_fileunits, only: nu_diag
+
     real(kind=dbl_kind), intent(in) :: &
          Tsf0  , & ! snow surface temperature (C) at beginning of timestep
          Tsf       ! snow surface temperature (C)
@@ -1677,7 +1590,7 @@ contains
     integer :: &
          k        ! vertical layer index
 
-    write(nu_diag,*) istep1, "convergence failed!"
+    write(nu_diag,*) istep1, "picard convergence failed!"
 
     write(nu_diag,*) 0, Tsf0, Tsf
     
@@ -1703,7 +1616,7 @@ contains
                                       km,         ks,       &
                                       hilyr,      hslyr,    &
                                       fswint,               &
-                                      einit,                &
+                                      einit,      dt,       &
                                       fcondtop,   fcondbot, &
                                       fadvheat)
 
@@ -1717,6 +1630,7 @@ contains
          nit          ! Picard iteration count
 
     real(kind=dbl_kind), intent(in) :: &
+         dt       , & ! time step (s)
          Tsf      , & ! snow surface temperature (C)
          Tsf_prev , & ! snow surface temperature at previous iteration
          hilyr    , & ! ice layer thickness (m)
@@ -1787,7 +1701,7 @@ contains
     lconverged = (dTsf  < dTmp_errmax .and. &
                   dzTsn < dTmp_errmax .and. &
                   dzTin < dTmp_errmax .and. &
-                  abs(ferr) < 0.9_dbl_kind*ferrmax)
+                  abs(ferr) < 0.9_dbl_kind*ferrcon)
 
   end subroutine check_picard_convergence
 
@@ -1834,7 +1748,7 @@ contains
                                     qbr,           &
                                     qocn,     qpond)
 
-   real(kind=dbl_kind), intent(inout) :: &
+    real(kind=dbl_kind), intent(inout) :: &
          fadvheat  ! flow of heat to ocean due to advection (W m-2)
 
     real(kind=dbl_kind), dimension(nilyr), intent(in) :: &
@@ -1902,6 +1816,7 @@ contains
                                   zqin,   zqsn,  &
                                   hilyr,  hslyr, &
                                   energy)
+
     logical, intent(in) :: &
          lsnow     ! snow presence: T: has snow, F: no snow
 
@@ -3116,6 +3031,8 @@ contains
 
     ! write out diagnostics related to gravity drainage
 
+    use ice_calendar, only: istep1
+
     real(kind=dbl_kind), dimension(0:nilyr), intent(in) :: &
          q    ! upward interface vertical Darcy flow (m s-1)
 
@@ -3127,11 +3044,11 @@ contains
 
     open(11,file='history/salt_flux.txt',position='append')
 
-    write(11,*) istep, 0, q(0)
+    write(11,*) istep1, 0, q(0)
     do k = 1, nilyr
-       write(11,*) istep, k, q(k), dSdt(k)
+       write(11,*) istep1, k, q(k), dSdt(k)
     enddo ! k
-    write(11,*) istep, k, c0, c0, c0
+    write(11,*) istep1, k, c0, c0, c0
 
     close(11)
 
@@ -3437,25 +3354,12 @@ contains
     ! maximum up flow to flood to sea level
     w_up_max = max(((Mice + hsn * rhos - hin * rhow) * (rhoi - rhos)) / (dt * rhos * rhow), c0)
 
-    !open(44,file='./history/wup.txt',position='append')
-    !write(44,*) istep, w, w_up_max, min(max(w,w_down_max),w_up_max), hocn, hbrine, hin, hpond, dhhead, Mice, perm_harm
-    !close(44)
-
-    !open(44,file='./history/wdn.txt',position='append')
-    !write(44,*) istep, w, abs(min(w,c0)), w_down_max, hpond, apond, &
-    !     min(max(w,w_down_max),w_up_max), perm_harm, hbrine, hocn, dhhead, hbrine - hocn, hin
-    !close(44)
-
     ! limit flow
     w = min(max(w,w_down_max),w_up_max)
     !w = c0!
 
     ! limit amount of brine that can be advected out of any particular layer
     wlimit = (advection_limit * phi_min * hilyr) / dt
-
-    !open(44,file='./history/wup2.txt',position='append')
-    !write(44,*) istep, wlimit, w, w * max(min(abs(wlimit/w),c1),c0)
-    !close(44)
 
     if (abs(w) > puny) then
        w = w * max(min(abs(wlimit/w),c1),c0)
@@ -3561,13 +3465,7 @@ contains
        
        hpond = max(hpond, c0)
 
-       !open(55,file="history/flush_pond.txt",position='append')
-       !write(55,*) istep, w, abs(min(w,c0)), (min(w,c0) * dt), (min(w,c0) * dt) / apond, hpond
-       !close(55)
-
        ! exponential decay of pond
-       !write(65,*) istep1, hpond, hpond - lambda_pond * dt * (hpond + hpond0), - lambda_pond * dt * (hpond + hpond0)
-
        hpond = hpond - lambda_pond * dt * (hpond + hpond0)
 
        hpond = max(hpond, c0)
@@ -3640,23 +3538,8 @@ contains
     sadded = c0
     snoice = c0
 
-    !write(61,*) istep1, w, dhhead, w_up_max, hsn
-
     if (w > c0 .or. dhhead < dhhead_lateral) then 
 
-       ! initial energy and salt
-       !einit = c0
-       !sinit = c0
-       
-       !do k = 1, nslyr
-       !   einit = einit + zqsn(k) * hslyr
-       !enddo ! k
-       
-       !do k = 1, nilyr
-       !   einit = einit + zqin(k) * hilyr
-       !   sinit = sinit + zSin(k) * hilyr
-       !enddo ! k
-      
        ! lateral flow
        w_lateral = w_up_max * (abs(min(max(dhhead - dhhead_lateral,-hsn),c0)) / hsn)
        !w_lateral = c0
@@ -3703,30 +3586,9 @@ contains
        hslyr = hslyr2
        snoice = dh
        
-       ! final energy and salt
-       !efinal = c0
-       !sfinal = c0
-       
-       !do k = 1, nslyr
-       !   efinal = efinal + zqsn(k) * hslyr
-       !enddo ! k
-       
-       !do k = 1, nilyr
-       !   efinal = efinal + zqin(k) * hilyr
-       !   sfinal = sfinal + zSin(k) * hilyr
-       !enddo ! k
-       
        eadded = w_combined * qbr(1)
        sadded = w_combined * Sbr(1)
        
-       !euncon = efinal - einit - eadded * dt
-       !suncon = sfinal - sinit - sadded * dt
-       
-       !open(11,file='./history/flood.txt',position='append')
-       !write(11,*) istep, einit, efinal, eadded, euncon, euncon / einit, &
-       !                   sinit, sfinal, sadded, suncon, suncon / sinit
-       !close(11)
-
     endif
     
   end subroutine flood_ice
@@ -4253,464 +4115,6 @@ contains
     phi = zSin / max(Sbr, zSin)
 
   end function liquid_fraction
-
-!=======================================================================
-! debug
-!=======================================================================
-
-  subroutine temperature_changes_column_debug(istep1,   dt,       & 
-                                              rhoa,     flw,      &
-                                              potT,     Qa,       &
-                                              shcoef,   lhcoef,   &
-                                              fswsfc,   fswint,   &
-                                              Sswabs,   Iswabs,   &
-                                              hilyr,    hslyr,    &
-                                              zqin,     zTin,     &
-                                              zqsn,     zTsn,     &
-                                              zSin,               &
-                                              hpond,    apond,    & !!
-                                              Tsf,      Tbot,     &
-                                              sss,                & !!
-                                              fsensn,   flatn,    &
-                                              flwoutn,  fsurfn,   &
-                                              fcondtopn,fcondbot, &
-                                              fadvocn,  snoice,   & !!
-                                              einit,    l_stop)
-
-    ! this routine is useful for debugging situations when the Newton loop fails to converge
-    ! run with this routine and with type="normal_run" - upon failure of the solver the state of
-    ! that solver is saved to file. Rerun with type="load_saved_state" and cice will try to resolve
-    ! the failed state the first time temperature_chnages is called. This vastly speeds debugging
-    ! as you dont need to wait for the whole simulation until it fails again.
-
-    use ice_fileunits, only: nu_jfnkdiag
-
-    integer(kind=int_kind), intent(in) :: &
-         istep1          ! time step index (diagnostic only)
-    
-    real(kind=dbl_kind), intent(in) :: &
-         dt              ! time step
-    
-    real(kind=dbl_kind), intent(in) :: &
-         rhoa        , & ! air density (kg/m^3)
-         flw         , & ! incoming longwave radiation (W/m^2)
-         potT        , & ! air potential temperature  (K)
-         Qa          , & ! specific humidity (kg/kg)
-         shcoef      , & ! transfer coefficient for sensible heat
-         lhcoef      , & ! transfer coefficient for latent heat
-         Tbot        , & ! ice bottom surface temperature (deg C)
-         sss             ! sea surface salinity
-
-    real(kind=dbl_kind), intent(inout) :: &
-         fswsfc      , & ! SW absorbed at ice/snow surface (W m-2)
-         fswint          ! SW absorbed in ice interior below surface (W m-2)
-    
-    real(kind=dbl_kind), intent(inout) :: &
-         hilyr       , & ! ice layer thickness (m)
-         hslyr           ! snow layer thickness (m)
-
-    real(kind=dbl_kind), intent(in) :: &
-         einit           ! initial energy of melting (J m-2)
-    
-    real(kind=dbl_kind), dimension (nslyr), &
-         intent(inout) :: &
-         Sswabs          ! SW radiation absorbed in snow layers (W m-2)
-    
-    real(kind=dbl_kind), dimension (nilyr), &
-         intent(inout) :: &
-         Iswabs          ! SW radiation absorbed in ice layers (W m-2)
-    
-    real(kind=dbl_kind), intent(inout):: &
-         fsurfn      , & ! net flux to top surface, excluding fcondtopn
-         fcondtopn   , & ! downward cond flux at top surface (W m-2)
-         fsensn      , & ! surface downward sensible heat (W m-2)
-         flatn       , & ! surface downward latent heat (W m-2)
-         flwoutn         ! upward LW at surface (W m-2)
-    
-    real(kind=dbl_kind), intent(out):: &
-         fcondbot    , & ! downward cond flux at bottom surface (W m-2)
-         fadvocn     , & ! flow of heat to ocean due to advection
-         snoice          ! snow-ice formation
-
-    real (kind=dbl_kind), intent(inout):: &
-         Tsf         , & ! ice/snow surface temperature(C)
-         hpond       , & ! melt pond depth (m)
-         apond           ! melt pond area
-
-    real(kind=dbl_kind), dimension (nilyr), intent(inout) :: &
-         zqin         , & ! ice layer enthalpy (J m-3)
-         zTin         , & ! internal ice layer temperatures
-         zSin             ! internal ice layer salinities
-  
-    real(kind=dbl_kind), dimension (nslyr), intent(inout) :: &
-         zqsn         , & ! snow layer enthalpy (J m-3)
-         zTsn             ! internal snow layer temperatures
-    
-    logical(kind=log_kind), intent(inout) :: &
-         l_stop          ! if true, print diagnostics and abort model
-
-    ! local versions
-    integer(kind=int_kind) :: &
-         istep1_in,    istep1_sv         ! time step index (diagnostic only)
-
-    real(kind=dbl_kind) :: &
-         dt_in,        dt_sv         , & ! time step
-         rhoa_in,      rhoa_sv       , & ! air density (kg/m^3)
-         flw_in,       flw_sv        , & ! incoming longwave radiation (W/m^2)
-         potT_in,      potT_sv       , & ! air potential temperature  (K)
-         Qa_in,        Qa_sv         , & ! specific humidity (kg/kg)
-         shcoef_in,    shcoef_sv     , & ! transfer coefficient for sensible heat
-         lhcoef_in,    lhcoef_sv     , & ! transfer coefficient for latent heat
-         Tbot_in,      Tbot_sv       , & ! ice bottom surface temperature (deg C)
-         sss_in,       sss_sv        , & ! sea surface salinity
-         fswsfc_in,    fswsfc_sv     , & ! SW absorbed at ice/snow surface (W m-2)
-         fswint_in,    fswint_sv     , & ! SW absorbed in ice interior below surface (W m-2)
-         hilyr_in,     hilyr_sv      , & ! ice layer thickness (m)
-         hslyr_in,     hslyr_sv      , & ! snow layer thickness (m)
-         einit_in,     einit_sv      , & ! initial energy of melting (J m-2)
-         fsurfn_in,    fsurfn_sv     , & ! net flux to top surface, excluding fcondtopn
-         fcondtopn_in, fcondtopn_sv  , & ! downward cond flux at top surface (W m-2)
-         fsensn_in,    fsensn_sv     , & ! surface downward sensible heat (W m-2)
-         flatn_in,     flatn_sv      , & ! surface downward latent heat (W m-2)
-         flwoutn_in,   flwoutn_sv    , & ! upward LW at surface (W m-2)
-         Tsf_in,       Tsf_sv        , & ! ice/snow surface temperature (C)
-         hpond_in,     hpond_sv      , & ! melt pond thickness (m)
-         apond_in,     apond_sv          ! melt pond area
-
-    real(kind=dbl_kind), dimension (nslyr) :: &
-         Sswabs_in, Sswabs_sv        , & ! SW radiation absorbed in snow layers (W m-2)
-         zqsn_in,    zqsn_sv           , & ! snow layer enthalpy (J m-3)
-         zTsn_in,    zTsn_sv               ! internal snow layer temperatures
-
-    real(kind=dbl_kind), dimension (nilyr) :: &
-         Iswabs_in, Iswabs_sv        , & ! SW radiation absorbed in ice layers (W m-2)
-         zqin_in,    zqin_sv           , & ! ice layer enthalpy (J m-3)
-         zTin_in,    zTin_sv           , & ! internal ice layer temperatures
-         zSin_in,    zSin_sv               ! internal ice layer salinities
-
-    logical(kind=log_kind) :: &
-         l_stop_in, l_stop_sv            ! if true, print diagnostics and abort model
-
-    logical(kind=log_kind) :: &
-         lstop  ! solver failure flag 
-
-    ! formatting type for save state
-    character(len=200), parameter :: form_type = "unformatted"
-
-    ! run type
-#if load_save_state == 0
-    character(len=200), parameter :: type = "normal_run"
-#else
-    character(len=200), parameter :: type = "load_saved_state"
-#endif
-
-    ! filename for file saving
-    character(len=200) :: fileout
-
-    ! always save the state
-    logical(kind=log_kind), parameter :: l_save_state_always = .false.
-
-    ! normal running conditions
-    if (trim(type) == "normal_run") then
-
-       ! make copies of input state
-       istep1_in    = istep1    ; istep1_sv    = istep1
-       dt_in        = dt        ; dt_sv        = dt
-       rhoa_in      = rhoa      ; rhoa_sv      = rhoa
-       flw_in       = flw       ; flw_sv       = flw
-       potT_in      = potT      ; potT_sv      = potT
-       Qa_in        = Qa        ; Qa_sv        = Qa
-       shcoef_in    = shcoef    ; shcoef_sv    = shcoef
-       lhcoef_in    = lhcoef    ; lhcoef_sv    = lhcoef
-       Tbot_in      = Tbot      ; Tbot_sv      = Tbot
-       sss_in       = sss       ; sss_sv       = sss
-       fswsfc_in    = fswsfc    ; fswsfc_sv    = fswsfc
-       fswint_in    = fswint    ; fswint_sv    = fswint
-       hilyr_in     = hilyr     ; hilyr_sv     = hilyr
-       hslyr_in     = hslyr     ; hslyr_sv     = hslyr
-       einit_in     = einit     ; einit_sv     = einit
-       Sswabs_in    = Sswabs    ; Sswabs_sv    = Sswabs
-       Iswabs_in    = Iswabs    ; Iswabs_sv    = Iswabs
-       hpond_in     = hpond     ; hpond_sv     = hpond
-       apond_in     = apond     ; apond_sv     = apond
-       fsurfn_in    = fsurfn    ; fsurfn_sv    = fsurfn
-       fcondtopn_in = fcondtopn ; fcondtopn_sv = fcondtopn
-       fsensn_in    = fsensn    ; fsensn_sv    = fsensn
-       flatn_in     = flatn     ; flatn_sv     = flatn
-       flwoutn_in   = flwoutn   ; flwoutn_sv   = flwoutn
-       Tsf_in       = Tsf       ; Tsf_sv       = Tsf
-       zqin_in       = zqin       ; zqin_sv       = zqin
-       zTin_in       = zTin       ; zTin_sv       = zTin
-       zSin_in       = zSin       ; zSin_sv       = zSin
-       zqsn_in       = zqsn       ; zqsn_sv       = zqsn
-       zTsn_in       = zTsn       ; zTsn_sv       = zTsn
-       l_stop_in    = l_stop    ; l_stop_sv    = l_stop
-
-    else
-       
-       ! start from saved state
-       if (form_type == "formatted") then
-
-          ! read in formatted saved state
-          open(nu_jfnkdiag,file='save_state_form.dat',form="formatted",action='read')
-          
-          read(nu_jfnkdiag,*) istep1_in    ; istep1_sv    = istep1_in
-          read(nu_jfnkdiag,*) dt_in        ; dt_sv        = dt_in
-          read(nu_jfnkdiag,*) rhoa_in      ; rhoa_sv      = rhoa_in
-          read(nu_jfnkdiag,*) flw_in       ; flw_sv       = flw_in
-          read(nu_jfnkdiag,*) potT_in      ; potT_sv      = potT_in
-          read(nu_jfnkdiag,*) Qa_in        ; Qa_sv        = Qa_in
-          read(nu_jfnkdiag,*) shcoef_in    ; shcoef_sv    = shcoef_in
-          read(nu_jfnkdiag,*) lhcoef_in    ; lhcoef_sv    = lhcoef_in
-          read(nu_jfnkdiag,*) Tbot_in      ; Tbot_sv      = Tbot_in
-          read(nu_jfnkdiag,*) sss_in       ; sss_sv       = sss_in
-          read(nu_jfnkdiag,*) fswsfc_in    ; fswsfc_sv    = fswsfc_in
-          read(nu_jfnkdiag,*) fswint_in    ; fswint_sv    = fswint_in
-          read(nu_jfnkdiag,*) hilyr_in     ; hilyr_sv     = hilyr_in
-          read(nu_jfnkdiag,*) hslyr_in     ; hslyr_sv     = hslyr_in
-          read(nu_jfnkdiag,*) einit_in     ; einit_sv     = einit_in
-          read(nu_jfnkdiag,*) Sswabs_in    ; Sswabs_sv    = Sswabs_in
-          read(nu_jfnkdiag,*) Iswabs_in    ; Iswabs_sv    = Iswabs_in
-          read(nu_jfnkdiag,*) hpond_in     ; hpond_sv     = hpond_in
-          read(nu_jfnkdiag,*) apond_in     ; apond_sv     = apond_in
-          read(nu_jfnkdiag,*) fsurfn_in    ; fsurfn_sv    = fsurfn_in
-          read(nu_jfnkdiag,*) fcondtopn_in ; fcondtopn_sv = fcondtopn_in
-          read(nu_jfnkdiag,*) fsensn_in    ; fsensn_sv    = fsensn_in
-          read(nu_jfnkdiag,*) flatn_in     ; flatn_sv     = flatn_in
-          read(nu_jfnkdiag,*) flwoutn_in   ; flwoutn_sv   = flwoutn_in
-          read(nu_jfnkdiag,*) Tsf_in       ; Tsf_sv       = Tsf_in
-          read(nu_jfnkdiag,*) zqin_in       ; zqin_sv       = zqin_in
-          read(nu_jfnkdiag,*) zTin_in       ; zTin_sv       = zTin_in
-          read(nu_jfnkdiag,*) zSin_in       ; zSin_sv       = zSin_in
-          read(nu_jfnkdiag,*) zqsn_in       ; zqsn_sv       = zqsn_in
-          read(nu_jfnkdiag,*) zTsn_in       ; zTsn_sv       = zTsn_in
-          read(nu_jfnkdiag,*) l_stop_in    ; l_stop_sv    = l_stop_in        
-          
-          close(nu_jfnkdiag)
-          
-       else if (form_type == "unformatted") then
-
-          ! read in binary saved state
-          open(nu_jfnkdiag,file='save_state_unform.dat',form="unformatted",action='read')
-          
-          read(nu_jfnkdiag) istep1_in    ; istep1_sv    = istep1_in
-          read(nu_jfnkdiag) dt_in        ; dt_sv        = dt_in
-          read(nu_jfnkdiag) rhoa_in      ; rhoa_sv      = rhoa_in
-          read(nu_jfnkdiag) flw_in       ; flw_sv       = flw_in
-          read(nu_jfnkdiag) potT_in      ; potT_sv      = potT_in
-          read(nu_jfnkdiag) Qa_in        ; Qa_sv        = Qa_in
-          read(nu_jfnkdiag) shcoef_in    ; shcoef_sv    = shcoef_in
-          read(nu_jfnkdiag) lhcoef_in    ; lhcoef_sv    = lhcoef_in
-          read(nu_jfnkdiag) Tbot_in      ; Tbot_sv      = Tbot_in
-          read(nu_jfnkdiag) sss_in       ; sss_sv       = sss_in
-          read(nu_jfnkdiag) fswsfc_in    ; fswsfc_sv    = fswsfc_in
-          read(nu_jfnkdiag) fswint_in    ; fswint_sv    = fswint_in
-          read(nu_jfnkdiag) hilyr_in     ; hilyr_sv     = hilyr_in
-          read(nu_jfnkdiag) hslyr_in     ; hslyr_sv     = hslyr_in
-          read(nu_jfnkdiag) einit_in     ; einit_sv     = einit_in
-          read(nu_jfnkdiag) Sswabs_in    ; Sswabs_sv    = Sswabs_in
-          read(nu_jfnkdiag) Iswabs_in    ; Iswabs_sv    = Iswabs_in
-          read(nu_jfnkdiag) hpond_in     ; hpond_sv     = hpond_in
-          read(nu_jfnkdiag) apond_in     ; apond_sv     = apond_in
-          read(nu_jfnkdiag) fsurfn_in    ; fsurfn_sv    = fsurfn_in
-          read(nu_jfnkdiag) fcondtopn_in ; fcondtopn_sv = fcondtopn_in
-          read(nu_jfnkdiag) fsensn_in    ; fsensn_sv    = fsensn_in
-          read(nu_jfnkdiag) flatn_in     ; flatn_sv     = flatn_in
-          read(nu_jfnkdiag) flwoutn_in   ; flwoutn_sv   = flwoutn_in
-          read(nu_jfnkdiag) Tsf_in       ; Tsf_sv       = Tsf_in
-          read(nu_jfnkdiag) zqin_in       ; zqin_sv       = zqin_in
-          read(nu_jfnkdiag) zTin_in       ; zTin_sv       = zTin_in
-          read(nu_jfnkdiag) zSin_in       ; zSin_sv       = zSin_in
-          read(nu_jfnkdiag) zqsn_in       ; zqsn_sv       = zqsn_in
-          read(nu_jfnkdiag) zTsn_in       ; zTsn_sv       = zTsn_in
-          read(nu_jfnkdiag) l_stop_in    ; l_stop_sv    = l_stop_in        
-          
-          close(nu_jfnkdiag)
-
-       endif
-
-    endif
-
-    ! perform the temperature changes calculation
-    call temperature_changes_column(istep1_in,    dt_in,       & 
-                                    rhoa_in,      flw_in,      &
-                                    potT_in,      Qa_in,       &
-                                    shcoef_in,    lhcoef_in,   &
-                                    fswsfc_in,    fswint_in,   &
-                                    Sswabs_in,    Iswabs_in,   &
-                                    hilyr_in,     hslyr_in,    &
-                                    zqin_in,       zTin_in,      &
-                                    zqsn_in,       zTsn_in,      &
-                                    zSin_in,                    &
-                                    hpond_in,     apond_in,    &
-                                    Tsf_in,       Tbot_in,     &
-                                    sss_in,                    &
-                                    fsensn_in,    flatn_in,    &
-                                    flwoutn_in,   fsurfn_in,   &
-                                    fcondtopn_in, fcondbot,    &
-                                    fadvocn,      snoice,      &
-                                    einit_in,     lstop)
-
-    ! normal running conditions
-    if (trim(type) == "normal_run") then
-       if (.not. lstop .and. .not. l_save_state_always) then
-       
-          ! Solution found - copy out solution to output
-          fswsfc    = fswsfc_in   
-          fswint    = fswint_in   
-          Sswabs    = Sswabs_in   
-          Iswabs    = Iswabs_in
-          hpond     = hpond_in
-          apond     = apond_in
-          fsurfn    = fsurfn_in   
-          fcondtopn = fcondtopn_in
-          fsensn    = fsensn_in   
-          flatn     = flatn_in    
-          flwoutn   = flwoutn_in  
-          Tsf       = Tsf_in      
-          zqin       = zqin_in      
-          zTin       = zTin_in      
-          zSin       = zSin_in      
-          zqsn       = zqsn_in      
-          zTsn       = zTsn_in     
-          hilyr     = hilyr_in
-          hslyr     = hslyr_in
-          l_stop    = l_stop_in       
-          
-       else if (lstop .or. l_save_state_always) then
-
-          ! solution failed - save the input state
-          if (form_type == "formatted") then
-
-             ! save the input state with formatted output
-             write(nu_diag,*) "save state formatted: istep, n, i, j: ", istep, g_n, g_i, g_j
-             
-             if (l_save_state_always) then
-                write(fileout,fmt='(a,i5.5,a)') "save_state_unform_",istep1,".dat"
-             else
-                fileout = "save_state_unform.dat"
-             endif
-
-             open(nu_jfnkdiag,file=fileout,form="formatted",action='write')
-             
-             write(nu_jfnkdiag,*) istep1_sv   
-             write(nu_jfnkdiag,*) dt_sv       
-             write(nu_jfnkdiag,*) rhoa_sv     
-             write(nu_jfnkdiag,*) flw_sv      
-             write(nu_jfnkdiag,*) potT_sv     
-             write(nu_jfnkdiag,*) Qa_sv       
-             write(nu_jfnkdiag,*) shcoef_sv   
-             write(nu_jfnkdiag,*) lhcoef_sv   
-             write(nu_jfnkdiag,*) Tbot_sv
-             write(nu_jfnkdiag,*) sss_sv     
-             write(nu_jfnkdiag,*) fswsfc_sv   
-             write(nu_jfnkdiag,*) fswint_sv   
-             write(nu_jfnkdiag,*) hilyr_sv    
-             write(nu_jfnkdiag,*) hslyr_sv    
-             write(nu_jfnkdiag,*) einit_sv    
-             write(nu_jfnkdiag,*) Sswabs_sv   
-             write(nu_jfnkdiag,*) Iswabs_sv
-             write(nu_jfnkdiag,*) hpond_sv
-             write(nu_jfnkdiag,*) apond_sv
-             write(nu_jfnkdiag,*) fsurfn_sv   
-             write(nu_jfnkdiag,*) fcondtopn_sv
-             write(nu_jfnkdiag,*) fsensn_sv   
-             write(nu_jfnkdiag,*) flatn_sv    
-             write(nu_jfnkdiag,*) flwoutn_sv  
-             write(nu_jfnkdiag,*) fcondbot
-             write(nu_jfnkdiag,*) fadvocn
-             write(nu_jfnkdiag,*) snoice
-             write(nu_jfnkdiag,*) Tsf_sv      
-             write(nu_jfnkdiag,*) zqin_sv      
-             write(nu_jfnkdiag,*) zTin_sv      
-             write(nu_jfnkdiag,*) zSin_sv 
-             write(nu_jfnkdiag,*) zqsn_sv      
-             write(nu_jfnkdiag,*) zTsn_sv      
-             write(nu_jfnkdiag,*) l_stop_sv   
-             
-             close(nu_jfnkdiag)
-             
-             if (.not. l_save_state_always) stop
-
-          else if (form_type == "unformatted") then
-
-             ! save the input state with binary output
-             write(nu_diag,*) "save state formatted: istep, n, i, j: ", istep, g_n, g_i, g_j
-
-             if (l_save_state_always) then
-                write(fileout,fmt='(a,i5.5,a)') "save_state_unform_",istep1,".dat"
-             else
-                fileout = "save_state_unform.dat"
-             endif             
-             
-             open(nu_jfnkdiag,file=fileout,form="unformatted",action='write')
-             
-             write(nu_jfnkdiag) istep1_sv   
-             write(nu_jfnkdiag) dt_sv       
-             write(nu_jfnkdiag) rhoa_sv     
-             write(nu_jfnkdiag) flw_sv      
-             write(nu_jfnkdiag) potT_sv     
-             write(nu_jfnkdiag) Qa_sv       
-             write(nu_jfnkdiag) shcoef_sv   
-             write(nu_jfnkdiag) lhcoef_sv   
-             write(nu_jfnkdiag) Tbot_sv
-             write(nu_jfnkdiag) sss_sv     
-             write(nu_jfnkdiag) fswsfc_sv   
-             write(nu_jfnkdiag) fswint_sv   
-             write(nu_jfnkdiag) hilyr_sv    
-             write(nu_jfnkdiag) hslyr_sv    
-             write(nu_jfnkdiag) einit_sv    
-             write(nu_jfnkdiag) Sswabs_sv   
-             write(nu_jfnkdiag) Iswabs_sv
-             write(nu_jfnkdiag) hpond_sv
-             write(nu_jfnkdiag) apond_sv
-             write(nu_jfnkdiag) fsurfn_sv   
-             write(nu_jfnkdiag) fcondtopn_sv
-             write(nu_jfnkdiag) fsensn_sv   
-             write(nu_jfnkdiag) flatn_sv    
-             write(nu_jfnkdiag) flwoutn_sv  
-             write(nu_jfnkdiag) fcondbot
-             write(nu_jfnkdiag) fadvocn
-             write(nu_jfnkdiag) snoice
-             write(nu_jfnkdiag) Tsf_sv      
-             write(nu_jfnkdiag) zqin_sv      
-             write(nu_jfnkdiag) zTin_sv      
-             write(nu_jfnkdiag) zSin_sv     
-             write(nu_jfnkdiag) zqsn_sv      
-             write(nu_jfnkdiag) zTsn_sv      
-             write(nu_jfnkdiag) l_stop_sv   
-             
-             close(nu_jfnkdiag)
-             
-             if (.not. l_save_state_always) then
-
-                call abort_ice("ice_therm_mushy: solver failure: state saved")
-
-             endif
-
-          endif
-          
-       endif
-    endif
-
-    ! after loading check to see result of solver
-    if (trim(type) == "load_saved_state") then
-       if (.not. l_stop_in) then
-          
-          if (my_task == master_task) then
-             call abort_ice("Saved state worked")
-          endif
-          
-       else
-          
-          if (my_task == master_task) then
-             call abort_ice("Saved state failed")
-          endif
-
-       endif
-    endif
-
-  end subroutine temperature_changes_column_debug
 
 !=======================================================================
 

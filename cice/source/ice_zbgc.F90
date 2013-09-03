@@ -218,7 +218,6 @@
          nlt_bgc_DMSPp = 0
          nlt_bgc_DMSPd = 0
          nlt_bgc_DMS = 0
-         nlt_bgc_PON = 0
 
          ntrcr = ntrcr + 1              ! algalN, required tracer
          nt_bgc_N_sk = ntrcr
