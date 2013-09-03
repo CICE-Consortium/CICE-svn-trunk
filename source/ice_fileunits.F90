@@ -59,8 +59,7 @@
          nu_rst_pointer, &  ! pointer to latest restart file
          nu_history    , &  ! binary history output file
          nu_hdr        , &  ! header file for binary history output
-         nu_diag       , &  ! diagnostics output file
-         nu_jfnkdiag        ! diagnostics for JFNK failure
+         nu_diag            ! diagnostics output file
 
       character (6), parameter, public :: &
          nml_filename = 'ice_in' ! namelist input file name
@@ -123,7 +122,6 @@
          call get_fileunit(nu_rst_pointer)
          call get_fileunit(nu_history)
          call get_fileunit(nu_hdr)
-         call get_fileunit(nu_jfnkdiag)
 
       end subroutine init_fileunits
 
@@ -204,7 +202,6 @@
          call release_fileunit(nu_rst_pointer)
          call release_fileunit(nu_history)
          call release_fileunit(nu_hdr)
-         call release_fileunit(nu_jfnkdiag)
          if (nu_diag /= ice_stdout) call release_fileunit(nu_diag)
 
       end subroutine release_all_fileunits

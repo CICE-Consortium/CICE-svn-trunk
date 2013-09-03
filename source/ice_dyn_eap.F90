@@ -29,9 +29,9 @@
 
       ! Look-up table needed for calculating structure tensor
       integer (int_kind), parameter :: & 
-        nx_yield            =  21, &
-        ny_yield            =  21, &
-        na_yield            =  11
+        nx_yield            =  41, &
+        ny_yield            =  41, &
+        na_yield            =  21
 
       real (kind=dbl_kind), dimension (nx_yield,ny_yield,na_yield) :: & 
         s11r, s12r, s22r, s11s, s12s, s22s           
@@ -95,6 +95,9 @@
       use ice_mechred, only: ice_strength
       use ice_state, only: aice, vice, vsno, uvel, vvel, divu, shear, &
           aice_init, aice0, aicen, vicen, strength
+!      use ice_timers, only: timer_dynamics, timer_bound, &
+!          ice_timer_start, ice_timer_stop, &
+!          timer_tmp1, timer_tmp2, timer_tmp3
       use ice_timers, only: timer_dynamics, timer_bound, &
           ice_timer_start, ice_timer_stop
 #ifdef CICE_IN_NEMO
@@ -227,7 +230,7 @@
       endif
 #endif
 
-      !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block)
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
 
       !-----------------------------------------------------------------
@@ -339,6 +342,7 @@
          !$OMP PARALLEL DO PRIVATE(iblk)
          do iblk = 1, nblocks
 
+!      call ice_timer_start(timer_tmp1) ! dynamics
             call stress_eap  (nx_block,             ny_block,             &
                               ksub,                 ndte,                 &
                               icellt(iblk),                               &
@@ -349,8 +353,7 @@
                               dxhy      (:,:,iblk), dyhx      (:,:,iblk), &
                               cxp       (:,:,iblk), cyp       (:,:,iblk), &
                               cxm       (:,:,iblk), cym       (:,:,iblk), &
-                              tarear    (:,:,iblk), tinyarea  (:,:,iblk), &
-                              strength  (:,:,iblk),                       &
+                              tarear    (:,:,iblk), strength  (:,:,iblk), &
                               a11       (:,:,iblk), a12  (:,:,iblk),      &
                               a11_1     (:,:,iblk), a11_2   (:,:,iblk),   &
                               a11_3     (:,:,iblk), a11_4   (:,:,iblk),   &
@@ -368,11 +371,12 @@
                               s11       (:,:,iblk), s12       (:,:,iblk), &
                               s22       (:,:,iblk),                       &
                               yieldstress11 (:,:,iblk),                   &
-                              yieldstress12 (:,:,iblk),                           &
+                              yieldstress12 (:,:,iblk),                   &
                               yieldstress22 (:,:,iblk),                   &
                               prs_sig   (:,:,iblk),                       &
                               rdg_conv  (:,:,iblk), rdg_shear (:,:,iblk), &
                               str       (:,:,:))
+!      call ice_timer_stop(timer_tmp1) ! dynamics
 
       !-----------------------------------------------------------------
       ! momentum equation
@@ -400,6 +404,8 @@
       ! evolution of structure tensor A
       !-----------------------------------------------------------------
 
+!      call ice_timer_start(timer_tmp3) ! dynamics
+            if (mod(ksub,10) == 1) then ! only called every 10th timestep
             call stepa (nx_block,          ny_block,                &
                         dtei,              icellt     (iblk),       &
                         indxti   (:,iblk), indxtj    (:,iblk),      &
@@ -414,7 +420,8 @@
                         stressm_3(:,:,iblk), stressm_4(:,:,iblk),   &
                         stress12_1(:,:,iblk), stress12_2(:,:,iblk), &
                         stress12_3(:,:,iblk), stress12_4(:,:,iblk))
-
+            endif
+!      call ice_timer_stop(timer_tmp3) ! dynamics
          enddo
          !$OMP END PARALLEL DO
 
@@ -479,13 +486,11 @@
 
       use ice_blocks, only: nx_block, ny_block
       use ice_communicate, only: my_task, master_task
-      use ice_constants, only: c0, p5
+      use ice_constants, only: c0, c1, c2, c12, p5, pi, pih, piq
       use ice_domain, only: nblocks
       use ice_dyn_shared, only: init_evp
       use ice_exit, only: abort_ice
       use ice_restart, only: runtype
-      use ice_fileunits, only: nu_diag, nu_eap, eap_filename, &
-          get_fileunit, release_fileunit
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -494,8 +499,20 @@
 
       integer (kind=int_kind) :: &
          i, j, k, &
-         iblk, &         ! block index
-         eap_error       ! eap input file i/o error flag
+         iblk          ! block index
+
+      real (kind=dbl_kind), parameter :: & 
+         phi = pi/c12 ! diamond shaped floe smaller angle (default phi = 30 deg)
+
+      integer (kind=int_kind) :: & 
+         ix, iy, ip, iz, n, ia
+
+      integer (kind=int_kind), parameter :: & 
+         nz = 100
+
+      real (kind=dbl_kind) :: & 
+         ainit, xinit, yinit, pinit, zinit, &
+         da, dx, dy, dp, dz, a1
 
       call init_evp (dt)
 
@@ -526,31 +543,497 @@
       !$OMP END PARALLEL DO
 
       !-----------------------------------------------------------------
-      ! read stresses for eap dynamics (see Appendix A1)
+      ! create lookup table for eap dynamics (see Appendix A1)
       !-----------------------------------------------------------------
 
-          call get_fileunit(nu_eap)
-          open(nu_eap,file=eap_filename,status='old',iostat=eap_error)
-          if (my_task == master_task) write(nu_diag,*) 'Reading eap stresses'
-          do k = 1, na_yield
-          do i = 1, nx_yield
-          do j = 1, ny_yield
-             if (eap_error == 0) read(nu_eap,*,iostat=eap_error) &
-                      s11r(i,j,k), s12r(i,j,k), s22r(i,j,k), &
-                      s11s(i,j,k), s12s(i,j,k), s22s(i,j,k)
-          end do
-          end do
-          end do
-          if (my_task == master_task) then
-             if (eap_error == 0) close(nu_eap)
-             if (eap_error /= 0) &
-                          call abort_ice('ice: error reading eap stresses')
-          endif
-          call release_fileunit(nu_eap)
+      da = p5/real(na_yield-1,kind=dbl_kind)
+      ainit = p5 - da
+      dx = pi/real(nx_yield-1,kind=dbl_kind)
+      xinit = pi + piq - dx
+      dz = pi/real(nz,kind=dbl_kind)
+      zinit = -pih
+      dy = pi/real(ny_yield-1,kind=dbl_kind)
+      yinit = -dy
+
+      do ia=1,na_yield
+       do ix=1,nx_yield
+        do iy=1,ny_yield
+         s11r(ix,iy,ia) = c0
+         s12r(ix,iy,ia) = c0
+         s22r(ix,iy,ia) = c0
+         s11s(ix,iy,ia) = c0
+         s12s(ix,iy,ia) = c0
+         s22s(ix,iy,ia) = c0
+         if (ia <= na_yield-1) then
+          do iz=1,nz
+          s11r(ix,iy,ia) = s11r(ix,iy,ia) + 1*w1(ainit+ia*da)* &
+           exp(-w2(ainit+ia*da)*(zinit+iz*dz)*(zinit+iz*dz))* &
+           s11kr(xinit+ix*dx,yinit+iy*dy,zinit+iz*dz,phi)*dz/sin(c2*phi)
+          s12r(ix,iy,ia) = s12r(ix,iy,ia) + 1*w1(ainit+ia*da)* &
+           exp(-w2(ainit+ia*da)*(zinit+iz*dz)*(zinit+iz*dz))* &
+           s12kr(xinit+ix*dx,yinit+iy*dy,zinit+iz*dz,phi)*dz/sin(c2*phi)
+          s22r(ix,iy,ia) = s22r(ix,iy,ia) + 1*w1(ainit+ia*da)* &
+           exp(-w2(ainit+ia*da)*(zinit+iz*dz)*(zinit+iz*dz))* &
+           s22kr(xinit+ix*dx,yinit+iy*dy,zinit+iz*dz,phi)*dz/sin(c2*phi) 
+          s11s(ix,iy,ia) = s11s(ix,iy,ia) + 1*w1(ainit+ia*da)* &
+           exp(-w2(ainit+ia*da)*(zinit+iz*dz)*(zinit+iz*dz))* &
+           s11ks(xinit+ix*dx,yinit+iy*dy,zinit+iz*dz,phi)*dz/sin(c2*phi)
+          s12s(ix,iy,ia) = s12s(ix,iy,ia) + 1*w1(ainit+ia*da)* &
+           exp(-w2(ainit+ia*da)*(zinit+iz*dz)*(zinit+iz*dz))* &
+           s12ks(xinit+ix*dx,yinit+iy*dy,zinit+iz*dz,phi)*dz/sin(c2*phi)
+          s22s(ix,iy,ia) = s22s(ix,iy,ia) + 1*w1(ainit+ia*da)* &
+           exp(-w2(ainit+ia*da)*(zinit+iz*dz)*(zinit+iz*dz))* &
+           s22ks(xinit+ix*dx,yinit+iy*dy,zinit+iz*dz,phi)*dz/sin(c2*phi)
+          enddo
+          if (abs(s11r(ix,iy,ia))<1.0e-6_dbl_kind) s11r(ix,iy,ia)=c0
+          if (abs(s12r(ix,iy,ia))<1.0e-6_dbl_kind) s12r(ix,iy,ia)=c0
+          if (abs(s22r(ix,iy,ia))<1.0e-6_dbl_kind) s22r(ix,iy,ia)=c0
+          if (abs(s11s(ix,iy,ia))<1.0e-6_dbl_kind) s11s(ix,iy,ia)=c0
+          if (abs(s12s(ix,iy,ia))<1.0e-6_dbl_kind) s12s(ix,iy,ia)=c0
+          if (abs(s22s(ix,iy,ia))<1.0e-6_dbl_kind) s22s(ix,iy,ia)=c0
+         else
+          s11r(ix,iy,ia) = p5*s11kr(xinit+ix*dx,yinit+iy*dy,c0,phi)/sin(c2*phi)
+          s12r(ix,iy,ia) = p5*s12kr(xinit+ix*dx,yinit+iy*dy,c0,phi)/sin(c2*phi)
+          s22r(ix,iy,ia) = p5*s22kr(xinit+ix*dx,yinit+iy*dy,c0,phi)/sin(c2*phi)
+          s11s(ix,iy,ia) = p5*s11ks(xinit+ix*dx,yinit+iy*dy,c0,phi)/sin(c2*phi)
+          s12s(ix,iy,ia) = p5*s12ks(xinit+ix*dx,yinit+iy*dy,c0,phi)/sin(c2*phi)
+          s22s(ix,iy,ia) = p5*s22ks(xinit+ix*dx,yinit+iy*dy,c0,phi)/sin(c2*phi)
+          if (abs(s11r(ix,iy,ia))<1.0e-6_dbl_kind) s11r(ix,iy,ia)=c0
+          if (abs(s12r(ix,iy,ia))<1.0e-6_dbl_kind) s12r(ix,iy,ia)=c0
+          if (abs(s22r(ix,iy,ia))<1.0e-6_dbl_kind) s22r(ix,iy,ia)=c0
+          if (abs(s11s(ix,iy,ia))<1.0e-6_dbl_kind) s11s(ix,iy,ia)=c0
+          if (abs(s12s(ix,iy,ia))<1.0e-6_dbl_kind) s12s(ix,iy,ia)=c0
+          if (abs(s22s(ix,iy,ia))<1.0e-6_dbl_kind) s22s(ix,iy,ia)=c0
+         endif
+        enddo
+       enddo
+      enddo
 
       if (runtype == 'continue') call read_restart_eap
 
       end subroutine init_eap
+
+!=======================================================================
+! Function : w1 (see Gaussian function psi in Tsamados et al 2013)
+
+      FUNCTION w1(a)
+      double precision, intent(in) :: a
+
+      real (kind=dbl_kind) :: w1
+
+      w1 = - 223.87569446_dbl_kind &
+           + 2361.2198663_dbl_kind*a &
+           - 10606.56079975_dbl_kind*a*a &
+           + 26315.50025642_dbl_kind*a*a*a &
+           - 38948.30444297_dbl_kind*a*a*a*a &
+           + 34397.72407466_dbl_kind*a*a*a*a*a &
+           - 16789.98003081_dbl_kind*a*a*a*a*a*a &
+           + 3495.82839237_dbl_kind*a*a*a*a*a*a*a
+
+      end FUNCTION w1
+
+!=======================================================================
+! Function : w2 (see Gaussian function psi in Tsamados et al 2013)
+
+      FUNCTION w2(a)
+      double precision, intent(in) :: a
+
+      real (kind=dbl_kind) :: w2
+
+      w2 = - 6670.68911883_dbl_kind &
+           + 70222.33061536_dbl_kind*a &
+           - 314871.71525448_dbl_kind*a*a &
+           + 779570.02793492_dbl_kind*a*a*a &
+           - 1151098.82436864_dbl_kind*a*a*a*a &
+           + 1013896.59464498_dbl_kind*a*a*a*a*a &
+           - 493379.44906738_dbl_kind*a*a*a*a*a*a &
+           + 102356.551518_dbl_kind*a*a*a*a*a*a*a
+
+      end FUNCTION w2
+
+!=======================================================================
+! Function : s11kr
+
+      FUNCTION s11kr(x,y,z,phi) 
+
+      use ice_constants , only: p5, pi, pih, c0, c1, eps11
+
+      real (kind=dbl_kind), intent(in) :: &
+        x,y,z,phi
+
+      real (kind=dbl_kind) :: &
+      s11kr, p
+
+      real (kind=dbl_kind) :: &
+      n1t2i11, n1t2i12, n1t2i21, n1t2i22, &
+      n2t1i11, n2t1i12, n2t1i21, n2t1i22, &
+      t1t2i11, t1t2i12, t1t2i21, t1t2i22, &
+      t2t1i11, t2t1i12, t2t1i21, t2t1i22, &
+      d11, d12, d22, &
+      IIn1t2, IIn2t1, IIt1t2, &
+      Hen1t2, Hen2t1
+
+      p = phi
+
+      n1t2i11 = cos(z+pih-p) * cos(z+p)
+      n1t2i12 = cos(z+pih-p) * sin(z+p)
+      n1t2i21 = sin(z+pih-p) * cos(z+p)
+      n1t2i22 = sin(z+pih-p) * sin(z+p)
+      n2t1i11 = cos(z-pih+p) * cos(z-p)
+      n2t1i12 = cos(z-pih+p) * sin(z-p)
+      n2t1i21 = sin(z-pih+p) * cos(z-p)
+      n2t1i22 = sin(z-pih+p) * sin(z-p)
+      t1t2i11 = cos(z-p) * cos(z+p)
+      t1t2i12 = cos(z-p) * sin(z+p)
+      t1t2i21 = sin(z-p) * cos(z+p)
+      t1t2i22 = sin(z-p) * sin(z+p)
+      t2t1i11 = cos(z+p) * cos(z-p)
+      t2t1i12 = cos(z+p) * sin(z-p)
+      t2t1i21 = sin(z+p) * cos(z-p)
+      t2t1i22 = sin(z+p) * sin(z-p)
+! In expression of tensor d, with this formulatin d(x)=-d(x+pi)
+! Solution, when diagonalizing always check sgn(a11-a22) if > then keep x else x=x-pi/2
+      d11 = cos(y)*cos(y)*(cos(x)+sin(x)*tan(y)*tan(y))
+      d12 = cos(y)*cos(y)*tan(y)*(-cos(x)+sin(x))
+      d22 = cos(y)*cos(y)*(sin(x)+cos(x)*tan(y)*tan(y))
+      IIn1t2 = n1t2i11 * d11 + (n1t2i12 + n1t2i21) * d12 + n1t2i22 * d22
+      IIn2t1 = n2t1i11 * d11 + (n2t1i12 + n2t1i21) * d12 + n2t1i22 * d22
+      IIt1t2 = t1t2i11 * d11 + (t1t2i12 + t1t2i21) * d12 + t1t2i22 * d22
+
+      if (-IIn1t2>=eps11) then
+      Hen1t2 = c1
+      else
+      Hen1t2 = c0
+      endif
+
+      if (-IIn2t1>=eps11) then
+      Hen2t1 = c1
+      else
+      Hen2t1 = c0
+      endif
+
+      s11kr = (- Hen1t2 * n1t2i11 - Hen2t1 * n2t1i11)
+
+      end FUNCTION s11kr
+
+!=======================================================================
+! Function : s12kr
+
+      FUNCTION s12kr(x,y,z,phi)
+
+      use ice_constants , only: p5, pi, pih, c0, c1, eps11
+      real (kind=dbl_kind), intent(in) :: &
+        x,y,z,phi
+
+      real (kind=dbl_kind) :: &
+      s12kr, s12r0, s21r0, p
+
+      real (kind=dbl_kind) :: &
+      n1t2i11, n1t2i12, n1t2i21, n1t2i22, &
+      n2t1i11, n2t1i12, n2t1i21, n2t1i22, &
+      t1t2i11, t1t2i12, t1t2i21, t1t2i22, &
+      t2t1i11, t2t1i12, t2t1i21, t2t1i22, &
+      d11, d12, d22, &
+      IIn1t2, IIn2t1, IIt1t2, &
+      Hen1t2, Hen2t1
+
+      p = phi
+
+      n1t2i11 = cos(z+pih-p) * cos(z+p)
+      n1t2i12 = cos(z+pih-p) * sin(z+p)
+      n1t2i21 = sin(z+pih-p) * cos(z+p)
+      n1t2i22 = sin(z+pih-p) * sin(z+p)
+      n2t1i11 = cos(z-pih+p) * cos(z-p)
+      n2t1i12 = cos(z-pih+p) * sin(z-p)
+      n2t1i21 = sin(z-pih+p) * cos(z-p)
+      n2t1i22 = sin(z-pih+p) * sin(z-p)
+      t1t2i11 = cos(z-p) * cos(z+p)
+      t1t2i12 = cos(z-p) * sin(z+p)
+      t1t2i21 = sin(z-p) * cos(z+p)
+      t1t2i22 = sin(z-p) * sin(z+p)
+      t2t1i11 = cos(z+p) * cos(z-p)
+      t2t1i12 = cos(z+p) * sin(z-p)
+      t2t1i21 = sin(z+p) * cos(z-p)
+      t2t1i22 = sin(z+p) * sin(z-p)
+      d11 = cos(y)*cos(y)*(cos(x)+sin(x)*tan(y)*tan(y))
+      d12 = cos(y)*cos(y)*tan(y)*(-cos(x)+sin(x))
+      d22 = cos(y)*cos(y)*(sin(x)+cos(x)*tan(y)*tan(y))
+      IIn1t2 = n1t2i11 * d11 + (n1t2i12 + n1t2i21) * d12 + n1t2i22 * d22
+      IIn2t1 = n2t1i11 * d11 + (n2t1i12 + n2t1i21) * d12 + n2t1i22 * d22
+      IIt1t2 = t1t2i11 * d11 + (t1t2i12 + t1t2i21) * d12 + t1t2i22 * d22
+
+      if (-IIn1t2>=eps11) then
+      Hen1t2 = c1
+      else
+      Hen1t2 = c0
+      endif
+
+      if (-IIn2t1>=eps11) then
+      Hen2t1 = c1
+      else
+      Hen2t1 = c0
+      endif
+
+      s12r0 = (- Hen1t2 * n1t2i12 - Hen2t1 * n2t1i12)
+      s21r0 = (- Hen1t2 * n1t2i21 - Hen2t1 * n2t1i21)
+      s12kr=p5*(s12r0+s21r0)
+
+      end FUNCTION s12kr
+
+!=======================================================================
+! Function : s22r
+
+      FUNCTION s22kr(x,y,z,phi)
+
+      use ice_constants , only: p5, pi, pih, c0, c1, eps11
+
+      real (kind=dbl_kind), intent(in) :: &
+        x,y,z,phi
+
+      real (kind=dbl_kind) :: &
+      s22kr, p
+
+      real (kind=dbl_kind) :: &
+      n1t2i11, n1t2i12, n1t2i21, n1t2i22, &
+      n2t1i11, n2t1i12, n2t1i21, n2t1i22, &
+      t1t2i11, t1t2i12, t1t2i21, t1t2i22, &
+      t2t1i11, t2t1i12, t2t1i21, t2t1i22, &
+      d11, d12, d22, &
+      IIn1t2, IIn2t1, IIt1t2, &
+      Hen1t2, Hen2t1
+
+      p = phi
+
+      n1t2i11 = cos(z+pih-p) * cos(z+p)
+      n1t2i12 = cos(z+pih-p) * sin(z+p)
+      n1t2i21 = sin(z+pih-p) * cos(z+p)
+      n1t2i22 = sin(z+pih-p) * sin(z+p)
+      n2t1i11 = cos(z-pih+p) * cos(z-p)
+      n2t1i12 = cos(z-pih+p) * sin(z-p)
+      n2t1i21 = sin(z-pih+p) * cos(z-p)
+      n2t1i22 = sin(z-pih+p) * sin(z-p)
+      t1t2i11 = cos(z-p) * cos(z+p)
+      t1t2i12 = cos(z-p) * sin(z+p)
+      t1t2i21 = sin(z-p) * cos(z+p)
+      t1t2i22 = sin(z-p) * sin(z+p)
+      t2t1i11 = cos(z+p) * cos(z-p)
+      t2t1i12 = cos(z+p) * sin(z-p)
+      t2t1i21 = sin(z+p) * cos(z-p)
+      t2t1i22 = sin(z+p) * sin(z-p)
+      d11 = cos(y)*cos(y)*(cos(x)+sin(x)*tan(y)*tan(y))
+      d12 = cos(y)*cos(y)*tan(y)*(-cos(x)+sin(x))
+      d22 = cos(y)*cos(y)*(sin(x)+cos(x)*tan(y)*tan(y))
+      IIn1t2 = n1t2i11 * d11 + (n1t2i12 + n1t2i21) * d12 + n1t2i22 * d22
+      IIn2t1 = n2t1i11 * d11 + (n2t1i12 + n2t1i21) * d12 + n2t1i22 * d22
+      IIt1t2 = t1t2i11 * d11 + (t1t2i12 + t1t2i21) * d12 + t1t2i22 * d22
+
+      if (-IIn1t2>=eps11) then
+      Hen1t2 = c1
+      else
+      Hen1t2 = c0
+      endif
+
+      if (-IIn2t1>=eps11) then
+      Hen2t1 = c1
+      else
+      Hen2t1 = c0
+      endif
+
+      s22kr = (- Hen1t2 * n1t2i22 - Hen2t1 * n2t1i22)
+
+      end FUNCTION s22kr
+
+!=======================================================================
+! Function : s11ks
+
+      FUNCTION s11ks(x,y,z,phi)
+
+      use ice_constants , only: p5, pi, pih, c0, c1, eps11
+
+      real (kind=dbl_kind), intent(in):: &
+        x,y,z,phi
+
+      real (kind=dbl_kind) :: &
+      s11ks, p
+
+      real (kind=dbl_kind) :: &
+      n1t2i11, n1t2i12, n1t2i21, n1t2i22, &
+      n2t1i11, n2t1i12, n2t1i21, n2t1i22, &
+      t1t2i11, t1t2i12, t1t2i21, t1t2i22, &
+      t2t1i11, t2t1i12, t2t1i21, t2t1i22, &
+      d11, d12, d22, &
+      IIn1t2, IIn2t1, IIt1t2, &
+      Hen1t2, Hen2t1
+
+      p = phi
+
+      n1t2i11 = cos(z+pih-p) * cos(z+p)
+      n1t2i12 = cos(z+pih-p) * sin(z+p)
+      n1t2i21 = sin(z+pih-p) * cos(z+p)
+      n1t2i22 = sin(z+pih-p) * sin(z+p)
+      n2t1i11 = cos(z-pih+p) * cos(z-p)
+      n2t1i12 = cos(z-pih+p) * sin(z-p)
+      n2t1i21 = sin(z-pih+p) * cos(z-p)
+      n2t1i22 = sin(z-pih+p) * sin(z-p)
+      t1t2i11 = cos(z-p) * cos(z+p)
+      t1t2i12 = cos(z-p) * sin(z+p)
+      t1t2i21 = sin(z-p) * cos(z+p)
+      t1t2i22 = sin(z-p) * sin(z+p)
+      t2t1i11 = cos(z+p) * cos(z-p)
+      t2t1i12 = cos(z+p) * sin(z-p)
+      t2t1i21 = sin(z+p) * cos(z-p)
+      t2t1i22 = sin(z+p) * sin(z-p)
+      d11 = cos(y)*cos(y)*(cos(x)+sin(x)*tan(y)*tan(y))
+      d12 = cos(y)*cos(y)*tan(y)*(-cos(x)+sin(x))
+      d22 = cos(y)*cos(y)*(sin(x)+cos(x)*tan(y)*tan(y))
+      IIn1t2 = n1t2i11 * d11 + (n1t2i12 + n1t2i21) * d12 + n1t2i22 * d22
+      IIn2t1 = n2t1i11 * d11 + (n2t1i12 + n2t1i21) * d12 + n2t1i22 * d22
+      IIt1t2 = t1t2i11 * d11 + (t1t2i12 + t1t2i21) * d12 + t1t2i22 * d22
+
+      if (-IIn1t2>=eps11) then
+      Hen1t2 = c1
+      else
+      Hen1t2 = c0
+      endif
+
+      if (-IIn2t1>=eps11) then
+      Hen2t1 = c1
+      else
+      Hen2t1 = c0
+      endif
+
+      s11ks = sign(c1,IIt1t2+eps11)*(Hen1t2 * t1t2i11 + Hen2t1 * t2t1i11)
+
+      end FUNCTION s11ks
+
+!=======================================================================
+! Function : s12ks
+
+      FUNCTION s12ks(x,y,z,phi)
+
+      use ice_constants , only: p5, pi, pih, c0, c1, eps11
+
+      real (kind=dbl_kind), intent(in) :: &
+        x,y,z,phi
+
+      real (kind=dbl_kind) :: &
+      s12ks,s12s0,s21s0,p
+
+      real (kind=dbl_kind) :: &
+      n1t2i11, n1t2i12, n1t2i21, n1t2i22, &
+      n2t1i11, n2t1i12, n2t1i21, n2t1i22, &
+      t1t2i11, t1t2i12, t1t2i21, t1t2i22, &
+      t2t1i11, t2t1i12, t2t1i21, t2t1i22, &
+      d11, d12, d22, &
+      IIn1t2, IIn2t1, IIt1t2, &
+      Hen1t2, Hen2t1
+
+      p =phi
+
+      n1t2i11 = cos(z+pih-p) * cos(z+p)
+      n1t2i12 = cos(z+pih-p) * sin(z+p)
+      n1t2i21 = sin(z+pih-p) * cos(z+p)
+      n1t2i22 = sin(z+pih-p) * sin(z+p)
+      n2t1i11 = cos(z-pih+p) * cos(z-p)
+      n2t1i12 = cos(z-pih+p) * sin(z-p)
+      n2t1i21 = sin(z-pih+p) * cos(z-p)
+      n2t1i22 = sin(z-pih+p) * sin(z-p)
+      t1t2i11 = cos(z-p) * cos(z+p)
+      t1t2i12 = cos(z-p) * sin(z+p)
+      t1t2i21 = sin(z-p) * cos(z+p)
+      t1t2i22 = sin(z-p) * sin(z+p)
+      t2t1i11 = cos(z+p) * cos(z-p)
+      t2t1i12 = cos(z+p) * sin(z-p)
+      t2t1i21 = sin(z+p) * cos(z-p)
+      t2t1i22 = sin(z+p) * sin(z-p)
+      d11 = cos(y)*cos(y)*(cos(x)+sin(x)*tan(y)*tan(y))
+      d12 = cos(y)*cos(y)*tan(y)*(-cos(x)+sin(x))
+      d22 = cos(y)*cos(y)*(sin(x)+cos(x)*tan(y)*tan(y))
+      IIn1t2 = n1t2i11 * d11 + (n1t2i12 + n1t2i21) * d12 + n1t2i22 * d22
+      IIn2t1 = n2t1i11 * d11 + (n2t1i12 + n2t1i21) * d12 + n2t1i22 * d22
+      IIt1t2 = t1t2i11 * d11 + (t1t2i12 + t1t2i21) * d12 + t1t2i22 * d22
+
+      if (-IIn1t2>=eps11) then
+      Hen1t2 = c1
+      else
+      Hen1t2 = c0
+      endif
+
+      if (-IIn2t1>=eps11) then
+      Hen2t1 = c1
+      else
+      Hen2t1 = c0
+      endif
+
+      s12s0 = sign(c1,IIt1t2+eps11)*(Hen1t2 * t1t2i12 + Hen2t1 * t2t1i12)
+      s21s0 = sign(c1,IIt1t2+eps11)*(Hen1t2 * t1t2i21 + Hen2t1 * t2t1i21)
+      s12ks=p5*(s12s0+s21s0)
+
+      end FUNCTION s12ks
+
+!=======================================================================
+! Function : s22ks
+
+      FUNCTION s22ks(x,y,z,phi) 
+
+      use ice_constants , only: p5, pi, pih, c0, c1, eps11
+
+      real (kind=dbl_kind), intent(in) :: &
+        x,y,z,phi
+
+      real (kind=dbl_kind) :: &
+      s22ks,p
+
+      real (kind=dbl_kind) :: &
+      n1t2i11, n1t2i12, n1t2i21, n1t2i22, &
+      n2t1i11, n2t1i12, n2t1i21, n2t1i22, &
+      t1t2i11, t1t2i12, t1t2i21, t1t2i22, &
+      t2t1i11, t2t1i12, t2t1i21, t2t1i22, &
+      d11, d12, d22, &
+      IIn1t2, IIn2t1, IIt1t2, &
+      Hen1t2, Hen2t1
+
+      p = phi
+
+      n1t2i11 = cos(z+pih-p) * cos(z+p)
+      n1t2i12 = cos(z+pih-p) * sin(z+p)
+      n1t2i21 = sin(z+pih-p) * cos(z+p)
+      n1t2i22 = sin(z+pih-p) * sin(z+p)
+      n2t1i11 = cos(z-pih+p) * cos(z-p)
+      n2t1i12 = cos(z-pih+p) * sin(z-p)
+      n2t1i21 = sin(z-pih+p) * cos(z-p)
+      n2t1i22 = sin(z-pih+p) * sin(z-p)
+      t1t2i11 = cos(z-p) * cos(z+p)
+      t1t2i12 = cos(z-p) * sin(z+p)
+      t1t2i21 = sin(z-p) * cos(z+p)
+      t1t2i22 = sin(z-p) * sin(z+p)
+      t2t1i11 = cos(z+p) * cos(z-p)
+      t2t1i12 = cos(z+p) * sin(z-p)
+      t2t1i21 = sin(z+p) * cos(z-p)
+      t2t1i22 = sin(z+p) * sin(z-p)
+      d11 = cos(y)*cos(y)*(cos(x)+sin(x)*tan(y)*tan(y))
+      d12 = cos(y)*cos(y)*tan(y)*(-cos(x)+sin(x))
+      d22 = cos(y)*cos(y)*(sin(x)+cos(x)*tan(y)*tan(y))
+      IIn1t2 = n1t2i11 * d11 + (n1t2i12 + n1t2i21) * d12 + n1t2i22 * d22
+      IIn2t1 = n2t1i11 * d11 + (n2t1i12 + n2t1i21) * d12 + n2t1i22 * d22
+      IIt1t2 = t1t2i11 * d11 + (t1t2i12 + t1t2i21) * d12 + t1t2i22 * d22
+
+      if (-IIn1t2>=eps11) then
+      Hen1t2 = c1
+      else
+      Hen1t2 = c0
+      endif
+
+      if (-IIn2t1>=eps11) then
+      Hen2t1 = c1
+      else
+      Hen2t1 = c0
+      endif
+
+      s22ks = sign(c1,IIt1t2+eps11)*(Hen1t2 * t1t2i22 + Hen2t1 * t2t1i22)
+
+      end FUNCTION s22ks
+
 
 !=======================================================================
 
@@ -569,8 +1052,7 @@
                               dxhy,       dyhx,           &
                               cxp,        cyp,            &
                               cxm,        cym,            &
-                              tarear,     tinyarea,       &
-                              strength,                   &
+                              tarear,     strength,       &
                               a11, a12,                   &
                               a11_1, a11_2, a11_3, a11_4, &
                               a12_1, a12_2, a12_3, a12_4, &
@@ -594,6 +1076,11 @@
 
       use ice_constants, only: c0, p027, p055, p111, p166, &
           p2, p222, p25, p333, p5, puny
+
+!echmod tmp
+!      use ice_timers, only:  &
+!          ice_timer_start, ice_timer_stop, &
+!          timer_tmp1, timer_tmp2, timer_tmp3
 
       integer (kind=int_kind), intent(in) :: & 
          nx_block, ny_block, & ! block dimensions
@@ -622,8 +1109,7 @@
          cxp      , & ! 1.5*HTN - 0.5*HTN
          cym      , & ! 0.5*HTE - 1.5*HTE
          cxm      , & ! 0.5*HTN - 1.5*HTN
-         tarear   , & ! 1/tarea
-         tinyarea     ! puny*tarea
+         tarear       ! 1/tarea
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), & 
          intent(inout) :: &
@@ -735,6 +1221,7 @@
       !-----------------------------------------------------------------
       ! Stress updated depending on strain rate and structure tensor
       !-----------------------------------------------------------------
+!      call ice_timer_start(timer_tmp2) ! dynamics
 
          ! ne
          call update_stress_rdg (ksub, ndte, divune, tensionne, &
@@ -761,6 +1248,7 @@
                                  stress12tmp_4, strength(i,j), &
                                  alpharse, alphasse)
 
+!      call ice_timer_stop(timer_tmp2) ! dynamics
       !-----------------------------------------------------------------
       ! on last subcycle, save quantities for mechanical redistribution
       !-----------------------------------------------------------------
@@ -821,27 +1309,27 @@
          stress12_4(i,j) = (stress12_4(i,j) + stress12tmp_4*arlx1i) &
                           * denom1
 
-          s11(i,j) = p5 * p25 * (stressp_1(i,j) + stressp_2(i,j) &
-                               + stressp_3(i,j) + stressp_4(i,j) &
-                               + stressm_1(i,j) + stressm_2(i,j) &
-                               + stressm_3(i,j) + stressm_4(i,j))
-          s22(i,j) = p5 * p25 * (stressp_1(i,j) + stressp_2(i,j) &
-                               + stressp_3(i,j) + stressp_4(i,j) &
-                               - stressm_1(i,j) - stressm_2(i,j) &
-                               - stressm_3(i,j) - stressm_4(i,j))
-          s12(i,j) = p25 *      (stress12_1(i,j) + stress12_2(i,j) &
-                               + stress12_3(i,j) + stress12_4(i,j))
+         s11(i,j) = p5 * p25 * (stressp_1(i,j) + stressp_2(i,j) &
+                              + stressp_3(i,j) + stressp_4(i,j) &
+                              + stressm_1(i,j) + stressm_2(i,j) &
+                              + stressm_3(i,j) + stressm_4(i,j))
+         s22(i,j) = p5 * p25 * (stressp_1(i,j) + stressp_2(i,j) &
+                              + stressp_3(i,j) + stressp_4(i,j) &
+                              - stressm_1(i,j) - stressm_2(i,j) &
+                              - stressm_3(i,j) - stressm_4(i,j))
+         s12(i,j) =      p25 * (stress12_1(i,j) + stress12_2(i,j) &
+                              + stress12_3(i,j) + stress12_4(i,j))
 
-          yieldstress11(i,j) = p5 * p25 * (stressptmp_1 + stressptmp_2 &
-                                         + stressptmp_3 + stressptmp_4 &
-                                         + stressmtmp_1 + stressmtmp_2 &
-                                         + stressmtmp_3 + stressmtmp_4)
-          yieldstress22(i,j) = p5 * p25 * (stressptmp_1 + stressptmp_2 &
-                                         + stressptmp_3 + stressptmp_4 &
-                                         - stressmtmp_1 - stressmtmp_2 &
-                                         - stressmtmp_3 - stressmtmp_4)
-          yieldstress12(i,j) = p25 *      (stress12tmp_1 + stress12tmp_2 &
-                                         + stress12tmp_3 + stress12tmp_4)
+         yieldstress11(i,j) = p5 * p25 * (stressptmp_1 + stressptmp_2 &
+                                        + stressptmp_3 + stressptmp_4 &
+                                        + stressmtmp_1 + stressmtmp_2 &
+                                        + stressmtmp_3 + stressmtmp_4)
+         yieldstress22(i,j) = p5 * p25 * (stressptmp_1 + stressptmp_2 &
+                                        + stressptmp_3 + stressptmp_4 &
+                                        - stressmtmp_1 - stressmtmp_2 &
+                                        - stressmtmp_3 - stressmtmp_4)
+         yieldstress12(i,j) =      p25 * (stress12tmp_1 + stress12tmp_2 &
+                                        + stress12tmp_3 + stress12tmp_4)
 
       !-----------------------------------------------------------------
       ! Eliminate underflows.
@@ -1000,90 +1488,86 @@
 
       ! local variables
 
-      real (kind=dbl_kind), dimension(2,2) :: &
-         Q, Qd, atemp,                   &
-         dtemp,               &
-         sig, sigprime
+      integer (kind=int_kind) :: &
+         kx ,ky, ka
 
       real (kind=dbl_kind) :: &
          stemp11r, stemp12r, stemp22r,   &
-         stemp11s, stemp12s, stemp22s
-
-      real (kind=dbl_kind) :: &
+         stemp11s, stemp12s, stemp22s, &
+         a22, Q11, Q12, Qd11, Qd12, &
+         Q11Q11, Q11Q12, Q12Q12, &
+         dtemp11, dtemp12, dtemp22, &
+         fxinvdx, fyinvdy, fainvda, &
+         mfxinvdx, mfyinvdy, mfainvda, &
+         fff, ffm, fmm, mmm, mmf, mff, fmf, mfm, &
          rotstemp11r, rotstemp12r, rotstemp22r,   &
-         rotstemp11s, rotstemp12s, rotstemp22s
-
-      real (kind=dbl_kind) :: &
-         gamma, alpha, x, y, xmin, ymin, dx, dy, da, invdx, invdy, invda, invsin
-
-      real (kind=dbl_kind) :: &
-         invleng, dtemp1, dtemp2, atempprime
-
-      integer (kind=int_kind) :: &
-         kx ,ky, ka, fx, fy, fa
-
-      real (kind=dbl_kind) :: &
-	 invstressconviso
+         rotstemp11s, rotstemp12s, rotstemp22s, &
+         sig11, sig12, sig22, &
+         sgprm11, sgprm12, sgprm22, &
+	 invstressconviso, &
+         gamma, alpha, x, y, dx, dy, da, &
+         invdx, invdy, invda, invsin, &
+         invleng, dtemp1, dtemp2, atempprime, a
 
       real (kind=dbl_kind), parameter :: &
          kfriction = 0.45_dbl_kind
 
 ! Factor to maintain the same stress as in EVP (see Section 3)
 ! Can be set to 1 otherwise
-      invstressconviso = c1/(c1+kfriction*kfriction)
+         invstressconviso = c1/(c1+kfriction*kfriction)
+
+         invsin = c1/sin(pi2/c12) * invstressconviso
 
 ! compute eigenvalues, eigenvectors and angles for structure tensor, strain rates
 
 ! 1) structure tensor
 
-         atemp(1,1) = a11
-         atemp(1,2) = a12
-!         atemp(2,1) = a12
-         atemp(2,2) = 1-a11
+         a22 = c1-a11
 
 ! gamma: angle between general coordiantes and principal axis 
-         gamma = p5*atan2((c2*atemp(1,2)),(atemp(1,1) - atemp(2,2)))
+         gamma = p5*atan2((c2*a12),(a11 - a22))
 
 ! rotational tensor from general coordinates into principal axis
-         Q(1,1) = cos(gamma)
-         Q(1,2) = sin(gamma)
-!         Q(2,1) = -Q(1,2)
-         Q(2,2) = Q(1,1)
+         Q11 = cos(gamma)
+         Q12 = sin(gamma)
+
+         Q11Q11 = Q11*Q11
+         Q11Q12 = Q11*Q12
+         Q12Q12 = Q12*Q12
 
 ! rotation Q*atemp*Q^T
-         atempprime = Q(1,1)*(Q(1,1)*atemp(1,1) + 2*Q(1,2)*atemp(1,2)) &
-                      + Q(1,2)*Q(1,2)*atemp(2,2) 
+         atempprime = Q11Q11*a11 + c2*Q11Q12*a12 + Q12Q12*a22 
 
 ! make first principal value the largest
-         if (atempprime < p5) atempprime = c1 - atempprime
+         atempprime = max(atempprime, c1 - atempprime)
 
 ! 2) strain rate
 
-         dtemp(1,1) = p5*(divu + tension)
-         dtemp(1,2) = shear*p5
-!         dtemp(2,1) = shear*p5
-         dtemp(2,2) = p5*(divu - tension)
+         dtemp11 = p5*(divu + tension)
+         dtemp12 = shear*p5
+         dtemp22 = p5*(divu - tension)
 
 ! alpha: angle between general coordiantes and principal axis
-         alpha = p5*atan2((c2*dtemp(1,2)),(dtemp(1,1) - dtemp(2,2)))
+         alpha = p5*atan2((c2*dtemp12),(dtemp11 - dtemp22))
 
 ! y: angle between major principal axis of strain rate and structure tensor
 ! to make sure y between 0 and pi/2
-	 if (alpha > gamma) alpha = alpha - pi
-	 if (alpha < gamma-pi) alpha = alpha + pi
-
+         if (alpha > gamma) alpha = alpha - pi
+         if (alpha < gamma-pi) alpha = alpha + pi
          y = gamma - alpha
+!echmod require 0 <= y < (ny_yield-1)*dy = pi/2
+!         y = mod(y+pi2, pih)
+!echmod require 0 <= y < (ny_yield-1)*dy = pi
+!         y = mod(y+pi2, pi)
+!         alpha = gamma - y
 
-! rotational tensor (anticlockwise) from general coordinates into principal axis
-         Qd(1,1) = cos(alpha)
-         Qd(1,2) = sin(alpha)
-!         Qd(2,1) = -Qd(1,2)
-         Qd(2,2) = Qd(1,1)
+! rotate tensor (anticlockwise) from general coordinates into principal axis
+         Qd11 = cos(alpha)
+         Qd12 = sin(alpha)
          
-         dtemp1 = Qd(1,1)*(Qd(1,1)*dtemp(1,1) + 2*Qd(1,2)*dtemp(1,2)) &
-                           + Qd(1,2)*Qd(1,2)*dtemp(2,2)
-         dtemp2 = Qd(1,2)*(Qd(1,2)*dtemp(1,1) - 2*Qd(1,1)*dtemp(1,2)) &
-                           + Qd(1,1)*Qd(1,1)*dtemp(2,2)
+         dtemp1 = Qd11*(Qd11*dtemp11 + c2*Qd12*dtemp12) + Qd12*Qd12*dtemp22
+         dtemp2 = Qd12*(Qd12*dtemp11 - c2*Qd11*dtemp12) + Qd11*Qd11*dtemp22
+         x = c0
 
 ! In cos and sin values
          if ((ABS(dtemp1) > puny).or.(ABS(dtemp2) > puny)) then
@@ -1091,140 +1575,77 @@
            dtemp1 = dtemp1*invleng
            dtemp2 = dtemp2*invleng
            x = atan2(dtemp2,dtemp1)
-         else
-           x = c0
          endif
 
-! to ensure the angle lies between pi/4 and 9 pi/4 
-         if (x < p5*pih) x = x + pi2
+!echmod to ensure the angle lies between pi/4 and 9 pi/4 
+         if (x < piq) x = x + pi2
+!echmod require 0 <= x < (nx_yield-1)*dx = 2 pi
+!         x = mod(x+pi2, pi2)
 
 ! Now calculate updated stress tensor
-         xmin = piq+pi
-         ymin = c0
-         dx   = pi2*p025
-         dy   = pih*p1
-         da   = p05
+         dx   = pi/real(nx_yield-1,kind=dbl_kind)
+         dy   = pi/real(ny_yield-1,kind=dbl_kind)
+         da   = p5/real(na_yield-1,kind=dbl_kind)
          invdx = c1/dx
          invdy = c1/dy
          invda = c1/da
-         invsin = c1/sin(2*pi/c12)
 
-         kx = int((x-xmin)*invdx) + 1
-         ky = int((y-ymin)*invdy) + 1
+         kx = int((x-piq-pi)*invdx) + 1
+         ky = int(y*invdy) + 1
          ka = int((atempprime-p5)*invda) + 1
-         fx = (x - xmin) - (kx - 1)*dx
-         fy = (y - ymin) - (ky - 1)*dy
-         fa = (atempprime - p5) - (ka - 1)*da
 
-! Determine sigma_r(A1,Zeta,y) by interpolation in kx,ky,ka space i
-! (see Section A1) 
+! Determine sigma_r(A1,Zeta,y) and sigma_s (see Section A1) 
+         stemp11r = s11r(kx,ky,ka)     
+         stemp12r = s12r(kx,ky,ka)
+         stemp22r = s22r(kx,ky,ka)
 
-         stemp11r = s11r(kx,ky,ka)*(1-fx*invdx)*(1-fy*invdy)*(1-fa*invda) &     
-                    + s11r(kx+1,ky,ka)*fx*invdx*(1-fy*invdy)*(1-fa*invda) &
-                    + s11r(kx,ky+1,ka)*(1-fx*invdx)*fy*invdy*(1-fa*invda) &
-                    + s11r(kx,ky,ka+1)*(1-fx*invdx)*(1-fy*invdy)*fa*invda &
-                    + s11r(kx+1,ky,ka+1)*fx*invdx*(1-fy*invdy)*fa*invda &
-                    + s11r(kx,ky+1,ka+1)*(1-fx*invdx)*fy*invdy*fa*invda &
-                    + s11r(kx+1,ky+1,ka)*fx*invdx*fy*invdy*(1-fa*invda) &
-                    + s11r(kx+1,ky+1,ka+1)*fx*invdx*fy*invdy*fa*invda
-
-         stemp12r = s12r(kx,ky,ka)*(1-fx*invdx)*(1-fy*invdy)*(1-fa*invda) &
-                    + s12r(kx+1,ky,ka)*fx*invdx*(1-fy*invdy)*(1-fa*invda) &
-                    + s12r(kx,ky+1,ka)*(1-fx*invdx)*fy*invdy*(1-fa*invda) &
-                    + s12r(kx,ky,ka+1)*(1-fx*invdx)*(1-fy*invdy)*fa*invda &
-                    + s12r(kx+1,ky,ka+1)*fx*invdx*(1-fy*invdy)*fa*invda &
-                    + s12r(kx,ky+1,ka+1)*(1-fx*invdx)*fy*invdy*fa*invda &
-                    + s12r(kx+1,ky+1,ka)*fx*invdx*fy*invdy*(1-fa*invda) &
-                    + s12r(kx+1,ky+1,ka+1)*fx*invdx*fy*invdy*fa*invda
-
-         stemp22r = s22r(kx,ky,ka)*(1-fx*invdx)*(1-fy*invdy)*(1-fa*invda) &
-                    + s22r(kx+1,ky,ka)*fx*invdx*(1-fy*invdy)*(1-fa*invda) &
-                    + s22r(kx,ky+1,ka)*(1-fx*invdx)*fy*invdy*(1-fa*invda) &
-                    + s22r(kx,ky,ka+1)*(1-fx*invdx)*(1-fy*invdy)*fa*invda &
-                    + s22r(kx+1,ky,ka+1)*fx*invdx*(1-fy*invdy)*fa*invda &
-                    + s22r(kx,ky+1,ka+1)*(1-fx*invdx)*fy*invdy*fa*invda &
-                    + s22r(kx+1,ky+1,ka)*fx*invdx*fy*invdy*(1-fa*invda) &
-                    + s22r(kx+1,ky+1,ka+1)*fx*invdx*fy*invdy*fa*invda
-
-! Determine sigma_s(A1,Zeta,y) by interpolation in kx,ky,ka space (see Eq. A1)
-
-         stemp11s = s11s(kx,ky,ka)*(1-fx*invdx)*(1-fy*invdy)*(1-fa*invda) &
-                    + s11s(kx+1,ky,ka)*fx*invdx*(1-fy*invdy)*(1-fa*invda) &
-                    + s11s(kx,ky+1,ka)*(1-fx*invdx)*fy*invdy*(1-fa*invda) &
-                    + s11s(kx,ky,ka+1)*(1-fx*invdx)*(1-fy*invdy)*fa*invda &
-                    + s11s(kx+1,ky,ka+1)*fx*invdx*(1-fy*invdy)*fa*invda &
-                    + s11s(kx,ky+1,ka+1)*(1-fx*invdx)*fy*invdy*fa*invda &
-                    + s11s(kx+1,ky+1,ka)*fx*invdx*fy*invdy*(1-fa*invda) &
-                    + s11s(kx+1,ky+1,ka+1)*fx*invdx*fy*invdy*fa*invda
-
-         stemp12s = s12s(kx,ky,ka)*(1-fx*invdx)*(1-fy*invdy)*(1-fa*invda) &
-                    + s12s(kx+1,ky,ka)*fx*invdx*(1-fy*invdy)*(1-fa*invda) &
-                    + s12s(kx,ky+1,ka)*(1-fx*invdx)*fy*invdy*(1-fa*invda) &
-                    + s12s(kx,ky,ka+1)*(1-fx*invdx)*(1-fy*invdy)*fa*invda &
-                    + s12s(kx+1,ky,ka+1)*fx*invdx*(1-fy*invdy)*fa*invda &
-                    + s12s(kx,ky+1,ka+1)*(1-fx*invdx)*fy*invdy*fa*invda &
-                    + s12s(kx+1,ky+1,ka)*fx*invdx*fy*invdy*(1-fa*invda) &
-                    + s12s(kx+1,ky+1,ka+1)*fx*invdx*fy*invdy*fa*invda
-
-         stemp22s = s22s(kx,ky,ka)*(1-fx*invdx)*(1-fy*invdy)*(1-fa*invda) &
-                    + s22s(kx+1,ky,ka)*fx*invdx*(1-fy*invdy)*(1-fa*invda) &
-                    + s22s(kx,ky+1,ka)*(1-fx*invdx)*fy*invdy*(1-fa*invda) &
-                    + s22s(kx,ky,ka+1)*(1-fx*invdx)*(1-fy*invdy)*fa*invda &
-                    + s22s(kx+1,ky,ka+1)*fx*invdx*(1-fy*invdy)*fa*invda &
-                    + s22s(kx,ky+1,ka+1)*(1-fx*invdx)*fy*invdy*fa*invda &
-                    + s22s(kx+1,ky+1,ka)*fx*invdx*fy*invdy*(1-fa*invda) &
-                    + s22s(kx+1,ky+1,ka+1)*fx*invdx*fy*invdy*fa*invda
+         stemp11s = s11s(kx,ky,ka)
+         stemp12s = s12s(kx,ky,ka)
+         stemp22s = s22s(kx,ky,ka)
 
 ! Calculate mean ice stress over a collection of floes (Equation 3)
 
-         stressp  = strength*(stemp11r + kfriction*stemp11s + stemp22r &
-                    + kfriction*stemp22s) *invsin *invstressconviso
-         stress12 = strength*(stemp12r + kfriction*stemp12s) &
-                    *invsin *invstressconviso
-         stressm  = strength*(stemp11r + kfriction*stemp11s - stemp22r &
-                    - kfriction*stemp22s)*invsin *invstressconviso
+         stressp  = strength*(stemp11r + kfriction*stemp11s &
+                            + stemp22r + kfriction*stemp22s) * invsin
+         stress12 = strength*(stemp12r + kfriction*stemp12s) * invsin 
+         stressm  = strength*(stemp11r + kfriction*stemp11s &
+                            - stemp22r - kfriction*stemp22s) * invsin
 
-! Back - rotation of the stress from principal aces into general coordinates
+! Back - rotation of the stress from principal axes into general coordinates
 
 ! Update stress
-         sig(1,1) = p5*(stressp + stressm)
-         sig(1,2) = stress12
-!         sig(2,1) = stress12
-         sig(2,2) = p5*(stressp - stressm)
+         sig11 = p5*(stressp + stressm)
+         sig12 = stress12
+         sig22 = p5*(stressp - stressm)
 
-         sigprime(1,1) = Q(1,1)*(Q(1,1)*sig(1,1) - 2*Q(1,2)*sig(1,2)) &
-                         + Q(1,2)*Q(1,2)*sig(2,2)
-         sigprime(1,2) = Q(1,1)*(Q(1,1)*sig(1,2) + Q(1,2)*sig(1,1) &
-                         - Q(1,2)*sig(2,2)) - Q(1,2)*Q(1,2)*sig(1,2)
-         sigprime(2,2) = Q(1,2)*(Q(1,2)*sig(1,1) + 2*Q(1,1)*sig(1,2)) &
-                         + Q(1,1)*Q(1,1)*sig(2,2)
+         sgprm11 = Q11Q11*sig11 + Q12Q12*sig22 -        c2*Q11Q12 *sig12 
+         sgprm12 = Q11Q12*sig11 - Q11Q12*sig22 + (Q11Q11 - Q12Q12)*sig12
+         sgprm22 = Q12Q12*sig11 + Q11Q11*sig22 +        c2*Q11Q12 *sig12 
 
-         stressp  = sigprime(1,1) + sigprime(2,2)
-         stress12 = sigprime(1,2)
-         stressm  = sigprime(1,1) - sigprime(2,2)
+         stressp  = sgprm11 + sgprm22
+         stress12 = sgprm12
+         stressm  = sgprm11 - sgprm22
 
 ! Compute ridging and sliding functions in general coordinates (Equation 11)
          if (ksub == ndte) then
+           rotstemp11r = Q11Q11*stemp11r - c2*Q11Q12* stemp12r &
+                       + Q12Q12*stemp22r
+           rotstemp12r = Q11Q11*stemp12r +    Q11Q12*(stemp11r-stemp22r) &
+                       - Q12Q12*stemp12r
+           rotstemp22r = Q12Q12*stemp11r + c2*Q11Q12* stemp12r & 
+                       + Q11Q11*stemp22r
 
-           rotstemp11r = Q(1,1)*(Q(1,1)*stemp11r-2*Q(1,2)*stemp12r) &
-                         + Q(1,2)*Q(1,2)*stemp22r
-           rotstemp12r = Q(1,1)*(Q(1,1)*stemp12r+Q(1,2)*stemp11r-Q(1,2)*stemp22r) &
-                         - Q(1,2)*Q(1,2)*stemp12r
-           rotstemp22r = Q(1,2)*(Q(1,2)*stemp11r+2*Q(1,1)*stemp12r) & 
-                         + Q(1,1)*Q(1,1)*stemp22r
+           rotstemp11s = Q11Q11*stemp11s - c2*Q11Q12* stemp12s &
+                       + Q12Q12*stemp22s
+           rotstemp12s = Q11Q11*stemp12s +    Q11Q12*(stemp11s-stemp22s) &
+                       - Q12Q12*stemp12s
+           rotstemp22s = Q12Q12*stemp11s + c2*Q11Q12* stemp12s & 
+                       + Q11Q11*stemp22s
 
-           rotstemp11s = Q(1,1)*(Q(1,1)*stemp11s-2*Q(1,2)*stemp12s) &
-                         + Q(1,2)*Q(1,2)*stemp22s
-           rotstemp12s = Q(1,1)*(Q(1,1)*stemp12s+Q(1,2)*stemp11s-Q(1,2)*stemp22s) &
-                         - Q(1,2)*Q(1,2)*stemp12s
-           rotstemp22s = Q(1,2)*(Q(1,2)*stemp11s+2*Q(1,1)*stemp12s) & 
-                         + Q(1,1)*Q(1,1)*stemp22s
-
-           alphar =  rotstemp11r*dtemp(1,1) + 2*rotstemp12r*dtemp(1,2) &
-                     + rotstemp22r*dtemp(2,2)
-           alphas =  rotstemp11s*dtemp(1,1) + 2*rotstemp12s*dtemp(1,2) &
-                     + rotstemp22s*dtemp(2,2)
-
+           alphar =  rotstemp11r*dtemp11 + c2*rotstemp12r*dtemp12 &
+                   + rotstemp22r*dtemp22
+           alphas =  rotstemp11s*dtemp11 + c2*rotstemp12s*dtemp12 &
+                   + rotstemp22s*dtemp22
          endif
 
       end subroutine update_stress_rdg
@@ -1246,7 +1667,7 @@
                          stress12_1, stress12_2,     &
                          stress12_3, stress12_4)
 
-      use ice_constants, only: p001, p2, p25, p5
+      use ice_constants, only: p001, p2, p25, p5, c1
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -1279,10 +1700,14 @@
          i, j, ij
 
       real (kind=dbl_kind) :: &
-        mresult11, mresult12
+        mresult11, mresult12, &
+        dteikth, p5kth
 
       real (kind=dbl_kind), parameter :: &
         kth  = p2*p001             
+
+      dteikth = c1 / (dtei + kth)
+      p5kth = p5 * kth
 
       do ij = 1, icellt
          i = indxti(ij)
@@ -1299,9 +1724,8 @@
                            a12_1(i,j),                       &
                            mresult12)
 
-         a11_1(i,j) = (a11_1(i,j)*dtei + kth*p5 - mresult11) / &
-                      (dtei + kth) ! implicit
-         a12_1(i,j) = (a12_1(i,j)*dtei - mresult12)/(dtei + kth) ! implicit
+         a11_1(i,j) = (a11_1(i,j)*dtei + p5kth - mresult11) * dteikth ! implicit
+         a12_1(i,j) = (a12_1(i,j)*dtei - mresult12) * dteikth ! implicit
 
  
 ! nw
@@ -1315,9 +1739,8 @@
                            a12_2(i,j),                       &
                            mresult12)
 
-         a11_2(i,j) = (a11_2(i,j)*dtei + kth*p5 - mresult11) / &
-                      (dtei + kth) ! implicit
-         a12_2(i,j) = (a12_2(i,j)*dtei - mresult12)/(dtei + kth) ! implicit
+         a11_2(i,j) = (a11_2(i,j)*dtei + p5kth - mresult11) * dteikth ! implicit
+         a12_2(i,j) = (a12_2(i,j)*dtei - mresult12) * dteikth ! implicit
 
 ! sw
          call calc_ffrac(1, stressp_3(i,j), stressm_3(i,j),  &
@@ -1330,9 +1753,8 @@
                            a12_3(i,j),                       &
                            mresult12)
 
-         a11_3(i,j) = (a11_3(i,j)*dtei + kth*p5 - mresult11) / &
-                      (dtei + kth) ! implicit
-         a12_3(i,j) = (a12_3(i,j)*dtei - mresult12)/(dtei + kth) ! implicit
+         a11_3(i,j) = (a11_3(i,j)*dtei + p5kth - mresult11) * dteikth ! implicit
+         a12_3(i,j) = (a12_3(i,j)*dtei - mresult12) * dteikth ! implicit
                                 
 ! se
          call calc_ffrac(1, stressp_4(i,j), stressm_4(i,j),  &
@@ -1345,9 +1767,8 @@
                            a12_4(i,j),                       &
                            mresult12)
 
-         a11_4(i,j) = (a11_4(i,j)*dtei + kth*p5 - mresult11) / &
-                      (dtei + kth) ! implicit
-         a12_4(i,j) = (a12_4(i,j)*dtei - mresult12)/(dtei + kth) ! implicit
+         a11_4(i,j) = (a11_4(i,j)*dtei + p5kth - mresult11) * dteikth ! implicit
+         a12_4(i,j) = (a12_4(i,j)*dtei - mresult12) * dteikth ! implicit
 
 ! average structure tensor
 
@@ -1382,34 +1803,34 @@
 
       ! local variables
 
-      real (kind=dbl_kind), dimension(2,2) :: &
-         Q, sigma
-
       real (kind=dbl_kind) :: &
-         gamma, sigma_1, sigma_2
+         sigma11, sigma12, sigma22, &
+         gamma, sigma_1, sigma_2, &
+         Q11, Q12, Q11Q11, Q11Q12, Q12Q12
 
       real (kind=dbl_kind), parameter :: &
          kfrac = p001, &
          threshold = c3*p1
 
-       sigma(1,1) = p5*(stressp+stressm) 
-       sigma(1,2) = stress12 
-       sigma(2,1) = sigma(1,2) 
-       sigma(2,2) = p5*(stressp-stressm) 
+       sigma11 = p5*(stressp+stressm) 
+       sigma12 = stress12 
+       sigma22 = p5*(stressp-stressm) 
 
-       gamma = p5*atan2((c2*sigma(1,2)),(sigma(1,1)-sigma(2,2)))
+       gamma = p5*atan2((c2*sigma12),(sigma11-sigma22))
 
-! rotational tensor to get into sigma principal axis
+! rotate tensor to get into sigma principal axis
 
-       Q(1,1) = cos(gamma)
-       Q(1,2) = sin(gamma)
-       Q(2,1) = -Q(1,2)
-       Q(2,2) = Q(1,1)
+       Q11 = cos(gamma)
+       Q12 = sin(gamma)
 
-       sigma_1 = Q(1,1)*(Q(1,1)*sigma(1,1)+2*Q(1,2)*sigma(1,2)) + &
-            Q(1,2)*Q(1,2)*sigma(2,2) ! S(1,1)
-       sigma_2 = Q(1,2)*(Q(1,2)*sigma(1,1)-2*Q(1,1)*sigma(1,2)) + &
-            Q(1,1)*Q(1,1)*sigma(2,2) ! S(2,2)
+       Q11Q11 = Q11*Q11
+       Q11Q12 = Q11*Q12
+       Q12Q12 = Q12*Q12
+
+       sigma_1 = Q11Q11*sigma11 + c2*Q11Q12*sigma12  &
+               + Q12Q12*sigma22 ! S(1,1)
+       sigma_2 = Q12Q12*sigma11 - c2*Q11Q12*sigma12  &
+               + Q11Q11*sigma22 ! S(2,2)
 
 ! Pure divergence
        if ((sigma_1 >= c0).and.(sigma_2 >= c0))  then
@@ -1418,15 +1839,15 @@
 ! Unconfined compression: cracking of blocks not along the axial splitting direction
 ! which leads to the loss of their shape, so we again model it through diffusion
        elseif ((sigma_1 >= c0).and.(sigma_2 < c0))  then
-         if (blockno == 1) mresult = kfrac * (a1x - Q(1,2)*Q(1,2))
-         if (blockno == 2) mresult = kfrac * (a1x + Q(1,1)*Q(1,2))
+         if (blockno == 1) mresult = kfrac * (a1x - Q12Q12)
+         if (blockno == 2) mresult = kfrac * (a1x + Q11Q12)
 
 ! Shear faulting
        elseif (sigma_2 == c0) then
          mresult =c0
        elseif ((sigma_1 <= c0).and.(sigma_1/sigma_2 <= threshold)) then
-         if (blockno == 1) mresult = kfrac * (a1x - Q(1,2)*Q(1,2))
-         if (blockno == 2) mresult = kfrac * (a1x + Q(1,1)*Q(1,2))
+         if (blockno == 1) mresult = kfrac * (a1x - Q12Q12)
+         if (blockno == 2) mresult = kfrac * (a1x + Q11Q12)
 
 ! Horizontal spalling
        else 

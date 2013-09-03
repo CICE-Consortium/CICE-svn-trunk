@@ -145,10 +145,6 @@
       call init_forcing_atmo    ! initialize atmospheric forcing (standalone)
 #endif
 
-#ifdef oned
-      call init_therm_oned
-#endif
-
 #ifndef coupled
       call get_forcing_atmo     ! atmospheric forcing from data
       call get_forcing_ocn(dt)  ! ocean forcing from data

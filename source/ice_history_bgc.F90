@@ -43,7 +43,7 @@
            f_bgc_C        = 'x', f_bgc_chl      = 'x', &
            f_bgc_DMSPp    = 'x', f_bgc_DMSPd    = 'x', &
            f_bgc_DMS      = 'x', f_bgc_Sil      = 'x', &
-           f_bgc_PON      = 'x', f_bgc_S        = 'x', &
+           f_bgc_S        = 'x', &
            f_fbri         = 'x', f_hbri         = 'x', &
            f_grownet      = 'x', f_PPnet        = 'x'
 
@@ -71,7 +71,7 @@
            f_bgc_C       , f_bgc_chl     , &
            f_bgc_DMSPp   , f_bgc_DMSPd   , &
            f_bgc_DMS     , f_bgc_Sil     , &
-           f_bgc_PON     , f_bgc_S       , &
+           f_bgc_S       , &
            f_fbri        , f_hbri        , &
            f_grownet     , f_PPnet       
 
@@ -105,7 +105,7 @@
            n_bgc_C       , n_bgc_chl     , &
            n_bgc_DMSPp   , n_bgc_DMSPd   , &
            n_bgc_DMS     , n_bgc_Sil     , &
-           n_bgc_PON     , n_bgc_S       , &
+           n_bgc_S       , &
            n_fbri        , n_hbri        , &
            n_grownet     , n_PPnet       
 

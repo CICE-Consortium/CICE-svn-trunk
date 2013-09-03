@@ -76,8 +76,7 @@
          nlt_bgc_Sil    , & !
          nlt_bgc_DMSPp  , & ! trace gases
          nlt_bgc_DMSPd  , & ! 
-         nlt_bgc_DMS    , & ! 
-         nlt_bgc_PON        ! zooplankton and detritus
+         nlt_bgc_DMS
 
       ! bio parameters for algal_dyn
       real (kind=dbl_kind), parameter, public :: &
