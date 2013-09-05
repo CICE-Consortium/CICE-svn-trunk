@@ -458,8 +458,8 @@
          else
             hs = c0
          endif
-         if (hs > hsmin) then    ! should this really be hsmin or 0? 
-                                 ! should use same hsmin value as in radiation
+         if (hs > hs_min) then    ! should this really be hs_min or 0? 
+                                  ! should use same hs_min value as in radiation
             do k=1,n_aero
                aerosno(k,1) = aerosno(k,1) &
                                 + faero_atm(i,j,k)*dt*aicen(i,j)
@@ -515,7 +515,7 @@
          dzint_new  = hs - dzssl_new
          dzinti_new = hi - dzssli_new
 
-         if (hs > hsmin) then
+         if (hs > hs_min) then
             do k = 1, n_aero
                dznew = min(dzssl_new-dzssl, c0)
                sloss1 = c0

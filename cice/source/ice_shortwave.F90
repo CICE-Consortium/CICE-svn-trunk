@@ -952,6 +952,7 @@
                                 + (c1-alidfns(i,j))*asnow )
 
          swabs   = swabsv + swabsi
+         if (hs <= hs_min) swabs = c0
 
          fswpenvdr = swvdr(i,j) * (c1-alvdrni(i,j)) * (c1-asnow) * i0vis
          fswpenvdf = swvdf(i,j) * (c1-alvdfni(i,j)) * (c1-asnow) * i0vis
@@ -1226,7 +1227,7 @@
                ! pond depth over fraction fpn 
                hpn(i,j) = trcrn(i,j,nt_hpnd,n)
                ! snow infiltration
-               if (hsn(i,j) >= hsmin .and. hs0 > puny) then
+               if (hsn(i,j) >= hs_min .and. hs0 > puny) then
                   asnow = min(hsn(i,j)/hs0, c1) ! delta-Eddington formulation
                   fpn(i,j) = (c1 - asnow) * fpn(i,j)
                   hpn(i,j) = pndaspect * fpn(i,j)
@@ -1248,7 +1249,7 @@
                     * trcrn(i,j,nt_ipnd,n)
                dhs = dhsn(i,j,n) ! snow depth difference, sea ice - pond
                if (ipn > puny .and. &
-                    dhs < puny .and. fsnow(i,j)*dt > hsmin) &
+                    dhs < puny .and. fsnow(i,j)*dt > hs_min) &
                     dhs =  hsn(i,j) - fsnow(i,j)*dt ! initialize dhs>0
                spn = hsn(i,j) - dhs   ! snow depth on pond ice
                if (ipn*spn < puny) dhs = c0
@@ -3634,7 +3635,7 @@
          ! set snow horizontal fraction
          hs(i,j) = vsno(i,j) / aice(i,j)
 
-         if (hs(i,j) >= hsmin) then
+         if (hs(i,j) >= hs_min) then
             fs(i,j) = c1
             if (hs0 > puny) fs(i,j) = min(hs(i,j)/hs0, c1)
          endif

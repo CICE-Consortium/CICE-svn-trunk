@@ -70,7 +70,7 @@
                                       istop,    jstop,    &
                                       hin)
 
-      use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf, hs_min
+      use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions

@@ -29,7 +29,7 @@
                            nt_Tsfc, nt_iage, nt_sice, nt_qice, nt_qsno, &
                            nt_apnd, nt_hpnd
       use ice_therm_shared, only: ktherm, ferrmax, heat_capacity, l_brine, &
-                                  calc_Tsfc, calculate_tin_from_qin, hs_min
+                                  calc_Tsfc, calculate_tin_from_qin
       use ice_therm_bl99, only: temperature_changes
       use ice_therm_0layer, only: zerolayer_temperature
       use ice_flux, only: Tf
