@@ -350,8 +350,6 @@ contains
 
     ! solve the enthalpy and bulk salinity of the ice for a single column
 
-    use ice_therm_shared, only: hs_min
-
     integer (kind=int_kind), intent(in) :: &
          istep1          ! time step index (diagnostic only)
     
