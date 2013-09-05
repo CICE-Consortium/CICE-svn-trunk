@@ -367,9 +367,10 @@
             if (my_task == master_task) then
             write(nu_diag,*) &
             'WARNING: runtype, restart, ice_ic are inconsistent:'
-            write(nu_diag,*) runtype, restart, ice_ic
+            write(nu_diag,*) trim(runtype), restart, trim(ice_ic)
             write(nu_diag,*) &
-            'WARNING: Initializing with NO ICE: '
+            'WARNING: Initializing with NO ICE: ' 
+            write(nu_diag,*) ' '
             endif
             ice_ic = 'none'
          endif
@@ -580,6 +581,8 @@
       call broadcast_scalar(R_ice,              master_task)
       call broadcast_scalar(R_pnd,              master_task)
       call broadcast_scalar(R_snw,              master_task)
+      call broadcast_scalar(dT_mlt,             master_task)
+      call broadcast_scalar(rsnw_mlt,           master_task)
       call broadcast_scalar(hs0,                master_task)
       call broadcast_scalar(hs1,                master_task)
       call broadcast_scalar(dpscale,            master_task)
@@ -622,6 +625,7 @@
 
       if (dbug) & ! else only master_task writes to file
       call broadcast_scalar(nu_diag,            master_task)
+
       ! tracers
       call broadcast_scalar(tr_iage,            master_task)
       call broadcast_scalar(restart_age,        master_task)
@@ -690,11 +694,11 @@
          write(nu_diag,*)    ' restart_dir               = ', &
                                trim(restart_dir)
          write(nu_diag,*)    ' restart_ext               = ', restart_ext
-         write(nu_diag,*)    ' use_restart_time          = ', use_restart_time
          write(nu_diag,*)    ' restart_file              = ', &
                                trim(restart_file)
          write(nu_diag,*)    ' pointer_file              = ', &
                                trim(pointer_file)
+         write(nu_diag,*)    ' use_restart_time          = ', use_restart_time
          write(nu_diag,*   ) ' ice_ic                    = ', &
                                trim(ice_ic)
          write(nu_diag,*)    ' grid_type                 = ', &
@@ -714,6 +718,7 @@
          write(nu_diag,1020) ' ndte                      = ', ndte
          write(nu_diag,1010) ' revised_evp               = ', &
                                revised_evp
+         if (kdyn == 1) &
          write(nu_diag,*)    ' yield_curve               = ', &
                                trim(yield_curve)
          write(nu_diag,1020) ' kstrength                 = ', kstrength
@@ -721,44 +726,64 @@
                                krdg_partic
          write(nu_diag,1020) ' krdg_redist               = ', &
                                krdg_redist
+         if (krdg_redist == 1) &
          write(nu_diag,1000) ' mu_rdg                    = ', mu_rdg
          write(nu_diag,1030) ' advection                 = ', &
                                trim(advection)
          write(nu_diag,1030) ' shortwave                 = ', &
                                trim(shortwave)
-         write(nu_diag,1030) ' albedo_type               = ', &
-                               trim(albedo_type)
+
+         if (trim(shortwave) == 'dEdd') then
          write(nu_diag,1000) ' R_ice                     = ', R_ice
          write(nu_diag,1000) ' R_pnd                     = ', R_pnd
          write(nu_diag,1000) ' R_snw                     = ', R_snw
+         write(nu_diag,1000) ' dT_mlt                    = ', dT_mlt
+         write(nu_diag,1000) ' rsnw_mlt                  = ', rsnw_mlt
          write(nu_diag,1000) ' hs0                       = ', hs0
-         write(nu_diag,1000) ' hs1                       = ', hs1
-         write(nu_diag,1000) ' dpscale                   = ', dpscale
-         write(nu_diag,1030) ' frzpnd                    = ', trim(frzpnd)
-         write(nu_diag,1010) ' snowinfil                 = ', snowinfil
-         write(nu_diag,1000) ' rfracmin                  = ', rfracmin
-         write(nu_diag,1000) ' rfracmax                  = ', rfracmax
-         write(nu_diag,1000) ' pndaspect                 = ', pndaspect
+         else
+         write(nu_diag,1030) ' albedo_type               = ', &
+                               trim(albedo_type)
          write(nu_diag,1000) ' albicev                   = ', albicev
          write(nu_diag,1000) ' albicei                   = ', albicei
          write(nu_diag,1000) ' albsnowv                  = ', albsnowv
          write(nu_diag,1000) ' albsnowi                  = ', albsnowi
          write(nu_diag,1000) ' ahmax                     = ', ahmax
+         endif
+
+         write(nu_diag,1000) ' rfracmin                  = ', rfracmin
+         write(nu_diag,1000) ' rfracmax                  = ', rfracmax
+         if (tr_pond_lvl) then
+         write(nu_diag,1000) ' hs1                       = ', hs1
+         write(nu_diag,1000) ' dpscale                   = ', dpscale
+         write(nu_diag,1030) ' frzpnd                    = ', trim(frzpnd)
+         write(nu_diag,1010) ' snowinfil                 = ', snowinfil
+         endif
+         if (.not. tr_pond_lvl) &
+         write(nu_diag,1000) ' pndaspect                 = ', pndaspect
+
          write(nu_diag,1020) ' ktherm                    = ', ktherm
+         if (ktherm == 1) &
          write(nu_diag,1030) ' conduct                   = ', conduct
+         if (ktherm == 2) then
+         write(nu_diag,1005) ' a_rapid_mode              = ', a_rapid_mode
+         write(nu_diag,1005) ' Rac_rapid_mode            = ', Rac_rapid_mode
+         write(nu_diag,1005) ' aspect_rapid_mode         = ', aspect_rapid_mode
+         write(nu_diag,1005) ' dSdt_slow_mode            = ', dSdt_slow_mode
+         write(nu_diag,1005) ' phi_c_slow_mode           = ', phi_c_slow_mode
+         write(nu_diag,1005) ' phi_i_mushy               = ', phi_i_mushy
+         endif
+
          write(nu_diag,1030) ' atmbndy                   = ', &
                                trim(atmbndy)
+         write(nu_diag,1010) ' calc_formdrag             = ', calc_formdrag
+         write(nu_diag,1010) ' calc_strair               = ', calc_strair
+         write(nu_diag,1010) ' calc_Tsfc                 = ', calc_Tsfc
 
          write(nu_diag,1020) ' fyear_init                = ', &
                                fyear_init
          write(nu_diag,1020) ' ycycle                    = ', ycycle
          write(nu_diag,*)    ' atm_data_type             = ', &
                                trim(atm_data_type)
-         write(nu_diag,1010) ' calc_strair               = ', calc_strair
-         write(nu_diag,1010) ' calc_Tsfc                 = ', calc_Tsfc
-         write(nu_diag,1010) ' calc_formdrag             = ', calc_formdrag
-         write(nu_diag,1010) ' update_ocn_f              = ', update_ocn_f
-         write(nu_diag,1005) ' ustar_min                 = ', ustar_min
          if (trim(atm_data_type) /= 'default') then
             write(nu_diag,*) ' atm_data_dir              = ', &
                                trim(atm_data_dir)
@@ -766,8 +791,15 @@
                                trim(precip_units)
          endif 
 
+         write(nu_diag,1010) ' update_ocn_f              = ', update_ocn_f
+         write(nu_diag,1005) ' ustar_min                 = ', ustar_min
          write(nu_diag,1010) ' oceanmixed_ice            = ', &
                                oceanmixed_ice
+         if (trim(sss_data_type) == 'ncar' .or. &
+             trim(sst_data_type) == 'ncar') then
+            write(nu_diag,*) ' oceanmixed_file           = ', &
+                               trim(oceanmixed_file)
+         endif
          write(nu_diag,*)    ' sss_data_type             = ', &
                                trim(sss_data_type)
          write(nu_diag,*)    ' sst_data_type             = ', &
@@ -776,12 +808,13 @@
              trim(sst_data_type) /= 'default') then
             write(nu_diag,*) ' ocn_data_dir              = ', &
                                trim(ocn_data_dir)
+            write(nu_diag,1010) ' restore_sst               = ', &
+                               restore_sst
          endif 
-         if (trim(sss_data_type) == 'ncar' .or. &
-             trim(sst_data_type) == 'ncar') then
-            write(nu_diag,*) ' oceanmixed_file           = ', &
-                               trim(oceanmixed_file)
-         endif
+         write(nu_diag,1010) ' restore_ice               = ', &
+                               restore_ice
+         if (restore_ice .or. restore_sst) &
+         write(nu_diag,1000) ' trestore                  = ', trestore
  
 #ifdef coupled
          if( oceanmixed_ice ) then
@@ -815,13 +848,6 @@
          write(nu_diag,1010) ' restart_pond_topo         = ', restart_pond_topo
          write(nu_diag,1010) ' tr_aero                   = ', tr_aero
          write(nu_diag,1010) ' restart_aero              = ', restart_aero
-
-         write(nu_diag,1005) ' a_rapid_mode              = ', a_rapid_mode
-         write(nu_diag,1005) ' Rac_rapid_mode            = ', Rac_rapid_mode
-         write(nu_diag,1005) ' aspect_rapid_mode         = ', aspect_rapid_mode
-         write(nu_diag,1005) ' dSdt_slow_mode            = ', dSdt_slow_mode
-         write(nu_diag,1005) ' phi_c_slow_mode           = ', phi_c_slow_mode
-         write(nu_diag,1005) ' phi_i_mushy               = ', phi_i_mushy
 
          nt_Tsfc = 1           ! index tracers, starting with Tsfc = 1
          ntrcr = 1             ! count tracers, starting with Tsfc = 1

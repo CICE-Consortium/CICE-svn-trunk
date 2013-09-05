@@ -26,8 +26,6 @@
          cp_air    = 1004.0_dbl_kind  ,&! specific heat of air (J/kg/K)
          emissivity= 0.98_dbl_kind    ,&! emissivity of snow and ice
          cp_ice    = 2090._dbl_kind   ,&! specific heat of fresh ice (J/kg/K)
-         cp_brine  = 4650._dbl_kind   ,&! specific heat of brine (J/kg/K) 
-                                        ! from Taylor and Feltham (2004)
          cp_ocn    = 4190._dbl_kind   ,&! specific heat of ocn    (J/kg/K)
          depressT  = 0.0575_dbl_kind  ,&! Tf:brine salinity ratio (C/ppt)
          dragio    = 0.0055_dbl_kind  ,&! ice-ocn drag coefficient
@@ -97,7 +95,7 @@
                                    ! (used in zero layer thermodynamics option)
          ksno   = 0.30_dbl_kind  ,&! thermal conductivity of snow  (W/m/deg)
          zref   = 10._dbl_kind   ,&! reference height for stability (m)
-         hs_min = 5.e-4_dbl_kind ,&! min snow thickness for computing zTsn and for shortwave (m)
+         hs_min = 1.e-4_dbl_kind ,&! min snow thickness for computing zTsn (m)
          snowpatch = 0.02_dbl_kind ! parameter for fractional snow area (m)
                     
       ! weights for albedos 
