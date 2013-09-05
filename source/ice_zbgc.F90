@@ -130,8 +130,10 @@
 
       if (my_task == master_task) then
          write(nu_diag,1010) ' tr_brine                  = ', tr_brine
+         if (tr_brine) then
          write(nu_diag,1010) ' restart_hbrine            = ', restart_hbrine
          write(nu_diag,1005) ' phi_snow                  = ', phi_snow
+         endif
          write(nu_diag,1010) ' solve_skl_bgc             = ', solve_skl_bgc
       endif
 
@@ -185,12 +187,14 @@
 
       if (my_task == master_task) then
 
+         write(nu_diag,1010) ' restart_bgc               = ', restart_bgc
+         write(nu_diag,1010) ' restore_bgc               = ', restore_bgc
+         write(nu_diag,*)    ' bgc_data_dir              = ', &
+                               trim(bgc_data_dir)
          write(nu_diag,*)    ' sil_data_type             = ', &
                                trim(sil_data_type)
          write(nu_diag,*)    ' nit_data_type             = ', &
                                trim(nit_data_type)
-         write(nu_diag,*)    ' bgc_data_dir              = ', &
-                               trim(bgc_data_dir)
          write(nu_diag,1010) ' tr_bgc_N_sk               = ', tr_bgc_N_sk
          write(nu_diag,1010) ' tr_bgc_C_sk               = ', tr_bgc_C_sk
          write(nu_diag,1010) ' tr_bgc_chl_sk             = ', tr_bgc_chl_sk
@@ -200,7 +204,6 @@
          write(nu_diag,1010) ' tr_bgc_DMSPp_sk           = ', tr_bgc_DMSPp_sk
          write(nu_diag,1010) ' tr_bgc_DMSPd_sk           = ', tr_bgc_DMSPd_sk
          write(nu_diag,1010) ' tr_bgc_DMS_sk             = ', tr_bgc_DMS_sk
-         write(nu_diag,1010) ' restart_bgc               = ', restart_bgc
         
       endif   ! master_task
 
@@ -298,7 +301,6 @@
             write(nu_diag,1020)'nt_bgc_N_sk = ', nt_bgc_N_sk
             write(nu_diag,1020)'nt_bgc_Nit_sk = ', nt_bgc_Nit_sk
          endif
-         write(nu_diag,*)' '
          if (tr_brine .or. solve_skl_bgc) then
             write(nu_diag,1020)'nblyr = ', nblyr
             write(nu_diag,1020) 'ntrcr (w/ bgc) = ', ntrcr

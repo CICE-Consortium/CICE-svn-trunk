@@ -139,7 +139,7 @@
   , fyear_init      = 1981
   , ycycle          = 1
   , atm_data_format = 'nc'
-  , atm_data_type   = 'rct'
+  , atm_data_type   = 'oned'
   , atm_data_dir    = '/usr/projects/climate/eclare/DATA/column/'
   , calc_strair     = .true.
   , calc_Tsfc       = .true.

@@ -215,6 +215,10 @@
                                   trim(distribution_type)
      write(nu_diag,'(a25,a10)') '  Distribution weight:    ', &
                                   trim(distribution_wght)
+     write(nu_diag,'(a25,a10)') '  ew_boundary_type:       ', &
+                                  trim(ew_boundary_type)
+     write(nu_diag,'(a25,a10)') '  ns_boundary_type:       ', &
+                                  trim(ns_boundary_type)
      write(nu_diag,'(a26,l6)') '  maskhalo_dyn          = ', &
                                   maskhalo_dyn
      write(nu_diag,'(a26,l6)') '  maskhalo_remap        = ', &

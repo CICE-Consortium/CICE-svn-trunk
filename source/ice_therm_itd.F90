@@ -311,7 +311,7 @@
             j = indxj(ij)
 
             if (aicen_init(i,j,n) > puny) then
-               hicen_init (ij,n) = vicen_init(i,j,n) / aicen_init(i,j,n)
+               hicen_init(ij,n) = vicen_init(i,j,n) / aicen_init(i,j,n)
             else
                hicen_init(ij,n) = c0
             endif               ! aicen_init > puny
@@ -657,7 +657,7 @@
 
       ! maintain qsno negative definiteness
       do n = 1, ncat
-         do k = nt_qsno, nt_qsno+nslyr
+         do k = nt_qsno, nt_qsno+nslyr-1
             do ij = 1, iflag
                i = indxii(ij)
                j = indxjj(ij)
@@ -680,7 +680,7 @@
 
       ! maintain qsno negative definiteness
       do n = 1, ncat
-         do k = nt_qsno, nt_qsno+nslyr
+         do k = nt_qsno, nt_qsno+nslyr-1
             do ij = 1, iflag
                i = indxii(ij)
                j = indxjj(ij)

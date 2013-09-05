@@ -981,7 +981,6 @@
          daice_greater_aicen = .false.
          dvice_greater_vicen = .false.
 
-
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
@@ -1146,7 +1145,8 @@
             m = indxij(ij)
 
             nd = donor(m,n)
-            worka(i,j) = dvice(m,n) / vicen(i,j,nd)
+!echmod            worka(i,j) = dvice(m,n) / vicen(i,j,nd)
+            worka(i,j) = daice(m,n) / aicen(i,j,nd)
             if (nd  ==  n) then
                nr = nd+1
             else                ! nd = n+1
@@ -1219,7 +1219,7 @@
             j = indxj(ij)
 
             if (aicen(i,j,n) > puny) then
-               hicen(ij,n) = vicen (i,j,n)  / aicen(i,j,n)                
+               hicen(ij,n) = vicen (i,j,n) / aicen(i,j,n)                
             else
                hicen(ij,n) = c0
             endif
