@@ -3065,7 +3065,7 @@
         ! Read in ocean forcing data from an existing file
         !---------------------------------------------------------------
         write (nu_diag,*) 'ocean mixed layer forcing data file = ', &
-                           sst_file
+                           trim(sst_file)
 
       endif ! master_task
 
@@ -3213,7 +3213,8 @@
         ! Read in ocean forcing data from an existing file
         !---------------------------------------------------------------
         write (nu_diag,*) 'ocean mixed layer forcing data file = ', &
-                           sst_file
+                           trim(sst_file)
+        write (nu_diag,*)
 
       endif ! master_task
 
