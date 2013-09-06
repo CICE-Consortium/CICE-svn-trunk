@@ -1,8 +1,4 @@
 !  SVN:$Id$
-
-#define flushing 1
-#define flushing_down 1
-#define flushing_up 0
  
 !=======================================================================
 
@@ -37,15 +33,6 @@ module ice_therm_mushy
        dSdt_slow_mode    , & ! slow mode drainage strength (m s-1 K-1)
        phi_c_slow_mode   , & ! critical liquid fraction porosity cutoff for slow mode
        phi_i_mushy           ! liquid fraction of congelation ice
-
-  !-----------------------------------------------------------------
-  ! physical parameters for passing to residual function through solver
-  !-----------------------------------------------------------------
-
-  integer(kind=int_kind) :: &
-       g_i , & ! current grid i-index (for diagnostics)
-       g_j , & ! current grid j-index  (for diagnostics)
-       g_n     ! current category (for diagnostics)
 
   !-----------------------------------------------------------------
   ! Constants for Liquidus relation from Assur (1958)
@@ -132,18 +119,21 @@ module ice_therm_mushy
        N2_liq = -az2p_liq          , &
        O2_liq = -bz2_liq / az2_liq
 
- !-----------------------------------------------------------------
- ! Other parameters
- !-----------------------------------------------------------------
-
+  !-----------------------------------------------------------------
+  ! Other parameters
+  !-----------------------------------------------------------------
+  
   real(kind=dbl_kind), parameter :: &
-       serrmax = 1.e-11_dbl_kind ! max allowed salt flux error (ppt m s-1)
+       dTemp_errmax = 5.0e-4_dbl_kind ! max allowed change in temperature 
+                                      ! between iterations
 
-  real(kind=dbl_kind), parameter :: &
-       dTsf_errcon = 5.e-4_dbl_kind ! max allowed error in dTsf
+  !-----------------------------------------------------------------
+  ! debugging parameters
+  !-----------------------------------------------------------------
 
-  real(kind=dbl_kind), parameter :: &
-       ferrcon = ferrmax ! max allowed surface flux error for consistency
+  integer(kind=int_kind) :: &
+       g_i , & ! current grid i-index (for diagnostics)
+       g_j     ! current grid j-index  (for diagnostics)
 
 !=======================================================================
 
@@ -203,7 +193,7 @@ contains
          shcoef      , & ! transfer coefficient for sensible heat
          lhcoef      , & ! transfer coefficient for latent heat
          Tbot        , & ! ice bottom surface temperature (deg C)
-         sss             ! sea surface salinity (PSU)
+         sss             ! sea surface salinity (ppt)
 
     real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
@@ -280,7 +270,6 @@ contains
        
        g_i = i
        g_j = j
-       g_n = 1
        
        if (tr_pond) then
           trc_hpnd = trcrn(i,j,nt_hpnd)
@@ -441,14 +430,11 @@ contains
          hsn         , & ! snow thickness (m)
          hslyr_min   , & ! minimum snow layer thickness (m)
          w           , & ! vertical flushing Darcy velocity (m/s)
-         wdown       , & ! downwards vertical flushing Darcy velocity (m/s)
-         wup         , & ! upwards vertical flushing Darcy velocity (m/s)
          w_scaling   , & !
          fadvsalt    , & ! heat flux to ocean from brine advection (W m-2)
          snowice_en  , & ! energy added as snowice
          snowice_st  , & ! salt added as snowice
          dhhead      , & ! hydraulic head (m)
-         w_up_max    , & 
          qocn        , & ! ocean brine enthalpy (J m-3)
          qpond       , & ! melt pond brine enthalpy (J m-3)
          Spond           ! melt pond salinity (ppt)
@@ -460,9 +446,9 @@ contains
          lsnow           ! snow presence: T: has snow, F: no snow
 
     lstop = .false.
-    fadvheat = c0
-    fadvsalt = c0
-    snoice = c0
+    fadvheat   = c0
+    fadvsalt   = c0
+    snoice     = c0
     snowice_en = c0
     snowice_st = c0
 
@@ -494,7 +480,6 @@ contains
        phi(k) = liquid_fraction(temperature_mush(zqin(k),zSin(k)),zSin(k))
     enddo ! k
 
-#if flushing == 1
     ! calculate vertical bulk darcy flow
     call flushing_velocity(zTin,   zSin,  &
                            phi,           &
@@ -502,14 +487,7 @@ contains
                            hilyr,         &
                            hpond,  apond, & 
                            dt,     w,     &
-                           wdown,  wup,   &
-                           dhhead, w_up_max)
-
-#else
-    w = c0
-    wdown = c0
-    wup = c0
-#endif
+                           dhhead)
 
     ! calculate quantities related to drainage
     call explicit_flow_velocities(zSin,           &
@@ -519,10 +497,7 @@ contains
                                   qbr,    dt,     &
                                   sss,    qocn,   &
                                   hilyr,  hin)
-    !q = c0 ; dSdt = c0
     
-    !call diagnose_salt_flux(q, dSdt) ! for debugging
-
     ! calculate the conductivities
     call conductivity_mush_array(zqin0, zSin0, km)
 
@@ -609,34 +584,20 @@ contains
        return
     end if
 
-#if flushing == 1
-
-    call flushing_advection_flow_restriction(w_scaling,     &
-                                             wdown,  wup,   &
-                                             zSin0,  Sbr,   &
-                                             sss,    Spond, &
-                                             dt)
-
-    w = w * w_scaling
-
-    ! now perform final flushing related changes to the ice
     ! drain ponds from flushing 
     call flush_pond(w, hin, hpond, apond, dt)
        
     ! flood snow ice
-   ! call flood_ice(w,          dt,       &
-   !                dhhead,     w_up_max, &
-   !                hsn,        hin,      &
-   !                hslyr,      hilyr,    & 
-   !                zqsn,       zqin,     &
-   !                phi,                  &
-   !                zSin,       Sbr,      &
-   !                qbr,        snoice,   &
-   !                snowice_en, snowice_st)
+    call flood_ice(hsn,        hin,      &
+                   hslyr,      hilyr,    & 
+                   zqsn,       zqin,     &
+                   phi,        dt,       &
+                   zSin,       Sbr,      &
+                   sss,        qocn,     &
+                   snoice,               &
+                   snowice_en, snowice_st)
 
     fadvheat = fadvheat - snowice_en
-
-#endif
 
   end subroutine temperature_changes_column
 
@@ -772,7 +733,7 @@ contains
        if (lstop) return
 
        ! check if solution is consistent - surface should still be cold
-       if (Tsf < dTsf_errcon) then
+       if (Tsf < dTemp_errmax) then
 
           ! solution is consistent - have solution so finish
           return
@@ -818,7 +779,7 @@ contains
           ! check if solution is consistent 
           ! surface conductive heat flux should be less than 
           ! incoming surface heat flux
-          if (fcondtop - fsurfn < ferrcon) then
+          if (fcondtop - fsurfn < ferrmax) then
 
              ! solution is consistent - have solution so finish
              return
@@ -867,7 +828,7 @@ contains
        ! check if solution is consistent 
        ! surface conductive heat flux should be less than 
        ! incoming surface heat flux
-       if (fcondtop - fsurfn < ferrcon) then
+       if (fcondtop - fsurfn < ferrmax) then
 
           ! solution is consistent - have solution so finish
           return
@@ -910,7 +871,7 @@ contains
           if (lstop) return
 
           ! check if solution is consistent - surface should be cold
-          if (Tsf < dTsf_errcon) then
+          if (Tsf < dTemp_errmax) then
 
              ! solution is consistent - have solution so finish
              return
@@ -1070,7 +1031,7 @@ contains
        Tmlt = liquidus_temperature_mush(zSin(1))
 
        ! check if solution is consistent - surface should still be cold
-       if (Tsf < Tmlt + dTsf_errcon) then
+       if (Tsf < Tmlt + dTemp_errmax) then
 
           ! solution is consistent - have solution so finish
           return
@@ -1114,7 +1075,7 @@ contains
           ! check if solution is consistent 
           ! surface conductive heat flux should be less than 
           ! incoming surface heat flux
-          if (fcondtop - fsurfn < ferrcon) then
+          if (fcondtop - fsurfn < ferrmax) then
 
              ! solution is consistent - have solution so finish
              return
@@ -1164,7 +1125,7 @@ contains
        ! check if solution is consistent 
        ! surface conductive heat flux should be less than 
        ! incoming surface heat flux
-       if (fcondtop - fsurfn < ferrcon) then
+       if (fcondtop - fsurfn < ferrmax) then
 
           ! solution is consistent - have solution so finish
           return
@@ -1209,7 +1170,7 @@ contains
           Tmlt = liquidus_temperature_mush(zSin(1))
 
           ! check if solution is consistent - surface should be cold
-          if (Tsf < Tmlt + dTsf_errcon) then
+          if (Tsf < Tmlt + dTemp_errmax) then
 
              ! solution is consistent - have solution so finish
              return
@@ -1328,6 +1289,7 @@ contains
                            w,        lstop)
 
     use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
+    use ice_communicate, only: my_task
 
     logical, intent(in) :: &
          lsnow         , & ! snow presence: T: has snow, F: no snow
@@ -1566,6 +1528,7 @@ contains
 
     use ice_calendar, only: istep1
     use ice_fileunits, only: nu_diag
+    use ice_communicate, only: my_task
 
     real(kind=dbl_kind), intent(in) :: &
          Tsf0  , & ! snow surface temperature (C) at beginning of timestep
@@ -1588,8 +1551,9 @@ contains
     integer :: &
          k        ! vertical layer index
 
-    write(nu_diag,*) istep1, "picard convergence failed!"
+    write(nu_diag,*) "-------------------------------------"
 
+    write(nu_diag,*) "picard convergence failed!"
     write(nu_diag,*) 0, Tsf0, Tsf
     
     do k = 1, nslyr
@@ -1599,6 +1563,8 @@ contains
     do k = 1, nilyr
        write(nu_diag,*) k, zTin0(k), zTin(k), zSin0(k), zSin(k), phi(k), zqin0(k)
     enddo ! k
+
+    write(nu_diag,*) "-------------------------------------"
 
   end subroutine picard_nonconvergence
 
@@ -1665,10 +1631,6 @@ contains
          dzTsn    , & ! change in snow temperature (C) between iterations
          dzTin    , & ! change in ice temperature (C) between iterations
          dTsf         ! change in surface temperature (C) between iterations
-         
-    real(kind=dbl_kind), parameter :: &
-         dTmp_errmax = 5.0e-4_dbl_kind ! max allowed change in temperature 
-                                       ! between iterations
 
     call picard_final(lsnow,      &
                       zqin, zqsn, &
@@ -1696,10 +1658,10 @@ contains
 
     ferr = (efinal - einit) / dt - (fcondtop - fcondbot + fswint - fadvheat)
 
-    lconverged = (dTsf  < dTmp_errmax .and. &
-                  dzTsn < dTmp_errmax .and. &
-                  dzTin < dTmp_errmax .and. &
-                  abs(ferr) < 0.9_dbl_kind*ferrcon)
+    lconverged = (dTsf  < dTemp_errmax .and. &
+                  dzTsn < dTemp_errmax .and. &
+                  dzTin < dTemp_errmax .and. &
+                  abs(ferr) < 0.9_dbl_kind*ferrmax)
 
   end subroutine check_picard_convergence
 
@@ -1756,16 +1718,8 @@ contains
          w     , & ! vertical flushing Darcy velocity (m/s)
          qocn  , & ! ocean brine enthalpy (J m-3)
          qpond     ! melt pond brine enthalpy (J m-3)
-    
-    real(kind=dbl_kind) :: &
-         wdown , & ! downwards vertical flushing Darcy velocity (m/s)
-         wup       ! upwards vertical flushing Darcy velocity (m/s)
 
-    wdown = -min(w,c0)
-    wup   =  max(w,c0)
-
-    fadvheat = fadvheat - wup   * (qocn       - qbr(1)) &
-                        + wdown * (qbr(nilyr) - qpond)
+    fadvheat = fadvheat + w * (qbr(nilyr) - qpond)
 
   end subroutine picard_flushing_fluxes
 
@@ -2142,15 +2096,8 @@ contains
          b            , & ! right hand side of matrix solve
          T                ! ice and snow temperatures
 
-    real(kind=dbl_kind) :: &
-         wup          , & ! upwards vertical flushing Darcy velocity (m/s)
-         wdown            ! downwards vertical flushing Darcy velocity (m/s)
-
     integer :: &
          nyn              ! matrix size
-
-    wdown = -min(w,c0)
-    wup   =  max(w,c0)
 
     ! set up matrix and right hand side - snow
     if (lsnow) then
@@ -2162,7 +2109,7 @@ contains
                                          zqin0,  zqsn0,        &
                                          qpond,  qocn,         &
                                          phi,    q,            &
-                                         wup,    wdown,        &
+                                         w,                    &
                                          hilyr,  hslyr,        &
                                          dxp,    kcstar,       &
                                          Iswabs, Sswabs,       &
@@ -2176,7 +2123,7 @@ contains
                                          zqin0,  zqsn0,        &
                                          qpond,  qocn,         &
                                          phi,    q,            &
-                                         wup,    wdown,        &
+                                         w,                    &
                                          hilyr,  hslyr,        &
                                          dxp,    kcstar,       &
                                          Iswabs, Sswabs,       &
@@ -2194,7 +2141,7 @@ contains
                                            zqin0,                &
                                            qpond,  qocn,         &
                                            phi,    q,            &
-                                           wup,    wdown,        &
+                                           w,                    &
                                            hilyr,                &
                                            dxp,    kcstar,       &
                                            Iswabs,               &
@@ -2208,7 +2155,7 @@ contains
                                            zqin0,                &
                                            qpond,  qocn,         &
                                            phi,    q,            &
-                                           wup,    wdown,        &
+                                           w,                    &
                                            hilyr,                &
                                            dxp,    kcstar,       &
                                            Iswabs,               &
@@ -2315,7 +2262,7 @@ contains
                                          zqin0,                &
                                          qpond,  qocn,         &
                                          phi,    q,            &
-                                         wup,    wdown,        &
+                                         w,                    &
                                          hilyr,                &
                                          dxp,    kcstar,       &
                                          Iswabs,               &
@@ -2343,8 +2290,7 @@ contains
          Tbot         , & ! ice bottom surfce temperature (deg C)
          qpond        , & ! melt pond brine enthalpy (J m-3)
          qocn         , & ! ocean brine enthalpy (J m-3)
-         wup          , & ! upwards vertical flushing Darcy velocity (m/s)
-         wdown        , & ! downwards vertical flushing Darcy velocity (m/s)
+         w            , & ! downwards vertical flushing Darcy velocity (m/s)
          fsurfn       , & ! net flux to top surface, excluding fcondtop
          dfsurfn_dTsf     ! derivative of net flux to top surface, excluding fcondtopn
 
@@ -2366,16 +2312,14 @@ contains
     Ap(l) = ((phi(k) * (cp_ocn * rhow - cp_ice * rhoi) + rhoi * cp_ice) / dt) * hilyr + &
              kcstar(k+1) / dxp(k+1) + &
              kcstar(k)   / dxp(k) + &
-             q(k)  * cp_ocn * rhow + &
-             wdown * cp_ocn * rhow + &
-             wup   * cp_ocn * rhow
+             q(k) * cp_ocn * rhow + &
+             w    * cp_ocn * rhow
     As(l) = -kcstar(k+1) / dxp(k+1) - &
-             q(k)  * cp_ocn * rhow - &
-             wup   * cp_ocn * rhow
+             q(k) * cp_ocn * rhow
     An(l) = c0
     b (l) = (((c1 - phi(k)) * rhoi * Lfresh + zqin0(k)) / dt) * hilyr + Iswabs(k) + &
             (kcstar(k) / dxp(k)) * Tsf + &
-             wdown * qpond
+             w    * qpond
 
     ! interior ice layers
     do k = 2, nilyr-1
@@ -2385,14 +2329,12 @@ contains
        Ap(l) = ((phi(k) * (cp_ocn * rhow - cp_ice * rhoi) + rhoi * cp_ice) / dt) * hilyr + &
                 kcstar(k+1) / dxp(k+1) + &
                 kcstar(k)   / dxp(k) + &
-                q(k)  * cp_ocn * rhow + &
-                wdown * cp_ocn * rhow + &
-                wup   * cp_ocn * rhow
+                q(k) * cp_ocn * rhow + &
+                w    * cp_ocn * rhow
        As(l) = -kcstar(k+1) / dxp(k+1) - &
-                q(k)  * cp_ocn * rhow - &
-                wup   * cp_ocn * rhow
+                q(k) * cp_ocn * rhow
        An(l) = -kcstar(k)   / dxp(k) - &
-                wdown * cp_ocn * rhow
+                w    * cp_ocn * rhow
        b (l) = (((c1 - phi(k)) * rhoi * Lfresh + zqin0(k)) / dt) * hilyr + Iswabs(k)
 
     enddo ! k
@@ -2404,16 +2346,14 @@ contains
     Ap(l) = ((phi(k) * (cp_ocn * rhow - cp_ice * rhoi) + rhoi * cp_ice) / dt) * hilyr + &
              kcstar(k+1) / dxp(k+1) + &
              kcstar(k)   / dxp(k) + &
-             q(k)  * cp_ocn * rhow + &
-             wdown * cp_ocn * rhow + &
-             wup   * cp_ocn * rhow
+             q(k) * cp_ocn * rhow + &
+             w    * cp_ocn * rhow
     As(l) = c0
     An(l) = -kcstar(k) / dxp(k) - &
-            wdown * cp_ocn * rhow
+            w     * cp_ocn * rhow
     b (l) = (((c1 - phi(k)) * rhoi * Lfresh + zqin0(k)) / dt) * hilyr + Iswabs(k) + &
             (kcstar(k+1) * Tbot) / dxp(k+1) + &
-            q(k) * qocn + &
-            wup  * qocn
+            q(k)  * qocn
     
     nyn = nilyr
 
@@ -2426,7 +2366,7 @@ contains
                                          zqin0,                &
                                          qpond,  qocn,         &
                                          phi,    q,            &
-                                         wup,    wdown,        &
+                                         w,                    &
                                          hilyr,                &
                                          dxp,    kcstar,       &
                                          Iswabs,               &
@@ -2454,8 +2394,7 @@ contains
          Tbot         , & ! ice bottom surfce temperature (deg C)
          qpond        , & ! melt pond brine enthalpy (J m-3)
          qocn         , & ! ocean brine enthalpy (J m-3)
-         wup          , & ! upwards vertical flushing Darcy velocity (m/s)
-         wdown        , & ! downwards vertical flushing Darcy velocity (m/s)
+         w            , & ! downwards vertical flushing Darcy velocity (m/s)
          fsurfn       , & ! net flux to top surface, excluding fcondtop
          dfsurfn_dTsf     ! derivative of net flux to top surface, excluding fcondtopn
 
@@ -2484,15 +2423,13 @@ contains
     Ap(l) = ((phi(k) * (cp_ocn * rhow - cp_ice * rhoi) + rhoi * cp_ice) / dt) * hilyr + &
              kcstar(k+1) / dxp(k+1) + &
              kcstar(k)   / dxp(k) + &
-             q(k)  * cp_ocn * rhow + &
-             wdown * cp_ocn * rhow + &
-             wup   * cp_ocn * rhow
+             q(k) * cp_ocn * rhow + &
+             w    * cp_ocn * rhow
     As(l) = -kcstar(k+1) / dxp(k+1) - &
-             q(k)  * cp_ocn * rhow - &
-             wup   * cp_ocn * rhow
+             q(k) * cp_ocn * rhow
     An(l) = -kcstar(k)   / dxp(k)
     b (l) = (((c1 - phi(k)) * rhoi * Lfresh + zqin0(k)) / dt) * hilyr + Iswabs(k) + &
-             wdown * qpond
+             w    * qpond
 
     ! interior ice layers
     do k = 2, nilyr-1
@@ -2502,14 +2439,12 @@ contains
        Ap(l) = ((phi(k) * (cp_ocn * rhow - cp_ice * rhoi) + rhoi * cp_ice) / dt) * hilyr + &
                 kcstar(k+1) / dxp(k+1) + &
                 kcstar(k)   / dxp(k) + &
-                q(k)  * cp_ocn * rhow + &
-                wdown * cp_ocn * rhow + &
-                wup   * cp_ocn * rhow
+                q(k) * cp_ocn * rhow + &
+                w    * cp_ocn * rhow
        As(l) = -kcstar(k+1) / dxp(k+1) - &
-                q(k)  * cp_ocn * rhow - &
-                wup   * cp_ocn * rhow
+                q(k) * cp_ocn * rhow
        An(l) = -kcstar(k)   / dxp(k) - &
-                wdown * cp_ocn * rhow
+                w    * cp_ocn * rhow
        b (l) = (((c1 - phi(k)) * rhoi * Lfresh + zqin0(k)) / dt) * hilyr + Iswabs(k)
 
     enddo ! k
@@ -2521,16 +2456,14 @@ contains
     Ap(l) = ((phi(k) * (cp_ocn * rhow - cp_ice * rhoi) + rhoi * cp_ice) / dt) * hilyr + &
              kcstar(k+1) / dxp(k+1) + &
              kcstar(k)   / dxp(k) + &
-             q(k)  * cp_ocn * rhow + &
-             wdown * cp_ocn * rhow + &
-             wup   * cp_ocn * rhow
+             q(k) * cp_ocn * rhow + &
+             w    * cp_ocn * rhow
     As(l) = c0
     An(l) = -kcstar(k) / dxp(k) - &
-            wdown * cp_ocn * rhow
+            w     * cp_ocn * rhow
     b (l) = (((c1 - phi(k)) * rhoi * Lfresh + zqin0(k)) / dt) * hilyr + Iswabs(k) + &
             (kcstar(k+1) * Tbot) / dxp(k+1) + &
-            q(k) * qocn + &
-            wup  * qocn
+            q(k)  * qocn
     
     nyn = nilyr + 1
 
@@ -2543,7 +2476,7 @@ contains
                                        zqin0,  zqsn0,        &
                                        qpond,  qocn,         &
                                        phi,    q,            &
-                                       wup,    wdown,        &
+                                       w,                    &
                                        hilyr,  hslyr,        &
                                        dxp,    kcstar,       &
                                        Iswabs, Sswabs,       &
@@ -2576,8 +2509,7 @@ contains
          Tbot         , & ! ice bottom surfce temperature (deg C)
          qpond        , & ! melt pond brine enthalpy (J m-3)
          qocn         , & ! ocean brine enthalpy (J m-3)
-         wup          , & ! upwards vertical flushing Darcy velocity (m/s)
-         wdown        , & ! downwards vertical flushing Darcy velocity (m/s)
+         w            , & ! downwards vertical flushing Darcy velocity (m/s)
          fsurfn       , & ! net flux to top surface, excluding fcondtop
          dfsurfn_dTsf     ! derivative of net flux to top surface, excluding fcondtopn
 
@@ -2625,15 +2557,13 @@ contains
     Ap(l) = ((phi(k) * (cp_ocn * rhow - cp_ice * rhoi) + rhoi * cp_ice) / dt) * hilyr + &
              kcstar(l+1) / dxp(l+1) + &
              kcstar(l)   / dxp(l) + &
-             q(k)  * cp_ocn * rhow + &
-             wdown * cp_ocn * rhow + &
-             wup   * cp_ocn * rhow
+             q(k) * cp_ocn * rhow + &
+             w    * cp_ocn * rhow
     As(l) = -kcstar(l+1) / dxp(l+1) - &
-             q(k)  * cp_ocn * rhow - &
-             wup   * cp_ocn * rhow
+             q(k) * cp_ocn * rhow
     An(l) = -kcstar(l)   / dxp(l)
     b (l) = (((c1 - phi(k)) * rhoi * Lfresh + zqin0(k)) / dt) * hilyr + Iswabs(k) + &
-             wdown * qpond
+             w    * qpond
 
     ! interior ice layers
     do k = 2, nilyr-1
@@ -2643,14 +2573,12 @@ contains
        Ap(l) = ((phi(k) * (cp_ocn * rhow - cp_ice * rhoi) + rhoi * cp_ice) / dt) * hilyr + &
                 kcstar(l+1) / dxp(l+1) + &
                 kcstar(l)   / dxp(l) + &
-                q(k)  * cp_ocn * rhow + &
-                wdown * cp_ocn * rhow + &
-                wup   * cp_ocn * rhow
+                q(k) * cp_ocn * rhow + &
+                w    * cp_ocn * rhow
        As(l) = -kcstar(l+1) / dxp(l+1) - &
-                q(k)  * cp_ocn * rhow - &
-                wup   * cp_ocn * rhow
+                q(k) * cp_ocn * rhow
        An(l) = -kcstar(l)   / dxp(l) - &
-                wdown * cp_ocn * rhow
+                w    * cp_ocn * rhow
        b (l) = (((c1 - phi(k)) * rhoi * Lfresh + zqin0(k)) / dt) * hilyr + Iswabs(k)
           
     enddo ! k
@@ -2662,16 +2590,14 @@ contains
     Ap(l) = ((phi(k) * (cp_ocn * rhow - cp_ice * rhoi) + rhoi * cp_ice) / dt) * hilyr + &
              kcstar(l+1) / dxp(l+1) + &
              kcstar(l)   / dxp(l) + &
-             q(k)  * cp_ocn * rhow + &
-             wdown * cp_ocn * rhow + &
-             wup   * cp_ocn * rhow
+             q(k) * cp_ocn * rhow + &
+             w    * cp_ocn * rhow
     As(l) = c0
     An(l) = -kcstar(l)   / dxp(l) - &
-             wdown * cp_ocn * rhow
+             w    * cp_ocn * rhow
     b (l) = (((c1 - phi(k)) * rhoi * Lfresh + zqin0(k)) / dt) * hilyr + Iswabs(k) + &
             (kcstar(l+1) * Tbot) / dxp(l+1) + &
-             q(k) * qocn + &
-             wup  * qocn
+             q(k) * qocn
        
     nyn = nilyr + nslyr
 
@@ -2684,7 +2610,7 @@ contains
                                        zqin0,  zqsn0,        &
                                        qpond,  qocn,         &
                                        phi,    q,            &
-                                       wup,    wdown,        &
+                                       w,                    &
                                        hilyr,  hslyr,        &
                                        dxp,    kcstar,       &
                                        Iswabs, Sswabs,       &
@@ -2717,8 +2643,7 @@ contains
          Tbot         , & ! ice bottom surfce temperature (deg C)
          qpond        , & ! melt pond brine enthalpy (J m-3)
          qocn         , & ! ocean brine enthalpy (J m-3)
-         wup          , & ! upwards vertical flushing Darcy velocity (m/s)
-         wdown        , & ! downwards vertical flushing Darcy velocity (m/s)
+         w            , & ! downwards vertical flushing Darcy velocity (m/s)
          fsurfn       , & ! net flux to top surface, excluding fcondtop
          dfsurfn_dTsf     ! derivative of net flux to top surface, excluding fcondtopn
 
@@ -2776,15 +2701,13 @@ contains
     Ap(l) = ((phi(k) * (cp_ocn * rhow - cp_ice * rhoi) + rhoi * cp_ice) / dt) * hilyr + &
              kcstar(m+1) / dxp(m+1) + &
              kcstar(m)   / dxp(m) + &
-             q(k)  * cp_ocn * rhow + &
-             wdown * cp_ocn * rhow + &
-             wup   * cp_ocn * rhow
+             q(k) * cp_ocn * rhow + &
+             w    * cp_ocn * rhow
     As(l) = -kcstar(m+1) / dxp(m+1) - &
-             q(k)  * cp_ocn * rhow - &
-             wup   * cp_ocn * rhow
+             q(k) * cp_ocn * rhow
     An(l) = -kcstar(m)   / dxp(m)
     b (l) = (((c1 - phi(k)) * rhoi * Lfresh + zqin0(k)) / dt) * hilyr + Iswabs(k) + &
-              wdown * qpond
+              w   * qpond
 
     ! interior ice layers
     do k = 2, nilyr-1
@@ -2795,14 +2718,12 @@ contains
        Ap(l) = ((phi(k) * (cp_ocn * rhow - cp_ice * rhoi) + rhoi * cp_ice) / dt) * hilyr + &
                 kcstar(m+1) / dxp(m+1) + &
                 kcstar(m)   / dxp(m) + &
-                q(k)  * cp_ocn * rhow + &
-                wdown * cp_ocn * rhow + &
-                wup   * cp_ocn * rhow
+                q(k) * cp_ocn * rhow + &
+                w    * cp_ocn * rhow
        As(l) = -kcstar(m+1) / dxp(m+1) - &
-                q(k)  * cp_ocn * rhow - &
-                wup   * cp_ocn * rhow
+                q(k) * cp_ocn * rhow
        An(l) = -kcstar(m)   / dxp(m) - &
-                wdown * cp_ocn * rhow
+                w    * cp_ocn * rhow
        b (l) = (((c1 - phi(k)) * rhoi * Lfresh + zqin0(k)) / dt) * hilyr + Iswabs(k)
 
     enddo ! k
@@ -2815,16 +2736,14 @@ contains
     Ap(l) = ((phi(k) * (cp_ocn * rhow - cp_ice * rhoi) + rhoi * cp_ice) / dt) * hilyr + &
              kcstar(m+1) / dxp(m+1) + &
              kcstar(m)   / dxp(m) + &
-             q(k)  * cp_ocn * rhow + &
-             wdown * cp_ocn * rhow + &
-             wup   * cp_ocn * rhow
+             q(k) * cp_ocn * rhow + &
+             w    * cp_ocn * rhow
     As(l) = c0
     An(l) = -kcstar(m)   / dxp(m) - &
-             wdown * cp_ocn * rhow
+             w    * cp_ocn * rhow
     b (l) = (((c1 - phi(k)) * rhoi * Lfresh + zqin0(k)) / dt) * hilyr + Iswabs(k) + &
             (kcstar(m+1) * Tbot) / dxp(m+1) + &
-             q(k) * qocn + &
-             wup  * qocn
+             q(k) * qocn
 
     nyn = nilyr + nslyr + 1
 
@@ -2855,41 +2774,29 @@ contains
          hilyr , & ! ice layer thickness (m)
          dt        ! timestep (s)
 
-    real(kind=dbl_kind) :: &
-         wdown , & ! downwards vertical flushing Darcy velocity (m/s)
-         wup       ! upwards vertical flushing Darcy velocity (m/s)
-
     integer :: &
          k         ! vertical layer index
 
     real(kind=dbl_kind), parameter :: &
          S_min = 0.01_dbl_kind
     
-
-
     real(kind=dbl_kind), dimension(nilyr) :: &
          zSin0
 
     zSin0 = zSin
 
-
-    wdown = -min(w,c0)
-    wup   =  max(w,c0)
-
     k = 1
     zSin(k) = zSin(k) + max(S_min - zSin(k), &
          ((q(k)  * (Sbr(k+1) - Sbr(k))) / hilyr + &
           dSdt(k)                               + &
-          (wdown * (Spond    - Sbr(k))) / hilyr + &
-          (wup   * (Sbr(k+1) - Sbr(k))) / hilyr) * dt)
+          (w * (Spond    - Sbr(k))) / hilyr) * dt)
 
     do k = 2, nilyr-1
 
        zSin(k) = zSin(k) + max(S_min - zSin(k), &
             ((q(k)  * (Sbr(k+1) - Sbr(k))) / hilyr + &
              dSdt(k)                               + &
-             (wdown * (Sbr(k-1) - Sbr(k))) / hilyr + &
-             (wup   * (Sbr(k+1) - Sbr(k))) / hilyr) * dt)
+             (w * (Sbr(k-1) - Sbr(k))) / hilyr) * dt)
 
     enddo ! k
 
@@ -2897,8 +2804,7 @@ contains
     zSin(k) = zSin(k) + max(S_min - zSin(k), &
          ((q(k)  * (sss      - Sbr(k))) / hilyr + &
           dSdt(k)                               + &
-          (wdown * (Sbr(k-1) - Sbr(k))) / hilyr + &
-          (wup   * (sss      - Sbr(k))) / hilyr) * dt)
+          (w * (Sbr(k-1) - Sbr(k))) / hilyr) * dt)
 
 
     if (minval(zSin) < c0) then
@@ -2906,8 +2812,7 @@ contains
 
          write(*,*) (q(k)  * (Sbr(k+1) - Sbr(k))) / hilyr, &
           dSdt(k)                               , &
-          (wdown * (Spond    - Sbr(k))) / hilyr , &
-          (wup   * (Sbr(k+1) - Sbr(k))) / hilyr
+          (w * (Spond    - Sbr(k))) / hilyr
 
        do k = 1, nilyr
        
@@ -2920,62 +2825,6 @@ contains
     endif
 
   end subroutine solve_salinity
-
-!=======================================================================
-
-  subroutine solve_salinity_diffusion(zSin,  Sbr, &
-                                      Spond, sss, &
-                                      kappa, w,   &
-                                      hilyr, dt)
-
-    real(kind=dbl_kind), dimension(nilyr), intent(inout) :: &
-         zSin      ! ice layer bulk salinity (ppt)
-
-    real(kind=dbl_kind), dimension(nilyr), intent(in) :: &
-         Sbr       ! ice layer brine salinity (ppt)
-
-    real(kind=dbl_kind), dimension(nilyr+1), intent(in) :: &
-         kappa     ! salt diffusivity
-
-    real(kind=dbl_kind), intent(in) :: &
-         Spond , & ! melt pond salinity (ppt)
-         sss   , & ! sea surface salinity (ppt)
-         w     , & ! vertical flushing Darcy velocity (m/s)
-         hilyr , & ! ice layer thickness (m)
-         dt        ! timestep (s)
-
-    real(kind=dbl_kind) :: &
-         wdown , & ! downwards vertical flushing Darcy velocity (m/s)
-         wup       ! upwards vertical flushing Darcy velocity (m/s)
-
-    integer :: &
-         k         ! vertical layer index
-
-    wdown = -min(w,c0)
-    wup   =  max(w,c0)
-
-    k = 1
-    zSin(k) = zSin(k) + ( &
-         (kappa(k+1) * (Sbr(k+1) - Sbr(k)) - kappa(k) * (Sbr(k) - Spond)) / hilyr**2 + &
-         (wdown * (Spond    - Sbr(k))) / hilyr + &
-         (wup   * (Sbr(k+1) - Sbr(k))) / hilyr) * dt
-
-    do k = 2, nilyr-1
-       
-       zSin(k) = zSin(k) + ( &
-            (kappa(k+1) * (Sbr(k+1) - Sbr(k)) - kappa(k) * (Sbr(k) - Sbr(k-1))) / hilyr**2 + &
-            (wdown * (Sbr(k-1) - Sbr(k))) / hilyr + &
-            (wup   * (Sbr(k+1) - Sbr(k))) / hilyr) * dt
-       
-    enddo ! k
-    
-    k = nilyr
-    zSin(k) = zSin(k) + ( &
-         (kappa(k+1) * (sss - Sbr(k)) - kappa(k) * (Sbr(k) - Sbr(k-1))) / hilyr**2 + &
-         (wdown * (Sbr(k-1) - Sbr(k))) / hilyr + &
-         (wup   * (sss      - Sbr(k))) / hilyr) * dt
-    
-  end subroutine solve_salinity_diffusion
 
 !=======================================================================
 
@@ -3025,35 +2874,6 @@ contains
 ! Effect of salinity
 !=======================================================================
 
-  subroutine diagnose_salt_flux(q, dSdt)
-
-    ! write out diagnostics related to gravity drainage
-
-    use ice_calendar, only: istep1
-
-    real(kind=dbl_kind), dimension(0:nilyr), intent(in) :: &
-         q    ! upward interface vertical Darcy flow (m s-1)
-
-    real(kind=dbl_kind), dimension(1:nilyr), intent(in) :: &
-         dSdt ! gravity drainage desalination rate for slow mode (ppt s-1)
-
-    integer(kind=int_kind) :: &
-         k    ! ice layer index
-
-    open(11,file='history/salt_flux.txt',position='append')
-
-    write(11,*) istep1, 0, q(0)
-    do k = 1, nilyr
-       write(11,*) istep1, k, q(k), dSdt(k)
-    enddo ! k
-    write(11,*) istep1, k, c0, c0, c0
-
-    close(11)
-
-  end subroutine diagnose_salt_flux
-
-!=======================================================================
-
   function permeability(phi) result(perm)
 
     ! given the liquid fraction calculate the permeability
@@ -3068,11 +2888,7 @@ contains
     real(kind=dbl_kind), parameter :: &
          phic = 0.05_dbl_kind ! critical liquid fraction for impermeability
 
-    !perm = 3.0e-8_dbl_kind * phi**3
-
     perm = 3.0e-8_dbl_kind * max(phi - phic, c0)**3
-
-    !perm = 3.0e-8_dbl_kind * max(phi - phic, c0)**2
 
   end function permeability
 
@@ -3253,8 +3069,7 @@ contains
                                hilyr,         &
                                hpond,  apond, &
                                dt,     w,     &
-                               wdown,  wup,   &
-                               dhhead, w_up_max)
+                               dhhead)
    
     ! calculate the vertical flushing Darcy velocity
     ! negative - downward flushing
@@ -3275,10 +3090,7 @@ contains
 
     real(kind=dbl_kind), intent(out) :: &
          w         , & ! vertical flushing Darcy flow rate (m s-1)
-         wdown     , & ! downwards vertical flushing Darcy velocity (m/s)
-         wup       , & ! upwards vertical flushing Darcy velocity (m/s)
-         dhhead    , & ! hydraulic head (m)
-         w_up_max      ! maximum upward flushing Darcy flow rate (m s-1) 
+         dhhead        ! hydraulic head (m)
 
     real(kind=dbl_kind), parameter :: &
          viscosity_dyn = 1.79e-3_dbl_kind, & ! dynamic viscosity
@@ -3286,7 +3098,7 @@ contains
 
     real(kind=dbl_kind) :: &
          perm       , & ! ice layer permeability (m2)
-         Mice       , & ! mass of ice (kg m-2)
+         ice_mass   , & ! mass of ice (kg m-2)
          perm_harm  , & ! harmonic mean of ice permeability (m2)
          hocn       , & ! ocean surface height above ice base (m)
          hbrine     , & ! brine surface height above ice base (m)
@@ -3295,12 +3107,14 @@ contains
          wlimit         ! limit to w to avoid advecting all brine in layer
 
     integer(kind=int_kind) :: &
-         k             ! ice layer index
+         k              ! ice layer index
 
     ! initialize
-    Mice = c0
+    w = c0
+
+    ice_mass  = c0
     perm_harm = c0
-    phi_min = c1
+    phi_min   = c1
 
     do k = 1, nilyr
 
@@ -3310,51 +3124,37 @@ contains
 
        ! permeability
        perm = permeability(phi(k))
-       !perm = 3.0e-8 * phi(k)**3
-       !xperm = 3.0e-8 * (0.05_dbl_kind)**3! * 100.0_dbl_kind
 
        ! ice mass
-       Mice = Mice + hilyr * (phi(k) * rhow + (c1 - phi(k)) * rhoi)
+       ice_mass = ice_mass + phi(k)        * density_brine(liquidus_brine_salinity_mush(zTin(k))) + &
+                             (c1 - phi(k)) * rhoi
 
        ! permeability harmonic mean
        perm_harm = perm_harm + c1 / (perm + 1e-30_dbl_kind)
 
     enddo ! k
 
+    ice_mass = ice_mass * hilyr
+
     perm_harm = real(nilyr,dbl_kind) / perm_harm 
 
     ! calculate ocean surface height above bottom of ice
-    hocn = (Mice + hpond * apond * rhow + hsn * rhos) / rhow
+    hocn = (ice_mass + hpond * apond * rhow + hsn * rhos) / rhow
 
     ! calculate brine height above bottom of ice
     hbrine = hin + hpond
 
-    ! hydraulic head
-    !dhhead = hbrine - hocn
-    !if (hbrine == hin) then
-    !   dhhead = min(dhhead,c0)
-    !endif
-
-    if (hocn > hbrine) then
-       ! snowice formation
-       dhhead = hbrine - hocn
-    else
-       ! pond formation
-       dhhead = hpond
-    endif
+    ! pressure head
+    dhhead = max(hbrine - hocn,c0)
 
     ! darcy flow through ice
     w = -(perm_harm * rhow * gravit * (dhhead / hin)) / viscosity_dyn
 
     ! maximum down flow to drain pond
     w_down_max = -(hpond * apond) / dt
-    
-    ! maximum up flow to flood to sea level
-    w_up_max = max(((Mice + hsn * rhos - hin * rhow) * (rhoi - rhos)) / (dt * rhos * rhow), c0)
 
     ! limit flow
-    w = min(max(w,w_down_max),w_up_max)
-    !w = c0!
+    w = max(w,w_down_max)
 
     ! limit amount of brine that can be advected out of any particular layer
     wlimit = (advection_limit * phi_min * hilyr) / dt
@@ -3365,78 +3165,9 @@ contains
        w = c0
     endif
 
-#if flushing_up == 0
-    ! no flooding
-    w = min(w,c0)
-#endif
-
-#if flushing_down == 0
-    ! no flushing
-    w = max(w,c0)
-#endif
-
-    wdown = -min(w,c0) / hilyr
-    wup   =  max(w,c0) / hilyr
+    w = -min(w,c0)
 
   end subroutine flushing_velocity
-
-!=======================================================================
-
-  subroutine flushing_advection_flow_restriction(w_scaling,     &
-                                                 wdown,  wup,   &
-                                                 zSin0,  Sbr,   &
-                                                 sss,    Spond, &
-                                                 dt)
-
-    real(kind=dbl_kind), intent(out) :: &
-         w_scaling
-
-    real(kind=dbl_kind), dimension(nilyr), intent(in) :: &
-         zSin0, &
-         Sbr
-
-    real(kind=dbl_kind), intent(in) :: &
-         wdown, & ! downwards vertical flushing Darcy velocity (m/s)
-         wup, &! upwards vertical flushing Darcy velocity (m/s)
-         sss, &
-         Spond, & ! melt pond salinity (ppt)
-         dt
-
-    real(kind=dbl_kind) :: &
-         deltaS
-
-    integer :: &
-         k
-
-    real(kind=dbl_kind), parameter :: &
-         safety_factor = 0.1_dbl_kind
-
-    ! calculate salinity change and scaling factor
-    w_scaling = c1
-
-    k = 1
-    deltaS = wdown * (Spond    - Sbr(k)) + &
-             wup   * (Sbr(k+1) - Sbr(k)) 
-
-    w_scaling = min(w_scaling,c1/(max(deltaS*dt / (-safety_factor * zSin0(k)),c1)))
-
-    do k = 2, nilyr-1
-
-       deltaS = wdown * (Sbr(k-1) - Sbr(k)) + &
-                wup   * (Sbr(k+1) - Sbr(k))
-
-       w_scaling = min(w_scaling,c1/(max(deltaS*dt / (-safety_factor * zSin0(k)),c1)))
-
-    enddo ! k
-
-    k = nilyr
-    deltaS = wdown * (Sbr(k-1) - Sbr(k)) + &
-             wup   * (sss      - Sbr(k))
-
-    w_scaling = min(w_scaling,c1/(max(deltaS*dt / (-safety_factor * zSin0(k)),c1)))
-    !w_scaling = 1.0_dbl_kind
-
-  end subroutine flushing_advection_flow_restriction
 
 !=======================================================================
 
@@ -3459,6 +3190,7 @@ contains
 
     if (apond > c0 .and. hpond > c0) then
 
+       ! flush pond through mush
        hpond = hpond + (min(w,c0) * dt) / apond
        
        hpond = max(hpond, c0)
@@ -3474,121 +3206,134 @@ contains
 
  !=======================================================================
 
-  subroutine flood_ice(w,      dt,       &
-                       dhhead, w_up_max, &
-                       hsn,    hin,      &
+  subroutine flood_ice(hsn,    hin,      &
                        hslyr,  hilyr,    & 
                        zqsn,   zqin,     &
-                       phi,              &
+                       phi,    dt,       &
                        zSin,   Sbr,      &
-                       qbr,    snoice,   &
+                       sss,    qocn,     &
+                       snoice,           &
                        eadded, sadded)
 
     ! given upwards flushing brine flow calculate amount of snow ice and
     ! convert snow to ice with appropriate properties
 
     real(kind=dbl_kind), intent(in) :: &
-         w           , & ! vertical flushing Darcy flow rate (m s-1)
-         dt          , & ! time step (s)
-         hsn         , & ! snow thickness (m)
-         hin         , & ! ice thickness (m)
-         dhhead      , & ! hydraulic head (m)
-         w_up_max
+         dt                , & ! time step (s)
+         hsn               , & ! snow thickness (m)
+         hin               , & ! ice thickness (m)
+         sss               , & ! sea surface salinity (ppt)
+         qocn                  ! ocean brine enthalpy (J m-2)
 
     real(kind=dbl_kind), dimension(nslyr), intent(inout) :: &
-         zqsn            ! snow layer enthalpy (J m-2)
+         zqsn                  ! snow layer enthalpy (J m-2)
 
     real(kind=dbl_kind), dimension(nilyr), intent(inout) :: &
-         zqin        , & ! ice layer enthalpy (J m-2)
-         zSin        , & ! ice layer bulk salinity (ppt)
-         phi
+         zqin              , & ! ice layer enthalpy (J m-2)
+         zSin              , & ! ice layer bulk salinity (ppt)
+         phi                   ! ice liquid fraction
 
     real(kind=dbl_kind), dimension(nilyr), intent(in) :: &
-         Sbr         , & ! ice layer brine salinity (ppt)
-         qbr             ! ice layer brine enthalpy (J m-2)
+         Sbr                   ! ice layer brine salinity (ppt)
 
     real(kind=dbl_kind), intent(inout) :: &
-         hslyr       , & ! ice layer thickness (m)
-         hilyr           ! snow layer thickness (m)
+         hslyr             , & ! ice layer thickness (m)
+         hilyr                 ! snow layer thickness (m)
 
     real(kind=dbl_kind), intent(out) :: &
-         snoice      , & ! snow ice formation
-         eadded      , & ! energy added by forming sea ice 
-         sadded          ! salt added by forming sea ice
+         snoice            , & ! snow ice formation
+         eadded            , & ! energy added by forming sea ice 
+         sadded                ! salt added by forming sea ice
 
     real(kind=dbl_kind) :: &
-         hin2        , & ! new ice thickness (m)
-         hsn2        , & ! new snow thickness (m)
-         hilyr2      , & ! new ice layer thickness (m)
-         hslyr2      , & ! new snow layer thickness (m)
-         dh          , & ! thickness of snowice formation (m)
-         phi_snowice , & ! liquid fraction of new snow ice
-         zSin_snowice, & ! bulk salinity of new snowice (ppt)
-         zqin_snowice, & ! ice enthalpy of new snowice (J m-2)
-         zqsn_snowice, & ! snow enthalpy of snow thats becoming snowice (J m-2)
-         w_lateral   , &
-         w_combined
+         hin2              , & ! new ice thickness (m)
+         hsn2              , & ! new snow thickness (m)
+         hilyr2            , & ! new ice layer thickness (m)
+         hslyr2            , & ! new snow layer thickness (m)
+         dh                , & ! thickness of snowice formation (m)
+         phi_snowice       , & ! liquid fraction of new snow ice
+         rho_snowice       , & ! density of snowice (kg m-3)
+         zSin_snowice      , & ! bulk salinity of new snowice (ppt)
+         zqin_snowice      , & ! ice enthalpy of new snowice (J m-2)
+         zqsn_snowice      , & ! snow enthalpy of snow thats becoming snowice (J m-2)
+         freeboard_density , & ! negative of ice surface freeboard times the ocean density (kg m-2)
+         ice_mass          , & ! mass of the ice (kg m-2)
+         rho_ocn           , & ! density of the ocean (kg m-3)
+         ice_density           ! density of ice layer (kg m-3)
 
-    real(kind=dbl_kind), parameter :: &
-         dhhead_lateral = -0.1_dbl_kind
+    integer :: &
+         k                     ! vertical index
 
     eadded = c0
     sadded = c0
     snoice = c0
 
-    if (w > c0 .or. dhhead < dhhead_lateral) then 
+    ! check we have snow
+    if (hsn > puny) then
+       
+       rho_ocn = density_brine(sss)
 
-       ! lateral flow
-       w_lateral = w_up_max * (abs(min(max(dhhead - dhhead_lateral,-hsn),c0)) / hsn)
-       !w_lateral = c0
+       ! ice mass
+       ice_mass = c0
+       do k = 1, nilyr
+          ice_density = min(phi(k) * density_brine(Sbr(k)) + (c1 - phi(k)) * rhoi,rho_ocn)
+          ice_mass = ice_mass + ice_density
+       enddo ! k
+       ice_mass = ice_mass * hilyr
 
-       ! combined flow effective rate
-       w_combined = w + w_lateral
+       ! negative freeboard times ocean density
+       freeboard_density = max(ice_mass + hsn * rhos - hin * rho_ocn, c0)
 
-       ! limit combined flow rate 
-       w_combined = min(w_combined, w_up_max)
+       ! check if have flooded ice
+       if (freeboard_density > c0) then
 
-       ! sea ice fraction of newly formed snow ice
-       phi_snowice = (c1 - rhos / rhoi)
+          ! sea ice fraction of newly formed snow ice
+          phi_snowice = (c1 - rhos / rhoi)
 
-       ! calculate thickness of new ice added
-       dh = (w_combined * dt) / phi_snowice
-       
-       ! enthalpy of snow that becomes snowice
-       call enthalpy_snow_snowice(dh, hsn, zqsn, zqsn_snowice)
-       
-       ! change thicknesses
-       hin2 = hin + dh
-       hsn2 = hsn - dh
-       
-       hilyr2 = hin2 / real(nilyr,dbl_kind)
-       hslyr2 = hsn2 / real(nslyr,dbl_kind)
-       
-       ! properties of new snow ice
-       zSin_snowice = phi_snowice * Sbr(1)
-       zqin_snowice = phi_snowice * qbr(1) + zqsn_snowice
-       
-       ! change snow properties
-       call update_vertical_tracers_snow(zqsn, hslyr, hslyr2)
-       
-       ! change ice properties
-       call update_vertical_tracers_ice(zqin, hilyr, hilyr2, &
-                                        hin,  hin2,  zqin_snowice)
-       call update_vertical_tracers_ice(zSin, hilyr, hilyr2, &
-                                        hin,  hin2,  zSin_snowice)
-       call update_vertical_tracers_ice(phi,  hilyr, hilyr2, &
-                                        hin,  hin2,  phi_snowice)
+          ! desnity of newly formed snowice
+          rho_snowice = phi_snowice * rho_ocn + (c1 - phi_snowice) * rhoi
 
-       ! change thicknesses
-       hilyr = hilyr2
-       hslyr = hslyr2
-       snoice = dh
-       
-       eadded = w_combined * qbr(1)
-       sadded = w_combined * Sbr(1)
-       
+          ! calculate thickness of new ice added
+          dh = freeboard_density / (rho_ocn - rho_snowice + rhos)
+          dh = max(min(dh,hsn),c0)
+
+          ! enthalpy of snow that becomes snowice
+          call enthalpy_snow_snowice(dh, hsn, zqsn, zqsn_snowice)
+
+          ! change thicknesses
+          hin2 = hin + dh
+          hsn2 = hsn - dh
+
+          hilyr2 = hin2 / real(nilyr,dbl_kind)
+          hslyr2 = hsn2 / real(nslyr,dbl_kind)
+
+          ! properties of new snow ice
+          zSin_snowice = phi_snowice * sss
+          zqin_snowice = phi_snowice * qocn + zqsn_snowice
+
+          ! change snow properties
+          call update_vertical_tracers_snow(zqsn, hslyr, hslyr2)
+
+          ! change ice properties
+          call update_vertical_tracers_ice(zqin, hilyr, hilyr2, &
+               hin,  hin2,  zqin_snowice)
+          call update_vertical_tracers_ice(zSin, hilyr, hilyr2, &
+               hin,  hin2,  zSin_snowice)
+          call update_vertical_tracers_ice(phi,  hilyr, hilyr2, &
+               hin,  hin2,  phi_snowice)
+
+          ! change thicknesses
+          hilyr = hilyr2
+          hslyr = hslyr2
+          snoice = dh
+
+          eadded = (dh * phi_snowice * qocn) / dt
+          sadded = (dh * phi_snowice * sss)  / dt
+
+       endif
+
     endif
-    
+
   end subroutine flood_ice
 
 !=======================================================================
@@ -3614,24 +3359,29 @@ contains
          nlyr     , & ! no of snow layers involved in snow ice formation
          k            ! snow layer index
 
-    ! snow depth and snow layers affected by snowice formation
-    rnlyr = (dh / hsn) * nslyr
-    nlyr = min(floor(rnlyr),nslyr-1)
-
     zqsn_snowice = c0
 
-    ! loop over full snow layers affected
-    do k = nslyr, nslyr-nlyr+1, -1
+    ! snow depth and snow layers affected by snowice formation
+    if (hsn > puny) then
+       rnlyr = (dh / hsn) * nslyr
+       nlyr = min(floor(rnlyr),nslyr-1)
+       
+       zqsn_snowice = c0
+       
+       ! loop over full snow layers affected
+       do k = nslyr, nslyr-nlyr+1, -1
+          
+          zqsn_snowice = zqsn_snowice + zqsn(k) / rnlyr
+          
+       enddo ! k
+       
+       ! partially converted snow layer
+       zqsn_snowice = zqsn_snowice + &
+                      ((rnlyr - real(nlyr,dbl_kind)) / rnlyr) * zqsn(nslyr)
+       
+       zqsn_snowice = zqsn_snowice
 
-       zqsn_snowice = zqsn_snowice + zqsn(k) / rnlyr
-
-    enddo ! k
-
-    ! partially converted snow layer
-    zqsn_snowice = zqsn_snowice + &
-                  ((rnlyr - real(nlyr,dbl_kind)) / rnlyr) * zqsn(nslyr)
-
-    zqsn_snowice = zqsn_snowice
+    endif
 
   end subroutine enthalpy_snow_snowice
 

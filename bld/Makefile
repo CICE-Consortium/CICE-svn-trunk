@@ -113,22 +113,22 @@ $(EXEC): $(OBJS)
 	cc $(CFLAGS) $(CPPDEFS) $(INCS) $(INCLDIR) $<
 
 .F.o:
-	$(CPP) $(CPPFLAGS) $(CPPDEFS) $(INCS) $(INCLDIR) $< > $*.f 
-	$(FC) -c $(FFLAGS) $(FIXEDFLAGS) $(INCS) $(INCLDIR) $*.f  
+	$(CPP) $(CPPFLAGS) $(CPPDEFS) $(INCS) $(INCLDIR) $< > $*.f
+	$(FC) -c $(FFLAGS) $(FIXEDFLAGS) $(INCS) $(INCLDIR) $*.f
 
 .F90.o:
-	$(CPP) $(CPPFLAGS) $(CPPDEFS) $(INCS) $(INCLDIR) $< > $*.f90
-	$(FC) -c $(FFLAGS) $(FREEFLAGS) $(INCS) $(INCLDIR) $*.f90  
+	$(CPP) $(CPPFLAGS) $(CPPDEFS) $(INCS) $(INCLDIR) $< > $*.f95
+	$(FC) -c $(FFLAGS) $(FREEFLAGS) $(INCS) $(INCLDIR) $*.f95
 
 mostlyclean:
-	$(RM) -f *.f *.f90 
+	$(RM) -f *.f *.f95 
 
 clean:
-	$(RM) -f *.f *.f90 *.d *.mod *.o
-#	$(RM) -f *.f *.f90 *.d *.$(MOD_SUFFIX) $(OBJS)
+	$(RM) -f *.f *.f95 *.d *.mod *.o
+#	$(RM) -f *.f *.f95 *.d *.$(MOD_SUFFIX) $(OBJS)
 
 realclean:
-	$(RM) -f *.f *.f90 *.d *.$(MOD_SUFFIX) $(OBJS) $(EXEC)
+	$(RM) -f *.f *.f95 *.d *.$(MOD_SUFFIX) $(OBJS) $(EXEC)
 
 #-------------------------------------------------------------------------------
 # Build & include dependency files

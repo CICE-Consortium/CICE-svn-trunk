@@ -353,7 +353,7 @@
             if (my_task == master_task) then
             write(nu_diag,*) &
             'WARNING: runtype, restart, ice_ic are inconsistent:'
-            write(nu_diag,*) runtype, restart, ice_ic
+            write(nu_diag,*) trim(runtype), restart, trim(ice_ic)
             write(nu_diag,*) &
             'WARNING: Need ice_ic = <filename>.'
             write(nu_diag,*) &
