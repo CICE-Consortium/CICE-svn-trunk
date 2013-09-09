@@ -701,6 +701,12 @@ contains
     logical(kind=log_kind), intent(inout) :: &
          lstop           ! solver failure flag
 
+    real(kind=dbl_kind) :: &
+         fcondtop1   , & ! first stage downward cond flux at top surface (W m-2)
+         fsurfn1     , & ! first stage net flux to top surface, excluding fcondtop
+         Tsf1            ! first stage ice surface temperature (C)
+
+
     ! determine if surface is initially cold or melting
     if (Tsf < c0) then
 
@@ -742,10 +748,10 @@ contains
           
           ! solution is inconsistent - surface is warmer than melting 
           ! resolve assuming surface is melting
+          Tsf1 = Tsf
 
           ! reset the solution to initial values
           Tsf  = c0
-          Tsf  = Tsf0
           zqsn = zqsn0
           zqin = zqin0
           zSin = zSin0
@@ -787,8 +793,8 @@ contains
           else
 
              ! solution is inconsistent
-
-             write(nu_diag,*) istep1, "inconsistency! 1" ; stop
+             call two_stage_inconsistency(1, Tsf1, c0, fcondtop, fsurfn)
+             return
 
           endif ! surface flux consistency
 
@@ -837,6 +843,8 @@ contains
 
           ! solution is inconsistent - resolve assuming other surface condition
           ! assume surface is cold
+          fcondtop1 = fcondtop
+          fsurfn1   = fsurfn
 
           ! reset the solution to initial values
           Tsf  = Tsf0
@@ -880,9 +888,9 @@ contains
 
              ! solution is inconsistent
              ! failed to find a solution so need to refine solutions until consistency found
-             
-             write(*,*) istep1, "inconsistency! 2" ; stop
-
+             call two_stage_inconsistency(2, Tsf, c0, fcondtop1, fsurfn1)
+             return
+ 
           endif ! surface temperature consistency
           
        endif ! surface flux consistency
@@ -991,10 +999,13 @@ contains
          lstop           ! solver failure flag
 
     real(kind=dbl_kind) :: &
-         Tmlt            ! upper ice layer melting temperature (C)
+         Tmlt        , & ! upper ice layer melting temperature (C)
+         fcondtop1   , & ! first stage downward cond flux at top surface (W m-2)
+         fsurfn1     , & ! first stage net flux to top surface, excluding fcondtop
+         Tsf1            ! first stage ice surface temperature (C)
 
     ! initial surface melting temperature
-    Tmlt = liquidus_temperature_mush(zSin(1))
+    Tmlt = liquidus_temperature_mush(zSin0(1))
 
     ! determine if surface is initially cold or melting
     if (Tsf < Tmlt) then
@@ -1027,9 +1038,6 @@ contains
        ! halt if solver failed
        if (lstop) return
 
-       ! surface melting temperature
-       Tmlt = liquidus_temperature_mush(zSin(1))
-
        ! check if solution is consistent - surface should still be cold
        if (Tsf < Tmlt + dTemp_errmax) then
 
@@ -1039,10 +1047,10 @@ contains
        else
           ! solution is inconsistent - surface is warmer than melting 
           ! resolve assuming surface is melting
+          Tsf1 = Tsf
 
           ! reset the solution to initial values
-          Tsf  = liquidus_temperature_mush(zSin(1))
-          !Tsf = Tsf0
+          Tsf  = liquidus_temperature_mush(zSin0(1))
           zqin = zqin0
           zSin = zSin0
 
@@ -1083,8 +1091,8 @@ contains
           else
 
              ! solution is inconsistent
-
-             write(*,*) istep1, "inconsistency! 3" ; stop
+             call two_stage_inconsistency(3, Tsf1, Tmlt, fcondtop, fsurfn)
+             return
 
           endif
 
@@ -1094,9 +1102,8 @@ contains
        ! initially melting
 
        ! solve the system for melt and no snow
-       
-       Tsf = liquidus_temperature_mush(zSin(1))
-       
+       Tsf = Tmlt       
+
        call picard_solver(.false.,  .false.,  &
                           Tsf,      zqsn,     &
                           zqin,     zSin,     &
@@ -1134,6 +1141,8 @@ contains
 
           ! solution is inconsistent - resolve assuming other surface condition
           ! assume surface is cold
+          fcondtop1 = fcondtop
+          fsurfn1   = fsurfn
 
           ! reset the solution to initial values
           Tsf  = Tsf0
@@ -1166,9 +1175,6 @@ contains
           ! halt if solver failed
           if (lstop) return
 
-          ! surface melting temperature
-          Tmlt = liquidus_temperature_mush(zSin(1))
-
           ! check if solution is consistent - surface should be cold
           if (Tsf < Tmlt + dTemp_errmax) then
 
@@ -1178,8 +1184,8 @@ contains
           else
 
              ! solution is inconsistent
-
-             write(*,*) istep1, "inconsistency! 4" ; stop
+             call two_stage_inconsistency(4, Tsf, Tmlt, fcondtop1, fsurfn1)
+             return
 
           endif
           
@@ -1188,6 +1194,60 @@ contains
     endif
 
   end subroutine two_stage_solver_nosnow
+
+!=======================================================================
+
+  subroutine two_stage_inconsistency(type, Tsf, Tmlt, fcondtop, fsurfn)
+
+    use ice_calendar, only: istep1
+    use ice_fileunits, only: nu_diag
+    use ice_communicate, only: my_task
+
+    integer, intent(in) :: &
+         type
+
+    real(kind=dbl_kind), intent(in) :: &
+         Tsf, &
+         Tmlt, &
+         fcondtop, &
+         fsurfn
+
+    write(nu_diag,*) "ice_therm_mushy: two stage inconsistency"
+    write(nu_diag,*) "istep1, my_task, type:", istep1, my_task, type
+
+    if (type == 1) then
+
+       write(nu_diag,*) "First stage  : Tsf, Tmlt, dTemp_errmax, Tsf - Tmlt - dTemp_errmax"
+       write(nu_diag,*) "             :", Tsf, Tmlt, dTemp_errmax, Tsf - Tmlt - dTemp_errmax
+       write(nu_diag,*) "Second stage : fcondtop, fsurfn, ferrmax, fcondtop - fsurfn - ferrmax"
+       write(nu_diag,*) "             :", fcondtop, fsurfn, ferrmax, fcondtop - fsurfn - ferrmax
+
+    else if (type == 2) then
+
+       write(nu_diag,*) "First stage  : Tsf, Tmlt, dTemp_errmax, Tsf - Tmlt - dTemp_errmax"
+       write(nu_diag,*) "             :", Tsf, Tmlt, dTemp_errmax, Tsf - Tmlt - dTemp_errmax
+       write(nu_diag,*) "Second stage : fcondtop, fsurfn, ferrmax, fcondtop - fsurfn - ferrmax"
+       write(nu_diag,*) "             :", fcondtop, fsurfn, ferrmax, fcondtop - fsurfn - ferrmax
+
+    else if (type == 3) then
+
+       write(nu_diag,*) "First stage  : Tsf, Tmlt, dTemp_errmax, Tsf - Tmlt - dTemp_errmax"
+       write(nu_diag,*) "             :", Tsf, Tmlt, dTemp_errmax, Tsf - Tmlt - dTemp_errmax
+       write(nu_diag,*) "Second stage : fcondtop, fsurfn, ferrmax, fcondtop - fsurfn - ferrmax"
+       write(nu_diag,*) "             :", fcondtop, fsurfn, ferrmax, fcondtop - fsurfn - ferrmax
+
+    else if (type == 4) then
+       
+       write(nu_diag,*) "First stage  : fcondtop, fsurfn, ferrmax, fcondtop - fsurfn - ferrmax"
+       write(nu_diag,*) "             :", fcondtop, fsurfn, ferrmax, fcondtop - fsurfn - ferrmax
+       write(nu_diag,*) "Second stage : Tsf, Tmlt, dTemp_errmax, Tsf - Tmlt - dTemp_errmax"
+       write(nu_diag,*) "             :", Tsf, Tmlt, dTemp_errmax, Tsf - Tmlt - dTemp_errmax
+
+    endif
+
+    stop
+
+  end subroutine two_stage_inconsistency
 
 !=======================================================================
 ! Picard/TDMA based solver
@@ -1290,6 +1350,7 @@ contains
 
     use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
     use ice_communicate, only: my_task
+    use ice_calendar, only: istep1
 
     logical, intent(in) :: &
          lsnow         , & ! snow presence: T: has snow, F: no snow
