@@ -102,6 +102,7 @@
   , tr_bgc_DMS_sk   = .false.
   , restart_bgc     = .false.
   , phi_snow        = 0.5
+  , bgc_flux_type   = 'Jin2006'
 /
 
 &ice_nml

@@ -57,7 +57,7 @@
          tr_bgc_N_sk, tr_bgc_C_sk, tr_bgc_chl_sk, &
          tr_bgc_Nit_sk, tr_bgc_Am_sk, tr_bgc_Sil_sk, &
          tr_bgc_DMSPp_sk, tr_bgc_DMSPd_sk, tr_bgc_DMS_sk, &
-         restart_bgc, restart_hbrine, phi_snow
+         restart_bgc, restart_hbrine, phi_snow, bgc_flux_type
 
       !-----------------------------------------------------------------
       ! default values
@@ -81,6 +81,7 @@
       restart_bgc     = .false.  ! biogeochemistry restart
       restart_hbrine  = .false.  ! hbrine restart
       phi_snow        = p5       ! snow porosity
+      bgc_flux_type   = 'Jin2006'! type of ocean-ice poston velocity ('constant')
 
       !-----------------------------------------------------------------
       ! read from input file
@@ -118,6 +119,7 @@
       call broadcast_scalar(tr_brine,           master_task)
       call broadcast_scalar(restart_hbrine,     master_task)
       call broadcast_scalar(phi_snow,           master_task)
+      call broadcast_scalar(bgc_flux_type,      master_task)
 
       nt_fbri = c0
       if (tr_brine) then
@@ -134,6 +136,7 @@
          write(nu_diag,1010) ' restart_hbrine            = ', restart_hbrine
          write(nu_diag,1005) ' phi_snow                  = ', phi_snow
          endif
+         write(nu_diag,1030) ' bgc_flux_type             = ', bgc_flux_type
          write(nu_diag,1010) ' solve_skl_bgc             = ', solve_skl_bgc
       endif
 
@@ -332,6 +335,7 @@
  1005    format (a30,2x,f9.6)  ! float
  1010    format (a30,2x,l6)    ! logical
  1020    format (a30,2x,i6)    ! integer
+ 1030    format (a30,   a8)    ! character
 
       end subroutine init_zbgc
 
