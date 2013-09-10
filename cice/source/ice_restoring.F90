@@ -9,9 +9,10 @@
 
       use ice_kinds_mod
       use ice_blocks, only: nx_block, ny_block
-      use ice_domain_size, only: ncat, max_blocks
+      use ice_domain_size, only: ncat, max_blocks, max_ntrcr
       use ice_forcing, only: trestore, trest
-      use ice_state, only: aicen, vicen, vsnon, trcrn, ntrcr, bound_state
+      use ice_state, only: aicen, vicen, vsnon, trcrn, ntrcr, bound_state, &
+                           aice_init, aice0, aice, vice, vsno, trcr, trcr_depend
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bound
 
       implicit none
@@ -48,11 +49,14 @@
 
       use ice_blocks, only: block, get_block, nblocks_x, nblocks_y
       use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0
       use ice_domain, only: ew_boundary_type, ns_boundary_type, &
           nblocks, blocks_ice
       use ice_fileunits, only: nu_diag
       use ice_grid, only: tmask
       use ice_flux, only: sst, Tf, Tair, salinz, Tmltz
+      use ice_init, only: ice_ic
+      use ice_itd, only: aggregate
       use ice_restart, only: restart_ext
 
    integer (int_kind) :: &
@@ -116,14 +120,40 @@
                                trcrn_rest(:,:,:,:,iblk), ntrcr,         &
                                vicen_rest(:,:,  :,iblk), &
                                vsnon_rest(:,:,  :,iblk))
-      enddo ! iblk
 
       ! reset initial ice state to be the same as the restoring
-      ! necessary for ice_ic='none'
-      aicen(:,:,:,:) = aicen_rest(:,:,:,:)
-      vicen(:,:,:,:) = vicen_rest(:,:,:,:)
-      vsnon(:,:,:,:) = vsnon_rest(:,:,:,:)
-      trcrn(:,:,1:ntrcr,:,:) = trcrn_rest(:,:,:,:,:)
+         if (ice_ic == 'none') then
+         aicen(:,:,:,iblk) = aicen_rest(:,:,:,iblk)
+         vicen(:,:,:,iblk) = vicen_rest(:,:,:,iblk)
+         vsnon(:,:,:,iblk) = vsnon_rest(:,:,:,iblk)
+         trcrn(:,:,1:ntrcr,:,iblk) = trcrn_rest(:,:,:,:,iblk)
+
+      ! compute aggregate ice state and open water area
+         aice(:,:,iblk) = c0
+         vice(:,:,iblk) = c0
+         vsno(:,:,iblk) = c0
+         do nt = 1, max_ntrcr
+            trcr(:,:,nt,iblk) = c0
+         enddo
+
+         call aggregate (nx_block, ny_block,  &
+                         aicen(:,:,:,iblk),   &
+                         trcrn(:,:,1:ntrcr,:,iblk), &
+                         vicen(:,:,:,iblk),   &
+                         vsnon(:,:,:,iblk),   &
+                         aice (:,:,  iblk),   &
+                         trcr (:,:,1:ntrcr,iblk),   &
+                         vice (:,:,  iblk),   &
+                         vsno (:,:,  iblk),   &
+                         aice0(:,:,  iblk),   &
+                         tmask(:,:,  iblk),   &
+                         ntrcr,               &
+                         trcr_depend(1:ntrcr))
+
+         aice_init(:,:,iblk) = aice(:,:,iblk)
+         endif ! ice_ic
+
+      enddo ! iblk
 
    else  ! restore_ic
 
@@ -354,12 +384,6 @@
                enddo
             endif
             if (tr_brine) trcrn(i,j,nt_fbri,n) = c1
-            do k = 1, nilyr
-               trcrn(i,j,nt_sice+k-1,n) = salinz(i,j,k)
-            enddo
-            do k = 1, nslyr
-               trcrn(i,j,nt_qsno+k-1,n) = -rhos * Lfresh
-            enddo
          enddo
          enddo
       enddo
@@ -386,13 +410,11 @@
 
       icells = 0
       if (iblock == 1) then              ! west edge
-            do n = 1, ncat
             do j = 1, ny_block
             do i = 1, ilo
 !               icells = icells + 1
 !               indxi(icells) = i
 !               indxj(icells) = j
-            enddo
             enddo
             enddo
       endif
@@ -410,7 +432,6 @@
                if (npad /= 0) ibc = ibc - 1
             enddo
 
-            do n = 1, ncat
             do j = 1, ny_block
             do i = ihi, ibc
                icells = icells + 1
@@ -418,17 +439,14 @@
                indxj(icells) = j
             enddo
             enddo
-            enddo
       endif
 
       if (jblock == 1) then              ! south edge
-            do n = 1, ncat
             do j = 1, jlo
             do i = 1, nx_block
- !              icells = icells + 1
- !              indxi(icells) = i
- !              indxj(icells) = j
-            enddo
+!               icells = icells + 1
+!               indxi(icells) = i
+!               indxj(icells) = j
             enddo
             enddo
       endif
@@ -446,13 +464,11 @@
                if (npad /= 0) ibc = ibc - 1
             enddo
 
-            do n = 1, ncat
             do j = jhi, ibc
             do i = 1, nx_block
 !               icells = icells + 1
 !               indxi(icells) = i
 !               indxj(icells) = j
-            enddo
             enddo
             enddo
       endif
