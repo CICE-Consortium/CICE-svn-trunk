@@ -18,20 +18,6 @@
       ! physical constants
       !-----------------------------------------------------------------
 
-#ifdef AOMIP
-      real (kind=dbl_kind), parameter, public :: &
-         rhos      = 300.0_dbl_kind   ,&! density of snow (kg/m^3)
-         rhoi      = 900.0_dbl_kind   ,&! density of ice (kg/m^3)
-         rhow      = 1025.0_dbl_kind  ,&! density of seawater (kg/m^3)
-         cp_air    = 1004.0_dbl_kind  ,&! specific heat of air (J/kg/K)
-         emissivity= 0.98_dbl_kind    ,&! emissivity of snow and ice
-         cp_ice    = 2090._dbl_kind   ,&! specific heat of fresh ice (J/kg/K)
-         cp_ocn    = 4190._dbl_kind   ,&! specific heat of ocn    (J/kg/K)
-         depressT  = 0.0575_dbl_kind  ,&! Tf:brine salinity ratio (C/ppt)
-         dragio    = 0.0055_dbl_kind  ,&! ice-ocn drag coefficient
-         albocn    = 0.10_dbl_kind      ! ocean albedo
-#else
-      ! CICE default parameters
       real (kind=dbl_kind), parameter, public :: &
          rhos      = 330.0_dbl_kind   ,&! density of snow (kg/m^3)
          rhoi      = 917.0_dbl_kind   ,&! density of ice (kg/m^3)
@@ -45,14 +31,6 @@
          depressT  = 0.054_dbl_kind   ,&! Tf:brine salinity ratio (C/ppt)
          dragio    = 0.00536_dbl_kind ,&! ice-ocn drag coefficient
          albocn    = 0.06_dbl_kind      ! ocean albedo
-#endif
-
-      ! UNESCO melting temperature parameters
-      real (kind=dbl_kind), parameter, public :: &
-         mlt_a     = 0.0575_dbl_kind       ,& !nonlinear melting T coefficient (oC/ppt)
-         mlt_b     = 1.710523e-3_dbl_kind  ,& !(oC/ppt^(3/2))
-         mlt_c     = 2.154996e-4_dbl_kind     !(oC/ppt^2)
-          
 
       real (kind=dbl_kind), parameter, public :: &
          gravit    = 9.80616_dbl_kind    ,&! gravitational acceleration (m/s^2)
@@ -60,8 +38,8 @@
          radius    = 6.37e6_dbl_kind       ! earth radius (m)
 
       real (kind=dbl_kind), parameter, public :: &
-         pi = 3.14159265358979323846_dbl_kind,&! pi
          secday    = 86400.0_dbl_kind ,&! seconds in calendar day
+         viscosity_dyn = 1.79e-3_dbl_kind, & ! dynamic viscosity of brine
          Tocnfrz   = -1.8_dbl_kind    ,&! freezing temp of seawater (C),
                                         ! used as Tsfcn for open water
          rhofresh  = 1000.0_dbl_kind  ,&! density of fresh water (kg/m^3)
@@ -90,7 +68,9 @@
          kappav = 1.4_dbl_kind ,&! vis extnctn coef in ice, wvlngth<700nm (1/m)
          kappan = 17.6_dbl_kind,&! vis extnctn coef in ice, wvlngth<700nm (1/m)
 
+         ! kice is not used for mushy thermo
          kice   = 2.03_dbl_kind  ,&! thermal conductivity of fresh ice(W/m/deg)
+         ! kseaice is used only for zero-layer thermo
          kseaice= 2.00_dbl_kind  ,&! thermal conductivity of sea ice (W/m/deg)
                                    ! (used in zero layer thermodynamics option)
          ksno   = 0.30_dbl_kind  ,&! thermal conductivity of snow  (W/m/deg)
@@ -172,6 +152,7 @@
         eps16  = 1.0e-16_dbl_kind, &
         puny   = eps11, &
         bignum = 1.0e+30_dbl_kind, &
+        pi     = 3.14159265358979323846_dbl_kind, &
         pih    = p5*pi, &
         piq    = p5*pih, &
         pi2    = c2*pi

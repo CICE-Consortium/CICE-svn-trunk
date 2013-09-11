@@ -55,7 +55,7 @@
       use ice_fileunits, only: nu_diag
       use ice_grid, only: tmask
       use ice_flux, only: sst, Tf, Tair, salinz, Tmltz
-      use ice_init, only: ice_ic
+!circular      use ice_init, only: ice_ic
       use ice_itd, only: aggregate
       use ice_restart, only: restart_ext
 
@@ -122,36 +122,37 @@
                                vsnon_rest(:,:,  :,iblk))
 
       ! reset initial ice state to be the same as the restoring
-         if (ice_ic == 'none') then
-         aicen(:,:,:,iblk) = aicen_rest(:,:,:,iblk)
-         vicen(:,:,:,iblk) = vicen_rest(:,:,:,iblk)
-         vsnon(:,:,:,iblk) = vsnon_rest(:,:,:,iblk)
-         trcrn(:,:,1:ntrcr,:,iblk) = trcrn_rest(:,:,:,:,iblk)
+      ! required for ice_ic == 'none'
+!circular         if (ice_ic == 'none') then
+!         aicen(:,:,:,iblk) = aicen_rest(:,:,:,iblk)
+!         vicen(:,:,:,iblk) = vicen_rest(:,:,:,iblk)
+!         vsnon(:,:,:,iblk) = vsnon_rest(:,:,:,iblk)
+!         trcrn(:,:,1:ntrcr,:,iblk) = trcrn_rest(:,:,:,:,iblk)
 
       ! compute aggregate ice state and open water area
-         aice(:,:,iblk) = c0
-         vice(:,:,iblk) = c0
-         vsno(:,:,iblk) = c0
-         do nt = 1, max_ntrcr
-            trcr(:,:,nt,iblk) = c0
-         enddo
+!         aice(:,:,iblk) = c0
+!         vice(:,:,iblk) = c0
+!         vsno(:,:,iblk) = c0
+!         do nt = 1, max_ntrcr
+!            trcr(:,:,nt,iblk) = c0
+!         enddo
 
-         call aggregate (nx_block, ny_block,  &
-                         aicen(:,:,:,iblk),   &
-                         trcrn(:,:,1:ntrcr,:,iblk), &
-                         vicen(:,:,:,iblk),   &
-                         vsnon(:,:,:,iblk),   &
-                         aice (:,:,  iblk),   &
-                         trcr (:,:,1:ntrcr,iblk),   &
-                         vice (:,:,  iblk),   &
-                         vsno (:,:,  iblk),   &
-                         aice0(:,:,  iblk),   &
-                         tmask(:,:,  iblk),   &
-                         ntrcr,               &
-                         trcr_depend(1:ntrcr))
+!         call aggregate (nx_block, ny_block,  &
+!                         aicen(:,:,:,iblk),   &
+!                         trcrn(:,:,1:ntrcr,:,iblk), &
+!                         vicen(:,:,:,iblk),   &
+!                         vsnon(:,:,:,iblk),   &
+!                         aice (:,:,  iblk),   &
+!                         trcr (:,:,1:ntrcr,iblk),   &
+!                         vice (:,:,  iblk),   &
+!                         vsno (:,:,  iblk),   &
+!                         aice0(:,:,  iblk),   &
+!                         tmask(:,:,  iblk),   &
+!                         ntrcr,               &
+!                         trcr_depend(1:ntrcr))
 
-         aice_init(:,:,iblk) = aice(:,:,iblk)
-         endif ! ice_ic
+!         aice_init(:,:,iblk) = aice(:,:,iblk)
+!circular         endif ! ice_ic
 
       enddo ! iblk
 

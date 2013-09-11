@@ -68,6 +68,7 @@
                                    Tsfcn, alvl, &
                                    apnd,  hpnd, ipnd)
 
+      use ice_constants, only: viscosity_dyn
       use ice_domain_size, only: nilyr
       use ice_therm_shared, only: ktherm
 
@@ -144,8 +145,7 @@
 
       real (kind=dbl_kind), parameter :: &
          Td       = c2          , & ! temperature difference for freeze-up (C)
-         rexp     = p01         , & ! pond contraction scaling
-         viscosity= 1.79e-3_dbl_kind ! dynamic viscosity, kg/m/s
+         rexp     = p01             ! pond contraction scaling
 
       !-----------------------------------------------------------------
       ! Initialize 
@@ -306,7 +306,7 @@
                Tmlt(:) = -sicen(i,j,:) * depressT
                call brine_permeability(nilyr, qicen(i,j,:), &
                     vicen(i,j), sicen(i,j,:), Tmlt, perm)
-               drain = perm*pressure_head*dt / (viscosity*hi) * dpscale
+               drain = perm*pressure_head*dt / (viscosity_dyn*hi) * dpscale
                deltah = min(drain, hpondn)
                dvn = -deltah*apondn
                volpn(i,j) = volpn(i,j) + dvn

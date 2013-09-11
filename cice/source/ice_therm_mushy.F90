@@ -55,46 +55,49 @@ module ice_therm_mushy
 
   ! basic liquidus relation constants
   real(kind=dbl_kind), parameter :: &
-       az1p_liq = az1_liq / 1000.0_dbl_kind, &
-       bz1p_liq = bz1_liq / 1000.0_dbl_kind, &
-       az2p_liq = az2_liq / 1000.0_dbl_kind, &
-       bz2p_liq = bz2_liq / 1000.0_dbl_kind
+       az1p_liq = az1_liq / c1000, &
+       bz1p_liq = bz1_liq / c1000, &
+       az2p_liq = az2_liq / c1000, &
+       bz2p_liq = bz2_liq / c1000
   
   ! quadratic constants - higher temperature region
   real(kind=dbl_kind), parameter :: &
-       AS1_liq = az1p_liq * (rhow * cp_ocn - rhoi * cp_ice)                                   , &
-       AC1_liq = rhoi * cp_ice * az1_liq                                                      , &
-       BS1_liq = (c1 + bz1p_liq) * (rhow * cp_ocn - rhoi * cp_ice) + rhoi * Lfresh * az1p_liq , &
-       BQ1_liq = -az1_liq                                                                     , &
-       BC1_liq = rhoi * cp_ice * bz1_liq - rhoi * Lfresh * az1_liq                            , &
-       CS1_liq = rhoi * Lfresh * (c1 + bz1p_liq)                                              , &
-       CQ1_liq = -bz1_liq                                                                     , &
+       AS1_liq = az1p_liq * (rhow * cp_ocn - rhoi * cp_ice)       , &
+       AC1_liq = rhoi * cp_ice * az1_liq                          , & 
+       BS1_liq = (c1 + bz1p_liq) * (rhow * cp_ocn - rhoi * cp_ice)  &
+               + rhoi * Lfresh * az1p_liq                         , &
+       BQ1_liq = -az1_liq                                         , &
+       BC1_liq = rhoi * cp_ice * bz1_liq - rhoi * Lfresh * az1_liq, &
+       CS1_liq = rhoi * Lfresh * (c1 + bz1p_liq)                  , &
+       CQ1_liq = -bz1_liq                                         , &
        CC1_liq = -rhoi * Lfresh * bz1_liq
   
   ! quadratic constants - lower temperature region
   real(kind=dbl_kind), parameter :: &
-       AS2_liq = az2p_liq * (rhow * cp_ocn - rhoi * cp_ice)                                   , &
-       AC2_liq = rhoi * cp_ice * az2_liq                                                      , &
-       BS2_liq = (c1 + bz2p_liq) * (rhow * cp_ocn - rhoi * cp_ice) + rhoi * Lfresh * az2p_liq , &
-       BQ2_liq = -az2_liq                                                                     , &
-       BC2_liq = rhoi * cp_ice * bz2_liq - rhoi * Lfresh * az2_liq                            , &
-       CS2_liq = rhoi * Lfresh * (c1 + bz2p_liq)                                              , &
-       CQ2_liq = -bz2_liq                                                                     , &
+       AS2_liq = az2p_liq * (rhow * cp_ocn - rhoi * cp_ice)       , &
+       AC2_liq = rhoi * cp_ice * az2_liq                          , &
+       BS2_liq = (c1 + bz2p_liq) * (rhow * cp_ocn - rhoi * cp_ice)  &
+               + rhoi * Lfresh * az2p_liq                         , &
+       BQ2_liq = -az2_liq                                         , &
+       BC2_liq = rhoi * cp_ice * bz2_liq - rhoi * Lfresh * az2_liq, &
+       CS2_liq = rhoi * Lfresh * (c1 + bz2p_liq)                  , &
+       CQ2_liq = -bz2_liq                                         , &
        CC2_liq = -rhoi * Lfresh * bz2_liq
   
   ! break enthalpy constants
   real(kind=dbl_kind), parameter :: &
-       D_liq = ((c1 + az1p_liq * Tb_liq + bz1p_liq) / (az1_liq * Tb_liq + bz1_liq)) * &
-               ((cp_ocn * rhow - cp_ice * rhoi) * Tb_liq + Lfresh * rhoi), &
-       E_liq = cp_ice * rhoi * Tb_liq - Lfresh * rhoi
+       D_liq = ((c1 + az1p_liq*Tb_liq + bz1p_liq) &
+             / (       az1_liq*Tb_liq + bz1_liq)) &
+             * ((cp_ocn*rhow - cp_ice*rhoi)*Tb_liq + Lfresh*rhoi), &
+       E_liq = cp_ice*rhoi*Tb_liq - Lfresh*rhoi
   
   ! just fully melted enthapy constants
   real(kind=dbl_kind), parameter :: &
-       F1_liq = (-1000.0_dbl_kind * cp_ocn * rhow) / az1_liq , &
-       G1_liq = -1000.0_dbl_kind                             , &
-       H1_liq = (-bz1_liq * cp_ocn * rhow) / az1_liq         , &
-       F2_liq = (-1000.0_dbl_kind * cp_ocn * rhow) / az2_liq , &
-       G2_liq = -1000.0_dbl_kind                             , &
+       F1_liq = (  -c1000 * cp_ocn * rhow) / az1_liq , &
+       G1_liq =    -c1000                            , &
+       H1_liq = (-bz1_liq * cp_ocn * rhow) / az1_liq , &
+       F2_liq = (  -c1000 * cp_ocn * rhow) / az2_liq , &
+       G2_liq =    -c1000                            , &
        H2_liq = (-bz2_liq * cp_ocn * rhow) / az2_liq
   
   ! warmer than fully melted constants
@@ -104,10 +107,10 @@ module ice_therm_mushy
   ! temperature to brine salinity
   real(kind=dbl_kind), parameter :: &
        J1_liq = bz1_liq / az1_liq         , &
-       K1_liq = c1 / 1000.0_dbl_kind      , &
+       K1_liq = c1 / c1000                , &
        L1_liq = (c1 + bz1p_liq) / az1_liq , &
-       J2_liq = bz2_liq / az2_liq         , &
-       K2_liq = c1 / 1000.0_dbl_kind      , &
+       J2_liq = bz2_liq  / az2_liq        , &
+       K2_liq = c1 / c1000                , &
        L2_liq = (c1 + bz2p_liq) / az2_liq
 
   ! brine salinity to temperature
@@ -123,6 +126,10 @@ module ice_therm_mushy
   ! Other parameters
   !-----------------------------------------------------------------
   
+  real(kind=dbl_kind), parameter :: &
+       ki = 2.3_dbl_kind , & ! fresh ice conductivity (W m-1 K-1)
+       kb = 0.5375_dbl_kind  ! brine conductivity (W m-1 K-1)
+
   real(kind=dbl_kind), parameter :: &
        dTemp_errmax = 5.0e-4_dbl_kind ! max allowed change in temperature 
                                       ! between iterations
@@ -459,7 +466,7 @@ contains
     zTsn0 = zTsn
     zTin0 = zTin
 
-    Spond = 0.0_dbl_kind
+    Spond = c0
     qpond = enthalpy_brine(c0)
 
     hslyr_min = hs_min / real(nslyr, dbl_kind)
@@ -2839,7 +2846,7 @@ contains
          k         ! vertical layer index
 
     real(kind=dbl_kind), parameter :: &
-         S_min = 0.01_dbl_kind
+         S_min = p01
     
     real(kind=dbl_kind), dimension(nilyr) :: &
          zSin0
@@ -2947,7 +2954,7 @@ contains
          perm                 ! permeability (m2)
     
     real(kind=dbl_kind), parameter :: &
-         phic = 0.05_dbl_kind ! critical liquid fraction for impermeability
+         phic = p05 ! critical liquid fraction for impermeability
 
     perm = 3.0e-8_dbl_kind * max(phi - phic, c0)**3
 
@@ -2965,6 +2972,8 @@ contains
 
     ! calculate the rapid gravity drainage mode Darcy velocity and the
     ! slow mode drainage rate
+
+    use ice_constants, only: viscosity_dyn
 
     real(kind=dbl_kind), dimension(1:nilyr), intent(in) :: &
          zSin, &   ! ice layer bulk salinity (ppt)
@@ -2990,12 +2999,11 @@ contains
          qbr       ! ice layer brine enthalpy (J m-3)
 
     real(kind=dbl_kind), parameter :: &
-         kappal        = 8.824e-8_dbl_kind                 , & ! heat diffusivity of liquid
-         viscosity_dyn = 1.79e-3_dbl_kind                  , & ! dynamic viscosity of brine
-         ra_constants  = gravit / (viscosity_dyn * kappal) , & ! Rayleigh number constants
-         fracmax       = 0.2_dbl_kind                      , & ! limiting advective fraction of layer
-         zSin_min      = 0.1_dbl_kind                      , & ! minimum bulk salinity (ppt)
-         safety_factor = 10.0_dbl_kind                         ! safety factor for getting negative salinities
+         kappal        = 8.824e-8_dbl_kind, & ! heat diffusivity of liquid
+         ra_constants  = gravit / (viscosity_dyn * kappal), & ! for Rayleigh number
+         fracmax       = p2               , & ! limiting advective layer fraction
+         zSin_min      = p1               , & ! minimum bulk salinity (ppt)
+         safety_factor = c10                  ! to prevent negative salinities
 
     real(kind=dbl_kind), dimension(1:nilyr) :: &
          phi           ! ice layer liquid fraction
@@ -3136,6 +3144,8 @@ contains
     ! negative - downward flushing
     ! positive - upward flushing
 
+    use ice_constants, only: viscosity_dyn
+
     real(kind=dbl_kind), dimension(nilyr), intent(in) :: &
          zTin      , & ! ice layer temperature (C)
          zSin      , & ! ice layer bulk salinity (ppt)
@@ -3154,8 +3164,8 @@ contains
          dhhead        ! hydraulic head (m)
 
     real(kind=dbl_kind), parameter :: &
-         viscosity_dyn = 1.79e-3_dbl_kind, & ! dynamic viscosity
-         advection_limit = 0.005_dbl_kind      ! limit to fraction of brine in any layer that can be advected 
+         advection_limit = 0.005_dbl_kind ! limit to fraction of brine in 
+                                          ! any layer that can be advected 
 
     real(kind=dbl_kind) :: &
          perm       , & ! ice layer permeability (m2)
@@ -3893,10 +3903,6 @@ contains
     real(kind=dbl_kind) :: &
          km                    ! ice layer conductivity (W m-1 K-1)
     
-    real(kind=dbl_kind), parameter :: &
-         ki = 2.3_dbl_kind , & ! fresh ice conductivity (W m-1 K-1)
-         kb = 0.3_dbl_kind     ! brine conductivity (W m-1 K-1)
-
     real(kind=dbl_kind) :: &
          phi                   ! liquid fraction
 

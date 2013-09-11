@@ -605,39 +605,40 @@
          Cdn_atm_pond , & ! drag coefficient dur to ponds 
          Cdn_atm_rdg      ! drag coefficient dur to ridges 
 
-      real (kind=dbl_kind), parameter :: & ! in [,] range of values that can be tested 
-         csw       = 0.002_dbl_kind   ,&! ice-ocn drag coefficient [0.0005,0.005]
-         csa       = 0.0005_dbl_kind  ,&! ice-air drag coefficient [0.0001,0.001] 
-         dragia    = 0.0012_dbl_kind  ,&! ice-air drag coefficient [0.0005,0.002] 
-         mrdg      = 20.0_dbl_kind    ,&! screening effect see Lu2011 [5,50]
-         mrdgo     = 10.0_dbl_kind    ,&! screening effect see Lu2011 [5,50]
-         beta      = 0.5_dbl_kind     ,&! power exponent appearing in astar and 
-                                        ! L=Lmin(A*/(A*-A))**beta [0,1]
-         Lmin      = 8._dbl_kind      ,&! min length of floe (m) [5,100]
-         Lmax      = 300._dbl_kind    ,&! max length of floe (m) [30,3000]
-         Lmoy      = 300._dbl_kind    ,&! average length of floe (m) [30,1000]
-         cfa       = 0.2_dbl_kind     ,&! cfa/csf in Eq. 12 ratio of local from drag over 
-                                        ! geometrical parameter [0,1] 
-         cfw       = 0.2_dbl_kind     ,&! cdw/cds in Eq. 15 ratio of local from drag over 
-                                        ! geometrical parameter [0,1]
-         cpa       = 0.2_dbl_kind     ,&! cpa/csp in Eq. 16 ratio of local from drag over 
-                                        ! geometrical parameter [0,1]
-         cra       = 0.2_dbl_kind     ,&! cra in Eq. 10 local from drag coefficient [0,1]
-         crw       = 0.2_dbl_kind     ,&! ckw in Eq. 11 local from drag coefficient [0,1]
-         sl        = 22._dbl_kind     ,&! Sheltering parameter see Lupkes2012 Eq. 30 [10,30]
-         lpmin     = 2.26_dbl_kind    ,&! min pond length (m) see Eq. 17 [1,10]
-         lpmax     = 24.63_dbl_kind   ,&! max pond length (m) see Eq. 17 [10,100]
-         tanar     = 0.4_dbl_kind     ,&! 0.25 sail slope = 14 deg [0.4,1]
-         tanak     = 0.4_dbl_kind     ,&! 0.58 keel slope = 30 deg [0.4,1]
-         invsqrte  = 0.6065_dbl_kind  ,&!
-         phir      = 0.8_dbl_kind     ,&! porosity of ridges [0.4,1]
-         phik      = 0.8_dbl_kind     ,&! porosity of keels  [0.4,1]
-         hkoverhr  = 4._dbl_kind      ,&! hkeel/hridge ratio [4,8]
-         dkoverdr  = 1._dbl_kind      ,&! dkeel/distrdg ratio [1,5]
-         sHGB      = 0.18_dbl_kind    ,&! see Lupkes2012 Eq. 28, Hanssen1988, 
-                                        ! Steele1989 suggest instead 0.18
-         alpha2    = 0._dbl_kind      ,&! weight functions for area of ridged ice [0,1]
-         beta2     = 0.75_dbl_kind
+      real (kind=dbl_kind), parameter :: & 
+                                      ! [,] = range of values that can be tested 
+         csw       = 0.002_dbl_kind ,&! ice-ocn drag coefficient [0.0005,0.005]
+         csa       = 0.0005_dbl_kind,&! ice-air drag coefficient [0.0001,0.001] 
+         dragia    = 0.0012_dbl_kind,&! ice-air drag coefficient [0.0005,0.002] 
+         mrdg      = c20            ,&! screening effect see Lu2011 [5,50]
+         mrdgo     = c10            ,&! screening effect see Lu2011 [5,50]
+         beta      = p5             ,&! power exponent appearing in astar and 
+                                      ! L=Lmin(A*/(A*-A))**beta [0,1]
+         Lmin      = c8             ,&! min length of floe (m) [5,100]
+         Lmax      = 300._dbl_kind  ,&! max length of floe (m) [30,3000]
+         Lmoy      = 300._dbl_kind  ,&! average length of floe (m) [30,1000]
+         cfa       = p2             ,&! Eq. 12 ratio of local from drag over 
+                                      ! geometrical parameter [0,1] 
+         cfw       = p2             ,&! Eq. 15 ratio of local from drag over 
+                                      ! geometrical parameter [0,1]
+         cpa       = p2             ,&! Eq. 16 ratio of local form drag over 
+                                      ! geometrical parameter [0,1]
+         cra       = p2             ,&! Eq. 10 local form drag coefficient [0,1]
+         crw       = p2             ,&! Eq. 11 local form drag coefficient [0,1]
+         sl        = 22._dbl_kind   ,&! Sheltering parameter Lupkes2012 [10,30]
+         lpmin     = 2.26_dbl_kind  ,&! min pond length (m) see Eq. 17 [1,10]
+         lpmax     = 24.63_dbl_kind ,&! max pond length (m) see Eq. 17 [10,100]
+         tanar     = p4             ,&! 0.25 sail slope = 14 deg [0.4,1]
+         tanak     = p4             ,&! 0.58 keel slope = 30 deg [0.4,1]
+         invsqrte  = 0.6065_dbl_kind,&!
+         phir      = 0.8_dbl_kind   ,&! porosity of ridges [0.4,1]
+         phik      = 0.8_dbl_kind   ,&! porosity of keels  [0.4,1]
+         hkoverhr  = c4             ,&! hkeel/hridge ratio [4,8]
+         dkoverdr  = c1             ,&! dkeel/distrdg ratio [1,5]
+         sHGB      = 0.18_dbl_kind  ,&! Lupkes2012 Eq. 28, Hanssen1988, 
+                                      ! Steele1989 suggest instead 0.18
+         alpha2    = c0             ,&! weight functions for area of 
+         beta2     = p75              ! ridged ice [0,1]
 
        integer (kind=int_kind) :: &
          icells, & ! number of cells that require atmo fluxes
