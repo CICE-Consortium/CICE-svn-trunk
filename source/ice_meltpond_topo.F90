@@ -372,6 +372,7 @@
                            volpn, volp,  &
                            apondn,hpondn,dvolp)
 
+      use ice_constants, only: viscosity_dyn
       use ice_exit, only: abort_ice
       use ice_therm_shared, only: ktherm
     
@@ -422,9 +423,6 @@
          deltah, &
          perm, &
          apond
-
-      real (kind=dbl_kind), parameter :: & 
-         viscosity = 1.79e-3_dbl_kind  ! kinematic water viscosity in kg/m/s
 
  !-----------|
  !           |
@@ -566,7 +564,7 @@
          if (hicen(n) > c0) then
             call permeability_phi(qicen(:,n),sicen(:,n),vicen(n),perm)
             if (perm > c0) permflag = 1
-            drain = perm*apondn(n)*pressure_head*dt / (viscosity*hicen(n))
+            drain = perm*apondn(n)*pressure_head*dt / (viscosity_dyn*hicen(n))
             dvolp = dvolp + min(drain, volp)
             volp = max(volp - drain, c0)
             if (volp < puny) then

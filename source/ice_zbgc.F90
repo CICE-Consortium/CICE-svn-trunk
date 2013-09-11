@@ -445,7 +445,7 @@
 
             if (my_task == master_task) close(nu_forcing)
 
-         elseif (trim(sil_data_type) == 'rct_clim') then
+         else ! default
         
             ! use WOA2005_surface (winter or spring) for a specific location
             ! Bering (60, 180), Okhotsk (55, 150E),  Chukchi (70, 170W) 
@@ -454,7 +454,13 @@
             ! mmol/m^3 Apr, May, Jun spring range: (20, 40, 10, 2.5, 20)
             !          Jan, Feb, Mar winter range: (20, 60, 25, 2.5, 20)
           
-            sil(:,:,:) = 30.0_dbl_kind  !chukchi, march
+            do iblk = 1, nblocks
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  sil(i,j,iblk) = 30.0_dbl_kind  !chukchi, march
+               enddo
+               enddo
+            enddo
 
          endif ! sil_data_type
          endif ! tr_bgc_Sil_sk
@@ -489,15 +495,6 @@
             
             if (my_task == master_task) close(nu_forcing)
 
-         elseif (trim(nit_data_type) == 'rct_clim') then
-            
-            if (my_task == master_task) then
-               write (nu_diag,*) ' '
-               write (nu_diag,*) 'nitrate initialized from March, Chukchi Sea'
-            endif
-             
-            nit(:,:,:) = c10 
-
          elseif (trim(nit_data_type) == 'sss') then
            
             if (my_task == master_task) then
@@ -512,6 +509,22 @@
                enddo
                enddo
             enddo
+
+         else ! default
+            
+            if (my_task == master_task) then
+               write (nu_diag,*) ' '
+               write (nu_diag,*) 'nitrate initialized from March, Chukchi Sea'
+            endif
+             
+            do iblk = 1, nblocks
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  nit(i,j,iblk) = c10
+               enddo
+               enddo
+            enddo
+
          endif ! nit_data_type
          endif ! tr_bgc_Nit_sk
               

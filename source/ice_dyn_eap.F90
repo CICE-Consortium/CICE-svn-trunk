@@ -502,6 +502,7 @@
          iblk          ! block index
 
       real (kind=dbl_kind), parameter :: & 
+         eps6 = 1.0e-6_dbl_kind, &
          phi = pi/c12 ! diamond shaped floe smaller angle (default phi = 30 deg)
 
       integer (kind=int_kind) :: & 
@@ -585,12 +586,12 @@
            exp(-w2(ainit+ia*da)*(zinit+iz*dz)*(zinit+iz*dz))* &
            s22ks(xinit+ix*dx,yinit+iy*dy,zinit+iz*dz,phi)*dz/sin(c2*phi)
           enddo
-          if (abs(s11r(ix,iy,ia))<1.0e-6_dbl_kind) s11r(ix,iy,ia)=c0
-          if (abs(s12r(ix,iy,ia))<1.0e-6_dbl_kind) s12r(ix,iy,ia)=c0
-          if (abs(s22r(ix,iy,ia))<1.0e-6_dbl_kind) s22r(ix,iy,ia)=c0
-          if (abs(s11s(ix,iy,ia))<1.0e-6_dbl_kind) s11s(ix,iy,ia)=c0
-          if (abs(s12s(ix,iy,ia))<1.0e-6_dbl_kind) s12s(ix,iy,ia)=c0
-          if (abs(s22s(ix,iy,ia))<1.0e-6_dbl_kind) s22s(ix,iy,ia)=c0
+          if (abs(s11r(ix,iy,ia)) < eps6) s11r(ix,iy,ia) = c0
+          if (abs(s12r(ix,iy,ia)) < eps6) s12r(ix,iy,ia) = c0
+          if (abs(s22r(ix,iy,ia)) < eps6) s22r(ix,iy,ia) = c0
+          if (abs(s11s(ix,iy,ia)) < eps6) s11s(ix,iy,ia) = c0
+          if (abs(s12s(ix,iy,ia)) < eps6) s12s(ix,iy,ia) = c0
+          if (abs(s22s(ix,iy,ia)) < eps6) s22s(ix,iy,ia) = c0
          else
           s11r(ix,iy,ia) = p5*s11kr(xinit+ix*dx,yinit+iy*dy,c0,phi)/sin(c2*phi)
           s12r(ix,iy,ia) = p5*s12kr(xinit+ix*dx,yinit+iy*dy,c0,phi)/sin(c2*phi)
@@ -598,12 +599,12 @@
           s11s(ix,iy,ia) = p5*s11ks(xinit+ix*dx,yinit+iy*dy,c0,phi)/sin(c2*phi)
           s12s(ix,iy,ia) = p5*s12ks(xinit+ix*dx,yinit+iy*dy,c0,phi)/sin(c2*phi)
           s22s(ix,iy,ia) = p5*s22ks(xinit+ix*dx,yinit+iy*dy,c0,phi)/sin(c2*phi)
-          if (abs(s11r(ix,iy,ia))<1.0e-6_dbl_kind) s11r(ix,iy,ia)=c0
-          if (abs(s12r(ix,iy,ia))<1.0e-6_dbl_kind) s12r(ix,iy,ia)=c0
-          if (abs(s22r(ix,iy,ia))<1.0e-6_dbl_kind) s22r(ix,iy,ia)=c0
-          if (abs(s11s(ix,iy,ia))<1.0e-6_dbl_kind) s11s(ix,iy,ia)=c0
-          if (abs(s12s(ix,iy,ia))<1.0e-6_dbl_kind) s12s(ix,iy,ia)=c0
-          if (abs(s22s(ix,iy,ia))<1.0e-6_dbl_kind) s22s(ix,iy,ia)=c0
+          if (abs(s11r(ix,iy,ia)) < eps6) s11r(ix,iy,ia) = c0
+          if (abs(s12r(ix,iy,ia)) < eps6) s12r(ix,iy,ia) = c0
+          if (abs(s22r(ix,iy,ia)) < eps6) s22r(ix,iy,ia) = c0
+          if (abs(s11s(ix,iy,ia)) < eps6) s11s(ix,iy,ia) = c0
+          if (abs(s12s(ix,iy,ia)) < eps6) s12s(ix,iy,ia) = c0
+          if (abs(s22s(ix,iy,ia)) < eps6) s22s(ix,iy,ia) = c0
          endif
         enddo
        enddo
@@ -1844,7 +1845,7 @@
 
 ! Shear faulting
        elseif (sigma_2 == c0) then
-         mresult =c0
+         mresult = c0
        elseif ((sigma_1 <= c0).and.(sigma_1/sigma_2 <= threshold)) then
          if (blockno == 1) mresult = kfrac * (a1x - Q12Q12)
          if (blockno == 2) mresult = kfrac * (a1x + Q11Q12)
