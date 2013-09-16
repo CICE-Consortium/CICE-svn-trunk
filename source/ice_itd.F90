@@ -1627,6 +1627,7 @@
       dfresh(:,:) = c0
       dfsalt(:,:) = c0
       dfhocn(:,:) = c0
+      dfaero_ocn(:,:,:) = c0
 
       !-----------------------------------------------------------------
       ! Compute total ice area.
@@ -1715,6 +1716,18 @@
                                istop,    jstop)
          if (l_stop) return
       endif   ! l_limit_aice
+
+    !-------------------------------------------------------------------
+    ! Zap snow that has out of bounds temperatures
+    !-------------------------------------------------------------------
+
+      call zap_snow_temperature(nx_block,   ny_block, &
+                                ilo, ihi, jlo, jhi,   &
+                                dt,         ntrcr,    &
+                                aicen,                &
+                                trcrn,      vsnon,    &
+                                dfresh,     dfhocn,   &
+                                dfaero_ocn, tr_aero)
 
     !-------------------------------------------------------------------
     ! Update ice-ocean fluxes for strict conservation
@@ -1849,11 +1862,12 @@
       istop = 0
       jstop = 0
 
-      dfpond(:,:) = c0
-      dfresh(:,:) = c0
-      dfsalt(:,:) = c0
-      dfhocn(:,:) = c0
-      dfaero_ocn(:,:,:) = c0
+      !!!AKT already done 
+      !dfpond(:,:) = c0
+      !dfresh(:,:) = c0
+      !dfsalt(:,:) = c0
+      !dfhocn(:,:) = c0
+      !dfaero_ocn(:,:,:) = c0
      
       zspace = c1/(real(nblyr,kind=dbl_kind)) 
       
@@ -1912,9 +1926,7 @@
                i = indxi(ij)
                j = indxj(ij)
                do it = 1, n_aero
-                  xtmp = (vsnon(i,j,n)*(trcrn(i,j,nt_aero  +4*(it-1),n)     &
-                                      + trcrn(i,j,nt_aero+1+4*(it-1),n))    &
-                       +  vicen(i,j,n)*(trcrn(i,j,nt_aero+2+4*(it-1),n)     &
+                  xtmp = (vicen(i,j,n)*(trcrn(i,j,nt_aero+2+4*(it-1),n)     &
                                       + trcrn(i,j,nt_aero+3+4*(it-1),n)))/dt
                   dfaero_ocn(i,j,it) = dfaero_ocn(i,j,it) + xtmp
                enddo                 ! n
@@ -1942,26 +1954,6 @@
          enddo                  ! k
 
       !-----------------------------------------------------------------
-      ! Zap snow energy and use ocean heat to melt snow
-      !-----------------------------------------------------------------
-
-         do k = 1, nslyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-
-               xtmp = trcrn(i,j,nt_qsno+k-1,n) / dt &
-                    * vsnon(i,j,n)/real(nslyr,kind=dbl_kind) ! < 0
-               dfhocn(i,j) = dfhocn(i,j) + xtmp
-               trcrn(i,j,nt_qsno+k-1,n) = c0
-
-            enddo               ! ij
-         enddo                  ! k
-
-      !-----------------------------------------------------------------
       ! Zap ice and snow volume, add water and salt to ocean
       !-----------------------------------------------------------------
 
@@ -1972,7 +1964,7 @@
             i = indxi(ij)
             j = indxj(ij)
 
-            xtmp = (rhoi*vicen(i,j,n) + rhos*vsnon(i,j,n)) / dt
+            xtmp = (rhoi*vicen(i,j,n)) / dt
             dfresh(i,j) = dfresh(i,j) + xtmp
 
             xtmp = rhoi*vicen(i,j,n)*ice_ref_salinity*p001 / dt
@@ -1981,9 +1973,20 @@
             aice0(i,j) = aice0(i,j) + aicen(i,j,n)
             aicen(i,j,n) = c0
             vicen(i,j,n) = c0
-            vsnon(i,j,n) = c0
             trcrn(i,j,nt_Tsfc,n) = Tocnfrz
          enddo                  ! ij
+
+      !-----------------------------------------------------------------
+      ! Zap snow
+      !-----------------------------------------------------------------
+
+         call zap_snow(nx_block,       ny_block,     &
+                       icells,                       &
+                       indxi,          indxj,        &
+                       dt,             ntrcr,        &
+                       trcrn(:,:,:,n), vsnon(:,:,n), &
+                       dfresh,         dfhocn,       &
+                       dfaero_ocn,     tr_aero)
 
       !-----------------------------------------------------------------
       ! Zap tracers
@@ -2162,6 +2165,249 @@
 
 !=======================================================================
 
+      subroutine zap_snow(nx_block,   ny_block, &
+                          icells,               &
+                          indxi,      indxj,    &
+                          dt,         ntrcr,    &
+                          trcrn,      vsnon,    &
+                          dfresh,     dfhocn,   &
+                          dfaero_ocn, tr_aero)
+
+      use ice_state, only: nt_qsno, nt_aero
+
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         icells            , & ! number of ice/ocean grid cells
+         ntrcr                 ! number of tracers in use
+ 
+      real (kind=dbl_kind), intent(in) :: &
+         dt           ! time step
+
+      integer (kind=int_kind), dimension (nx_block*ny_block), &
+         intent(in) :: &
+         indxi,  indxj       ! compressed i/j indices
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(inout) :: &
+         vsnon        ! volume per unit area of snow         (m)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr), &
+         intent(inout) :: &
+         trcrn        ! ice tracers
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout) :: &
+         dfresh   , & ! zapped fresh water flux (kg/m^2/s)
+         dfhocn       ! zapped energy flux ( W/m^2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_aero), &
+         intent(inout) :: &
+         dfaero_ocn   ! zapped aerosol flux   (kg/m^2/s)
+
+      logical (kind=log_kind), intent(in) :: &
+         tr_aero      ! aerosol flag
+
+      ! local variables
+
+      integer (kind=int_kind) :: &
+         i,j, k, it  , & ! counting indices
+         ij                 ! combined i/j horizontal index
+
+      real (kind=dbl_kind) :: xtmp
+
+      ! aerosols
+      if (tr_aero) then
+!DIR$ CONCURRENT !Cray 
+!cdir nodep      !NEC 
+!ocl novrec      !Fujitsu
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+            do it = 1, n_aero
+               xtmp = (vsnon(i,j)*(trcrn(i,j,nt_aero  +4*(it-1))     &
+                                 + trcrn(i,j,nt_aero+1+4*(it-1))))/dt
+               dfaero_ocn(i,j,it) = dfaero_ocn(i,j,it) + xtmp
+            enddo                 ! it
+
+         enddo               ! ij
+
+      endif ! tr_aero
+
+      ! snow enthalpy tracer
+      do k = 1, nslyr 
+!DIR$ CONCURRENT !Cray 
+!cdir nodep      !NEC 
+!ocl novrec      !Fujitsu
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+
+            xtmp = trcrn(i,j,nt_qsno+k-1) / dt &
+                 * vsnon(i,j)/real(nslyr,kind=dbl_kind) ! < 0
+            dfhocn(i,j) = dfhocn(i,j) + xtmp
+            trcrn(i,j,nt_qsno+k-1) = c0
+
+         enddo               ! ij
+      enddo                  ! k
+
+      ! snow volume
+!DIR$ CONCURRENT !Cray 
+!cdir nodep      !NEC 
+!ocl novrec      !Fujitsu
+      do ij = 1, icells
+         i = indxi(ij)
+         j = indxj(ij)
+
+         xtmp = (rhos*vsnon(i,j)) / dt
+         dfresh(i,j) = dfresh(i,j) + xtmp
+         vsnon(i,j) = c0
+
+      enddo               ! ij
+
+      end subroutine zap_snow
+
+!=======================================================================
+   
+      subroutine zap_snow_temperature(nx_block,   ny_block, &
+                                      ilo, ihi, jlo, jhi,   &
+                                      dt,         ntrcr,    &
+                                      aicen,                &
+                                      trcrn,      vsnon,    &
+                                      dfresh,     dfhocn,   &
+                                      dfaero_ocn, tr_aero)
+
+      use ice_state, only: nt_qsno 
+      use ice_therm_shared, only: heat_capacity, Tmin
+      use ice_calendar, only: istep1
+
+      integer (kind=int_kind), intent(in) :: &
+         nx_block, ny_block, & ! block dimensions
+         ilo,ihi,jlo,jhi   , & ! beginning and end of physical domain
+         ntrcr                 ! number of tracers in use
+
+      real (kind=dbl_kind), intent(in) :: &
+         dt           ! time step
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),  &
+         intent(in) :: & 
+         aicen        ! concentration of ice 
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat), &
+         intent(inout) :: &
+         vsnon        ! volume per unit area of snow         (m)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), &
+         intent(inout) :: &
+         trcrn        ! ice tracers
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), &
+         intent(inout) :: &
+         dfresh   , & ! zapped fresh water flux (kg/m^2/s)
+         dfhocn       ! zapped energy flux ( W/m^2)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_aero), &
+         intent(inout) :: &
+         dfaero_ocn   ! zapped aerosol flux   (kg/m^2/s)
+
+      logical (kind=log_kind), intent(in) :: &
+         tr_aero      ! aerosol flag
+
+      ! local variables
+
+      integer (kind=int_kind) :: &
+         i,j, n, k, it , & ! counting indices
+         icells        , & ! number of cells with ice to zap
+         ij                 ! combined i/j horizontal index
+
+      integer (kind=int_kind), dimension (nx_block*ny_block) :: &
+         indxi         , & ! compressed indices for i/j directions
+         indxj
+
+      real (kind=dbl_kind) :: &
+         rnslyr        , & ! real(nslyr)
+         hsn           , & ! snow thickness (m)
+         zqsn          , & ! snow layer enthalpy (J m-2)
+         zTsn          , & ! snow layer temperature (C)
+         Tmax              ! maximum allowed snow temperature
+
+      logical :: &
+         l_zap             ! logical whether zap snow
+
+      rnslyr = real(nslyr,kind=dbl_kind)
+      
+      do n = 1, ncat
+
+      !-----------------------------------------------------------------
+      ! Determine cells to zap
+      !-----------------------------------------------------------------
+
+         icells = 0
+         do j = jlo, jhi
+         do i = ilo, ihi
+
+            l_zap = .false.
+
+            ! check each snow layer - zap all if one is bad
+            do k = 1, nslyr
+
+               ! snow thickness
+               hsn = vsnon(i,j,n) / aicen(i,j,n)
+
+               ! snow enthalpy and max temperature
+               if (hsn > hs_min .and. heat_capacity) then
+                  ! zqsn < 0              
+                  zqsn = trcrn(i,j,nt_qsno+k-1,n)
+                  Tmax = -zqsn*puny*rnslyr / &
+                       (rhos*cp_ice*vsnon(i,j,n))
+               else
+                  zqsn = -rhos * Lfresh
+                  Tmax = puny
+               endif
+                     
+               ! snow temperature
+               zTsn = (Lfresh + zqsn/rhos)/cp_ice
+
+               ! check for zapping
+               if (zTsn < Tmin .or. zTsn > Tmax) then
+                  l_zap = .true.
+                  write(nu_diag,*) "zap_snow_temperature: temperature out of bounds!"
+                  write(nu_diag,*) "istep1, my_task, i, j, k:", istep1, my_task, i, j, k
+                  write(nu_diag,*) "zTsn:", zTsn
+                  write(nu_diag,*) "Tmin:", Tmin
+                  write(nu_diag,*) "Tmax:", Tmax
+                  write(nu_diag,*) "zqsn:", zqsn
+               endif
+
+            enddo ! k
+
+            ! add cell to zap list
+            if (l_zap) then
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
+            endif ! l_zap
+
+         enddo ! i
+         enddo ! j
+
+      !-----------------------------------------------------------------
+      ! Zap the cells
+      !-----------------------------------------------------------------
+
+         call zap_snow(nx_block,       ny_block,     &
+                       icells,                       &
+                       indxi,          indxj,        &
+                       dt,             ntrcr,        &
+                       trcrn(:,:,:,n), vsnon(:,:,n), &
+                       dfresh,         dfhocn,       &
+                       dfaero_ocn,     tr_aero)
+
+        enddo ! n
+
+      end subroutine zap_snow_temperature
+
+!=======================================================================
 ! Checks that the snow and ice energy in the zero layer thermodynamics
 ! model still agrees with the snow and ice volume.
 ! If there is an error, the model will abort.
