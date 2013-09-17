@@ -119,14 +119,13 @@
       call broadcast_scalar(tr_brine,           master_task)
       call broadcast_scalar(restart_hbrine,     master_task)
       call broadcast_scalar(phi_snow,           master_task)
-      call broadcast_scalar(bgc_flux_type,      master_task)
 
       nt_fbri = c0
       if (tr_brine) then
           nt_fbri = ntrcr + 1   ! ice volume fraction with salt
           ntrcr = ntrcr + 1
       endif
-      if (tr_brine) trcr_depend(nt_fbri) = 1
+      if (tr_brine) trcr_depend(nt_fbri) = 1  ! volume-weighted
 
       if (phi_snow .le. c0) phi_snow = c1-rhos/rhoi
 
@@ -136,7 +135,6 @@
          write(nu_diag,1010) ' restart_hbrine            = ', restart_hbrine
          write(nu_diag,1005) ' phi_snow                  = ', phi_snow
          endif
-         write(nu_diag,1030) ' bgc_flux_type             = ', bgc_flux_type
          write(nu_diag,1010) ' solve_skl_bgc             = ', solve_skl_bgc
       endif
 
@@ -172,6 +170,7 @@
             tr_bgc_DMS_sk    = .false.
       endif
 
+      call broadcast_scalar(bgc_flux_type,      master_task)
       call broadcast_scalar(restore_bgc,        master_task)
       call broadcast_scalar(bgc_data_dir,       master_task)
       call broadcast_scalar(sil_data_type,      master_task)
@@ -190,6 +189,7 @@
 
       if (my_task == master_task) then
 
+         write(nu_diag,1030) ' bgc_flux_type             = ', bgc_flux_type
          write(nu_diag,1010) ' restart_bgc               = ', restart_bgc
          write(nu_diag,1010) ' restore_bgc               = ', restore_bgc
          write(nu_diag,*)    ' bgc_data_dir              = ', &
@@ -575,7 +575,7 @@
       real (kind=dbl_kind), dimension (nx_block*ny_block) :: &
          hin         , & ! new ice thickness
          hsn         , & ! snow thickness  (m)
-         hinS_old    , & ! old brine thickness before growh/melt
+         hbr_old     , & ! old brine thickness before growh/melt
          kavg        , & ! average ice permeability (m^2)
          zphi_o      , & ! surface ice porosity 
          hbrin           ! brine height
@@ -672,8 +672,8 @@
                                 congeln(:,:,n,iblk), snoicen(:,:,n,iblk), &
                                 hin_old(:,:,n,iblk),                      & 
                                 trcrn  (:,:,nt_fbri,n,iblk),              &
-                                dh_top (:,:,n,iblk), dh_bot (:,:,n,iblk), &
-                                hinS_old,            hin,                 &
+                                dhbr_top(:,:,n,iblk),dhbr_bot(:,:,n,iblk),&
+                                hbr_old,             hin,                 &
                                 hsn,                 first_ice(:,:,n,iblk))
 
                ! Requires the average ice permeability = kavg(:)
@@ -684,7 +684,7 @@
                                 icells,              n,                   &
                                 indxi,               indxj,               &
                                 trcrn(:,:,:,n,iblk), hin_old(:,:,n,iblk), &
-                                hinS_old,                                 &
+                                hbr_old,                                  &
                                 sss  (:,:,iblk),     sst(:,:,iblk),       & 
                                 bTiz (:,:,:,n,iblk), bphi(:,:,:,n,iblk),  &
                                 kavg,                zphi_o,              &
@@ -699,14 +699,14 @@
                   i = indxi(ij)
                   j = indxj(ij)
 
-               call update_hbrine (meltbn  (i,j,n,iblk), melttn(i,j,n,iblk), &
-                                   meltsn  (i,j,n,iblk), dt,                 &
-                                   hin     (ij),         hsn   (ij),        &
-                                   hin_old (i,j,n,iblk), hbrin (ij),        &
-                                   hinS_old(ij),                            &
-                                   trcrn   (i,j,nt_fbri,n,iblk),             &
-                                   dh_top  (i,j,n,iblk), dh_bot(i,j,n,iblk), &
-                                   kavg    (ij),         zphi_o(ij),        &
+               call update_hbrine (meltbn  (i,j,n,iblk), melttn(i,j,n,iblk),  &
+                                   meltsn  (i,j,n,iblk), dt,                  &
+                                   hin     (ij),         hsn   (ij),          &
+                                   hin_old (i,j,n,iblk), hbrin (ij),          &
+                                   hbr_old (ij),                              &
+                                   trcrn   (i,j,nt_fbri,n,iblk),              &
+                                   dhbr_top(i,j,n,iblk), dhbr_bot(i,j,n,iblk),&
+                                   kavg    (ij),         zphi_o(ij),          &
                                    darcy_V (i,j,n,iblk))
                     
                hbri(i,j,iblk) = hbri(i,j,iblk) + hbrin(ij)*aicen_init(i,j,n,iblk)  

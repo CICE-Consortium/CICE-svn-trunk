@@ -88,7 +88,7 @@
          yday           , & ! day of the year
          tday           , & ! absolute day number
          dayyr          , & ! number of days per year
-         basis_seconds      ! Seconds since calendar zero.
+         basis_seconds      ! Seconds since calendar zero
 
       logical (kind=log_kind), public :: &
          new_year       , & ! new year = .true.

@@ -17,7 +17,7 @@
       use ice_exit, only: abort_ice
       use ice_state, only: ntrcr, nt_qice, nt_sice
       use ice_zbgc_shared, only: cgrid, bgrid, igrid, exp_h, k_o, rhosi, &
-           his_min, thinS, min_salin, igrid, remap_layers_bgc, &
+           hbr_min, thinS, min_salin, igrid, remap_layers_bgc, &
            phi_snow, restart_hbrine, first_ice
 
       implicit none
@@ -28,7 +28,7 @@
                 hbrine_diags
  
       real (kind=dbl_kind), parameter :: &   
-         maxhinS = 1.25_dbl_kind  , & ! brine overflows if hinS > maxhinS*hin
+         maxhbr  = 1.25_dbl_kind  , & ! brine overflows if hbr > maxhbr*hin
          viscos  = 2.1e-6_dbl_kind, & ! kinematic viscosity (m^2/s) 
          ! Brine salinity as a cubic function of temperature
          a1      = -21.4_dbl_kind , & ! (psu/C)  
@@ -108,7 +108,7 @@
 ! works for zsalinity and tr_salinity
 !
 ! NOTE: In this subroutine, trcrn(nt_fbri) is  the volume fraction of ice with 
-! dynamic salinity or the height ratio == hinS/vicen*aicen, where hinS is the 
+! dynamic salinity or the height ratio == hbr/vicen*aicen, where hbr is the 
 ! height of the brine surface relative to the bottom of the ice.  This volume fraction
 ! may be > 1 in which case there is brine above the ice surface (meltponds). 
 
@@ -118,8 +118,8 @@
                                       aicen,    vicen,    vsnon,      &
                                       meltb,    meltt,    congel,     &
                                       snoice,   hice_old, fbri,       & 
-                                      dh_top,   dh_bot,               &
-                                      hinS_o,   hin,hsn,  firstice)
+                                      dhbr_top, dhbr_bot,             &
+                                      hbr_old,  hin,hsn,  firstice)
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -142,12 +142,12 @@
       real (kind=dbl_kind), dimension(nx_block*ny_block), intent(inout) :: &
          hin          , & ! ice thickness (m) 
          hsn          , & ! snow thickness (m) 
-         hinS_o           ! old brine height (m)
+         hbr_old          ! old brine height (m)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(inout) :: &
          fbri         , & ! trcrn(i,j,nt_fbri)
-         dh_top       , & ! brine change in top for diagnostics (m)
-         dh_bot       , & ! brine change in bottom for diagnostics (m)
+         dhbr_top     , & ! brine change in top for diagnostics (m)
+         dhbr_bot     , & ! brine change in bottom for diagnostics (m)
          hice_old         ! old ice thickness (m)
 
       logical (kind=log_kind), dimension (nx_block,ny_block), intent(in) :: &
@@ -169,8 +169,8 @@
       ! initialize
       !-----------------------------------------------------------------
 
-      dh_top    (:,:) = c0
-      dh_bot    (:,:) = c0
+      dhbr_top(:,:) = c0
+      dhbr_bot(:,:) = c0
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -191,18 +191,18 @@
          hin_old = max(c0, hin(ij) + meltb (i,j) + meltt (i,j) &
                                    - congel(i,j) - snoice(i,j))
          dhice = hin_old - hice_old(i,j)   ! change due to subl/cond
-         dh_top(i,j) = meltt (i,j) - dhice - snoice(i,j)
-         dh_bot(i,j) = congel(i,j) - meltb(i,j)   
+         dhbr_top(i,j) = meltt (i,j) - dhice - snoice(i,j)
+         dhbr_bot(i,j) = congel(i,j) - meltb(i,j)   
 
          if ((hice_old(i,j) < puny) .OR. (hin_old < puny) &
                                     .OR. firstice(i,j)) then
             hin_old         = hin(ij) 
-            dh_top    (i,j) = c0
-            dh_bot    (i,j) = c0
+            dhbr_top  (i,j) = c0
+            dhbr_bot  (i,j) = c0
             fbri      (i,j) = c1 
          endif
 
-         hinS_o(ij) = fbri(i,j)* hice_old(i,j)
+         hbr_old(ij) = fbri(i,j) * hice_old(i,j)
 
       enddo  ! ij
 
@@ -218,7 +218,7 @@
       subroutine compute_microS_mushy (nx_block, ny_block,               &
                                        icells,   n_cat,                  &
                                        indxii,   indxjj,                 &
-                                       trcrn,    hice_old,   hinS_o,     &
+                                       trcrn,    hice_old,   hbr_old,     &
                                        sss,      sst,        bTin,       &
                                        bphin,    kperm,      zphi_min,   &
                                        bSin,     brine_sal,  brine_rho,  &
@@ -250,7 +250,7 @@
          zphi_min        ! surface porosity
 
       real (kind=dbl_kind), dimension (nx_block*ny_block), intent(inout) :: &
-         hinS_o          ! previous timestep brine height (m)
+         hbr_old           ! previous timestep brine height (m)
 
       real (kind=dbl_kind), dimension (nx_block*ny_block,nblyr+1), &
          intent(inout)  :: &
@@ -286,9 +286,9 @@
          k               ! vertical biology layer index 
       
       real (kind=dbl_kind), dimension(icells) :: &
-         surface_S   , & ! salinity of ice above hin > hinS 
+         surface_S   , & ! salinity of ice above hin > hbr 
          hinc_old    , & ! mean ice thickness before current melt/growth (m)
-         hinSc_old       ! mean brine thickness before current melt/growth (m)
+         hbrc_old        ! mean brine thickness before current melt/growth (m)
       
       real (kind=dbl_kind), dimension (nx_block*ny_block,nblyr+2) :: &
          trtmp_s     , & ! temporary, remapped tracers   
@@ -318,13 +318,13 @@
       do ij = 1, icells   ! map Sin and qin profiles to bgc grid 
          i = indxii(ij)
          j = indxjj(ij)
-         hinS_o   (ij) = min(hinS_o(ij), maxhinS*hice_old(i,j))
+         hbr_old  (ij) = min(hbr_old(ij), maxhbr*hice_old(i,j))
          hinc_old (ij) = hice_old(i,j)
-         hinSc_old(ij) = hinS_o  (ij)
+         hbrc_old (ij) = hbr_old (ij)
 
          call remap_layers_bgc (ntrcr,            nilyr,          &
                                 nt_sice,                          &
-                                trcrn(i,j,:),     trtmp_s(ij,:), &
+                                trcrn(i,j,:),     trtmp_s(ij,:),  &
                                 0,                nblyr+1,        &
                                 hinc_old(ij),     hinc_old(ij),   &
                                 cgrid(2:nilyr+1),                 &
@@ -332,7 +332,7 @@
      
          call remap_layers_bgc (ntrcr,            nilyr,          &
                                 nt_qice,                          &
-                                trcrn(i,j,:),     trtmp_q(ij,:), &
+                                trcrn(i,j,:),     trtmp_q(ij,:),  &
                                 0,                nblyr+1,        &
                                 hinc_old(ij),     hinc_old(ij),   &
                                 cgrid(2:nilyr+1),                 &
@@ -538,8 +538,8 @@
 ! Decreases arise from downward flushing and bottom melt.  
 !
 ! NOTE: In this subroutine, trcrn(nt_fbri) is  the volume fraction of ice 
-! with dynamic salinity or the height ratio == hinS/vicen*aicen, where 
-! hinS is the height of the brine surface relative to the bottom of the 
+! with dynamic salinity or the height ratio == hbr/vicen*aicen, where 
+! hbr is the height of the brine surface relative to the bottom of the 
 ! ice.  This volume fraction may be > 1 in which case there is brine 
 ! above the ice surface (ponds).
 
@@ -547,7 +547,7 @@
                                 melts,      dt,          &
                                 hin,        hsn,         &
                                 hin_old,                 &
-                                hinS,       hinS_old,    &
+                                hbr,        hbr_old,     &
                                 fbri,                    &
                                 dhS_top,    dhS_bottom,  &
                                 kperm,      zphi_min,    &
@@ -563,27 +563,27 @@
          hin,         & ! ice thickness (m)
          hsn,         & ! snow thickness (m)
          hin_old,     & ! past timestep ice thickness (m)
-         hinS_old,    & ! previous timestep hinS
+         hbr_old,     & ! previous timestep hbr
          kperm          ! avg ice permeability
 
       real (kind=dbl_kind), intent(inout):: &
          darcy_V    , & ! Darcy velocity: m/s
-         dhS_top    , & ! change in top hinS before darcy flow
-         dhS_bottom , & ! change in bottom hinS initially before darcy flow
-         hinS       , & ! thickness of brine (m) 
-         fbri       , & ! brine height ratio tracer (hinS/hin) 
+         dhS_top    , & ! change in top hbr before darcy flow
+         dhS_bottom , & ! change in bottom hbr initially before darcy flow
+         hbr        , & ! thickness of brine (m) 
+         fbri       , & ! brine height ratio tracer (hbr/hin) 
          zphi_min       ! surface porosity
 
       ! local variables
 
       real (kind=dbl_kind) :: &  
-         hinS_min   , & ! thinS or hin 
-         dhinS_hin  , & ! hinS-hin
-         hbrn       , & ! brine height  (m) hinS-h_o
-         dhinS      , & ! change in brine surface
-         h_o        , & ! new ocean surface from ice bottom (m)
-         darcy_coeff, & ! magnitude of the Darcy velocity/hbrn (1/s)
-         hbrn_new       ! hbrn after flushing
+         hbr_min    , & ! thinS or hin 
+         dhbr_hin   , & ! hbr-hin
+         hbrocn     , & ! brine height above sea level (m) hbr-h_ocn
+         dhbr       , & ! change in brine surface
+         h_ocn      , & ! new ocean surface from ice bottom (m)
+         darcy_coeff, & ! magnitude of the Darcy velocity/hbrocn (1/s)
+         hbrocn_new     ! hbrocn after flushing
 
       real (kind=dbl_kind), parameter :: &
          dh_min = p001, & ! brine remains within dh_min of sea level
@@ -591,43 +591,43 @@
 !echmod USE NAMELIST PARAMETERS rfracmin, rfracmax 
          run_off = c0   ! fraction of melt that runs off directly to the ocean
 
-         hbrn     = c0
-         darcy_V  = c0
-         hbrn_new = c0
-         h_o = rhosi/rhow*hin + rhos/rhow*hsn 
+         hbrocn     = c0
+         darcy_V    = c0
+         hbrocn_new = c0
+         h_ocn = rhosi/rhow*hin + rhos/rhow*hsn 
        
-         if (hinS_old > thinS .AND. hin_old > thinS) then
+         if (hbr_old > thinS .AND. hin_old > thinS) then
 
-            dhS_top = -max(c0, min(hin_old-hinS_old, meltt)) * rhoi/rhow
+            dhS_top = -max(c0, min(hin_old-hbr_old, meltt)) * rhoi/rhow
             dhS_top = dhS_top - max(c0, melts) * rhos/rhow
             dhS_top = (c1 - run_off) * dhS_top
-            dhinS   = dhS_bottom - dhS_top  
-            hinS    = max(his_min, hinS_old + dhinS)
-            hbrn    = hinS - h_o
-            darcy_coeff = max(c0, kperm*gravit/(viscos*hinS_old))
+            dhbr    = dhS_bottom - dhS_top  
+            hbr     = max(hbr_min, hbr_old + dhbr)
+            hbrocn  = hbr - h_ocn
+            darcy_coeff = max(c0, kperm*gravit/(viscos*hbr_old))
 
-            if (hbrn > c0 .AND. hinS > thinS ) then   
-               hbrn_new = hbrn*exp(-darcy_coeff/zphi_min*dt)
-               hinS = max(thinS, h_o + hbrn_new)    
-            elseif (hbrn < c0) then
-               if (hinS >= hin) zphi_min = phi_snow
-               hbrn_new = hbrn*exp(-darcy_coeff/zphi_min*dt)
-               hinS = max(his_min, h_o + hbrn_new)
+            if (hbrocn > c0 .AND. hbr > thinS ) then   
+               hbrocn_new = hbrocn*exp(-darcy_coeff/zphi_min*dt)
+               hbr = max(thinS, h_ocn + hbrocn_new)    
+            elseif (hbrocn < c0) then
+               if (hbr >= hin) zphi_min = phi_snow
+               hbrocn_new = hbrocn*exp(-darcy_coeff/zphi_min*dt)
+               hbr = max(hbr_min, h_ocn + hbrocn_new)
             endif
 
-            hbrn_new = hinS - h_o
-            darcy_V  = -SIGN((hbrn-hbrn_new)/dt*zphi_min, hbrn)
-            dhS_top  = dhS_top + SIGN((hbrn-hbrn_new), hbrn)
+            hbrocn_new = hbr - h_ocn
+            darcy_V  = -SIGN((hbrocn-hbrocn_new)/dt*zphi_min, hbrocn)
+            dhS_top  = dhS_top + SIGN((hbrocn-hbrocn_new), hbrocn)
 
          else    ! very thin brine height 
-            hinS_min  = min(thinS, hin)
-            hinS = max(hinS_min, hinS_old+dhS_bottom-dhS_top)
-            dhinS_hin = hinS - h_o
-            if (abs(dhinS_hin) > dh_min) &
-               hinS = max(his_min, h_o + SIGN(dh_min,dhinS_hin))
+            hbr_min  = min(thinS, hin)
+            hbr = max(hbr_min, hbr_old+dhS_bottom-dhS_top)
+            dhbr_hin = hbr - h_ocn
+            if (abs(dhbr_hin) > dh_min) &
+               hbr = max(hbr_min, h_ocn + SIGN(dh_min,dhbr_hin))
          endif 
 
-         fbri = hinS/hin
+         fbri = hbr/hin
 
       end subroutine update_hbrine
 

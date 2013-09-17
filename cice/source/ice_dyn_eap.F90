@@ -657,7 +657,7 @@
 
       FUNCTION s11kr(x,y,z,phi) 
 
-      use ice_constants , only: p5, pi, pih, c0, c1, eps11
+      use ice_constants , only: p5, pi, pih, c0, c1, puny
 
       real (kind=dbl_kind), intent(in) :: &
         x,y,z,phi
@@ -701,13 +701,13 @@
       IIn2t1 = n2t1i11 * d11 + (n2t1i12 + n2t1i21) * d12 + n2t1i22 * d22
       IIt1t2 = t1t2i11 * d11 + (t1t2i12 + t1t2i21) * d12 + t1t2i22 * d22
 
-      if (-IIn1t2>=eps11) then
+      if (-IIn1t2>=puny) then
       Hen1t2 = c1
       else
       Hen1t2 = c0
       endif
 
-      if (-IIn2t1>=eps11) then
+      if (-IIn2t1>=puny) then
       Hen2t1 = c1
       else
       Hen2t1 = c0
@@ -722,7 +722,7 @@
 
       FUNCTION s12kr(x,y,z,phi)
 
-      use ice_constants , only: p5, pi, pih, c0, c1, eps11
+      use ice_constants , only: p5, pi, pih, c0, c1, puny
       real (kind=dbl_kind), intent(in) :: &
         x,y,z,phi
 
@@ -763,13 +763,13 @@
       IIn2t1 = n2t1i11 * d11 + (n2t1i12 + n2t1i21) * d12 + n2t1i22 * d22
       IIt1t2 = t1t2i11 * d11 + (t1t2i12 + t1t2i21) * d12 + t1t2i22 * d22
 
-      if (-IIn1t2>=eps11) then
+      if (-IIn1t2>=puny) then
       Hen1t2 = c1
       else
       Hen1t2 = c0
       endif
 
-      if (-IIn2t1>=eps11) then
+      if (-IIn2t1>=puny) then
       Hen2t1 = c1
       else
       Hen2t1 = c0
@@ -786,7 +786,7 @@
 
       FUNCTION s22kr(x,y,z,phi)
 
-      use ice_constants , only: p5, pi, pih, c0, c1, eps11
+      use ice_constants , only: p5, pi, pih, c0, c1, puny
 
       real (kind=dbl_kind), intent(in) :: &
         x,y,z,phi
@@ -828,13 +828,13 @@
       IIn2t1 = n2t1i11 * d11 + (n2t1i12 + n2t1i21) * d12 + n2t1i22 * d22
       IIt1t2 = t1t2i11 * d11 + (t1t2i12 + t1t2i21) * d12 + t1t2i22 * d22
 
-      if (-IIn1t2>=eps11) then
+      if (-IIn1t2>=puny) then
       Hen1t2 = c1
       else
       Hen1t2 = c0
       endif
 
-      if (-IIn2t1>=eps11) then
+      if (-IIn2t1>=puny) then
       Hen2t1 = c1
       else
       Hen2t1 = c0
@@ -849,7 +849,7 @@
 
       FUNCTION s11ks(x,y,z,phi)
 
-      use ice_constants , only: p5, pi, pih, c0, c1, eps11
+      use ice_constants , only: p5, pi, pih, c0, c1, puny
 
       real (kind=dbl_kind), intent(in):: &
         x,y,z,phi
@@ -891,19 +891,19 @@
       IIn2t1 = n2t1i11 * d11 + (n2t1i12 + n2t1i21) * d12 + n2t1i22 * d22
       IIt1t2 = t1t2i11 * d11 + (t1t2i12 + t1t2i21) * d12 + t1t2i22 * d22
 
-      if (-IIn1t2>=eps11) then
+      if (-IIn1t2>=puny) then
       Hen1t2 = c1
       else
       Hen1t2 = c0
       endif
 
-      if (-IIn2t1>=eps11) then
+      if (-IIn2t1>=puny) then
       Hen2t1 = c1
       else
       Hen2t1 = c0
       endif
 
-      s11ks = sign(c1,IIt1t2+eps11)*(Hen1t2 * t1t2i11 + Hen2t1 * t2t1i11)
+      s11ks = sign(c1,IIt1t2+puny)*(Hen1t2 * t1t2i11 + Hen2t1 * t2t1i11)
 
       end FUNCTION s11ks
 
@@ -912,7 +912,7 @@
 
       FUNCTION s12ks(x,y,z,phi)
 
-      use ice_constants , only: p5, pi, pih, c0, c1, eps11
+      use ice_constants , only: p5, pi, pih, c0, c1, puny
 
       real (kind=dbl_kind), intent(in) :: &
         x,y,z,phi
@@ -954,20 +954,20 @@
       IIn2t1 = n2t1i11 * d11 + (n2t1i12 + n2t1i21) * d12 + n2t1i22 * d22
       IIt1t2 = t1t2i11 * d11 + (t1t2i12 + t1t2i21) * d12 + t1t2i22 * d22
 
-      if (-IIn1t2>=eps11) then
+      if (-IIn1t2>=puny) then
       Hen1t2 = c1
       else
       Hen1t2 = c0
       endif
 
-      if (-IIn2t1>=eps11) then
+      if (-IIn2t1>=puny) then
       Hen2t1 = c1
       else
       Hen2t1 = c0
       endif
 
-      s12s0 = sign(c1,IIt1t2+eps11)*(Hen1t2 * t1t2i12 + Hen2t1 * t2t1i12)
-      s21s0 = sign(c1,IIt1t2+eps11)*(Hen1t2 * t1t2i21 + Hen2t1 * t2t1i21)
+      s12s0 = sign(c1,IIt1t2+puny)*(Hen1t2 * t1t2i12 + Hen2t1 * t2t1i12)
+      s21s0 = sign(c1,IIt1t2+puny)*(Hen1t2 * t1t2i21 + Hen2t1 * t2t1i21)
       s12ks=p5*(s12s0+s21s0)
 
       end FUNCTION s12ks
@@ -977,7 +977,7 @@
 
       FUNCTION s22ks(x,y,z,phi) 
 
-      use ice_constants , only: p5, pi, pih, c0, c1, eps11
+      use ice_constants , only: p5, pi, pih, c0, c1, puny
 
       real (kind=dbl_kind), intent(in) :: &
         x,y,z,phi
@@ -1019,19 +1019,19 @@
       IIn2t1 = n2t1i11 * d11 + (n2t1i12 + n2t1i21) * d12 + n2t1i22 * d22
       IIt1t2 = t1t2i11 * d11 + (t1t2i12 + t1t2i21) * d12 + t1t2i22 * d22
 
-      if (-IIn1t2>=eps11) then
+      if (-IIn1t2>=puny) then
       Hen1t2 = c1
       else
       Hen1t2 = c0
       endif
 
-      if (-IIn2t1>=eps11) then
+      if (-IIn2t1>=puny) then
       Hen2t1 = c1
       else
       Hen2t1 = c0
       endif
 
-      s22ks = sign(c1,IIt1t2+eps11)*(Hen1t2 * t1t2i22 + Hen2t1 * t2t1i22)
+      s22ks = sign(c1,IIt1t2+puny)*(Hen1t2 * t1t2i22 + Hen2t1 * t2t1i22)
 
       end FUNCTION s22ks
 

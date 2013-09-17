@@ -1071,6 +1071,7 @@
 
       use ice_calendar, only: dt
       use ice_restart_meltpond_cesm, only: hs0
+      use ice_restart_meltpond_topo, only: hp1
       use ice_restart_meltpond_lvl, only: hs1, pndaspect, snowinfil
       use ice_orbital, only: compute_coszen
       use ice_state, only: ntrcr, nt_Tsfc, nt_alvl, nt_apnd, nt_hpnd, nt_ipnd, &
@@ -1167,8 +1168,7 @@
          tmp             ! 0 or 1
 
       real (kind=dbl_kind), parameter :: & 
-         argmax = c10, & ! maximum argument of exponential
-         ipnd_crit = p01 ! critical lid depth for meltpond_topo 
+         argmax = c10    ! maximum argument of exponential
 
       exp_min = exp(-argmax)
 
@@ -1304,9 +1304,9 @@
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)
-               ! Lid effective if thicker than ipnd_crit (1 cm) 
+               ! Lid effective if thicker than hp1
                if (trcrn(i,j,nt_apnd,n)*aicen(i,j,n) > puny .and. &
-                    trcrn(i,j,nt_ipnd,n) < ipnd_crit) then
+                    trcrn(i,j,nt_ipnd,n) < hp1) then
                   fpn(i,j) = trcrn(i,j,nt_apnd,n)
                else
                   fpn(i,j) = c0

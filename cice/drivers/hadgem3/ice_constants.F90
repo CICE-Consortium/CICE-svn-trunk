@@ -39,7 +39,7 @@
 
       real (kind=dbl_kind), parameter, public :: &
          secday    = 86400.0_dbl_kind ,&! seconds in calendar day
-         viscosity_dyn = 1.79e-3_dbl_kind, & ! dynamic viscosity of brine
+         viscosity_dyn = 1.79e-3_dbl_kind, & ! dynamic viscosity of brine (kg/m/s)
          Tocnfrz   = -1.8_dbl_kind    ,&! freezing temp of seawater (C),
                                         ! used as Tsfcn for open water
          rhofresh  = 1000.0_dbl_kind  ,&! density of fresh water (kg/m^3)
@@ -55,7 +55,6 @@
          Tsmelt    = 0.0_dbl_kind     ,&! melting temperature, snow top surface (C)
          ice_ref_salinity = 4._dbl_kind ,&! (ppt)
 !        ocn_ref_salinity = 34.7_dbl_kind,&! (ppt)
-!        rho_air   = 1.2_dbl_kind     ,&! ambient air density (kg/m^3)
          spval_dbl = 1.0e30_dbl_kind    ! special value (double precision)
 
       real (kind=real_kind), parameter, public :: &
@@ -66,7 +65,7 @@
 
          ! (Ebert, Schramm and Curry JGR 100 15965-15975 Aug 1995)
          kappav = 1.4_dbl_kind ,&! vis extnctn coef in ice, wvlngth<700nm (1/m)
-         kappan = 17.6_dbl_kind,&! vis extnctn coef in ice, wvlngth<700nm (1/m)
+         !kappan = 17.6_dbl_kind,&! vis extnctn coef in ice, wvlngth<700nm (1/m)
 
          ! kice is not used for mushy thermo
          kice   = 2.03_dbl_kind  ,&! thermal conductivity of fresh ice(W/m/deg)
@@ -147,10 +146,9 @@
         p055 = p111*p5, &
         p027 = p055*p5, &
         p222 = c2/c9, &
-        eps11  = 1.0e-11_dbl_kind, &
+        puny   = 1.0e-11_dbl_kind, &
         eps13  = 1.0e-13_dbl_kind, &
         eps16  = 1.0e-16_dbl_kind, &
-        puny   = eps11, &
         bignum = 1.0e+30_dbl_kind, &
         pi     = 3.14159265358979323846_dbl_kind, &
         pih    = p5*pi, &

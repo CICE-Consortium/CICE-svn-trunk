@@ -80,6 +80,7 @@
       use ice_restart_firstyear, only: restart_FY
       use ice_restart_lvl, only: restart_lvl
       use ice_restart_meltpond_cesm, only: restart_pond_cesm, hs0
+      use ice_restart_meltpond_topo, only: hp1
       use ice_restart_meltpond_lvl, only: restart_pond_lvl, dpscale, frzpnd, snowinfil, &
                                           rfracmin, rfracmax, pndaspect, hs1
       use ice_restart_meltpond_topo, only: restart_pond_topo
@@ -129,7 +130,7 @@
         ktherm,         conduct,         shortwave,     albedo_type,    &
         albicev,        albicei,         albsnowv,      albsnowi,       &
         ahmax,          R_ice,           R_pnd,         R_snw,          &
-        dT_mlt,         rsnw_mlt,                                       &
+        dT_mlt,         rsnw_mlt,        hp1,                           &
         hs0,            dpscale,         frzpnd,        snowinfil,      &
         rfracmin,       rfracmax,        pndaspect,     hs1,            &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
@@ -224,6 +225,7 @@
       dT_mlt    = 1.5_dbl_kind    ! change in temp to give non-melt to melt change
                                   ! in snow grain radius
       rsnw_mlt  = 1500._dbl_kind  ! maximum melting snow grain radius
+      hp1       = 0.01_dbl_kind   ! critical pond lid thickness for topo ponds
       hs0       = 0.03_dbl_kind   ! snow depth for transition to bare sea ice (m)
       hs1       = 0.03_dbl_kind   ! snow depth for transition to bare pond ice (m)
       dpscale   = c1              ! alter e-folding time scale for flushing 
@@ -232,7 +234,6 @@
       rfracmin  = 0.15_dbl_kind   ! minimum retained fraction of meltwater
       rfracmax  = 0.85_dbl_kind   ! maximum retained fraction of meltwater
       pndaspect = 0.8_dbl_kind    ! ratio of pond depth to area fraction
-      hs0       = 0.03_dbl_kind   ! snow depth for transition to bare sea ice (m)
       albicev   = 0.78_dbl_kind   ! visible ice albedo for h > ahmax
       albicei   = 0.36_dbl_kind   ! near-ir ice albedo for h > ahmax
       albsnowv  = 0.98_dbl_kind   ! cold snow albedo, visible
@@ -583,6 +584,7 @@
       call broadcast_scalar(R_snw,              master_task)
       call broadcast_scalar(dT_mlt,             master_task)
       call broadcast_scalar(rsnw_mlt,           master_task)
+      call broadcast_scalar(hp1,                master_task)
       call broadcast_scalar(hs0,                master_task)
       call broadcast_scalar(hs1,                master_task)
       call broadcast_scalar(dpscale,            master_task)
@@ -739,6 +741,7 @@
          write(nu_diag,1000) ' R_snw                     = ', R_snw
          write(nu_diag,1000) ' dT_mlt                    = ', dT_mlt
          write(nu_diag,1000) ' rsnw_mlt                  = ', rsnw_mlt
+         write(nu_diag,1000) ' hp1                       = ', hp1
          write(nu_diag,1000) ' hs0                       = ', hs0
          else
          write(nu_diag,1030) ' albedo_type               = ', &
@@ -1163,7 +1166,6 @@
       use ice_domain_size, only: nilyr, nslyr, nx_global, ny_global, max_ntrcr, ncat
       use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_fbri, tr_brine
       use ice_itd, only: hin_max
-      use ice_therm_vertical, only: phi_init
       use ice_therm_mushy, only: &
            enthalpy_mush, &
            liquidus_temperature_mush, &

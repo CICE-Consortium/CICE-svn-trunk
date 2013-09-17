@@ -23,9 +23,6 @@
                          ! 1 = Bitz and Lipscomb 1999
                          ! 2 = mushy layer theory
 
-      !real (kind=dbl_kind), dimension(nilyr+1) :: &
-      !   salin        ! salinity (ppt)   
-
       real (kind=dbl_kind), dimension(nilyr+1), public :: &
          Tmlt            ! melting temperature
                          ! nilyr + 1 index is for bottom surface

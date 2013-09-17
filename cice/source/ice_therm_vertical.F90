@@ -43,7 +43,7 @@
 
       real (kind=dbl_kind), parameter, public :: &
          saltmax = 3.2_dbl_kind,   & ! max salinity at ice base for BL99 (ppt)
-         ! phi_init and dSin0_frazil are used for ktherm=2
+         ! phi_init and dSin0_frazil are used for mushy thermo, ktherm=2
          phi_init = 0.75_dbl_kind, & ! initial liquid fraction of frazil
          dSin0_frazil = c3 ! bulk salinity reduction of newly formed frazil
 
@@ -660,7 +660,7 @@
 
       real (kind=dbl_kind), parameter :: &
          floediam = 300.0_dbl_kind, & ! effective floe diameter (m)
-         alpha    = 0.66_dbl_kind , & ! constant from Steele (unitless)
+         floeshape = 0.66_dbl_kind , & ! constant from Steele (unitless)
          m1 = 1.6e-6_dbl_kind     , & ! constant from Maykut & Perovich
                                       ! (m/s/deg^(-m2))
          m2 = 1.36_dbl_kind           ! constant from Maykut & Perovich
@@ -722,7 +722,7 @@
       !-----------------------------------------------------------------
 
          wlat = m1 * deltaT**m2 ! Maykut & Perovich
-         rside(i,j) = wlat*dt*pi/(alpha*floediam) ! Steele
+         rside(i,j) = wlat*dt*pi/(floeshape*floediam) ! Steele
          rside(i,j) = max(c0,min(rside(i,j),c1))
 
       enddo                     ! ij

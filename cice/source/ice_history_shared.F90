@@ -107,10 +107,6 @@
       type (ice_hist_field), dimension(max_avail_hist_fields), public :: &
          avail_hist_fields
 
-      character (len=16), public :: vname_in     ! variable name
-      character (len=55), public :: vdesc_in     ! variable description
-      character (len=55), public :: vcomment_in  ! variable description
-
       integer (kind=int_kind), parameter, public :: &
          nvar = 11              , & ! number of grid fields that can be written
                                     !   excluding grid vertices
