@@ -124,13 +124,13 @@
       use ice_exit, only: abort_ice
       use ice_fileunits, only: nu_nml, nml_filename, &
           get_fileunit, release_fileunit
-      use ice_history_shared, only: tstr2D, tcstr, define_hist_field, &
-          vname_in
+      use ice_history_shared, only: tstr2D, tcstr, define_hist_field
       use ice_state, only: tr_aero, tr_brine
 
       integer (kind=int_kind) :: n, ns
       integer (kind=int_kind) :: nml_error ! namelist i/o error flag
       character (len=3) :: nchar
+      character (len=16) :: vname_in     ! variable name
 
       !-----------------------------------------------------------------
       ! read namelist
@@ -434,7 +434,7 @@
       ! brine
       if (f_hbri(1:1) /= 'x') &
          call define_hist_field(n_hbri,"hbrine","m",tstr2D, tcstr, &
-             "Brine height",                                       &
+             "Area-averaged brine height",                         &
              "distance from ice bottom to brine surface", c1, c0,  &
              ns, f_hbri)
 
@@ -457,7 +457,7 @@
       do ns = 1, nstreams
         if (f_fbri(1:1) /= 'x') &
          call define_hist_field(n_fbri,"fbrine","1",tstr3Dc, tcstr, &
-             "ice vol frac. with dynamic sal, cat",                 &
+             "brine tracer fraction of ice volume, cat",             &
              "none", c1, c0,       &
              ns, f_fbri)
       enddo ! ns

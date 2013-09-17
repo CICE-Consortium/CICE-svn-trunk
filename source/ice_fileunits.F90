@@ -37,7 +37,6 @@
          nu_kmt        , &  ! land mask file
          nu_nml        , &  ! namelist input file
          nu_forcing    , &  ! forcing data file
-         nu_eap        , &  ! input file for eap dynamics
          nu_dump       , &  ! dump file for restarting
          nu_restart    , &  ! restart input file
          nu_dump_age   , &  ! dump file for restarting ice age tracer
@@ -63,9 +62,6 @@
 
       character (6), parameter, public :: &
          nml_filename = 'ice_in' ! namelist input file name
-
-      character (12), parameter, public :: &
-         eap_filename = 'eap_stresses' ! eap dynmaics input file name
 
       integer (kind=int_kind), parameter, public :: &
          ice_stdin  =  5, & ! reserved unit for standard input

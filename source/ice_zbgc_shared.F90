@@ -53,7 +53,7 @@
          amm        , & ! ammonia/um (mmol/m^3)
          sil        , & ! silicate (mmol/m^3)
          dmsp       , & ! dmsp (mmol/m^3)
-         dms        , & ! dms (mmmol/m^3     
+         dms        , & ! dms (mmol/m^3)
          algalN         ! ocean algal nitrogen (mmol/m^3)
 
       character (char_len_long), public :: &        ! input data file names
@@ -84,7 +84,7 @@
          R_C2N      = 7.0_dbl_kind  , & ! algal C to N (mole/mole) 
                                         ! Kristiansen 1991 (Barents) 9.0
          R_gC2molC  = 12.01_dbl_kind, & ! mg/mmol C
-         R_chl2N    = 3.0_dbl_kind  , & ! algal chlorophyll to N (mg/millimole)
+         R_chl2N    = 3.0_dbl_kind  , & ! algal chlorophyll to N (mg/mmol)
          R_S2N      = 0.03_dbl_kind , & ! algal S to N (mole/mole)
          fr_resp    = 0.05_dbl_kind     ! respiration fraction
 
@@ -122,7 +122,7 @@
          rhosi     = 940.0_dbl_kind, & ! average sea ice density
                                        ! Cox and Weeks, 1982: 919-974 kg/m^2
          min_salin = p1            , & ! threshold for brine pocket treatment 
-         his_min   = p01           , & ! minimum hbrine thickness
+         hbr_min   = p01           , & ! minimum hbrine thickness
          thinS     = 0.05_dbl_kind     ! minimum ice thickness for brine
 
       real (kind=dbl_kind), public :: & 
@@ -131,14 +131,14 @@
 
       real (kind=dbl_kind), & 
          dimension (nx_block,ny_block,ncat,max_blocks), public :: &
-         dh_top     , & ! brine top change
-         dh_bot         ! brine bottom change
+         dhbr_top     , & ! brine top change
+         dhbr_bot         ! brine bottom change
 
       real (kind=dbl_kind), &
          dimension (nx_block,ny_block,max_blocks), public :: &
          grow_net       , & ! Specific growth rate (/s) per grid cell
          PP_net         , & ! Total production (mg C/m^2/s) per grid cell
-         hbri               ! brine height
+         hbri               ! brine height, area-averaged for comparison with hi (m)
 
       real (kind=dbl_kind), dimension (nblyr+2), public :: &
          bgrid              ! biology nondimensional vertical grid points

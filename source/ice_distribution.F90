@@ -1423,7 +1423,7 @@
 
    blktogether = max(1,nint(float(nblocks_x*nblocks_y)/float(4*nprocs)))
 
-   ! --- two phases, resetnt processor and cnt for each phase
+   ! --- two phases, reset processor and cnt for each phase
    ! --- phase 1 is south to north, east to west on the left half of the domain
    ! --- phase 2 is north to south, east to west on the right half of the domain
 

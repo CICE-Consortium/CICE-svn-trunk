@@ -32,6 +32,9 @@
       logical (kind=log_kind), public :: & 
          restart_pond_topo ! if .true., read meltponds restart file
 
+      real (kind=dbl_kind), public :: &
+         hp1               ! critical parameter for pond ice thickness
+
 !=======================================================================
 
       contains

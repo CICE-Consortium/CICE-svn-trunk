@@ -39,7 +39,7 @@
       distrb_info        ! block distribution info
 
    type (ice_halo), public :: &
-      halo_info          !  ghost cell update info
+      halo_info          ! ghost cell update info
 
    character (char_len), public :: &
       ew_boundary_type, &! type of domain bndy in each logical

@@ -200,7 +200,7 @@
        ! (Note CICE_IN_NEMO does not use these for coupling.  
        !  It uses fresh_ai,fsalt_ai,fhocn_ai and fswthru_ai)
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
-         fpond   , & ! fresh water flux to ponds (kg/m2/s)
+         fpond   , & ! fresh water flux to ponds (kg/m^2/s)
          fresh   , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt   , & ! salt flux to ocean (kg/m^2/s)
          fhocn   , & ! net heat flux to ocean (W/m^2)
