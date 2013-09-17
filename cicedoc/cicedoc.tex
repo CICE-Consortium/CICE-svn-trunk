@@ -881,12 +881,12 @@ and snow volume $v_{sn}$ for each thickness category $n$ are
 \frac{\partial v_{sn}}{\partial t} + \nabla \cdot (v_{sn} {\bf u})&=&0.\\
 \end{eqnarray}
 The ice and snow volumes can be written equivalently in terms of tracers, ice thickness $h_{in}$ and snow depth $h_{sn}$:
-\begin{eqnarray}
+\begin{eqnarray*}
 \label{eq:transport_hi}
 \frac{\partial h_{in}a_{in}}{\partial t} + \nabla \cdot (h_{in}a_{in} {\bf u})&=&0,\\
 \label{eq:transport_hs}
 \frac{\partial h_{sn}a_{in}}{\partial t} + \nabla \cdot (h_{sn}a_{in} {\bf u})&=&0.\\
-\end{eqnarray}
+\end{eqnarray*}
 Although we maintain ice and snow volume  instead of the thicknesses as state variables in CICE, the tracer form is used for volume transport (section~\ref{subsec:horiz_transport}).  There are many other tracers available, whose values are contained in the {\tt trcrn} array.  Their transport equations typically have one of the following three forms 
 \begin{eqnarray}
 \label{eq:transport_aT}
@@ -921,10 +921,10 @@ For a generic quantity $q$ that represents a mean value over the ice fraction, $
 Tracers may need to be modified for physical reasons outside of the ``core" module or subroutine describing their evolution.  For example, when new ice forms in open water, the new ice does not yet have ponds on it.   Likewise when sea ice deforms, we assume that pond water (and ice) on the portion of ice that ridges is lost to the ocean.\index{fresh water flux} 
 
 When new ice is added to a grid cell, the {\it grid cell} total  area of melt ponds is preserved within each category gaining ice, $ a_{pnd}^{t+\Delta t}a_{i}^{t+\Delta t} = a_{pnd}^{t}a_{i}^{t}, $ or
-\begin{equation}
+\begin{equation*}
 \label{eq:apnd}
 a_{pnd}^{t+\Delta t}= {a_{pnd}^{t}a_{i}^{t} \over a_{i}^{t+\Delta t} }.
-\end{equation}
+\end{equation*}
 Similar calculations are performed for all tracer types, for example tracer-on-tracer dependencies such as $h_{pnd}$, when needed: 
 \[ h_{pnd}^{t+\Delta t}= {h_{pnd}^{t}a_{pnd}^{t}a_{i}^{t} \over a_{pnd}^{t+\Delta t}a_{i}^{t+\Delta t} }. \]
 In this case (adding new ice), $h_{pnd}$ does not change because $ a_{pnd}^{t+\Delta t}a_{i}^{t+\Delta t} = a_{pnd}^{t}a_{i}^{t}, $ .
@@ -932,12 +932,12 @@ In this case (adding new ice), $h_{pnd}$ does not change because $ a_{pnd}^{t+\D
 When ice is transferred between two thickness categories, we conserve the total pond area summed over categories $n$,\index{conservation}
 \[ \sum_n a_{pnd}^{t+\Delta t}(n)a_{i}^{t+\Delta t}(n) = \sum_n a_{pnd}^{t}(n)a_{i}^{t}(n). \]
 Thus,
-\begin{eqnarray}
+\begin{eqnarray*}
 \label{eq:xfer}
 a_{pnd}^{t+\Delta t}(m)&=& {\sum_n a_{pnd}^{t}(n)a_{i}^{t}(n) - \sum_{n\ne m} a_{pnd}^{t+\Delta t}(n)a_{i}^{t+\Delta t}(n) \over a_i^{t+\Delta t}(m)  } \\
 \nonumber
 &=& {a_{pnd}^t(m)a_i^t(m) + \sum_{n\ne m} \Delta \left(a_{pnd}a_i\right)^{t+\Delta t} \over a_i^{t+\Delta t}(m)  }
-\end{eqnarray}
+\end{eqnarray*}
 This is more complicated because of the $\Delta$ term on the right-hand side, which is  handled manually in {\bf ice\_itd.F90}.  Such tracer calculations are scattered throughout the code, wherever there are changes to the ice thickness distribution. \index{thickness!distribution}
  
 Note that if a quantity such as $a_{pnd}$ becomes zero in a grid cell's thickness category, then all tracers that depend on it also become zero.    If a tracer should be conserved\index{conservation} (e.g., aerosols\index{aerosols} and the liquid water in topo ponds),\index{melt pond!topo} additional code must be added to track changes in the conserved quantity. 
@@ -1009,10 +1009,10 @@ and `constant' modelled after the constant piston velocity of
 In addition to horizontal advection and transport\index{transport!thickness} among thickness
 categories,  biogeochemical tracers ($T_b$ where $b = 1,\ldots, N_b$) satisfy a
 set of local coupled equations of the form
-\begin{eqnarray}
+\begin{equation*}
 \label{eqn:bgc_Tracer}
-\frac{d T_b}{dt}  & = & w_b \frac{\Delta T_b}{\Delta z} +  R_b({T_j : j = 1,\ldots,N_b})
-\end{eqnarray}
+\frac{d T_b}{dt}  = w_b \frac{\Delta T_b}{\Delta z} +  R_b({T_j : j = 1,\ldots,N_b})
+\end{equation*}
 where $R_b$ represents the nonlinear biochemical reaction terms
 detailed in \cite{EDHHJJLS:12} and $\Delta z$ is a length scale
 representing the molecular sublayer of the ice--ocean interface.  Its
@@ -1023,20 +1023,20 @@ on the particular tracer and the flux formulation.
  For `Jin2006', the piston velocity is a function of ice growth\index{ice!growth} and
  melt rates.  All tracers (algae included) flux with the same piston velocity during  ice growth,
  $dh/dt > 0$:
-\begin{eqnarray}
+\begin{equation*}
 \label{eqn:pwJin_growth}
-w_b  & =  & - p_g\left|m_1 + m_2 \frac{dh}{dt} - m_3
+w_b   =   - p_g\left|m_1 + m_2 \frac{dh}{dt} - m_3
   \left(\frac{dh}{dt} \right)^2\right|
-\end{eqnarray}
+\end{equation*}
 with parameters $m_1$, $m_2$, $m_3$ and $p_g$ defined
 in {\bf skl\_biogeochemistry}. 
 For ice melt, $dh/dt < 0$, all tracers with the exception of ice algae
 flux with 
-\begin{eqnarray}
+\begin{equation}
 \label{eqn:pwJin_melt}
-w_b  & =  & p_m\left|m_2 \frac{dh}{dt} - m_3
+w_b  =  p_m\left|m_2 \frac{dh}{dt} - m_3
     \left(\frac{dh}{dt}  \right)^2\right| 
-\end{eqnarray}
+\end{equation}
 with $p_m$ defined
 in {\bf skl\_biogeochemistry}. 
 The `Jin2006' formulation also requires that for both expressions, $|w_b| \leq 0.9
@@ -1055,24 +1055,24 @@ ice growth unless the ice algal brine concentration is less than the
 ocean algal
 concentration ($N_o$).  Then the ocean seeds the sea ice concentration
 according to
-\begin{eqnarray}
+\begin{equation}
 \label{eqn:seed}
-w_b \frac{\Delta N_a}{\Delta z} & = & \frac{N_oh_{sk}/\phi_{sk} -
+w_b \frac{\Delta N_a}{\Delta z} = \frac{N_oh_{sk}/\phi_{sk} -
   N_a}{\Delta t}
-\end{eqnarray}
+\end{equation}
 
 The `constant' formulation uses a fixed piston velocity\index{velocity!piston} ({\tt
 PVc}) for positive ice growth\index{ice!growth} rates for all tracers except $N_a$.  As
 in `Jin2006', congelation ice growth seeds the sea ice algal
 population according to (\ref{eqn:seed}) when $N_a < N_o
 h_{sk}/\phi_{sk}$. For bottom ice melt, all tracers follow the prescription
-\begin{eqnarray} 
- w_b \frac{\Delta T_b}{\Delta z} & = &  \left\{ \begin{array}{ll}
+\begin{equation*} 
+ w_b \frac{\Delta T_b}{\Delta z} =  \left\{ \begin{array}{ll}
    T_b   |dh_i/dt|/h_{sk} \ \ \ \ \ &   \mbox{if }
  |dh_i/dt|\Delta t/h_{sk} < 1  \\
  T_b/\Delta t & \mbox{otherwise.}   \end{array} \right.  
 \label{eqn:constant_melt}
-\end{eqnarray}
+\end{equation*}
 
 All of the necessary fluxes required for coupling\index{flux coupler} to an ocean model component are contained in a single array, {\tt flux\_bio}. 
 
@@ -1126,39 +1126,38 @@ bottom boundary changes,
 and from  pressure adjustments. The computation of $h_b$ at $t+\Delta
 t$ is a two step process. First,  $h_b$  is updated from
 changes in ice and snow thickness,\index{thickness!ice or snow} ie.
-\begin{eqnarray}
+\begin{equation*}
 \label{eqn:hb_thickness_changes}
-h_b' & = & h_b(t) + \Delta h_b|_{h_i,h_s} \ \ \ .
-\end{eqnarray}
+h_b'  =  h_b(t) + \Delta h_b|_{h_i,h_s} .
+\end{equation*}
  Second,  pressure driven adjustments arising from \index{melt water}
 meltwater flushing\index{drainage!flushing} and snow loading are applied to $h'_b$. Brine flow due
 to pressure forces are governed by
 Darcy's equation\index{Darcy flow}
- (\ref{eq:topo_darcy})
-\begin{eqnarray}
+\begin{equation*}
 \label{eqn:Darcy}
-w & = & -\frac{\Pi^* \bar{\rho} g}{\mu}\frac{h_p}{h_i}.  
-\end{eqnarray}
+w =  -\frac{\Pi^* \bar{\rho} g}{\mu}\frac{h_p}{h_i}.  
+\end{equation*}
 The vertical component of the net permeability tensor $\Pi^*$
 is computed as
-\begin{eqnarray}
+\begin{equation*}
 \label{eqn:netPi}
-\Pi^* & = & \left(\frac{1}{h}\sum_{i=1}^N{\frac{\Delta
+\Pi^*  =  \left(\frac{1}{h}\sum_{i=1}^N{\frac{\Delta
       z_i}{\Pi_i}}\right)^{-1} 
-\end{eqnarray}
+\end{equation*}
 where the sea ice is composed of $N$ vertical layers with $i$th layer
 thickness $\Delta z_i$ and
 permeability $\Pi_i$ (\ref{eq:topo_permea}).  The average sea ice density\index{density!ice or snow} is
 $\bar{\rho}$ specified in {\bf ice\_zbgc\_shared.F90}.
  The hydraulic head is $h_p = h_b - h_{sl}$ where $h_{sl}$ is the sea level\index{sea level} given by
-\begin{eqnarray}
-h_{sl} & = & \frac{\bar{\rho}}{\rho_w}h_i + \frac{\rho_s}{\rho_w}h_s \ \ .
-\end{eqnarray}
+\begin{equation*}
+h_{sl}  =  \frac{\bar{\rho}}{\rho_w}h_i + \frac{\rho_s}{\rho_w}h_s.
+\end{equation*}
 Assuming constant $h_i$ and $h_s$ during Darcy flow, the rate of change of $h_b$ is
-\begin{eqnarray}
+\begin{equation}
 \label{eqn:h_p}
-\frac{\partial h_b}{\partial t}  & = & -w h_p
-\end{eqnarray}
+\frac{\partial h_b}{\partial t}   =  -w h_p
+\end{equation}
 where   $w_o = \Pi^* \bar{\rho}
 g/(h_i\mu\phi_{top})$ and $\phi_{top}$ is the upper surface porosity.\index{liquid fraction} 
 When the Darcy flow\index{Darcy flow} is downward into the ice ($w_o < 0$), then
@@ -1170,10 +1169,10 @@ used: {\tt phi\_snow} $=1 - \rho_s/\rho_w$.
 
 Since $h_{sl}$ remains relatively unchanged during Darcy flow,\index{Darcy flow}
 (\ref{eqn:h_p}) has the approximate solution 
-\begin{eqnarray}
+\begin{equation*}
 \label{eqn:brine_height}
 h_b(t+\Delta t) \approx h_{sl}(t+\Delta t) +  [h'_b - h_{sl}(t+\Delta t)]\exp\left\{-w \Delta t\right\}.
-\end{eqnarray}
+\end{equation*}
 
 The contribution $\Delta h_b|_{h_i,h_s}$ arises from snow and ice
 melt and bottom ice changes.  Since the ice and brine bottom
@@ -1183,31 +1182,38 @@ contribution from ice and snow melt, however, is opposite in
 sign. The ice contribution is as follows. If $h_i > h_b$ and the ice
 surface is melting, ie. $(\Delta h_i)_{top} <
 0$), then melt water increases the brine height:
-\begin{eqnarray}
-\left(\Delta h_b\right)_{top} & = &  \frac{\rho_i}{\rho_o} \cdot \left\{ \begin{array}{ll}
+\begin{equation*}
+\left(\Delta h_b\right)_{top}  =   \frac{\rho_i}{\rho_o} \cdot \left\{ \begin{array}{ll}
  -(\Delta h_i)_{top} &  \mbox{if }
  |(\Delta h_i)_{top}| < h_i-h_b  \\
  h_i-h_b & \mbox{otherwise.}   \end{array} \right.  
-\end{eqnarray}
+\end{equation*}
 For snow melt\index{snow!melt} ($\Delta h_s < 0$), it is assumed that
 all snow melt water contributes a source of surface
 brine. The total change from snow melt and ice thickness changes is
-\begin{eqnarray}
+\begin{equation*}
 \label{eqn:dzdt_meltwater}
-\Delta h_b|_{h_i,h_s} & = & \left( \Delta
+\Delta h_b|_{h_i,h_s}  =  \left( \Delta
 h_b\right)_{top} -\left(\Delta h_i\right)_{bot} -\frac{\rho_s}{\rho_o}\Delta h_s.  
-\end{eqnarray}
+\end{equation*}
 
 The above brine height calculation is used only when $h_i$ and $h_b$
 exceed a minimum thickness, {\tt thinS}, specified in {\bf
   ice\_zbgc\_shared}. Otherwise 
-\begin{eqnarray}
+\begin{equation*}
 \label{eqn:thinbrine}
-h_b(t+\Delta t) & = & h_b(t) + \Delta h_i 
-\end{eqnarray}
+h_b(t+\Delta t)  =  h_b(t) + \Delta h_i 
+\end{equation*}
 provided that $|h_{sl}-h_b| \leq 0.001$.  This
 formulation ensures small Darcy velocities\index{Darcy flow}
  when $h_b$ first exceeds {\tt thinS}.  
+ 
+ Both the volume fraction $f_{bri}$ and the area-weighted brine height $h_b$ can be written to the history file.\index{history}  The history variable {\tt fbri} contains the volume-averaged brine fraction tracer
+ \[{{\sum f_{bri} v_i} \over {\sum v_i}},\]
+ while {\tt hbri} is comparable to {\tt hi} ($h_i$)
+ \[{{\sum f_{bri} h_i a_i} \over {\sum a_i}}, \]
+ where the sums are taken over thickness categories.
+ 
 \index{height!brine|)}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1236,12 +1242,12 @@ conservation equations for ice volume (eq.~\ref{eq:transport_vi}),
 \index{volume!ice or snow}%
 snow volume (eq~\ref{eq:transport_vs}), ice energy and
 snow energy:
-\begin{eqnarray}
+\begin{eqnarray*}
 \label{eq:transport_ei}
 \frac{\partial e_{ink}}{\partial t} + \nabla \cdot (e_{ink} {\bf u})&=&0,\\
 \label{eq:transport_es}
 \frac{\partial e_{snk}}{\partial t} + \nabla \cdot (e_{snk} {\bf u})&=&0.
-\end{eqnarray}
+\end{eqnarray*}
 
 \index{conservation}By default, ice and snow are assumed to have constant densities, so that volume conservation is equivalent to mass conservation.  Variable-density\index{density!ice or snow} ice and snow layers can be transported conservatively by defining tracers corresponding to ice and snow density, as explained in the introductory comments in {\bf ice\_transport\_remap.F90}.  Prognostic equations for ice and/or snow density may be included in future model versions but have not yet been implemented.
 \index{tracers|)}
@@ -1606,10 +1612,10 @@ Given a 2D velocity field {\bf u},\index{velocity!ice} the divergence $\nabla\cd
 We made one other change in the scheme of \cite{DB:00}  for locating triangles.
 In their paper, departure points are defined by projecting cell
 corner velocities directly backward.  That is,
-\begin{equation}
+\begin{equation*}
 \label{eq:departure_points} \mathbf{x_D} =
 -\mathbf{u} \, \Delta t,
-\end{equation}
+\end{equation*}
 where $\mathbf{x}_D$ is the location of the departure point
 relative to the cell corner and  $\mathbf{u}$ is the velocity at the corner. This approximation is only first-order
 accurate. Accuracy can be improved by estimating the 
@@ -1626,10 +1632,10 @@ triangles to find the total area, volume, and energy transported
 across each cell edge.  Area transports are easy to compute since the
 area is linear in $x$ and $y$.  Given a triangle with vertices
 $\mathbf{x_i} = (x_i,y_i)$, $i\in\{1,2,3\}$, the triangle area is
-\begin{equation}
+\begin{equation*}
 A_T = \frac{1}{2}\left|(x_2-x_1)(y_3-y_1) -
 (y_2-y_1)(x_3-x_1)\right|.
-\end{equation}
+\end{equation*}
 The integral $F_a$ of any linear function $f(\mathbf{r})$ over a
 triangle is given by
 \begin{equation}
@@ -1637,13 +1643,13 @@ triangle is given by
  F_a = A_T f(\mathbf{x_0}),
 \end{equation}
 where $\mathbf{x}_0 = (x_0,y_0)$ is the triangle midpoint,
-\begin{equation}
+\begin{equation*}
 \mathbf{x}_0={1\over 3}\sum_{i=1}^3\mathbf{x}_i.
-\end{equation}
+\end{equation*}
 To compute the area transport, we evaluate the area at the midpoint,
-\begin{equation}
+\begin{equation*}
 a(\mathbf{x}_0)  = a_c + a_x x_0 + a_y y_0,
-\end{equation}
+\end{equation*}
 and multiply by $A_T$.  By convention, northward and eastward
 transport is positive, while southward and westward transport is
 negative.
@@ -1739,10 +1745,10 @@ Next we solve the equation for ice transport in thickness space due to
 thermodynamic 
 \index{ice!growth}%
 growth and melt,
-\begin{equation}
+\begin{equation*}
 \label{eq:itd_transport}
 \frac{\partial g}{\partial t} + \frac{\partial}{\partial h} (f g) = 0,
-\end{equation}
+\end{equation*}
 which is obtained from (\ref{eq:transport_g}) by neglecting the
 first and third terms on the right-hand side. We use the remapping
 method of \cite{Lipscomb:01}, in which thickness categories are
@@ -1990,11 +1996,11 @@ b(h) = \frac{\exp[-G(h)/a^*]}
 \end{equation}
 When integrated between category boundaries, (\ref{eq:partic_new_contin}) implies
 %lipscomb - eqn. 58 from paper
-\begin{equation}
+\begin{equation*}
 \label{eq:partic_new_discrete}
 a_{Pn} = \frac {\exp(-G_{n-1}/a^*) - \exp(-G_{n}/a^*)}
                {1 - \exp(-1/a^*)}
-\end{equation}
+\end{equation*}
 This weighting function is used if {\tt krdg\_partic} = 1 in the namelist.\index{namelist}  From (\ref{eq:partic_new_contin}), the mean value of $G$ for ice participating in ridging is $a^*$, as compared to $G^*/3$ for (\ref{eq:partic_old_contin}).  For typical ice thickness distributions, setting $a^* = 0.05$ with {\tt krdg\_partic} = 1 gives participation fractions similar to those given by $G^* = 0.15$ with {\tt krdg\_partic} = 0.  See \cite{LHMJ:07} for a detailed comparison of these two participation functions.
  
 Thin ice is converted to thick, ridged ice in a way that reduces the total 
@@ -2193,22 +2199,22 @@ m{\partial v\over\partial t} &=& {\partial\sigma_{2j}\over\partial x_j} + \tau_{
 \end{eqnarray*}
 In the code, ${\tt vrel}=a_i c_w \rho_w\left|{\bf U}_w - {\bf u}^k\right|$, where $k$ denotes the subcycling step.\index{subcycling}  The following equations illustrate the time discretization and define some of the other variables used in the code.
 \small
-\begin{equation}
+\begin{equation*}
 \label{eq:umom}
 \underbrace{\left({m\over\Delta t_e}+{\tt vrel} \cos\theta\right)}_{\tt cca} u^{k+1} 
 - \underbrace{\left(mf+{\tt vrel}\sin\theta\right)}_{\tt ccb}v^{k+1}
  =  \underbrace{{\partial\sigma_{1j}^{k+1}\over\partial x_j}}_{\tt strintx} 
  + \underbrace{\tau_{ax} - mg{\partial H_\circ\over\partial x} }_{\tt forcex}
   + {\tt vrel}\underbrace{\left(U_w\cos\theta-V_w\sin\theta\right)}_{\tt waterx}  + {m\over\Delta t_e}u^k,
-\end{equation}
-\begin{equation}
+\end{equation*}
+\begin{equation*}
 \label{eq:vmom}
  \underbrace{\left(mf+{\tt vrel}\sin\theta\right)}_{\tt ccb} u^{k+1} 
 + \underbrace{\left({m\over\Delta t_e}+{\tt vrel} \cos\theta\right)}_{\tt cca}v^{k+1}
  =  \underbrace{{\partial\sigma_{2j}^{k+1}\over\partial x_j}}_{\tt strinty} 
  + \underbrace{\tau_{ay} - mg{\partial H_\circ\over\partial y} }_{\tt forcey}
   + {\tt vrel}\underbrace{\left(U_w\sin\theta+V_w\cos\theta\right)}_{\tt watery}  + {m\over\Delta t_e}v^k,
-\end{equation}
+\end{equation*}
 \normalsize
 and {\tt vrel$\cdot$waterx(y) = taux(y)}.  
 
@@ -2267,7 +2273,7 @@ regularized version of the VP constitutive law,
   2\eta} &=& {1\over 2}D_S,
 \end{eqnarray}
 where
-\begin{eqnarray}
+\begin{eqnarray*}
 D_D &=& \dot{\epsilon}_{11} + \dot{\epsilon}_{22}, \\
 D_T &=& \dot{\epsilon}_{11} - \dot{\epsilon}_{22}, \\
 D_S &=& 2\dot{\epsilon}_{12}, \\
@@ -2284,7 +2290,7 @@ x_j}} + {{\partial u_j}\over{\partial x_i}}\right), \\
 \label{eq:Delta}
 \nonumber
 \Delta &=& \left[D_D^2 + {1\over e^2}\left(D_T^2 + D_S^2\right)\right]^{1/2},
-\end{eqnarray}
+\end{eqnarray*}
 and $P$ is a function of the ice 
 \index{thickness!ice or snow}%
 thickness and 
@@ -2348,9 +2354,9 @@ incorporated into the discretization explicitly.  Details pertaining to the spat
 
 \index{elastic!-anisotropic-plastic dynamics|(emph}%
 In the EAP model the internal stress tensor is related to the geometrical properties and orientation of underlying virtual diamond shaped floes (see Fig.~\ref{fig:EAP}). In contrast to the isotropic EVP rheology, the anisotropic plastic yield curve within the EAP rheology depends on the relative orientation of the diamond shaped floes (unit vector $\mathbf r$ in Fig.~\ref{fig:EAP}), with respect to the principal direction of the deformation rate (not shown).  Local anisotropy of the sea ice cover is accounted for by an additional prognostic variable, the structure tensor $\mathbf{A}$ defined by
-\begin{equation}
+\begin{equation*}
 {\mathbf A}=\int_{\mathbb{S}}\vartheta(\mathbf r)\mathbf r\mathbf r d\mathbf r\label{structuretensor}.
-\end{equation}
+\end{equation*}
 where $\mathbb{S}$ is a unit-radius circle; {\bf A} is a unit trace, 2$\times$2 matrix. From now on we shall describe the orientational distribution of floes using the structure tensor. For simplicity we take the probability density function $\vartheta(\mathbf r )$ to be Gaussian, $\vartheta(z)=\omega_{1}\exp(-\omega_{2}z^{2})$, where $z$ is the ice floe inclination with respect to the axis $x_{1}$ of preferential alignment of ice floes (see Fig.~\ref{fig:EAP}), $\vartheta(z)$ is periodic with period $\pi$, and the positive coefficients $\omega_{1}$ and $\omega_{2}$ are calculated to ensure normalization of $\vartheta(z)$, i.e. $\int_{0}^{2\pi}\vartheta(z)dz=1$. The ratio of the principal components of $\mathbf{A}$, $A_{1}/A_{2}$, are derived from the phenomenological evolution equation for the structure tensor $\mathbf A$,
 \begin{equation}
 \frac{D\mathbf{A}}{D t}=\mathbf{F}_{iso}(\mathbf{A})+\mathbf{F}_{frac}(\mathbf{A},\boldsymbol\sigma),\label{evolutionA}
@@ -2366,10 +2372,10 @@ where $t$ is the time, and $D/Dt$ is the co-rotational time derivative accountin
 \end{figure} 
 
 The new anisotropic rheology requires  solving  the evolution  Eq.~(\ref{evolutionA}) for the structure tensor in addition to the momentum and stress equations. The evolution equation for $\mathbf{A}$ is solved within the EVP subcycling loop,\index{subcycling} and consistently with the momentum and stress evolution equations, we neglect the advection\index{transport!horizontal}  term for the structure tensor. Eq.~(\ref{evolutionA}) then reduces to the system of two equations: 
-\begin{eqnarray}
+\begin{eqnarray*}
 \frac{\partial A_{11}}{\partial t}&=&-k_{t}\left(A_{11}-\frac{1}{2}\right)+M_{11}  \mbox{,} \\ 
 \frac{\partial A_{12}}{\partial t}&=&-k_{t} A_{12}+M_{12}  \mbox{,}
-\end{eqnarray}
+\end{eqnarray*}
 where the first terms on the right hand side correspond to the isotropic contribution, $F_{iso}$, and $M_{11}$ and $M_{12}$ are the components of the term $F_{frac}$ in Eq.~(\ref{evolutionA}) that are given in \cite{WF:06}  and \cite{Tsamados:13}. These evolution equations are discretized  semi-implicitly in time.
 % as
 %\begin{eqnarray}
@@ -2381,15 +2387,15 @@ The degree of anisotropy is measured by the largest eigenvalue ($A_{1}$) of this
 
 As described in greater detail in \cite{WF:06}, the internal ice stress for a single orientation of the ice floes can be calculated explicitly and decomposed, for an average ice thickness $h$, into its ridging (r) and sliding (s) contributions
 \index{ridging}%
-\begin{equation}\label{stress1}
+\begin{equation*}\label{stress1}
 \boldsymbol \sigma^{b}(\mathbf r,h)=P_{r}(h) \boldsymbol \sigma_{r}^{b}(\mathbf r)+P_{s}(h) \boldsymbol \sigma_{s}^{b}(\mathbf r),
-\end{equation}
+\end{equation*}
 where  $P_{r}$ and $P_{s}$ are the ridging and sliding strengths\index{strength}%
  and the ridging and sliding stresses are functions of the angle $\theta= \arctan(\dot\epsilon_{II}/\dot\epsilon_{I})$, the angle $y$ between the major principal axis of the strain rate tensor (not shown) and the structure tensor ($x_1$ axis in Fig.~\ref{fig:EAP}), and the angle $z$ defined in Fig.~\ref{fig:EAP}. 
 In the stress expressions above the underlying floes are assumed parallel, but in a continuum-scale sea ice region the floes can possess different orientations in different places and we take the mean sea ice stress over a collection of floes to be given by the average
-\begin{equation}
+\begin{equation*}
 \boldsymbol\sigma^{EAP}(h)=P_{r}(h)\int_{\mathbb{S}}\vartheta(\mathbf r)\left[\boldsymbol\sigma_{r}^{b}(\mathbf r)+ k \boldsymbol\sigma_{s}^{b}(\mathbf r)\right]d\mathbf r,\label{stressaverage}
-\end{equation}
+\end{equation*}
 where we have introduced the friction parameter $k=P_{s}/P_{r}$ and where we identify the ridging ice strength $P_{r}(h)$ with the strength $P$ described in section 1 and used within the EVP framework.
 
 As is the case for the EVP rheology, \index{elastic!-viscous-plastic dynamics}% 
@@ -2397,14 +2403,16 @@ elasticity is included in the EAP description not to describe any physical effec
 \begin{eqnarray}
 \label{eq:EAPsigma1}
 \frac{\partial \sigma_{1}}{\partial t}+\frac{\sigma_1}{2T}&=&\frac{\sigma^{EAP}_{1}}{2T}  \mbox{,} \\ 
+\label{eq:EAPsigma2}
 \frac{\partial \sigma_{2}}{\partial t}+\frac{\sigma_2}{2T}&=&\frac{\sigma^{EAP}_{2}}{2T} \mbox{,} \\ 
+\label{eq:EAPsigma12}
 \frac{\partial \sigma_{12}}{\partial t}+\frac{\sigma_{12}}{2T}&=&\frac{\sigma^{EAP}_{12}}{2T} \mbox{,}
 \end{eqnarray}
-where the anisotropic stress $\boldsymbol\sigma^{EAP}$ is defined in a look-up table (Eq.~(\ref{eq:EAPsigma1})) for the current values of strain rate and structure tensor. The look-up table is constructed by computing the stress (normalized by the strength) from Eq.~(\ref{eq:EAPsigma1}) for discrete values of the largest eigenvalue of the structure tensor, $\frac{1}{2}\le A_{1}\le 1$, the angle $0\le\theta\le2\pi$, and the angle $-\pi/2\le y\le\pi/2$ between the major principal axis of the strain rate tensor and the structure tensor \cite{Tsamados:13}. The updated stress, after the elastic relaxation, is then passed to the momentum equation and the sea ice velocities are updated in the usual manner within the subcycling\index{subcycling} loop of the EVP rheology. The structure tensor evolution equations are  solved implicitly at the same frequency, $\Delta t_{e}$, as the ice velocities and internal stresses. Finally, to be coherent with our new rheology we compute the area loss rate due to ridging \index{ridging}%
+where the anisotropic stress $\boldsymbol\sigma^{EAP}$ is defined in a look-up table for the current values of strain rate and structure tensor. The look-up table is constructed by computing the stress (normalized by the strength) from Eq.~(\ref{eq:EAPsigma1}--\ref{eq:EAPsigma12}) for discrete values of the largest eigenvalue of the structure tensor, $\frac{1}{2}\le A_{1}\le 1$, the angle $0\le\theta\le2\pi$, and the angle $-\pi/2\le y\le\pi/2$ between the major principal axis of the strain rate tensor and the structure tensor \cite{Tsamados:13}. The updated stress, after the elastic relaxation, is then passed to the momentum equation and the sea ice velocities are updated in the usual manner within the subcycling\index{subcycling} loop of the EVP rheology. The structure tensor evolution equations are  solved implicitly at the same frequency, $\Delta t_{e}$, as the ice velocities and internal stresses. Finally, to be coherent with our new rheology we compute the area loss rate due to ridging \index{ridging}%
 as $\vert\dot{\boldsymbol\epsilon}\vert\alpha_{r}(\theta)$, with $\alpha_r(\theta)$ and  $\alpha_s(\theta)$ given by \cite{WF:04b},
-\begin{eqnarray}
+\begin{eqnarray*}
 \alpha_{r}(\theta)=\frac{\sigma^{r}_{ij}\dot\epsilon_{ij}}{P_{r} \vert\dot{\boldsymbol\epsilon}\vert } , \qquad \alpha_{s}(\theta)=\frac{\sigma^{s}_{ij}\dot\epsilon_{ij}}{P_{s} \vert\dot{\boldsymbol\epsilon}\vert }.\label{alphas}
-\end{eqnarray}
+\end{eqnarray*}
 Both ridging rate and sea ice strength are computed in the outer loop of the dynamics. 
 \index{elastic!-anisotropic-plastic dynamics|)}%
 \index{strain rate|)}%
@@ -2442,7 +2450,7 @@ v^{k+1} &=& {\tilde{a} \tilde{v} - b \tilde{u} \over \tilde{a}^2 + b^2},
 \end{eqnarray*}
 where
 \begin{eqnarray}
-\label{eq:tildea}
+\nonumber
 \tilde{a} &=& \left(1+\beta\right){m\over\Delta t} + {\tt vrel}\cos\theta \\
 \label{eq:tildeu}
 \tilde{\bf u} &=& \overline{\bf u} + \beta  {m\over\Delta t}{\bf u}^k,
@@ -2463,18 +2471,18 @@ then Eq.~(\ref{eq:sig1time}) becomes
 \begin{equation}
 \sigma_1^{k+1}\left(1+\alpha_1\right) = \alpha_1\sigma_1^k + {P\over\Delta} \left(\dot{\epsilon} - \Delta\right).
 \end{equation}
-This is equivalent to Eq.~(~\ref{evolutionA}) in \cite{BFLM:13}, but using $\sigma$ at the current subcycle $k+1$ in the last term on the right-hand side.  Likewise, setting 
+This is equivalent to Eq.~(23) in \cite{BFLM:13}, but using $\sigma$ at the current subcycle $k+1$ in the last term on the right-hand side.  Likewise, setting 
 \[\alpha_2 = {2T\over e^2\Delta t_e} = {\alpha_1\over e^2}\]
-produces equations equivalent to Eq.~(~\ref{evolutionA}) in \cite{BFLM:13} for $\sigma_2$ and $\sigma_{12}$.  Therefore the only change needed in the stress code is to use $\alpha_1$ and $\alpha_2$ instead of  $2T / \Delta t_e$ and $2T /e^2 \Delta t_e$.
+produces equations equivalent to Eq.~(23) in \cite{BFLM:13} for $\sigma_2$ and $\sigma_{12}$.  Therefore the only change needed in the stress code is to use $\alpha_1$ and $\alpha_2$ instead of  $2T / \Delta t_e$ and $2T /e^2 \Delta t_e$.
 
 However, \cite{BFLM:13} introduce another change to the EVP stress equations by altering the form of Young's modulus in the elastic term:  the coefficient of $\partial\sigma_1/\partial t$ is $1/E$, but it is $e^2/E$ in the $\sigma_2$ and $\sigma_{12}$ equations.  This change does not affect the VP equations to which the EVP equations should converge, but it does affect the transient path taken during the subcycling.\index{subcycling}  Since EVP subcycling is finite, the numerical solutions obtained using this method differ from the original EVP code.
 
 To implement this second change, we need define only $\alpha_1 = {2T/\Delta t_e}$ as above and incorporate the factor of $e^2$ from $\alpha_2$ into the equations for $\sigma_2$ and $\sigma_{12}$:
-\begin{eqnarray}
+\begin{eqnarray*}
 \sigma_1^{k+1}\left(1+\alpha_1\right) &=&\sigma_1^k +  {\alpha_1}{P\over\Delta} D_D, \\
 \sigma_2^{k+1}\left(1+\alpha_1\right) &=&\sigma_2^k + {\alpha_1\over e^2}{P\over\Delta}  D_T, \\
 \sigma_{12}^{k+1}\left(1+\alpha_1\right) &=&\sigma_{12}^k + {\alpha_1\over 2e^2}{P\over\Delta}  D_S.
-\end{eqnarray}
+\end{eqnarray*}
 
 To minimize code changes and unify the two approaches, we define and apply $1/\alpha_1$ and $\beta$ in the classic EVP code, and modify the elastic stress term.  These under-relaxation parameters control the rate at which the iteration converges. Thus for classic EVP we set
 \begin{eqnarray*}
@@ -2641,24 +2649,24 @@ is the region with vertical hatching, is the volume of water required
 to completely fill up the first thickness category, so that any extra 
 melt water must occupy the second thickness category, and it is given 
 by the expression
-\begin{equation}
+\begin{equation*}
 \label{eq:topo_vol1}
 V_{P1} = a_{i1} (h_{top,2}-h_{top,1}) - a_{s1} a_{i1} h_{s1} (1-V_{sw}), 
-\end{equation} 
+\end{equation*} 
 where $V_{sw}$ is the fraction of the snow volume that can be occupied 
 by water,\index{porosity!snow} and $h_{s1}$ is the snow depth on ice height class 1. In a 
 similar way, the volume required to fill up the first and second 
 surface categories, $V_{P2}$, is given by 
-\begin{equation}
+\begin{equation*}
 \label{eq:topo_vol2}
 V_{P2} = a_{i1} (h_{top,3}-h_{top,2}) + a_{i2} (h_{top,3}-h_{top,2}) - a_{s2} a_{i2} h_{s2} (1-V_{sw}) + V_{P1}. 
-\end{equation} 
+\end{equation*} 
 The general expression for volume $V_{Pk}$ is given by
-\begin{equation}
+\begin{equation*}
 \label{eq:topo_vol}
 V_{Pk} = \sum^k_{m=0} a_{im} (h_{top,k+1}-h_{top,k}) - a_{sk} a_{ik} h_{sk} (1-V_{sw})
           + \sum^{k-1}_{m=0} V_{Pm}. 
-\end{equation} 
+\end{equation*} 
 (Note that we have implicitly assumed that $h_{si} < h_{top,k+1} - h_{top,k}$ for all $k$.) 
 No melt water can be stored on the thickest ice thickness category. 
 If the melt water volume exceeds the volume calculated above, 
@@ -2669,10 +2677,10 @@ surface height class, that is, the maximum pond depth, is diagnosed
 from the list of volumes $V_{Pk}$. In particular, if the total volume 
 of melt water $V_{P}$ is such that $V_{Pk} < V_{P} < V_{P,k+1}$ then 
 the pond height $h_{pnd,tot}$ is
-\begin{equation}
+\begin{equation*}
 \label{eq:topo_hpnd_tot}
 h_{pnd,tot} = h_{par} + h_{top,k} - h_{top,1},
-\end{equation}
+\end{equation*}
 where $h_{par}$ is the height of the pond above the level of the ice 
 in class $k$ and partially fills the volume between $V_{P,k}$ and $V_{P,k+1}$.
 From Figure~\ref{fig:topo}a we see that $h_{top,k} - h_{top,1}$ is the height of the
@@ -2684,20 +2692,20 @@ is completely covered in melt water (i.e., $h_{par} > h_{s,k+1}$), or it is not
 (i.e., $h_{par} \le h_{s,k+1}$). From conservation\index{conservation} of volume, we see from 
 Figure~\ref{fig:topo}a that for an incompletely to completely saturated snow cover \index{porosity!snow}
 on surface ice class $k + 1$,
-\begin{eqnarray}
+\begin{eqnarray*}
 \label{eq:topo_satsnow1}
 V_{P} - V_{Pk} & = & h_{par} \left( \sum^k_{m=1} a_{ik} + a_{i,k+1}(1-a_{s,k+1}) 
 + a_{i,k+1} a_{s,k+1} V_{sw} \right) \nonumber\\ 
 & & {\rm for} \hspace{3mm} h_{par} \le h_{s,k+1},
-\end{eqnarray}
+\end{eqnarray*}
 and for a saturated snow cover with water on top of the snow on surface ice class $k + 1$,
-\begin{eqnarray}
+\begin{eqnarray*}
 \label{eq:topo_satsnow2}
 V_{P} - V_{Pk} & = & h_{par} \left( \sum^k_{m=1} a_{ik} + a_{i,k+1}(1-a_{s,k+1}) \right) 
    + a_{i,k+1} a_{s,k+1} V_{sw} h_{s,k+1} \nonumber\\ 
 & & + a_{i,k+1} a_{s,k+1} (h_{par}-h_{s,k+1}) \nonumber\\
 & & {\rm for} \hspace{3mm} h_{par} > h_{s,k+1}.
-\end{eqnarray}
+\end{eqnarray*}
 \index{snow!infiltration by water|)}
 
 \index{drainage!flushing|(}
@@ -2707,10 +2715,10 @@ reduction in solid fraction \cite{EGPRF:04}. The hydraulic head \index{pressure!
 on sea ice (i.e., its height above sea level)\index{sea level} drives flushing of melt water through the 
 porous sea ice and into the underlying ocean.  The mushy thermodynamics scheme ({\tt ktherm}~$= 2$) handles flushing.  For {\tt ktherm}~$\ne 2$ we model the vertical flushing rate using 
 Darcy's law for flow through a porous medium\index{Darcy flow}
-\begin{equation}
+\begin{equation*}
 \label{eq:topo_darcy}
 w = - \frac{\Pi_v}{\mu} \rho_o g \frac{\Delta H}{h_i},
-\end{equation}
+\end{equation*}
 where $w$ is the vertical mass flux per unit perpendicular cross-sectional area 
 (i.e., the vertical component of the Darcy velocity), $\Pi_v$ is the vertical component 
 of the permeability\index{permeability} tensor (assumed to be isotropic in the horizontal), $\mu$ is the viscosity of water, $\rho_o$ is the ocean \index{density!ocean}
@@ -2724,10 +2732,10 @@ can be calculated from the liquid fraction $\phi$:\index{liquid fraction}
 \Pi_v = 3 \times 10^{-8} \phi^3 \rm{m^2}.
 \end{equation}
 Since the solid fraction varies throughout the depth of the sea ice, so does the permeability. The rate of vertical drainage is determined by the lowest (least permeable) layer, corresponding to the highest solid fraction. From the equations describing sea ice as a mushy layer \cite{FUWW:06}, the solid fraction is determined by:
-\begin{equation}
+\begin{equation*}
 \label{eq:topo_solid}
 \phi = \frac{c_i-S}{c_i-S_{br}(T)},
-\end{equation}
+\end{equation*}
 where $S$ is the bulk salinity of the ice, $S_{br}(T)$ is the concentration of salt in the brine
 \index{salinity!brine}  at temperature $T$ and $c_i$ is the concentration of salt in the ice crystals (set to zero).
 
@@ -2742,10 +2750,10 @@ submerged portion of the floe. Figure~\ref{fig:topo}b depicts the
 relationship between the hydraulic head and the depths and heights that appear in
 equation (\ref{eq:topo_hsl1}). The depth of
 the submerged portion of the floe is determined from hydrostatic equilibrium to be
-\begin{equation}
+\begin{equation*}
 \label{eq:topo_hsl2}
 h_{sub} = \frac{\rho_m}{\rho_w} V_P + \frac{\rho_s}{\rho_w} V_s + \frac{\rho_i}{\rho_w} V_i,
-\end{equation}
+\end{equation*}
 where $\rho_m$ is the density of melt water,  
 $V_P$ is the total pond volume, $V_s$ is the total snow volume, and $V_i$ is the total ice volume.
 \index{drainage!flushing|)}\index{volume!ice or snow}
@@ -2753,15 +2761,15 @@ $V_P$ is the total pond volume, $V_s$ is the total snow volume, and $V_i$ is the
 When the surface energy balance is negative, a layer of ice is formed at the upper surface of the ponds. 
 The rate of growth of the ice lid is given by the Stefan energy budget at the lid-pond interface
 \index{Stefan growth}\index{ice!growth}
-\begin{equation}
+\begin{equation*}
 \label{eq:topo_lid}
 \rho_i L_0 \frac{d h_{ipnd}}{dt} = k_i \frac{\partial T_i}{\partial z} - k_p \frac{\partial T_p}{\partial z},
-\end{equation} 
+\end{equation*} 
 where $L_0$ is the latent heat\index{latent heat} of fusion of pure ice per unit volume, $T_i$ and $T_p$ are the ice surface\index{temperature!surface} and pond temperatures, and $k_i$ and $k_p$ are the thermal conductivity\index{conductivity} of the ice lid and pond respectively. The second term on the right hand-side is close to zero since the pond is almost uniformly at the freezing temperature\index{temperature!freezing} \cite{TF:04}. Approximating the temperature gradient in the ice lid as linear, the Stefan condition yields the classic Stefan solution for ice lid depth\index{Stefan growth}
-\begin{equation}
+\begin{equation*}
 \label{eq:topo_stefan}
 h_{ipnd} = \sqrt{\frac{2k_i}{\rho_s L}\Delta T_i t},
-\end{equation} 
+\end{equation*} 
 where $\Delta T$ is the temperature difference between the top and the bottom of the lid.
 Depending on the surface flux conditions\index{boundary!condition} the ice lid can grow, partially melt, or melt completely. Provided that the ice lid is thinner than a critical lid depth (1 cm is suggested) then the pond is regarded as effective, i.e. the pond affects the optical properties of the ice cover. Effective pond area and pond depth for each thickness category are passed to the radiation scheme for calculating albedo. Note that once the ice lid has exceeded the critical thickness, snow may accumulate on the lid causing a substantial increase in albedo. In the current CICE model, melt ponds only affect the thermodynamics of the ice through the albedo.  To conserve\index{conservation} energy, the ice lid is dismissed once the pond is completely refrozen.
 
@@ -2801,19 +2809,19 @@ The ponds are assumed to be well mixed fresh water, and therefore their temperat
 A. The {\tt frzpnd = `hlid'} option uses a Stefan\index{Stefan growth} approximation for growth of fresh ice and is invoked only when $\Delta V_{melt}=0$.  
 
 The basic thermodynamic equation governing ice growth\index{ice!growth} is
-\begin{equation}
+\begin{equation*}
 \label{eq:Stefanthermo1}
 \rho_i L {\partial h_i\over\partial t} = k_i{\partial T_i\over\partial z} \sim k_i {\Delta T\over h_i}
-\end{equation}
+\end{equation*}
 assuming a linear temperature profile through the ice thickness $h_i$.
 In discrete form, the solution is
-\begin{equation}
+\begin{equation*}
 \label{eq:hi}
 \Delta h_i = \left\{ 
 \begin{array}{ll}    {\sqrt{\beta\Delta t}/2} & \mbox {if $h_i=0$} \\
                                 {\beta\Delta t / 2 h_i} & \mbox {if $h_i>0,$} 
 \end{array} \right.                             
-\end{equation}
+\end{equation*}
 where
 \[\beta = {2 k_i \Delta T \over \rho_i L} .\]
 
@@ -2978,10 +2986,10 @@ diffuse near infrared). The flux penetrating into the ice is $I_0
 = i_0 \, F_{\mathit {swabs}}$, where $i_0 = 0.70 \, (1-f_{snow})$
 for visible radiation and $i_0 = 0$ for near IR. Radiation
 penetrating into the ice is attenuated according to Beer's Law:
-\begin{equation}
+\begin{equation*}
 \label{eq:Beers_law}
         I(z) = I_0 \exp(-\kappa_i z),
-\end{equation}
+\end{equation*}
 where $I(z)$ is the shortwave flux that reaches depth $z$ beneath
 the surface without being absorbed, and $\kappa_i$ is the bulk
 extinction coefficient for solar radiation in ice, set to $1.4 \
@@ -3231,12 +3239,12 @@ until the solution converges.
 \index{conductivity|(}
 Next consider the first term on the right-hand side of
 (\ref{eq:ice_temp_change}). The first term describes heat diffusion and is discretized for a given ice or snow layer $k$ as
-\begin{equation}
+\begin{equation*}
 \label{eq:ice_dT_dz}
 \frac{\partial}{\partial z} \left(K \frac{\partial T}{\partial z}\right) =
  \frac{1}{\Delta h} 
   \left[ {K_k^*(T_{k-1}^{m+1} - T_{k}^{m+1})} - K_{k+1}^*(T_{k}^{m+1} - T_{k+1}^{m+1}) \right],
-\end{equation}
+\end{equation*}
 where $\Delta h$ is the layer thickness and $K_{k}$ is the effective conductivity at the upper boundary of
 layer $k$.   This discretization is centered and second-order accurate in space, except at the boundaries.  The flux terms on the right-hand side (RHS) are treated implicitly; i.e., they depend on the temperatures at the new time $m+1$.  The resulting scheme is first-order accurate in time and unconditionally stable.\index{stability}  The effective conductivity $K^*$ at the interface of layers $k-1$ and $k$ is defined as
 \[K_k^* = {2K_{k-1}K_k\over{K_{k-1}h_k + K_k h_{k-1}}}, \]
@@ -3263,12 +3271,12 @@ Thus we can rewrite~(\ref{eq:top_surface}) as
 \[ F_0^* + \left(\frac{dF_0}{dT_{\mathit{sf}}}\right)^* \, (T_{\mathit
 {sf}}^{m+1} - T_{\mathit{sf}}^*) =    K_1^* (T_{\mathit{sf}}^{m+1} - T_1^{m+1}), \]
 Rearranging terms, we obtain
-\begin{equation}
+\begin{equation*}
 \label{eq:surface_case1}
 \left[ \left(\frac{dF_0}{dT_{\mathit{sf}}}\right)^* - K_1^* \right]
 T_{\mathit{sf}}^{m+1} +  K_1^* T_1^{m+1} =
 \left(\frac{dF_0}{dT_{\mathit{sf}}}\right)^* \, T_{\mathit{sf}}^* - F_0^*,
-\end{equation}
+\end{equation*}
 the first equation in the set of equations~(\ref{eq:tridiag}).
 The temperature change in ice/snow layer $k$ is
 \begin{equation}
@@ -3510,13 +3518,13 @@ The unmodified flow rate, $w$, is determined from a hydraulic pressure\index{pre
 w(z) \Delta x^2=A_m \left(-\frac{\Delta P}{l} + B_m\right)
 \end{equation*}
 where
-\begin{eqnarray}
+\begin{eqnarray*}
 \frac{\Delta P}{l} &=& \frac{A_p B_p + A_mB_m}{A_m+A_p},\\
 A_m&=& \frac{\Delta x^2}{\eta} \frac{n}{\sum^n_{k=1}\frac{1}{\Pi(k)}},\\
 B_m&=& -\frac{g}{n}\sum_{k=1}^n \rho(k),\\
 A_p&=& \frac{\pi a^4}{8 \eta},\\
 B_p&=& -\rho_p g.
-\end{eqnarray}
+\end{eqnarray*}
 There are three tunable parameters in the above parameterization, $a$, the diameter of the channel, $\Delta x$, the horizontal size of the mush draining through each channel, and $Ra_c$, the critical Rayleigh number. $\rho_p$ is the density\index{density!brine} of brine in the channel which we take to be the density of brine in the mush at the level that the brine is draining from. $l$ is the thickness of mush from the ice base to the top of the layer in question. We assume that $\Delta x$ is proportional to $l$ so that $\Delta x = 2 \beta l$. $a$ ({\tt a\_rapid\_mode}), $\beta$ ({\tt aspect\_rapid\_mode}) and $Ra_c$ ({\tt Ra\_c\_rapid\_mode}) are all namelist\index{namelist} parameters with default values of $0.5\;\mathrm{mm}$, 1 and 10, respectively. The value $\beta=1$ gives a square aspect ratio for the convective flow in the mush.
 
 The {\it slow drainage} mode takes the form of a simple relaxation of bulk salinity:
@@ -3567,13 +3575,13 @@ where $(1-\phi_i)$ is the solid fraction of new ice formed and the right hand is
 
 \index{melting potential}%
 Melting at the top surface is given by
-\begin{equation}
+\begin{equation*}
 \label{eq:top_melting} q \, \delta h = \left\{\begin{array}{ll}
                          (F_0-F_{ct}) \, \Delta t & \mbox{if $F_0>F_{ct}$} \\
                          0                   & \mbox{otherwise}
                         \end{array}
                  \right.
-\end{equation}
+\end{equation*}
 where $q$ is the enthalpy of the surface ice or snow layer\footnote{The mushy thermodynamics option does not include the enthalpy associated with raising the meltwater temperature to \zeroC\, in these calculations, unlike BL99, which does include it.  This extra heat\index{ocean!heat} is returned to the ocean (or the atmosphere, in the case of evaporation\index{evaporation}) with the melt water.} (recall
 that $q < 0$) and $\delta h$ is the change in 
 \index{thickness!ice or snow}%
@@ -3622,9 +3630,9 @@ sublimates at the top surface.  If the latent heat flux is
 positive, vapor from the atmosphere is deposited at the surface as
 snow or ice.  The thickness change of the surface layer is given
 by
-\begin{equation}
+\begin{equation*}
 \label{latent_heat} (\rho L_v - q) \delta h = F_l \Delta t,
-\end{equation}
+\end{equation*}
 where $\rho$ is the 
 \index{density!ice or snow}%
 density of the surface material (snow or ice),
@@ -5056,7 +5064,7 @@ variable & options/format & description & recommended value\\
 & {\tt constant} & constant ice--ocean flux velocity & \\
  {\tt sil\_data\_type} & {\tt default} & default forcing value for silicate & \\
  & {\tt clim} & silicate forcing from ocean climatology \cite{GLBA:06} & \\
- {\tt nit\_data\_type} & {\tt default} & default forcing value for silicate & \\
+ {\tt nit\_data\_type} & {\tt default} & default forcing value for nitrate & \\
  & {\tt clim} & nitrate forcing from ocean climatology \cite{GLBA:06} & \\
  & {\tt sss} & nitrate forcing equals salinity & \\
  {\tt tr\_bgc\_C\_sk} & true/false & algal carbon tracer &\\
@@ -5066,7 +5074,7 @@ variable & options/format & description & recommended value\\
  {\tt tr\_bgc\_DMSPp\_sk} & true/false & particulate DMSP tracer&\\
  {\tt tr\_bgc\_DMSPd\_sk} & true/false & dissolved DMSP tracer&\\
  {\tt tr\_bgc\_DMS\_sk} & true/false & DMS tracer&\\
- {\tt phi\_snow} & real  & snow porosity for brine tracer motion & \\
+ {\tt phi\_snow} & real  & snow porosity for brine height tracer  & \\
 &&&\\
 {\it ice\_nml}&&{\it Physical Parameterizations}& \\
  {\tt kitd} & {\tt 0} & delta function ITD approximation & {\tt 1}\\
@@ -5140,11 +5148,12 @@ variable & options/format & description & recommended value\\
 {\tt atm\_data\_format} & {\tt nc} & read \netcdf\ atmo forcing files & {\tt bin} \\
                             & {\tt bin} & read direct access, binary files & \\
 {\tt atm\_data\_type} & {\tt default} & constant values defined in the code & \\
-                         & {\tt ecmwf} & \index{ECMWF} ECMWF forcing data & \\
-                         & {\tt ncar} & \index{NCAR} NCAR bulk forcing data & \\
                          & {\tt LYq}  & \index{AOMIP} AOMIP/Large-Yeager forcing data & \\
                          & {\tt monthly} & monthly forcing data & \\
+                         & {\tt ncar} & \index{NCAR} NCAR bulk forcing data & \\
+                         & {\tt oned} & column forcing data & \\
 {\tt atm\_data\_dir} & path/ & path to atmospheric forcing data directory & \\
+{\tt calc\_formdrag} & true/false & calculate form drag &  \\
 {\tt calc\_strair} & true & calculate wind stress and speed & \\
                     & false & read wind stress and speed from files & \\
 {\tt calc\_Tsfc} & true/false & calculate surface temperature & {\tt .true.} \\
@@ -5221,7 +5230,16 @@ All quantities in the code are expressed in MKS units
 &&\\
 {\Large\bf A} &&\\
 &&\\
+a11, a12 & structure tensor components & \\
+a2D & history field accumulations, 2D & \\
+a3Dz & history field accumulations, 3D vertical & \\
+a3Db & history field accumulations, 3D bio grid & \\
+a3Dc & history field accumulations, 3D categories & \\
+a4Di & history field accumulations, 4D categories, vertical ice &  \\
+a4Db & history field accumulations, 4D categories, vertical bio grid & \\
+a4Ds & history field accumulations, 4D categories, vertical snow & \\
 a\_min & minimum area concentration for computing velocity{\dotfill\ } & 0.001 \\
+a\_rapid\_mode& {$\bullet$}brine channel diameter &   \\
  advection & {$\bullet$} type of advection algorithm used (`remap' or `upwind'){\dotfill\ }& remap \\
 ahmax & {$\bullet$} thickness above which ice albedo is constant{\dotfill\ }& 0.3 m \\
  aice\_extmin & minimum value for ice extent diagnostic {\dotfill\ }& 0.15 \\
@@ -5229,27 +5247,39 @@ ahmax & {$\bullet$} thickness above which ice albedo is constant{\dotfill\ }& 0.
 aice0 & fractional open water area & \\
  aice(n)     & total concentration of ice in grid cell (in category n) & \\
  albedo\_type & {$\bullet$} type of albedo parameterization (`default' or `constant') & \\
+ albcnt & counter for averaging albedo & \\
+ albice & bare ice albedo & \\
  albicei & {$\bullet$} near infrared ice albedo for thicker ice &\\
  albicev & {$\bullet$} visible ice albedo for thicker ice  & \\
  albocn  & ocean albedo {\dotfill\ } & 0.06 \\
+ albpnd & melt pond albedo & \\
+ albsno & snow albedo & \\
  albsnowi  & {$\bullet$} near infrared, cold snow albedo & \\
  albsnowv  & {$\bullet$} visible, cold snow albedo & \\
- alpha & floe shape constant for lateral melt {\dotfill\ } & 0.66 \\
+algalN & algal nitrogen concentration & mmol/m$^3$ \\
 alv(n)dr(f)   & albedo: visible (near IR), direct (diffuse) & \\
 alv(n)dr(f)\_ai   & grid-box-mean value of alv(n)dr(f) & \\
+amm & ammonia/um concentration & mmol/m$^3$ \\
  ANGLE  & for conversions between the POP grid and latitude-longitude grids & radians \\
  ANGLET   & ANGLE converted to T-cells & radians \\
+ aparticn & participation function & \\
+ apeff\_ai & grid-cell-mean effective pond fraction & \\
  apondn & area concentration of melt ponds & \\
+ arlx1i & relaxation constant for dynamics (stress) & \\
+ araftn & area fraction of rafted ice & \\
+ aredistrn & redistribution function: fraction of new ridge area & \\
+ ardgn & fractional area of ridged ice & \\
+aspect\_rapid\_mode & {$\bullet$} brine convection aspect ratio {\dotfill\ }& 1 \\
  astar & e-folding scale for participation function  {\dotfill\ }& 0.05 \\
 atm\_data\_dir &  {$\bullet$} directory for atmospheric forcing data & \\
 atm\_data\_format  & {$\bullet$}  format of atmospheric forcing files & \\
 atm\_data\_type & {$\bullet$}  type of atmospheric forcing & \\ 
 atmbndy & {$\bullet$} atmo boundary layer parameterization (`default' or `constant') & \\
+avail\_hist\_fields & type for history field data & \\
 awtidf   & weighting factor for near-ir, diffuse albedo{\dotfill\ } & 0.36218 \\
- awtidr   & weighting factor for near-ir, direct  albedo{\dotfill\ } & 0.63282 \\
- awtvdf  & weighting factor for visible, diffuse albedo{\dotfill\ } & 0.00182 \\
+ awtidr   & weighting factor for near-ir, direct  albedo{\dotfill\ } & 0.00182 \\
+ awtvdf  & weighting factor for visible, diffuse albedo{\dotfill\ } & 0.63282 \\
  awtvdr  & weighting factor for visible, direct  albedo {\dotfill\ }& 0.00318 \\
- avgsiz  & number of cell-averaged fields that can be written to history file {\dotfill\ }& 81 \\
 \end{tabular*}
 \end{center}
 \begin{center}
@@ -5257,6 +5287,10 @@ awtidf   & weighting factor for near-ir, diffuse albedo{\dotfill\ } & 0.36218 \\
 &&\\
 {\Large\bf B} &&\\
 &&\\
+bgc\_data\_dir&  {$\bullet$} data directory for bgc & \\
+bgc\_flux\_type &  {$\bullet$} ice--ocean flux velocity  & \\
+bgc\_tracer\_type & tracer\_type for bgc tracers & \\
+bgrid & nondimensional vertical grid points for bio grid & \\
 bignum & a large number {\dotfill\ }& $10^{30}$ \\
 block & data type for blocks & \\
 block\_id & global block number & \\
@@ -5265,13 +5299,20 @@ blockGlobalID & global block IDs & \\
 blockLocalID & local block IDs & \\
 blockLocation & processor location of block & \\
 blocks\_ice & local block IDs & \\
+bphi & porosity of ice layers on bio grid & \\
+ brlx & relaxation constant for dynamics (momentum) & \\
+ bTiz & temperature of ice layers on bio grid & \\
 &&\\
 {\Large\bf C} &&\\
 &&\\
 c$\left<n\right>$ & real($n$) &  \\
+calc\_formdrag & {$\bullet$} calculate form drag &  \\
 calc\_strair & {$\bullet$} if true, calculate wind stress {\dotfill\ }& T \\
 calc\_Tsfc & {$\bullet$} if true, calculate surface temperature {\dotfill\ }& T \\
+Cdn\_atm & atmospheric drag coefficient & \\
+Cdn\_ocn & ocean drag coefficient & \\
  Cf      & ratio of ridging work to PE change in ridging{\dotfill\ } & 17. \\
+ cgrid & vertical grid points for ice grid (compare bgrid) & \\
  char\_len  & length of character variable strings{\dotfill\ } &  80 \\
  char\_len\_long  & length of longer character variable strings{\dotfill\ } &  256 \\
  check\_step & time step on which to begin writing debugging data & \\
@@ -5293,16 +5334,22 @@ cp063 & diffuse fresnel reflectivity (above) {\dotfill\ }& 0.063 \\
 cp455 & diffuse fresnel reflectivity (below) {\dotfill\ }& 0.455 \\
 Cs   & fraction of shear energy contributing to ridging {\dotfill\ }& 0.25 \\
  Cstar & constant in Hibler ice strength formula  {\dotfill\ }& 20. \\
+ cxm & combination of HTN values & \\ 
+ cxp & combination of HTN values & \\ 
+ cym & combination of HTE values & \\ 
+ cyp & combination of HTE values & \\ 
 &&\\
 {\Large\bf D} &&\\
 &&\\
+daice\_da & data assimilation concentration increment rate & \\
  daidtd    & ice area tendency due to dynamics/transport &1/s \\
  daidtt    & ice area tendency due to thermodynamics &1/s \\
 dalb\_mlt & [see {\bf ice\_shortwave.F90}] {\dotfill\ } & -0.075 \\
 dalb\_mlti & [see {\bf ice\_shortwave.F90}] {\dotfill\ }  & -0.100\\
 dalb\_mltv & [see {\bf ice\_shortwave.F90}] {\dotfill\ }  &-0.150 \\
-dardg1dt & rate of fractional area loss by ridging ice & 1/s \\
-dardg2dt & rate of fractional area gain by new ridges & 1/s \\
+darcy\_V & Darcy velocity used for brine height tracer & \\
+dardg1(n)dt & rate of fractional area loss by ridging ice (category n) & 1/s \\
+dardg2(n)dt & rate of fractional area gain by new ridges (category n)  & 1/s \\
 \end{tabular*}
 \end{center}
 \begin{center}
@@ -5313,46 +5360,57 @@ days\_per\_year & {$\bullet$} number of days in one year {\dotfill\ }& 365 \\
  dbl\_kind  & definition of double precision{\dotfill\ } & selected\_real\_kind(13) \\
  dbug &{$\bullet$} write extra diagnostics {\dotfill\ }  & .false. \\
  Delta  & function of strain rates (see Section~\ref{subsec:dynamics}) & 1/s \\
+ denom1 & combination of constants for stress equation & \\
  depressT  & ratio of freezing temperature to salinity of brine {\dotfill\ } & 0.054 deg/ppt \\
+ dhbr\_bt & change in brine height at the bottom of the column & \\
+ dhbr\_top & change in brine height at the top of the column & \\
+ dhsn & depth difference for snow on sea ice and pond ice & \\
  diag\_file & {$\bullet$} diagnostic output file (alternative to standard out) & \\
  diag\_type & {$\bullet$} where diagnostic output is written {\dotfill\ } & stdout \\
  diagfreq& {$\bullet$} how often diagnostic output is written (10 = once per 10 dt) &\\
+ distrb &  distribution data type & \\
  distrb\_info & block distribution information & \\
- distribution\_type & {$\bullet$} `cartesian' or `rake' or `spacecurve' & \\
+ distribution\_type & {$\bullet$} method used to distribute blocks on processors & \\
  distribution\_weight & {$\bullet$} weighting method used to compute work per block & \\
  divu     & strain rate I component, velocity divergence  &1/s \\
  divu\_adv  & divergence associated with advection &1/s  \\
+dms & dimethyl sulfide concentration & mmol/m$^3$ \\
+dmsp & dimethyl sulfoniopropionate concentration & mmol/m$^3$ \\
  dpscale & {$\bullet$} time scale for flushing in permeable ice {\dotfill\ } & $1\times 10^{-3}$ \\ 
  dragio & drag coefficient for water on ice {\dotfill\ }& 0.00536 \\
-dragw  & drag coefficient for water on ice*$\rho_w$ &  kg/m$^3$ \\
+dSdt\_slow\_mode & {$\bullet$} drainage strength parameter &  \\
+dsnow & change in snow thickness & m \\
 dt      & {$\bullet$} thermodynamics time step {\dotfill\ }  & 3600. s\\ 
-dT\_mlt &  [see {\bf ice\_shortwave.F90}] {\dotfill\ }  & 1. deg\\
+dt\_dyn & dynamics/ridging/transport time step & \\
+dT\_mlt & {$\bullet$} $\Delta$ temperature  per $\Delta$ snow grain radius{\dotfill\ }  & 1. deg\\
 dte     & subcycling time step for EVP dynamics {($\Delta t_e$)} & s\\
+dte2T & dte / 2(damping time scale) & \\
 dtei       & 1/dte, where dte is the EVP subcycling time step &1/s \\
 dump\_file  & {$\bullet$} output file for restart dump & \\
 dumpfreq& {$\bullet$} dump frequency for restarts, y, m or d &\\
 dumpfreq\_n& {$\bullet$} restart output frequency &\\
-dump\_last & if true, write restart on last time step of simulation & \\
+dump\_last & {$\bullet$} if true, write restart on last time step of simulation & \\
+dxhy & combination of HTE values & \\ 
 dxt     & width of T cell {($\Delta x$)} through the middle & m\\
 dxu     & width of U cell {($\Delta x$)} through the middle &m\\
+dyhx & combination of HTN values & \\ 
 dyn\_dt & dynamics and transport time step {($\Delta t_{dyn}$)} & s \\
 dyt     & height of T cell {($\Delta y$)} through the middle &m \\
 dyu     & height of U cell {($\Delta y$)} through the middle &m\\
  dvidtd    & ice volume tendency due to dynamics/transport &m/s \\
  dvidtt    & ice volume tendency due to thermodynamics &m/s \\
-dvirdgdt & ice volume ridging rate & m/s \\
+dvirdg(n)dt & ice volume ridging rate (category n)  & m/s \\
 &&\\
 {\Large\bf E} &&\\
 &&\\
+e11, e12, e22 & strain rate tensor components & \\
 ecci & yield curve minor/major axis ratio, squared {\dotfill\ } & 1/4 \\
  eice(n)     & energy of melting of ice per unit area  (in category n)         &J/m$^2$ \\
  emissivity      & emissivity of snow and ice{\dotfill\ } &  0.95 \\
- eps11  & a small number {\dotfill\ }&  10$^{-11}$ \\
  eps13  & a small number {\dotfill\ }&  10$^{-13}$ \\
  eps16  & a small number {\dotfill\ }&  10$^{-16}$ \\
  esno(n)     & energy of melting of snow per unit area  (in category n)  &J/m$^2$ \\
  evap        & evaporative water flux & kg/m$^2$/s \\
- evp\_damping  & {$\bullet$} if true, use evp damping procedure \cite{ech_JCP:01}{\dotfill\ } & F \\
  ew\_boundary\_type & {$\bullet$}  type of east-west boundary condition & \\
 eyc     & coefficient for calculating the parameter E, 0$<$ eyc $<$1 {\dotfill\ } & 0.36\\
 \end{tabular*}
@@ -5367,8 +5425,9 @@ faero\_ocn & aerosol flux to the ocean & kg/m$^2$/s \\
  fcondtop(n)(\_f) & conductive heat flux  & W/m$^2$ \\
  fcor\_blk         & Coriolis parameter &1/s \\
 ferrmax & max allowed energy flux error (thermodynamics) {\dotfill\ } & 1.$\times$10$^{-3}$  W/m$^2$ \\
+ffracn & fraction of fsurfn used to melt pond ice & \\
  fhocn       & net heat flux to ocean &W/m$^2$ \\
- fhocn\_gbm   & grid-box-mean net heat flux to ocean (fhocn) &W/m$^2$ \\
+ fhocn\_ai   & grid-box-mean net heat flux to ocean (fhocn) &W/m$^2$ \\
  field\_loc\_center & field centered on grid cell {\dotfill\ } & 1 \\
  field\_loc\_Eface & field centered on east face {\dotfill\ } & 4 \\
  field\_loc\_NEcorner & field on northeast corner {\dotfill\ } & 2 \\
@@ -5381,30 +5440,39 @@ ferrmax & max allowed energy flux error (thermodynamics) {\dotfill\ } & 1.$\time
  field\_type\_scalar & scalar field type {\dotfill\ } & 1 \\
  field\_type\_unknown & unknown field type{\dotfill\ }  & 0 \\
  field\_type\_vector & vector field type {\dotfill\ } & 2 \\
+ first\_ice & flag for initial ice formation & \\
  flat     & latent heat flux   &W/m$^2$ \\
  floediam & effective floe diameter for lateral melt {\dotfill\ } &300. m \index{floe size} \\
+ floeshape & floe shape constant for lateral melt {\dotfill\ } & 0.66 \\
+ flux\_bio & all biogeochemistry fluxes passed to ocean & \\
+ flux\_bio\_ai & all biogeochemistry fluxes passed to ocean, grid cell mean & \\
  flw     & incoming longwave radiation &W/m$^2$ \\
  flwout      & outgoing longwave radiation &W/m$^2$ \\
  fm & Coriolis parameter * mass in U cell & kg/s \\
+ fpond & fresh water flux to ponds & kg/m$^2$/s \\
+ fr\_resp & bgc respiration fraction & 0.05 \\
  frain   & rainfall rate &kg/m$^2$/s \\
  frazil    & frazil ice growth        &m \\
  fresh       & fresh water flux to ocean &kg/m$^2$/s \\
- fresh\_gbm   & grid-box-mean fresh water flux (fresh) &kg/m$^2$/s \\
+ fresh\_ai   & grid-box-mean fresh water flux (fresh) &kg/m$^2$/s \\
 frz\_onset & day of year that freezing begins & \\
  frzmlt  & freezing/melting potential &W/m$^2$ \\
+ frzmlt\_init & freezing/melting potential at beginning of time step &W/m$^2$ \\
  frzmlt\_max  & maximum magnitude of freezing/melting potential {\dotfill\ } &1000. W/m$^2$ \\
  frzpnd & {$\bullet$} Stefan refreezing of melt ponds {\dotfill\ } & `hlid' \\
  fsalt       & net salt flux to ocean & kg/m$^2$/s \\
- fsalt\_gbm  & grid-box-mean salt flux to ocean (fsalt) & kg/m$^2$/s \\
+ fsalt\_ai  & grid-box-mean salt flux to ocean (fsalt) & kg/m$^2$/s \\
  fsens   & sensible heat flux &W/m$^2$ \\
  fsnow   & snowfall rate &kg/m$^2$/s  \\
  fsnowrdg  & snow fraction that survives in ridging{\dotfill\ }& 0.5 \\
  fsurf(n)(\_f) & net surface heat flux excluding fcondtop & W/m$^2$ \\
  fsw     & incoming shortwave radiation &W/m$^2$ \\
- fswabs      & absorbed shortwave radiation &W/m$^2$ \\
+ fswabs      & total absorbed shortwave radiation &W/m$^2$ \\
  fswfac & scaling factor to adjust ice quantities for updated data & \\
+ fswint & shortwave absorbed in ice interior &W/m$^2$ \\
+ fswpenl & shortwave penetrating through ice layers &W/m$^2$ \\
  fswthru     & shortwave penetrating to ocean & W/m$^2$ \\
- fswthru\_gbm & grid-box-mean shortwave penetrating to ocean (fswthru) &W/m$^2$\\
+ fswthru\_ai & grid-box-mean shortwave penetrating to ocean (fswthru) &W/m$^2$\\
 fyear  &current data year &  \\
 fyear\_final    &last data year &  \\
 fyear\_init    &{$\bullet$} initial data year &\\
@@ -5419,6 +5487,7 @@ fyear\_init    &{$\bullet$} initial data year &\\
  grid\_file         & {$\bullet$} input file for grid info & \\
  grid\_format         & {$\bullet$} format of grid files  & \\
  grid\_type         & {$\bullet$} `rectangular' or `displaced\_pole' or `column' &\\
+ grow\_ net & specific biogeochemistry growth rate per grid cell & s$^{-1}$ \\
  Gstar & piecewise-linear ridging participation function parameter {\dotfill\ }& 0.15 \\
 &&\\
 {\Large\bf H} &&\\
@@ -5427,7 +5496,9 @@ halo\_info & information for updating ghost cells & \\
 heat\_capacity & {$\bullet$} if true, use salinity-dependent thermodynamics {\dotfill\ }& T\\
 hfrazilmin  & minimum thickness of new frazil ice  {\dotfill\ }& 0.05 m \\
  hi\_min       & minimum ice thickness for thinnest ice category {\dotfill\ }& 0.01 m \\
+ hi\_ssl & ice surface scattering layer thickness & 0.05 m \\
  hicen & ice thickness in category n & m \\
+ hin\_old &  ice thickness prior to growth/melt & m \\
  hin\_max   & category thickness limits                &m \\
  hist\_avg  & {$\bullet$} if true, write averaged data instead of snapshots {\dotfill\ }& T \\
  histfreq & {$\bullet$} units of history output frequency: y, m, w, d or 1 &\\
@@ -5437,13 +5508,14 @@ hfrazilmin  & minimum thickness of new frazil ice  {\dotfill\ }& 0.05 m \\
  hm   & land/boundary mask, thickness (T-cell) & \\
  hmix   & ocean mixed layer depth {\dotfill\ }& 20. m \\
  hour & hour of the year & \\
- hp0 & pond depth at which transition to bare ice occurs {\dotfill\ }& 0.2 m \\
- hpmin & minimum melt pond depth {\dotfill\ }& 0.005 m \\
+ hp0 & pond depth at which shortwave transition to bare ice occurs {\dotfill\ }& 0.2 m \\
+ hp1 & {$\bullet$} critical ice lid thickness for topo ponds (dEdd) {\dotfill\ }& 0.01 m \\
+ hpmin & minimum melt pond depth (shortwave) {\dotfill\ }& 0.005 m \\
  hpondn & melt pond depth & m\\
  hs\_min  & minimum thickness for which $T_s$ is computed{\dotfill\ } & 1.$\times$10$^{-4}$ m \\
- hp1 & {$\bullet$} critical ice lid thickness for topo ponds (dEdd) {\dotfill\ }& 0.01 m \\
  hs0 & {$\bullet$} snow depth at which transition to ice occurs (dEdd) {\dotfill\ }& 0.03 m \\
  hs1 & {$\bullet$} snow depth of transition to pond ice  {\dotfill\ }  & 0.03 m \\
+ hs\_ssl & snow surface scattering layer thickness & 0.04 m \\
 Hstar  & determines mean thickness of ridged ice {\dotfill\ }& 25. m\\
  HTE  & length of eastern edge ($\Delta y$) of T-cell &m \\
  HTN  & length of northern edge ($\Delta x$) of T-cell &m \\
@@ -5456,7 +5528,10 @@ i(j)\_glob & global domain location for each grid cell & \\
 i0vis & fraction of penetrating visible solar radiation {\dotfill\ }& 0.70 \\
 iblkp & block on which to write debugging data & \\
 i(j)block & Cartesian i,j position of block & \\
+ice\_hist\_field & type for history variables & \\
 ice\_ic &  {$\bullet$}  choice of initial conditions (see Table~\ref{table:ic}) & \\
+ice\_stdout & unit number for standard output & \\
+ice\_stderr & unit number for standard error output & \\
  ice\_ref\_salinity  & reference salinity for ice--ocean exchanges {\dotfill\ }& 4. ppt \\
 icells & number of grid cells with specified property (for vectorization) & \\
  iceruf & ice surface roughness {\dotfill\ }& 5.$\times$10$^{-4}$ m  \\
@@ -5469,10 +5544,9 @@ icetmask  & ice extent mask (T-cell) & \\
  idate   & the date  at the end of the current time step (yyyymmdd)& \\
  idate0   & initial date  & \\
  ierr                   & general-use error flag & \\
+ igrid & interface points for vertical bio grid & \\
  i(j)hi  & last  i(j) index of physical domain (local) & \\
  i(j)lo  & first i(j) index of physical domain (local) & \\
- ilyr1      & index of the top layer in each cat (for eicen) & \\
- ilyrn      & index of the bottom layer in each cat (for eicen) & \\
 incond\_dir &  {$\bullet$} directory to write snapshot of initial condition & \\
 incond\_file &  {$\bullet$} prefix for initial condition file name & \\
  int\_kind  & definition of an integer  {\dotfill\ }& selected\_real\_kind(6) \\
@@ -5485,17 +5559,16 @@ incond\_file &  {$\bullet$} prefix for initial condition file name & \\
 &&\\
 {\Large\bf K} &&\\
 &&\\
- kappan  & visible extinction coefficient in ice, wavelength$>$700nm{\dotfill\ } & 17.6 m$^{-1}$ \\
  kappav  & visible extinction coefficient in ice, wavelength$<$700nm {\dotfill\ }& 1.4 m$^{-1}$ \\
  kcatbound &  {$\bullet$} category boundary formula & \\
  kdyn & {$\bullet$} type of dynamics (1 = EVP, 0 = off){\dotfill\ } & 1  \\
  kg\_to\_g & kg to g conversion factor {\dotfill\ } & 1000.  \\
- kice      & thermal conductivity of fresh ice{\dotfill\ }& 2.03 W/m/deg \\
- kimin & minimum conductivity of saline ice {\dotfill\ }& 0.10 W/m/deg \\
+ kice      & thermal conductivity of fresh ice (BL99){\dotfill\ }& 2.03 W/m/deg \\
  kitd & {$\bullet$} type of itd conversions (0 = delta function, 1 = linear remap){\dotfill\ } & 1 \\
  kmt\_file & {$\bullet$} input file for land mask info  & \\
 krdg\_partic & {$\bullet$} ridging participation function {\dotfill\ }& 1 \\
 krdg\_redist & {$\bullet$} ridging redistribution function {\dotfill\ }& 1 \\
+krgdn & mean ridge thickness per thickness of ridging ice & \\
  kseaice      & thermal conductivity of ice for zero-layer thermodynamics{\dotfill\ }& 2.0 W/m/deg \\
  ksno     & thermal conductivity of snow{\dotfill\ }  & 0.30 W/m/deg \\
  kstrength & {$\bullet$} ice stength formulation (1= Rothrock 1975, 0 = Hibler 1979){\dotfill\ } & 1 \\
@@ -5506,7 +5579,7 @@ krdg\_redist & {$\bullet$} ridging redistribution function {\dotfill\ }& 1 \\
 l\_brine & flag for brine pocket effects & \\
 l\_conservation\_check & if true, check conservation when ridging & \\
 l\_fixed\_area & flag for prescribing remapping fluxes & \\
-latpt & {$\bullet$} latitude of diagnostic points  & degrees N \\
+latpnt & {$\bullet$} desired latitude of diagnostic points  & degrees N \\
 latt(u)\_bounds & latitude of T(U) grid cell corners & degrees N \\
  Lfresh   & latent heat of melting of fresh ice = Lsub - Lvap & J/kg \\
  lhcoef  & transfer coefficient for latent heat & \\
@@ -5517,7 +5590,7 @@ latt(u)\_bounds & latitude of T(U) grid cell corners & degrees N \\
 \end{center}
 \begin{center}
 \begin{tabular*}{6.5in}{@{}l@{\extracolsep{\fill}}l@{\extracolsep{\fill}}l@{}} 
-lonpt & {$\bullet$} longitude of diagnostic points  & degrees E \\
+lonpnt & {$\bullet$} desired longitude of diagnostic points  & degrees E \\
 lont(u)\_bounds & longitude of T(U) grid cell corners & degrees E \\
  Lsub   & latent heat of sublimation for fresh water {\dotfill\ }& 2.835$\times$
 10$^6$ J/kg \\
@@ -5559,7 +5632,9 @@ n\_aero & number of aerosol species & \\
 nblocks & number of blocks on current processor & \\
 nblocks\_tot & total number of blocks in decomposition & \\
 nblocks\_x(y) & total number of blocks in x(y) direction & \\
+nbtrcr & number of biology tracers \index{tracers} & \\
 ncat    & number of ice categories {\dotfill\ }{\dotfill\ } & 5\\
+ncat\_hist & number of categories written to history & \\
 ndte  &{$\bullet$} number of subcycles {\dotfill\ }& 120 \\
 ndtd  &{$\bullet$} number of dynamics/advection steps under thermo {\dotfill\ }& 1 \\
 new\_day          & flag for beginning new day & \\
@@ -5574,20 +5649,23 @@ ngroups & number of groups of flux triangles in remapping {\dotfill\ } & 5 \\
 \begin{tabular*}{6.5in}{@{}l@{\extracolsep{\fill}}l@{\extracolsep{\fill}}l@{}} 
 nhlat & northern latitude of artificial mask edge {\dotfill\ } & 30$^\circ$S \\
 nilyr    & number of ice layers in each category {\dotfill\ } & 4\\
+nit & nitrate concentration & mmol/m$^3$ \\
+nit\_data\_type & {$\bullet$}   forcing type for nitrate & \\
+nlt\_bgc\_[chem] & ocean sources and sinks for biogeochemistry & \\
+nml\_filename &  namelist file name & \\
 nprocs & {$\bullet$} total number of processors & \\
 npt   & {$\bullet$} total number of time steps (dt) &\\
  ns\_boundary\_type & {$\bullet$}  type of north-south boundary condition & \\
 nslyr & number of snow layers in each category & \\
 nspint & number of solar spectral intervals & \\
+nstreams & number of history output streams (frequencies) & \\
 nt\_$\left<trcr\right>$ & tracer index &  \\
-ntilyr       & sum of number of ice layers in all categories & \\
 ntrace & number of fields being transported & \\
-ntrcr & number of tracers transported in remapping\index{tracers} & \\
-ntslyr & sum of number of snow layers in all categories & \\
+ntrcr & number of tracers \index{tracers} & \\
 nu\_diag          & unit number for diagnostics output file &  \\
 nu\_dump          & unit number for dump file for restarting&  \\
-nu\_dump\_age          & unit number for age dump file for restarting& \\
-nu\_dump\_pond          & unit number for melt pond dump file for restarting& \\
+nu\_dump\_eap          & unit number for EAP dynamics dump file for restarting& \\
+nu\_dump\_[tracer]          & unit number for tracer dump file for restarting& \\
 nu\_forcing  & unit number for forcing data file & \\
 nu\_grid          & unit number for grid file & \\
 nu\_hdr          & unit number for binary history header file & \\
@@ -5595,15 +5673,19 @@ nu\_history          & unit number for history file & \\
 nu\_kmt           & unit number for land mask file & \\
 nu\_nml           & unit number for namelist input file & \\
 nu\_restart       & unit number for restart input file & \\
-nu\_restart\_age       & unit number for age restart input file & \\
-nu\_restart\_pond       & unit number for melt pond restart input file & \\
+nu\_restart\_eap       & unit number for EAP dynamics restart input file & \\
+nu\_restart\_[tracer]       & unit number for tracer restart input file & \\
 nu\_rst\_pointer   & unit number for pointer to latest restart file & \\
+num\_avail\_hist\_fields\_[shape] & number of history fields of each array shape & \\
+nvar & number of horizontal grid fields written to history & \\
+nvarz & number of category, vertical grid fields written to history & \\
 nx(y)\_block & total number of gridpoints  on block in x(y) direction &\\
 nx(y)\_global & number of physical gridpoints in x(y) direction, global domain &\\
 nyr     & year number & \\
 &&\\
 {\Large\bf O} &&\\
 &&\\
+ocean\_bio & concentrations of bgc constituents in the ocean & \\
 oceanmixed\_file & {$\bullet$} data file containing ocean forcing data  &  \\
 oceanmixed\_ice & {$\bullet$} if true, use internal ocean mixed layer & \\
 ocn\_data\_dir &  {$\bullet$} directory for ocean forcing data & \\
@@ -5615,6 +5697,7 @@ omega  & angular velocity of Earth {\dotfill\ }& 7.292$\times$10$^{-5}$ rad/s \\
 &&\\
  p001 & 1/1000 &\\
  p01  & 1/100 & \\
+ p025 & 1/40 &  \\
  p027 & 1/36 &  \\
  p05 & 1/20 & \\
  p055 & 1/18 &  \\
@@ -5637,12 +5720,21 @@ omega  & angular velocity of Earth {\dotfill\ }& 7.292$\times$10$^{-5}$ rad/s \\
  p6   & 3/5 & \\
  p666 & 2/3 & \\
  p75 & 3/4 & \\
+phi\_c\_slow\_mode & {$\bullet$} critical liquid fraction & \\
+phi\_i\_mushy & {$\bullet$} solid fraction at lower boundary &  \\
+phi\_sk & skeletal layer porosity & \\
+phi\_snow & {$\bullet$} snow porosity for brine height tracer  & \\
  pi & $\pi$ & \\
  pi2         &  $2\pi$ & \\ 
  pih & $\pi /2$ & \\
- pndaspect & {$\bullet$} aspect ratio of pond changes (depth:area)  {\dotfill\ } & 0.8 \\
+ piq & $\pi /4$ & \\
+ pi(j,b,m)loc & x (y, block, task) location of diagnostic points & \\
+ plat & grid latitude of diagnostic points & \\
+ plon & grid longitude of diagnostic points & \\
+pndaspect & {$\bullet$} aspect ratio of pond changes (depth:area)  {\dotfill\ } & 0.8 \\
  pointer\_file      &{$\bullet$} input file for restarting & \\
  potT   & atmospheric potential temperature  &K \\
+ PP\_net & total primary productivity per grid cell & mg C/m$^2$/s \\
  precip\_units  &{$\bullet$} liquid precipitation data units & \\
  print\_global  &{$\bullet$} if true, print global data {\dotfill\ } & F\\
  print\_points  &{$\bullet$} if true, print point data {\dotfill\ } & F\\
@@ -5661,10 +5753,15 @@ Qref   & 2m atmospheric reference specific humidity & kg/kg \\
 &&\\
 {\Large\bf R} &&\\
 &&\\
+R\_C2N & algal carbon to nitrate factor & 7. mole/mole \\
+R\_gC2molC & mg/mmol carbon & 12.01 mg/mole \\
+R\_chl2N & algal chlorophyll to nitrate factor & 3. mg/mmol \\
 R\_ice & {$\bullet$} parameter for Delta-Eddington ice albedo  &  \\
 R\_pnd & {$\bullet$} parameter for Delta-Eddington pond albedo &  \\
+R\_S2N & algal silicate to nitrate factor & 0.03 mole/mole \\
 R\_snw & {$\bullet$} parameter for Delta-Eddington snow albedo  &  \\
 r16\_kind & definition of quad precision {\dotfill\ } & selected\_real\_kind(26) \\
+Rac\_rapid\_mode & {$\bullet$} critical Rayleigh number{\dotfill\ } & 10 \\
  rad\_to\_deg               & degree-radian conversion{\dotfill\ } & $180/\pi$ \\
  radius        & earth radius {\dotfill\ }& 6.37$\times$10$^6$ m \\
  rdg\_conv & convergence for ridging & 1/s \\
@@ -5675,12 +5772,15 @@ r16\_kind & definition of quad precision {\dotfill\ } & selected\_real\_kind(26)
 \begin{center}
 \begin{tabular*}{6.5in}{@{}l@{\extracolsep{\fill}}l@{\extracolsep{\fill}}l@{}} 
 refindx & refractive index of sea ice {\dotfill\ } & 1.310  \\
+revp & real(revised\_evp) & \\
   restart &{$\bullet$} if true, initialize using restart file instead of defaults{\dotfill\ } & T \\
   restart\_age & {$\bullet$} if true, read age restart file & \\
+  restart\_bgc & {$\bullet$} if true, read bgc restart file & \\
   restart\_dir &{$\bullet$} path to restart/dump files & \\
   restart\_file &{$\bullet$} restart file prefix & \\
   restart\_[tracer] & {$\bullet$} if true, read tracer restart file & \\
   restart\_ext & {$\bullet$} if true, read/write halo cells in restart file & \\
+  restore\_bgc & {$\bullet$} if true, restore nitrate/silicate to data & \\
   restore\_ice & {$\bullet$} if true, restore ice state along lateral boundaries & \\
   restore\_sst & {$\bullet$} restore sst to data & \\
   revised\_evp &  {$\bullet$} if true, use revised EVP parameters and approach & \\
@@ -5690,11 +5790,12 @@ refindx & refractive index of sea ice {\dotfill\ } & 1.310  \\
  rhofresh            & density of fresh water {\dotfill\ }& 1000.0 kg/m$^3$ \\
  rhoi    & density of ice {\dotfill\ } & 917. kg/m$^3$\\
  rhos              & density of snow {\dotfill\ }& 330.   kg/m$^3$ \\
+ rhosi              & average sea ice density (for hbrine tracer) {\dotfill\ }& 940.   kg/m$^3$ \\
  rhow              & density of seawater {\dotfill\ }& 1026.  kg/m$^3$ \\
  rnilyr  &  real(nlyr) &\\
  rside & fraction of ice that melts laterally & \\
  rsnw\_fresh & freshly fallen snow grain radius {\dotfill\ } & 100. $\times$ 10$^{-6}$  m \\
- rsnw\_melt & melting snow grain radius {\dotfill\ } & 1000. $\times$ 10$^{-6}$  m \\
+ rsnw\_melt & {$\bullet$} melting snow grain radius {\dotfill\ } & 1000. $\times$ 10$^{-6}$  m \\
  rsnw\_nonmelt & nonmelting snow grain radius {\dotfill\ } & 500. $\times$ 10$^{-6}$  m \\
  rsnw\_sig & standard deviation of snow grain radius {\dotfill\ } & 250. $\times$ 10$^{-6}$  m \\
  runid & {$\bullet$} identifier for run & \\
@@ -5702,8 +5803,9 @@ refindx & refractive index of sea ice {\dotfill\ } & 1.310  \\
 &&\\
 {\Large\bf S} &&\\
 &&\\
-salin & ice salinity & ppt \\
- saltmax   & max salinity, at ice base   {\dotfill\ }  & 3.2 ppt \\
+s11, s12, s22 & stress tensor components & \\
+salinz & ice salinity profile & ppt \\
+ saltmax   & max salinity, at ice base (BL99)   {\dotfill\ }  & 3.2 ppt \\
  scale\_factor & scaling factor for shortwave radiation components & \\
 sec     & seconds elasped into idate & \\
  secday  & number of seconds in a day {\dotfill\ }&  86400.   \\
@@ -5712,10 +5814,14 @@ shcoef  & transfer coefficient for sensible heat & \\
 shlat & southern latitude of artificial mask edge {\dotfill\ } & 30$^\circ$N \\
 shortwave &  {$\bullet$} flag for shortwave parameterization (`default' or `dEdd') & \\
 sig1(2) & principal stress components (diagnostic) & \\
+sil & silicate concentration & mmol/m$^3$ \\
+sil\_data\_type & {$\bullet$}  forcing type for silicate & \\
 sinw    & sine of the turning angle in water {\dotfill\ } & 0. \\
+sk\_l & skeletal layer thickness & 0.03 m \\
  snoice    & snow--ice formation       &m \\
  snowinfil & {$\bullet$} snow infiltration on/off {\dotfill\ } & T \\
 snowpatch & length scale for parameterizing nonuniform snow coverage{\dotfill\ } & 0.02 m \\
+solve\_skl\_bgc & {$\bullet$} biogeochemistry on/off & \\
 spval & special value (single precision){\dotfill\ } & $10^{30}$ \\
 spval\_dbl & special value (double precision){\dotfill\ } & $10^{30}$ \\
 ss\_tltx(y) & sea surface   in the x(y) direction & m/m \\
@@ -5752,10 +5858,15 @@ Tair    & air temperature at 10 m & K\\
  tarean      & area of northern hemisphere T-cells & m$^2$ \\
  tarear   & 1/tarea & 1/m$^2$ \\
  tareas      & area of southern hemisphere T-cells& m$^2$ \\
+ tcstr & string identifying T grid for history variables & \\
  tday & absolute day number & \\
 Tf      & freezing temperature & C\\
  Tffresh    & freezing temp of fresh ice{\dotfill\ } &  273.15 K \\
+ thinS & minimum ice thickness for brine tracer & \\
  time       & total elapsed time &s \\
+ time\_beg & beginning time for history averages & \\
+ time\_bounds & beginning and ending time for history averages & \\
+ time\_end & ending time for history averages & \\
  time\_forc  & time of last forcing update &s \\
  Timelt  & melting temperature of ice top surface{\dotfill\ }& 0. C \\
  tinyarea & puny * tarea & m$^2$ \\
@@ -5764,9 +5875,11 @@ Tf      & freezing temperature & C\\
  tmask & land/boundary mask, thickness (T-cell)& \\
  tmass    & total mass of ice and snow & kg/m$^2$  \\
  Tmin & minimum allowed internal temperature {\dotfill\ }& -100. C \\
- Tmlt & melting temperature of ice & \\
+ Tmltz & melting temperature profile of ice & \\
  Tocnfrz & temperature of constant freezing point parameterization {\dotfill\ }&  -1.8 C \\
  tr\_aero & {$\bullet$} if true, use aerosol tracers & \\
+ tr\_bgc\_[tracer] & {$\bullet$} if true, use biogeochemistry tracers & \\
+ tr\_brine & {$\bullet$} if true, use brine height tracer & \\
  tr\_FY & {$\bullet$} if true, use first-year area tracer & \\
  tr\_iage & {$\bullet$} if true, use ice age tracer & \\
  tr\_lvl & {$\bullet$} if true, use level ice area and volume tracers & \\
@@ -5780,10 +5893,10 @@ Tf      & freezing temperature & C\\
  trcr & ice tracers & \\
  trcr\_depend & tracer dependency on basic state variables & \\
  Tref   & 2m atmospheric reference temperature &K \\
- trestore & {$\bullet$}  sst restoring time scale & days \\
+ trestore & {$\bullet$}  restoring time scale & days \\
  tripole & if true, block lies along tripole boundary & \\
  tripoleT & if true, tripole boundary is T-fold; if false, U-fold & \\
- Tsf\_errmax & max allowed $T_{sfc}$ error (thermodynamics)  {\dotfill\ } & 5.$\times$10$^{-4}$deg\\
+ Tsf\_errmax & max allowed $T_{\mathit sf}$ error (thermodynamics)  {\dotfill\ } & 5.$\times$10$^{-4}$deg\\
  Tsfc(n)     & temperature of ice/snow top surface (in category n) &C \\
  Tsmelt & melting temperature of snow top surface {\dotfill\ }&0. C \\
 TTTice & for saturated specific humidity over ice {\dotfill\ }& 5897.8 K \\
@@ -5802,9 +5915,12 @@ umin & min wind speed for turbulent fluxes {\dotfill\ }& 1. m/s \\
  uocn     & ocean current in the x-direction &m/s \\
 update\_ocn\_f &  {$\bullet$} if true, include frazil ice fluxes in ocean flux fields & \\
 use\_leap\_years & {$\bullet$} if true, include leap days & \\
+use\_restart\_time & {$\bullet$} if true, use date from restart file & \\
  ustar\_min & {$\bullet$} minimum friction velocity under ice &\\% {\dotfill\ }& 5 $\times$ 10$^{-3}$ m/s \\ 
  %ustar\_scale & scaling factor for ice--ocean heat flux & \\
+ ucstr & string identifying U grid for history variables & \\
  uvel           & x-component of ice velocity &m/s \\
+ uvel\_init   & x-component of ice velocity at beginning of time step &m/s \\
  uvm  & land/boundary mask, velocity (U-cell)& \\
 &&\\
 {\Large\bf V} &&\\
@@ -5812,10 +5928,15 @@ use\_leap\_years & {$\bullet$} if true, include leap days & \\
  vatm   & wind velocity in the y direction    &m/s \\
  vice(n)     & volume per unit area of ice  (in category n)        &m \\
  vicen\_init & ice volume at beginning of timestep & m \\
+ viscosity\_dyn & dynamic viscosity of brine{\dotfill\ }  & $1.79\times 10^{-3}$ kg/m/s \\
  vocn     & ocean current in the y-direction &m/s \\
  vonkar             & von Karman constant{\dotfill\ } &  0.4   \\
+ vraftn & volume of rafted ice & m \\
+ vrdgn & volume of ridged ice & m\\
+ vredistrn & redistribution function: fraction of new ridge volume & \\
  vsno(n)     & volume per unit area of snow  (in category n)       &m \\
 vvel            & y-component of ice velocity &m/s \\
+ vvel\_init   & y-component of ice velocity at beginning of time step &m/s \\
 &&\\
 {\Large\bf W} &&\\
 &&\\
@@ -5834,6 +5955,8 @@ warmsno & value for constant albedo parameterization {\dotfill\ }& 0.77 \\
 &&\\
 ycycle    &{$\bullet$} number of years in forcing data cycle  &  \\
 yday    & day of the year & \\
+yield\_curve & type of yield curve & ellipse \\
+yieldstress11(12, 22) & yield stress tensor components & \\
 year\_init    &{$\bullet$} the initial year  &  \\
 &&\\
 {\Large\bf Z} &&\\
