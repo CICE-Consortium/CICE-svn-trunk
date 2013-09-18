@@ -213,14 +213,15 @@
                dTs = max(Tp - Tsfcn(i,j),c0)
                dvn = dvn - volpn(i,j) * (c1 - exp(rexp*dTs/Tp))
 
-            elseif (trim(frzpnd) == 'hlid') then ! Stefan approximation
+            else 
+               ! trim(frzpnd) == 'hlid' Stefan approximation
                ! assumes pond is fresh (freezing temperature = 0 C)
                ! and ice grows from existing pond ice
                hlid = ipnd(i,j)
                if (dvn == c0) then ! freeze pond
                   Ts = Tair(i,j) - Tffresh
                   if (Ts < c0) then
-!                  if (Ts < -c2) then ! as in meltpond_cesm
+                 ! if (Ts < -c2) then ! as in meltpond_cesm
                      bdt = -c2*Ts*kice*dt/(rhoi*Lfresh)
                      dhlid = p5*sqrt(bdt)                  ! open water freezing
                      if (hlid > dhlid) dhlid = p5*bdt/hlid ! existing ice
@@ -239,17 +240,6 @@
                endif
                alid = apondn * aicen(i,j)
                dvn = dvn - dhlid*alid*rhoi/rhofresh
-            else ! Stefan approximation
-                 ! assumes pond is fresh (freezing temperature = 0 C)
-                 ! and ice grows from open water
-               if (dvn == c0) then
-                  Ts = Tair(i,j) - Tffresh
-                  if (Ts < c0) then
-                     dhlid = p5*sqrt(-c2*Ts*kice*dt/(rhoi*Lfresh))
-                     alid = apondn * aicen(i,j)
-                     dvn = dvn - dhlid*alid*rhoi/rhofresh
-                  endif
-               endif
             endif
 
             volpn(i,j) = volpn(i,j) + dvn

@@ -173,7 +173,7 @@
       use ice_firstyear, only: update_FYarea
       use ice_grid, only: lmask_n, lmask_s, TLAT, TLON
       use ice_itd, only: hi_min
-      use ice_meltpond_cesm, only: compute_ponds_cesm, compute_ponds_simple
+      use ice_meltpond_cesm, only: compute_ponds_cesm
       use ice_meltpond_lvl, only: compute_ponds_lvl
       use ice_meltpond_topo, only: compute_ponds_topo
       use ice_restart_meltpond_lvl, only: ffracn, dhsn, &
@@ -574,13 +574,12 @@
          if (tr_pond) then
 
             if (tr_pond_cesm) then
-!               rfrac(:,:) = 0.15_dbl_kind + 0.7_dbl_kind * aicen(:,:,n,iblk)
                rfrac(:,:) = rfracmin + (rfracmax-rfracmin) * aicen(:,:,n,iblk) 
-               call compute_ponds_cesm(nx_block, ny_block,                     &
-                                       ilo, ihi, jlo, jhi,                     &
-                                       dt,       hi_min,                       &
-                                       pndaspect,                              &
-                                       rfrac,  melttn(:,:,n,iblk),             &
+               call compute_ponds_cesm(nx_block,  ny_block,                    &
+                                       ilo, ihi,  jlo, jhi,                    &
+                                       dt,        hi_min,                      &
+                                       pndaspect, rfrac,                       &
+                                       melttn(:,:,n,iblk),                     &
                                        meltsn(:,:,n,iblk), frain(:,:,iblk),    &
                                        aicen (:,:,n,iblk), vicen (:,:,n,iblk), &
                                        vsnon (:,:,n,iblk),                     &
@@ -637,23 +636,6 @@
             endif
 
          endif
-
-         if (tr_pond .and. trim(shortwave) /= 'dEdd') then
-
-            rfrac(:,:) = c1
-
-            call compute_ponds_simple(nx_block, ny_block,                       &
-                                   ilo, ihi, jlo, jhi,                          &
-                                   dt, rfrac, hi_min,                           &
-                                   melttn(:,:,n,iblk), meltsn(:,:,n,iblk),      &
-                                   frain(:,:,iblk), &
-                                   aicen (:,:,n,iblk), vicen (:,:,n,iblk),      &
-                                   vsnon (:,:,n,iblk),                          &
-                                   trcrn(:,:,nt_Tsfc,n,iblk),                   &
-                                   trcrn(:,:,nt_apnd,n,iblk),                   &
-                                   trcrn(:,:,nt_hpnd,n,iblk))
-
-         endif
          call ice_timer_stop(timer_ponds)
 
       !-----------------------------------------------------------------
@@ -683,8 +665,8 @@
                             Tref    (:,:,iblk), Qref      (:,:,iblk), &
                             fresh   (:,:,iblk), fsalt     (:,:,iblk), &
                             fhocn   (:,:,iblk), fswthru   (:,:,iblk), &
-                            melttn  (:,:,n,iblk), meltsn(:,:,n,iblk), &
-                            meltbn(:,:,n,iblk), congeln(:,:,n,iblk),  &
+                            melttn(:,:,n,iblk), meltsn  (:,:,n,iblk), &
+                            meltbn(:,:,n,iblk), congeln (:,:,n,iblk), &
                             snoicen(:,:,n,iblk),                      &
                             meltt   (:,:,iblk),  melts   (:,:,iblk),  &
                             meltb   (:,:,iblk),                       &
@@ -695,24 +677,24 @@
       !-----------------------------------------------------------------
       ! Calculate ponds from the topographic scheme
       !-----------------------------------------------------------------
-            call ice_timer_start(timer_ponds)
-            if (tr_pond_topo) then
-               call compute_ponds_topo(nx_block, ny_block,                     &
+         call ice_timer_start(timer_ponds)
+         if (tr_pond_topo) then
+            call compute_ponds_topo(nx_block, ny_block,                        &
                                     ilo, ihi, jlo, jhi,                        &
                                     dt,                                        &
-                                    aice (:,:,  iblk), aicen(:,:,:,iblk),      &
-                                    vice (:,:,  iblk), vicen(:,:,:,iblk),      &
-                                    vsno (:,:,  iblk), vsnon(:,:,:,iblk),      &
-                                    potT(:,:,  iblk),  meltt(:,:,iblk),        &
-                                    fsurf(:,:,iblk),   fpond(:,:,iblk),        &
+                                    aice (:,:,iblk), aicen(:,:,:,iblk),        &
+                                    vice (:,:,iblk), vicen(:,:,:,iblk),        &
+                                    vsno (:,:,iblk), vsnon(:,:,:,iblk),        &
+                                    potT (:,:,iblk), meltt(:,:,  iblk),        &
+                                    fsurf(:,:,iblk), fpond(:,:,  iblk),        &
                                     trcrn(:,:,nt_Tsfc,:,iblk),                 &
                                     trcrn(:,:,nt_qice:nt_qice+nilyr-1,:,iblk), &
                                     trcrn(:,:,nt_sice:nt_sice+nilyr-1,:,iblk), &
                                     trcrn(:,:,nt_apnd,:,iblk),                 &
                                     trcrn(:,:,nt_hpnd,:,iblk),                 &
                                     trcrn(:,:,nt_ipnd,:,iblk))
-            endif
-            call ice_timer_stop(timer_ponds)
+         endif
+         call ice_timer_stop(timer_ponds)
 
       end subroutine step_therm1
 
