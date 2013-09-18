@@ -58,7 +58,8 @@ setenv NTRAERO 0          # number of aerosol tracers
                           # CESM uses 3 aerosol tracers
 setenv TRBRI   1          # set to 1 for brine height tracer
 setenv NBGCLYR 7          # number of zbgc layers
-setenv TRBGCS  0          # number of skeletal layer bgc tracers (0 or >=2)
+setenv TRBGCS  0          # number of skeletal layer bgc tracers 
+                          # TRBGCS=0 or 2<=TRBGCS<=9)
 
 ### Specialty code
 setenv CAM_ICE  no        # set to yes for CAM runs (single column) 
@@ -152,4 +153,13 @@ echo "global N, block_size"
 echo "x    $NXGLOB,    $BLCKX"
 echo "y    $NYGLOB,    $BLCKY"
 echo max_blocks = $MXBLCKS
+echo $TRAGE   = TRAGE,   iage tracer
+echo $TRFY    = TRFY,    first-year ice tracer
+echo $TRLVL   = TRLVL,   level-ice tracers
+echo $TRPND   = TRPND,   melt pond tracers
+echo $NTRAERO = NTRAERO, number of aerosol tracers
+echo $TRBRI   = TRBRI,   brine height tracer
+echo $NBGCLYR = NBGCLYR, number of bio grid layers
+echo $TRBGCS  = TRBGCS,  number of BGC tracers
+
 
