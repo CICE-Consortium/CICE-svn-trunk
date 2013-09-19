@@ -74,9 +74,11 @@
   , restart_aero = .false.
 /
 
-
-&mushy_nml
-    a_rapid_mode      =  0.5e-3
+&thermo_nml
+    kitd              = 1
+  , ktherm            = 1
+  , conduct           = 'bubbly'
+  , a_rapid_mode      =  0.5e-3
   , Rac_rapid_mode    =    10.0
   , aspect_rapid_mode =     1.0
   , dSdt_slow_mode    = -1.5e-7
@@ -84,29 +86,8 @@
   , phi_i_mushy       =    0.85
 /
 
-&zbgc_nml
-    tr_brine        = .false.
-  , restart_hbrine  = .false.
-  , solve_skl_bgc   = .false.
-  , restore_bgc     = .false.
-  , bgc_data_dir    = 'unknown_bgc_data_dir'
-  , sil_data_type   = 'default'
-  , nit_data_type   = 'default'
-  , tr_bgc_C_sk     = .false.
-  , tr_bgc_chl_sk   = .false.
-  , tr_bgc_Am_sk    = .false.
-  , tr_bgc_Sil_sk   = .false.
-  , tr_bgc_DMSPp_sk = .false.
-  , tr_bgc_DMSPd_sk = .false.
-  , tr_bgc_DMS_sk   = .false
-  , restart_bgc     = .false.
-  , phi_snow        = 0.5
-  , bgc_flux_type   = 'Jin2006'
-/
-
-&ice_nml
-    kitd            = 1
-  , kdyn            = 0
+&dynamics_nml
+    kdyn            = 0
   , ndte            = 120
   , revised_evp     = .false.
   , advection       = 'remap'
@@ -114,9 +95,10 @@
   , krdg_partic     = 1
   , krdg_redist     = 1
   , mu_rdg          = 3
-  , ktherm          = 1
-  , conduct         = 'bubbly'
-  , shortwave       = 'default'
+/
+
+&shortwave_nml
+    shortwave       = 'default'
   , albedo_type     = 'default'
   , albicev         = 0.78
   , albicei         = 0.36
@@ -128,7 +110,10 @@
   , R_snw           = 0.
   , dT_mlt          = 1.5
   , rsnw_mlt        = 1500.
-  , hp1             = 0.01
+/
+
+&ponds_nml
+    hp1             = 0.01
   , hs0             = 0.03
   , hs1             = 0.03
   , dpscale         = 1.e-3
@@ -137,6 +122,30 @@
   , rfracmin        = 0.15
   , rfracmax        = 0.85
   , pndaspect       = 0.8
+/
+
+&zbgc_nml
+    tr_brine        = .false.
+  , restart_hbrine  = .false.
+  , solve_skl_bgc   = .false.
+  , bgc_flux_type   = 'Jin2006'
+  , restart_bgc     = .false.
+  , restore_bgc     = .false.
+  , bgc_data_dir    = 'unknown_bgc_data_dir'
+  , sil_data_type   = 'default'
+  , nit_data_type   = 'default'
+  , tr_bgc_C_sk     = .false.
+  , tr_bgc_chl_sk   = .false.
+  , tr_bgc_Am_sk    = .false.
+  , tr_bgc_Sil_sk   = .false.
+  , tr_bgc_DMSPp_sk = .false.
+  , tr_bgc_DMSPd_sk = .false.
+  , tr_bgc_DMS_sk   = .false
+  , phi_snow        = 0.5
+/
+
+&forcing_nml
+    formdrag        = .false.
   , atmbndy         = 'default'
   , fyear_init      = 1981
   , ycycle          = 1
@@ -145,7 +154,6 @@
   , atm_data_dir    = '/usr/projects/climate/eclare/DATA/column/'
   , calc_strair     = .true.
   , calc_Tsfc       = .true.
-  , calc_formdrag   = .false.
   , precip_units    = 'mm_per_sec'
   , ustar_min       = 0.0005
   , update_ocn_f    = .false.

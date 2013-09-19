@@ -87,10 +87,6 @@
                 depend        (ntrace), &
                 has_dependents(ntrace))
 
-      if (trim(advection)=='remap') then
-
-!lipscomb - two branches for now; consolidate later
-
          ! define tracer dependency arrays
          ! see comments in remapping routine
 
@@ -178,16 +174,9 @@
                 write(nu_diag,*) 'nt_bgc_sk',nt,depend(nt),tracer_type(nt),&
                                               has_dependents(nt)
           enddo
-
           endif ! master_task
 
-          call init_remap    ! grid quantities
-
-      else   ! upwind
-
-         continue
-
-      endif
+          if (trim(advection)=='remap') call init_remap    ! grid quantities
 
       call ice_timer_stop(timer_advect)  ! advection 
 

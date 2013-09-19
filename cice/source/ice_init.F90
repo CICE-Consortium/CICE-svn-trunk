@@ -69,7 +69,7 @@
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, ahmax, &
                                shortwave, albedo_type, R_ice, R_pnd, &
                                R_snw, dT_mlt, rsnw_mlt
-      use ice_atmo, only: atmbndy, calc_strair, calc_formdrag
+      use ice_atmo, only: atmbndy, calc_strair, formdrag
       use ice_transport_driver, only: advection
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_aero, &
@@ -123,22 +123,34 @@
         grid_format,    grid_type,       grid_file,     kmt_file,       &
         kcatbound
 
-      namelist /ice_nml/ &
-        kitd,           kdyn,            ndte,                          &
-        revised_evp,    yield_curve,     advection,                     &
-        kstrength,      krdg_partic,     krdg_redist,   mu_rdg,         &
-        ktherm,         conduct,         shortwave,     albedo_type,    &
+      namelist /thermo_nml/ &
+        kitd,           ktherm,          conduct,                       &
+        a_rapid_mode,   Rac_rapid_mode,  aspect_rapid_mode,             &
+        dSdt_slow_mode, phi_c_slow_mode, phi_i_mushy
+
+      namelist /dynamics_nml/ &
+        kdyn,           ndte,           revised_evp,    yield_curve,    &
+        advection,                                                      &
+        kstrength,      krdg_partic,    krdg_redist,    mu_rdg
+
+      namelist /shortwave_nml/ &
+        shortwave,      albedo_type,                                    &
         albicev,        albicei,         albsnowv,      albsnowi,       &
         ahmax,          R_ice,           R_pnd,         R_snw,          &
-        dT_mlt,         rsnw_mlt,        hp1,                           &
+        dT_mlt,         rsnw_mlt
+
+      namelist /ponds_nml/ &
         hs0,            dpscale,         frzpnd,        snowinfil,      &
         rfracmin,       rfracmax,        pndaspect,     hs1,            &
+        hp1
+
+      namelist /forcing_nml/ &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
         atm_data_type,  atm_data_dir,    calc_strair,   calc_Tsfc,      &
-        calc_formdrag,  precip_units,    update_ocn_f,  ustar_min,      &
+        precip_units,   update_ocn_f,    ustar_min,                     &
         oceanmixed_ice, ocn_data_format, sss_data_type, sst_data_type,  &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
-        restore_ice
+        restore_ice,    formdrag
 
       namelist /tracer_nml/   &
         tr_iage, restart_age, &
@@ -148,14 +160,6 @@
         tr_pond_lvl, restart_pond_lvl, &
         tr_pond_topo, restart_pond_topo, &
         tr_aero, restart_aero
-
-      namelist /mushy_nml/ &
-        a_rapid_mode      , &
-        Rac_rapid_mode    , &
-        aspect_rapid_mode , &
-        dSdt_slow_mode    , &
-        phi_c_slow_mode   , &
-        phi_i_mushy
 
       !-----------------------------------------------------------------
       ! default values
@@ -247,7 +251,7 @@
       atm_data_type   = 'default'
       atm_data_dir    = ' '
       calc_strair     = .true.    ! calculate wind stress
-      calc_formdrag   = .false.   ! calculate form drag
+      formdrag        = .false.   ! calculate form drag
       precip_units    = 'mks'     ! 'mm_per_month' or
                                   ! 'mm_per_sec' = 'mks' = kg/m^2 s
       oceanmixed_ice  = .false.   ! if true, use internal ocean mixed layer
@@ -287,10 +291,10 @@
 
       ! mushy layer gravity drainage physics
       a_rapid_mode      =  0.5e-3_dbl_kind ! channel radius for rapid drainage mode (m)
-      Rac_rapid_mode    =    10.0_dbl_kind ! critical Rayleigh number for rapid drainage mode
-      aspect_rapid_mode =     1.0_dbl_kind ! aspect ratio for rapid drainage mode (larger is wider)
+      Rac_rapid_mode    =    10.0_dbl_kind ! critical Rayleigh number
+      aspect_rapid_mode =     1.0_dbl_kind ! aspect ratio (larger is wider)
       dSdt_slow_mode    = -1.5e-7_dbl_kind ! slow mode drainage strength (m s-1 K-1)
-      phi_c_slow_mode   =    0.05_dbl_kind ! critical liquid fraction porosity cutoff for slow mode
+      phi_c_slow_mode   =    0.05_dbl_kind ! critical liquid fraction porosity cutoff
       phi_i_mushy       =    0.85_dbl_kind ! liquid fraction of congelation ice
 
       !-----------------------------------------------------------------
@@ -317,11 +321,20 @@
             print*,'Reading tracer_nml'
                read(nu_nml, nml=tracer_nml,iostat=nml_error)
                if (nml_error /= 0) exit
-            print*,'Reading mushy_nml'
-               read(nu_nml, nml=mushy_nml,iostat=nml_error)
+            print*,'Reading thermo_nml'
+               read(nu_nml, nml=thermo_nml,iostat=nml_error)
                if (nml_error /= 0) exit
-            print*,'Reading ice_nml'
-               read(nu_nml, nml=ice_nml,iostat=nml_error)
+            print*,'Reading dynamics_nml'
+               read(nu_nml, nml=dynamics_nml,iostat=nml_error)
+               if (nml_error /= 0) exit
+            print*,'Reading shortwave_nml'
+               read(nu_nml, nml=shortwave_nml,iostat=nml_error)
+               if (nml_error /= 0) exit
+            print*,'Reading ponds_nml'
+               read(nu_nml, nml=ponds_nml,iostat=nml_error)
+               if (nml_error /= 0) exit
+            print*,'Reading forcing_nml'
+               read(nu_nml, nml=forcing_nml,iostat=nml_error)
                if (nml_error /= 0) exit
          end do
          if (nml_error == 0) close(nu_nml)
@@ -491,6 +504,14 @@
       if (trim(atm_data_type) == 'monthly' .and. calc_strair) &
          calc_strair = .false.
 
+      if (ktherm == 2 .and. .not. calc_Tsfc) then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'WARNING: ktherm = 2 and calc_Tsfc = F'
+            write (nu_diag,*) 'WARNING: Setting calc_Tsfc = T'
+         endif
+         calc_Tsfc = .true.
+      endif
+
       if (trim(atm_data_type) == 'hadgem' .and. & 
              trim(precip_units) /= 'mks') then
          if (my_task == master_task) &
@@ -501,11 +522,10 @@
          precip_units='mks'
       endif
 
-      if (calc_formdrag) then
+      if (formdrag) then
       if (trim(atmbndy) == 'constant') then
          if (my_task == master_task) then
-            write (nu_diag,*) 'WARNING: atmbndy = constant not allowed'
-            write (nu_diag,*) 'WARNING: for calcform_drag'
+            write (nu_diag,*) 'WARNING: atmbndy = constant not allowed with formdrag'
             write (nu_diag,*) 'WARNING: Setting atmbndy = default'
          endif
          atmbndy = 'default'
@@ -513,7 +533,7 @@
 
       if (.not. calc_strair) then
          if (my_task == master_task) then
-            write (nu_diag,*) 'WARNING: calc_formdrag=T but calc_strair=F'
+            write (nu_diag,*) 'WARNING: formdrag=T but calc_strair=F'
             write (nu_diag,*) 'WARNING: Setting calc_strair=T'
          endif
          calc_strair = .true.
@@ -521,7 +541,7 @@
 
       if (.not. tr_lvl) then
          if (my_task == master_task) then
-            write (nu_diag,*) 'WARNING: calc_formdrag=T but tr_lvl=F'
+            write (nu_diag,*) 'WARNING: formdrag=T but tr_lvl=F'
             write (nu_diag,*) 'WARNING: Setting tr_lvl=T'
          endif
          tr_lvl = .true.
@@ -606,7 +626,7 @@
       call broadcast_scalar(atm_data_dir,       master_task)
       call broadcast_scalar(calc_strair,        master_task)
       call broadcast_scalar(calc_Tsfc,          master_task)
-      call broadcast_scalar(calc_formdrag,      master_task)
+      call broadcast_scalar(formdrag,           master_task)
       call broadcast_scalar(update_ocn_f,       master_task)
       call broadcast_scalar(ustar_min,          master_task)
       call broadcast_scalar(precip_units,       master_task)
@@ -761,7 +781,7 @@
          write(nu_diag,1030) ' frzpnd                    = ', trim(frzpnd)
          write(nu_diag,1010) ' snowinfil                 = ', snowinfil
          endif
-         if (.not. tr_pond_lvl) &
+         if (tr_pond .and. .not. tr_pond_lvl) &
          write(nu_diag,1000) ' pndaspect                 = ', pndaspect
 
          write(nu_diag,1020) ' ktherm                    = ', ktherm
@@ -778,7 +798,7 @@
 
          write(nu_diag,1030) ' atmbndy                   = ', &
                                trim(atmbndy)
-         write(nu_diag,1010) ' calc_formdrag             = ', calc_formdrag
+         write(nu_diag,1010) ' formdrag                  = ', formdrag
          write(nu_diag,1010) ' calc_strair               = ', calc_strair
          write(nu_diag,1010) ' calc_Tsfc                 = ', calc_Tsfc
 
@@ -817,7 +837,7 @@
          write(nu_diag,1010) ' restore_ice               = ', &
                                restore_ice
          if (restore_ice .or. restore_sst) &
-         write(nu_diag,1000) ' trestore                  = ', trestore
+         write(nu_diag,1020) ' trestore                  = ', trestore
  
 #ifdef coupled
          if( oceanmixed_ice ) then
@@ -1023,7 +1043,7 @@
             if (nilyr > 1) then
                write (nu_diag,*) 'nilyr =', nilyr
                write (nu_diag,*)        &
-                    'Must have nilyr = 1 if heat_capacity = F'
+                    'Must have nilyr = 1 if ktherm = 0'
                call abort_ice('ice_init: Too many ice layers')
             endif
 

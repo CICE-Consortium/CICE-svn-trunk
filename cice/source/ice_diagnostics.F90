@@ -959,6 +959,20 @@
       toten = global_sum(work1, distrb_info, field_loc_center, tarean)
       totes = global_sum(work1, distrb_info, field_loc_center, tareas)
 
+      if (print_points) then
+         do n = 1, npnt
+            if (my_task == pmloc(n)) then
+               i = piloc(n)
+               j = pjloc(n)
+               iblk = pbloc(n)
+
+               pdhi(n) = vice(i,j,iblk)
+               pdhs(n) = vsno(i,j,iblk)
+               pde(n) = work1(i,j,iblk)
+            endif
+         enddo  ! npnt
+      endif                     ! print_points
+
       if (tr_aero) then
          do n=1,n_aero
             !$OMP PARALLEL DO PRIVATE(iblk,i,j)
@@ -1003,24 +1017,6 @@
          totmn = totmn + totpn*rhofresh
          totms = totms + totps*rhofresh
       endif
-
-      if (print_points) then
-
-         do n = 1, npnt
-
-            if (my_task == pmloc(n)) then
-               i = piloc(n)
-               j = pjloc(n)
-               iblk = pbloc(n)
-
-               pdhi(n) = vice(i,j,iblk)
-               pdhs(n) = vsno(i,j,iblk)
-               pde(n) = work1(i,j,iblk)
-            endif
-
-         enddo  ! npnt
-
-      endif                     ! print_points
 
       end subroutine init_mass_diags
 
