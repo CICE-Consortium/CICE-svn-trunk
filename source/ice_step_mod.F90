@@ -151,7 +151,7 @@
       use ice_age, only: increment_age
       use ice_atmo, only: calc_strair, &
           atmbndy, atmo_boundary_const, atmo_boundary_layer, &
-          calc_formdrag, neutral_drag_coeffs, &
+          formdrag, neutral_drag_coeffs, &
           Cdn_ocn, Cdn_ocn_skin, Cdn_ocn_floe, Cdn_ocn_keel, Cdn_atm_ocn, &
           Cdn_atm, Cdn_atm_skin, Cdn_atm_floe, Cdn_atm_rdg, Cdn_atm_pond, &
           hfreebd, hdraft, hridge, distrdg, hkeel, dkeel, lfloe, dfloe
@@ -324,7 +324,7 @@
       ! Oceanic and atmospheric drag coefficients
       !-----------------------------------------------------------------
 
-         if (calc_formdrag) then
+         if (formdrag) then
             call neutral_drag_coeffs &
                        (nx_block,       ny_block,                      &
                         ilo, ihi,       jlo, jhi,                      &

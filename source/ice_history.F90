@@ -54,7 +54,7 @@
 
       subroutine init_hist (dt)
 
-      use ice_atmo, only: calc_formdrag
+      use ice_atmo, only: formdrag
       use ice_blocks, only: nx_block, ny_block
       use ice_broadcast, only: broadcast_scalar, broadcast_array
       use ice_communicate, only: my_task, master_task
@@ -900,7 +900,7 @@
       ! biogeochemistry
       if (tr_aero .or. tr_brine .or. solve_skl_bgc) call init_hist_bgc_2D
 
-      if (calc_formdrag) call init_hist_drag_2D
+      if (formdrag) call init_hist_drag_2D
 
       !-----------------------------------------------------------------
       ! 3D (category) variables looped separately for ordering
@@ -1156,7 +1156,7 @@
           stressp_3, stressm_3, stress12_3, &
           stressp_4, stressm_4, stress12_4, sig1, sig2, &
           mlt_onset, frz_onset
-      use ice_atmo, only: calc_formdrag
+      use ice_atmo, only: formdrag
       use ice_history_shared ! almost everything
       use ice_history_write, only: ice_write_hist
       use ice_history_bgc, only: accum_hist_bgc
@@ -1597,7 +1597,7 @@
          if (tr_aero .or. tr_brine .or. solve_skl_bgc) call accum_hist_bgc (iblk)
 
          ! form drag
-         if (calc_formdrag) call accum_hist_drag (iblk)
+         if (formdrag) call accum_hist_drag (iblk)
 
       enddo                     ! iblk
       !$OMP END PARALLEL DO

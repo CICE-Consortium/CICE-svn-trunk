@@ -137,7 +137,7 @@
 
       ! Check that the number of days per year is set correctly when using
       ! leap years. If not, set days_per_year correctly and warn the user.
-      if (use_leap_years .and. days_per_year .ne. 365) then
+      if (use_leap_years .and. days_per_year /= 365) then
          days_per_year = 365
          write(nu_diag,*) 'Warning: days_per_year has been set to 365', &
               ' because use_leap_years = .true.'

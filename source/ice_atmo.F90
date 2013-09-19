@@ -28,7 +28,7 @@
 
       logical (kind=log_kind), public :: &
          calc_strair, & ! if true, calculate wind stress components
-         calc_formdrag  ! if true, calculate form drag
+         formdrag       ! if true, calculate form drag
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
          Cdn_atm, &  ! atm drag coefficient
@@ -219,7 +219,7 @@
             j = indxj(ij)
             vmag(ij) = max(umin, wind(i,j))
 
-            if (calc_formdrag .and. Cdn_atm(i,j) > puny) then 
+            if (formdrag .and. Cdn_atm(i,j) > puny) then 
               rdn(ij)  = sqrt(Cdn_atm(i,j))               
             else
               rdn(ij)  = vonkar/log(zref/iceruf) ! neutral coefficient

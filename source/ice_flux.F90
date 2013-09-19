@@ -18,7 +18,7 @@
       use ice_domain_size, only: max_blocks, ncat, max_aero, max_nstrm, nilyr
       use ice_constants, only: c0, c1, c5, c10, c20, c180, dragio, &
           depressT, stefan_boltzmann, Tffresh, emissivity 
-      use ice_atmo, only: calc_formdrag, &
+      use ice_atmo, only: formdrag, &
           hfreebd, hdraft, hridge, distrdg, hkeel, dkeel, lfloe, dfloe, &
           Cdn_atm_skin, Cdn_atm_floe, Cdn_atm_pond, Cdn_atm_rdg, &
           Cdn_ocn_skin, Cdn_ocn_floe, Cdn_ocn_keel, Cdn_atm_ocn
@@ -574,7 +574,7 @@
       Cdn_ocn(:,:,:) = dragio
       Cdn_atm(:,:,:) = c0
 
-      if (calc_formdrag) then
+      if (formdrag) then
         Cdn_atm_rdg (:,:,:) = c0
         Cdn_atm_floe(:,:,:) = c0
         Cdn_atm_pond(:,:,:) = c0

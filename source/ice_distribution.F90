@@ -824,7 +824,6 @@
    
       deallocate(workTmp, procTmp, stat=istat)
 
-
 !----------------------------------------------------------------------
 !
 !     use a rake algorithm in the y-direction now
@@ -998,9 +997,10 @@
              newDistrb%blockLocalID (nblocks_tot), stat=istat)
 
    allocate (newDistrb%blockCnt(nprocs))
+
 !----------------------------------------------------------------------
 !
-!  distribute blocks linearly across processors in each direction
+!  distribute blocks across processors, one block per proc until used
 !
 !----------------------------------------------------------------------
 
@@ -1133,7 +1133,7 @@
 
 !----------------------------------------------------------------------
 !
-!  distribute blocks linearly across processors in each direction
+!  distribute groups of blocks across processors, one per proc until used
 !
 !----------------------------------------------------------------------
 
@@ -1411,7 +1411,7 @@
    allocate (newDistrb%blockCnt(nprocs))
 !----------------------------------------------------------------------
 !
-!  distribute blocks linearly across processors in each direction
+!  distribute blocks linearly across processors in quadrants
 !
 !----------------------------------------------------------------------
 
