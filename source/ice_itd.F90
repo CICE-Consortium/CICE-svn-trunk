@@ -1861,13 +1861,6 @@
       istop = 0
       jstop = 0
 
-      !!!AKT already done 
-      !dfpond(:,:) = c0
-      !dfresh(:,:) = c0
-      !dfsalt(:,:) = c0
-      !dfhocn(:,:) = c0
-      !dfaero_ocn(:,:,:) = c0
-     
       zspace = c1/(real(nblyr,kind=dbl_kind)) 
       
       !-----------------------------------------------------------------
@@ -1899,6 +1892,8 @@
             endif
          enddo
          enddo
+
+         if (icells > 0) then
 
       !-----------------------------------------------------------------
       ! Account for tracers important for conservation
@@ -2013,6 +2008,8 @@
              j = indxj(ij)
              first_ice(i,j,n) = .true.
          enddo
+
+      endif ! icells
       enddo                     ! n
 
       !-----------------------------------------------------------------
@@ -2038,6 +2035,8 @@
          endif
       enddo
       enddo
+
+      if (icells > 0) then
 
       do n = 1, ncat
 
@@ -2159,6 +2158,8 @@
          aice(i,j) = c1
          aice0(i,j) = c0
       enddo
+
+      endif ! icells
 
       end subroutine zap_small_areas
 
@@ -2394,6 +2395,7 @@
       ! Zap the cells
       !-----------------------------------------------------------------
 
+         if (icells > 0) &
          call zap_snow(nx_block,       ny_block,     &
                        icells,                       &
                        indxi,          indxj,        &

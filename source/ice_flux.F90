@@ -330,7 +330,7 @@
       integer (kind=int_kind) :: n
 
       logical (kind=log_kind), parameter ::     & 
-         l_winter = .false. , &  ! winter/summer default switch
+         l_winter = .true.  , &  ! winter/summer default switch
          l_spring = .false.      ! spring example
 
       real (kind=dbl_kind) :: fcondtopn_d(6), fsurfn_d(6)
