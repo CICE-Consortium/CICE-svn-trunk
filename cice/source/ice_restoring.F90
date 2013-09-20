@@ -55,7 +55,6 @@
       use ice_fileunits, only: nu_diag
       use ice_grid, only: tmask
       use ice_flux, only: sst, Tf, Tair, salinz, Tmltz
-!circular      use ice_init, only: ice_ic
       use ice_itd, only: aggregate
       use ice_restart, only: restart_ext
 
@@ -69,7 +68,8 @@
      npad                 ! padding column/row counter
 
    character (len=7), parameter :: &
-     restore_ic = "defined" ! otherwise restore to initial ice state
+!     restore_ic = 'defined' ! otherwise restore to initial ice state
+     restore_ic = 'initial' ! restore to initial ice state
 
    type (block) :: &
      this_block  ! block info for current block
@@ -120,55 +120,19 @@
                                trcrn_rest(:,:,:,:,iblk), ntrcr,         &
                                vicen_rest(:,:,  :,iblk), &
                                vsnon_rest(:,:,  :,iblk))
-
-      ! reset initial ice state to be the same as the restoring
-      ! required for ice_ic == 'none'
-!circular         if (ice_ic == 'none') then
-!         aicen(:,:,:,iblk) = aicen_rest(:,:,:,iblk)
-!         vicen(:,:,:,iblk) = vicen_rest(:,:,:,iblk)
-!         vsnon(:,:,:,iblk) = vsnon_rest(:,:,:,iblk)
-!         trcrn(:,:,1:ntrcr,:,iblk) = trcrn_rest(:,:,:,:,iblk)
-
-      ! compute aggregate ice state and open water area
-!         aice(:,:,iblk) = c0
-!         vice(:,:,iblk) = c0
-!         vsno(:,:,iblk) = c0
-!         do nt = 1, max_ntrcr
-!            trcr(:,:,nt,iblk) = c0
-!         enddo
-
-!         call aggregate (nx_block, ny_block,  &
-!                         aicen(:,:,:,iblk),   &
-!                         trcrn(:,:,1:ntrcr,:,iblk), &
-!                         vicen(:,:,:,iblk),   &
-!                         vsnon(:,:,:,iblk),   &
-!                         aice (:,:,  iblk),   &
-!                         trcr (:,:,1:ntrcr,iblk),   &
-!                         vice (:,:,  iblk),   &
-!                         vsno (:,:,  iblk),   &
-!                         aice0(:,:,  iblk),   &
-!                         tmask(:,:,  iblk),   &
-!                         ntrcr,               &
-!                         trcr_depend(1:ntrcr))
-
-!         aice_init(:,:,iblk) = aice(:,:,iblk)
-!circular         endif ! ice_ic
-
       enddo ! iblk
 
    else  ! restore_ic
 
    ! restore to initial ice state
-   aicen_rest(:,:,:,:) = aicen(:,:,:,:)
-   vicen_rest(:,:,:,:) = vicen(:,:,:,:)
-   vsnon_rest(:,:,:,:) = vsnon(:,:,:,:)
-   trcrn_rest(:,:,:,:,:) = trcrn(:,:,1:ntrcr,:,:)
 
-      call ice_timer_start(timer_bound)
-      call bound_state (aicen, trcrn, &
-                        vicen, vsnon)
-      call ice_timer_stop(timer_bound)
+! the easy way
+!   aicen_rest(:,:,:,:) = aicen(:,:,:,:)
+!   vicen_rest(:,:,:,:) = vicen(:,:,:,:)
+!   vsnon_rest(:,:,:,:) = vsnon(:,:,:,:)
+!   trcrn_rest(:,:,:,:,:) = trcrn(:,:,1:ntrcr,:,:)
 
+! the more precise way
    !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block, &
    !$OMP                     i,j,n,nt,ibc,npad)
    do iblk = 1, nblocks
@@ -229,9 +193,9 @@
             do n = 1, ncat
             do j = 1, jlo
             do i = 1, nx_block
-               aicen_rest(i,j,n,iblk) = aicen(ilo,j,n,iblk)
-               vicen_rest(i,j,n,iblk) = vicen(ilo,j,n,iblk)
-               vsnon_rest(i,j,n,iblk) = vsnon(ilo,j,n,iblk)
+               aicen_rest(i,j,n,iblk) = aicen(i,jlo,n,iblk)
+               vicen_rest(i,j,n,iblk) = vicen(i,jlo,n,iblk)
+               vsnon_rest(i,j,n,iblk) = vsnon(i,jlo,n,iblk)
                do nt = 1, ntrcr
                   trcrn_rest(i,j,nt,n,iblk) = trcrn(ilo,j,nt,n,iblk)
                enddo
@@ -260,9 +224,9 @@
             do n = 1, ncat
             do j = jhi, ibc
             do i = 1, nx_block
-               aicen_rest(i,j,n,iblk) = aicen(ihi,j,n,iblk)
-               vicen_rest(i,j,n,iblk) = vicen(ihi,j,n,iblk)
-               vsnon_rest(i,j,n,iblk) = vsnon(ihi,j,n,iblk)
+               aicen_rest(i,j,n,iblk) = aicen(i,jhi,n,iblk)
+               vicen_rest(i,j,n,iblk) = vicen(i,jhi,n,iblk)
+               vsnon_rest(i,j,n,iblk) = vsnon(i,jhi,n,iblk)
                do nt = 1, ntrcr
                   trcrn_rest(i,j,nt,n,iblk) = trcrn(ihi,j,nt,n,iblk)
                enddo
@@ -390,7 +354,7 @@
       enddo
 
       !-----------------------------------------------------------------
-      ! initial area and thickness in ice regions
+      ! initial area and thickness in ice-occupied restoring cells
       !-----------------------------------------------------------------
 
       hbar = c2  ! initial ice thickness
@@ -406,16 +370,18 @@
 
       !-----------------------------------------------------------------
       ! Define cells where ice is placed (or other values are used)
-      ! Edges using initial values (above) are commented out
+      ! Edges using initial values (zero, above) are commented out
       !-----------------------------------------------------------------
 
       icells = 0
       if (iblock == 1) then              ! west edge
             do j = 1, ny_block
             do i = 1, ilo
+               if (tmask(i,j)) then
 !               icells = icells + 1
 !               indxi(icells) = i
 !               indxj(icells) = j
+               endif
             enddo
             enddo
       endif
@@ -435,9 +401,11 @@
 
             do j = 1, ny_block
             do i = ihi, ibc
+               if (tmask(i,j)) then
                icells = icells + 1
                indxi(icells) = i
                indxj(icells) = j
+               endif
             enddo
             enddo
       endif
@@ -445,9 +413,11 @@
       if (jblock == 1) then              ! south edge
             do j = 1, jlo
             do i = 1, nx_block
+               if (tmask(i,j)) then
 !               icells = icells + 1
 !               indxi(icells) = i
 !               indxj(icells) = j
+               endif
             enddo
             enddo
       endif
@@ -467,9 +437,11 @@
 
             do j = jhi, ibc
             do i = 1, nx_block
+               if (tmask(i,j)) then
 !               icells = icells + 1
 !               indxi(icells) = i
 !               indxj(icells) = j
+               endif
             enddo
             enddo
       endif
