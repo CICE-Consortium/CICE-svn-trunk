@@ -349,17 +349,18 @@
       vatm  (:,:,:) = c5
       strax (:,:,:) = 0.05_dbl_kind
       stray (:,:,:) = 0.05_dbl_kind
+      fsnow (:,:,:) = c0              ! snowfall rate (kg/m2/s)
+                                      ! fsnow must be 0 for exact restarts
       if (l_spring) then
          !typical spring values
-         potT  (:,:,:) = 263.15_dbl_kind  ! air potential temp (K)
-         Tair  (:,:,:) = 263.15_dbl_kind  ! air temperature  (K)
-         Qa    (:,:,:) = 0.001_dbl_kind ! specific humidity (kg/kg)
-         swvdr (:,:,:) = 25._dbl_kind    !25 shortwave radiation (W/m^2)
-         swvdf (:,:,:) = 25._dbl_kind    !25 shortwave radiation (W/m^2)
-         swidr (:,:,:) = 25._dbl_kind    !25 shortwave radiation (W/m^2)
-         swidf (:,:,:) = 25._dbl_kind    !25 shortwave radiation (W/m^2)
+         potT  (:,:,:) = 263.15_dbl_kind ! air potential temp (K)
+         Tair  (:,:,:) = 263.15_dbl_kind ! air temperature  (K)
+         Qa    (:,:,:) = 0.001_dbl_kind  ! specific humidity (kg/kg)
+         swvdr (:,:,:) = 25._dbl_kind    ! shortwave radiation (W/m^2)
+         swvdf (:,:,:) = 25._dbl_kind    ! shortwave radiation (W/m^2)
+         swidr (:,:,:) = 25._dbl_kind    ! shortwave radiation (W/m^2)
+         swidf (:,:,:) = 25._dbl_kind    ! shortwave radiation (W/m^2)
          flw   (:,:,:) = 230.0_dbl_kind  ! incoming longwave rad (W/m^2)
-         fsnow (:,:,:) = c0              ! snowfall rate (kg/m2/s)
          do n = 1, ncat                  ! surface heat flux (W/m^2)
             fsurfn_f(:,:,n,:) = fsurfn_d(n)
          enddo
@@ -376,7 +377,6 @@
          swidf (:,:,:) = c0              ! shortwave radiation (W/m^2)
          flw   (:,:,:) = c180            ! incoming longwave rad (W/m^2)
          frain (:,:,:) = c0              ! rainfall rate (kg/m2/s)
-         fsnow (:,:,:) = 4.0e-6_dbl_kind ! snowfall rate (kg/m2/s)
          do n = 1, ncat                  ! conductive heat flux (W/m^2)
             fcondtopn_f(:,:,n,:) = fcondtopn_d(n)
          enddo
@@ -393,7 +393,6 @@
          swidf (:,:,:) = 50._dbl_kind    ! shortwave radiation (W/m^2)
          flw   (:,:,:) = 280.0_dbl_kind  ! incoming longwave rad (W/m^2)
          frain (:,:,:) = c0              ! rainfall rate (kg/m2/s)
-         fsnow (:,:,:) = c0              ! snowfall rate (kg/m2/s)
          do n = 1, ncat                  ! surface heat flux (W/m^2)
             fsurfn_f(:,:,n,:) = fsurfn_d(n)
          enddo

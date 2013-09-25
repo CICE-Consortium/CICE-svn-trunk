@@ -124,8 +124,8 @@
       if (tr_brine) then
           nt_fbri = ntrcr + 1   ! ice volume fraction with salt
           ntrcr = ntrcr + 1
+          trcr_depend(nt_fbri) = 1  ! volume-weighted
       endif
-      if (tr_brine) trcr_depend(nt_fbri) = 1  ! volume-weighted
 
       if (phi_snow .le. c0) phi_snow = c1-rhos/rhoi
 
