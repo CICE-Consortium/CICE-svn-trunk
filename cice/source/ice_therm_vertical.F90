@@ -88,7 +88,6 @@
                                   dsnow)
 
       use ice_communicate, only: my_task
-      use ice_state, only: nt_fbri, tr_brine
       use ice_therm_mushy, only: temperature_changes_salinity
 
       integer (kind=int_kind), intent(in) :: &
@@ -223,10 +222,9 @@
          efinal      , & ! final energy of melting (J m-2)
          einter          ! intermediate energy
 
-! ech: the size of these arrays should be reduced to icells
+! echmod: reduce size to icells?
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         iage , & ! ice age (s)
-         fbri     ! brine height to ice thickness fraction
+         iage    ! ice age (s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          fadvocn ! advective heat flux to ocean
@@ -256,8 +254,6 @@
          congel (i,j) = c0
          snoice (i,j) = c0
          dsnow  (i,j) = c0
-         fbri   (i,j) = c1
-         if (tr_brine) fbri(i,j) = trcrn(i,j,nt_fbri)
          if (tr_iage) iage(i,j) = trcrn(i,j,nt_iage)
       enddo
       enddo
@@ -430,7 +426,7 @@
                                 congel,       snoice,   &
                                 mlt_onset,    frz_onset,&
                                 zSin,         sss,      &
-                                dsnow,        fbri)
+                                dsnow)
 
       !-----------------------------------------------------------------
       ! Check for energy conservation by comparing the change in energy
@@ -1262,7 +1258,7 @@
                                     congel,    snoice,   &  
                                     mlt_onset, frz_onset,&
                                     zSin,      sss,      &
-                                    dsnow,     fbri)
+                                    dsnow)
 
       use ice_therm_mushy, only: enthalpy_mush, enthalpy_of_melting, &
                            phi_i_mushy, temperature_mush, &
@@ -1286,8 +1282,7 @@
          fsnow       , & ! snowfall rate (kg m-2 s-1)
          flatn       , & ! surface downward latent heat (W m-2)
          fsurfn      , & ! net flux to top surface, excluding fcondtopn
-         fcondtopn   , & ! downward cond flux at top surface (W m-2)
-         fbri            ! brine height to ice height fraction
+         fcondtopn       ! downward cond flux at top surface (W m-2)
 
       real (kind=dbl_kind), dimension (icells), intent(inout) :: &
          fcondbot        ! downward cond flux at bottom surface (W m-2)

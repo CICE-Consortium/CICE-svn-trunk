@@ -1785,7 +1785,7 @@
                                   istop,    jstop)
 
       use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_aero, nt_apnd, nt_hpnd, &
-                           nt_fbri
+                           nt_fbri, tr_brine
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -1988,17 +1988,17 @@
          
          if (ntrcr >= 2) then
             do it = 2, ntrcr
-               if (it /= nt_fbri) then
+               if (tr_brine .and. it == nt_fbri) then
                   do ij = 1, icells
                      i = indxi(ij)
                      j = indxj(ij)
-                     trcrn(i,j,it,n) = c0
+                     trcrn(i,j,it,n) = c1
                   enddo
                else
                   do ij = 1, icells
                      i = indxi(ij)
                      j = indxj(ij)
-                     trcrn(i,j,nt_fbri,n) = c1
+                     trcrn(i,j,it,n) = c0
                   enddo               
                endif
             enddo
@@ -2351,6 +2351,8 @@
             ! check each snow layer - zap all if one is bad
             do k = 1, nslyr
 
+               if (aicen(i,j,n) > puny) then
+
                ! snow thickness
                hsn = vsnon(i,j,n) / aicen(i,j,n)
 
@@ -2378,6 +2380,8 @@
                   write(nu_diag,*) "Tmax:", Tmax
                   write(nu_diag,*) "zqsn:", zqsn
                endif
+
+               endif ! aicen > puny
 
             enddo ! k
 
