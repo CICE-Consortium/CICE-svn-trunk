@@ -19,7 +19,7 @@
       implicit none
 
       private
-      public :: init_aerosol, faero_default, update_aerosol
+      public :: init_aerosol, faero_default, update_aerosol, write_restart_aero
 
       logical (kind=log_kind), public :: & 
          restart_aero      ! if .true., read aerosol tracer restart file
@@ -37,6 +37,7 @@
       use ice_domain_size, only: n_aero
       use ice_state, only: trcrn, nt_aero
 
+      if (trim(runtype) == 'continue') restart_aero = .true.
       if (restart_aero) then
          call read_restart_aero
       else
