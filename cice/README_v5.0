@@ -1,36 +1,33 @@
+CICE version 5.0
+  September 2013
 
-CICE version 5.0 BETA
-  < date >
+This directory contains files needed to run version 5.0 of CICE, the LANL sea 
+ice model, in standalone mode on a 3 degree grid.  As currently configured, the 
+model runs on 4 processors.  MPI is used for message passing between processors, 
+and OpenMP threading is available.  The grid provided here is too small for the 
+code to scale well beyond about 8 processors. A 1 degree grid is provided also, 
+without forcing data.  If you want to run on a single processor without using MPI, 
+edit comp_ice.
 
-  < update directories/files below >
-
-This directory contains files needed to run version 5.0 of CICE, the
-LANL sea ice model, in standalone mode on a 3 degree grid.  As
-currently configured, the model runs on 4 processors.  MPI is used for
-message passing between processors.  The grid provided here is too 
-small for the code to scale well beyond about 8 processors. A 1 degree 
-grid is provided also, without forcing data.  If you want to run on a 
-single processor without using MPI, edit comp_ice.
-
-For additional information, please consult the CICE documentation 
-'cicedoc.pdf', found at http://climate.lanl.gov/Models/CICE/ or in the
-code distribution, in the directory doc/.  This README file contains
-introductory material only.  For troubleshooting, please consult 
-Section 5 of the pdf documentation.
+For additional information, please consult the CICE documentation 'cicedoc.pdf', 
+found at http://climate.lanl.gov/Models/CICE/ or in the code distribution, in the 
+directory doc/.  This README file contains introductory material only.  
 
 --- To compile and run the model ---
+
+For further details, consult Section 4 of doc/cicedoc.pdf.  For troubleshooting, 
+see Section 5.
 
  In the source directory:
 1. Create Macros.<OS>* and run_ice.<OS>* files for your particular platform, 
    if they do not already exist (type 'uname -s' at the prompt to get <OS>).
 2. Alter directories in the script comp_ice.
 3. Run comp_ice to set up the run directory and make the executable 'cice'.
-4. To clean the compile directory and start fresh, alter directories in 
-   the script clean_ice and execute it.
  In the run directory:
-5. Alter atm_data_dir in the namelist file ice_in.
-6. Alter the script run_ice for your system.
-7. Execute run_ice (see forcing data information below).
+4. Alter atm_data_dir in the namelist file ice_in.
+5. Alter the script run_ice for your system.
+6. Execute run_ice (see forcing data information below).
+7. To clean the compile directory and start fresh, execute '/bin/rm -rf compile'.
 
 Output files (in the run directory):
 ice.log*       diagnostic output normally written to the screen, if 
@@ -41,141 +38,37 @@ hist/iceh*     output of numerous model variables as instructed by ice_in
 When restart files are written, the filename is written into the file
           restart/ice.restart_file
 
---- Forcing data information ---
+--- Forcing data ---
 
-The code is currently configured to run in standalone mode on a 3 degree
-grid using atmospheric data from 1997, available from
-http://climate.lanl.gov/Models/CICE/.  These data files are
-designed only for testing the code and are not necessarily the best
-observational data.  Please do not publish results based on these data
-sets.  Module ice_forcing.F90 can be modified to change the forcing
-data. 
+The code is currently configured to run in standalone mode on a 3 degree grid using 
+atmospheric data from 1997, available from http://climate.lanl.gov/Models/CICE/.  
+These data files are designed only for testing the code, not for use in production 
+runs or as observational data.  Please do not publish results based on these data
+sets.  Module source/ice_forcing.F90 can be modified to change the forcing data. 
 
---- initial directory structure and contents ---
+--- Online resources ---
 
-cice/
+The CICE wiki includes an FAQ, a list of known development projects and 
+collaborations, instructions for developers, and a list of code users and their 
+publications using CICE.  Two mailing lists are available, for general users and 
+for developers.
 
-README_v5.0             this file
-comp_ice                script that sets up and compiles the code
-ice.log.<OS>*           sample diagnostic output files
+primary wiki page:
+http://oceans11.lanl.gov/trac/CICE/wiki
 
-cice/bld
+FAQ:
+http://oceans11.lanl.gov/trac/CICE/wiki/FrequentlyAskedQuestions
 
-Macros.<OS>*            macro definitions for the given operating system
-Makefile.<OS>           makefile for the given operating system
-makdep.c                script that determines module dependencies
+instructions for code developers:
+http://oceans11.lanl.gov/trac/CICE/wiki/CiceCodeModifications
 
-cice/csm_share          modules based on "shared" code in CCSM
+ongoing or planned development projects:
+http://oceans11.lanl.gov/trac/CICE/wiki/CiceDev
 
-shr_orb_mod.F90         orbital parameterizations
+list of users and publications:
+http://oceans11.lanl.gov/trac/CICE/wiki/CiceUsers
 
-cice/doc/
-
-cicedoc.pdf             Documentation and Software User's Manual
-PDF/                    PDF documents of numerous publications related to CICE
-
-cice/drivers/           institution-specific modules
-
-cice/drivers/cice4      official driver for CICE version 4.0 (LANL)
-
-CICE.F90                main program
-CICE.F90_debug          debugging version of CICE.F90
-CICE_FinalMod.F90       routines for finishing and exiting a run
-CICE_InitMod.F90        routines for initializing a run
-CICE_RunMod.F90         main driver routines for time stepping
-ice_constants.F90       physical and numerical constants and parameters
-
-cice/input_templates/
-
-run_ice.<OS>*           batch script for the given operating system
-
-cice/input_templates/gx1/
-
-global_gx1.grid         0.9 x 1.1 deg displaced pole grid, 'gx1'
-global_gx1.kmt          0.9 x 1.1 deg land mask (N pole is in Greenland)
-ice.restart_file        pointer with restart filename
-ice_in                  namelist input parameters
-iced_gx1_v4.0_kcatbound0  restart file used for initial condition
-
-cice/input_templates/gx3/
-
-global_gx3.grid         3.6 x 1.85 deg displaced pole grid, 'gx3'  
-global_gx3.kmt          3.6 x 1.85 deg land mask (N pole is in Greenland)
-ice.restart_file        pointer with restart filename
-ice_in                  namelist input parameters for the given OS
-iced_gx3_v4.0_kcatbound0  restart file used for initial condition
-
-cice/mpi/               modules that require MPI calls
-
-ice_boundary.F90        boundary conditions
-ice_broadcast.F90       routines for broadcasting data across processors
-ice_communicate.F90     routines for communicating between processors
-ice_exit.F90            aborts or exits the run
-ice_gather_scatter.F90  gather/scatters data to/from one processor from/to
-                        all processors
-ice_global_reductions.F90  global sums, minvals, etc., across processors
-ice_timers.F90          timing routines
-
-cice/serial             same modules as in mpi/ but without MPI calls
-
-cice/source/            general CICE source code
-
-ice_age.F90             handles most work associated with age tracer
-ice_atmo.F90            transfer coefficients and atmo fluxes
-ice_blocks.F90          for decomposing global domain into blocks
-ice_calendar.F90        keeps track of what time it is
-ice_diagnostics.F90     miscellaneous diagnostic and debugging routines
-ice_distribution.F90    for distributing blocks across processors
-ice_domain.F90          decompositions, distributions and other info
-ice_domain_size.F90     domain and block sizes
-ice_dyn_evp.F90         EVP ice dynamics component
-ice_fileunits.F90       unit numbers for I/O 
-ice_flux.F90            fluxes needed/produced by the model
-ice_forcing.F90         routines to read input data for stand-alone runs
-ice_grid.F90            grid and land masks
-ice_history.F90         writes binary or netCDF output to history files
-ice_init.F90            initializations
-ice_itd.F90             routines for managing ice thickness distribution
-ice_kinds_mod.F90       basic definitions of reals, integers, etc.
-ice_mechred.F90         mechanical redistribution (ridging) routines
-ice_meltpond.F90        meltpond parameterization
-ice_ocean.F90           mixed layer routines
-ice_orbital.F90         orbital parameters for delta-Eddington parameterization
-ice_read_write.F90      utilities for reading and writing files
-ice_restart.F90         read/write core restart file
-ice_restoring.F90       basic restoring for open boundary conditions
-ice_shortwave.F90       shortwave and albedo parameterizations
-ice_spacecurve.F90      space-filling-curves distribution method
-ice_state.F90           essential arrays to describe the state of the ice
-ice_therm_itd.F90       thermodynamics related to ice thickness distribution
-ice_therm_vertical.F90  vertical growth rates and fluxes
-ice_timers.F90          timing routines
-ice_transport_driver.F90  driver for horizontal advection
-ice_transport_remap.F90 horizontal advection via incremental remapping
-ice_work.F90            globally accessible work arrays
-
---- directories and files created when the code is compiled ---
-
-rundir/                 execution or "run" directory
-
-cice                    code executable
-grid                    horizontal grid file from cice/input_templates/gx3/
-ice.log.[timeID]        diagnostic output files
-ice_in                  namelist input file from cice/input_templates/gx3/
-kmt                     land mask file from cice/input_templates/gx3/
-run_ice                 batch run script from cice/input_templates/gx3/
-
-rundir/compile/         directory containing object files, etc.
-
-rundir/hist/            directory containing history output
-
-iceh_mavg.[timeID].nc   monthly average output history file
-
-rundir/restart/         restart directory 
-
-iced_gx3_v3.1           initial condition from cice/input_templates/gx3/
-ice.restart_file        restart pointer from cice/input_templates/gx3/
-
+Please send references to your publications using the CICE model to Elizabeth.
 
 --- Authors ---
 
@@ -183,4 +76,3 @@ Please report any bugs to
 Elizabeth Hunke (eclare@lanl.gov)
  
 Good luck!
-
