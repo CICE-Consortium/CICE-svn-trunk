@@ -324,6 +324,8 @@
                                               flwoutn,       fsurfn,   &
                                               fcondtopn,     fcondbot, &
                                               fadvocn,       snoice,   &
+                                              freshn,        fsaltn,   &
+                                              fhocnn,                  &
                                               einit,         l_stop,   &
                                               istop,         jstop)
 
@@ -461,10 +463,11 @@
          dhi = hin(ij) - worki(ij)
          dhs = hsn(ij) - works(ij) - hsn_new(ij)
                
-         freshn(i,j) = evapn(i,j) - &
+         freshn(i,j) = freshn(i,j) + &
+                       evapn(i,j) - &
                        (rhoi*dhi + rhos*dhs) / dt
-         fsaltn(i,j) = -rhoi*dhi*ice_ref_salinity*p001/dt
-         fhocnn(i,j) = fhocnn(i,j) + fadvocn(i,j) ! for ktherm=2
+         fsaltn(i,j) = fsaltn(i,j) - &
+                       rhoi*dhi*ice_ref_salinity*p001/dt
 
          if (hin(ij) == c0) then
             if (tr_pond_topo) &
@@ -1786,6 +1789,7 @@
     ! Convert snow to ice if snow lies below freeboard.
     !-------------------------------------------------------------------
 
+      if (ktherm /= 2) &
       call freeboard (nx_block, ny_block, &
                       icells,             &
                       indxi,    indxj,    &

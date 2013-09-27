@@ -168,6 +168,8 @@ contains
                                           flwoutn,  fsurfn,   &
                                           fcondtopn,fcondbot, &
                                           fadvocn,  snoice,   &
+                                          freshn,   fsaltn,   &
+                                          fhocnn,             &
                                           einit,    l_stop,   &
                                           istop,    jstop)
 
@@ -228,7 +230,10 @@ contains
          fsensn      , & ! surface downward sensible heat (W m-2)
          flatn       , & ! surface downward latent heat (W m-2)
          flwoutn     , & ! upward LW at surface (W m-2)
-         fadvocn         ! advection heat flux to ocean
+         fadvocn     , & ! advection heat flux to ocean
+         freshn      , & ! fresh water flux to ocean (kg/m^2/s)
+         fsaltn      , & ! salt flux to ocean (kg/m^2/s)
+         fhocnn          ! net heat flux to ocean (W/m^2) 
     
     real (kind=dbl_kind), dimension (icells), intent(out):: &
          fcondbot        ! downward cond flux at bottom surface (W m-2)
@@ -303,6 +308,8 @@ contains
                                        flwoutn(i,j),  fsurfn(i,j),   &
                                        fcondtopn(i,j),fcondbot(ij),  &
                                        fadvocn(i,j),  snoice(i,j),   &
+                                       freshn(i,j),   fsaltn(i,j),   &
+                                       fhocnn(i,j),                  &
                                        einit(ij),     l_stop)
 
        if (tr_pond) then
@@ -342,6 +349,8 @@ contains
                                         flwoutn,  fsurfn,   &
                                         fcondtop, fcondbot, &
                                         fadvheat, snoice,   &
+                                        freshn,   fsaltn,   &
+                                        fhocnn,             &
                                         einit_old,lstop)
 
     ! solve the enthalpy and bulk salinity of the ice for a single column
@@ -396,8 +405,11 @@ contains
     real (kind=dbl_kind), intent(inout):: &
          Tsf         , & ! ice/snow surface temperature (C)
          hpond       , & ! melt pond depth (m)
-         apond           ! melt pond area
-    
+         apond       , & ! melt pond area
+         freshn      , & ! fresh water flux to ocean (kg/m^2/s)
+         fsaltn      , & ! salt flux to ocean (kg/m^2/s)
+         fhocnn          ! net heat flux to ocean (W/m^2) 
+
     real (kind=dbl_kind), dimension (nilyr), intent(inout) :: &
          zqin        , & ! ice layer enthalpy (J m-3)
          zTin        , & ! internal ice layer temperatures
@@ -437,11 +449,6 @@ contains
          hsn         , & ! snow thickness (m)
          hslyr_min   , & ! minimum snow layer thickness (m)
          w           , & ! vertical flushing Darcy velocity (m/s)
-         w_scaling   , & !
-         fadvsalt    , & ! heat flux to ocean from brine advection (W m-2)
-         snowice_en  , & ! energy added as snowice
-         snowice_st  , & ! salt added as snowice
-         dhhead      , & ! hydraulic head (m)
          qocn        , & ! ocean brine enthalpy (J m-3)
          qpond       , & ! melt pond brine enthalpy (J m-3)
          Spond           ! melt pond salinity (ppt)
@@ -454,10 +461,7 @@ contains
 
     lstop = .false.
     fadvheat   = c0
-    fadvsalt   = c0
     snoice     = c0
-    snowice_en = c0
-    snowice_st = c0
 
     Tsf0  = Tsf
     zqsn0 = zqsn
@@ -493,8 +497,7 @@ contains
                            hin,    hsn,   &
                            hilyr,         &
                            hpond,  apond, & 
-                           dt,     w,     &
-                           dhhead)
+                           dt,     w)
 
     ! calculate quantities related to drainage
     call explicit_flow_velocities(zSin,           &
@@ -601,10 +604,9 @@ contains
                    phi,        dt,       &
                    zSin,       Sbr,      &
                    sss,        qocn,     &
-                   snoice,               &
-                   snowice_en, snowice_st)
-
-    fadvheat = fadvheat - snowice_en
+                   snoice,     fadvheat, &
+                   freshn,     fsaltn,   &
+                   fhocnn)
 
   end subroutine temperature_changes_column
 
@@ -3137,8 +3139,7 @@ contains
                                hin,    hsn,   &
                                hilyr,         &
                                hpond,  apond, &
-                               dt,     w,     &
-                               dhhead)
+                               dt,     w)
    
     ! calculate the vertical flushing Darcy velocity
     ! negative - downward flushing
@@ -3160,8 +3161,7 @@ contains
          dt            ! time step (s)
 
     real(kind=dbl_kind), intent(out) :: &
-         w         , & ! vertical flushing Darcy flow rate (m s-1)
-         dhhead        ! hydraulic head (m)
+         w             ! vertical flushing Darcy flow rate (m s-1)
 
     real(kind=dbl_kind), parameter :: &
          advection_limit = 0.005_dbl_kind ! limit to fraction of brine in 
@@ -3175,7 +3175,8 @@ contains
          hbrine     , & ! brine surface height above ice base (m)
          w_down_max , & ! maximum downward flushing Darcy flow rate (m s-1) 
          phi_min    , & ! minimum porosity in the mush
-         wlimit         ! limit to w to avoid advecting all brine in layer
+         wlimit     , & ! limit to w to avoid advecting all brine in layer
+         dhhead         ! hydraulic head (m)
 
     integer(kind=int_kind) :: &
          k              ! ice layer index
@@ -3283,8 +3284,9 @@ contains
                        phi,    dt,       &
                        zSin,   Sbr,      &
                        sss,    qocn,     &
-                       snoice,           &
-                       eadded, sadded)
+                       snoice, fadvheat, &
+                       freshn, fsaltn,   &
+                       fhocnn)
 
     ! given upwards flushing brine flow calculate amount of snow ice and
     ! convert snow to ice with appropriate properties
@@ -3312,9 +3314,13 @@ contains
          hilyr                 ! snow layer thickness (m)
 
     real(kind=dbl_kind), intent(out) :: &
-         snoice            , & ! snow ice formation
-         eadded            , & ! energy added by forming sea ice 
-         sadded                ! salt added by forming sea ice
+         snoice                ! snow ice formation
+
+   real(kind=dbl_kind), intent(inout) :: &
+         fadvheat          , & ! advection heat flux to ocean
+         freshn            , & ! fresh water flux to ocean (kg/m^2/s)
+         fsaltn            , & ! salt flux to ocean (kg/m^2/s)
+         fhocnn                ! net heat flux to ocean (W/m^2) 
 
     real(kind=dbl_kind) :: &
          hin2              , & ! new ice thickness (m)
@@ -3330,13 +3336,15 @@ contains
          freeboard_density , & ! negative of ice surface freeboard times the ocean density (kg m-2)
          ice_mass          , & ! mass of the ice (kg m-2)
          rho_ocn           , & ! density of the ocean (kg m-3)
-         ice_density           ! density of ice layer (kg m-3)
+         ice_density       , & ! density of ice layer (kg m-3)
+         hadded            , & ! thickness rate of water used from ocean (m/s)
+         wadded            , & ! mass rate of water used from ocean (kg/m^2/s)
+         eadded            , & ! energy rate of water used from ocean (W/m^2) 
+         sadded                ! salt rate of water used from ocean (kg/m^2/s)
 
     integer :: &
          k                     ! vertical index
 
-    eadded = c0
-    sadded = c0
     snoice = c0
 
     ! check we have snow
@@ -3398,8 +3406,18 @@ contains
           hslyr = hslyr2
           snoice = dh
 
-          eadded = (dh * phi_snowice * qocn) / dt
-          sadded = (dh * phi_snowice * sss)  / dt
+          hadded = (dh * phi_snowice) / dt
+          wadded = hadded * rhoi
+          eadded = hadded * qocn
+          sadded = wadded * ice_ref_salinity * p001
+
+          ! conservation
+          fadvheat = fadvheat - eadded
+          
+          ! coupling
+          freshn = freshn - wadded
+          fsaltn = fsaltn - sadded
+          fhocnn = fhocnn - eadded
 
        endif
 
