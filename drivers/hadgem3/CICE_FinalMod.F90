@@ -30,7 +30,7 @@
 
       use ice_exit, only: end_run
       use ice_fileunits, only: nu_diag, release_all_fileunits
-      use ice_restart, only: runid
+      use ice_restart_shared, only: runid
       use ice_timers, only: ice_timer_stop, ice_timer_print_all, timer_total
 
    !-------------------------------------------------------------------
@@ -68,7 +68,7 @@
 
       subroutine writeout_finished_file()
       
-      use ice_restart, only: restart_dir
+      use ice_restart_shared, only: restart_dir
       use ice_communicate, only: my_task, master_task
 
       character(len=char_len_long) :: filename

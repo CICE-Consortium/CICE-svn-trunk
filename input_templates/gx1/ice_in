@@ -11,6 +11,8 @@
   , restart        = .true.
   , restart_ext    = .false.
   , use_restart_time = .true.
+  , restart_format = 'nc'
+  , lcdf64         = .false.
   , restart_dir    = './restart/'
   , restart_file   = 'iced'
   , pointer_file   = './restart/ice.restart_file'
@@ -134,10 +136,8 @@
   , bgc_data_dir    = 'unknown_bgc_data_dir'
   , sil_data_type   = 'default'
   , nit_data_type   = 'default'
-  , tr_bgc_N_sk     = .false.
   , tr_bgc_C_sk     = .false.
   , tr_bgc_chl_sk   = .false.
-  , tr_bgc_Nit_sk   = .false.
   , tr_bgc_Am_sk    = .false.
   , tr_bgc_Sil_sk   = .false.
   , tr_bgc_DMSPp_sk = .false.

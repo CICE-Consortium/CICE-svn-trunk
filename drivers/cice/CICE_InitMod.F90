@@ -68,7 +68,7 @@
           get_forcing_atmo, get_forcing_ocn
       use ice_grid, only: init_grid1, init_grid2
       use ice_history, only: init_hist, accum_hist
-      use ice_restart, only: restart, runid, runtype
+      use ice_restart_shared, only: restart, runid, runtype
       use ice_init, only: input_data, init_state
       use ice_itd, only: init_itd
       use ice_kinds_mod
@@ -170,6 +170,8 @@
       use ice_calendar, only: time, calendar
       use ice_domain, only: nblocks
       use ice_domain_size, only: ncat
+      use ice_dyn_eap, only: read_restart_eap
+      use ice_dyn_shared, only: kdyn
       use ice_firstyear, only: init_fy
       use ice_flux, only: sss
       use ice_init, only: ice_ic
@@ -177,8 +179,8 @@
       use ice_meltpond_cesm, only: init_meltponds_cesm
       use ice_meltpond_lvl, only: init_meltponds_lvl
       use ice_meltpond_topo, only: init_meltponds_topo
-      use ice_restart, only: runtype, restart, restart_ext, &
-          restartfile_ext, restartfile
+      use ice_restart_shared, only: runtype, restart
+      use ice_restart_driver, only: restartfile, restartfile_v4
       use ice_restart_age, only: restart_age, read_restart_age
       use ice_restart_firstyear, only: restart_FY, read_restart_FY
       use ice_restart_lvl, only: restart_lvl, read_restart_lvl
@@ -193,22 +195,15 @@
 
       integer(kind=int_kind) :: iblk
 
-      if (restart_ext) then              ! read extended grid
-         if (trim(runtype) == 'continue') then 
-            ! start from core restart file
-            call restartfile_ext()       ! given by pointer in ice_in
-            call calendar(time)          ! update time parameters
-         else if (restart) then          ! ice_ic = core restart file
-            call restartfile_ext(ice_ic) !  or 'default' or 'none'
-         endif         
-      else                            ! read physical grid
-         if (trim(runtype) == 'continue') then 
-            ! start from core restart file
-            call restartfile()           ! given by pointer in ice_in
-            call calendar(time)          ! update time parameters
-         else if (restart) then          ! ice_ic = core restart file
-            call restartfile (ice_ic)    !  or 'default' or 'none'
-         endif         
+      if (trim(runtype) == 'continue') then 
+         ! start from core restart file
+         call restartfile()           ! given by pointer in ice_in
+         call calendar(time)          ! update time parameters
+         if (kdyn == 2) call read_restart_eap ! EAP
+      else if (restart) then          ! ice_ic = core restart file
+         call restartfile (ice_ic)    !  or 'default' or 'none'
+!         call restartfile_v4 (ice_ic) ! CICE v4.1 binary restart file
+!         if (kdyn == 2) call read_restart_eap ! EAP
       endif         
 
       ! tracers
@@ -306,7 +301,7 @@
 
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
-      use ice_restart, only: restart_dir
+      use ice_restart_shared, only: restart_dir
 
       character(len=char_len_long) :: filename
       logical :: lexist = .false.

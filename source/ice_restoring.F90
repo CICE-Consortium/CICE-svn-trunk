@@ -56,7 +56,7 @@
       use ice_grid, only: tmask
       use ice_flux, only: sst, Tf, Tair, salinz, Tmltz
       use ice_itd, only: aggregate
-      use ice_restart, only: restart_ext
+      use ice_restart_shared, only: restart_ext
 
    integer (int_kind) :: &
      i,j,iblk,nt,n,      &! dummy loop indices

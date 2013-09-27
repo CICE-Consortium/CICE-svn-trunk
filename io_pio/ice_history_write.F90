@@ -49,7 +49,7 @@
       use ice_calendar, only: time, sec, idate, idate0, write_ic, &
           histfreq, dayyr, days_per_year, use_leap_years
       use ice_communicate, only: my_task, master_task
-      use ice_constants, only: c0, c360, secday, spval, rad_to_deg
+      use ice_constants, only: c0, c360, secday, spval, spval_dbl, rad_to_deg
       use ice_domain, only: distrb_info
       use ice_domain_size, only: nx_global, ny_global, max_blocks, max_nstrm
       use ice_exit, only: abort_ice
@@ -60,7 +60,7 @@
           lont_bounds, latt_bounds, lonu_bounds, latu_bounds
       use ice_history_shared
       use ice_itd, only: hin_max
-      use ice_restart, only: runid
+      use ice_restart_shared, only: runid
       use netcdf
 #endif
       use ice_pio	
@@ -71,12 +71,6 @@
       ! local variables
 
 #ifdef ncdf
-      real (kind=dbl_kind),  dimension(:,:),   allocatable :: work_g1
-      real (kind=real_kind), dimension(:,:),   allocatable :: work_gr
-      real (kind=real_kind), dimension(:,:,:), allocatable :: work_gr3
-      real (kind=dbl_kind),  dimension(nx_block,ny_block,max_blocks) :: &
-         work1
-
       integer (kind=int_kind) :: i,j,k,ic,n,nn, &
          ncid,status,imtid,jmtid,kmtidi,kmtids,kmtidb, cmtid,timid, &
          length,nvertexid,ivertex
@@ -130,23 +124,29 @@
       TYPE(coord_attributes), dimension(nvarz) :: var_nz
       CHARACTER (char_len), dimension(ncoord) :: coord_bounds
 
-      real (kind=real_kind), dimension(nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
            workr
-      real (kind=real_kind), dimension(nx_block,ny_block,max_blocks,ncat_hist) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks,ncat_hist) :: &
            workr3c
-      real (kind=real_kind), dimension(nx_block,ny_block,max_blocks,nzlyr) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks,nzlyr) :: &
            workr3i
-      real (kind=real_kind), dimension(nx_block,ny_block,max_blocks,nzlyrb) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks,nzlyrb) :: &
            workr3b
 #if 1==0
-      real (kind=real_kind), dimension(nx_block,ny_block,max_blocks,nzlyr,ncat_hist) :: &
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks,nzlyr,ncat_hist) :: &
            workr4i
 #endif
-      real (kind=real_kind), dimension(nverts,nx_block,ny_block,max_blocks) :: &
+      real (kind=dbl_kind), dimension(nverts,nx_block,ny_block,max_blocks) :: &
            workrv
 
       character(len=char_len_long) :: &
            filename
+
+      integer (kind=int_kind), dimension(1) ::  &
+         tim_start,tim_length          ! dimension quantities for netCDF
+
+      integer (kind=int_kind), dimension(2) ::  &
+         bnd_start,bnd_length          ! dimension quantities for netCDF
 
       if (my_task == master_task) then
         call construct_filename(ncfile(ns),'nc',ns)
@@ -162,8 +162,7 @@
       call broadcast_scalar(filename, master_task)
 
       ! create file
-!      lcdf64 = .true.
-      lcdf64 = .false.
+
       File%fh=-1
       call ice_pio_init(mode='write', filename=trim(filename), File=File, &
 	clobber=.true., cdf64=lcdf64)
@@ -722,7 +721,10 @@
           status = pio_inq_varid(File,'time_bounds',varid)
           call pio_setframe(varid, int(1,kind=PIO_OFFSET))
           time_bounds=(/time_beg(ns),time_end(ns)/)
-!fails          status = pio_put_var(File,varid,time_bounds) 
+          bnd_start  = (/1,1/)
+          bnd_length = (/2,1/)
+          status = pio_put_var(File,varid,ival=time_bounds, &
+                   start=bnd_start(:),count=bnd_length(:)) 
         endif
 
       !-----------------------------------------------------------------
@@ -747,7 +749,7 @@
           
              status = pio_inq_varid(File, coord_var(i)%short_name, varid)
          call pio_write_darray(File, varid, iodesc2d, &
-                               workr, status, fillval=spval)
+                               workr, status, fillval=spval_dbl)
         enddo
 
         if (igrdz(n_NCAT)) then
@@ -763,7 +765,7 @@
         workr = tmask
         status = pio_inq_varid(File, 'tmask', varid)
         call pio_write_darray(File, varid, iodesc2d, &
-                              workr, status, fillval=spval)
+                              workr, status, fillval=spval_dbl)
       endif
 
       do i = 2, nvar       ! note: n_tmask=1
@@ -793,7 +795,7 @@
 
         status = pio_inq_varid(File, var(i)%req%short_name, varid)
         call pio_write_darray(File, varid, iodesc2d, &
-                              workr, status, fillval=spval)
+                              workr, status, fillval=spval_dbl)
 
         endif
       enddo
@@ -826,7 +828,7 @@
 
           status = pio_inq_varid(File, var_nverts(i)%short_name, varid)
           call pio_write_darray(File, varid, iodesc3dv, &
-                                workrv, status, fillval=spval)
+                                workrv, status, fillval=spval_dbl)
       enddo
       endif
 
@@ -844,7 +846,7 @@
             workr(:,:,:) = a2D(:,:,n,:)
             call pio_setframe(varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc2d,&
-                                  workr, status, fillval=spval)
+                                  workr, status, fillval=spval_dbl)
          endif
       enddo ! num_avail_hist_fields_2D
 
@@ -860,7 +862,7 @@
             enddo
             call pio_setframe(varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc3dc,&
-                                  workr3c, status, fillval=spval)
+                                  workr3c, status, fillval=spval_dbl)
          endif
       enddo ! num_avail_hist_fields_3Dc
 
@@ -876,7 +878,7 @@
             enddo
             call pio_setframe(varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc3di,&
-                                  workr3i, status, fillval=spval)
+                                  workr3i, status, fillval=spval_dbl)
          endif
       enddo ! num_avail_hist_fields_3Dz
 
@@ -892,7 +894,7 @@
             enddo
             call pio_setframe(varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc3db,&
-                                  workr3b, status, fillval=spval)
+                                  workr3b, status, fillval=spval_dbl)
          endif
       enddo ! num_avail_hist_fields_3Db
 
@@ -912,7 +914,7 @@
             enddo ! i
             call pio_setframe(varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc4di,&
-                                  workr4i, status, fillval=spval)
+                                  workr4i, status, fillval=spval_dbl)
          endif
       enddo ! num_avail_hist_fields_4Di
 

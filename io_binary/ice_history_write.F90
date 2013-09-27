@@ -49,8 +49,7 @@
       use ice_fileunits, only: nu_history, nu_hdr, nu_diag
       use ice_grid, only: tarea
       use ice_history_shared
-      use ice_itd, only: c_hi_range
-      use ice_restart, only: lenstr, runid
+      use ice_restart_shared, only: lenstr, runid
 
       integer (kind=int_kind), intent(in) :: ns
 
@@ -137,8 +136,8 @@
             i_aice = lenstr(c_aice)
             if (i_aice > 4 .and. c_aice(1:5) == 'aicen') then
               read(c_aice(6:9), '(i3)') icategory
-              avail_hist_fields(n)%vcomment = &
-                 'Ice range: '//c_hi_range(icategory)
+!             avail_hist_fields(n)%vcomment = &
+!                'Ice range: '//c_hi_range(icategory)
             endif
             write (nu_hdr, 995) nrec,trim(avail_hist_fields(n)%vname), &
                trim(avail_hist_fields(n)%vcomment)

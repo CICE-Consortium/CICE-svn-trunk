@@ -633,72 +633,39 @@
 
 !=======================================================================
 
-      subroutine read_restart_hbrine(filename_spec)
+      subroutine read_restart_hbrine()
 
 ! Reads all values needed for hbrine
 ! author Elizabeth C. Hunke, LANL
 
-      use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init, &
-                              istep0
+      use ice_communicate, only: my_task, master_task
       use ice_domain, only: nblocks
-      use ice_flux, only: sss  
+      use ice_fileunits, only: nu_diag, nu_restart_hbrine
       use ice_state, only: trcrn, nt_fbri
-      use ice_exit, only: abort_ice
-      use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
-      use ice_read_write, only: ice_open, ice_read
-
-      character(len=char_len_long), intent(in), optional :: filename_spec
+      use ice_restart,only: read_restart_field
 
       ! local variables
 
       integer (kind=int_kind) :: &
          i, j, n, iblk          ! counting indices
 
-      character(len=char_len_long) :: &
-         filename, filename0, string1, string2
-
       logical (kind=log_kind) :: &
          diag
 
-      if (my_task == master_task) then
-         open(nu_rst_pointer,file=pointer_file)
-         read(nu_rst_pointer,'(a)') filename0
-         filename = trim(filename0)
-         close(nu_rst_pointer)
-
-         ! reconstruct path/file
-         n = index(filename0,trim(restart_file))
-         if (n == 0) call abort_ice('hbrine restart: filename discrepancy')
-         string1 = trim(filename0(1:n-1))
-         string2 = trim(filename0(n+lenstr(restart_file):lenstr(filename0)))
-         write(filename,'(a,a,a,a)') &
-            string1(1:lenstr(string1)), &
-            restart_file(1:lenstr(restart_file)),'.hb', &
-            string2(1:lenstr(string2))
-      endif ! master_task
-
-      call ice_open(nu_restart_hbrine,filename,0)
-
-      if (my_task == master_task) then
-        read(nu_restart_hbrine) istep1,time,time_forc
-        write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
-        write(nu_diag,*) 'hbrine Restart read at istep=',istep0,time,time_forc
-      endif
-
       diag = .true.
+
+      if (my_task == master_task) write(nu_diag,*) 'brine restart'
+
+      call read_restart_field(nu_restart_hbrine,0,trcrn(:,:,nt_fbri,:,:),'ruf8', &
+                              'fbrn',ncat,diag)
+      call read_restart_field(nu_restart_hbrine,0,first_ice_real(:,:,:,:),'ruf8', &
+                              'first_ice',ncat,diag)
        
-      do n = 1, ncat
-          call ice_read(nu_restart_hbrine,0,trcrn(:,:,nt_fbri,n,:),'ruf8',diag, &
-                          field_loc_center, field_type_scalar)
-          call ice_read(nu_restart_hbrine,0,first_ice_real(:,:,n,:),'ruf8',diag, &
-                          field_loc_center, field_type_scalar)
-      enddo
       do iblk = 1, nblocks
          do n = 1,ncat
             do j = 1, ny_block
             do i = 1, nx_block
-               if (first_ice_real(i,j,n,iblk) >= c1) then
+               if (first_ice_real(i,j,n,iblk) >= p5) then
                   first_ice (i,j,n,iblk) = .true.
                else
                   first_ice (i,j,n,iblk) = .false.
@@ -708,59 +675,25 @@
          enddo
       enddo
 
-      if (my_task == master_task) close(nu_restart_hbrine)
-
       end subroutine read_restart_hbrine
 
 !=======================================================================
 
-      subroutine write_restart_hbrine(filename_spec)
+      subroutine write_restart_hbrine()
 
 ! Dumps all values needed for a hbrine restart
 ! author Elizabeth C. Hunke, LANL
 
-      use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init
       use ice_domain, only: nblocks
       use ice_state, only: trcrn, nt_fbri
-      use ice_flux, only: sss  
-      use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file, runtype
-      use ice_read_write, only: ice_open, ice_write
-
-      character(len=char_len_long), intent(in), optional :: filename_spec
+      use ice_restart,only: write_restart_field
 
       ! local variables
 
       integer (kind=int_kind) :: &
-         i, j, n, iblk          , & ! counting indices
-         iyear, imonth, iday        ! year, month, day
-
-      character(len=char_len_long) :: filename
+         i, j, n, iblk
 
       logical (kind=log_kind) :: diag
-
-      ! construct path/file
-      if (present(filename_spec)) then
-         filename = trim(filename_spec)
-      else
-         iyear = nyr + year_init - 1
-         imonth = month
-         iday = mday
-         
-         write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
-              restart_dir(1:lenstr(restart_dir)), &
-              restart_file(1:lenstr(restart_file)),'.hb.', &
-              iyear,'-',month,'-',mday,'-',sec
-      endif
-
-      ! begin writing restart data
-      call ice_open(nu_dump_hbrine,filename,0)
-
-      if (my_task == master_task) then
-        write(nu_dump_hbrine) istep1,time,time_forc
-        write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
-        write(nu_diag,*) 'hbrine Restart written ',istep1,time,time_forc
-      endif
 
       diag = .true.
 
@@ -778,12 +711,10 @@
        enddo
       enddo
 
-      do n = 1, ncat
-         call ice_write(nu_dump_hbrine,0,trcrn(:,:,nt_fbri,n,:),'ruf8',diag)
-         call ice_write(nu_dump_hbrine,0,first_ice_real(:,:,n,:),'ruf8',diag)
-      enddo
-
-      if (my_task == master_task) close(nu_dump_hbrine)
+      call write_restart_field(nu_dump_hbrine,0,trcrn(:,:,nt_fbri,:,:),'ruf8', &
+                               'fbrn',ncat,diag)
+      call write_restart_field(nu_dump_hbrine,0,first_ice_real(:,:,:,:),'ruf8', &
+                               'first_ice',ncat,diag)
 
       end subroutine write_restart_hbrine
 

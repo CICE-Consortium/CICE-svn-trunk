@@ -1118,46 +1118,15 @@
 !
 ! author Elizabeth C. Hunke, LANL
 
-      subroutine write_restart_bgc(filename_spec)
+      subroutine write_restart_bgc()
 
       use ice_domain_size, only: ncat
-      use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, year_init
-      use ice_restart, only: lenstr, restart_dir, restart_file
       use ice_state, only: trcrn
-
-      character(len=char_len_long), intent(in), optional :: filename_spec
+      use ice_restart,only: write_restart_field
 
       ! local variables
 
-      integer (kind=int_kind) :: &
-          n,      & ! category index
-          iyear     ! year, month, day
-
-      character(len=char_len_long) :: filename
-
       logical (kind=log_kind) :: diag
-
-      ! construct path/file
-      if (present(filename_spec)) then
-         filename = trim(filename_spec)
-      else
-         iyear = nyr + year_init - 1
-         
-         write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
-              restart_dir(1:lenstr(restart_dir)), &
-              restart_file(1:lenstr(restart_file)),'.bgc.', &
-              iyear,'-',month,'-',mday,'-',sec
-      end if
-         
-      ! begin writing restart data
-      call ice_open(nu_dump_bgc,filename,0)
-
-      if (my_task == master_task) then
-        write(nu_dump_bgc) istep1,time,time_forc
-        write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
-        write(nu_diag,*) 'BGC Restart written ',istep1,time,time_forc
-      endif
 
       diag = .true.
 
@@ -1165,41 +1134,49 @@
       ! Skeletal layer BGC
       !-----------------------------------------------------------------
 
-      if (solve_skl_bgc) then
-      do n = 1, ncat
-                              call ice_write(nu_dump_bgc,0, &
-                              trcrn(:,:,nt_bgc_N_sk,n,:),    'ruf8',diag)
-         if (tr_bgc_C_sk)     call ice_write(nu_dump_bgc,0, &
-                              trcrn(:,:,nt_bgc_C_sk,n,:),    'ruf8',diag)
-         if (tr_bgc_chl_sk)   call ice_write(nu_dump_bgc,0, &
-                              trcrn(:,:,nt_bgc_chl_sk,n,:),  'ruf8',diag)
-         if (tr_bgc_Nit_sk)   call ice_write(nu_dump_bgc,0, &
-                              trcrn(:,:,nt_bgc_Nit_sk,n,:),  'ruf8',diag)
-         if (tr_bgc_Am_sk)    call ice_write(nu_dump_bgc,0, &
-                              trcrn(:,:,nt_bgc_Am_sk,n,:),   'ruf8',diag)
-         if (tr_bgc_Sil_sk)   call ice_write(nu_dump_bgc,0, &
-                              trcrn(:,:,nt_bgc_Sil_sk,n,:),  'ruf8',diag)
-         if (tr_bgc_DMSPp_sk) call ice_write(nu_dump_bgc,0, &
-                              trcrn(:,:,nt_bgc_DMSPp_sk,n,:),'ruf8',diag)
-         if (tr_bgc_DMSPd_sk) call ice_write(nu_dump_bgc,0, &
-                              trcrn(:,:,nt_bgc_DMSPd_sk,n,:),'ruf8',diag)
-         if (tr_bgc_DMS_sk)   call ice_write(nu_dump_bgc,0, &
-                              trcrn(:,:,nt_bgc_DMS_sk,n,:),  'ruf8',diag)
-      enddo
-      endif  ! solve_skl_bgc
+         call write_restart_field(nu_dump_bgc,0,trcrn(:,:,nt_bgc_N_sk,:,:), &
+                                  'ruf8','bgc_N_sk',ncat,diag)
+         if (tr_bgc_C_sk) &
+         call write_restart_field(nu_dump_bgc,0,trcrn(:,:,nt_bgc_C_sk,:,:), &
+                                  'ruf8','bgc_C_sk',ncat,diag)
+         if (tr_bgc_chl_sk) &
+         call write_restart_field(nu_dump_bgc,0,trcrn(:,:,nt_bgc_chl_sk,:,:), &
+                                  'ruf8','bgc_chl_sk',ncat,diag)
+         if (tr_bgc_Nit_sk) &
+         call write_restart_field(nu_dump_bgc,0,trcrn(:,:,nt_bgc_Nit_sk,:,:), &
+                                  'ruf8','bgc_Nit_sk',ncat,diag)
+         if (tr_bgc_Am_sk) &
+         call write_restart_field(nu_dump_bgc,0,trcrn(:,:,nt_bgc_Am_sk,:,:), &
+                                  'ruf8','bgc_Am_sk',ncat,diag)
+         if (tr_bgc_Sil_sk) &
+         call write_restart_field(nu_dump_bgc,0,trcrn(:,:,nt_bgc_Sil_sk,:,:), &
+                                  'ruf8','bgc_Sil_sk',ncat,diag)
+         if (tr_bgc_DMSPp_sk) &
+         call write_restart_field(nu_dump_bgc,0,trcrn(:,:,nt_bgc_DMSPp_sk,:,:), &
+                                  'ruf8','bgc_DMSPp_sk',ncat,diag)
+         if (tr_bgc_DMSPd_sk) &
+         call write_restart_field(nu_dump_bgc,0,trcrn(:,:,nt_bgc_DMSPd_sk,:,:), &
+                                  'ruf8','bgc_DMSPd_sk',ncat,diag)
+         if (tr_bgc_DMS_sk) &
+         call write_restart_field(nu_dump_bgc,0,trcrn(:,:,nt_bgc_DMS_sk,:,:), &
+                                  'ruf8','bgc_DMS_sk',ncat,diag)
       
       !-----------------------------------------------------------------
       ! Ocean BGC
       !-----------------------------------------------------------------
 
-      if (tr_bgc_N_sk)     call ice_write(nu_dump_bgc,0,algalN,'ruf8',diag)
-      if (tr_bgc_Nit_sk)   call ice_write(nu_dump_bgc,0,nit,   'ruf8',diag)
-      if (tr_bgc_Am_sk)    call ice_write(nu_dump_bgc,0,amm,   'ruf8',diag)
-      if (tr_bgc_Sil_sk)   call ice_write(nu_dump_bgc,0,sil,   'ruf8',diag)
-      if (tr_bgc_DMSPp_sk) call ice_write(nu_dump_bgc,0,dmsp,  'ruf8',diag)
-      if (tr_bgc_DMS_sk)   call ice_write(nu_dump_bgc,0,dms,   'ruf8',diag)
-
-      if (my_task == master_task) close(nu_dump_bgc)
+      if (tr_bgc_N_sk) &
+      call write_restart_field(nu_dump_bgc,0,algalN,'ruf8','algalN',1,diag)
+      if (tr_bgc_Nit_sk) &
+      call write_restart_field(nu_dump_bgc,0,nit,   'ruf8','nit',   1,diag)
+      if (tr_bgc_Am_sk) &
+      call write_restart_field(nu_dump_bgc,0,amm,   'ruf8','amm',   1,diag)
+      if (tr_bgc_Sil_sk) &
+      call write_restart_field(nu_dump_bgc,0,sil,   'ruf8','sil',   1,diag)
+      if (tr_bgc_DMSPp_sk) &
+      call write_restart_field(nu_dump_bgc,0,dmsp,  'ruf8','dmsp',  1,diag)
+      if (tr_bgc_DMS_sk) &
+      call write_restart_field(nu_dump_bgc,0,dms,   'ruf8','dms',   1,diag)
 
       end subroutine write_restart_bgc
 
@@ -1209,53 +1186,15 @@
 !
 ! author Elizabeth C. Hunke, LANL
 
-      subroutine read_restart_bgc(filename_spec)
+      subroutine read_restart_bgc()
 
-      use ice_constants, only: field_loc_center, field_type_scalar
       use ice_domain_size, only: ncat
-      use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, year_init, &
-                              istep0
-      use ice_restart, only: lenstr, restart_file, pointer_file
       use ice_state, only: trcrn
-      use ice_exit, only: abort_ice
-
-      character(len=char_len_long), intent(in), optional :: filename_spec
+      use ice_restart,only: read_restart_field
 
       ! local variables
 
-      integer (kind=int_kind) :: &
-          n   ! category index
-
-      character(len=char_len_long) :: &
-         filename, filename0, string1, string2
-
       logical (kind=log_kind) :: diag
-
-      if (my_task == master_task) then
-         open(nu_rst_pointer,file=pointer_file)
-         read(nu_rst_pointer,'(a)') filename0
-         filename = trim(filename0)
-         close(nu_rst_pointer)
-
-         ! reconstruct path/file
-         n = index(filename0,trim(restart_file))
-         if (n == 0) call abort_ice('bgc restart: filename discrepancy')
-         string1 = trim(filename0(1:n-1))
-         string2 = trim(filename0(n+lenstr(restart_file):lenstr(filename0)))
-         write(filename,'(a,a,a,a)') &
-            string1(1:lenstr(string1)), &
-            restart_file(1:lenstr(restart_file)),'.bgc', &
-            string2(1:lenstr(string2))
-      endif ! master_task
-
-      call ice_open(nu_restart_bgc,filename,0)
-
-      if (my_task == master_task) then
-        read(nu_restart_bgc) istep1,time,time_forc
-        write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
-        write(nu_diag,*) 'BGC Restart read at istep=',istep0,time,time_forc
-      endif
 
       diag = .true.
 
@@ -1263,47 +1202,53 @@
       ! Skeletal Layer BGC
       !-----------------------------------------------------------------
 
-      if (solve_skl_bgc) then
-      do n = 1, ncat
-         call ice_read(nu_restart_bgc,0,trcrn(:,:,nt_bgc_N_sk,n,:),'ruf8',diag)
-         if (tr_bgc_C_sk)     call ice_read(nu_restart_bgc,0, &
-                              trcrn(:,:,nt_bgc_C_sk,n,:),'ruf8',diag)
-         if (tr_bgc_chl_sk)   call ice_read(nu_restart_bgc,0, &
-                              trcrn(:,:,nt_bgc_chl_sk  ,n,:),'ruf8',diag)
-         if (tr_bgc_Nit_sk)   call ice_read(nu_restart_bgc,0, &
-                              trcrn(:,:,nt_bgc_Nit_sk  ,n,:),'ruf8',diag)
-         if (tr_bgc_Am_sk)    call ice_read(nu_restart_bgc,0, &
-                              trcrn(:,:,nt_bgc_Am_sk   ,n,:),'ruf8',diag)
-         if (tr_bgc_Sil_sk)   call ice_read(nu_restart_bgc,0, &
-                              trcrn(:,:,nt_bgc_Sil_sk  ,n,:),'ruf8',diag)
-         if(tr_bgc_DMSPp_sk)  call ice_read(nu_restart_bgc,0, &
-                              trcrn(:,:,nt_bgc_DMSPp_sk,n,:),'ruf8',diag)
-         if (tr_bgc_DMSPd_sk) call ice_read(nu_restart_bgc,0, &
-                              trcrn(:,:,nt_bgc_DMSPd_sk,n,:),'ruf8',diag)
-         if (tr_bgc_DMS_sk)   call ice_read(nu_restart_bgc,0, &
-                              trcrn(:,:,nt_bgc_DMS_sk  ,n,:),'ruf8',diag)
-      enddo
-      endif ! solve_skl_bgc
-     
+      if (my_task == master_task) write(nu_diag,*) 'skl bgc restart'
+
+      call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_N_sk,:,:), &
+           'ruf8','bgc_N_sk',ncat,diag)
+      if (tr_bgc_C_sk) &
+      call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_C_sk,:,:), &
+           'ruf8','bgc_C_sk',ncat,diag)
+      if (tr_bgc_chl_sk) &
+      call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_chl_sk,:,:), &
+           'ruf8','bgc_chl_sk',ncat,diag)
+      if (tr_bgc_Nit_sk) &
+      call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_Nit_sk,:,:), &
+           'ruf8','bgc_Nit_sk',ncat,diag)
+      if (tr_bgc_Am_sk) &
+      call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_Am_sk,:,:), &
+           'ruf8','bgc_Am_sk',ncat,diag)
+      if (tr_bgc_Sil_sk) &
+      call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_Sil_sk,:,:), &
+           'ruf8','bgc_Sil_sk',ncat,diag)
+      if(tr_bgc_DMSPp_sk) &
+      call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_DMSPp_sk,:,:), &
+           'ruf8','bgc_DMSPp_sk',ncat,diag)
+      if (tr_bgc_DMSPd_sk) &
+      call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_DMSPd_sk,:,:), &
+           'ruf8','bgc_DMSPd_sk',ncat,diag)
+      if (tr_bgc_DMS_sk) &
+      call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_DMS_sk,:,:), &
+           'ruf8','bgc_DMS_sk',ncat,diag)
+
       !-----------------------------------------------------------------
       ! Ocean BGC
       !-----------------------------------------------------------------
 
-      if (my_task == master_task) &
-         write(nu_diag,*) 'ocean bgc fields:  algalN, nit, amm, sil, dmsp, dms'
-      if (tr_bgc_N_sk)     call ice_read(nu_restart_bgc,0,algalN,'ruf8',diag, &
-                                         field_loc_center, field_type_scalar)
-      if (tr_bgc_Nit_sk)   call ice_read(nu_restart_bgc,0,nit   ,'ruf8',diag, &
-                                         field_loc_center, field_type_scalar)
-      if (tr_bgc_Am_sk)    call ice_read(nu_restart_bgc,0,amm   ,'ruf8',diag, &
-                                         field_loc_center, field_type_scalar)
-      if (tr_bgc_Sil_sk)   call ice_read(nu_restart_bgc,0,sil   ,'ruf8',diag, &
-                                         field_loc_center, field_type_scalar)
-      if (tr_bgc_DMSPp_sk) call ice_read(nu_restart_bgc,0,dmsp  ,'ruf8',diag, &
-                                         field_loc_center, field_type_scalar)
-      if (tr_bgc_DMS_sk)   call ice_read(nu_restart_bgc,0,dms   ,'ruf8',diag, &
-                                         field_loc_center, field_type_scalar)
-      if (my_task == master_task) close(nu_restart_bgc)
+      if (my_task == master_task) write(nu_diag,*) 'mixed layer ocean bgc restart'
+
+      if (tr_bgc_N_sk) &
+      call read_restart_field(nu_restart_bgc,0,algalN,'ruf8','algalN',1,diag)
+      if (tr_bgc_Nit_sk) &
+      call read_restart_field(nu_restart_bgc,0,nit   ,'ruf8','nit'   ,1,diag)
+      if (tr_bgc_Am_sk) &
+      call read_restart_field(nu_restart_bgc,0,amm   ,'ruf8','amm'   ,1,diag)
+      if (tr_bgc_Sil_sk) &
+      call read_restart_field(nu_restart_bgc,0,sil   ,'ruf8','sil'   ,1,diag)
+      if (tr_bgc_DMSPp_sk) &
+      call read_restart_field(nu_restart_bgc,0,dmsp  ,'ruf8','dmsp'  ,1,diag)
+      if (tr_bgc_DMS_sk) &
+      call read_restart_field(nu_restart_bgc,0,dms   ,'ruf8','dms'   ,1,diag)
 
       end subroutine read_restart_bgc
 

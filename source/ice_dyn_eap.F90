@@ -24,7 +24,7 @@
 
       implicit none
       private
-      public :: eap, init_eap, write_restart_eap
+      public :: eap, init_eap, write_restart_eap, read_restart_eap
       save
 
       ! Look-up table needed for calculating structure tensor
@@ -490,7 +490,7 @@
       use ice_domain, only: nblocks
       use ice_dyn_shared, only: init_evp
       use ice_exit, only: abort_ice
-      use ice_restart, only: runtype
+      use ice_restart_shared, only: runtype
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -609,8 +609,6 @@
         enddo
        enddo
       enddo
-
-      if (runtype == 'continue') call read_restart_eap
 
       end subroutine init_eap
 
@@ -1863,16 +1861,10 @@
 
 ! Dumps all values needed for a restart
 
-      subroutine write_restart_eap (filename_spec)
+      subroutine write_restart_eap ()
 
-      use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init
-      use ice_communicate, only: my_task, master_task
       use ice_fileunits, only: nu_diag, nu_dump_eap
-      use ice_read_write, only: ice_open, ice_write
-      use ice_restart, only: lenstr, restart_dir, restart_file
-
-      character(len=char_len_long), intent(in), optional :: filename_spec
+      use ice_restart, only: write_restart_field
 
       ! local variables
 
@@ -1883,44 +1875,21 @@
 
       logical (kind=log_kind) :: diag
 
-      ! construct path/file
-      if (present(filename_spec)) then
-         filename = trim(filename_spec)
-      else
-         iyear = nyr + year_init - 1
-         imonth = month
-         iday = mday
-         
-         write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
-              restart_dir(1:lenstr(restart_dir)), &
-              restart_file(1:lenstr(restart_file)),'.eap.', &
-              iyear,'-',month,'-',mday,'-',sec
-      end if
-         
-      ! begin writing restart data
-      call ice_open(nu_dump_eap,filename,0)
-
-      if (my_task == master_task) then
-        write(nu_dump_eap) istep1,time,time_forc
-        write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
-      endif
-
       diag = .true.
 
       !-----------------------------------------------------------------
       ! structure tensor 
       !-----------------------------------------------------------------
-      call ice_write(nu_dump_eap,0,a11_1,'ruf8',diag)
-      call ice_write(nu_dump_eap,0,a11_3,'ruf8',diag)
-      call ice_write(nu_dump_eap,0,a11_2,'ruf8',diag)
-      call ice_write(nu_dump_eap,0,a11_4,'ruf8',diag)
 
-      call ice_write(nu_dump_eap,0,a12_1,'ruf8',diag)
-      call ice_write(nu_dump_eap,0,a12_3,'ruf8',diag)
-      call ice_write(nu_dump_eap,0,a12_2,'ruf8',diag)
-      call ice_write(nu_dump_eap,0,a12_4,'ruf8',diag)
+      call write_restart_field(nu_dump_eap,0,a11_1,'ruf8','a11_1',1,diag)
+      call write_restart_field(nu_dump_eap,0,a11_3,'ruf8','a11_3',1,diag)
+      call write_restart_field(nu_dump_eap,0,a11_2,'ruf8','a11_2',1,diag)
+      call write_restart_field(nu_dump_eap,0,a11_4,'ruf8','a11_4',1,diag)
 
-      if (my_task == master_task) close(nu_dump_eap)
+      call write_restart_field(nu_dump_eap,0,a12_1,'ruf8','a12_1',1,diag)
+      call write_restart_field(nu_dump_eap,0,a12_3,'ruf8','a12_3',1,diag)
+      call write_restart_field(nu_dump_eap,0,a12_2,'ruf8','a12_2',1,diag)
+      call write_restart_field(nu_dump_eap,0,a12_4,'ruf8','a12_4',1,diag)
 
       end subroutine write_restart_eap
 
@@ -1928,62 +1897,26 @@
 
 ! Reads all values needed for elastic anisotropic plastic dynamics restart
 
-      subroutine read_restart_eap(filename_spec)
+      subroutine read_restart_eap()
 
       use ice_blocks, only: nghost
-      use ice_calendar, only: istep1, time, time_forc
+      use ice_boundary, only: ice_HaloUpdate_stress
       use ice_communicate, only: my_task, master_task
-      use ice_constants, only: c0
-      use ice_domain, only: distrb_info, nblocks
-      use ice_domain_size, only: nx_global, ny_global
-      use ice_exit, only: abort_ice
-      use ice_gather_scatter, only: scatter_global_stress
-      use ice_read_write, only: ice_open, ice_read_global
-      use ice_restart, only: lenstr, restart_file, &
-                             pointer_file, runtype
-      use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_restart_eap
-
-      character(len=char_len_long), intent(in), optional :: filename_spec
+      use ice_constants, only: c0, &
+          field_loc_center, field_type_scalar
+      use ice_domain, only: nblocks, halo_info
+      use ice_fileunits, only: nu_diag, nu_restart_eap
+      use ice_grid, only: grid_type
+      use ice_restart, only: read_restart_field
+      use ice_restart_shared, only: restart_format
 
       ! local variables
 
       integer (kind=int_kind) :: &
-          i, j, n, iblk ! counting indices
-
-      character(len=char_len_long) :: &
-         filename, filename0, string1, string2
+         i, j, iblk
 
       logical (kind=log_kind) :: &
          diag
-
-      real (kind=dbl_kind), dimension(:,:), allocatable :: &
-         work_g1, work_g2
-
-      if (my_task == master_task) then
-         open(nu_rst_pointer,file=pointer_file)
-         read(nu_rst_pointer,'(a)') filename0
-         filename = trim(filename0)
-         close(nu_rst_pointer)
-
-         ! reconstruct path/file
-         n = index(filename0,trim(restart_file))
-         if (n == 0) call abort_ice('eap restart: filename discrepancy')
-         string1 = trim(filename0(1:n-1))
-         string2 = trim(filename0(n+lenstr(restart_file):lenstr(filename0)))
-         write(filename,'(a,a,a,a)') &
-            string1(1:lenstr(string1)), &
-            restart_file(1:lenstr(restart_file)),'.eap', &
-            string2(1:lenstr(string2))
-      endif ! master_task
-
-      if (runtype == 'continue') then 
-
-      call ice_open(nu_restart_eap,filename,0)
-
-      if (my_task == master_task) then
-        read(nu_restart_eap) istep1,time,time_forc
-        write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
-      endif
 
       diag = .true.
 
@@ -1992,42 +1925,45 @@
       ! to properly match corner values across a tripole grid cut.
       !-----------------------------------------------------------------
          if (my_task == master_task) write(nu_diag,*) &
-           'structure tensor'
+           'structure tensor restart data'
     
-         allocate (work_g1(nx_global,ny_global), &
-                work_g2(nx_global,ny_global))
+      call read_restart_field(nu_restart_eap,0,a11_1,'ruf8', &
+           'a11_1',1,diag,field_loc_center,field_type_scalar) ! a11_1
+      call read_restart_field(nu_restart_eap,0,a11_3,'ruf8', &
+           'a11_3',1,diag,field_loc_center,field_type_scalar) ! a11_3
+      call read_restart_field(nu_restart_eap,0,a11_2,'ruf8', &
+           'a11_2',1,diag,field_loc_center,field_type_scalar) ! a11_2
+      call read_restart_field(nu_restart_eap,0,a11_4,'ruf8', &
+           'a11_4',1,diag,field_loc_center,field_type_scalar) ! a11_4
 
-         call ice_read_global(nu_restart_eap,0,work_g1,'ruf8',diag) ! a11_1
-         call ice_read_global(nu_restart_eap,0,work_g2,'ruf8',diag) ! a11_3
-         call scatter_global_stress(a11_1, work_g1, work_g2, &
-                                 master_task, distrb_info)
-         call scatter_global_stress(a11_3, work_g2, work_g1, &
-                                 master_task, distrb_info)
+      call read_restart_field(nu_restart_eap,0,a12_1,'ruf8', &
+           'a12_1',1,diag,field_loc_center,field_type_scalar) ! a12_1
+      call read_restart_field(nu_restart_eap,0,a12_3,'ruf8', &
+           'a12_3',1,diag,field_loc_center,field_type_scalar) ! a12_3
+      call read_restart_field(nu_restart_eap,0,a12_2,'ruf8', &
+           'a12_2',1,diag,field_loc_center,field_type_scalar) ! a12_2
+      call read_restart_field(nu_restart_eap,0,a12_4,'ruf8', &
+           'a12_4',1,diag,field_loc_center,field_type_scalar) ! a12_4
 
-         call ice_read_global(nu_restart_eap,0,work_g1,'ruf8',diag) ! a11_2
-         call ice_read_global(nu_restart_eap,0,work_g2,'ruf8',diag) ! a11_4
-         call scatter_global_stress(a11_2, work_g1, work_g2, &
-                                 master_task, distrb_info)
-         call scatter_global_stress(a11_4, work_g2, work_g1, &
-                                 master_task, distrb_info)
+      if (trim(grid_type) == 'tripole' .and. trim(restart_format) == 'pio') then
 
-         call ice_read_global(nu_restart_eap,0,work_g1,'ruf8',diag) ! a12_1
-         call ice_read_global(nu_restart_eap,0,work_g2,'ruf8',diag) ! a12_3
-         call scatter_global_stress(a12_1, work_g1, work_g2, &
-                                 master_task, distrb_info)
-         call scatter_global_stress(a12_3, work_g2, work_g1, &
-                                 master_task, distrb_info)
+      call ice_HaloUpdate_stress(a11_1, a11_3, halo_info, &
+                                 field_loc_center,  field_type_scalar)
+      call ice_HaloUpdate_stress(a11_3, a11_1, halo_info, &
+                                 field_loc_center,  field_type_scalar)
+      call ice_HaloUpdate_stress(a11_2, a11_4, halo_info, &
+                                 field_loc_center,  field_type_scalar)
+      call ice_HaloUpdate_stress(a11_4, a11_2, halo_info, &
+                                 field_loc_center,  field_type_scalar)
+      call ice_HaloUpdate_stress(a12_1, a12_3, halo_info, &
+                                 field_loc_center,  field_type_scalar)
+      call ice_HaloUpdate_stress(a12_3, a12_1, halo_info, &
+                                 field_loc_center,  field_type_scalar)
+      call ice_HaloUpdate_stress(a12_2, a12_4, halo_info, &
+                                 field_loc_center,  field_type_scalar)
+      call ice_HaloUpdate_stress(a12_4, a12_2, halo_info, &
+                                 field_loc_center,  field_type_scalar)
 
-         call ice_read_global(nu_restart_eap,0,work_g1,'ruf8',diag) ! a12_2
-         call ice_read_global(nu_restart_eap,0,work_g2,'ruf8',diag) ! a12_4
-         call scatter_global_stress(a12_2, work_g1, work_g2, &
-                                 master_task, distrb_info)
-         call scatter_global_stress(a12_4, work_g2, work_g1, &
-                                 master_task, distrb_info)
-
-         deallocate (work_g1, work_g2)
-
-      if (my_task == master_task) close(nu_restart_eap)
       endif
 
       !-----------------------------------------------------------------

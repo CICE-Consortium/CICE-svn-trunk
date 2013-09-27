@@ -424,7 +424,7 @@
                               mday, write_ic, histfreq, histfreq_n, &
                               year_init, new_year, new_month, new_day, &
                               dt
-      use ice_restart, only: lenstr
+      use ice_restart_shared, only: lenstr
 
       character (char_len_long), intent(inout) :: ncfile
       character (len=2), intent(in) :: suffix

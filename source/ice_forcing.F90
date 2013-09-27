@@ -3304,7 +3304,7 @@
       use ice_domain_size, only: max_blocks
       use ice_flux, only: sss, sst, Tf, uocn, vocn, ss_tltx, ss_tlty, &
             qdp, hmix
-      use ice_restart, only: restart
+      use ice_restart_shared, only: restart
       use ice_grid, only: hm, tmask, umask
 
       real (kind=dbl_kind), intent(in) :: &
