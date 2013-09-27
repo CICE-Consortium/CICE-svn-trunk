@@ -19,10 +19,10 @@
       implicit none
       save
 
-      character(len=char_len_long) :: & 
+      character(len=char_len_long) :: &
          ice_ic      ! method of ice cover initialization
                      ! 'default'  => latitude and sst dependent
-                     ! 'none'     => no ice 
+                     ! 'none'     => no ice
                      ! note:  restart = .true. overwrites
 
 !=======================================================================
@@ -48,9 +48,9 @@
                               dumpfreq, dumpfreq_n, diagfreq, nstreams, &
                               npt, dt, ndtd, days_per_year, use_leap_years, &
                               write_ic, dump_last
-      use ice_restart, only: &
+      use ice_restart_shared, only: &
           restart, restart_ext, restart_dir, restart_file, pointer_file, &
-          runid, runtype, use_restart_time
+          runid, runtype, use_restart_time, restart_format, lcdf64
       use ice_history_shared, only: hist_avg, history_dir, history_file, &
                              incond_dir, incond_file
       use ice_exit, only: abort_ice
@@ -111,7 +111,7 @@
         dt,             npt,            ndtd,                           &
         runtype,        runid,                                          &
         ice_ic,         restart,        restart_dir,     restart_file,  &
-        restart_ext,    use_restart_time,                               &
+        restart_ext,    use_restart_time, restart_format, lcdf64,       &
         pointer_file,   dumpfreq,       dumpfreq_n,      dump_last,     &
         diagfreq,       diag_type,      diag_file,                      &
         print_global,   print_points,   latpnt,          lonpnt,        &
@@ -198,6 +198,8 @@
       restart_ext  = .false. ! if true, read/write ghost cells
       use_restart_time = .true.     ! if true, use time info written in file
       pointer_file = 'ice.restart_file'
+      restart_format = 'nc'  ! file format ('bin'=binary or 'nc'=netcdf or 'pio')
+      lcdf64       = .false. ! 64 bit offset for netCDF
       ice_ic       = 'default'      ! latitude and sst-dependent
       grid_format  = 'bin'          ! file format ('bin'=binary or 'nc'=netcdf)
       grid_type    = 'rectangular'  ! define rectangular grid internally
@@ -577,6 +579,8 @@
       call broadcast_scalar(restart_dir,        master_task)
       call broadcast_scalar(restart_ext,        master_task)
       call broadcast_scalar(use_restart_time,   master_task)
+      call broadcast_scalar(restart_format,     master_task)
+      call broadcast_scalar(lcdf64,             master_task)
       call broadcast_scalar(pointer_file,       master_task)
       call broadcast_scalar(ice_ic,             master_task)
       call broadcast_scalar(grid_format,        master_task)
@@ -716,6 +720,10 @@
          write(nu_diag,*)    ' restart_dir               = ', &
                                trim(restart_dir)
          write(nu_diag,*)    ' restart_ext               = ', restart_ext
+         write(nu_diag,*)    ' restart_format            = ', &
+                               trim(restart_format)
+         write(nu_diag,*)    ' lcdf64                    = ', &
+                               lcdf64
          write(nu_diag,*)    ' restart_file              = ', &
                                trim(restart_file)
          write(nu_diag,*)    ' pointer_file              = ', &

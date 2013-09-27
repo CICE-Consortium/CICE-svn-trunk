@@ -74,8 +74,7 @@
          call get_forcing_ocn(dt)  ! ocean forcing from data
 !         if (tr_aero) call faero_data        ! aerosols
          if (tr_aero)  call faero_default     ! aerosols
-         if (solve_skl_bgc) &
-                call get_forcing_bgc    ! biogeochemistry
+         if (solve_skl_bgc) call get_forcing_bgc ! biogeochemistry
          call ice_timer_stop(timer_couple)   ! atm/ocn coupling
 #endif
 
@@ -113,7 +112,8 @@
       use ice_dyn_shared, only: kdyn
       use ice_flux, only: scale_factor, init_history_therm
       use ice_history, only: accum_hist
-      use ice_restart, only: restart_ext, dumpfile_ext, dumpfile
+      use ice_restart, only: final_restart
+      use ice_restart_driver, only: dumpfile
       use ice_restart_age, only: write_restart_age
       use ice_restart_firstyear, only: write_restart_FY
       use ice_restart_lvl, only: write_restart_lvl
@@ -243,11 +243,7 @@
 
          call ice_timer_start(timer_readwrite)  ! reading/writing
          if (write_restart == 1) then
-            if (restart_ext) then
-               call dumpfile_ext ! core variables for restarting
-            else
-               call dumpfile     ! core variables for restarting
-            endif
+            call dumpfile     ! core variables for restarting
             if (tr_iage)      call write_restart_age
             if (tr_FY)        call write_restart_FY
             if (tr_lvl)       call write_restart_lvl
@@ -258,6 +254,7 @@
             if (solve_skl_bgc)call write_restart_bgc  
             if (tr_brine)     call write_restart_hbrine
             if (kdyn == 2)    call write_restart_eap
+            call final_restart
          endif
 
          call ice_timer_stop(timer_readwrite)  ! reading/writing

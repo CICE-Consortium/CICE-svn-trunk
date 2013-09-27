@@ -73,14 +73,16 @@ contains
 !echmod   pio_iotype =  shr_pio_getiotype(inst_name)
 !echmod: equivalent to shr code
 !echmod: for now, assume all processors write output (numProcs)
+! DAB: Let PIO choose.
    integer (int_kind) :: numProcs ! number of processor participating
 
    numProcs = distrb_info%nprocs
+
    call PIO_init(my_task      , &   ! local task
                  MPI_COMM_ICE , &   ! MPI communicator for ice comms
-                 numProcs     , &   ! number of I/O processors
-                 numProcs     , &   ! aggregator 
-                 1            , &   ! stride
+                 numProcs/4   , &   ! number of I/O processors
+                 0            , &   ! aggregator 
+                 numProcs/4   , &   ! stride
                  PIO_rearr_box, &   ! PIO-specific
                  ice_pio_subsystem) ! I/O system for ice
    pio_iotype = PIO_iotype_pnetcdf  ! type of parallel I/O
@@ -153,7 +155,7 @@ contains
 
       type(block) :: this_block 
 
-      integer(kind=int_kind), pointer :: dof2d(:)
+      integer(kind=pio_offset), pointer :: dof2d(:)
 
       allocate(dof2d(nx_block*ny_block*nblocks))
 
@@ -181,8 +183,7 @@ contains
          enddo !j
       end do
 
-!      call pio_initdecomp(ice_pio_subsystem, pio_double, (/nx_global,ny_global/), &
-      call pio_initdecomp(ice_pio_subsystem, pio_real, (/nx_global,ny_global/), &
+      call pio_initdecomp(ice_pio_subsystem, pio_double, (/nx_global,ny_global/), &
            dof2d, iodesc)
 
       deallocate(dof2d)
@@ -233,8 +234,7 @@ contains
       enddo    ! iblk
       enddo    ! ndim3
 
-!      call pio_initdecomp(ice_pio_subsystem, pio_double, (/nx_global,ny_global,ndim3/), &
-      call pio_initdecomp(ice_pio_subsystem, pio_real, (/nx_global,ny_global,ndim3/), &
+      call pio_initdecomp(ice_pio_subsystem, pio_double, (/nx_global,ny_global,ndim3/), &
            dof3d, iodesc)
 
       deallocate(dof3d)
@@ -254,7 +254,7 @@ contains
 
       type(block) :: this_block 
 
-      integer(kind=int_kind), pointer :: dof3d(:)
+      integer(kind=pio_offset), pointer :: dof3d(:)
 
       allocate(dof3d(nx_block*ny_block*nblocks*ndim3))
 
@@ -284,8 +284,7 @@ contains
          enddo  ! j
       enddo     ! iblk
 
-!      call pio_initdecomp(ice_pio_subsystem, pio_double, (/ndim3,nx_global,ny_global/), &
-      call pio_initdecomp(ice_pio_subsystem, pio_real, (/ndim3,nx_global,ny_global/), &
+      call pio_initdecomp(ice_pio_subsystem, pio_double, (/ndim3,nx_global,ny_global/), &
            dof3d, iodesc)
 
       deallocate(dof3d)
@@ -353,23 +352,9 @@ contains
       enddo    ! ndim3
       enddo    ! ndim4
 
-      start(:) = 1
-      count(1) = nx_global
-      count(2) = ny_global
-      count(3) = ndim3
-      count(4) = ndim4
-      startpio = start
-      countpio = count
+      call pio_initdecomp(ice_pio_subsystem, pio_double, (/nx_global,ny_global,ndim3,ndim4/), &
+           dof4d, iodesc)
 
-!      call pio_initdecomp(ice_pio_subsystem, pio_double, (/nx_global,ny_global,ndim3,ndim4/), &
-!           dof4d, iodesc)
-
-      call pio_initdecomp(ice_pio_subsystem, pio_real, (/nx_global,ny_global,ndim3,ndim4/), &
-!           dof4d, iodesc)
-           dof4d, iodesc, startpio, countpio)
-
-!      call pio_initdecomp(ice_pio_subsystem, pio_real, (/nx_global,ny_global,ndim3,ndim4/), &
-!           startpio, countpio, iodesc, startpio, countpio)
 
       deallocate(dof4d)
 

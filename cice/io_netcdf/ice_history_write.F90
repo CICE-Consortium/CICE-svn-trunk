@@ -54,7 +54,7 @@
           lont_bounds, latt_bounds, lonu_bounds, latu_bounds
       use ice_history_shared
       use ice_itd, only: hin_max
-      use ice_restart, only: runid
+      use ice_restart_shared, only: runid
       use netcdf
 #endif
 

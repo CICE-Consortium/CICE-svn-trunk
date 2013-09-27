@@ -38,7 +38,7 @@
       use ice_exit, only: abort_ice
       use ice_fileunits, only: nu_nml, nml_filename, get_fileunit, &
                                release_fileunit, nu_diag
-      use ice_restart, only: runtype
+      use ice_restart_shared, only: runtype
       use ice_state, only: tr_brine, nt_fbri, ntrcr, nbtrcr, trcr_depend, &
           nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_chl_sk, nt_bgc_Am_sk, &
           nt_bgc_Sil_sk, nt_bgc_DMSPp_sk, nt_bgc_DMSPd_sk, &
@@ -54,8 +54,7 @@
       namelist /zbgc_nml/  &
          tr_brine, bgc_data_dir, sil_data_type, nit_data_type, &
          restore_bgc, solve_skl_bgc, &
-         tr_bgc_N_sk, tr_bgc_C_sk, tr_bgc_chl_sk, &
-         tr_bgc_Nit_sk, tr_bgc_Am_sk, tr_bgc_Sil_sk, &
+         tr_bgc_C_sk, tr_bgc_chl_sk, tr_bgc_Am_sk, tr_bgc_Sil_sk, &
          tr_bgc_DMSPp_sk, tr_bgc_DMSPd_sk, tr_bgc_DMS_sk, &
          restart_bgc, restart_hbrine, phi_snow, bgc_flux_type
 
@@ -69,10 +68,8 @@
       bgc_data_dir    = 'unknown_bgc_data_dir'
       sil_data_type   = 'default'
       nit_data_type   = 'default'
-      tr_bgc_N_sk     = .false.  ! biogeochemistry, algae (skeletal)
       tr_bgc_C_sk     = .false.  ! biogeochemistry, 
       tr_bgc_chl_sk   = .false.  ! biogeochemistry,
-      tr_bgc_Nit_sk   = .false.  ! biogeochemistry, nutrients (skeletal)
       tr_bgc_Am_sk    = .false.  ! biogeochemistry, 
       tr_bgc_Sil_sk   = .false.  ! biogeochemistry,
       tr_bgc_DMSPp_sk = .false.  ! biogeochemistry, trace gases (skeletal)

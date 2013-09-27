@@ -11,7 +11,7 @@
       use ice_kinds_mod
       use ice_constants
       use ice_fileunits, only: nu_diag
-      use ice_restart, only: lenstr, restart_dir, restart_file, &
+      use ice_restart_shared, only: lenstr, restart_dir, restart_file, &
                              pointer_file, runtype
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
@@ -638,64 +638,41 @@
 !         David Bailey, NCAR
 !         Marika Holland, NCAR
 
-      subroutine write_restart_aero(filename_spec)
+      subroutine write_restart_aero()
 
       use ice_domain_size, only: ncat, n_aero
-      use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init
+      use ice_restart, only: write_restart_field
       use ice_state, only: trcrn, nt_aero
-      use ice_read_write, only: ice_open, ice_write
       use ice_fileunits, only: nu_dump_aero
-      use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file
-
-      character(len=char_len_long), intent(in), optional :: filename_spec
 
       ! local variables
 
       integer (kind=int_kind) :: &
-          k, n,                 & ! loop indices
-          iyear, imonth, iday     ! year, month, day
-
-      character(len=char_len_long) :: filename
+         k                    ! loop indices
 
       logical (kind=log_kind) :: diag
 
-      ! construct path/file
-      if (present(filename_spec)) then
-         filename = trim(filename_spec)
-      else
-         iyear = nyr + year_init - 1
-         imonth = month
-         iday = mday
-         
-         write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
-              restart_dir(1:lenstr(restart_dir)), &
-              restart_file(1:lenstr(restart_file)),'.aero.', &
-              iyear,'-',month,'-',mday,'-',sec
-      end if
-         
-      ! begin writing restart data
-      call ice_open(nu_dump_aero,filename,0)
-
-      if (my_task == master_task) then
-        write(nu_dump_aero) istep1,time,time_forc
-        write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
-      endif
+      character (len=3)       :: nchar
 
       diag = .true.
 
       !-----------------------------------------------------------------
 
       do k = 1, n_aero
-      do n = 1, ncat
-       call ice_write(nu_dump_aero,0,trcrn(:,:,nt_aero  +(k-1)*4,n,:),'ruf8',diag)
-       call ice_write(nu_dump_aero,0,trcrn(:,:,nt_aero+1+(k-1)*4,n,:),'ruf8',diag)
-       call ice_write(nu_dump_aero,0,trcrn(:,:,nt_aero+2+(k-1)*4,n,:),'ruf8',diag)
-       call ice_write(nu_dump_aero,0,trcrn(:,:,nt_aero+3+(k-1)*4,n,:),'ruf8',diag)
+       write(nchar,'(i3.3)') k
+       call write_restart_field(nu_dump_aero,0, &
+            trcrn(:,:,nt_aero  +(k-1)*4,:,:),'ruf8','aerosnossl'//nchar, &
+            ncat,diag)
+       call write_restart_field(nu_dump_aero,0, &
+            trcrn(:,:,nt_aero+1+(k-1)*4,:,:),'ruf8','aerosnoint'//nchar, &
+            ncat,diag)
+       call write_restart_field(nu_dump_aero,0, &
+            trcrn(:,:,nt_aero+2+(k-1)*4,:,:),'ruf8','aeroicessl'//nchar, &
+            ncat,diag)
+       call write_restart_field(nu_dump_aero,0, &
+            trcrn(:,:,nt_aero+3+(k-1)*4,:,:),'ruf8','aeroiceint'//nchar, &
+            ncat,diag)
       enddo
-      enddo
-
-      if (my_task == master_task) close(nu_dump_aero)
 
       end subroutine write_restart_aero
 
@@ -707,75 +684,41 @@
 !         David Bailey, NCAR
 !         Marika Holland, NCAR
 
-      subroutine read_restart_aero(filename_spec)
+      subroutine read_restart_aero()
 
+      use ice_communicate, only: my_task, master_task
       use ice_domain_size, only: n_aero, ncat
-      use ice_calendar, only: sec, month, mday, nyr, istep1, &
-                              time, time_forc, idate, year_init
+      use ice_restart, only: read_restart_field
       use ice_state, only: trcrn, nt_aero
-      use ice_fileunits, only: nu_restart_aero, nu_rst_pointer
-      use ice_read_write, only: ice_read, ice_open
-      use ice_restart, only: lenstr, restart_dir, restart_file, pointer_file
-
-      character(len=char_len_long), intent(in), optional :: filename_spec
+      use ice_fileunits, only: nu_restart_aero
 
       ! local variables
 
       integer (kind=int_kind) :: &
-         k, n                    ! loop indices
-
-      character(len=char_len_long) :: &
-         filename, filename0, string1, string2
+         k                    ! loop indices
 
       logical (kind=log_kind) :: &
          diag
 
-      if (my_task == master_task) then
-         ! reconstruct path/file
-         if (present(filename_spec)) then
-            filename = filename_spec
-         else
-            open(nu_rst_pointer,file=pointer_file)
-            read(nu_rst_pointer,'(a)') filename0
-            filename = trim(filename0)
-            close(nu_rst_pointer)
+      character (len=3)       :: nchar
 
-            n = index(filename0,trim(restart_file))
-            if (n == 0) call abort_ice('aero restart: filename discrepancy')
-            string1 = trim(filename0(1:n-1))
-            string2 = trim(filename0(n+lenstr(restart_file):lenstr(filename0)))
-            write(filename,'(a,a,a,a)') &
-               string1(1:lenstr(string1)), &
-               restart_file(1:lenstr(restart_file)),'.aero', &
-               string2(1:lenstr(string2))
-         endif
-      endif ! master_task
-
-      call ice_open(nu_restart_aero,filename,0)
-
-      if (my_task == master_task) then
-        read(nu_restart_aero) istep1,time,time_forc
-        write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
-      endif
-
-      diag = .true.
-
-      !-----------------------------------------------------------------
+      if (my_task == master_task) write(nu_diag,*) 'aerosols'
 
       do k = 1, n_aero
-      do n = 1, ncat
-       call ice_read(nu_restart_aero,0,trcrn(:,:,nt_aero  +(k-1)*4,n,:),'ruf8',&
-            diag,field_type=field_type_scalar,field_loc=field_loc_center)
-       call ice_read(nu_restart_aero,0,trcrn(:,:,nt_aero+1+(k-1)*4,n,:),'ruf8',&
-            diag,field_type=field_type_scalar,field_loc=field_loc_center)
-       call ice_read(nu_restart_aero,0,trcrn(:,:,nt_aero+2+(k-1)*4,n,:),'ruf8',&
-            diag,field_type=field_type_scalar,field_loc=field_loc_center)
-       call ice_read(nu_restart_aero,0,trcrn(:,:,nt_aero+3+(k-1)*4,n,:),'ruf8',&
-            diag,field_type=field_type_scalar,field_loc=field_loc_center)
+       write(nchar,'(i3.3)') k
+       call read_restart_field(nu_restart_aero,0, &
+            trcrn(:,:,nt_aero  +(k-1)*4,:,:),'ruf8','aerosnossl'//trim(nchar), &
+            ncat,diag,field_type=field_type_scalar,field_loc=field_loc_center)
+       call read_restart_field(nu_restart_aero,0, &
+            trcrn(:,:,nt_aero+1+(k-1)*4,:,:),'ruf8','aerosnoint'//trim(nchar), &
+            ncat,diag,field_type=field_type_scalar,field_loc=field_loc_center)
+       call read_restart_field(nu_restart_aero,0, &
+            trcrn(:,:,nt_aero+2+(k-1)*4,:,:),'ruf8','aeroicessl'//trim(nchar), &
+            ncat,diag,field_type=field_type_scalar,field_loc=field_loc_center)
+       call read_restart_field(nu_restart_aero,0, &
+            trcrn(:,:,nt_aero+3+(k-1)*4,:,:),'ruf8','aeroiceint'//trim(nchar), &
+            ncat,diag,field_type=field_type_scalar,field_loc=field_loc_center)
       enddo
-      enddo
-
-      if (my_task == master_task) close(nu_restart_aero)
 
       end subroutine read_restart_aero
 
