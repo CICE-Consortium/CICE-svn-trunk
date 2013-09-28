@@ -251,6 +251,10 @@
             call define_rest_field(File,'a12_4',dims)
          endif
 
+         if (tr_pond_lvl) then
+            call define_rest_field(ncid,'fsnow',dims)
+         endif
+
          if (skl_bgc) then
             call define_rest_field(File,'algalN',dims)
             call define_rest_field(File,'nit'   ,dims)

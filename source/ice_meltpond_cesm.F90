@@ -21,7 +21,14 @@
       implicit none
 
       private
-      public :: init_meltponds_cesm, compute_ponds_cesm, compute_ponds_simple
+      public :: init_meltponds_cesm, compute_ponds_cesm, &
+                write_restart_pond_cesm, read_restart_pond_cesm
+
+      logical (kind=log_kind), public :: & 
+         restart_pond_cesm ! if .true., read meltponds restart file
+
+      real (kind=dbl_kind), public :: &
+         hs0               ! snow depth for transition to bare sea ice (m)
 
 !=======================================================================
 
@@ -190,125 +197,62 @@
       end subroutine compute_ponds_cesm
 
 !=======================================================================
+!
+! Dumps all values needed for restarting
+!
+! authors Elizabeth C. Hunke, LANL
+!         David A. Bailey, NCAR
 
-! author: Adrian Turner, LANL
+      subroutine write_restart_pond_cesm()
 
-      subroutine compute_ponds_simple(nx_block,ny_block,   &
-                                      ilo, ihi, jlo, jhi,  &
-                                      dt,    rfrac, hi_min,&
-                                      meltt, melts, frain, &
-                                      aicen, vicen, vsnon, &
-                                      Tsfcn, apnd,  hpnd)
+      use ice_domain_size, only: ncat
+      use ice_fileunits, only: nu_dump_pond
+      use ice_state, only: trcrn, nt_apnd, nt_hpnd
+      use ice_restart, only: write_restart_field
 
-      integer (kind=int_kind), intent(in) :: &
-         nx_block, ny_block, & ! block dimensions
-         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
+      ! local variables
 
-      real (kind=dbl_kind), intent(in) :: &
-         dt,       & ! time step (s)
-         hi_min      ! minimum ice thickness allowed for thermo (m)
+      logical (kind=log_kind) :: diag
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), &
-         intent(in) :: &
-         rfrac, &    ! water fraction retained for melt ponds
-         meltt, &
-         melts, &
-         frain, &
-         aicen, &
-         vicen, &
-         vsnon
+      diag = .true.
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), &
-         intent(in) :: &
-         Tsfcn
+      call write_restart_field(nu_dump_pond,0,trcrn(:,:,nt_apnd,:,:),'ruf8', &
+                               'apnd',ncat,diag)
+      call write_restart_field(nu_dump_pond,0,trcrn(:,:,nt_hpnd,:,:),'ruf8', &
+                               'hpnd',ncat,diag)
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block), &
-         intent(inout) :: &
-         apnd, &
-         hpnd
+      end subroutine write_restart_pond_cesm
 
-!     local temporary variables
+!=======================================================================
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
-         volpn
+! Reads all values needed for a meltpond volume restart
+!
+! authors Elizabeth C. Hunke, LANL
+!         David A. Bailey, NCAR
 
-      integer (kind=int_kind), dimension (nx_block*ny_block) :: &
-         indxi, indxj     ! compressed indices for cells with ice melting
+      subroutine read_restart_pond_cesm()
 
-      integer (kind=int_kind) :: i,j,ij,icells
+      use ice_domain_size, only: ncat
+      use ice_communicate, only: my_task, master_task
+      use ice_fileunits, only: nu_diag, nu_restart_pond 
+      use ice_state, only: trcrn, nt_apnd, nt_hpnd
+      use ice_restart, only: read_restart_field
 
-      real (kind=dbl_kind) :: &
-         hi                     , & ! ice thickness (m)
-         hs                     , & ! snow depth (m)
-         apondn, &
-         hpondn   
+      ! local variables
 
-      real (kind=dbl_kind), parameter :: &
-         hicemin  = c0!hi_min          ! minimum ice thickness with ponds (m)
+      logical (kind=log_kind) :: &
+         diag
 
-      !-----------------------------------------------------------------
-      ! Initialize 
-      !-----------------------------------------------------------------
-!      volpn(:,:) = trcrn(:,:,nt_volp) * aicen(:,:)
-      volpn(:,:) = hpnd(:,:) * apnd(:,:) * aicen(:,:)
+      diag = .true.
 
-      !-----------------------------------------------------------------
-      ! Identify grid cells where ice can melt
-      !-----------------------------------------------------------------
+      if (my_task == master_task) write(nu_diag,*) 'min/max cesm ponds'
 
-      icells = 0
-      do j = jlo, jhi
-      do i = ilo, ihi
-         if (aicen(i,j) > puny) then
-            icells = icells + 1
-            indxi(icells) = i
-            indxj(icells) = j
-         endif
-      enddo                     ! i
-      enddo                     ! j
+      call read_restart_field(nu_restart_pond,0,trcrn(:,:,nt_apnd,:,:),'ruf8', &
+                              'apnd',ncat,diag)
+      call read_restart_field(nu_restart_pond,0,trcrn(:,:,nt_hpnd,:,:),'ruf8', &
+                              'hpnd',ncat,diag)
 
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-
-         hi = vicen(i,j)/aicen(i,j)
-         hs = vsnon(i,j)/aicen(i,j)
-
-         if (hi < hicemin) then
-
-         !--------------------------------------------------------------
-         ! Remove ponds on thin ice
-         !--------------------------------------------------------------
-            apondn = c0
-            hpondn = c0
-            volpn (i,j) = c0
-
-         else
-
-            !-----------------------------------------------------------
-            ! Update pond volume
-            !-----------------------------------------------------------
-            volpn(i,j) = volpn(i,j) &
-                       + rfrac(i,j)/rhofresh*(meltt(i,j)*rhoi &
-                       +                      melts(i,j)*rhos &
-                       +                      frain(i,j)*  dt)&
-                       * aicen(i,j)
-
-            apondn = c1
-            hpondn = volpn(i,j)
-
-            !-----------------------------------------------------------
-            ! Reload tracer array
-            !-----------------------------------------------------------
-            apnd(i,j) = apondn / aicen(i,j)
-            hpnd(i,j) = hpondn
-!            trcrn(i,j,nt_volp) = volpn(i,j) / aicen(i,j)
-
-         endif
-
-      enddo
-
-      end subroutine compute_ponds_simple
+      end subroutine read_restart_pond_cesm
 
 !=======================================================================
 

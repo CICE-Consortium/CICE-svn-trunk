@@ -38,6 +38,7 @@
 
       subroutine input_data
 
+      use ice_age, only: restart_age
       use ice_broadcast, only: broadcast_scalar, broadcast_array
       use ice_constants, only: c0, c1, puny
       use ice_diagnostics, only: diag_file, print_global, print_points, latpnt, lonpnt
@@ -56,6 +57,7 @@
       use ice_exit, only: abort_ice
       use ice_itd, only: kitd, kcatbound
       use ice_ocean, only: oceanmixed_ice
+      use ice_firstyear, only: restart_FY
       use ice_flux, only: update_ocn_f
       use ice_forcing, only: &
           ycycle,          fyear_init,    dbug, &
@@ -64,6 +66,7 @@
           sss_data_type,   sst_data_type, ocn_data_dir, &
           oceanmixed_file, restore_sst,   trestore
       use ice_grid, only: grid_file, kmt_file, grid_type, grid_format
+      use ice_lvl, only: restart_lvl
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist, mu_rdg
       use ice_dyn_shared, only: ndte, kdyn, revised_evp, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, ahmax, &
@@ -76,14 +79,10 @@
                            nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_iage, nt_FY, &
                            nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd, nt_aero, &
                            ntrcr
-      use ice_restart_age, only: restart_age
-      use ice_restart_firstyear, only: restart_FY
-      use ice_restart_lvl, only: restart_lvl
-      use ice_restart_meltpond_cesm, only: restart_pond_cesm, hs0
-      use ice_restart_meltpond_topo, only: hp1
-      use ice_restart_meltpond_lvl, only: restart_pond_lvl, dpscale, frzpnd, snowinfil, &
+      use ice_meltpond_cesm, only: restart_pond_cesm, hs0
+      use ice_meltpond_topo, only: hp1, restart_pond_topo
+      use ice_meltpond_lvl, only: restart_pond_lvl, dpscale, frzpnd, snowinfil, &
                                           rfracmin, rfracmax, pndaspect, hs1
-      use ice_restart_meltpond_topo, only: restart_pond_topo
       use ice_aerosol, only: restart_aero
       use ice_therm_shared, only: ktherm, calc_Tsfc, conduct
       use ice_therm_vertical, only: ustar_min

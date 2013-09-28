@@ -68,7 +68,7 @@
   , restart_lvl  = .false.
   , tr_pond_cesm = .false.
   , restart_pond_cesm = .false.
-  , tr_pond_topo = .false.
+  , tr_pond_topo = .true.
   , restart_pond_topo = .false.
   , tr_pond_lvl  = .false.
   , restart_pond_lvl  = .false.

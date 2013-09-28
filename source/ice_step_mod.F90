@@ -174,10 +174,9 @@
       use ice_grid, only: lmask_n, lmask_s, TLAT, TLON
       use ice_itd, only: hi_min
       use ice_meltpond_cesm, only: compute_ponds_cesm
-      use ice_meltpond_lvl, only: compute_ponds_lvl
-      use ice_meltpond_topo, only: compute_ponds_topo
-      use ice_restart_meltpond_lvl, only: ffracn, dhsn, &
+      use ice_meltpond_lvl, only: compute_ponds_lvl, ffracn, dhsn, &
           rfracmin, rfracmax, dpscale, pndaspect, frzpnd
+      use ice_meltpond_topo, only: compute_ponds_topo
       use ice_shortwave, only: fswsfcn, fswintn, fswthrun, &
                                Sswabsn, Iswabsn, shortwave
       use ice_state, only: aice, aicen, aice_init, aicen_init, vicen_init, &
@@ -1328,7 +1327,7 @@
       use ice_domain_size, only: ncat
       use ice_flux, only: swvdr, swvdf, swidr, swidf, coszen, fsnow
       use ice_grid, only: TLAT, TLON, tmask
-      use ice_restart_meltpond_lvl, only: ffracn, dhsn
+      use ice_meltpond_lvl, only: ffracn, dhsn
       use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswpenln, &
                                Sswabsn, Iswabsn, shortwave, &
                                albicen, albsnon, albpndn, &

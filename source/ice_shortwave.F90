@@ -143,7 +143,7 @@
       use ice_state, only: aicen, vicen, vsnon, trcrn, nt_Tsfc
       use ice_blocks, only: block, get_block
       use ice_grid, only: tmask, tlat, tlon
-      use ice_restart_meltpond_lvl, only: dhsn, ffracn
+      use ice_meltpond_lvl, only: dhsn, ffracn
 
       integer (kind=int_kind) :: &
          icells          ! number of cells with aicen > puny
@@ -1070,9 +1070,9 @@
                           dhsn,     ffracn)
 
       use ice_calendar, only: dt
-      use ice_restart_meltpond_cesm, only: hs0
-      use ice_restart_meltpond_topo, only: hp1
-      use ice_restart_meltpond_lvl, only: hs1, pndaspect, snowinfil
+      use ice_meltpond_cesm, only: hs0
+      use ice_meltpond_topo, only: hp1
+      use ice_meltpond_lvl, only: hs1, pndaspect, snowinfil
       use ice_orbital, only: compute_coszen
       use ice_state, only: ntrcr, nt_Tsfc, nt_alvl, nt_apnd, nt_hpnd, nt_ipnd, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo
@@ -1246,21 +1246,20 @@
                ! refrozen pond lid thickness avg over ice
                ! allow snow to cover pond ice
                ipn = trcrn(i,j,nt_alvl,n) * trcrn(i,j,nt_apnd,n) &
-                    * trcrn(i,j,nt_ipnd,n)
+                                          * trcrn(i,j,nt_ipnd,n)
                dhs = dhsn(i,j,n) ! snow depth difference, sea ice - pond
                if (ipn > puny .and. &
-                    dhs < puny .and. fsnow(i,j)*dt > hs_min) &
-                    dhs =  hsn(i,j) - fsnow(i,j)*dt ! initialize dhs>0
+                   dhs < puny .and. fsnow(i,j)*dt > hs_min) &
+                   dhs = hsn(i,j) - fsnow(i,j)*dt ! initialize dhs>0
                spn = hsn(i,j) - dhs   ! snow depth on pond ice
                if (ipn*spn < puny) dhs = c0
                dhsn(i,j,n) = dhs ! save: constant until reset to 0
 
                ! not using ipn assumes that lid ice is perfectly clear
-               !                     if (ipn <= 0.3_dbl_kind) then
+               ! if (ipn <= 0.3_dbl_kind) then
                
                ! fraction of ice area
-               fpn(i,j) = trcrn(i,j,nt_apnd,n) &
-                    * trcrn(i,j,nt_alvl,n) 
+               fpn(i,j) = trcrn(i,j,nt_apnd,n) * trcrn(i,j,nt_alvl,n) 
                ! pond depth over fraction fpn
                hpn(i,j) = trcrn(i,j,nt_hpnd,n)
 
@@ -1286,7 +1285,7 @@
                      hmx = hs*(rhofresh - rhos)/rhofresh
                      tmp = max(c0, sign(c1, hp-hmx)) ! 1 if hp>=hmx, else 0
                      hp = (rhofresh*hp + rhos*hs*tmp) &
-                          / (rhofresh    - rhos*(c1-tmp))
+                        / (rhofresh    - rhos*(c1-tmp))
                      hsn(i,j) = hs - hp*fpn(i,j)*(c1-tmp)
                      hpn(i,j) = hp * tmp
                      fpn(i,j) = fpn(i,j) * tmp
@@ -1295,7 +1294,7 @@
 
                endif ! snowinfil
 
-               !                     endif    ! masking by lid ice
+               ! endif    ! masking by lid ice
                apeffn(i,j,n) = fpn(i,j) ! for history
             enddo ! ij
 
@@ -3565,7 +3564,7 @@
                                          Tsfc,     fs,  hs,  &
                                          rhosnw,   rsnw)
 
-      use ice_restart_meltpond_cesm, only: hs0
+      use ice_meltpond_cesm, only: hs0
 
       integer (kind=int_kind), &
          intent(in) :: &

@@ -166,7 +166,7 @@
   , ocn_data_dir    = 'unknown_ocn_data_dir'
   , oceanmixed_file = 'unknown_oceanmixed_file'
   , restore_sst     = .false.
-  , trestore        =  180
+  , trestore        =  90
   , restore_ice     = .false.
 /
 
@@ -270,7 +270,7 @@
   , f_aisnap       = 'x'
   , f_trsig        = 'm'
   , f_icepresent   = 'm'
-  , f_iage         = 'x'
+  , f_iage         = 'm'
   , f_FY           = 'x'
   , f_aicen        = 'x'
   , f_vicen        = 'x'
