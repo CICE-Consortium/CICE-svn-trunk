@@ -32,7 +32,7 @@
 
 \begin{document}
 \title{CICE: the Los Alamos Sea Ice Model \\ Documentation and
-Software User's Manual \\ Version 5.0 {\color{red} DRAFT} \\ LA-CC-06-012 }
+Software User's Manual \\ Version 5.0  \\ LA-CC-06-012 }
 \author{Elizabeth C. Hunke, William H. Lipscomb,  \\ 
 Adrian K. Turner, Nicole Jeffery, Scott Elliott \\
 Los Alamos National Laboratory\\ 
@@ -95,20 +95,22 @@ This model release is CICE version 5.0, available from
 \href{http://climate.lanl.gov/Models/CICE/}{http://climate.lanl.gov/Models/CICE/}.  
 It updates CICE 4.1, which was released in May 2010: 
 \begin{itemize}
-\item A method for prognosing sea ice salinity
+\item A method for prognosing sea ice salinity, including improved snow-ice formation
 \item Two new explicit melt pond parameterizations (topo and level-ice)
 \item Sea ice biogeochemistry
 \item Elastic-Anisotropic-Plastic rheology
 \item Improved parameterization of form drag 
+\item The ``revised EVP'' under-damping approach
 \item Gracefully handles the case when an internal layer melts completely
 \item Gregorian calendar with leap years
 \item Reduced memory and floating-point operations for tracer calculations
-\item Defined  tracers for ice and snow enthalpy
+\item Ice and snow enthalpy defined as tracers
 \item New history variables for melt ponds, ridging diagnostics, biogeochemistry and more
 \item Read/write variables on the extended grid, including ghost (halo) cells
 \item Parallelism option via OpenMP threads
 \item Improved parallel efficiency through halo masks and new block distributions
 \item Parallel I/O option via the PIO library
+\item Restarts in binary, netCDF or PIO formats
 \item CPP options for categories, layers and tracers 
 \item Corrected bugs, particularly for nonstandard configurations.
 \end{itemize}
@@ -626,7 +628,7 @@ For CICE run in stand-alone mode (i.e., uncoupled), a thermodynamic slab ocean m
 \index{roughness|(}
 
 In the default CICE setup, atmospheric and oceanic neutral drag coefficients ($c_u$ and $c_w$) are assumed constant in time and space. These constants are chosen to reflect friction associated with an effective sea ice surface roughness  
-at the ice--atmosphere and ice--ocean interfaces. Sea ice (in both Arctic and Antarctic) contains pressure ridges as well as floe and melt pond edges that act as discrete obstructions to the flow of air or water past the ice, and are a source of form drag.\index{form drag} Following \cite{TFSFFKLB:13} and based on recent theoretical developments \cite{LGHA:12,LLCL:11}, the neutral drag coefficients can now be estimated from properties of the ice cover such as ice concentration,\index{ice!fraction} vertical extent and area of the ridges, freeboard\index{freeboard} and floe draft,\index{keels} and size of floes\index{floe size} and melt ponds.\index{melt pond} The new parameterization allows the drag coefficients to be coupled to the sea ice state and therefore to evolve spatially and temporally.  This parameterization is contained in the subroutine {\it neutral\_drag\_coeffs} and is accessed by setting {\tt calc\_formdrag} = true in the namelist.\index{namelist}
+at the ice--atmosphere and ice--ocean interfaces. Sea ice (in both Arctic and Antarctic) contains pressure ridges as well as floe and melt pond edges that act as discrete obstructions to the flow of air or water past the ice, and are a source of form drag.\index{form drag} Following \cite{TFSFFKLB:13} and based on recent theoretical developments \cite{LGHA:12,LLCL:11}, the neutral drag coefficients can now be estimated from properties of the ice cover such as ice concentration,\index{ice!fraction} vertical extent and area of the ridges, freeboard\index{freeboard} and floe draft,\index{keels} and size of floes\index{floe size} and melt ponds.\index{melt pond} The new parameterization allows the drag coefficients to be coupled to the sea ice state and therefore to evolve spatially and temporally.  This parameterization is contained in the subroutine {\it neutral\_drag\_coeffs} and is accessed by setting {\tt formdrag} = true in the namelist.\index{namelist}
 
 Following \cite{TFSFFKLB:13},  consider the general case of  fluid flow obstructed by N randomly oriented obstacles of height $H$ and transverse length $L_y$, distributed on a domain surface area $S_T$. Under the assumption of a logarithmic fluid velocity profile, the general formulation of the form drag coefficient can be expressed as
 \begin{equation}
@@ -751,8 +753,8 @@ We denote the fractional area of
 open water by 
 $a_{i0}$, giving $\sum_{n=0}^{N_C} a_{in} = 1$ by definition.  
  
-	Category boundaries are computed in {\it init\_itd} using one of several formulas, summarized in Table~\ref{table:itd}. Setting the namelist\index{namelist} variable {\tt kcatbound} equal to 0 or 1 gives lower thickness boundaries for any number of thickness categories $N_C$.  Table~\ref{table:itd} shows the boundary values for  $N_C$ = 5.  A third option specifies the boundaries based on the World Meteorological Organization\index{WMO} classification; the full
-WMO thickness distribution\index{thickness!distribution} is used if $N_C$ = 7;  if $N_C$ = 5 or 6, some of the thinner categories are combined.  The original formula ({\tt kcatbound} = 0) is the default because it was used to create the restart files included with the code distribution.  Users may substitute their own preferred boundaries in {\it init\_itd}.Ê
+	Category boundaries are computed in {\it init\_itd} using one of several formulas, summarized in Table~\ref{table:itd}. Setting the namelist\index{namelist} variable {\tt kcatbound} equal to 0 or 1 gives lower thickness boundaries for any number of thickness categories $N_C$.  Table~\ref{table:itd} shows the boundary values for  $N_C$ = 5 and  linear remapping of the ice thickness distribution.  A third option specifies the boundaries based on the World Meteorological Organization\index{WMO} classification; the full
+WMO thickness distribution\index{thickness!distribution} is used if $N_C$ = 7;  if $N_C$ = 5 or 6, some of the thinner categories are combined.  The original formula ({\tt kcatbound} = 0) is the default.  Category boundaries differ from those shown in Table~\ref{table:itd} for the delta-function ITD.  Users may substitute their own preferred boundaries in {\it init\_itd}.Ê
 
 \begin{table}
 \begin{center}
@@ -764,7 +766,7 @@ distribution & original & round & \multicolumn{3}{c}{WMO} \\
 \hline
 $N_C$ & 5 & 5 & 5 & 6 & 7 \\
 \hline
-category & \multicolumn{5}{c}{lower bound (m)}  \\
+categories & \multicolumn{5}{c}{lower bound (m)}  \\
 1 & 0.00 & 0.00 & 0.00 & 0.00 & 0.00 \\
 2 & 0.64 & 0.60 & 0.30 & 0.15 & 0.10 \\
 3 & 1.39 & 1.40 & 0.70 & 0.30 & 0.15 \\
@@ -775,7 +777,7 @@ category & \multicolumn{5}{c}{lower bound (m)}  \\
 \hline
 \end{tabular}
 \end{center}
-\caption{\label{table:itd} Lower boundary values for thickness categories, in meters, for the three distribution options ({\tt kcatbound}).  In the WMO\index{WMO} case, the distribution used depends on the number of categories used.}
+\caption{\label{table:itd} Lower boundary values for thickness categories, in meters, for the three distribution options ({\tt kcatbound}) and linear remapping ({\tt kitd} = 1).  In the WMO\index{WMO} case, the distribution used depends on the number of categories used.}
 \end{table}
  
 In addition to the 
@@ -982,7 +984,7 @@ of reactive tracers attached to the sea ice
 bottom. 
 Optional settings are available via the {\it zbgc\_nml} namelist in {\bf ice\_in}.\index{namelist}  The prefix {\tt tr\_bgc} signifies a biogeochemical tracer, while the postscript {\tt \_sk} indicates that a particular quantity is restricted to the band of bottom or skeletal ice material. History\index{history} fields are controlled in the {\it icefields\_bgc\_nml} namelist. As with other CICE history fields, the suffix {\tt \_ai} indicates that the field is multiplied by ice area and is therefore a grid-cell-mean quantity.
 
-Setting the flag {\tt solve\_skl\_bgc} to true turns on a reduced `NP'
+Setting the flag {\tt skl\_bgc} to true turns on a reduced `NP'
 (Nitrogen-Plankton) biogeochemistry consisting
 of nitrate and one algal tracer. Ammonium ({\tt tr\_bgc\_Am\_sk}),
 silicate ({\tt tr\_bgc\_Sil\_sk}), dimethyl sulfoniopropionate (DMSP) in
@@ -2256,7 +2258,9 @@ a &=& {m\over\Delta t_e} + {\tt vrel}\cos\theta \\
 b &=& mf + {\tt vrel}\sin\theta.
 \end{eqnarray}
 
-When the subcycling\index{subcycling} is finished for each (thermodynamic) time step, the ice--ocean stress\index{ice--ocean stress} must be constructed from {\tt taux(y)} and the terms containing {\tt vrel} on the left  hand side of the equations.  This is done in subroutine {\it evp\_finish}. {\color{red}[CHECK akt changes and hibler-bryan stress]}
+When the subcycling\index{subcycling} is finished for each (thermodynamic) time step, the ice--ocean stress\index{ice--ocean stress} must be constructed from {\tt taux(y)} and the terms containing {\tt vrel} on the left  hand side of the equations.  
+
+The Hibler-Bryan form for the ice-ocean stress \cite{HB:87} is included in {\bf ice\_dyn\_shared.F90} but is currently commented out, pending further testing.
 \index{momentum equation|)}%
 
 \subsubsection{Internal stress}
@@ -3082,7 +3086,7 @@ of ice melting laterally are scaled so that $F_{bot} + F_{side} \ge F_{\mathit f
 \label{subsubsec:thermo_temp}
 {\bf Zero-layer thermodynamics} ({\tt ktherm} = 0)
 \index{thermodynamics!zero-layer}\\
-An option for zero-layer thermodynamics \cite{Semt:76} is available in this version of CICE by setting the namelist \index{namelist}parameter {\tt heat\_capacity} to false and changing the number of ice layers, {\tt nilyr}, in {\bf ice\_domain\_size.F90} to 1.  In the zero-layer case, the ice is fresh and the thermodynamic calculations are much simpler than in the other configurations, which we describe here.\\
+An option for zero-layer thermodynamics \cite{Semt:76} is available in this version of CICE by setting the namelist \index{namelist}parameter {\tt ktherm} to 0 and changing the number of ice layers, {\tt nilyr}, in {\bf ice\_domain\_size.F90} to 1.  In the zero-layer case, the ice is fresh and the thermodynamic calculations are much simpler than in the other configurations, which we describe here.\\
 
 \markboth{Model components}{Bitz and Lipscomb thermodynamics}
 \noindent{\bf Bitz and Lipscomb thermodynamics} ({\tt ktherm} = 1)
@@ -3794,7 +3798,7 @@ used by {\bf Makefile.$\langle$OS$\rangle$}
   \item[{\bf   ice.restart\_file}] pointer for restart file name\index{restart}
   \item[{\bf   ice\_in}] namelist input data (data paths depend on particular system)\index{namelist}
   \item[{\bf   ice\_in\_v4.1}] namelist input data for default CICE v4.1 configuration\index{namelist}
-  \item[{\bf   iced\_gx1\_v5.0}] restart file used for initial condition\index{initial condition} {\color{red}\bf 4 LAYER!}
+  \item[{\bf   iced\_gx1\_v5.nc}] \netcdf\ restart file used for initial condition\index{initial condition} 
   \end{description}
 \item[{\bf   gx3/}] $\left<3^\circ\right>$ displaced pole grid\index{grid!horizontal} files
   \begin{description}
@@ -3804,22 +3808,25 @@ used by {\bf Makefile.$\langle$OS$\rangle$}
   \item[{\bf   global\_gx3.kmt.nc}] $\left<3^\circ\right>$ land mask (\netcdf)\index{masks}
   \item[{\bf   ice.restart\_file}] pointer for restart file name\index{restart}
   \item[{\bf   ice\_in}] namelist input data (data paths depend on particular system)\index{namelist}
-  \item[{\bf   iced\_gx3\_v5.0}] restart file used for initial condition\index{initial condition} {\color{red} \bf 4 LAYER!}
+  \item[{\bf   iced\_gx3\_v5.nc}] \netcdf\ restart file used for initial condition\index{initial condition} 
   \end{description}
 \item[convert\_restarts.f90] Fortran code to convert restart files from v4.1 to v5.0 (4 ice layers)
 \end{description}
-\item[{\bf   io\_binary/}] binary history output modules\index{history}
+\item[{\bf   io\_binary/}] binary history and restart modules\index{history}
   \begin{description}
-  \item[{\bf   ice\_history\_write.F90}] subroutines with binary output calls
+  \item[{\bf   ice\_history\_write.F90}] subroutines with binary output 
+  \item[{\bf   ice\_restart.F90}]  read/write binary restart files \index{restart}
   \end{description}
-\item[{\bf   io\_netcdf/}] \netcdf\ history output modules\index{history}
+\item[{\bf   io\_netcdf/}] \netcdf\ history and restart  modules\index{history}
   \begin{description}
   \item[{\bf   ice\_history\_write.F90}] subroutines with \netcdf\ output
+  \item[{\bf   ice\_restart.F90}]  read/write \netcdf\  restart files \index{restart}
   \end{description}
-\item[{\bf   io\_pio/}] parallel I/O history output modules\index{history}\index{parallelization}\index{PIO}
+\item[{\bf   io\_pio/}] parallel I/O history and restart  modules\index{history}\index{parallelization}\index{PIO}
   \begin{description}
-  \item[{\bf   ice\_history\_write.F90}] subroutines with PIO output
+  \item[{\bf   ice\_history\_write.F90}] subroutines with \netcdf\  output using PIO
   \item[{\bf   ice\_pio.F90}] subroutines specific to PIO
+  \item[{\bf   ice\_restart.F90}]  read/write \netcdf\ restart files using PIO \index{restart}
   \end{description}
 \item[{\bf   run\_ice.}$\langle$OS$\rangle$.$\langle$SITE$\rangle$.$\langle$machine$\rangle$]  sample script for running on the given operating system
 \item[{\bf mpi/}]  modules that require MPI calls\index{MPI}
@@ -3876,8 +3883,8 @@ component (ridging)\index{ridging}
 \item[{\bf   ice\_ocean.F90}]  mixed layer ocean model\index{mixed layer}
 \item[{\bf   ice\_orbital.F90}]   orbital parameters for Delta-Eddington shortwave parameterization\index{radiation!Delta-Eddington}
 \item[{\bf   ice\_read\_write.F90}]  utilities for reading and writing files
-\item[{\bf   ice\_restart.F90}]  read/write core restart file\index{restart}
-\item[{\bf   ice\_restart\_$\langle$tracer$\rangle$.F90}]  read/write tracer restart file\index{restart}\index{tracers}
+\item[{\bf   ice\_restart\_driver.F90}]  driver for reading/writing  restart files\index{restart}
+\item[{\bf   ice\_restart\_shared.F90}]  code shared by all  restart options\index{restart}
 \item[{\bf   ice\_restoring.F90}]  basic restoring for open boundary conditions\index{restoring}\index{boundary!condition}
 \item[{\bf   ice\_shortwave.F90}]  shortwave and albedo parameterizations\index{albedo}
 \item[\bf   ice\_spacecurve.F90]  space-filling-curves distribution method\index{space-filling curve}
@@ -3905,7 +3912,7 @@ component (ridging)\index{ridging}
 \item[{\bf kmt}]  land mask file from {\bf cice/input\_templates/gx3/}\index{masks}
 \item[{\bf restart/}]  restart directory \index{restart}
 \begin{description}
-\item[{\bf iced\_gx3\_v5.0}]  initial condition from {\bf cice/input\_templates/gx3/}\index{initial condition}
+\item[{\bf iced\_gx3\_v5.nc}]  initial condition from {\bf cice/input\_templates/gx3/}\index{initial condition}
 \item[{\bf ice.restart\_file}]  restart pointer from {\bf cice/input\_templates/gx3/}
 \end{description}
 \item[{\bf run\_ice}]  batch run script file from {\bf cice/input\_templates/}
@@ -3979,7 +3986,7 @@ applied to each of the four subdomains.}
 
 \subsubsection{Grid domains and blocks}
 \index{blocks|(emph} 
-In general, the global gridded domain is {\tt nx\_global$\times$ny\_global}, while the subdomains used in the block distribution are {\tt nx\_block$\times$ny\_block}.  The physical portion of a subdomain is indexed as [{\tt ilo:ihi,jlo:jhi}], with {\tt nghost} ``ghost'' or ``halo" cells\index{halo}
+In general, the global gridded domain is {\tt nx\_global$\times$ny\_global}, while the subdomains used in the block distribution are {\tt nx\_block$\times$ny\_block}.  The physical portion of a subdomain is indexed as [{\tt ilo:ihi, jlo:jhi}], with {\tt nghost} ``ghost'' or ``halo" cells\index{halo}
 outside the domain used for boundary conditions. These parameters are illustrated in~Figure~\ref{fig:grid} in one dimension.  The routines {\it global\_scatter} and {\it
 global\_gather} distribute information from the global domain to the
 local domains and back, respectively.  If MPI\index{MPI} is not being used for
@@ -4166,7 +4173,7 @@ reinitialized in {\it restartfile}, while tracer\index{tracers} variables needed
 albedo and other quantities dependent on the initial ice state are set.  Some of these parameters will be
 described in more detail in Table~\ref{table:namelist}.
 
-The restartfiles supplied with the code release include only the core variables on the default configuration, that is, with \textcolor{red}{four} vertical layers and the ice thickness distribution\index{thickness!distribution} defined by {\tt kcatbound=0}.
+The restart files supplied with the code release include the core variables on the default configuration, that is, with seven vertical layers and the ice thickness distribution\index{thickness!distribution} defined by {\tt kcatbound=0}.   Restart information for some tracers is also included in the netcdf files.
 
 \index{initial condition|(}
 Three namelist\index{namelist} variables control model initialization, {\tt ice\_ic}, {\tt runtype}, and {\tt restart}, as described in Table~\ref{table:ic}.  It is possible to do an initial run from a file {\bf filename} in two ways:  (1) set {\tt runtype} = `initial', {\tt restart} = true and {\tt ice\_ic} = {\bf filename}, or (2) {\tt runtype} = `continue' and {\tt pointer\_file} = {\bf ./restart/ice.restart\_file} where {\bf ./restart/ice.restart\_file} contains the line ``./restart/{[filename]}".  The first option is convenient when repeatedly starting from a given file when subsequent restart files have been written.  With this arrangement, the tracer restart flags can be set to true or false, depending on whether the tracer restart files exist.  With the second option, tracer restart flags are  set to `continue' for all active tracers.  
@@ -4293,7 +4300,7 @@ time steps
 ($\Delta t$)
 on the order of 1 hour. 
 
-For the revised EVP approach ({\tt kdyn} = 1, {\tt revised\_evp} = false), the relaxation parameter {\tt arlx1i}  effectively sets the damping timescale\index{damping timescale} in the problem, and {\tt brlx} represents the effective subcycling \cite{BFLM:13}.  In practice the parameters $S_e>0.5$ and $\xi<1$ are set, along with an estimate of the ice strength\index{strength} per unit mass, and these parameters are then calculated.  {\color{red} [CHECK.  More info?  Mv parameters to namelist.]}
+For the revised EVP approach ({\tt kdyn} = 1, {\tt revised\_evp} = false), the relaxation parameter {\tt arlx1i}  effectively sets the damping timescale\index{damping timescale} in the problem, and {\tt brlx} represents the effective subcycling \cite{BFLM:13}.  In practice the parameters $S_e>0.5$ and $\xi<1$ are set, along with an estimate of the ice strength\index{strength} per unit mass, and the damping and subcycline parameters are then calculated.  
 
 Note that only $T$ and
 $\Delta t_e $
@@ -4305,7 +4312,7 @@ considerations, large time steps ({\it e.g.,}
 $\Delta t=1$~day, 
 given daily forcing) do not produce accurate results in the dynamics
 component.  The reasons for this error are discussed in \cite{HD:97};
-see \cite{HZ:99} for its practical effects. The thermodynamics component is stable for any time step, as long as the surface temperature $T_{\mathit sfc}$ is computed internally. \index{temperature!surface}  {\color{red} NEW THERMO?}
+see \cite{HZ:99} for its practical effects. The thermodynamics component is stable for any time step, as long as the surface temperature $T_{\mathit sfc}$ is computed internally. \index{temperature!surface}  The numerical constraint on the thermodynamics time step is associated with the transport scheme rather than the thermodynamic solver.
 \index{elastic!-viscous-plastic dynamics|)}
 \index{stability|)}
 \index{subcycling|)}
@@ -4456,20 +4463,21 @@ The timers use {\it MPI\_WTIME}\index{MPI} for parallel\index{parallelization} r
 \label{sec:restarts}
 
 \index{restart|(emph}%
-A binary unformatted file is created that contains all of the data
-that CICE needs for a full restart. The filename begins with the
-character string `iced.', and the restart dump frequency is
-given by {\tt dumpfreq} and {\tt dumpfreq\_n}.  The pointer to the filename from which the
-restart data is to be read for a continuation run is set in {\tt pointer\_file}.
-The code assumes that auxiliary tracer\index{tracers} restart files will be identified using the same pointer and file name prefix, but with an additional character string in the file name that is associated with each tracer set.
+CICE now provides restart data in binary unformatted or \netcdf\ formats, via the {\tt NETCDF} flag in {\bf comp\_ice} and namelist variable {\tt restart\_format}.  Restart and history files must use the same format.  As with the history output, there is also an option for writing parallel \netcdf\ restart files using PIO.
 
-Two new namelist\index{namelist} flags provide further control of restart behavior.  {\tt dump\_last} = true causes a set of restart files to be written at the end of a run when it is otherwise not scheduled to occur.  The flag {\tt use\_restart\_time} enables the user to choose to use the model date provided in the restart files.  If {\tt use\_restart\_time} = false then the initial model date stamp is determined from the namelist parameters.
+The restart files created by CICE  contain all of the variables 
+ needed for a full, exact restart. The filename begins with the
+character string `iced.', and the restart dump frequency is
+given by the namelist variables {\tt dumpfreq} and {\tt dumpfreq\_n}.  The pointer to the filename from which the
+restart data is to be read for a continuation run is set in {\tt pointer\_file}.
+The code assumes that auxiliary binary tracer\index{tracers} restart files will be identified using the same pointer and file name prefix, but with an additional character string in the file name that is associated with each tracer set.  All variables are included in \netcdf\ restart files.
+
+Additional namelist\index{namelist} flags provide further control of restart behavior.  {\tt dump\_last} = true causes a set of restart files to be written at the end of a run when it is otherwise not scheduled to occur.  The flag {\tt use\_restart\_time} enables the user to choose to use the model date provided in the restart files.  If {\tt use\_restart\_time} = false then the initial model date stamp is determined from the namelist parameters. {\tt lcdf64} = true sets 64-bit \netcdf\ output, allowing larger file sizes with \netcdf\ version 3.
 
 Routines for gathering, scattering and (unformatted) reading and writing 
-of the ``extended" global grid,\index{grid!extended} including the physical domain and ghost (halo)\index{halo} cells 
-around the outer edges, allow exact restarts on regional \index{grid!regional}
+of the ``extended" global grid,\index{grid!extended} including the physical domain and ghost (halo)\index{halo} cells around the outer edges, allow exact restarts on regional \index{grid!regional}
 grids with open boundary conditions,\index{boundary!condition} and they will also simplify restarts on 
-the various tripole grids.\index{grid!tripole}  They are accessed by setting {\tt restart\_ext} = true in namelist.
+the various tripole grids.\index{grid!tripole}  They are accessed by setting {\tt restart\_ext} = true in namelist.  Extended grid restarts are not available when using PIO; in this case extra halo update calls fill ghost cells for tripole grids (do not use PIO for regional grids).
 \index{restart|)}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -4736,7 +4744,7 @@ To add a tracer, follow these steps using one of the existing tracers as a patte
 \item {\bf ice\_state.F90}:  declare {\tt nt\_[tracer]} 
 \item {\bf ice\_[tracer].F90}:  create initialization, physics, restart routines
 \item {\bf ice\_fileunits.F90}:  add new dump and restart file units
-\item {\bf ice\_init.F90}:
+\item {\bf ice\_init.F90}: (some of this may be done in {\bf ice\_[tracer].F90} instead
 \begin{itemize}  
 \item add new module and {\tt tr\_[tracer]} to list of used modules and variables
 \item add logical namelist variable {\tt tr\_[tracer]} 
@@ -4753,6 +4761,7 @@ To add a tracer, follow these steps using one of the existing tracers as a patte
 \item call routine to write tracer restart file
 \item call physics routines in {\bf ice\_[tracer].F90}
 \end{itemize}
+\item {\bf ice\_restart.F90}:  define restart variables\index{restart} (for \netcdf\ and PIO)
 \item {\bf ice\_history\_[tracer].F90}:  add history variables\index{history} (Section~\ref{sec:addhist})
 \item {\bf ice\_in}:  add namelist variables to {\it tracer\_nml} and {\it icefields\_nml} 
 \item If strict conservation\index{conservation} is necessary, add diagnostics\index{diagnostics} as noted for topo ponds in Section~\ref{subsubsec:ponds}. 
@@ -4788,6 +4797,19 @@ coupled runs, check that {\tt -Dcoupled} and other coupled-model-specific (e.g.,
 \item edit the grid size and other parameters in {\bf comp\_ice}.  
 \item remove the {\bf compile/} directory completely and recompile.
 \end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Restarts}
+CICE version 5.0 introduces a new model configuration that makes restarting from older simulations difficult.  In particular, the number of ice categories, the category boundaries, and the number of vertical layers within each category must be the same in the restart file and in the run restarting from that file.  Moreover, significant differences in the physics, such as the salinity profile, may cause the code to fail upon restart.  Therefore,  new model configurations may need to be started using {\tt runtype} = 'initial'. 
+
+Restart files that were provided with CICE v4.1 are available with CICE v5.0, but they were made using the BL99 thermodynamics with 4 layers and 5 thickness categories ({\tt kcatbound} = 0) and therefore can not be used for the default CICE v5.0 configuration (7 layers).
+
+Restarting a run using {\tt runtype} = 'continue' requires restart data for all tracers used in the new run.  If tracer restart data is not available, use {\tt runtype} = 'initial', setting {\tt ice\_ic} to the name of the core restart file and setting to true the namelist restart flags for each tracer that is available.  The unavailable tracers will be initialized to their default settings.
+
+In addition, restart file formats may now be netcdf in addition to binary, and the netcdf files may be written using PIO.
+
+On tripole grids, use {\tt restart\_ext} = true when using either binary or regular (non-PIO) netcdf.
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Slow execution}
@@ -4848,11 +4870,11 @@ consequences and causes the code to abort.
 \end{enumerate}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsection{Multi-dimensional output}
-\index{column configuration}
-{\color{red}CHECK}
-\index{history}
-An issue that has already arisen in the column configuration of the model is the format of the multi-dimensional history variables.  Even though each history file includes only a single time slice or average, all netcdf history variables include the time dimension for use with external post-processing software such as NCO.  When the time dimension is included for the four-dimensional variables  (x, y, z, and categories; strictly speaking, time makes them 5D), the Ferret software package misinterprets the data.   In order to look at these variables using Ferret, uncomment the lines indicated by the tag ``ferret" in {\bf ice\_history.F90} and comment out the lines that they replace.
+%\subsection{Multi-dimensional output}
+%\index{column configuration}
+%{\color{red}CHECK}
+%\index{history}
+%An issue that has already arisen in the column configuration of the model is the format of the multi-dimensional history variables.  Even though each history file includes only a single time slice or average, all netcdf history variables include the time dimension for use with external post-processing software such as NCO.  When the time dimension is included for the four-dimensional variables  (x, y, z, and categories; strictly speaking, time makes them 5D), the Ferret software package misinterprets the data.   In order to look at these variables using Ferret, uncomment the lines indicated by the tag ``ferret" in {\bf ice\_history.F90} and comment out the lines that they replace.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Interpretation of albedos}
@@ -4889,6 +4911,7 @@ following people:
 \item Alison McLaren, Ann Keen and others working with the Hadley Centre GCM\index{Hadley Centre}
       for testing non-standard model configurations and providing their code to us,
 \item Daniel Feltham and his research group for several new parameterizations and documentation,
+\item Sylvain Bouillon for the revised EVP approach,
 \item the many researchers who tested beta versions of CICE 5.0 and
       waited patiently for the official release.
 \end{itemize}
@@ -4913,8 +4936,8 @@ Los Alamos National Laboratory under Contract No. DE-AC52-06NA25396 with the U.S
 variable & options/format & description & recommended value\\
 \hline
 &&&\\
-{\it setup\_nml} & &{\it Time} & \\
-{\tt days\_per\_year} & {\tt 360} or {\tt 365} & number of days in a model year & {\tt 365} \\
+{\it setup\_nml} & &{\it Time, Diagnostics} & \\
+{\tt days\_per\_year} & {\tt 360} or {\tt 365} & number of days in a model year & {365} \\
 {\tt use\_leap\_years} & true/false & if true, include leap days & \\
 {\tt year\_init}  & yyyy  & the initial year, if not using restart & \\
 {\tt istep0}  & integer &  initial time step number & 0 \\
@@ -4926,16 +4949,19 @@ variable & options/format & description & recommended value\\
 &&{\it Initialization/Restarting} & \\
 {\tt runtype} & {\tt initial} & start from {\tt ice\_ic} & \\
  & {\tt continue} & restart using {\tt pointer\_file}  & \\
-{\tt ice\_ic} & {\tt default} & latitude and sst dependent & {\tt default} \\
+{\tt ice\_ic} & {\tt default} & latitude and sst dependent & {default} \\
          & {\tt none} & no ice & \\
          & path/file & restart file name & \\
 {\tt restart} & true/false & initialize using restart file & {\tt .true.}\\
 {\tt use\_restart\_time} & true/false & set initial date using restart file & {\tt .true.}\\
+{\tt restart\_format} & nc & read/write \netcdf\ restart files (use with PIO) \\
+                                 & bin & read/write binary restart files \\
+{\tt lcdf64} & true/false & if true, use 64-bit \netcdf\ format & \\
 {\tt restart\_dir} & path/ & path to restart directory\\
 {\tt restart\_ext} & true/false & read/write halo cells in restart files \\
 {\tt restart\_file}  & filename prefix &  output file for restart dump &  `iced'\\
 {\tt pointer\_file}  & pointer filename & contains restart filename & \\
-{\tt dumpfreq} & {\tt y} & write restart every {\tt dumpfreq\_n} years & {\tt y}\\
+{\tt dumpfreq} & {\tt y} & write restart every {\tt dumpfreq\_n} years & {y}\\
          & {\tt m} & write restart every {\tt dumpfreq\_n} months &\\
          & {\tt d} & write restart every {\tt dumpfreq\_n} days &\\
 {\tt dumpfreq\_n} & integer & frequency restart data is written & 1\\   
@@ -4949,9 +4975,6 @@ variable & options/format & description & recommended value\\
 {\tt diag\_file} & filename & diagnostic output file (script may reset) & \\
 {\tt print\_global} & true/false & print diagnostic data, global sums & {\tt .false.} \\
 {\tt print\_points}  & true/false & print diagnostic data for two grid points & {\tt .false.}\\
-{\tt latpnt} & real & latitude of (2) diagnostic points & \\
-{\tt lonpnt} & real & longitude of (2) diagnostic points & \\
-{\tt dbug} & true/false & if true, write extra diagnostics & {\tt .false.} \\
 \hline
 \end{tabular}
 \caption{\label{table:namelist} Namelist options (continued next page).\index{namelist|emph}}
@@ -4966,13 +4989,16 @@ variable & options/format & description & recommended value\\
 \hline
 &&&\\
 &&{\it Model Output, continued}& \\
+{\tt latpnt} & real & latitude of (2) diagnostic points & \\
+{\tt lonpnt} & real & longitude of (2) diagnostic points & \\
+{\tt dbug} & true/false & if true, write extra diagnostics & {\tt .false.} \\
 {\tt histfreq} & string array & defines output frequencies & \\
          & {\tt y} & write history every  {\tt histfreq\_n} years & \\
          & {\tt m} & write history every  {\tt histfreq\_n} months &\\
          & {\tt d} & write history every  {\tt histfreq\_n} days &\\
          & {\tt h} & write history every  {\tt histfreq\_n} hours &\\
          & {\tt 1}  & write history every time step &\\
-         & {\tt x}  & unused frequency stream (i.e., do not write) &\\
+         & {\tt x}  & unused frequency stream (not written) &\\
  {\tt histfreq\_n} & integer array & frequency history output is written & \\         
          & {\tt 0}  & do not write to history &\\
  {\tt hist\_avg}  & true  & write time-averaged data & {\tt .true.} \\
@@ -4985,10 +5011,10 @@ variable & options/format & description & recommended value\\
  {\tt runid} & string & label for run (currently CESM only) & \\
 &&&\\
 {\it grid\_nml}&&{\it Grid} \\
- {\tt grid\_format} & {\tt nc} & read \netcdf\ grid and kmt files & {\tt bin'}\\
+ {\tt grid\_format} & {\tt nc} & read \netcdf\ grid and kmt files & {`bin'}\\
                             & {\tt bin} & read direct access, binary file & \\
 
- {\tt grid\_type} & {\tt rectangular}  &  defined in {\it rectgrid} & {\tt displaced\_pole}\\
+ {\tt grid\_type} & {\tt rectangular}  &  defined in {\it rectgrid} & \\
            & {\tt displaced\_pole} & read from file in {\it popgrid} & \\
            & {\tt tripole} & read from file in {\it popgrid} & \\
   {\tt grid\_file} & filename     &  name of grid file to be read & `grid'\\
@@ -5005,13 +5031,11 @@ variable & options/format & description & recommended value\\
                                  &{\tt  square-ice} & more processors in x than y, $\sim$square & \\
                                  & {\tt square-pop} & more processors in y than x, $\sim$square  & \\
  {\tt distribution\_type} & {\tt cartesian} & distribute blocks in 2D Cartesian array & \\      
-                                & {\tt roundrobin} & {\color{red}ADD DESCRIPTION} & \\ 
-                                & {\tt sectcart} &  & \\ 
-                                & {\tt sectrobin} &  & \\ 
+                                & {\tt roundrobin} & 1 block per proc until blocks are used & \\ 
+                                & {\tt sectcart} & blocks distributed to domain quadrants & \\ 
+                                & {\tt sectrobin} & several blocks per proc until used & \\ 
                                 & {\tt rake} & redistribute blocks among neighbors & \\ 
                                & {\tt spacecurve} & distribute blocks via space-filling curves & \\ 
- {\tt distribution\_weight} & {\tt block} & full block size sets {\tt work\_per\_block} & \\
-                                    & {\tt latitude} &  latitude/ocean sets {\tt work\_per\_block}  & \\
 \hline
 \end{tabular}
 \caption{Namelist options (continued).\index{namelist|emph}}
@@ -5026,6 +5050,8 @@ variable & options/format & description & recommended value\\
 \hline
 &&&\\
 &&{\it Domain, continued}& \\
+ {\tt distribution\_weight} & {\tt block} & full block size sets {\tt work\_per\_block} & \\
+                                    & {\tt latitude} &  latitude/ocean sets {\tt work\_per\_block}  & \\
  {\tt ew\_boundary\_type} & {\tt cyclic} & periodic boundary conditions in x-direction & \\
                                       & {\tt open}  & Neumann boundary conditions in x & \\
                                       & {\tt closed} & Dirichlet boundary conditions in x & \\
@@ -5054,23 +5080,20 @@ variable & options/format & description & recommended value\\
  {\tt tr\_aero} & true/false & aerosols \\
  {\tt restart\_aero} & true/false & restart tracer values from file & \\
 &&&\\
-{\it mushy\_nml}&&{\it Mushy thermodynamics} \\
-{\tt a\_rapid\_mode} & real & brine channel diameter & $0.5\times 10^{-3}$  \\
+{\it thermo\_nml}&&{\it Thermodynamics} \\
+ {\tt kitd} & {\tt 0} & delta function ITD approximation & {1}\\
+     & {\tt 1} & linear remapping ITD approximation &\\
+{\tt ktherm} & {\tt 0} & zero-layer thermodynamic model & \\
+                    & {\tt 1} & Bitz and Lipscomb thermodynamic model & \\
+                    & {\tt 2} & mushy-layer  thermodynamic model & \\
+{\tt conduct} & {\tt MU71} & conductivity \cite{MU:71} & \\
+                      & {\tt bubbly} & conductivity \cite{PETB:07} & \\
+{\tt a\_rapid\_mode} & real & brine channel diameter & $0.5\times 10^{-3}$ m  \\
 {\tt Rac\_rapid\_mode} & real & critical Rayleigh number & 10 \\
 {\tt aspect\_rapid\_mode} & real & brine convection aspect ratio & 1 \\
-{\tt dSdt\_slow\_mode} & real & drainage strength parameter & $-1.5\times 10^{-7}$ \\
-{\tt phi\_c\_slow\_mode} & real & critical liquid fraction & 0.05 \\
-{\tt phi\_i\_mushy} & real & solid fraction at lower boundary & 0.85 \\
-&&&\\
-{\it zbgc\_nml}&&{\it Biogeochemistry}& \\
- {\tt tr\_brine} & true/false & brine height tracer & \\
- {\tt restart\_hbrine} & true/false & restart tracer values from file & \\
- {\tt solve\_skl\_bgc} & true/false & biogeochemistry & \\
- {\tt restart\_bgc} & true/false & restart tracer values from file & \\
- {\tt restore\_bgc} & true/false & restore nitrate/silicate to data & \\
- {\tt bgc\_data\_dir} & path/ &  data directory for bgc & \\
- {\tt bgc\_flux\_type} & {\tt Jin2006} & ice--ocean flux velocity of \cite{JDWSTWLG:06} & \\
-& {\tt constant} & constant ice--ocean flux velocity & \\
+{\tt dSdt\_slow\_mode} & real & drainage strength parameter & $-1.5\times 10^{-7}$ m/s/K \\
+{\tt phi\_c\_slow\_mode} & $0<\phi_c < 1$ & critical liquid fraction & 0.05 \\
+{\tt phi\_i\_mushy} & $0<\phi_i < 1$ & solid fraction at lower boundary & 0.85 \\
 \hline
 \end{tabular}
 \caption{Namelist options (continued).\index{namelist|emph}}
@@ -5084,7 +5107,74 @@ variable & options/format & description & recommended value\\
 variable & options/format & description & recommended value\\
 \hline
 &&&\\
-&&{\it Biogeochemistry, continued}& \\
+{\it dynamics\_nml}&&{\it Dynamics}& \\
+ {\tt kdyn} & {\tt 0} &  dynamics OFF & {1}\\
+     & {\tt 1} & EVP dynamics &\\
+     & {\tt 2} & EAP dynamics &\\
+{\tt revised\_evp} & true/false & use revised EVP formulation & \\
+{\tt ndte}  & integer & number of EVP subcycles & 120\\
+%{\tt yield\_curve} & {\tt ellipse} & shape of rheology & `ellipse' \\
+%                       & {\tt teardrop} & NOTE: not fully debugged & \\
+{\tt advection} & {\tt remap}   & linear remapping advection & {`remap'}\\
+          & {\tt upwind}  & donor cell advection &\\
+{\tt kstrength} & {\tt 0} & ice strength formulation \cite{Hib:79}  & {1}\\
+          & {\tt 1} & ice strength formulation \cite{Rothridge:75} & \\
+{\tt krdg\_partic} & {\tt 0} & old ridging participation function & {1} \\
+                 & {\tt 1} & new ridging participation function &  \\
+{\tt krdg\_redist} & {\tt 0} & old ridging redistribution function & {1} \\
+                 & {\tt 1} & new ridging redistribution function &  \\
+{\tt mu\_rdg} & real & e-folding scale of ridged ice & \\
+&&&\\
+{\it shortwave\_nml}&&{\it Shortwave}& \\
+{\tt shortwave} & {\tt default} & \index{NCAR} NCAR CCSM3 distribution method & \\
+                    & {\tt dEdd} & Delta-Eddington method & \\
+{\tt albedo\_type} & {\tt default} & \index{NCAR} NCAR CCSM3 albedos & {`default'} \\
+                    & {\tt constant} & four constant albedos & \\
+{\tt albicev} & $0<\alpha <1$ & visible ice albedo for thicker ice & \\
+{\tt albicei} & $0<\alpha <1$ & near infrared ice albedo for thicker ice & \\
+{\tt albsnowv}  & $0<\alpha <1$ & visible, cold snow albedo & \\
+{\tt albsnowi}  & $0<\alpha <1$ & near infrared, cold snow albedo & \\
+{\tt ahmax} & real & albedo is constant above this thickness & 0.3 m \\
+{\tt R\_ice} & real & tuning parameter for sea ice albedo & \\
+  & & from Delta-Eddington shortwave & \\
+{\tt R\_pnd} & real &  ... for ponded sea ice albedo ... & \\
+{\tt R\_snw} & real & ... for snow (broadband albedo) ... & \\
+{\tt dT\_mlt} & real & $\Delta$ temperature  per $\Delta$ snow grain radius  & \\
+{\tt rsnw\_mlt} & real & maximum melting snow grain radius  & \\
+&&&\\
+{\it ponds\_nml}&&{\it Melt ponds}& \\
+{\tt hp1} & real & critical ice lid thickness for topo ponds   & 0.01 m \\
+{\tt hs0} & real & snow depth of transition to bare sea ice   & 0.03 m \\
+{\tt hs1} & real & snow depth of transition to pond ice   & 0.03 m \\
+{\tt dpscale} & real & time scale for flushing in permeable ice & $1\times 10^{-3}$ \\
+{\tt frzpnd} & {\tt hlid} & Stefan refreezing with pond ice thickness & `hlid' \\
+                   & {\tt cesm} & CESM refreezing empirical formula & \\
+{\tt snowinfil} & true/false & snow infiltration on/off & {\tt .true.} \\
+{\tt rfracmin} & $0 \le r_{min} \le 1$ & minimum melt water added to ponds & 0.15 \\
+{\tt rfracmax} & $0 \le r_{max} \le 1$ & maximum melt water added to ponds & 1.0 \\
+{\tt pndaspect} & real & aspect ratio of pond changes (depth:area) & 0.8 \\
+\hline
+\end{tabular}
+\caption{Namelist options (continued).\index{namelist|emph}}
+\end{center}
+\end{table}
+
+\addtocounter{table}{-1}
+\begin{table}[t!]
+\begin{center}
+\begin{tabular}{llll}
+variable & options/format & description & recommended value\\
+\hline
+&&&\\
+{\it zbgc\_nml}&&{\it Biogeochemistry}& \\
+ {\tt tr\_brine} & true/false & brine height tracer & \\
+ {\tt restart\_hbrine} & true/false & restart tracer values from file & \\
+ {\tt skl\_bgc} & true/false & biogeochemistry & \\
+ {\tt bgc\_flux\_type} & {\tt Jin2006} & ice--ocean flux velocity of \cite{JDWSTWLG:06} & \\
+& {\tt constant} & constant ice--ocean flux velocity & \\
+ {\tt restart\_bgc} & true/false & restart tracer values from file & \\
+ {\tt restore\_bgc} & true/false & restore nitrate/silicate to data & \\
+ {\tt bgc\_data\_dir} & path/ &  data directory for bgc & \\
  {\tt sil\_data\_type} & {\tt default} & default forcing value for silicate & \\
  & {\tt clim} & silicate forcing from ocean climatology \cite{GLBA:06} & \\
  {\tt nit\_data\_type} & {\tt default} & default forcing value for nitrate & \\
@@ -5099,76 +5189,13 @@ variable & options/format & description & recommended value\\
  {\tt tr\_bgc\_DMS\_sk} & true/false & DMS tracer&\\
  {\tt phi\_snow} & real  & snow porosity for brine height tracer  & \\
 &&&\\
-{\it ice\_nml}&&{\it Physical Parameterizations}& \\
- {\tt kitd} & {\tt 0} & delta function ITD approximation & {\tt 1}\\
-     & {\tt 1} & linear remapping ITD approximation &\\
- {\tt kdyn} & {\tt 0} &  dynamics OFF & {\tt 1}\\
-     & {\tt 1} & EVP dynamics &\\
-     & {\tt 2} & EAP dynamics &\\
-{\tt revised\_evp} & true/false & use revised EVP formulation & \\
-{\tt ndte}  & integer & number of EVP subcycles & 120\\
-%{\tt yield\_curve} & {\tt ellipse} & shape of rheology & `ellipse' \\
-%                       & {\tt teardrop} & NOTE: not fully debugged & \\
-{\tt advection} & {\tt remap}   & linear remapping advection & {\tt remap}\\
-          & {\tt upwind}  & donor cell advection &\\
-{\tt kstrength} & {\tt 0} & ice strength formulation \cite{Hib:79}  & {\tt 1}\\
-          & {\tt 1} & ice strength formulation \cite{Rothridge:75} & \\
-{\tt krdg\_partic} & {\tt 0} & old ridging participation function & {\tt 1} \\
-                 & {\tt 1} & new ridging participation function &  \\
-{\tt krdg\_redist} & {\tt 0} & old ridging redistribution function & {\tt 1} \\
-                 & {\tt 1} & new ridging redistribution function &  \\
-{\tt mu\_rdg} & real & e-folding scale of ridged ice & \\
-{\tt ktherm} & {\tt 0} & zero-layer thermodynamic model & \\
-                    & {\tt 1} & Bitz and Lipscomb thermodynamic model & \\
-                    & {\tt 2} & mushy-layer  thermodynamic model & \\
-{\tt conduct} & {\tt MU71} & conductivity \cite{MU:71} & \\
-                      & {\tt bubbly} & conductivity \cite{PETB:07} & \\
-{\tt shortwave} & {\tt default} & \index{NCAR} NCAR CCSM3 distribution method & {\tt default} \\
-                    & {\tt dEdd} & Delta-Eddington method & \\
-{\tt albedo\_type} & {\tt default} & \index{NCAR} NCAR CCSM3 albedos & {\tt default} \\
-                    & {\tt constant} & four constant albedos & \\
-{\tt albicev} & $0<\alpha <1$ & visible ice albedo for thicker ice & \\
-{\tt albicei} & $0<\alpha <1$ & near infrared ice albedo for thicker ice & \\
-{\tt albsnowv}  & $0<\alpha <1$ & visible, cold snow albedo & \\
-{\tt albsnowi}  & $0<\alpha <1$ & near infrared, cold snow albedo & \\
-{\tt ahmax} & real & albedo is constant above this thickness & 0.3 m \\
-\hline
-\end{tabular}
-\caption{Namelist options (continued).\index{namelist|emph}}
-\end{center}
-\end{table}
-
-\addtocounter{table}{-1}
-\begin{table}[t!]
-\begin{center}
-\begin{tabular}{llll}
-variable & options/format & description & recommended value\\
-\hline
-&&&\\
-&&{\it Physical Parameterizations, continued}& \\
-{\tt R\_ice} & real & tuning parameter for sea ice albedo & \\
-  & & from Delta-Eddington shortwave & \\
-{\tt R\_pnd} & real &  ... for ponded sea ice albedo ... & \\
-{\tt R\_snw} & real & ... for snow (broadband albedo) ... & \\
-{\tt dT\_mlt} & real & $\Delta$ temperature  per $\Delta$ snow grain radius  & \\
-{\tt rsnw\_mlt} & real & maximum melting snow grain radius  & \\
-{\tt hp1} & real & critical ice lid thickness for topo ponds   & 0.01 m \\
-{\tt hs0} & real & snow depth of transition to bare sea ice   & 0.03 m \\
-{\tt hs1} & real & snow depth of transition to pond ice   & 0.03 m \\
-{\tt dpscale} & real & time scale for flushing in permeable ice & $1\times 10^{-3}$ \\
-{\tt frzpnd} & {\tt hlid} & Stefan refreezing with pond ice thickness & `hlid' \\
-                   & {\tt cesm} & CESM refreezing empirical formula & \\
-{\tt snowinfil} & true/false & snow infiltration on/off & {\tt .true.} \\
-{\tt rfracmin} & $0 \le r_{min} \le 1$ & minimum melt water added to ponds & 0.15 \\
-{\tt rfracmax} & $0 \le r_{max} \le 1$ & maximum melt water added to ponds & 1.0 \\
-{\tt pndaspect} & real & aspect ratio of pond changes (depth:area) & 0.8 \\
-&&&\\
-&&{\it Forcing}& \\
-{\tt atmbndy} & {\tt default} & stability-based boundary layer & {\tt default}\\
+{\it forcing\_nml}&&{\it Forcing}& \\
+{\tt formdrag} & true/false & calculate form drag &  \\
+{\tt atmbndy} & {\tt default} & stability-based boundary layer & {`default'}\\
                     & {\tt constant} & bulk transfer coefficients & \\
 {\tt fyear\_init} & yyyy & first year of atmospheric forcing data & \\
 {\tt ycycle} &integer & number of years in forcing data cycle & \\
-{\tt atm\_data\_format} & {\tt nc} & read \netcdf\ atmo forcing files & {\tt bin} \\
+{\tt atm\_data\_format} & {\tt nc} & read \netcdf\ atmo forcing files &  \\
                             & {\tt bin} & read direct access, binary files & \\
 {\tt atm\_data\_type} & {\tt default} & constant values defined in the code & \\
                          & {\tt LYq}  & \index{AOMIP} AOMIP/Large-Yeager forcing data & \\
@@ -5176,7 +5203,6 @@ variable & options/format & description & recommended value\\
                          & {\tt ncar} & \index{NCAR} NCAR bulk forcing data & \\
                          & {\tt oned} & column forcing data & \\
 {\tt atm\_data\_dir} & path/ & path to atmospheric forcing data directory & \\
-{\tt calc\_formdrag} & true/false & calculate form drag &  \\
 {\tt calc\_strair} & true & calculate wind stress and speed & \\
                     & false & read wind stress and speed from files & \\
 {\tt calc\_Tsfc} & true/false & calculate surface temperature & {\tt .true.} \\
@@ -5184,11 +5210,6 @@ variable & options/format & description & recommended value\\
                    & {\tt mm\_per\_month} & & \\
                    & {\tt mm\_per\_sec} & (same as MKS units) & \\
 {\tt ustar\_min} & real & minimum value of ocean friction velocity & 0.0005 m/s \\
-{\tt update\_ocn\_f} & true & include frazil water/salt fluxes in ocn fluxes & \\
-                          & false & do not include (when coupling with POP) & \\
-{\tt oceanmixed\_ice} & true/false & active ocean mixed layer calculation & {\tt .true.} (if uncoupled) \\
-{\tt ocn\_data\_format} & {\tt nc} & read \netcdf\ ocean forcing files & {\tt bin} \\
-                            & {\tt bin} & read direct access, binary files & \\
 \hline
 \end{tabular}
 \caption{Namelist options (continued).\index{namelist|emph}}
@@ -5203,6 +5224,11 @@ variable & options/format & description & recommended value\\
 \hline
 &&&\\
 &&{\it Forcing, continued}&\\
+{\tt update\_ocn\_f} & true & include frazil water/salt fluxes in ocn fluxes & \\
+                          & false & do not include (when coupling with POP) & \\
+{\tt oceanmixed\_ice} & true/false & active ocean mixed layer calculation & {\tt .true.} (if uncoupled) \\
+{\tt ocn\_data\_format} & {\tt nc} & read \netcdf\ ocean forcing files &  \\
+                            & {\tt bin} & read direct access, binary files & \\
 {\tt sss\_data\_type} & {\tt default} & constant values defined in the code & \\
                          & {\tt clim} & climatological data & \\
                          & \index{NCAR}{\tt ncar} & \index{POP}POP ocean forcing data & \\
@@ -5329,7 +5355,6 @@ bphi & porosity of ice layers on bio grid & \\
 {\Large\bf C} &&\\
 &&\\
 c$\left<n\right>$ & real($n$) &  \\
-calc\_formdrag & {$\bullet$} calculate form drag &  \\
 calc\_strair & {$\bullet$} if true, calculate wind stress {\dotfill\ }& T \\
 calc\_Tsfc & {$\bullet$} if true, calculate surface temperature {\dotfill\ }& T \\
 Cdn\_atm & atmospheric drag coefficient & \\
@@ -5476,6 +5501,7 @@ ffracn & fraction of fsurfn used to melt pond ice & \\
  flw     & incoming longwave radiation &W/m$^2$ \\
  flwout      & outgoing longwave radiation &W/m$^2$ \\
  fm & Coriolis parameter * mass in U cell & kg/s \\
+formdrag & {$\bullet$} calculate form drag &  \\
  fpond & fresh water flux to ponds & kg/m$^2$/s \\
  fr\_resp & bgc respiration fraction & 0.05 \\
  frain   & rainfall rate &kg/m$^2$/s \\
@@ -5612,6 +5638,7 @@ l\_conservation\_check & if true, check conservation when ridging & \\
 l\_fixed\_area & flag for prescribing remapping fluxes & \\
 latpnt & {$\bullet$} desired latitude of diagnostic points  & degrees N \\
 latt(u)\_bounds & latitude of T(U) grid cell corners & degrees N \\
+lcdf64 & {$\bullet$} if true, use 64-bit \netcdf\ format \\
  Lfresh   & latent heat of melting of fresh ice = Lsub - Lvap & J/kg \\
  lhcoef  & transfer coefficient for latent heat & \\
  lmask\_n(s) & northern (southern) hemisphere mask &\\
@@ -5805,6 +5832,7 @@ revp & real(revised\_evp) & \\
   restart\_bgc & {$\bullet$} if true, read bgc restart file & \\
   restart\_dir &{$\bullet$} path to restart/dump files & \\
   restart\_file &{$\bullet$} restart file prefix & \\
+  restart\_format & {$\bullet$}  restart file format &  \\
   restart\_[tracer] & {$\bullet$} if true, read tracer restart file & \\
   restart\_ext & {$\bullet$} if true, read/write halo cells in restart file & \\
 \end{tabular*}
@@ -5852,7 +5880,7 @@ sk\_l & skeletal layer thickness & 0.03 m \\
  snoice    & snow--ice formation       &m \\
  snowinfil & {$\bullet$} snow infiltration on/off {\dotfill\ } & T \\
 snowpatch & length scale for parameterizing nonuniform snow coverage{\dotfill\ } & 0.02 m \\
-solve\_skl\_bgc & {$\bullet$} biogeochemistry on/off & \\
+skl\_bgc & {$\bullet$} biogeochemistry on/off & \\
 spval & special value (single precision){\dotfill\ } & $10^{30}$ \\
 spval\_dbl & special value (double precision){\dotfill\ } & $10^{30}$ \\
 ss\_tltx(y) & sea surface   in the x(y) direction & m/m \\
