@@ -20,7 +20,7 @@
       use ice_zbgc_shared, only: tr_bgc_N_sk, tr_bgc_C_sk, tr_bgc_Nit_sk, &
                            tr_bgc_Sil_sk, tr_bgc_DMSPp_sk, tr_bgc_DMS_sk, &
                            tr_bgc_chl_sk, tr_bgc_DMSPd_sk, tr_bgc_Am_sk, &
-                           solve_skl_bgc
+                           skl_bgc
 
       implicit none
       private
@@ -261,7 +261,7 @@
          endif
       endif
 
-      if (solve_skl_bgc) then
+      if (skl_bgc) then
          if (my_task == master_task) then
             n = index(filename0,trim(restart_file))
             if (n == 0) call abort_ice('bgc restart: filename discrepancy')
@@ -519,7 +519,7 @@
 
       endif
 
-      if (solve_skl_bgc) then
+      if (skl_bgc) then
 
          write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
               restart_dir(1:lenstr(restart_dir)), &

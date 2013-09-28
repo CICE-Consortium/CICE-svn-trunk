@@ -120,7 +120,7 @@
       use ice_zbgc_shared, only: tr_bgc_N_sk, tr_bgc_C_sk, tr_bgc_Nit_sk, &
                            tr_bgc_Sil_sk, tr_bgc_DMSPp_sk, tr_bgc_DMS_sk, &
                            tr_bgc_chl_sk, tr_bgc_DMSPd_sk, tr_bgc_Am_sk, &
-                           solve_skl_bgc
+                           skl_bgc
 
       character(len=char_len_long), intent(in), optional :: filename_spec
 
@@ -244,7 +244,7 @@
             call define_rest_field(ncid,'a12_4',dims)
          endif
 
-         if (solve_skl_bgc) then
+         if (skl_bgc) then
             call define_rest_field(ncid,'algalN',dims)
             call define_rest_field(ncid,'nit'   ,dims)
             if (tr_bgc_Am_sk) &
@@ -311,7 +311,7 @@
             call define_rest_field(ncid,'first_ice',dims)
          endif
 
-         if (solve_skl_bgc) then
+         if (skl_bgc) then
             call define_rest_field(ncid,'bgc_N_sk'    ,dims)
             call define_rest_field(ncid,'bgc_Nit_sk'  ,dims)
             if (tr_bgc_C_sk) &

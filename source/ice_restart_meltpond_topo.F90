@@ -90,7 +90,7 @@
 
       diag = .true.
 
-      if (my_task == master_task) write(nu_diag,*) 'topo ponds'
+      if (my_task == master_task) write(nu_diag,*) 'min/max topo ponds'
 
       call read_restart_field(nu_restart_pond,0,trcrn(:,:,nt_apnd,:,:),'ruf8', &
                               'apnd',ncat,diag)

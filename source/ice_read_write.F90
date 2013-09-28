@@ -1099,20 +1099,18 @@
     !-------------------------------------------------------------------
 
       if (my_task==master_task .and. diag) then
-          write(nu_diag,*) & 
-            'ice_read_nc_xy, fid= ',fid, ', nrec = ',nrec, & 
-            ', varname = ',trim(varname)
-          status = nf90_inquire(fid, nDimensions=ndim, nVariables=nvar)
-          write(nu_diag,*) 'ndim= ',ndim,', nvar= ',nvar
-          do id=1,ndim
-            status = nf90_inquire_dimension(fid,id,name=dimname,len=dimlen)
-            write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
-         enddo
+!          write(nu_diag,*) & 
+!            'ice_read_nc_xy, fid= ',fid, ', nrec = ',nrec, & 
+!            ', varname = ',trim(varname)
+!          status = nf90_inquire(fid, nDimensions=ndim, nVariables=nvar)
+!          write(nu_diag,*) 'ndim= ',ndim,', nvar= ',nvar
+!          do id=1,ndim
+!            status = nf90_inquire_dimension(fid,id,name=dimname,len=dimlen)
+!            write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
+!         enddo
          amin = minval(work_g1)
          amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
          write(nu_diag,*) ' min and max =', amin, amax
-!         write(nu_diag,*) ''
-
       endif
 
     !-------------------------------------------------------------------
@@ -1279,7 +1277,6 @@
             amin = minval(work_g1(:,:,n))
             amax = maxval(work_g1(:,:,n), mask = work_g1(:,:,n) /= spval_dbl)
             write(nu_diag,*) ' min and max =', amin, amax
-!            write(nu_diag,*) ''
          enddo
       endif
 
@@ -1394,20 +1391,17 @@
     ! optional diagnostics
     !-------------------------------------------------------------------
 
-!      if (my_task==master_task .and. diag) then
-
-!          write(nu_diag,*) & 
-!            'ice_read_nc_point, fid= ',fid, ', nrec = ',nrec, & 
-!            ', varname = ',trim(varname)
-!          status = nf90_inquire(fid, nDimensions=ndim, nVariables=nvar)
-!          write(nu_diag,*) 'ndim= ',ndim,', nvar= ',nvar
-!          do id=1,ndim
-!            status = nf90_inquire_dimension(fid,id,name=dimname,len=dimlen)
-!            write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
-!         enddo
-!         write(nu_diag,*) ''
-
-!      endif
+      if (my_task==master_task .and. diag) then
+          write(nu_diag,*) & 
+            'ice_read_nc_point, fid= ',fid, ', nrec = ',nrec, & 
+            ', varname = ',trim(varname)
+          status = nf90_inquire(fid, nDimensions=ndim, nVariables=nvar)
+          write(nu_diag,*) 'ndim= ',ndim,', nvar= ',nvar
+          do id=1,ndim
+            status = nf90_inquire_dimension(fid,id,name=dimname,len=dimlen)
+            write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
+         enddo
+      endif
 
       work = workg(1) 
 
@@ -1490,19 +1484,17 @@
     ! optional diagnostics
     !-------------------------------------------------------------------
 
-!      if (my_task==master_task .and. diag) then
-
-!          write(nu_diag,*) & 
-!            'ice_read_nc_z, fid= ',fid, ', nrec = ',nrec, & 
-!            ', varname = ',trim(varname)
-!          status = nf90_inquire(fid, nDimensions=ndim, nVariables=nvar)
-!          write(nu_diag,*) 'ndim= ',ndim,', nvar= ',nvar
-!          do id=1,ndim
-!            status = nf90_inquire_dimension(fid,id,name=dimname,len=dimlen)
-!            write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
-!         enddo
-
-!      endif
+      if (my_task==master_task .and. diag) then
+          write(nu_diag,*) & 
+            'ice_read_nc_z, fid= ',fid, ', nrec = ',nrec, & 
+            ', varname = ',trim(varname)
+          status = nf90_inquire(fid, nDimensions=ndim, nVariables=nvar)
+          write(nu_diag,*) 'ndim= ',ndim,', nvar= ',nvar
+          do id=1,ndim
+            status = nf90_inquire_dimension(fid,id,name=dimname,len=dimlen)
+            write(nu_diag,*) 'Dim name = ',trim(dimname),', size = ',dimlen
+         enddo
+      endif
 
       work(:) = work_z(:)
       deallocate(work_z)
@@ -1613,8 +1605,6 @@
          amin = minval(work_g1)
          amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
          write(nu_diag,*) ' min and max =', amin, amax
-!         write(nu_diag,*) ''
-
       endif
 
       deallocate(work_g1)
@@ -1690,12 +1680,14 @@
       if (present(restart_ext)) then
          if (restart_ext) then
             do n=1,ncat
-               call gather_global_ext(work_g1(:,:,n), work(:,:,n,:), master_task, distrb_info, spc_val=c0)
+               call gather_global_ext(work_g1(:,:,n), work(:,:,n,:), &
+                    master_task, distrb_info, spc_val=c0)
             enddo
          endif
       else
          do n=1,ncat
-            call gather_global(work_g1(:,:,n), work(:,:,n,:), master_task, distrb_info, spc_val=c0)
+            call gather_global(work_g1(:,:,n), work(:,:,n,:), &
+                    master_task, distrb_info, spc_val=c0)
          enddo
       endif
 
@@ -1731,7 +1723,6 @@
             amin = minval(work_g1(:,:,n))
             amax = maxval(work_g1(:,:,n), mask = work_g1(:,:,n) /= spval_dbl)
             write(nu_diag,*) ' min and max =', amin, amax
-!            write(nu_diag,*) ''
          enddo
       endif
 
@@ -1832,7 +1823,6 @@
     !-------------------------------------------------------------------
 
       if (my_task == master_task .and. diag) then
-
 !          write(nu_diag,*) & 
 !            'ice_read_global_nc, fid= ',fid, ', nrec = ',nrec, & 
 !            ', varname = ',trim(varname)
@@ -1845,8 +1835,6 @@
          amin = minval(work_g)
          amax = maxval(work_g, mask = work_g /= spval_dbl)
          write(nu_diag,*) 'min and max = ', amin, amax
-!         write(nu_diag,*) ''
-
       endif
 
 #ifdef ORCA_GRID

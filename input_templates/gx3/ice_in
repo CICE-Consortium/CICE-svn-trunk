@@ -7,7 +7,7 @@
   , npt            = 744
   , ndtd           = 1
   , runtype        = 'initial'
-  , ice_ic         = './restart/iced_gx3_v5.0'
+  , ice_ic         = './restart/iced_gx3_v5.nc'
   , restart        = .true.
   , restart_ext    = .false.
   , use_restart_time = .true.
@@ -22,8 +22,8 @@
   , diagfreq       = 24
   , diag_type      = 'stdout'
   , diag_file      = 'ice_diag.d'
-  , print_global   = .true.
-  , print_points   = .true.
+  , print_global   = .false.
+  , print_points   = .false.
   , latpnt(1)      =  90.
   , lonpnt(1)      =   0.
   , latpnt(2)      = -65.
@@ -60,17 +60,17 @@
 /
 
 &tracer_nml
-    tr_iage      = .false.
+    tr_iage      = .true.
   , restart_age  = .false.
   , tr_FY        = .false.
   , restart_FY   = .false.
-  , tr_lvl       = .false.
+  , tr_lvl       = .true.
   , restart_lvl  = .false.
   , tr_pond_cesm = .false.
   , restart_pond_cesm = .false.
   , tr_pond_topo = .false.
   , restart_pond_topo = .false.
-  , tr_pond_lvl  = .false.
+  , tr_pond_lvl  = .true.
   , restart_pond_lvl  = .false.
   , tr_aero      = .false.
   , restart_aero = .false.
@@ -78,7 +78,7 @@
 
 &thermo_nml
     kitd              = 1
-  , ktherm            = 1
+  , ktherm            = 2
   , conduct           = 'bubbly'
   , a_rapid_mode      =  0.5e-3
   , Rac_rapid_mode    =    10.0
@@ -129,7 +129,7 @@
 &zbgc_nml
     tr_brine        = .false.
   , restart_hbrine  = .false.
-  , solve_skl_bgc   = .false.
+  , skl_bgc         = .false.
   , bgc_flux_type   = 'Jin2006'
   , restart_bgc     = .false.
   , restore_bgc     = .false.
@@ -157,7 +157,7 @@
   , calc_strair     = .true.
   , calc_Tsfc       = .true.
   , precip_units    = 'mm_per_month'
-  , ustar_min       = 0.05
+  , ustar_min       = 0.0005
   , update_ocn_f    = .false.
   , oceanmixed_ice  = .true.
   , ocn_data_format = 'bin'
@@ -187,10 +187,11 @@
   , f_VGRDs        = .false.
   , f_VGRDb        = .false.
   , f_bounds       = .false.
+  , f_aice         = 'm' 
   , f_hi           = 'm'
   , f_hs           = 'm' 
   , f_Tsfc         = 'm' 
-  , f_aice         = 'm' 
+  , f_sice         = 'm' 
   , f_uvel         = 'm' 
   , f_vvel         = 'm' 
   , f_fswdn        = 'm' 
@@ -283,14 +284,14 @@
 /
 
 &icefields_mechred_nml
-    f_alvl         = 'x'
-  , f_vlvl         = 'x'
-  , f_ardg         = 'x'
-  , f_vrdg         = 'x'
-  , f_dardg1dt     = 'm'
-  , f_dardg2dt     = 'm'
-  , f_dvirdgdt     = 'm'
-  , f_opening      = 'm'
+    f_alvl         = 'm'
+  , f_vlvl         = 'm'
+  , f_ardg         = 'm'
+  , f_vrdg         = 'm'
+  , f_dardg1dt     = 'x'
+  , f_dardg2dt     = 'x'
+  , f_dvirdgdt     = 'x'
+  , f_opening      = 'x'
   , f_ardgn        = 'x'
   , f_vrdgn        = 'x'
   , f_dardg1ndt    = 'x'
@@ -308,14 +309,14 @@
     f_apondn       = 'x'
   , f_apeffn       = 'x'
   , f_hpondn       = 'x'
-  , f_apond        = 'x'
-  , f_hpond        = 'x'
-  , f_ipond        = 'x'
-  , f_apeff        = 'x'
-  , f_apond_ai     = 'x'
-  , f_hpond_ai     = 'x'
-  , f_ipond_ai     = 'x'
-  , f_apeff_ai     = 'x'
+  , f_apond        = 'm'
+  , f_hpond        = 'm'
+  , f_ipond        = 'm'
+  , f_apeff        = 'm'
+  , f_apond_ai     = 'm'
+  , f_hpond_ai     = 'm'
+  , f_ipond_ai     = 'm'
+  , f_apeff_ai     = 'm'
 /
 
 &icefields_bgc_nml

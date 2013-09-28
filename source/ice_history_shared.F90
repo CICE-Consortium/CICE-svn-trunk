@@ -190,7 +190,7 @@
            f_rain      = 'm', f_rain_ai    = 'm', &
            f_sst       = 'm', f_sss        = 'm', &
            f_uocn      = 'm', f_vocn       = 'm', &
-           f_frzmlt    = 'm', &
+           f_sice      = 'm', f_frzmlt     = 'm', &
            f_fswfac    = 'm', &
            f_fswabs    = 'm', f_fswabs_ai  = 'm', &
            f_albsni    = 'm', &
@@ -265,7 +265,7 @@
            f_rain,      f_rain_ai  , &
            f_sst,       f_sss      , &
            f_uocn,      f_vocn     , &
-           f_frzmlt                , &
+           f_sice,      f_frzmlt   , &
            f_fswfac                , &
            f_fswabs,    f_fswabs_ai, &
            f_albsni                , &
@@ -349,6 +349,7 @@
            n_hi         , n_hs         , &
            n_Tsfc       , n_aice       , &
            n_uvel       , n_vvel       , &
+           n_sice       , &
            n_fswdn      , n_flwdn      , &
            n_snow       , n_snow_ai    , &
            n_rain       , n_rain_ai    , &
@@ -367,8 +368,8 @@
            n_Tair       , &
            n_Tref       , n_Qref       , &
            n_congel     , n_frazil     , &
-           n_snoice, n_dsnow     , n_meltt      , &
-           n_melts      , &
+           n_snoice     , n_dsnow      , &
+           n_meltt      , n_melts      , &
            n_meltb      , n_meltl      , &
            n_fresh      , n_fresh_ai   , &
            n_fsalt      , n_fsalt_ai   , &

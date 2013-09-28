@@ -71,7 +71,7 @@
 
       diag = .true.
 
-      if (my_task == master_task) write(nu_diag,*) 'level ice area, volume'
+      if (my_task == master_task) write(nu_diag,*) 'min/max level ice area, volume'
 
       call read_restart_field(nu_restart_lvl,0,trcrn(:,:,nt_alvl,:,:),'ruf8', &
                               'alvl',ncat,diag)

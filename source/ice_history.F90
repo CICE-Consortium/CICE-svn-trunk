@@ -76,7 +76,7 @@
       use ice_history_drag, only: init_hist_drag_2D
       use ice_restart_shared, only: restart
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero, tr_brine
-      use ice_zbgc_shared, only: solve_skl_bgc
+      use ice_zbgc_shared, only: skl_bgc
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -190,6 +190,7 @@
       call broadcast_scalar (f_aice, master_task)
       call broadcast_scalar (f_uvel, master_task)
       call broadcast_scalar (f_vvel, master_task)
+      call broadcast_scalar (f_sice, master_task)
       call broadcast_scalar (f_fswdn, master_task)
       call broadcast_scalar (f_flwdn, master_task)
       call broadcast_scalar (f_snow, master_task)
@@ -316,7 +317,6 @@
              "snow volume per unit grid cell area", c1, c0,       &
              ns1, f_hs)
 
-      
       if (f_Tsfc(1:1) /= 'x') &
          call define_hist_field(n_Tsfc,"Tsfc","C",tstr2D, tcstr,    &
              "snow/ice surface temperature",                      &
@@ -340,6 +340,12 @@
              "ice velocity (y)",                                  &
              "positive is y direction on U grid", c1, c0,         &
              ns1, f_vvel)
+      
+      if (f_sice(1:1) /= 'x') &
+         call define_hist_field(n_sice,"sice","ppt",ustr2D, ucstr,  &
+             "bulk ice salinity",                                 &
+             "none", c1, c0,                                      &
+             ns1, f_sice)
       
       if (f_fswdn(1:1) /= 'x') &
          call define_hist_field(n_fswdn,"fswdn","W/m^2",tstr2D, tcstr, &
@@ -898,7 +904,7 @@
       if (tr_pond) call init_hist_pond_2D
 
       ! biogeochemistry
-      if (tr_aero .or. tr_brine .or. solve_skl_bgc) call init_hist_bgc_2D
+      if (tr_aero .or. tr_brine .or. skl_bgc) call init_hist_bgc_2D
 
       if (formdrag) call init_hist_drag_2D
 
@@ -1167,7 +1173,7 @@
       use ice_therm_shared, only: calculate_Tin_from_qin, Tmlt, ktherm
       use ice_therm_mushy, only: temperature_mush, temperature_snow
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
-      use ice_zbgc_shared, only: solve_skl_bgc
+      use ice_zbgc_shared, only: skl_bgc
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -1260,6 +1266,12 @@
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
       !$OMP                     k,n,qn,ns)
       do iblk = 1, nblocks
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
          workb(:,:) = aice_init(:,:,iblk)
 
 !        if (f_example(1:1) /= 'x') &
@@ -1276,6 +1288,19 @@
              call accum_hist_field(n_uvel,   iblk, uvel(:,:,iblk), a2D)
          if (f_vvel   (1:1) /= 'x') &
              call accum_hist_field(n_vvel,   iblk, vvel(:,:,iblk), a2D)
+
+         if (f_sice   (1:1) /= 'x') then
+             do j = jlo, jhi
+             do i = ilo, ihi
+                worka(i,j) = c0
+                do k = 1, nzilyr
+                   worka(i,j) = worka(i,j) + trcr(i,j,nt_sice+k-1,iblk)
+                enddo
+                worka(i,j) = worka(i,j) / nzilyr
+             enddo
+             enddo
+             call accum_hist_field(n_sice,   iblk, worka(:,:), a2D)
+         endif
 
          if (f_fswdn  (1:1) /= 'x') &
              call accum_hist_field(n_fswdn,  iblk, fsw(:,:,iblk), a2D)
@@ -1437,12 +1462,6 @@
          if (f_daidtd (1:1) /= 'x') &
              call accum_hist_field(n_daidtd,  iblk, daidtd(:,:,iblk), a2D)
 
-         this_block = get_block(blocks_ice(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
          if (f_fsurf_ai(1:1)/= 'x') &
              call accum_hist_field(n_fsurf_ai,iblk, fsurf(:,:,iblk)*workb(:,:), a2D)
          if (f_fcondtop_ai(1:1)/= 'x') &
@@ -1563,7 +1582,6 @@
                                   Tsnz4d(:,:,1:nzslyr,1:ncat_hist), a4Ds)
          endif
          
-
         ! Calculate aggregate surface melt flux by summing category values
         if (f_fmeltt_ai(1:1) /= 'x') then
          do ns = 1, nstreams
@@ -1594,7 +1612,7 @@
          if (tr_pond) call accum_hist_pond (iblk)
 
          ! biogeochemistry
-         if (tr_aero .or. tr_brine .or. solve_skl_bgc) call accum_hist_bgc (iblk)
+         if (tr_aero .or. tr_brine .or. skl_bgc) call accum_hist_bgc (iblk)
 
          ! form drag
          if (formdrag) call accum_hist_drag (iblk)

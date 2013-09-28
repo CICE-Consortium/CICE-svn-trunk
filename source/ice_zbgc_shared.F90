@@ -104,7 +104,7 @@
          tr_bgc_DMS_sk,   & ! if true, DMS as product tracer on ice
          restart_bgc,     & ! if true, read bgc restart file
          restore_bgc,     & ! if true, restore nitrate
-         solve_skl_bgc      ! if true, solve skeletal biochemistry
+         skl_bgc            ! if true, solve skeletal biochemistry
 
       real (kind=dbl_kind), parameter, public :: &
          sk_l       = 0.03_dbl_kind,  & ! skeletal layer thickness (m)

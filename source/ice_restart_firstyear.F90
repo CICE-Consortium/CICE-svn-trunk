@@ -71,10 +71,13 @@
 
       diag = .true.
 
-      if (my_task == master_task) write(nu_diag,*) 'first-year ice'
+      if (my_task == master_task) write(nu_diag,*) 'min/max first-year ice area'
 
       call read_restart_field(nu_restart_FY,0,trcrn(:,:,nt_FY,:,:),'ruf8', &
                               'FY',ncat,diag)
+
+      if (my_task == master_task) write(nu_diag,*) 'min/max frz_onset'
+
       call read_restart_field(nu_restart_FY,0,frz_onset,'ruf8', &
                               'frz_onset',1,diag)
 

@@ -65,7 +65,7 @@
 
       diag = .true.
 
-      if (my_task == master_task) write(nu_diag,*) 'age restart'
+      if (my_task == master_task) write(nu_diag,*) 'min/max age (s)'
 
       call read_restart_field(nu_restart_age,0,trcrn(:,:,nt_iage,:,:),'ruf8', &
                               'iage',ncat,diag)

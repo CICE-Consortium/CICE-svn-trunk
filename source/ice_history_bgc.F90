@@ -168,7 +168,7 @@
               f_fbri  = 'x'
               f_hbri  = 'x'
       endif
-      if (.not. solve_skl_bgc) then
+      if (.not. skl_bgc) then
           f_bgc_N_sk = 'x'
           f_bgc_C_sk = 'x'
           f_bgc_chl_sk = 'x'
