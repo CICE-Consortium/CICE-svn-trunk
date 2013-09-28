@@ -27,7 +27,14 @@
       implicit none
 
       private
-      public :: init_meltponds_topo, compute_ponds_topo
+      public :: init_meltponds_topo, compute_ponds_topo, &
+                write_restart_pond_topo, read_restart_pond_topo
+
+      logical (kind=log_kind), public :: & 
+         restart_pond_topo ! if .true., read meltponds restart file
+
+      real (kind=dbl_kind), public :: &
+         hp1               ! critical parameter for pond ice thickness
 
 !=======================================================================
 
@@ -865,6 +872,68 @@
       perm = 3.0e-08_dbl_kind * (minval(phi))**3
     
       end subroutine permeability_phi
+
+!=======================================================================
+
+! Dumps all values needed for restarting
+!
+! authors Elizabeth C. Hunke, LANL
+!         David A. Bailey, NCAR
+
+      subroutine write_restart_pond_topo()
+
+      use ice_domain_size, only: ncat
+      use ice_fileunits, only: nu_dump_pond
+      use ice_state, only: trcrn, nt_apnd, nt_hpnd, nt_ipnd
+      use ice_restart, only: write_restart_field
+
+      ! local variables
+
+      logical (kind=log_kind) :: diag
+
+      diag = .true.
+
+      call write_restart_field(nu_dump_pond,0,trcrn(:,:,nt_apnd,:,:),'ruf8', &
+                               'apnd',ncat,diag)
+      call write_restart_field(nu_dump_pond,0,trcrn(:,:,nt_hpnd,:,:),'ruf8', &
+                               'hpnd',ncat,diag)
+      call write_restart_field(nu_dump_pond,0,trcrn(:,:,nt_ipnd,:,:),'ruf8', &
+                               'ipnd',ncat,diag)
+
+      end subroutine write_restart_pond_topo
+
+!=======================================================================
+
+! Reads all values needed for a meltpond volume restart
+!
+! authors Elizabeth C. Hunke, LANL
+!         David A. Bailey, NCAR
+
+      subroutine read_restart_pond_topo()
+
+      use ice_domain_size, only: ncat
+      use ice_communicate, only: my_task, master_task
+      use ice_fileunits, only: nu_diag, nu_restart_pond 
+      use ice_state, only: trcrn, nt_apnd, nt_hpnd, nt_ipnd
+      use ice_restart, only: read_restart_field
+
+      ! local variables
+
+      logical (kind=log_kind) :: &
+         diag
+
+      diag = .true.
+
+      if (my_task == master_task) write(nu_diag,*) 'min/max topo ponds'
+
+      call read_restart_field(nu_restart_pond,0,trcrn(:,:,nt_apnd,:,:),'ruf8', &
+                              'apnd',ncat,diag)
+      call read_restart_field(nu_restart_pond,0,trcrn(:,:,nt_hpnd,:,:),'ruf8', &
+                              'hpnd',ncat,diag)
+      call read_restart_field(nu_restart_pond,0,trcrn(:,:,nt_ipnd,:,:),'ruf8', &
+                              'ipnd',ncat,diag)
+
+      end subroutine read_restart_pond_topo
 
 !=======================================================================
 

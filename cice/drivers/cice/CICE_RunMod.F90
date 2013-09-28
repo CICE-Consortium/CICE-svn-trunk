@@ -100,6 +100,7 @@
 
       subroutine ice_step
 
+      use ice_age, only: write_restart_age
       use ice_aerosol, only: write_restart_aero
       use ice_boundary, only: ice_HaloUpdate
       use ice_brine, only: hbrine_diags, write_restart_hbrine
@@ -110,16 +111,15 @@
       use ice_domain_size, only: nslyr
       use ice_dyn_eap, only: write_restart_eap
       use ice_dyn_shared, only: kdyn
+      use ice_firstyear, only: write_restart_FY
       use ice_flux, only: scale_factor, init_history_therm
       use ice_history, only: accum_hist
+      use ice_lvl, only: write_restart_lvl
       use ice_restart, only: final_restart
       use ice_restart_driver, only: dumpfile
-      use ice_restart_age, only: write_restart_age
-      use ice_restart_firstyear, only: write_restart_FY
-      use ice_restart_lvl, only: write_restart_lvl
-      use ice_restart_meltpond_cesm, only: write_restart_pond_cesm
-      use ice_restart_meltpond_lvl, only: write_restart_pond_lvl
-      use ice_restart_meltpond_topo, only: write_restart_pond_topo
+      use ice_meltpond_cesm, only: write_restart_pond_cesm
+      use ice_meltpond_lvl, only: write_restart_pond_lvl
+      use ice_meltpond_topo, only: write_restart_pond_topo
       use ice_restoring, only: restore_ice, ice_HaloRestore
       use ice_state, only: nt_qsno, trcrn, tr_iage, tr_FY, tr_lvl, &
           tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_brine, tr_aero
