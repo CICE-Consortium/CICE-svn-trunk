@@ -44,7 +44,7 @@
       use ice_state, only: tr_aero
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_couple, timer_step
-      use ice_zbgc_shared, only: solve_skl_bgc
+      use ice_zbgc_shared, only: skl_bgc
 
    !--------------------------------------------------------------------
    !  initialize error code and step timer
@@ -72,10 +72,10 @@
          call ice_timer_start(timer_couple)  ! atm/ocn coupling
          call get_forcing_atmo     ! atmospheric forcing from data
          call get_forcing_ocn(dt)  ! ocean forcing from data
-!         if (tr_aero) call faero_data        ! aerosols
+         ! if (tr_aero) call faero_data       ! aerosols
          if (tr_aero)  call faero_default     ! aerosols
-         if (solve_skl_bgc) call get_forcing_bgc ! biogeochemistry
-         call ice_timer_stop(timer_couple)   ! atm/ocn coupling
+         if (skl_bgc)  call get_forcing_bgc   ! biogeochemistry
+         call ice_timer_stop(timer_couple)    ! atm/ocn coupling
 #endif
 
          call init_flux_atm     ! initialize atmosphere fluxes sent to coupler
@@ -131,7 +131,7 @@
           timer_hist, timer_readwrite
       use ice_algae, only: bgc_diags, write_restart_bgc
       use ice_zbgc, only: init_history_bgc, biogeochemistry
-      use ice_zbgc_shared, only: solve_skl_bgc
+      use ice_zbgc_shared, only: skl_bgc
 
       integer (kind=int_kind) :: &
          iblk        , & ! block index 
@@ -232,8 +232,8 @@
          call ice_timer_start(timer_diags)  ! diagnostics
          if (mod(istep,diagfreq) == 0) then
             call runtime_diags(dt)          ! log file
-            if (solve_skl_bgc) call bgc_diags (dt)
-            if (tr_brine)      call hbrine_diags (dt)
+            if (skl_bgc)  call bgc_diags (dt)
+            if (tr_brine) call hbrine_diags (dt)
          endif
          call ice_timer_stop(timer_diags)   ! diagnostics
 
@@ -251,7 +251,7 @@
             if (tr_pond_lvl)  call write_restart_pond_lvl
             if (tr_pond_topo) call write_restart_pond_topo
             if (tr_aero)      call write_restart_aero
-            if (solve_skl_bgc)call write_restart_bgc  
+            if (skl_bgc)      call write_restart_bgc  
             if (tr_brine)     call write_restart_hbrine
             if (kdyn == 2)    call write_restart_eap
             call final_restart

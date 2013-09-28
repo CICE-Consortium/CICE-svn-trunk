@@ -79,7 +79,7 @@
       use ice_timers, only: timer_total, init_ice_timers, ice_timer_start
       use ice_transport_driver, only: init_transport
       use ice_zbgc, only: init_zbgc
-      use ice_zbgc_shared, only: solve_skl_bgc
+      use ice_zbgc_shared, only: skl_bgc
 #ifdef popcice
       use drv_forcing, only: sst_sss
 #endif
@@ -150,7 +150,7 @@
       call get_forcing_ocn(dt)  ! ocean forcing from data
 !      if (tr_aero) call faero_data          ! aerosols
       if (tr_aero) call faero_default ! aerosols
-      if (solve_skl_bgc) call get_forcing_bgc
+      if (skl_bgc) call get_forcing_bgc
 #endif
 
       if (runtype == 'initial' .and. .not. restart) &
@@ -195,7 +195,7 @@
           tr_pond_lvl, tr_pond_topo, tr_aero, trcrn, &
           nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd, tr_brine
       use ice_zbgc, only: init_bgc
-      use ice_zbgc_shared, only: solve_skl_bgc
+      use ice_zbgc_shared, only: skl_bgc
 
       integer(kind=int_kind) :: iblk
 
@@ -206,8 +206,10 @@
          if (kdyn == 2) call read_restart_eap ! EAP
       else if (restart) then          ! ice_ic = core restart file
          call restartfile (ice_ic)    !  or 'default' or 'none'
-!         call restartfile_v4 (ice_ic) ! CICE v4.1 binary restart file
-!         if (kdyn == 2) call read_restart_eap ! EAP
+         !!! uncomment to create netcdf
+         ! call restartfile_v4 (ice_ic)  ! CICE v4.1 binary restart file
+         !!! uncomment if EAP restart data exists
+         ! if (kdyn == 2) call read_restart_eap
       endif         
 
       ! tracers
@@ -287,9 +289,9 @@
             enddo ! iblk
          endif ! .not restart_pond
       endif
-      if (tr_aero)       call init_aerosol ! ice aerosol
-      if (tr_brine)      call init_hbrine  ! brine height tracer
-      if (solve_skl_bgc) call init_bgc     ! biogeochemistry
+      if (tr_aero)  call init_aerosol ! ice aerosol
+      if (tr_brine) call init_hbrine  ! brine height tracer
+      if (skl_bgc)  call init_bgc     ! biogeochemistry
 
       end subroutine init_restart
 

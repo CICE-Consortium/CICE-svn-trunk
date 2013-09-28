@@ -53,7 +53,7 @@
 
       namelist /zbgc_nml/  &
          tr_brine, bgc_data_dir, sil_data_type, nit_data_type, &
-         restore_bgc, solve_skl_bgc, &
+         restore_bgc, skl_bgc, &
          tr_bgc_C_sk, tr_bgc_chl_sk, tr_bgc_Am_sk, tr_bgc_Sil_sk, &
          tr_bgc_DMSPp_sk, tr_bgc_DMSPd_sk, tr_bgc_DMS_sk, &
          restart_bgc, restart_hbrine, phi_snow, bgc_flux_type
@@ -64,7 +64,7 @@
 
       tr_brine        = .false.  ! brine height differs from ice height
       restore_bgc     = .false.  ! restore bgc if true
-      solve_skl_bgc   = .false.  ! solve skeletal biochemistry in diffuse bio
+      skl_bgc         = .false.  ! solve skeletal biochemistry in diffuse bio
       bgc_data_dir    = 'unknown_bgc_data_dir'
       sil_data_type   = 'default'
       nit_data_type   = 'default'
@@ -132,27 +132,27 @@
          write(nu_diag,1010) ' restart_hbrine            = ', restart_hbrine
          write(nu_diag,1005) ' phi_snow                  = ', phi_snow
          endif
-         write(nu_diag,1010) ' solve_skl_bgc             = ', solve_skl_bgc
+         write(nu_diag,1010) ' skl_bgc                   = ', skl_bgc
       endif
 
       !-----------------------------------------------------------------
       ! skeletal layer biogeochemistry
       !-----------------------------------------------------------------
 
-      if (TRBGCS == 0 .and. solve_skl_bgc) then
+      if (TRBGCS == 0 .and. skl_bgc) then
          write(nu_diag,*) &
-            'WARNING: solve_skl_bgc=T but 0 bgc tracers compiled'
+            'WARNING: skl_bgc=T but 0 bgc tracers compiled'
          write(nu_diag,*) &
-            'WARNING: setting solve_skl_bgc = F'
-         solve_skl_bgc = .false.
+            'WARNING: setting skl_bgc = F'
+         skl_bgc = .false.
       endif
 
       if (trim(runtype) == 'continue') restart_bgc = .true.
 
-      call broadcast_scalar(solve_skl_bgc,      master_task)
+      call broadcast_scalar(skl_bgc,            master_task)
       call broadcast_scalar(restart_bgc,        master_task)
 
-      if (solve_skl_bgc) then
+      if (skl_bgc) then
             tr_bgc_N_sk      = .true.   ! minimum NP biogeochemistry
             tr_bgc_Nit_sk    = .true.
       else
@@ -182,7 +182,7 @@
       call broadcast_scalar(tr_bgc_DMSPd_sk,    master_task)
       call broadcast_scalar(tr_bgc_DMS_sk,      master_task)
 
-      if (solve_skl_bgc) then
+      if (skl_bgc) then
 
       if (my_task == master_task) then
 
@@ -274,7 +274,7 @@
              nbtrcr = nbtrcr + 1
              nlt_bgc_DMS = nbtrcr
          endif  
-      endif  ! solve_skl_bgc
+      endif  ! skl_bgc
 
       if (nbtrcr > max_nbtrcr) then
          write (nu_diag,*) ' '
@@ -289,7 +289,7 @@
          call abort_ice('max_ntrcr < number of namelist tracers')
       endif                               
 
-      if (solve_skl_bgc .and. TRBGCS < 2) then
+      if (skl_bgc .and. TRBGCS < 2) then
          write (nu_diag,*) ' '
          write (nu_diag,*) 'comp_ice must have number of bgc tracers >= 2'
          write (nu_diag,*) 'number of bgc tracers compiled:',TRBGCS
@@ -297,11 +297,11 @@
       endif
 
       if (my_task == master_task) then
-         if (solve_skl_bgc) then
+         if (skl_bgc) then
             write(nu_diag,1020)'nt_bgc_N_sk = ', nt_bgc_N_sk
             write(nu_diag,1020)'nt_bgc_Nit_sk = ', nt_bgc_Nit_sk
          endif
-         if (tr_brine .or. solve_skl_bgc) then
+         if (tr_brine .or. skl_bgc) then
             write(nu_diag,1020)'nblyr = ', nblyr
             write(nu_diag,1020) 'ntrcr (w/ bgc) = ', ntrcr
          endif
@@ -370,7 +370,7 @@
 
       dbug = .true.
 
-      if (.not. solve_skl_bgc) return
+      if (.not. skl_bgc) return
   
       if (restart_bgc) then       
 
@@ -596,7 +596,7 @@
       type (block) :: &
          this_block      ! block information for current block
 
-      if (tr_brine .or. solve_skl_bgc) then
+      if (tr_brine .or. skl_bgc) then
 
          call ice_timer_start(timer_bgc) ! biogeochemistry
 
@@ -715,7 +715,7 @@
       ! biogeochemistry
       !-----------------------------------------------------------------
 
-            if (solve_skl_bgc) then
+            if (skl_bgc) then
                call skl_biogeochemistry (nx_block, ny_block,            &
                                          icells,   dt,                  &
                                          indxi,    indxj,               &  
@@ -755,7 +755,7 @@
 
          call ice_timer_stop(timer_bgc) ! biogeochemistry
 
-      endif  ! tr_brine .or. solve_skl_bgc
+      endif  ! tr_brine .or. skl_bgc
 
       end subroutine biogeochemistry
 

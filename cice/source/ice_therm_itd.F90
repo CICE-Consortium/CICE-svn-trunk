@@ -1264,7 +1264,7 @@
       use ice_therm_mushy, only: liquidus_temperature_mush, enthalpy_mush
       use ice_therm_shared, only: ktherm, hfrazilmin
       use ice_zbgc, only: add_new_ice_bgc
-      use ice_zbgc_shared, only: solve_skl_bgc
+      use ice_zbgc_shared, only: skl_bgc
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -1815,7 +1815,7 @@
       !-----------------------------------------------------------------
       ! Biogeochemistry
       !-----------------------------------------------------------------     
-      if (tr_brine .or. solve_skl_bgc) &
+      if (tr_brine .or. skl_bgc) &
       call add_new_ice_bgc (nx_block,  ny_block,   dt,       &
                            icells,     jcells,     kcells,   &
                            indxi,      indxj,                &

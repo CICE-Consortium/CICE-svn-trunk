@@ -545,7 +545,7 @@
       real (kind=dbl_kind), dimension(icells,nbtrcr), intent(in) :: &
          ltrcrn     ! concentrations in layer
 
-      ! tracer flags for z_bgc or skl_bgc
+      ! tracer flags for vertical or skeletal layer bgc
       logical (kind=log_kind), intent(in):: & 
          tr_bio_N    , & ! algal nitrogen
          tr_bio_NO   , & ! algal nitrate  
@@ -993,7 +993,7 @@
                ! fluxes in mmol/m^2/d
                ! concentrations are bulk in mmol/m^3
 
-               if (solve_skl_bgc) then
+               if (skl_bgc) then
                   pNit_sk(n)   = c0
                   pAm_sk(n)    = c0
                   pSil_sk(n)   = c0
@@ -1036,7 +1036,7 @@
             call broadcast_scalar(pflux_NH (n), pmloc(n))             
             call broadcast_scalar(pflux_Sil(n), pmloc(n))
 
-            if (solve_skl_bgc) then              ! skl_bgc
+            if (skl_bgc) then   ! skl_bgc
                call broadcast_scalar(pN_sk    (n), pmloc(n))            
                call broadcast_scalar(pNit_sk  (n), pmloc(n))             
                call broadcast_scalar(pAm_sk   (n), pmloc(n))             
@@ -1062,7 +1062,7 @@
       !-----------------------------------------------------------------
 
       if (print_points) then
-      if (solve_skl_bgc) then  
+      if (skl_bgc) then  
 
       write(nu_diag,*) '----------BGC----------'
 
@@ -1099,7 +1099,7 @@
       write(nu_diag,900) 'DMS         (mmol/m^3) = ',pDMS_ac(1),pDMS_ac(2)
       endif
 
-      endif                   ! solve_skl_bgc
+      endif                   ! skl_bgc
       endif                   ! print_points
 
       endif                   ! my_task = master_task 

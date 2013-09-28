@@ -80,7 +80,7 @@
 
       diag = .true.
 
-      if (my_task == master_task) write(nu_diag,*) 'cesm ponds'
+      if (my_task == master_task) write(nu_diag,*) 'min/max cesm ponds'
 
       call read_restart_field(nu_restart_pond,0,trcrn(:,:,nt_apnd,:,:),'ruf8', &
                               'apnd',ncat,diag)

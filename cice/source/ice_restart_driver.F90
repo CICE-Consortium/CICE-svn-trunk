@@ -840,6 +840,11 @@
       enddo
       !$OMP END PARALLEL DO
 
+      ! creates netcdf if restart_format = 'nc'
+      filename = 'restart/iced.converted'
+      call dumpfile(filename) 
+      ! stop
+
       ! if runid is bering then need to correct npt for istep0
       if (trim(runid) == 'bering') then
          npt = npt - istep0
