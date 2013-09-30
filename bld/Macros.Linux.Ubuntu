@@ -31,16 +31,11 @@ ifeq ($(DITTO), yes)
    CPPDEFS :=  $(CPPDEFS) -DREPRODUCIBLE
 endif
 
-ifeq ($(NETCDF), yes)
+ifeq ($(IO_TYPE), netcdf)
    CPPDEFS :=  $(CPPDEFS) -Dncdf
    INCLDIR := $(INCLDIR) -I/usr/include
    SLIBS   := $(SLIBS) -lnetcdf -lnetcdff
 endif
 
-#ifeq ($(USE_ESMF), yes)
-# ESMF is currently not installed
-#   CPPDEFS :=  $(CPPDEFS) -Duse_esmf
-#   INCLDIR :=  $(INCLDIR) -I /.../ESMF/...
-#   SLIBS   :=  $(SLIBS) -L /.../ESMF/... -lesmf -lcprts -lrt -ldl
-#endif
-
+### note this file does not include PIO capability
+### see Macros.Linux.LANL.conejo

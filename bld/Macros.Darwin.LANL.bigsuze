@@ -39,14 +39,14 @@ ifeq ($(DITTO), yes)
    CPPDEFS :=  $(CPPDEFS) -DREPRODUCIBLE
 endif
 
-ifeq ($(NETCDF), yes)
+ifeq ($(IO_TYPE), netcdf)
    CPPDEFS :=  $(CPPDEFS) -Dncdf
    INCLDIR := $(INCLDIR) -I/Users/akt/Work/libraries/netcdf/netcdf/include
    SLIBS   := $(SLIBS) -L/Users/akt/Work/libraries/netcdf/netcdf/lib -lnetcdff
 endif
 
 ### if using parallel I/O, load all 3 libraries.  PIO must be first!
-ifeq ($(NETCDF), pio)
+ifeq ($(IO_TYPE), pio)
    INCLDIR := $(INCLDIR) -I/usr/projects/climate/SHARED_CLIMATE/software/conejo/intel_openmpi/pio-1.4.0
    SLIBS   := $(SLIBS) -L/usr/projects/climate/SHARED_CLIMATE/software/conejo/intel_openmpi/pio-1.4.0 -lpio
 
