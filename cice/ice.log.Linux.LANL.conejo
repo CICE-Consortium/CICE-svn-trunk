@@ -1,0 +1,827 @@
+Reported: 1 (out of 1) daemons -  4 (out of 4) procs
+ Reading setup_nml
+ Reading grid_nml
+ Reading tracer_nml
+ Reading thermo_nml
+ Reading dynamics_nml
+ Reading shortwave_nml
+ Reading ponds_nml
+ Reading forcing_nml
+ --------------------------------
+   CICE model diagnostic output  
+ --------------------------------
+  
+  Document ice_in namelist parameters:
+  ==================================== 
+  
+  runtype                   =  initial
+  days_per_year             =      365
+  use_leap_years            =        F
+  year_init                 =     1997
+  istep0                    =        0
+  dt                        =     3600.00
+  npt                       =      744
+  diagfreq                  =       24
+  print_global              =        F
+  print_points              =        F
+  histfreq                  =        m     x     x     x     x
+  histfreq_n                =        1     1     1     1     1
+  hist_avg                  =        T
+  history_dir               = ./history/
+  history_file              = iceh
+ Initial condition will be written in ./history/
+  dumpfreq                  =        y
+  dumpfreq_n                =        1
+  dump_last                 =        F
+  restart                   =        T
+  restart_dir               = ./restart/
+  restart_ext               =  F
+  restart_format            = nc
+  lcdf64                    =  F
+  restart_file              = iced
+  pointer_file              = ./restart/ice.restart_file
+  use_restart_time          =  T
+  ice_ic                    = ./restart/iced_gx3_v5.nc
+  grid_type                 = displaced_pole
+  grid_file                 = grid
+  kmt_file                  = kmt
+  kitd                      =        1
+  kcatbound                 =        0
+  kdyn                      =        1
+  ndtd                      =        1
+  ndte                      =      120
+  revised_evp               =        F
+  yield_curve               = ellipse
+  kstrength                 =        1
+  krdg_partic               =        1
+  krdg_redist               =        1
+  mu_rdg                    =        3.00
+  advection                 =    remap
+  shortwave                 =     dEdd
+  R_ice                     =        0.00
+  R_pnd                     =        0.00
+  R_snw                     =        1.50
+  dT_mlt                    =        1.50
+  rsnw_mlt                  =     1500.00
+  hp1                       =        0.01
+  hs0                       =        0.00
+  rfracmin                  =        0.15
+  rfracmax                  =        1.00
+  hs1                       =        0.03
+  dpscale                   =        0.00
+  frzpnd                    =     hlid
+  snowinfil                 =        T
+  ktherm                    =        2
+  a_rapid_mode              =    0.000500
+  Rac_rapid_mode            =   10.000000
+  aspect_rapid_mode         =    1.000000
+  dSdt_slow_mode            =    0.000000
+  phi_c_slow_mode           =    0.050000
+  phi_i_mushy               =    0.850000
+  atmbndy                   =  default
+  formdrag                  =        F
+  calc_strair               =        T
+  calc_Tsfc                 =        T
+  fyear_init                =     1997
+  ycycle                    =        1
+  atm_data_type             = ncar
+  atm_data_dir              = /usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/
+  precip_units              = mm_per_month
+  update_ocn_f              =        F
+  ustar_min                 =    0.000500
+  oceanmixed_ice            =        T
+  sss_data_type             = default
+  sst_data_type             = default
+  restore_ice               =        F
+  
+Diagnostic point 1: lat, lon =   90.00    0.00
+Diagnostic point 2: lat, lon =  -65.00  -45.00
+  tr_iage                   =        T
+  restart_age               =        F
+  tr_FY                     =        F
+  restart_FY                =        F
+  tr_lvl                    =        T
+  restart_lvl               =        F
+  tr_pond_cesm              =        F
+  restart_pond_cesm         =        F
+  tr_pond_lvl               =        T
+  restart_pond_lvl          =        F
+  tr_pond_topo              =        F
+  restart_pond_topo         =        F
+  tr_aero                   =        F
+  restart_aero              =        F
+  
+                      ntrcr =       22
+  
+                    nt_sice =       10
+                    nt_qice =        2
+                    nt_qsno =        9
+  
+                         nilyr       7
+  
+  
+ Reading zbgc_nml
+  tr_brine                  =        F
+  skl_bgc                   =        F
+
+Domain Information
+
+  Horizontal domain: nx =    100
+                     ny =    116
+  No. of categories: nc =      5
+  No. of ice layers: ni =      7
+  No. of snow layers:ns =      1
+  Processors:  total    =      4
+  Processor shape:        slenderX2
+  Distribution type:      cartesian
+  Distribution weight:     latitude
+  ew_boundary_type:          cyclic
+  ns_boundary_type:            open
+  maskhalo_dyn          =      F
+  maskhalo_remap        =      F
+  maskhalo_bound        =      F
+  max_blocks =                 4
+  Number of ghost cells:       1
+
+  read_global           11           1  -1.36148077740934        1.56905100613449     
+  read_global           12           1  0.000000000000000E+000   25.0000000000000     
+  Processors (X x Y) =    2 x    2
+  Block size:  nx_block =     27
+               ny_block =     31
+  read_global           12           1  0.000000000000000E+000   25.0000000000000     
+  read_global           11           1  -1.36148077740934        1.56905100613449     
+  read_global           11           2  0.000000000000000E+000   6.28318539733030     
+  read_global           11           7  -3.10633476588604        3.14159265358979     
+  read_global           11           3   372424.009403068        40023891.5205005     
+  read_global           11           4   9205227.47129144        25237286.5505761     
+  
+ min/max ULON:  0.000000000000000E+000   360.000005165255     
+ min/max ULAT:  -76.1620403824018        89.9000004922619     
+ min/max TLON:  -179.858286493174        179.993500992481     
+ min/max TLAT:  -77.0907308422031        89.0075076820328     
+  
+ The following variables will be written to the history tape: 
+          description                     units             variable  frequency   x
+ grid cell mean ice thickness              m                 hi           m       1
+ grid cell mean snow thickness             m                 hs           m       1
+ snow/ice surface temperature              C                 Tsfc         m       1
+ ice area  (aggregate)                     1                 aice         m       1
+ ice velocity (x)                          m/s               uvel         m       1
+ ice velocity (y)                          m/s               vvel         m       1
+ bulk ice salinity                         ppt               sice         m       1
+ down solar flux                           W/m^2             fswdn        m       1
+ down longwave flux                        W/m^2             flwdn        m       1
+ snowfall rate                             cm/day            snow_ai      m       1
+ rainfall rate                             cm/day            rain_ai      m       1
+ sea surface temperature                   C                 sst          m       1
+ sea surface salinity                      ppt               sss          m       1
+ ocean current (x)                         m/s               uocn         m       1
+ ocean current (y)                         m/s               vocn         m       1
+ freeze/melt potential                     W/m^2             frzmlt       m       1
+ shortwave scaling factor                  1                 fswfac       m       1
+ snow/ice/ocn absorbed solar flux          W/m^2             fswabs_ai    m       1
+ snow/ice broad band albedo                %                 albsni       m       1
+ latent heat flux                          W/m^2             flat_ai      m       1
+ sensible heat flux                        W/m^2             fsens_ai     m       1
+ upward longwave flux                      W/m^2             flwup_ai     m       1
+ evaporative water flux                    cm/day            evap_ai      m       1
+ air temperature                           C                 Tair         m       1
+ congelation ice growth                    cm/day            congel       m       1
+ frazil ice growth                         cm/day            frazil       m       1
+ snow-ice formation                        cm/day            snoice       m       1
+ top ice melt                              cm/day            meltt        m       1
+ top snow melt                             cm/day            melts        m       1
+ basal ice melt                            cm/day            meltb        m       1
+ lateral ice melt                          cm/day            meltl        m       1
+ freshwtr flx ice to ocn                   cm/day            fresh_ai     m       1
+ salt flux ice to ocean                    kg/m^2/s          fsalt_ai     m       1
+ heat flux ice to ocean                    W/m^2             fhocn_ai     m       1
+ SW flux thru ice to ocean                 W/m^2             fswthru_ai   m       1
+ atm/ice stress (x)                        N/m^2             strairx      m       1
+ atm/ice stress (y)                        N/m^2             strairy      m       1
+ compressive ice strength                  N/m               strength     m       1
+ strain rate (divergence)                  %/day             divu         m       1
+ strain rate (shear)                       %/day             shear        m       1
+ norm. principal stress 1                  1                 sig1         m       1
+ norm. principal stress 2                  1                 sig2         m       1
+ volume tendency thermo                    cm/day            dvidtt       m       1
+ volume tendency dynamics                  cm/day            dvidtd       m       1
+ area tendency thermo                      %/day             daidtt       m       1
+ area tendency dynamics                    %/day             daidtd       m       1
+ melt onset date                           day of year       mlt_onset    m       1
+ freeze onset date                         day of year       frz_onset    m       1
+ internal stress tensor trace              N/m^2             trsig        m       1
+ fraction of time-avg interval that ice i  1                 ice_present  m       1
+ sea ice age                               years             iage         m       1
+ level ice area fraction                   1                 alvl         m       1
+ level ice volume                          m                 vlvl         m       1
+ ridged ice area fraction                  1                 ardg         m       1
+ ridged ice volume                         m                 vrdg         m       1
+ melt pond fraction of sea ice             1                 apond        m       1
+ melt pond fraction of grid cell           1                 apond_ai     m       1
+ mean melt pond depth over sea ice         m                 hpond        m       1
+ mean melt pond depth over grid cell       m                 hpond_ai     m       1
+ mean pond ice thickness over sea ice      m                 ipond        m       1
+ mean pond ice thickness over grid cell    m                 ipond_ai     m       1
+ radiation-effective pond area fraction o  1                 apeff        m       1
+ radiation-effective pond area fraction o  1                 apeff_ai     m       1
+  
+ arlx, brlx   86.4000000000000        120.000000000000     
+ Se, Sv, xi  0.309607192368673       5.547257729537776E-004  1.791708289170564E-003
+ dt  =    3600.00000000000     
+ dte =    30.0000000000000     
+ tdamp =   1296.00000000000     
+  
+ hin_max(n-1) < Cat n < hin_max(n)
+  0.000000000000000E+000  < Cat            1  <   0.644507216819426     
+  0.644507216819426       < Cat            2  <    1.39143349757630     
+   1.39143349757630       < Cat            3  <    2.47017938195989     
+   2.47017938195989       < Cat            4  <    4.56728791885049     
+   4.56728791885049       < Cat            5  <    9.33384181586817     
+  
+  
+istep1:         0    idate:  19970101    sec:         0
+ tracer        index      depend        type has_dependents
+    hi             1           0           1 T
+    hs             2           0           1 T
+ nt_Tsfc           3           0           1 F
+ nt_qice           4           1           2 F
+ nt_qsno          11           2           2 F
+ nt_sice          12           1           2 F
+ nt_iage          19           1           2 F
+ nt_alvl          20           0           1 T
+ nt_vlvl          21           1           2 F
+ nt_apnd          22          20           2 T
+ nt_hpnd          23          22           3 F
+ nt_ipnd          24          22           3 F
+ Using restart dump=./restart/iced_gx3_v5.nc
+ Restart read at istep=        8760   31536000.0000000        31536000.0000000     
+  min/max area, vol ice, vol snow, Tsfc
+  min and max =  0.000000000000000E+000  0.998178226091468     
+  min and max =  0.000000000000000E+000  0.980941533129509     
+  min and max =  0.000000000000000E+000  0.766001413580015     
+  min and max =  0.000000000000000E+000  0.289662396287981     
+  min and max =  0.000000000000000E+000  0.257193792561365     
+  min and max =  0.000000000000000E+000  0.434515209947254     
+  min and max =  0.000000000000000E+000  0.958763618986031     
+  min and max =  0.000000000000000E+000   1.64149509473701     
+  min and max =  0.000000000000000E+000  0.990206390792516     
+  min and max =  0.000000000000000E+000   1.98571692898406     
+  min and max =  0.000000000000000E+000  0.105187986911778     
+  min and max =  0.000000000000000E+000  0.244952826103784     
+  min and max =  0.000000000000000E+000  0.379658332882433     
+  min and max =  0.000000000000000E+000  0.174096384260834     
+  min and max =  0.000000000000000E+000  0.225511646549016     
+  min and max =  -39.8314004075623       0.000000000000000E+000
+  min and max =  -41.9673127277776       0.000000000000000E+000
+  min and max =  -42.8610541938917       0.000000000000000E+000
+  min and max =  -43.3183222445363       0.000000000000000E+000
+  min and max =  -43.6425601582905       0.000000000000000E+000
+ min/max sice for each layer
+  min and max =  0.000000000000000E+000   27.6749454602177     
+  min and max =  0.000000000000000E+000   24.2565886377762     
+  min and max =  0.000000000000000E+000   24.2797116959214     
+  min and max =  0.000000000000000E+000   25.0142980591713     
+  min and max =  0.000000000000000E+000   24.6283833704105     
+  min and max =  0.000000000000000E+000   27.4194889476506     
+  min and max =  0.000000000000000E+000   25.0197976860473     
+  min and max =  0.000000000000000E+000   25.0229290587083     
+  min and max =  0.000000000000000E+000   24.8977816259025     
+  min and max =  0.000000000000000E+000   24.4922248156475     
+  min and max =  0.000000000000000E+000   27.4290870759596     
+  min and max =  0.000000000000000E+000   25.4508022790849     
+  min and max =  0.000000000000000E+000   25.4265322842651     
+  min and max =  0.000000000000000E+000   25.2775561705063     
+  min and max =  0.000000000000000E+000   24.8500880989576     
+  min and max =  0.000000000000000E+000   27.4281898923847     
+  min and max =  0.000000000000000E+000   26.4616349319292     
+  min and max =  0.000000000000000E+000   26.4347445810440     
+  min and max =  0.000000000000000E+000   26.2916479741295     
+  min and max =  0.000000000000000E+000   25.8389671457641     
+  min and max =  0.000000000000000E+000   28.1500147419806     
+  min and max =  0.000000000000000E+000   28.2873653297670     
+  min and max =  0.000000000000000E+000   28.2640976783675     
+  min and max =  0.000000000000000E+000   28.1398231013197     
+  min and max =  0.000000000000000E+000   27.6933468675969     
+  min and max =  0.000000000000000E+000   30.2723289617746     
+  min and max =  0.000000000000000E+000   30.4810140045520     
+  min and max =  0.000000000000000E+000   30.4617411967951     
+  min and max =  0.000000000000000E+000   30.3677312473077     
+  min and max =  0.000000000000000E+000   29.9816056043747     
+  min and max =  0.000000000000000E+000   31.9787249237759     
+  min and max =  0.000000000000000E+000   32.1079634710983     
+  min and max =  0.000000000000000E+000   32.0910902998216     
+  min and max =  0.000000000000000E+000   32.0273504870974     
+  min and max =  0.000000000000000E+000   31.7498912359515     
+ min/max qice for each layer
+  min and max =  -341640006.869039       0.000000000000000E+000
+  min and max =  -343793411.372077       0.000000000000000E+000
+  min and max =  -346307487.162735       0.000000000000000E+000
+  min and max =  -343874460.231917       0.000000000000000E+000
+  min and max =  -339985438.384217       0.000000000000000E+000
+  min and max =  -333704260.457916       0.000000000000000E+000
+  min and max =  -336243159.443732       0.000000000000000E+000
+  min and max =  -337396403.309698       0.000000000000000E+000
+  min and max =  -333759550.601433       0.000000000000000E+000
+  min and max =  -325980088.990137       0.000000000000000E+000
+  min and max =  -325119550.817300       0.000000000000000E+000
+  min and max =  -327420055.363107       0.000000000000000E+000
+  min and max =  -328226534.083109       0.000000000000000E+000
+  min and max =  -326391615.630470       0.000000000000000E+000
+  min and max =  -314344039.227010       0.000000000000000E+000
+  min and max =  -314980793.590524       0.000000000000000E+000
+  min and max =  -317862637.629583       0.000000000000000E+000
+  min and max =  -320034737.721236       0.000000000000000E+000
+  min and max =  -320956245.984965       0.000000000000000E+000
+  min and max =  -304100011.739884       0.000000000000000E+000
+  min and max =  -300574322.905153       0.000000000000000E+000
+  min and max =  -307933367.837093       0.000000000000000E+000
+  min and max =  -311313185.764326       0.000000000000000E+000
+  min and max =  -313335898.866186       0.000000000000000E+000
+  min and max =  -297449612.798780       0.000000000000000E+000
+  min and max =  -285650037.522958       0.000000000000000E+000
+  min and max =  -293512117.013544       0.000000000000000E+000
+  min and max =  -297160699.906969       0.000000000000000E+000
+  min and max =  -303183172.952831       0.000000000000000E+000
+  min and max =  -289605680.945539       0.000000000000000E+000
+  min and max =  -294025879.179539       0.000000000000000E+000
+  min and max =  -292738605.046307       0.000000000000000E+000
+  min and max =  -288717869.187912       0.000000000000000E+000
+  min and max =  -278750817.623692       0.000000000000000E+000
+  min and max =  -274561943.220633       0.000000000000000E+000
+ min/max qsno for each layer
+  min and max =  -129838236.665249       0.000000000000000E+000
+  min and max =  -131579940.648444       0.000000000000000E+000
+  min and max =  -132053642.995585       0.000000000000000E+000
+  min and max =  -132514395.081418       0.000000000000000E+000
+  min and max =  -132255144.343074       0.000000000000000E+000
+ min/max velocity components
+  min and max = -0.348336546819980       0.233197330201283     
+  min and max = -0.226125032959230       0.200535893665503     
+ radiation fields
+  min and max =  0.000000000000000E+000   318.812650508793     
+  min and max =  0.000000000000000E+000   90.4794976203415     
+  min and max =  0.000000000000000E+000   77.5538551031499     
+  min and max =  0.000000000000000E+000   100.173729508235     
+  min and max =  0.000000000000000E+000   54.9339806980645     
+ min/max ocean stress components
+  min and max = -0.282834556986444       0.521221631575581     
+  min and max = -0.254468293676816       0.286062640065272     
+ internal stress components
+  min and max =  -130617.498193739       0.000000000000000E+000
+  min and max =  -118279.840032645       0.000000000000000E+000
+  min and max =  -118489.305495656       0.000000000000000E+000
+  min and max =  -109341.534517104       0.000000000000000E+000
+  min and max =  -19473.8105739483        21630.5604177159     
+  min and max =  -17184.5687450806        22425.4812148165     
+  min and max =  -17428.3972327389        24022.4426705363     
+  min and max =  -18418.1305493553        20293.0201185428     
+  min and max =  -16202.0947643439        14914.5281783837     
+  min and max =  -13035.8744928539        10121.5504147739     
+  min and max =  -13239.0541893085        17365.1142977199     
+  min and max =  -12357.2954319393        10821.2177333744     
+ ice mask for dynamics
+  min and max =  0.000000000000000E+000   1.00000000000000     
+ min/max sst, frzmlt
+  min and max =  -1.90458264992426        32.1347266279115     
+  min and max =  -1000.00000000000        36.5111000611982     
+  Initial forcing data year =         1997
+  Final   forcing data year =         1997
+  
+ Forcing data year =        1997
+ Atmospheric data files:
+ /usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/ISCCPM/MONTHLY/RADFLX/swdn.1997.dat
+ /usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/ISCCPM/MONTHLY/RADFLX/cldf.1997.dat
+ /usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/MXA/MONTHLY/PRECIP/prec.1997.dat
+ /usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/NCEP/4XDAILY/STATES/u_10.1997.dat
+ /usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/NCEP/4XDAILY/STATES/v_10.1997.dat
+ /usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/NCEP/4XDAILY/STATES/t_10.1997.dat
+ /usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/NCEP/4XDAILY/STATES/q_10.1997.dat
+ /usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/NCEP/4XDAILY/STATES/dn10.1997.dat
+  Current forcing data year =         1997
+  
+ Finished writing ./history/iceh_ic.1998-01-01-00000.nc
+  
+istep1:      8784    idate:  19980102    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.56366124240553007E+07   1.54726475470723379E+07
+total ice extent(km^2) =    1.58210241002404131E+07   1.93110430585269369E+07
+total ice volume (m^3) =    1.50013724354216699E+13   2.38348400460744180E+13
+total snw volume (m^3) =    1.98559191472783765E+12   5.06936953864048926E+12
+tot kinetic energy (J) =    2.01967933610923984E+13   1.48795519301710750E+14
+rms ice speed    (m/s) =        0.05294214799863843       0.11246156596094826
+average albedo         =        0.82630928877502885       0.79960102079696704
+max ice volume     (m) =        3.61421135429978779       2.83610602090037034
+max ice speed    (m/s) =        0.29640675005266603       0.27026149510279873
+max strength    (kN/m) =      129.73221456445460831      54.15437081481434944
+  
+istep1:      8808    idate:  19980103    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.56821981382281631E+07   1.53213662924428079E+07
+total ice extent(km^2) =    1.58331327554375231E+07   1.92395442050359696E+07
+total ice volume (m^3) =    1.51521827708810156E+13   2.36268251044691641E+13
+total snw volume (m^3) =    2.00961678470965723E+12   5.00133446347816797E+12
+tot kinetic energy (J) =    2.56633883476382500E+13   1.19554432934054406E+14
+rms ice speed    (m/s) =        0.05937795525570068       0.10126715070250338
+average albedo         =        0.82771842955873054       0.80209130035355103
+max ice volume     (m) =        3.56926671545807350       2.81672651123783657
+max ice speed    (m/s) =        0.44000908927602594       0.28449193100208819
+max strength    (kN/m) =      130.13022131692588346      53.42386713699185208
+  
+istep1:      8832    idate:  19980104    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.57249871214171313E+07   1.51701291535980813E+07
+total ice extent(km^2) =    1.59391889703010377E+07   1.90794804174562506E+07
+total ice volume (m^3) =    1.52969852815426250E+13   2.34093813502757930E+13
+total snw volume (m^3) =    2.03441705713235181E+12   4.93893311274535059E+12
+tot kinetic energy (J) =    2.49346404499842969E+13   1.79075615731149437E+14
+rms ice speed    (m/s) =        0.05824748676487898       0.12452670094532288
+average albedo         =        0.83673889027027171       0.80331256125460437
+max ice volume     (m) =        3.57234406821444495       2.80804797249278648
+max ice speed    (m/s) =        0.26451940056111056       0.41014698783469627
+max strength    (kN/m) =      130.62314978403432519      44.84934379689561013
+  
+istep1:      8856    idate:  19980105    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.59082744265058897E+07   1.50307936618100815E+07
+total ice extent(km^2) =    1.61372735044906586E+07   1.87006812489944771E+07
+total ice volume (m^3) =    1.54468842185304492E+13   2.31981024900018281E+13
+total snw volume (m^3) =    2.06274049215726367E+12   4.88472442520562891E+12
+tot kinetic energy (J) =    2.52686529683474297E+13   1.56807689469266812E+14
+rms ice speed    (m/s) =        0.05834567516189979       0.11706493600321145
+average albedo         =        0.83063452548537842       0.80168494466578688
+max ice volume     (m) =        3.57765504702297354       2.80599676421310518
+max ice speed    (m/s) =        0.38585465064223229       0.29892776735856624
+max strength    (kN/m) =      131.27008644627667877      39.10143778390713720
+  
+istep1:      8880    idate:  19980106    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.60135073547433801E+07   1.48840042198788505E+07
+total ice extent(km^2) =    1.62892805044721905E+07   1.85413332471410371E+07
+total ice volume (m^3) =    1.55897122118602559E+13   2.29754916911755898E+13
+total snw volume (m^3) =    2.09083450337268823E+12   4.82220430301617188E+12
+tot kinetic energy (J) =    2.82349015473021250E+13   1.60345204796387500E+14
+rms ice speed    (m/s) =        0.06138595525544092       0.11896369344846283
+average albedo         =        0.83630487350035976       0.80638858888003895
+max ice volume     (m) =        3.58022042789865758       2.80430148993216211
+max ice speed    (m/s) =        0.40017056787007099       0.28908204738215559
+max strength    (kN/m) =      132.10820720908128578      37.57113627360494235
+  
+istep1:      8904    idate:  19980107    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.60745828398950975E+07   1.47383120077484250E+07
+total ice extent(km^2) =    1.63188424469395503E+07   1.85653459730802178E+07
+total ice volume (m^3) =    1.57276448188947988E+13   2.27656831943480430E+13
+total snw volume (m^3) =    2.11617996768420557E+12   4.74134612211972168E+12
+tot kinetic energy (J) =    1.39150663594996348E+13   1.74019720914397562E+14
+rms ice speed    (m/s) =        0.04290157877096496       0.12453611091419987
+average albedo         =        0.83776372665867938       0.80285734242221618
+max ice volume     (m) =        3.53702412219765128       2.80093541066277885
+max ice speed    (m/s) =        0.34899664019482579       0.37143959994365822
+max strength    (kN/m) =      132.98302236330070514      37.20841146560154300
+  
+istep1:      8928    idate:  19980108    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.61339260046937801E+07   1.46106261595250033E+07
+total ice extent(km^2) =    1.63898067627858985E+07   1.80578828521273211E+07
+total ice volume (m^3) =    1.58669509036527559E+13   2.25628573842212969E+13
+total snw volume (m^3) =    2.14300836446334814E+12   4.67403649752599805E+12
+tot kinetic energy (J) =    3.01491252209721016E+13   1.73169836983844844E+14
+rms ice speed    (m/s) =        0.06286589817001942       0.12481197791399652
+average albedo         =        0.83857999615120515       0.80381807166497288
+max ice volume     (m) =        3.52269584715669737       2.79884711710320655
+max ice speed    (m/s) =        0.45067350432047920       0.34350103544944321
+max strength    (kN/m) =      133.61993913122677213      36.81025325944021631
+  
+istep1:      8952    idate:  19980109    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.61423154499074761E+07   1.45058042793078553E+07
+total ice extent(km^2) =    1.64566997963298894E+07   1.78584880317337885E+07
+total ice volume (m^3) =    1.59994511150630820E+13   2.23915491511070742E+13
+total snw volume (m^3) =    2.16621517890476904E+12   4.62753883608625391E+12
+tot kinetic energy (J) =    6.47969307627149922E+13   1.11814344466895906E+14
+rms ice speed    (m/s) =        0.09177501083823054       0.10068381026515637
+average albedo         =        0.81224955825750345       0.80930496335622815
+max ice volume     (m) =        3.55325961868080409       2.78538281917083674
+max ice speed    (m/s) =        0.44105058001465058       0.23076166644511539
+max strength    (kN/m) =      134.48720146289628019      32.50419311008812429
+  
+istep1:      8976    idate:  19980110    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.61868701195740309E+07   1.44080508682376742E+07
+total ice extent(km^2) =    1.64696432095159739E+07   1.78918584980909526E+07
+total ice volume (m^3) =    1.61340334045005000E+13   2.22203273959525234E+13
+total snw volume (m^3) =    2.18995677247865918E+12   4.58955878845000098E+12
+tot kinetic energy (J) =    8.29387996201140625E+13   1.31761566801729062E+14
+rms ice speed    (m/s) =        0.10339074697389578       0.10971868497313633
+average albedo         =        0.80115654069215403       0.80882964459706852
+max ice volume     (m) =        3.58211316089536336       2.76878816556100293
+max ice speed    (m/s) =        0.36544395557566611       0.34427613053044365
+max strength    (kN/m) =      135.62617265787383758      30.14436496617807748
+  
+istep1:      9000    idate:  19980111    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.63309834354107566E+07   1.42900117390967328E+07
+total ice extent(km^2) =    1.65625653097943310E+07   1.77347031878479198E+07
+total ice volume (m^3) =    1.62812718036989961E+13   2.20042193360651562E+13
+total snw volume (m^3) =    2.21563267560319482E+12   4.54528979783742578E+12
+tot kinetic energy (J) =    9.71919374764782500E+13   1.49567306310408969E+14
+rms ice speed    (m/s) =        0.11140872241136440       0.11746962529053802
+average albedo         =        0.81944190685635743       0.80745097595821802
+max ice volume     (m) =        3.55237232226246835       2.76590725015652605
+max ice speed    (m/s) =        0.38245851040028273       0.27072867854254978
+max strength    (kN/m) =      136.56077418905385912      32.34416009269317982
+  
+istep1:      9024    idate:  19980112    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.63721956809219532E+07   1.41746564134907462E+07
+total ice extent(km^2) =    1.66443178483977262E+07   1.76252340483584516E+07
+total ice volume (m^3) =    1.64348468587989414E+13   2.17879664722524609E+13
+total snw volume (m^3) =    2.24271054798130762E+12   4.50622654856133984E+12
+tot kinetic energy (J) =    6.31862378793700234E+13   1.27661642589004187E+14
+rms ice speed    (m/s) =        0.08940229154789711       0.10905946865660093
+average albedo         =        0.80197848223106583       0.80473273826938818
+max ice volume     (m) =        3.34340506106554836       2.76153373346881992
+max ice speed    (m/s) =        0.33317105234447397       0.23759968509309576
+max strength    (kN/m) =      137.52481971168546693      29.23719469171674845
+  
+istep1:      9048    idate:  19980113    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.64365991640381645E+07   1.40731965844253432E+07
+total ice extent(km^2) =    1.66601158799933549E+07   1.76127784164508022E+07
+total ice volume (m^3) =    1.65902913820443398E+13   2.15936079593044766E+13
+total snw volume (m^3) =    2.26943478385750293E+12   4.46011701493918359E+12
+tot kinetic energy (J) =    6.49216555245692031E+13   1.17656246762644531E+14
+rms ice speed    (m/s) =        0.09019101439693308       0.10517349715494317
+average albedo         =        0.79804383627371256       0.80121058726643257
+max ice volume     (m) =        3.47712026881627834       2.74034615502931445
+max ice speed    (m/s) =        0.35028969311838820       0.24110028942630646
+max strength    (kN/m) =      138.59950743440452925      26.38485029416304783
+  
+istep1:      9072    idate:  19980114    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.64889013548531588E+07   1.39644182091631833E+07
+total ice extent(km^2) =    1.67175443982784636E+07   1.74745732322639972E+07
+total ice volume (m^3) =    1.67463091225352148E+13   2.13818351876407656E+13
+total snw volume (m^3) =    2.29630872413559375E+12   4.40001480804917773E+12
+tot kinetic energy (J) =    9.08834850433485937E+13   1.44228505803847219E+14
+rms ice speed    (m/s) =        0.10620716559440724       0.11703618429441519
+average albedo         =        0.78761560574594536       0.79394359489620348
+max ice volume     (m) =        3.68009553105354970       2.69799686603790168
+max ice speed    (m/s) =        0.42360573492394638       0.32139960701244485
+max strength    (kN/m) =      139.83974121155455350      28.21938531733988142
+  
+istep1:      9096    idate:  19980115    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.65843807340340465E+07   1.38434020581048317E+07
+total ice extent(km^2) =    1.68270824566150270E+07   1.74268120419756882E+07
+total ice volume (m^3) =    1.69128893919606367E+13   2.11558622950269180E+13
+total snw volume (m^3) =    2.32045176107821777E+12   4.34302553641528516E+12
+tot kinetic energy (J) =    8.16088713742374219E+13   1.36661816163356031E+14
+rms ice speed    (m/s) =        0.10014400077300620       0.11454111088445512
+average albedo         =        0.76680612192291553       0.80123962114132141
+max ice volume     (m) =        3.72312303208659534       2.68511849011919868
+max ice speed    (m/s) =        0.39993863780257610       0.30031257209922535
+max strength    (kN/m) =      141.08362007034210706      30.83441242610203048
+  
+istep1:      9120    idate:  19980116    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.66790143779455218E+07   1.37406687465283796E+07
+total ice extent(km^2) =    1.68773219909480177E+07   1.73393254336042032E+07
+total ice volume (m^3) =    1.70740892979732344E+13   2.09608101761898203E+13
+total snw volume (m^3) =    2.34759555658486768E+12   4.29263750479901367E+12
+tot kinetic energy (J) =    6.95974032051776250E+13   1.07651573121918922E+14
+rms ice speed    (m/s) =        0.09203880580726394       0.10213985625706605
+average albedo         =        0.78963450612436681       0.80049915317771481
+max ice volume     (m) =        3.68831466759051629       2.66687509590322591
+max ice speed    (m/s) =        0.35772135941921163       0.28755321561562674
+max strength    (kN/m) =      141.96265863724704559      19.72976897614368497
+  
+istep1:      9144    idate:  19980117    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.67700425022608656E+07   1.36290234669247419E+07
+total ice extent(km^2) =    1.70410522351969369E+07   1.72802822120208852E+07
+total ice volume (m^3) =    1.72371963046662031E+13   2.07644434079443281E+13
+total snw volume (m^3) =    2.37528328070654492E+12   4.23930198717837598E+12
+tot kinetic energy (J) =    5.33799678931441562E+13   9.97649781995746562E+13
+rms ice speed    (m/s) =        0.08021883401085064       0.09880160230583014
+average albedo         =        0.80106456549174154       0.79892857963970398
+max ice volume     (m) =        3.69296151300417552       2.66015269893469508
+max ice speed    (m/s) =        0.39448603257141546       0.29221662872220594
+max strength    (kN/m) =      143.02190631584315383      24.47927613912922240
+  
+istep1:      9168    idate:  19980118    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.67620870251258072E+07   1.35122328278434779E+07
+total ice extent(km^2) =    1.70410522351969369E+07   1.70619628425424024E+07
+total ice volume (m^3) =    1.73875077468223379E+13   2.05668423655315937E+13
+total snw volume (m^3) =    2.39446248134154590E+12   4.18511419402186621E+12
+tot kinetic energy (J) =    4.98957639559760937E+13   1.16219476918350969E+14
+rms ice speed    (m/s) =        0.07722185718171037       0.10716173541189752
+average albedo         =        0.82015151611511350       0.79311183371373295
+max ice volume     (m) =        3.68101575555685301       2.64760719096407815
+max ice speed    (m/s) =        0.41541196816511844       0.31586023207829217
+max strength    (kN/m) =      143.94694926863687101      20.88213118525584022
+  
+istep1:      9192    idate:  19980119    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.68072371558362693E+07   1.33834827432144396E+07
+total ice extent(km^2) =    1.70207241380881034E+07   1.67168710975150988E+07
+total ice volume (m^3) =    1.75365371696824258E+13   2.03521274713754844E+13
+total snw volume (m^3) =    2.41746898904165820E+12   4.12376567639484326E+12
+tot kinetic energy (J) =    7.36440011653526719E+13   1.17387680778757000E+14
+rms ice speed    (m/s) =        0.09341428556364430       0.10828134000351686
+average albedo         =        0.82091854582896939       0.78705674450614882
+max ice volume     (m) =        3.73275701858311315       2.65170183849610197
+max ice speed    (m/s) =        0.42023672222775549       0.27577363746472094
+max strength    (kN/m) =      144.95041052691189520      20.53311299985994154
+  
+istep1:      9216    idate:  19980120    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.68431638162514418E+07   1.32464706630907059E+07
+total ice extent(km^2) =    1.71237793782800399E+07   1.66407724243827946E+07
+total ice volume (m^3) =    1.76828235525055156E+13   2.01299337639190078E+13
+total snw volume (m^3) =    2.44143455243720166E+12   4.06312193202903369E+12
+tot kinetic energy (J) =    8.75281385073463594E+13   1.40134285105391922E+14
+rms ice speed    (m/s) =        0.10141415381599907       0.11897475761501372
+average albedo         =        0.81573546230155758       0.78890996801990021
+max ice volume     (m) =        3.93302466749449220       2.62600958484568059
+max ice speed    (m/s) =        0.43765786361476389       0.31466569735227606
+max strength    (kN/m) =      145.95119032651291491      23.46596218029621284
+  
+istep1:      9240    idate:  19980121    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.68848911713306718E+07   1.31217817858329285E+07
+total ice extent(km^2) =    1.70651263026113585E+07   1.65315007576251701E+07
+total ice volume (m^3) =    1.78329709894257031E+13   1.99316695587268984E+13
+total snw volume (m^3) =    2.46049518186611328E+12   4.01438850923349121E+12
+tot kinetic energy (J) =    1.14209890072596844E+14   9.05401962920269844E+13
+rms ice speed    (m/s) =        0.11535794439229877       0.09611353113836683
+average albedo         =        0.79388271698924362       0.79078754578316601
+max ice volume     (m) =        4.06210141645001599       2.62917376043030604
+max ice speed    (m/s) =        0.40568143555903963       0.25854034847039137
+max strength    (kN/m) =      146.94479941651775334      24.87112752873981236
+  
+istep1:      9264    idate:  19980122    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.69155746381698661E+07   1.29948696729096677E+07
+total ice extent(km^2) =    1.71558719353038520E+07   1.64219847425552215E+07
+total ice volume (m^3) =    1.79787846739668281E+13   1.97246441171113125E+13
+total snw volume (m^3) =    2.48038226797021191E+12   3.96557349171935205E+12
+tot kinetic energy (J) =    8.72968993699611406E+13   1.17917971820635187E+14
+rms ice speed    (m/s) =        0.10044485720274611       0.11026745893136915
+average albedo         =        0.78860884445611279       0.78914701409782151
+max ice volume     (m) =        4.12046030193903867       2.63118090712650776
+max ice speed    (m/s) =        0.33399071101098959       0.28437729981150983
+max strength    (kN/m) =      148.05945548241743381      26.27266859403823673
+  
+istep1:      9288    idate:  19980123    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.69314138037431054E+07   1.28629151381850000E+07
+total ice extent(km^2) =    1.71558719353038520E+07   1.62768860045132618E+07
+total ice volume (m^3) =    1.81181539783826680E+13   1.95005975053323437E+13
+total snw volume (m^3) =    2.50383539062584961E+12   3.92534382034015820E+12
+tot kinetic energy (J) =    6.99857480977369062E+13   1.40998616582914031E+14
+rms ice speed    (m/s) =        0.08958574946483892       0.12126275516009076
+average albedo         =        0.77588336742598818       0.79064461859983981
+max ice volume     (m) =        4.14550075769454462       2.62635123368293044
+max ice speed    (m/s) =        0.37362887988530630       0.28589624860100898
+max strength    (kN/m) =      149.25337085949527705      25.28720529142034934
+  
+istep1:      9312    idate:  19980124    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.69388547138724104E+07   1.27279840162511002E+07
+total ice extent(km^2) =    1.73181281059797928E+07   1.63008987304524444E+07
+total ice volume (m^3) =    1.82604915486020547E+13   1.92699452838132344E+13
+total snw volume (m^3) =    2.52064911524436084E+12   3.88436730637814551E+12
+tot kinetic energy (J) =    8.24921564296000156E+13   1.39805499541009078E+14
+rms ice speed    (m/s) =        0.09688417420121509       0.12146334470652136
+average albedo         =        0.77940968953130751       0.79158466651459436
+max ice volume     (m) =        4.17563192553229268       2.62736381786875484
+max ice speed    (m/s) =        0.42657491799956310       0.33201839819101930
+max strength    (kN/m) =      150.32604922833021988      20.65670549732868722
+  
+istep1:      9336    idate:  19980125    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.69180805015014261E+07   1.26004793138606995E+07
+total ice extent(km^2) =    1.73466763865429014E+07   1.62510917220467515E+07
+total ice volume (m^3) =    1.83975072314800859E+13   1.90559087815074531E+13
+total snw volume (m^3) =    2.53466535840474121E+12   3.84835237259826270E+12
+tot kinetic energy (J) =    1.00161900384410219E+14   9.68418044190163125E+13
+rms ice speed    (m/s) =        0.10636392372686954       0.10165124312348667
+average albedo         =        0.77749990746595710       0.80221096224338373
+max ice volume     (m) =        4.22423938246388708       2.64486274392298881
+max ice speed    (m/s) =        0.33964123780011901       0.32750587971168960
+max strength    (kN/m) =      151.22054195881403871      22.63975983793736191
+  
+istep1:      9360    idate:  19980126    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.70222134680257030E+07   1.24837410295505542E+07
+total ice extent(km^2) =    1.74967753764202558E+07   1.60918501761700734E+07
+total ice volume (m^3) =    1.85437865655613281E+13   1.88767510795774961E+13
+total snw volume (m^3) =    2.54814787667476563E+12   3.82144911344247461E+12
+tot kinetic energy (J) =    1.49097121700887750E+14   8.33475711347928437E+13
+rms ice speed    (m/s) =        0.12926613607859572       0.09474212856636099
+average albedo         =        0.80460338293268496       0.80317242618193596
+max ice volume     (m) =        4.23981799459873621       2.68062030983787025
+max ice speed    (m/s) =        0.41539286959277189       0.37429339000865508
+max strength    (kN/m) =      152.23569697456025551      32.50387695707170366
+  
+istep1:      9384    idate:  19980127    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.71090366112647541E+07   1.23723669270851370E+07
+total ice extent(km^2) =    1.74856706025226153E+07   1.60111193649706319E+07
+total ice volume (m^3) =    1.86971879372285664E+13   1.87039855481684648E+13
+total snw volume (m^3) =    2.56112330672707764E+12   3.79262101495934766E+12
+tot kinetic energy (J) =    1.49925821928696562E+14   7.39220067588232344E+13
+rms ice speed    (m/s) =        0.12910162133694419       0.08963056759581614
+average albedo         =        0.79155277955092673       0.80905211868000959
+max ice volume     (m) =        4.24894676072688426       2.68041292850625190
+max ice speed    (m/s) =        0.40346627044137950       0.26406794822256857
+max strength    (kN/m) =      153.46632906810413033      32.64634237601573830
+  
+istep1:      9408    idate:  19980128    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.71945153951500654E+07   1.22656904410681371E+07
+total ice extent(km^2) =    1.75906103663716316E+07   1.59163495161129050E+07
+total ice volume (m^3) =    1.88588390384910039E+13   1.85352539489632695E+13
+total snw volume (m^3) =    2.58558026628902393E+12   3.76909193307650342E+12
+tot kinetic energy (J) =    1.17062814782596500E+14   7.09796369379575000E+13
+rms ice speed    (m/s) =        0.11358591737805894       0.08821897123114833
+average albedo         =        0.80582940967933825       0.81296212443669447
+max ice volume     (m) =        4.25142911486020925       2.67211401017389516
+max ice speed    (m/s) =        0.34112240268303845       0.25872411979202642
+max strength    (kN/m) =      154.69130228381521874      32.34711321424450858
+  
+istep1:      9432    idate:  19980129    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.72819468849165738E+07   1.21643649490305260E+07
+total ice extent(km^2) =    1.76159978855856210E+07   1.58308931025626212E+07
+total ice volume (m^3) =    1.90176343991303750E+13   1.83704753420469805E+13
+total snw volume (m^3) =    2.61369500966468945E+12   3.74368302832605273E+12
+tot kinetic energy (J) =    6.53159149632099531E+13   1.25029364210197375E+14
+rms ice speed    (m/s) =        0.08448486349796702       0.11760020784058456
+average albedo         =        0.82783156462976781       0.81161622851612469
+max ice volume     (m) =        4.25095993966006880       2.67410735993838067
+max ice speed    (m/s) =        0.34154129564371699       0.31037889864116180
+max strength    (kN/m) =      155.62003445277608193      31.24011585319717810
+  
+istep1:      9456    idate:  19980130    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.73758301883988976E+07   1.20601978198919520E+07
+total ice extent(km^2) =    1.78267803511864655E+07   1.58308931025626212E+07
+total ice volume (m^3) =    1.91618949865298164E+13   1.81835842372462031E+13
+total snw volume (m^3) =    2.64144448433623828E+12   3.71256864071232373E+12
+tot kinetic energy (J) =    8.92777194294467187E+13   1.69342243548528406E+14
+rms ice speed    (m/s) =        0.09839412690882547       0.13755528169392578
+average albedo         =        0.82554560208202510       0.81123243082920093
+max ice volume     (m) =        4.20911441430760114       2.72097039118242634
+max ice speed    (m/s) =        0.43484624093128127       0.30277445803662761
+max strength    (kN/m) =      156.90380390533354671      35.44551255877831863
+  
+istep1:      9480    idate:  19980131    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.75530287660506740E+07   1.19577514900443200E+07
+total ice extent(km^2) =    1.78811331542185023E+07   1.56953671006698925E+07
+total ice volume (m^3) =    1.93041164997453750E+13   1.80035353642919453E+13
+total snw volume (m^3) =    2.67021592019021973E+12   3.68337238092279883E+12
+tot kinetic energy (J) =    9.23499218804806875E+13   1.11094981936149031E+14
+rms ice speed    (m/s) =        0.09969532927202060       0.11196237465171212
+average albedo         =        0.83489787477310018       0.81568236715140574
+max ice volume     (m) =        3.82476249577944172       2.77120629982920530
+max ice speed    (m/s) =        0.42264740100306974       0.28854287436877568
+max strength    (kN/m) =      158.06996501013529155      42.16544253837672329
+  
+istep1:      9504    idate:  19980201    sec:         0
+                                             Arctic                 Antarctic
+total ice area  (km^2) =    1.76599683642708324E+07   1.18450913008906003E+07
+total ice extent(km^2) =    1.79539009241383635E+07   1.55577857594975308E+07
+total ice volume (m^3) =    1.94361401007537266E+13   1.78289370367821953E+13
+total snw volume (m^3) =    2.70059574222121338E+12   3.65851773355869434E+12
+tot kinetic energy (J) =    3.15371736753209922E+13   1.18147513676725469E+14
+rms ice speed    (m/s) =        0.05805524734255907       0.11601362236037549
+average albedo         =        0.83798122564774358       0.81560050213879376
+max ice volume     (m) =        3.76542213610671661       2.80729718689230978
+max ice speed    (m/s) =        0.28553166028779653       0.29626496374383687
+max strength    (kN/m) =      158.74812207174102241      47.21312157244811658
+  
+ Finished writing ./history/iceh.1998-01.nc
+
+Timing information:
+
+Timer   1:     Total      86.12 seconds
+Timer   2:  TimeLoop      85.64 seconds
+Timer   3:  Dynamics      13.18 seconds
+Timer   4: Advection      20.81 seconds
+Timer   5:    Column      48.79 seconds
+Timer   6:    Thermo      39.99 seconds
+Timer   7: Shortwave      15.46 seconds
+Timer   8: Meltponds       0.81 seconds
+Timer   9:   Ridging       5.56 seconds
+Timer  10:  Cat Conv       1.17 seconds
+Timer  11:  Coupling       3.80 seconds
+Timer  12: ReadWrite       1.24 seconds
+Timer  13:     Diags       0.83 seconds
+Timer  14:   History       0.95 seconds
+Timer  15:     Bound      31.83 seconds
+Timer  16:       BGC       0.00 seconds

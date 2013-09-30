@@ -1615,7 +1615,7 @@
                 trcrn(i,j,nt_alvl,n)*vsurp) / vtmp
             endif
 
-            if (tr_aero) then
+            if (tr_aero .and. vtmp > puny) then
                do it = 1, n_aero
                   trcrn(i,j,nt_aero+2+4*(it-1),n) = &
                   trcrn(i,j,nt_aero+2+4*(it-1),n)*vicen(i,j,n) / vtmp
