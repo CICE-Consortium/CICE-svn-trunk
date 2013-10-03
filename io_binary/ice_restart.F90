@@ -565,7 +565,7 @@
 ! author David A Bailey, NCAR
 
       subroutine read_restart_field(nu,nrec,work,atype,vname,ndim3, &
-                                    diag, field_loc, field_type, restart_ext)
+                                    diag, field_loc, field_type)
 
       use ice_blocks, only: nx_block, ny_block
       use ice_domain_size, only: max_blocks
@@ -587,9 +587,6 @@
       logical (kind=log_kind), intent(in) :: &
            diag              ! if true, write diagnostic output
 
-      logical (kind=log_kind), intent(in), optional :: &
-           restart_ext       ! if true, write ghost cells
-
       character (len=*), intent(in) :: vname
 
       integer (kind=int_kind), optional, intent(in) :: &
@@ -610,8 +607,7 @@
          write(nu_diag,*) 'vname ',trim(vname)
          if (present(field_loc)) then
             do n=1,ndim3
-               if (present(restart_ext)) then
-                  if (restart_ext) &
+               if (restart_ext) then
                   call ice_read_ext(nu,nrec,work2,atype,diag,field_loc,field_type)
                else
                   call ice_read(nu,nrec,work2,atype,diag,field_loc,field_type)
@@ -620,8 +616,7 @@
             enddo
          else
             do n=1,ndim3
-               if (present(restart_ext)) then
-                  if (restart_ext) &
+               if (restart_ext) then
                   call ice_read_ext(nu,nrec,work2,atype,diag)
                else
                   call ice_read(nu,nrec,work2,atype,diag)
@@ -640,8 +635,7 @@
 ! Writes a single restart field.
 ! author David A Bailey, NCAR
 
-      subroutine write_restart_field(nu,nrec,work,atype,vname,ndim3, &
-                                     diag,restart_ext)
+      subroutine write_restart_field(nu,nrec,work,atype,vname,ndim3,diag)
 
       use ice_blocks, only: nx_block, ny_block
       use ice_domain_size, only: max_blocks
@@ -663,9 +657,6 @@
       logical (kind=log_kind), intent(in) :: &
            diag              ! if true, write diagnostic output
 
-      logical (kind=log_kind), intent(in), optional :: &
-           restart_ext       ! if true, write ghost cells
-
       character (len=*), intent(in)  :: vname
 
       ! local variables
@@ -681,8 +672,7 @@
       if (restart_format == 'bin') then
          do n=1,ndim3
             work2(:,:,:) = work(:,:,n,:)
-            if (present(restart_ext)) then
-               if (restart_ext) &
+            if (restart_ext) then
                call ice_write_ext(nu,nrec,work2,atype,diag)
             else
                call ice_write(nu,nrec,work2,atype,diag)

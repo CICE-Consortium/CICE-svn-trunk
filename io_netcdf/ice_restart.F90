@@ -107,6 +107,7 @@
 
       subroutine init_restart_write(filename_spec)
 
+      use ice_blocks, only: nghost
       use ice_calendar, only: sec, month, mday, nyr, istep1, &
                               time, time_forc, year_init
       use ice_communicate, only: my_task, master_task
@@ -128,6 +129,7 @@
 
       integer (kind=int_kind) :: &
           k,                    & ! index
+          nx, ny,               & ! global array size
           iyear, imonth, iday     ! year, month, day
 
       character(len=char_len_long) :: filename
@@ -182,8 +184,15 @@
          status = nf90_put_att(ncid,nf90_global,'mday',mday)
          status = nf90_put_att(ncid,nf90_global,'sec',sec)
 
-         status = nf90_def_dim(ncid,'ni',nx_global,dimid_ni)
-         status = nf90_def_dim(ncid,'nj',ny_global,dimid_nj)
+         nx = nx_global
+         ny = ny_global
+         if (restart_ext) then
+            nx = nx_global + 2*nghost
+            ny = ny_global + 2*nghost
+         endif
+         status = nf90_def_dim(ncid,'ni',nx,dimid_ni)
+         status = nf90_def_dim(ncid,'nj',ny,dimid_nj)
+
          status = nf90_def_dim(ncid,'ncat',ncat,dimid_ncat)
 
       !-----------------------------------------------------------------

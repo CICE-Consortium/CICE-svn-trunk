@@ -89,8 +89,8 @@
 
       !-----------------------------------------------------------------
       ! state variables
-      ! Tsfc is the only tracer written to this file.  All other
-      ! tracers are written to their own dump/restart files.
+      ! Tsfc is the only tracer written to binary files.  All other
+      ! tracers are written to their own dump/restart binary files.
       !-----------------------------------------------------------------
 
       call write_restart_field(nu_dump,0,aicen(:,:,:,:),'ruf8','aicen',ncat,diag)
