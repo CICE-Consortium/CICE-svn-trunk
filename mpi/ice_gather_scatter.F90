@@ -770,7 +770,7 @@
               msg_buffer(i,j)
             end do
             end do
-            if (this_block%jblock == 1) then
+            if (this_block%iblock == 1) then
                ! southwest corner
                do j=1, nghost
                do i=1, nghost
@@ -788,7 +788,7 @@
               msg_buffer(i, this_block%jhi+j)
             end do
             end do
-            if (this_block%jblock == nblocks_y) then
+            if (this_block%iblock == nblocks_x) then
                ! northeast corner
                do j=1, nghost
                do i=1, nghost
