@@ -578,7 +578,7 @@
    real (dbl_kind), dimension(:,:), intent(inout) :: &
      ARRAY_G    ! array containing global horizontal field on dst_task
 
-   real (dbl_kind), optional :: &
+   real (dbl_kind), intent(in), optional :: &
      spc_val
      
 !-----------------------------------------------------------------------
@@ -620,7 +620,6 @@
 
    nx = nx_global + 2*nghost
    ny = ny_global + 2*nghost
-   ARRAY_G = c0
 
 !-----------------------------------------------------------------------
 !
@@ -657,7 +656,7 @@
               ARRAY  (i,j,src_dist%blockLocalID(n))
             end do
             end do
-            if (this_block%jblock == 1) then
+            if (this_block%iblock == 1) then
                ! southwest corner
                do j=1, nghost
                do i=1, nghost
@@ -676,7 +675,7 @@
               ARRAY  (i,this_block%jhi+nghost-j+1,src_dist%blockLocalID(n))
             end do
             end do
-            if (this_block%jblock == nblocks_y) then
+            if (this_block%iblock == nblocks_x) then
                ! northeast corner
                do j=1, nghost
                do i=1, nghost

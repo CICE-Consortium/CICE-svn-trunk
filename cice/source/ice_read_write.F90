@@ -1009,7 +1009,7 @@
            work              ! output array (real, 8-byte)
 
       logical (kind=log_kind), optional, intent(in) :: &
-           restart_ext       ! if true, write diagnostic output
+           restart_ext       ! if true, read extended grid
 
       integer (kind=int_kind), optional, intent(in) :: &
            field_loc, &      ! location of field on staggered grid
@@ -1173,7 +1173,7 @@
            work              ! output array (real, 8-byte)
 
       logical (kind=log_kind), optional, intent(in) :: &
-           restart_ext       ! if true, write diagnostic output
+           restart_ext       ! if true, read extended grid
 
       integer (kind=int_kind), optional, intent(in) :: &
            field_loc, &      ! location of field on staggered grid
@@ -1525,7 +1525,7 @@
            diag              ! if true, write diagnostic output
 
       logical (kind=log_kind), optional, intent(in) :: &
-           restart_ext
+           restart_ext       ! if true, write extended grid
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
            intent(in) :: &
@@ -1633,7 +1633,7 @@
            diag              ! if true, write diagnostic output
 
       logical (kind=log_kind), optional, intent(in) :: &
-           restart_ext
+           restart_ext       ! if true, read extended grid
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,ncat,max_blocks), &
            intent(in) :: &
