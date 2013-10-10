@@ -60,13 +60,13 @@
                    + nilyr       & ! ice enthalpy
                    + nslyr         ! snow enthalpy
 
-      integer (kind=int_kind), dimension(nilyr) :: &
+      integer (kind=int_kind), dimension(ncat) :: &
          ilyr1          , & ! starting ice layer number for each category
          slyr1              ! starting snow layer number for each category
 
       integer (kind=int_kind) :: &
          ntrcr          , & ! number of required tracers
-         i,j,n,k            ! indices
+         i,j,n,k,m          ! indices
 
       ! tracer indices
       integer (kind=int_kind) :: &
@@ -139,8 +139,9 @@
          Lsub      = 2.835e6_dbl_kind ,&! latent heat, sublimation freshwater (J/kg)
          Lvap      = 2.501e6_dbl_kind ,&! latent heat, vaporization freshwater (J/kg)
          Lfresh    = Lsub-Lvap        ,&! latent heat of melting of fresh ice (J/kg)
+         cp_ice    = 2106._dbl_kind   ,&! specific heat of fresh ice (J/kg/K)
          rhos      = 330.0_dbl_kind   ,&! density of snow (kg/m^3)
-         hs_min = 1.e-4_dbl_kind, & ! min snow thickness for computing Tsno (m)
+         hs_min  = 1.e-4_dbl_kind, &  ! min snow thickness for computing Tsno (m)
          nsal    = 0.407_dbl_kind, &
          msal    = 0.573_dbl_kind, &
          min_salin = 0.1_dbl_kind, &  ! threshold for brine pocket treatment 
@@ -151,6 +152,8 @@
          salin       ! initial salinity  profile (ppt)   
 
       real (kind=dbl_kind)    :: &
+         Tmin, Tmax,    & ! min and max snow temperature
+         zTsn,          & ! snow temperature
          zn,            & ! thickness
          rnslyr,        & ! real(nslyr)
          rnilyr           ! real(nilyr)
@@ -186,7 +189,7 @@
             salin(k) = c0
          enddo
       endif
-      do k = 1, nilyr+1
+      do k = 1, nilyr
          trcrn(:,:,nt_sice+k-1,:) = salin(k)
       enddo
 
@@ -203,6 +206,7 @@
 
       rnslyr = real(nslyr, kind=dbl_kind)
       rnilyr = real(nilyr, kind=dbl_kind)
+      Tmin = -100.  ! minimum allowed snow temperature
       do j = 1, ny_block
       do i = 1, nx_block
       do n = 1, ncat
@@ -212,18 +216,35 @@
             ! qsn, esnon < 0              
             trcrn(i,j,nt_qsno+k-1,n) = &
                min(esnon(i,j,slyr1(n)+k-1)*rnslyr/vsnon(i,j,n),-rhos*Lfresh) 
+            Tmax = -trcrn(i,j,nt_qsno+k-1,n)*puny*rnslyr/(rhos*cp_ice*vsnon(i,j,n))
             if (.not. heat_capacity) then
                trcrn(i,j,nt_qsno+k-1,n) = -rhos * Lfresh
+               Tmax = puny
             endif
+!!!!!!! modify as needed (begin)
+! if your restarts do not work, try uncommenting this section
+!            ! snow temperature
+!            zTsn = (Lfresh + trcrn(i,j,nt_qsno+k-1,n)/rhos)/cp_ice
+!            ! zap entire snow volume if temperature is out of bounds
+!            if (zTsn < Tmin .or. zTsn > Tmax) then
+!               print*, 'zapping snow volume ', i,j,n,vsnon(i,j,n)
+!               vsnon(i,j,n) = c0
+!               do m = 1, nslyr
+!                  trcrn(i,j,nt_qsno+m-1,n) = c0
+!               enddo
+!            endif
+!!!!!!! modify as needed (begin)
          enddo
       else
+         vsnon(i,j,n) = c0
          do k = 1, nslyr
             trcrn(i,j,nt_qsno+k-1,n) = c0
          enddo
       endif
       endif
       do k = 1, nilyr
-         if (vicen(i,j,n) > puny) then
+!         if (vicen(i,j,n) > puny) then
+         if (aicen(i,j,n) > puny) then  ! matches v4.1
             trcrn(i,j,nt_qice+k-1,n) = eicen(i,j,ilyr1(n)+k-1)*rnilyr/vicen(i,j,n)
          else
             trcrn(i,j,nt_qice+k-1,n) = c0
