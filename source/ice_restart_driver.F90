@@ -841,8 +841,9 @@
       !$OMP END PARALLEL DO
 
       ! creates netcdf if restart_format = 'nc'
-      filename = 'restart/iced.converted'
+      filename = trim(restart_dir) // '/iced.converted'
       call dumpfile(filename) 
+      call final_restart
       ! stop
 
       ! if runid is bering then need to correct npt for istep0
