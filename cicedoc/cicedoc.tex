@@ -4104,21 +4104,23 @@ History\index{history} variables available for column output are ice and snow te
 
 \index{grid!horizontal}
 \subsubsection{Boundary conditions}
-Open boundary conditions are the default in CICE; the physical domain can 
+Much of the infrastructure used in CICE, including the boundary routines, is adopted from POP. \index{POP}% 
+The boundary routines perform
+\index{boundary!communication}%
+boundary communications among processors when MPI\index{MPI} is in use and among blocks whenever there is more than one block per processor.
+
+Open/cyclic boundary conditions are the default in CICE; the physical domain can 
 still be closed using the land mask.
  In our bipolar, displaced-pole grids, one row of grid cells along the
 north and south boundaries is located on land, and along east/west domain boundaries not masked by land, periodic conditions wrap  the domain around the globe.   CICE can be run on regional grids
 \index{grid!regional}
 with open boundary conditions; except for variables describing grid lengths, non-land halo\index{halo} cells along the grid edge must be filled by restoring\index{restoring} them to specified values.
-The namelist\index{namelist} variable {\tt restore\_ice} turns this functionality on and off and currently uses the restoring timescale {\tt trestore} (also used for restoring ocean sea surface temperature\index{temperature!ocean} in stand-alone ice runs).
-This implementation is only intended to provide the ``hooks" for a more sophisticated 
+The namelist\index{namelist} variable {\tt restore\_ice} turns this functionality on and off; the restoring timescale {\tt trestore} may be used (it is also used for restoring ocean sea surface temperature\index{temperature!ocean} in stand-alone ice runs).  This implementation is only intended to provide the ``hooks" for a more sophisticated 
 treatment; the rectangular grid option can be used to test this
-configuration.  The `displaced\_pole' grid option should not be used unless the regional grid contains land all along the north and south boundaries.  For exact restarts\index{restart} using restoring, set {\tt restart\_ext} = true in namelist\index{namelist} to use the extended-grid subroutines.
+configuration.   The `displaced\_pole' grid option should not be used unless the regional grid contains land all along the north and south boundaries.  The current form of the boundary condition routines does not allow Neumann boundary conditions, which must be set explicitly.  This has been done in an unreleased branch of the code; contact Elizabeth for more information.
 
-Much of the infrastructure used in CICE, including the boundary routines, is adopted from POP. \index{POP}% 
-The boundary routines perform
-\index{boundary!communication}%
-boundary communications among processors when MPI\index{MPI} is in use and among blocks whenever there is more than one block per processor.
+For exact restarts\index{restart} using restoring, set {\tt restart\_ext} = true in namelist\index{namelist} to use the extended-grid subroutines.
+
 
 \subsubsection{Masks}
 \index{masks|(emph}%
@@ -5073,11 +5075,9 @@ variable & options/format & description & recommended value\\
  {\tt distribution\_weight} & {\tt block} & full block size sets {\tt work\_per\_block} & \\
                                     & {\tt latitude} &  latitude/ocean sets {\tt work\_per\_block}  & \\
  {\tt ew\_boundary\_type} & {\tt cyclic} & periodic boundary conditions in x-direction & \\
-                                      & {\tt open}  & Neumann boundary conditions in x & \\
-                                      & {\tt closed} & Dirichlet boundary conditions in x & \\
+                                      & {\tt open}  & Dirichlet boundary conditions in x & \\
  {\tt ns\_boundary\_type} & {\tt cyclic} & periodic boundary conditions in y-direction & \\
-                                      & {\tt open}  & Neumann boundary conditions in y & \\
-                                      & {\tt closed} & Dirichlet boundary conditions in y & \\
+                                      & {\tt open}  & Dirichlet boundary conditions in y & \\
                                       & {\tt tripole} & U-fold tripole boundary conditions in y & \\
                                       & {\tt tripoleT} & T-fold tripole boundary conditions in y & \\
 {\tt maskhalo\_dyn} & true/false & mask unused halo cells for dynamics & \\
