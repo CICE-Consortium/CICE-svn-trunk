@@ -952,7 +952,6 @@
                                 + (c1-alidfns(i,j))*asnow )
 
          swabs   = swabsv + swabsi
-         if (hs <= hs_min) swabs = c0
 
          fswpenvdr = swvdr(i,j) * (c1-alvdrni(i,j)) * (c1-asnow) * i0vis
          fswpenvdf = swvdf(i,j) * (c1-alvdfni(i,j)) * (c1-asnow) * i0vis
