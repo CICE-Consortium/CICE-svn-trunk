@@ -168,7 +168,7 @@
       subroutine init_restart
 
       use ice_aerosol, only: init_aerosol
-      use ice_age, only: init_age
+      use ice_age, only: init_age, restart_age, read_restart_age
       use ice_blocks, only: nx_block, ny_block
       use ice_brine, only: init_hbrine
       use ice_calendar, only: time, calendar
@@ -176,21 +176,18 @@
       use ice_domain_size, only: ncat
       use ice_dyn_eap, only: read_restart_eap
       use ice_dyn_shared, only: kdyn
-      use ice_firstyear, only: init_fy
+      use ice_firstyear, only: init_fy, restart_FY, read_restart_FY
       use ice_flux, only: sss
       use ice_init, only: ice_ic
-      use ice_lvl, only: init_lvl
-      use ice_meltpond_cesm, only: init_meltponds_cesm
-      use ice_meltpond_lvl, only: init_meltponds_lvl
-      use ice_meltpond_topo, only: init_meltponds_topo
+      use ice_lvl, only: init_lvl, restart_lvl, read_restart_lvl
+      use ice_meltpond_cesm, only: init_meltponds_cesm, &
+          restart_pond_cesm, read_restart_pond_cesm
+      use ice_meltpond_lvl, only: init_meltponds_lvl, &
+          restart_pond_lvl, read_restart_pond_lvl, dhsn
+      use ice_meltpond_topo, only: init_meltponds_topo, &
+          restart_pond_topo, read_restart_pond_topo
       use ice_restart_shared, only: runtype, restart
       use ice_restart_driver, only: restartfile, restartfile_v4
-      use ice_restart_age, only: restart_age, read_restart_age
-      use ice_restart_firstyear, only: restart_FY, read_restart_FY
-      use ice_restart_lvl, only: restart_lvl, read_restart_lvl
-      use ice_restart_meltpond_cesm, only: restart_pond_cesm, read_restart_pond_cesm
-      use ice_restart_meltpond_lvl, only: restart_pond_lvl, read_restart_pond_lvl, dhsn
-      use ice_restart_meltpond_topo, only: restart_pond_topo, read_restart_pond_topo
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond_cesm, &
           tr_pond_lvl, tr_pond_topo, tr_aero, trcrn, &
           nt_iage, nt_FY, nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd, tr_brine
