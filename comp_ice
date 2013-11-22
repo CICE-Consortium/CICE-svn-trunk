@@ -66,6 +66,7 @@ setenv SHRDIR   csm_share # location of CCSM shared code
 setenv IO_TYPE  netcdf    # set to none if netcdf library is unavailable
                           # set to pio for parallel netcdf
 setenv DITTO    no        # reproducible diagnostics
+setenv BARRIERS no        # prevent MPI buffer overflow during gather/scatter 
 setenv THRD     no        # set to yes for OpenMP threading
 
 if ( $THRD == 'yes') setenv OMP_NUM_THREADS 2 # positive integer 

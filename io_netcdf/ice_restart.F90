@@ -63,9 +63,7 @@
 
       if (my_task == master_task) then
          write(nu_diag,*) 'Using restart dump=', trim(filename)
-      end if
 
-      if (restart_format == 'nc') then
          status = nf90_open(trim(filename), nf90_nowrite, ncid)
          if (status /= nf90_noerr) call abort_ice( &
             'ice: Error reading restart ncfile '//trim(filename))
@@ -81,9 +79,7 @@
             status = nf90_get_att(ncid, nf90_global, 'sec', sec)
          endif
          endif ! use namelist values if use_restart_time = F
-      endif
 
-      if (my_task == master_task) then
          write(nu_diag,*) 'Restart read at istep=',istep0,time,time_forc
       endif
 
@@ -158,18 +154,14 @@
               restart_file(1:lenstr(restart_file)),'.', &
               iyear,'-',month,'-',mday,'-',sec
       end if
-        
-      if (restart_format /= 'bin') filename = trim(filename) // '.nc'
 
       ! write pointer (path/file)
       if (my_task == master_task) then
+         filename = trim(filename) // '.nc'
          open(nu_rst_pointer,file=pointer_file)
          write(nu_rst_pointer,'(a)') filename
          close(nu_rst_pointer)
-      endif
 
-      if (restart_format == 'nc') then
-      
          iflag = 0
          if (lcdf64) iflag = nf90_64bit_offset
          status = nf90_create(trim(filename), iflag, ncid)
@@ -371,11 +363,8 @@
          deallocate(dims)
          status = nf90_enddef(ncid)
 
-      endif
-
-      if (my_task == master_task) then
          write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
-      endif
+      endif ! master_task
 
       end subroutine init_restart_write
 
@@ -424,7 +413,6 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
            work2              ! input array (real, 8-byte)
 
-      if (restart_format == 'nc') then
          if (present(field_loc)) then
             if (ndim3 == ncat) then
                if (restart_ext) then
@@ -462,9 +450,6 @@
                write(nu_diag,*) 'ndim3 not supported ',ndim3
             endif
          endif
-      else
-         call abort_ice('Invalid restart_format: '//restart_format)
-      endif
 
       end subroutine read_restart_field
       
@@ -508,7 +493,6 @@
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
            work2              ! input array (real, 8-byte)
 
-      if (restart_format == 'nc') then
          status = nf90_inq_varid(ncid,trim(vname),varid)
          if (ndim3 == ncat) then 
             if (restart_ext) then
@@ -526,9 +510,6 @@
          else
             write(nu_diag,*) 'ndim3 not supported',ndim3
          endif
-      else
-         call abort_ice('Invalid restart_format: '//restart_format)
-      endif
 
       end subroutine write_restart_field
 
@@ -545,9 +526,7 @@
 
       integer (kind=int_kind) :: status
 
-      if (restart_format == 'nc') then
-         status = nf90_close(ncid)
-      endif
+      status = nf90_close(ncid)
 
       if (my_task == master_task) &
          write(nu_diag,*) 'Restart read/written ',istep1,time,time_forc
