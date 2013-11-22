@@ -227,6 +227,10 @@
 
    endif
 
+#ifdef gather_scatter_barrier
+   call MPI_BARRIER(MPI_COMM_ICE, ierr)
+#endif
+
 !-----------------------------------------------------------------------
 
  end subroutine gather_global_dbl
@@ -390,6 +394,10 @@
 
    endif
 
+#ifdef gather_scatter_barrier
+   call MPI_BARRIER(MPI_COMM_ICE, ierr)
+#endif
+
 !-----------------------------------------------------------------------
 
  end subroutine gather_global_real
@@ -552,6 +560,10 @@
      deallocate(snd_request, snd_status)
 
    endif
+
+#ifdef gather_scatter_barrier
+   call MPI_BARRIER(MPI_COMM_ICE, ierr)
+#endif
 
 !-----------------------------------------------------------------------
 
@@ -869,6 +881,10 @@
      deallocate(snd_request, snd_status)
 
    endif
+
+#ifdef gather_scatter_barrier
+   call MPI_BARRIER(MPI_COMM_ICE, ierr)
+#endif
 
 !-----------------------------------------------------------------------
 
@@ -1241,6 +1257,10 @@
          endif
       enddo
    endif
+
+#ifdef gather_scatter_barrier
+   call MPI_BARRIER(MPI_COMM_ICE, ierr)
+#endif
 
 !-----------------------------------------------------------------------
 
@@ -1627,6 +1647,10 @@
       enddo
    endif
 
+#ifdef gather_scatter_barrier
+   call MPI_BARRIER(MPI_COMM_ICE, ierr)
+#endif
+
 !-----------------------------------------------------------------------
 
  end subroutine scatter_global_real
@@ -2012,6 +2036,10 @@
       enddo
    endif
 
+#ifdef gather_scatter_barrier
+   call MPI_BARRIER(MPI_COMM_ICE, ierr)
+#endif
+
 !-----------------------------------------------------------------------
 
  end subroutine scatter_global_int
@@ -2337,6 +2365,10 @@
      deallocate(rcv_request, rcv_status)
    endif
 
+#ifdef gather_scatter_barrier
+   call MPI_BARRIER(MPI_COMM_ICE, ierr)
+#endif
+
 !-----------------------------------------------------------------------
 
  end subroutine scatter_global_ext
@@ -2618,6 +2650,10 @@
 
      deallocate(rcv_request, rcv_status)
    endif
+
+#ifdef gather_scatter_barrier
+   call MPI_BARRIER(MPI_COMM_ICE, ierr)
+#endif
 
 !-----------------------------------------------------------------------
 

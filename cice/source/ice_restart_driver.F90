@@ -85,7 +85,7 @@
          call init_restart_write
       endif
 
-      diag = .true.
+      diag = .false.
 
       !-----------------------------------------------------------------
       ! state variables
