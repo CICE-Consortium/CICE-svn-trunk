@@ -2800,7 +2800,7 @@ Unlike the cesm\index{CESM/CCSM} and level-ice melt pond schemes, the liquid pon
 
 \noindent{\bf Level-ice formulation} ({\tt tr\_pond\_lvl} = true)\index{melt pond!level-ice|(emph}
 
-This meltpond parameterization represents a combination of ideas from the empirical CESM\index{CESM/CCSM} melt pond scheme and the topo approach, and is documented in \cite{HHL:12}. The ponds evolve according to physically based process descriptions, assuming a thickness-area ratio for changes in pond volume. A novel aspect of the new scheme is that the ponds are carried as tracers\index{tracers} on the level\index{ice!level} (undeformed) ice area of each thickness category, thus limiting their spatial extent based on the simulated sea ice topography. This limiting is meant to approximate the horizontal drainage\index{drainage} of melt water into depressions in ice floes. (The primary difference between the level-ice and topo meltpond parameterizations lies in how sea ice topography is taken into account when determining the areal coverage of ponds.)  Infiltration of the snow\index{snow!infiltration by water} by melt water postpones the appearance of ponds and the subsequent acceleration of melting through albedo feedback, while snow on top of refrozen pond ice also reduces the ponds' effect on the radiation budget. 
+This meltpond parameterization represents a combination of ideas from the empirical CESM\index{CESM/CCSM} melt pond scheme and the topo approach, and is documented in \cite{HHL:13}. The ponds evolve according to physically based process descriptions, assuming a thickness-area ratio for changes in pond volume. A novel aspect of the new scheme is that the ponds are carried as tracers\index{tracers} on the level\index{ice!level} (undeformed) ice area of each thickness category, thus limiting their spatial extent based on the simulated sea ice topography. This limiting is meant to approximate the horizontal drainage\index{drainage} of melt water into depressions in ice floes. (The primary difference between the level-ice and topo meltpond parameterizations lies in how sea ice topography is taken into account when determining the areal coverage of ponds.)  Infiltration of the snow\index{snow!infiltration by water} by melt water postpones the appearance of ponds and the subsequent acceleration of melting through albedo feedback, while snow on top of refrozen pond ice also reduces the ponds' effect on the radiation budget. 
 
 Melt pond processes, described in more detail below, include addition of liquid water from rain, melting snow and melting surface ice, drainage of pond water when its weight pushes the ice surface below sea level or when the ice interior becomes permeable, and refreezing of the pond water.  If snow falls after a layer of ice has formed on the ponds, the snow may block sunlight from reaching the ponds below.  When melt water forms with snow still on the ice, the water is assumed to infiltrate the snow.  If there is enough water to fill the air spaces within the snowpack, then the pond becomes visible above the snow, thus decreasing the albedo and ultimately causing the snow to melt faster.  The albedo also decreases as snow depth decreases, and thus a thin layer of snow remaining above a pond-saturated layer of snow will have a lower albedo than if the melt water were not present.
 
@@ -4549,6 +4549,7 @@ TRFY  & 0 or 1 & set to 1 for first-year ice area tracer\index{first-year area}\
 NBGCLYR & (integer) &  number of vertical layers for biogeochemical transport \index{transport!vertical} \\
  IO\_TYPE & none/netcdf/pio & use `none' if \netcdf\ library is unavailable, `pio' for PIO \index{PIO} \\
  DITTO & yes/no & for reproducible diagnostics \index{reproducible}\index{diagnostics} \\
+ BARRIERS & yes/no & flushes MPI buffers during global scatters and gathers \\
  THRD & yes/no & set to yes for OpenMP threaded parallelism \index{OpenMP}\index{parallelization}\\
  OMP\_NUM\_THREADS & (integer) & the number of OpenMP threads requested \\
  NUMIN & (integer) & smallest unit number assigned to CICE files \\
@@ -4833,9 +4834,13 @@ Provided that the same number of ice layers (default: 4) will be used for the ne
 \item In {\bf CICE\_InitMod.F90}, comment out the call to restartfile(ice\_ic) and uncomment the call to restartfile\_v4(ice\_ic) immediately below it.  This will read the v4.1 binary  file and write a v5.0 \netcdf\ file containing the same information.
 \end{enumerate}  
 
+If restart files are taking a long time to be written serially (i.e., not using PIO), see the next section.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Slow execution}
 On some architectures, underflows ($10^{-300}$ for example) are not flushed to zero automatically.  Usually a compiler flag is available to do this, but if not, try uncommenting the block of code at the end of subroutine {\it stress} in {\bf ice\_dyn\_evp.F90} or {\bf ice\_dyn\_eap.F90}.  You will take a hit for the extra computations, but it will not be as bad as running with the underflows.
+
+In some configurations, multiple calls to scatter or gather global variables may overfill MPI's buffers, causing the code to slow down (particularly when writing large output files such as restarts).  To remedy this problem, set {\tt BARRIERS yes} in {\bf comp\_ice}.   This synchronizes MPI messages, keeping the buffers in check.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Debugging hints}
