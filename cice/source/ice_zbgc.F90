@@ -963,20 +963,6 @@
       call ice_timer_start(timer_bgc) ! biogeochemistry
 
       !-----------------------------------------------------------------     
-      ! ocean flux
-      !-----------------------------------------------------------------     
-      do k = 1, nbtrcr  ! only correct for dissolved tracers
-         do ij = 1,icells
-            i = indxi(ij)
-            j = indxj(ij)
-            flux_bio(i,j,k) = flux_bio(i,j,k) &
-                            - vi0_init(ij)/dt*ocean_bio(i,j,k) & 
-                            * (bgc_tracer_type(k)*initbio_frac &
-                                      + (c1-bgc_tracer_type(k)))
-         enddo
-      enddo
-
-      !-----------------------------------------------------------------     
       ! brine
       !-----------------------------------------------------------------     
       do n = 1, ncat
@@ -1002,6 +988,9 @@
 
          vbri_init(ij) = vbri_init(ij) + vi0_init(ij)
 
+      !-----------------------------------------------------------------     
+      ! ocean flux
+      !-----------------------------------------------------------------     
          do k = 1, nbtrcr  ! only correct for dissolved tracers
             flux_bio(i,j,k) = flux_bio(i,j,k) &
                             - vi0_init(ij)/dt*ocean_bio(i,j,k) & 
