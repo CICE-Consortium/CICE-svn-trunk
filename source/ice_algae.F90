@@ -18,11 +18,9 @@
       use ice_communicate, only: my_task, master_task
       use ice_exit, only: abort_ice
       use ice_zbgc_shared ! everything
-      use ice_state, only: vicen, vice, trcr, ntrcr, nt_bgc_am_sk, &
-          nt_bgc_c_sk, nt_bgc_chl_sk, nt_bgc_DMS_sk, nt_bgc_DMSPd_sk, &
-          nt_bgc_DMSPp_sk, nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_Sil_sk, &
-          nt_bgc_Nit_sk, nt_bgc_Sil_sk, nt_bgc_Nit_sk, &
-          nt_bgc_Sil_sk
+      use ice_state, only: vicen, vice, trcr, ntrcr, nt_bgc_Am_sk, &
+          nt_bgc_C_sk, nt_bgc_chl_sk, nt_bgc_DMS_sk, nt_bgc_DMSPd_sk, &
+          nt_bgc_DMSPp_sk, nt_bgc_N_sk, nt_bgc_Nit_sk, nt_bgc_Sil_sk
 
       implicit none
 
@@ -309,23 +307,23 @@
          ice_growth(ij) = (congel(i,j)-meltb(i,j))/dt
 
          if (first_ice(i,j)) then     
-               trcrn(i,j,nt_bgc_N_sk)     = ocean_bio(i,j,nlt_bgc_N)    *sk_l/phi_sk
+               trcrn(i,j,nt_bgc_N_sk)     = ocean_bio(i,j,nlt_bgc_N)    *sk_l*rphi_sk
             if (tr_bgc_Nit_sk) &
-               trcrn(i,j,nt_bgc_Nit_sk)   = ocean_bio(i,j,nlt_bgc_NO)   *sk_l/phi_sk
+               trcrn(i,j,nt_bgc_Nit_sk)   = ocean_bio(i,j,nlt_bgc_NO)   *sk_l*rphi_sk
             if (tr_bgc_Am_sk)  &
-               trcrn(i,j,nt_bgc_Am_sk)    = ocean_bio(i,j,nlt_bgc_NH)   *sk_l/phi_sk
+               trcrn(i,j,nt_bgc_Am_sk)    = ocean_bio(i,j,nlt_bgc_NH)   *sk_l*rphi_sk
             if (tr_bgc_Sil_sk) &
-               trcrn(i,j,nt_bgc_Sil_sk)   = ocean_bio(i,j,nlt_bgc_Sil)  *sk_l/phi_sk
+               trcrn(i,j,nt_bgc_Sil_sk)   = ocean_bio(i,j,nlt_bgc_Sil)  *sk_l*rphi_sk
             if (tr_bgc_C_sk)   &
-               trcrn(i,j,nt_bgc_C_sk)     = ocean_bio(i,j,nlt_bgc_C)    *sk_l/phi_sk
+               trcrn(i,j,nt_bgc_C_sk)     = ocean_bio(i,j,nlt_bgc_C)    *sk_l*rphi_sk
             if (tr_bgc_chl_sk) &
-               trcrn(i,j,nt_bgc_chl_sk)   = ocean_bio(i,j,nlt_bgc_chl)  *sk_l/phi_sk
+               trcrn(i,j,nt_bgc_chl_sk)   = ocean_bio(i,j,nlt_bgc_chl)  *sk_l*rphi_sk
             if (tr_bgc_DMSPp_sk) &
-               trcrn(i,j,nt_bgc_DMSPp_sk) = ocean_bio(i,j,nlt_bgc_DMSPp)*sk_l/phi_sk
+               trcrn(i,j,nt_bgc_DMSPp_sk) = ocean_bio(i,j,nlt_bgc_DMSPp)*sk_l*rphi_sk
             if (tr_bgc_DMSPd_sk) &
-               trcrn(i,j,nt_bgc_DMSPd_sk) = ocean_bio(i,j,nlt_bgc_DMSPd)*sk_l/phi_sk
+               trcrn(i,j,nt_bgc_DMSPd_sk) = ocean_bio(i,j,nlt_bgc_DMSPd)*sk_l*rphi_sk
             if (tr_bgc_DMS_sk) &
-               trcrn(i,j,nt_bgc_DMS_sk)   = ocean_bio(i,j,nlt_bgc_DMS)  *sk_l/phi_sk
+               trcrn(i,j,nt_bgc_DMS_sk)   = ocean_bio(i,j,nlt_bgc_DMS)  *sk_l*rphi_sk
          endif ! first_ice
 
                               cinit(ij,nlt_bgc_N)     = trcrn(i,j,nt_bgc_N_sk)    
@@ -543,7 +541,7 @@
          reactb     ! biological reaction terms (mmol/m^3)
 
       real (kind=dbl_kind), dimension(icells,nbtrcr), intent(in) :: &
-         ltrcrn     ! concentrations in layer
+         ltrcrn     ! concentrations in layer * sk_l
 
       ! tracer flags for vertical or skeletal layer bgc
       logical (kind=log_kind), intent(in):: & 
