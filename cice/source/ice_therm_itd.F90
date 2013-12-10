@@ -1460,11 +1460,15 @@
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
-            Si0new(ij) = sss(i,j) - dSin0_frazil
+            if (sss(i,j) > c2 * dSin0_frazil) then
+               Si0new(ij) = sss(i,j) - dSin0_frazil
+            else
+               Si0new(ij) = sss(i,j)**2 / (c4*dSin0_frazil)
+            endif
             do k = 1, nilyr
                Sprofile(ij,k) = Si0new(ij)
             enddo
-            Ti = liquidus_temperature_mush(Si0new(ij) / phi_init)
+            Ti = min(liquidus_temperature_mush(Si0new(ij)/phi_init), -p1)
             qi0new(ij) = enthalpy_mush(Ti, Si0new(ij))
          enddo ! ij
 
