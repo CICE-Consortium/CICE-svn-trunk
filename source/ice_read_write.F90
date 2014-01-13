@@ -1041,10 +1041,12 @@
       real (kind=dbl_kind), dimension(:,:), allocatable :: &
          work_g2
 
-      if (my_task == master_task) then
-         allocate(work_g2(nx_global+2,ny_global+1))
-      else
-         allocate(work_g2(1,1))   ! to save memory
+      if (.not. present(restart_ext)) then
+         if (my_task == master_task) then
+            allocate(work_g2(nx_global+2,ny_global+1))
+         else
+            allocate(work_g2(1,1))   ! to save memory
+         endif
       endif
 #endif
 
@@ -1086,10 +1088,16 @@
                start=(/1,1,nrec/), & 
                count=(/nx,ny,1/) )
 #else
-         status = nf90_get_var( fid, varid, work_g2, &
+         if (.not. present(restart_ext)) then
+            status = nf90_get_var( fid, varid, work_g2, &
                start=(/1,1,nrec/), & 
                count=(/nx_global+2,ny_global+1,1/) )
-	 work_g1=work_g2(2:nx_global+1,1:ny_global)
+            work_g1 = work_g2(2:nx_global+1,1:ny_global)
+         else
+            status = nf90_get_var( fid, varid, work_g1, &
+               start=(/1,1,nrec/), & 
+               count=(/nx,ny,1/) )
+         endif
 #endif
 
       endif                     ! my_task = master_task
@@ -1134,7 +1142,7 @@
 
       deallocate(work_g1)
 #ifdef ORCA_GRID
-      deallocate(work_g2)
+      if (.not. present(restart_ext)) deallocate(work_g2)
 #endif
 
 #else
@@ -1206,10 +1214,12 @@
       real (kind=dbl_kind), dimension(:,:,:), allocatable :: &
          work_g2
 
-      if (my_task == master_task) then
-         allocate(work_g2(nx_global+2,ny_global+1,ncat))
-      else
-         allocate(work_g2(1,1,1))   ! to save memory
+      if (.not. present(restart_ext)) then
+         if (my_task == master_task) then
+            allocate(work_g2(nx_global+2,ny_global+1,ncat))
+         else
+            allocate(work_g2(1,1,1))   ! to save memory
+         endif
       endif
 #endif
 
@@ -1251,10 +1261,16 @@
                start=(/1,1,1,nrec/), & 
                count=(/nx,ny,ncat,1/) )
 #else
-         status = nf90_get_var( fid, varid, work_g2, &
+         if (.not. present(restart_ext)) then
+            status = nf90_get_var( fid, varid, work_g2, &
                start=(/1,1,1,nrec/), & 
                count=(/nx_global+2,ny_global+1,ncat,1/) )
-	 work_g1=work_g2(2:nx_global+1,1:ny_global,:)
+            work_g1 = work_g2(2:nx_global+1,1:ny_global,:)
+         else
+            status = nf90_get_var( fid, varid, work_g1, &
+               start=(/1,1,1,nrec/), & 
+               count=(/nx,ny,ncat,1/) )
+         endif
 #endif
 
       endif                     ! my_task = master_task
@@ -1308,7 +1324,7 @@
 
       deallocate(work_g1)
 #ifdef ORCA_GRID
-      deallocate(work_g2)
+      if (.not. present(restart_ext)) deallocate(work_g2)
 #endif
 
 #else
