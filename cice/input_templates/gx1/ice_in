@@ -264,6 +264,8 @@
   , f_dvidtd       = 'm' 
   , f_daidtt       = 'm'
   , f_daidtd       = 'm' 
+  , f_dagedtt      = 'm'
+  , f_dagedtd      = 'm' 
   , f_mlt_onset    = 'm'
   , f_frz_onset    = 'm'
   , f_hisnap       = 'x'

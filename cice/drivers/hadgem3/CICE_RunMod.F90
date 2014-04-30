@@ -52,11 +52,13 @@
 
       call ice_timer_start(timer_step)   ! start timing entire run
 
+#ifndef CICE_IN_NEMO
    !--------------------------------------------------------------------
    ! timestep loop
    !--------------------------------------------------------------------
 
       timeLoop: do
+#endif
 
          call ice_step
 
@@ -66,7 +68,9 @@
 
          call calendar(time)    ! at the end of the timestep
 
+#ifndef CICE_IN_NEMO
          if (stop_now >= 1) exit timeLoop
+#endif
 
 #ifndef coupled
          call ice_timer_start(timer_couple)  ! atm/ocn coupling
@@ -81,7 +85,9 @@
          call init_flux_atm     ! initialize atmosphere fluxes sent to coupler
          call init_flux_ocn     ! initialize ocean fluxes sent to coupler
 
+#ifndef CICE_IN_NEMO
       enddo timeLoop
+#endif
 
    !--------------------------------------------------------------------
    ! end of timestep loop
