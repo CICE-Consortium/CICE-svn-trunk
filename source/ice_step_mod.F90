@@ -969,12 +969,12 @@
 
       use ice_blocks, only: nx_block, ny_block
       use ice_domain, only: nblocks
-      use ice_flux, only: daidtt, dvidtt
+      use ice_flux, only: daidtt, dvidtt, dagedtt
       use ice_grid, only: tmask
       use ice_itd, only: aggregate
       use ice_state, only: aicen, trcrn, vicen, vsnon, ntrcr, &
                            aice,  trcr,  vice,  vsno, aice0, trcr_depend, &
-                           bound_state
+                           bound_state, nt_iage
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bound
 
       real (kind=dbl_kind), intent(in) :: &
@@ -1018,6 +1018,8 @@
          do i = 1, nx_block
             daidtt(i,j,iblk) = (aice(i,j,iblk) - daidtt(i,j,iblk)) / dt
             dvidtt(i,j,iblk) = (vice(i,j,iblk) - dvidtt(i,j,iblk)) / dt
+            if (trcr(i,j,nt_iage,iblk) > c0) &
+            dagedtt(i,j,iblk)= (trcr(i,j,nt_iage,iblk)-dagedtt(i,j,iblk)-dt)/dt
          enddo
          enddo
 
@@ -1046,11 +1048,11 @@
       use ice_dyn_evp, only: evp
       use ice_dyn_eap, only: eap
       use ice_dyn_shared, only: kdyn
-      use ice_flux, only: daidtd, dvidtd, init_history_dyn
+      use ice_flux, only: daidtd, dvidtd, init_history_dyn, dagedtd
       use ice_grid, only: tmask
       use ice_itd, only: aggregate
       use ice_state, only: nt_qsno, trcrn, vsnon, aicen, vicen, ntrcr, &
-          aice, trcr, vice, vsno, aice0, trcr_depend, bound_state
+          aice, trcr, vice, vsno, aice0, trcr_depend, bound_state, nt_iage
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_column, &
           timer_ridge, timer_bound
       use ice_transport_driver, only: advection, transport_upwind, transport_remap
@@ -1145,6 +1147,7 @@
          do i = ilo,ihi
             dvidtd(i,j,iblk) = (vice(i,j,iblk) - dvidtd(i,j,iblk)) /dt
             daidtd(i,j,iblk) = (aice(i,j,iblk) - daidtd(i,j,iblk)) /dt
+            dagedtd(i,j,iblk)= (trcr(i,j,nt_iage,iblk)-dagedtd(i,j,iblk))/dt
          enddo
          enddo
 

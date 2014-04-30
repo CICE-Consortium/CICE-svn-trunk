@@ -221,6 +221,7 @@
            f_sig1      = 'm', f_sig2       = 'm', &
            f_dvidtt    = 'm', f_dvidtd     = 'm', &
            f_daidtt    = 'm', f_daidtd     = 'm', &
+           f_dagedtt   = 'm', f_dagedtd    = 'm', &
            f_mlt_onset = 'm', f_frz_onset  = 'm', &
            f_iage      = 'm', f_FY         = 'm', &
            f_hisnap    = 'm', f_aisnap     = 'm', &
@@ -296,6 +297,7 @@
            f_sig1,      f_sig2     , &
            f_dvidtt,    f_dvidtd   , &
            f_daidtt,    f_daidtd   , &
+           f_dagedtt,   f_dagedtd  , &
            f_mlt_onset, f_frz_onset, &
            f_iage,      f_FY       , &
            f_hisnap,    f_aisnap   , &
@@ -385,6 +387,7 @@
            n_sig1       , n_sig2       , &
            n_dvidtt     , n_dvidtd     , &
            n_daidtt     , n_daidtd     , &
+           n_dagedtt    , n_dagedtd    , &
            n_mlt_onset  , n_frz_onset  , &
            n_hisnap     , n_aisnap     , &
            n_trsig      , n_icepresent , &

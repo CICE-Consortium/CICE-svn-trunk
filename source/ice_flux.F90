@@ -70,6 +70,7 @@
          strinty , & ! divergence of internal ice stress, y (N/m^2)
          daidtd  , & ! ice area tendency due to transport   (1/s)
          dvidtd  , & ! ice volume tendency due to transport (m/s)
+         dagedtd , & ! ice age tendency due to transport (s/s)
          dardg1dt, & ! rate of area loss by ridging ice (1/s)
          dardg2dt, & ! rate of area gain by new ridges (1/s)
          dvirdgdt, & ! rate of ice volume ridged (m/s)
@@ -268,6 +269,7 @@
          dsnow,  & ! change in snow thickness (m/step-->cm/day)
          daidtt, & ! ice area tendency thermo.   (s^-1)
          dvidtt, & ! ice volume tendency thermo. (m/s)
+         dagedtt,& ! ice age tendency thermo.    (s/s)
          mlt_onset, &! day of year that sfc melting begins
          frz_onset   ! day of year that freezing begins (congel or frazil)
          
@@ -542,7 +544,7 @@
                           Cdn_atm_floe, Cdn_atm_pond, Cdn_atm_skin, &
                           Cdn_atm_ocn, Cdn_ocn, Cdn_ocn_keel, &
                           Cdn_ocn_floe, Cdn_ocn_skin
-      use ice_state, only: aice, vice
+      use ice_state, only: aice, vice, trcr, nt_iage
 
       fsurf  (:,:,:) = c0
       fcondtop(:,:,:)= c0
@@ -556,6 +558,7 @@
       meltl  (:,:,:) = c0
       daidtt (:,:,:) = aice(:,:,:) ! temporary initial area
       dvidtt (:,:,:) = vice(:,:,:) ! temporary initial volume
+      dagedtt(:,:,:) = trcr(:,:,nt_iage,:) ! temporary initial age
       fsurfn    (:,:,:,:) = c0
       fcondtopn (:,:,:,:) = c0
       flatn     (:,:,:,:) = c0
@@ -602,7 +605,7 @@
 
       subroutine init_history_dyn
 
-      use ice_state, only: aice, vice
+      use ice_state, only: aice, vice, trcr, nt_iage
 
       sig1    (:,:,:) = c0
       sig2    (:,:,:) = c0
@@ -620,6 +623,7 @@
       opening (:,:,:) = c0
       daidtd  (:,:,:) = aice(:,:,:) ! temporary initial area
       dvidtd  (:,:,:) = vice(:,:,:) ! temporary initial volume
+      dagedtd (:,:,:) = trcr(:,:,nt_iage,:) ! temporary initial age
       fm      (:,:,:) = c0
       prs_sig (:,:,:) = c0
       ardgn   (:,:,:,:) = c0

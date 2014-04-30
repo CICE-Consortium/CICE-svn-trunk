@@ -71,6 +71,7 @@
          Gstar  = p15        , & ! max value of G(h) that participates 
                                  ! (krdg_partic = 0) 
          astar  = p05        , & ! e-folding scale for G(h) participation 
+!echmod         astar  = p1        , & ! e-folding scale for G(h) participation 
                                  ! (krdg_partic = 1) 
          maxraft= c1         , & ! max value of hrmin - hi = max thickness 
                                  ! of ice that rafts (m) 
@@ -1909,25 +1910,26 @@
                      expL = exp(-(hL-hi1)/hexp)
                      farea(ij) = expL
                      fvol (ij) = (hL + hexp)*expL / (hi1 + hexp)
-
                   enddo
 
                endif            ! nr < ncat
 
                ! diagnostics
+               if (n ==1) then  ! only for thinnest ridging ice
                if (present(aredistn)) then
                do ij = 1, iridge
                   i = indxii(ij)
                   j = indxjj(ij)
-                  aredistn(i,j,nr) = farea(ij)
+                  aredistn(i,j,nr) = farea(ij)*ardg2n(ij)
                enddo
                endif
                if (present(vredistn)) then
                do ij = 1, iridge
                   i = indxii(ij)
                   j = indxjj(ij)
-                  vredistn(i,j,nr) = fvol (ij)
+                  vredistn(i,j,nr) = fvol(ij)*virdgn(ij)
                enddo
+               endif
                endif
 
             endif               ! krdg_redist
@@ -1953,7 +1955,6 @@
       ! Transfer area-weighted and volume-weighted tracers to category nr.
       ! Note: The global sum aicen*trcrn of ice area tracers 
       !       (trcr_depend = 0) is not conserved by ridging.
-      ! Is this the problem???
       !       However, ridging conserves the global sum of volume
       !       tracers (trcr_depend = 1 or 2).
       ! Tracers associated with level ice, or that are otherwise lost

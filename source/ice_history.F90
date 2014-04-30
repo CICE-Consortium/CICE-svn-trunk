@@ -134,7 +134,11 @@
          enddo
       enddo
 
-      if (.not. tr_iage) f_iage = 'x'
+      if (.not. tr_iage) then
+         f_iage = 'x'
+         f_dagedtt = 'x'
+         f_dagedtd = 'x'
+      endif
       if (.not. tr_FY)   f_FY   = 'x'
 
       if (kdyn /= 2) then
@@ -258,6 +262,8 @@
       call broadcast_scalar (f_dvidtd, master_task)
       call broadcast_scalar (f_daidtt, master_task)
       call broadcast_scalar (f_daidtd, master_task)
+      call broadcast_scalar (f_dagedtt, master_task)
+      call broadcast_scalar (f_dagedtd, master_task)
       call broadcast_scalar (f_mlt_onset, master_task)
       call broadcast_scalar (f_frz_onset, master_task)
       call broadcast_scalar (f_aisnap, master_task)
@@ -756,6 +762,18 @@
              "none", secday*c100, c0,                                  &
              ns1, f_daidtd)
       
+      if (f_dagedtt(1:1) /= 'x') &
+         call define_hist_field(n_dagedtt,"dagedtt","day/day",tstr2D, tcstr, &
+             "age tendency thermo",                                   &
+             "excludes time step increment", c1, c0,                  &
+             ns1, f_dagedtt)
+      
+      if (f_dagedtd(1:1) /= 'x') &
+         call define_hist_field(n_dagedtd,"dagedtd","day/day",tstr2D, tcstr, &
+             "age tendency dynamics",                                 &
+             "excludes time step increment", c1, c0,                  &
+             ns1, f_dagedtd)
+      
       if (f_mlt_onset(1:1) /= 'x') &
          call define_hist_field(n_mlt_onset,"mlt_onset","day of year", &
              tstr2D, tcstr,"melt onset date",                            &
@@ -1161,7 +1179,7 @@
           stressp_2, stressm_2, stress12_2, &
           stressp_3, stressm_3, stress12_3, &
           stressp_4, stressm_4, stress12_4, sig1, sig2, &
-          mlt_onset, frz_onset
+          mlt_onset, frz_onset, dagedtt, dagedtd
       use ice_atmo, only: formdrag
       use ice_history_shared ! almost everything
       use ice_history_write, only: ice_write_hist
@@ -1461,6 +1479,10 @@
              call accum_hist_field(n_daidtt,  iblk, daidtt(:,:,iblk), a2D)
          if (f_daidtd (1:1) /= 'x') &
              call accum_hist_field(n_daidtd,  iblk, daidtd(:,:,iblk), a2D)
+         if (f_dagedtt (1:1) /= 'x') &
+             call accum_hist_field(n_dagedtt, iblk, dagedtt(:,:,iblk), a2D)
+         if (f_dagedtd (1:1) /= 'x') &
+             call accum_hist_field(n_dagedtd, iblk, dagedtd(:,:,iblk), a2D)
 
          if (f_fsurf_ai(1:1)/= 'x') &
              call accum_hist_field(n_fsurf_ai,iblk, fsurf(:,:,iblk)*workb(:,:), a2D)
