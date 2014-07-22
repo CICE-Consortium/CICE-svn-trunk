@@ -324,8 +324,6 @@
                                               flwoutn,       fsurfn,   &
                                               fcondtopn,     fcondbot, &
                                               fadvocn,       snoice,   &
-                                              freshn,        fsaltn,   &
-                                              fhocnn,                  &
                                               einit,         l_stop,   &
                                               istop,         jstop)
 
@@ -468,6 +466,8 @@
                        (rhoi*dhi + rhos*dhs) / dt
          fsaltn(i,j) = fsaltn(i,j) - &
                        rhoi*dhi*ice_ref_salinity*p001/dt
+
+         fhocnn(i,j) = fhocnn(i,j) + fadvocn(i,j) ! for ktherm=2 
 
          if (hin(ij) == c0) then
             if (tr_pond_topo) &

@@ -168,8 +168,6 @@ contains
                                           flwoutn,  fsurfn,   &
                                           fcondtopn,fcondbot, &
                                           fadvocn,  snoice,   &
-                                          freshn,   fsaltn,   &
-                                          fhocnn,             &
                                           einit,    l_stop,   &
                                           istop,    jstop)
 
@@ -230,10 +228,7 @@ contains
          fsensn      , & ! surface downward sensible heat (W m-2)
          flatn       , & ! surface downward latent heat (W m-2)
          flwoutn     , & ! upward LW at surface (W m-2)
-         fadvocn     , & ! advection heat flux to ocean
-         freshn      , & ! fresh water flux to ocean (kg/m^2/s)
-         fsaltn      , & ! salt flux to ocean (kg/m^2/s)
-         fhocnn          ! net heat flux to ocean (W/m^2) 
+         fadvocn         ! advection heat flux to ocean
     
     real (kind=dbl_kind), dimension (icells), intent(out):: &
          fcondbot        ! downward cond flux at bottom surface (W m-2)
@@ -308,8 +303,6 @@ contains
                                        flwoutn(i,j),  fsurfn(i,j),   &
                                        fcondtopn(i,j),fcondbot(ij),  &
                                        fadvocn(i,j),  snoice(i,j),   &
-                                       freshn(i,j),   fsaltn(i,j),   &
-                                       fhocnn(i,j),                  &
                                        einit(ij),     l_stop)
 
        if (tr_pond) then
@@ -349,8 +342,6 @@ contains
                                         flwoutn,  fsurfn,   &
                                         fcondtop, fcondbot, &
                                         fadvheat, snoice,   &
-                                        freshn,   fsaltn,   &
-                                        fhocnn,             &
                                         einit_old,lstop)
 
     ! solve the enthalpy and bulk salinity of the ice for a single column
@@ -405,10 +396,7 @@ contains
     real (kind=dbl_kind), intent(inout):: &
          Tsf         , & ! ice/snow surface temperature (C)
          hpond       , & ! melt pond depth (m)
-         apond       , & ! melt pond area
-         freshn      , & ! fresh water flux to ocean (kg/m^2/s)
-         fsaltn      , & ! salt flux to ocean (kg/m^2/s)
-         fhocnn          ! net heat flux to ocean (W/m^2) 
+         apond           ! melt pond area
 
     real (kind=dbl_kind), dimension (nilyr), intent(inout) :: &
          zqin        , & ! ice layer enthalpy (J m-3)
@@ -604,9 +592,7 @@ contains
                    phi,        dt,       &
                    zSin,       Sbr,      &
                    sss,        qocn,     &
-                   snoice,     fadvheat, &
-                   freshn,     fsaltn,   &
-                   fhocnn)
+                   snoice,     fadvheat)
 
   end subroutine temperature_changes_column
 
@@ -3284,9 +3270,7 @@ contains
                        phi,    dt,       &
                        zSin,   Sbr,      &
                        sss,    qocn,     &
-                       snoice, fadvheat, &
-                       freshn, fsaltn,   &
-                       fhocnn)
+                       snoice, fadvheat)
 
     ! given upwards flushing brine flow calculate amount of snow ice and
     ! convert snow to ice with appropriate properties
@@ -3317,10 +3301,7 @@ contains
          snoice                ! snow ice formation
 
    real(kind=dbl_kind), intent(inout) :: &
-         fadvheat          , & ! advection heat flux to ocean
-         freshn            , & ! fresh water flux to ocean (kg/m^2/s)
-         fsaltn            , & ! salt flux to ocean (kg/m^2/s)
-         fhocnn                ! net heat flux to ocean (W/m^2) 
+         fadvheat              ! advection heat flux to ocean
 
     real(kind=dbl_kind) :: &
          hin2              , & ! new ice thickness (m)
@@ -3413,11 +3394,6 @@ contains
 
           ! conservation
           fadvheat = fadvheat - eadded
-          
-          ! coupling
-          freshn = freshn - wadded
-          fsaltn = fsaltn - sadded
-          fhocnn = fhocnn - eadded
 
        endif
 
