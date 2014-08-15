@@ -250,8 +250,8 @@
          !----------------------------------------------------------------
          ! melting: floating upper ice layer melts in whole or part
          !----------------------------------------------------------------
-!               if (Tsfcn(i,j,n) > Tp) then
-               if (Tavg > Tp) then
+               ! Use Tsfc for each category
+               if (Tsfcn(i,j,n) > Tp) then
 
                   dvice = min(meltt(i,j)*apondn(i,j,n), vuin(i,j,n))
                   if (dvice > puny) then
@@ -274,11 +274,11 @@
          !----------------------------------------------------------------
                else if (volpn(i,j,n) > puny) then ! Tavg <= Tp
 
-                ! differential growth of base of surface floating ice layer
-                  dTice = max(-Tavg, c0) ! > 0
+                  ! differential growth of base of surface floating ice layer
+                  dTice = max(-Tsfcn(i,j,n)-Td, c0) ! > 0   
                   omega = kice*DTice/rhoi_L
-                  dHui = sqrt(omega*dt + p25*(vuin(i,j,n)/aicen(i,j,n))**2) &
-                                       - p5 * vuin(i,j,n)/aicen(i,j,n)
+                  dHui = sqrt(c2*omega*dt + (vuin(i,j,n)/aicen(i,j,n))**2) &
+                                           - vuin(i,j,n)/aicen(i,j,n)
 
                   dvice = min(dHui*apondn(i,j,n), volpn(i,j,n))   
                   if (dvice > puny) then

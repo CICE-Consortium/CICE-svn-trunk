@@ -1315,6 +1315,11 @@
                   fpn(i,j) = c0
                   hpn(i,j) = c0
                endif
+
+               ! If ponds are present snow fraction reduced to
+               ! non-ponded part dEdd scheme 
+               fsn(i,j) = fsn(i,j)*(c1-fpn(i,j))
+
                apeffn(i,j,n) = fpn(i,j)
             enddo
          else
