@@ -60,9 +60,9 @@
 
 ! Compute coefficients for atm/ice fluxes, stress, and reference
 ! temperature and humidity. NOTE: \\
-! (1) all fluxes are positive downward,  \\
-! (2) here, tstar = (WT)/U*, and qstar = (WQ)/U*,  \\
-! (3) wind speeds should all be above a minimum speed (eg. 1.0 m/s). \\
+! (1) All fluxes are positive downward,  \\
+! (2) Here, tstar = (WT)/U*, and qstar = (WQ)/U*,  \\
+! (3a) wind speeds should all be above a minimum speed (eg. 1.0 m/s). \\
 !
 ! ASSUME:
 !  The saturation humidity of air at T(K): qsat(T)  (kg/m**3)
@@ -80,7 +80,18 @@
                                       Tref,     Qref,     &
                                       delt,     delq,     &
                                       lhcoef,   shcoef,   &
-                                      Cdn_atm,  Cdn_atm_ocn_n)     
+                                      Cdn_atm,  Cdn_atm_ocn_n, &
+#ifdef RASM_MODS
+                                      uice,     vice,     &
+                                      logz0,              &
+#endif
+                                      Uref                )     
+
+
+#ifdef RASM_MODS
+      use ice_fileunits, only: nu_diag
+      use ice_communicate, only: my_task, master_task
+#endif
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -122,9 +133,26 @@
          shcoef   , & ! transfer coefficient for sensible heat
          lhcoef       ! transfer coefficient for latent heat
 
+      real (kind=dbl_kind), dimension (nx_block,ny_block), optional, intent(out) :: &
+         Uref         ! reference height wind speed (m/s)
+
+#ifdef RASM_MODS
+      real (kind=dbl_kind), dimension (nx_block,ny_block), optional, intent(in) :: &
+         uice     , & ! x-direction ice speed (m/s)
+         vice         ! y-direction ice speed (m/s)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block), optional, intent(out) :: &
+         logz0        ! log of sea ice roughness length (m) for WRF 
+#endif
+
        !local variables
 
-       integer (kind=int_kind) :: &
+#ifdef RASM_MODS
+      logical (kind=log_kind), save :: &
+         firstpass=.true. ! RASM sea ice flux first pass
+#endif
+
+      integer (kind=int_kind) :: &
          k     , & ! iteration index
          i, j  , & ! horizontal indices
          ij        ! combined ij index
@@ -165,7 +193,12 @@
       real (kind=dbl_kind), parameter :: &
          cpvir = cp_wv/cp_air-c1, & ! defined as cp_wv/cp_air - 1.
          zTrf  = c2             , & ! reference height for air temp (m)
+
+#ifdef RASM_MODS
+         umin  = p5                 ! minimum RASM wind speed (m/s)
+#else
          umin  = c1                 ! minimum wind speed (m/s)
+#endif
 
       ! local functions
       real (kind=dbl_kind) :: &
@@ -189,14 +222,33 @@
       ! Initialize
       !------------------------------------------------------------
 
+#ifdef RASM_MODS
+      if (my_task==master_task.and.firstpass.and.sfctype(1:3)=='ice') then
+         if (present(logz0) .and. present(uice) .and. present(vice)) then
+            write(nu_diag,*)'Using RASM sea ice flux settings'
+         else
+            write(nu_diag,*)'WARNING: Not using RASM sea ice flux settings'
+         endif
+      endif
+      firstpass = .false.
+#endif
+
       do j = 1, ny_block
       do i = 1, nx_block
+         if (present(Uref)) then
+            Uref(i,j) = c0
+         endif
          Tref(i,j) = c0
          Qref(i,j) = c0
          delt(i,j) = c0
          delq(i,j) = c0
          shcoef(i,j) = c0
          lhcoef(i,j) = c0
+#ifdef RASM_MODS
+         if (present(logz0)) then
+            logz0(i,j) = log(iceruf) ! log(z0) passed to WRF 
+         endif
+#endif
       enddo
       enddo
 
@@ -217,14 +269,40 @@
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
+
+#ifdef RASM_MODS
+            if (present(uice) .and. present(vice)) then
+               vmag(ij) = max(umin, sqrt( (uatm(i,j)-uice(i,j))**2 + &
+                                          (vatm(i,j)-vice(i,j))**2) )
+            else
+               vmag(ij) = max(umin, wind(i,j))
+            endif
+
+            if (formdrag .and. Cdn_atm(i,j) > puny) then 
+               rdn(ij)  = sqrt(Cdn_atm(i,j))               
+            elseif (formdrag) then 
+! ANDREW ROBERTS ATTEMPT TO REDUCE DRAG AT ICE EDGE
+               rdn(ij)  = vonkar/log(4*zref/iceruf) ! neutral coefficient
+               Cdn_atm(i,j) = rdn(ij) * rdn(ij)
+            else
+               rdn(ij)  = vonkar/log(zref/iceruf) ! neutral coefficient
+               Cdn_atm(i,j) = rdn(ij) * rdn(ij)
+            endif
+
+            if (present(logz0)) then
+               logz0(i,j) = log(zref) - (vonkar/rdn(ij)); ! log(z0) passed to WRF 
+            endif
+#else
             vmag(ij) = max(umin, wind(i,j))
 
             if (formdrag .and. Cdn_atm(i,j) > puny) then 
-              rdn(ij)  = sqrt(Cdn_atm(i,j))               
+               rdn(ij)  = sqrt(Cdn_atm(i,j))               
             else
-              rdn(ij)  = vonkar/log(zref/iceruf) ! neutral coefficient
-              Cdn_atm(i,j) = rdn(ij) * rdn(ij)
+               rdn(ij)  = vonkar/log(zref/iceruf) ! neutral coefficient
+               Cdn_atm(i,j) = rdn(ij) * rdn(ij)
             endif
+#endif
+
          enddo   ! ij
 
       elseif (sfctype(1:3)=='ocn') then
@@ -235,9 +313,12 @@
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
+
             vmag(ij) = max(umin, wind(i,j))
+
             rdn(ij)  = sqrt(0.0027_dbl_kind/vmag(ij) &
                     + .000142_dbl_kind + .0000764_dbl_kind*vmag(ij))
+
          enddo   ! ij
 
       endif   ! sfctype
@@ -279,7 +360,11 @@
       ! iterate to converge on Z/L, ustar, tstar and qstar
       !------------------------------------------------------------
 
+#ifdef RASM_MODS
+      do k=1,25
+#else
       do k=1,5
+#endif
 
          do ij = 1, icells
             i = indxi(ij)
@@ -334,18 +419,52 @@
          i = indxi(ij)
          j = indxj(ij)
 
-      !------------------------------------------------------------
-      ! momentum flux
-      !------------------------------------------------------------
-      ! tau = rhoa(i,j) * ustar * ustar
-      ! strx = tau * uatm(i,j) / vmag
-      ! stry = tau * vatm(i,j) / vmag
-      !------------------------------------------------------------
+#ifdef RASM_MODS
+         if (present(uice) .and. present(vice)) then
+
+            !------------------------------------------------------------
+            ! momentum flux for RASM
+            !------------------------------------------------------------
+            ! tau = rhoa(i,j) * rd * rd
+            ! strx = tau * |Uatm-U| * (uatm-u)
+            ! stry = tau * |Uatm-U| * (vatm-v)
+            !------------------------------------------------------------
+
+            tau = rhoa(i,j) * rd(ij) * rd(ij) ! not the stress at zlvl(i,j)
+
+            ! SPECIAL SETTINGS
+            strx(i,j) = tau * sqrt((uatm(i,j)-uice(i,j))**2 + &
+                                   (vatm(i,j)-vice(i,j))**2) * &
+                              (uatm(i,j)-uice(i,j))
+            stry(i,j) = tau * sqrt((uatm(i,j)-uice(i,j))**2 + &
+                                   (vatm(i,j)-vice(i,j))**2) * &
+                              (vatm(i,j)-vice(i,j))
+
+         else
+
+            tau = rhoa(i,j) * ustar(ij) * rd(ij) ! not the stress at zlvl(i,j)
+            strx(i,j) = tau * uatm(i,j)
+            stry(i,j) = tau * vatm(i,j)
+
+         endif
+#else
+
+         !------------------------------------------------------------
+         ! momentum flux
+         !------------------------------------------------------------
+         ! tau = rhoa(i,j) * ustar * ustar
+         ! strx = tau * uatm(i,j) / vmag
+         ! stry = tau * vatm(i,j) / vmag
+         !------------------------------------------------------------
 
          tau = rhoa(i,j) * ustar(ij) * rd(ij) ! not the stress at zlvl(i,j)
          strx(i,j) = tau * uatm(i,j)
          stry(i,j) = tau * vatm(i,j)
+
+#endif
+
          Cdn_atm_ocn_n(i,j) = rd(ij) * rd(ij) / rdn(ij) / rdn(ij)
+
       enddo                     ! ij
 
       endif                     ! calc_strair
@@ -357,15 +476,35 @@
          i = indxi(ij)
          j = indxj(ij)
 
-      !------------------------------------------------------------
-      ! coefficients for turbulent flux calculation
-      !------------------------------------------------------------
-      ! add windless coefficient for sensible heat flux
-      ! as in Jordan et al (JGR, 1999)
-      !------------------------------------------------------------
+         !------------------------------------------------------------
+         ! coefficients for turbulent flux calculation
+         !------------------------------------------------------------
+         ! add windless coefficient for sensible heat flux
+         ! as in Jordan et al (JGR, 1999)
+         !------------------------------------------------------------
 
+#ifdef RASM_MODS
+         if (present(uice) .and. present(vice)) then
+
+            shcoef(i,j)=rhoa(i,j) * rd(ij) * &
+                        sqrt((uatm(i,j)-uice(i,j))**2 + &
+                             (vatm(i,j)-vice(i,j))**2) * &
+                        cp(ij) * rh(ij) + c1
+            lhcoef(i,j)=rhoa(i,j) * rd(ij) * &
+                        sqrt((uatm(i,j)-uice(i,j))**2+ &
+                             (vatm(i,j)-vice(i,j))**2) * &
+                        Lheat  * re(ij)
+         else
+
+            shcoef(i,j) = rhoa(i,j) * ustar(ij) * cp(ij) * rh(ij) + c1
+            lhcoef(i,j) = rhoa(i,j) * ustar(ij) * Lheat  * re(ij)
+
+         endif
+
+#else
          shcoef(i,j) = rhoa(i,j) * ustar(ij) * cp(ij) * rh(ij) + c1
          lhcoef(i,j) = rhoa(i,j) * ustar(ij) * Lheat  * re(ij)
+#endif
 
       !------------------------------------------------------------
       ! Compute diagnostics: 2m ref T & Q
@@ -381,7 +520,19 @@
          fac      = (re(ij)/vonkar) &
                   * (alz(ij) + al2 - psixh(ij) + psix2)
          Qref(i,j)= Qa(i,j) - delq(i,j)*fac
-
+         if (present(Uref)) then
+#ifdef RASM_MODS
+            if (present(uice) .and. present(vice)) then
+               Uref(i,j) = sqrt((uatm(i,j)-uice(i,j))**2 + &
+                                (vatm(i,j)-vice(i,j))**2) * &
+                           rd(ij) / rdn(ij)
+            else
+               Uref(i,j) = vmag(ij) * rd(ij) / rdn(ij)
+            endif ! (present(uice) .and. present(vice))
+#else
+            Uref(i,j)= vmag(ij) * rd(ij) / rdn(ij)
+#endif
+         endif ! (present(Uref)) 
       enddo                     ! ij
 
       end subroutine atmo_boundary_layer
@@ -675,6 +826,33 @@
          cwmax    = 0.06_dbl_kind     ! Maximum for ocean drag
 
       astar = c1/(c1-(Lmin/Lmax)**(c1/beta))
+
+
+! ANDREW ROBERTS CHANGE
+
+      !-----------------------------------------------------------------
+      ! Initialize cells
+      !-----------------------------------------------------------------
+
+      hfreebd(:,:)=c0
+      hdraft(:,:)=c0       
+      hridge(:,:)=c0       
+      distrdg(:,:)=c0    
+      hkeel(:,:)=c0 
+      dkeel(:,:)=c0 
+      lfloe(:,:)=c0
+      dfloe(:,:)=c0 
+      Cdn_ocn(:,:)=dragio
+      Cdn_ocn_skin(:,:)=c0 
+      Cdn_ocn_floe(:,:)=c0 
+      Cdn_ocn_keel(:,:)=c0 
+      Cdn_atm(:,:)=c0      
+      Cdn_atm_skin(:,:)=c0 
+      Cdn_atm_floe(:,:)=c0 
+      Cdn_atm_pond(:,:)=c0 
+      Cdn_atm_rdg(:,:)=c0
+
+! END ANDREW ROBERTS CHANGE
 
       !-----------------------------------------------------------------
       ! Identify cells with nonzero ice area

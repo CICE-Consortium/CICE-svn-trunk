@@ -654,9 +654,11 @@
 
       character (len=3)       :: nchar
 
-      diag = .true.
-
       !-----------------------------------------------------------------
+
+      if (my_task == master_task) write(nu_diag,*) 'write_restart_aero (aerosols)'
+
+      diag = .true.
 
       do k = 1, n_aero
        write(nchar,'(i3.3)') k
@@ -702,7 +704,11 @@
 
       character (len=3)       :: nchar
 
-      if (my_task == master_task) write(nu_diag,*) 'aerosols'
+      !-----------------------------------------------------------------
+
+      if (my_task == master_task) write(nu_diag,*) 'read_restart_aero (aerosols)'
+
+      diag = .true.
 
       do k = 1, n_aero
        write(nchar,'(i3.3)') k

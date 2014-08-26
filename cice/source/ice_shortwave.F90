@@ -51,7 +51,6 @@
       use ice_communicate, only: my_task
 
       implicit none
-      save
 
       private
       public :: init_shortwave, run_dEdd, shortwave_ccsm3
@@ -71,7 +70,7 @@
 
       ! category albedos
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,ncat,max_blocks), public :: &
+         dimension (nx_block,ny_block,ncat,max_blocks), public, save :: &
          alvdrn      , & ! visible direct albedo           (fraction)
          alidrn      , & ! near-ir direct albedo           (fraction)
          alvdfn      , & ! visible diffuse albedo          (fraction)
@@ -79,7 +78,7 @@
 
       ! albedo components for history
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,ncat,max_blocks), public :: &
+         dimension (nx_block,ny_block,ncat,max_blocks), public, save :: &
          albicen, &   ! bare ice 
          albsnon, &   ! snow 
          albpndn, &   ! pond 
@@ -87,21 +86,21 @@
 
       ! shortwave components
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,nilyr,ncat,max_blocks), public :: &
+         dimension (nx_block,ny_block,nilyr,ncat,max_blocks), public, save :: &
          Iswabsn         ! SW radiation absorbed in ice layers (W m-2)
 
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,nslyr,ncat,max_blocks), public :: &
+         dimension (nx_block,ny_block,nslyr,ncat,max_blocks), public, save :: &
          Sswabsn         ! SW radiation absorbed in snow layers (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks), &
-         public :: &
+         public, save :: &
          fswsfcn     , & ! SW absorbed at ice/snow surface (W m-2)
          fswthrun    , & ! SW through ice to ocean            (W/m^2)
          fswintn         ! SW absorbed in ice interior, below surface (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1,ncat,max_blocks), &
-         public :: &
+         public, save :: &
          fswpenln        ! visible SW entering ice layers (W m-2)
 
       ! dEdd tuning parameters, set in namelist
@@ -162,21 +161,41 @@
       type (block) :: &
          this_block      ! block information for current block
 
-      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,n)
       do iblk=1,nblocks
-      do j = 1, ny_block
-      do i = 1, nx_block
-         alvdf(i,j,iblk) = c0
-         alidf(i,j,iblk) = c0
-         alvdr(i,j,iblk) = c0
-         alidr(i,j,iblk) = c0
-         alvdr_ai(i,j,iblk) = c0
-         alidr_ai(i,j,iblk) = c0
-         alvdf_ai(i,j,iblk) = c0
-         alidf_ai(i,j,iblk) = c0
-      enddo
-      enddo
-      enddo
+         do j = 1, ny_block
+         do i = 1, nx_block
+            alvdf(i,j,iblk) = c0
+            alidf(i,j,iblk) = c0
+            alvdr(i,j,iblk) = c0
+            alidr(i,j,iblk) = c0
+            alvdr_ai(i,j,iblk) = c0
+            alidr_ai(i,j,iblk) = c0
+            alvdf_ai(i,j,iblk) = c0
+            alidf_ai(i,j,iblk) = c0
+         enddo
+         enddo
+
+         ! Initialize
+         do n = 1, ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            alvdrn(i,j,n,iblk) = c0
+            alidrn(i,j,n,iblk) = c0
+            alvdfn(i,j,n,iblk) = c0
+            alidfn(i,j,n,iblk) = c0
+            fswsfcn(i,j,n,iblk) = c0
+            fswintn(i,j,n,iblk) = c0
+            fswthrun(i,j,n,iblk) = c0
+         enddo   ! i
+         enddo   ! j
+         enddo   ! ncat
+
+         fswpenln(:,:,:,:,iblk) = c0
+         Iswabsn(:,:,:,:,iblk) = c0
+         Sswabsn(:,:,:,:,iblk) = c0
+
+      enddo   ! iblk
       !$OMP END PARALLEL DO
 
       if (trim(shortwave) == 'dEdd') then ! delta Eddington
@@ -252,7 +271,7 @@
       !-----------------------------------------------------------------
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,n,ilo,ihi,jlo,jhi,this_block, &
-      !$OMP                     ij,icells,cszn)
+      !$OMP                     ij,icells,cszn,indxi,indxj)
       do iblk=1,nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -363,7 +382,7 @@
          swidf        ! sw down, near IR, diffuse (W/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
-         intent(out) :: &
+         intent(inout) :: &
          alvdrn   , & ! visible, direct, avg   (fraction)
          alidrn   , & ! near-ir, direct, avg   (fraction)
          alvdfn   , & ! visible, diffuse, avg  (fraction)
@@ -375,7 +394,7 @@
          albsn        ! snow albedo
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1,ncat), &
-           intent(out) :: &
+           intent(inout) :: &
          fswpenl      ! SW entering ice layers (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
@@ -383,11 +402,11 @@
          coszen       ! cosine(zenith angle)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr,ncat), &
-           intent(out) :: &
+           intent(inout) :: &
          Iswabs       ! SW absorbed in particular layer (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr,ncat), &
-           intent(out) :: &
+           intent(inout) :: &
          Sswabs       ! SW absorbed in particular layer (W m-2)
 
       ! local variables
@@ -1107,7 +1126,7 @@
       real(kind=dbl_kind), dimension(nx_block,ny_block), intent(out) :: &
            coszen   ! cosine solar zenith angle, < 0 for sun below horizon 
 
-      real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), intent(out) :: &
+      real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), intent(inout) :: &
            alvdrn,   & ! visible direct albedo (fraction)
            alvdfn,   & ! near-ir direct albedo (fraction)
            alidrn,   & ! visible diffuse albedo (fraction)
@@ -1120,13 +1139,13 @@
            albpndn,  & ! albedo pond 
            apeffn      ! effective pond area used for radiation calculation
 
-      real(kind=dbl_kind), dimension(nx_block,ny_block,nslyr,ncat), intent(out) :: &
+      real(kind=dbl_kind), dimension(nx_block,ny_block,nslyr,ncat), intent(inout) :: &
            Sswabsn     ! SW radiation absorbed in snow layers (W m-2)
 
-      real(kind=dbl_kind), dimension(nx_block,ny_block,nilyr,ncat), intent(out) :: &
+      real(kind=dbl_kind), dimension(nx_block,ny_block,nilyr,ncat), intent(inout) :: &
            Iswabsn     ! SW radiation absorbed in ice layers (W m-2) 
 
-      real(kind=dbl_kind), dimension(nx_block,ny_block,nilyr+1,ncat), intent(out) :: &
+      real(kind=dbl_kind), dimension(nx_block,ny_block,nilyr+1,ncat), intent(inout) :: &
            fswpenln    ! visible SW entering ice layers (W m-2)
 
       ! local temporary variables
@@ -1304,7 +1323,7 @@
                j = indxj(ij)
                ! Lid effective if thicker than hp1
                if (trcrn(i,j,nt_apnd,n)*aicen(i,j,n) > puny .and. &
-                    trcrn(i,j,nt_ipnd,n) < hp1) then
+                   trcrn(i,j,nt_ipnd,n) < hp1) then
                   fpn(i,j) = trcrn(i,j,nt_apnd,n)
                else
                   fpn(i,j) = c0
@@ -1446,7 +1465,7 @@
          swidf       ! sw down, near IR, diffuse (W/m^2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
-         intent(out) :: &
+         intent(inout) :: &
          alvdr   , & ! visible, direct, albedo (fraction) 
          alvdf   , & ! visible, diffuse, albedo (fraction) 
          alidr   , & ! near-ir, direct, albedo (fraction) 
@@ -1456,15 +1475,15 @@
          fswthru     ! SW through snow/bare ice/ponded ice into ocean (W m-2)
  
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr+1), &
-         intent(out) :: &
+         intent(inout) :: &
          fswpenl     ! visible SW entering ice layers (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
-         intent(out) :: &
+         intent(inout) :: &
          Sswabs      ! SW absorbed in snow layer (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nilyr), &
-         intent(out) :: &
+         intent(inout) :: &
          Iswabs      ! SW absorbed in ice layer (W m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
@@ -1633,6 +1652,17 @@
          albice(i,j) = albice(i,j) &
                      + awtvdr*avdrl(i,j) + awtidr*aidrl(i,j) &
                      + awtvdf*avdfl(i,j) + awtidf*aidfl(i,j) 
+
+#ifdef RASM_MODS
+         if (alvdr(i,j)>1.or.alvdf(i,j)>1.or.alidr(i,j)>1.or.alidf(i,j)>1) then
+            write(6,*)'Ice Albedo Calculations'
+            write(6,*)'alvdr(i,j),avdrl(i,j),fi(i,j) ',alvdr(i,j),avdrl(i,j),fi(i,j)
+            write(6,*)'alvdf(i,j),avdfl(i,j),fi(i,j) ',alvdf(i,j),avdfl(i,j),fi(i,j)
+            write(6,*)'alidr(i,j),aidrl(i,j),fi(i,j) ',alidr(i,j),aidrl(i,j),fi(i,j)
+            write(6,*)'alidf(i,j),aidfl(i,j),fi(i,j) ',alidf(i,j),aidfl(i,j),fi(i,j)
+         endif
+#endif
+
       enddo
 
 !DIR$ CONCURRENT !Cray
@@ -1683,6 +1713,17 @@
          albsno(i,j) = albsno(i,j) &
                      + awtvdr*avdrl(i,j) + awtidr*aidrl(i,j) &
                      + awtvdf*avdfl(i,j) + awtidf*aidfl(i,j) 
+
+#ifdef RASM_MODS
+         if (alvdr(i,j)>1.or.alvdf(i,j)>1.or.alidr(i,j)>1.or.alidf(i,j)>1) then
+            write(6,*)'Snow Albedo Calculations'
+            write(6,*)'alvdr(i,j),avdrl(i,j),fs(i,j) ',alvdr(i,j),avdrl(i,j),fs(i,j)
+            write(6,*)'alvdf(i,j),avdfl(i,j),fs(i,j) ',alvdf(i,j),avdfl(i,j),fs(i,j)
+            write(6,*)'alidr(i,j),aidrl(i,j),fs(i,j) ',alidr(i,j),aidrl(i,j),fs(i,j)
+            write(6,*)'alidf(i,j),aidfl(i,j),fs(i,j) ',alidf(i,j),aidfl(i,j),fs(i,j)
+         endif
+#endif
+
       enddo
 
 !DIR$ CONCURRENT !Cray
@@ -1735,9 +1776,20 @@
          albpnd(i,j) = albpnd(i,j) &
                      + awtvdr*avdrl(i,j) + awtidr*aidrl(i,j) &
                      + awtvdf*avdfl(i,j) + awtidf*aidfl(i,j) 
+
+#ifdef RASM_MODS
+         if (alvdr(i,j)>1.or.alvdf(i,j)>1.or.alidr(i,j)>1.or.alidf(i,j)>1) then
+            write(6,*)'Melt Ponds Albedo Calculations'
+            write(6,*)'alvdr,avdrl,fp,fs,fi',alvdr(i,j),avdrl(i,j),fp(i,j),fs(i,j),fi(i,j)
+            write(6,*)'alvdf,avdfl,fp,fs,fi',alvdf(i,j),avdfl(i,j),fp(i,j),fs(i,j),fi(i,j)
+            write(6,*)'alidr,aidrl,fp,fs,fi',alidr(i,j),aidrl(i,j),fp(i,j),fs(i,j),fi(i,j)
+            write(6,*)'alidf,aidfl,fp,fs,fi',alidf(i,j),aidfl(i,j),fp(i,j),fs(i,j),fi(i,j)
+         endif
+#endif
+
       enddo
 
-      dbug = .false.
+      dbug = .true.
       if (dbug .and. print_points) then
          do n = 1, npnt
             if (my_task == pmloc(n)) then

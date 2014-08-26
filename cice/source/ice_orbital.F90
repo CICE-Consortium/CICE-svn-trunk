@@ -17,11 +17,11 @@
 
       integer (kind=int_kind) :: iyear_AD  ! Year to calculate orbit for
  
-      real(kind=dbl_kind) :: eccen  !Earth's orbital eccentricity
-      real(kind=dbl_kind) :: obliqr !Earth's obliquity in radians
-      real(kind=dbl_kind) :: lambm0 !Mean longitude of perihelion at the
+      real(kind=dbl_kind),public :: eccen  !Earth's orbital eccentricity
+      real(kind=dbl_kind),public :: obliqr !Earth's obliquity in radians
+      real(kind=dbl_kind),public :: lambm0 !Mean longitude of perihelion at the
                                     !vernal equinox (radians)
-      real(kind=dbl_kind) :: mvelpp !Earth's moving vernal equinox longitude
+      real(kind=dbl_kind),public :: mvelpp !Earth's moving vernal equinox longitude
                                     !of perihelion + pi (radians)
       real(kind=dbl_kind) :: obliq  ! obliquity in degrees
       real(kind=dbl_kind) :: mvelp  ! moving vernal equinox long
@@ -66,7 +66,7 @@
                                  tlat,     tlon,     &
                                  coszen,   dt)
 
-      use ice_calendar, only: yday, sec
+      use ice_calendar, only: yday, sec, calendar_type, nextsw_cday, days_per_year
       use ice_constants, only: c0, c2, p5, pi, secday
       use shr_orb_mod, only: shr_orb_decl
 
@@ -99,7 +99,18 @@
  
 ! Solar declination for next time step
  
+#ifdef CCSMCOUPLED
+      if (calendar_type == "GREGORIAN") then
+         ydayp1 = min(nextsw_cday, real(days_per_year,kind=dbl_kind))
+      else
+         ydayp1 = nextsw_cday
+      endif
+
+      !--- update coszen when nextsw_cday valid
+      if (ydayp1 > -0.5_dbl_kind) then
+#else
       ydayp1 = yday + sec/secday
+#endif
  
       call shr_orb_decl(ydayp1, eccen, mvelpp, lambm0, &
                         obliqr, delta, eccf)
@@ -121,6 +132,10 @@
                       *cos((sec/secday-p5)*c2*pi + tlon(i,j)) !cos(hour angle)
       enddo
  
+#ifdef CCSMCOUPLED
+      endif
+#endif
+
       end subroutine compute_coszen
  
 !=======================================================================

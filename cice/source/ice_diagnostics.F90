@@ -121,9 +121,6 @@
       use ice_therm_shared, only: calc_Tsfc
       use ice_zbgc_shared, only: rhosi
 
-#if (defined CCSM) || (defined SEQ_MCT)
-      use ice_prescribed_mod, only : prescribed_ice
-#endif
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
 
@@ -1330,7 +1327,7 @@
           trcrn,  nt_Tsfc, nt_qice, nt_qsno
       use ice_flux, only: uatm, vatm, potT, Tair, Qa, flw, frain, fsnow, &
           fsens, flat, evap, flwout, swvdr, swvdf, swidr, swidf, rhoa, &
-          frzmlt, sst, sss, Tf, Tref, Qref, uocn, vocn, strtltx, strtlty
+          frzmlt, sst, sss, Tf, Tref, Qref, Uref, uocn, vocn, strtltx, strtlty
 
       character (len=20), intent(in) :: plabel
 
@@ -1437,6 +1434,7 @@
       write(nu_diag,*) 'srf states and fluxes'
       write(nu_diag,*) '            Tref    = ',Tref  (i,j,iblk)
       write(nu_diag,*) '            Qref    = ',Qref  (i,j,iblk)
+      write(nu_diag,*) '            Uref    = ',Uref  (i,j,iblk)
       write(nu_diag,*) '            fsens   = ',fsens (i,j,iblk)
       write(nu_diag,*) '            flat    = ',flat  (i,j,iblk)
       write(nu_diag,*) '            evap    = ',evap  (i,j,iblk)

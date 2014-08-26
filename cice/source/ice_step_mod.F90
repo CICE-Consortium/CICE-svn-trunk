@@ -33,10 +33,12 @@
       subroutine prep_radiation (dt, iblk)
 
       use ice_blocks, only: block, get_block, nx_block, ny_block
+      use ice_communicate, only: my_task
       use ice_domain, only: blocks_ice
-      use ice_domain_size, only: ncat, nilyr
+      use ice_domain_size, only: ncat, nilyr, nslyr
+      use ice_fileunits, only: nu_diag
       use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
-          alvdr_ai, alvdf_ai, alidr_ai, alidf_ai, fswfac
+          alvdr_ai, alvdf_ai, alidr_ai, alidf_ai, fswfac, coszen
       use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswpenln, &
                                Sswabsn, Iswabsn
       use ice_state, only: aice, aicen
@@ -127,10 +129,14 @@
                                     = scale_factor(i,j,iblk)*fswpenln(i,j,k,n,iblk)
                enddo       !k
 
-               Sswabsn(i,j,:,n,iblk) = &
-                       scale_factor(i,j,iblk)*Sswabsn(i,j,:,n,iblk)
-               Iswabsn(i,j,:,n,iblk) = &
-                       scale_factor(i,j,iblk)*Iswabsn(i,j,:,n,iblk)
+               do k=1,nslyr
+                  Sswabsn(i,j,k,n,iblk) = &
+                       scale_factor(i,j,iblk)*Sswabsn(i,j,k,n,iblk)
+               enddo
+               do k=1,nilyr
+                  Iswabsn(i,j,k,n,iblk) = &
+                       scale_factor(i,j,iblk)*Iswabsn(i,j,k,n,iblk)
+               enddo
             enddo
          enddo                  ! ncat
 
@@ -167,9 +173,12 @@
           wind, rhoa, potT, Qa, zlvl, strax, stray, flatn, fsurfn, fcondtopn, &
           flw, fsnow, fpond, sss, mlt_onset, frz_onset, faero_atm, faero_ocn, &
           frain, Tair, coszen, strairxT, strairyT, fsurf, fcondtop, fsens, &
-          flat, fswabs, flwout, evap, Tref, Qref, fresh, fsalt, fhocn, &
+          flat, fswabs, flwout, evap, Tref, Qref, Uref, fresh, fsalt, fhocn, &
           fswthru, meltt, melts, meltb, meltl, congel, snoice, &
           set_sfcflux, merge_fluxes
+#ifdef RASM_MODS
+      use ice_flux, only: logzo
+#endif
       use ice_firstyear, only: update_FYarea
       use ice_grid, only: lmask_n, lmask_s, TLAT, TLON
       use ice_itd, only: hi_min
@@ -184,6 +193,9 @@
           nt_apnd, nt_hpnd, nt_ipnd, nt_alvl, nt_vlvl, nt_Tsfc, &
           tr_iage, nt_iage, tr_FY, nt_FY, tr_aero, tr_pond, tr_pond_cesm, &
           tr_pond_lvl, nt_qice, nt_sice, tr_pond_topo
+#ifdef RASM_MODS
+      use ice_state, only: uvel, vvel
+#endif
       use ice_therm_shared, only: calc_Tsfc
       use ice_therm_vertical, only: frzmlt_bottom_lateral, thermo_vertical
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_ponds
@@ -201,10 +213,10 @@
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          n               ! thickness category index
 
-      integer (kind=int_kind), save :: &
+      integer (kind=int_kind) :: &
          icells          ! number of cells with aicen > puny
 
-      integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
          indxi, indxj    ! indirect indices for cells with aicen > puny
 
       ! 2D coupler variables (computed for each category, then aggregated)
@@ -220,6 +232,7 @@
          strairyn    , & ! air/ice meridional stress,         (N/m^2)
          Cdn_atm_ocn_n,& ! drag coefficient ratio
          Trefn       , & ! air tmp reference level                (K)
+         Urefn       , & ! air speed reference level            (m/s)
          Qrefn           ! air sp hum reference level         (kg/kg)
 
       ! other local variables
@@ -323,7 +336,26 @@
       ! Oceanic and atmospheric drag coefficients
       !-----------------------------------------------------------------
 
+
          if (formdrag) then
+
+            if (nt_apnd==0) then
+               write(nu_diag,*)'ERROR: nt_apnd:',nt_apnd
+               call abort_ice ('formdrag: nt_apnd=0')
+            elseif (nt_hpnd==0) then
+               write(nu_diag,*)'ERROR: nt_hpnd:',nt_hpnd
+               call abort_ice ('formdrag: nt_hpnd=0')
+            elseif (nt_ipnd==0) then
+               write(nu_diag,*)'ERROR: nt_ipnd:',nt_ipnd
+               call abort_ice ('formdrag: nt_ipnd=0')
+            elseif (nt_alvl==0) then
+               write(nu_diag,*)'ERROR: nt_alvl:',nt_alvl
+               call abort_ice ('formdrag: nt_alvl=0')
+            elseif (nt_vlvl==0) then
+               write(nu_diag,*)'ERROR: nt_vlvl:',nt_vlvl
+               call abort_ice ('formdrag: nt_vlvl=0')
+            endif
+
             call neutral_drag_coeffs &
                        (nx_block,       ny_block,                      &
                         ilo, ihi,       jlo, jhi,                      &
@@ -344,7 +376,7 @@
                         distrdg     (:,:,iblk), hkeel       (:,:,iblk),&
                         dkeel       (:,:,iblk), lfloe       (:,:,iblk),&
                         dfloe       (:,:,iblk), ncat)
-            endif 
+         endif 
 
          do n = 1, ncat
 
@@ -361,6 +393,8 @@
       !-----------------------------------------------------------------
 
             icells = 0
+            indxi = 0
+            indxj = 0
             do j = jlo, jhi
             do i = ilo, ihi
                if (aicen(i,j,n,iblk) > puny) then
@@ -409,7 +443,13 @@
                                    Trefn,          Qrefn,          &
                                    worka,          workb,          &
                                    lhcoef,         shcoef,         &
-                                   Cdn_atm(:,:,iblk), Cdn_atm_ocn_n)
+                                   Cdn_atm(:,:,iblk), Cdn_atm_ocn_n, &
+#ifdef RASM_MODS
+                                   uice=uvel(:,:,iblk),            &
+                                   vice=vvel(:,:,iblk),            &
+                                   logz0=logzo(:,:,iblk),          &
+#endif
+                                   Uref=Urefn                      )
                endif ! atmbndy
 
             else
@@ -417,6 +457,7 @@
                ! Initialize for safety
                Trefn (:,:)  = c0
                Qrefn (:,:)  = c0
+               Urefn (:,:)  = c0
                lhcoef(:,:)  = c0
                shcoef(:,:)  = c0
 
@@ -515,14 +556,18 @@
                                istep1, my_task, iblk
             write (nu_diag,*) 'category n = ', n
             write (nu_diag,*) 'Global block:', this_block%block_id
-            if (istop > 0 .and. jstop > 0) &
-                 write(nu_diag,*) 'Global i and j:', &
-                                  this_block%i_glob(istop), &
-                                  this_block%j_glob(jstop) 
-                 write(nu_diag,*) 'Lat, Lon:', &
-                                 TLAT(istop,jstop,iblk)*rad_to_deg, &
-                                 TLON(istop,jstop,iblk)*rad_to_deg
-         
+            if (istop > 0 .and. jstop > 0) then
+               write(nu_diag,*) 'Global i and j:', &
+                                this_block%i_glob(istop), &
+                                this_block%j_glob(jstop) 
+               write(nu_diag,*) 'Lat, Lon:', &
+                                TLAT(istop,jstop,iblk)*rad_to_deg, &
+                                TLON(istop,jstop,iblk)*rad_to_deg
+               write(nu_diag,*) 'aice:', &
+                                aice(istop,jstop,iblk)
+               write(nu_diag,*) 'n: ',n, 'aicen: ', &
+                                aicen(istop,jstop,n,iblk)
+            endif
             call abort_ice ('ice: Vertical thermo error')
          endif
 
@@ -669,7 +714,8 @@
                             snoicen(:,:,n,iblk),                      &
                             meltt   (:,:,iblk),  melts   (:,:,iblk),  &
                             meltb   (:,:,iblk),                       &
-                            congel  (:,:,iblk),  snoice  (:,:,iblk))
+                            congel  (:,:,iblk),  snoice  (:,:,iblk),  &
+                            Uref=Uref(:,:,iblk), Urefn=Urefn          )
 
          enddo                  ! ncat
 

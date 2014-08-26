@@ -1021,6 +1021,10 @@
          processor = mod(processor,nprocs) + 1
          proc_tmp(processor) = proc_tmp(processor) + 1
          localID = proc_tmp(processor)
+         if (localID > max_blocks) then
+            call abort_ice('create_distrb_roundrobin: max_blocks too small')
+            return
+         endif
          newDistrb%blockLocation(globalID) = processor
          newDistrb%blockLocalID (globalID) = localID
          newDistrb%blockIndex(processor,localID) = globalID
@@ -1198,6 +1202,10 @@
          if (workPerBlock(globalID) /= 0) then
             proc_tmp(processor) = proc_tmp(processor) + 1
             localID = proc_tmp(processor)
+            if (localID > max_blocks) then
+               call abort_ice('create_distrb_sectrobin: max_blocks too small')
+               return
+            endif
             newDistrb%blockLocation(globalID) = processor
             newDistrb%blockLocalID (globalID) = localID
             newDistrb%blockIndex(processor,localID) = globalID
@@ -1245,6 +1253,10 @@
          if (workPerBlock(globalID) /= 0) then
             proc_tmp(processor) = proc_tmp(processor) + 1
             localID = proc_tmp(processor)
+            if (localID > max_blocks) then
+               call abort_ice('create_distrb_sectrobin: max_blocks too small')
+               return
+            endif
             newDistrb%blockLocation(globalID) = processor
             newDistrb%blockLocalID (globalID) = localID
             newDistrb%blockIndex(processor,localID) = globalID
@@ -1301,6 +1313,10 @@
       if (workPerBlock(globalID) /= 0) then
          proc_tmp(processor) = proc_tmp(processor) + 1
          localID = proc_tmp(processor)
+         if (localID > max_blocks) then
+            call abort_ice('create_distrb_sectrobin: max_blocks too small')
+            return
+         endif
          newDistrb%blockLocation(globalID) = processor
          newDistrb%blockLocalID (globalID) = localID
          newDistrb%blockIndex(processor,localID) = globalID
@@ -1457,6 +1473,10 @@
       if (workPerBlock(globalID) /= 0) then
          proc_tmp(processor) = proc_tmp(processor) + 1
          localID = proc_tmp(processor)
+         if (localID > max_blocks) then
+            call abort_ice('create_distrb_sectcart: max_blocks too small')
+            return
+         endif
          newDistrb%blockLocation(globalID) = processor
          newDistrb%blockLocalID (globalID) = localID
          newDistrb%blockIndex(processor,localID) = globalID

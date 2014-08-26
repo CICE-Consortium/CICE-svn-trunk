@@ -22,6 +22,9 @@
       module ice_fileunits
 
       use ice_kinds_mod
+#ifdef CCSMCOUPLED
+      use shr_file_mod, only : shr_file_getunit, shr_file_freeunit
+#endif
 
       implicit none
       private
@@ -60,7 +63,7 @@
          nu_hdr        , &  ! header file for binary history output
          nu_diag            ! diagnostics output file
 
-      character (6), parameter, public :: &
+      character (32), public :: &
          nml_filename = 'ice_in' ! namelist input file name
 
       integer (kind=int_kind), parameter, public :: &
@@ -74,6 +77,13 @@
 
       logical (kind=log_kind), dimension(ice_IOUnitsMaxUnit) :: &
          ice_IOUnitsInUse   ! flag=.true. if unit currently open
+
+#ifdef CCSMCOUPLED
+      ! instance control
+      integer (kind=int_kind), public :: inst_index
+      character(len=16)      , public :: inst_name
+      character(len=16)      , public :: inst_suffix
+#endif
 
 !=======================================================================
 
@@ -140,7 +150,7 @@
 
    logical (kind=log_kind) :: alreadyInUse
 
-#ifdef SEQ_MCT
+#ifdef CCSMCOUPLED
    iunit = shr_file_getUnit()
 #else
 
@@ -214,7 +224,7 @@
    integer (kind=int_kind), intent(in) :: &
       iunit                    ! I/O unit to be released
 
-#ifdef SEQ_MCT
+#ifdef CCSMCOUPLED
          call shr_file_freeUnit(iunit)
 #else
 !  check for proper unit number
@@ -241,7 +251,7 @@
 
       subroutine flush_fileunit(iunit)
 
-#ifdef CCSM
+#ifdef CCSMCOUPLED
       use shr_sys_mod, only : shr_sys_flush
 #endif
 
@@ -261,8 +271,17 @@
    call flush_(iunit)
 #endif
 
-#ifdef CCSM
+#ifdef CCSMCOUPLED
    call shr_sys_flush(iunit)
+#else
+
+#if (defined IRIX64 || defined CRAY || defined OSF1 || defined SUNOS || defined LINUX || defined NEC_SX | defined UNICOSMP)
+   call flush(iunit)
+#endif
+#if (defined AIX)
+   call flush_(iunit)
+#endif
+
 #endif
 
       end subroutine flush_fileunit

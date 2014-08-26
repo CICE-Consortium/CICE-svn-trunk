@@ -24,7 +24,7 @@
 !  This routine aborts the ice model and prints an error message.
 
       use ice_fileunits, only: nu_diag, ice_stderr, flush_fileunit
-#if (defined CCSM) || (defined SEQ_MCT)
+#if (defined CCSMCOUPLED)
       use shr_sys_mod
 #endif
 
@@ -36,7 +36,10 @@
 
       integer (int_kind) :: ierr ! MPI error flag
 
-#if (defined CCSM) || (defined SEQ_MCT)
+#if (defined CCSMCOUPLED)
+      call flush_fileunit(nu_diag)
+      write (nu_diag,*) error_message
+      call flush_fileunit(nu_diag)
       call shr_sys_abort(error_message)
 #else
       call flush_fileunit(nu_diag)

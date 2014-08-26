@@ -1,4 +1,4 @@
-!  SVN:$Id$
+!  SVN:$Id: CICE_InitMod.F90 746 2013-09-28 22:47:56Z eclare $
 !=======================================================================
 !
 !  This module contains the CICE initialization routine that sets model
@@ -49,19 +49,18 @@
 !
 !  Initialize CICE model.
 
-      subroutine cice_init
+      subroutine cice_init(mpicom_ice)
 
       use ice_aerosol, only: faero_default
       use ice_algae, only: get_forcing_bgc
-      use ice_calendar, only: dt, dt_dyn, time, istep, istep1, write_ic, &
-          init_calendar, calendar
+      use ice_calendar, only: dt, dt_dyn, write_ic, &
+          init_calendar, calendar, time
       use ice_communicate, only: init_communicate
       use ice_diagnostics, only: init_diags
       use ice_domain, only: init_domain_blocks
       use ice_dyn_eap, only: init_eap
       use ice_dyn_shared, only: kdyn, init_evp
       use ice_fileunits, only: init_fileunits
-      use ice_firstyear, only: init_FY
       use ice_flux, only: init_coupler_flux, init_history_therm, &
           init_history_dyn, init_flux_atm, init_flux_ocn
       use ice_forcing, only: init_forcing_ocn, init_forcing_atmo, &
@@ -84,7 +83,11 @@
       use drv_forcing, only: sst_sss
 #endif
 
-      call init_communicate     ! initial setup for message passing
+! !INPUT/OUTPUT PARAMETERS:
+      integer (kind=int_kind), optional, intent(in) :: &
+         mpicom_ice ! communicator for sequential ccsm
+
+      call init_communicate(mpicom_ice)     ! initial setup for message passing
       call init_fileunits       ! unit numbers
       call input_data           ! namelist variables
       if (trim(runid) == 'bering') call check_finished_file
@@ -113,9 +116,7 @@
       call init_itd             ! initialize ice thickness distribution
       call calendar(time)       ! determine the initial date
 
-#ifndef CICE_IN_NEMO
       call init_forcing_ocn(dt) ! initialize sss and sst from data
-#endif
       call init_state           ! initialize the ice state
       call init_transport       ! initialize horizontal transport
       call ice_HaloRestore_init ! restored boundary conditions
@@ -132,18 +133,11 @@
       if (trim(runtype) == 'continue' .or. restart) &
          call init_shortwave    ! initialize radiative transfer
 
-         istep  = istep  + 1    ! update time step counters
-         istep1 = istep1 + 1
-         time = time + dt       ! determine the time and date
-         call calendar(time)    ! at the end of the first timestep
-
    !--------------------------------------------------------------------
    ! coupler communication or forcing data initialization
    !--------------------------------------------------------------------
 
-#ifndef CICE_IN_NEMO
       call init_forcing_atmo    ! initialize atmospheric forcing (standalone)
-#endif
 
 #ifndef coupled
       call get_forcing_atmo     ! atmospheric forcing from data
@@ -194,7 +188,7 @@
       use ice_zbgc, only: init_bgc
       use ice_zbgc_shared, only: skl_bgc
 
-      integer(kind=int_kind) :: iblk
+      integer(kind=int_kind) :: iblk, ltmp
 
       if (trim(runtype) == 'continue') then 
          ! start from core restart file
@@ -202,11 +196,14 @@
          call calendar(time)          ! update time parameters
          if (kdyn == 2) call read_restart_eap ! EAP
       else if (restart) then          ! ice_ic = core restart file
-         call restartfile (ice_ic)    !  or 'default' or 'none'
-         !!! uncomment to create netcdf
-         ! call restartfile_v4 (ice_ic)  ! CICE v4.1 binary restart file
-         !!! uncomment if EAP restart data exists
-         ! if (kdyn == 2) call read_restart_eap
+         ltmp = len_trim(ice_ic)
+         if (ice_ic(ltmp-2:ltmp) == '.nc') then
+            call restartfile (ice_ic)    !  or 'default' or 'none'
+         else
+            call restartfile_v4 (ice_ic)  ! CICE v4.1 binary restart file
+            !!! uncomment if EAP restart data exists
+            ! if (kdyn == 2) call read_restart_eap
+         endif
       endif         
 
       ! tracers

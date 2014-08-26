@@ -467,6 +467,7 @@
             hicen(n) =  c0 
             hsnon(n) = c0
             reduced_aicen(n) = c0
+            asnon(n) = c0
          else
             hicen(n) = vicen(n) / aicen(n)
             hsnon(n) = vsnon(n) / aicen(n)

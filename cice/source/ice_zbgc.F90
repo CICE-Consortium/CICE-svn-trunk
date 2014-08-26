@@ -563,10 +563,10 @@
          ilo,ihi,jlo,jhi, & ! beginning and end of physical domain
          n               ! thickness category index
 
-      integer (kind=int_kind), save :: &
+      integer (kind=int_kind) :: &
          icells          ! number of cells with aicen > puny
 
-      integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
          indxi, indxj    ! indirect indices for cells with aicen > puny
 
       real (kind=dbl_kind), dimension (nx_block*ny_block) :: &

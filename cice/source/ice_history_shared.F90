@@ -25,6 +25,7 @@
       module ice_history_shared
 
       use ice_kinds_mod
+      use ice_fileunits, only: nu_diag
       use ice_domain_size, only: ncat, nilyr, nslyr, nblyr, max_nstrm
 
       implicit none
@@ -195,6 +196,7 @@
            f_fswabs    = 'm', f_fswabs_ai  = 'm', &
            f_albsni    = 'm', &
            f_alvdr     = 'm', f_alidr      = 'm', &
+           f_alvdf     = 'm', f_alidf      = 'm', &
            f_albice    = 'm', f_albsno     = 'm', &
            f_albpnd    = 'm', f_coszen     = 'm', &
            f_flat      = 'm', f_flat_ai    = 'm', &
@@ -271,6 +273,7 @@
            f_fswabs,    f_fswabs_ai, &
            f_albsni                , &
            f_alvdr,     f_alidr    , &
+           f_alvdf,     f_alidf    , &
            f_albice,    f_albsno   , &
            f_albpnd,    f_coszen   , &
            f_flat,      f_flat_ai  , &
@@ -361,6 +364,7 @@
            n_fswabs     , n_fswabs_ai  , &
            n_albsni     , &
            n_alvdr      , n_alidr      , &
+           n_alvdf      , n_alidf      , &
            n_albice     , n_albsno     , &
            n_albpnd     , n_coszen     , &
            n_flat       , n_flat_ai    , &
@@ -505,7 +509,7 @@
 
       subroutine define_hist_field(id, vname, vunit, vcoord, vcellmeas, &
                                    vdesc, vcomment, cona, conb, &
-                                   ns1, vhistfreq)
+                                   ns, vhistfreq)
 
       use ice_calendar, only: histfreq, histfreq_n, nstreams
       use ice_domain_size, only: max_nstrm
@@ -531,18 +535,22 @@
          vhistfreq      ! history frequency
  
       integer (kind=int_kind), intent(in) :: &
-         ns1            ! stream index
+         ns             ! history file stream index
 
       integer (kind=int_kind) :: &
-         ns         , & ! loop index
+         ns1        , & ! variable stream loop index
          lenf           ! length of namelist string
 
       character (len=40) :: stmp
 
-      lenf = len(trim(vhistfreq))
-      if (ns1 == 1) id(:) = 0
+      if (histfreq(ns) == 'x') then
+         call abort_ice("define_hist_fields has histfreq x")
+      endif
 
-      do ns = 1, nstreams
+      if (ns == 1) id(:) = 0
+      lenf = len(trim(vhistfreq))
+
+      do ns1 = 1, lenf
          if (vhistfreq(ns1:ns1) == histfreq(ns)) then
 
             num_avail_hist_fields_tot = num_avail_hist_fields_tot + 1
@@ -579,7 +587,7 @@
             id(ns) = num_avail_hist_fields_tot
 
             stmp = vname
-            if (lenf > 1 .and. ns1 > 1) &
+            if (ns > 1) &
                write(stmp,'(a,a1,a1)') trim(stmp),'_',vhistfreq(ns1:ns1)
 
             avail_hist_fields(id(ns))%vname = trim(stmp)
@@ -593,8 +601,8 @@
             avail_hist_fields(id(ns))%vhistfreq = vhistfreq(ns1:ns1)
             avail_hist_fields(id(ns))%vhistfreq_n = histfreq_n(ns)
 
-           endif
-        enddo
+         endif
+      enddo
 
       end subroutine define_hist_field
 

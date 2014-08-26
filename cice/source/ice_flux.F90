@@ -14,10 +14,11 @@
       module ice_flux
 
       use ice_kinds_mod
+      use ice_fileunits, only: nu_diag
       use ice_blocks, only: nx_block, ny_block
       use ice_domain_size, only: max_blocks, ncat, max_aero, max_nstrm, nilyr
       use ice_constants, only: c0, c1, c5, c10, c20, c180, dragio, &
-          depressT, stefan_boltzmann, Tffresh, emissivity 
+          depressT, stefan_boltzmann, Tffresh, emissivity, iceruf
       use ice_atmo, only: formdrag, &
           hfreebd, hdraft, hridge, distrdg, hkeel, dkeel, lfloe, dfloe, &
           Cdn_atm_skin, Cdn_atm_floe, Cdn_atm_pond, Cdn_atm_rdg, &
@@ -174,6 +175,10 @@
          flwout  , & ! outgoing longwave radiation (W/m^2)
          Tref    , & ! 2m atm reference temperature (K)
          Qref    , & ! 2m atm reference spec humidity (kg/kg)
+#ifdef RASM_MODS
+         logzo   , & ! log of variable roughness length (m) for WRF coupling
+#endif
+         Uref    , & ! 10m atm reference wind speed (m/s)
          evap        ! evaporative water flux (kg/m^2/s)
 
        ! albedos aggregated over categories (if calc_Tsfc)
@@ -214,7 +219,7 @@
        ! internal
 
       real (kind=dbl_kind), &
-         dimension (nx_block,ny_block,max_blocks), public :: &
+         dimension (nx_block,ny_block,max_blocks), public, save :: &
          fswfac  , & ! for history
          scale_factor! scaling factor for shortwave components
 
@@ -443,6 +448,10 @@
       evap    (:,:,:) = c0
       Tref    (:,:,:) = c0
       Qref    (:,:,:) = c0
+#ifdef RASM_MODS
+      logzo   (:,:,:) = log(iceruf) 
+#endif
+      Uref    (:,:,:) = c0
       alvdr   (:,:,:) = c0
       alidr   (:,:,:) = c0
       alvdf   (:,:,:) = c0
@@ -498,6 +507,7 @@
       evap    (:,:,:) = c0
       Tref    (:,:,:) = c0
       Qref    (:,:,:) = c0
+      Uref    (:,:,:) = c0
 
       end subroutine init_flux_atm
 
@@ -668,9 +678,10 @@
                                fresh,    fsalt,      & 
                                fhocn,    fswthru,    &
                                melttn, meltsn, meltbn, congeln, snoicen, &
-                               meltt,  melts,  &
-                               meltb,                       &
-                               congel,  snoice)
+                               meltt,  melts,        &
+                               meltb,                &
+                               congel,  snoice,      &
+                               Uref,     Urefn       )
                                
       integer (kind=int_kind), intent(in) :: &
           nx_block, ny_block, & ! block dimensions
@@ -707,6 +718,9 @@
           congeln , & ! congelation ice growth          (m)
           snoicen     ! snow-ice growth                 (m)
            
+      real (kind=dbl_kind), dimension(nx_block,ny_block), optional, intent(in):: &
+          Urefn       ! air speed reference level       (m/s)
+
       ! cumulative fluxes
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
           intent(inout):: &
@@ -731,6 +745,10 @@
           melts   , & ! snow melt                       (m)
           congel  , & ! congelation ice growth          (m)
           snoice      ! snow-ice growth                 (m)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), optional, &
+          intent(inout):: &
+          Uref        ! air speed reference level       (m/s)
 
       integer (kind=int_kind) :: &
           ij, i, j    ! horizontal indices
@@ -765,6 +783,9 @@
          evap     (i,j)  = evap    (i,j) + evapn   (i,j)*aicen(i,j)
          Tref     (i,j)  = Tref    (i,j) + Trefn   (i,j)*aicen(i,j)
          Qref     (i,j)  = Qref    (i,j) + Qrefn   (i,j)*aicen(i,j)
+         if (present(Urefn) .and. present(Uref)) then
+            Uref  (i,j)  = Uref    (i,j) + Urefn   (i,j)*aicen(i,j)
+         endif
 
          ! ocean fluxes
 
@@ -807,7 +828,8 @@
                                alvdr,    alidr,    &
                                alvdf,    alidf,    &
                                flux_bio,           &
-                               fsurf,    fcondtop)
+                               fsurf,    fcondtop, &
+                               Uref,     wind      )
 
       integer (kind=int_kind), intent(in) :: &
           nx_block, ny_block, &    ! block dimensions
@@ -824,6 +846,10 @@
           Tf      , & ! freezing temperature            (C)
           Tair    , & ! surface air temperature         (K)
           Qa          ! sfc air specific humidity       (kg/kg)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), optional, &
+          intent(in):: &
+          wind        ! wind speed                      (m/s)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
           intent(inout):: &
@@ -844,6 +870,10 @@
           alidr   , & ! near-ir, direct   (fraction)
           alvdf   , & ! visible, diffuse  (fraction)
           alidf       ! near-ir, diffuse  (fraction)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), optional, &
+          intent(inout):: &
+          Uref        ! air speed reference level       (m/s)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,nbtrcr), &
           intent(inout):: &
@@ -882,6 +912,9 @@
             evap    (i,j) = evap    (i,j) * ar
             Tref    (i,j) = Tref    (i,j) * ar
             Qref    (i,j) = Qref    (i,j) * ar
+            if (present(Uref)) then
+               Uref    (i,j) = Uref    (i,j) * ar
+            endif
             fresh   (i,j) = fresh   (i,j) * ar
             fsalt   (i,j) = fsalt   (i,j) * ar
             fhocn   (i,j) = fhocn   (i,j) * ar
@@ -903,6 +936,9 @@
             evap    (i,j) = c0
             Tref    (i,j) = Tair(i,j)
             Qref    (i,j) = Qa  (i,j)
+            if (present(Uref) .and. present(wind)) then
+               Uref    (i,j) = wind(i,j)
+            endif
             fresh   (i,j) = c0
             fsalt   (i,j) = c0
             fhocn   (i,j) = c0
