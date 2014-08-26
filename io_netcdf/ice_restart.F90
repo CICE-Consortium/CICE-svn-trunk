@@ -199,6 +199,9 @@
          call define_rest_field(ncid,'uvel',dims)
          call define_rest_field(ncid,'vvel',dims)
 
+#ifdef CCSMCOUPLED
+         call define_rest_field(ncid,'coszen',dims)
+#endif
          call define_rest_field(ncid,'scale_factor',dims)
          call define_rest_field(ncid,'swvdr',dims)
          call define_rest_field(ncid,'swvdf',dims)

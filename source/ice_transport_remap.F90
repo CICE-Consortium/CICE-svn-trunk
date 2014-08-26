@@ -464,7 +464,7 @@
 !---! Remap the open water area (without tracers).
 !---!-------------------------------------------------------------------
 
-      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block,n)
+      !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block,n,indxinc,indxjnc)
       do iblk = 1, nblocks
 
          this_block = get_block(blocks_ice(iblk),iblk)         
@@ -635,7 +635,8 @@
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
       !$OMP                     edgearea_e,edgearea_n,edge,n,iflux,jflux, &
-      !$OMP                     xp,yp,icellsng,indxing,indxjng,triarea)
+      !$OMP                     xp,yp,indxing,indxjng,mflxe,mflxn, &
+      !$OMP                     mtflxe,mtflxn,triarea)
       do iblk = 1, nblocks
 
          this_block = get_block(blocks_ice(iblk),iblk)         

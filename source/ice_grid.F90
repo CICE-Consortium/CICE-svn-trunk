@@ -34,8 +34,9 @@
                 t2ugrid_vector, u2tgrid_vector, &
                 to_ugrid, to_tgrid
 
-      character (len=char_len_long), public, save :: &
+      character (len=char_len_long), public :: &
          grid_format  , & ! file format ('bin'=binary or 'nc'=netcdf)
+         gridcpl_file , & !  input file for POP coupling grid info
          grid_file    , & !  input file for POP grid info
          kmt_file     , & !  input file for POP grid info
          grid_type        !  current options are rectangular (default),
@@ -232,7 +233,7 @@
       subroutine init_grid2
 
       use ice_blocks, only: get_block, block, nx_block, ny_block
-      use ice_constants, only: c0, c1, pi, pi2, puny, p5, p25, c1p5, &
+      use ice_constants, only: c0, c1, c2, pi, pi2, puny, p5, p25, c1p5, &
           field_loc_center, field_loc_NEcorner, &
           field_type_scalar, field_type_vector, field_type_angle
       use ice_domain_size, only: max_blocks
@@ -403,6 +404,30 @@
       enddo
       !$OMP END PARALLEL DO
       endif ! cpom_grid
+
+#ifdef RASM_MODS
+         !*** for S boundary extrapolate from interior
+         !*** NOTE: RASM pan-Arctic domain
+         !*** Robert Osinski
+
+      do iblk = 1, nblocks !cro
+         this_block = get_block(blocks_ice(iblk),iblk)
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do j = jlo, jhi
+          do i = ilo, ihi
+
+            if (this_block%i_glob(i) == 1) then
+             ANGLET(i,j,iblk) = c2*ANGLET(i+1,j,iblk)-ANGLET(i+2,j,iblk)
+            endif
+
+          enddo
+         enddo
+      enddo !cro
+#endif
       
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (ANGLET,           halo_info, &
@@ -1198,7 +1223,7 @@
 
       subroutine Tlatlon
 
-      use ice_constants, only: c0, c1, rad_to_deg, c4, &
+      use ice_constants, only: c0, c1, rad_to_deg, c2, c4, &
           field_loc_center, field_type_scalar
       use ice_global_reductions, only: global_minval, global_maxval
       save 
@@ -1267,6 +1292,30 @@
          enddo                  ! j         
       enddo                     ! iblk
       !$OMP END PARALLEL DO
+
+#ifdef RASM_MODS
+         !*** for W boundary extrapolate from interior
+         !*** NOTE: RASM pan-Arctic domain
+         !*** Robert Osinski
+      do iblk = 1, nblocks !cro
+         this_block = get_block(blocks_ice(iblk),iblk)
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do i = ilo, ihi
+          do j= jlo,jhi
+            if (this_block%i_glob(i) == 1) then
+              TLON(i,j,iblk) = c2*TLON(i+1,j,iblk) - &
+                                         TLON(i+2,j,iblk)
+              TLAT(i,j,iblk) = c2*TLAT(i+1,j,iblk) - &
+                                         TLAT(i+2,j,iblk)
+             endif
+          enddo
+         enddo !cro
+      enddo
+#endif
 
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (TLON,             halo_info, &

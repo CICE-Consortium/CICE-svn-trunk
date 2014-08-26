@@ -205,6 +205,9 @@
          call define_rest_field(File,'uvel',dims)
          call define_rest_field(File,'vvel',dims)
 
+#ifdef CCSMCOUPLED
+         call define_rest_field(File,'coszen',dims)
+#endif
          call define_rest_field(File,'scale_factor',dims)
          call define_rest_field(File,'swvdr',dims)
          call define_rest_field(File,'swvdf',dims)
@@ -252,7 +255,7 @@
          endif
 
          if (tr_pond_lvl) then
-            call define_rest_field(ncid,'fsnow',dims)
+            call define_rest_field(File,'fsnow',dims)
          endif
 
          if (skl_bgc) then
@@ -391,7 +394,7 @@
       use ice_blocks, only: nx_block, ny_block
       use ice_communicate, only: my_task, master_task
       use ice_boundary, only: ice_HaloUpdate
-      use ice_domain, only: halo_info, distrb_info
+      use ice_domain, only: halo_info, distrb_info, nblocks
       use ice_domain_size, only: max_blocks, ncat
       use ice_fileunits, only: nu_diag
       use ice_global_reductions, only: global_minval, global_maxval
@@ -421,19 +424,29 @@
       ! local variables
 
       integer (kind=int_kind) :: &
+        j,     &      ! dimension counter
         n,     &      ! number of dimensions for variable
         status        ! status variable from netCDF routine
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
-           work2              ! input array (real, 8-byte)
-
+      real (kind=dbl_kind), allocatable :: work2(:,:,:)    ! input array (real, 8-byte)
+      real (kind=dbl_kind), allocatable :: work3(:,:,:,:)  ! input 3D array (real, 8-byte)
       real (kind=dbl_kind) :: amin,amax
 
       if (restart_format == "pio") then
-         write(nu_diag,*) vname
+         if (my_task == master_task) &
+            write(nu_diag,*)'Parallel restart file read: ',vname
+
          status = pio_inq_varid(File,trim(vname),vardesc)
+
          if (ndim3 == ncat) then
-            call pio_read_darray(File, vardesc, iodesc3d_ncat, work, status)
+            allocate(work3(nx_block,ny_block,nblocks,ndim3))
+            call pio_read_darray(File, vardesc, iodesc3d_ncat, work3, status)
+            do j=1,nblocks
+            do n=1,ndim3
+               work(:,:,n,j) = work3(:,:,j,n)
+            enddo
+            enddo
+            deallocate(work3)
             if (present(field_loc)) then
                do n=1,ndim3
                   call ice_HaloUpdate (work(:,:,n,:), halo_info, &
@@ -441,12 +454,16 @@
                enddo
             endif
          elseif (ndim3 == 1) then
+            allocate(work2(nx_block,ny_block,nblocks))
             call pio_read_darray(File, vardesc, iodesc2d, work2, status)
-            work(:,:,1,:) = work2(:,:,:)
+            do j=1,nblocks
+               work(:,:,1,j) = work2(:,:,j)
+            enddo
             if (present(field_loc)) then
                call ice_HaloUpdate (work(:,:,1,:), halo_info, &
                                     field_loc, field_type)
             endif
+            deallocate(work2)
          else
             write(nu_diag,*) "ndim3 not supported ",ndim3
          endif
@@ -487,7 +504,7 @@
       use ice_blocks, only: nx_block, ny_block
       use ice_communicate, only: my_task, master_task
       use ice_constants, only: c0
-      use ice_domain, only: distrb_info
+      use ice_domain, only: distrb_info, nblocks
       use ice_domain_size, only: max_blocks, ncat
       use ice_fileunits, only: nu_diag
       use ice_global_reductions, only: global_minval, global_maxval
@@ -513,22 +530,36 @@
       ! local variables
 
       integer (kind=int_kind) :: &
+        j,     &      ! dimension counter
         n,     &      ! dimension counter
         status        ! status variable from netCDF routine
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
-           work2              ! input array (real, 8-byte)
-
+      real (kind=dbl_kind), allocatable :: work2(:,:,:)   ! input array (real, 8-byte)
+      real (kind=dbl_kind), allocatable :: work3(:,:,:,:) ! input array (real, 8-byte)
       real (kind=dbl_kind) :: amin,amax
 
       if (restart_format == "pio") then
-         write(nu_diag,*) vname
+         if (my_task == master_task) &
+            write(nu_diag,*)'Parallel restart file write: ',vname
+
          status = pio_inq_varid(File,trim(vname),vardesc)
+
          if (ndim3 == ncat) then 
-            call pio_write_darray(File, vardesc, iodesc3d_ncat, work, status, fillval=c0)
+            allocate(work3(nx_block,ny_block,nblocks,ndim3))
+            do j = 1, nblocks
+            do n=1,ndim3
+               work3(:,:,j,n) = work(:,:,n,j)
+            enddo
+            enddo
+            call pio_write_darray(File, vardesc, iodesc3d_ncat,work3, status, fillval=c0)
+            deallocate(work3)
          elseif (ndim3 == 1) then
-            work2(:,:,:) = work(:,:,1,:)
+            allocate(work2(nx_block,ny_block,nblocks))
+            do j = 1, nblocks
+               work2(:,:,j) = work(:,:,1,j)
+            enddo
             call pio_write_darray(File, vardesc, iodesc2d, work2, status, fillval=c0)
+            deallocate(work2)
          else
             write(nu_diag,*) "ndim3 not supported",ndim3
          endif

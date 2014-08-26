@@ -250,6 +250,8 @@
                      if (hlid > dhlid) dhlid = p5*bdt/hlid ! existing ice
                      dhlid = min(dhlid, hpnd(i,j)*rhofresh/rhoi)
                      hlid = hlid + dhlid
+                  else
+                     dhlid = 0 ! to account for surface inversions
                   endif
                else ! convert refrozen pond ice back to water
                   dhlid = max(fsurfn(i,j)*dt / (rhoi*Lfresh), c0) ! > 0

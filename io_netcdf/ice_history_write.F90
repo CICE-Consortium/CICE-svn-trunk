@@ -330,6 +330,12 @@
           status = nf90_put_att(ncid, varid, 'units', coord_var(i)%units)
           if (status /= nf90_noerr) call abort_ice( &
                   'Error defining units for '//coord_var(i)%short_name)
+          status = nf90_put_att(ncid,varid,'missing_value',spval)
+          if (status /= nf90_noerr) call abort_ice( &
+             'Error defining missing_value for '//coord_var(i)%short_name)
+          status = nf90_put_att(ncid,varid,'_FillValue',spval)
+          if (status /= nf90_noerr) call abort_ice( &
+             'Error defining _FillValue for '//coord_var(i)%short_name)
           if (coord_var(i)%short_name == 'ULAT') then
              status = nf90_put_att(ncid,varid,'comment', &
                   'Latitude of NE corner of T grid cell')
@@ -375,6 +381,10 @@
            if (status /= nf90_noerr) call abort_ice('ice Error: tmask units') 
            status = nf90_put_att(ncid,varid,'comment', '0 = land, 1 = ocean')
            if (status /= nf90_noerr) call abort_ice('ice Error: tmask comment') 
+           status = nf90_put_att(ncid,varid,'missing_value',spval)
+           if (status /= nf90_noerr) call abort_ice('Error defining missing_value for tmask')
+           status = nf90_put_att(ncid,varid,'_FillValue',spval)
+           if (status /= nf90_noerr) call abort_ice('Error defining _FillValue for tmask')
         endif
 
         do i = 2, nvar       ! note: n_tmask=1
@@ -392,6 +402,12 @@
              status = nf90_put_att(ncid, varid, 'coordinates', var(i)%coordinates)
              if (status /= nf90_noerr) call abort_ice( &
                   'Error defining coordinates for '//var(i)%req%short_name)
+             status = nf90_put_att(ncid,varid,'missing_value',spval)
+             if (status /= nf90_noerr) call abort_ice( &
+                'Error defining missing_value for '//var(i)%req%short_name)
+             status = nf90_put_att(ncid,varid,'_FillValue',spval)
+             if (status /= nf90_noerr) call abort_ice( &
+                'Error defining _FillValue for '//var(i)%req%short_name)
           endif
         enddo
 
@@ -405,14 +421,18 @@
                                    nf90_float,dimid_nverts, varid)
              if (status /= nf90_noerr) call abort_ice( &
                   'Error defining variable '//var_nverts(i)%short_name)
-             status = & 
-             nf90_put_att(ncid,varid, 'long_name', var_nverts(i)%long_name)
+             status = nf90_put_att(ncid,varid, 'long_name', var_nverts(i)%long_name)
              if (status /= nf90_noerr) call abort_ice( &
                   'Error defining long_name for '//var_nverts(i)%short_name)
-             status = &
-             nf90_put_att(ncid, varid, 'units', var_nverts(i)%units)
+             status = nf90_put_att(ncid, varid, 'units', var_nverts(i)%units)
              if (status /= nf90_noerr) call abort_ice( &
                   'Error defining units for '//var_nverts(i)%short_name)
+             status = nf90_put_att(ncid,varid,'missing_value',spval)
+             if (status /= nf90_noerr) call abort_ice( &
+                'Error defining missing_value for '//var_nverts(i)%short_name)
+             status = nf90_put_att(ncid,varid,'_FillValue',spval)
+             if (status /= nf90_noerr) call abort_ice( &
+                'Error defining _FillValue for '//var_nverts(i)%short_name)
           endif
         enddo
 
@@ -440,7 +460,7 @@
                'Error defining cell measures for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'missing_value',spval)
             if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+               'Error defining missing_value for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'_FillValue',spval)
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining _FillValue for '//avail_hist_fields(n)%vname)
@@ -499,7 +519,7 @@
                'Error defining cell measures for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'missing_value',spval)
             if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+               'Error defining missing_value for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'_FillValue',spval)
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining _FillValue for '//avail_hist_fields(n)%vname)
@@ -550,7 +570,7 @@
                'Error defining cell measures for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'missing_value',spval)
             if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+               'Error defining missing_value for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'_FillValue',spval)
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining _FillValue for '//avail_hist_fields(n)%vname)
@@ -587,7 +607,7 @@
                'Error defining cell measures for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'missing_value',spval)
             if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+               'Error defining missing_value for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'_FillValue',spval)
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining _FillValue for '//avail_hist_fields(n)%vname)
@@ -626,7 +646,7 @@
                'Error defining cell measures for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'missing_value',spval)
             if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+               'Error defining missing_value for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'_FillValue',spval)
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining _FillValue for '//avail_hist_fields(n)%vname)
@@ -679,7 +699,7 @@
                'Error defining cell measures for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'missing_value',spval)
             if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+               'Error defining missing_value for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'_FillValue',spval)
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining _FillValue for '//avail_hist_fields(n)%vname)
@@ -732,7 +752,7 @@
                'Error defining cell measures for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'missing_value',spval)
             if (status /= nf90_noerr) call abort_ice( &
-               'Error defining mising_value for '//avail_hist_fields(n)%vname)
+               'Error defining missing_value for '//avail_hist_fields(n)%vname)
             status = nf90_put_att(ncid,varid,'_FillValue',spval)
             if (status /= nf90_noerr) call abort_ice( &
                'Error defining _FillValue for '//avail_hist_fields(n)%vname)
@@ -869,25 +889,24 @@
           call broadcast_scalar(coord_var(i)%short_name,master_task)
           SELECT CASE (coord_var(i)%short_name)
             CASE ('TLON')
-              call gather_global(work_g1,TLON,master_task,distrb_info)
-              if (my_task == master_task) then
               ! Convert T grid longitude from -180 -> 180 to 0 to 360
-                 work_gr = work_g1*rad_to_deg + c360    ! single precision
-                 where (work_gr > c360) work_gr = work_gr - c360
-                 where (work_gr < c0 )  work_gr = work_gr + c360
-              endif
+              work1 = TLON*rad_to_deg + c360
+              where (work1 > c360) work1 = work1 - c360
+              where (work1 < c0 )  work1 = work1 + c360
+              call gather_global(work_g1,work1,master_task,distrb_info)
             CASE ('TLAT')
-              call gather_global(work_g1,TLAT,master_task,distrb_info)
-              if (my_task == master_task) work_gr = work_g1*rad_to_deg
+              work1 = TLAT*rad_to_deg
+              call gather_global(work_g1,work1,master_task,distrb_info)
             CASE ('ULON')
-              call gather_global(work_g1,ULON,master_task,distrb_info)
-              if (my_task == master_task) work_gr = work_g1*rad_to_deg
+              work1 = ULON*rad_to_deg
+              call gather_global(work_g1,work1,master_task,distrb_info)
             CASE ('ULAT')
-              call gather_global(work_g1,ULAT,master_task,distrb_info)
-              if (my_task == master_task) work_gr = work_g1*rad_to_deg
+              work1 = ULAT*rad_to_deg
+              call gather_global(work_g1,work1,master_task,distrb_info)
           END SELECT
           
           if (my_task == master_task) then
+             work_gr = work_g1
              status = nf90_inq_varid(ncid, coord_var(i)%short_name, varid)
              if (status /= nf90_noerr) call abort_ice( &
                   'ice: Error getting varid for '//coord_var(i)%short_name)

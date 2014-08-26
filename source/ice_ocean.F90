@@ -79,10 +79,10 @@
          shcoef, & ! transfer coefficient for sensible heat
          lhcoef    ! transfer coefficient for latent heat
 
-      integer (kind=int_kind), save :: &
+      integer (kind=int_kind) :: &
          icells    ! number of ocean cells
 
-      integer (kind=int_kind), dimension(nx_block*ny_block), save :: &
+      integer (kind=int_kind), dimension(nx_block*ny_block) :: &
          indxi, indxj    ! compressed indices for ocean cells
 
       !-----------------------------------------------------------------
@@ -91,6 +91,8 @@
       !-----------------------------------------------------------------
 
          icells = 0
+         indxi(:) = 0
+         indxj(:) = 0
          do j = 1, ny_block
          do i = 1, nx_block
             if (tmask(i,j,iblk)) then
@@ -151,8 +153,8 @@
                                       delq       (:,:),      &
                                       lhcoef     (:,:),      &
                                       shcoef     (:,:),      &
-                                      Cdn_atm(:,:,iblk),          & 
-                                      Cdn_atm_ocn(:,:,iblk))    
+                                      Cdn_atm(:,:,iblk),     & 
+                                      Cdn_atm_ocn(:,:,iblk)  )
          endif
 
       !-----------------------------------------------------------------

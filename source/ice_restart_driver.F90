@@ -53,7 +53,7 @@
       use ice_domain_size, only: nilyr, nslyr, ncat, max_blocks
       use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_dump
       use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
-          strocnxT, strocnyT, sst, frzmlt, iceumask, &
+          strocnxT, strocnyT, sst, frzmlt, iceumask, coszen, &
           stressp_1, stressp_2, stressp_3, stressp_4, &
           stressm_1, stressm_2, stressm_3, stressm_4, &
           stress12_1, stress12_2, stress12_3, stress12_4
@@ -125,6 +125,9 @@
       !-----------------------------------------------------------------
       ! radiation fields
       !-----------------------------------------------------------------
+#ifdef CCSMCOUPLED
+      call write_restart_field(nu_dump,0,coszen,'ruf8','coszen',1,diag)
+#endif
       call write_restart_field(nu_dump,0,scale_factor,'ruf8','scale_factor',1,diag)
 
       call write_restart_field(nu_dump,0,swvdr,'ruf8','swvdr',1,diag)
@@ -200,7 +203,7 @@
           max_ntrcr, max_blocks
       use ice_fileunits, only: nu_diag, nu_rst_pointer, nu_restart
       use ice_flux, only: scale_factor, swvdr, swvdf, swidr, swidf, &
-          strocnxT, strocnyT, sst, frzmlt, iceumask, &
+          strocnxT, strocnyT, sst, frzmlt, iceumask, coszen, &
           stressp_1, stressp_2, stressp_3, stressp_4, &
           stressm_1, stressm_2, stressm_3, stressm_4, &
           stress12_1, stress12_2, stress12_3, stress12_4
@@ -301,6 +304,10 @@
       if (my_task == master_task) &
          write(nu_diag,*) 'radiation fields'
 
+#ifdef CCSMCOUPLED
+      call read_restart_field(nu_restart,0,coszen,'ruf8', &
+           'coszen',1,diag, field_loc_center, field_type_scalar)
+#endif
       call read_restart_field(nu_restart,0,scale_factor,'ruf8', &
            'scale_factor',1,diag, field_loc_center, field_type_scalar)
       call read_restart_field(nu_restart,0,swvdr,'ruf8', &
@@ -580,11 +587,11 @@
             read (nu_restart) istep0,time,time_forc
             write(nu_diag,*) 'Restart read at istep=',istep0,time,time_forc
          endif
-         call calendar(time)
          call broadcast_scalar(istep0,master_task)
          istep1 = istep0
          call broadcast_scalar(time,master_task)
          call broadcast_scalar(time_forc,master_task)
+         call calendar(time)
 
       else
 

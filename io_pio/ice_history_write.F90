@@ -50,7 +50,7 @@
           histfreq, dayyr, days_per_year, use_leap_years
       use ice_communicate, only: my_task, master_task
       use ice_constants, only: c0, c360, secday, spval, spval_dbl, rad_to_deg
-      use ice_domain, only: distrb_info
+      use ice_domain, only: distrb_info, nblocks
       use ice_domain_size, only: nx_global, ny_global, max_blocks, max_nstrm
       use ice_exit, only: abort_ice
       use ice_fileunits, only: nu_diag
@@ -124,20 +124,12 @@
       TYPE(coord_attributes), dimension(nvarz) :: var_nz
       CHARACTER (char_len), dimension(ncoord) :: coord_bounds
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks) :: &
-           workr
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks,ncat_hist) :: &
-           workr3c
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks,nzlyr) :: &
-           workr3i
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks,nzlyrb) :: &
-           workr3b
+      real (kind=dbl_kind), allocatable :: workr2(:,:,:)
+      real (kind=dbl_kind), allocatable :: workr3(:,:,:,:)
 #if 1==0
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks,nzlyr,ncat_hist) :: &
-           workr4i
+      real (kind=dbl_kind), allocatable :: workr4(:,:,:,:,:)
 #endif
-      real (kind=dbl_kind), dimension(nverts,nx_block,ny_block,max_blocks) :: &
-           workrv
+      real (kind=dbl_kind), allocatable :: workr3v(:,:,:,:)
 
       character(len=char_len_long) :: &
            filename
@@ -731,25 +723,27 @@
       ! write coordinate variables
       !-----------------------------------------------------------------
 
+        allocate(workr2(nx_block,ny_block,max_blocks))
+
         do i = 1,ncoord
 
           SELECT CASE (coord_var(i)%short_name)
             CASE ('TLON')
               ! Convert T grid longitude from -180 -> 180 to 0 to 360
-                 workr = tlon*rad_to_deg + c360
-                 where (workr > c360) workr = workr - c360
-                 where (workr < c0 )  workr = workr + c360
+                 workr2 = tlon*rad_to_deg + c360
+                 where (workr2 > c360) workr2 = workr2 - c360
+                 where (workr2 < c0 )  workr2 = workr2 + c360
             CASE ('TLAT')
-              workr = tlat*rad_to_deg
+              workr2 = tlat*rad_to_deg
             CASE ('ULON')
-              workr = ulon*rad_to_deg
+              workr2 = ulon*rad_to_deg
             CASE ('ULAT')
-              workr = ulat*rad_to_deg
+              workr2 = ulat*rad_to_deg
           END SELECT
           
-             status = pio_inq_varid(File, coord_var(i)%short_name, varid)
-         call pio_write_darray(File, varid, iodesc2d, &
-                               workr, status, fillval=spval_dbl)
+          status = pio_inq_varid(File, coord_var(i)%short_name, varid)
+          call pio_write_darray(File, varid, iodesc2d, &
+                               workr2, status, fillval=spval_dbl)
         enddo
 
         if (igrdz(n_NCAT)) then
@@ -762,40 +756,41 @@
       !-----------------------------------------------------------------
 
       if (igrd(n_tmask)) then
-        workr = tmask
+!        workr2 = tmask  ! tcraig -- tmask is logical, use hm
+        workr2 = hm
         status = pio_inq_varid(File, 'tmask', varid)
         call pio_write_darray(File, varid, iodesc2d, &
-                              workr, status, fillval=spval_dbl)
+                              workr2, status, fillval=spval_dbl)
       endif
 
       do i = 2, nvar       ! note: n_tmask=1
         if (igrd(i)) then
         SELECT CASE (var(i)%req%short_name)
           CASE ('tarea')
-            workr = tarea
+            workr2 = tarea
           CASE ('uarea')
-            workr = uarea
+            workr2 = uarea
           CASE ('dxu')
-            workr = dxu
+            workr2 = dxu
           CASE ('dyu')
-            workr = dyu
+            workr2 = dyu
           CASE ('dxt')
-            workr = dxt
+            workr2 = dxt
           CASE ('dyt')
-            workr = dyt
+            workr2 = dyt
           CASE ('HTN')
-            workr = HTN
+            workr2 = HTN
           CASE ('HTE')
-            workr = HTE
+            workr2 = HTE
           CASE ('ANGLE')
-            workr = ANGLE
+            workr2 = ANGLE
           CASE ('ANGLET')
-            workr = ANGLET
+            workr2 = ANGLET
         END SELECT
 
         status = pio_inq_varid(File, var(i)%req%short_name, varid)
         call pio_write_darray(File, varid, iodesc2d, &
-                              workr, status, fillval=spval_dbl)
+                              workr2, status, fillval=spval_dbl)
 
         endif
       enddo
@@ -805,32 +800,34 @@
       !----------------------------------------------------------------
 
       if (f_bounds) then
-      workrv (:,:,:,:) = c0
+      allocate(workr3v(nverts,nx_block,ny_block,max_blocks))
+      workr3v (:,:,:,:) = c0
       do i = 1, nvar_verts
         SELECT CASE (var_nverts(i)%short_name)
         CASE ('lont_bounds')
            do ivertex = 1, nverts 
-              workrv(ivertex,:,:,:) = lont_bounds(ivertex,:,:,:)
+              workr3v(ivertex,:,:,:) = lont_bounds(ivertex,:,:,:)
            enddo
         CASE ('latt_bounds')
            do ivertex = 1, nverts 
-              workrv(ivertex,:,:,:) = latt_bounds(ivertex,:,:,:)
+              workr3v(ivertex,:,:,:) = latt_bounds(ivertex,:,:,:)
            enddo
         CASE ('lonu_bounds')
            do ivertex = 1, nverts 
-              workrv(ivertex,:,:,:) = lonu_bounds(ivertex,:,:,:)
+              workr3v(ivertex,:,:,:) = lonu_bounds(ivertex,:,:,:)
            enddo
         CASE ('latu_bounds')
            do ivertex = 1, nverts 
-              workrv(ivertex,:,:,:) = latu_bounds(ivertex,:,:,:)
+              workr3v(ivertex,:,:,:) = latu_bounds(ivertex,:,:,:)
            enddo
         END SELECT
 
           status = pio_inq_varid(File, var_nverts(i)%short_name, varid)
           call pio_write_darray(File, varid, iodesc3dv, &
-                                workrv, status, fillval=spval_dbl)
+                                workr3v, status, fillval=spval_dbl)
       enddo
-      endif
+      deallocate(workr3v)
+      endif  ! f_bounds
 
 
       !-----------------------------------------------------------------
@@ -843,63 +840,78 @@
             status  = pio_inq_varid(File,avail_hist_fields(n)%vname,varid)
             if (status /= pio_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
-            workr(:,:,:) = a2D(:,:,n,:)
+            workr2(:,:,:) = a2D(:,:,n,:)
             call pio_setframe(varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc2d,&
-                                  workr, status, fillval=spval_dbl)
+                                  workr2, status, fillval=spval_dbl)
          endif
       enddo ! num_avail_hist_fields_2D
 
+      deallocate(workr2)
+
       ! 3D (category)
+      allocate(workr3(nx_block,ny_block,nblocks,ncat_hist))
       do n = n2D + 1, n3Dccum
          nn = n - n2D
          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
             status  = pio_inq_varid(File,avail_hist_fields(n)%vname,varid)
             if (status /= pio_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+            do j = 1, nblocks
             do i = 1, ncat_hist
-               workr3c(:,:,:,i) = a3Dc(:,:,i,nn,:)
+               workr3(:,:,j,i) = a3Dc(:,:,i,nn,j)
+            enddo
             enddo
             call pio_setframe(varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc3dc,&
-                                  workr3c, status, fillval=spval_dbl)
+                                  workr3, status, fillval=spval_dbl)
          endif
       enddo ! num_avail_hist_fields_3Dc
+      deallocate(workr3)
 
       ! 3D (vertical ice)
+      allocate(workr3(nx_block,ny_block,nblocks,nzlyr))
       do n = n3Dccum+1, n3Dzcum
          nn = n - n3Dccum
          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
             status  = pio_inq_varid(File,avail_hist_fields(n)%vname,varid)
             if (status /= pio_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+            do j = 1, nblocks
             do i = 1, nzlyr
-               workr3i(:,:,:,i) = a3Dz(:,:,i,nn,:)
+               workr3(:,:,j,i) = a3Dz(:,:,i,nn,j)
+            enddo
             enddo
             call pio_setframe(varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc3di,&
-                                  workr3i, status, fillval=spval_dbl)
+                                  workr3, status, fillval=spval_dbl)
          endif
       enddo ! num_avail_hist_fields_3Dz
+      deallocate(workr3)
 
       ! 3D (vertical ice biology)
+      allocate(workr3(nx_block,ny_block,nblocks,nzlyrb))
       do n = n3Dzcum+1, n3Dbcum
          nn = n - n3Dzcum
          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
             status  = pio_inq_varid(File,avail_hist_fields(n)%vname,varid)
             if (status /= pio_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+            do j = 1, nblocks
             do i = 1, nzlyrb
-               workr3b(:,:,:,i) = a3Db(:,:,i,nn,:)
+               workr3(:,:,j,i) = a3Db(:,:,i,nn,j)
+            enddo
             enddo
             call pio_setframe(varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc3db,&
-                                  workr3b, status, fillval=spval_dbl)
+                                  workr3, status, fillval=spval_dbl)
          endif
       enddo ! num_avail_hist_fields_3Db
+      deallocate(workr3)
 
 #if 1==0
 !!! 4D variables are not available with PIO
+      allocate(workr4(nx_block,ny_block,nblocks,nzlyr,ncat_hist))
       ! 4D (categories, vertical ice)
       do n = n3Dbcum+1, n4Dicum
          nn = n - n3Dbcum
@@ -907,16 +919,19 @@
             status  = pio_inq_varid(File,avail_hist_fields(n)%vname,varid)
             if (status /= pio_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+            do j = 1, nblocks
             do i = 1, ncat_hist
             do k = 1, nzilyr
-               workr4i(:,:,:,k,i) = a4Di(:,:,k,i,nn,:)
+               workr4(:,:,j,k,i) = a4Di(:,:,k,i,nn,j)
             enddo ! k
             enddo ! i
+            enddo ! j
             call pio_setframe(varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc4di,&
-                                  workr4i, status, fillval=spval_dbl)
+                                  workr4, status, fillval=spval_dbl)
          endif
       enddo ! num_avail_hist_fields_4Di
+      deallocate(workr4)
 
       similarly for num_avail_hist_fields_4Ds (define workr4s, iodesc4ds)
       similarly for num_avail_hist_fields_4Db (define workr4b, iodesc4db)

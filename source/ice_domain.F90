@@ -173,7 +173,7 @@
       !***
       !*** input nprocs does not match system (eg MPI) request
       !***
-#if (defined SEQ_MCT)
+#if (defined CCSMCOUPLED)
       nprocs = get_num_procs()
 #else
       call abort_ice('ice: Input nprocs not same as system request')
@@ -270,6 +270,7 @@
       i,j,n              ,&! dummy loop indices
       ig,jg              ,&! global indices
       work_unit          ,&! size of quantized work unit
+      tblocks_tmp        ,&! total number of blocks
       nblocks_tmp        ,&! temporary value of nblocks
       nblocks_max          ! max blocks on proc
 
@@ -447,11 +448,18 @@
       nblocks = 0
    endif
    nblocks_max = 0
+   tblocks_tmp = 0
    do n=0,distrb_info%nprocs - 1
      nblocks_tmp = nblocks
      call broadcast_scalar(nblocks_tmp, n)
      nblocks_max = max(nblocks_max,nblocks_tmp)
+     tblocks_tmp = tblocks_tmp + nblocks_tmp
    end do
+
+   if (my_task == master_task) then
+      write(nu_diag,*) &
+          'ice: total number of blocks is', tblocks_tmp
+   endif
 
    if (nblocks_max > max_blocks) then
      write(outstring,*) &

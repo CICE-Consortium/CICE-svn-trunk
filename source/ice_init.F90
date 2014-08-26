@@ -45,6 +45,9 @@
       use ice_domain_size, only: max_nstrm, nilyr, nslyr, max_ntrcr, ncat, n_aero
       use ice_fileunits, only: nu_nml, nu_diag, nml_filename, diag_type, &
           ice_stdout, get_fileunit, release_fileunit
+#ifdef CCSMCOUPLED
+      use ice_fileunits, only: inst_suffix
+#endif
       use ice_calendar, only: year_init, istep0, histfreq, histfreq_n, &
                               dumpfreq, dumpfreq_n, diagfreq, nstreams, &
                               npt, dt, ndtd, days_per_year, use_leap_years, &
@@ -65,7 +68,7 @@
           atm_data_format, ocn_data_format, &
           sss_data_type,   sst_data_type, ocn_data_dir, &
           oceanmixed_file, restore_sst,   trestore
-      use ice_grid, only: grid_file, kmt_file, grid_type, grid_format
+      use ice_grid, only: grid_file, gridcpl_file, kmt_file, grid_type, grid_format
       use ice_lvl, only: restart_lvl
       use ice_mechred, only: kstrength, krdg_partic, krdg_redist, mu_rdg
       use ice_dyn_shared, only: ndte, kdyn, revised_evp, yield_curve
@@ -90,6 +93,9 @@
                                  dSdt_slow_mode, phi_c_slow_mode, &
                                  phi_i_mushy
       use ice_restoring, only: restore_ice
+#ifdef CCSMCOUPLED
+      use shr_file_mod, only: shr_file_setIO
+#endif
 
       ! local variables
 
@@ -98,6 +104,8 @@
         n            ! loop index
 
       character (len=6) :: chartmp
+
+      logical :: exists
 
       real (kind=real_kind) :: rpcesm, rplvl, rptopo 
 
@@ -120,7 +128,7 @@
 
       namelist /grid_nml/ &
         grid_format,    grid_type,       grid_file,     kmt_file,       &
-        kcatbound
+        kcatbound,      gridcpl_file
 
       namelist /thermo_nml/ &
         kitd,           ktherm,          conduct,                       &
@@ -192,17 +200,23 @@
       dumpfreq_n = 1         ! restart frequency
       dump_last = .false.    ! write restart on last time step
       restart = .false.      ! if true, read restart files for initialization
-      restart_dir  = ' '     ! write to executable dir for default
+      restart_dir  = './'     ! write to executable dir for default
       restart_file = 'iced'  ! restart file name prefix
       restart_ext  = .false. ! if true, read/write ghost cells
       use_restart_time = .true.     ! if true, use time info written in file
+#ifdef CCSMCOUPLED
+      pointer_file = 'rpointer.ice' // trim(inst_suffix)
+      nml_filename  = 'ice_in'//trim(inst_suffix)
+#else
       pointer_file = 'ice.restart_file'
+#endif
       restart_format = 'nc'  ! file format ('bin'=binary or 'nc'=netcdf or 'pio')
       lcdf64       = .false. ! 64 bit offset for netCDF
       ice_ic       = 'default'      ! latitude and sst-dependent
       grid_format  = 'bin'          ! file format ('bin'=binary or 'nc'=netcdf)
       grid_type    = 'rectangular'  ! define rectangular grid internally
       grid_file    = 'unknown_grid_file'
+      gridcpl_file = 'unknown_gridcpl_file'
       kmt_file     = 'unknown_kmt_file'
 
       kitd = 1           ! type of itd conversions (0 = delta, 1 = linear)
@@ -350,7 +364,32 @@
       ! set up diagnostics output and resolve conflicts
       !-----------------------------------------------------------------
 
+#ifdef CCSMCOUPLED
+      ! Note in CCSMCOUPLED mode diag_file is not utilized and
+      ! runid and runtype are obtained from the driver, not from the namelist
+
+      if (my_task == master_task) then
+         history_file  = trim(runid) // ".cice" // trim(inst_suffix) //".h"
+         restart_file  = trim(runid) // ".cice" // trim(inst_suffix) //".r"
+         incond_file   = trim(runid) // ".cice" // trim(inst_suffix) //".i."
+         inquire(file='ice_modelio.nml'//trim(inst_suffix),exist=exists)
+         if (exists) then
+            call get_fileUnit(nu_diag)
+            call shr_file_setIO('ice_modelio.nml'//trim(inst_suffix),nu_diag)
+         end if
+!      else
+! each task gets unique filename
+!            call get_fileUnit(nu_diag)
+!            write(str,'(a,i4.4)') "ice.log.task_",my_task
+!            open(nu_diag,file=str)
+      end if
+      if (trim(ice_ic) /= 'default' .and. trim(ice_ic) /= 'none') then
+         restart = .true.
+      end if
+#else
       if (trim(diag_type) == 'file') call get_fileunit(nu_diag)
+#endif
+
       if (my_task == master_task) then
          if (trim(diag_type) == 'file') then
             write(ice_stdout,*) 'Diagnostic output will be in file ',diag_file
@@ -540,6 +579,13 @@
          calc_strair = .true.
       endif
 
+      if (tr_pond_cesm) then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'ERROR: formdrag=T but frzpnd=''cesm''' 
+            call abort_ice('ice_init: Formdrag and no hlid')
+         endif
+      endif
+
       if (.not. tr_lvl) then
          if (my_task == master_task) then
             write (nu_diag,*) 'WARNING: formdrag=T but tr_lvl=F'
@@ -585,6 +631,7 @@
       call broadcast_scalar(grid_format,        master_task)
       call broadcast_scalar(grid_type,          master_task)
       call broadcast_scalar(grid_file,          master_task)
+      call broadcast_scalar(gridcpl_file,       master_task)
       call broadcast_scalar(kmt_file,           master_task)
       call broadcast_scalar(kitd,               master_task)
       call broadcast_scalar(kcatbound,          master_task)
@@ -736,6 +783,8 @@
              trim(grid_type) /= 'column') then
             write(nu_diag,*) ' grid_file                 = ', &
                                trim(grid_file)
+            write(nu_diag,*) ' gridcpl_file              = ', &
+                               trim(gridcpl_file)
             write(nu_diag,*) ' kmt_file                  = ', &
                                trim(kmt_file)
          endif

@@ -1,4 +1,4 @@
-!  SVN:$Id: ice_restart.F90 741 2013-09-26 18:55:02Z dbailey $
+!  SVN:$Id: ice_restart.F90 806 2014-07-31 19:00:00Z tcraig $
 !=======================================================================
 
 ! Read and write ice model restart files using netCDF or binary
