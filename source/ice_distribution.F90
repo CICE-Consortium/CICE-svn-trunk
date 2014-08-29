@@ -1527,7 +1527,7 @@
 !  load-balanced manner using space-filling curves
 !  added by J. Dennis 3/10/06
 
-   use ice_spacecurve, only: IsFactorable, GenSpaceCurve, PrintCurve
+   use ice_spacecurve
 
    integer (int_kind), intent(in) :: &
       nprocs                ! number of processors in this distribution
@@ -1555,7 +1555,8 @@
 
    integer (int_kind), dimension(:,:),allocatable :: &
         Mesh             ,&!   !arrays to hold Space-filling curve
-        Mesh2              !
+        Mesh2            ,&!
+        Mesh3              !
 
    integer (int_kind) :: &
         nblocksL,nblocks, &! Number of blocks local and total
@@ -1564,31 +1565,65 @@
 
    logical, parameter :: Debug = .FALSE.
 
+   type (factor_t) :: xdim,ydim
+
+   integer (int_kind) :: it,jj,i2,j2
+   integer (int_kind) :: curveSize,sb_x,sb_y,itmp,numfac
+   integer (int_kind) :: subNum, sfcNum
+   logical            :: foundx
+
    integer (int_kind), dimension(:), allocatable :: &
       proc_tmp             ! temp processor id for rake algrthm
 
    type (distrb) :: dist   ! temp hold distribution
 
-!------------------------------------------------------
-! Space filling curves only work if:
-!
-!    nblocks_x = nblocks_y
-!       nblocks_x = 2^m 3^n 5^p where m,n,p are integers
-!------------------------------------------------------
-   if((nblocks_x /= nblocks_y) .or. (.not. IsFactorable(nblocks_x))) then
+   !------------------------------------------------------
+   ! Space filling curves only work if:
+   !
+   !    nblocks_x = nblocks_y
+   !       nblocks_x = 2^m 3^n 5^p where m,n,p are integers
+   !------------------------------------------------------
+
+   if((.not. IsFactorable(nblocks_y)) .or. (.not. IsFactorable(nblocks_x))) then
      create_distrb_spacecurve = create_distrb_cart(nprocs, work_per_block)
      return
    endif
+
+   !-----------------------------------------------
+   ! Factor the numbers of blocks in each dimension
+   !-----------------------------------------------
+
+   xdim = Factor(nblocks_x)
+   ydim = Factor(nblocks_y)
+   numfac = xdim%numfact
+
+   !---------------------------------------------
+   ! Match the common factors to create SFC curve
+   !---------------------------------------------
+
+   curveSize=1
+   do it=1,numfac
+      call MatchFactor(xdim,ydim,itmp,foundX)
+      curveSize = itmp*curveSize
+   enddo
+
+   !--------------------------------------
+   ! determine the size of the sub-blocks
+   ! within the space-filling curve
+   !--------------------------------------
+
+   sb_x = ProdFactor(xdim)
+   sb_y = ProdFactor(ydim)
 
    call create_communicator(dist%communicator, nprocs)
 
    dist%nprocs = nprocs
 
-!----------------------------------------------------------------------
-!
-!  allocate space for decomposition
-!
-!----------------------------------------------------------------------
+   !----------------------------------------------------------------------
+   !
+   !  allocate space for decomposition
+   !
+   !----------------------------------------------------------------------
 
    allocate (dist%blockLocation(nblocks_tot), &
              dist%blockLocalID (nblocks_tot))
@@ -1596,54 +1631,82 @@
    dist%blockLocation=0
    dist%blockLocalID =0
 
-!----------------------------------------------------------------------
-!  Create the array to hold the SFC and indices into it
-!----------------------------------------------------------------------
-   allocate(Mesh(nblocks_x,nblocks_y))
+   !----------------------------------------------------------------------
+   !  Create the array to hold the SFC and indices into it
+   !----------------------------------------------------------------------
+
+   allocate(Mesh(curveSize,curveSize))
    allocate(Mesh2(nblocks_x,nblocks_y))
+   allocate(Mesh3(nblocks_x,nblocks_y))
    allocate(idxT_i(nblocks_tot),idxT_j(nblocks_tot))
 
    Mesh  = 0
    Mesh2 = 0
+   Mesh3 = 0
 
-!----------------------------------------------------------------------
-!  Generate the space-filling curve
-!----------------------------------------------------------------------
+   !----------------------------------------------------------------------
+   !  Generate the space-filling curve
+   !----------------------------------------------------------------------
+
    call GenSpaceCurve(Mesh)
+   Mesh = Mesh + 1 ! make it 1-based indexing
    if(Debug) then
      if(my_task ==0) call PrintCurve(Mesh)
    endif
+
+   !-----------------------------------------------
+   ! Reindex the SFC to address internal sub-blocks
+   !-----------------------------------------------
+
+   do j=1,curveSize
+   do i=1,curveSize
+      sfcNum = (Mesh(i,j) - 1)*(sb_x*sb_y) + 1
+      do jj=1,sb_y
+      do ii=1,sb_x
+         subNum = (jj-1)*sb_x + (ii-1)
+         i2 = (i-1)*sb_x + ii
+         j2 = (j-1)*sb_y + jj
+         Mesh2(i2,j2) = sfcNum + subNum
+      enddo
+      enddo
+   enddo
+   enddo
+
    !------------------------------------------------
    ! create a linear array of i,j coordinates of SFC
    !------------------------------------------------
+
    idxT_i=0;idxT_j=0
    do j=1,nblocks_y
      do i=1,nblocks_x
         n = (j-1)*nblocks_x + i
-        ig = Mesh(i,j)
+        ig = Mesh2(i,j)
         if(work_per_block(n) /= 0) then
-            idxT_i(ig+1)=i;idxT_j(ig+1)=j
+            idxT_i(ig)=i;idxT_j(ig)=j
         endif
      enddo
    enddo
+
    !-----------------------------
    ! Compress out the land blocks
    !-----------------------------
+
    ii=0
    do i=1,nblocks_tot
       if(IdxT_i(i) .gt. 0) then
          ii=ii+1
-         Mesh2(idxT_i(i),idxT_j(i)) = ii
+         Mesh3(idxT_i(i),idxT_j(i)) = ii
       endif
    enddo
    nblocks=ii
    if(Debug) then
-     if(my_task==0) call PrintCurve(Mesh2)
+     if(my_task==0) call PrintCurve(Mesh3)
    endif
 
    !----------------------------------------------------
    ! Compute the partitioning of the space-filling curve
    !----------------------------------------------------
+
    nblocksL = nblocks/nprocs
    ! every cpu gets nblocksL blocks, but the first 'extra' get nblocksL+1
    extra = mod(nblocks,nprocs)
@@ -1662,10 +1725,11 @@
    !-----------------------------------------------------------
    ! Use the SFC to partition the blocks across processors
    !-----------------------------------------------------------
+
    do j=1,nblocks_y
    do i=1,nblocks_x
       n = (j-1)*nblocks_x + i
-      ii = Mesh2(i,j)
+      ii = Mesh3(i,j)
       if(ii>0) then
         if(ii<=s1) then
            ! ------------------------------------
@@ -1688,16 +1752,16 @@
    enddo
    enddo
 
-!----------------------------------------------------------------------
-!  Reset the dist data structure
-!----------------------------------------------------------------------
+   !----------------------------------------------------------------------
+   !  Reset the dist data structure
+   !----------------------------------------------------------------------
 
    allocate(proc_tmp(nprocs))
    proc_tmp = 0
 
    do n=1,nblocks_tot
       pid = dist%blockLocation(n)
-      dist%blockLocation(n) = pid
+      !!!dist%blockLocation(n) = pid
 
       if(pid>0) then
         proc_tmp(pid) = proc_tmp(pid) + 1
@@ -1730,9 +1794,8 @@
    ! Deallocate temporary arrays
    !---------------------------------
    deallocate(proc_tmp)
-   deallocate(Mesh,Mesh2)
+   deallocate(Mesh,Mesh2,Mesh3)
    deallocate(idxT_i,idxT_j)
-!----------------------------------------------------------------------
 
    create_distrb_spacecurve = dist  ! return the result
 

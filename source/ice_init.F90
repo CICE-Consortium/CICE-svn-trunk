@@ -44,7 +44,7 @@
       use ice_diagnostics, only: diag_file, print_global, print_points, latpnt, lonpnt
       use ice_domain_size, only: max_nstrm, nilyr, nslyr, max_ntrcr, ncat, n_aero
       use ice_fileunits, only: nu_nml, nu_diag, nml_filename, diag_type, &
-          ice_stdout, get_fileunit, release_fileunit
+          ice_stdout, get_fileunit, release_fileunit, bfbflag
 #ifdef CCSMCOUPLED
       use ice_fileunits, only: inst_suffix
 #endif
@@ -104,6 +104,7 @@
         n            ! loop index
 
       character (len=6) :: chartmp
+      character (len=32) :: str
 
       logical :: exists
 
@@ -116,7 +117,7 @@
       namelist /setup_nml/ &
         days_per_year,  use_leap_years, year_init,       istep0,        &
         dt,             npt,            ndtd,                           &
-        runtype,        runid,                                          &
+        runtype,        runid,          bfbflag,                        &
         ice_ic,         restart,        restart_dir,     restart_file,  &
         restart_ext,    use_restart_time, restart_format, lcdf64,       &
         pointer_file,   dumpfreq,       dumpfreq_n,      dump_last,     &
@@ -182,6 +183,7 @@
       diagfreq = 24          ! how often diag output is written
       print_points = .false. ! if true, print point data
       print_global = .true.  ! if true, print global diagnostic data
+      bfbflag = .false.      ! if true, do bit-for-bit computations
       diag_type = 'stdout'
       diag_file = 'ice_diag.d'
       histfreq(1) = '1'      ! output frequency option for different streams
@@ -371,17 +373,19 @@
       if (my_task == master_task) then
          history_file  = trim(runid) // ".cice" // trim(inst_suffix) //".h"
          restart_file  = trim(runid) // ".cice" // trim(inst_suffix) //".r"
-         incond_file   = trim(runid) // ".cice" // trim(inst_suffix) //".i."
+         incond_file   = trim(runid) // ".cice" // trim(inst_suffix) //".i"
          inquire(file='ice_modelio.nml'//trim(inst_suffix),exist=exists)
          if (exists) then
             call get_fileUnit(nu_diag)
             call shr_file_setIO('ice_modelio.nml'//trim(inst_suffix),nu_diag)
          end if
-!      else
-! each task gets unique filename
-!            call get_fileUnit(nu_diag)
-!            write(str,'(a,i4.4)') "ice.log.task_",my_task
-!            open(nu_diag,file=str)
+      else
+! tcraig, each task gets unique ice log filename when if test is true, handy for debugging
+         if (1 == 0) then
+            call get_fileUnit(nu_diag)
+            write(str,'(a,i4.4)') "ice.log.task_",my_task
+            open(nu_diag,file=str)
+         endif
       end if
       if (trim(ice_ic) /= 'default' .and. trim(ice_ic) /= 'none') then
          restart = .true.
@@ -604,6 +608,7 @@
       call broadcast_scalar(diagfreq,           master_task)
       call broadcast_scalar(print_points,       master_task)
       call broadcast_scalar(print_global,       master_task)
+      call broadcast_scalar(bfbflag,            master_task)
       call broadcast_scalar(diag_type,          master_task)
       call broadcast_scalar(diag_file,          master_task)
       do n = 1, max_nstrm
@@ -742,10 +747,9 @@
          write(nu_diag,1000) ' dt                        = ', dt
          write(nu_diag,1020) ' npt                       = ', npt
          write(nu_diag,1020) ' diagfreq                  = ', diagfreq
-         write(nu_diag,1010) ' print_global              = ', &
-                               print_global
-         write(nu_diag,1010) ' print_points              = ', &
-                               print_points
+         write(nu_diag,1010) ' print_global              = ', print_global
+         write(nu_diag,1010) ' print_points              = ', print_points
+         write(nu_diag,1010) ' bfbflag                   = ', bfbflag
          write(nu_diag,1050) ' histfreq                  = ', histfreq(:)
          write(nu_diag,1040) ' histfreq_n                = ', histfreq_n(:)
          write(nu_diag,1010) ' hist_avg                  = ', hist_avg

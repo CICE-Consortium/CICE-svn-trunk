@@ -329,7 +329,7 @@ subroutine ice_prescribed_run(mDateIn, secIn)
       do j = jlo, jhi
       do i = ilo, ihi
          n = n+1
-         ice_cov(i,j,iblk) = sdat%avs(1)%rAttr(1,n)
+          ice_cov(i,j,iblk) = sdat%avs(1)%rAttr(1,n)
       end do
       end do
    end do
@@ -450,8 +450,7 @@ subroutine ice_prescribed_phys
          !--------------------------------------------------------------
          ! Place ice where ice concentration > .0001
          !--------------------------------------------------------------
-#if (1 == 0)
-! tcraig this needs to be checked by a profesional !!!
+
          if (ice_cov(i,j,iblk) >= eps04) then
 
             hi = 0.0_dbl_kind
@@ -477,47 +476,11 @@ subroutine ice_prescribed_phys
                      hs = c0
                   endif
 
-                  qin_save(:) = c0
-                  qsn_save(:) = c0
-
-                  if (vicen(i,j,nc,iblk) > c0) then
-                     do k=1,nilyr
-                        qin_save(k) = eicen(i,j,ilyr1(nc)+k-1,iblk)         &
-                                    * real(nilyr,kind=dbl_kind)             &
-                                    / Vicen(i,j,nc,iblk)
-                     enddo
-                  endif
-
-                  if (vsnon(i,j,nc,iblk) > c0) then
-                     do k=1,nslyr
-                        qsn_save(k) = esnon(i,j,slyr1(nc)+k-1,iblk)         &
-                                    * real(nslyr,kind=dbl_kind)             &
-                                    / vsnon(i,j,nc,iblk)
-                     enddo
-                  endif
-
-                  aicen(i,j,nc,iblk) = ice_cov(i,j,iblk)
-                  vicen(i,j,nc,iblk) = hi*aicen(i,j,nc,iblk) 
-                  vsnon(i,j,nc,iblk) = hs*aicen(i,j,nc,iblk) 
-
-                  ! remember enthalpy profile to compute energy
-                  do k=1,nilyr
-                     eicen(i,j,ilyr1(nc)+k-1,iblk)                          &
-                        = qin_save(k) * vicen(i,j,nc,iblk)                  &
-                        / real(nilyr,kind=dbl_kind)
-                  enddo
-
-                  do k=1,nslyr
-                     esnon(i,j,slyr1(nc)+k-1,iblk)                          &
-                        = qsn_save(k) * vsnon(i,j,nc,iblk)                  &
-                        / real(nslyr,kind=dbl_kind)
-                  enddo
-
                   !---------------------------------------------------------
                   ! make linear temp profile and compute enthalpy
                   !---------------------------------------------------------
 
-                  if (abs(eicen(i,j,ilyr1(nc),iblk)) < puny) then
+                  if (abs(trcrn(i,j,nt_qice,nc,iblk)) < puny) then
 
                   if (aice(i,j,iblk) < puny) &
                      trcrn(i,j,nt_Tsfc,nc,iblk) = Tf(i,j,iblk)
@@ -528,32 +491,29 @@ subroutine ice_prescribed_phys
                      Ti = trcrn(i,j,nt_Tsfc,nc,iblk) + slope*zn
                      salin(k) = (saltmax/c2)*(c1-cos(pi*zn**(nsal/(msal+zn))))
                      Tmlt = -salin(k)*depressT
-                     eicen(i,j,ilyr1(nc)+k-1,iblk) =                        &
+                     trcrn(i,j,nt_sice+k-1,nc,iblk) = salin(k)
+                     trcrn(i,j,nt_qice+k-1,nc,iblk) =                      &
                        -(rhoi * (cp_ice*(Tmlt-Ti) &
-                       + Lfresh*(c1-Tmlt/Ti) - cp_ocn*Tmlt)) &
-                       * vicen(i,j,nc,iblk)/real(nilyr,kind=dbl_kind)
+                       + Lfresh*(c1-Tmlt/Ti) - cp_ocn*Tmlt))
                   enddo
 
                   do k=1,nslyr
-                     esnon(i,j,slyr1(nc)+k-1,iblk) =                       &
-                        -rhos*(Lfresh - cp_ice*trcrn(i,j,nt_Tsfc,nc,iblk)) &
-                         *vsnon(i,j,nc,iblk)
+                     trcrn(i,j,nt_qsno+k-1,nc,iblk) =                      &
+                        -rhos*(Lfresh - cp_ice*trcrn(i,j,nt_Tsfc,nc,iblk))
                   enddo
 
                   endif  ! aice < puny
                end if    ! hin_max
             enddo        ! ncat
          else
-#endif
             trcrn(i,j,nt_Tsfc,:,iblk) = Tf(i,j,iblk)
             aicen(i,j,:,iblk) = c0
             vicen(i,j,:,iblk) = c0
             vsnon(i,j,:,iblk) = c0
-#if (1 == 0)
-            esnon(i,j,:,iblk) = c0
-            eicen(i,j,:,iblk) = c0
+            trcrn(i,j,nt_sice:nt_sice+nilyr-1,:,iblk) = c0
+            trcrn(i,j,nt_qice:nt_qice+nilyr-1,:,iblk) = c0
+            trcrn(i,j,nt_qsno:nt_qsno+nslyr-1,:,iblk) = c0
          end if          ! ice_cov >= eps04
-#endif
       end if             ! tmask
    enddo                 ! i
    enddo                 ! j
@@ -561,13 +521,15 @@ subroutine ice_prescribed_phys
    !--------------------------------------------------------------------
    ! compute aggregate ice state and open water area
    !--------------------------------------------------------------------
-   call aggregate (nx_block, ny_block,                      &
-                   aicen(:,:,:,iblk),  trcrn(:,:,:,:,iblk), &
-                   vicen(:,:,:,iblk),  vsnon(:,:,:,iblk),   &
-                   aice(:,:,iblk),     trcr(:,:,:,iblk),    &
-                   vice(:,:,iblk),     vsno(:,:,iblk),      &
-                   aice0(:,:,iblk),    tmask(:,:,iblk),     &
-                   ntrcr,              trcr_depend) 
+    call aggregate (nx_block,          ny_block,             &
+                    aicen(:,:,:,iblk),                       &
+                    trcrn(:,:,1:ntrcr,:,iblk),               &
+                    vicen(:,:,:,iblk), vsnon(:,:,  :,iblk),  &
+                    aice (:,:,  iblk),                       &
+                    trcr (:,:,1:ntrcr,  iblk),               &
+                    vice (:,:,  iblk), vsno (:,:,    iblk),  &
+                    aice0(:,:,  iblk), tmask(:,:,    iblk),  &
+                    ntrcr, trcr_depend(1:ntrcr))
 
    enddo                 ! iblk
 

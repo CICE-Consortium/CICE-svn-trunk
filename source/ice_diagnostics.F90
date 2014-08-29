@@ -20,10 +20,10 @@
 
       implicit none
       private
-      public :: runtime_diags, init_mass_diags, init_diags, print_state
+      public :: runtime_diags, init_mass_diags, init_diags, print_state, print_points_state
 
       save
-	
+
       ! diagnostic output file
       character (len=char_len), public :: diag_file
 
@@ -120,6 +120,9 @@
       use ice_state ! everything
       use ice_therm_shared, only: calc_Tsfc
       use ice_zbgc_shared, only: rhosi
+#ifdef CCSMCOUPLED
+      use ice_prescribed_mod, only: prescribed_ice
+#endif
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -335,7 +338,7 @@
       ! (Ice speeds of ~1 m/s or more usually indicate instability)
 
       if (check_umax) then
-      	 if (umaxn > umax_stab) then
+         if (umaxn > umax_stab) then
             !$OMP PARALLEL DO PRIVATE(iblk,i,j)
             do iblk = 1, nblocks
             do j = 1, ny_block
@@ -767,6 +770,15 @@
 
         if (print_global) then  ! global diags for conservations checks
 
+#ifdef CCSMCOUPLED
+         if (prescribed_ice) then
+          write (nu_diag,*) '----------------------------'
+          write (nu_diag,*)   'This is the prescribed ice option.'
+          write (nu_diag,*)   'Heat and water will not be conserved.'
+          write (nu_diag,*) '----------------------------'
+         endif
+#endif
+
          write(nu_diag,*) '----------------------------'
          write(nu_diag,901) 'arwt rain h2o kg in dt = ',rnn,rns
          write(nu_diag,901) 'arwt snow h2o kg in dt = ',snn,sns
@@ -1054,18 +1066,18 @@
       ! Initialize
       !-----------------------------------------------------------------
 
-      icells = 0
-      do j = 1, ny_block
-      do i = 1, nx_block
-         if (tmask(i,j,iblk)) then
-            icells = icells + 1
-            indxi(icells) = i
-            indxj(icells) = j
-         endif                  ! tmask
-      enddo
-      enddo
+         icells = 0
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (tmask(i,j,iblk)) then
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
+            endif                  ! tmask
+         enddo
+         enddo
 
-      work(:,:,iblk) = c0
+         work(:,:,iblk) = c0
 
       !-----------------------------------------------------------------
       ! Aggregate
@@ -1140,18 +1152,18 @@
       ! Initialize
       !-----------------------------------------------------------------
 
-      icells = 0
-      do j = 1, ny_block
-      do i = 1, nx_block
-         if (tmask(i,j,iblk)) then
-            icells = icells + 1
-            indxi(icells) = i
-            indxj(icells) = j
-         endif                  ! tmask
-      enddo
-      enddo
+         icells = 0
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (tmask(i,j,iblk)) then
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
+            endif                  ! tmask
+         enddo
+         enddo
 
-      work(:,:,iblk) = c0
+         work(:,:,iblk) = c0
 
       !-----------------------------------------------------------------
       ! Aggregate
@@ -1204,21 +1216,16 @@
          iblk        , & ! block index
          ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
-      character (char_len) :: label(npnt)
-
       type (block) :: &
          this_block           ! block information for current block
 
-      if (print_points) then
+!tcraig, do this all the time now for print_points_state usage
+!      if (print_points) then
 
          if (my_task==master_task) then
             write(nu_diag,*) ' '
             write(nu_diag,*) ' Find indices of diagnostic points '
          endif
-
-         ! initialize labels
-         label(1)(1:40)  = 'Near North Pole pack ice                '
-         label(2)(1:40)  = 'Weddell Sea                             '
 
          piloc(:) = 0
          pjloc(:) = 0
@@ -1235,6 +1242,8 @@
             jindx = 0
             bindx = 0
             mindis = 540.0_dbl_kind !  360. + 180.
+
+            if (abs(latpnt(n)) < c360 .and. abs(lonpnt(n)) < c360) then
 
             !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,latdis,londis,totdis)
             do iblk = 1, nblocks
@@ -1263,11 +1272,13 @@
             enddo               ! iblk
             !$OMP END PARALLEL DO
 
+            endif
+
             ! find global minimum distance to diagnostic points 
             mindis_g = global_minval(mindis, distrb_info)
 
             ! save indices of minimum-distance grid cell
-            if (abs(mindis_g - mindis) < puny) then
+            if (mindis <= 180.0 .and. abs(mindis_g - mindis) < puny) then
                piloc(n) = iindx
                pjloc(n) = jindx
                pbloc(n) = bindx
@@ -1295,7 +1306,7 @@
                 4(f6.1,1x),1x,4(i4,2x) )
 
          enddo                  ! npnt
-      endif                     ! print_points
+!      endif                     ! print_points
 
       end subroutine init_diags
 
@@ -1442,6 +1453,146 @@
       write(nu_diag,*) ' '
 
       end subroutine print_state
+
+!=======================================================================
+!=======================================================================
+
+! This routine is useful for debugging.
+! Calls can be inserted anywhere and it will print info on print_points points
+!      call print_points_state(plabel)
+!
+! 'use ice_diagnostics' may need to be inserted also
+
+      subroutine print_points_state(plabel,ilabel)
+
+      use ice_blocks, only: block, get_block
+      use ice_constants, only: puny, rhoi, rhos, Lfresh, cp_ice
+      use ice_domain, only: blocks_ice
+      use ice_domain_size, only: ncat, nilyr, nslyr
+      use ice_state, only: aice0, aicen, vicen, vsnon, uvel, vvel, &
+          trcrn,  nt_Tsfc, nt_qice, nt_qsno
+      use ice_flux, only: uatm, vatm, potT, Tair, Qa, flw, frain, fsnow, &
+          fsens, flat, evap, flwout, swvdr, swvdf, swidr, swidf, rhoa, &
+          frzmlt, sst, sss, Tf, Tref, Qref, Uref, uocn, vocn, strtltx, strtlty
+
+      character (len=*), intent(in),optional :: plabel
+      integer          , intent(in),optional :: ilabel
+
+      ! local variables
+
+      real (kind=dbl_kind) :: &
+           eidebug, esdebug, &
+           qi, qs, Tsnow
+
+      integer (kind=int_kind) :: m, n, k, i, j, iblk
+      character(len=256) :: llabel
+
+      type (block) :: &
+         this_block           ! block information for current block
+
+      ! ----------------------
+
+      do m = 1, npnt
+      if (my_task == pmloc(m)) then
+         i = piloc(m)
+         j = pjloc(m)
+         iblk = pbloc(m)
+         this_block = get_block(blocks_ice(iblk),iblk)         
+
+         if (present(ilabel)) then
+            write(llabel,'(i6,a1,i3,a1)') ilabel,':',m,':'
+         else
+            write(llabel,'(i3,a1)') m,':'
+         endif
+         if (present(plabel)) then
+            write(llabel,'(a)') 'pps:'//trim(plabel)//':'//trim(llabel)
+         else
+            write(llabel,'(a)') 'pps:'//trim(llabel)
+         endif
+
+         write(nu_diag,*) trim(llabel),'istep1, my_task, i, j, iblk=', &
+                           istep1, my_task, i, j, iblk
+         write(nu_diag,*) trim(llabel),'Global i and j=', &
+                           this_block%i_glob(i), &
+                           this_block%j_glob(j) 
+         write(nu_diag,*) trim(llabel),'aice0=', aice0(i,j,iblk)
+
+      do n = 1, ncat
+         write(nu_diag,*) trim(llabel),'aicen=', n,aicen(i,j,n,iblk)
+         write(nu_diag,*) trim(llabel),'vicen=', n,vicen(i,j,n,iblk)
+         write(nu_diag,*) trim(llabel),'vsnon=', n,vsnon(i,j,n,iblk)
+         if (aicen(i,j,n,iblk) > puny) then
+            write(nu_diag,*) trim(llabel),'hin=', n,vicen(i,j,n,iblk)/aicen(i,j,n,iblk)
+            write(nu_diag,*) trim(llabel),'hsn=', n,vsnon(i,j,n,iblk)/aicen(i,j,n,iblk)
+         endif
+         write(nu_diag,*) trim(llabel),'Tsfcn=',n,trcrn(i,j,nt_Tsfc,n,iblk)
+      enddo
+
+      eidebug = c0
+      do n = 1,ncat
+         do k = 1,nilyr
+            qi = trcrn(i,j,nt_qice+k-1,n,iblk)
+            write(nu_diag,*) trim(llabel),'qice= ',n,k, qi
+            eidebug = eidebug + qi
+         enddo
+      enddo
+      write(nu_diag,*) trim(llabel),'qice=',eidebug
+
+      esdebug = c0
+      do n = 1,ncat
+         if (vsnon(i,j,n,iblk) > puny) then
+            do k = 1,nslyr
+               qs = trcrn(i,j,nt_qsno+k-1,n,iblk)
+               write(nu_diag,*) trim(llabel),'qsnow=',n,k, qs
+               esdebug = esdebug + qs
+            enddo
+         endif
+      enddo
+      write(nu_diag,*) trim(llabel),'qsnow=',esdebug
+
+      write(nu_diag,*) trim(llabel),'uvel=',uvel(i,j,iblk)
+      write(nu_diag,*) trim(llabel),'vvel=',vvel(i,j,iblk)
+
+      !  write(nu_diag,*) ' '
+      !  write(nu_diag,*) 'atm states and fluxes'
+      !  write(nu_diag,*) '            uatm    = ',uatm (i,j,iblk)
+      !  write(nu_diag,*) '            vatm    = ',vatm (i,j,iblk)
+      !  write(nu_diag,*) '            potT    = ',potT (i,j,iblk)
+      !  write(nu_diag,*) '            Tair    = ',Tair (i,j,iblk)
+      !  write(nu_diag,*) '            Qa      = ',Qa   (i,j,iblk)
+      !  write(nu_diag,*) '            rhoa    = ',rhoa (i,j,iblk)
+      !  write(nu_diag,*) '            swvdr   = ',swvdr(i,j,iblk)
+      !  write(nu_diag,*) '            swvdf   = ',swvdf(i,j,iblk)
+      !  write(nu_diag,*) '            swidr   = ',swidr(i,j,iblk)
+      !  write(nu_diag,*) '            swidf   = ',swidf(i,j,iblk)
+      !  write(nu_diag,*) '            flw     = ',flw  (i,j,iblk)
+      !  write(nu_diag,*) '            frain   = ',frain(i,j,iblk)
+      !  write(nu_diag,*) '            fsnow   = ',fsnow(i,j,iblk)
+      !  write(nu_diag,*) ' '
+      !  write(nu_diag,*) 'ocn states and fluxes'
+      !  write(nu_diag,*) '            frzmlt  = ',frzmlt (i,j,iblk)
+      !  write(nu_diag,*) '            sst     = ',sst    (i,j,iblk)
+      !  write(nu_diag,*) '            sss     = ',sss    (i,j,iblk)
+      !  write(nu_diag,*) '            Tf      = ',Tf     (i,j,iblk)
+      !  write(nu_diag,*) '            uocn    = ',uocn   (i,j,iblk)
+      !  write(nu_diag,*) '            vocn    = ',vocn   (i,j,iblk)
+      !  write(nu_diag,*) '            strtltx = ',strtltx(i,j,iblk)
+      !  write(nu_diag,*) '            strtlty = ',strtlty(i,j,iblk)
+      !  write(nu_diag,*) ' '
+      !  write(nu_diag,*) 'srf states and fluxes'
+      !  write(nu_diag,*) '            Tref    = ',Tref  (i,j,iblk)
+      !  write(nu_diag,*) '            Qref    = ',Qref  (i,j,iblk)
+      !  write(nu_diag,*) '            Uref    = ',Uref  (i,j,iblk)
+      !  write(nu_diag,*) '            fsens   = ',fsens (i,j,iblk)
+      !  write(nu_diag,*) '            flat    = ',flat  (i,j,iblk)
+      !  write(nu_diag,*) '            evap    = ',evap  (i,j,iblk)
+      !  write(nu_diag,*) '            flwout  = ',flwout(i,j,iblk)
+      !  write(nu_diag,*) ' '
+
+      endif   ! my_task
+      enddo   ! ncnt
+
+      end subroutine print_points_state
 
 !=======================================================================
 

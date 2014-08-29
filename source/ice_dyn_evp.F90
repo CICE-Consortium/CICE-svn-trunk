@@ -122,7 +122,7 @@
       real (kind=dbl_kind), allocatable :: fld2(:,:,:,:)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,8):: &
-         str          ! stress combinations for momentum equation
+         strtmp       ! stress combinations for momentum equation
 
       integer (kind=int_kind), dimension (nx_block,ny_block,max_blocks) :: &
          icetmask     ! ice extent mask (T-cell)
@@ -293,7 +293,7 @@
 
       ! unload
       !$OMP PARALLEL DO PRIVATE(iblk)
-      do iblk = 1,nblocks
+      do iblk = 1, nblocks
          uvel(:,:,iblk) = fld2(:,:,1,iblk)
          vvel(:,:,iblk) = fld2(:,:,2,iblk)
       enddo
@@ -309,7 +309,7 @@
       ! stress tensor equation, total surface stress
       !-----------------------------------------------------------------
 
-         !$OMP PARALLEL DO PRIVATE(iblk)
+         !$OMP PARALLEL DO PRIVATE(iblk,strtmp)
          do iblk = 1, nblocks
 
 !            if (trim(yield_curve) == 'ellipse') then
@@ -332,7 +332,7 @@
                             shear     (:,:,iblk), divu      (:,:,iblk), & 
                             prs_sig   (:,:,iblk),                       & 
                             rdg_conv  (:,:,iblk), rdg_shear (:,:,iblk), & 
-                            str       (:,:,:) )
+                            strtmp    (:,:,:) )
 !            endif               ! yield_curve
 
       !-----------------------------------------------------------------
@@ -342,7 +342,7 @@
             call stepu (nx_block,            ny_block,           &
                         icellu       (iblk), Cdn_ocn (:,:,iblk), & 
                         indxui     (:,iblk), indxuj    (:,iblk), & 
-                        aiu      (:,:,iblk), str     (:,:,:),    & 
+                        aiu      (:,:,iblk), strtmp  (:,:,:),    & 
                         uocn     (:,:,iblk), vocn    (:,:,iblk), &     
                         waterx   (:,:,iblk), watery  (:,:,iblk), & 
                         forcex   (:,:,iblk), forcey  (:,:,iblk), & 
@@ -370,7 +370,7 @@
 
          ! unload
          !$OMP PARALLEL DO PRIVATE(iblk)
-         do iblk = 1,nblocks
+         do iblk = 1, nblocks
             uvel(:,:,iblk) = fld2(:,:,1,iblk)
             vvel(:,:,iblk) = fld2(:,:,2,iblk)
          enddo

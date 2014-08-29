@@ -61,7 +61,9 @@
          TLON   , & ! longitude of temp pts (radians)
          TLAT   , & ! latitude of temp pts (radians)
          ANGLE  , & ! for conversions between POP grid and lat/lon
-         ANGLET     ! ANGLE converted to T-cells
+         ANGLET , & ! ANGLE converted to T-cells
+         ocn_gridcell_frac   ! only relevant for lat-lon grids
+                             ! gridcell value of [1 - (land fraction)] (T-cell)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public, save :: &
          cyp    , & ! 1.5*HTE - 0.5*HTE
@@ -101,6 +103,7 @@
       ! masks
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public, save :: &
          hm     , & ! land/boundary mask, thickness (T-cell)
+         bm     , & ! task/block id
          uvm        ! land/boundary mask, velocity (U-cell)
 
       logical (kind=log_kind), &
@@ -266,6 +269,9 @@
          else
             call popgrid        ! read POP grid lengths directly
          endif 
+      elseif (trim(grid_type) == 'latlon') then
+         call latlongrid        ! lat lon grid for sequential CCSM (CAM mode)
+         return
       elseif (trim(grid_type) == 'cpom_grid') then
          call cpomgrid          ! cpom model orca1 type grid
       else
@@ -410,6 +416,7 @@
          !*** NOTE: RASM pan-Arctic domain
          !*** Robert Osinski
 
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks !cro
          this_block = get_block(blocks_ice(iblk),iblk)
          ilo = this_block%ilo
@@ -717,6 +724,290 @@
       end subroutine popgrid_nc
 
 !=======================================================================
+!BOP
+!
+! !IROUTINE: latlongrid- lat and lon grid for coupling to standalone CAM
+!
+! !INTERFACE:
+!
+      subroutine latlongrid
+!
+! !DESCRIPTION:
+!
+! Read in kmt file that matches CAM lat-lon grid and has single column 
+! functionality
+!
+! !REVISION HISTORY:
+!
+! author: Mariana Vertenstein
+! 2007: Elizabeth Hunke upgraded to netcdf90 and cice ncdf calls
+!
+! !USES:
+!
+!     use ice_boundary
+      use ice_domain_size
+#ifdef CCSMCOUPLED
+      use ice_scam, only : scmlat, scmlon, single_column
+#endif
+      use ice_constants, only: c0, c1, pi, pi2, rad_to_deg, puny, p5, p25, &
+          field_loc_center, field_type_scalar, radius
+      use ice_exit, only: abort_ice
+      use netcdf
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) :: &
+         i, j, iblk    
+      
+      integer (kind=int_kind) :: &
+         ni, nj, ncid, dimid, varid, ier
+
+      character (len=char_len) :: &
+         subname='latlongrid' ! subroutine name
+
+      type (block) :: &
+         this_block           ! block information for current block
+
+      integer (kind=int_kind) :: &
+         ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+
+      real (kind=dbl_kind) :: &
+           closelat, &        ! Single-column latitude value
+           closelon, &        ! Single-column longitude value
+           closelatidx, &     ! Single-column latitude index to retrieve
+           closelonidx        ! Single-column longitude index to retrieve
+
+      integer (kind=int_kind) :: &
+           start(2), &        ! Start index to read in
+           count(2)           ! Number of points to read in
+
+      integer (kind=int_kind) :: &
+           start3(3), &        ! Start index to read in
+           count3(3)           ! Number of points to read in
+
+      integer (kind=int_kind) :: &
+        status                ! status flag
+
+      real (kind=dbl_kind), allocatable :: &
+           lats(:),lons(:),pos_lons(:), glob_grid(:,:)  ! temporaries 
+
+      real (kind=dbl_kind) :: &
+         pos_scmlon,&         ! temporary
+         scamdata             ! temporary
+
+      !-----------------------------------------------------------------
+      ! - kmt file is actually clm fractional land file
+      ! - Determine consistency of dimensions
+      ! - Read in lon/lat centers in degrees from kmt file
+      ! - Read in ocean from "kmt" file (1 for ocean, 0 for land)
+      !-----------------------------------------------------------------
+#ifdef CCSMCOUPLED
+
+      ! Determine dimension of domain file and check for consistency
+
+      if (my_task == master_task) then
+         call ice_open_nc(kmt_file, ncid)
+
+         status = nf90_inq_dimid (ncid, 'ni', dimid)
+         status = nf90_inquire_dimension(ncid, dimid, len=ni)
+         status = nf90_inq_dimid (ncid, 'nj', dimid)
+         status = nf90_inquire_dimension(ncid, dimid, len=nj)
+      end if
+
+      ! Determine start/count to read in for either single column or global lat-lon grid
+      ! If single_column, then assume that only master_task is used since there is only one task
+
+      if (single_column) then
+         ! Check for consistency
+         if (my_task == master_task) then
+            if ((nx_global /= 1).or. (ny_global /= 1)) then
+               write(nu_diag,*) 'Because you have selected the column model flag'
+               write(nu_diag,*) 'Please set nx_global=ny_global=1 in file'
+               write(nu_diag,*) 'ice_domain_size.F and recompile'
+               call abort_ice ('latlongrid: check nx_global, ny_global')
+            endif
+         end if
+
+         ! Read in domain file for single column
+         allocate(lats(nj))
+         allocate(lons(ni))
+         allocate(pos_lons(ni))
+         allocate(glob_grid(ni,nj))
+
+         start3=(/1,1,1/)
+         count3=(/ni,nj,1/)
+         status = nf90_inq_varid(ncid, 'xc' , varid)
+         if (status /= nf90_noerr) call abort_ice (subname//' inq_varid xc')
+         status = nf90_get_var(ncid, varid, glob_grid, start3, count3)
+         if (status /= nf90_noerr) call abort_ice (subname//' get_var xc')
+         do i = 1,ni
+            lons(i) = glob_grid(i,1)
+         end do
+
+         status = nf90_inq_varid(ncid, 'yc' , varid)
+         if (status /= nf90_noerr) call abort_ice (subname//' inq_varid yc')
+         status = nf90_get_var(ncid, varid, glob_grid, start3, count3)
+         if (status /= nf90_noerr) call abort_ice (subname//' get_var yc')
+         do j = 1,nj
+            lats(j) = glob_grid(1,j) 
+         end do
+         
+         ! convert lons array and scmlon to 0,360 and find index of value closest to 0
+         ! and obtain single-column longitude/latitude indices to retrieve
+         
+         pos_lons(:)= mod(lons(:) + 360._dbl_kind,360._dbl_kind)
+         pos_scmlon = mod(scmlon  + 360._dbl_kind,360._dbl_kind)
+         start(1) = (MINLOC(abs(pos_lons-pos_scmlon),dim=1))
+         start(2) = (MINLOC(abs(lats    -scmlat    ),dim=1))
+
+         deallocate(lats)
+         deallocate(lons)
+         deallocate(pos_lons)
+         deallocate(glob_grid)
+
+         status = nf90_inq_varid(ncid, 'xc' , varid)
+         if (status /= nf90_noerr) call abort_ice (subname//' inq_varid xc')
+         status = nf90_get_var(ncid, varid, scamdata, start)
+         if (status /= nf90_noerr) call abort_ice (subname//' get_var xc')
+         TLON = scamdata
+         status = nf90_inq_varid(ncid, 'yc' , varid)
+         if (status /= nf90_noerr) call abort_ice (subname//' inq_varid yc')
+         status = nf90_get_var(ncid, varid, scamdata, start)
+         if (status /= nf90_noerr) call abort_ice (subname//' get_var yc')
+         TLAT = scamdata
+         status = nf90_inq_varid(ncid, 'area' , varid)
+         if (status /= nf90_noerr) call abort_ice (subname//' inq_varid area')
+         status = nf90_get_var(ncid, varid, scamdata, start)
+         if (status /= nf90_noerr) call abort_ice (subname//' get_var are')
+         tarea = scamdata
+         status = nf90_inq_varid(ncid, 'mask' , varid)
+         if (status /= nf90_noerr) call abort_ice (subname//' inq_varid mask')
+         status = nf90_get_var(ncid, varid, scamdata, start)
+         if (status /= nf90_noerr) call abort_ice (subname//' get_var mask')
+         hm = scamdata
+         status = nf90_inq_varid(ncid, 'frac' , varid)
+         if (status /= nf90_noerr) call abort_ice (subname//' inq_varid frac')
+         status = nf90_get_var(ncid, varid, scamdata, start)
+         if (status /= nf90_noerr) call abort_ice (subname//' get_var frac')
+         ocn_gridcell_frac = scamdata
+      else
+         ! Check for consistency
+         if (my_task == master_task) then
+            if (nx_global /= ni .and. ny_global /= nj) then
+              call abort_ice ('latlongrid: ni,nj not equal to nx_global,ny_global')
+            end if
+         end if
+
+         ! Read in domain file for global lat-lon grid
+         call ice_read_nc(ncid, 1, 'xc'  , TLON             , diag=.true.)
+         call ice_read_nc(ncid, 1, 'yc'  , TLAT             , diag=.true.)
+         call ice_read_nc(ncid, 1, 'area', tarea            , diag=.true., &
+            field_loc=field_loc_center,field_type=field_type_scalar)
+         call ice_read_nc(ncid, 1, 'mask', hm               , diag=.true.)
+         call ice_read_nc(ncid, 1, 'frac', ocn_gridcell_frac, diag=.true.)
+      end if
+
+      if (my_task == master_task) then
+         call ice_close_nc(ncid)
+      end if
+
+     !$OMP PARALLEL DO PRIVATE(iblk,this_block,ilo,ihi,jlo,jhi,i,j)
+      do iblk = 1, nblocks
+         this_block = get_block(blocks_ice(iblk),iblk)
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do j = jlo, jhi
+         do i = ilo, ihi
+            ! Convert from degrees to radians
+            TLON(i,j,iblk) = pi*TLON(i,j,iblk)/180._dbl_kind
+
+            ! Convert from degrees to radians
+            TLAT(i,j,iblk) = pi*TLAT(i,j,iblk)/180._dbl_kind
+
+            ! Convert from radians^2 to m^2
+            ! (area in domain file is in radians^2 and tarea is in m^2)
+            tarea(i,j,iblk) = tarea(i,j,iblk) * (radius*radius)
+         end do
+         end do
+      end do
+      !$OMP END PARALLEL DO
+
+      !-----------------------------------------------------------------
+      ! Calculate various geometric 2d arrays
+      ! The U grid (velocity) is not used when run with sequential CAM
+      ! because we only use thermodynamic sea ice.  However, ULAT is used
+      ! in the default initialization of CICE so we calculate it here as 
+      ! a "dummy" so that CICE will initialize with ice.  If a no ice
+      ! initialization is OK (or desired) this can be commented out and
+      ! ULAT will remain 0 as specified above.  ULAT is located at the
+      ! NE corner of the grid cell, TLAT at the center, so here ULAT is
+      ! hacked by adding half the latitudinal spacing (in radians) to
+      ! TLAT.
+      !-----------------------------------------------------------------
+
+     !$OMP PARALLEL DO PRIVATE(iblk,this_block,ilo,ihi,jlo,jhi,i,j)
+      do iblk = 1, nblocks
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+
+         do j = jlo, jhi
+         do i = ilo, ihi
+
+            if (ny_global == 1) then
+               uarea(i,j,iblk)  = tarea(i,j,  iblk)
+            else
+               uarea(i,j,iblk)  = p25*  &
+                                 (tarea(i,j,  iblk) + tarea(i+1,j,  iblk) &
+                                + tarea(i,j+1,iblk) + tarea(i+1,j+1,iblk))
+            endif
+            tarear(i,j,iblk)   = c1/tarea(i,j,iblk)
+            uarear(i,j,iblk)   = c1/uarea(i,j,iblk)
+            tinyarea(i,j,iblk) = puny*tarea(i,j,iblk)
+
+            if (single_column) then
+               ULAT  (i,j,iblk) = TLAT(i,j,iblk)+(pi/nj)  
+            else
+               if (ny_global == 1) then
+                  ULAT  (i,j,iblk) = TLAT(i,j,iblk)
+               else
+                  ULAT  (i,j,iblk) = TLAT(i,j,iblk)+(pi/ny_global)  
+               endif
+            endif
+            ULON  (i,j,iblk) = c0
+            ANGLE (i,j,iblk) = c0                             
+
+            ANGLET(i,j,iblk) = c0                             
+            HTN   (i,j,iblk) = 1.e36_dbl_kind
+            HTE   (i,j,iblk) = 1.e36_dbl_kind
+            dxt   (i,j,iblk) = 1.e36_dbl_kind
+            dyt   (i,j,iblk) = 1.e36_dbl_kind
+            dxu   (i,j,iblk) = 1.e36_dbl_kind
+            dyu   (i,j,iblk) = 1.e36_dbl_kind
+            dxhy  (i,j,iblk) = 1.e36_dbl_kind
+            dyhx  (i,j,iblk) = 1.e36_dbl_kind
+            cyp   (i,j,iblk) = 1.e36_dbl_kind
+            cxp   (i,j,iblk) = 1.e36_dbl_kind
+            cym   (i,j,iblk) = 1.e36_dbl_kind
+            cxm   (i,j,iblk) = 1.e36_dbl_kind
+         enddo
+         enddo
+      enddo
+      !$OMP END PARALLEL DO
+
+      call makemask
+#endif
+
+      end subroutine latlongrid
+
+!=======================================================================
 
 ! Regular rectangular grid and mask
 !
@@ -933,7 +1224,6 @@
          do i = ilo, ihi
             hm(i,j,iblk) = work1(i,j,iblk)
             if (hm(i,j,iblk) >= c1) hm(i,j,iblk) = c1
-
          enddo
          enddo
       enddo
@@ -1149,6 +1439,7 @@
       ! construct T-cell and U-cell masks
       !-----------------------------------------------------------------
 
+      bm = c0
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
@@ -1161,6 +1452,7 @@
          do i = ilo, ihi
             uvm(i,j,iblk) = min (hm(i,j,  iblk), hm(i+1,j,  iblk), &
                                  hm(i,j+1,iblk), hm(i+1,j+1,iblk))
+            bm(i,j,iblk) = my_task + iblk/100.0_dbl_kind
          enddo
          enddo
       enddo
@@ -1169,6 +1461,8 @@
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (uvm,                halo_info, &
                            field_loc_NEcorner, field_type_scalar)
+      call ice_HaloUpdate (bm,               halo_info, &
+                           field_loc_center, field_type_scalar)
       call ice_timer_stop(timer_bound)
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
@@ -1297,6 +1591,7 @@
          !*** for W boundary extrapolate from interior
          !*** NOTE: RASM pan-Arctic domain
          !*** Robert Osinski
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
       do iblk = 1, nblocks !cro
          this_block = get_block(blocks_ice(iblk),iblk)
          ilo = this_block%ilo
@@ -1315,6 +1610,7 @@
           enddo
          enddo !cro
       enddo
+      !$OMP END PARALLEL DO
 #endif
 
       call ice_timer_start(timer_bound)

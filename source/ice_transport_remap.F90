@@ -455,17 +455,18 @@
       type (block) ::     &
          this_block       ! block information for current block
 
-      l_stop = .false.
-      istop = 0
-      jstop = 0
-
 !---!-------------------------------------------------------------------
 !---! Remap the ice area and associated tracers.
 !---! Remap the open water area (without tracers).
 !---!-------------------------------------------------------------------
 
-      !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block,n,indxinc,indxjnc)
+      !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block,n,m, &
+      !$OMP          indxinc,indxjnc,mmask,tmask,istop,jstop,l_stop)
       do iblk = 1, nblocks
+
+         l_stop = .false.
+         istop = 0
+         jstop = 0
 
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -588,7 +589,7 @@
 
          ! tracer fields 
          if (maskhalo_remap) then
-            halomask = 0
+            halomask(:,:,:) = 0
             !$OMP PARALLEL DO PRIVATE(iblk,this_block,ilo,ihi,jlo,jhi,n,m,j,i)
             do iblk = 1, nblocks
                this_block = get_block(blocks_ice(iblk),iblk)         
@@ -633,11 +634,15 @@
 
       endif  ! nghost
 
-      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
-      !$OMP                     edgearea_e,edgearea_n,edge,n,iflux,jflux, &
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block,n,m, &
+      !$OMP                     edgearea_e,edgearea_n,edge,iflux,jflux, &
       !$OMP                     xp,yp,indxing,indxjng,mflxe,mflxn, &
-      !$OMP                     mtflxe,mtflxn,triarea)
+      !$OMP                     mtflxe,mtflxn,triarea,istop,jstop,l_stop)
       do iblk = 1, nblocks
+
+         l_stop = .false.
+         istop = 0
+         jstop = 0
 
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo

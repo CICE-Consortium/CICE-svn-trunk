@@ -16,6 +16,8 @@
       module CICE_RunMod
 
       use ice_kinds_mod
+      use perf_mod,        only : t_startf, t_stopf, t_barrierf
+      use ice_fileunits, only: nu_diag
 
       implicit none
       private
@@ -104,9 +106,9 @@
       use ice_aerosol, only: write_restart_aero
       use ice_boundary, only: ice_HaloUpdate
       use ice_brine, only: hbrine_diags, write_restart_hbrine
-      use ice_calendar, only: dt, dt_dyn, ndtd, diagfreq, write_restart, istep
+      use ice_calendar, only: dt, dt_dyn, ndtd, diagfreq, write_restart, istep, idate, sec
       use ice_constants, only: field_loc_center, field_type_scalar
-      use ice_diagnostics, only: init_mass_diags, runtime_diags
+      use ice_diagnostics, only: init_mass_diags, runtime_diags, print_points_state
       use ice_domain, only: halo_info, nblocks
       use ice_domain_size, only: nslyr
       use ice_dyn_eap, only: write_restart_eap
@@ -132,6 +134,8 @@
       use ice_algae, only: bgc_diags, write_restart_bgc
       use ice_zbgc, only: init_history_bgc, biogeochemistry
       use ice_zbgc_shared, only: skl_bgc
+      use ice_communicate, only: MPI_COMM_ICE
+      use ice_prescribed_mod
 
       integer (kind=int_kind) :: &
          iblk        , & ! block index 
@@ -153,6 +157,13 @@
          call init_history_bgc
          call ice_timer_stop(timer_diags)   ! diagnostics/history
 
+         if(prescribed_ice) then  ! read prescribed ice
+            call t_barrierf('cice_run_presc_BARRIER',MPI_COMM_ICE)
+            call t_startf ('cice_run_presc')
+            call ice_prescribed_run(idate, sec)
+            call t_stopf ('cice_run_presc')
+         endif
+
          call ice_timer_start(timer_column)  ! column physics
          call ice_timer_start(timer_thermo)  ! thermodynamics
 
@@ -171,7 +182,8 @@
             
             call step_therm1     (dt, iblk) ! vertical thermodynamics
             call biogeochemistry (dt, iblk) ! biogeochemistry
-            call step_therm2     (dt, iblk) ! ice thickness distribution thermo
+            if (.not.prescribed_ice) &
+              call step_therm2   (dt, iblk) ! ice thickness distribution thermo
 
          enddo ! iblk
          !$OMP END PARALLEL DO
@@ -185,9 +197,11 @@
       ! dynamics, transport, ridging
       !-----------------------------------------------------------------
 
+         if (.not.prescribed_ice) then
          do k = 1, ndtd
             call step_dynamics (dt_dyn, ndtd)
          enddo
+         endif
 
       !-----------------------------------------------------------------
       ! albedo, shortwave radiation

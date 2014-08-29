@@ -443,7 +443,12 @@
         iyear = nyr + year_init - 1 ! set year_init=1 in ice_in to get iyear=nyr
         imonth = month
         iday = mday
-        isec = sec - dt
+
+        if (write_ic) then
+           isec = sec
+        else
+           isec = sec - dt
+        endif
 
         ! construct filename
         if (write_ic) then

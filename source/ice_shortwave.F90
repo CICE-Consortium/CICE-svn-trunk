@@ -162,7 +162,7 @@
          this_block      ! block information for current block
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,n)
-      do iblk=1,nblocks
+      do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
             alvdf(i,j,iblk) = c0
@@ -205,7 +205,7 @@
          call init_orbit       ! initialize orbital parameters
 #endif
          !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block)
-         do iblk=1,nblocks
+         do iblk = 1, nblocks
 
             this_block = get_block(blocks_ice(iblk),iblk)         
             ilo = this_block%ilo
@@ -237,7 +237,7 @@
       else                     ! basic (ccsm3) shortwave
 
          !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block)
-         do iblk=1,nblocks
+         do iblk = 1, nblocks
 
             this_block = get_block(blocks_ice(iblk),iblk)         
             ilo = this_block%ilo
@@ -272,7 +272,7 @@
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,n,ilo,ihi,jlo,jhi,this_block, &
       !$OMP                     ij,icells,cszn,indxi,indxj)
-      do iblk=1,nblocks
+      do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
          ihi = this_block%ihi
