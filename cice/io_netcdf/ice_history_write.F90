@@ -49,7 +49,7 @@
       use ice_exit, only: abort_ice
       use ice_fileunits, only: nu_diag
       use ice_gather_scatter, only: gather_global
-      use ice_grid, only: TLON, TLAT, ULON, ULAT, hm, tarea, uarea, &
+      use ice_grid, only: TLON, TLAT, ULON, ULAT, hm, bm, tarea, uarea, &
           dxu, dxt, dyu, dyt, HTN, HTE, ANGLE, ANGLET, &
           lont_bounds, latt_bounds, lonu_bounds, latu_bounds
       use ice_history_shared
@@ -385,6 +385,20 @@
            if (status /= nf90_noerr) call abort_ice('Error defining missing_value for tmask')
            status = nf90_put_att(ncid,varid,'_FillValue',spval)
            if (status /= nf90_noerr) call abort_ice('Error defining _FillValue for tmask')
+
+           status = nf90_def_var(ncid, 'blkmask', nf90_float, dimid(1:2), varid)
+           if (status /= nf90_noerr) call abort_ice( &
+                         'ice: Error defining var blkmask')
+           status = nf90_put_att(ncid,varid, 'long_name', 'ice grid block mask') 
+           if (status /= nf90_noerr) call abort_ice('ice Error: blkmask long_name') 
+           status = nf90_put_att(ncid, varid, 'coordinates', 'TLON TLAT')
+           if (status /= nf90_noerr) call abort_ice('ice Error: blkmask units') 
+           status = nf90_put_att(ncid,varid,'comment', 'mytask + iblk/100')
+           if (status /= nf90_noerr) call abort_ice('ice Error: blkmask comment') 
+           status = nf90_put_att(ncid,varid,'missing_value',spval)
+           if (status /= nf90_noerr) call abort_ice('Error defining missing_value for blkmask')
+           status = nf90_put_att(ncid,varid,'_FillValue',spval)
+           if (status /= nf90_noerr) call abort_ice('Error defining _FillValue for blkmask')
         endif
 
         do i = 2, nvar       ! note: n_tmask=1
@@ -953,6 +967,16 @@
         status = nf90_put_var(ncid,varid,work_gr)
         if (status /= nf90_noerr) call abort_ice( &
                       'ice: Error writing variable tmask')
+      endif
+      call gather_global(work_g1, bm, master_task, distrb_info)
+      if (my_task == master_task) then
+        work_gr=work_g1
+        status = nf90_inq_varid(ncid, 'blkmask', varid)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error getting varid for blkmask')
+        status = nf90_put_var(ncid,varid,work_gr)
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice: Error writing variable blkmask')
       endif
       endif
 

@@ -3364,6 +3364,7 @@
         endif
         enddo
         !$OMP END PARALLEL DO
+
         call interpolate_data (sst_data,work1)
         ! masking by hm is necessary due to NaNs in the data file
         do j = 1, ny_block 

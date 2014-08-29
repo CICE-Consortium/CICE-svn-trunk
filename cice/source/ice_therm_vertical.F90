@@ -89,6 +89,9 @@
 
       use ice_communicate, only: my_task
       use ice_therm_mushy, only: temperature_changes_salinity
+#ifdef CCSMCOUPLED
+      use ice_prescribed_mod, only: prescribed_ice
+#endif
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -447,6 +450,21 @@
                                         istop,    jstop)
 
       if (l_stop) return
+
+      !-----------------------------------------------------------------
+      ! If prescribed ice, set hi back to old values
+      !-----------------------------------------------------------------
+
+#ifdef CCSMCOUPLED
+      if (prescribed_ice) then
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            hin(ij) = worki(ij)
+            fhocnn(i,j) = c0             ! for diagnostics
+         enddo                  ! ij
+      endif
+#endif
 
       !-----------------------------------------------------------------
       ! Compute fluxes of water and salt from ice to ocean.

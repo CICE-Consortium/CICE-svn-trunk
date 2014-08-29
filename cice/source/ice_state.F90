@@ -202,7 +202,9 @@
                            field_loc_center, field_type_scalar)
 
       if (maskhalo_bound) then
-         halomask = 0
+         halomask(:,:,:) = 0
+
+         !$OMP PARALLEL DO PRIVATE(iblk,n,i,j)
          do iblk = 1, nblocks
          do n = 1, ncat
          do j = 1, ny_block
@@ -212,6 +214,8 @@
          enddo
          enddo
          enddo
+         !$OMP END PARALLEL DO
+
          call ice_HaloMask(halo_info_aicemask, halo_info, halomask)
 
          call ice_HaloUpdate (trcrn(:,:,1:ntrcr,:,:), halo_info_aicemask, &

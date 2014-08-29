@@ -41,10 +41,10 @@ module ice_comp_mct
   use ice_domain,      only : nblocks, blocks_ice, halo_info, distrb_info
   use ice_blocks,      only : block, get_block, nx_block, ny_block
   use ice_grid,        only : tlon, tlat, tarea, tmask, anglet, hm, &
- 		              grid_type, t2ugrid_vector, gridcpl_file
+ 		              grid_type, t2ugrid_vector, gridcpl_file, ocn_gridcell_frac
   use ice_constants,   only : c0, c1, spval_dbl, rad_to_deg, radius, secday
   use ice_communicate, only : my_task, master_task, MPI_COMM_ICE
-  use ice_calendar,    only : istep, istep1, force_restart_now,          &
+  use ice_calendar,    only : istep, istep1, force_restart_now, write_ic,&
                               idate, mday, time, month, daycal,          &
 		              sec, dt, dt_dyn, calendar,                 &
                               calendar_type, nextsw_cday, days_per_year, &
@@ -118,6 +118,7 @@ contains
 
     use CICE_InitMod
     use ice_restart_shared, only: runid, runtype, restart_dir, restart_format
+    use ice_history,        only: accum_hist
     use ice_history_shared, only: history_dir, history_file
 !
 ! !ARGUMENTS:
@@ -297,6 +298,7 @@ contains
     end if
 
     call calendar(time)     ! update calendar info
+    if (write_ic) call accum_hist(dt) ! write initial conditions
  
     !---------------------------------------------------------------------------
     ! Initialize MCT attribute vectors and indices
@@ -355,23 +357,11 @@ contains
     ! Prescribed ice initialization
     !-----------------------------------------------------------------
 
-!tcx
-!    if (other_cplgrid) then
-!       call ice_prescribed_init(ICEID, gsmap_iloc, dom_iloc)
-!    else
-!       call ice_prescribed_init(ICEID, gsmap_ice, dom_i)
-!    endif
-
-    !-----------------------------------------------------------------
-    ! Get ready for coupling
-    !-----------------------------------------------------------------
-
-!tcx
-!    !$OMP PARALLEL DO PRIVATE(iblk)
-!    do iblk = 1, nblocks
-!       call coupling_prep (iblk)
-!    enddo ! iblk
-!    !$OMP END PARALLEL DO
+    if (other_cplgrid) then
+       call ice_prescribed_init(ICEID, gsmap_iloc, dom_iloc)
+    else
+       call ice_prescribed_init(ICEID, gsmap_ice, dom_i)
+    endif
 
     !---------------------------------------------------------------------------
     ! Fill in export state for driver
@@ -862,11 +852,11 @@ contains
        do j = jlo, jhi
        do i = ilo, ihi
           n = n+1
-!	  if (trim(grid_type) == 'latlon') then
-!             data(n) = ocn_gridcell_frac(i,j,iblk)
-!          else
+         if (trim(grid_type) == 'latlon') then
+             data(n) = ocn_gridcell_frac(i,j,iblk)
+          else
              data(n) = real(nint(hm(i,j,iblk)),kind=dbl_kind)
-!          end if
+          end if
        enddo   !i
        enddo   !j
     enddo      !iblk

@@ -55,7 +55,7 @@
       use ice_exit, only: abort_ice
       use ice_fileunits, only: nu_diag
       use ice_gather_scatter, only: gather_global
-      use ice_grid, only: TLON, TLAT, ULON, ULAT, hm, tarea, uarea, &
+      use ice_grid, only: TLON, TLAT, ULON, ULAT, hm, bm, tarea, uarea, &
           dxu, dxt, dyu, dyt, HTN, HTE, ANGLE, ANGLET, tmask, &
           lont_bounds, latt_bounds, lonu_bounds, latu_bounds
       use ice_history_shared
@@ -333,7 +333,15 @@
            status = pio_def_var(File, 'tmask', pio_real, dimid2, varid)
            status = pio_put_att(File,varid, 'long_name', 'ocean grid mask') 
            status = pio_put_att(File, varid, 'coordinates', 'TLON TLAT')
+           status = pio_put_att(File, varid, 'missing_value', spval)
+           status = pio_put_att(File, varid,'_FillValue',spval)
            status = pio_put_att(File,varid,'comment', '0 = land, 1 = ocean')
+           status = pio_def_var(File, 'blkmask', pio_real, dimid2, varid)
+           status = pio_put_att(File,varid, 'long_name', 'ice grid block mask') 
+           status = pio_put_att(File, varid, 'coordinates', 'TLON TLAT')
+           status = pio_put_att(File,varid,'comment', 'mytask + iblk/100')
+           status = pio_put_att(File, varid, 'missing_value', spval)
+           status = pio_put_att(File, varid,'_FillValue',spval)
         endif
 
         do i = 2, nvar       ! note: n_tmask=1
@@ -360,6 +368,8 @@
              pio_put_att(File,varid, 'long_name', trim(var_nverts(i)%long_name))
              status = &
              pio_put_att(File, varid, 'units', trim(var_nverts(i)%units))
+             status = pio_put_att(File, varid, 'missing_value', spval)
+             status = pio_put_att(File, varid,'_FillValue',spval)
           endif
         enddo
  
@@ -759,6 +769,10 @@
 !        workr2 = tmask  ! tcraig -- tmask is logical, use hm
         workr2 = hm
         status = pio_inq_varid(File, 'tmask', varid)
+        call pio_write_darray(File, varid, iodesc2d, &
+                              workr2, status, fillval=spval_dbl)
+        workr2 = bm
+        status = pio_inq_varid(File, 'blkmask', varid)
         call pio_write_darray(File, varid, iodesc2d, &
                               workr2, status, fillval=spval_dbl)
       endif

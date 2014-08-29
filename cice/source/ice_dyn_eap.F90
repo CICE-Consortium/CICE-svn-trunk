@@ -323,7 +323,7 @@
 
       ! unload
       !$OMP PARALLEL DO PRIVATE(iblk)
-      do iblk = 1,nblocks
+      do iblk = 1, nblocks
          uvel(:,:,iblk) = fld2(:,:,1,iblk)
          vvel(:,:,iblk) = fld2(:,:,2,iblk)
       enddo
@@ -436,7 +436,7 @@
 
          ! unload
          !$OMP PARALLEL DO PRIVATE(iblk)
-         do iblk = 1,nblocks
+         do iblk = 1, nblocks
             uvel(:,:,iblk) = fld2(:,:,1,iblk)
             vvel(:,:,iblk) = fld2(:,:,2,iblk)
          enddo
