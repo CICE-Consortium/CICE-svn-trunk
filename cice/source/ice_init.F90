@@ -1039,6 +1039,23 @@
       call broadcast_scalar(nt_ipnd,  master_task)
       call broadcast_scalar(nt_aero,  master_task)
 
+      if (nt_apnd==0) then
+         write(nu_diag,*)'ERROR: nt_apnd:',nt_apnd
+         call abort_ice ('formdrag: nt_apnd=0')
+      elseif (nt_hpnd==0) then
+         write(nu_diag,*)'ERROR: nt_hpnd:',nt_hpnd
+         call abort_ice ('formdrag: nt_hpnd=0')
+      elseif (nt_ipnd==0) then
+         write(nu_diag,*)'ERROR: nt_ipnd:',nt_ipnd
+         call abort_ice ('formdrag: nt_ipnd=0')
+      elseif (nt_alvl==0) then
+         write(nu_diag,*)'ERROR: nt_alvl:',nt_alvl
+         call abort_ice ('formdrag: nt_alvl=0')
+      elseif (nt_vlvl==0) then
+         write(nu_diag,*)'ERROR: nt_vlvl:',nt_vlvl
+         call abort_ice ('formdrag: nt_vlvl=0')
+      endif
+
       end subroutine input_data
 
 !=======================================================================

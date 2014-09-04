@@ -339,23 +339,6 @@
 
          if (formdrag) then
 
-            if (nt_apnd==0) then
-               write(nu_diag,*)'ERROR: nt_apnd:',nt_apnd
-               call abort_ice ('formdrag: nt_apnd=0')
-            elseif (nt_hpnd==0) then
-               write(nu_diag,*)'ERROR: nt_hpnd:',nt_hpnd
-               call abort_ice ('formdrag: nt_hpnd=0')
-            elseif (nt_ipnd==0) then
-               write(nu_diag,*)'ERROR: nt_ipnd:',nt_ipnd
-               call abort_ice ('formdrag: nt_ipnd=0')
-            elseif (nt_alvl==0) then
-               write(nu_diag,*)'ERROR: nt_alvl:',nt_alvl
-               call abort_ice ('formdrag: nt_alvl=0')
-            elseif (nt_vlvl==0) then
-               write(nu_diag,*)'ERROR: nt_vlvl:',nt_vlvl
-               call abort_ice ('formdrag: nt_vlvl=0')
-            endif
-
             call neutral_drag_coeffs &
                        (nx_block,       ny_block,                      &
                         ilo, ihi,       jlo, jhi,                      &
