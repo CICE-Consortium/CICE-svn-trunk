@@ -1789,7 +1789,7 @@
 
       enddo
 
-      dbug = .true.
+      dbug = .false.
       if (dbug .and. print_points) then
          do n = 1, npnt
             if (my_task == pmloc(n)) then
