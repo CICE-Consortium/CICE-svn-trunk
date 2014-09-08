@@ -247,7 +247,7 @@ explained in more detail below.
 The fluxes and state variables passed between the sea ice model and the CESM flux
 coupler are listed 
 in~Table~\ref{table:coupling}.
-By convention, directional fluxes are positive downward.
+By convention, directional fluxes are positive downward.  In CESM, the sea ice model may exchange coupling fluxes using a different grid than the computational grid.  This functionality is activated using the namelist variable {\tt gridcpl\_file}.
 
 \index{ice!fraction|(emph} The ice fraction
 { $a_i$ 
@@ -632,9 +632,9 @@ For CICE run in stand-alone mode (i.e., uncoupled), a thermodynamic slab ocean m
 \index{roughness|(}
 
 In the default CICE setup, atmospheric and oceanic neutral drag coefficients ($c_u$ and $c_w$) are assumed constant in time and space. These constants are chosen to reflect friction associated with an effective sea ice surface roughness  
-at the ice--atmosphere and ice--ocean interfaces. Sea ice (in both Arctic and Antarctic) contains pressure ridges as well as floe and melt pond edges that act as discrete obstructions to the flow of air or water past the ice, and are a source of form drag.\index{form drag} Following \cite{TFSFFKLB:13} and based on recent theoretical developments \cite{LGHA:12,LLCL:11}, the neutral drag coefficients can now be estimated from properties of the ice cover such as ice concentration,\index{ice!fraction} vertical extent and area of the ridges, freeboard\index{freeboard} and floe draft,\index{keels} and size of floes\index{floe size} and melt ponds.\index{melt pond} The new parameterization allows the drag coefficients to be coupled to the sea ice state and therefore to evolve spatially and temporally.  This parameterization is contained in the subroutine {\it neutral\_drag\_coeffs} and is accessed by setting {\tt formdrag} = true in the namelist.\index{namelist}
+at the ice--atmosphere and ice--ocean interfaces. Sea ice (in both Arctic and Antarctic) contains pressure ridges as well as floe and melt pond edges that act as discrete obstructions to the flow of air or water past the ice, and are a source of form drag.\index{form drag} Following \cite{TFSFFKLB:14} and based on recent theoretical developments \cite{LGHA:12,LLCL:11}, the neutral drag coefficients can now be estimated from properties of the ice cover such as ice concentration,\index{ice!fraction} vertical extent and area of the ridges, freeboard\index{freeboard} and floe draft,\index{keels} and size of floes\index{floe size} and melt ponds.\index{melt pond} The new parameterization allows the drag coefficients to be coupled to the sea ice state and therefore to evolve spatially and temporally.  This parameterization is contained in the subroutine {\it neutral\_drag\_coeffs} and is accessed by setting {\tt formdrag} = true in the namelist.\index{namelist}
 
-Following \cite{TFSFFKLB:13},  consider the general case of  fluid flow obstructed by N randomly oriented obstacles of height $H$ and transverse length $L_y$, distributed on a domain surface area $S_T$. Under the assumption of a logarithmic fluid velocity profile, the general formulation of the form drag coefficient can be expressed as
+Following \cite{TFSFFKLB:14},  consider the general case of  fluid flow obstructed by N randomly oriented obstacles of height $H$ and transverse length $L_y$, distributed on a domain surface area $S_T$. Under the assumption of a logarithmic fluid velocity profile, the general formulation of the form drag coefficient can be expressed as
 \begin{equation}
 C_d=\frac{N c S_c^2 \gamma L_y  H}{2 S_T}\left[\frac{\ln(H/z_0)}{\ln(z_{ref}/z_0)}\right]^2,\label{FormulaDragCoeff}
 \end{equation}
@@ -655,13 +655,13 @@ As in the original drag formulation in CICE (sections \ref{sec:atmo} and \ref{se
 \end{eqnarray}
 \index{ridging}%
 \index{melt pond}%
-The contributions to form drag from ridges (and keels\index{keels} underneath the ice), floe edges  and  melt pond edges can be expressed using the general formulation of equation \eqref{FormulaDragCoeff} (see \cite{TFSFFKLB:13} for details). Individual terms in equation \eqref{Cda} are fully described in \cite{TFSFFKLB:13}. Following \cite{Arya:75} the skin drag coefficient is parametrized as 
+The contributions to form drag from ridges (and keels\index{keels} underneath the ice), floe edges  and  melt pond edges can be expressed using the general formulation of equation \eqref{FormulaDragCoeff} (see \cite{TFSFFKLB:14} for details). Individual terms in equation \eqref{Cda} are fully described in \cite{TFSFFKLB:14}. Following \cite{Arya:75} the skin drag coefficient is parametrized as 
 \begin{equation}
 { \tt{Cdn\_(atm/ocn)\_skin}}=a_{i} \left(1-m_{(s/k)} \frac{H_{(s/k)}}{D_{(s/k)}}\right)c_{s(s/k)}, \mbox{       if  $\displaystyle\frac{H_{(s/k)}}{D_{(s/k)}}\ge\frac{1}{m_{(s/k)}}$,} \label{SkinDragCoeff}
 \end{equation}
 where $m_s$ ($m_k$) is a sheltering parameter that depends on the average sail\index{sails} (keel)\index{keels} height, $H_s$ ($H_k$), but is often assumed constant, $D_s$ ($D_k$) is the average distance between sails (keels), and $c_{ss}$ ($c_{sk}$) is the unobstructed atmospheric (oceanic) skin drag that would be attained in the absence of sails (keels) and with complete ice coverage, $a_{ice}=1$.
 
-Calculation of equations \eqref{FormulaDragCoeff}--\eqref{SkinDragCoeff} requires that  small-scale geometrical properties of the ice cover be related to average grid cell quantities already computed in the sea ice model. These intermediate quantities are briefly presented here and described in more detail in \cite{TFSFFKLB:13}. The sail height is given by
+Calculation of equations \eqref{FormulaDragCoeff}--\eqref{SkinDragCoeff} requires that  small-scale geometrical properties of the ice cover be related to average grid cell quantities already computed in the sea ice model. These intermediate quantities are briefly presented here and described in more detail in \cite{TFSFFKLB:14}. The sail height is given by
 \begin{equation*}
 H_{s} = \displaystyle 2\frac{v_{rdg}}{a_{rdg}}\left(\frac{\alpha\tan \alpha_{k} R_d+\beta \tan \alpha_{s} R_h}{\phi_r\tan \alpha_{k} R_d+\phi_k \tan \alpha_{s} R_h^2}\right),\label{Hs}\\
 \end{equation*}
@@ -2915,7 +2915,7 @@ the permeability\index{permeability} of the sea ice is calculated using the inte
 \index{salinity!brine}\index{liquid fraction}
 $S_{br} = {1/ (10^{-3} - 0.054/T_i)}$ and $\phi = S/S_{br}$, where $S$ is the bulk salinity of the combined ice and brine.  The ice is considered permeable if $\phi \ge 0.05$ with a permeability of $p=3\times 10^{-8}\min(\phi^3)$ (the minimum being taken over all of the ice layers).
 A hydraulic pressure head\index{pressure!hydraulic} is computed as $P=g\rho_w\Delta h$ where $\Delta h$ is the height of the pond and sea ice above sea level.\index{sea level}    Then the volume of water drained is given by\index{drainage!flushing} 
-\[\Delta V_{perm} = -a_i d_p\min\left(h_{pnd}, {p P \Delta t \over \mu h_i}\right),\]
+\[\Delta V_{perm} = -a_{pnd} \min\left(h_{pnd}, {p P d_p \Delta t \over \mu h_i}\right),\]
 where $d_p$ is a scaling factor ({\tt dpscale}), and $\mu=1.79\times 10^{-3}$~kg~m$^{-1}$~s$^{-1}$ is the dynamic viscosity.
 \index{drainage!flushing|)}\index{drainage|)}
 
@@ -2930,7 +2930,7 @@ and solving for the new pond area tracer $a_{pnd}^\prime$ given the newly formed
 \subsubsection{Thermodynamic surface forcing balance}
 \label{subsubsec:sfc_forcing}
 
-The net energy flux from the atmosphere to the ice
+The net surface energy flux from the atmosphere to the ice
 (with all fluxes defined as positive downward) is
 \[ F_0 = F_s + F_l + F_{L\downarrow} + F_{L\uparrow} +
          (1-\alpha) (1-i_0) F_{sw},  \]
@@ -3977,6 +3977,9 @@ $\left<1^\circ\right>$  grid and land
 mask.  These are binary unformatted, direct access files
 produced on an SGI (Big Endian).  If you are using an incompatible (Little Endian) architecture,
 choose {\tt rectangular} instead of {\tt displaced\_pole} in {\bf ice\_in}, or  follow procedures as for conejo ($\langle${\bf OS}$\rangle.\langle${\bf SITE}$\rangle.\langle${\bf machine}$\rangle$ =  {\tt Linux.LANL.conejo}).  There are \netcdf\  versions of the gx3 grid files available.
+
+In CESM,\index{CESM/CCSM} 
+the sea ice model may exchange coupling fluxes using a different grid than the computational grid.  This functionality is activated using the namelist variable {\tt gridcpl\_file}.
 \begin{figure}
 \centerline{
 \includegraphics[scale=.45, viewport=50 20 520 400,clip]{./Figures/grid.pdf}
@@ -4405,7 +4408,7 @@ Several history variables are available in two forms, a value representing an av
 \label{sec:diags}
 
 \index{diagnostics|(emph}%
-Like {\tt histfreq}, the parameters {\tt diagfreq} and {\tt diagfreq\_n} can be used to
+Like {\tt histfreq}, the parameter {\tt diagfreq} can be used to
 regulate how often output is written to a log file.   The log file unit to
 which diagnostic output is written is set in {\bf ice\_fileunits.F90}.
 If {\tt diag\_type} = `stdout', then it is written to standard out (or to {\bf
@@ -4582,6 +4585,8 @@ calculations across the global block structure, so that the results are
 bit-for-bit as long as the block distribution is the same (the number of 
 processors can be different).  
 
+A more flexible option is available for double-precision MPI calculations, using the namelist variable {\tt bfbflag}.  When true, this flag produces bit-for-bit identical diagnostics with different tasks, threads, blocks and grid decompositions.\index{reproducible}  
+
 CICE namelist\index{namelist} variables available for changes after compile time
 appear in {\bf ice.log.*} with values read from the file 
 {\bf ice\_in}; their definitions are given in 
@@ -4668,7 +4673,8 @@ While the Cartesian distribution groups sets of blocks by processor, the `roundr
 The {\tt maskhalo} options
 \index{masks} \index{halo}
 in the namelist\index{namelist} improve performance by removing unnecessary halo communications where there is no ice.  There is some overhead in setting up the halo masks, which is done during the timestepping procedure as the ice area
-\index{ice!fraction} changes, but this option usually improves timings even for relatively small processor counts.  T. Craig has found that performance improved by more than 20\% for  combinations of updated decompositions and masked haloes, in CESM's version of CICE.\index{CESM/CCSM}
+\index{ice!fraction} changes, but this option usually improves timings even for relatively small processor counts.  T. Craig has found that performance improved by more than 20\% for  combinations of updated decompositions and masked haloes, in CESM's version of CICE.\index{CESM/CCSM}  A practical guide for choosing a CICE grid decomposition, based on experience in CESM, is available:\\
+\href{http://oceans11.lanl.gov/drupal/CICE/DecompositionGuide}{http://oceans11.lanl.gov/drupal/CICE/DecompositionGuide}
 
 % old
 %In general, the following rules-of-thumb seem to work best:  
@@ -4999,13 +5005,12 @@ variable & options/format & description & recommended value\\
 {\tt dump\_last} & true/false & if true, write restart on last time step of simulation & \\
 &&&\\
 &&{\it Model Output}& \\
+{\tt bfbflag} & true/false & for bit-for-bit diagnostic output & \\
 {\tt diagfreq} & integer & frequency of diagnostic output in {\tt dt} & 24 \\
          & {\it e.g.}, 10    & once every 10 time steps &\\
 {\tt diag\_type} & {\tt stdout} & write diagnostic output to stdout & \\
                 & {\tt file} & write diagnostic output to file & \\
 {\tt diag\_file} & filename & diagnostic output file (script may reset) & \\
-{\tt print\_global} & true/false & print diagnostic data, global sums & {\tt .false.} \\
-{\tt print\_points}  & true/false & print diagnostic data for two grid points & {\tt .false.}\\
 \hline
 \end{tabular}
 \caption{\label{table:namelist} Namelist options (continued next page).\index{namelist|emph}}
@@ -5020,6 +5025,8 @@ variable & options/format & description & recommended value\\
 \hline
 &&&\\
 &&{\it Model Output, continued}& \\
+{\tt print\_global} & true/false & print diagnostic data, global sums & {\tt .false.} \\
+{\tt print\_points}  & true/false & print diagnostic data for two grid points & {\tt .false.}\\
 {\tt latpnt} & real & latitude of (2) diagnostic points & \\
 {\tt lonpnt} & real & longitude of (2) diagnostic points & \\
 {\tt dbug} & true/false & if true, write extra diagnostics & {\tt .false.} \\
@@ -5050,6 +5057,7 @@ variable & options/format & description & recommended value\\
            & {\tt tripole} & read from file in {\it popgrid} & \\
   {\tt grid\_file} & filename     &  name of grid file to be read & `grid'\\
  {\tt kmt\_file} & filename & name of land mask file to be read & `kmt'\\
+ {\tt gridcpl\_file} & filename & input file for coupling grid info & \\
  {\tt kcatbound} & {\tt 0} & original category boundary formula & 0 \\
                 & {\tt 1} & new formula with round numbers &  \\
                 & {\tt 2} & WMO standard categories & \\
@@ -5061,12 +5069,6 @@ variable & options/format & description & recommended value\\
                                  & {\tt slenderX2} & 2 processors in the y direction (thin) &  \\      
                                  &{\tt  square-ice} & more processors in x than y, $\sim$square & \\
                                  & {\tt square-pop} & more processors in y than x, $\sim$square  & \\
- {\tt distribution\_type} & {\tt cartesian} & distribute blocks in 2D Cartesian array & \\      
-                                & {\tt roundrobin} & 1 block per proc until blocks are used & \\ 
-                                & {\tt sectcart} & blocks distributed to domain quadrants & \\ 
-                                & {\tt sectrobin} & several blocks per proc until used & \\ 
-                                & {\tt rake} & redistribute blocks among neighbors & \\ 
-                               & {\tt spacecurve} & distribute blocks via space-filling curves & \\ 
 \hline
 \end{tabular}
 \caption{Namelist options (continued).\index{namelist|emph}}
@@ -5081,6 +5083,12 @@ variable & options/format & description & recommended value\\
 \hline
 &&&\\
 &&{\it Domain, continued}& \\
+ {\tt distribution\_type} & {\tt cartesian} & distribute blocks in 2D Cartesian array & \\      
+                                & {\tt roundrobin} & 1 block per proc until blocks are used & \\ 
+                                & {\tt sectcart} & blocks distributed to domain quadrants & \\ 
+                                & {\tt sectrobin} & several blocks per proc until used & \\ 
+                                & {\tt rake} & redistribute blocks among neighbors & \\ 
+                               & {\tt spacecurve} & distribute blocks via space-filling curves & \\ 
  {\tt distribution\_weight} & {\tt block} & full block size sets {\tt work\_per\_block} & \\
                                     & {\tt latitude} &  latitude/ocean sets {\tt work\_per\_block}  & \\
  {\tt ew\_boundary\_type} & {\tt cyclic} & periodic boundary conditions in x-direction & \\
@@ -5117,12 +5125,6 @@ variable & options/format & description & recommended value\\
                     & {\tt 2} & mushy-layer  thermodynamic model & \\
 {\tt conduct} & {\tt MU71} & conductivity \cite{MU:71} & \\
                       & {\tt bubbly} & conductivity \cite{PETB:07} & \\
-{\tt a\_rapid\_mode} & real & brine channel diameter & $0.5\times 10^{-3}$ m  \\
-{\tt Rac\_rapid\_mode} & real & critical Rayleigh number & 10 \\
-{\tt aspect\_rapid\_mode} & real & brine convection aspect ratio & 1 \\
-{\tt dSdt\_slow\_mode} & real & drainage strength parameter & $-1.5\times 10^{-7}$ m/s/K \\
-{\tt phi\_c\_slow\_mode} & $0<\phi_c < 1$ & critical liquid fraction & 0.05 \\
-{\tt phi\_i\_mushy} & $0<\phi_i < 1$ & solid fraction at lower boundary & 0.85 \\
 \hline
 \end{tabular}
 \caption{Namelist options (continued).\index{namelist|emph}}
@@ -5135,6 +5137,14 @@ variable & options/format & description & recommended value\\
 \begin{tabular}{llll}
 variable & options/format & description & recommended value\\
 \hline
+&&&\\
+&&{\it Thermodynamics, continued}& \\
+{\tt a\_rapid\_mode} & real & brine channel diameter & $0.5\times 10^{-3}$ m  \\
+{\tt Rac\_rapid\_mode} & real & critical Rayleigh number & 10 \\
+{\tt aspect\_rapid\_mode} & real & brine convection aspect ratio & 1 \\
+{\tt dSdt\_slow\_mode} & real & drainage strength parameter & $-1.5\times 10^{-7}$ m/s/K \\
+{\tt phi\_c\_slow\_mode} & $0<\phi_c < 1$ & critical liquid fraction & 0.05 \\
+{\tt phi\_i\_mushy} & $0<\phi_i < 1$ & solid fraction at lower boundary & 0.85 \\
 &&&\\
 {\it dynamics\_nml}&&{\it Dynamics}& \\
  {\tt kdyn} & {\tt 0} &  dynamics OFF & {1}\\
@@ -5170,18 +5180,6 @@ variable & options/format & description & recommended value\\
 {\tt R\_snw} & real & ... for snow (broadband albedo) ... & \\
 {\tt dT\_mlt} & real & $\Delta$ temperature  per $\Delta$ snow grain radius  & \\
 {\tt rsnw\_mlt} & real & maximum melting snow grain radius  & \\
-&&&\\
-{\it ponds\_nml}&&{\it Melt ponds}& \\
-{\tt hp1} & real & critical ice lid thickness for topo ponds   & 0.01 m \\
-{\tt hs0} & real & snow depth of transition to bare sea ice   & 0.03 m \\
-{\tt hs1} & real & snow depth of transition to pond ice   & 0.03 m \\
-{\tt dpscale} & real & time scale for flushing in permeable ice & $1\times 10^{-3}$ \\
-{\tt frzpnd} & {\tt hlid} & Stefan refreezing with pond ice thickness & `hlid' \\
-                   & {\tt cesm} & CESM refreezing empirical formula & \\
-{\tt snowinfil} & true/false & snow infiltration on/off & {\tt .true.} \\
-{\tt rfracmin} & $0 \le r_{min} \le 1$ & minimum melt water added to ponds & 0.15 \\
-{\tt rfracmax} & $0 \le r_{max} \le 1$ & maximum melt water added to ponds & 1.0 \\
-{\tt pndaspect} & real & aspect ratio of pond changes (depth:area) & 0.8 \\
 \hline
 \end{tabular}
 \caption{Namelist options (continued).\index{namelist|emph}}
@@ -5194,6 +5192,18 @@ variable & options/format & description & recommended value\\
 \begin{tabular}{llll}
 variable & options/format & description & recommended value\\
 \hline
+&&&\\
+{\it ponds\_nml}&&{\it Melt ponds}& \\
+{\tt hp1} & real & critical ice lid thickness for topo ponds   & 0.01 m \\
+{\tt hs0} & real & snow depth of transition to bare sea ice   & 0.03 m \\
+{\tt hs1} & real & snow depth of transition to pond ice   & 0.03 m \\
+{\tt dpscale} & real & time scale for flushing in permeable ice & $1\times 10^{-3}$ \\
+{\tt frzpnd} & {\tt hlid} & Stefan refreezing with pond ice thickness & `hlid' \\
+                   & {\tt cesm} & CESM refreezing empirical formula & \\
+{\tt snowinfil} & true/false & snow infiltration on/off & {\tt .true.} \\
+{\tt rfracmin} & $0 \le r_{min} \le 1$ & minimum melt water added to ponds & 0.15 \\
+{\tt rfracmax} & $0 \le r_{max} \le 1$ & maximum melt water added to ponds & 1.0 \\
+{\tt pndaspect} & real & aspect ratio of pond changes (depth:area) & 0.8 \\
 &&&\\
 {\it zbgc\_nml}&&{\it Biogeochemistry}& \\
  {\tt tr\_brine} & true/false & brine height tracer & \\
@@ -5217,6 +5227,19 @@ variable & options/format & description & recommended value\\
  {\tt tr\_bgc\_DMSPd\_sk} & true/false & dissolved DMSP tracer&\\
  {\tt tr\_bgc\_DMS\_sk} & true/false & DMS tracer&\\
  {\tt phi\_snow} & real  & snow porosity for brine height tracer  & \\
+%&&&\\
+\hline
+\end{tabular}
+\caption{Namelist options (continued).\index{namelist|emph}}
+\end{center}
+\end{table}
+
+\addtocounter{table}{-1}
+\begin{table}[t!]
+\begin{center}
+\begin{tabular}{llll}
+variable & options/format & description & recommended value\\
+\hline
 &&&\\
 {\it forcing\_nml}&&{\it Forcing}& \\
 {\tt formdrag} & true/false & calculate form drag &  \\
@@ -5239,20 +5262,7 @@ variable & options/format & description & recommended value\\
                    & {\tt mm\_per\_month} & & \\
                    & {\tt mm\_per\_sec} & (same as MKS units) & \\
 {\tt ustar\_min} & real & minimum value of ocean friction velocity & 0.0005 m/s \\
-\hline
-\end{tabular}
-\caption{Namelist options (continued).\index{namelist|emph}}
-\end{center}
-\end{table}
-
-\addtocounter{table}{-1}
-\begin{table}[t!]
-\begin{center}
-\begin{tabular}{llll}
-variable & options/format & description & recommended value\\
-\hline
-&&&\\
-&&{\it Forcing, continued}&\\
+%&&{\it Forcing, continued}&\\
 {\tt update\_ocn\_f} & true & include frazil water/salt fluxes in ocn fluxes & \\
                           & false & do not include (when coupling with POP) & \\
 {\tt oceanmixed\_ice} & true/false & active ocean mixed layer calculation & {\tt .true.} (if uncoupled) \\
@@ -5280,7 +5290,7 @@ variable & options/format & description & recommended value\\
          & {\tt x}  & do not write $\left<var\right>$ to history &\\
          & {\tt md}  & {\it e.g.,} write both monthly and daily files &\\
 {\tt f\_$\left<var\right>$\_ai}&&grid cell average of $\left<var\right>$ ($\times a_i$) &\\
-&&&\\
+%&&&\\
 \hline
 \end{tabular}
 \caption{Namelist options (continued).\index{namelist|emph}}
@@ -5365,6 +5375,7 @@ awtidf   & weighting factor for near-ir, diffuse albedo{\dotfill\ } & 0.36218 \\
 &&\\
 {\Large\bf B} &&\\
 &&\\
+bfb\_flag &  {$\bullet$} for bit-for-bit reproducible diagnostics & \\
 bgc\_data\_dir&  {$\bullet$} data directory for bgc & \\
 bgc\_flux\_type &  {$\bullet$} ice--ocean flux velocity  & \\
 bgc\_tracer\_type & tracer\_type for bgc tracers & \\
@@ -5569,6 +5580,7 @@ fyear\_init    &{$\bullet$} initial data year &\\
  grid\_file         & {$\bullet$} input file for grid info & \\
  grid\_format         & {$\bullet$} format of grid files  & \\
  grid\_type         & {$\bullet$} `rectangular' or `displaced\_pole' or `column' &\\
+ gridcpl\_file         & {$\bullet$} input file for coupling grid info & \\
  grow\_ net & specific biogeochemistry growth rate per grid cell & s$^{-1}$ \\
  Gstar & piecewise-linear ridging participation function parameter {\dotfill\ }& 0.15 \\
 &&\\
@@ -6051,7 +6063,7 @@ year\_init    &{$\bullet$} the initial year  &  \\
 &&\\
 zlvl    & atmospheric level height & m \\
 zref    & reference height for stability{\dotfill\ } & 10. m \\
-zTrf    & reference height for $T_{ref}$, $Q_{ref}$ {\dotfill\ } & 2. m \\
+zTrf    & reference height for $T_{ref}$, $Q_{ref}$, $U_{ref}$ {\dotfill\ } & 2. m \\
 zvir & gas constant (water vapor)/gas constant (air) - 1 {\dotfill\ }& 0.606 \\
 
 \end{tabular*}
