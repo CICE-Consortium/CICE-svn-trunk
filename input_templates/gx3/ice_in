@@ -19,6 +19,7 @@
   , dumpfreq       = 'y'
   , dumpfreq_n     = 1
   , dump_last      = .false.
+  , bfbflag        = .false.
   , diagfreq       = 24
   , diag_type      = 'stdout'
   , diag_file      = 'ice_diag.d'
@@ -44,6 +45,7 @@
   , grid_type    = 'displaced_pole'
   , grid_file    = 'grid'
   , kmt_file     = 'kmt'
+  , gridcpl_file = 'unknown_gridcpl_file'
   , kcatbound    = 0
 /
 
@@ -211,6 +213,8 @@
   , f_albsni       = 'm' 
   , f_alvdr        = 'x'
   , f_alidr        = 'x'
+  , f_alvdf        = 'x'
+  , f_alidf        = 'x'
   , f_albice       = 'x'
   , f_albsno       = 'x'
   , f_albpnd       = 'x'
