@@ -1263,7 +1263,8 @@
       use ice_constants, only: c0, c1, c2, c3, p2, p5, rhoi, rhos, Lfresh, &
            cp_ice, cp_ocn, Tsmelt, Tffresh, rad_to_deg, puny
       use ice_domain_size, only: nilyr, nslyr, nx_global, ny_global, max_ntrcr, ncat
-      use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_fbri, tr_brine
+      use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_sice, &
+           nt_fbri, tr_brine, tr_lvl, nt_alvl, nt_vlvl
       use ice_itd, only: hin_max
       use ice_therm_mushy, only: &
            enthalpy_mush, &
@@ -1354,6 +1355,8 @@
                   trcrn(i,j,it,n) = c0
                enddo
             endif
+            if (tr_lvl)   trcrn(i,j,nt_alvl,n) = c1
+            if (tr_lvl)   trcrn(i,j,nt_vlvl,n) = c1
             if (tr_brine) trcrn(i,j,nt_fbri,n) = c1
             do k = 1, nilyr
                trcrn(i,j,nt_sice+k-1,n) = salinz(i,j,k)

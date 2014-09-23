@@ -12,9 +12,9 @@
 ! Hibler, W. D. III, 1980: Modeling a variable thickness sea ice
 !  cover, Mon. Wea. Rev., 108, 1943-1973, 1980.
 !
-! Lipscomb, W. H., E. C. Hunke, W. Maslowski, and J. Jakacki, 2006: 
-!  Ridging, strength, and stability in sea ice models, submitted 
-!  to J. Geophys. Res. 
+! Lipscomb, W. H., E. C. Hunke, W. Maslowski, and J. Jakacki, 2007: 
+!  Improving ridging schemes for high-resolution sea ice models.
+!  J. Geophys. Res. 112, C03S91, doi:10.1029/2005JC003355.
 ! 
 ! Rothrock, D. A., 1975: The energetics of the plastic deformation of
 !  pack ice by ridging, J. Geophys. Res., 80, 4514-4519.
@@ -669,6 +669,7 @@
             i = indxi(ij)
             j = indxj(ij)
             araftn(i,j,n) = mraftn(ij,n)*ardg2n(ij,n)
+!            araftn(i,j,n) = mraftn(ij,n)*ardg1n(ij,n)*p5
          enddo
          enddo
       endif

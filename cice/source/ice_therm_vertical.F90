@@ -350,8 +350,7 @@
                                      flwoutn,       fsurfn,   &
                                      fcondtopn,     fcondbot, &
                                      einit,         l_stop,   &
-                                     istop,         jstop,    &
-                                     hin)
+                                     istop,         jstop)
 
          endif ! ktherm
             

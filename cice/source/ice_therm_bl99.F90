@@ -67,8 +67,7 @@
                                       flwoutn,  fsurfn,   &
                                       fcondtopn,fcondbot, &
                                       einit,    l_stop,   &
-                                      istop,    jstop,    &
-                                      hin)
+                                      istop,    jstop)
 
       use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
 
@@ -103,8 +102,7 @@
       real (kind=dbl_kind), dimension (icells), intent(in) :: &
          hilyr       , & ! ice layer thickness (m)
          hslyr       , & ! snow layer thickness (m)
-         einit       , & ! initial energy of melting (J m-2)
-         hin             ! initial ice thickness
+         einit           ! initial energy of melting (J m-2)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
          intent(inout) :: &
@@ -552,7 +550,7 @@
       !        conductive flux, fcondtopn.
       !    (5) The net energy added to the ice per unit time must equal 
       !        the net change in internal ice energy per unit time,
-      !        within the prescribed error ferrmax.
+      !        withinic the prescribed error ferrmax.
       !
       ! For briny ice (the standard case), zTsn and zTin are limited
       !  to prevent them from exceeding their melting temperatures.
