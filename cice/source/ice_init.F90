@@ -1176,13 +1176,13 @@
          enddo
       endif
 
-      !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block, &
-      !$OMP                     iglob,jglob,it)
-      do iblk = 1, nblocks
-
       !-----------------------------------------------------------------
       ! Set state variables
       !-----------------------------------------------------------------
+
+      !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block, &
+      !$OMP                     iglob,jglob)
+      do iblk = 1, nblocks
 
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -1203,9 +1203,22 @@
                              aicen(:,:,  :,iblk), trcrn(:,:,:,:,iblk), &
                              vicen(:,:,  :,iblk), vsnon(:,:,  :,iblk))
 
+      enddo                     ! iblk
+      !$OMP END PARALLEL DO
+
+      !-----------------------------------------------------------------
+      ! ghost cell updates
+      !-----------------------------------------------------------------
+
+      call bound_state (aicen, trcrn, &
+                        vicen, vsnon)
+
       !-----------------------------------------------------------------
       ! compute aggregate ice state and open water area
       !-----------------------------------------------------------------
+
+      !$OMP PARALLEL DO PRIVATE(iblk,it)
+      do iblk = 1, nblocks
 
          aice(:,:,iblk) = c0
          vice(:,:,iblk) = c0
@@ -1232,13 +1245,6 @@
 
       enddo                     ! iblk
       !$OMP END PARALLEL DO
-
-      !-----------------------------------------------------------------
-      ! ghost cell updates
-      !-----------------------------------------------------------------
-
-      call bound_state (aicen, trcrn, &
-                        vicen, vsnon)
 
       end subroutine init_state
 
