@@ -143,7 +143,12 @@
    if (bfbflag) then
       allocate(work(nx_block,ny_block,max_blocks))
       work = 0.0_dbl_kind
-      allocate(workg(nx_global,ny_global))
+      if (my_task == master_task) then
+         allocate(workg(nx_global,ny_global))
+      else 
+         allocate(workg(1,1))
+      endif
+      workg = 0.0_dbl_kind
    else
 #ifdef REPRODUCIBLE
       nreduce = nblocks_tot
@@ -263,11 +268,13 @@
    if (bfbflag) then
       call gather_global(workg, work, master_task, dist, spc_val=0.0_dbl_kind)
       globalSum = 0.0_dbl_kind
-      do j = 1, ny_global
-      do i = 1, nx_global
-         globalSum = globalSum + workg(i,j)
-      enddo
-      enddo
+      if (my_task == master_task) then
+         do j = 1, ny_global
+         do i = 1, nx_global
+            globalSum = globalSum + workg(i,j)
+         enddo
+         enddo
+      endif
       call MPI_BCAST(globalSum,1,mpiR8,master_task,communicator,ierr)
       deallocate(workg,work)
    else
@@ -919,8 +926,13 @@
 
    if (bfbflag) then
       allocate(work(nx_block,ny_block,max_blocks))
-      allocate(workg(nx_global,ny_global))
       work = 0.0_dbl_kind
+      if (my_task == master_task) then
+         allocate(workg(nx_global,ny_global))
+      else
+         allocate(workg(1,1))
+      endif
+      workg = 0.0_dbl_kind
    else
 #ifdef REPRODUCIBLE
       nreduce = nblocks_tot
@@ -1045,11 +1057,13 @@
    if (bfbflag) then
       call gather_global(workg, work, master_task, dist, spc_val=0.0_dbl_kind)
       globalSum = 0.0_dbl_kind
-      do j = 1, ny_global
-      do i = 1, nx_global
-         globalSum = globalSum + workg(i,j)
-      enddo
-      enddo
+      if (my_task == master_task) then
+         do j = 1, ny_global
+         do i = 1, nx_global
+            globalSum = globalSum + workg(i,j)
+         enddo
+         enddo
+      endif
       call MPI_BCAST(globalSum,1,mpiR8,master_task,communicator,ierr)
       deallocate(workg,work)
    else

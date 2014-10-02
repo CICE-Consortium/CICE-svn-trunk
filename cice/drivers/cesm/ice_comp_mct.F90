@@ -211,9 +211,9 @@ contains
     else if (trim(starttype) == trim(seq_infodata_start_type_cont) ) then
        runtype = "continue"
     else if (trim(starttype) == trim(seq_infodata_start_type_brnch)) then
-       runtype = "branch"
+       runtype = "continue"
     else
-       write(nu_diag,*) 'ice_comp_mct ERROR: unknown starttype'
+       write(nu_diag,*) trim(subname),' ERROR: unknown starttype'
        call shr_sys_abort()
     end if
 
@@ -236,6 +236,10 @@ contains
     inst_name   = seq_comm_name(ICEID)
     inst_index  = seq_comm_inst(ICEID)
     inst_suffix = seq_comm_suffix(ICEID)
+
+    write(nu_diag,*) trim(subname),'inst_name   = ',trim(inst_name)
+    write(nu_diag,*) trim(subname),'inst_index  = ',inst_index
+    write(nu_diag,*) trim(subname),'inst_suffix = ',trim(inst_suffix)
 
     call t_startf ('cice_init')
     call cice_init( mpicom_loc )
@@ -270,20 +274,20 @@ contains
     if (runtype == 'initial') then
        if (ref_ymd /= start_ymd .or. ref_tod /= start_tod) then
           if (my_task == master_task) then
-             write(nu_diag,*) 'ice_comp_mct: ref_ymd ',ref_ymd, &
+             write(nu_diag,*) trim(subname),': ref_ymd ',ref_ymd, &
                   ' must equal start_ymd ',start_ymd
-             write(nu_diag,*) 'ice_comp_mct: ref_ymd ',ref_tod, &
+             write(nu_diag,*) trim(subname),': ref_ymd ',ref_tod, &
                   ' must equal start_ymd ',start_tod
           end if
        end if
 
        if (my_task == master_task) then
-          write(nu_diag,*) '(ice_init_mct) idate from sync clock = ', &
+          write(nu_diag,*) trim(subname),' idate from sync clock = ', &
                start_ymd
-          write(nu_diag,*) '(ice_init_mct)   tod from sync clock = ', &
+          write(nu_diag,*) trim(subname),'   tod from sync clock = ', &
                start_tod
           write(nu_diag,*) &
-               '(ice_init_mct) resetting idate to match sync clock'
+               trim(subname),' resetting idate to match sync clock'
        end if
 
        idate = curr_ymd
@@ -399,10 +403,10 @@ contains
 
     !   call ice_timer_stop(timer_total) ! time entire run
     !   call shr_get_memusage(msize,mrss)
-    !   call shr_mpi_max(mrss, mrss0, MPI_COMM_ICE,'ice_init_mct mrss0')
-    !   call shr_mpi_max(msize,msize0,MPI_COMM_ICE,'ice_init_mct msize0')
+    !   call shr_mpi_max(mrss, mrss0, MPI_COMM_ICE,trim(subname)//' mrss0')
+    !   call shr_mpi_max(msize,msize0,MPI_COMM_ICE,trim(subname)//' msize0')
     !   if(my_task == 0) then
-    !   write(shrlogunit,105) 'ice_init_mct: memory_write: model date = ',start_ymd,start_tod, &
+    !   write(shrlogunit,105) trim(subname)//': memory_write: model date = ',start_ymd,start_tod, &
     !           ' memory = ',msize0,' MB (highwater)    ',mrss0,' MB (usage)'
     !   endif
  
@@ -581,10 +585,10 @@ contains
     
 !   if(tod == 0) then
 !      call shr_get_memusage(msize,mrss)
-!      call shr_mpi_max(mrss, mrss0, MPI_COMM_ICE,'ice_run_mct mrss0')
-!      call shr_mpi_max(msize,msize0,MPI_COMM_ICE,'ice_run_mct msize0')
+!      call shr_mpi_max(mrss, mrss0, MPI_COMM_ICE,trim(subname)//' mrss0')
+!      call shr_mpi_max(msize,msize0,MPI_COMM_ICE,trim(subname)//' msize0')
 !      if(my_task == 0 ) then
-!          write(shrlogunit,105) 'ice_run_mct: memory_write: model date = ',ymd,tod, &
+!          write(shrlogunit,105) trim(subname)//': memory_write: model date = ',ymd,tod, &
 !               ' memory = ',msize0,' MB (highwater)    ',mrss0,' MB (usage)'
 !      endif
 !   endif
@@ -632,7 +636,6 @@ contains
     !
     ! Arguments
     !
-    implicit none
     integer        , intent(in)    :: mpicom
     integer        , intent(in)    :: ID
     type(mct_gsMap), intent(inout) :: gsMap_ice
@@ -872,8 +875,6 @@ contains
 
   subroutine ice_setdef_mct( i2x_i )   
 
-    implicit none
-
     !-----------------------------------------------------
     type(mct_aVect)   , intent(inout) :: i2x_i
 
@@ -888,7 +889,6 @@ contains
   !=======================================================================
 
   subroutine ice_coffset_mct(xoff,yoff,gsmap_a,dom_a,gsmap_b,dom_b,mpicom_i)
-    implicit none
 
     integer        , intent(out)   :: xoff
     integer        , intent(out)   :: yoff
@@ -1000,7 +1000,6 @@ contains
 
   subroutine ice_setcoupling_mct(mpicom_i, ICEID, gsmap_i, dom_i)
 
-    implicit none
     include 'netcdf.inc'
 
     integer        , intent(in)    :: mpicom_i
@@ -1136,53 +1135,6 @@ contains
 
   end subroutine ice_setcoupling_mct
 !=======================================================================
-! BOP
-!
-! !ROUTINE: restart_filename
-!
-! !INTERFACE:
-  character(len=char_len_long) function restart_filename( yr_spec, mon_spec, day_spec, sec_spec )
-!
-! !DESCRIPTION: 
-! Create a restart filename 
-!
-! !USES:
-  use ice_restart_shared, only : restart_file
-!
-! !INPUT/OUTPUT PARAMETERS:
-  integer         , intent(in)  :: yr_spec         ! Simulation year
-  integer         , intent(in)  :: mon_spec        ! Simulation month
-  integer         , intent(in)  :: day_spec        ! Simulation day
-  integer         , intent(in)  :: sec_spec        ! Seconds into current simulation day
-!
-! EOP
-!
-  integer             :: i, n      ! Loop variables
-  integer             :: year      ! Simulation year
-  integer             :: month     ! Simulation month
-  integer             :: day       ! Simulation day
-  integer             :: ncsec     ! Seconds into current simulation day
-  character(len=char_len_long) :: rdate ! char date for restart filename
-
-  !-----------------------------------------------------------------
-  ! Determine year, month, day and sec to put in filename
-  !-----------------------------------------------------------------
-
-  year  = yr_spec
-  month = mon_spec
-  day   = day_spec
-  ncsec = sec_spec
-
-  if ( year > 99999   ) then
-     write(rdate,'(i6.6,"-",i2.2,"-",i2.2,"-",i5.5)') year,month,mday,ncsec
-  else if ( year > 9999    ) then
-     write(rdate,'(i5.5,"-",i2.2,"-",i2.2,"-",i5.5)') year,month,mday,ncsec
-  else
-     write(rdate,'(i4.4,"-",i2.2,"-",i2.2,"-",i5.5)') year,month,mday,ncsec
-  end if
-  restart_filename = trim(restart_file) // "." // trim(rdate) 
-
-end function restart_filename
 
 end module ice_comp_mct
 

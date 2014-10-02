@@ -157,6 +157,8 @@
   , atm_data_type   = 'ncar'
   , atm_data_dir    = '/usr/projects/climate/eclare/DATA/atm/gx3v2m/NCAR_bulk/'
   , calc_strair     = .true.
+  , highfreq        = .false.
+  , natmiter        = 5
   , calc_Tsfc       = .true.
   , precip_units    = 'mm_per_month'
   , ustar_min       = 0.0005

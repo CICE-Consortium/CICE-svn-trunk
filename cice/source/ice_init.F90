@@ -45,9 +45,7 @@
       use ice_domain_size, only: max_nstrm, nilyr, nslyr, max_ntrcr, ncat, n_aero
       use ice_fileunits, only: nu_nml, nu_diag, nml_filename, diag_type, &
           ice_stdout, get_fileunit, release_fileunit, bfbflag
-#ifdef CCSMCOUPLED
       use ice_fileunits, only: inst_suffix
-#endif
       use ice_calendar, only: year_init, istep0, histfreq, histfreq_n, &
                               dumpfreq, dumpfreq_n, diagfreq, nstreams, &
                               npt, dt, ndtd, days_per_year, use_leap_years, &
@@ -75,7 +73,7 @@
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, ahmax, &
                                shortwave, albedo_type, R_ice, R_pnd, &
                                R_snw, dT_mlt, rsnw_mlt
-      use ice_atmo, only: atmbndy, calc_strair, formdrag
+      use ice_atmo, only: atmbndy, calc_strair, formdrag, highfreq, natmiter
       use ice_transport_driver, only: advection
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_aero, &
@@ -158,7 +156,7 @@
         precip_units,   update_ocn_f,    ustar_min,                     &
         oceanmixed_ice, ocn_data_format, sss_data_type, sst_data_type,  &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
-        restore_ice,    formdrag
+        restore_ice,    formdrag,        highfreq,      natmiter
 
       namelist /tracer_nml/   &
         tr_iage, restart_age, &
@@ -178,7 +176,9 @@
       year_init = 0          ! initial year
       istep0 = 0             ! no. of steps taken in previous integrations,
                              ! real (dumped) or imagined (to set calendar)
-      dt = 3600.0_dbl_kind   ! time step, s 
+#ifndef CCSMCOUPLED
+      dt = 3600.0_dbl_kind   ! time step, s      
+#endif
       npt = 99999            ! total number of time steps (dt) 
       diagfreq = 24          ! how often diag output is written
       print_points = .false. ! if true, print point data
@@ -206,12 +206,7 @@
       restart_file = 'iced'  ! restart file name prefix
       restart_ext  = .false. ! if true, read/write ghost cells
       use_restart_time = .true.     ! if true, use time info written in file
-#ifdef CCSMCOUPLED
-      pointer_file = 'rpointer.ice' // trim(inst_suffix)
-      nml_filename  = 'ice_in'//trim(inst_suffix)
-#else
       pointer_file = 'ice.restart_file'
-#endif
       restart_format = 'nc'  ! file format ('bin'=binary or 'nc'=netcdf or 'pio')
       lcdf64       = .false. ! 64 bit offset for netCDF
       ice_ic       = 'default'      ! latitude and sst-dependent
@@ -269,6 +264,8 @@
       atm_data_dir    = ' '
       calc_strair     = .true.    ! calculate wind stress
       formdrag        = .false.   ! calculate form drag
+      highfreq        = .false.   ! calculate high frequency RASM coupling
+      natmiter        = 5         ! number of iterations for atm boundary layer calcs
       precip_units    = 'mks'     ! 'mm_per_month' or
                                   ! 'mm_per_sec' = 'mks' = kg/m^2 s
       oceanmixed_ice  = .false.   ! if true, use internal ocean mixed layer
@@ -287,8 +284,10 @@
       latpnt(2) = -65._dbl_kind   ! latitude of diagnostic point 2 (deg)
       lonpnt(2) = -45._dbl_kind   ! longitude of point 2 (deg)
 
+#ifndef CCSMCOUPLED
       runid   = 'unknown'   ! run ID used in CESM and for machine 'bering'
       runtype = 'initial'   ! run type: 'initial', 'continue'
+#endif
 
       ! extra tracers
       tr_iage      = .false. ! ice age
@@ -317,6 +316,10 @@
       !-----------------------------------------------------------------
       ! read from input file
       !-----------------------------------------------------------------
+
+#ifdef CCSMCOUPLED
+      nml_filename  = 'ice_in'//trim(inst_suffix)
+#endif
 
       call get_fileunit(nu_nml)
 
@@ -380,7 +383,7 @@
             call shr_file_setIO('ice_modelio.nml'//trim(inst_suffix),nu_diag)
          end if
       else
-! tcraig, each task gets unique ice log filename when if test is true, handy for debugging
+         ! each task gets unique ice log filename when if test is true, for debugging
          if (1 == 0) then
             call get_fileUnit(nu_diag)
             write(str,'(a,i4.4)') "ice.log.task_",my_task
@@ -682,6 +685,8 @@
       call broadcast_scalar(calc_strair,        master_task)
       call broadcast_scalar(calc_Tsfc,          master_task)
       call broadcast_scalar(formdrag,           master_task)
+      call broadcast_scalar(highfreq,           master_task)
+      call broadcast_scalar(natmiter,           master_task)
       call broadcast_scalar(update_ocn_f,       master_task)
       call broadcast_scalar(ustar_min,          master_task)
       call broadcast_scalar(precip_units,       master_task)
@@ -725,6 +730,10 @@
       call broadcast_scalar(dSdt_slow_mode,     master_task)
       call broadcast_scalar(phi_c_slow_mode,    master_task)
       call broadcast_scalar(phi_i_mushy,        master_task)
+
+#ifdef CCSMCOUPLED
+      pointer_file = trim(pointer_file) // trim(inst_suffix)
+#endif
 
       !-----------------------------------------------------------------
       ! spew
@@ -859,6 +868,8 @@
          write(nu_diag,1030) ' atmbndy                   = ', &
                                trim(atmbndy)
          write(nu_diag,1010) ' formdrag                  = ', formdrag
+         write(nu_diag,1010) ' highfreq                  = ', highfreq
+         write(nu_diag,1020) ' natmiter                  = ', natmiter
          write(nu_diag,1010) ' calc_strair               = ', calc_strair
          write(nu_diag,1010) ' calc_Tsfc                 = ', calc_Tsfc
 
@@ -1019,6 +1030,7 @@
              grid_type  /=  'column'         .and. &
              grid_type  /=  'rectangular'    .and. &
              grid_type  /=  'cpom_grid'      .and. &
+             grid_type  /=  'regional'       .and. &
              grid_type  /=  'latlon' ) then 
             call abort_ice('ice_init: unknown grid_type')
          endif

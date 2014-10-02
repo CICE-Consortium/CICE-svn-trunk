@@ -157,6 +157,8 @@
   , atm_data_type   = 'LYq'
   , atm_data_dir    = '/usr/projects/climate/eclare/DATA/gx1v3/LargeYeager/v2_updated/'
   , calc_strair     = .true.
+  , highfreq        = .false.
+  , natmiter        = 5
   , calc_Tsfc       = .true.
   , precip_units    = 'mm_per_sec'
   , ustar_min       = 0.0005

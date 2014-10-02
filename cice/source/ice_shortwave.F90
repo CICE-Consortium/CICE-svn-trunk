@@ -1337,7 +1337,7 @@
 
                ! If ponds are present snow fraction reduced to
                ! non-ponded part dEdd scheme 
-               fsn(i,j) = fsn(i,j)*(c1-fpn(i,j))
+               fsn(i,j) = min(fsn(i,j), c1-fpn(i,j))
 
                apeffn(i,j,n) = fpn(i,j)
             enddo
@@ -3394,14 +3394,14 @@
         ! begin main level loop
         do k = 0, klev
  
-            ! initialize all layer apparent optical properties to 0
-            rdir  (k) = c0
-            rdif_a(k) = c0
-            rdif_b(k) = c0
-            tdir  (k) = c0
-            tdif_a(k) = c0
-            tdif_b(k) = c0
-            trnlay(k) = c0
+           ! initialize all layer apparent optical properties to 0
+           rdir  (k) = c0
+           rdif_a(k) = c0
+           rdif_b(k) = c0
+           tdir  (k) = c0
+           tdif_a(k) = c0
+           tdif_b(k) = c0
+           trnlay(k) = c0
 
            ! compute next layer Delta-eddington solution only if total transmission
            ! of radiation to the interface just above the layer exceeds trmin.

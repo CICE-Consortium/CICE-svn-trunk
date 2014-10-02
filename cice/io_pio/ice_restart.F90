@@ -393,11 +393,12 @@
 
       use ice_blocks, only: nx_block, ny_block
       use ice_communicate, only: my_task, master_task
+      use ice_constants, only: c0, field_loc_center
       use ice_boundary, only: ice_HaloUpdate
       use ice_domain, only: halo_info, distrb_info, nblocks
       use ice_domain_size, only: max_blocks, ncat
       use ice_fileunits, only: nu_diag
-      use ice_global_reductions, only: global_minval, global_maxval
+      use ice_global_reductions, only: global_minval, global_maxval, global_sum
 
       integer (kind=int_kind), intent(in) :: &
            nu            , & ! unit number (not used for netcdf)
@@ -430,7 +431,7 @@
 
       real (kind=dbl_kind), allocatable :: work2(:,:,:)    ! input array (real, 8-byte)
       real (kind=dbl_kind), allocatable :: work3(:,:,:,:)  ! input 3D array (real, 8-byte)
-      real (kind=dbl_kind) :: amin,amax
+      real (kind=dbl_kind) :: amin,amax,asum
 
       if (restart_format == "pio") then
          if (my_task == master_task) &
@@ -473,16 +474,19 @@
                do n=1,ndim3
                   amin = global_minval(work(:,:,n,:),distrb_info)
                   amax = global_maxval(work(:,:,n,:),distrb_info)
+                  asum = global_sum(work(:,:,n,:), distrb_info, field_loc_center)
                   if (my_task == master_task) then
                      write(nu_diag,*) ' min and max =', amin, amax
-                     write(nu_diag,*) ''
+                     write(nu_diag,*) ' sum =',asum
                   endif
                enddo
             else
                amin = global_minval(work(:,:,1,:),distrb_info)
                amax = global_maxval(work(:,:,1,:),distrb_info)
+               asum = global_sum(work(:,:,1,:), distrb_info, field_loc_center)
                if (my_task == master_task) then
                   write(nu_diag,*) ' min and max =', amin, amax
+                  write(nu_diag,*) ' sum =',asum
                   write(nu_diag,*) ''
                endif
             endif
@@ -503,11 +507,11 @@
 
       use ice_blocks, only: nx_block, ny_block
       use ice_communicate, only: my_task, master_task
-      use ice_constants, only: c0
+      use ice_constants, only: c0, field_loc_center
       use ice_domain, only: distrb_info, nblocks
       use ice_domain_size, only: max_blocks, ncat
       use ice_fileunits, only: nu_diag
-      use ice_global_reductions, only: global_minval, global_maxval
+      use ice_global_reductions, only: global_minval, global_maxval, global_sum
 
       integer (kind=int_kind), intent(in) :: &
            nu            , & ! unit number
@@ -536,7 +540,7 @@
 
       real (kind=dbl_kind), allocatable :: work2(:,:,:)   ! input array (real, 8-byte)
       real (kind=dbl_kind), allocatable :: work3(:,:,:,:) ! input array (real, 8-byte)
-      real (kind=dbl_kind) :: amin,amax
+      real (kind=dbl_kind) :: amin,amax,asum
 
       if (restart_format == "pio") then
          if (my_task == master_task) &
@@ -569,15 +573,20 @@
                do n=1,ndim3
                   amin = global_minval(work(:,:,n,:),distrb_info)
                   amax = global_maxval(work(:,:,n,:),distrb_info)
+                  asum = global_sum(work(:,:,n,:), distrb_info, field_loc_center)
+                  if (my_task == master_task) then
+                     write(nu_diag,*) ' min and max =', amin, amax
+                     write(nu_diag,*) ' sum =',asum
+                  endif
                enddo
             else
                amin = global_minval(work(:,:,1,:),distrb_info)
                amax = global_maxval(work(:,:,1,:),distrb_info)
-            endif
-         
-            if (my_task == master_task) then
-               write(nu_diag,*) ' min and max =', amin, amax
-               write(nu_diag,*) ''
+               asum = global_sum(work(:,:,1,:), distrb_info, field_loc_center)
+               if (my_task == master_task) then
+                  write(nu_diag,*) ' min and max =', amin, amax
+                  write(nu_diag,*) ' sum =',asum
+               endif
             endif
          endif
       else

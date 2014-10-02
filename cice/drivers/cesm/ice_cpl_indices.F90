@@ -15,9 +15,7 @@ module ice_cpl_indices
   integer :: index_i2x_Si_t            ! temperature                     
   integer :: index_i2x_Si_tref         ! 2m reference temperature        
   integer :: index_i2x_Si_qref         ! 2m reference specific humidity  
-#ifdef RASM_MODS
   integer :: index_i2x_Si_logz0        ! surface roughness length (m)
-#endif
   integer :: index_i2x_Si_avsdr        ! albedo: visible, direct         
   integer :: index_i2x_Si_avsdf        ! albedo: near ir, direct         
   integer :: index_i2x_Si_anidr        ! albedo: visible, diffuse        
@@ -93,9 +91,7 @@ contains
     index_i2x_Si_t          = mct_avect_indexra(i2x,'Si_t')
     index_i2x_Si_tref       = mct_avect_indexra(i2x,'Si_tref')
     index_i2x_Si_qref       = mct_avect_indexra(i2x,'Si_qref')
-#ifdef RASM_MODS
-    index_i2x_Si_logz0      = mct_avect_indexra(i2x,'Si_logz0')
-#endif
+    index_i2x_Si_logz0      = mct_avect_indexra(i2x,'Si_logz0',perrWith='quiet') ! optional
     index_i2x_Si_ifrac      = mct_avect_indexra(i2x,'Si_ifrac')
     index_i2x_Si_avsdr      = mct_avect_indexra(i2x,'Si_avsdr')
     index_i2x_Si_anidr      = mct_avect_indexra(i2x,'Si_anidr')

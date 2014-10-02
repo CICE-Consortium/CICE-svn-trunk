@@ -81,12 +81,10 @@
       logical (kind=log_kind), dimension(ice_IOUnitsMaxUnit) :: &
          ice_IOUnitsInUse   ! flag=.true. if unit currently open
 
-#ifdef CCSMCOUPLED
       ! instance control
       integer (kind=int_kind), public :: inst_index
       character(len=16)      , public :: inst_name
       character(len=16)      , public :: inst_suffix
-#endif
 
 !=======================================================================
 

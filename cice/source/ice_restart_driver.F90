@@ -85,7 +85,7 @@
          call init_restart_write
       endif
 
-      diag = .false.
+      diag = .true.
 
       !-----------------------------------------------------------------
       ! state variables
@@ -366,35 +366,33 @@
       call read_restart_field(nu_restart,0,stress12_4,'ruf8', &
            'stress12_4',1,diag,field_loc_center,field_type_scalar) ! stress12_4
 
-      if (trim(grid_type) == 'tripole' .and. trim(restart_format) == 'pio') then
+      if (trim(grid_type) == 'tripole') then
+         call ice_HaloUpdate_stress(stressp_1, stressp_3, halo_info, &
+                                    field_loc_center,  field_type_scalar)
+         call ice_HaloUpdate_stress(stressp_3, stressp_1, halo_info, &
+                                    field_loc_center,  field_type_scalar)
+         call ice_HaloUpdate_stress(stressp_2, stressp_4, halo_info, &
+                                    field_loc_center,  field_type_scalar)
+         call ice_HaloUpdate_stress(stressp_4, stressp_2, halo_info, &
+                                    field_loc_center,  field_type_scalar)
 
-      call ice_HaloUpdate_stress(stressp_1, stressp_3, halo_info, &
-                                 field_loc_center,  field_type_scalar)
-      call ice_HaloUpdate_stress(stressp_3, stressp_1, halo_info, &
-                                 field_loc_center,  field_type_scalar)
-      call ice_HaloUpdate_stress(stressp_2, stressp_4, halo_info, &
-                                 field_loc_center,  field_type_scalar)
-      call ice_HaloUpdate_stress(stressp_4, stressp_2, halo_info, &
-                                 field_loc_center,  field_type_scalar)
+         call ice_HaloUpdate_stress(stressm_1, stressm_3, halo_info, &
+                                    field_loc_center,  field_type_scalar)
+         call ice_HaloUpdate_stress(stressm_3, stressm_1, halo_info, &
+                                    field_loc_center,  field_type_scalar)
+         call ice_HaloUpdate_stress(stressm_2, stressm_4, halo_info, &
+                                    field_loc_center,  field_type_scalar)
+         call ice_HaloUpdate_stress(stressm_4, stressm_2, halo_info, &
+                                    field_loc_center,  field_type_scalar)
 
-      call ice_HaloUpdate_stress(stressm_1, stressm_3, halo_info, &
-                                 field_loc_center,  field_type_scalar)
-      call ice_HaloUpdate_stress(stressm_3, stressm_1, halo_info, &
-                                 field_loc_center,  field_type_scalar)
-      call ice_HaloUpdate_stress(stressm_2, stressm_4, halo_info, &
-                                 field_loc_center,  field_type_scalar)
-      call ice_HaloUpdate_stress(stressm_4, stressm_2, halo_info, &
-                                 field_loc_center,  field_type_scalar)
-
-      call ice_HaloUpdate_stress(stress12_1, stress12_3, halo_info, &
-                                 field_loc_center,  field_type_scalar)
-      call ice_HaloUpdate_stress(stress12_3, stress12_1, halo_info, &
-                                 field_loc_center,  field_type_scalar)
-      call ice_HaloUpdate_stress(stress12_2, stress12_4, halo_info, &
-                                 field_loc_center,  field_type_scalar)
-      call ice_HaloUpdate_stress(stress12_4, stress12_2, halo_info, &
-                                 field_loc_center,  field_type_scalar)
-
+         call ice_HaloUpdate_stress(stress12_1, stress12_3, halo_info, &
+                                    field_loc_center,  field_type_scalar)
+         call ice_HaloUpdate_stress(stress12_3, stress12_1, halo_info, &
+                                    field_loc_center,  field_type_scalar)
+         call ice_HaloUpdate_stress(stress12_2, stress12_4, halo_info, &
+                                    field_loc_center,  field_type_scalar)
+         call ice_HaloUpdate_stress(stress12_4, stress12_2, halo_info, &
+                                    field_loc_center,  field_type_scalar)
       endif
 
       !-----------------------------------------------------------------

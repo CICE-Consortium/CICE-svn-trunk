@@ -141,7 +141,7 @@
       integer (kind=int_kind) :: i, j, ios
 
       real (kind=dbl_kind) :: &
-         amin, amax         ! min and max values of input array
+         amin, amax, asum    ! min, max values and sum of input array
 
       logical (kind=log_kind) :: ignore_eof_use
 
@@ -220,7 +220,8 @@
       if (my_task==master_task .and. diag) then
          amin = minval(work_g1)
          amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
-         write(nu_diag,*) ' read_global ',nu, nrec, amin, amax
+         asum = sum(work_g1, mask = work_g1 /= spval_dbl)
+         write(nu_diag,*) ' read_global ',nu, nrec, amin, amax, asum
       endif
 
     !-------------------------------------------------------------------
@@ -285,7 +286,7 @@
       integer (kind=int_kind) :: i, j, k, ios
 
       real (kind=dbl_kind) :: &
-         amin, amax         ! min and max values of input array
+         amin, amax, asum    ! min, max values and sum of input array
 
       logical (kind=log_kind) :: ignore_eof_use
 
@@ -305,7 +306,7 @@
       if (my_task == master_task) then
          allocate(work_g4(nx_global,ny_global,nblyr+2))
       else
-         allocate(work_g4(1,1,1))   ! to save memory
+         allocate(work_g4(1,1,nblyr+2))   ! to save memory
       endif
 
       if (my_task == master_task) then
@@ -367,7 +368,8 @@
       if (my_task==master_task .and. diag) then
          amin = minval(work_g4)
          amax = maxval(work_g4, mask = work_g4 /= spval_dbl)
-         write(nu_diag,*) ' read_global ',nu, nrec, amin, amax
+         asum = sum   (work_g4, mask = work_g4 /= spval_dbl)
+         write(nu_diag,*) ' read_global ',nu, nrec, amin, amax, asum
       endif
 
     !-------------------------------------------------------------------
@@ -428,7 +430,7 @@
       integer (kind=int_kind) :: i, j, ios
 
       real (kind=dbl_kind) :: &
-         amin, amax         ! min and max values of input array
+         amin, amax, asum    ! min, max values and sum of input array
 
       logical (kind=log_kind) :: ignore_eof_use
 
@@ -497,7 +499,8 @@
       if (my_task == master_task .and. diag) then
          amin = minval(work_g)
          amax = maxval(work_g, mask = work_g /= spval_dbl)
-         write(nu_diag,*) ' read_global ',nu, nrec, amin, amax
+         asum = sum   (work_g, mask = work_g /= spval_dbl)
+         write(nu_diag,*) ' read_global ',nu, nrec, amin, amax,asum
       endif
 
       end subroutine ice_read_global
@@ -542,7 +545,7 @@
       integer (kind=int_kind) :: i, j, ios, nx, ny
 
       real (kind=dbl_kind) :: &
-         amin, amax         ! min and max values of input array
+         amin, amax, asum    ! min, max values and sum of input array
 
       logical (kind=log_kind) :: ignore_eof_use
 
@@ -624,7 +627,8 @@
       if (my_task==master_task .and. diag) then
          amin = minval(work_g1)
          amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
-         write(nu_diag,*) ' read_global ',nu, nrec, amin, amax
+         asum = sum   (work_g1, mask = work_g1 /= spval_dbl)
+         write(nu_diag,*) ' read_global ',nu, nrec, amin, amax, asum
       endif
 
     !-------------------------------------------------------------------
@@ -668,7 +672,7 @@
       integer (kind=int_kind) :: i, j
 
       real (kind=dbl_kind) :: &
-         amin, amax     ! min and max values of ouput array
+         amin, amax, asum    ! min, max values and sum of input array
 
       real (kind=dbl_kind), dimension(:,:), allocatable :: &
          work_g1
@@ -728,7 +732,8 @@
          if (diag) then
             amin = minval(work_g1)
             amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
-            write(nu_diag,*) ' write_global ', nu, nrec, amin, amax
+            asum = sum   (work_g1, mask = work_g1 /= spval_dbl)
+            write(nu_diag,*) ' write_global ', nu, nrec, amin, amax, asum
          endif
 
       endif                     ! my_task = master_task
@@ -768,7 +773,7 @@
       integer (kind=int_kind) :: i, j, k
 
       real (kind=dbl_kind) :: &
-         amin, amax     ! min and max values of ouput array
+         amin, amax, asum    ! min, max values and sum of input array
 
       real (kind=dbl_kind), dimension(:,:,:), allocatable :: &
          work_g4
@@ -789,7 +794,7 @@
       if (my_task == master_task) then
          allocate(work_g4(nx_global,ny_global,nblyr+2))
       else
-         allocate(work_g4(1,1,1)) ! to save memory
+         allocate(work_g4(1,1,nblyr+2)) ! to save memory
       endif
       do k = 1,nblyr+2
        call gather_global(work_g4(:,:,k), work(:,:,k,:), master_task, &
@@ -831,7 +836,8 @@
          if (diag) then
             amin = minval(work_g4)
             amax = maxval(work_g4, mask = work_g4 /= spval_dbl)
-            write(nu_diag,*) ' write_global ', nu, nrec, amin, amax
+            asum = sum   (work_g4, mask = work_g4 /= spval_dbl)
+            write(nu_diag,*) ' write_global ', nu, nrec, amin, amax, asum
          endif
 
       endif                     ! my_task = master_task
@@ -872,7 +878,7 @@
       integer (kind=int_kind) :: i, j, nx, ny
 
       real (kind=dbl_kind) :: &
-         amin, amax     ! min and max values of ouput array
+         amin, amax, asum    ! min, max values and sum of input array
 
       real (kind=dbl_kind), dimension(:,:), allocatable :: &
          work_g1
@@ -935,7 +941,8 @@
          if (diag) then
             amin = minval(work_g1)
             amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
-            write(nu_diag,*) ' write_global ', nu, nrec, amin, amax
+            asum = sum   (work_g1, mask = work_g1 /= spval_dbl)
+            write(nu_diag,*) ' write_global ', nu, nrec, amin, amax, asum
          endif
 
       endif                     ! my_task = master_task
@@ -1027,7 +1034,7 @@
          dimlen             ! size of dimension
 
       real (kind=dbl_kind) :: &
-         amin, amax         ! min and max values of input array
+         amin, amax, asum   ! min, max values and sum of input array
 
       character (char_len) :: &
          dimname            ! dimension name            
@@ -1118,7 +1125,8 @@
 !         enddo
          amin = minval(work_g1)
          amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
-         write(nu_diag,*) ' min and max =', amin, amax
+         asum = sum   (work_g1, mask = work_g1 /= spval_dbl)
+         write(nu_diag,*) ' min and max =', amin, amax, asum
       endif
 
     !-------------------------------------------------------------------
@@ -1200,7 +1208,7 @@
          dimlen             ! size of dimension
 
       real (kind=dbl_kind) :: &
-         amin, amax         ! min and max values of input array
+         amin, amax, asum   ! min, max values and sum of input array
 
       character (char_len) :: &
          dimname            ! dimension name            
@@ -1218,7 +1226,7 @@
          if (my_task == master_task) then
             allocate(work_g2(nx_global+2,ny_global+1,ncat))
          else
-            allocate(work_g2(1,1,1))   ! to save memory
+            allocate(work_g2(1,1,ncat))   ! to save memory
          endif
       endif
 #endif
@@ -1236,7 +1244,7 @@
       if (my_task == master_task) then
          allocate(work_g1(nx,ny,ncat))
       else
-         allocate(work_g1(1,1,1))   ! to save memory
+         allocate(work_g1(1,1,ncat))   ! to save memory
       endif
 
       if (my_task == master_task) then
@@ -1292,7 +1300,8 @@
          do n=1,ncat
             amin = minval(work_g1(:,:,n))
             amax = maxval(work_g1(:,:,n), mask = work_g1(:,:,n) /= spval_dbl)
-            write(nu_diag,*) ' min and max =', amin, amax
+            asum = sum   (work_g1(:,:,n), mask = work_g1(:,:,n) /= spval_dbl)
+            write(nu_diag,*) ' min and max =', amin, amax, asum
          enddo
       endif
 
@@ -1558,7 +1567,7 @@
          dimlen             ! size of dimension
 
       real (kind=dbl_kind) :: &
-         amin, amax         ! min and max values of input array
+         amin, amax, asum   ! min, max values and sum of input array
 
       character (char_len) :: &
          dimname            ! dimension name            
@@ -1620,7 +1629,8 @@
 !         enddo
          amin = minval(work_g1)
          amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
-         write(nu_diag,*) ' min and max =', amin, amax
+         asum = sum   (work_g1, mask = work_g1 /= spval_dbl)
+         write(nu_diag,*) ' min and max =', amin, amax, asum
       endif
 
       deallocate(work_g1)
@@ -1667,7 +1677,7 @@
          dimlen             ! size of dimension
 
       real (kind=dbl_kind) :: &
-         amin, amax         ! min and max values of input array
+         amin, amax, asum   ! min, max values and sum of input array
 
       character (char_len) :: &
          dimname            ! dimension name            
@@ -1690,7 +1700,7 @@
       if (my_task == master_task) then
          allocate(work_g1(nx,ny,ncat))
       else
-         allocate(work_g1(1,1,1))   ! to save memory
+         allocate(work_g1(1,1,ncat))   ! to save memory
       endif
 
       if (present(restart_ext)) then
@@ -1738,7 +1748,8 @@
          do n=1,ncat
             amin = minval(work_g1(:,:,n))
             amax = maxval(work_g1(:,:,n), mask = work_g1(:,:,n) /= spval_dbl)
-            write(nu_diag,*) ' min and max =', amin, amax
+            asum = sum   (work_g1(:,:,n), mask = work_g1(:,:,n) /= spval_dbl)
+            write(nu_diag,*) ' min and max =', amin, amax, asum
          enddo
       endif
 
@@ -1786,7 +1797,7 @@
          dimlen             ! size of dimension      
 
       real (kind=dbl_kind) :: &
-         amin, amax         ! min and max values of input array
+         amin, amax, asum   ! min, max values and sum of input array
 
      character (char_len) :: &
          dimname            ! dimension name            
@@ -1850,7 +1861,8 @@
 !         enddo
          amin = minval(work_g)
          amax = maxval(work_g, mask = work_g /= spval_dbl)
-         write(nu_diag,*) 'min and max = ', amin, amax
+         asum = sum   (work_g, mask = work_g /= spval_dbl)
+         write(nu_diag,*) 'min and max = ', amin, amax, asum
       endif
 
 #ifdef ORCA_GRID

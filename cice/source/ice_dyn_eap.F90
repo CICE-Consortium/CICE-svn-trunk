@@ -138,7 +138,7 @@
       real (kind=dbl_kind), allocatable :: fld2(:,:,:,:)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,8):: &
-         str          ! stress combinations for momentum equation
+         strtmp       ! stress combinations for momentum equation
 
       integer (kind=int_kind), dimension (nx_block,ny_block,max_blocks) :: &
          icetmask   ! ice extent mask (T-cell)
@@ -339,7 +339,7 @@
       ! stress tensor equation, total surface stress
       !-----------------------------------------------------------------
 
-         !$OMP PARALLEL DO PRIVATE(iblk)
+         !$OMP PARALLEL DO PRIVATE(iblk,strtmp)
          do iblk = 1, nblocks
 
 !      call ice_timer_start(timer_tmp1) ! dynamics
@@ -375,7 +375,7 @@
                               yieldstress22 (:,:,iblk),                   &
                               prs_sig   (:,:,iblk),                       &
                               rdg_conv  (:,:,iblk), rdg_shear (:,:,iblk), &
-                              str       (:,:,:))
+                              strtmp    (:,:,:))
 !      call ice_timer_stop(timer_tmp1) ! dynamics
 
       !-----------------------------------------------------------------
@@ -385,7 +385,7 @@
             call stepu (nx_block,            ny_block,           & 
                         icellu       (iblk), Cdn_ocn (:,:,iblk), & 
                         indxui     (:,iblk), indxuj    (:,iblk), & 
-                        aiu      (:,:,iblk), str     (:,:,:),    & 
+                        aiu      (:,:,iblk), strtmp  (:,:,:),    & 
                         uocn     (:,:,iblk), vocn    (:,:,iblk), &     
                         waterx   (:,:,iblk), watery  (:,:,iblk), & 
                         forcex   (:,:,iblk), forcey  (:,:,iblk), & 
@@ -1071,7 +1071,7 @@
                               yieldstress22,              &
                               prs_sig,                    &
                               rdg_conv,   rdg_shear,      &
-                              str)
+                              strtmp)
 
       use ice_constants, only: c0, p027, p055, p111, p166, &
           p2, p222, p25, p333, p5, puny
@@ -1140,7 +1140,7 @@
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,8), & 
          intent(out) :: &
-         str          ! stress combinations
+         strtmp       ! stress combinations
 
       ! local variables
 
@@ -1174,7 +1174,7 @@
       ! Initialize
       !-----------------------------------------------------------------
 
-      str(:,:,:) = c0
+      strtmp(:,:,:) = c0
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1411,22 +1411,22 @@
          strm_tmp  = p25*dyt(i,j)*(p333*ssigmn  + p166*ssigms)
 
          ! northeast (i,j)
-         str(i,j,1) = -strp_tmp - strm_tmp - str12ew &
+         strtmp(i,j,1) = -strp_tmp - strm_tmp - str12ew &
               + dxhy(i,j)*(-csigpne + csigmne) + dyhx(i,j)*csig12ne
 
          ! northwest (i+1,j)
-         str(i,j,2) = strp_tmp + strm_tmp - str12we &
+         strtmp(i,j,2) = strp_tmp + strm_tmp - str12we &
               + dxhy(i,j)*(-csigpnw + csigmnw) + dyhx(i,j)*csig12nw
 
          strp_tmp  = p25*dyt(i,j)*(p333*ssigps  + p166*ssigpn)
          strm_tmp  = p25*dyt(i,j)*(p333*ssigms  + p166*ssigmn)
 
          ! southeast (i,j+1)
-         str(i,j,3) = -strp_tmp - strm_tmp + str12ew &
+         strtmp(i,j,3) = -strp_tmp - strm_tmp + str12ew &
               + dxhy(i,j)*(-csigpse + csigmse) + dyhx(i,j)*csig12se
 
          ! southwest (i+1,j+1)
-         str(i,j,4) = strp_tmp + strm_tmp + str12we &
+         strtmp(i,j,4) = strp_tmp + strm_tmp + str12we &
               + dxhy(i,j)*(-csigpsw + csigmsw) + dyhx(i,j)*csig12sw
 
       !-----------------------------------------------------------------
@@ -1436,22 +1436,22 @@
          strm_tmp  = p25*dxt(i,j)*(p333*ssigme  + p166*ssigmw)
 
          ! northeast (i,j)
-         str(i,j,5) = -strp_tmp + strm_tmp - str12ns &
+         strtmp(i,j,5) = -strp_tmp + strm_tmp - str12ns &
               - dyhx(i,j)*(csigpne + csigmne) + dxhy(i,j)*csig12ne
 
          ! southeast (i,j+1)
-         str(i,j,6) = strp_tmp - strm_tmp - str12sn &
+         strtmp(i,j,6) = strp_tmp - strm_tmp - str12sn &
               - dyhx(i,j)*(csigpse + csigmse) + dxhy(i,j)*csig12se
 
          strp_tmp  = p25*dxt(i,j)*(p333*ssigpw  + p166*ssigpe)
          strm_tmp  = p25*dxt(i,j)*(p333*ssigmw  + p166*ssigme)
 
          ! northwest (i+1,j)
-         str(i,j,7) = -strp_tmp + strm_tmp + str12ns &
+         strtmp(i,j,7) = -strp_tmp + strm_tmp + str12ns &
               - dyhx(i,j)*(csigpnw + csigmnw) + dxhy(i,j)*csig12nw
 
          ! southwest (i+1,j+1)
-         str(i,j,8) = strp_tmp - strm_tmp + str12sn &
+         strtmp(i,j,8) = strp_tmp - strm_tmp + str12sn &
               - dyhx(i,j)*(csigpsw + csigmsw) + dxhy(i,j)*csig12sw
 
       enddo                     ! ij

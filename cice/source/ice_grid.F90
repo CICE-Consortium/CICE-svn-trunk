@@ -40,7 +40,7 @@
          grid_file    , & !  input file for POP grid info
          kmt_file     , & !  input file for POP grid info
          grid_type        !  current options are rectangular (default),
-                          !  displaced_pole, tripole
+                          !  displaced_pole, tripole, regional
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public, save :: &
          dxt    , & ! width of T-cell through the middle (m)
@@ -157,7 +157,8 @@
       allocate(work_g2(nx_global,ny_global))
 
       if (trim(grid_type) == 'displaced_pole' .or. &
-          trim(grid_type) == 'tripole'      ) then
+          trim(grid_type) == 'tripole' .or. &
+          trim(grid_type) == 'regional'     ) then
 
          if (trim(grid_format) == 'nc') then
 
@@ -263,7 +264,8 @@
       !-----------------------------------------------------------------
 
       if (trim(grid_type) == 'displaced_pole' .or. &
-          trim(grid_type) == 'tripole'      ) then
+          trim(grid_type) == 'tripole' .or. &
+          trim(grid_type) == 'regional'      ) then
          if (trim(grid_format) == 'nc') then
             call popgrid_nc     ! read POP grid lengths from nc file
          else
@@ -411,30 +413,25 @@
       !$OMP END PARALLEL DO
       endif ! cpom_grid
 
-#ifdef RASM_MODS
-         !*** for S boundary extrapolate from interior
-         !*** NOTE: RASM pan-Arctic domain
-         !*** Robert Osinski
+      if (trim(grid_type) == 'regional') then
+         ! for W boundary extrapolate from interior
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
+         do iblk = 1, nblocks
+            this_block = get_block(blocks_ice(iblk),iblk)
+            ilo = this_block%ilo
+            ihi = this_block%ihi
+            jlo = this_block%jlo
+            jhi = this_block%jhi
 
-      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
-      do iblk = 1, nblocks !cro
-         this_block = get_block(blocks_ice(iblk),iblk)
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo, jhi
-          do i = ilo, ihi
-
+            i = ilo
             if (this_block%i_glob(i) == 1) then
-             ANGLET(i,j,iblk) = c2*ANGLET(i+1,j,iblk)-ANGLET(i+2,j,iblk)
+               do j = jlo, jhi
+                  ANGLET(i,j,iblk) = c2*ANGLET(i+1,j,iblk)-ANGLET(i+2,j,iblk)
+               enddo
             endif
-
-          enddo
          enddo
-      enddo !cro
-#endif
+         !$OMP END PARALLEL DO
+      endif  ! regional
       
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (ANGLET,           halo_info, &
@@ -1587,31 +1584,28 @@
       enddo                     ! iblk
       !$OMP END PARALLEL DO
 
-#ifdef RASM_MODS
-         !*** for W boundary extrapolate from interior
-         !*** NOTE: RASM pan-Arctic domain
-         !*** Robert Osinski
-      !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
-      do iblk = 1, nblocks !cro
-         this_block = get_block(blocks_ice(iblk),iblk)
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
+      if (trim(grid_type) == 'regional') then
+         ! for W boundary extrapolate from interior
+         !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
+         do iblk = 1, nblocks
+            this_block = get_block(blocks_ice(iblk),iblk)
+            ilo = this_block%ilo
+            ihi = this_block%ihi
+            jlo = this_block%jlo
+            jhi = this_block%jhi
 
-         do i = ilo, ihi
-          do j= jlo,jhi
+            i = ilo
             if (this_block%i_glob(i) == 1) then
-              TLON(i,j,iblk) = c2*TLON(i+1,j,iblk) - &
-                                         TLON(i+2,j,iblk)
-              TLAT(i,j,iblk) = c2*TLAT(i+1,j,iblk) - &
-                                         TLAT(i+2,j,iblk)
-             endif
-          enddo
-         enddo !cro
-      enddo
-      !$OMP END PARALLEL DO
-#endif
+               do j = jlo, jhi
+                  TLON(i,j,iblk) = c2*TLON(i+1,j,iblk) - &
+                                      TLON(i+2,j,iblk)
+                  TLAT(i,j,iblk) = c2*TLAT(i+1,j,iblk) - &
+                                      TLAT(i+2,j,iblk)
+               enddo
+            endif
+         enddo
+         !$OMP END PARALLEL DO
+      endif   ! regional
 
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (TLON,             halo_info, &
