@@ -176,9 +176,6 @@
           flat, fswabs, flwout, evap, Tref, Qref, Uref, fresh, fsalt, fhocn, &
           fswthru, meltt, melts, meltb, meltl, congel, snoice, &
           set_sfcflux, merge_fluxes
-#ifdef RASM_MODS
-      use ice_flux, only: logzo
-#endif
       use ice_firstyear, only: update_FYarea
       use ice_grid, only: lmask_n, lmask_s, TLAT, TLON
       use ice_itd, only: hi_min
@@ -192,10 +189,7 @@
           vice, vicen, vsno, vsnon, ntrcr, trcrn, &
           nt_apnd, nt_hpnd, nt_ipnd, nt_alvl, nt_vlvl, nt_Tsfc, &
           tr_iage, nt_iage, tr_FY, nt_FY, tr_aero, tr_pond, tr_pond_cesm, &
-          tr_pond_lvl, nt_qice, nt_sice, tr_pond_topo
-#ifdef RASM_MODS
-      use ice_state, only: uvel, vvel
-#endif
+          tr_pond_lvl, nt_qice, nt_sice, tr_pond_topo, uvel, vvel
       use ice_therm_shared, only: calc_Tsfc
       use ice_therm_vertical, only: frzmlt_bottom_lateral, thermo_vertical
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_ponds
@@ -427,11 +421,8 @@
                                    worka,          workb,          &
                                    lhcoef,         shcoef,         &
                                    Cdn_atm(:,:,iblk), Cdn_atm_ocn_n, &
-#ifdef RASM_MODS
                                    uice=uvel(:,:,iblk),            &
                                    vice=vvel(:,:,iblk),            &
-                                   logz0=logzo(:,:,iblk),          &
-#endif
                                    Uref=Urefn                      )
                endif ! atmbndy
 
@@ -1003,7 +994,7 @@
       use ice_itd, only: aggregate
       use ice_state, only: aicen, trcrn, vicen, vsnon, ntrcr, &
                            aice,  trcr,  vice,  vsno, aice0, trcr_depend, &
-                           bound_state, nt_iage
+                           bound_state, tr_iage, nt_iage
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bound
 
       real (kind=dbl_kind), intent(in) :: &
@@ -1047,8 +1038,10 @@
          do i = 1, nx_block
             daidtt(i,j,iblk) = (aice(i,j,iblk) - daidtt(i,j,iblk)) / dt
             dvidtt(i,j,iblk) = (vice(i,j,iblk) - dvidtt(i,j,iblk)) / dt
-            if (trcr(i,j,nt_iage,iblk) > c0) &
-            dagedtt(i,j,iblk)= (trcr(i,j,nt_iage,iblk)-dagedtt(i,j,iblk)-dt)/dt
+            if (tr_iage) then
+               if (trcr(i,j,nt_iage,iblk) > c0) &
+                  dagedtt(i,j,iblk)= (trcr(i,j,nt_iage,iblk)-dagedtt(i,j,iblk)-dt)/dt
+            endif
          enddo
          enddo
 
@@ -1081,7 +1074,7 @@
       use ice_grid, only: tmask
       use ice_itd, only: aggregate
       use ice_state, only: nt_qsno, trcrn, vsnon, aicen, vicen, ntrcr, &
-          aice, trcr, vice, vsno, aice0, trcr_depend, bound_state, nt_iage
+          aice, trcr, vice, vsno, aice0, trcr_depend, bound_state, tr_iage, nt_iage
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_column, &
           timer_ridge, timer_bound
       use ice_transport_driver, only: advection, transport_upwind, transport_remap
@@ -1176,7 +1169,8 @@
          do i = ilo,ihi
             dvidtd(i,j,iblk) = (vice(i,j,iblk) - dvidtd(i,j,iblk)) /dt
             daidtd(i,j,iblk) = (aice(i,j,iblk) - daidtd(i,j,iblk)) /dt
-            dagedtd(i,j,iblk)= (trcr(i,j,nt_iage,iblk)-dagedtd(i,j,iblk))/dt
+            if (tr_iage) &
+               dagedtd(i,j,iblk)= (trcr(i,j,nt_iage,iblk)-dagedtd(i,j,iblk))/dt
          enddo
          enddo
 

@@ -152,68 +152,68 @@
             ns, f_drag)   
   
        if (f_Cdn_atm(1:1) /= 'x') &
-         call define_hist_field(n_Cdn_atm,"Cdn_atm","m",tstr2D, tcstr, &
+         call define_hist_field(n_Cdn_atm,"Cdn_atm","none",tstr2D, tcstr, &
             "Ca: total ice-atm drag coefficient", &
             "none", c1, c0,            &
             ns, f_Cdn_atm)
 
        if (f_Cdn_ocn(1:1) /= 'x') &
-         call define_hist_field(n_Cdn_ocn,"Cdn_ocn","m",tstr2D, tcstr, &
+         call define_hist_field(n_Cdn_ocn,"Cdn_ocn","none",tstr2D, tcstr, &
             "Cdn_ocn: total ice-ocn drag coefficient", &
             "none", c1, c0,            &
             ns, f_Cdn_ocn)
  
        if (f_drag(1:1) /= 'x') &
-         call define_hist_field(n_Cdn_atm_skin,"Cdn_atm_skin","m", &
+         call define_hist_field(n_Cdn_atm_skin,"Cdn_atm_skin","none", &
             tstr2D, tcstr, &
             "Cdn_atm_skin: neutral skin ice-atm drag coefficient", &
             "none", c1, c0,            &
             ns, f_drag)
  
        if (f_drag(1:1) /= 'x') &
-         call define_hist_field(n_Cdn_atm_floe,"Cdn_atm_floe","m", &
+         call define_hist_field(n_Cdn_atm_floe,"Cdn_atm_floe","none", &
             tstr2D, tcstr, &
             "Cdn_atm_floe: neutral floe edge ice-atm drag coefficient", &
             "none", c1, c0,            &
             ns, f_drag)            
  
        if (f_drag(1:1) /= 'x') &
-         call define_hist_field(n_Cdn_atm_pond,"Cdn_atm_pond","m", &
+         call define_hist_field(n_Cdn_atm_pond,"Cdn_atm_pond","none", &
             tstr2D, tcstr, &
             "Cdn_atm_pond: neutral pond edge ice-atm drag coefficient", &
             "none", c1, c0,            &
             ns, f_drag)
             
        if (f_drag(1:1) /= 'x') &
-         call define_hist_field(n_Cdn_atm_rdg,"Cdn_atm_rdg","m", &
+         call define_hist_field(n_Cdn_atm_rdg,"Cdn_atm_rdg","none", &
             tstr2D, tcstr, &
             "Cdn_atm_rdg: neutral ridge ice-atm drag coefficient", &
             "none", c1, c0,            &
             ns, f_drag)
             
         if (f_drag(1:1) /= 'x') &
-         call define_hist_field(n_Cdn_ocn_skin,"Cdn_ocn_skin","m", &
+         call define_hist_field(n_Cdn_ocn_skin,"Cdn_ocn_skin","none", &
             tstr2D, tcstr, &
             "Cdn_ocn_skin: neutral skin ice-ocn drag coefficient", &
             "none", c1, c0,            &
             ns, f_drag)
  
        if (f_drag(1:1) /= 'x') &
-         call define_hist_field(n_Cdn_ocn_floe,"Cdn_ocn_floe","m", &
+         call define_hist_field(n_Cdn_ocn_floe,"Cdn_ocn_floe","none", &
             tstr2D, tcstr, &
             "Cdn_ocn_floe: neutral floe edge ice-ocn drag coefficient", &
             "none", c1, c0,            &
             ns, f_drag)            
  
        if (f_drag(1:1) /= 'x') &
-         call define_hist_field(n_Cdn_ocn_keel,"Cdn_ocn_keel","m", &
+         call define_hist_field(n_Cdn_ocn_keel,"Cdn_ocn_keel","none", &
             tstr2D, tcstr, &
             "Cdn_ocn_keel: neutral keel ice-ocn drag coefficient", &
             "none", c1, c0,            &
             ns, f_drag)
        if (f_drag(1:1) /= 'x') &
          call define_hist_field(n_Cdn_atm_ocn,"Cdn_atm_ocn", &
-            "m",tstr2D, tcstr, &
+            "none",tstr2D, tcstr, &
             "Cdn_atm_ocn: ratio total atm drag / ocn drag", &
             "none", c1, c0,            &
             ns, f_drag)

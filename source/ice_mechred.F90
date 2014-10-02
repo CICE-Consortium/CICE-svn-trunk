@@ -279,6 +279,7 @@
          ardg1n   (ij,:) = c0
          ardg2n   (ij,:) = c0
          virdgn   (ij,:) = c0
+         mraftn   (ij,:) = c0
 !         aopen    (ij) = c0
       enddo
 

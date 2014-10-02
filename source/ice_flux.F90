@@ -175,9 +175,6 @@
          flwout  , & ! outgoing longwave radiation (W/m^2)
          Tref    , & ! 2m atm reference temperature (K)
          Qref    , & ! 2m atm reference spec humidity (kg/kg)
-#ifdef RASM_MODS
-         logzo   , & ! log of variable roughness length (m) for WRF coupling
-#endif
          Uref    , & ! 10m atm reference wind speed (m/s)
          evap        ! evaporative water flux (kg/m^2/s)
 
@@ -448,9 +445,6 @@
       evap    (:,:,:) = c0
       Tref    (:,:,:) = c0
       Qref    (:,:,:) = c0
-#ifdef RASM_MODS
-      logzo   (:,:,:) = log(iceruf) 
-#endif
       Uref    (:,:,:) = c0
       alvdr   (:,:,:) = c0
       alidr   (:,:,:) = c0
@@ -554,7 +548,7 @@
                           Cdn_atm_floe, Cdn_atm_pond, Cdn_atm_skin, &
                           Cdn_atm_ocn, Cdn_ocn, Cdn_ocn_keel, &
                           Cdn_ocn_floe, Cdn_ocn_skin
-      use ice_state, only: aice, vice, trcr, nt_iage
+      use ice_state, only: aice, vice, trcr, tr_iage, nt_iage
 
       fsurf  (:,:,:) = c0
       fcondtop(:,:,:)= c0
@@ -568,7 +562,11 @@
       meltl  (:,:,:) = c0
       daidtt (:,:,:) = aice(:,:,:) ! temporary initial area
       dvidtt (:,:,:) = vice(:,:,:) ! temporary initial volume
-      dagedtt(:,:,:) = trcr(:,:,nt_iage,:) ! temporary initial age
+      if (tr_iage) then
+         dagedtt(:,:,:) = trcr(:,:,nt_iage,:) ! temporary initial age
+      else
+         dagedtt(:,:,:) = c0
+      endif
       fsurfn    (:,:,:,:) = c0
       fcondtopn (:,:,:,:) = c0
       flatn     (:,:,:,:) = c0
@@ -615,7 +613,7 @@
 
       subroutine init_history_dyn
 
-      use ice_state, only: aice, vice, trcr, nt_iage
+      use ice_state, only: aice, vice, trcr, tr_iage, nt_iage
 
       sig1    (:,:,:) = c0
       sig2    (:,:,:) = c0
@@ -633,7 +631,8 @@
       opening (:,:,:) = c0
       daidtd  (:,:,:) = aice(:,:,:) ! temporary initial area
       dvidtd  (:,:,:) = vice(:,:,:) ! temporary initial volume
-      dagedtd (:,:,:) = trcr(:,:,nt_iage,:) ! temporary initial age
+      if (tr_iage) &
+         dagedtd (:,:,:) = trcr(:,:,nt_iage,:) ! temporary initial age
       fm      (:,:,:) = c0
       prs_sig (:,:,:) = c0
       ardgn   (:,:,:,:) = c0

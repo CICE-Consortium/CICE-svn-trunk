@@ -158,6 +158,8 @@
   , atm_data_dir    = '/usr/projects/climate/eclare/DATA/column/'
   , calc_strair     = .true.
   , calc_Tsfc       = .true.
+  , highfreq        = .false.
+  , natmiter        = 5
   , precip_units    = 'mm_per_sec'
   , ustar_min       = 0.0005
   , update_ocn_f    = .false.

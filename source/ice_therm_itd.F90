@@ -1504,7 +1504,9 @@
 
          ! increment ice volume and energy
          vice_init(ij) = vice_init(ij) + vi0new(ij)
-         eice_init(ij) = eice_init(ij) + vi0new(ij)*qi0new(ij)
+         if (l_conservation_check) then
+            eice_init(ij) = eice_init(ij) + vi0new(ij)*qi0new(ij)
+         endif
 
          ! history diagnostics
          frazil(i,j) = vi0new(ij)

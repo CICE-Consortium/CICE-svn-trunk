@@ -6,6 +6,7 @@ module ice_import_export
   use ice_constants   , only: c0, c1, puny, tffresh, spval_dbl
   use ice_constants   , only: field_loc_center, field_type_scalar
   use ice_constants   , only: field_type_vector, c100
+  use ice_constants   , only: vonkar, zref
   use ice_blocks      , only: block, get_block, nx_block, ny_block
   use ice_flux        , only: strairxt, strairyt, strocnxt, strocnyt           
   use ice_flux        , only: alvdr, alidr, alvdf, alidf, Tref, Qref, Uref
@@ -14,9 +15,7 @@ module ice_import_export
   use ice_flux        , only: rhoa, swvdr, swvdf, swidr, swidf, flw, frain
   use ice_flux        , only: fsnow, uocn, vocn, sst, ss_tltx, ss_tlty, frzmlt
   use ice_flux        , only: sss, tf, wind, fsw, init_flux_atm, init_flux_ocn, faero_atm
-#ifdef RASM_MODS
-  use ice_flux        , only: logzo
-#endif
+  use ice_atmo        , only: Cdn_atm
   use ice_state       , only: vice, vsno, aice, trcr
   use ice_state       , only: tr_aero, tr_iage, tr_FY, tr_pond, tr_lvl 
   use ice_domain      , only: nblocks, blocks_ice, halo_info, distrb_info
@@ -28,12 +27,16 @@ module ice_import_export
   use ice_prescribed_mod
   use ice_cpl_indices
   use perf_mod        , only: t_startf, t_stopf, t_barrierf
+
   implicit none
   public
 
 #ifdef RASM_MODS
 ! (1)  Andrew Roberts:  Added artificial correction to snow and rain division
 !      This is to be consistent with VIC in the Regional Arctic System Model
+  logical, parameter :: rasm_snowrain_split = .true.
+#else
+  logical, parameter :: rasm_snowrain_split = .false.
 #endif
 
   !==============================================================================
@@ -112,10 +115,10 @@ contains
        call t_stopf ('cice_imp_halo')
     endif
 
-#ifdef RASM_MODS
-    MIN_RAIN_TEMP = Tffresh-c1
-    MAX_SNOW_TEMP = Tffresh+c0
-#endif
+    if (rasm_snowrain_split) then
+       MIN_RAIN_TEMP = Tffresh-c1
+       MAX_SNOW_TEMP = Tffresh+c0
+    endif
 
     !$OMP PARALLEL DO PRIVATE(iblk,i,j)
     do iblk = 1, nblocks
@@ -136,23 +139,25 @@ contains
              flw  (i,j,iblk)   = aflds(i,j,13,iblk)
              frain(i,j,iblk)   = aflds(i,j,14,iblk)
              fsnow(i,j,iblk)   = aflds(i,j,15,iblk)
-#ifdef RASM_MODS
-             !--- Artificial correction to snow and rain for RASM
-             if (Tair(i,j,iblk)<MIN_RAIN_TEMP) then
-                fsnow(i,j,iblk)=fsnow(i,j,iblk)+frain(i,j,iblk)
-                frain(i,j,iblk)=0
-             elseif (Tair(i,j,iblk)>MAX_SNOW_TEMP) then
-                frain(i,j,iblk)=fsnow(i,j,iblk)+frain(i,j,iblk)
-                fsnow(i,j,iblk)=0
-             else
-                frain(i,j,iblk)=fsnow(i,j,iblk)+frain(i,j,iblk)
-                fsnow(i,j,iblk)=frain(i,j,iblk)
-                frain(i,j,iblk)=frain(i,j,iblk)*(Tair(i,j,iblk)-MIN_RAIN_TEMP) / &
-                                                 (MAX_SNOW_TEMP-MIN_RAIN_TEMP)
-                fsnow(i,j,iblk)=fsnow(i,j,iblk)-frain(i,j,iblk)
-             endif
-             !--- end artificial RASM correction
-#endif
+
+             if (rasm_snowrain_split) then
+                !--- Artificial correction to snow and rain for RASM
+                if (Tair(i,j,iblk)<MIN_RAIN_TEMP) then
+                   fsnow(i,j,iblk)=fsnow(i,j,iblk)+frain(i,j,iblk)
+                   frain(i,j,iblk)=0
+                elseif (Tair(i,j,iblk)>MAX_SNOW_TEMP) then
+                   frain(i,j,iblk)=fsnow(i,j,iblk)+frain(i,j,iblk)
+                   fsnow(i,j,iblk)=0
+                else
+                   frain(i,j,iblk)=fsnow(i,j,iblk)+frain(i,j,iblk)
+                   fsnow(i,j,iblk)=frain(i,j,iblk)
+                   frain(i,j,iblk)=frain(i,j,iblk)*(Tair(i,j,iblk)-MIN_RAIN_TEMP) / &
+                                                    (MAX_SNOW_TEMP-MIN_RAIN_TEMP)
+                   fsnow(i,j,iblk)=fsnow(i,j,iblk)-frain(i,j,iblk)
+                endif
+                !--- end artificial RASM correction
+             endif  ! rasm_snowrain_split
+
           enddo    !i
        enddo    !j
     enddo        !iblk
@@ -357,6 +362,7 @@ contains
 
     type(block)        :: this_block                           ! block information for current block
     logical :: flag
+    character(len=*),parameter :: subname = 'ice_export'
     !-----------------------------------------------------
 
     flag=.false.
@@ -455,9 +461,16 @@ contains
                 i2x(index_i2x_Si_qref  ,n)    = Qref(i,j,iblk)
                 i2x(index_i2x_Si_snowh ,n)    = vsno(i,j,iblk) &
                      / ailohi(i,j,iblk)
-#ifdef RASM_MODS
-                i2x(index_i2x_Si_logz0 ,n)    = logzo(i,j,iblk) ! log(z0) passed to WRF
-#endif
+
+                if (index_i2x_Si_logz0 > 0) then
+                if (Cdn_atm(i,j,iblk) > c0) then
+                   i2x(index_i2x_Si_logz0 ,n)    = log(zref)-(vonkar/sqrt(Cdn_atm(i,j,iblk)))
+                else
+                   !--- tcraig, this should not happen but if it does, continue gracefully
+                   write(nu_diag,*) trim(subname),' WARNING: Cdn_atm error ',Cdn_atm(i,j,iblk),i,j,iblk
+                   i2x(index_i2x_Si_logz0 ,n)    = log(zref)
+                endif
+                endif
 
                 !--- a/i fluxes computed by ice
                 i2x(index_i2x_Faii_taux ,n)   = tauxa(i,j,iblk)    

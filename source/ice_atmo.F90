@@ -9,6 +9,7 @@
 ! 2004: Block structure added by William Lipscomb
 ! 2006: Converted to free source form (F90) by Elizabeth Hunke
 ! 2013: Form drag routine added (neutral_drag_coeffs) by David Schroeder 
+! 2014: Adjusted form drag and added high frequency coupling by Andrew Roberts
 
       module ice_atmo
 
@@ -27,14 +28,17 @@
          atmbndy ! atmo boundary method, 'default' ('ccsm3') or 'constant'
 
       logical (kind=log_kind), public :: &
-         calc_strair, & ! if true, calculate wind stress components
-         formdrag       ! if true, calculate form drag
+         calc_strair, &  ! if true, calculate wind stress components
+         formdrag,    &  ! if true, calculate form drag
+         highfreq        ! if true, use high frequency coupling
+
+      integer (kind=int_kind), public :: &
+         natmiter        ! number of iterations for boundary layer calculations
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
-         Cdn_atm, &  ! atm drag coefficient
-         Cdn_ocn, &  ! ocn drag coefficient
-
-      ! form drag
+         Cdn_atm     , & ! atm drag coefficient
+         Cdn_ocn     , & ! ocn drag coefficient
+                         ! form drag
          hfreebd,      & ! freeboard (m)
          hdraft,       & ! draft of ice + snow column (Stoessel1993)
          hridge,       & ! ridge height
@@ -81,17 +85,13 @@
                                       delt,     delq,     &
                                       lhcoef,   shcoef,   &
                                       Cdn_atm,  Cdn_atm_ocn_n, &
-#ifdef RASM_MODS
                                       uice,     vice,     &
-                                      logz0,              &
-#endif
                                       Uref                )     
 
 
-#ifdef RASM_MODS
       use ice_fileunits, only: nu_diag
       use ice_communicate, only: my_task, master_task
-#endif
+      use ice_exit, only: abort_ice
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -136,21 +136,14 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), optional, intent(out) :: &
          Uref         ! reference height wind speed (m/s)
 
-#ifdef RASM_MODS
       real (kind=dbl_kind), dimension (nx_block,ny_block), optional, intent(in) :: &
          uice     , & ! x-direction ice speed (m/s)
          vice         ! y-direction ice speed (m/s)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), optional, intent(out) :: &
-         logz0        ! log of sea ice roughness length (m) for WRF 
-#endif
+      ! local variables
 
-       !local variables
-
-#ifdef RASM_MODS
       logical (kind=log_kind), save :: &
-         firstpass=.true. ! RASM sea ice flux first pass
-#endif
+         firstpass=.true. ! high frequency checks on first pass
 
       integer (kind=int_kind) :: &
          k     , & ! iteration index
@@ -170,7 +163,8 @@
          qqq   , & ! for qsat, dqsfcdt
          TTT   , & ! for qsat, dqsfcdt
          qsat  , & ! the saturation humidity of air (kg/m^3)
-         Lheat     ! Lvap or Lsub, depending on surface type
+         Lheat , & ! Lvap or Lsub, depending on surface type
+         umin      ! minimum wind speed (m/s)
 
       real (kind=dbl_kind), dimension (icells) :: &
          ustar , & ! ustar (m/s)
@@ -192,13 +186,7 @@
 
       real (kind=dbl_kind), parameter :: &
          cpvir = cp_wv/cp_air-c1, & ! defined as cp_wv/cp_air - 1.
-         zTrf  = c2             , & ! reference height for air temp (m)
-
-#ifdef RASM_MODS
-         umin  = p5                 ! minimum RASM wind speed (m/s)
-#else
-         umin  = c1                 ! minimum wind speed (m/s)
-#endif
+         zTrf  = c2                 ! reference height for air temp (m)
 
       ! local functions
       real (kind=dbl_kind) :: &
@@ -222,21 +210,30 @@
       ! Initialize
       !------------------------------------------------------------
 
-#ifdef RASM_MODS
-      if (my_task==master_task.and.firstpass.and.sfctype(1:3)=='ice') then
-         if (present(logz0) .and. present(uice) .and. present(vice)) then
-            write(nu_diag,*)'Using RASM sea ice flux settings'
+      if (highfreq) then       
+
+       ! high frequency coupling follows Roberts et al. (2014)
+       if (my_task==master_task.and.firstpass.and.sfctype(1:3)=='ice') then
+         if (present(uice) .and. present(vice)) then
+          write(nu_diag,*)'Using high frequency RASM atmospheric coupling'
          else
-            write(nu_diag,*)'WARNING: Not using RASM sea ice flux settings'
+          call abort_ice('High frequency RASM coupling missing uice and vice')
          endif
+         firstpass = .false. 
+       endif
+
+       umin  = p5 ! minumum allowable wind-ice speed difference of 0.5 m/s
+
+      else
+
+       umin  = c1 ! minumum allowable wind speed of 1m/s
+
       endif
-      firstpass = .false.
-#endif
 
       do j = 1, ny_block
       do i = 1, nx_block
          if (present(Uref)) then
-            Uref(i,j) = c0
+           Uref(i,j) = c0
          endif
          Tref(i,j) = c0
          Qref(i,j) = c0
@@ -244,11 +241,6 @@
          delq(i,j) = c0
          shcoef(i,j) = c0
          lhcoef(i,j) = c0
-#ifdef RASM_MODS
-         if (present(logz0)) then
-            logz0(i,j) = log(iceruf) ! log(z0) passed to WRF 
-         endif
-#endif
       enddo
       enddo
 
@@ -270,8 +262,7 @@
             i = indxi(ij)
             j = indxj(ij)
 
-#ifdef RASM_MODS
-            if (present(uice) .and. present(vice)) then
+            if (highfreq) then
                vmag(ij) = max(umin, sqrt( (uatm(i,j)-uice(i,j))**2 + &
                                           (vatm(i,j)-vice(i,j))**2) )
             else
@@ -280,28 +271,10 @@
 
             if (formdrag .and. Cdn_atm(i,j) > puny) then 
                rdn(ij)  = sqrt(Cdn_atm(i,j))               
-            elseif (formdrag) then 
-! ANDREW ROBERTS ATTEMPT TO REDUCE DRAG AT ICE EDGE
-               rdn(ij)  = vonkar/log(4*zref/iceruf) ! neutral coefficient
-               Cdn_atm(i,j) = rdn(ij) * rdn(ij)
             else
                rdn(ij)  = vonkar/log(zref/iceruf) ! neutral coefficient
                Cdn_atm(i,j) = rdn(ij) * rdn(ij)
             endif
-
-            if (present(logz0)) then
-               logz0(i,j) = log(zref) - (vonkar/rdn(ij)); ! log(z0) passed to WRF 
-            endif
-#else
-            vmag(ij) = max(umin, wind(i,j))
-
-            if (formdrag .and. Cdn_atm(i,j) > puny) then 
-               rdn(ij)  = sqrt(Cdn_atm(i,j))               
-            else
-               rdn(ij)  = vonkar/log(zref/iceruf) ! neutral coefficient
-               Cdn_atm(i,j) = rdn(ij) * rdn(ij)
-            endif
-#endif
 
          enddo   ! ij
 
@@ -360,11 +333,7 @@
       ! iterate to converge on Z/L, ustar, tstar and qstar
       !------------------------------------------------------------
 
-#ifdef RASM_MODS
-      do k=1,25
-#else
-      do k=1,5
-#endif
+      do k = 1, natmiter
 
          do ij = 1, icells
             i = indxi(ij)
@@ -419,8 +388,7 @@
          i = indxi(ij)
          j = indxj(ij)
 
-#ifdef RASM_MODS
-         if (present(uice) .and. present(vice)) then
+         if (highfreq .and. sfctype(1:3)=='ice') then
 
             !------------------------------------------------------------
             ! momentum flux for RASM
@@ -432,7 +400,7 @@
 
             tau = rhoa(i,j) * rd(ij) * rd(ij) ! not the stress at zlvl(i,j)
 
-            ! SPECIAL SETTINGS
+            ! high frequency momentum coupling following Roberts et al. (2014)
             strx(i,j) = tau * sqrt((uatm(i,j)-uice(i,j))**2 + &
                                    (vatm(i,j)-vice(i,j))**2) * &
                               (uatm(i,j)-uice(i,j))
@@ -442,26 +410,19 @@
 
          else
 
+            !------------------------------------------------------------
+            ! momentum flux
+            !------------------------------------------------------------
+            ! tau = rhoa(i,j) * ustar * ustar
+            ! strx = tau * uatm(i,j) / vmag
+            ! stry = tau * vatm(i,j) / vmag
+            !------------------------------------------------------------
+
             tau = rhoa(i,j) * ustar(ij) * rd(ij) ! not the stress at zlvl(i,j)
             strx(i,j) = tau * uatm(i,j)
             stry(i,j) = tau * vatm(i,j)
 
          endif
-#else
-
-         !------------------------------------------------------------
-         ! momentum flux
-         !------------------------------------------------------------
-         ! tau = rhoa(i,j) * ustar * ustar
-         ! strx = tau * uatm(i,j) / vmag
-         ! stry = tau * vatm(i,j) / vmag
-         !------------------------------------------------------------
-
-         tau = rhoa(i,j) * ustar(ij) * rd(ij) ! not the stress at zlvl(i,j)
-         strx(i,j) = tau * uatm(i,j)
-         stry(i,j) = tau * vatm(i,j)
-
-#endif
 
          Cdn_atm_ocn_n(i,j) = rd(ij) * rd(ij) / rdn(ij) / rdn(ij)
 
@@ -483,32 +444,13 @@
          ! as in Jordan et al (JGR, 1999)
          !------------------------------------------------------------
 
-#ifdef RASM_MODS
-         if (present(uice) .and. present(vice)) then
-
-            shcoef(i,j)=rhoa(i,j) * rd(ij) * &
-                        sqrt((uatm(i,j)-uice(i,j))**2 + &
-                             (vatm(i,j)-vice(i,j))**2) * &
-                        cp(ij) * rh(ij) + c1
-            lhcoef(i,j)=rhoa(i,j) * rd(ij) * &
-                        sqrt((uatm(i,j)-uice(i,j))**2+ &
-                             (vatm(i,j)-vice(i,j))**2) * &
-                        Lheat  * re(ij)
-         else
-
-            shcoef(i,j) = rhoa(i,j) * ustar(ij) * cp(ij) * rh(ij) + c1
-            lhcoef(i,j) = rhoa(i,j) * ustar(ij) * Lheat  * re(ij)
-
-         endif
-
-#else
          shcoef(i,j) = rhoa(i,j) * ustar(ij) * cp(ij) * rh(ij) + c1
          lhcoef(i,j) = rhoa(i,j) * ustar(ij) * Lheat  * re(ij)
-#endif
 
-      !------------------------------------------------------------
-      ! Compute diagnostics: 2m ref T & Q
-      !------------------------------------------------------------
+         !------------------------------------------------------------
+         ! Compute diagnostics: 2m ref T, Q, U
+         !------------------------------------------------------------
+
          hol(ij)  = hol(ij)*zTrf/zlvl(i,j)
          xqq      = max( c1, sqrt(abs(c1-c16*hol(ij))) )
          xqq      = sqrt(xqq)
@@ -521,17 +463,13 @@
                   * (alz(ij) + al2 - psixh(ij) + psix2)
          Qref(i,j)= Qa(i,j) - delq(i,j)*fac
          if (present(Uref)) then
-#ifdef RASM_MODS
-            if (present(uice) .and. present(vice)) then
+            if (highfreq .and. sfctype(1:3)=='ice') then
                Uref(i,j) = sqrt((uatm(i,j)-uice(i,j))**2 + &
                                 (vatm(i,j)-vice(i,j))**2) * &
                            rd(ij) / rdn(ij)
             else
                Uref(i,j) = vmag(ij) * rd(ij) / rdn(ij)
-            endif ! (present(uice) .and. present(vice))
-#else
-            Uref(i,j)= vmag(ij) * rd(ij) / rdn(ij)
-#endif
+            endif
          endif ! (present(Uref)) 
       enddo                     ! ij
 
@@ -691,6 +629,9 @@
 !
 ! authors: Michel Tsamados, CPOM
 !          David Schroeder, CPOM
+!
+! changes: Andrew Roberts, NPS (adjusted for fully coupled models)
+
 
       subroutine neutral_drag_coeffs (nx_block, ny_block, &
                                       ilo, ihi, jlo, jhi, &
@@ -828,31 +769,27 @@
       astar = c1/(c1-(Lmin/Lmax)**(c1/beta))
 
 
-! ANDREW ROBERTS CHANGE
-
       !-----------------------------------------------------------------
-      ! Initialize cells
+      ! Initialize across entire grid
       !-----------------------------------------------------------------
 
       hfreebd(:,:)=c0
-      hdraft(:,:)=c0       
-      hridge(:,:)=c0       
+      hdraft (:,:)=c0       
+      hridge (:,:)=c0       
       distrdg(:,:)=c0    
-      hkeel(:,:)=c0 
-      dkeel(:,:)=c0 
-      lfloe(:,:)=c0
-      dfloe(:,:)=c0 
+      hkeel  (:,:)=c0 
+      dkeel  (:,:)=c0 
+      lfloe  (:,:)=c0
+      dfloe  (:,:)=c0 
       Cdn_ocn(:,:)=dragio
       Cdn_ocn_skin(:,:)=c0 
       Cdn_ocn_floe(:,:)=c0 
       Cdn_ocn_keel(:,:)=c0 
-      Cdn_atm(:,:)=c0      
+      Cdn_atm(:,:) = (vonkar/log(zref/iceruf)) * (vonkar/log(zref/iceruf))
       Cdn_atm_skin(:,:)=c0 
       Cdn_atm_floe(:,:)=c0 
       Cdn_atm_pond(:,:)=c0 
-      Cdn_atm_rdg(:,:)=c0
-
-! END ANDREW ROBERTS CHANGE
+      Cdn_atm_rdg (:,:)=c0
 
       !-----------------------------------------------------------------
       ! Identify cells with nonzero ice area
@@ -861,13 +798,15 @@
       icells = 0
       do j = jlo, jhi
         do i = ilo, ihi
-          if (aice(i,j) > p1) then 
+          if (aice(i,j) > p001) then 
             icells = icells + 1
             indxi(icells) = i
             indxj(icells) = j
           endif
         enddo               ! i
       enddo               ! j
+
+     
          
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -877,20 +816,11 @@
         j = indxj(ij)
 
       !------------------------------------------------------------
-      ! Initialize
+      ! Initialize inside loop where concentration > 0.1%
       !------------------------------------------------------------
  
-        hridge (i,j) = c0
-        distrdg (i,j) = c0
-        hkeel (i,j) = c0
-        dkeel (i,j) = c0      
         Cdn_atm_skin(i,j) = csa
-        Cdn_atm_floe(i,j) = c0
-        Cdn_atm_pond(i,j) = c0
-        Cdn_atm_rdg(i,j) = c0
         Cdn_ocn_skin(i,j) = csw
-        Cdn_ocn_floe(i,j) = c0
-        Cdn_ocn_keel(i,j) = c0
 
         ai  = aice(i,j)
         aii = c1/ai
@@ -966,7 +896,6 @@
 
           Cdn_atm_skin(i,j) = ai * csa*(c1 - mrdg*tmp1/distrdg(i,j))
           Cdn_atm_skin(i,j) = max(min(Cdn_atm_skin(i,j),camax),c0)
-!         Cdn_atm_skin(i,j) = c0
 
       !------------------------------------------------------------
       ! Ridge effect (atmo)
@@ -980,7 +909,6 @@
           Cdn_atm_rdg(i,j) = min(Cdn_atm_rdg(i,j),camax)
 
           tmp1 = hkeel(i,j) - hdraft(i,j)
-!         Cdn_atm_rdg(i,j) = c0
 
       !------------------------------------------------------------
       ! Skin drag bottom ice (ocean)
@@ -988,7 +916,6 @@
   
           Cdn_ocn_skin(i,j) = csw * (c1 - mrdgo*tmp1/dkeel(i,j))
           Cdn_ocn_skin(i,j) = max(min(Cdn_ocn_skin(i,j),cwmax), c0)
-!         Cdn_ocn_skin(i,j) = c0
   
       !------------------------------------------------------------
       ! Keel effect (ocean)
@@ -1000,7 +927,6 @@
           Cdn_ocn_keel(i,j) = ctecwk*ai*tmp1/dkeel(i,j)*scw* &
                      (log(tmp1*icerufi)/log(zref*icerufi))**c2  
           Cdn_ocn_keel(i,j) = max(min(Cdn_ocn_keel(i,j),cwmax),c0)
-!         Cdn_ocn_keel(i,j) = c0
   
         endif ! ardg > 0.001
 
@@ -1014,7 +940,6 @@
           Cdn_atm_floe(i,j) = ctecaf * hfreebd(i,j) * ai / lfloe(i,j)  
           Cdn_atm_floe(i,j) = max(min(Cdn_atm_floe(i,j),camax),c0)
         endif
-!       Cdn_atm_floe(i,j) = c0
 
       !------------------------------------------------------------
       ! Pond edge effect (atmo)
@@ -1027,7 +952,6 @@
                    * (log(hfreebd(i,j)*ocnrufi)/log(zref*ocnrufi))**c2
           Cdn_atm_pond(i,j) = min(Cdn_atm_pond(i,j),camax)
         endif
-!       Cdn_atm_pond(i,j) = c0
   
       !------------------------------------------------------------
       ! Floe edge drag effect (ocean)
@@ -1039,7 +963,6 @@
           Cdn_ocn_floe(i,j) = ctecwf * hdraft(i,j) * ai / lfloe(i,j)
           Cdn_ocn_floe(i,j) = max(min(Cdn_ocn_floe(i,j),cwmax),c0)
         endif
-!       Cdn_ocn_floe(i,j) = c0
 
       !------------------------------------------------------------
       ! Total drag coefficient (atmo)
@@ -1048,7 +971,7 @@
         Cdn_atm(i,j) = Cdn_atm_skin(i,j) + Cdn_atm_floe(i,j) + &
                        Cdn_atm_pond(i,j) + Cdn_atm_rdg(i,j)
         Cdn_atm(i,j) = min(Cdn_atm(i,j),camax)
- 
+
       !------------------------------------------------------------
       ! Total drag coefficient (ocean)
       !------------------------------------------------------------
