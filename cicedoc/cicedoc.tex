@@ -247,7 +247,7 @@ explained in more detail below.
 The fluxes and state variables passed between the sea ice model and the CESM flux
 coupler are listed 
 in~Table~\ref{table:coupling}.
-By convention, directional fluxes are positive downward.  In CESM, the sea ice model may exchange coupling fluxes using a different grid than the computational grid.  This functionality is activated using the namelist variable {\tt gridcpl\_file}.
+By convention, directional fluxes are positive downward.  In CESM, the sea ice model may exchange coupling fluxes using a different grid than the computational grid.  This functionality is activated using the namelist variable {\tt gridcpl\_file}.  Another namelist variable {/tt highfreq}, allows the high-frequency coupling procedure implemented in the Regional Arctic System Model (RASM).\index{RASM}  In particular, the relative atmosphere-ice velocity ($\vec{U}_a-\vec{u}$) is used instead of the full atmospheric velocity for computing turbulent fluxes in the atmospheric boundary layer.
 
 \index{ice!fraction|(emph} The ice fraction
 { $a_i$ 
@@ -394,7 +394,7 @@ Neglecting form drag,\index{form drag}%
 the exchange coefficients $c_u$, $c_\theta$ and $c_q$ are initialized as
 \[\kappa\over \ln(z_{\mathit {ref}}/z_{\mathit {ice}})\]
 and updated during a short iteration, as they depend upon the
-turbulent scales. (For the case with form drag, see section~\ref{sec:formdrag}.)  Here, $z_{\mathit {ref}}$ is a 
+turbulent scales. The number of iterations is set by the namelist variable {\tt natmiter}.  (For the case with form drag, see section~\ref{sec:formdrag}.)  Here, $z_{\mathit {ref}}$ is a 
 \index{height!reference}%
 reference height of 10\,m and $z_{\mathit {ice}}$ is the roughness
 \index{roughness}
@@ -1612,7 +1612,7 @@ y_1$ if $x_1>0$, else $\tilde{y}_1 = y_a$. Similarly, $\tilde{y}_2
 \end{table}
 
 \index{grid!horizontal}%
-This scheme was originally designed for rectangular grids.  Grid cells in CICE actually lie on the surface of a sphere and must be projected onto a plane.  The projection used in CICE 4.0 maps each grid cell to a square with sides of unit length.  Departure triangles across a given cell edge are computed in a coordinate system whose origin lies at the midpoint of the edge and whose vertices are at (-0.5, 0) and (0.5, 0).  Intersection points are computed assuming Cartesian geometry with cell edges meeting at right angles.  Let CL and CR denote the left and right vertices, which are joined by line CLR.   Similarly, let DL and DR denote the departure points, which are joined by line DLR.  Also, let IL and IR denote the intersection points (0, $y_a$) and (0,$y_b$) respectively, and let IC = ($x_c$, 0) denote the intersection of CLR and DLR.  It can be shown that $y_a$, $y_b$, and $x_c$ are given by
+This scheme was originally designed for rectangular grids.  Grid cells in CICE actually lie on the surface of a sphere and must be projected onto a plane.  The projection used in CICE  maps each grid cell to a square with sides of unit length.  Departure triangles across a given cell edge are computed in a coordinate system whose origin lies at the midpoint of the edge and whose vertices are at (-0.5, 0) and (0.5, 0).  Intersection points are computed assuming Cartesian geometry with cell edges meeting at right angles.  Let CL and CR denote the left and right vertices, which are joined by line CLR.   Similarly, let DL and DR denote the departure points, which are joined by line DLR.  Also, let IL and IR denote the intersection points (0, $y_a$) and (0,$y_b$) respectively, and let IC = ($x_c$, 0) denote the intersection of CLR and DLR.  It can be shown that $y_a$, $y_b$, and $x_c$ are given by
 \begin{eqnarray*}
  y_a &=& {x_{CL} (y_{DM}-y_{DL}) + x_{DM}y_{DL} - x_{DL}y_{DM}}\over{x_{DM} - x_{DL}}, \\
  y_b &=& {x_{CR} (y_{DR}-y_{DM}) - x_{DM}y_{DR} + x_{DR}y_{DM}}\over{x_{DR} - x_{DM}}, \\
@@ -3964,7 +3964,7 @@ velocity components are aligned
 along grid lines. 
 
 The user has several choices of grid routines: {\it popgrid} reads grid
-lengths and other parameters for a nonuniform grid (including tripole grids),\index{grid!tripole} 
+lengths and other parameters for a nonuniform grid (including tripole and regional grids),\index{grid!tripole}\index{grid!regional}
 and {\it rectgrid} creates a regular rectangular grid, including that used for the column configuration.\index{column configuration}   The input files {\bf global\_gx3.grid} and {\bf
 global\_gx3.kmt} contain the  
 $\left<3^\circ\right>$ 
@@ -4128,6 +4128,7 @@ configuration.   The `displaced\_pole' grid option should not be used unless the
 
 For exact restarts\index{restart} using restoring, set {\tt restart\_ext} = true in namelist\index{namelist} to use the extended-grid subroutines.
 
+On tripole\index{grid!tripole} grids, the order of operations used for calculating elements of the stress tensor can differ on either side of the fold, leading to round-off differences.  Although restarts using the extended grid routines are exact for a given run, the solution will differ from another run in which restarts are written at different times.  For this reason, explicit halo updates of the stress tensor are implemented for the tripole grid, both within the dynamics calculation and for restarts.  This has not been implemented yet for tripoleT grids, pending further testing.
 
 \subsubsection{Masks}
 \index{masks|(emph}%
@@ -4943,6 +4944,7 @@ following people:
       CESM Polar Climate Working Group, including David Bailey,
       Cecilia Bitz, Bruce Briegleb, Tony Craig, Marika Holland, John Dennis,
       Julie Schramm, Bonnie Light and Phil Jones,
+\item Andrew Roberts of the Naval Postgraduate School,
 \item David Hebert and Olivier Lecomte for their melt pond work,
 \item Jonathan Gregory of the University of Reading and the U.K. MetOffice for supplying tripole T-fold code and documentation,\index{grid!tripole}
 \item Alison McLaren, Ann Keen and others working with the Hadley Centre GCM\index{Hadley Centre}
@@ -5055,6 +5057,7 @@ variable & options/format & description & recommended value\\
  {\tt grid\_type} & {\tt rectangular}  &  defined in {\it rectgrid} & \\
            & {\tt displaced\_pole} & read from file in {\it popgrid} & \\
            & {\tt tripole} & read from file in {\it popgrid} & \\
+           & {\tt regional} & read from file in {\it popgrid} & \\
   {\tt grid\_file} & filename     &  name of grid file to be read & `grid'\\
  {\tt kmt\_file} & filename & name of land mask file to be read & `kmt'\\
  {\tt gridcpl\_file} & filename & input file for coupling grid info & \\
@@ -5227,7 +5230,13 @@ variable & options/format & description & recommended value\\
  {\tt tr\_bgc\_DMSPd\_sk} & true/false & dissolved DMSP tracer&\\
  {\tt tr\_bgc\_DMS\_sk} & true/false & DMS tracer&\\
  {\tt phi\_snow} & real  & snow porosity for brine height tracer  & \\
-%&&&\\
+&&&\\
+{\it forcing\_nml}&&{\it Forcing}& \\
+{\tt formdrag} & true/false & calculate form drag &  \\
+{\tt atmbndy} & {\tt default} & stability-based boundary layer & {`default'}\\
+                    & {\tt constant} & bulk transfer coefficients & \\
+{\tt fyear\_init} & yyyy & first year of atmospheric forcing data & \\
+{\tt ycycle} &integer & number of years in forcing data cycle & \\
 \hline
 \end{tabular}
 \caption{Namelist options (continued).\index{namelist|emph}}
@@ -5241,12 +5250,7 @@ variable & options/format & description & recommended value\\
 variable & options/format & description & recommended value\\
 \hline
 &&&\\
-{\it forcing\_nml}&&{\it Forcing}& \\
-{\tt formdrag} & true/false & calculate form drag &  \\
-{\tt atmbndy} & {\tt default} & stability-based boundary layer & {`default'}\\
-                    & {\tt constant} & bulk transfer coefficients & \\
-{\tt fyear\_init} & yyyy & first year of atmospheric forcing data & \\
-{\tt ycycle} &integer & number of years in forcing data cycle & \\
+&&{\it Forcing, continued}& \\
 {\tt atm\_data\_format} & {\tt nc} & read \netcdf\ atmo forcing files &  \\
                             & {\tt bin} & read direct access, binary files & \\
 {\tt atm\_data\_type} & {\tt default} & constant values defined in the code & \\
@@ -5257,6 +5261,8 @@ variable & options/format & description & recommended value\\
 {\tt atm\_data\_dir} & path/ & path to atmospheric forcing data directory & \\
 {\tt calc\_strair} & true & calculate wind stress and speed & \\
                     & false & read wind stress and speed from files & \\
+{\tt highfreq} & true/false & high-frequency atmo coupling & \\
+{\tt natmiter} & integer & number of atmo boundary layer iterations & \\
 {\tt calc\_Tsfc} & true/false & calculate surface temperature & {\tt .true.} \\
 {\tt precip\_units} & {\tt mks} & liquid precipitation data units & \\
                    & {\tt mm\_per\_month} & & \\
@@ -5579,7 +5585,7 @@ fyear\_init    &{$\bullet$} initial data year &\\
  gravit        & gravitational acceleration{\dotfill\ } & 9.80616 m/s$^2$ \\
  grid\_file         & {$\bullet$} input file for grid info & \\
  grid\_format         & {$\bullet$} format of grid files  & \\
- grid\_type         & {$\bullet$} `rectangular' or `displaced\_pole' or `column' &\\
+ grid\_type         & {$\bullet$} `rectangular', `displaced\_pole', `column' or `regional' &\\
  gridcpl\_file         & {$\bullet$} input file for coupling grid info & \\
  grow\_ net & specific biogeochemistry growth rate per grid cell & s$^{-1}$ \\
  Gstar & piecewise-linear ridging participation function parameter {\dotfill\ }& 0.15 \\
@@ -5592,6 +5598,7 @@ hfrazilmin  & minimum thickness of new frazil ice  {\dotfill\ }& 0.05 m \\
  hi\_min       & minimum ice thickness for thinnest ice category {\dotfill\ }& 0.01 m \\
  hi\_ssl & ice surface scattering layer thickness & 0.05 m \\
  hicen & ice thickness in category n & m \\
+ highfreq &  {$\bullet$} high-frequency atmo coupling {\dotfill\ } & F \\
  hin\_old &  ice thickness prior to growth/melt & m \\
  hin\_max   & category thickness limits                &m \\
  hist\_avg  & {$\bullet$} if true, write averaged data instead of snapshots {\dotfill\ }& T \\
@@ -5728,11 +5735,12 @@ m\_to\_cm            & meters to cm conversion {\dotfill\ }&  100.  \\
 {\Large\bf N} &&\\
 &&\\
 n\_aero & number of aerosol species & \\
+natmiter & {$\bullet$} number of atmo boundary layer iterations {\dotfill\ } & 5 \\
 nblocks & number of blocks on current processor & \\
 nblocks\_tot & total number of blocks in decomposition & \\
 nblocks\_x(y) & total number of blocks in x(y) direction & \\
 nbtrcr & number of biology tracers \index{tracers} & \\
-ncat    & number of ice categories {\dotfill\ }{\dotfill\ } & 5\\
+ncat    & number of ice categories {\dotfill\ } & 5\\
 ncat\_hist & number of categories written to history & \\
 ndte  &{$\bullet$} number of subcycles {\dotfill\ }& 120 \\
 ndtd  &{$\bullet$} number of dynamics/advection steps under thermo {\dotfill\ }& 1 \\
