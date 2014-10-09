@@ -805,8 +805,6 @@
           endif
         enddo               ! i
       enddo               ! j
-
-     
          
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
