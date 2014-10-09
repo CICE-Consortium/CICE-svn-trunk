@@ -721,26 +721,15 @@
       end subroutine popgrid_nc
 
 !=======================================================================
-!BOP
-!
-! !IROUTINE: latlongrid- lat and lon grid for coupling to standalone CAM
-!
-! !INTERFACE:
-!
-      subroutine latlongrid
-!
-! !DESCRIPTION:
-!
+
 ! Read in kmt file that matches CAM lat-lon grid and has single column 
 ! functionality
-!
-! !REVISION HISTORY:
-!
 ! author: Mariana Vertenstein
 ! 2007: Elizabeth Hunke upgraded to netcdf90 and cice ncdf calls
-!
-! !USES:
-!
+
+      subroutine latlongrid
+
+#ifdef ncdf
 !     use ice_boundary
       use ice_domain_size
 #ifdef CCSMCOUPLED
@@ -750,11 +739,7 @@
           field_loc_center, field_type_scalar, radius
       use ice_exit, only: abort_ice
       use netcdf
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
+
       integer (kind=int_kind) :: &
          i, j, iblk    
       
@@ -1000,6 +985,7 @@
       !$OMP END PARALLEL DO
 
       call makemask
+#endif
 #endif
 
       end subroutine latlongrid

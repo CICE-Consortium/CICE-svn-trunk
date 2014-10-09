@@ -1847,9 +1847,8 @@
          dfhocn       ! zapped energy flux ( W/m^2)
 
      real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
-         intent(out) :: &
+         intent(inout), optional :: &
          flux_bio     ! Ocean tracer flux from biology (mmol/m^2/s)
-
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_aero), &
          intent(out) :: &
