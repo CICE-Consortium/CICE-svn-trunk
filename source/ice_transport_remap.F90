@@ -1739,7 +1739,13 @@
          i, j, ij, ic   ,&! horizontal indices
          ib, ie, jb, je ,&! limits for loops over edges
          ng, nv         ,&! triangle indices
-         ishift, jshift   ! differences between neighbor cells
+         ishift, jshift ,&! differences between neighbor cells
+         ishift_tl, jshift_tl ,&! i,j indices of TL cell relative to edge
+         ishift_bl, jshift_bl ,&! i,j indices of BL cell relative to edge
+         ishift_tr, jshift_tr ,&! i,j indices of TR cell relative to edge
+         ishift_br, jshift_br ,&! i,j indices of BR cell relative to edge
+         ishift_tc, jshift_tc ,&! i,j indices of TC cell relative to edge
+         ishift_bc, jshift_bc   ! i,j indices of BC cell relative to edge
 
       integer (kind=int_kind) ::   &
          icellsd          ! number of cells where departure area > 0.
@@ -1770,12 +1776,6 @@
          md             ,&! slope of line connecting DL and DR
          mdl            ,&! slope of line connecting DL and DM
          mdr            ,&! slope of line connecting DR and DM
-         ishift_tl, jshift_tl ,&! i,j indices of TL cell relative to edge
-         ishift_bl, jshift_bl ,&! i,j indices of BL cell relative to edge
-         ishift_tr, jshift_tr ,&! i,j indices of TR cell relative to edge
-         ishift_br, jshift_br ,&! i,j indices of BR cell relative to edge
-         ishift_tc, jshift_tc ,&! i,j indices of TC cell relative to edge
-         ishift_bc, jshift_bc ,&! i,j indices of BC cell relative to edge
          area1, area2         ,&! temporary triangle areas
          area3, area4         ,&! 
          area_c               ,&! center polygon area
