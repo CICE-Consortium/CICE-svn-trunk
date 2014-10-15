@@ -370,7 +370,7 @@
            endif
         enddo
 
-        ! Attributes for tmask defined separately, since it has no units
+        ! Attributes for tmask, blkmask defined separately, since they have no units
         if (igrd(n_tmask)) then
            status = nf90_def_var(ncid, 'tmask', nf90_float, dimid(1:2), varid)
            if (status /= nf90_noerr) call abort_ice( &
@@ -385,7 +385,9 @@
            if (status /= nf90_noerr) call abort_ice('Error defining missing_value for tmask')
            status = nf90_put_att(ncid,varid,'_FillValue',spval)
            if (status /= nf90_noerr) call abort_ice('Error defining _FillValue for tmask')
+        endif
 
+        if (igrd(n_blkmask)) then
            status = nf90_def_var(ncid, 'blkmask', nf90_float, dimid(1:2), varid)
            if (status /= nf90_noerr) call abort_ice( &
                          'ice: Error defining var blkmask')
@@ -401,7 +403,7 @@
            if (status /= nf90_noerr) call abort_ice('Error defining _FillValue for blkmask')
         endif
 
-        do i = 2, nvar       ! note: n_tmask=1
+        do i = 3, nvar      ! note n_tmask=1, n_blkmask=2
           if (igrd(i)) then
              status = nf90_def_var(ncid, var(i)%req%short_name, &
                                    nf90_float, dimid(1:2), varid)
@@ -954,7 +956,7 @@
         enddo
 
       !-----------------------------------------------------------------
-      ! write grid mask, area and rotation angle
+      ! write grid masks, area and rotation angle
       !-----------------------------------------------------------------
 
       if (igrd(n_tmask)) then
@@ -968,6 +970,9 @@
         if (status /= nf90_noerr) call abort_ice( &
                       'ice: Error writing variable tmask')
       endif
+      endif
+
+      if (igrd(n_blkmask)) then
       call gather_global(work_g1, bm, master_task, distrb_info)
       if (my_task == master_task) then
         work_gr=work_g1
@@ -980,7 +985,7 @@
       endif
       endif
 
-      do i = 2, nvar       ! note: n_tmask=1
+      do i = 3, nvar      ! note n_tmask=1, n_blkmask=2
         if (igrd(i)) then
         call broadcast_scalar(var(i)%req%short_name,master_task)
         SELECT CASE (var(i)%req%short_name)

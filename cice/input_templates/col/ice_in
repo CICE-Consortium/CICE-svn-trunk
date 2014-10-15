@@ -176,6 +176,7 @@
 
 &icefields_nml
     f_tmask        = .true.
+  , f_blkmask      = .true.
   , f_tarea        = .true.
   , f_uarea        = .true.
   , f_dxt          = .false.

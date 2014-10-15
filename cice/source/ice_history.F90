@@ -176,6 +176,7 @@
 #endif
 
       call broadcast_scalar (f_tmask, master_task)
+      call broadcast_scalar (f_blkmask, master_task)
       call broadcast_scalar (f_tarea, master_task)
       call broadcast_scalar (f_uarea, master_task)
       call broadcast_scalar (f_dxt, master_task)
@@ -964,6 +965,7 @@
       igrd=.true.
 
       igrd(n_tmask     ) = f_tmask
+      igrd(n_blkmask   ) = f_blkmask
       igrd(n_tarea     ) = f_tarea
       igrd(n_uarea     ) = f_uarea
       igrd(n_dxt       ) = f_dxt

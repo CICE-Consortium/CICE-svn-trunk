@@ -336,6 +336,8 @@
            status = pio_put_att(File, varid, 'missing_value', spval)
            status = pio_put_att(File, varid,'_FillValue',spval)
            status = pio_put_att(File,varid,'comment', '0 = land, 1 = ocean')
+        endif
+        if (igrd(n_blkmask)) then
            status = pio_def_var(File, 'blkmask', pio_real, dimid2, varid)
            status = pio_put_att(File,varid, 'long_name', 'ice grid block mask') 
            status = pio_put_att(File, varid, 'coordinates', 'TLON TLAT')
@@ -344,7 +346,7 @@
            status = pio_put_att(File, varid,'_FillValue',spval)
         endif
 
-        do i = 2, nvar       ! note: n_tmask=1
+        do i = 3, nvar      ! note n_tmask=1, n_blkmask=2
           if (igrd(i)) then
              status = pio_def_var(File, trim(var(i)%req%short_name), &
                                    pio_real, dimid2, varid)
@@ -762,22 +764,24 @@
         endif
 
       !-----------------------------------------------------------------
-      ! write grid mask, area and rotation angle
+      ! write grid masks, area and rotation angle
       !-----------------------------------------------------------------
 
       if (igrd(n_tmask)) then
-!        workr2 = tmask  ! tcraig -- tmask is logical, use hm
         workr2 = hm
         status = pio_inq_varid(File, 'tmask', varid)
         call pio_write_darray(File, varid, iodesc2d, &
                               workr2, status, fillval=spval_dbl)
+      endif
+
+      if (igrd(n_blkmask)) then
         workr2 = bm
         status = pio_inq_varid(File, 'blkmask', varid)
         call pio_write_darray(File, varid, iodesc2d, &
                               workr2, status, fillval=spval_dbl)
       endif
 
-      do i = 2, nvar       ! note: n_tmask=1
+      do i = 3, nvar      ! note n_tmask=1, n_blkmask=2
         if (igrd(i)) then
         SELECT CASE (var(i)%req%short_name)
           CASE ('tarea')
