@@ -109,7 +109,7 @@
          avail_hist_fields
 
       integer (kind=int_kind), parameter, public :: &
-         nvar = 11              , & ! number of grid fields that can be written
+         nvar = 12              , & ! number of grid fields that can be written
                                     !   excluding grid vertices
          nvarz = 4              , & ! number of category/vertical grid fields written
          ncat_hist = ncat           ! number of ice categories written <= ncat
@@ -171,7 +171,7 @@
       !---------------------------------------------------------------
 
       logical (kind=log_kind), public :: &
-           f_tmask     = .true., &
+           f_tmask     = .true., f_blkmask    = .true., &
            f_tarea     = .true., f_uarea      = .true., &
            f_dxt       = .true., f_dyt        = .true., &
            f_dxu       = .true., f_dyu        = .true., &
@@ -250,7 +250,7 @@
       !---------------------------------------------------------------
 
       namelist / icefields_nml /     &
-           f_tmask    , &
+           f_tmask    , f_blkmask  , &
            f_tarea    , f_uarea    , &
            f_dxt      , f_dyt      , &
            f_dxu      , f_dyu      , &
@@ -328,16 +328,17 @@
 
       integer (kind=int_kind), parameter, public :: &
            n_tmask      = 1,  &
-           n_tarea      = 2,  &
-           n_uarea      = 3,  &
-           n_dxt        = 4,  &
-           n_dyt        = 5,  &
-           n_dxu        = 6,  & 
-           n_dyu        = 7,  &
-           n_HTN        = 8,  &
-           n_HTE        = 9,  &
-           n_ANGLE      = 10, &
-           n_ANGLET     = 11, &
+           n_blkmask    = 2,  &
+           n_tarea      = 3,  &
+           n_uarea      = 4,  &
+           n_dxt        = 5,  &
+           n_dyt        = 6,  &
+           n_dxu        = 7,  & 
+           n_dyu        = 8,  &
+           n_HTN        = 9,  &
+           n_HTE        = 10, &
+           n_ANGLE      = 11, &
+           n_ANGLET     = 12, &
 
            n_NCAT       = 1, &
            n_VGRDi      = 2, &
