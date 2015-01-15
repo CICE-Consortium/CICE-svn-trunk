@@ -2215,24 +2215,29 @@
       !-----------------------------------------------------------------
 
       do k2 = 1, nlyr
-
          do ij = 1, icells
             hq(ij,k2) = c0
          enddo
+      enddo                     ! k
 
-         do k1 = 1, nlyr
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
-            do ij = 1, icells
-               hovlp = min (z1(ij,k1+1), z2(ij,k2+1)) &
-                     - max (z1(ij,k1),   z2(ij,k2))
-               hovlp = max (hovlp, c0)
-
-               hq(ij,k2) = hq(ij,k2) + hovlp*qn(ij,k1)
-            enddo               ! ij
-         enddo                  ! kold
-      enddo                     ! k
+      do ij = 1, icells
+         k1 = 1
+         k2 = 1
+         do while (k1 <= nlyr .and. k2 <= nlyr)
+            hovlp = min (z1(ij,k1+1), z2(ij,k2+1)) &
+                  - max (z1(ij,k1),   z2(ij,k2))
+            hovlp = max (hovlp, c0)
+            hq(ij,k2) = hq(ij,k2) + hovlp*qn(ij,k1)
+            if (z1(ij,k1+1) > z2(ij,k2+1)) then
+               k2 = k2 + 1
+            else
+               k1 = k1 + 1
+            endif
+         enddo                  ! while
+      enddo                     ! ij
 
       !-----------------------------------------------------------------
       ! Compute new enthalpies.

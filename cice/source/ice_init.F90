@@ -82,8 +82,8 @@
                            ntrcr
       use ice_meltpond_cesm, only: restart_pond_cesm, hs0
       use ice_meltpond_topo, only: hp1, restart_pond_topo
-      use ice_meltpond_lvl, only: restart_pond_lvl, dpscale, frzpnd, snowinfil, &
-                                          rfracmin, rfracmax, pndaspect, hs1
+      use ice_meltpond_lvl, only: restart_pond_lvl, dpscale, frzpnd, &
+                                  rfracmin, rfracmax, pndaspect, hs1
       use ice_aerosol, only: restart_aero
       use ice_therm_shared, only: ktherm, calc_Tsfc, conduct
       use ice_therm_vertical, only: ustar_min
@@ -146,7 +146,7 @@
         dT_mlt,         rsnw_mlt
 
       namelist /ponds_nml/ &
-        hs0,            dpscale,         frzpnd,        snowinfil,      &
+        hs0,            dpscale,         frzpnd,                        &
         rfracmin,       rfracmax,        pndaspect,     hs1,            &
         hp1
 
@@ -246,7 +246,6 @@
       hs1       = 0.03_dbl_kind   ! snow depth for transition to bare pond ice (m)
       dpscale   = c1              ! alter e-folding time scale for flushing 
       frzpnd    = 'cesm'          ! melt pond refreezing parameterization
-      snowinfil = .true.          ! snow infiltration by melt water
       rfracmin  = 0.15_dbl_kind   ! minimum retained fraction of meltwater
       rfracmax  = 0.85_dbl_kind   ! maximum retained fraction of meltwater
       pndaspect = 0.8_dbl_kind    ! ratio of pond depth to area fraction
@@ -513,7 +512,7 @@
       if (tr_pond_cesm .and. trim(frzpnd) /= 'cesm') then
          if (my_task == master_task) then
             write (nu_diag,*) 'WARNING: tr_pond_cesm=T'
-            write (nu_diag,*) 'WARNING: frzpnd, dpscale, snowinfil not used'
+            write (nu_diag,*) 'WARNING: frzpnd, dpscale not used'
          endif
          frzpnd = 'cesm'
       endif
@@ -667,7 +666,6 @@
       call broadcast_scalar(hs1,                master_task)
       call broadcast_scalar(dpscale,            master_task)
       call broadcast_scalar(frzpnd,             master_task)
-      call broadcast_scalar(snowinfil,          master_task)
       call broadcast_scalar(rfracmin,           master_task)
       call broadcast_scalar(rfracmax,           master_task)
       call broadcast_scalar(pndaspect,          master_task)
@@ -848,7 +846,6 @@
          write(nu_diag,1000) ' hs1                       = ', hs1
          write(nu_diag,1000) ' dpscale                   = ', dpscale
          write(nu_diag,1030) ' frzpnd                    = ', trim(frzpnd)
-         write(nu_diag,1010) ' snowinfil                 = ', snowinfil
          endif
          if (tr_pond .and. .not. tr_pond_lvl) &
          write(nu_diag,1000) ' pndaspect                 = ', pndaspect

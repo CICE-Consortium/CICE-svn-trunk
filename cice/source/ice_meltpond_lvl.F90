@@ -27,9 +27,7 @@
                 write_restart_pond_lvl, read_restart_pond_lvl
 
       logical (kind=log_kind), public :: & 
-         restart_pond_lvl, & ! if .true., read meltponds restart file
-         snowinfil           ! if .true., adjust snow depth/area in dEdd
-                             !            for infiltration of melt water
+         restart_pond_lvl    ! if .true., read meltponds restart file
 
       character (len=char_len), public :: &
          frzpnd              ! pond refreezing parameterization
@@ -88,8 +86,8 @@
                                    dhs,   ffrac,        &
                                    aicen, vicen, vsnon, &
                                    qicen, sicen,        &
-                                   Tsfcn, alvl, &
-                                   apnd,  hpnd, ipnd)
+                                   Tsfcn, alvl,         &
+                                   apnd,  hpnd,  ipnd)
 
       use ice_constants, only: viscosity_dyn
       use ice_domain_size, only: nilyr
@@ -106,21 +104,21 @@
          pndaspect   ! ratio of pond depth to pond fraction
 
       character (len=char_len), intent(in) :: &
-         frzpnd       ! pond refreezing parameterization
+         frzpnd      ! pond refreezing parameterization
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(in) :: &
-         Tsfcn, &
-         alvl,  &
+         Tsfcn, &    ! surface temperature (C)
+         alvl,  &    ! fraction of level ice
          rfrac, &    ! water fraction retained for melt ponds
-         meltt, &
-         melts, &
-         frain, &
+         meltt, &    ! top melt rate (m/s)
+         melts, &    ! snow melt rate (m/s)
+         frain, &    ! rainfall rate (kg/m2/s)
          Tair,  &    ! air temperature (K)
          fsurfn,&    ! atm-ice surface heat flux  (W/m2)
-         aicen, &
-         vicen, &
-         vsnon
+         aicen, &    ! ice area fraction
+         vicen, &    ! ice volume (m)
+         vsnon       ! snow volume (m)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(inout) :: &
@@ -138,18 +136,18 @@
          intent(out) :: &
          ffrac     ! fraction of fsurfn over pond used to melt ipond
 
-!     local temporary variables
+      ! local temporary variables
 
       real (kind=dbl_kind), dimension(nx_block,ny_block) :: &
-         volpn 
+         volpn     ! pond volume per unit area (m)
 
       real (kind=dbl_kind), dimension (nilyr) :: &
-         Tmlt      ! melting temperature 
+         Tmlt      ! melting temperature (C)
 
       integer (kind=int_kind), dimension (nx_block*ny_block) :: &
          indxi, indxj     ! compressed indices for cells with ice melting
 
-      integer (kind=int_kind) :: i,j,ij,icells
+      integer (kind=int_kind) :: i, j, ij, icells ! indices
 
       real (kind=dbl_kind) :: &
          hi                     , & ! ice thickness (m)
@@ -157,9 +155,9 @@
          dTs                    , & ! surface temperature diff for freeze-up (C)
          Tp                     , & ! pond freezing temperature (C)
          Ts                     , & ! surface air temperature (C)
-         apondn, &
-         hpondn, &
-         dvn   , &
+         apondn                 , & ! local pond area 
+         hpondn                 , & ! local pond depth (m)
+         dvn                    , & ! change in pond volume (m)
          hlid, alid             , & ! refrozen lid thickness, area
          dhlid                  , & ! change in refrozen lid thickness
          bdt                    , & ! 2 kice dT dt / (rhoi Lfresh)
@@ -207,9 +205,10 @@
 
          if (hi < hi_min) then
 
-         !--------------------------------------------------------------
-         ! Remove ponds on thin ice
-         !--------------------------------------------------------------
+            !-----------------------------------------------------------
+            ! Remove ponds on thin ice
+            !-----------------------------------------------------------
+
             apondn = c0
             hpondn = c0
             volpn (i,j) = c0
