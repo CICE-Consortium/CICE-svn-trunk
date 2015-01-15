@@ -122,7 +122,6 @@
   , hs1             = 0.03
   , dpscale         = 1.e-3
   , frzpnd          = 'hlid'
-  , snowinfil       = .true.
   , rfracmin        = 0.15
   , rfracmax        = 1.
   , pndaspect       = 0.8

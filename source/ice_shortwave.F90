@@ -1090,7 +1090,7 @@
       use ice_calendar, only: dt
       use ice_meltpond_cesm, only: hs0
       use ice_meltpond_topo, only: hp1
-      use ice_meltpond_lvl, only: hs1, pndaspect, snowinfil
+      use ice_meltpond_lvl, only: hs1, pndaspect
       use ice_orbital, only: compute_coszen
       use ice_state, only: ntrcr, nt_Tsfc, nt_alvl, nt_apnd, nt_hpnd, nt_ipnd, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo
@@ -1293,7 +1293,7 @@
 
                ! infiltrate snow
                hp = hpn(i,j)
-               if (snowinfil .and. hp > puny) then
+               if (hp > puny) then
                   hs = hsn(i,j)
                   rp = rhofresh*hp/(rhofresh*hp + rhos*hs)
                   if (rp < p15) then
@@ -1309,8 +1309,7 @@
                      fpn(i,j) = fpn(i,j) * tmp
                   endif
                   fsn(i,j) = min(fsn(i,j), c1-fpn(i,j))
-
-               endif ! snowinfil
+               endif      ! hp > puny
 
                ! endif    ! masking by lid ice
                apeffn(i,j,n) = fpn(i,j) ! for history

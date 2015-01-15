@@ -175,6 +175,13 @@
       f_bounds = .false.
 #endif
 
+      ! write dimensions for 3D or 4D history variables
+      ! note: list of variables checked here is incomplete
+      if (f_aicen(1:1) /= 'x' .or. f_vicen(1:1) /= 'x' .or. &
+          f_Tinz (1:1) /= 'x' .or. f_Sinz (1:1) /= 'x') f_NCAT  = .true.
+      if (f_Tinz (1:1) /= 'x' .or. f_Sinz (1:1) /= 'x') f_VGRDi = .true.
+      if (f_Tsnz (1:1) /= 'x')                          f_VGRDs = .true.
+
       call broadcast_scalar (f_tmask, master_task)
       call broadcast_scalar (f_blkmask, master_task)
       call broadcast_scalar (f_tarea, master_task)

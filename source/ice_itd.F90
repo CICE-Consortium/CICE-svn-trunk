@@ -1665,7 +1665,6 @@
                            aicen, &
                            aice,     aice0)
 
-
       if (limit_aice) then  ! check for aice out of bounds
       
          do j = jlo,jhi
