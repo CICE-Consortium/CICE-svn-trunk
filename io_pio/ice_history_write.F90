@@ -1,8 +1,4 @@
 !  SVN:$Id: ice_history_write.F90 567 2013-01-07 02:57:36Z eclare $
-
-! NOTE 4D variables are not available with PIO.
-! Search for '1==0' to find related code
-
 !=======================================================================
 !
 ! Writes history in netCDF format
@@ -126,9 +122,7 @@
 
       real (kind=dbl_kind), allocatable :: workr2(:,:,:)
       real (kind=dbl_kind), allocatable :: workr3(:,:,:,:)
-#if 1==0
       real (kind=dbl_kind), allocatable :: workr4(:,:,:,:,:)
-#endif
       real (kind=dbl_kind), allocatable :: workr3v(:,:,:,:)
 
       character(len=char_len_long) :: &
@@ -164,9 +158,7 @@
       call ice_pio_initdecomp(ndim3=nzlyr,     iodesc=iodesc3di)
       call ice_pio_initdecomp(ndim3=nzlyrb,    iodesc=iodesc3db)
       call ice_pio_initdecomp(ndim3=nverts, inner_dim=.true., iodesc=iodesc3dv)
-#if 1==0
       call ice_pio_initdecomp(ndim3=nzlyr,  ndim4=ncat_hist,  iodesc=iodesc4di)
-#endif
 
 !      ltime = time/int(secday)
       ltime = real(time/int(secday),kind=real_kind)
@@ -346,7 +338,7 @@
            status = pio_put_att(File, varid,'_FillValue',spval)
         endif
 
-        do i = 3, nvar      ! note n_tmask=1, n_blkmask=2
+        do i = 3, nvar       ! note: n_tmask=1, n_blkmask=2
           if (igrd(i)) then
              status = pio_def_var(File, trim(var(i)%req%short_name), &
                                    pio_real, dimid2, varid)
@@ -543,10 +535,6 @@
       ! 4D (ice categories and layers)
       !-----------------------------------------------------------------
 
-!!! 4D is not available with PIO
-#if 1==0
-!!! this part works properly
-
         dimidcz(1) = imtid
         dimidcz(2) = jmtid
         dimidcz(3) = kmtidi
@@ -656,9 +644,6 @@
             endif
           endif
         enddo  ! num_avail_hist_fields_4Db
-
-!end of 4D definitions, not available in PIO
-#endif
 
       !-----------------------------------------------------------------
       ! global attributes
@@ -773,7 +758,6 @@
         call pio_write_darray(File, varid, iodesc2d, &
                               workr2, status, fillval=spval_dbl)
       endif
-
       if (igrd(n_blkmask)) then
         workr2 = bm
         status = pio_inq_varid(File, 'blkmask', varid)
@@ -781,7 +765,7 @@
                               workr2, status, fillval=spval_dbl)
       endif
 
-      do i = 3, nvar      ! note n_tmask=1, n_blkmask=2
+      do i = 3, nvar       ! note: n_tmask=1, n_blkmask=2
         if (igrd(i)) then
         SELECT CASE (var(i)%req%short_name)
           CASE ('tarea')
@@ -927,9 +911,7 @@
       enddo ! num_avail_hist_fields_3Db
       deallocate(workr3)
 
-#if 1==0
-!!! 4D variables are not available with PIO
-      allocate(workr4(nx_block,ny_block,nblocks,nzlyr,ncat_hist))
+      allocate(workr4(nx_block,ny_block,nblocks,ncat_hist,nzlyr))
       ! 4D (categories, vertical ice)
       do n = n3Dbcum+1, n4Dicum
          nn = n - n3Dbcum
@@ -940,7 +922,7 @@
             do j = 1, nblocks
             do i = 1, ncat_hist
             do k = 1, nzilyr
-               workr4(:,:,j,k,i) = a4Di(:,:,k,i,nn,j)
+               workr4(:,:,j,i,k) = a4Di(:,:,k,i,nn,j)
             enddo ! k
             enddo ! i
             enddo ! j
@@ -951,10 +933,8 @@
       enddo ! num_avail_hist_fields_4Di
       deallocate(workr4)
 
-      similarly for num_avail_hist_fields_4Ds (define workr4s, iodesc4ds)
-      similarly for num_avail_hist_fields_4Db (define workr4b, iodesc4db)
-!end of 4D definitions, not available in PIO
-#endif
+!     similarly for num_avail_hist_fields_4Ds (define workr4s, iodesc4ds)
+!     similarly for num_avail_hist_fields_4Db (define workr4b, iodesc4db)
 
       !-----------------------------------------------------------------
       ! close output dataset
@@ -975,9 +955,7 @@
       call pio_freedecomp(File,iodesc3dc)
       call pio_freedecomp(File,iodesc3di)
       call pio_freedecomp(File,iodesc3db)
-#if 1==0
       call pio_freedecomp(File,iodesc4di)
-#endif
 
 #endif
 

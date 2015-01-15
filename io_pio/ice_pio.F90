@@ -24,6 +24,7 @@
   interface ice_pio_initdecomp
      module procedure ice_pio_initdecomp_2d
      module procedure ice_pio_initdecomp_3d
+     module procedure ice_pio_initdecomp_4d
      module procedure ice_pio_initdecomp_3d_inner
   end interface
 
@@ -269,6 +270,57 @@
 
    end subroutine ice_pio_initdecomp_3d_inner
 
+   subroutine ice_pio_initdecomp_4d (ndim3, ndim4, iodesc)
+
+      integer(kind=int_kind), intent(in) :: ndim3, ndim4
+      type(io_desc_t), intent(out) :: iodesc
+
+      integer (kind=int_kind) :: &
+          iblk,ilo,ihi,jlo,jhi,lon,lat,i,j,n,k,l 
+
+      type(block) :: this_block 
+
+      integer(kind=int_kind), pointer :: dof4d(:)
+
+      allocate(dof4d(nx_block*ny_block*nblocks*ndim3*ndim4))
+
+      n=0
+      do l=1,ndim4
+      do k=1,ndim3
+      do iblk = 1, nblocks
+         this_block = get_block(blocks_ice(iblk),iblk)         
+         ilo = this_block%ilo
+         ihi = this_block%ihi
+         jlo = this_block%jlo
+         jhi = this_block%jhi
+         
+         do j=1,ny_block
+         do i=1,nx_block
+            n = n+1
+            if (j < jlo .or. j>jhi) then
+               dof4d(n)=0
+            else if (i < ilo .or. i > ihi) then
+               dof4d(n) = 0
+            else
+               lon = this_block%i_glob(i)
+               lat = this_block%j_glob(j)
+               dof4d(n) = ((lat-1)*nx_global + lon) &
+                        + (k-1)*nx_global*ny_global & 
+                        + (l-1)*nx_global*ny_global*ndim3 
+            endif
+         enddo !i
+         enddo !j
+      enddo ! iblk
+      enddo !ndim3
+      enddo !ndim4
+
+      call pio_initdecomp(ice_pio_subsystem, pio_double, &
+          (/nx_global,ny_global,ndim3,ndim4/), dof4d, iodesc)
+
+      deallocate(dof4d)
+
+   end subroutine ice_pio_initdecomp_4d
+   
 !================================================================================
 
   end module ice_pio
