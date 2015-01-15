@@ -6,7 +6,8 @@ module ice_import_export
   use ice_constants   , only: c0, c1, puny, tffresh, spval_dbl
   use ice_constants   , only: field_loc_center, field_type_scalar
   use ice_constants   , only: field_type_vector, c100
-  use ice_constants   , only: vonkar, zref
+  use ice_constants   , only: vonkar, zref, iceruf
+  use ice_constants   , only: p001
   use ice_blocks      , only: block, get_block, nx_block, ny_block
   use ice_flux        , only: strairxt, strairyt, strocnxt, strocnyt           
   use ice_flux        , only: alvdr, alidr, alvdf, alidf, Tref, Qref, Uref
@@ -282,9 +283,15 @@ contains
                   - workx*sin(ANGLET(i,j,iblk))
 
              sst(i,j,iblk) = sst(i,j,iblk) - Tffresh       ! sea sfc temp (C)
-             Tf (i,j,iblk) = -1.8_dbl_kind                 ! hardwired for NCOM
-             !         Tf (i,j,iblk) = -depressT*sss(i,j,iblk)       ! freezing temp (C)
-             !         Tf (i,j,iblk) = -depressT*max(sss(i,j,iblk),ice_ref_salinity)
+
+#ifdef RASM_MODS
+             sss(i,j,iblk)=max(sss(i,j,iblk),c0)
+             Tf (i,j,iblk) = sss(i,j,iblk) / (-18.48_dbl_kind &
+                             + ((18.48_dbl_kind*p001)*sss(i,j,iblk)))
+#else
+             ! CESM coupling hardwired 
+             Tf (i,j,iblk) = -1.8_dbl_kind 
+#endif
 
           enddo
        enddo
@@ -464,11 +471,12 @@ contains
 
                 if (index_i2x_Si_logz0 > 0) then
                 if (Cdn_atm(i,j,iblk) > c0) then
-                   i2x(index_i2x_Si_logz0 ,n)    = log(zref)-(vonkar/sqrt(Cdn_atm(i,j,iblk)))
+                 i2x(index_i2x_Si_logz0 ,n) = log(zref)-(vonkar/sqrt(Cdn_atm(i,j,iblk)))
                 else
-                   !--- tcraig, this should not happen but if it does, continue gracefully
-                   write(nu_diag,*) trim(subname),' WARNING: Cdn_atm error ',Cdn_atm(i,j,iblk),i,j,iblk
-                   i2x(index_i2x_Si_logz0 ,n)    = log(zref)
+                 !--- tcraig, this should not happen but if it does, continue gracefully
+                 write(nu_diag,*) trim(subname),&
+                      ' WARNING: Cdn_atm error ',Cdn_atm(i,j,iblk),i,j,iblk
+                 i2x(index_i2x_Si_logz0 ,n)    = log(iceruf)
                 endif
                 endif
 

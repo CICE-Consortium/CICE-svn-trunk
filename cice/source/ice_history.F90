@@ -356,7 +356,7 @@
              "positive is y direction on U grid", c1, c0,         &
              ns1, f_vvel)
       
-         call define_hist_field(n_sice,"sice","ppt",ustr2D, ucstr,  &
+         call define_hist_field(n_sice,"sice","ppt",tstr2D, tcstr,  &
              "bulk ice salinity",                                 &
              "none", c1, c0,                                      &
              ns1, f_sice)

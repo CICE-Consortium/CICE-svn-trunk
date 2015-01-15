@@ -327,9 +327,10 @@
 
       subroutine init_coupler_flux
 
-      use ice_constants, only: p001
+      use ice_constants, only: p001,vonkar,zref,iceruf
       use ice_therm_shared, only: ktherm
       use ice_zbgc_shared, only: flux_bio
+      use ice_atmo, only: Cdn_atm
 
       integer (kind=int_kind) :: n
 
@@ -473,6 +474,8 @@
       scale_factor(:,:,:) = c1        ! shortwave scaling factor 
       wind    (:,:,:) = sqrt(uatm(:,:,:)**2 &
                            + vatm(:,:,:)**2)  ! wind speed, (m/s)
+      Cdn_atm(:,:,:) = (vonkar/log(zref/iceruf)) &
+                     * (vonkar/log(zref/iceruf)) ! atmo drag for RASM
 
       end subroutine init_coupler_flux
 
@@ -549,6 +552,7 @@
                           Cdn_atm_ocn, Cdn_ocn, Cdn_ocn_keel, &
                           Cdn_ocn_floe, Cdn_ocn_skin
       use ice_state, only: aice, vice, trcr, tr_iage, nt_iage
+      use ice_constants, only: vonkar,zref,iceruf
 
       fsurf  (:,:,:) = c0
       fcondtop(:,:,:)= c0
@@ -582,7 +586,8 @@
       ! drag coefficients are computed prior to the atmo_boundary call, 
       ! during the thermodynamics section 
       Cdn_ocn(:,:,:) = dragio
-      Cdn_atm(:,:,:) = c0
+      Cdn_atm(:,:,:) = (vonkar/log(zref/iceruf)) &
+                     * (vonkar/log(zref/iceruf)) ! atmo drag for RASM
 
       if (formdrag) then
         Cdn_atm_rdg (:,:,:) = c0
