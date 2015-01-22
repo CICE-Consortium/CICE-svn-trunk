@@ -1186,6 +1186,7 @@
 
       subroutine read_restart_bgc()
 
+      use ice_constants, only: field_loc_center, field_type_scalar
       use ice_domain_size, only: ncat
       use ice_state, only: trcrn
       use ice_restart,only: read_restart_field
@@ -1203,31 +1204,31 @@
       if (my_task == master_task) write(nu_diag,*) 'skl bgc restart'
 
       call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_N_sk,:,:), &
-           'ruf8','bgc_N_sk',ncat,diag)
+           'ruf8','bgc_N_sk',ncat,diag,field_loc_center,field_type_scalar)
       if (tr_bgc_C_sk) &
       call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_C_sk,:,:), &
-           'ruf8','bgc_C_sk',ncat,diag)
+           'ruf8','bgc_C_sk',ncat,diag,field_loc_center,field_type_scalar)
       if (tr_bgc_chl_sk) &
       call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_chl_sk,:,:), &
-           'ruf8','bgc_chl_sk',ncat,diag)
+           'ruf8','bgc_chl_sk',ncat,diag,field_loc_center,field_type_scalar)
       if (tr_bgc_Nit_sk) &
       call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_Nit_sk,:,:), &
-           'ruf8','bgc_Nit_sk',ncat,diag)
+           'ruf8','bgc_Nit_sk',ncat,diag,field_loc_center,field_type_scalar)
       if (tr_bgc_Am_sk) &
       call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_Am_sk,:,:), &
-           'ruf8','bgc_Am_sk',ncat,diag)
+           'ruf8','bgc_Am_sk',ncat,diag,field_loc_center,field_type_scalar)
       if (tr_bgc_Sil_sk) &
       call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_Sil_sk,:,:), &
-           'ruf8','bgc_Sil_sk',ncat,diag)
+           'ruf8','bgc_Sil_sk',ncat,diag,field_loc_center,field_type_scalar)
       if(tr_bgc_DMSPp_sk) &
       call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_DMSPp_sk,:,:), &
-           'ruf8','bgc_DMSPp_sk',ncat,diag)
+           'ruf8','bgc_DMSPp_sk',ncat,diag,field_loc_center,field_type_scalar)
       if (tr_bgc_DMSPd_sk) &
       call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_DMSPd_sk,:,:), &
-           'ruf8','bgc_DMSPd_sk',ncat,diag)
+           'ruf8','bgc_DMSPd_sk',ncat,diag,field_loc_center,field_type_scalar)
       if (tr_bgc_DMS_sk) &
       call read_restart_field(nu_restart_bgc,0,trcrn(:,:,nt_bgc_DMS_sk,:,:), &
-           'ruf8','bgc_DMS_sk',ncat,diag)
+           'ruf8','bgc_DMS_sk',ncat,diag,field_loc_center,field_type_scalar)
 
       !-----------------------------------------------------------------
       ! Ocean BGC
@@ -1236,17 +1237,23 @@
       if (my_task == master_task) write(nu_diag,*) 'mixed layer ocean bgc restart'
 
       if (tr_bgc_N_sk) &
-      call read_restart_field(nu_restart_bgc,0,algalN,'ruf8','algalN',1,diag)
+      call read_restart_field(nu_restart_bgc,0,algalN,'ruf8','algalN',&
+                              1,diag,field_loc_center,field_type_scalar)
       if (tr_bgc_Nit_sk) &
-      call read_restart_field(nu_restart_bgc,0,nit   ,'ruf8','nit'   ,1,diag)
+      call read_restart_field(nu_restart_bgc,0,nit   ,'ruf8','nit'   ,&
+                              1,diag,field_loc_center,field_type_scalar)
       if (tr_bgc_Am_sk) &
-      call read_restart_field(nu_restart_bgc,0,amm   ,'ruf8','amm'   ,1,diag)
+      call read_restart_field(nu_restart_bgc,0,amm   ,'ruf8','amm'   ,&
+                              1,diag,field_loc_center,field_type_scalar)
       if (tr_bgc_Sil_sk) &
-      call read_restart_field(nu_restart_bgc,0,sil   ,'ruf8','sil'   ,1,diag)
+      call read_restart_field(nu_restart_bgc,0,sil   ,'ruf8','sil'   ,&
+                              1,diag,field_loc_center,field_type_scalar)
       if (tr_bgc_DMSPp_sk) &
-      call read_restart_field(nu_restart_bgc,0,dmsp  ,'ruf8','dmsp'  ,1,diag)
+      call read_restart_field(nu_restart_bgc,0,dmsp  ,'ruf8','dmsp'  ,&
+                              1,diag,field_loc_center,field_type_scalar)
       if (tr_bgc_DMS_sk) &
-      call read_restart_field(nu_restart_bgc,0,dms   ,'ruf8','dms'   ,1,diag)
+      call read_restart_field(nu_restart_bgc,0,dms   ,'ruf8','dms'   ,&
+                              1,diag,field_loc_center,field_type_scalar)
 
       end subroutine read_restart_bgc
 

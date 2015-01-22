@@ -463,17 +463,17 @@
       if (my_task == master_task) write(nu_diag,*) 'min/max level-ice ponds'
 
       call read_restart_field(nu_restart_pond,0, trcrn(:,:,nt_apnd,:,:),'ruf8', &
-                              'apnd',ncat,diag)
+                              'apnd',ncat,diag,field_loc_center,field_type_scalar)
       call read_restart_field(nu_restart_pond,0, trcrn(:,:,nt_hpnd,:,:),'ruf8', &
-                              'hpnd',ncat,diag)
+                              'hpnd',ncat,diag,field_loc_center,field_type_scalar)
       call read_restart_field(nu_restart_pond,0, trcrn(:,:,nt_ipnd,:,:),'ruf8', &
-                              'ipnd',ncat,diag)
+                              'ipnd',ncat,diag,field_loc_center,field_type_scalar)
       call read_restart_field(nu_restart_pond,0, fsnow(:,:,          :),'ruf8', &
-                              'fsnow',1,diag)
+                              'fsnow',1,diag,field_loc_center,field_type_scalar)
       call read_restart_field(nu_restart_pond,0,  dhsn(:,:,        :,:),'ruf8', &
-                              'dhs',ncat,diag)
+                              'dhs',ncat,diag,field_loc_center,field_type_scalar)
       call read_restart_field(nu_restart_pond,0,ffracn(:,:,        :,:),'ruf8', &
-                              'ffrac',ncat,diag)
+                              'ffrac',ncat,diag,field_loc_center,field_type_scalar)
 
       end subroutine read_restart_pond_lvl
 
