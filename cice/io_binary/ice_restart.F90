@@ -76,7 +76,11 @@
 
       if (my_task == master_task) then
          write(nu_diag,*) 'Using restart dump=', trim(filename)
-         call ice_open(nu_restart,trim(filename),0)
+         if (restart_ext) then
+            call ice_open_ext(nu_restart,trim(filename),0)
+         else
+            call ice_open(nu_restart,trim(filename),0)
+         endif
          if (use_restart_time) then
             read (nu_restart) istep0,time,time_forc
          else
@@ -103,7 +107,11 @@
                string1(1:lenstr(string1)), &
                restart_file(1:lenstr(restart_file)),'.eap', &
                string2(1:lenstr(string2))
-            call ice_open(nu_restart_eap,filename,0)
+            if (restart_ext) then
+               call ice_open_ext(nu_restart_eap,filename,0)
+            else
+               call ice_open(nu_restart_eap,filename,0)
+            endif
             read (nu_restart_eap) iignore,rignore,rignore
             write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
          endif
@@ -119,7 +127,11 @@
                string1(1:lenstr(string1)), &
                restart_file(1:lenstr(restart_file)),'.iage', &
                string2(1:lenstr(string2))
-            call ice_open(nu_restart_age,filename,0)
+            if (restart_ext) then
+               call ice_open_ext(nu_restart_age,filename,0)
+            else
+               call ice_open(nu_restart_age,filename,0)
+            endif
             read (nu_restart_age) iignore,rignore,rignore
             write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
          endif
@@ -135,7 +147,11 @@
                string1(1:lenstr(string1)), &
                restart_file(1:lenstr(restart_file)),'.FY', &
                string2(1:lenstr(string2))
-            call ice_open(nu_restart_FY,filename,0)
+            if (restart_ext) then
+               call ice_open_ext(nu_restart_FY,filename,0)
+            else
+               call ice_open(nu_restart_FY,filename,0)
+            endif
             read (nu_restart_FY) iignore,rignore,rignore
             write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
          endif
@@ -151,7 +167,11 @@
                string1(1:lenstr(string1)), &
                restart_file(1:lenstr(restart_file)),'.lvl', &
                string2(1:lenstr(string2))
-            call ice_open(nu_restart_lvl,filename,0)
+            if (restart_ext) then
+               call ice_open_ext(nu_restart_lvl,filename,0)
+            else
+               call ice_open(nu_restart_lvl,filename,0)
+            endif
             read (nu_restart_lvl) iignore,rignore,rignore
             write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
          endif
@@ -167,7 +187,11 @@
                string1(1:lenstr(string1)), &
                restart_file(1:lenstr(restart_file)),'.pond_cesm', &
                string2(1:lenstr(string2))
-            call ice_open(nu_restart_pond,filename,0)
+            if (restart_ext) then
+               call ice_open_ext(nu_restart_pond,filename,0)
+            else
+               call ice_open(nu_restart_pond,filename,0)
+            endif
             read (nu_restart_pond) iignore,rignore,rignore
             write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
          endif
@@ -183,7 +207,11 @@
                string1(1:lenstr(string1)), &
                restart_file(1:lenstr(restart_file)),'.pond_lvl', &
                string2(1:lenstr(string2))
-            call ice_open(nu_restart_pond,filename,0)
+            if (restart_ext) then
+               call ice_open_ext(nu_restart_pond,filename,0)
+            else
+               call ice_open(nu_restart_pond,filename,0)
+            endif
             read (nu_restart_pond) iignore,rignore,rignore
             write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
          endif
@@ -199,7 +227,11 @@
                string1(1:lenstr(string1)), &
                restart_file(1:lenstr(restart_file)),'.pond_topo', &
                string2(1:lenstr(string2))
-            call ice_open(nu_restart_pond,filename,0)
+            if (restart_ext) then
+               call ice_open_ext(nu_restart_pond,filename,0)
+            else
+               call ice_open(nu_restart_pond,filename,0)
+            endif
             read (nu_restart_pond) iignore,rignore,rignore
             write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
          endif
@@ -215,7 +247,11 @@
                string1(1:lenstr(string1)), &
                restart_file(1:lenstr(restart_file)),'.brine', &
                string2(1:lenstr(string2))
-            call ice_open(nu_restart_hbrine,filename,0)
+            if (restart_ext) then
+               call ice_open_ext(nu_restart_hbrine,filename,0)
+            else
+               call ice_open(nu_restart_hbrine,filename,0)
+            endif
             read (nu_restart_hbrine) iignore,rignore,rignore
             write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
          endif
@@ -231,7 +267,11 @@
                string1(1:lenstr(string1)), &
                restart_file(1:lenstr(restart_file)),'.bgc', &
                string2(1:lenstr(string2))
-            call ice_open(nu_restart_bgc,filename,0)
+            if (restart_ext) then
+               call ice_open_ext(nu_restart_bgc,filename,0)
+            else
+               call ice_open(nu_restart_bgc,filename,0)
+            endif
             read (nu_restart_bgc) iignore,rignore,rignore
             write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
          endif
@@ -247,7 +287,11 @@
                string1(1:lenstr(string1)), &
                restart_file(1:lenstr(restart_file)),'.aero', &
                string2(1:lenstr(string2))
-            call ice_open(nu_restart_aero,filename,0)
+            if (restart_ext) then
+               call ice_open_ext(nu_restart_aero,filename,0)
+            else
+               call ice_open(nu_restart_aero,filename,0)
+            endif
             read (nu_restart_aero) iignore,rignore,rignore
             write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
          endif
@@ -301,7 +345,11 @@
          open(nu_rst_pointer,file=pointer_file)
          write(nu_rst_pointer,'(a)') filename
          close(nu_rst_pointer)
-         call ice_open(nu_dump,filename,0)
+         if (restart_ext) then
+            call ice_open_ext(nu_dump,filename,0)
+         else
+            call ice_open(nu_dump,filename,0)
+         endif
          write(nu_dump) istep1,time,time_forc
          write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
       endif
@@ -315,7 +363,11 @@
               restart_file(1:lenstr(restart_file)),'.eap.', &
               iyear,'-',month,'-',mday,'-',sec
 
-         call ice_open(nu_dump_eap,filename,0)
+         if (restart_ext) then
+            call ice_open_ext(nu_dump_eap,filename,0)
+         else
+            call ice_open(nu_dump_eap,filename,0)
+         endif
 
          if (my_task == master_task) then
            write(nu_dump_eap) istep1,time,time_forc
@@ -331,7 +383,11 @@
               restart_file(1:lenstr(restart_file)),'.FY.', &
               iyear,'-',month,'-',mday,'-',sec
 
-         call ice_open(nu_dump_FY,filename,0)
+         if (restart_ext) then
+            call ice_open_ext(nu_dump_FY,filename,0)
+         else
+            call ice_open(nu_dump_FY,filename,0)
+         endif
 
          if (my_task == master_task) then
            write(nu_dump_FY) istep1,time,time_forc
@@ -347,7 +403,11 @@
               restart_file(1:lenstr(restart_file)),'.iage.', &
               iyear,'-',month,'-',mday,'-',sec
 
-         call ice_open(nu_dump_age,filename,0)
+         if (restart_ext) then
+            call ice_open_ext(nu_dump_age,filename,0)
+         else
+            call ice_open(nu_dump_age,filename,0)
+         endif
 
          if (my_task == master_task) then
            write(nu_dump_age) istep1,time,time_forc
@@ -363,7 +423,11 @@
               restart_file(1:lenstr(restart_file)),'.lvl.', &
               iyear,'-',month,'-',mday,'-',sec
 
-         call ice_open(nu_dump_lvl,filename,0)
+         if (restart_ext) then
+            call ice_open_ext(nu_dump_lvl,filename,0)
+         else
+            call ice_open(nu_dump_lvl,filename,0)
+         endif
 
          if (my_task == master_task) then
            write(nu_dump_lvl) istep1,time,time_forc
@@ -379,7 +443,11 @@
               restart_file(1:lenstr(restart_file)),'.pond_cesm.', &
               iyear,'-',month,'-',mday,'-',sec
 
-         call ice_open(nu_dump_pond,filename,0)
+         if (restart_ext) then
+            call ice_open_ext(nu_dump_pond,filename,0)
+         else
+            call ice_open(nu_dump_pond,filename,0)
+         endif
 
          if (my_task == master_task) then
            write(nu_dump_pond) istep1,time,time_forc
@@ -395,7 +463,11 @@
               restart_file(1:lenstr(restart_file)),'.pond_lvl.', &
               iyear,'-',month,'-',mday,'-',sec
 
-         call ice_open(nu_dump_pond,filename,0)
+         if (restart_ext) then
+            call ice_open_ext(nu_dump_pond,filename,0)
+         else
+            call ice_open(nu_dump_pond,filename,0)
+         endif
 
          if (my_task == master_task) then
            write(nu_dump_pond) istep1,time,time_forc
@@ -411,7 +483,11 @@
               restart_file(1:lenstr(restart_file)),'.pond_topo.', &
               iyear,'-',month,'-',mday,'-',sec
 
-         call ice_open(nu_dump_pond,filename,0)
+         if (restart_ext) then
+            call ice_open_ext(nu_dump_pond,filename,0)
+         else
+            call ice_open(nu_dump_pond,filename,0)
+         endif
 
          if (my_task == master_task) then
            write(nu_dump_pond) istep1,time,time_forc
@@ -427,7 +503,11 @@
               restart_file(1:lenstr(restart_file)),'.brine.', &
               iyear,'-',month,'-',mday,'-',sec
 
-         call ice_open(nu_dump_hbrine,filename,0)
+         if (restart_ext) then
+            call ice_open_ext(nu_dump_hbrine,filename,0)
+         else
+            call ice_open(nu_dump_hbrine,filename,0)
+         endif
 
          if (my_task == master_task) then
            write(nu_dump_hbrine) istep1,time,time_forc
@@ -443,7 +523,11 @@
               restart_file(1:lenstr(restart_file)),'.bgc.', &
               iyear,'-',month,'-',mday,'-',sec
 
-         call ice_open(nu_dump_bgc,filename,0)
+         if (restart_ext) then
+            call ice_open_ext(nu_dump_bgc,filename,0)
+         else
+            call ice_open(nu_dump_bgc,filename,0)
+         endif
 
          if (my_task == master_task) then
            write(nu_dump_bgc) istep1,time,time_forc
@@ -459,7 +543,11 @@
               restart_file(1:lenstr(restart_file)),'.aero.', &
               iyear,'-',month,'-',mday,'-',sec
 
-         call ice_open(nu_dump_aero,filename,0)
+         if (restart_ext) then
+            call ice_open_ext(nu_dump_aero,filename,0)
+         else
+            call ice_open(nu_dump_aero,filename,0)
+         endif
 
          if (my_task == master_task) then
            write(nu_dump_aero) istep1,time,time_forc
