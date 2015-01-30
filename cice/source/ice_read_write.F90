@@ -29,6 +29,7 @@
 
       private
       public :: ice_open,           &
+                ice_open_ext,       &
                 ice_open_nc,        &
                 ice_read,           &
                 ice_read_ext,       &
@@ -126,7 +127,7 @@
             nx = nx_global + 2*nghost
             ny = ny_global + 2*nghost
 
-            open(nu,file=filename,recl=nxl*ny*nbits/8, &
+            open(nu,file=filename,recl=nx*ny*nbits/8, &
                   form='unformatted',access='direct')
          endif                   ! nbits = 0
 
