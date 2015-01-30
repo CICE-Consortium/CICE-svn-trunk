@@ -98,6 +98,44 @@
 
 !=======================================================================
 
+! Opens an unformatted file for reading, incl ghost cells (direct access).
+! nbits indicates whether the file is sequential or direct access.
+!
+! authors: Tony Craig, NCAR
+!          David Hebert, NRLSSC
+
+      subroutine ice_open_ext(nu, filename, nbits)
+
+      integer (kind=int_kind), intent(in) :: &
+           nu        , & ! unit number
+           nbits         ! no. of bits per variable (0 for sequential access)
+
+      character (*) :: filename
+
+      integer (kind=int_kind) :: &
+           nx, ny        ! grid dimensions including ghost cells
+
+      if (my_task == master_task) then
+
+         if (nbits == 0) then   ! sequential access
+
+            open(nu,file=filename,form='unformatted')
+
+         else                   ! direct access
+
+            nx = nx_global + 2*nghost
+            ny = ny_global + 2*nghost
+
+            open(nu,file=filename,recl=nxl*ny*nbits/8, &
+                  form='unformatted',access='direct')
+         endif                   ! nbits = 0
+
+      endif                      ! my_task = master_task
+
+      end subroutine ice_open_ext
+
+!=======================================================================
+
 ! Read an unformatted file and scatter to processors.
 ! work is a real array, atype indicates the format of the data.
 ! If the optional variables field_loc and field_type are present,
