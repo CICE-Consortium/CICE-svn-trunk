@@ -42,7 +42,7 @@
       use ice_calendar, only: istep0, istep1, time, time_forc, npt
       use ice_communicate, only: my_task, master_task
       use ice_dyn_shared, only: kdyn
-      use ice_read_write, only: ice_open
+      use ice_read_write, only: ice_open, ice_open_ext
 
       character(len=char_len_long), intent(in), optional :: ice_ic
 
@@ -315,7 +315,7 @@
                               time, time_forc, year_init
       use ice_communicate, only: my_task, master_task
       use ice_dyn_shared, only: kdyn
-      use ice_read_write, only: ice_open
+      use ice_read_write, only: ice_open, ice_open_ext
 
       character(len=char_len_long), intent(in), optional :: filename_spec
 
