@@ -892,7 +892,7 @@
       ! Skin drag (atmo)
       !------------------------------------------------------------	  
 
-          Cdn_atm_skin(i,j) = ai * csa*(c1 - mrdg*tmp1/distrdg(i,j))
+          Cdn_atm_skin(i,j) = csa*(c1 - mrdg*tmp1/distrdg(i,j))
           Cdn_atm_skin(i,j) = max(min(Cdn_atm_skin(i,j),camax),c0)
 
       !------------------------------------------------------------
@@ -902,7 +902,7 @@
           sca = c1 - exp(-sHGB*distrdg(i,j)/tmp1) ! see Eq. 9
           ctecar = cra*p5
           ! hridge relative to sea level
-          Cdn_atm_rdg(i,j) = ai * ctecar*tmp1/distrdg(i,j)*sca* &
+          Cdn_atm_rdg(i,j) = ctecar*tmp1/distrdg(i,j)*sca* &
                      (log(tmp1*icerufi)/log(zref*icerufi))**c2
           Cdn_atm_rdg(i,j) = min(Cdn_atm_rdg(i,j),camax)
 
@@ -922,7 +922,7 @@
           scw = c1 - exp(-sHGB*dkeel(i,j)/tmp1) 
           ctecwk = crw*p5
           ! hkeel relative to sea level
-          Cdn_ocn_keel(i,j) = ctecwk*ai*tmp1/dkeel(i,j)*scw* &
+          Cdn_ocn_keel(i,j) = ctecwk*tmp1/dkeel(i,j)*scw* &
                      (log(tmp1*icerufi)/log(zref*icerufi))**c2  
           Cdn_ocn_keel(i,j) = max(min(Cdn_ocn_keel(i,j),cwmax),c0)
   
@@ -935,7 +935,7 @@
         if (hfreebd(i,j) > puny) then
           sca = c1 - exp(-sl*beta*(c1-ai))
           ctecaf = cfa*p5*(log(hfreebd(i,j)*ocnrufi)/log(zref*ocnrufi))**c2*sca
-          Cdn_atm_floe(i,j) = ctecaf * hfreebd(i,j) * ai / lfloe(i,j)  
+          Cdn_atm_floe(i,j) = ctecaf * hfreebd(i,j) / lfloe(i,j)  
           Cdn_atm_floe(i,j) = max(min(Cdn_atm_floe(i,j),camax),c0)
         endif
 
@@ -946,7 +946,7 @@
         if (hfreebd(i,j) > puny) then
           sca = (apond)**(c1/(zref*beta))
           lp  = lpmin*(1-apond)+lpmax*apond
-          Cdn_atm_pond(i,j) = ai * cpa*p5*sca*apond*hfreebd(i,j)/lp &
+          Cdn_atm_pond(i,j) = cpa*p5*sca*apond*hfreebd(i,j)/lp &
                    * (log(hfreebd(i,j)*ocnrufi)/log(zref*ocnrufi))**c2
           Cdn_atm_pond(i,j) = min(Cdn_atm_pond(i,j),camax)
         endif
@@ -958,7 +958,7 @@
         if (hdraft(i,j) > puny) then
           scw = c1 - exp(-sl*beta*(c1-ai))
           ctecwf = cfw*p5*(log(hdraft(i,j)*ocnrufi)/log(zref*ocnrufi))**c2*scw
-          Cdn_ocn_floe(i,j) = ctecwf * hdraft(i,j) * ai / lfloe(i,j)
+          Cdn_ocn_floe(i,j) = ctecwf * hdraft(i,j) / lfloe(i,j)
           Cdn_ocn_floe(i,j) = max(min(Cdn_ocn_floe(i,j),cwmax),c0)
         endif
 
