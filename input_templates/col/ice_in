@@ -161,6 +161,7 @@
   , natmiter        = 5
   , precip_units    = 'mm_per_sec'
   , ustar_min       = 0.0005
+  , fbot_xfer_type  = 'constant'
   , update_ocn_f    = .false.
   , oceanmixed_ice  = .true.
   , ocn_data_format = 'nc'

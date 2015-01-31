@@ -86,7 +86,7 @@
                                   rfracmin, rfracmax, pndaspect, hs1
       use ice_aerosol, only: restart_aero
       use ice_therm_shared, only: ktherm, calc_Tsfc, conduct
-      use ice_therm_vertical, only: ustar_min
+      use ice_therm_vertical, only: ustar_min, fbot_xfer_type
       use ice_therm_mushy, only: a_rapid_mode, Rac_rapid_mode, aspect_rapid_mode, &
                                  dSdt_slow_mode, phi_c_slow_mode, &
                                  phi_i_mushy
@@ -153,7 +153,7 @@
       namelist /forcing_nml/ &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
         atm_data_type,  atm_data_dir,    calc_strair,   calc_Tsfc,      &
-        precip_units,   update_ocn_f,    ustar_min,                     &
+        precip_units,   update_ocn_f,    ustar_min,     fbot_xfer_type, &
         oceanmixed_ice, ocn_data_format, sss_data_type, sst_data_type,  &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
         restore_ice,    formdrag,        highfreq,      natmiter
@@ -235,6 +235,7 @@
       calc_Tsfc = .true.     ! calculate surface temperature
       update_ocn_f = .false. ! include fresh water and salt fluxes for frazil
       ustar_min = 0.005      ! minimum friction velocity for ocean heat flux (m/s)
+      fbot_xfer_type = 'constant' ! transfer coefficient type for ocn heat flux
       R_ice     = 0.00_dbl_kind   ! tuning parameter for sea ice
       R_pnd     = 0.00_dbl_kind   ! tuning parameter for ponded sea ice
       R_snw     = 1.50_dbl_kind   ! tuning parameter for snow over sea ice
@@ -601,6 +602,15 @@
       endif
       endif
 
+      if (trim(fbot_xfer_type) == 'Cdn_ocn' .and. .not. formdrag)  then
+         if (my_task == master_task) then
+            write (nu_diag,*) 'WARNING: formdrag=F but fbot_xfer_type=Cdn_ocn'
+            write (nu_diag,*) 'WARNING: Setting fbot_xfer_type = constant'
+         endif
+         fbot_xfer_type = 'constant'
+      endif
+
+
       call broadcast_scalar(days_per_year,      master_task)
       call broadcast_scalar(use_leap_years,     master_task)
       call broadcast_scalar(year_init,          master_task)
@@ -687,6 +697,7 @@
       call broadcast_scalar(natmiter,           master_task)
       call broadcast_scalar(update_ocn_f,       master_task)
       call broadcast_scalar(ustar_min,          master_task)
+      call broadcast_scalar(fbot_xfer_type,     master_task)
       call broadcast_scalar(precip_units,       master_task)
       call broadcast_scalar(oceanmixed_ice,     master_task)
       call broadcast_scalar(ocn_data_format,    master_task)
@@ -884,6 +895,8 @@
 
          write(nu_diag,1010) ' update_ocn_f              = ', update_ocn_f
          write(nu_diag,1005) ' ustar_min                 = ', ustar_min
+         write(nu_diag, *)   ' fbot_xfer_type            = ', &
+                               trim(fbot_xfer_type)
          write(nu_diag,1010) ' oceanmixed_ice            = ', &
                                oceanmixed_ice
          if (trim(sss_data_type) == 'ncar' .or. &

@@ -323,7 +323,7 @@
                                  sst   (:,:,  iblk), Tf    (:,:,  iblk), &
                                  strocnxT(:,:,iblk), strocnyT(:,:,iblk), &
                                  Tbot,               fbot,               &
-                                 rside (:,:,  iblk) )
+                                 rside (:,:,  iblk), Cdn_ocn (:,:,iblk) )
 
       !-----------------------------------------------------------------
       ! Update the neutral drag coefficients to account for form drag
