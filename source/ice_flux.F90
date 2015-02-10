@@ -172,6 +172,7 @@
          fsens   , & ! sensible heat flux (W/m^2)
          flat    , & ! latent heat flux   (W/m^2)
          fswabs  , & ! shortwave flux absorbed in ice and ocean (W/m^2)
+         fswint_ai, & ! SW absorbed in ice interior below surface (W/m^2)
          flwout  , & ! outgoing longwave radiation (W/m^2)
          Tref    , & ! 2m atm reference temperature (K)
          Qref    , & ! 2m atm reference spec humidity (kg/kg)
@@ -221,7 +222,9 @@
          scale_factor! scaling factor for shortwave components
 
       logical (kind=log_kind), public :: &
-         update_ocn_f ! if true, update fresh water and salt fluxes
+         update_ocn_f, & ! if true, update fresh water and salt fluxes
+         l_mpond_fresh   ! if true, include freshwater feedback from meltponds
+                         ! when running in ice-ocean or coupled configuration
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks), public :: &
          meltsn      , & ! snow melt in category n (m)
@@ -229,6 +232,10 @@
          meltbn      , & ! bottom melt in category n (m)
          congeln     , & ! congelation ice formation in category n (m)
          snoicen         ! snow-ice formation in category n (m)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks), public :: &
+         keffn_top       ! effective thermal conductivity of the top ice layer 
+                         ! on categories (W/m^2/K)
 
       ! for biogeochemistry
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat,max_blocks), public :: &
@@ -574,7 +581,7 @@
       fsurfn    (:,:,:,:) = c0
       fcondtopn (:,:,:,:) = c0
       flatn     (:,:,:,:) = c0
-      fpond      (:,:,:) = c0
+      fpond     (:,:,:) = c0
       fresh_ai  (:,:,:) = c0
       fsalt_ai  (:,:,:) = c0
       fhocn_ai  (:,:,:) = c0

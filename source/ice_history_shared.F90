@@ -192,7 +192,7 @@
            f_sst       = 'm', f_sss        = 'm', &
            f_uocn      = 'm', f_vocn       = 'm', &
            f_sice      = 'm', f_frzmlt     = 'm', &
-           f_fswfac    = 'm', &
+           f_fswfac    = 'm', f_fswint_ai  = 'x', &
            f_fswabs    = 'm', f_fswabs_ai  = 'm', &
            f_albsni    = 'm', &
            f_alvdr     = 'm', f_alidr      = 'm', &
@@ -228,12 +228,14 @@
            f_iage      = 'm', f_FY         = 'm', &
            f_hisnap    = 'm', f_aisnap     = 'm', &
            f_aicen     = 'x', f_vicen      = 'x', &
+           f_vsnon     = 'x',                     &
            f_trsig     = 'm', f_icepresent = 'm', &
            f_fsurf_ai  = 'm', f_fcondtop_ai= 'm', &
            f_fmeltt_ai = 'm',                     &
            f_fsurfn_ai = 'x' ,f_fcondtopn_ai='x', &
            f_fmelttn_ai= 'x', f_flatn_ai   = 'x', &
 !          f_field3dz  = 'x',                     &
+           f_keffn_top = 'x', &
            f_Tinz      = 'x', f_Sinz       = 'x', &
            f_Tsnz      = 'x', &
            f_a11       = 'x', f_a12        = 'x', & 
@@ -269,7 +271,7 @@
            f_sst,       f_sss      , &
            f_uocn,      f_vocn     , &
            f_sice,      f_frzmlt   , &
-           f_fswfac                , &
+           f_fswfac,    f_fswint_ai, &
            f_fswabs,    f_fswabs_ai, &
            f_albsni                , &
            f_alvdr,     f_alidr    , &
@@ -305,12 +307,14 @@
            f_iage,      f_FY       , &
            f_hisnap,    f_aisnap   , &
            f_aicen,     f_vicen    , &
+           f_vsnon,                  &
            f_trsig,     f_icepresent,&
            f_fsurf_ai,  f_fcondtop_ai,&
            f_fmeltt_ai, &
            f_fsurfn_ai,f_fcondtopn_ai,&
            f_fmelttn_ai,f_flatn_ai,  &
 !          f_field3dz,  &
+           f_keffn_top, &
            f_Tinz,      f_Sinz,      &
            f_Tsnz,  &
            f_a11, 	f_a12 	   , &
@@ -362,6 +366,7 @@
            n_sst        , n_sss        , &
            n_uocn       , n_vocn       , &
            n_frzmlt     , n_fswfac     , &
+           n_fswint_ai,                  &
            n_fswabs     , n_fswabs_ai  , &
            n_albsni     , &
            n_alvdr      , n_alidr      , &
@@ -380,6 +385,7 @@
            n_meltb      , n_meltl      , &
            n_fresh      , n_fresh_ai   , &
            n_fsalt      , n_fsalt_ai   , &
+           n_vsnon,                        &
            n_fhocn      , n_fhocn_ai   , &
            n_fswthru    , n_fswthru_ai , &
            n_strairx    , n_strairy    , &
@@ -405,6 +411,7 @@
            n_fmelttn_ai  , &
            n_flatn_ai    , &
 !          n_field3dz    , &
+           n_keffn_top   , &
            n_Tinz        , n_Sinz      , &
            n_Tsnz, &
 	   n_a11	 , n_a12	, &

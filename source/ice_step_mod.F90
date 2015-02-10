@@ -706,7 +706,7 @@
                                     vsno (:,:,iblk), vsnon(:,:,:,iblk),        &
                                     potT (:,:,iblk), meltt(:,:,  iblk),        &
                                     fsurf(:,:,iblk), fpond(:,:,  iblk),        &
-                                    trcrn(:,:,nt_Tsfc,:,iblk),                 &
+                                    trcrn(:,:,nt_Tsfc,:,iblk), Tf(:,:,  iblk), &
                                     trcrn(:,:,nt_qice:nt_qice+nilyr-1,:,iblk), &
                                     trcrn(:,:,nt_sice:nt_sice+nilyr-1,:,iblk), &
                                     trcrn(:,:,nt_apnd,:,iblk),                 &
@@ -1349,18 +1349,21 @@
       subroutine step_radiation (dt, iblk)
 
       use ice_blocks, only: block, get_block, nx_block, ny_block
-      use ice_domain, only: blocks_ice
+      use ice_domain, only: blocks_ice, nblocks
       use ice_domain_size, only: ncat
       use ice_flux, only: swvdr, swvdf, swidr, swidf, coszen, fsnow
       use ice_grid, only: TLAT, TLON, tmask
       use ice_meltpond_lvl, only: ffracn, dhsn
+      use ice_meltpond_topo, only: hp1 
       use ice_shortwave, only: fswsfcn, fswintn, fswthrun, fswpenln, &
                                Sswabsn, Iswabsn, shortwave, &
                                albicen, albsnon, albpndn, &
                                alvdrn, alidrn, alvdfn, alidfn, &
                                run_dedd, shortwave_ccsm3, apeffn
-      use ice_state, only: aicen, vicen, vsnon, trcrn, nt_Tsfc
+      use ice_state, only: aicen, vicen, vsnon, trcrn, nt_Tsfc, &
+                           nt_apnd, nt_ipnd, nt_hpnd, tr_pond_topo 
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_sw
+      use ice_therm_shared, only: calc_Tsfc
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -1404,9 +1407,11 @@
       jlo = this_block%jlo
       jhi = this_block%jhi
 
-      if (trim(shortwave) == 'dEdd') then ! delta Eddington
 
-         call run_dEdd(ilo, ihi, jlo, jhi,                             &
+      if (calc_Tsfc) then
+        if (trim(shortwave) == 'dEdd') then ! delta Eddington
+ 
+          call run_dEdd(ilo, ihi, jlo, jhi,                            &
                        aicen(:,:,:,iblk),     vicen(:,:,:,iblk),       &
                        vsnon(:,:,:,iblk),     trcrn(:,:,:,:,iblk),     &
                        TLAT(:,:,iblk),        TLON(:,:,iblk),          &
@@ -1423,9 +1428,9 @@
                        albpndn(:,:,:,iblk),   apeffn(:,:,:,iblk),      &
                        dhsn(:,:,:,iblk),      ffracn(:,:,:,iblk))
          
-      else  ! .not. dEdd
+        else  ! .not. dEdd
 
-         call shortwave_ccsm3(nx_block, ny_block,                       &
+          call shortwave_ccsm3(nx_block, ny_block,                      &
                               ilo, ihi, jlo, jhi,                       &
                               aicen(:,:,:,iblk),   vicen(:,:,:,iblk),   &
                               vsnon(:,:,:,iblk),                        &
@@ -1441,8 +1446,53 @@
                               Sswabsn(:,:,:,:,iblk),                    &
                               albicen(:,:,:,iblk), albsnon(:,:,:,iblk), &
                               coszen(:,:,iblk))
+        endif   ! shortwave
 
-      endif   ! shortwave
+
+      else    ! .not. calc_Tsfc
+
+      ! Calculate effective pond area for HadGEM
+
+      if (tr_pond_topo) then
+         do n = 1, ncat
+           apeffn(:,:,n,iblk) = c0 
+           do j = 1, ny_block
+             do i = 1, nx_block
+               if (aicen(i,j,n,iblk) > puny) then
+               ! Lid effective if thicker than hp1
+                 if (trcrn(i,j,nt_apnd,n,iblk)*aicen(i,j,n,iblk) > puny .and. &
+                     trcrn(i,j,nt_ipnd,n,iblk) < hp1) then
+                     apeffn(i,j,n,iblk) = trcrn(i,j,nt_apnd,n,iblk)
+                 else
+                   apeffn(i,j,n,iblk) = c0
+                 endif
+                 if (trcrn(i,j,nt_apnd,n,iblk) < puny) apeffn(i,j,n,iblk) = c0
+               endif
+             enddo 
+           enddo
+         enddo  ! ncat
+ 
+      endif ! tr_pond_topo
+
+        ! Initialize for safety
+        do n = 1, ncat
+          do j = 1, ny_block
+            do i = 1, nx_block
+              alvdrn(i,j,n,iblk) = c0
+              alidrn(i,j,n,iblk) = c0
+              alvdfn(i,j,n,iblk) = c0
+              alidfn(i,j,n,iblk) = c0
+              fswsfcn(i,j,n,iblk) = c0
+              fswintn(i,j,n,iblk) = c0
+              fswthrun(i,j,n,iblk) = c0
+            enddo   ! i
+          enddo   ! j
+        enddo   ! ncat
+        Iswabsn(:,:,:,:,iblk) = c0
+        Sswabsn(:,:,:,:,iblk) = c0
+
+      endif    ! calc_Tsfc
+
 
       call ice_timer_stop(timer_sw)     ! shortwave
 

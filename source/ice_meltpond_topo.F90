@@ -74,7 +74,7 @@
                                     vsno,  vsnon,       &
                                     potT,  meltt,       &
                                     fsurf, fpond,       &
-                                    Tsfcn,              &
+                                    Tsfcn, Tf,          &
                                     qicen, sicen,       &
                                     apnd,  hpnd, ipnd)
 
@@ -88,7 +88,8 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
          aice, &    ! total ice area fraction
-         vsno       ! total snow volume (m)
+         vsno, &    ! total snow volume (m)
+         Tf   ! ocean freezing temperature [= ice bottom temperature] (degC) 
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
@@ -232,6 +233,7 @@
                         aicen(i,j,:),   vicen(i,j,:), vsnon(i,j,:), &
                         qicen(i,j,:,:), sicen(i,j,:,:), &
                         volpn(i,j,:),   volp(i,j), &
+                        Tsfcn(i,j,:),   Tf(i,j), & 
                         apondn(i,j,:),  hpondn(i,j,:), dvn)
 
          fpond(i,j) = fpond(i,j) - dvn
@@ -272,7 +274,7 @@
          !----------------------------------------------------------------
          ! freezing: existing upper ice layer grows
          !----------------------------------------------------------------
-               else if (volpn(i,j,n) > puny) then ! Tavg <= Tp
+               else if (volpn(i,j,n) > puny) then ! Tsfcn(i,j,n) <= Tp
 
                   ! differential growth of base of surface floating ice layer
                   dTice = max(-Tsfcn(i,j,n)-Td, c0) ! > 0   
@@ -289,7 +291,7 @@
                      hpondn(i,j,n) = volpn(i,j,n) / apondn(i,j,n)
                   endif
 
-               endif ! Tavg
+               endif ! Tsfcn(i,j,n)
 
          !----------------------------------------------------------------
          ! freezing: upper ice layer begins to form
@@ -374,20 +376,23 @@
 
 ! Computes melt pond area, pond depth and melting rates
 
-      subroutine pond_area(dt,aice,vice,vsno, &
-                           aicen, vicen, vsnon, qicen, sicen, &
-                           volpn, volp,  &
-                           apondn,hpondn,dvolp)
+      subroutine pond_area(dt,                    &
+                           aice,   vice,   vsno,  &
+                           aicen,  vicen,  vsnon, &
+                           qicen,  sicen,         &
+                           volpn,  volp,          &
+                           Tsfcn,  Tf,            &
+                           apondn, hpondn, dvolp)
 
       use ice_constants, only: viscosity_dyn
       use ice_exit, only: abort_ice
       use ice_therm_shared, only: ktherm
     
       real (kind=dbl_kind), intent(in) :: &
-         dt,aice,vice,vsno
+         dt, aice, vice, vsno, Tf
 
       real (kind=dbl_kind), dimension(ncat), intent(in) :: &
-         aicen, vicen, vsnon
+         aicen, vicen, vsnon, Tsfcn
 
       real (kind=dbl_kind), dimension(nilyr,ncat), intent(in) :: &
          qicen, &
@@ -473,7 +478,7 @@
             hsnon(n) = vsnon(n) / aicen(n)
             reduced_aicen(n) = c1 ! n=ncat
             if (n < ncat) reduced_aicen(n) = aicen(n) &
-                                 * (-0.024_dbl_kind*hicen(n) + 0.832_dbl_kind) 
+                * max(0.2_dbl_kind,(-0.024_dbl_kind*hicen(n) + 0.832_dbl_kind))
             asnon(n) = reduced_aicen(n) 
          endif
 
@@ -548,7 +553,7 @@
                       volp, cum_max_vol, hpond, m_index)
     
       do n=1, m_index
-         hpondn(n) = hpond - alfan(n) + alfan(1)
+         hpondn(n) = max((hpond - alfan(n) + alfan(1)), c0)
          apondn(n) = reduced_aicen(n) 
       enddo
       apond = sum(apondn(1:m_index))
@@ -570,7 +575,7 @@
       if (ktherm /= 2 .and. pressure_head > c0) then
       do n = 1, ncat-1
          if (hicen(n) > c0) then
-            call permeability_phi(qicen(:,n),sicen(:,n),vicen(n),perm)
+            call permeability_phi(qicen(:,n),sicen(:,n),Tsfcn(n),Tf,vicen(n),perm)
             if (perm > c0) permflag = 1
             drain = perm*apondn(n)*pressure_head*dt / (viscosity_dyn*hicen(n))
             dvolp = dvolp + min(drain, volp)
@@ -804,16 +809,20 @@
 
 ! determine the liquid fraction of brine in the ice and the permeability
 
-      subroutine permeability_phi(qicen, sicen, vicen, perm)
+      subroutine permeability_phi(qicen, sicen, Tsfcn, Tf, vicen, perm)
 
-      use ice_therm_shared, only: calculate_Tin_from_qin
+      use ice_exit, only: abort_ice
+      use ice_therm_shared, only: calculate_Tin_from_qin, heat_capacity
+      use ice_constants, only: ice_ref_salinity
 
       real (kind=dbl_kind), dimension(nilyr), intent(in) :: &
          qicen, &  ! energy of melting for each ice layer (J/m2)
          sicen     ! salinity (ppt)   
     
       real (kind=dbl_kind), intent(in) :: &
-         vicen     ! ice volume
+         vicen, &  ! ice volume
+         Tsfcn, &  ! sea ice surface skin temperature (degC)     
+         Tf     ! ocean freezing temperature [= ice bottom temperature] (degC) 
     
       real (kind=dbl_kind), intent(out) :: &
          perm      ! permeability
@@ -834,10 +843,14 @@
       ! Compute ice temperatures from enthalpies using quadratic formula
       !-----------------------------------------------------------------
 
-      do k = 1,nilyr
-         Tmlt = -sicen(k) * depressT
-         Tin(k) = calculate_Tin_from_qin(qicen(k),Tmlt)
-      enddo
+      if (heat_capacity) then
+        do k = 1,nilyr
+           Tmlt = -sicen(k) * depressT
+           Tin(k) = calculate_Tin_from_qin(qicen(k),Tmlt)
+        enddo
+      else
+        Tin(1) = (Tsfcn + Tf) / c2
+      endif  
 
       !-----------------------------------------------------------------
       ! brine salinity and liquid fraction
@@ -851,7 +864,11 @@
                   -21.8_dbl_kind     * Tin(k)    &
                   - 0.919_dbl_kind   * Tin(k)**2 &
                   - 0.01878_dbl_kind * Tin(k)**3
-            phi(k) = sicen(k)/Sbr ! liquid fraction
+            if (heat_capacity) then
+              phi(k) = sicen(k)/Sbr ! liquid fraction
+            else
+              phi(k) = ice_ref_salinity / Sbr ! liquid fraction
+            endif
          enddo ! k
        
       else
@@ -861,7 +878,14 @@
             Sbr = -17.6_dbl_kind    * Tin(k)    &
                   - 0.389_dbl_kind  * Tin(k)**2 &
                   - 0.00362_dbl_kind* Tin(k)**3
-            phi(k) = sicen(k)/Sbr ! liquid fraction
+            if (Sbr == c0) call abort_ice( &
+               'zero brine salinity in topo pond permeability')
+            if (heat_capacity) then
+              phi(k) = sicen(k) / Sbr         ! liquid fraction
+            else
+              phi(k) = ice_ref_salinity / Sbr ! liquid fraction
+            endif
+
          enddo
 
       endif

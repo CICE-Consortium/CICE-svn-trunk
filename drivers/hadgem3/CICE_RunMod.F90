@@ -280,7 +280,7 @@
       use ice_constants, only: c0, c1, puny, rhofresh
       use ice_domain_size, only: ncat
       use ice_flux, only: alvdf, alidf, alvdr, alidr, albice, albsno, &
-          albpnd, albcnt, apeff_ai, coszen, fpond, fresh, &
+          albpnd, albcnt, apeff_ai, coszen, fpond, fresh, l_mpond_fresh, &
           alvdf_ai, alidf_ai, alvdr_ai, alidr_ai, fhocn_ai, &
           fresh_ai, fsalt_ai, fsalt, &
           fswthru_ai, fhocn, fswthru, scale_factor, &
@@ -385,8 +385,10 @@
       ! reduce fresh by fpond for coupling
       !-----------------------------------------------------------------
 
-            fpond(i,j,iblk) = fpond(i,j,iblk) * rhofresh/dt
-            fresh(i,j,iblk) = fresh(i,j,iblk) - fpond(i,j,iblk)
+            if (l_mpond_fresh) then
+               fpond(i,j,iblk) = fpond(i,j,iblk) * rhofresh/dt
+               fresh(i,j,iblk) = fresh(i,j,iblk) - fpond(i,j,iblk)
+            endif
 
       !----------------------------------------------------------------
       ! Store grid box mean albedos and fluxes before scaling by aice
