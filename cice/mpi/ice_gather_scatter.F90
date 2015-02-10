@@ -743,12 +743,85 @@
 
          this_block = get_block(n,n)
 
+         ! interior
          do j=this_block%jlo,this_block%jhi
          do i=this_block%ilo,this_block%ihi
            ARRAY_G(this_block%i_glob(i)+nghost, &
                    this_block%j_glob(j)+nghost) = special_value
          end do
          end do
+
+#ifdef CICE_IN_NEMO
+!echmod: this code is temporarily wrapped for nemo pending further testing elsewhere
+         ! fill ghost cells
+         if (this_block%jblock == 1) then
+            ! south block
+            do j=1, nghost
+            do i=this_block%ilo,this_block%ihi
+              ARRAY_G(this_block%i_glob(i)+nghost,j) = special_value
+            end do
+            end do
+            if (this_block%iblock == 1) then
+               ! southwest corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(i,j) = special_value
+               end do
+               end do
+            endif
+         endif
+         if (this_block%jblock == nblocks_y) then
+            ! north block
+            do j=1, nghost
+            do i=this_block%ilo,this_block%ihi
+              ARRAY_G(this_block%i_glob(i)+nghost, &
+                      ny_global + nghost + j) = special_value
+            end do
+            end do
+            if (this_block%iblock == nblocks_x) then
+               ! northeast corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(nx-i+1, ny-j+1) = special_value
+               end do
+               end do
+            endif
+         endif
+         if (this_block%iblock == 1) then
+            ! west block
+            do j=this_block%jlo,this_block%jhi
+            do i=1, nghost
+              ARRAY_G(i,this_block%j_glob(j)+nghost) = special_value
+            end do
+            end do
+            if (this_block%jblock == nblocks_y) then
+               ! northwest corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(i,                   ny-j+1) = special_value
+               end do
+               end do
+            endif
+         endif
+         if (this_block%iblock == nblocks_x) then
+            ! east block
+            do j=this_block%jlo,this_block%jhi
+            do i=1, nghost
+              ARRAY_G(nx_global + nghost + i, &
+                      this_block%j_glob(j)+nghost) = special_value
+            end do
+            end do
+            if (this_block%jblock == 1) then
+               ! southeast corner
+               do j=1, nghost
+               do i=1, nghost
+                 ARRAY_G(                   nx-i+1,j) = special_value
+               end do
+               end do
+            endif
+         endif
+#endif
+
        endif
 
      end do

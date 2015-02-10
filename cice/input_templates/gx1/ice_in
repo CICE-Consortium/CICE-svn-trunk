@@ -163,6 +163,7 @@
   , ustar_min       = 0.0005
   , fbot_xfer_type  = 'constant'
   , update_ocn_f    = .false.
+  , l_mpond_fresh   = .false.
   , oceanmixed_ice  = .true.
   , ocn_data_format = 'nc'
   , sss_data_type   = 'ncar'
@@ -211,6 +212,7 @@
   , f_vocn         = 'm' 
   , f_frzmlt       = 'm'
   , f_fswfac       = 'm'
+  , f_fswint_ai    = 'm'
   , f_fswabs       = 'x' 
   , f_fswabs_ai    = 'm' 
   , f_albsni       = 'm' 
@@ -283,6 +285,8 @@
   , f_FY           = 'm'
   , f_aicen        = 'x'
   , f_vicen        = 'x'
+  , f_vsnon        = 'x'
+  , f_keffn_top    = 'x'
   , f_Tinz         = 'x'
   , f_Sinz         = 'x'
   , f_Tsnz         = 'x'

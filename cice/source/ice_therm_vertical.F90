@@ -2256,8 +2256,6 @@
 
       do k = 1, nlyr
          do ij = 1, icells
-            i = indxi(ij)
-            j = indxj(ij)
             qn(ij,k) = hq(ij,k) * rhlyr(ij)
          enddo                  ! ij
       enddo                     ! k

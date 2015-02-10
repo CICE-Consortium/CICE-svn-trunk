@@ -59,7 +59,7 @@
       use ice_itd, only: kitd, kcatbound
       use ice_ocean, only: oceanmixed_ice
       use ice_firstyear, only: restart_FY
-      use ice_flux, only: update_ocn_f
+      use ice_flux, only: update_ocn_f, l_mpond_fresh
       use ice_forcing, only: &
           ycycle,          fyear_init,    dbug, &
           atm_data_type,   atm_data_dir,  precip_units, &
@@ -153,7 +153,8 @@
       namelist /forcing_nml/ &
         atmbndy,        fyear_init,      ycycle,        atm_data_format,&
         atm_data_type,  atm_data_dir,    calc_strair,   calc_Tsfc,      &
-        precip_units,   update_ocn_f,    ustar_min,     fbot_xfer_type, &
+        precip_units,   update_ocn_f,    l_mpond_fresh, ustar_min,      &
+        fbot_xfer_type,                                                 &
         oceanmixed_ice, ocn_data_format, sss_data_type, sst_data_type,  &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
         restore_ice,    formdrag,        highfreq,      natmiter
@@ -235,6 +236,8 @@
       calc_Tsfc = .true.     ! calculate surface temperature
       update_ocn_f = .false. ! include fresh water and salt fluxes for frazil
       ustar_min = 0.005      ! minimum friction velocity for ocean heat flux (m/s)
+      l_mpond_fresh = .false.     ! logical switch for including meltpond freshwater
+                                  ! flux feedback to ocean model
       fbot_xfer_type = 'constant' ! transfer coefficient type for ocn heat flux
       R_ice     = 0.00_dbl_kind   ! tuning parameter for sea ice
       R_pnd     = 0.00_dbl_kind   ! tuning parameter for ponded sea ice
@@ -518,10 +521,10 @@
          frzpnd = 'cesm'
       endif
 
-      if (trim(shortwave) /= 'dEdd' .and. tr_pond) then
+      if (trim(shortwave) /= 'dEdd' .and. tr_pond .and. calc_tsfc) then
          if (my_task == master_task) then
             write (nu_diag,*) 'WARNING: Must use dEdd shortwave'
-            write (nu_diag,*) 'WARNING: with tr_pond.'
+            write (nu_diag,*) 'WARNING: with tr_pond and calc_tsfc=T.'
             write (nu_diag,*) 'WARNING: Setting shortwave = dEdd'
          endif
          shortwave = 'dEdd'
@@ -696,6 +699,7 @@
       call broadcast_scalar(highfreq,           master_task)
       call broadcast_scalar(natmiter,           master_task)
       call broadcast_scalar(update_ocn_f,       master_task)
+      call broadcast_scalar(l_mpond_fresh,      master_task)
       call broadcast_scalar(ustar_min,          master_task)
       call broadcast_scalar(fbot_xfer_type,     master_task)
       call broadcast_scalar(precip_units,       master_task)
@@ -894,6 +898,7 @@
          endif 
 
          write(nu_diag,1010) ' update_ocn_f              = ', update_ocn_f
+         write(nu_diag,1010) ' l_mpond_fresh             = ', l_mpond_fresh
          write(nu_diag,1005) ' ustar_min                 = ', ustar_min
          write(nu_diag, *)   ' fbot_xfer_type            = ', &
                                trim(fbot_xfer_type)

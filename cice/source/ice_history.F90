@@ -220,6 +220,7 @@
       call broadcast_scalar (f_vocn, master_task)
       call broadcast_scalar (f_frzmlt, master_task)
       call broadcast_scalar (f_fswfac, master_task)
+      call broadcast_scalar (f_fswint_ai, master_task)
       call broadcast_scalar (f_fswabs, master_task)
       call broadcast_scalar (f_fswabs_ai, master_task)
       call broadcast_scalar (f_albsni, master_task)
@@ -285,6 +286,7 @@
       call broadcast_scalar (f_hisnap, master_task)
       call broadcast_scalar (f_aicen, master_task)
       call broadcast_scalar (f_vicen, master_task)
+      call broadcast_scalar (f_vsnon, master_task)
       call broadcast_scalar (f_trsig, master_task)
       call broadcast_scalar (f_icepresent, master_task)
       call broadcast_scalar (f_fsurf_ai, master_task)
@@ -296,6 +298,7 @@
       call broadcast_scalar (f_flatn_ai, master_task)
 
 !      call broadcast_scalar (f_field3dz, master_task)
+      call broadcast_scalar (f_keffn_top, master_task)
       call broadcast_scalar (f_Tinz, master_task)
       call broadcast_scalar (f_Sinz, master_task)
       call broadcast_scalar (f_Tsnz, master_task)
@@ -420,7 +423,12 @@
              "shortwave scaling factor",                           &
              "ratio of netsw new:old", c1, c0,                     &
              ns1, f_fswfac)
-      
+
+         call define_hist_field(n_fswint_ai,"fswint_ai","W/m^2",tstr2D, tcstr, &
+             "shortwave absorbed in ice interior",                             &
+             "does not include surface", c1, c0,                               &
+             ns1, f_fswint_ai)
+
          call define_hist_field(n_fswabs,"fswabs","W/m^2",tstr2D, tcstr, &
              "snow/ice/ocn absorbed solar flux (cpl)",                 &
              "positive downward", c1, c0,                              &
@@ -867,6 +875,10 @@
               "ice volume, categories","none", c1, c0,                &            
               ns1, f_vicen)
 
+           call define_hist_field(n_vsnon,"vsnon","m",tstr3Dc, tcstr, &
+              "snow depth on ice, categories","volume per unit area of snow", c1, c0, &           
+              ns1, f_vsnon)
+
            call define_hist_field(n_fsurfn_ai,"fsurfn_ai","W/m^2",tstr3Dc, tcstr, & 
               "net surface heat flux, categories","weighted by ice area", c1, c0, &            
               ns1, f_fsurfn_ai)
@@ -882,6 +894,11 @@
            call define_hist_field(n_flatn_ai,"flatn_ai","W/m^2",tstr3Dc, tcstr, & 
               "latent heat flux, category","weighted by ice area", c1, c0,      &            
               ns1, f_flatn_ai)
+
+           call define_hist_field(n_keffn_top,"keffn_top","W/m^2/K",tstr3Dc, tcstr, &
+              "effective thermal conductivity of the top ice layer, categories", &
+              "multilayer scheme", c1, c0,      &           
+              ns1, f_keffn_top)
 
       endif ! if (histfreq(ns1) /= 'x') then
       enddo ! ns1
@@ -1105,7 +1122,7 @@
           stressp_2, stressm_2, stress12_2, &
           stressp_3, stressm_3, stress12_3, &
           stressp_4, stressm_4, stress12_4, sig1, sig2, &
-          mlt_onset, frz_onset, dagedtt, dagedtd
+          mlt_onset, frz_onset, dagedtt, dagedtd, fswint_ai, keffn_top
       use ice_atmo, only: formdrag
       use ice_history_shared ! almost everything
       use ice_history_write, only: ice_write_hist
@@ -1274,6 +1291,10 @@
              call accum_hist_field(n_fswfac, iblk, fswfac(:,:,iblk), a2D)
          if (f_fswabs (1:1) /= 'x') &
              call accum_hist_field(n_fswabs, iblk, fswabs(:,:,iblk), a2D)
+
+         if (f_fswint_ai (1:1) /= 'x') &
+             call accum_hist_field(n_fswint_ai, iblk, fswint_ai(:,:,iblk), a2D)
+
          if (f_fswabs_ai(1:1)/= 'x') &
              call accum_hist_field(n_fswabs_ai, iblk, fswabs(:,:,iblk)*workb(:,:), a2D)
 
@@ -1437,7 +1458,12 @@
          if (f_vicen   (1:1) /= 'x') &
              call accum_hist_field(n_vicen-n2D, iblk, ncat_hist, &
                                    vicen(:,:,1:ncat_hist,iblk), a3Dc)
-
+         if (f_vsnon   (1:1) /= 'x') &
+             call accum_hist_field(n_vsnon-n2D, iblk, ncat_hist, &
+                                   vsnon(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_keffn_top (1:1) /= 'x') &
+             call accum_hist_field(n_keffn_top-n2D, iblk, ncat_hist, &
+                                   keffn_top(:,:,1:ncat_hist,iblk), a3Dc)
          if (f_fsurfn_ai   (1:1) /= 'x') &
              call accum_hist_field(n_fsurfn_ai-n2D, iblk, ncat_hist, &
                   fsurfn(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)

@@ -19,6 +19,10 @@
    use cpl_oasis4
 #endif
 
+#if defined key_iomput
+   use lib_mpp, only:   mpi_comm_opa      ! MPP library
+#endif
+
    implicit none
    private
    save
@@ -76,6 +80,8 @@
    else
 #if (defined key_oasis3 || defined key_oasis3mct || defined key_oasis4)
      ice_comm = localComm       ! communicator from NEMO/OASISn 
+#elif defined key_iomput
+    ice_comm = mpi_comm_opa    ! communicator from NEMO/XIOS
 #else
      ice_comm = MPI_COMM_WORLD  ! Global communicator 
 #endif 

@@ -406,8 +406,14 @@
       ! use processor_shape = 'square-pop' and distribution_wght = 'block' 
       ! to make CICE and POP decompositions/distributions identical.
 
+
+#ifdef CICE_IN_NEMO
+      ! Keep all blocks even the ones only containing land points
+      if (distribution_wght == 'block') nocn(n) = nx_block*ny_block
+#else
       if (distribution_wght == 'block' .and. &   ! POP style
           nocn(n) > 0) nocn(n) = nx_block*ny_block
+#endif
    end do
 
    work_unit = maxval(nocn)/max_work_unit + 1
