@@ -347,6 +347,7 @@
       enddo
       enddo
 
+      if (icells > 0) then
 
       allocate (atrcr(icells,ntrcr))
 
@@ -476,6 +477,8 @@
                             trcr(:,:,:))
 
       deallocate (atrcr)
+
+      endif ! icells > 0
 
       end subroutine aggregate
 
