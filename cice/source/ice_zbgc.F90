@@ -87,17 +87,16 @@
       call get_fileunit(nu_nml)
 
       if (my_task == master_task) then
-         open (nu_nml, file=nml_filename, status='old',iostat=nml_error)
+         open (nu_nml, file=trim(nml_filename), status='old',iostat=nml_error)
          if (nml_error /= 0) then
             nml_error = -1
          else
             nml_error =  1
          endif 
 
+         print*,'Reading zbgc_nml'
          do while (nml_error > 0)
-            print*,'Reading zbgc_nml'
             read(nu_nml, nml=zbgc_nml,iostat=nml_error)
-            if (nml_error /= 0) exit
          end do
          if (nml_error == 0) close(nu_nml)
       endif

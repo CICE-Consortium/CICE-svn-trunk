@@ -207,6 +207,8 @@
       call broadcast_scalar (f_aice, master_task)
       call broadcast_scalar (f_uvel, master_task)
       call broadcast_scalar (f_vvel, master_task)
+      call broadcast_scalar (f_uatm, master_task)
+      call broadcast_scalar (f_vatm, master_task)
       call broadcast_scalar (f_sice, master_task)
       call broadcast_scalar (f_fswdn, master_task)
       call broadcast_scalar (f_flwdn, master_task)
@@ -296,6 +298,7 @@
       call broadcast_scalar (f_fcondtopn_ai, master_task)
       call broadcast_scalar (f_fmelttn_ai, master_task)
       call broadcast_scalar (f_flatn_ai, master_task)
+      call broadcast_scalar (f_fsensn_ai, master_task)
 
 !      call broadcast_scalar (f_field3dz, master_task)
       call broadcast_scalar (f_keffn_top, master_task)
@@ -358,6 +361,16 @@
              "ice velocity (y)",                                  &
              "positive is y direction on U grid", c1, c0,         &
              ns1, f_vvel)
+      
+         call define_hist_field(n_uatm,"uatm","m/s",ustr2D, ucstr,  &
+             "atm velocity (x)",                                  &
+             "positive is x direction on U grid", c1, c0,         &
+             ns1, f_uatm)
+      
+         call define_hist_field(n_vatm,"vatm","m/s",ustr2D, ucstr,  &
+             "atm velocity (y)",                                  &
+             "positive is y direction on U grid", c1, c0,         &
+             ns1, f_vatm)
       
          call define_hist_field(n_sice,"sice","ppt",tstr2D, tcstr,  &
              "bulk ice salinity",                                 &
@@ -895,6 +908,10 @@
               "latent heat flux, category","weighted by ice area", c1, c0,      &            
               ns1, f_flatn_ai)
 
+           call define_hist_field(n_fsensn_ai,"fsensn_ai","W/m^2",tstr3Dc, tcstr, & 
+              "sensible heat flux, category","weighted by ice area", c1, c0,      &            
+              ns1, f_fsensn_ai)
+
            call define_hist_field(n_keffn_top,"keffn_top","W/m^2/K",tstr3Dc, tcstr, &
               "effective thermal conductivity of the top ice layer, categories", &
               "multilayer scheme", c1, c0,      &           
@@ -1114,10 +1131,10 @@
           albice, albsno, albpnd, coszen, flat, fsens, flwout, evap, &
           Tair, Tref, Qref, congel, frazil, snoice, dsnow, &
           melts, meltb, meltt, meltl, fresh, fsalt, fresh_ai, fsalt_ai, &
-          fhocn, fhocn_ai, &
+          fhocn, fhocn_ai, uatm, vatm, &
           fswthru_ai, strairx, strairy, strtltx, strtlty, strintx, strinty, &
           strocnx, strocny, fm, daidtt, dvidtt, daidtd, dvidtd, fsurf, &
-          fcondtop, fsurfn, fcondtopn, flatn, albcnt, prs_sig, &
+          fcondtop, fsurfn, fcondtopn, flatn, fsensn, albcnt, prs_sig, &
           stressp_1, stressm_1, stress12_1, &
           stressp_2, stressm_2, stress12_2, &
           stressp_3, stressm_3, stress12_3, &
@@ -1249,6 +1266,10 @@
              call accum_hist_field(n_uvel,   iblk, uvel(:,:,iblk), a2D)
          if (f_vvel   (1:1) /= 'x') &
              call accum_hist_field(n_vvel,   iblk, vvel(:,:,iblk), a2D)
+         if (f_uatm   (1:1) /= 'x') &
+             call accum_hist_field(n_uatm,   iblk, uatm(:,:,iblk), a2D)
+         if (f_vatm   (1:1) /= 'x') &
+             call accum_hist_field(n_vatm,   iblk, vatm(:,:,iblk), a2D)
 
          if (f_sice   (1:1) /= 'x') then
              do j = jlo, jhi
@@ -1473,6 +1494,9 @@
          if (f_flatn_ai   (1:1) /= 'x') &
              call accum_hist_field(n_flatn_ai-n2D, iblk, ncat_hist, &
                   flatn(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_fsensn_ai   (1:1) /= 'x') &
+             call accum_hist_field(n_fsensn_ai-n2D, iblk, ncat_hist, &
+                  fsensn(:,:,1:ncat_hist,iblk)*aicen_init(:,:,1:ncat_hist,iblk), a3Dc)
          ! Calculate surface heat flux that causes melt (calculated by the 
          ! atmos in HadGEM3 so needed for checking purposes)
          if (f_fmelttn_ai   (1:1) /= 'x') &

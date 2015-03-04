@@ -278,16 +278,12 @@
             do i = 1, nx_block
                sss(i,j,iblk) = sss(i,j,iblk) / c12   ! annual average
                sss(i,j,iblk) = max(sss(i,j,iblk),c0)
-               if (ktherm == 2) then
-                  Tf(i,j,iblk) = sss(i,j,iblk) / (-18.48_dbl_kind &
-                               + ((18.48_dbl_kind/c1000) * sss(i,j,iblk)))
-               else
-                  Tf(i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
-               endif
             enddo
             enddo
          enddo
          !$OMP END PARALLEL DO
+
+         call ocn_freezing_temperature
 
          if (my_task == master_task) close(nu_forcing)
 
@@ -374,6 +370,45 @@
       endif
 
       end subroutine init_forcing_ocn
+
+!=======================================================================
+
+      subroutine ocn_freezing_temperature
+
+ ! Compute ocean freezing temperature Tf based on tfrz_option
+ ! 'minus1p8'         Tf = -1.8 C (default)
+ ! 'linear_salt'      Tf = -depressT * sss
+ ! 'mushy'            Tf conforms with mushy layer thermo (ktherm=2)
+
+      use ice_blocks, only: nx_block, ny_block
+      use ice_constants, only: depressT, c1000
+      use ice_domain, only: nblocks
+      use ice_flux, only: sss, Tf
+      use ice_ocean, only: tfrz_option
+
+      ! local variables
+
+      integer (kind=int_kind) :: &
+         i, j, iblk           ! horizontal indices
+
+      !$OMP PARALLEL DO PRIVATE(iblk,i,j)
+      do iblk = 1, nblocks
+         do j = 1, ny_block
+         do i = 1, nx_block
+            if (trim(tfrz_option) == 'mushy') then
+               Tf(i,j,iblk) =  sss(i,j,iblk) / (-18.48_dbl_kind &
+                            + ((18.48_dbl_kind/c1000) * sss(i,j,iblk)))
+            elseif (trim(tfrz_option) == 'linear_salt') then
+               Tf(i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
+            else
+               Tf(i,j,iblk) = -1.8_dbl_kind
+            endif
+         enddo
+         enddo
+      enddo
+      !$OMP END PARALLEL DO
+
+      end subroutine ocn_freezing_temperature
 
 !=======================================================================
 
@@ -2949,16 +2984,12 @@
             do j = 1, ny_block
             do i = 1, nx_block
                sss(i,j,iblk) = max(sss(i,j,iblk), c0)
-               if (ktherm == 2) then
-                  Tf(i,j,iblk) =  sss(i,j,iblk) / (-18.48_dbl_kind &
-                               + ((18.48_dbl_kind/c1000) * sss(i,j,iblk)))
-               else
-                  Tf(i,j,iblk) = -depressT * sss(i,j,iblk) ! deg C
-               endif
             enddo
             enddo
          enddo
          !$OMP END PARALLEL DO
+
+         call ocn_freezing_temperature
       endif
 
     !-------------------------------------------------------------------
@@ -3394,14 +3425,11 @@
       do j = 1, ny_block 
          do i = 1, nx_block 
             sss (i,j,:) = max (sss(i,j,:), c0) 
-            if (ktherm == 2) then
-               Tf(i,j,:) =  sss(i,j,:) / (-18.48_dbl_kind + ((18.48_dbl_kind/1000.0_dbl_kind) * sss(i,j,:)))
-            else
-               Tf(i,j,:) = -depressT * sss(i,j,:) ! deg C
-            endif
             hmix(i,j,:) = max(hmix(i,j,:), c0) 
          enddo 
       enddo 
+
+      call ocn_freezing_temperature
 
       if (restore_sst) then
         do j = 1, ny_block 
@@ -3489,14 +3517,7 @@
  
       sss    (:,:,:) = 34.0_dbl_kind   ! sea surface salinity (ppt)
 
-      ! freezing temp (C)
-      if (ktherm == 2) then
-         ! liquidus_temperature_mush(sss)
-         Tf (:,:,:) = sss(:,:,:) / (-18.48_dbl_kind &
-                                 + ((18.48_dbl_kind*p001)*sss(:,:,:)))
-      else
-         Tf (:,:,:) = -depressT*sss(:,:,:)
-      endif
+      call ocn_freezing_temperature
 
       sst    (:,:,:) = Tf(:,:,:)       ! sea surface temp (C)
       uocn   (:,:,:) = c0              ! surface ocean currents (m/s)

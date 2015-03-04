@@ -16,6 +16,7 @@ module ice_import_export
   use ice_flux        , only: rhoa, swvdr, swvdf, swidr, swidf, flw, frain
   use ice_flux        , only: fsnow, uocn, vocn, sst, ss_tltx, ss_tlty, frzmlt
   use ice_flux        , only: sss, tf, wind, fsw, init_flux_atm, init_flux_ocn, faero_atm
+  use ice_ocean       , only: tfrz_option
   use ice_atmo        , only: Cdn_atm
   use ice_state       , only: vice, vsno, aice, trcr
   use ice_state       , only: tr_aero, tr_iage, tr_FY, tr_pond, tr_lvl 
@@ -59,6 +60,7 @@ contains
     real (kind=dbl_kind)             :: workx, worky
     real (kind=dbl_kind) :: MIN_RAIN_TEMP, MAX_SNOW_TEMP 
     logical (kind=log_kind)          :: first_call = .true.
+    character(len=*),parameter :: subname = 'ice_import'
     !-----------------------------------------------------
 
     ! Note that the precipitation fluxes received  from the coupler
@@ -286,12 +288,23 @@ contains
 
 #ifdef RASM_MODS
              sss(i,j,iblk)=max(sss(i,j,iblk),c0)
-             Tf (i,j,iblk) = sss(i,j,iblk) / (-18.48_dbl_kind &
-                             + ((18.48_dbl_kind*p001)*sss(i,j,iblk)))
-#else
-             ! CESM coupling hardwired 
-             Tf (i,j,iblk) = -1.8_dbl_kind 
 #endif
+
+             if (tfrz_option == 'minus1p8') then
+                Tf (i,j,iblk) = -1.8_dbl_kind 
+             elseif (tfrz_option == 'linear_salt') then
+                Tf (i,j,iblk) = -0.0544_r8*sss(i,j,iblk)   ! THIS IS THE ORIGINAL POP FORMULA
+             elseif (tfrz_option == 'mushy') then
+                if (sss(i,j,iblk) > c0) then
+                   Tf (i,j,iblk) = sss(i,j,iblk) / (-18.48_dbl_kind &
+                                   + ((18.48_dbl_kind*p001)*sss(i,j,iblk)))
+                else
+                   Tf (i,j,iblk) = c0
+                endif
+             else
+                write(nu_diag,*) subname,' ERROR: unknown tfrz_option = ',trim(tfrz_option)
+                call shr_sys_abort(subname//' ERROR: unknown tfrz_option = '//trim(tfrz_option))
+             endif
 
           enddo
        enddo

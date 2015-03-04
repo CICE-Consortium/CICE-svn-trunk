@@ -105,11 +105,12 @@
 
       ! dEdd tuning parameters, set in namelist
       real (kind=dbl_kind), public :: &
-         R_ice , & ! sea ice tuning parameter; +1 > 1sig increase in albedo
-         R_pnd , & ! ponded ice tuning parameter; +1 > 1sig increase in albedo
-         R_snw , & ! snow tuning parameter; +1 > ~.01 change in broadband albedo
-         dT_mlt, & ! change in temp for non-melt to melt snow grain radius change (C)
-         rsnw_mlt  ! maximum melting snow grain radius (10^-6 m)
+         R_ice ,   & ! sea ice tuning parameter; +1 > 1sig increase in albedo
+         R_pnd ,   & ! ponded ice tuning parameter; +1 > 1sig increase in albedo
+         R_snw ,   & ! snow tuning parameter; +1 > ~.01 change in broadband albedo
+         dT_mlt,   & ! change in temp for non-melt to melt snow grain radius change (C)
+         rsnw_mlt, & ! maximum melting snow grain radius (10^-6 m)
+         kalg        ! algae absorption coefficient for 0.5 m thick layer
 
       real (kind=dbl_kind), parameter, public :: &
          hi_ssl = 0.050_dbl_kind, & ! ice surface scattering layer thickness (m)
@@ -229,7 +230,8 @@
                           Sswabsn(:,:,:,:,iblk), Iswabsn(:,:,:,:,iblk),   &
                           albicen(:,:,:,iblk),   albsnon(:,:,:,iblk),     &
                           albpndn(:,:,:,iblk),   apeffn(:,:,:,iblk),      &
-                          dhsn(:,:,:,iblk),      ffracn(:,:,:,iblk))
+                          dhsn(:,:,:,iblk),      ffracn(:,:,:,iblk),      &
+                          initonly = .true.       )
 
          enddo
          !$OMP END PARALLEL DO
@@ -1085,7 +1087,8 @@
                           Sswabsn,  Iswabsn,   &
                           albicen,  albsnon,   &
                           albpndn,  apeffn,    &
-                          dhsn,     ffracn)
+                          dhsn,     ffracn,    &
+                          initonly     )
 
       use ice_calendar, only: dt
       use ice_meltpond_cesm, only: hs0
@@ -1148,6 +1151,9 @@
       real(kind=dbl_kind), dimension(nx_block,ny_block,nilyr+1,ncat), intent(inout) :: &
            fswpenln    ! visible SW entering ice layers (W m-2)
 
+      logical (kind=log_kind), optional :: &
+           initonly    ! flag to indicate init only, default is false
+
       ! local temporary variables
 
       integer (kind=int_kind) :: &
@@ -1185,8 +1191,16 @@
          spn         , & ! snow depth on refrozen pond (m)
          tmp             ! 0 or 1
 
+      logical (kind=log_kind) :: &
+         linitonly       ! local initonly value
+
       real (kind=dbl_kind), parameter :: & 
          argmax = c10    ! maximum argument of exponential
+
+      linitonly = .false.
+      if (present(initonly)) then
+         linitonly = initonly
+      endif
 
       exp_min = exp(-argmax)
 
@@ -1261,16 +1275,17 @@
 
                fpn(i,j) = c0  ! fraction of ice covered in pond
                hpn(i,j) = c0  ! pond depth over fpn
+
                ! refrozen pond lid thickness avg over ice
                ! allow snow to cover pond ice
                ipn = trcrn(i,j,nt_alvl,n) * trcrn(i,j,nt_apnd,n) &
                                           * trcrn(i,j,nt_ipnd,n)
                dhs = dhsn(i,j,n) ! snow depth difference, sea ice - pond
-               if (ipn > puny .and. &
+               if (.not. linitonly .and. ipn > puny .and. &
                    dhs < puny .and. fsnow(i,j)*dt > hs_min) &
                    dhs = hsn(i,j) - fsnow(i,j)*dt ! initialize dhs>0
                spn = hsn(i,j) - dhs   ! snow depth on pond ice
-               if (ipn*spn < puny) dhs = c0
+               if (.not. linitonly .and. ipn*spn < puny) dhs = c0
                dhsn(i,j,n) = dhs ! save: constant until reset to 0
 
                ! not using ipn assumes that lid ice is perfectly clear
@@ -1309,7 +1324,8 @@
                      fpn(i,j) = fpn(i,j) * tmp
                   endif
                   fsn(i,j) = min(fsn(i,j), c1-fpn(i,j))
-               endif      ! hp > puny
+
+               endif ! hp > puny
 
                ! endif    ! masking by lid ice
                apeffn(i,j,n) = fpn(i,j) ! for history
@@ -1347,7 +1363,7 @@
                                          trcrn(:,:,nt_Tsfc,n),       &
                                          fsn,                 fpn,   &
                                          hpn)
-            apeffn(:,:,n) = fpn(i,j) ! for history
+            apeffn(:,:,n) = fpn(:,:) ! for history
             fpn = c0
             hpn = c0
          endif
@@ -1651,17 +1667,6 @@
          albice(i,j) = albice(i,j) &
                      + awtvdr*avdrl(i,j) + awtidr*aidrl(i,j) &
                      + awtvdf*avdfl(i,j) + awtidf*aidfl(i,j) 
-
-#ifdef RASM_MODS
-         if (alvdr(i,j)>1.or.alvdf(i,j)>1.or.alidr(i,j)>1.or.alidf(i,j)>1) then
-            write(6,*)'Ice Albedo Calculations'
-            write(6,*)'alvdr(i,j),avdrl(i,j),fi(i,j) ',alvdr(i,j),avdrl(i,j),fi(i,j)
-            write(6,*)'alvdf(i,j),avdfl(i,j),fi(i,j) ',alvdf(i,j),avdfl(i,j),fi(i,j)
-            write(6,*)'alidr(i,j),aidrl(i,j),fi(i,j) ',alidr(i,j),aidrl(i,j),fi(i,j)
-            write(6,*)'alidf(i,j),aidfl(i,j),fi(i,j) ',alidf(i,j),aidfl(i,j),fi(i,j)
-         endif
-#endif
-
       enddo
 
 !DIR$ CONCURRENT !Cray
@@ -1712,17 +1717,6 @@
          albsno(i,j) = albsno(i,j) &
                      + awtvdr*avdrl(i,j) + awtidr*aidrl(i,j) &
                      + awtvdf*avdfl(i,j) + awtidf*aidfl(i,j) 
-
-#ifdef RASM_MODS
-         if (alvdr(i,j)>1.or.alvdf(i,j)>1.or.alidr(i,j)>1.or.alidf(i,j)>1) then
-            write(6,*)'Snow Albedo Calculations'
-            write(6,*)'alvdr(i,j),avdrl(i,j),fs(i,j) ',alvdr(i,j),avdrl(i,j),fs(i,j)
-            write(6,*)'alvdf(i,j),avdfl(i,j),fs(i,j) ',alvdf(i,j),avdfl(i,j),fs(i,j)
-            write(6,*)'alidr(i,j),aidrl(i,j),fs(i,j) ',alidr(i,j),aidrl(i,j),fs(i,j)
-            write(6,*)'alidf(i,j),aidfl(i,j),fs(i,j) ',alidf(i,j),aidfl(i,j),fs(i,j)
-         endif
-#endif
-
       enddo
 
 !DIR$ CONCURRENT !Cray
@@ -1775,17 +1769,6 @@
          albpnd(i,j) = albpnd(i,j) &
                      + awtvdr*avdrl(i,j) + awtidr*aidrl(i,j) &
                      + awtvdf*avdfl(i,j) + awtidf*aidfl(i,j) 
-
-#ifdef RASM_MODS
-         if (alvdr(i,j)>1.or.alvdf(i,j)>1.or.alidr(i,j)>1.or.alidf(i,j)>1) then
-            write(6,*)'Melt Ponds Albedo Calculations'
-            write(6,*)'alvdr,avdrl,fp,fs,fi',alvdr(i,j),avdrl(i,j),fp(i,j),fs(i,j),fi(i,j)
-            write(6,*)'alvdf,avdfl,fp,fs,fi',alvdf(i,j),avdfl(i,j),fp(i,j),fs(i,j),fi(i,j)
-            write(6,*)'alidr,aidrl,fp,fs,fi',alidr(i,j),aidrl(i,j),fp(i,j),fs(i,j),fi(i,j)
-            write(6,*)'alidf,aidfl,fp,fs,fi',alidf(i,j),aidfl(i,j),fp(i,j),fs(i,j),fi(i,j)
-         endif
-#endif
-
       enddo
 
       dbug = .false.
@@ -2362,9 +2345,6 @@
          rhoi   = 917.0_dbl_kind,& ! pure ice mass density (kg/m3)
          fr_max = 1.00_dbl_kind, & ! snow grain adjustment factor max
          fr_min = 0.80_dbl_kind, & ! snow grain adjustment factor min
-      ! algae absorption coefficient for 0.5 m thick layer
-         kalg   = 0.60_dbl_kind, & ! for 0.5 m path of 75 mg Chl a / m2
-!cesm turns kalg off         kalg   = 0.00_dbl_kind, & ! for 0.5 m path of 75 mg Chl a / m2
       ! tuning parameters
       ! ice and pond scat coeff fractional change for +- one-sigma in albedo
          fp_ice = 0.15_dbl_kind, & ! ice fraction of scat coeff for + stn dev in alb

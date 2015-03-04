@@ -475,8 +475,9 @@
                fcondtopn(i,j) = kh(m,1+nslyr) * (Tsf(m) - zTin(m,1))
             endif
 
-            if (fsurfn(i,j) < fcondtopn(i,j)) &
-                 Tsf(m) = min (Tsf(m), -puny)
+            if ( Tsf(m) >= c0 .and. fsurfn(i,j) < fcondtopn(i,j)) &
+                 Tsf(m) = -puny 
+
 
       !-----------------------------------------------------------------
       ! Save surface temperature at start of iteration
@@ -484,11 +485,12 @@
 
             Tsf_start(ij) = Tsf(m)
 
-            if (Tsf(m) <= -puny) then
+            if (Tsf(m) < c0) then
                l_cold(m) = .true.
             else
                l_cold(m) = .false.
             endif
+
           enddo                  ! ij
 
       !-----------------------------------------------------------------
@@ -769,7 +771,7 @@
             endif
 
       !-----------------------------------------------------------------
-      ! Condition 4: check for fsurfn < fcondtopn with Tsf > 0
+      ! Condition 4: check for fsurfn < fcondtopn with Tsf >= 0
       !-----------------------------------------------------------------
 
             fsurfn(i,j) = fsurfn(i,j) + dTsf(ij)*dfsurf_dT(ij)
@@ -779,7 +781,7 @@
                fcondtopn(i,j) = kh(m,1+nslyr) * (Tsf(m)-zTin(m,1))
             endif
 
-            if (Tsf(m) > -puny .and. fsurfn(i,j) < fcondtopn(i,j)) then
+            if (Tsf(m) >= c0 .and. fsurfn(i,j) < fcondtopn(i,j)) then
                converged(m) = .false.
                all_converged = .false.
             endif

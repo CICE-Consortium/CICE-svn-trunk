@@ -2888,6 +2888,9 @@ contains
     
     ! perform a tri-diagonal solve with TDMA using a sparse tridiagoinal matrix
 
+    integer(kind=int_kind), intent(in) :: &
+         n      ! matrix size
+    
     real(kind=dbl_kind), dimension(1:n), intent(in) :: &
          a  , & ! matrix lower off-diagonal
          b  , & ! matrix diagonal
@@ -2897,9 +2900,6 @@ contains
     real(kind=dbl_kind), dimension(1:n), intent(out) :: &
          x      ! solution vector
 
-    integer(kind=int_kind), intent(in) :: &
-         n      ! matrix size
-    
     real(kind=dbl_kind), dimension(nilyr+nslyr+1) :: &
          cp , & ! modified upper off-diagonal vector
          dp     ! modified right hand side vector

@@ -1,3 +1,4 @@
+
 !  SVN:$Id: ice_restart.F90 607 2013-03-29 15:49:42Z eclare $
 !=======================================================================
 !
@@ -76,7 +77,7 @@
          call ice_pio_init(mode='read', filename=trim(filename), File=File)
       
          call ice_pio_initdecomp(iodesc=iodesc2d)
-         call ice_pio_initdecomp(ndim3=ncat  , iodesc=iodesc3d_ncat)
+         call ice_pio_initdecomp(ndim3=ncat  , iodesc=iodesc3d_ncat,remap=.true.)
 
          if (use_restart_time) then
          status = pio_get_att(File, pio_global, 'istep1', istep0)
@@ -84,13 +85,13 @@
          status = pio_get_att(File, pio_global, 'time_forc', time_forc)
          call pio_seterrorhandling(File, PIO_BCAST_ERROR)
          status = pio_get_att(File, pio_global, 'nyr', nyr)
+         call pio_seterrorhandling(File, PIO_INTERNAL_ERROR)
          if (status == PIO_noerr) then
             status = pio_get_att(File, pio_global, 'month', month)
             status = pio_get_att(File, pio_global, 'mday', mday)
             status = pio_get_att(File, pio_global, 'sec', sec)
          endif
          endif ! use namelist values if use_restart_time = F
-         call pio_seterrorhandling(File, PIO_INTERNAL_ERROR)
       endif
 
       if (my_task == master_task) then
@@ -373,7 +374,7 @@
          status = pio_enddef(File)
 
          call ice_pio_initdecomp(iodesc=iodesc2d)
-         call ice_pio_initdecomp(ndim3=ncat  , iodesc=iodesc3d_ncat)
+         call ice_pio_initdecomp(ndim3=ncat  , iodesc=iodesc3d_ncat, remap=.true.)
 
       endif
 
@@ -429,25 +430,24 @@
         n,     &      ! number of dimensions for variable
         status        ! status variable from netCDF routine
 
-      real (kind=dbl_kind), allocatable :: work2(:,:,:)    ! input array (real, 8-byte)
-      real (kind=dbl_kind), allocatable :: work3(:,:,:,:)  ! input 3D array (real, 8-byte)
       real (kind=dbl_kind) :: amin,amax,asum
 
       if (restart_format == "pio") then
          if (my_task == master_task) &
             write(nu_diag,*)'Parallel restart file read: ',vname
 
+         call pio_seterrorhandling(File, PIO_BCAST_ERROR)
+
          status = pio_inq_varid(File,trim(vname),vardesc)
 
-         if (ndim3 == ncat) then
-            allocate(work3(nx_block,ny_block,nblocks,ndim3))
-            call pio_read_darray(File, vardesc, iodesc3d_ncat, work3, status)
-            do j=1,nblocks
-            do n=1,ndim3
-               work(:,:,n,j) = work3(:,:,j,n)
-            enddo
-            enddo
-            deallocate(work3)
+         if (status /= 0) then
+            call abort_ice("CICE4 restart? Missing variable: "//trim(vname))
+         endif
+
+         call pio_seterrorhandling(File, PIO_INTERNAL_ERROR)
+
+         if (ndim3 == ncat .and. ncat>1) then
+            call pio_read_darray(File, vardesc, iodesc3d_ncat, work, status)
             if (present(field_loc)) then
                do n=1,ndim3
                   call ice_HaloUpdate (work(:,:,n,:), halo_info, &
@@ -455,16 +455,11 @@
                enddo
             endif
          elseif (ndim3 == 1) then
-            allocate(work2(nx_block,ny_block,nblocks))
-            call pio_read_darray(File, vardesc, iodesc2d, work2, status)
-            do j=1,nblocks
-               work(:,:,1,j) = work2(:,:,j)
-            enddo
+            call pio_read_darray(File, vardesc, iodesc2d, work, status)
             if (present(field_loc)) then
                call ice_HaloUpdate (work(:,:,1,:), halo_info, &
                                     field_loc, field_type)
             endif
-            deallocate(work2)
          else
             write(nu_diag,*) "ndim3 not supported ",ndim3
          endif
@@ -536,10 +531,9 @@
       integer (kind=int_kind) :: &
         j,     &      ! dimension counter
         n,     &      ! dimension counter
+        ndims, &  ! number of variable dimensions
         status        ! status variable from netCDF routine
 
-      real (kind=dbl_kind), allocatable :: work2(:,:,:)   ! input array (real, 8-byte)
-      real (kind=dbl_kind), allocatable :: work3(:,:,:,:) ! input array (real, 8-byte)
       real (kind=dbl_kind) :: amin,amax,asum
 
       if (restart_format == "pio") then
@@ -547,25 +541,17 @@
             write(nu_diag,*)'Parallel restart file write: ',vname
 
          status = pio_inq_varid(File,trim(vname),vardesc)
+         
+         status = pio_inq_varndims(File, vardesc, ndims)
 
-         if (ndim3 == ncat) then 
-            allocate(work3(nx_block,ny_block,nblocks,ndim3))
-            do j = 1, nblocks
-            do n=1,ndim3
-               work3(:,:,j,n) = work(:,:,n,j)
-            enddo
-            enddo
-            call pio_write_darray(File, vardesc, iodesc3d_ncat,work3, status, fillval=c0)
-            deallocate(work3)
-         elseif (ndim3 == 1) then
-            allocate(work2(nx_block,ny_block,nblocks))
-            do j = 1, nblocks
-               work2(:,:,j) = work(:,:,1,j)
-            enddo
-            call pio_write_darray(File, vardesc, iodesc2d, work2, status, fillval=c0)
-            deallocate(work2)
+         if (ndims==3) then 
+            call pio_write_darray(File, vardesc, iodesc3d_ncat,work(:,:,:,1:nblocks), &
+                 status, fillval=c0)
+         elseif (ndims == 2) then
+            call pio_write_darray(File, vardesc, iodesc2d, work(:,:,1,1:nblocks), &
+                 status, fillval=c0)
          else
-            write(nu_diag,*) "ndim3 not supported",ndim3
+            write(nu_diag,*) "ndims not supported",ndims,ndim3
          endif
 
          if (diag) then
@@ -607,10 +593,9 @@
       use ice_fileunits, only: nu_diag
 
       if (restart_format == 'pio') then
-         call pio_closefile(File)
-
          call PIO_freeDecomp(File,iodesc2d)
          call PIO_freeDecomp(File,iodesc3d_ncat)
+         call pio_closefile(File)
       endif
 
       if (my_task == master_task) &

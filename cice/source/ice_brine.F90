@@ -69,7 +69,7 @@
       igrid(1)       = c0 ! ice top
       igrid(nblyr+1) = c1 ! ice bottom
       
-      zspace = c1/(real(nblyr,kind=dbl_kind)) 
+      zspace = c1/max(c1,(real(nblyr,kind=dbl_kind)))
       do k = 2, nblyr+1
          bgrid(k) = zspace*(real(k,kind=dbl_kind) - c1p5)
       enddo

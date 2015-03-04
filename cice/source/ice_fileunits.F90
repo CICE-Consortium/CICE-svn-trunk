@@ -147,9 +147,10 @@
 
    ! local variables
 
+#ifndef CCSMCOUPLED
    integer (kind=int_kind) :: n  ! dummy loop index
-
    logical (kind=log_kind) :: alreadyInUse
+#endif
 
 #ifdef CCSMCOUPLED
    iunit = shr_file_getUnit()
@@ -265,24 +266,15 @@
 !
 !-----------------------------------------------------------------------
 
-#if (defined IRIX64 || defined CRAY || defined OSF1 || defined SUNOS || defined LINUX || defined NEC_SX | defined UNICOSMP)
-   call flush(iunit)
-#endif
-#if (defined AIX)
-   call flush_(iunit)
-#endif
-
 #ifdef CCSMCOUPLED
    call shr_sys_flush(iunit)
 #else
-
 #if (defined IRIX64 || defined CRAY || defined OSF1 || defined SUNOS || defined LINUX || defined NEC_SX | defined UNICOSMP)
    call flush(iunit)
 #endif
 #if (defined AIX)
    call flush_(iunit)
 #endif
-
 #endif
 
       end subroutine flush_fileunit

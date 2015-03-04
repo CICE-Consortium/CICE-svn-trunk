@@ -23,18 +23,21 @@
 
 !  This routine aborts the ice model and prints an error message.
 
-      use ice_fileunits, only: nu_diag, ice_stderr, flush_fileunit
 #if (defined CCSMCOUPLED)
+      use ice_fileunits, only: nu_diag, flush_fileunit
       use shr_sys_mod
-#endif
-
+#else
+      use ice_fileunits, only: nu_diag, ice_stderr, flush_fileunit
       include 'mpif.h'   ! MPI Fortran include file
+#endif
 
       character (len=*), intent(in) :: error_message
 
       ! local variables
 
+#ifndef CCSMCOUPLED
       integer (int_kind) :: ierr ! MPI error flag
+#endif
 
 #if (defined CCSMCOUPLED)
       call flush_fileunit(nu_diag)

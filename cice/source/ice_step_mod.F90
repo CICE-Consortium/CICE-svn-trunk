@@ -69,7 +69,7 @@
       type (block) :: &
          this_block      ! block information for current block
 
-      call ice_timer_start(timer_sw)      ! shortwave
+      call ice_timer_start(timer_sw,iblk)      ! shortwave
 
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -140,7 +140,7 @@
             enddo
          enddo                  ! ncat
 
-      call ice_timer_stop(timer_sw)     ! shortwave
+      call ice_timer_stop(timer_sw,iblk)     ! shortwave
 
       end subroutine prep_radiation
 
@@ -170,7 +170,7 @@
       use ice_fileunits, only: nu_diag
       use ice_flux, only: frzmlt, sst, Tf, strocnxT, strocnyT, rside, &
           meltsn, melttn, meltbn, congeln, snoicen, dsnown, uatm, vatm, &
-          wind, rhoa, potT, Qa, zlvl, strax, stray, flatn, fsurfn, fcondtopn, &
+          wind, rhoa, potT, Qa, zlvl, strax, stray, flatn, fsensn, fsurfn, fcondtopn, &
           flw, fsnow, fpond, sss, mlt_onset, frz_onset, faero_atm, faero_ocn, &
           frain, Tair, coszen, strairxT, strairyT, fsurf, fcondtop, fsens, &
           flat, fswabs, flwout, evap, Tref, Qref, Uref, fresh, fsalt, fhocn, &
@@ -215,7 +215,6 @@
 
       ! 2D coupler variables (computed for each category, then aggregated)
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         fsensn      , & ! surface downward sensible heat     (W/m^2)
          fswabsn     , & ! shortwave absorbed by ice          (W/m^2)
          flwoutn     , & ! upward LW at surface               (W/m^2)
          evapn       , & ! flux of vapor, atmos to ice   (kg m-2 s-1)
@@ -490,6 +489,7 @@
                                 indxi,     indxj,     &
                                 aicen    (:,:,n,iblk),&
                                 flatn    (:,:,n,iblk),&
+                                fsensn   (:,:,n,iblk),&
                                 fsurfn   (:,:,n,iblk),&
                                 fcondtopn(:,:,n,iblk) )
             endif
@@ -513,7 +513,7 @@
                                 Iswabsn(:,:,:,n,iblk),                    &
                                 fsurfn(:,:,n,iblk),                       &
                                 fcondtopn(:,:,n,iblk),                    &
-                                fsensn,              flatn(:,:,n,iblk),   &
+                                fsensn(:,:,n,iblk),  flatn(:,:,n,iblk),   &
                                 flwoutn,                                  &
                                 evapn,               freshn,              &
                                 fsaltn,              fhocnn,              &
@@ -588,7 +588,8 @@
       ! the surface fluxes are merged, below.
       !-----------------------------------------------------------------
 
-         call ice_timer_start(timer_ponds)
+         call ice_timer_start(timer_ponds,iblk)
+
          if (tr_pond) then
 
             if (tr_pond_cesm) then
@@ -654,7 +655,7 @@
             endif
 
          endif
-         call ice_timer_stop(timer_ponds)
+         call ice_timer_stop(timer_ponds,iblk)
 
       !-----------------------------------------------------------------
       ! Increment area-weighted fluxes.
@@ -668,7 +669,7 @@
                             strairxn,           strairyn,             &
                             Cdn_atm_ocn_n,                            &
                             fsurfn(:,:,n,iblk), fcondtopn(:,:,n,iblk),&
-                            fsensn,             flatn(:,:,n,iblk),    &
+                            fsensn(:,:,n,iblk), flatn(:,:,n,iblk),    &
                             fswabsn,            flwoutn,              &
                             evapn,                                    &
                             Trefn,              Qrefn,                &
@@ -696,7 +697,7 @@
       !-----------------------------------------------------------------
       ! Calculate ponds from the topographic scheme
       !-----------------------------------------------------------------
-         call ice_timer_start(timer_ponds)
+         call ice_timer_start(timer_ponds,iblk)
          if (tr_pond_topo) then
             call compute_ponds_topo(nx_block, ny_block,                        &
                                     ilo, ihi, jlo, jhi,                        &
@@ -713,7 +714,7 @@
                                     trcrn(:,:,nt_hpnd,:,iblk),                 &
                                     trcrn(:,:,nt_ipnd,:,iblk))
          endif
-         call ice_timer_stop(timer_ponds)
+         call ice_timer_stop(timer_ponds,iblk)
 
       end subroutine step_therm1
 
@@ -798,7 +799,7 @@
       ! thickness categories.
       !-----------------------------------------------------------------
 
-         call ice_timer_start(timer_catconv)    ! category conversions
+         call ice_timer_start(timer_catconv,iblk)    ! category conversions
 
       !-----------------------------------------------------------------
       ! Compute fractional ice area in each grid cell.
@@ -855,7 +856,7 @@
 
          endif  ! kitd = 1
 
-         call ice_timer_stop(timer_catconv)    ! category conversions
+         call ice_timer_stop(timer_catconv,iblk)    ! category conversions
 
       !-----------------------------------------------------------------
       ! Add frazil ice growing in leads.
@@ -1381,7 +1382,7 @@
       type (block) :: &
          this_block      ! block information for current block
 
-      call ice_timer_start(timer_sw)      ! shortwave
+      call ice_timer_start(timer_sw,iblk)      ! shortwave
 
       ! Initialize
       do n = 1, ncat
@@ -1448,7 +1449,6 @@
                               coszen(:,:,iblk))
         endif   ! shortwave
 
-
       else    ! .not. calc_Tsfc
 
       ! Calculate effective pond area for HadGEM
@@ -1493,8 +1493,7 @@
 
       endif    ! calc_Tsfc
 
-
-      call ice_timer_stop(timer_sw)     ! shortwave
+      call ice_timer_stop(timer_sw,iblk)     ! shortwave
 
       end subroutine step_radiation
 

@@ -476,6 +476,10 @@ subroutine ice_prescribed_phys
                      hs = c0
                   endif
 
+                  aicen(i,j,nc,iblk) = ice_cov(i,j,iblk)
+                  vicen(i,j,nc,iblk) = hi*aicen(i,j,nc,iblk) 
+                  vsnon(i,j,nc,iblk) = hs*aicen(i,j,nc,iblk) 
+
                   !---------------------------------------------------------
                   ! make linear temp profile and compute enthalpy
                   !---------------------------------------------------------
