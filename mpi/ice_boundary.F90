@@ -1078,8 +1078,8 @@ contains
       halo%tripoleTFlag   = tripoleTFlag
       halo%numLocalCopies = numLocalCopies
 
-      halo%srcLocalAddr   = basehalo%srcLocalAddr
-      halo%dstLocalAddr   = basehalo%dstLocalAddr
+      halo%srcLocalAddr   = basehalo%srcLocalAddr(:,1:numLocalCopies)
+      halo%dstLocalAddr   = basehalo%dstLocalAddr(:,1:numLocalCopies)
 
    numMsgSend = 0
    do nmsg=1,basehalo%numMsgSend

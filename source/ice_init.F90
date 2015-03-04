@@ -57,7 +57,7 @@
                              incond_dir, incond_file
       use ice_exit, only: abort_ice
       use ice_itd, only: kitd, kcatbound
-      use ice_ocean, only: oceanmixed_ice
+      use ice_ocean, only: oceanmixed_ice, tfrz_option
       use ice_firstyear, only: restart_FY
       use ice_flux, only: update_ocn_f, l_mpond_fresh
       use ice_forcing, only: &
@@ -68,11 +68,11 @@
           oceanmixed_file, restore_sst,   trestore
       use ice_grid, only: grid_file, gridcpl_file, kmt_file, grid_type, grid_format
       use ice_lvl, only: restart_lvl
-      use ice_mechred, only: kstrength, krdg_partic, krdg_redist, mu_rdg
+      use ice_mechred, only: kstrength, krdg_partic, krdg_redist, mu_rdg, Cf
       use ice_dyn_shared, only: ndte, kdyn, revised_evp, yield_curve
       use ice_shortwave, only: albicev, albicei, albsnowv, albsnowi, ahmax, &
                                shortwave, albedo_type, R_ice, R_pnd, &
-                               R_snw, dT_mlt, rsnw_mlt
+                               R_snw, dT_mlt, rsnw_mlt, kalg
       use ice_atmo, only: atmbndy, calc_strair, formdrag, highfreq, natmiter
       use ice_transport_driver, only: advection
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, &
@@ -137,13 +137,14 @@
       namelist /dynamics_nml/ &
         kdyn,           ndte,           revised_evp,    yield_curve,    &
         advection,                                                      &
-        kstrength,      krdg_partic,    krdg_redist,    mu_rdg
+        kstrength,      krdg_partic,    krdg_redist,    mu_rdg,         &
+        Cf
 
       namelist /shortwave_nml/ &
         shortwave,      albedo_type,                                    &
         albicev,        albicei,         albsnowv,      albsnowi,       &
         ahmax,          R_ice,           R_pnd,         R_snw,          &
-        dT_mlt,         rsnw_mlt
+        dT_mlt,         rsnw_mlt,        kalg
 
       namelist /ponds_nml/ &
         hs0,            dpscale,         frzpnd,                        &
@@ -157,7 +158,8 @@
         fbot_xfer_type,                                                 &
         oceanmixed_ice, ocn_data_format, sss_data_type, sst_data_type,  &
         ocn_data_dir,   oceanmixed_file, restore_sst,   trestore,       &
-        restore_ice,    formdrag,        highfreq,      natmiter
+        restore_ice,    formdrag,        highfreq,      natmiter,       &
+        tfrz_option
 
       namelist /tracer_nml/   &
         tr_iage, restart_age, &
@@ -228,6 +230,7 @@
       krdg_partic = 1        ! 1 = new participation, 0 = Thorndike et al 75
       krdg_redist = 1        ! 1 = new redistribution, 0 = Hibler 80
       mu_rdg = 3             ! e-folding scale of ridged ice, krdg_partic=1 (m^0.5)
+      Cf = 17.0_dbl_kind     ! ratio of ridging work to PE change in ridging 
       advection  = 'remap'   ! incremental remapping transport scheme
       shortwave = 'default'  ! 'default' or 'dEdd' (delta-Eddington)
       albedo_type = 'default'! or 'constant'
@@ -245,6 +248,8 @@
       dT_mlt    = 1.5_dbl_kind    ! change in temp to give non-melt to melt change
                                   ! in snow grain radius
       rsnw_mlt  = 1500._dbl_kind  ! maximum melting snow grain radius
+      kalg      = 0.60_dbl_kind   ! algae absorption coefficient for 0.5 m thick layer
+                                  ! 0.5 m path of 75 mg Chl a / m2
       hp1       = 0.01_dbl_kind   ! critical pond lid thickness for topo ponds
       hs0       = 0.03_dbl_kind   ! snow depth for transition to bare sea ice (m)
       hs1       = 0.03_dbl_kind   ! snow depth for transition to bare pond ice (m)
@@ -271,6 +276,7 @@
       natmiter        = 5         ! number of iterations for atm boundary layer calcs
       precip_units    = 'mks'     ! 'mm_per_month' or
                                   ! 'mm_per_sec' = 'mks' = kg/m^2 s
+      tfrz_option     = 'mushy'   ! freezing temp formulation
       oceanmixed_ice  = .false.   ! if true, use internal ocean mixed layer
       ocn_data_format = 'bin'     ! file format ('bin'=binary or 'nc'=netcdf)
       sss_data_type   = 'default'
@@ -562,6 +568,23 @@
          calc_Tsfc = .true.
       endif
 
+      if (ktherm == 1 .and. trim(tfrz_option) /= 'linear_salt') then
+         if (my_task == master_task) then
+         write (nu_diag,*) &
+         'WARNING: ktherm = 1 and tfrz_option = ',trim(tfrz_option)
+         write (nu_diag,*) &
+         'WARNING: For consistency, set tfrz_option = linear_salt'
+         endif
+      endif
+      if (ktherm == 2 .and. trim(tfrz_option) /= 'mushy') then
+         if (my_task == master_task) then
+         write (nu_diag,*) &
+         'WARNING: ktherm = 2 and tfrz_option = ',trim(tfrz_option)
+         write (nu_diag,*) &
+         'WARNING: For consistency, set tfrz_option = mushy'
+         endif
+      endif
+
       if (trim(atm_data_type) == 'hadgem' .and. & 
              trim(precip_units) /= 'mks') then
          if (my_task == master_task) &
@@ -664,6 +687,7 @@
       call broadcast_scalar(krdg_partic,        master_task)
       call broadcast_scalar(krdg_redist,        master_task)
       call broadcast_scalar(mu_rdg,             master_task)
+      call broadcast_scalar(Cf,                 master_task)
       call broadcast_scalar(advection,          master_task)
       call broadcast_scalar(shortwave,          master_task)
       call broadcast_scalar(albedo_type,        master_task)
@@ -674,6 +698,7 @@
       call broadcast_scalar(R_snw,              master_task)
       call broadcast_scalar(dT_mlt,             master_task)
       call broadcast_scalar(rsnw_mlt,           master_task)
+      call broadcast_scalar(kalg,               master_task)
       call broadcast_scalar(hp1,                master_task)
       call broadcast_scalar(hs0,                master_task)
       call broadcast_scalar(hs1,                master_task)
@@ -704,6 +729,7 @@
       call broadcast_scalar(fbot_xfer_type,     master_task)
       call broadcast_scalar(precip_units,       master_task)
       call broadcast_scalar(oceanmixed_ice,     master_task)
+      call broadcast_scalar(tfrz_option,        master_task)
       call broadcast_scalar(ocn_data_format,    master_task)
       call broadcast_scalar(sss_data_type,      master_task)
       call broadcast_scalar(sst_data_type,      master_task)
@@ -801,7 +827,7 @@
          write(nu_diag,*)    ' pointer_file              = ', &
                                trim(pointer_file)
          write(nu_diag,*)    ' use_restart_time          = ', use_restart_time
-         write(nu_diag,*   ) ' ice_ic                    = ', &
+         write(nu_diag,*)    ' ice_ic                    = ', &
                                trim(ice_ic)
          write(nu_diag,*)    ' grid_type                 = ', &
                                trim(grid_type)
@@ -832,6 +858,8 @@
                                krdg_redist
          if (krdg_redist == 1) &
          write(nu_diag,1000) ' mu_rdg                    = ', mu_rdg
+         if (kstrength == 1) &
+         write(nu_diag,1000) ' Cf                        = ', Cf
          write(nu_diag,1030) ' advection                 = ', &
                                trim(advection)
          write(nu_diag,1030) ' shortwave                 = ', &
@@ -843,6 +871,7 @@
          write(nu_diag,1000) ' R_snw                     = ', R_snw
          write(nu_diag,1000) ' dT_mlt                    = ', dT_mlt
          write(nu_diag,1000) ' rsnw_mlt                  = ', rsnw_mlt
+         write(nu_diag,1000) ' kalg                      = ', kalg
          write(nu_diag,1000) ' hp1                       = ', hp1
          write(nu_diag,1000) ' hs0                       = ', hs0
          else
@@ -904,6 +933,8 @@
                                trim(fbot_xfer_type)
          write(nu_diag,1010) ' oceanmixed_ice            = ', &
                                oceanmixed_ice
+         write(nu_diag,*)    ' tfrz_option               = ', &
+                               trim(tfrz_option)
          if (trim(sss_data_type) == 'ncar' .or. &
              trim(sst_data_type) == 'ncar') then
             write(nu_diag,*) ' oceanmixed_file           = ', &

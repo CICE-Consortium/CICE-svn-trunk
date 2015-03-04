@@ -186,6 +186,7 @@
            f_hi        = 'm', f_hs         = 'm', &
            f_Tsfc      = 'm', f_aice       = 'm', &
            f_uvel      = 'm', f_vvel       = 'm', &
+           f_uatm      = 'm', f_vatm       = 'm', &
            f_fswdn     = 'm', f_flwdn      = 'm', &
            f_snow      = 'm', f_snow_ai    = 'm', &
            f_rain      = 'm', f_rain_ai    = 'm', &
@@ -234,6 +235,7 @@
            f_fmeltt_ai = 'm',                     &
            f_fsurfn_ai = 'x' ,f_fcondtopn_ai='x', &
            f_fmelttn_ai= 'x', f_flatn_ai   = 'x', &
+           f_fsensn_ai = 'x',                     &
 !          f_field3dz  = 'x',                     &
            f_keffn_top = 'x', &
            f_Tinz      = 'x', f_Sinz       = 'x', &
@@ -265,6 +267,7 @@
            f_hi,        f_hs       , &
            f_Tsfc,      f_aice     , &
            f_uvel,      f_vvel     , &
+           f_uatm,      f_vatm     , &
            f_fswdn,     f_flwdn    , &
            f_snow,      f_snow_ai  , &     
            f_rain,      f_rain_ai  , &
@@ -313,6 +316,7 @@
            f_fmeltt_ai, &
            f_fsurfn_ai,f_fcondtopn_ai,&
            f_fmelttn_ai,f_flatn_ai,  &
+           f_fsensn_ai,              &
 !          f_field3dz,  &
            f_keffn_top, &
            f_Tinz,      f_Sinz,      &
@@ -359,6 +363,7 @@
            n_hi         , n_hs         , &
            n_Tsfc       , n_aice       , &
            n_uvel       , n_vvel       , &
+           n_uatm       , n_vatm       , &
            n_sice       , &
            n_fswdn      , n_flwdn      , &
            n_snow       , n_snow_ai    , &
@@ -410,6 +415,7 @@
            n_fcondtopn_ai, &
            n_fmelttn_ai  , &
            n_flatn_ai    , &
+           n_fsensn_ai   , &
 !          n_field3dz    , &
            n_keffn_top   , &
            n_Tinz        , n_Sinz      , &

@@ -31,6 +31,12 @@
       real (kind=dbl_kind), parameter :: &
          cprho = cp_ocn*rhow
 
+      character(len=char_len), public :: &
+         tfrz_option              ! form of ocean freezing temperature
+                                  ! 'minus1p8' = -1.8 C
+                                  ! 'linear_salt' = -depressT * sss
+                                  ! 'mushy' conforms with ktherm=2
+
 !=======================================================================
 
       contains

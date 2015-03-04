@@ -623,14 +623,15 @@
 
 !=======================================================================
 
-! neutral drag coefficients for ocean and atmosphere 
-! also compute the intermediate necessary variables ridge height, 
-! distance, floe size...	 
+! Neutral drag coefficients for ocean and atmosphere also compute the 
+! intermediate necessary variables ridge height, distance, floe size	 
+! based upon Tsamados et al. (2014), JPO, DOI: 10.1175/JPO-D-13-0215.1.
+! Places where the code varies from the paper are commented.
 !
 ! authors: Michel Tsamados, CPOM
 !          David Schroeder, CPOM
 !
-! changes: Andrew Roberts, NPS (adjusted for fully coupled models)
+! changes: Andrew Roberts, NPS (RASM/CESM coupling and documentation)
 
 
       subroutine neutral_drag_coeffs (nx_block, ny_block, &
@@ -876,7 +877,9 @@
       
         ! hridge, hkeel, distrdg and dkeel estimates from CICE for 
         ! simple triangular geometry
+
         if (ardg > p001) then 
+
           ! see Eq. 25 and Eq. 26
           hridge(i,j) = vrdg/ardg*c2 &
                       * (alpha2+beta2*hkoverhr/dkoverdr*tanar/tanak) &
@@ -886,7 +889,11 @@
           hkeel(i,j) = hkoverhr * hridge(i,j)
           dkeel(i,j) = dkoverdr * distrdg(i,j)
 
-          tmp1 = hridge(i,j) - hfreebd(i,j)
+          ! Use the height of ridges relative to the mean freeboard of
+          ! the pack.  Therefore skin drag and ridge drag differ in
+          ! this code as compared to  Tsamados et al. (2014) equations
+          ! 10 and 18, which reference both to sea level. 
+          tmp1 = max(c0,hridge(i,j) - hfreebd(i,j))
 
       !------------------------------------------------------------
       ! Skin drag (atmo)
@@ -899,14 +906,21 @@
       ! Ridge effect (atmo)
       !------------------------------------------------------------
 
-          sca = c1 - exp(-sHGB*distrdg(i,j)/tmp1) ! see Eq. 9
-          ctecar = cra*p5
-          ! hridge relative to sea level
-          Cdn_atm_rdg(i,j) = ctecar*tmp1/distrdg(i,j)*sca* &
-                     (log(tmp1*icerufi)/log(zref*icerufi))**c2
-          Cdn_atm_rdg(i,j) = min(Cdn_atm_rdg(i,j),camax)
+          if (tmp1 > puny) then
+            sca = c1 - exp(-sHGB*distrdg(i,j)/tmp1) ! see Eq. 9
+            ctecar = cra*p5
+            Cdn_atm_rdg(i,j) = ctecar*tmp1/distrdg(i,j)*sca* &
+                       (log(tmp1*icerufi)/log(zref*icerufi))**c2
+            Cdn_atm_rdg(i,j) = min(Cdn_atm_rdg(i,j),camax)
+          endif
 
-          tmp1 = hkeel(i,j) - hdraft(i,j)
+          ! Use the depth of keels relative to the mean draft of
+          ! the pack.  Therefore skin drag and keel drag differ in
+          ! this code as compared to  Tsamados et al. (2014) equations
+          ! 11 and 19, which reference both to  sea level. In some
+          ! circumstances, hkeel can be less than hdraft because hkoverhr
+          ! is constant, and max(c0,...) temporarily addresses this.
+          tmp1 = max(c0,hkeel(i,j) - hdraft(i,j))
 
       !------------------------------------------------------------
       ! Skin drag bottom ice (ocean)
@@ -919,12 +933,14 @@
       ! Keel effect (ocean)
       !------------------------------------------------------------
 
-          scw = c1 - exp(-sHGB*dkeel(i,j)/tmp1) 
-          ctecwk = crw*p5
-          ! hkeel relative to sea level
-          Cdn_ocn_keel(i,j) = ctecwk*tmp1/dkeel(i,j)*scw* &
-                     (log(tmp1*icerufi)/log(zref*icerufi))**c2  
-          Cdn_ocn_keel(i,j) = max(min(Cdn_ocn_keel(i,j),cwmax),c0)
+          if (tmp1 > puny) then
+            scw = c1 - exp(-sHGB*dkeel(i,j)/tmp1) 
+            ctecwk = crw*p5
+
+            Cdn_ocn_keel(i,j) = ctecwk*tmp1/dkeel(i,j)*scw* &
+                        (log(tmp1*icerufi)/log(zref*icerufi))**c2  
+            Cdn_ocn_keel(i,j) = max(min(Cdn_ocn_keel(i,j),cwmax),c0)
+          endif
   
         endif ! ardg > 0.001
 

@@ -48,7 +48,7 @@ module ice_comp_mct
                               idate, mday, time, month, daycal,          &
 		              sec, dt, dt_dyn, calendar,                 &
                               calendar_type, nextsw_cday, days_per_year, &
-                              nyr, new_year, time2sec
+                              nyr, new_year, time2sec, year_init
   use ice_orbital,     only : eccen, obliqr, lambm0, mvelpp
   use ice_timers
 
@@ -236,14 +236,15 @@ contains
     inst_name   = seq_comm_name(ICEID)
     inst_index  = seq_comm_inst(ICEID)
     inst_suffix = seq_comm_suffix(ICEID)
-
-    write(nu_diag,*) trim(subname),'inst_name   = ',trim(inst_name)
-    write(nu_diag,*) trim(subname),'inst_index  = ',inst_index
-    write(nu_diag,*) trim(subname),'inst_suffix = ',trim(inst_suffix)
-
     call t_startf ('cice_init')
     call cice_init( mpicom_loc )
     call t_stopf ('cice_init')
+
+    if (my_task == master_task) then
+       write(nu_diag,*) trim(subname),' inst_name   = ',trim(inst_name)
+       write(nu_diag,*) trim(subname),' inst_index  = ',inst_index
+       write(nu_diag,*) trim(subname),' inst_suffix = ',trim(inst_suffix)
+    endif
 
     !---------------------------------------------------------------------------
     ! Reset shr logging to my log file
@@ -290,10 +291,22 @@ contains
                trim(subname),' resetting idate to match sync clock'
        end if
 
-       idate = curr_ymd
+       idate = curr_ymd - (year_init*10000)      ! adjust for year_init
+       if (idate < 0) then
+          write(nu_diag,*) trim(subname),' ERROR curr_ymd,year_init =',curr_ymd,year_init
+          write(nu_diag,*) trim(subname),' ERROR idate lt zero',idate
+          call shr_sys_abort(subname//' :: ERROR idate lt zero')
+       endif
        iyear = (idate/10000)                     ! integer year of basedate
        month = (idate-iyear*10000)/100           ! integer month of basedate
        mday  =  idate-iyear*10000-month*100      ! day of month of basedate
+
+       if (my_task == master_task) then
+          write(nu_diag,*) trim(subname),' curr_ymd = ',curr_ymd
+          write(nu_diag,*) trim(subname),' cice year_init = ',year_init
+          write(nu_diag,*) trim(subname),' cice start date = ',idate
+          write(nu_diag,*) trim(subname),' cice start ymds = ',iyear,month,mday,start_tod
+       endif
 
        call time2sec(iyear,month,mday,time)
        time = time+start_tod

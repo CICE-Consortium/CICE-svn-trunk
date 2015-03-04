@@ -22,7 +22,7 @@
       use ice_kinds_mod
       use ice_constants
       use ice_communicate, only: my_task, master_task
-      use ice_domain_size, only: nilyr, nslyr, nblyr, ncat, max_aero, &
+      use ice_domain_size, only: nilyr, nslyr, ncat, max_aero, &
                                  n_aero, max_ntrcr
       use ice_fileunits, only: nu_diag
 

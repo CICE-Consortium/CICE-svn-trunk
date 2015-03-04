@@ -60,11 +60,10 @@
                           ! 1 for exponential redistribution function 
 
       real (kind=dbl_kind), public :: &  
-         mu_rdg           ! gives e-folding scale of ridged ice (m^.5) 
-                          ! (krdg_redist = 1) 
+         mu_rdg, &        ! gives e-folding scale of ridged ice (m^.5) (krdg_redist = 1) 
+         Cf               ! ratio of ridging work to PE change in ridging (kstrength = 1)
  
       real (kind=dbl_kind), parameter :: & 
-         Cf = 17._dbl_kind   , & ! ratio of ridging work to PE change in ridging 
          Cs = p25            , & ! fraction of shear energy contrbtng to ridging 
          Cp = p5*gravit*(rhow-rhoi)*rhoi/rhow, & ! proport const for PE 
          fsnowrdg = p5       , & ! snow fraction that survives in ridging 

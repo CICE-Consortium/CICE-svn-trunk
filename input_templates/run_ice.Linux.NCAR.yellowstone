@@ -22,5 +22,5 @@ echo $ICE_LOG_FILE
 
 cd /glade/scratch/tcraig/CESM_CICE5/rundir
 tar -xvf /glade/scratch/tcraig/data1997.tar
-cp -f /glade/p/work/tcraig/cesm13.b07cice5/models/ice/cice_dev/src/input_templates/gx3/ice_in .
+cp -f /glade/p/work/tcraig/cesm13.a16cice/models/ice/cice_dev/src/input_templates/gx3/ice_in .
 mpirun.lsf ./cice >&! $ICE_LOG_FILE

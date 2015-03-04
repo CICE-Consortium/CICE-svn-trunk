@@ -851,6 +851,10 @@
         if (status /= nf90_noerr) call abort_ice( &
                       'ice Error: global attribute history')
 
+        status = nf90_put_att(ncid,nf90_global,'io_flavor','io_netcdf')
+        if (status /= nf90_noerr) call abort_ice( &
+                      'ice Error: global attribute io_flavor')
+
       !-----------------------------------------------------------------
       ! end define mode
       !-----------------------------------------------------------------
@@ -948,6 +952,8 @@
                  status = nf90_put_var(ncid,varid,(/(k, k=1,nzilyr)/))
                CASE ('VGRDs') ! index - needed for Met Office analysis code
                  status = nf90_put_var(ncid,varid,(/(k, k=1,nzslyr)/))
+               CASE ('VGRDb')
+                 status = nf90_put_var(ncid,varid,(/(k, k=1,nzblyr)/))
              END SELECT
              if (status /= nf90_noerr) call abort_ice( &
                            'ice: Error writing'//var_nz(i)%short_name)

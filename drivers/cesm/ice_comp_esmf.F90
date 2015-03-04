@@ -51,7 +51,7 @@ module ice_comp_esmf
                               idate, mday, time, month, daycal,          &
 		              sec, dt, dt_dyn, calendar,                 &
                               calendar_type, nextsw_cday, days_per_year, &
-                              nyr, new_year, time2sec
+                              nyr, new_year, time2sec, year_init
   use ice_orbital,     only : eccen, obliqr, lambm0, mvelpp
   use ice_timers
 
@@ -354,10 +354,23 @@ end subroutine
           write(nu_diag,*) trim(subname)//' resetting idate to match sync clock'
        end if
 
-       idate = curr_ymd
+       idate = curr_ymd - (year_init*10000)      ! adjust for year_init
+       if (idate < 0) then
+          write(nu_diag,*) trim(subname),' ERROR curr_ymd,year_init =',curr_ymd,year_init
+          write(nu_diag,*) trim(subname),' ERROR idate lt zero',idate
+          call shr_sys_abort(subname//' :: ERROR idate lt zero')
+       endif
+
        iyear = (idate/10000)                     ! integer year of basedate
        month = (idate-iyear*10000)/100           ! integer month of basedate
        mday  =  idate-iyear*10000-month*100      ! day of month of basedate
+
+       if (my_task == master_task) then
+          write(nu_diag,*) trim(subname),' curr_ymd = ',curr_ymd
+          write(nu_diag,*) trim(subname),' cice year_init = ',year_init
+          write(nu_diag,*) trim(subname),' cice start date = ',idate
+          write(nu_diag,*) trim(subname),' cice start ymds = ',iyear,month,mday,start_tod
+       endif
 
        call time2sec(iyear,month,mday,time)
        time = time+start_tod
