@@ -1880,7 +1880,7 @@
         indxi       , & ! compressed indices for i/j directions
         indxj
 
-      real (kind=dbl_kind) :: xtmp, zspace      ! temporary variable
+      real (kind=dbl_kind) :: xtmp     ! temporary variable
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -1890,8 +1890,6 @@
       istop = 0
       jstop = 0
 
-      zspace = c1/max(c1,(real(nblyr,kind=dbl_kind)))
-      
       !-----------------------------------------------------------------
       ! I. Zap categories with very small areas.
       !-----------------------------------------------------------------
@@ -2377,13 +2375,13 @@
 
             l_zap = .false.
 
+            if (aicen(i,j,n) > puny) then
+
+            ! snow thickness
+            hsn = vsnon(i,j,n) / aicen(i,j,n)
+
             ! check each snow layer - zap all if one is bad
             do k = 1, nslyr
-
-               if (aicen(i,j,n) > puny) then
-
-               ! snow thickness
-               hsn = vsnon(i,j,n) / aicen(i,j,n)
 
                ! snow enthalpy and max temperature
                if (hsn > hs_min .and. heat_capacity) then
@@ -2410,9 +2408,9 @@
                   write(nu_diag,*) "zqsn:", zqsn
                endif
 
-               endif ! aicen > puny
-
             enddo ! k
+
+            endif ! aicen > puny
 
             ! add cell to zap list
             if (l_zap) then
