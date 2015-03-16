@@ -32,7 +32,7 @@
 
 \begin{document}
 \title{CICE: the Los Alamos Sea Ice Model \\ Documentation and
-Software User's Manual \\ Version 5.0  \\ LA-CC-06-012 }
+Software User's Manual \\ Version 5.1  \\ LA-CC-06-012 }
 \author{Elizabeth C. Hunke, William H. Lipscomb,  \\ 
 Adrian K. Turner, Nicole Jeffery, Scott Elliott \\
 Los Alamos National Laboratory\\ 
@@ -91,9 +91,27 @@ model components such as
 \index{POP}%
 POP.
 
-This model release is CICE version 5.0, available from  
-\href{http://climate.lanl.gov/Models/CICE/}{http://climate.lanl.gov/Models/CICE/}.  
-It updates CICE 4.1, which was released in May 2010: 
+This model release is CICE version 5.1, available from  
+%\href{http://climate.lanl.gov/Models/CICE/}{http://climate.lanl.gov/Models/CICE/}.  
+\href{http://oceans11.lanl.gov/trac/CICE/wiki}{http://oceans11.lanl.gov/trac/CICE/wiki}. 
+It updates CICE 5.0, which was released in September 2013: 
+\begin{itemize}
+\item include ice velocity in atm-ice coupling updates (e.g. stress) for high-frequency coupling
+\item allow a variable coefficient for the ice-ocean heat flux
+\item several new namelist options improve flexibility, especially for coupled model configurations:
+\begin{itemize}
+\item	ice-ocean heat flux
+\item	 `virtual' or `real' topo melt pond water
+\item	ocean freezing temperature
+\item	high-frequency coupling
+\item coupling and computational grids may be different
+\item	and more
+\end{itemize}
+\item additional software enhancements improve flexibility and compatibility with CESM, Hadley Centre, and U.S. Navy coupled models
+\item new diagnostics and updated documentation
+\item various bug fixes 
+\end{itemize}
+The previous version, CICE v5.0, includes the following improvements:
 \begin{itemize}
 \item A method for prognosing sea ice salinity, including improved snow-ice formation
 \item Two new explicit melt pond parameterizations (topo and level-ice)
@@ -133,14 +151,14 @@ model name's pronunciation from ``sea ice'' to what an Italian might
 say, ch\={e}$^\prime$-ch\={a} or ``chee-chay.''  Others choose to say s\={\i}s (English, rhymes with ``ice"),  s\={e}s (French, like ``cease"), or sh\={e}-\={\i}-s\t{oo}  (``Shii-aisu," Japanese).
 
 For more information about the CICE model and its user community, visit the web pages \\
-%\href{http://oceans11.lanl.gov/trac/CICE/wiki}{http://oceans11.lanl.gov/trac/CICE/wiki} \\
-%\href{http://oceans11.lanl.gov/trac/CICE/wiki/CiceUsers}{http://oceans11.lanl.gov/trac/CICE/wiki/CiceUsers} \\
-%\href{http://oceans11.lanl.gov/trac/CICE/wiki/CiceCodeModifications}{http://oceans11.lanl.gov/trac/CICE/wiki/CiceCodeModifications} \\
-%\href{http://oceans11.lanl.gov/trac/CICE/wiki/CiceDev}{http://oceans11.lanl.gov/trac/CICE/wiki/CiceDev}
-\href{http://oceans11.lanl.gov/drupal/CICE/}{http://oceans11.lanl.gov/drupal/CICE} \\
-\href{http://oceans11.lanl.gov/drupal/CICE/Users}{http://oceans11.lanl.gov/drupal/CICE/Users} \\
-\href{http://oceans11.lanl.gov/drupal/CICE/Code-Modifications}{http://oceans11.lanl.gov/drupal/CICE/Code-Modifications} \\
-\href{http://oceans11.lanl.gov/drupal/CICE/Collaborative-Projects}{http://oceans11.lanl.gov/drupal/CICE/Collaborative-Projects}
+\href{http://oceans11.lanl.gov/trac/CICE/wiki}{http://oceans11.lanl.gov/trac/CICE/wiki} \\
+\href{http://oceans11.lanl.gov/trac/CICE/wiki/CiceUsers}{http://oceans11.lanl.gov/trac/CICE/wiki/CiceUsers} \\
+\href{http://oceans11.lanl.gov/trac/CICE/wiki/CiceCodeModifications}{http://oceans11.lanl.gov/trac/CICE/wiki/CiceCodeModifications} \\
+\href{http://oceans11.lanl.gov/trac/CICE/wiki/CiceDev}{http://oceans11.lanl.gov/trac/CICE/wiki/CiceDev}
+%\href{http://oceans11.lanl.gov/drupal/CICE/}{http://oceans11.lanl.gov/drupal/CICE} \\
+%\href{http://oceans11.lanl.gov/drupal/CICE/Users}{http://oceans11.lanl.gov/drupal/CICE/Users} \\
+%\href{http://oceans11.lanl.gov/drupal/CICE/Code-Modifications}{http://oceans11.lanl.gov/drupal/CICE/Code-Modifications} \\
+%\href{http://oceans11.lanl.gov/drupal/CICE/Collaborative-Projects}{http://oceans11.lanl.gov/drupal/CICE/Collaborative-Projects}
 
 \begin{table}
 \begin{center}
@@ -247,7 +265,7 @@ explained in more detail below.
 The fluxes and state variables passed between the sea ice model and the CESM flux
 coupler are listed 
 in~Table~\ref{table:coupling}.
-By convention, directional fluxes are positive downward.  In CESM, the sea ice model may exchange coupling fluxes using a different grid than the computational grid.  This functionality is activated using the namelist variable {\tt gridcpl\_file}.  Another namelist variable {/tt highfreq}, allows the high-frequency coupling procedure implemented in the Regional Arctic System Model (RASM).\index{RASM}  In particular, the relative atmosphere-ice velocity ($\vec{U}_a-\vec{u}$) is used instead of the full atmospheric velocity for computing turbulent fluxes in the atmospheric boundary layer.
+By convention, directional fluxes are positive downward.  In CESM, the sea ice model may exchange coupling fluxes using a different grid than the computational grid.  This functionality is activated using the namelist variable {\tt gridcpl\_file}.  Another namelist variable {/tt highfreq}, allows the high-frequency coupling\index{coupling!high-frequency} procedure implemented in the Regional Arctic System Model (RASM).\index{RASM}  In particular, the relative atmosphere-ice velocity ($\vec{U}_a-\vec{u}$) is used instead of the full atmospheric velocity for computing turbulent fluxes in the atmospheric boundary layer.
 
 \index{ice!fraction|(emph} The ice fraction
 { $a_i$ 
@@ -681,7 +699,9 @@ $L_A$, distance between floes, $D_F$, and melt pond size, $L_P$ we use the param
 
 We assume that the total neutral drag coefficients are thickness category independent, but through their dependance on the diagnostic variables described above, they vary both spatially and temporally.  The total drag coefficients and heat transfer coefficients will also depend on the type of stratification of the atmosphere and the ocean, and we use the parameterization described in section~\ref{sec:atmo} that accounts for both stable
 \index{stability}%
-and unstable atmosphere--ice boundary layers. In contrast to the neutral drag coefficients the stability effect of the atmospheric boundary layer is calculated separately for each ice thickness category. The stability of the ice--ocean boundary layer is currently not accounted for.
+and unstable atmosphere--ice boundary layers. In contrast to the neutral drag coefficients the stability effect of the atmospheric boundary layer is calculated separately for each ice thickness category. 
+
+The transfer coefficient for oceanic heat flux to the bottom of the ice may be varied based on form drag considerations by setting the namelist variable {\tt fbot\_xfer\_type} to {\tt 'Cdn\_ocn'}; this is recommended when using the form drag parameterization. Its default value of the transfer coefficient is 0.006 ({\tt fbot\_xfer\_type = 'constant'}).
 \index{boundary!layer|)}
 \index{form drag|)}%
 \index{roughness|)}
@@ -2799,7 +2819,7 @@ As the sea ice area shrinks due to melting and ridging, the pond volume over the
 
 %Flocco et al. \cite{FFT:10,FSFH:12} 
 
-Unlike the cesm\index{CESM/CCSM} and level-ice melt pond schemes, the liquid pond water in the topo parameterization is not virtual; it is withheld from being passed to the ocean model until the ponds drain.\index{drainage}  The refrozen pond lids are still virtual.  Extra code needed to track and enforce conservation\index{conservation} of water has been added to {\bf ice\_itd.F90} (subroutine {\it zap\_small\_areas}),  {\bf ice\_mechred.F90} (subroutine {\it ridge\_shift}), {\bf ice\_therm\_itd.F90} (subroutines {\it linear\_itd} and {\it lateral\_melt}), and {\bf ice\_therm\_vertical.F90} (subroutine {\it thermo\_vertical}), along with  global diagnostics in {\bf ice\_diagnostics.F90}.\index{diagnostics}
+Unlike the cesm\index{CESM/CCSM} and level-ice melt pond schemes, the liquid pond water in the topo parameterization is not necessarily virtual; it can be withheld from being passed to the ocean model until the ponds drain by setting the namelist variable {\tt l\_mpond\_fresh = .true.}\index{drainage}  The refrozen pond lids are still virtual.  Extra code needed to track and enforce conservation\index{conservation} of water has been added to {\bf ice\_itd.F90} (subroutine {\it zap\_small\_areas}),  {\bf ice\_mechred.F90} (subroutine {\it ridge\_shift}), {\bf ice\_therm\_itd.F90} (subroutines {\it linear\_itd} and {\it lateral\_melt}), and {\bf ice\_therm\_vertical.F90} (subroutine {\it thermo\_vertical}), along with  global diagnostics in {\bf ice\_diagnostics.F90}.\index{diagnostics}
 \index{melt pond!topo|)}
 
 \noindent{\bf Level-ice formulation} ({\tt tr\_pond\_lvl} = true)\index{melt pond!level-ice|(emph}
@@ -2957,7 +2977,7 @@ Two methods for computing albedo and shortwave fluxes are available, the default
 Delta-Eddington approach.  ``Inherent" optical properties (IOPs) for snow and sea ice, such as extinction coefficient and single scattering albedo, are prescribed based on physical measurements; reflected, absorbed and transmitted shortwave radiation (``apparent" optical properties) are then computed for each snow and ice layer in a self-consistent manner.  Absorptive effects of inclusions in the ice/snow matrix such as dust and algae can also be included, along with radiative treatment of melt ponds and other changes in physical properties, for example granularization associated with snow aging.  The Delta-Eddington formulation is described in detail in \cite{BL:07}.   Since publication of this technical paper, a number of improvements have been made to the Delta-Eddington scheme, including a surface scattering layer and internal shortwave absorption for snow, generalization for multiple snow layers and more than four layers of ice, and updated IOP values.
 
 %\index{albedo}
-The namelist\index{namelist} parameters {\tt R\_ice} and {\tt R\_pnd} adjust the albedo of bare or ponded ice by the product of the namelist value and one  standard deviation.  For example, if {\tt R\_ice} = 0.1, the albedo increases by $0.1\sigma$.  Similarly,  setting {\tt R\_snw} = 0.1 decreases the snow grain radius by $0.1\sigma$ (thus increasing the albedo).  Two additional tuning parameters are available for this scheme, {\tt dT\_mlt} and {\tt rsnw\_mlt}.  {\tt dT\_mlt} is the temperature change needed for a change in snow grain radius from non-melting to melting, and {\tt rsnw\_mlt} is the maximum snow grain radius when melting.    See  \cite{BL:07} for details; the CESM\index{CESM/CCSM} melt pond and Delta-Eddington parameterizations are further explained and validated in \cite{HBBLH:12}.
+The namelist\index{namelist} parameters {\tt R\_ice} and {\tt R\_pnd} adjust the albedo of bare or ponded ice by the product of the namelist value and one  standard deviation.  For example, if {\tt R\_ice} = 0.1, the albedo increases by $0.1\sigma$.  Similarly,  setting {\tt R\_snw} = 0.1 decreases the snow grain radius by $0.1\sigma$ (thus increasing the albedo).  Two additional tuning parameters are available for this scheme, {\tt dT\_mlt} and {\tt rsnw\_mlt}.  {\tt dT\_mlt} is the temperature change needed for a change in snow grain radius from non-melting to melting, and {\tt rsnw\_mlt} is the maximum snow grain radius when melting.   An absorption coefficient for algae ({\tt kalg}) may also be set.  See  \cite{BL:07} for details; the CESM\index{CESM/CCSM} melt pond and Delta-Eddington parameterizations are further explained and validated in \cite{HBBLH:12}.
 
 {\it Shortwave radiation: CCSM3}
 
@@ -3425,7 +3445,7 @@ Outside the parameterizations of brine drainage the densities of brine and ice a
 The permeability of ice is computed from the liquid fraction as in \cite{GEHMPZ:07}:
 \index{permeability}
 \begin{equation*}
-\Pi(\phi) = 3\times10^{-8} (\phi - \phi_\Pi)
+\Pi(\phi) = 3\times10^{-8} (\phi - \phi_\Pi)^3
 \end{equation*}
 where $\phi_\Pi$ is 0.05.
 
@@ -3759,7 +3779,7 @@ some input files.   The main directory is {\bf cice/}, and a run directory ({\bf
 upon initial execution of the script {\bf comp\_ice}.  One year of atmospheric forcing data is also available from the code distribution web site (see the {\bf README} file for details).
 \begin{description}
 \item[{\bf cice/}]  
-\item[{\bf   README\_v5.0}]     basic information
+\item[{\bf   README\_v5.1}]     basic information
 \item{\bf bld/} makefiles
 \begin{description}
 \item[{\bf   Macros.}$\langle$OS$\rangle$.$\langle$SITE$\rangle$.$\langle$machine$\rangle$] macro definitions for the given operating system,
@@ -3780,13 +3800,13 @@ used by {\bf Makefile.$\langle$OS$\rangle$}
 \end{description}
 \item [{\bf drivers/}] institution-specific modules
 \begin{description}
-\item[{\bf cice/}]  official driver for CICE v5.0 (LANL)
+\item[{\bf cice/}]  official driver for CICE v5 (LANL)
   \begin{description}
   \item[{\bf   CICE.F90}]  main program
-  \item[{\bf   CICE.F90\_debug}]   debugging version of {\bf CICE.F90}
   \item[{\bf   CICE\_FinalMod.F90}]  routines for finishing and exiting a run
   \item[{\bf   CICE\_InitMod.F90}]  routines for initializing a run
   \item[{\bf   CICE\_RunMod.F90}]  main driver routines for time stepping 
+  \item[{\bf   CICE\_RunMod.F90\_debug}]   debugging version of {\bf CICE\_RunMod.F90}
   \item[{\bf   ice\_constants.F90}]  physical and numerical constants and parameters
   \end{description}
 \end{description}
@@ -3816,7 +3836,8 @@ used by {\bf Makefile.$\langle$OS$\rangle$}
   \item[{\bf   ice\_in}] namelist input data (data paths depend on particular system)\index{namelist}
   \item[{\bf   iced\_gx3\_v5.nc}] \netcdf\ restart file used for initial condition\index{initial condition} 
   \end{description}
-\item[convert\_restarts.f90] Fortran code to convert restart files from v4.1 to v5.0 (4 ice layers)
+\item[convert\_restarts.f90] Fortran code to convert restart files from v4.1 to v5 (4 ice layers)
+\item[{\bf   run\_ice.}$\langle$OS$\rangle$.$\langle$SITE$\rangle$.$\langle$machine$\rangle$]  sample script for running on the given operating system
 \end{description}
 \item[{\bf   io\_binary/}] binary history and restart modules\index{history}
   \begin{description}
@@ -3834,7 +3855,6 @@ used by {\bf Makefile.$\langle$OS$\rangle$}
   \item[{\bf   ice\_pio.F90}] subroutines specific to PIO
   \item[{\bf   ice\_restart.F90}]  read/write \netcdf\ restart files using PIO \index{restart}
   \end{description}
-\item[{\bf   run\_ice.}$\langle$OS$\rangle$.$\langle$SITE$\rangle$.$\langle$machine$\rangle$]  sample script for running on the given operating system
 \item[{\bf mpi/}]  modules that require MPI calls\index{MPI}
   \begin{description}
   \item[{\bf   ice\_boundary.F90}] boundary conditions\index{boundary!condition}
@@ -3874,7 +3894,7 @@ for stand-alone ice model runs
 \item[{\bf   ice\_grid.F90}] grid and land masks\index{grid!horizontal}\index{masks}
 \item[{\bf   ice\_history.F90}]  initialization and accumulation of history output variables
 \item[{\bf   ice\_history\_bgc.F90}] history output of biogeochemistry variables\index{history}\index{biogeochemistry}
-\item[{\bf   ice\_history\_drag}] history output of form drag variables\index{history}
+\item[{\bf   ice\_history\_drag.F90}] history output of form drag variables\index{history}
 \item[{\bf   ice\_history\_mechred.F90}] history output of ridging variables\index{history}
 \item[{\bf   ice\_history\_pond.F90}] history output of melt pond variables\index{history}
 \item[{\bf   ice\_history\_shared.F90}] code shared by all history modules\index{history}
@@ -3915,7 +3935,7 @@ component (ridging)\index{ridging}
 \item[{\bf grid}]  horizontal grid file from {\bf cice/input\_templates/gx3/}\index{grid!horizontal}
 \item[{\bf   ice.log.[ID]}] diagnostic output file
 \item[{\bf   ice\_in}] namelist input data from {\bf cice/input\_templates/gx3/}\index{namelist}
-\item[{\bf hist/iceh.[timeID].nc}]   output history file \index{history}
+\item[{\bf history/iceh.[timeID].nc}]   output history file \index{history}
 \item[{\bf kmt}]  land mask file from {\bf cice/input\_templates/gx3/}\index{masks}
 \item[{\bf restart/}]  restart directory \index{restart}
 \begin{description}
@@ -3979,7 +3999,7 @@ produced on an SGI (Big Endian).  If you are using an incompatible (Little Endia
 choose {\tt rectangular} instead of {\tt displaced\_pole} in {\bf ice\_in}, or  follow procedures as for conejo ($\langle${\bf OS}$\rangle.\langle${\bf SITE}$\rangle.\langle${\bf machine}$\rangle$ =  {\tt Linux.LANL.conejo}).  There are \netcdf\  versions of the gx3 grid files available.
 
 In CESM,\index{CESM/CCSM} 
-the sea ice model may exchange coupling fluxes using a different grid than the computational grid.  This functionality is activated using the namelist variable {\tt gridcpl\_file}.
+the sea ice model may exchange coupling fluxes using a different grid than the computational grid.  This functionality is activated using the namelist variable {\tt gridcpl\_file}.\index{flux coupler}
 \begin{figure}
 \centerline{
 \includegraphics[scale=.45, viewport=50 20 520 400,clip]{./Figures/grid.pdf}
@@ -4010,6 +4030,8 @@ These points are excluded from the computation domain and have little effect on 
 The user chooses a block size {\tt BLCKX$\times$BLCKY} and the number of processors {\tt NTASK} in {\bf comp\_ice}.  Parameters in the {\it domain\_nml} namelist in {\bf ice\_in}\index{namelist} determine how the blocks are distributed across the processors, and how the processors are distributed across the grid domain.  Recommended combinations of these parameters for best performance are given in Section~\ref{sec:performance}.  The script {\bf comp\_ice} computes the maximum number of blocks on each processor for typical Cartesian distributions, but for non-Cartesian cases {\tt MXBLCKS} may need to be set in the script.  The code will print this information to the log file before aborting, and the user will need to adjust {\tt MXBLCKS} in {\bf comp\_ice} and recompile.  The code will also print a warning if the maximum number of blocks is too large.  Although this is not fatal, it does require excess memory.
 
 A loop at the end of routine {\it create\_blocks} in module {\bf ice\_blocks.F90} will print the locations for all of the blocks on the global grid if  {\tt dbug} is set to be true.  Likewise, a similar loop at the end of routine {\it create\_local\_block\_ids} in module {\bf ice\_distribution.F90}  will print the processor and local block number for each block.  With this information, the grid decomposition into processors and blocks can be ascertained.  The {\tt dbug} flag must be manually set in the code in each case (independently of the {\tt dbug} flag in {\bf ice\_in}), as there may be hundreds or thousands of blocks to print and this information should be needed only rarely.  This information is much easier to look at using a debugger such as Totalview.
+
+Alternatively, a new variable is provided in the history files, {\tt blkmask}, which labels the blocks in the grid decomposition according to {\tt blkmask = my\_task + iblk/100}.
 \index{blocks|)} 
 
 \subsubsection{Tripole grids}
@@ -4344,7 +4366,7 @@ and written to binary or \netcdf\ files prepended by {\tt history\_file} in
 That is, if {\tt history\_file} = `iceh' then the
 filenames will have the form {\bf iceh.[timeID].nc} or {\bf iceh.[timeID].da}, depending on the output file format chosen in {\bf comp\_ice} (set {\tt IO\_TYPE}).   The \netcdf\ history files are CF-compliant;
 header information for data contained in the \netcdf\ files is 
-displayed with the command {\tt ncdump -h filename.nc}.  Parallel \netcdf\ output is available using the PIO library\index{parallelization}\index{PIO}. With binary files, a separate header file is written with equivalent information.  Standard fields are output according to settings in the {\bf icefields\_nml} namelist in {\bf ice\_in}.\index{namelist} The user may add (or
+displayed with the command {\tt ncdump -h filename.nc}.  Parallel \netcdf\ output is available using the PIO library\index{parallelization}\index{PIO}; the attribute '{\tt io\_flavor} distinguishes output files written with PIO from those written with standard netCDF. With binary files, a separate header file is written with equivalent information.  Standard fields are output according to settings in the {\bf icefields\_nml} namelist in {\bf ice\_in}.\index{namelist} The user may add (or
 subtract) variables not already available in the namelist by following the
 instructions in section~\ref{sec:addhist}. 
 
@@ -4491,9 +4513,9 @@ of the ``extended" global grid,\index{grid!extended} including the physical doma
 grids with open boundary conditions,\index{boundary!condition} and they will also simplify restarts on 
 the various tripole grids.\index{grid!tripole}  They are accessed by setting {\tt restart\_ext} = true in namelist.  Extended grid restarts are not available when using PIO; in this case extra halo update calls fill ghost cells for tripole grids (do not use PIO for regional grids).
 
-Two \netcdf\ restart files are included with the CICE v5.0 code distribution, for the gx3 and gx1 grids.  The were created using the default model configuration (settings as in {\bf comp\_ice} and {\bf ice\_in}), but initialized with no ice.  The gx3 case was run for 1 year using the 1997 forcing data provided with the code.  The gx1 case was run for 20 years, so that the date of restart in the file is 1978-01-01.  Note that the restart dates provided in the restart files can be overridden using the namelist variables {\tt use\_restart\_time}, {\tt year\_init} and {\tt istep0}.  The forcing time can also be overridden using {\tt fyear\_init}.
+Two \netcdf\ restart files are included with the CICE v5 code distribution, for the gx3 and gx1 grids.  The were created using the default model configuration (settings as in {\bf comp\_ice} and {\bf ice\_in}), but initialized with no ice.  The gx3 case was run for 1 year using the 1997 forcing data provided with the code.  The gx1 case was run for 20 years, so that the date of restart in the file is 1978-01-01.  Note that the restart dates provided in the restart files can be overridden using the namelist variables {\tt use\_restart\_time}, {\tt year\_init} and {\tt istep0}.  The forcing time can also be overridden using {\tt fyear\_init}.
 
-Several changes in CICE v5.0 have made restarting from v4.1 restart files difficult.  First, the ice and snow enthalpy state variables are now carried as tracers instead of separate arrays, and salinity has been added as a necessary restart field.   Second, the default number of ice layers has been increased from 4 to 7.  Third, netcdf format is now used for all I/O; it is no longer possible to have history output as \netcdf\ and restart output in binary format.  However, some facilities are included with CICE v5.0 for converting v4.1 restart files to the new file structure and format, provided that the same number of ice layers and basic physics packages will be used for the new runs.  See Section \ref{subsection:restarttrouble} for details.
+Several changes in CICE v5 have made restarting from v4.1 restart files difficult.  First, the ice and snow enthalpy state variables are now carried as tracers instead of separate arrays, and salinity has been added as a necessary restart field.   Second, the default number of ice layers has been increased from 4 to 7.  Third, netcdf format is now used for all I/O; it is no longer possible to have history output as \netcdf\ and restart output in binary format.  However, some facilities are included with CICE v5 for converting v4.1 restart files to the new file structure and format, provided that the same number of ice layers and basic physics packages will be used for the new runs.  See Section \ref{subsection:restarttrouble} for details.
 \index{restart|)}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -4505,7 +4527,8 @@ To compile and execute the code:
 in the source directory,
 \begin{enumerate} 
 \item Download the forcing data used for testing from the CICE website, 
-\href{http://climate.lanl.gov/Models/CICE/}{http://climate.lanl.gov/Models/CICE/}.
+%\href{http://climate.lanl.gov/Models/CICE/}{http://climate.lanl.gov/Models/CICE/}.
+\href{http://oceans11.lanl.gov/trac/CICE/wiki}{http://oceans11.lanl.gov/trac/CICE/wiki}. 
 \item Create {\bf Macros.*} and {\bf run\_ice.*} files for your particular platform, if they do not already exist (type `uname -s' at the prompt  to get $\langle$OS$\rangle$).
 \item Alter directories in the script {\bf comp\_ice}. 
 \item  Run {\bf comp\_ice} to set up the run directory and make the executable `{\bf cice}'.
@@ -4534,7 +4557,12 @@ MPI\index{MPI} on 4 processors on the
 $\left<3^\circ\right>$
 grid.
 
-\begin{table}
+Several options are available in {\bf comp\_ice} for configuring the run, shown in Table~\ref{table:comp_ice}.
+If {\tt NTASK} = 1, then the {\bf serial/} code is used, otherwise the code in {\bf mpi/} is used.  Loops over blocks have been threaded throughout the code, so that their work will be divided among {\tt OMP\_NUM\_THREADS} if {\tt THRD} is `yes.' Note that the value of {\tt NTASK} in {\bf comp\_ice} must equal the value of {\tt nprocs} in {\bf ice\_in}.   Generally the value of {\tt MXBLCKS} computed by {\bf comp\_ice} is sufficient, but sometimes it will need to be set explicitly, as discussed in Section~\ref{sec:performance}.
+To conserve memory, match the tracer\index{tracers} requests in {\bf comp\_ice} with those in {\bf ice\_in}.  CESM\index{CESM/CCSM} uses 3 aerosol tracers; the number given in {\bf comp\_ice} must be less than or equal to the maximum allowed in {\bf ice\_domain\_size.F90}.
+
+The scripts define a number of environment variables, mostly as directories that you will need to edit for your own environment.   {\tt \$SYSTEM\_USERDIR}, which on machines at Oak Ridge National Laboratory\index{Oak Ridge National Laboratory} points automatically to scratch space, is intended to be a disk where the run directory resides. {\tt SHRDIR} is a path to the CESM\index{CESM/CCSM} shared code.
+\begin{table}[ht]
 \begin{center}
 \begin{tabular}{lll}
  variable & options & description \\
@@ -4557,7 +4585,7 @@ TRFY  & 0 or 1 & set to 1 for first-year ice area tracer\index{first-year area}\
 NBGCLYR & (integer) &  number of vertical layers for biogeochemical transport \index{transport!vertical} \\
  IO\_TYPE & none/netcdf/pio & use `none' if \netcdf\ library is unavailable, `pio' for PIO \index{PIO} \\
  DITTO & yes/no & for reproducible diagnostics \index{reproducible}\index{diagnostics} \\
- BARRIERS & yes/no & flushes MPI buffers during global scatters and gathers \\
+ BARRIERS & yes/no & flushes MPI buffers during global scatters and gathers\index{MPI} \\
  THRD & yes/no & set to yes for OpenMP threaded parallelism \index{OpenMP}\index{parallelization}\\
  OMP\_NUM\_THREADS & (integer) & the number of OpenMP threads requested \\
  NUMIN & (integer) & smallest unit number assigned to CICE files \\
@@ -4568,11 +4596,6 @@ NBGCLYR & (integer) &  number of vertical layers for biogeochemical transport \i
 \end{center}
 \caption{\label{table:comp_ice} Configuration options available in {\bf comp\_ice}.}
 \end{table}
-Several options are available in {\bf comp\_ice} for configuring the run, shown in Table~\ref{table:comp_ice}.
-If {\tt NTASK} = 1, then the {\bf serial/} code is used, otherwise the code in {\bf mpi/} is used.  Loops over blocks have been threaded throughout the code, so that their work will be divided among {\tt OMP\_NUM\_THREADS} if {\tt THRD} is `yes.' Note that the value of {\tt NTASK} in {\bf comp\_ice} must equal the value of {\tt nprocs} in {\bf ice\_in}.   Generally the value of {\tt MXBLCKS} computed by {\bf comp\_ice} is sufficient, but sometimes it will need to be set explicitly, as discussed in Section~\ref{sec:performance}.
-To conserve memory, match the tracer\index{tracers} requests in {\bf comp\_ice} with those in {\bf ice\_in}.  CESM\index{CESM/CCSM} uses 3 aerosol tracers; the number given in {\bf comp\_ice} must be less than or equal to the maximum allowed in {\bf ice\_domain\_size.F90}.
-
-The scripts define a number of environment variables, mostly as directories that you will need to edit for your own environment.   {\tt \$SYSTEM\_USERDIR}, which on machines at Oak Ridge National Laboratory\index{Oak Ridge National Laboratory} points automatically to scratch space, is intended to be a disk where the run directory resides. {\tt SHRDIR} is a path to the CESM\index{CESM/CCSM} shared code.
 
 The `reproducible' option ({\tt DITTO}) makes \index{reproducible}
 diagnostics bit-for-bit when varying the number of processors.  (The 
@@ -4760,8 +4783,8 @@ In several places in the code, tracer computations must be performed on the cons
 
 To add a tracer, follow these steps using one of the existing tracers as a pattern.
 \begin{enumerate}
-\item {\bf ice\_domain\_size.F90}:  increase {\tt max\_ntrcr} (can also add option to {\bf comp\_ice})
-\item {\bf ice\_state.F90}:  declare {\tt nt\_[tracer]} 
+\item {\bf ice\_domain\_size.F90}:  increase {\tt max\_ntrcr} (can also add option to {\bf comp\_ice} and {\bf bld/Macros.*})
+\item {\bf ice\_state.F90}:  declare {\tt nt\_[tracer]} and {\tt tr\_[tracer]} 
 \item {\bf ice\_[tracer].F90}:  create initialization, physics, restart routines
 \item {\bf ice\_fileunits.F90}:  add new dump and restart file units
 \item {\bf ice\_init.F90}: (some of this may be done in {\bf ice\_[tracer].F90} instead)
@@ -4779,9 +4802,9 @@ To add a tracer, follow these steps using one of the existing tracers as a patte
 \item {\bf CICE\_RunMod.F90}, {\bf ice\_step\_mod.F90}:
 \begin{itemize}
 \item call routine to write tracer restart data
-\item call physics routines in {\bf ice\_[tracer].F90}
+\item call physics routines in {\bf ice\_[tracer].F90} (often called from {\bf ice\_step\_mod.F90})
 \end{itemize}
-\item {\bf ice\_restart.F90}:  define restart variables\index{restart} (for \netcdf\ and PIO)
+\item {\bf ice\_restart.F90}:  define restart variables\index{restart} (for binary, \netcdf\ and PIO)
 \item {\bf ice\_history\_[tracer].F90}:  add history variables\index{history} (Section~\ref{sec:addhist})
 \item {\bf ice\_in}:  add namelist variables to {\it tracer\_nml} and {\it icefields\_nml} 
 \item If strict conservation\index{conservation} is necessary, add diagnostics\index{diagnostics} as noted for topo ponds in Section~\ref{subsubsec:ponds}. 
@@ -4825,8 +4848,8 @@ coupled runs, check that {\tt -Dcoupled} and other coupled-model-specific (e.g.,
 \subsection{Restarts}
 \label{subsection:restarttrouble}
 
-CICE version 5.0 introduces a new model configuration that makes restarting from older simulations difficult.  In particular, the number of ice categories, the category boundaries, and the number of vertical layers within each category must be the same in the restart file and in the run restarting from that file.  Moreover, significant differences in the physics, such as the salinity profile, may cause the code to fail upon restart.  Therefore,  new model configurations may need to be started using {\tt runtype} = `initial'. 
-Binary restart files that were provided with CICE v4.1 were made using the BL99 thermodynamics with 4 layers and 5 thickness categories ({\tt kcatbound} = 0) and therefore can not be used for the default CICE v5.0 configuration (7 layers).  In addition, CICE's default restart file format is now \netcdf\ instead of binary.
+CICE version  5 introduces a new model configuration that makes restarting from older simulations difficult.  In particular, the number of ice categories, the category boundaries, and the number of vertical layers within each category must be the same in the restart file and in the run restarting from that file.  Moreover, significant differences in the physics, such as the salinity profile, may cause the code to fail upon restart.  Therefore,  new model configurations may need to be started using {\tt runtype} = `initial'. 
+Binary restart files that were provided with CICE v4.1 were made using the BL99 thermodynamics with 4 layers and 5 thickness categories ({\tt kcatbound} = 0) and therefore can not be used for the default CICE v5 configuration (7 layers).  In addition, CICE's default restart file format is now \netcdf\ instead of binary.
 
 Restarting a run using {\tt runtype} = `continue' requires restart data for all tracers used in the new run.  If tracer restart data is not available, use {\tt runtype} = `initial', setting {\tt ice\_ic} to the name of the core restart file and setting to true the namelist restart flags for each tracer that is available.  The unavailable tracers will be initialized to their default settings.
 
@@ -4834,7 +4857,7 @@ On tripole grids, use {\tt restart\_ext} = true when using either binary or regu
 
 Provided that the same number of ice layers (default: 4) will be used for the new runs, it is possible to convert v4.1 restart files to the new file structure and then to \netcdf\ format.  If the same physical parameterizations are used, the code should be able to execute from these files.  However if different physics is used (for instance, mushy thermo instead of BL99), the code may still fail.  To convert a v4.1 restart file:
 \begin{enumerate}
-\item Edit the code {\bf input\_templates/convert\_restarts.f90} for your model configuration and path names.  Compile and run this code to create a binary restart file that can be read using v5.0.  Copy the resulting file to the {\bf restart/} subdirectory in your working directory.
+\item Edit the code {\bf input\_templates/convert\_restarts.f90} for your model configuration and path names.  Compile and run this code to create a binary restart file that can be read using v5.  Copy the resulting file to the {\bf restart/} subdirectory in your working directory.
 \item In your working directory, turn off all tracer restart flags in {\bf ice\_in} and set the following:
 \begin{itemize}
 \item runtype = `initial'
@@ -4842,7 +4865,7 @@ Provided that the same number of ice layers (default: 4) will be used for the ne
 \item restart = .true.
 \item use\_restart\_time = .true.
 \end{itemize}
-\item In {\bf CICE\_InitMod.F90}, comment out the call to restartfile(ice\_ic) and uncomment the call to restartfile\_v4(ice\_ic) immediately below it.  This will read the v4.1 binary  file and write a v5.0 \netcdf\ file containing the same information.
+\item In {\bf CICE\_InitMod.F90}, comment out the call to restartfile(ice\_ic) and uncomment the call to restartfile\_v4(ice\_ic) immediately below it.  This will read the v4.1 binary  file and write a v5 \netcdf\ file containing the same information.
 \end{enumerate}  
 
 If restart files are taking a long time to be written serially (i.e., not using PIO), see the next section.
@@ -4851,7 +4874,7 @@ If restart files are taking a long time to be written serially (i.e., not using 
 \subsection{Slow execution}
 On some architectures, underflows ($10^{-300}$ for example) are not flushed to zero automatically.  Usually a compiler flag is available to do this, but if not, try uncommenting the block of code at the end of subroutine {\it stress} in {\bf ice\_dyn\_evp.F90} or {\bf ice\_dyn\_eap.F90}.  You will take a hit for the extra computations, but it will not be as bad as running with the underflows.
 
-In some configurations, multiple calls to scatter or gather global variables may overfill MPI's buffers, causing the code to slow down (particularly when writing large output files such as restarts).  To remedy this problem, set {\tt BARRIERS yes} in {\bf comp\_ice}.   This synchronizes MPI messages, keeping the buffers in check.
+In some configurations, multiple calls to scatter or gather global variables may overfill MPI's buffers, causing the code to slow down (particularly when writing large output files such as restarts).\index{MPI}  To remedy this problem, set {\tt BARRIERS yes} in {\bf comp\_ice}.   This synchronizes MPI messages, keeping the buffers in check.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Debugging hints}
@@ -4905,6 +4928,7 @@ albedo rather than the bare ice albedo when
 \item  In stand-alone runs, restarts from the end of {\tt ycycle} will not be exact.\index{restart}
 \item Using the same frequency twice in {\tt histfreq} will have unexpected 
 consequences and causes the code to abort. 
+\item Latitude and longitude fields in the history output may be wrong when using padding.
 \end{enumerate}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -4951,7 +4975,7 @@ following people:
       for testing non-standard model configurations and providing their code to us,
 \item Daniel Feltham and his research group for several new parameterizations and documentation,
 \item Sylvain Bouillon for the revised EVP approach,
-\item the many researchers who tested beta versions of CICE 5.0 and
+\item the many researchers who tested beta versions of CICE 5 and
       waited patiently for the official release.
 \end{itemize}
 
@@ -5166,6 +5190,8 @@ variable & options/format & description & recommended value\\
 {\tt krdg\_redist} & {\tt 0} & old ridging redistribution function & {1} \\
                  & {\tt 1} & new ridging redistribution function &  \\
 {\tt mu\_rdg} & real & e-folding scale of ridged ice & \\
+{\tt  Cf} & real      & ratio of ridging work to PE change in ridging{\dotfill\ } & 17. \\
+
 &&&\\
 {\it shortwave\_nml}&&{\it Shortwave}& \\
 {\tt shortwave} & {\tt default} & \index{NCAR} NCAR CCSM3 distribution method & \\
@@ -5183,6 +5209,7 @@ variable & options/format & description & recommended value\\
 {\tt R\_snw} & real & ... for snow (broadband albedo) ... & \\
 {\tt dT\_mlt} & real & $\Delta$ temperature  per $\Delta$ snow grain radius  & \\
 {\tt rsnw\_mlt} & real & maximum melting snow grain radius  & \\
+{\tt kalg} & real & absorption coefficient for algae & \\
 \hline
 \end{tabular}
 \caption{Namelist options (continued).\index{namelist|emph}}
@@ -5203,7 +5230,7 @@ variable & options/format & description & recommended value\\
 {\tt dpscale} & real & time scale for flushing in permeable ice & $1\times 10^{-3}$ \\
 {\tt frzpnd} & {\tt hlid} & Stefan refreezing with pond ice thickness & `hlid' \\
                    & {\tt cesm} & CESM refreezing empirical formula & \\
-{\tt snowinfil} & true/false & snow infiltration on/off & {\tt .true.} \\
+%{\tt snowinfil} & true/false & snow infiltration on/off & {\tt .true.} \\
 {\tt rfracmin} & $0 \le r_{min} \le 1$ & minimum melt water added to ponds & 0.15 \\
 {\tt rfracmax} & $0 \le r_{max} \le 1$ & maximum melt water added to ponds & 1.0 \\
 {\tt pndaspect} & real & aspect ratio of pond changes (depth:area) & 0.8 \\
@@ -5237,6 +5264,13 @@ variable & options/format & description & recommended value\\
                     & {\tt constant} & bulk transfer coefficients & \\
 {\tt fyear\_init} & yyyy & first year of atmospheric forcing data & \\
 {\tt ycycle} &integer & number of years in forcing data cycle & \\
+{\tt atm\_data\_format} & {\tt nc} & read \netcdf\ atmo forcing files &  \\
+                            & {\tt bin} & read direct access, binary files & \\
+{\tt atm\_data\_type} & {\tt default} & constant values defined in the code & \\
+                         & {\tt LYq}  & \index{AOMIP} AOMIP/Large-Yeager forcing data & \\
+                         & {\tt monthly} & monthly forcing data & \\
+                         & {\tt ncar} & \index{NCAR} NCAR bulk forcing data & \\
+                         & {\tt oned} & column forcing data & \\
 \hline
 \end{tabular}
 \caption{Namelist options (continued).\index{namelist|emph}}
@@ -5251,13 +5285,6 @@ variable & options/format & description & recommended value\\
 \hline
 &&&\\
 &&{\it Forcing, continued}& \\
-{\tt atm\_data\_format} & {\tt nc} & read \netcdf\ atmo forcing files &  \\
-                            & {\tt bin} & read direct access, binary files & \\
-{\tt atm\_data\_type} & {\tt default} & constant values defined in the code & \\
-                         & {\tt LYq}  & \index{AOMIP} AOMIP/Large-Yeager forcing data & \\
-                         & {\tt monthly} & monthly forcing data & \\
-                         & {\tt ncar} & \index{NCAR} NCAR bulk forcing data & \\
-                         & {\tt oned} & column forcing data & \\
 {\tt atm\_data\_dir} & path/ & path to atmospheric forcing data directory & \\
 {\tt calc\_strair} & true & calculate wind stress and speed & \\
                     & false & read wind stress and speed from files & \\
@@ -5267,10 +5294,17 @@ variable & options/format & description & recommended value\\
 {\tt precip\_units} & {\tt mks} & liquid precipitation data units & \\
                    & {\tt mm\_per\_month} & & \\
                    & {\tt mm\_per\_sec} & (same as MKS units) & \\
+{\tt tfrz\_option} & {\tt minus1p8} & constant ocean freezing temperature ($-1.8\degC$) & \\
+                            & {\tt linear\_salt} & linear function of salinity (ktherm=1) & \\
+                            & {\tt mushy\_layer} & matches mushy-layer thermo (ktherm=2) & \\
 {\tt ustar\_min} & real & minimum value of ocean friction velocity & 0.0005 m/s \\
+{\tt fbot\_xfer\_type} & {\tt constant} & constant ocean heat transfer coefficient & \\
+                                   & {\tt Cdn\_ocn} & variable ocean heat transfer coefficient & \\
 %&&{\it Forcing, continued}&\\
 {\tt update\_ocn\_f} & true & include frazil water/salt fluxes in ocn fluxes & \\
                           & false & do not include (when coupling with POP) & \\
+{\tt l\_mpond\_fresh} & true & retain (topo) pond water until ponds drain  & \\
+                                     & false & release (topo) pond water immediately to ocean  & \\
 {\tt oceanmixed\_ice} & true/false & active ocean mixed layer calculation & {\tt .true.} (if uncoupled) \\
 {\tt ocn\_data\_format} & {\tt nc} & read \netcdf\ ocean forcing files &  \\
                             & {\tt bin} & read direct access, binary files & \\
@@ -5405,7 +5439,7 @@ calc\_strair & {$\bullet$} if true, calculate wind stress {\dotfill\ }& T \\
 calc\_Tsfc & {$\bullet$} if true, calculate surface temperature {\dotfill\ }& T \\
 Cdn\_atm & atmospheric drag coefficient & \\
 Cdn\_ocn & ocean drag coefficient & \\
- Cf      & ratio of ridging work to PE change in ridging{\dotfill\ } & 17. \\
+ Cf      & {$\bullet$} ratio of ridging work to PE change in ridging{\dotfill\ } & 17. \\
  cgrid & vertical grid points for ice grid (compare bgrid) & \\
  char\_len  & length of character variable strings{\dotfill\ } &  80 \\
  char\_len\_long  & length of longer character variable strings{\dotfill\ } &  256 \\
@@ -5520,6 +5554,7 @@ faero\_ocn & aerosol flux to the ocean & kg/m$^2$/s \\
 \end{center}
 \begin{center}
 \begin{tabular*}{6.5in}{@{}l@{\extracolsep{\fill}}l@{\extracolsep{\fill}}l@{}} 
+fbot\_xfer\_type & {$\bullet$} type of heat transfer coefficient under ice &\\
  fcondtop(n)(\_f) & conductive heat flux  & W/m$^2$ \\
  fcor\_blk         & Coriolis parameter &1/s \\
 ferrmax & max allowed energy flux error (thermodynamics) {\dotfill\ } & 1.$\times$10$^{-3}$  W/m$^2$ \\
@@ -5660,6 +5695,7 @@ incond\_file &  {$\bullet$} prefix for initial condition file name & \\
 &&\\
 {\Large\bf K} &&\\
 &&\\
+kalg & {$\bullet$} absorption coefficient for algae & \\
  kappav  & visible extinction coefficient in ice, wavelength$<$700nm {\dotfill\ }& 1.4 m$^{-1}$ \\
  kcatbound &  {$\bullet$} category boundary formula & \\
  kdyn & {$\bullet$} type of dynamics (1 = EVP, 0 = off){\dotfill\ } & 1  \\
@@ -5684,6 +5720,7 @@ krgdn & mean ridge thickness per thickness of ridging ice & \\
 l\_brine & flag for brine pocket effects & \\
 l\_conservation\_check & if true, check conservation when ridging & \\
 l\_fixed\_area & flag for prescribing remapping fluxes & \\
+l\_mpond\_fresh & {$\bullet$} if true, retain (topo) pond water until ponds drain  & \\
 latpnt & {$\bullet$} desired latitude of diagnostic points  & degrees N \\
 latt(u)\_bounds & latitude of T(U) grid cell corners & degrees N \\
 lcdf64 & {$\bullet$} if true, use 64-bit \netcdf\ format \\
@@ -5927,7 +5964,7 @@ sil\_data\_type & {$\bullet$}  forcing type for silicate & \\
 sinw    & sine of the turning angle in water {\dotfill\ } & 0. \\
 sk\_l & skeletal layer thickness & 0.03 m \\
  snoice    & snow--ice formation       &m \\
- snowinfil & {$\bullet$} snow infiltration on/off {\dotfill\ } & T \\
+% snowinfil & {$\bullet$} snow infiltration on/off {\dotfill\ } & T \\
 snowpatch & length scale for parameterizing nonuniform snow coverage{\dotfill\ } & 0.02 m \\
 skl\_bgc & {$\bullet$} biogeochemistry on/off & \\
 spval & special value (single precision){\dotfill\ } & $10^{30}$ \\
@@ -5970,6 +6007,7 @@ Tair    & air temperature at 10 m & K\\
  tday & absolute day number & \\
 Tf      & freezing temperature & C\\
  Tffresh    & freezing temp of fresh ice{\dotfill\ } &  273.15 K \\
+ tfrz\_option & {$\bullet$} form of ocean freezing temperature & \\
  thinS & minimum ice thickness for brine tracer & \\
  time       & total elapsed time &s \\
  time\_beg & beginning time for history averages & \\
@@ -6026,7 +6064,7 @@ use\_leap\_years & {$\bullet$} if true, include leap days & \\
 use\_restart\_time & {$\bullet$} if true, use date from restart file & \\
  ustar\_min & {$\bullet$} minimum friction velocity under ice &\\% {\dotfill\ }& 5 $\times$ 10$^{-3}$ m/s \\ 
  %ustar\_scale & scaling factor for ice--ocean heat flux & \\
- ucstr & string identifying U grid for history variables & \\
+  ucstr & string identifying U grid for history variables & \\
  uvel           & x-component of ice velocity &m/s \\
  uvel\_init   & x-component of ice velocity at beginning of time step &m/s \\
  uvm  & land/boundary mask, velocity (U-cell)& \\
@@ -6143,7 +6181,7 @@ zvir & gas constant (water vapor)/gas constant (air) - 1 {\dotfill\ }& 0.606 \\
 \index{turbulent fluxes!wind stress|see{wind stress}}
 \index{velocity!Darcy|see{Darcy flow}}
 \index{water, open|see{open water}}
-\index{zero-layer|see{thermodynamics}}
+%\index{zero-layer|see{thermodynamics}}
 
 \newpage
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
