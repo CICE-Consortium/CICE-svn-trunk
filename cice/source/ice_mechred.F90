@@ -1739,7 +1739,8 @@
                i = indxii(ij)
                j = indxjj(ij)
                m = indxij(ij)
-               esrdgn = vsrdgn(ij) * trcrn(i,j,nt_qsno+k-1,n)
+               esrdgn = vsrdgn(ij) * trcrn(i,j,nt_qsno+k-1,n) &
+                                   / real(nslyr,kind=dbl_kind)
                esnow_mlt(m) = esnow_mlt(m) + esrdgn*(c1-fsnowrdg)
            enddo
          enddo

@@ -3294,8 +3294,8 @@ contains
          Sbr                   ! ice layer brine salinity (ppt)
 
     real(kind=dbl_kind), intent(inout) :: &
-         hslyr             , & ! ice layer thickness (m)
-         hilyr                 ! snow layer thickness (m)
+         hslyr             , & ! snow layer thickness (m)
+         hilyr                 ! ice layer thickness (m)
 
     real(kind=dbl_kind), intent(out) :: &
          snoice                ! snow ice formation
@@ -3350,7 +3350,7 @@ contains
           ! sea ice fraction of newly formed snow ice
           phi_snowice = (c1 - rhos / rhoi)
 
-          ! desnity of newly formed snowice
+          ! density of newly formed snowice
           rho_snowice = phi_snowice * rho_ocn + (c1 - phi_snowice) * rhoi
 
           ! calculate thickness of new ice added
@@ -3429,23 +3429,17 @@ contains
     ! snow depth and snow layers affected by snowice formation
     if (hsn > puny) then
        rnlyr = (dh / hsn) * nslyr
-       nlyr = min(floor(rnlyr),nslyr-1)
-       
-       zqsn_snowice = c0
-       
+       nlyr = min(floor(rnlyr),nslyr-1) ! nlyr=0 if nslyr=1
+
        ! loop over full snow layers affected
+       ! not executed if nlyr=0
        do k = nslyr, nslyr-nlyr+1, -1
-          
           zqsn_snowice = zqsn_snowice + zqsn(k) / rnlyr
-          
        enddo ! k
-       
+
        ! partially converted snow layer
        zqsn_snowice = zqsn_snowice + &
-                      ((rnlyr - real(nlyr,dbl_kind)) / rnlyr) * zqsn(nslyr)
-       
-       zqsn_snowice = zqsn_snowice
-
+            ((rnlyr - real(nlyr,dbl_kind)) / rnlyr) * zqsn(nslyr-nlyr)
     endif
 
   end subroutine enthalpy_snow_snowice
