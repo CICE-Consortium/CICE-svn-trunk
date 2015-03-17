@@ -158,7 +158,7 @@
       use ice_atmo, only: calc_strair, &
           atmbndy, atmo_boundary_const, atmo_boundary_layer, &
           formdrag, neutral_drag_coeffs, &
-          Cdn_ocn, Cdn_ocn_skin, Cdn_ocn_floe, Cdn_ocn_keel, Cdn_atm_ocn, &
+          Cdn_ocn, Cdn_ocn_skin, Cdn_ocn_floe, Cdn_ocn_keel, Cdn_atm_ratio, &
           Cdn_atm, Cdn_atm_skin, Cdn_atm_floe, Cdn_atm_rdg, Cdn_atm_pond, &
           hfreebd, hdraft, hridge, distrdg, hkeel, dkeel, lfloe, dfloe
       use ice_blocks, only: block, get_block, nx_block, ny_block
@@ -223,7 +223,7 @@
          fhocnn      , & ! fbot corrected for leftover energy (W/m^2)
          strairxn    , & ! air/ice zonal  stress,             (N/m^2)
          strairyn    , & ! air/ice meridional stress,         (N/m^2)
-         Cdn_atm_ocn_n,& ! drag coefficient ratio
+         Cdn_atm_ratio_n,& ! drag coefficient ratio
          Trefn       , & ! air tmp reference level                (K)
          Urefn       , & ! air speed reference level            (m/s)
          Qrefn           ! air sp hum reference level         (kg/kg)
@@ -419,7 +419,8 @@
                                    Trefn,          Qrefn,          &
                                    worka,          workb,          &
                                    lhcoef,         shcoef,         &
-                                   Cdn_atm(:,:,iblk), Cdn_atm_ocn_n, &
+                                   Cdn_atm(:,:,iblk),              &
+                                   Cdn_atm_ratio_n,                &
                                    uice=uvel(:,:,iblk),            &
                                    vice=vvel(:,:,iblk),            &
                                    Uref=Urefn                      )
@@ -667,7 +668,7 @@
                             aicen_init(:,:,n,iblk),                   &
                             flw(:,:,iblk),      coszen(:,:,iblk),     &
                             strairxn,           strairyn,             &
-                            Cdn_atm_ocn_n,                            &
+                            Cdn_atm_ratio_n,                          &
                             fsurfn(:,:,n,iblk), fcondtopn(:,:,n,iblk),&
                             fsensn(:,:,n,iblk), flatn(:,:,n,iblk),    &
                             fswabsn,            flwoutn,              &
@@ -676,7 +677,7 @@
                             freshn,             fsaltn,               &
                             fhocnn,             fswthrun(:,:,n,iblk), &
                             strairxT(:,:,iblk), strairyT  (:,:,iblk), &
-                            Cdn_atm_ocn(:,:,iblk),              &
+                            Cdn_atm_ratio(:,:,iblk),                  &
                             fsurf   (:,:,iblk), fcondtop  (:,:,iblk), &
                             fsens   (:,:,iblk), flat      (:,:,iblk), &
                             fswabs  (:,:,iblk), flwout    (:,:,iblk), &

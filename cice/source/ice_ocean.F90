@@ -58,7 +58,7 @@
            qdp, hmix, strairx_ocn, strairy_ocn, Tref_ocn, Qref_ocn
       use ice_grid, only: tmask
       use ice_atmo, only: atmo_boundary_layer, atmbndy, atmo_boundary_const, &
-           Cdn_atm, Cdn_atm_ocn
+           Cdn_atm, Cdn_atm_ratio
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -160,7 +160,7 @@
                                       lhcoef     (:,:),      &
                                       shcoef     (:,:),      &
                                       Cdn_atm(:,:,iblk),     & 
-                                      Cdn_atm_ocn(:,:,iblk)  )
+                                      Cdn_atm_ratio(:,:,iblk))
          endif
 
       !-----------------------------------------------------------------
