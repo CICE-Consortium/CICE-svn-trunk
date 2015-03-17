@@ -43,7 +43,7 @@
            n_Cdn_atm_skin   , n_Cdn_atm_floe,  &
            n_Cdn_atm_pond   , n_Cdn_atm_rdg,  &
            n_Cdn_ocn_skin   , n_Cdn_ocn_floe,   &
-           n_Cdn_ocn_keel   , n_Cdn_atm_ocn    
+           n_Cdn_ocn_keel   , n_Cdn_atm_ratio    
 
 !=======================================================================
 
@@ -211,10 +211,11 @@
             "Cdn_ocn_keel: neutral keel ice-ocn drag coefficient", &
             "none", c1, c0,            &
             ns, f_drag)
+
        if (f_drag(1:1) /= 'x') &
-         call define_hist_field(n_Cdn_atm_ocn,"Cdn_atm_ocn", &
+         call define_hist_field(n_Cdn_atm_ratio,"Cdn_atm_ratio", &
             "none",tstr2D, tcstr, &
-            "Cdn_atm_ocn: ratio total atm drag / ocn drag", &
+            "Cdn_atm_ratio: ratio total drag / neutral drag (atm)", &
             "none", c1, c0,            &
             ns, f_drag)
 
@@ -233,7 +234,7 @@
           accum_hist_field
       use ice_atmo, only: hfreebd, hdraft, hridge, distrdg, hkeel, &
           dkeel, lfloe, dfloe, Cdn_atm, Cdn_atm_skin, Cdn_atm_floe, &
-          Cdn_atm_pond, Cdn_atm_rdg, Cdn_atm_ocn, Cdn_ocn_skin, &
+          Cdn_atm_pond, Cdn_atm_rdg, Cdn_atm_ratio, Cdn_ocn_skin, &
           Cdn_ocn_keel, Cdn_ocn_floe, Cdn_ocn
 
       integer (kind=int_kind), intent(in) :: &
@@ -266,8 +267,8 @@
                               iblk, Cdn_atm_pond(:,:,iblk), a2D)
         call accum_hist_field(n_Cdn_atm_skin, &
                               iblk, Cdn_atm_skin(:,:,iblk), a2D)   
-        call accum_hist_field(n_Cdn_atm_ocn, &
-                              iblk, Cdn_atm_ocn(:,:,iblk), a2D)
+        call accum_hist_field(n_Cdn_atm_ratio, &
+                              iblk, Cdn_atm_ratio(:,:,iblk), a2D)
         call accum_hist_field(n_Cdn_ocn_keel, &
                               iblk, Cdn_ocn_keel(:,:,iblk), a2D)  
         call accum_hist_field(n_Cdn_ocn_floe, &

@@ -45,7 +45,6 @@
          kcatbound       !   0 = old category boundary formula
                          !   1 = new formula giving round numbers
                          !   2 = WMO standard
-                         !   3 = asymptotic formula
 
       real (kind=dbl_kind), public :: &
          hi_min          ! minimum ice thickness allowed (m)
@@ -92,10 +91,7 @@
            rn           , & ! real(n)
            rncat        , & ! real(ncat)
            d1           , & ! parameters for kcatbound = 1 (m)
-           d2           , & !
-           b1           , & ! parameters for kcatbound = 3
-           b2           , & !
-           b3
+           d2
 
       real (kind=dbl_kind), dimension(5) :: wmo5 ! data for wmo itd
       real (kind=dbl_kind), dimension(6) :: wmo6 ! data for wmo itd
@@ -107,9 +103,6 @@
       rncat = real(ncat, kind=dbl_kind)
       d1 = 3.0_dbl_kind / rncat
       d2 = 0.5_dbl_kind / rncat
-      b1 = p1         ! asymptotic category width (m)
-      b2 = c3         ! thickness for which participation function is small (m)
-      b3 = max(rncat*(rncat-1), c2*b2/b1)
 
       hi_min = p01    ! minimum ice thickness allowed (m) for thermo
                       ! note hi_min is reset to 0.1 for kitd=0, below
@@ -138,13 +131,6 @@
       ! For ncat = 5,  boundaries are         30, 70, 120, 200, >200 cm.
       ! For ncat = 6,  boundaries are     15, 30, 70, 120, 200, >200 cm.
       ! For ncat = 7,  boundaries are 10, 15, 30, 70, 120, 200, >200 cm.
-      !
-      ! The fourth formula asymptotes to a particular category width as
-      ! the number of categories increases, given by the parameter b1.
-      ! The parameter b3 is computed so that the category boundaries
-      ! are even numbers.
-      !
-      !    H(n) = b1 * [n + b3*n*(n+1)/(2*N*(N-1))] for N=ncat
       !
       ! kcatbound=-1 is available only for 1-category runs, with
       ! boundaries 0 and 100 m.
@@ -206,11 +192,6 @@
                     0.30_dbl_kind, 0.70_dbl_kind,  &
                     1.20_dbl_kind, 2.00_dbl_kind,  &
                     999._dbl_kind /
-!echmod wmo6a
-!         data wmo6 /0.30_dbl_kind, 0.70_dbl_kind,  &
-!                    1.20_dbl_kind, 2.00_dbl_kind,  &
-!                    4.56729_dbl_kind, &
-!                    999._dbl_kind /
 
          hin_max(0) = c0
          do n = 1, ncat
@@ -230,14 +211,6 @@
          write (nu_diag,*) 'kcatbound=2 (WMO) must have ncat=5, 6 or 7'
          stop
        endif
-
-      elseif (kcatbound == 3) then  ! asymptotic scheme
-
-         hin_max(0) = c0
-         do n = 1, ncat
-            rn = real(n, kind=dbl_kind)
-            hin_max(n) = b1 * (rn + b3*rn*(rn+c1)/(c2*rncat*(rncat-c1)))
-         enddo
 
       endif ! kcatbound
 

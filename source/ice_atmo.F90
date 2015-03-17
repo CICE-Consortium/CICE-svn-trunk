@@ -54,7 +54,7 @@
          Cdn_ocn_skin, & ! skin drag coefficient
          Cdn_ocn_floe, & ! floe edge drag coefficient
          Cdn_ocn_keel, & ! keel drag coefficient
-         Cdn_atm_ocn     ! ratio drag atm / neutral drag atm
+         Cdn_atm_ratio   ! ratio drag atm / neutral drag atm
 
 !=======================================================================
 
@@ -84,7 +84,8 @@
                                       Tref,     Qref,     &
                                       delt,     delq,     &
                                       lhcoef,   shcoef,   &
-                                      Cdn_atm,  Cdn_atm_ocn_n, &
+                                      Cdn_atm,            &
+                                      Cdn_atm_ratio_n,    &
                                       uice,     vice,     &
                                       Uref                )     
 
@@ -118,7 +119,7 @@
          Cdn_atm      ! neutral drag coefficient
  
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out) :: &
-         Cdn_atm_ocn_n      ! ratio drag coeff / neutral drag coeff
+         Cdn_atm_ratio_n ! ratio drag coeff / neutral drag coeff (atm)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(inout) :: &
@@ -424,7 +425,7 @@
 
          endif
 
-         Cdn_atm_ocn_n(i,j) = rd(ij) * rd(ij) / rdn(ij) / rdn(ij)
+         Cdn_atm_ratio_n(i,j) = rd(ij) * rd(ij) / rdn(ij) / rdn(ij)
 
       enddo                     ! ij
 
