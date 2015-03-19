@@ -24,7 +24,7 @@
       private
       save
 
-      public :: init_calendar, calendar, time2sec
+      public :: init_calendar, calendar, time2sec, sec2time
 
       integer (kind=int_kind), public :: &
          days_per_year        , & ! number of days in one year
