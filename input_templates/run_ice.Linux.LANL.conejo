@@ -10,7 +10,7 @@ limit stacksize unlimited
 set  stamp   = `date -u '+%y%m%d%H%M%S'`
 setenv ICE_LOG_FILE ice.log.${stamp}
 
-cd /scratch/eclare/CICE.v5.0/rundir
+cd /scratch/eclare/CICE.v5.1/rundir
 mpirun -np 4 ./cice  >&! $ICE_LOG_FILE
 
 exit 0

@@ -3223,7 +3223,7 @@ contains
        w = c0
     endif
 
-    w = -min(w,c0)
+    w = min(w,c0)
 
   end subroutine flushing_velocity
 
