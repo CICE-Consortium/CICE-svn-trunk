@@ -3127,9 +3127,7 @@ contains
                                hpond,  apond, &
                                dt,     w)
    
-    ! calculate the vertical flushing Darcy velocity
-    ! negative - downward flushing
-    ! positive - upward flushing
+    ! calculate the vertical flushing Darcy velocity (positive downward)
 
     use ice_constants, only: viscosity_dyn
 
@@ -3206,13 +3204,13 @@ contains
     dhhead = max(hbrine - hocn,c0)
 
     ! darcy flow through ice
-    w = -(perm_harm * rhow * gravit * (dhhead / hin)) / viscosity_dyn
+    w = (perm_harm * rhow * gravit * (dhhead / hin)) / viscosity_dyn
 
     ! maximum down flow to drain pond
-    w_down_max = -(hpond * apond) / dt
+    w_down_max = (hpond * apond) / dt
 
     ! limit flow
-    w = max(w,w_down_max)
+    w = min(w,w_down_max)
 
     ! limit amount of brine that can be advected out of any particular layer
     wlimit = (advection_limit * phi_min * hilyr) / dt
@@ -3223,7 +3221,7 @@ contains
        w = c0
     endif
 
-    w = min(w,c0)
+    w = max(w, c0)
 
   end subroutine flushing_velocity
 
@@ -3249,7 +3247,7 @@ contains
     if (apond > c0 .and. hpond > c0) then
 
        ! flush pond through mush
-       hpond = hpond + (min(w,c0) * dt) / apond
+       hpond = hpond - w * dt / apond
        
        hpond = max(hpond, c0)
 
