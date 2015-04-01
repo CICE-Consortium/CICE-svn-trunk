@@ -3202,13 +3202,15 @@
           field_loc_center, field_type_scalar 
       use ice_domain_size, only: max_blocks
       use ice_grid, only: to_ugrid, ANGLET
+      use ice_read_write, only: ice_read_nc_uv
 #ifdef ncdf
       use netcdf
 #endif
 
       integer (kind=int_kind) :: & 
         n   , & ! field index
-        m       ! month index
+        m   , & ! month index
+        nzlev   ! z level of currents
 
       character(char_len) :: &
         vname(nfld) ! variable names to search for in file
@@ -3276,8 +3278,14 @@
           do m=1,12
                 
             ! Note: netCDF does single to double conversion if necessary
-            call ice_read_nc(fid, m, vname(n), work1, dbug, &
-                             field_loc_center, field_type_scalar)
+            if (n == 4 .or. n == 5) then ! 3D currents
+               nzlev = 1                 ! surface currents
+               call ice_read_nc_uv(fid, m, nzlev, vname(n), work1, dbug, &
+                                field_loc_center, field_type_scalar)
+            else
+               call ice_read_nc(fid, m, vname(n), work1, dbug, &
+                                field_loc_center, field_type_scalar)
+            endif
 
             ! the land mask used in ocean_mixed_depth.nc does not 
             ! match our gx1v3 mask (hm)
@@ -3301,10 +3309,8 @@
              ocn_frc_m(:,:,:,n+1,m) = work2(:,:,:)*cos(ANGLET(:,:,:)) &
                                     - work1(:,:,:)*sin(ANGLET(:,:,:))
 
-             work1(:,:,:) = ocn_frc_m(:,:,:,n  ,m)*cos(ANGLET(:,:,:)) &
-                          + ocn_frc_m(:,:,:,n+1,m)*sin(ANGLET(:,:,:))
-             work2(:,:,:) = ocn_frc_m(:,:,:,n+1,m)*cos(ANGLET(:,:,:)) &
-                          - ocn_frc_m(:,:,:,n  ,m)*sin(ANGLET(:,:,:))
+             work1(:,:,:) = ocn_frc_m(:,:,:,n  ,m)
+             work2(:,:,:) = ocn_frc_m(:,:,:,n+1,m)
              call to_ugrid(work1,ocn_frc_m(:,:,:,n  ,m))
              call to_ugrid(work2,ocn_frc_m(:,:,:,n+1,m))
 

@@ -36,6 +36,7 @@
                 ice_read_nc,        &
                 ice_read_global,    &
                 ice_read_global_nc, &
+                ice_read_nc_uv,     &
                 ice_write,          &
                 ice_write_nc,       &
                 ice_write_ext,      &
@@ -1935,6 +1936,142 @@
 #endif
 
       end subroutine ice_close_nc
+
+!=======================================================================
+
+! Read a netCDF file and scatter to processors.
+! If the optional variables field_loc and field_type are present,
+! the ghost cells are filled using values from the global array.
+! This prevents them from being filled with zeroes in land cells
+! (subroutine ice_HaloUpdate need not be called).
+!
+! Adapted by Elizabeth Hunke for reading 3D ocean currents
+
+      subroutine ice_read_nc_uv(fid,  nrec, nzlev,  varname, work,  diag, &
+                             field_loc, field_type, restart_ext)
+
+      use ice_fileunits, only: nu_diag
+      use ice_gather_scatter, only: scatter_global, scatter_global_ext
+
+      integer (kind=int_kind), intent(in) :: &
+           fid           , & ! file id
+           nrec          , & ! record number 
+           nzlev             ! z level
+
+      logical (kind=log_kind), intent(in) :: &
+           diag              ! if true, write diagnostic output
+
+      character (len=*), intent(in) :: & 
+           varname           ! field name in netcdf file
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
+           intent(out) :: &
+           work              ! output array (real, 8-byte)
+
+      logical (kind=log_kind), optional, intent(in) :: &
+           restart_ext       ! if true, read extended grid
+
+      integer (kind=int_kind), optional, intent(in) :: &
+           field_loc, &      ! location of field on staggered grid
+           field_type        ! type of field (scalar, vector, angle)
+
+      ! local variables
+
+#ifdef ncdf
+! netCDF file diagnostics:
+      integer (kind=int_kind) :: & 
+         varid          , & ! variable id
+         status,          & ! status output from netcdf routines
+         ndim, nvar,      & ! sizes of netcdf file
+         id,              & ! dimension index
+         dimlen             ! size of dimension
+
+      real (kind=dbl_kind) :: &
+         amin, amax, asum   ! min, max values and sum of input array
+
+      character (char_len) :: &
+         dimname            ! dimension name            
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1
+
+      integer (kind=int_kind) :: nx, ny
+
+      nx = nx_global
+      ny = ny_global
+
+      if (present(restart_ext)) then
+         if (restart_ext) then
+            nx = nx_global + 2*nghost
+            ny = ny_global + 2*nghost
+         endif
+      endif
+
+      if (my_task == master_task) then
+         allocate(work_g1(nx,ny))
+      else
+         allocate(work_g1(1,1))   ! to save memory
+      endif
+
+      if (my_task == master_task) then
+
+        !-------------------------------------------------------------
+        ! Find out ID of required variable
+        !-------------------------------------------------------------
+
+         status = nf90_inq_varid(fid, trim(varname), varid)
+ 
+         if (status /= nf90_noerr) then
+           call abort_ice ( & 
+               'ice_read_nc_xy: Cannot find variable '//trim(varname) )
+         endif
+
+       !--------------------------------------------------------------
+       ! Read global array 
+       !--------------------------------------------------------------
+
+         status = nf90_get_var( fid, varid, work_g1, &
+               start=(/1,1,nzlev,nrec/), & 
+               count=(/nx,ny,1,1/) )
+
+      endif                     ! my_task = master_task
+
+    !-------------------------------------------------------------------
+    ! optional diagnostics
+    !-------------------------------------------------------------------
+
+      if (my_task==master_task .and. diag) then
+         amin = minval(work_g1)
+         amax = maxval(work_g1, mask = work_g1 /= spval_dbl)
+         asum = sum   (work_g1, mask = work_g1 /= spval_dbl)
+         write(nu_diag,*) ' min, max, sum =', amin, amax, asum
+      endif
+
+    !-------------------------------------------------------------------
+    ! Scatter data to individual processors.
+    ! NOTE: Ghost cells are not updated unless field_loc is present.
+    !-------------------------------------------------------------------
+
+      if (present(restart_ext)) then
+         if (restart_ext) then
+            call scatter_global_ext(work, work_g1, master_task, distrb_info)
+         endif
+      else
+         if (present(field_loc)) then
+            call scatter_global(work, work_g1, master_task, distrb_info, &
+                                field_loc, field_type)
+         else
+            call scatter_global(work, work_g1, master_task, distrb_info, &
+                                field_loc_noupdate, field_type_noupdate)
+         endif
+      endif
+
+      deallocate(work_g1)
+
+#else
+      work = c0 ! to satisfy intent(out) attribute
+#endif
+      end subroutine ice_read_nc_uv
 
 !=======================================================================
 
