@@ -52,7 +52,7 @@
       subroutine cice_init
 
       use ice_aerosol, only: faero_default
-      use ice_algae, only: get_atm_bgc, fzaero_data, get_forcing_bgc
+      use ice_algae, only: get_forcing_bgc
       use ice_calendar, only: dt, dt_dyn, time, istep, istep1, write_ic, &
           init_calendar, calendar
       use ice_communicate, only: init_communicate
@@ -78,7 +78,7 @@
       use ice_timers, only: timer_total, init_ice_timers, ice_timer_start
       use ice_transport_driver, only: init_transport
       use ice_zbgc, only: init_zbgc
-      use ice_zbgc_shared, only: skl_bgc, z_tracers, tr_zaero 
+      use ice_zbgc_shared, only: skl_bgc
 #ifdef popcice
       use drv_forcing, only: sst_sss
 #endif
@@ -145,9 +145,7 @@
       call get_forcing_ocn(dt)  ! ocean forcing from data
 !      if (tr_aero) call faero_data          ! aerosols
       if (tr_aero) call faero_default ! aerosols
-      if (skl_bgc .or. z_tracers) call get_forcing_bgc 
-      if (z_tracers) call get_atm_bgc (dt)
-     ! if (tr_zaero) call fzaero_data ! zaerosols
+      if (skl_bgc) call get_forcing_bgc
 #endif
 
       if (runtype == 'initial' .and. .not. restart) &
@@ -188,10 +186,8 @@
       use ice_restart_shared, only: runtype, restart
       use ice_restart_driver, only: restartfile, restartfile_v4
       use ice_state ! almost everything
-      use ice_therm_shared, only: solve_zsal   
-      use ice_zbgc, only: init_bgc   
-      use ice_zbgc_shared, only: skl_bgc, z_tracers
-      use ice_zsalinity, only: init_zsalinity 
+      use ice_zbgc, only: init_bgc
+      use ice_zbgc_shared, only: skl_bgc
 
       integer(kind=int_kind) :: iblk
 
@@ -287,11 +283,7 @@
       endif
       if (tr_aero)  call init_aerosol ! ice aerosol
       if (tr_brine) call init_hbrine  ! brine height tracer
-      if (solve_zsal) call init_zsalinity(sss)        ! salinity on bio-grid
-      if (skl_bgc .or. z_tracers) then   ! biogeochemistry
-                call init_bgc   
-      endif
-              
+      if (skl_bgc)  call init_bgc     ! biogeochemistry
 
       !-----------------------------------------------------------------
       ! aggregate tracers

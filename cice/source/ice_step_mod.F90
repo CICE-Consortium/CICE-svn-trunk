@@ -189,12 +189,10 @@
           vice, vicen, vsno, vsnon, ntrcr, trcrn, &
           nt_apnd, nt_hpnd, nt_ipnd, nt_alvl, nt_vlvl, nt_Tsfc, &
           tr_iage, nt_iage, tr_FY, nt_FY, tr_aero, tr_pond, tr_pond_cesm, &
-          tr_pond_lvl, nt_qice, nt_sice, tr_pond_topo, uvel, vvel, &
-          vsnon_init  ! needed for updating ztracers in snow
+          tr_pond_lvl, nt_qice, nt_sice, tr_pond_topo, uvel, vvel
       use ice_therm_shared, only: calc_Tsfc
       use ice_therm_vertical, only: frzmlt_bottom_lateral, thermo_vertical
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_ponds
-      use ice_zbgc_shared, only: fzsaln  
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -238,6 +236,7 @@
          lhcoef          ! transfer coefficient for latent heat
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
+         vsnon_init  , & ! for aerosol mass budget
          rfrac           ! water fraction retained for melt ponds
 
       real (kind=dbl_kind) :: &
@@ -496,7 +495,7 @@
                                 fcondtopn(:,:,n,iblk) )
             endif
 
-            vsnon_init(:,:,n,iblk) = vsnon(:,:,n,iblk)
+            vsnon_init(:,:) = vsnon(:,:,n,iblk)
 
             call thermo_vertical(nx_block,           ny_block,            &
                                 dt,                  icells,              &
@@ -511,7 +510,6 @@
                                 sss  (:,:,iblk),                          &
                                 lhcoef,              shcoef,              &
                                 fswsfcn(:,:,n,iblk), fswintn(:,:,n,iblk), &
-                                fswthrun(:,:,n,iblk),                     & 
                                 Sswabsn(:,:,:,n,iblk),                    &
                                 Iswabsn(:,:,:,n,iblk),                    &
                                 fsurfn(:,:,n,iblk),                       &
@@ -526,8 +524,7 @@
                                 mlt_onset(:,:,iblk), frz_onset(:,:,iblk), &
                                 yday,                l_stop,              &
                                 istop,               jstop,               &
-                                dsnown(:,:,n,iblk),                       &
-                                fzsaln(:,:,n,iblk)) 
+                                dsnown(:,:,n,iblk))
 
          if (l_stop) then
             write (nu_diag,*) 'istep1, my_task, iblk =', &
@@ -577,7 +574,7 @@
                                     trcrn(:,:,:,n,iblk),                 &
                                     aicen_init(:,:,n,iblk),              &
                                     vicen_init(:,:,n,iblk),              &
-                                    vsnon_init(:,:,n,iblk),              &
+                                    vsnon_init(:,:),                     &
                                     vicen(:,:,n,iblk),                   &
                                     vsnon(:,:,n,iblk),                   &
                                     aicen(:,:,n,iblk),                   &
@@ -743,13 +740,14 @@
       use ice_grid, only: tmask
       use ice_itd, only: cleanup_itd, kitd, aggregate_area, reduce_area
       use ice_therm_itd, only: lateral_melt, linear_itd, add_new_ice
+      use ice_zbgc_shared, only: ocean_bio, flux_bio
       use ice_state, only: aice, aicen, aice0, ntrcr, trcr_depend, &
           aicen_init, vicen_init, trcrn, vicen, vsnon, nbtrcr, tr_aero, &
           tr_pond_topo
       use ice_therm_shared, only: heat_capacity
       use ice_therm_vertical, only: phi_init, dSin0_frazil
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_catconv
-      use ice_zbgc_shared, only: first_ice, ocean_bio, flux_bio, fzsal
+      use ice_zbgc_shared, only: first_ice
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -876,7 +874,7 @@
             endif
          enddo               ! i
          enddo               ! j
-
+            
          call add_new_ice (nx_block,              ny_block, &
                            ntrcr,                 icells,   &
                            indxi,                 indxj,    &
@@ -884,7 +882,6 @@
                            aicen     (:,:,:,iblk),          &
                            trcrn     (:,:,1:ntrcr,:,iblk),  &
                            vicen     (:,:,:,iblk),          &
-                           vsnon     (:,:,1,iblk),          &  
                            aice0     (:,:,  iblk),          &
                            aice      (:,:,  iblk),          &
                            frzmlt    (:,:,  iblk),          &
@@ -900,7 +897,6 @@
                            nbtrcr,                          &
                            flux_bio  (:,:,1:nbtrcr,iblk),   &
                            ocean_bio (:,:,1:nbtrcr,iblk),   &
-                           fzsal     (:,:,iblk),            &
                            l_stop,                          &
                            istop                 , jstop)
 
@@ -932,9 +928,7 @@
                             aicen     (:,:,:,iblk), &
                             vicen     (:,:,:,iblk), &
                             vsnon     (:,:,:,iblk), &
-                            trcrn     (:,:,:,:,iblk),&
-                            fzsal     (:,:,  iblk), &  
-                            flux_bio(:,:,:,iblk),nbtrcr) 
+                            trcrn     (:,:,:,:,iblk))
 
       !-----------------------------------------------------------------
       ! For the special case of a single category, adjust the area and
@@ -969,8 +963,8 @@
                            fhocn   (:,:,  iblk),                       &
                            faero_ocn(:,:,:,iblk),tr_aero,              &
                            tr_pond_topo,         heat_capacity,        &
-                           nbtrcr ,              first_ice(:,:,:,iblk),&
-                           fzsal(:,:,  iblk),    flux_bio(:,:,:,iblk), & 
+                           nbtrcr,               first_ice(:,:,:,iblk),&
+                           flux_bio(:,:,1:nbtrcr,iblk),                &
                            l_stop,                                     &
                            istop,                jstop)
 
@@ -1214,7 +1208,7 @@
       use ice_state, only: ntrcr, aicen, trcrn, vicen, vsnon, aice0, &
           trcr_depend, aice, tr_aero, tr_pond_topo, nbtrcr
       use ice_therm_shared, only: heat_capacity
-      use ice_zbgc_shared, only: flux_bio, first_ice, fzsal
+      use ice_zbgc_shared, only: flux_bio, first_ice
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -1329,8 +1323,7 @@
                            faero_ocn(:,:,:,iblk),tr_aero,              &
                            tr_pond_topo,         heat_capacity,        &
                            nbtrcr,               first_ice(:,:,:,iblk),&
-                           fzsal(:,:,  iblk),                          &
-                           flux_bio(:,:,1:nbtrcr,iblk),                & 
+                           flux_bio(:,:,1:nbtrcr,iblk),                &
                            l_stop,                                     &
                            istop,                jstop)
 
@@ -1373,7 +1366,6 @@
                            nt_apnd, nt_ipnd, nt_hpnd, tr_pond_topo 
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_sw
       use ice_therm_shared, only: calc_Tsfc
-      use ice_zbgc_shared, only: trcrn_sw
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -1436,8 +1428,7 @@
                        Sswabsn(:,:,:,:,iblk), Iswabsn(:,:,:,:,iblk),   &
                        albicen(:,:,:,iblk),   albsnon(:,:,:,iblk),     &
                        albpndn(:,:,:,iblk),   apeffn(:,:,:,iblk),      &
-                       dhsn(:,:,:,iblk),      ffracn(:,:,:,iblk),      &
-                       trcrn_sw(:,:,:,:,iblk))
+                       dhsn(:,:,:,iblk),      ffracn(:,:,:,iblk))
          
         else  ! .not. dEdd
 

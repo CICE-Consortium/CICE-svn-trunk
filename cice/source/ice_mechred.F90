@@ -489,7 +489,8 @@
       enddo
       enddo
       enddo
-    
+
+     
       do j = 1, ny_block
       do i = 1, nx_block
          vbrin(i,j,n) =  vicen(i,j,n)
@@ -497,6 +498,7 @@
       enddo
       enddo
       
+
       do k = 1, nilyr
       do j = 1, ny_block
       do i = 1, nx_block
@@ -592,13 +594,12 @@
 
          fieldid = 'vbrin, ridging'
          call column_conservation_check (nx_block,  ny_block,      &
-                                         icells,    indxi,  indxj, &
+                                         icells,   indxi,   indxj, &
                                          fieldid,                  &
                                          vbri_init, vbri_final,    &
-                                         puny*c10,  l_stop,        &
+                                         puny*c10,      l_stop,        &
                                          istop,     jstop)
-
-         if (l_stop) return  
+         if (l_stop) return         
       endif                     ! l_conservation_check            
 
       !-----------------------------------------------------------------

@@ -119,6 +119,7 @@
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_type
       use ice_state ! everything
       use ice_therm_shared, only: calc_Tsfc
+      use ice_zbgc_shared, only: rhosi
 #ifdef CCSMCOUPLED
       use ice_prescribed_mod, only: prescribed_ice
 #endif
@@ -680,13 +681,12 @@
                hiavg(n) = c0                       ! avg snow/ice thickness
                hsavg(n) = c0
                hbravg(n) = c0                      ! avg brine thickness
-               psalt(n) = c0
                if (paice(n) /= c0) then
                   hiavg(n) = vice(i,j,iblk)/paice(n)
                   hsavg(n) = vsno(i,j,iblk)/paice(n)
                   if (tr_brine) hbravg(n) = trcr(i,j,nt_fbri,iblk)* hiavg(n)
-                  psalt(n) = work2(i,j,iblk)/vice(i,j,iblk)
                endif
+               psalt(n) = work2(i,j,iblk)
                pTsfc(n) = trcr(i,j,nt_Tsfc,iblk)   ! ice/snow sfc temperature
                pevap(n) = evap(i,j,iblk)*dt/rhoi   ! sublimation/condensation
                pfswabs(n) = fswabs(i,j,iblk)       ! absorbed solar flux
@@ -720,7 +720,7 @@
             call broadcast_scalar(pflw     (n), pmloc(n))             
             call broadcast_scalar(paice    (n), pmloc(n))             
             call broadcast_scalar(hsavg    (n), pmloc(n))             
-            call broadcast_scalar(hiavg    (n), pmloc(n))
+            call broadcast_scalar(hiavg    (n), pmloc(n))              
             call broadcast_scalar(psalt    (n), pmloc(n))
             call broadcast_scalar(hbravg   (n), pmloc(n))
             call broadcast_scalar(pTsfc    (n), pmloc(n))             

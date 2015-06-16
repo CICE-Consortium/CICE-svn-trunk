@@ -80,8 +80,7 @@
       use ice_itd, only: hin_max, hi_min, aggregate_area, shift_ice, & 
                          column_sum, column_conservation_check
       use ice_state, only: nt_qice, nt_qsno, nt_fbri, nt_sice, &
-                           tr_pond_topo, nt_apnd, nt_hpnd, tr_brine, &
-                           nt_bgc_S 
+                           tr_pond_topo, nt_apnd, nt_hpnd, tr_brine
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -678,6 +677,7 @@
                       l_stop,                &
                       istop,    jstop)
 
+
       ! maintain qsno negative definiteness
       do n = 1, ncat
          do k = nt_qsno, nt_qsno+nslyr-1
@@ -1047,19 +1047,14 @@
                                fhocn,      faero_ocn,  &
                                rside,      meltl,      &
                                aicen,      vicen,      &
-                               vsnon,      trcrn,      &
-                               fzsal,      flux_bio,   &
-                               nbtrcr) 
+                               vsnon,      trcrn)
 
-      use ice_state, only: nt_qice, nt_qsno, tr_brine,  & 
+      use ice_state, only: nt_qice, nt_qsno, &
                            nt_aero, tr_aero, tr_pond_topo, nt_apnd, nt_hpnd
-      use ice_zbgc_shared, only: lateral_melt_bgc, skl_bgc, z_tracers 
-      use ice_therm_shared, only: solve_zsal
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
-         ilo,ihi,jlo,jhi,    & ! beginning and end of physical domain
-         nbtrcr                ! number of biology tracers  
+         ilo,ihi,jlo,jhi       ! beginning and end of physical domain
 
       real (kind=dbl_kind), intent(in) :: &
          dt        ! time step (s)
@@ -1083,13 +1078,8 @@
          fresh     , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt     , & ! salt flux to ocean (kg/m^2/s)
          fhocn     , & ! net heat flux to ocean (W/m^2)
-         meltl     , & ! lateral ice melt         (m/step-->cm/day)
-         fzsal         ! salt flux from layer Salinity (kg/m^2/s)  
+         meltl         ! lateral ice melt         (m/step-->cm/day)
   
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nbtrcr), &
-         intent(inout) :: &
-         flux_bio  ! biology tracer flux from layer bgc (mmol/m^2/s)  
-
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
          intent(inout) :: &
          faero_ocn     ! aerosol flux to ocean (kg/m^2/s)
@@ -1222,16 +1212,6 @@
             enddo
          endif
 
-      !-----------------------------------------------------------------
-      ! Biogeochemistry
-      !-----------------------------------------------------------------     
-      if (solve_zsal .or. z_tracers) & 
-         call lateral_melt_bgc(nx_block,       ny_block,    &
-                               icells,         dt,          &
-                               indxi,          indxj,       &
-                               rside,          vicen_init,  &
-                               trcrn(:,:,:,n), fzsal,       &
-                               flux_bio,       nbtrcr)
       enddo  ! n
 
       end subroutine lateral_melt
@@ -1261,7 +1241,7 @@
                               indxi,     indxj,      &
                               dt,                    &
                               aicen,     trcrn,      &
-                              vicen,     vsnon1,     & 
+                              vicen,                 &
                               aice0,     aice,       &
                               frzmlt,    frazil,     &
                               frz_onset, yday,       &
@@ -1271,7 +1251,7 @@
                               salinz,    phi_init,   &
                               dSin0_frazil,          &
                               nbtrcr,    flux_bio,   &
-                              ocean_bio, fzsal,      &  
+                              ocean_bio, &
                               l_stop,                &
                               istop,     jstop)
 
@@ -1282,9 +1262,9 @@
                            nt_apnd, tr_pond_cesm, tr_pond_lvl, tr_pond_topo, &
                            tr_iage, tr_FY, tr_lvl, tr_aero, tr_brine
       use ice_therm_mushy, only: liquidus_temperature_mush, enthalpy_mush
-      use ice_therm_shared, only: ktherm, hfrazilmin, solve_zsal
+      use ice_therm_shared, only: ktherm, hfrazilmin
       use ice_zbgc, only: add_new_ice_bgc
-      use ice_zbgc_shared, only: skl_bgc, initbio_frac, rhosi, bgc_tracer_type
+      use ice_zbgc_shared, only: skl_bgc
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -1302,8 +1282,7 @@
          aice  , & ! total concentration of ice
          frzmlt, & ! freezing/melting potential (W/m^2)
          Tf    , & ! freezing temperature (C)
-         sss   , & ! sea surface salinity (ppt)
-         vsnon1    ! category 1 snow volume per ice area (m)
+         sss       ! sea surface salinity (ppt)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), &
          intent(inout) :: &
@@ -1352,11 +1331,7 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
          intent(inout) :: &
          flux_bio   ! tracer flux to ocean from biology (mmol/m^2/s) 
-       
-      real (kind=dbl_kind), dimension (nx_block,ny_block), &
-         intent(inout) :: &  
-         fzsal      ! salt flux to ocean from prognostic S (kg/m^2/s)
- 
+        
       real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
          intent(in) :: &
          ocean_bio   ! ocean concentration of biological tracer
@@ -1554,9 +1529,6 @@
 
             fresh(i,j)      = fresh(i,j)      + dfresh
             fsalt(i,j)      = fsalt(i,j)      + dfsalt
-            if (solve_zsal) &  
-             fzsal(i,j)      = fzsal(i,j)  &
-                  - rhosi*vi0new(ij)/dt*p001*sss(i,j)*salt_loss
          endif
 
       !-----------------------------------------------------------------
@@ -1702,10 +1674,8 @@
                   trcrn(i,j,nt_qice+k-1,n) = &
                  (trcrn(i,j,nt_qice+k-1,n)*vtmp + qi0new(ij)*vsurp) / vicen(i,j,n)
                   ! salinity
-                
-                  if (.not. solve_zsal) & 
-                   trcrn(i,j,nt_sice+k-1,n) = &
-                  (trcrn(i,j,nt_sice+k-1,n)*vtmp + Sprofile(ij,k)*vsurp) / vicen(i,j,n)
+                  trcrn(i,j,nt_sice+k-1,n) = &
+                 (trcrn(i,j,nt_sice+k-1,n)*vtmp + Sprofile(ij,k)*vsurp) / vicen(i,j,n) 
                endif
             enddo               ! ij
             enddo               ! k
@@ -1797,7 +1767,6 @@
               (trcrn(i,j,nt_qice+k-1,1)*vice1(ij) &
                                        + qi0new(m)*vi0new(m))/vicen(i,j,1)
                ! salinity
-              if (.NOT. solve_zsal)&
                trcrn(i,j,nt_sice+k-1,1) = &
               (trcrn(i,j,nt_sice+k-1,1)*vice1(ij) &
                                    + Sprofile(m,k)*vi0new(m))/vicen(i,j,1)
@@ -1852,20 +1821,18 @@
       !-----------------------------------------------------------------
       ! Biogeochemistry
       !-----------------------------------------------------------------     
-      if (tr_brine .OR. nbtrcr > 0) then
-          call add_new_ice_bgc (nx_block,  ny_block,   dt,   &
+      if (tr_brine .or. skl_bgc) &
+      call add_new_ice_bgc (nx_block,  ny_block,   dt,       &
                            icells,     jcells,     kcells,   &
                            indxi,      indxj,                &
                            indxi2,     indxj2,     indxij2,  &
                            indxi3,     indxj3,     indxij3,  &
                            aicen_init, vicen_init, vi0_init, &
-                           aicen,      vicen,      vsnon1,   & 
-                           vi0new,   &
+                           aicen,      vicen,      vi0new,   &
                            ntrcr,      trcrn,      nbtrcr,   &
                            sss,        ocean_bio,  flux_bio, &
                            hsurp,                            &
                            l_stop,     istop,      jstop)
-      endif
 
       end subroutine add_new_ice
 

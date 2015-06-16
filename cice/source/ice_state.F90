@@ -37,8 +37,7 @@
       module ice_state
 
       use ice_kinds_mod
-      use ice_domain_size, only: max_blocks, ncat, max_ntrcr, n_aero, &
-          max_algae, max_doc, max_dic, max_aero, max_don, max_fe
+      use ice_domain_size, only: max_blocks, ncat, max_ntrcr, n_aero
       use ice_blocks, only: nx_block, ny_block
 
       implicit none
@@ -93,33 +92,9 @@
          ntrcr     ! number of tracers in use
 
       integer (kind=int_kind), public :: &
-         nbtrcr, &    ! number of bgc tracers in use
-         nbtrcr_sw    ! number of bgc tracers which impact shortwave
-  
-      integer (kind=int_kind), dimension(max_algae), public :: &  
-         nt_bgc_N , & ! diatoms, phaeocystis, pico/small   
-         nt_bgc_C , & ! diatoms, phaeocystis, pico/small   
-         nt_bgc_chl   ! diatoms, phaeocystis, pico/small 
-
-      integer (kind=int_kind), dimension(max_doc), public :: &  
-         nt_bgc_DOC      !  dissolved organic carbon
-
-      integer (kind=int_kind), dimension(max_don), public :: & 
-         nt_bgc_DON         !  dissolved organic nitrogen
-
-      integer (kind=int_kind), dimension(max_dic), public :: &  
-         nt_bgc_DIC         !  dissolved inorganic carbon
-
-      integer (kind=int_kind), dimension(max_fe), public :: & 
-         nt_bgc_Fed,     & !  dissolved iron
-         nt_bgc_Fep        !  particulate iron
-
-      integer (kind=int_kind), dimension(max_aero), public :: &  
-         nt_zaero       !  black carbon and other aerosols
-
-      integer (kind=int_kind), public :: &  
-         ntrace_start       ! index of first bio tracer
-         integer (kind=int_kind), public :: &
+         nbtrcr    ! number of bgc tracers in use
+      
+      integer (kind=int_kind), public :: &
          nt_Tsfc  , & ! ice/snow temperature
          nt_qice  , & ! volume-weighted ice enthalpy (in layers)
          nt_qsno  , & ! volume-weighted snow enthalpy (in layers)
@@ -133,15 +108,20 @@
          nt_hpnd  , & ! melt pond depth
          nt_ipnd  , & ! melt pond refrozen lid thickness
          nt_aero  , & ! starting index for aerosols in ice
-         nt_bgc_Nit,   & ! nutrients  
-         nt_bgc_Am,    & ! 
-         nt_bgc_Sil,   & !
-         nt_bgc_DMSPp, & ! trace gases (skeletal layer)
-         nt_bgc_DMSPd, & ! 
-         nt_bgc_DMS,   & ! 
-         nt_bgc_PON,   & ! zooplankton and detritus  
-         nt_zbgc_frac, & ! fraction of tracer in the mobile phase
-         nt_bgc_S        ! Bulk salinity in fraction ice with dynamic salinity (Bio grid)
+         nt_bgc_N_sk,   & ! algae (skeletal layer)
+         nt_bgc_C_sk,   & ! 
+         nt_bgc_chl_sk, & ! 
+         nt_bgc_Nit_sk, & ! nutrients (skeletal layer) 
+         nt_bgc_Am_sk,  & ! 
+         nt_bgc_Sil_sk, & !
+         nt_bgc_DMSPp_sk, & ! trace gases (skeletal layer)
+         nt_bgc_DMSPd_sk, & ! 
+         nt_bgc_DMS_sk, & ! 
+         nt_bgc_Nit_ml, & ! nutrients (ocean mixed layer) 
+         nt_bgc_Am_ml,  & ! 
+         nt_bgc_Sil_ml, & !
+         nt_bgc_DMSP_ml, & ! trace gases (ocean mixed layer)
+         nt_bgc_DMS_ml
 
       logical (kind=log_kind), public :: &
          tr_iage,   & ! if .true., use age tracer
@@ -177,8 +157,7 @@
       real (kind=dbl_kind), &
          dimension(nx_block,ny_block,ncat,max_blocks), public :: &
          aicen_init  , & ! initial ice concentration, for linear ITD
-         vicen_init  , & ! initial ice volume (m), for linear ITD
-         vsnon_init      ! initial snow volume (m), for aerosol
+         vicen_init      ! initial ice volume (m), for linear ITD
 
 !=======================================================================
 

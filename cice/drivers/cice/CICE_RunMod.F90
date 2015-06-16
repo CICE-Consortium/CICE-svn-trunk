@@ -37,14 +37,14 @@
       subroutine CICE_Run
 
       use ice_aerosol, only: faero_default
-      use ice_algae, only: get_forcing_bgc, get_atm_bgc, fzaero_data
+      use ice_algae, only: get_forcing_bgc
       use ice_calendar, only: istep, istep1, time, dt, stop_now, calendar
       use ice_forcing, only: get_forcing_atmo, get_forcing_ocn
       use ice_flux, only: init_flux_atm, init_flux_ocn
       use ice_state, only: tr_aero
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_couple, timer_step
-      use ice_zbgc_shared, only: skl_bgc, z_tracers, tr_zaero
+      use ice_zbgc_shared, only: skl_bgc
 
    !--------------------------------------------------------------------
    !  initialize error code and step timer
@@ -78,11 +78,10 @@
          call get_forcing_ocn(dt)  ! ocean forcing from data
          ! if (tr_aero) call faero_data       ! aerosols
          if (tr_aero)  call faero_default     ! aerosols
-         if (skl_bgc .or. z_tracers)  call get_forcing_bgc   ! biogeochemistry
-         if (z_tracers)  call get_atm_bgc (dt)    ! biogeochemistry
-        ! if (tr_zaero)  call fzaero_data     ! zaerosols 
+         if (skl_bgc)  call get_forcing_bgc   ! biogeochemistry
          call ice_timer_stop(timer_couple)    ! atm/ocn coupling
 #endif
+
          call init_flux_atm     ! initialize atmosphere fluxes sent to coupler
          call init_flux_ocn     ! initialize ocean fluxes sent to coupler
 
@@ -132,14 +131,13 @@
           tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_brine, tr_aero
       use ice_step_mod, only: prep_radiation, step_therm1, step_therm2, &
           post_thermo, step_dynamics, step_radiation
-      use ice_therm_shared, only: calc_Tsfc, solve_zsal, ktherm
+      use ice_therm_shared, only: calc_Tsfc
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_diags, timer_column, timer_thermo, timer_bound, &
           timer_hist, timer_readwrite
       use ice_algae, only: bgc_diags, write_restart_bgc
       use ice_zbgc, only: init_history_bgc, biogeochemistry
-      use ice_zbgc_shared, only: skl_bgc, z_tracers
-      use ice_zsalinity, only: S_diags, write_restart_S 
+      use ice_zbgc_shared, only: skl_bgc
 
       integer (kind=int_kind) :: &
          iblk        , & ! block index 
@@ -233,9 +231,8 @@
          call ice_timer_start(timer_diags)  ! diagnostics
          if (mod(istep,diagfreq) == 0) then
             call runtime_diags(dt)          ! log file
-            if (solve_zsal) call S_diags   (dt)  
-            if (skl_bgc .or. z_tracers) call bgc_diags (dt)
-            if (tr_brine .and. ktherm == 2)  call hbrine_diags (dt)
+            if (skl_bgc)  call bgc_diags (dt)
+            if (tr_brine) call hbrine_diags (dt)
          endif
          call ice_timer_stop(timer_diags)   ! diagnostics
 
@@ -253,8 +250,7 @@
             if (tr_pond_lvl)  call write_restart_pond_lvl
             if (tr_pond_topo) call write_restart_pond_topo
             if (tr_aero)      call write_restart_aero
-            if (skl_bgc .or. z_tracers) call write_restart_bgc 
-            if (solve_zsal)   call write_restart_S 
+            if (skl_bgc)      call write_restart_bgc  
             if (tr_brine)     call write_restart_hbrine
             if (kdyn == 2)    call write_restart_eap
             call final_restart
@@ -263,7 +259,7 @@
          call ice_timer_stop(timer_readwrite)  ! reading/writing
 
       end subroutine ice_step
-      
+    
 !=======================================================================
 !
 ! Prepare for coupling
@@ -283,8 +279,7 @@
           fswthru_ai, fhocn, fswthru, scale_factor, &
           swvdr, swidr, swvdf, swidf, Tf, Tair, Qa, strairxT, strairyt, &
           fsens, flat, fswabs, flwout, evap, Tref, Qref, faero_ocn, &
-          fsurfn_f, flatn_f, scale_fluxes, frzmlt_init, frzmlt, &
-          fzsal_ai, fzsal_g_ai  
+          fsurfn_f, flatn_f, scale_fluxes, frzmlt_init, frzmlt
       use ice_grid, only: tmask
       use ice_ocean, only: oceanmixed_ice, ocean_mixed_layer
       use ice_shortwave, only: alvdfn, alidfn, alvdrn, alidrn, &
@@ -292,8 +287,7 @@
       use ice_state, only: aicen, aice, aice_init, nbtrcr
       use ice_therm_shared, only: calc_Tsfc
       use ice_timers, only: timer_couple, ice_timer_start, ice_timer_stop
-      use ice_zbgc_shared, only: flux_bio, flux_bio_ai, &
-          fzsal, fzsal_g 
+      use ice_zbgc_shared, only: flux_bio, flux_bio_ai
 
       integer (kind=int_kind), intent(in) :: & 
          iblk            ! block index 
@@ -398,8 +392,6 @@
             fsalt_ai  (i,j,iblk) = fsalt  (i,j,iblk)
             fhocn_ai  (i,j,iblk) = fhocn  (i,j,iblk)
             fswthru_ai(i,j,iblk) = fswthru(i,j,iblk)
-            fzsal_ai  (i,j,iblk) = fzsal  (i,j,iblk) 
-            fzsal_g_ai(i,j,iblk) = fzsal_g(i,j,iblk)  
 
             if (nbtrcr > 0) then
             do k = 1, nbtrcr
@@ -439,8 +431,7 @@
                             faero_ocn(:,:,:,iblk),                   &
                             alvdr    (:,:,iblk), alidr   (:,:,iblk), &
                             alvdf    (:,:,iblk), alidf   (:,:,iblk), &
-                            fzsal    (:,:,iblk), fzsal_g (:,:,iblk), &
-                            flux_bio(:,:,:,iblk))
+                            flux_bio(:,:,1:nbtrcr,iblk))
  
 !echmod - comment this out for efficiency, if .not. calc_Tsfc
          if (.not. calc_Tsfc) then

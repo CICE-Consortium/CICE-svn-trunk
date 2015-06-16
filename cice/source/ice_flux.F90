@@ -299,11 +299,6 @@
          fhocn_ai, & ! net heat flux to ocean (W/m^2)
          fswthru_ai  ! shortwave penetrating to ocean (W/m^2)
 
-      ! zsalinity
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks), public :: &
-         fzsal_ai, & ! salt flux to ocean from zsalinity (kg/m^2/s) 
-         fzsal_g_ai  ! gravity drainage salt flux to ocean (kg/m^2/s) 
-
       ! Used with data assimilation in hadgem drivers
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
          fresh_da, & ! fresh water flux to ocean due to data assim (kg/m^2/s)
@@ -545,6 +540,7 @@
       fhocn    (:,:,:)   = c0
       fswthru  (:,:,:)   = c0
       faero_ocn(:,:,:,:) = c0
+ 
       flux_bio (:,:,:,:) = c0  ! bgc
 
       end subroutine init_flux_ocn
@@ -565,7 +561,6 @@
                           Cdn_ocn_floe, Cdn_ocn_skin, formdrag
       use ice_state, only: aice, vice, trcr, tr_iage, nt_iage
       use ice_constants, only: vonkar,zref,iceruf
-      use ice_zbgc_shared, only: fzsaln, fzsaln_g, fzsal, fzsal_g  
 
       fsurf  (:,:,:) = c0
       fcondtop(:,:,:)= c0
@@ -621,14 +616,6 @@
         lfloe       (:,:,:) = c0
         dfloe       (:,:,:) = c0
       endif
-
-      ! zsalinity fluxes
-      fzsal_ai  (:,:,:) = c0 
-      fzsal_g_ai(:,:,:) = c0  
-      fzsal     (:,:,:) = c0 
-      fzsal_g   (:,:,:) = c0 
-      fzsaln  (:,:,:,:) = c0 ! salt flux per category into ocean (kg/m^2/s) 
-      fzsaln_g(:,:,:,:) = c0 
 
       end subroutine init_history_therm
 
@@ -854,7 +841,6 @@
                                faero_ocn,          &
                                alvdr,    alidr,    &
                                alvdf,    alidf,    &
-                               fzsal,    fzsal_g,  &
                                flux_bio,           &
                                fsurf,    fcondtop, &
                                Uref,     wind      )
@@ -898,11 +884,14 @@
           alidr   , & ! near-ir, direct   (fraction)
           alvdf   , & ! visible, diffuse  (fraction)
           alidf       ! near-ir, diffuse  (fraction)
- 
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), optional, &
           intent(inout):: &
           Uref        ! air speed reference level       (m/s)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,nbtrcr), &
+          intent(inout):: &
+          flux_bio    ! tracer flux to ocean from biology (mmol/m2/s)
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), &
           intent(inout):: &
@@ -913,17 +902,6 @@
           intent(inout), optional :: &
           fsurf   , & ! surface heat flux               (W/m**2)
           fcondtop    ! top surface conductive flux     (W/m**2)
-
-      ! zsalinity fluxes
-      real (kind=dbl_kind), dimension(nx_block,ny_block), &
-          intent(inout):: &
-          fzsal   , & ! salt flux to ocean with prognositic salinity (kg/m2/s)  
-          fzsal_g     ! Gravity drainage salt flux to ocean (kg/m2/s)   
-      
-      ! bgc fluxes
-      real (kind=dbl_kind), dimension(nx_block,ny_block,nbtrcr), &
-          intent(inout):: &
-          flux_bio    ! tracer flux to ocean from biology (mmol/m2/s)
 
       ! local variables
 
@@ -959,10 +937,8 @@
             alidr   (i,j) = alidr   (i,j) * ar
             alvdf   (i,j) = alvdf   (i,j) * ar
             alidf   (i,j) = alidf   (i,j) * ar
+            flux_bio (i,j,:) = flux_bio (i,j,:) * ar
             faero_ocn(i,j,:) = faero_ocn(i,j,:) * ar
-            fzsal   (i,j) = fzsal   (i,j) * ar  
-            fzsal_g (i,j) = fzsal_g (i,j) * ar  
-            flux_bio(i,j,:) = flux_bio(i,j,:) * ar
          else                   ! zero out fluxes
             strairxT(i,j) = c0
             strairyT(i,j) = c0
@@ -985,10 +961,8 @@
             alidr   (i,j) = c0
             alvdf   (i,j) = c0 
             alidf   (i,j) = c0
+            flux_bio (i,j,:) = c0
             faero_ocn(i,j,:) = c0
-            fzsal   (i,j) = c0  
-            fzsal_g (i,j) = c0 
-            flux_bio(i,j,:) = c0
          endif                  ! tmask and aice > 0
       enddo                     ! i
       enddo                     ! j

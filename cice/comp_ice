@@ -11,7 +11,6 @@ setenv SYSTEM_USERDIR /scratch/eclare/CICE.v5.1  # conejo
 #setenv SYSTEM_USERDIR /Users/akt/Work/MPAS-CICE/Column_Package/cice_package/run_dirs
 
 ### Grid resolution
-#setenv RES rct ; setenv GRID 5x5
 #setenv RES col ; setenv GRID 5x5
 setenv RES gx3 ; setenv GRID 100x116
 #setenv RES gx1 ; setenv GRID 320x384
@@ -27,7 +26,7 @@ set NYGLOB = `echo $GRID | sed s/.\*x//`
 #   squarish blocks with distribution_type='rake'
 # If BLCKX (BLCKY) does not divide NXGLOB (NYGLOB) evenly, padding 
 # will be used on the right (top) of the grid.
-if ($RES == 'col' || $RES == 'rct') then   # for column configurations:
+if ($RES == 'col') then   # for column configuration:
    setenv NTASK      1       # total number of processors
    setenv BLCKX      5       # x-dimension of blocks ( not including )
    setenv BLCKY      5       # y-dimension of blocks (  ghost cells  )
@@ -53,34 +52,13 @@ setenv TRAGE   1          # set to 1 for ice age tracer
 setenv TRFY    1          # set to 1 for first-year ice area tracer
 setenv TRLVL   1          # set to 1 for level and deformed ice tracers
 setenv TRPND   1          # set to 1 for melt pond tracers
-setenv NTRAERO 3          # number of aerosol tracers 
+setenv NTRAERO 0          # number of aerosol tracers 
                           # (up to max_aero in ice_domain_size.F90) 
                           # CESM uses 3 aerosol tracers
-setenv TRBRI   1          # set to 1 for brine height tracer
-setenv TRZS    1          # set to 1 for zsalinity tracer
+setenv TRBRI   0          # set to 1 for brine height tracer
 setenv NBGCLYR 7          # number of zbgc layers
-setenv TRZAERO 3          # number of z aerosol tracers 
-                          # (up to max_aero in ice_domain_size.F90) 
-setenv TRALG   2          # number of algal tracers
-                          # 0 <= TRALG <= 3  (up to max_algae = 3)
-setenv TRDOC   1          # number of dissolve organic carbon 
-                          # [0, 3]  (up to max_doc = 3)
-setenv TRDIC   1          # number of dissolve inorganic carbon 
-                          # [0, 1]  (up to max_dic = 1)
-setenv TRDON   1          # number of dissolve organic nitrogen
-                          # [0, 1]  (up to max_don = 1)
-setenv TRFEP   1          # number of particulate iron tracers 
-                          # (Up to max_fe  = 2) 
-setenv TRFED   1          # number of dissolved iron tracers 
-                          # (up to max_fe  = 2; if TRFEP > 0, TRFED >= 1)
 setenv TRBGCS  0          # number of skeletal layer bgc tracers 
-                          # (includes TRALG+TRDOC+TRDIC+TRDON if solving skl)
-                          # TRBGCS=0 or (2<=TRBGCS<=21 and TRBGCZ=0)
-setenv TRBGCZ  11         # number of z layer tracers 
-                          # (includes 3*TRALG+TRDOC+TRDIC+TRDON+TRZAERO+
-                          # TRFEP+TRFED +
-                          #  nit, amm, sil, dmspp, dmspd, dms, pon
-                          # TRBGCZ=0 or (1<=TRBGCZ<=31 and TRBGCS=0)
+                          # TRBGCS=0 or 2<=TRBGCS<=9)
 
 ### Specialty code
 setenv CAM_ICE  no        # set to yes for CAM runs (single column) 
@@ -98,11 +76,10 @@ setenv NUMIN 11           # minimum file unit number
 setenv NUMAX 99           # maximum file unit number
 
 ### Set SRCDIR and EXEDIR to your own paths!
-#setenv SRCDIR /usr/projects/climate/eclare/CICE.v5.1/cice  # conejo
-setenv SRCDIR /usr/projects/climate/eclare/CICE.v5.1/zbgc_merge  # conejo
+setenv SRCDIR /usr/projects/climate/eclare/CICE.v5.1/cice  # conejo
 #setenv SRCDIR /Users/akt/Work/MPAS-CICE/Column_Package/cice_package/cice
 
-setenv EXEDIR $SYSTEM_USERDIR/zbgc_merge
+setenv EXEDIR $SYSTEM_USERDIR/rundir
                                           if !(-d $EXEDIR) mkdir -p $EXEDIR
 setenv CBLD   $SRCDIR/bld
 setenv OBJDIR $EXEDIR/compile           ; if !(-d $OBJDIR) mkdir -p $OBJDIR
@@ -125,10 +102,8 @@ cd $SRCDIR/source
 cd $EXEDIR
 
 if !($RES == 'col') then
-if !($RES == 'rct') then
 if !(-e grid)    cp $SRCDIR/input_templates/$RES/global_$RES.grid grid
 if !(-e kmt)     cp $SRCDIR/input_templates/$RES/global_$RES.kmt kmt
-endif
 endif
 if !(-e ice_in)  cp $SRCDIR/input_templates/$RES/ice_in .
 if !(-e run_ice) cp $SRCDIR/input_templates/run_ice.$ARCH run_ice
@@ -185,15 +160,6 @@ echo $TRPND   = TRPND,   melt pond tracers
 echo $NTRAERO = NTRAERO, number of aerosol tracers
 echo $TRBRI   = TRBRI,   brine height tracer
 echo $NBGCLYR = NBGCLYR, number of bio grid layers
-echo $TRZS    = TRZS,    zsalinity tracer
-echo $TRBGCS  = TRBGCS,  number of skl BGC tracers
-echo $TRBGCZ  = TRBGCZ,  number of z BGC tracers
-echo $TRALG   = TRALG,   number of autotrophs
-echo $TRDOC   = TRDOC,   number of DOC pools
-echo $TRDIC   = TRDIC,   number of DIC pools
-echo $TRDON   = TRDON,   number of DON pools
-echo $TRFED   = TRFED,   number of dFe pools
-echo $TRFEP   = TRFEP,   number of pFe pools
-echo $TRZAERO = TRZEARO, number of z aerosol tracers
+echo $TRBGCS  = TRBGCS,  number of BGC tracers
 
 
