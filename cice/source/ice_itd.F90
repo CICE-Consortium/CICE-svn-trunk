@@ -1522,7 +1522,7 @@
                               tr_pond_topo,            &
                               heat_capacity,           &
                               nbtrcr,      first_ice,  &
-                              flux_bio,                &
+                              fsice,       flux_bio,   & 
                               l_stop,                  &
                               istop,         jstop,    &
                               limit_aice_in)
@@ -1549,7 +1549,7 @@
          intent(inout) :: & 
          aice  , & ! total ice concentration
          aice0     ! concentration of open water 
-     
+
       integer (kind=int_kind), dimension(ntrcr), intent(in) :: & 
          trcr_depend  ! tracer dependency information
 
@@ -1577,7 +1577,8 @@
          fpond    , & ! fresh water flux to ponds (kg/m^2/s)
          fresh    , & ! fresh water flux to ocean (kg/m^2/s)
          fsalt    , & ! salt flux to ocean        (kg/m^2/s)
-         fhocn        ! net heat flux to ocean     (W/m^2)
+         fhocn    , & ! net heat flux to ocean     (W/m^2)
+         fsice        ! net salt flux to ocean from layer Salinity (kg/m^2/s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
          intent(inout), optional :: &
@@ -1605,10 +1606,14 @@
          dfpond   , & ! zapped pond water flux (kg/m^2/s)
          dfresh   , & ! zapped fresh water flux (kg/m^2/s)
          dfsalt   , & ! zapped salt flux   (kg/m^2/s)
-         dfhocn       ! zapped energy flux ( W/m^2)
+         dfhocn   , & ! zapped energy flux ( W/m^2)
+         dfsice       ! zapped salt flux for zsalinity (kg/m^2/s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_aero) :: &
          dfaero_ocn   ! zapped aerosol flux   (kg/m^2/s)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr) :: &
+         dflux_bio    ! zapped biology flux  (mmol/m^2/s)
 
       logical (kind=log_kind) ::   &
          limit_aice         ! if true, check for aice out of bounds
@@ -1632,6 +1637,7 @@
       dfsalt(:,:) = c0
       dfhocn(:,:) = c0
       dfaero_ocn(:,:,:) = c0
+      dflux_bio(:,:,:) = c0
 
       !-----------------------------------------------------------------
       ! Compute total ice area.
@@ -1715,7 +1721,8 @@
                                dfhocn,   dfaero_ocn,&
                                tr_aero,  tr_pond_topo, &
                                first_ice,nbtrcr,    &
-                               flux_bio, l_stop,    &
+                               dfsice,   dflux_bio, & 
+                               l_stop,              &
                                istop,    jstop)
          if (l_stop) return
       endif   ! l_limit_aice
@@ -1730,7 +1737,8 @@
                                 aicen,                &
                                 trcrn,      vsnon,    &
                                 dfresh,     dfhocn,   &
-                                dfaero_ocn, tr_aero)
+                                dfaero_ocn, tr_aero,  &
+                                dflux_bio,  nbtrcr)
 
     !-------------------------------------------------------------------
     ! Update ice-ocean fluxes for strict conservation
@@ -1746,6 +1754,10 @@
            fhocn     (:,:)   = fhocn(:,:)       + dfhocn(:,:)
       if (present(faero_ocn)) &
            faero_ocn (:,:,:) = faero_ocn(:,:,:) + dfaero_ocn(:,:,:)
+      if (present(flux_bio)) &
+           flux_bio (:,:,:) = flux_bio(:,:,:) + dflux_bio(:,:,:)
+      if (present(fsice)) &
+           fsice (:,:) = fsice(:,:) + dfsice(:,:)
 
       !----------------------------------------------------------------
       ! If using zero-layer model (no heat capacity), check that the 
@@ -1784,11 +1796,15 @@
                                   dfhocn,   dfaero_ocn,&
                                   tr_aero,  tr_pond_topo, &
                                   first_ice,nbtrcr,    &
-                                  flux_bio, l_stop,    &
+                                  dfsice,   dflux_bio, &
+                                  l_stop,              &
                                   istop,    jstop)
 
       use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_aero, nt_apnd, nt_hpnd, &
-                           nt_fbri, tr_brine
+                           nt_fbri, tr_brine, nt_bgc_S
+      use ice_therm_shared, only: solve_zsal
+      use ice_zbgc_shared, only: rhosi, zap_small_bgc, min_salin, z_tracers, &
+                     bio_index, skl_bgc, sk_l
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -1819,11 +1835,12 @@
          dfpond   , & ! zapped pond water flux (kg/m^2/s)
          dfresh   , & ! zapped fresh water flux (kg/m^2/s)
          dfsalt   , & ! zapped salt flux   (kg/m^2/s)
-         dfhocn       ! zapped energy flux ( W/m^2)
+         dfhocn   , & ! zapped energy flux ( W/m^2)
+         dfsice       ! zapped salt flux from zsalinity(kg/m^2/s) 
 
      real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
          intent(inout), optional :: &
-         flux_bio     ! Ocean tracer flux from biology (mmol/m^2/s)
+         dflux_bio     ! zapped bio tracer flux from biology (mmol/m^2/s)
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_aero), &
          intent(out) :: &
@@ -1847,13 +1864,18 @@
       integer (kind=int_kind) :: &
          i,j, n, k, it  , & ! counting indices
          icells         , & ! number of cells with ice to zap
-         ij                 ! combined i/j horizontal index
+         ij             , & ! combined i/j horizontal index
+         blevels
 
       integer (kind=int_kind), dimension (nx_block*ny_block) :: &
         indxi       , & ! compressed indices for i/j directions
         indxj
 
-      real (kind=dbl_kind) :: xtmp     ! temporary variable
+      real (kind=dbl_kind) :: xtmp    ! temporary variable
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block) :: worka 
+
+      real (kind=dbl_kind) , dimension (nblyr+1):: bvol     
 
       !-----------------------------------------------------------------
       ! Initialize
@@ -1910,6 +1932,55 @@
                     * trcrn(i,j,nt_apnd,n) * trcrn(i,j,nt_hpnd,n)
                dfpond(i,j) = dfpond(i,j) - xtmp
             enddo                  ! ij
+         endif
+
+         if (solve_zsal) then
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+               dfsice(i,j) = c0
+               do it = 1, nblyr
+                  xtmp = rhosi*trcrn(i,j,nt_fbri,n)*vicen(i,j,n)*p001&
+                        *trcrn(i,j,nt_bgc_S+it-1,n)/ &
+                         real(nblyr,kind=dbl_kind)/dt
+                  dfsice(i,j) = dfsice(i,j) + xtmp
+               enddo                 ! n
+            enddo                  ! ij
+         endif
+
+         if (skl_bgc) then
+           blevels = 1
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+               bvol(1) =  aicen(i,j,n)*sk_l
+               do it = 1, nbtrcr
+                  call zap_small_bgc(blevels, dflux_bio(i,j,it), &
+                       dt, bvol(1:blevels), trcrn(i,j,bio_index(it),n))
+               enddo
+            enddo  !icells
+         elseif (z_tracers) then
+           blevels = nblyr + 1
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+               bvol(:) = vicen(i,j,n)/real(nblyr,kind=dbl_kind)*trcrn(i,j,nt_fbri,n)
+               bvol(1) = p5*bvol(1)
+               bvol(blevels) = p5*bvol(blevels)
+               do it = 1, nbtrcr
+                  call zap_small_bgc(blevels, dflux_bio(i,j,it), &
+                       dt, bvol(1:blevels),trcrn(i,j,bio_index(it):bio_index(it)+blevels-1,n))
+               enddo
+            enddo  !icells
          endif
 
          if (tr_aero) then
@@ -1975,17 +2046,18 @@
       !-----------------------------------------------------------------
 
          call zap_snow(nx_block,       ny_block,     &
-                       icells,                       &
+                       icells,         aicen,        &
                        indxi,          indxj,        &
                        dt,             ntrcr,        &
                        trcrn(:,:,:,n), vsnon(:,:,n), &
                        dfresh,         dfhocn,       &
-                       dfaero_ocn,     tr_aero)
+                       dfaero_ocn,     tr_aero,      &
+                       dflux_bio,      nbtrcr)
 
       !-----------------------------------------------------------------
       ! Zap tracers
       !-----------------------------------------------------------------
-         
+
          if (ntrcr >= 2) then
             do it = 2, ntrcr
                if (tr_brine .and. it == nt_fbri) then
@@ -2135,6 +2207,21 @@
                  * (aice(i,j)-c1)/aice(i,j) / dt
             dfsalt(i,j) = dfsalt(i,j) + xtmp 
  
+            if (solve_zsal) then
+            do k = 1,nblyr
+               xtmp = rhosi*trcrn(i,j,nt_fbri,n)*vicen(i,j,n)*p001&
+                    /real(nblyr,kind=dbl_kind)*trcrn(i,j,nt_bgc_S+k-1,n) &
+                    * (aice(i,j)-c1)/aice(i,j) /dt
+               dfsice(i,j) = dfsice(i,j) + xtmp
+            enddo
+
+            if (vicen(i,j,n) > vicen(i,j,n)*trcrn(i,j,nt_fbri,n)) then
+               xtmp = (vicen(i,j,n)-vicen(i,j,n)*trcrn(i,j,nt_fbri,n))*(aice(i,j)-c1)/&
+                      aice(i,j)*p001*rhosi*min_salin/dt
+               dfsice(i,j) = dfsice(i,j) + xtmp
+            endif
+            endif ! solve_zsal
+
             aicen(i,j,n) = aicen(i,j,n) * (c1/aice(i,j)) 
             vicen(i,j,n) = vicen(i,j,n) * (c1/aice(i,j)) 
             vsnon(i,j,n) = vsnon(i,j,n) * (c1/aice(i,j))
@@ -2166,19 +2253,23 @@
 !=======================================================================
 
       subroutine zap_snow(nx_block,   ny_block, &
-                          icells,               &
+                          icells,     aicen,    &
                           indxi,      indxj,    &
                           dt,         ntrcr,    &
                           trcrn,      vsnon,    &
                           dfresh,     dfhocn,   &
-                          dfaero_ocn, tr_aero)
+                          dfaero_ocn, tr_aero,  &
+                          dflux_bio,  nbtrcr)
 
       use ice_state, only: nt_qsno, nt_aero
+      use ice_shortwave, only: hs_ssl
+      use ice_zbgc_shared, only: z_tracers, bio_index
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          icells            , & ! number of ice/ocean grid cells
-         ntrcr                 ! number of tracers in use
+         ntrcr             , & ! number of tracers in use
+         nbtrcr
  
       real (kind=dbl_kind), intent(in) :: &
          dt           ! time step
@@ -2186,6 +2277,10 @@
       integer (kind=int_kind), dimension (nx_block*ny_block), &
          intent(in) :: &
          indxi,  indxj       ! compressed i/j indices
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block), &
+         intent(in) :: &
+         aicen        ! ice area fraction
 
       real (kind=dbl_kind), dimension(nx_block,ny_block), &
          intent(inout) :: &
@@ -2204,6 +2299,10 @@
          intent(inout) :: &
          dfaero_ocn   ! zapped aerosol flux   (kg/m^2/s)
 
+     real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &
+         intent(inout) :: &
+         dflux_bio     ! zapped bio tracer flux from biology (mmol/m^2/s)
+
       logical (kind=log_kind), intent(in) :: &
          tr_aero      ! aerosol flag
 
@@ -2213,7 +2312,7 @@
          i,j, k, it  , & ! counting indices
          ij                 ! combined i/j horizontal index
 
-      real (kind=dbl_kind) :: xtmp
+      real (kind=dbl_kind) :: xtmp, dvssl, dvint
 
       ! aerosols
       if (tr_aero) then
@@ -2233,6 +2332,26 @@
          enddo               ! ij
 
       endif ! tr_aero
+
+      if (z_tracers) then
+!DIR$ CONCURRENT !Cray 
+!cdir nodep      !NEC 
+!ocl novrec      !Fujitsu
+         do ij = 1, icells
+            i = indxi(ij)
+            j = indxj(ij)
+            dvssl  = min(p5*vsnon(i,j), hs_ssl*aicen(i,j))   !snow surface layer
+            dvint  = vsnon(i,j)- dvssl                       !snow interior
+
+            do it = 1, nbtrcr
+               xtmp = (trcrn(i,j,bio_index(it)+nblyr+1)*dvssl + &
+                       trcrn(i,j,bio_index(it)+nblyr+2)*dvint)/dt
+               dflux_bio(i,j,it) = dflux_bio(i,j,it) + xtmp
+            enddo                 ! it
+
+         enddo               ! ij
+
+      endif ! z_tracers
 
       ! snow enthalpy tracer
       do k = 1, nslyr 
@@ -2275,7 +2394,8 @@
                                       aicen,                &
                                       trcrn,      vsnon,    &
                                       dfresh,     dfhocn,   &
-                                      dfaero_ocn, tr_aero)
+                                      dfaero_ocn, tr_aero,  &
+                                      dflux_bio,  nbtrcr)
 
       use ice_state, only: nt_qsno 
       use ice_therm_shared, only: heat_capacity, Tmin
@@ -2284,7 +2404,8 @@
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
          ilo,ihi,jlo,jhi   , & ! beginning and end of physical domain
-         ntrcr                 ! number of tracers in use
+         ntrcr             , & ! number of tracers in use
+         nbtrcr                ! number of z-tracers in use
 
       real (kind=dbl_kind), intent(in) :: &
          dt           ! time step
@@ -2309,6 +2430,10 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,max_aero), &
          intent(inout) :: &
          dfaero_ocn   ! zapped aerosol flux   (kg/m^2/s)
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,nbtrcr), &   
+         intent(inout) :: &
+         dflux_bio    ! zapped biology flux  (mmol/m^2/s)
 
       logical (kind=log_kind), intent(in) :: &
          tr_aero      ! aerosol flag
@@ -2401,12 +2526,13 @@
 
          if (icells > 0) &
          call zap_snow(nx_block,       ny_block,     &
-                       icells,                       &
+                       icells,         aicen,        &
                        indxi,          indxj,        &
                        dt,             ntrcr,        &
                        trcrn(:,:,:,n), vsnon(:,:,n), &
                        dfresh,         dfhocn,       &
-                       dfaero_ocn,     tr_aero)
+                       dfaero_ocn,     tr_aero,      &
+                       dflux_bio,      nbtrcr)
 
         enddo ! n
 
@@ -2590,7 +2716,6 @@
       end module ice_itd
 
 !=======================================================================
-
 
 
 

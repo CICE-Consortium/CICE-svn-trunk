@@ -75,8 +75,9 @@
          ksno   = 0.30_dbl_kind  ,&! thermal conductivity of snow  (W/m/deg)
          zref   = 10._dbl_kind   ,&! reference height for stability (m)
          hs_min = 1.e-4_dbl_kind ,&! min snow thickness for computing zTsn (m)
-         snowpatch = 0.02_dbl_kind ! parameter for fractional snow area (m)
-                    
+         snowpatch = 0.02_dbl_kind,&! parameter for fractional snow area (m)
+         salt_loss = 0.55_dbl_kind ! zbgc fraction of available salt retained 
+                                   ! (1.0 = no loss)                    
       ! weights for albedos 
       ! 4 Jan 2007 BPB  Following are appropriate for complete cloud
       ! in a summer polar atmosphere with 1.5m bare sea ice surface:

@@ -20,6 +20,8 @@ FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterec
 #FFLAGS     := -r8 -i4  -align all -w -ftz -convert big_endian -assume byterecl -fp-model precise -g
 #FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB -traceback 
 #FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB -check uninit
+# add option to allow large array sizes
+FFLAGS    := $(FFLAGS) -mcmodel=medium -shared-intel
 
 ifeq ($(THRD), yes)
    FFLAGS  :=  $(FFLAGS) -openmp
@@ -34,7 +36,11 @@ LDFLAGS    := $(FFLAGS) -v
                 -DBLCKX=$(BLCKX) -DBLCKY=$(BLCKY) -DMXBLCKS=$(MXBLCKS) \
                 -DNICELYR=$(NICELYR) -DNSNWLYR=$(NSNWLYR) -DNICECAT=$(NICECAT) \
                 -DTRAGE=$(TRAGE) -DTRFY=$(TRFY) -DTRLVL=$(TRLVL) -DTRPND=$(TRPND) \
-                -DTRBRI=$(TRBRI) -DNTRAERO=$(NTRAERO) -DNBGCLYR=$(NBGCLYR) \
+                -DTRBRI=$(TRBRI) -DNTRAERO=$(NTRAERO) -DTRZS=$(TRZS) \
+                -DNBGCLYR=$(NBGCLYR) -DTRALG=$(TRALG) -DTRBGCZ=$(TRBGCZ) \
+                -DTRDOC=$(TRDOC) -DTRDOC=$(TRDOC) -DTRDIC=$(TRDIC) \
+                -DTRDON=$(TRDON) -DTRFED=$(TRFED) -DTRFEP=$(TRFEP) \
+                -DTRZAERO=$(TRZAERO)  \
                 -DTRBGCS=$(TRBGCS) -DNUMIN=$(NUMIN) -DNUMAX=$(NUMAX)
 #   CPPDEFS :=  $(CPPDEFS) -DAOMIP
 

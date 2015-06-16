@@ -17,10 +17,9 @@
           runid, runtype, use_restart_time, restart_format, lenstr
       use ice_state, only: tr_iage, tr_aero, tr_lvl, tr_FY, tr_brine, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo
-      use ice_zbgc_shared, only: tr_bgc_N_sk, tr_bgc_C_sk, tr_bgc_Nit_sk, &
-                           tr_bgc_Sil_sk, tr_bgc_DMSPp_sk, tr_bgc_DMS_sk, &
-                           tr_bgc_chl_sk, tr_bgc_DMSPd_sk, tr_bgc_Am_sk, &
-                           skl_bgc
+      use ice_domain_size, only: nbtrcr
+      use ice_therm_shared, only: solve_Sin
+
 
       implicit none
       private
@@ -257,7 +256,23 @@
          endif
       endif
 
-      if (skl_bgc) then
+      if (solve_Sin) then
+         if (my_task == master_task) then
+            n = index(filename0,trim(restart_file))
+            if (n == 0) call abort_ice('zSalinity restart: filename discrepancy')
+            string1 = trim(filename0(1:n-1))
+            string2 = trim(filename0(n+lenstr(restart_file):lenstr(filename0)))
+            write(filename,'(a,a,a,a)') &
+               string1(1:lenstr(string1)), &
+               restart_file(1:lenstr(restart_file)),'.zS', &
+               string2(1:lenstr(string2))
+            call ice_open(nu_restart_S,filename,0)
+            read (nu_restart_S) iignore,rignore,rignore
+            write(nu_diag,*) 'Reading ',filename(1:lenstr(filename))
+         endif
+      endif
+
+      if (nbtrcr > 0) then
          if (my_task == master_task) then
             n = index(filename0,trim(restart_file))
             if (n == 0) call abort_ice('bgc restart: filename discrepancy')
@@ -516,7 +531,23 @@
 
       endif
 
-      if (skl_bgc) then
+      if (solve_Sin) then
+
+         write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
+              restart_dir(1:lenstr(restart_dir)), &
+              restart_file(1:lenstr(restart_file)),'.zS.', &
+              iyear,'-',month,'-',mday,'-',sec
+
+         call ice_open(nu_dump_S,filename,0)
+
+         if (my_task == master_task) then
+           write(nu_dump_S) istep1,time,time_forc
+           write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
+         endif
+
+      endif
+
+      if (nbtrcr > 0) then
 
          write(filename,'(a,a,a,i4.4,a,i2.2,a,i2.2,a,i5.5)') &
               restart_dir(1:lenstr(restart_dir)), &
@@ -533,7 +564,6 @@
            write(nu_dump_bgc) istep1,time,time_forc
            write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
          endif
-
       endif
 
       if (tr_aero) then
@@ -697,6 +727,9 @@
          if (tr_pond_cesm) close(nu_dump_pond)
          if (tr_pond_lvl)  close(nu_dump_pond)
          if (tr_pond_topo) close(nu_dump_pond)
+         if (tr_brine)     close(nu_dump_hbrine)
+         if (solve_Sin)    close(nu_dump_S)
+         if (nbtrcr > 0)   close(nu_dump_bgc)
 
          write(nu_diag,*) 'Restart read/written ',istep1,time,time_forc
       endif

@@ -144,6 +144,7 @@
       use ice_blocks, only: block, get_block
       use ice_grid, only: tmask, tlat, tlon
       use ice_meltpond_lvl, only: dhsn, ffracn
+      use ice_zbgc_shared, only: trcrn_sw
 
       integer (kind=int_kind) :: &
          icells          ! number of cells with aicen > puny
@@ -231,7 +232,7 @@
                           albicen(:,:,:,iblk),   albsnon(:,:,:,iblk),     &
                           albpndn(:,:,:,iblk),   apeffn(:,:,:,iblk),      &
                           dhsn(:,:,:,iblk),      ffracn(:,:,:,iblk),      &
-                          initonly = .true.       )
+                          trcrn_sw(:,:,:,:,iblk),initonly = .true.       )
 
          enddo
          !$OMP END PARALLEL DO
@@ -1088,7 +1089,7 @@
                           albicen,  albsnon,   &
                           albpndn,  apeffn,    &
                           dhsn,     ffracn,    &
-                          initonly     )
+                          trcrn_sw, initonly   )
 
       use ice_calendar, only: dt
       use ice_meltpond_cesm, only: hs0
@@ -1097,7 +1098,7 @@
       use ice_orbital, only: compute_coszen
       use ice_state, only: ntrcr, nt_Tsfc, nt_alvl, nt_apnd, nt_hpnd, nt_ipnd, &
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo
-      use ice_domain_size, only: max_ntrcr
+      use ice_domain_size, only: max_ntrcr, max_nsw
 
       integer (kind=int_kind), intent(in) :: &
            ilo,ihi,jlo,jhi
@@ -1122,6 +1123,9 @@
 
       real(kind=dbl_kind), dimension(nx_block,ny_block,max_ntrcr,ncat), intent(in) :: &
            trcrn    ! tracers
+
+      real(kind=dbl_kind), dimension(nx_block,ny_block,max_nsw,ncat), intent(in) :: &
+           trcrn_sw ! tracers (chlorophyll and aerosols) on the shortwave grid
 
       real(kind=dbl_kind), dimension(nx_block,ny_block,ncat), intent(inout) :: &
            dhsn     ! depth difference for snow on sea ice and pond ice
@@ -1387,7 +1391,7 @@
                              Iswabsn(:,:,:,n),                  &
                              albicen(:,:,n),                    &
                              albsnon(:,:,n),    albpndn(:,:,n), &
-                             fswpenln(:,:,:,n))
+                             fswpenln(:,:,:,n), trcrn_sw(:,:,:,n))
 
       enddo  ! ncat
  
@@ -1438,9 +1442,11 @@
                                   fswthru,  Sswabs,      &
                                   Iswabs,   albice,      &
                                   albsno,   albpnd,      &
-                                  fswpenl)
+                                  fswpenl,  trcr_sw)
 
       use ice_state, only: nt_aero, tr_aero
+      use ice_domain_size, only: max_nsw
+      use ice_zbgc_shared, only: tr_zaero
 
       integer (kind=int_kind), &
          intent(in) :: &
@@ -1469,6 +1475,10 @@
       real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr), &
          intent(in) :: &
          trcr        ! aerosol tracers
+
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_nsw), &
+         intent(in) :: &
+         trcr_sw     ! chlorophyll and aerosol tracers on the shortwave grid
 
       real (kind=dbl_kind), dimension (nx_block,ny_block), &
          intent(in) :: &
@@ -1592,7 +1602,7 @@
       ! compute aerosol mass path
 
       aero_mp(:,:,:) = c0
-      if( tr_aero ) then
+      if( tr_aero .and. .not. tr_zaero ) then
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -1651,7 +1661,8 @@
                                   aidrl,    aidfl,         &
                                   fswsfc,   fswint,        &
                                   fswthru,  Sswabs,        &
-                                  Iswabs,   fswpenl)
+                                  Iswabs,   fswpenl,       &
+                                  trcr_sw)
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1701,7 +1712,8 @@
                                   aidrl,    aidfl,         &
                                   fswsfc,   fswint,        &
                                   fswthru,  Sswabs,        &
-                                  Iswabs,   fswpenl)
+                                  Iswabs,   fswpenl,       &
+                                  trcr_sw)
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1753,7 +1765,8 @@
                                   aidrl,    aidfl,         &
                                   fswsfc,   fswint,        &
                                   fswthru,  Sswabs,        &
-                                  Iswabs,   fswpenl)
+                                  Iswabs,   fswpenl,       &
+                                  trcr_sw)
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1850,10 +1863,14 @@
                                   alidr,    alidf,         &
                                   fswsfc,   fswint,        &
                                   fswthru,  Sswabs,        &
-                                  Iswabs,   fswpenl)
+                                  Iswabs,   fswpenl,       &
+                                  trcr_sw)
 
       use ice_therm_shared, only: heat_capacity
-      use ice_state, only: tr_aero
+      use ice_state, only: tr_aero,  nbtrcr_sw
+      use ice_domain_size, only: max_nsw, n_zaero
+      use ice_zbgc_shared, only: nlt_chl_sw, nlt_zaero_sw, tr_zaero, &
+               tr_bgc_N, dEdd_algae
 
       integer (kind=int_kind), &
          intent(in) :: &
@@ -1892,6 +1909,11 @@
          hp      , & ! pond depth (m)
          fi          ! snow/bare ice fractional coverage (0 to 1)
  
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_nsw), &
+         intent(in) :: &
+         trcr_sw     ! chlorophyll and aerosol concentrations on the 
+                     ! shortwave grid
+
       real (kind=dbl_kind), dimension (nx_block,ny_block,4*n_aero), &
          intent(in) :: &
          aero_mp     ! aerosol mass path in kg/m2
@@ -2034,13 +2056,13 @@
          kp      , & ! k+1 or k+2 index for snow, sea ice internal absorption
          ksrf    , & ! level index for surface absorption
          ksnow   , & ! level index for snow density and grain size
-         kii         ! level starting index for sea ice (nslyr+1)
+         kii     , & ! level starting index for sea ice (nslyr+1)
+         n           ! indexing zbgc tracer trcrn_sw
 
       integer (kind=int_kind), parameter :: & 
          klev    = nslyr + nilyr + 1   , & ! number of radiation layers - 1
          klevp   = klev  + 1               ! number of radiation interfaces - 1
                                            ! (0 layer is included also)
- 
       integer (kind=int_kind), parameter :: & 
          nspint  = 3     , & ! number of solar spectral intervals
          nmbrad  = 32        ! number of snow grain radii in tables
@@ -2140,6 +2162,12 @@
          sig          , & ! scattering coefficient for tuning
          kabs         , & ! absorption coefficient for tuning
          sigp             ! modified scattering coefficient for tuning
+
+      real (kind=dbl_kind), dimension(nspint, 0:klev,icells_DE) :: &
+         kabs_chl    , & ! absorption coefficient for chlorophyll (/m)
+         tzaer       , & ! total aerosol extinction optical depth
+         wzaer       , & ! total aerosol single scatter albedo
+         gzaer           ! total aerosol asymmetry parameter
 
       real (kind=dbl_kind), dimension (icells_DE) :: &
          albodr       , & ! spectral ocean albedo to direct rad
@@ -2352,6 +2380,13 @@
          fp_pnd = 2.00_dbl_kind, & ! ponded ice fraction of scat coeff for + stn dev in alb
          fm_pnd = 0.50_dbl_kind    ! ponded ice fraction of scat coeff for - stn dev in alb
 
+      real (kind=dbl_kind),  parameter :: &   !chla-specific absorption coefficient
+         kchl_tab = 0.01 !0.0023-0.0029 Perovich 1993, also 0.0067 m^2 (mg Chl)^-1
+                         ! found values of 0.006 to 0.023 m^2/ mg  (676 nm)  Neukermans 2014
+                         ! and averages over the 300-700nm of 0.0075 m^2/mg in ice Fritsen (2011)
+                         ! at 440nm values as high as 0.2 m^2/mg in under ice bloom (Balch 2014)
+                         ! Grenfell 1991 uses 0.004 (m^2/mg) which is (0.0078 * spectral weighting)
+                         !chlorophyll mass extinction cross section (m^2/mg chla)
       ! aerosol optical properties   -> band  |
       !                                       v aerosol
       ! for combined dust category, use category 4 properties
@@ -2391,6 +2426,11 @@
       ! initialize albedos and fluxes to 0
       fthrul(:,:) = c0                
       Iabs(:,:) = c0
+      kabs_chl(:,:,:) = c0
+      tzaer(:,:,:) = c0
+      wzaer(:,:,:) = c0
+      gzaer(:,:,:) = c0
+
       do ij = 1, icells_DE
          i = indxi_DE(ij)
          j = indxj_DE(ij)
@@ -2539,8 +2579,43 @@
          ksrf = nslyr + 2 
       endif
 
+      if (tr_bgc_N .and. dEdd_algae) then ! compute kabs_chl for chlorophyll
+         do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
+            do k = 0, klev
+               kabs_chl(1,k,ij) = kchl_tab*trcr_sw(i,j,nlt_chl_sw+k)
+            enddo
+         enddo
+      else
+         do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
+            k = klev
+            kabs_chl(1,k,ij) = kalg*(0.50_dbl_kind/dzk(k,ij)) 
+         enddo
+      endif        ! kabs_chl
+      if (tr_zaero) then ! compute kzaero for chlorophyll
+      do n = 1,n_zaero          ! multiply by aice?
+         do ij = 1, icells_DE
+            i = indxi_DE(ij)
+            j = indxj_DE(ij)
+            do k = 0, klev
+               do ns = 1,nspint   ! not weighted by aice
+                  tzaer(ns,k,ij) = tzaer(ns,k,ij)+kaer_tab(ns,n)* &
+                                   trcr_sw(i,j,nlt_zaero_sw(n)+k)*dzk(k,ij)
+                  wzaer(ns,k,ij) = wzaer(ns,k,ij)+kaer_tab(ns,n)*waer_tab(ns,n)* &
+                                   trcr_sw(i,j,nlt_zaero_sw(n)+k)*dzk(k,ij)
+                  gzaer(ns,k,ij) = gzaer(ns,k,ij)+kaer_tab(ns,n)*waer_tab(ns,n)* &
+                                   gaer_tab(ns,n)*trcr_sw(i,j,nlt_zaero_sw(n)+k)*dzk(k,ij)
+               enddo  ! nspint
+            enddo
+         enddo
+      enddo
+      endif       
+
 !-----------------------------------------------------------------------
- 
+  
       ! begin spectral loop
       do ns = 1, nspint
  
@@ -2591,13 +2666,25 @@
               endif
               ks = Qs*((rhosnw(i,j,ksnow)/rhoi)*3._dbl_kind / &
                        (4._dbl_kind*frsnw(ksnow,ij)*1.0e-6_dbl_kind))
-
-              tau(k,ij) = ks*dzk(k,ij)
-              w0(k,ij)  = ws
+              tau(k,ij) = (ks + kabs_chl(ns,k,ij))* dzk(k,ij) 
+              w0(k,ij)  = ks/(ks + kabs_chl(ns,k,ij)) * ws     
               g(k,ij)   = gs
-            enddo       ! k
-            ! aerosol in snow
-            if (tr_aero) then
+
+            enddo  !k
+            ! aerosol in snow    !parameters not weighted by aice but in tr_aero they are!!!
+             if (tr_zaero) then 
+               do k = 0,nslyr
+                  gzaer(ns,k,ij) = gzaer(ns,k,ij)/(wzaer(ns,k,ij)+puny)
+                  wzaer(ns,k,ij) = wzaer(ns,k,ij)/(tzaer(ns,k,ij)+puny)
+                  g(k,ij)   = (g(k,ij)*w0(k,ij)*tau(k,ij) + gzaer(ns,k,ij)*wzaer(ns,k,ij)*tzaer(ns,k,ij)) / &
+                                  (w0(k,ij)*tau(k,ij) + wzaer(ns,k,ij)*tzaer(ns,k,ij))
+                  w0(k,ij)  = (w0(k,ij)*tau(k,ij) + wzaer(ns,k,ij)*tzaer(ns,k,ij)) / &
+                                   (tau(k,ij) + tzaer(ns,k,ij))
+                  tau(k,ij) = tau(k,ij) + tzaer(ns,k,ij)
+                 enddo
+             elseif (tr_aero) then
+            ! if (k == 0) then ! snow SSL
+                k = 0  
                 taer = c0
                 waer = c0
                 gaer = c0
@@ -2613,7 +2700,12 @@
                 enddo       ! na
                 gaer = gaer/(waer+puny)
                 waer = waer/(taer+puny)
-            do k=1,nslyr
+                g(k,ij)   = (g(k,ij)*w0(k,ij)*tau(k,ij) + gaer*waer*taer) / &
+                                  (w0(k,ij)*tau(k,ij) + waer*taer)
+                w0(k,ij)  = (w0(k,ij)*tau(k,ij) + waer*taer) / &
+                                   (tau(k,ij) + taer)
+                tau(k,ij) = tau(k,ij) + taer
+              do k = 1,nslyr 
                 taer = c0
                 waer = c0
                 gaer = c0
@@ -2653,7 +2745,7 @@
             enddo       ! k
           enddo         ! ij ... optical properties above sea ice set
          endif        ! srftyp
-
+   
         ! set optical properties of sea ice
 
           ! bare or snow-covered sea ice layers
@@ -2662,45 +2754,56 @@
           i = indxi_DE(ij)
           j = indxj_DE(ij)
               ! ssl
-              k = kii
-                tau(k,ij) = ki_ssl(ns)*dzk(k,ij)
-                w0(k,ij)  = wi_ssl(ns)
+              k = kii          
+                tau(k,ij) = (ki_ssl(ns) + kabs_chl(ns,k,ij))* dzk(k,ij)             
+                w0(k,ij)  = ki_ssl(ns)/(ki_ssl(ns) + kabs_chl(ns,k,ij))*wi_ssl(ns)  
                 g(k,ij)   = gi_ssl(ns)
               ! dl
               k = kii + 1
                 ! scale dz for dl relative to 4 even-layer-thickness 1.5m case
-                fs = p25/rnilyr
-                tau(k,ij) = ki_dl(ns)*dzk(k,ij)*fs
-                w0(k,ij)  = wi_dl(ns)
+                fs = p25/rnilyr   
+                ! ok, but why don't we scale the dl layer for aerosols?
+                tau(k,ij) = (ki_dl(ns) + kabs_chl(ns,k,ij)) * dzk(k,ij)*fs       
+                w0(k,ij)  = ki_dl(ns)/(ki_dl(ns) + kabs_chl(ns,k,ij)) * wi_dl(ns)
                 g(k,ij)   = gi_dl(ns)
               ! int above lowest layer
-              if (kii+2 <= klev-1) then
-              do k = kii+2, klev-1
-                tau(k,ij) = ki_int(ns)*dzk(k,ij)
-                w0(k,ij)  = wi_int(ns)
-                g(k,ij)   = gi_int(ns)
+              if (kii+2 <= klev) then
+              do k = kii+2, klev-1  
+                tau(k,ij) = (ki_int(ns) + kabs_chl(ns,k,ij))*dzk(k,ij)            
+                w0(k,ij)  = ki_int(ns)/(ki_int(ns) + kabs_chl(ns,k,ij)) * wi_int(ns)
+                g(k,ij)   = gi_int(ns)             
               enddo
-              endif
-              ! lowest layer
               k = klev
                 ! add algae to lowest sea ice layer, visible only:
                 kabs = ki_int(ns)*(c1-wi_int(ns))
                 if( ns == 1 ) then
                   ! total layer absorption optical depth fixed at value
                   ! of kalg*0.50m, independent of actual layer thickness
-                  kabs = kabs + kalg*(0.50_dbl_kind/dzk(k,ij))
+                  kabs = kabs + kabs_chl(ns,k,ij) !kalg*(0.50_dbl_kind/dzk(k,ij))
                 endif
                 sig        = ki_int(ns)*wi_int(ns)
                 tau(k,ij) = (kabs+sig)*dzk(k,ij)
                 w0(k,ij)  = (sig/(sig+kabs))
                 g(k,ij)   = gi_int(ns)
+
+              endif
               ! aerosol in sea ice
-              if (tr_aero) then
+              if (tr_zaero) then
+               do k = kii, klev                  
+                  gzaer(ns,k,ij) = gzaer(ns,k,ij)/(wzaer(ns,k,ij)+puny)
+                  wzaer(ns,k,ij) = wzaer(ns,k,ij)/(tzaer(ns,k,ij)+puny)
+                  g(k,ij)   = (g(k,ij)*w0(k,ij)*tau(k,ij) + gzaer(ns,k,ij)*wzaer(ns,k,ij)*tzaer(ns,k,ij)) / &
+                                  (w0(k,ij)*tau(k,ij) + wzaer(ns,k,ij)*tzaer(ns,k,ij))
+                  w0(k,ij)  = (w0(k,ij)*tau(k,ij) + wzaer(ns,k,ij)*tzaer(ns,k,ij)) / &
+                                   (tau(k,ij) + tzaer(ns,k,ij))
+                  tau(k,ij) = tau(k,ij) + tzaer(ns,k,ij)
+               enddo
+              elseif (tr_aero) then  
                 k = kii   ! sea ice SSL
-                  taer = c0
-                  waer = c0
-                  gaer = c0
-                  do na=1,4*n_aero,4
+                taer = c0
+                waer = c0
+                gaer = c0
+                do na=1,4*n_aero,4
                     taer = taer + &
                          aero_mp(i,j,na+2)*kaer_tab(ns,(1+(na-1)/4))
                     waer = waer + &
@@ -2709,15 +2812,15 @@
                     gaer = gaer + &
                          aero_mp(i,j,na+2)*kaer_tab(ns,(1+(na-1)/4))* &
                            waer_tab(ns,(1+(na-1)/4))*gaer_tab(ns,(1+(na-1)/4))
-                  enddo       ! na
-                  gaer = gaer/(waer+puny)
-                  waer = waer/(taer+puny)
+                enddo       ! na
+                gaer = gaer/(waer+puny)
+                waer = waer/(taer+puny)
                 g(k,ij)   = (g(k,ij)*w0(k,ij)*tau(k,ij) + gaer*waer*taer) / &
                                     (w0(k,ij)*tau(k,ij) + waer*taer)
                 w0(k,ij)  = (w0(k,ij)*tau(k,ij) + waer*taer) / &
                                      (tau(k,ij) + taer)
                 tau(k,ij) = tau(k,ij) + taer
-              do k = kii+1, klev
+                do k = kii+1, klev
                   taer = c0
                   waer = c0
                   gaer = c0
@@ -2733,11 +2836,11 @@
                   enddo       ! na
                   gaer = gaer/(waer+puny)
                   waer = waer/(taer+puny)
-                g(k,ij)   = (g(k,ij)*w0(k,ij)*tau(k,ij) + gaer*waer*taer) / &
+                  g(k,ij)   = (g(k,ij)*w0(k,ij)*tau(k,ij) + gaer*waer*taer) / &
                                     (w0(k,ij)*tau(k,ij) + waer*taer)
-                w0(k,ij)  = (w0(k,ij)*tau(k,ij) + waer*taer) / &
+                  w0(k,ij)  = (w0(k,ij)*tau(k,ij) + waer*taer) / &
                                      (tau(k,ij) + taer)
-                tau(k,ij) = tau(k,ij) + taer
+                  tau(k,ij) = tau(k,ij) + taer
               enddo ! k
               endif ! tr_aero
           enddo          ! ij 

@@ -57,6 +57,8 @@
          nu_restart_aero,&  ! restart input file for aerosol tracer
          nu_dump_bgc   , &  ! dump file for restarting bgc
          nu_restart_bgc, &  ! restart input file for bgc
+         nu_dump_S     , &  ! dump file for restarting zsalinity
+         nu_restart_S  , &  ! restart input file for zsalinity   
          nu_dump_hbrine, &  ! dump file for restarting hbrine
          nu_restart_hbrine, &  ! restart input file for hbrine
          nu_dump_eap   , &  ! dump file for restarting eap dynamics
@@ -122,6 +124,8 @@
          call get_fileunit(nu_restart_aero)
          call get_fileunit(nu_dump_bgc)
          call get_fileunit(nu_restart_bgc)
+         call get_fileunit(nu_dump_S)   
+         call get_fileunit(nu_restart_S) 
          call get_fileunit(nu_dump_hbrine)
          call get_fileunit(nu_restart_hbrine)
          call get_fileunit(nu_dump_eap)
@@ -203,6 +207,8 @@
          call release_fileunit(nu_restart_aero)
          call release_fileunit(nu_dump_bgc)
          call release_fileunit(nu_restart_bgc)
+         call release_fileunit(nu_dump_S)        
+         call release_fileunit(nu_restart_S)     
          call release_fileunit(nu_dump_hbrine)
          call release_fileunit(nu_restart_hbrine)
          call release_fileunit(nu_dump_eap)

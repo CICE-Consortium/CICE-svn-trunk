@@ -69,7 +69,8 @@
                                       einit,    l_stop,   &
                                       istop,    jstop)
 
-      use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf
+      use ice_therm_shared, only: surface_heat_flux, dsurface_heat_flux_dTsf, &
+                   solve_zsal
 
       integer (kind=int_kind), intent(in) :: &
          nx_block, ny_block, & ! block dimensions
@@ -302,6 +303,7 @@
 
       frac = 0.9
       dTemp = 0.02_dbl_kind
+      if (solve_zsal) dTemp = p1  ! lower tolerance with dynamic salinity
       do k = 1, nilyr
          do ij = 1, icells
             i = indxi(ij)

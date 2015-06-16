@@ -37,7 +37,7 @@
       private
       public :: init_hist, accum_hist
       save
-      
+
 !=======================================================================
 
       contains
@@ -72,11 +72,12 @@
       use ice_history_mechred, only: init_hist_mechred_2D, init_hist_mechred_3Dc
       use ice_history_pond, only: init_hist_pond_2D, init_hist_pond_3Dc
       use ice_history_bgc, only: init_hist_bgc_2D, init_hist_bgc_3Dc, &
-          init_hist_bgc_4Db
+          init_hist_bgc_3Db, init_hist_bgc_3Da
       use ice_history_drag, only: init_hist_drag_2D
       use ice_restart_shared, only: restart
       use ice_state, only: tr_iage, tr_FY, tr_lvl, tr_pond, tr_aero, tr_brine
-      use ice_zbgc_shared, only: skl_bgc
+      use ice_therm_shared, only: solve_zsal
+      use ice_zbgc_shared, only: solve_zbgc, skl_bgc, z_tracers
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -145,19 +146,35 @@
          f_dagedtd = 'x'
       endif
       if (.not. tr_FY)   f_FY   = 'x'
-
+      if (solve_zsal) then
+         f_fzsal = f_fsalt
+         f_fzsal_g = f_fsalt
+         f_fzsal_ai = f_fsalt_ai
+         f_fzsal_g_ai = f_fsalt_ai
+         f_zsal = f_sice
+         f_fsalt = 'x'
+         f_fsalt_ai = 'x'
+         f_sice = 'x'
+      else
+         f_fzsal      = 'x'
+         f_fzsal_g    = 'x'
+         f_fzsal_ai   = 'x'
+         f_fzsal_g_ai = 'x'
+         f_zsal       = 'x'
+      endif
+         
       if (kdyn /= 2) then
-           f_a11       = 'x'
-           f_a12       = 'x'
-           f_e11       = 'x'
-           f_e12       = 'x'
-           f_e22       = 'x'
-           f_s11       = 'x'
-           f_s12       = 'x'
-           f_s22       = 'x'
-           f_yieldstress11 = 'x'
-           f_yieldstress12 = 'x'
-           f_yieldstress22 = 'x'
+         f_a11       = 'x'
+         f_a12       = 'x'
+         f_e11       = 'x'
+         f_e12       = 'x'
+         f_e22       = 'x'
+         f_s11       = 'x'
+         f_s12       = 'x'
+         f_s22       = 'x'
+         f_yieldstress11 = 'x'
+         f_yieldstress12 = 'x'
+         f_yieldstress22 = 'x'
       endif
 
       ! these must be output at the same frequency because of 
@@ -199,6 +216,7 @@
       call broadcast_scalar (f_VGRDi, master_task)
       call broadcast_scalar (f_VGRDs, master_task)
       call broadcast_scalar (f_VGRDb, master_task)
+      call broadcast_scalar (f_VGRDa, master_task)
 
 !     call broadcast_scalar (f_example, master_task)
       call broadcast_scalar (f_hi, master_task)
@@ -320,6 +338,13 @@
       call broadcast_scalar (f_yieldstress11, master_task)
       call broadcast_scalar (f_yieldstress12, master_task)
       call broadcast_scalar (f_yieldstress22, master_task)
+
+      ! zsalinity
+      call broadcast_scalar (f_fzsal, master_task)            
+      call broadcast_scalar (f_fzsal_ai, master_task)        
+      call broadcast_scalar (f_fzsal_g, master_task)         
+      call broadcast_scalar (f_fzsal_g_ai, master_task)     
+      call broadcast_scalar (f_zsal, master_task)   
 
       ! 2D variables
       do ns1 = 1, nstreams
@@ -617,7 +642,7 @@
              "salt flux ice to ocean",                                        &
              "weighted by ice area", c1, c0,                                  &
              ns1, f_fsalt_ai)
-      
+    
          call define_hist_field(n_fhocn,"fhocn","W/m^2",tstr2D, tcstr, &
              "heat flux ice to ocn (cpl)",                           &
              "if positive, ocean gains heat", c1, c0,                &
@@ -844,6 +869,33 @@
             "none", c1, c0,            &
             ns1, f_yieldstress22)
 
+       ! zsalinity 
+     
+         call define_hist_field(n_fzsal,"fzsal","kg/m^2/s",tstr2D, tcstr, &
+             "prognostic salt flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains salt", c1, c0,                   &
+             ns1, f_fzsal)
+      
+         call define_hist_field(n_fzsal_ai,"fzsal_ai","kg/m^2/s",tstr2D, tcstr, &
+             "prognostic salt flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fzsal_ai)
+      
+         call define_hist_field(n_fzsal_g,"fzsal_g","kg/m^2/s",tstr2D, tcstr, &
+             "Gravity drainage salt flux ice to ocn (cpl)",                              &
+             "if positive, ocean gains salt", c1, c0,                   &
+             ns1, f_fzsal_g)
+      
+         call define_hist_field(n_fzsal_g_ai,"fzsal_g_ai","kg/m^2/s",tstr2D, tcstr, &
+             "Gravity drainage salt flux ice to ocean",                                        &
+             "weighted by ice area", c1, c0,                                  &
+             ns1, f_fzsal_g_ai)
+      
+         call define_hist_field(n_zsal,"zsal_tot","g/m^2",tstr2D, tcstr,        &
+             "Total Salt content",                     &
+             "In ice volume*fbri", c1, c0,       &
+             ns1, f_zsal)
+
       ! Tracers
 
       ! Ice Age
@@ -893,7 +945,7 @@
               ns1, f_vsnon)
 
            call define_hist_field(n_fsurfn_ai,"fsurfn_ai","W/m^2",tstr3Dc, tcstr, & 
-              "net surface heat flux, categories","weighted by ice area", c1, c0, &            
+              "net surface heat flux, categories","weighted by ice area", c1, c0, &  
               ns1, f_fsurfn_ai)
    
            call define_hist_field(n_fcondtopn_ai,"fcondtopn_ai","W/m^2",tstr3Dc, tcstr, &
@@ -905,7 +957,7 @@
               ns1, f_fmelttn_ai)
 
            call define_hist_field(n_flatn_ai,"flatn_ai","W/m^2",tstr3Dc, tcstr, & 
-              "latent heat flux, category","weighted by ice area", c1, c0,      &            
+              "latent heat flux, category","weighted by ice area", c1, c0,      &    
               ns1, f_flatn_ai)
 
            call define_hist_field(n_fsensn_ai,"fsensn_ai","W/m^2",tstr3Dc, tcstr, & 
@@ -945,6 +997,9 @@
 
 !      endif ! if (histfreq(ns1) /= 'x') then
 !      enddo ! ns1 
+
+      if (z_tracers .or. solve_zsal) call init_hist_bgc_3Db  
+      if (z_tracers) call init_hist_bgc_3Da
 
       !-----------------------------------------------------------------
       ! 4D (categories, vertical) variables must be looped separately
@@ -989,15 +1044,6 @@
             if (allocated(Tsnz4d)) deallocate(Tsnz4d)
             allocate(Tsnz4d(nx_block,ny_block,nzslyr,ncat_hist))
        endif
-       if (f_Sinz   (1:1) /= 'x') then
-            if (allocated(Sinz4d)) deallocate(Sinz4d)
-            allocate(Sinz4d(nx_block,ny_block,nzilyr,ncat_hist))
-       endif
-
-      ! other 4D history variables
-
-      ! biogeochemistry
-      if (tr_brine) call init_hist_bgc_4Db
 
       !-----------------------------------------------------------------
       ! fill igrd array with namelist values
@@ -1023,6 +1069,7 @@
       igrdz(n_VGRDi    ) = f_VGRDi
       igrdz(n_VGRDs    ) = f_VGRDs
       igrdz(n_VGRDb    ) = f_VGRDb
+      igrdz(n_VGRDa    ) = f_VGRDa
 
       !-----------------------------------------------------------------
       ! diagnostic output
@@ -1071,10 +1118,12 @@
       if (num_avail_hist_fields_3Dz > 0) &
       allocate(a3Dz(nx_block,ny_block,nzlyr,num_avail_hist_fields_3Dz,max_blocks))
 
-      nzlyrb = nzblyr
       if (allocated(a3Db)) deallocate(a3Db)
       if (num_avail_hist_fields_3Db > 0) &
-      allocate(a3Db(nx_block,ny_block,nzlyrb,num_avail_hist_fields_3Db,max_blocks))
+      allocate(a3Db(nx_block,ny_block,nzblyr,num_avail_hist_fields_3Db,max_blocks))
+      if (allocated(a3Da)) deallocate(a3Da)
+      if (num_avail_hist_fields_3Da > 0) &
+      allocate(a3Da(nx_block,ny_block,nzalyr,num_avail_hist_fields_3Da,max_blocks))
 
       if (allocated(a4Di)) deallocate(a4Di)
       if (num_avail_hist_fields_4Di > 0) &
@@ -1082,17 +1131,14 @@
       if (allocated(a4Ds)) deallocate(a4Ds)
       if (num_avail_hist_fields_4Ds > 0) &
       allocate(a4Ds(nx_block,ny_block,nzslyr,ncat_hist,num_avail_hist_fields_4Ds,max_blocks))
-      if (allocated(a4Db)) deallocate(a4Db)
-      if (num_avail_hist_fields_4Db > 0) &
-      allocate(a4Db(nx_block,ny_block,nzblyr,ncat_hist,num_avail_hist_fields_4Db,max_blocks))
 
       if (allocated(a2D))  a2D (:,:,:,:)     = c0
       if (allocated(a3Dc)) a3Dc(:,:,:,:,:)   = c0
       if (allocated(a3Dz)) a3Dz(:,:,:,:,:)   = c0
       if (allocated(a3Db)) a3Db(:,:,:,:,:)   = c0
+      if (allocated(a3Da)) a3Da(:,:,:,:,:)   = c0
       if (allocated(a4Di)) a4Di(:,:,:,:,:,:) = c0
       if (allocated(a4Ds)) a4Ds(:,:,:,:,:,:) = c0
-      if (allocated(a4Db)) a4Db(:,:,:,:,:,:) = c0
       avgct(:) = c0
       albcnt(:,:,:,:) = c0
 
@@ -1139,7 +1185,8 @@
           stressp_2, stressm_2, stress12_2, &
           stressp_3, stressm_3, stress12_3, &
           stressp_4, stressm_4, stress12_4, sig1, sig2, &
-          mlt_onset, frz_onset, dagedtt, dagedtd, fswint_ai, keffn_top
+          mlt_onset, frz_onset, dagedtt, dagedtd, fswint_ai, keffn_top, &
+          fzsal_ai, fzsal_g_ai
       use ice_atmo, only: formdrag
       use ice_history_shared ! almost everything
       use ice_history_write, only: ice_write_hist
@@ -1151,7 +1198,7 @@
       use ice_therm_shared, only: calculate_Tin_from_qin, Tmlt, ktherm
       use ice_therm_mushy, only: temperature_mush, temperature_snow
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
-      use ice_zbgc_shared, only: skl_bgc
+      use ice_zbgc_shared, only: skl_bgc, zsal_tot, fzsal, fzsal_g
 
       real (kind=dbl_kind), intent(in) :: &
          dt      ! time step
@@ -1178,17 +1225,13 @@
       type (block) :: &
          this_block           ! block information for current block
 
-      !---------------------------------------------------------------
-      ! increment step counter
-      !---------------------------------------------------------------
-
       n2D     = num_avail_hist_fields_2D
       n3Dccum = n2D     + num_avail_hist_fields_3Dc
       n3Dzcum = n3Dccum + num_avail_hist_fields_3Dz
       n3Dbcum = n3Dzcum + num_avail_hist_fields_3Db
-      n4Dicum = n3Dbcum + num_avail_hist_fields_4Di
-      n4Dscum = n4Dicum + num_avail_hist_fields_4Ds 
-      n4Dbcum = n4Dscum + num_avail_hist_fields_4Db ! should equal num_avail_hist_fields_tot
+      n3Dacum = n3Dbcum + num_avail_hist_fields_3Da
+      n4Dicum = n3Dacum + num_avail_hist_fields_4Di
+      n4Dscum = n4Dicum + num_avail_hist_fields_4Ds! should equal num_avail_hist_fields_tot
 
       do ns = 1,nstreams
          if (.not. hist_avg .or. histfreq(ns) == '1') then  ! write snapshots
@@ -1211,8 +1254,13 @@
               if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
                   a3Db(:,:,:,nn,:) = c0
            enddo
-           do n = n3Dbcum + 1, n4Dicum
+           do n = n3Dbcum + 1, n3Dacum
               nn = n - n3Dbcum
+              if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
+                  a3Da(:,:,:,nn,:) = c0
+           enddo
+           do n = n3Dacum + 1, n4Dicum
+              nn = n - n3Dacum
               if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
                   a4Di(:,:,:,:,nn,:) = c0
            enddo
@@ -1220,11 +1268,6 @@
               nn = n - n4Dicum
               if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
                   a4Ds(:,:,:,:,nn,:) = c0
-           enddo
-           do n = n4Dscum + 1, n4Dbcum
-              nn = n - n4Dscum
-              if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) &
-                  a4Db(:,:,:,:,nn,:) = c0
            enddo
            avgct(ns) = c1
          else                      ! write averages over time histfreq
@@ -1461,6 +1504,17 @@
          if (f_fcondtop_ai(1:1)/= 'x') &
              call accum_hist_field(n_fcondtop_ai, iblk, &
                                                  fcondtop(:,:,iblk)*workb(:,:), a2D)
+         ! zsalinity
+         if (f_fzsal  (1:1) /= 'x') &  
+             call accum_hist_field(n_fzsal,     iblk, fzsal(:,:,iblk), a2D)
+         if (f_fzsal_ai(1:1)/= 'x') & 
+             call accum_hist_field(n_fzsal_ai,  iblk, fzsal_ai(:,:,iblk), a2D)
+         if (f_fzsal_g  (1:1) /= 'x') & 
+             call accum_hist_field(n_fzsal_g,   iblk, fzsal_g(:,:,iblk), a2D)
+         if (f_fzsal_g_ai(1:1)/= 'x') & 
+             call accum_hist_field(n_fzsal_g_ai,iblk, fzsal_g_ai(:,:,iblk), a2D)
+         if (f_zsal  (1:1) /= 'x') &   
+             call accum_hist_field(n_zsal,      iblk, zsal_tot(:,:,iblk), a2D)
 
          if (f_icepresent(1:1) /= 'x') then
            worka(:,:) = c0
@@ -1537,7 +1591,7 @@
                   enddo
                enddo
             endif
-            call accum_hist_field(n_Tinz-n3Dbcum, iblk, nzilyr, ncat_hist, &
+            call accum_hist_field(n_Tinz-n3Dacum, iblk, nzilyr, ncat_hist, &
                                   Tinz4d(:,:,1:nzilyr,1:ncat_hist), a4Di)
          endif
          if (f_Sinz   (1:1) /= 'x') then
@@ -1551,7 +1605,7 @@
                enddo
                enddo
             enddo
-            call accum_hist_field(n_Sinz-n3Dbcum, iblk, nzilyr, ncat_hist, &
+            call accum_hist_field(n_Sinz-n3Dacum, iblk, nzilyr, ncat_hist, &
                                   Sinz4d(:,:,1:nzilyr,1:ncat_hist), a4Di)
          endif
          
@@ -1631,7 +1685,6 @@
 
       do ns = 1, nstrm
       if (write_history(ns) .or. write_ic) then
-
       !---------------------------------------------------------------
       ! Mask out land points and convert units 
       !---------------------------------------------------------------
@@ -1734,6 +1787,7 @@
               enddo             ! k
               endif
            enddo                ! n
+
            do n = 1, num_avail_hist_fields_3Db
               nn = n3Dzcum + n
               if (avail_hist_fields(nn)%vhistfreq == histfreq(ns)) then 
@@ -1752,8 +1806,26 @@
               endif
            enddo                ! n
 
-           do n = 1, num_avail_hist_fields_4Di
+           do n = 1, num_avail_hist_fields_3Da
               nn = n3Dbcum + n
+              if (avail_hist_fields(nn)%vhistfreq == histfreq(ns)) then 
+              do k = 1, nzalyr
+              do j = jlo, jhi
+              do i = ilo, ihi
+                 if (.not. tmask(i,j,iblk)) then ! mask out land points
+                    a3Da(i,j,k,n,iblk) = spval
+                 else                            ! convert units
+                    a3Da(i,j,k,n,iblk) = avail_hist_fields(nn)%cona*a3Da(i,j,k,n,iblk) &
+                                   * ravgct + avail_hist_fields(nn)%conb
+                 endif
+              enddo             ! i
+              enddo             ! j
+              enddo             ! k
+              endif
+           enddo                ! n
+
+           do n = 1, num_avail_hist_fields_4Di
+              nn = n3Dacum + n
               if (avail_hist_fields(nn)%vhistfreq == histfreq(ns)) then 
               do k = 1, nzilyr
               do ic = 1, ncat_hist
@@ -1783,25 +1855,6 @@
                     a4Ds(i,j,k,ic,n,iblk) = spval
                  else                            ! convert units
                     a4Ds(i,j,k,ic,n,iblk) = avail_hist_fields(nn)%cona*a4Ds(i,j,k,ic,n,iblk) &
-                                   * ravgct + avail_hist_fields(nn)%conb
-                 endif
-              enddo             ! i
-              enddo             ! j
-              enddo             ! ic
-              enddo             ! k
-              endif
-           enddo                ! n
-           do n = 1, num_avail_hist_fields_4Db
-              nn = n4Dscum + n
-              if (avail_hist_fields(nn)%vhistfreq == histfreq(ns)) then 
-              do k = 1, nzblyr
-              do ic = 1, ncat_hist
-              do j = jlo, jhi
-              do i = ilo, ihi
-                 if (.not. tmask(i,j,iblk)) then ! mask out land points
-                    a4Db(i,j,k,ic,n,iblk) = spval
-                 else                            ! convert units
-                    a4Db(i,j,k,ic,n,iblk) = avail_hist_fields(nn)%cona*a4Db(i,j,k,ic,n,iblk) &
                                    * ravgct + avail_hist_fields(nn)%conb
                  endif
               enddo             ! i
@@ -1933,9 +1986,9 @@
            if (allocated(a3Dc)) a3Dc(:,:,:,:,:)   = c0
            if (allocated(a3Dz)) a3Dz(:,:,:,:,:)   = c0
            if (allocated(a3Db)) a3Db(:,:,:,:,:)   = c0
+           if (allocated(a3Da)) a3Da(:,:,:,:,:)   = c0
            if (allocated(a4Di)) a4Di(:,:,:,:,:,:) = c0
            if (allocated(a4Ds)) a4Ds(:,:,:,:,:,:) = c0
-           if (allocated(a4Db)) a4Db(:,:,:,:,:,:) = c0
            avgct(:) = c0
            albcnt(:,:,:,:) = c0
            write_ic = .false.        ! write initial condition once at most
@@ -1960,17 +2013,17 @@
            nn = n - n3Dzcum
            if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a3Db(:,:,:,nn,:) = c0
         enddo
-        do n = n3Dbcum + 1, n4Dicum
+        do n = n3Dbcum + 1, n3Dacum
            nn = n - n3Dbcum
+           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a3Da(:,:,:,nn,:) = c0
+        enddo
+        do n = n3Dacum + 1, n4Dicum
+           nn = n - n3Dacum
            if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Di(:,:,:,:,nn,:) = c0
         enddo
         do n = n4Dicum + 1, n4Dscum
            nn = n - n4Dicum
            if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Ds(:,:,:,:,nn,:) = c0
-        enddo
-        do n = n4Dscum + 1, n4Dbcum
-           nn = n - n4Dscum
-           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) a4Db(:,:,:,:,nn,:) = c0
         enddo
 
       endif  ! write_history or write_ic

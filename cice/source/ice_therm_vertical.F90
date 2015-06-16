@@ -29,7 +29,8 @@
                            nt_Tsfc, nt_iage, nt_sice, nt_qice, nt_qsno, &
                            nt_apnd, nt_hpnd
       use ice_therm_shared, only: ktherm, ferrmax, heat_capacity, l_brine, &
-                                  calc_Tsfc, calculate_tin_from_qin, Tmin
+                                  calc_Tsfc, calculate_tin_from_qin, Tmin, &
+                                  solve_zsal
       use ice_therm_bl99, only: temperature_changes
       use ice_therm_0layer, only: zerolayer_temperature
       use ice_flux, only: Tf
@@ -77,18 +78,20 @@
                                   sss,                    &
                                   lhcoef,      shcoef,    &
                                   fswsfc,      fswint,    &
+                                  fswthrun,               &  
                                   Sswabs,      Iswabs,    &
                                   fsurfn,      fcondtopn, &
                                   fsensn,      flatn,     &
-                                  flwoutn,     evapn,     &
-                                  freshn,      fsaltn,    &
-                                  fhocnn,      meltt,     &
-                                  melts,       meltb,     &
+                                  flwoutn,                & 
+                                  evapn,       freshn,    &
+                                  fsaltn,      fhocnn,    &
+                                  meltt,       melts,     &
+                                  meltb,                  &
                                   congel,      snoice,    &
                                   mlt_onset,   frz_onset, &
                                   yday,        l_stop,    &
                                   istop,       jstop,     &
-                                  dsnow)
+                                  dsnow,       fzsaln)  
 
       use ice_communicate, only: my_task
       use ice_therm_mushy, only: temperature_changes_salinity
@@ -133,7 +136,8 @@
          intent(inout) :: &
          fswsfc  , & ! SW absorbed at ice/snow surface (W m-2)
          fswint  , & ! SW absorbed in ice interior, below surface (W m-2)
-         fpond       ! fresh water flux to ponds (kg/m^2/s)
+         fpond   , & ! fresh water flux to ponds (kg/m^2/s)
+         fswthrun    ! SW through ice to ocean  (W/m^2) 
 
       real (kind=dbl_kind), dimension (nx_block,ny_block,nslyr), &
          intent(inout) :: &
@@ -159,7 +163,8 @@
          fsensn   , & ! sensible heat flux (W/m^2) 
          flatn    , & ! latent heat flux   (W/m^2) 
          fsurfn   , & ! net flux to top surface, excluding fcondtopn
-         fcondtopn    ! downward cond flux at top surface (W m-2)
+         fcondtopn, & ! downward cond flux at top surface (W m-2)
+         fzsaln       ! net salt flux out of ice 
 
       ! coupler fluxes to ocean
       real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out):: &
@@ -214,7 +219,8 @@
       real (kind=dbl_kind), dimension (icells,nilyr) :: &
          zqin        , & ! ice layer enthalpy, zqin < 0 (J m-3)
          zTin        , & ! internal ice layer temperatures
-         zSin            ! internal ice layer salinities
+         zSin        , & ! internal ice layer salinities
+         dqmat           ! excess q from melted interior layers
 
       real (kind=dbl_kind), dimension (icells,nslyr) :: &
          zqsn        , & ! snow layer enthalpy, zqsn < 0 (J m-3)
@@ -230,7 +236,8 @@
 
 ! echmod: reduce size to icells?
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
-         iage    ! ice age (s)
+         iage , & ! ice age (s)
+         Tsfc     ! temperature of ice/snow top surface  (C) 
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
          fadvocn ! advective heat flux to ocean
@@ -252,6 +259,8 @@
          fsaltn (i,j) = c0
          fhocnn (i,j) = c0
          fadvocn(i,j) = c0
+
+         fzsaln (i,j) = c0 
 
          meltt  (i,j) = c0
          meltb  (i,j) = c0
@@ -298,7 +307,7 @@
       do ij = 1, icells
          ! Save initial ice and snow thickness (for fresh and fsalt)
          worki(ij) = hin(ij)
-         works(ij) = hsn(ij)
+         works(ij) = hsn(ij) 
       enddo
 
       !-----------------------------------------------------------------
@@ -327,7 +336,8 @@
                                               Tsf,           Tbot,     &
                                               sss,                     &
                                               fsensn,        flatn,    &
-                                              flwoutn,       fsurfn,   &
+                                              flwoutn,                 &
+                                              fsurfn,                  &
                                               fcondtopn,     fcondbot, &
                                               fadvocn,       snoice,   &
                                               einit,         l_stop,   &
@@ -350,10 +360,11 @@
                                      zSin,                    &
                                      Tsf,           Tbot,     &
                                      fsensn,        flatn,    &
-                                     flwoutn,       fsurfn,   &
+                                     flwoutn,                 &
+                                     fsurfn,                  &
                                      fcondtopn,     fcondbot, &
                                      einit,         l_stop,   &
-                                     istop,         jstop)
+                                     istop,         jstop) 
 
          endif ! ktherm
             
@@ -372,7 +383,8 @@
                                        hilyr,         hslyr,    &
                                        Tsf,           Tbot,     &
                                        fsensn,        flatn,    &
-                                       flwoutn,       fsurfn,   &
+                                       flwoutn,                 & 
+                                       fsurfn,                  &
                                        fcondtopn,     fcondbot, &
                                        l_stop,                  &
                                        istop,         jstop)
@@ -558,7 +570,8 @@
       if (ktherm == 0) heat_capacity = .false. ! 0-layer thermodynamics
 
       l_brine = .false.
-      if (saltmax > min_salin .and. heat_capacity) l_brine = .true.
+      if ((saltmax > min_salin .and. heat_capacity) .or. solve_zsal)&
+          l_brine = .true.
 
       !-----------------------------------------------------------------
       ! Prescibe vertical profile of salinity and melting temperature.
@@ -570,26 +583,36 @@
       do j = 1, ny_block
       do i = 1, nx_block
       if (l_brine) then
-         do k = 1, nilyr
-            zn = (real(k,kind=dbl_kind)-p5) /  &
-                  real(nilyr,kind=dbl_kind)
-            salinz(i,j,k,iblk)=(saltmax/c2)*(c1-cos(pi*zn**(nsal/(msal+zn))))
-            salinz(i,j,k,iblk) = max(salinz(i,j,k,iblk), min_salin)
-            Tmltz (i,j,k,iblk) = -salinz(i,j,k,iblk)*depressT
-         enddo ! k
-         salinz(i,j,nilyr+1,iblk) = saltmax
-         Tmltz(i,j,nilyr+1,iblk) = -salinz(i,j,nilyr+1,iblk)*depressT
+         if (solve_zsal) then
+            do k = 1, nilyr
+               salinz(i,j,k,iblk) = sss(i,j,iblk)*salt_loss 
+               Tmltz(i,j,k,iblk) = -salinz(i,j,k,iblk)*depressT 
+            enddo
+            salinz(i,j,nilyr+1,iblk) = sss(i,j,iblk) 
+            Tmltz(i,j,nilyr+1,iblk) = -salinz(i,j,nilyr+1,iblk)*depressT
 
+         else ! .not. (solve_zsal)
+         
+            do k = 1, nilyr
+               zn = (real(k,kind=dbl_kind)-p5) /  &
+                     real(nilyr,kind=dbl_kind)
+               salinz(i,j,k,iblk)=(saltmax/c2)*(c1-cos(pi*zn**(nsal/(msal+zn))))
+               salinz(i,j,k,iblk) = max(salinz(i,j,k,iblk), min_salin)
+               Tmltz (i,j,k,iblk) = -salinz(i,j,k,iblk)*depressT
+            enddo ! k
+            salinz(i,j,nilyr+1,iblk) = saltmax
+            Tmltz(i,j,nilyr+1,iblk) = -salinz(i,j,nilyr+1,iblk)*depressT
+         endif
       else ! .not. l_brine
          do k = 1, nilyr+1
             salinz(i,j,k,iblk) = c0
             Tmltz(i,j,k,iblk) = c0
-         enddo
+         enddo 
       endif ! l_brine
 
-      enddo !i
-      enddo !j
-      enddo !iblk
+      enddo ! i
+      enddo ! j
+      enddo ! iblk
       !$OMP END PARALLEL DO
 
       end subroutine init_thermo_vertical
@@ -828,7 +851,7 @@
 !
 ! Given the state variables (vicen, vsnon, trcrn)
 ! compute variables needed for the vertical thermodynamics
-! (hin, hsn, zqin, zqsn, zTin, zTsn, Tsf).
+! (hin, hsn, zqin, zqsn, zTin, zTsn, zTsf).
 !
 ! authors William H. Lipscomb, LANL
 !         C. M. Bitz, UW
@@ -1218,7 +1241,6 @@
                endif
             enddo               ! ij
          endif                  ! tice_low
-
       !-----------------------------------------------------------------
       ! correct roundoff error
       !-----------------------------------------------------------------
@@ -1235,18 +1257,17 @@
             enddo                  ! ij
          endif
 
-! echmod: is this necessary?
-!         if (ktherm == 1) then
+         if (ktherm == 1 .and. solve_zsal) then
 !!DIR$ CONCURRENT !Cray
 !!cdir nodep      !NEC
 !!ocl novrec      !Fujitsu
-!            do ij = 1, icells
-!               if (zTin(ij,k)>= -zSin(ij,k)*depressT) then
-!                   zTin(ij,k) = -zSin(ij,k)*depressT - puny
-!                   zqin(ij,k) = -rhoi*cp_ocn*zSin(ij,k)*depressT
-!               endif
-!            enddo                  ! ij
-!         endif
+            do ij = 1, icells
+               if (zTin(ij,k)>= -zSin(ij,k)*depressT) then
+                   zTin(ij,k) = -zSin(ij,k)*depressT - puny
+                   zqin(ij,k) = -rhoi*cp_ocn*zSin(ij,k)*depressT
+               endif
+            enddo                  ! ij
+         endif
 
       !-----------------------------------------------------------------
       ! initial energy per unit area of ice/snow, relative to 0 C
@@ -1262,7 +1283,6 @@
       enddo                     ! nilyr
 
       end subroutine init_vertical_profile
-
 !=======================================================================
 !
 ! Compute growth and/or melting at the top and bottom surfaces.
@@ -1828,7 +1848,7 @@
                       zqin,     zqsn,     &
                       dzi,      dzs,      &
                       dsnow)
-
+    
 !---!-------------------------------------------------------------------
 !---! Repartition the ice and snow into equal-thickness layers,
 !---! conserving energy.

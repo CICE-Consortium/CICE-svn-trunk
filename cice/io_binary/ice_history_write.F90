@@ -114,6 +114,8 @@
         write (nu_hdr, 998) '  ni',nx_global
         write (nu_hdr, 998) '  nj',ny_global
         write (nu_hdr, 998) '  nk',nzilyr
+        write (nu_hdr, 998) '  nb',nzblyr
+        write (nu_hdr, 998) '  na',nzalyr
         write (nu_hdr, 998) '  nc',ncat_hist
 
         write (nu_hdr, *  ) 'Grid variables: (left column = nrec)'
@@ -209,7 +211,55 @@
         endif
       enddo ! num_avail_hist_fields_3Dz
 
-      do n = n3Dzcum + 1, n4Dicum
+      do n = n3Dzcum + 1, n3Dbcum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) then
+
+          do k = 1, nzblyr
+          nrec = nrec + 1
+          if (my_task == master_task) then
+            write (nu_hdr, 993) nrec,trim(avail_hist_fields(n)%vname), &
+               trim(avail_hist_fields(n)%vdesc),trim(avail_hist_fields(n)%vunit),k
+
+            if (histfreq(ns) == '1' .or. .not. hist_avg) then
+               write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+                  'time_rep','instantaneous'
+            else
+               write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+                  'time_rep','averaged'
+            endif
+          endif
+
+          call ice_write(nu_history, nrec, a3Db(:,:,k,n-n3Dzcum,:), 'rda4', diag)
+          enddo ! nzblyr
+
+        endif
+      enddo ! num_avail_hist_fields_3Db
+
+      do n = n3Dbcum + 1, n3Dacum
+          if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) then
+
+          do k = 1, nzalyr
+          nrec = nrec + 1
+          if (my_task == master_task) then
+            write (nu_hdr, 993) nrec,trim(avail_hist_fields(n)%vname), &
+               trim(avail_hist_fields(n)%vdesc),trim(avail_hist_fields(n)%vunit),k
+
+            if (histfreq(ns) == '1' .or. .not. hist_avg) then
+               write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+                  'time_rep','instantaneous'
+            else
+               write (nu_hdr, 996) nrec,trim(avail_hist_fields(n)%vname), &
+                  'time_rep','averaged'
+            endif
+          endif
+
+          call ice_write(nu_history, nrec, a3Da(:,:,k,n-n3Dbcum,:), 'rda4', diag)
+          enddo ! nzalyr
+
+        endif
+      enddo ! num_avail_hist_fields_3Da
+
+      do n = n3Dacum + 1, n4Dicum
           if (avail_hist_fields(n)%vhistfreq == histfreq(ns)) then
 
           do nn = 1, ncat_hist
