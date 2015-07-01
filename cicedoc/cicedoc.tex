@@ -3497,7 +3497,7 @@ We discretize the terms that include temperature in the heat conservation equati
 \end{equation}
 where the superscript signifies whether the quantity is evaluated at the start ($t_0$) or the end ($t$) of the time step and the subscript indicates the vertical layer. Writing out the temperature dependence of the enthalpy term we have
 \begin{equation*}
-\frac{\left(\phi (c_w \rho_w - c_i \rho_i) + c_w \rho_w\right) T^t_k - (1-\phi) \rho_i L - q^{t_0}_k}{\Delta t} = \frac{ \frac{K^*_{k+1}}{\Delta z^\prime_{k+1}} (T^t_{k+1} - T^t_k) - \frac{K^*_k}{\Delta z^\prime_k} (T^t_k - T^t_{k-1})}{\Delta h}.
+\frac{\left(\phi (c_w \rho_w - c_i \rho_i) + c_i \rho_i\right) T^t_k - (1-\phi) \rho_i L - q^{t_0}_k}{\Delta t} = \frac{ \frac{K^*_{k+1}}{\Delta z^\prime_{k+1}} (T^t_{k+1} - T^t_k) - \frac{K^*_k}{\Delta z^\prime_k} (T^t_k - T^t_{k-1})}{\Delta h}.
 \end{equation*}
 The mush thermal conductivities are fixed at the start of the timestep. For the lowest ice layer $T_{k+1}$ is replaced with $T_{bot}$, the temperature of the ice base.  $\Delta h$ is the layer thickness and $z^\prime_k$ is the distance between the $k-1$ and $k$ layer centers.
 
