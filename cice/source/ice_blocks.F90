@@ -249,11 +249,11 @@ contains
                            'ice: create_blocks: unknown n-s bndy type')
                end select
 
-            !*** set last physical point if padded domain
+            !*** set last physical point in padded domain
 
             else if (j_global(j,n) == ny_global .and. &
-                     j > all_blocks(n)%jlo      .and. &
-                     j < all_blocks(n)%jhi) then
+                     j >= all_blocks(n)%jlo      .and. &
+                     j <= all_blocks(n)%jhi) then
                all_blocks(n)%jhi = j   ! last physical point in padded domain
             endif
          end do
@@ -302,8 +302,8 @@ contains
             !*** last physical point in padded domain
 
             else if (i_global(i,n) == nx_global .and. &
-                     i > all_blocks(n)%ilo      .and. &
-                     i < all_blocks(n)%ihi) then
+                     i >= all_blocks(n)%ilo      .and. &
+                     i <= all_blocks(n)%ihi) then
                all_blocks(n)%ihi = i
             endif
          end do

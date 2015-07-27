@@ -471,7 +471,7 @@
                   work1(i,j,iblk) = &
                      (fswabs(i,j,iblk) - fswthru(i,j,iblk) &
                     + fsens (i,j,iblk) + flwout (i,j,iblk)) &
-                                                  * aice      (i,j,iblk) &
+                                       * aice      (i,j,iblk) &
                     + flw   (i,j,iblk) * aice_init (i,j,iblk)
                enddo
                enddo
@@ -486,7 +486,7 @@
                do i = 1, nx_block
                   work1(i,j,iblk) = &
                              (fsurf(i,j,iblk) - flat(i,j,iblk)) & 
-                              * aice(i,j,iblk)
+                             * aice(i,j,iblk)
                enddo
                enddo
             enddo
