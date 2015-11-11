@@ -43,7 +43,7 @@
       use ice_blocks, only: nx_block, ny_block
       use ice_broadcast, only: broadcast_scalar
       use ice_calendar, only: time, sec, idate, idate0, write_ic, &
-          histfreq, dayyr, days_per_year, use_leap_years
+          histfreq, histfreq_n, dayyr, days_per_year, use_leap_years
       use ice_communicate, only: my_task, master_task
       use ice_constants, only: c0, c360, secday, spval, spval_dbl, rad_to_deg
       use ice_domain, only: distrb_info, nblocks
@@ -78,6 +78,7 @@
       integer (kind=int_kind), dimension(4) :: dimidex
       real (kind=real_kind) :: ltime
       character (char_len) :: title
+      character (char_len) :: time_period_freq
       character (char_len_long) :: ncfile(max_nstrm)
 
       integer (kind=int_kind) :: iyear, imonth, iday
@@ -90,7 +91,7 @@
       type(file_desc_t)     :: File
       type(io_desc_t)       :: iodesc2d, &
                                iodesc3dc, iodesc3dv, iodesc3di, iodesc3db, &
-                               iodesc4di
+                               iodesc4di, iodesc4ds
       type(var_desc_t)      :: varid
 
       ! 4 coordinate variables: TLON, TLAT, ULON, ULAT
@@ -156,10 +157,11 @@
 
       call ice_pio_initdecomp(iodesc=iodesc2d)
       call ice_pio_initdecomp(ndim3=ncat_hist, iodesc=iodesc3dc)
-      call ice_pio_initdecomp(ndim3=nzlyr,     iodesc=iodesc3di)
+      call ice_pio_initdecomp(ndim3=nzilyr,     iodesc=iodesc3di)
       call ice_pio_initdecomp(ndim3=nzlyrb,    iodesc=iodesc3db)
       call ice_pio_initdecomp(ndim3=nverts, inner_dim=.true., iodesc=iodesc3dv)
-      call ice_pio_initdecomp(ndim3=nzlyr,  ndim4=ncat_hist,  iodesc=iodesc4di)
+      call ice_pio_initdecomp(ndim3=nzilyr,  ndim4=ncat_hist,  iodesc=iodesc4di)
+      call ice_pio_initdecomp(ndim3=nzslyr,  ndim4=ncat_hist,  iodesc=iodesc4ds)
 
 !      ltime = time/int(secday)
       ltime = real(time/int(secday),kind=real_kind)
@@ -684,6 +686,21 @@
         title  = 'Los Alamos Sea Ice Model (CICE) Version 5'
         status = pio_put_att(File,pio_global,'source',trim(title))
 
+        select case (histfreq(ns))
+         case ("y", "Y")
+            write(time_period_freq,'(a,i0)') 'year_',histfreq_n(ns)
+         case ("m", "M")
+            write(time_period_freq,'(a,i0)') 'month_',histfreq_n(ns)
+         case ("d", "D")
+            write(time_period_freq,'(a,i0)') 'day_',histfreq_n(ns)
+         case ("h", "H")
+            write(time_period_freq,'(a,i0)') 'hour_',histfreq_n(ns)
+         case ("1")
+            write(time_period_freq,'(a,i0)') 'step_',histfreq_n(ns)
+        end select
+
+        status = pio_put_att(File,pio_global,'time_period_freq',trim(time_period_freq))
+
         if (use_leap_years) then
           write(title,'(a,i3,a)') 'This year has ',int(dayyr),' days'
         else
@@ -701,7 +718,11 @@
         status =  &
              pio_put_att(File,pio_global,'conventions',trim(title))
 
-        call date_and_time(date=current_date, time=current_time)
+        if (my_task == master_task) then
+           call date_and_time(date=current_date, time=current_time)
+        endif
+        call broadcast_scalar(current_date, master_task)
+        call broadcast_scalar(current_time, master_task)
         write(start_time,1000) current_date(1:4), current_date(5:6), &
                                current_date(7:8), current_time(1:2), &
                                current_time(3:4)
@@ -902,7 +923,7 @@
       deallocate(workr3)
 
       ! 3D (vertical ice)
-      allocate(workr3(nx_block,ny_block,nblocks,nzlyr))
+      allocate(workr3(nx_block,ny_block,nblocks,nzilyr))
       do n = n3Dccum+1, n3Dzcum
          nn = n - n3Dccum
          if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
@@ -910,7 +931,7 @@
             if (status /= pio_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
             do j = 1, nblocks
-            do i = 1, nzlyr
+            do i = 1, nzilyr
                workr3(:,:,j,i) = a3Dz(:,:,i,nn,j)
             enddo
             enddo
@@ -941,7 +962,7 @@
       enddo ! num_avail_hist_fields_3Db
       deallocate(workr3)
 
-      allocate(workr4(nx_block,ny_block,nblocks,ncat_hist,nzlyr))
+      allocate(workr4(nx_block,ny_block,nblocks,ncat_hist,nzilyr))
       ! 4D (categories, vertical ice)
       do n = n3Dbcum+1, n4Dicum
          nn = n - n3Dbcum
@@ -963,7 +984,28 @@
       enddo ! num_avail_hist_fields_4Di
       deallocate(workr4)
 
-!     similarly for num_avail_hist_fields_4Ds (define workr4s, iodesc4ds)
+      allocate(workr4(nx_block,ny_block,nblocks,ncat_hist,nzslyr))
+      ! 4D (categories, vertical ice)
+      do n = n4Dicum+1, n4Dscum
+         nn = n - n4Dicum
+         if (avail_hist_fields(n)%vhistfreq == histfreq(ns) .or. write_ic) then
+            status  = pio_inq_varid(File,avail_hist_fields(n)%vname,varid)
+            if (status /= pio_noerr) call abort_ice( &
+               'ice: Error getting varid for '//avail_hist_fields(n)%vname)
+            do j = 1, nblocks
+            do i = 1, ncat_hist
+            do k = 1, nzslyr
+               workr4(:,:,j,i,k) = a4Ds(:,:,k,i,nn,j)
+            enddo ! k
+            enddo ! i
+            enddo ! j
+            call pio_setframe(varid, int(1,kind=PIO_OFFSET))
+            call pio_write_darray(File, varid, iodesc4ds,&
+                                  workr4, status, fillval=spval_dbl)
+         endif
+      enddo ! num_avail_hist_fields_4Ds
+      deallocate(workr4)
+
 !     similarly for num_avail_hist_fields_4Db (define workr4b, iodesc4db)
 
 

@@ -48,7 +48,7 @@ module ice_comp_esmf
   use ice_constants,   only : c0, c1, spval_dbl, rad_to_deg, radius, secday
   use ice_communicate, only : my_task, master_task, MPI_COMM_ICE
   use ice_calendar,    only : istep, istep1, force_restart_now, write_ic,&
-                              idate, mday, time, month, daycal,          &
+                              idate, idate0, mday, time, month, daycal,  &
 		              sec, dt, dt_dyn, calendar,                 &
                               calendar_type, nextsw_cday, days_per_year, &
                               nyr, new_year, time2sec, year_init
@@ -354,7 +354,9 @@ end subroutine
           write(nu_diag,*) trim(subname)//' resetting idate to match sync clock'
        end if
 
-       idate = curr_ymd - (year_init*10000)      ! adjust for year_init
+       idate0 = curr_ymd
+       idate = curr_ymd
+
        if (idate < 0) then
           write(nu_diag,*) trim(subname),' ERROR curr_ymd,year_init =',curr_ymd,year_init
           write(nu_diag,*) trim(subname),' ERROR idate lt zero',idate

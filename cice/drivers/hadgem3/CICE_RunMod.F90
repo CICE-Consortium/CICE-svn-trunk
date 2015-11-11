@@ -286,11 +286,11 @@
           fswthru_ai, fhocn, fswthru, scale_factor, &
           swvdr, swidr, swvdf, swidf, Tf, Tair, Qa, strairxT, strairyt, &
           fsens, flat, fswabs, flwout, evap, Tref, Qref, faero_ocn, &
-          fsurfn_f, flatn_f, scale_fluxes, frzmlt_init, frzmlt
+          fsurfn_f, flatn_f, scale_fluxes, frzmlt_init, frzmlt, snowfrac
       use ice_grid, only: tmask
       use ice_ocean, only: oceanmixed_ice, ocean_mixed_layer
       use ice_shortwave, only: alvdfn, alidfn, alvdrn, alidrn, &
-                               albicen, albsnon, albpndn, apeffn
+                               albicen, albsnon, albpndn, apeffn, snowfracn
       use ice_state, only: aicen, aice, aice_init, nbtrcr
       use ice_therm_shared, only: calc_Tsfc
       use ice_timers, only: timer_couple, ice_timer_start, ice_timer_stop
@@ -309,7 +309,9 @@
          k           , & ! tracer index
          ilo,ihi,jlo,jhi ! beginning and end of physical domain
 
-      real (kind=dbl_kind) :: cszn ! counter for history averaging
+      real (kind=dbl_kind) :: &
+         cszn        , & ! counter for history averaging
+         netsw           ! flag for shortwave radiation presence
 
       !-----------------------------------------------------------------
       ! Save current value of frzmlt for diagnostics.
@@ -342,10 +344,12 @@
             albsno(i,j,iblk) = c0
             albpnd(i,j,iblk) = c0
             apeff_ai(i,j,iblk) = c0
+            snowfrac(i,j,iblk) = c0
 
             ! for history averaging
             cszn = c0
-            if (coszen(i,j,iblk) > puny) cszn = c1
+            netsw = swvdr(i,j,iblk)+swidr(i,j,iblk)+swvdf(i,j,iblk)+swidf(i,j,iblk)
+            if (netsw > puny) cszn = c1
             do n = 1, nstreams
                albcnt(i,j,iblk,n) = albcnt(i,j,iblk,n) + cszn
             enddo
@@ -374,6 +378,8 @@
 
             apeff_ai(i,j,iblk) = apeff_ai(i,j,iblk) &       ! for history
                + apeffn(i,j,n,iblk)*aicen(i,j,n,iblk)
+            snowfrac(i,j,iblk) = snowfrac(i,j,iblk) &       ! for history
+               + snowfracn(i,j,n,iblk)*aicen(i,j,n,iblk)
          enddo
          enddo
          enddo

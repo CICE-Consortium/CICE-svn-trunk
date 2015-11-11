@@ -197,7 +197,7 @@
       ! dynamics, transport, ridging
       !-----------------------------------------------------------------
 
-         if (.not.prescribed_ice) then
+         if (.not.prescribed_ice .and. kdyn>0) then
          do k = 1, ndtd
             call step_dynamics (dt_dyn, ndtd)
          enddo
@@ -281,17 +281,18 @@
       use ice_constants, only: c0, c1, puny, rhofresh
       use ice_domain_size, only: ncat
       use ice_flux, only: alvdf, alidf, alvdr, alidr, albice, albsno, &
-          albpnd, albcnt, apeff_ai, coszen, fpond, fresh, &
+          albpnd, albcnt, apeff_ai, coszen, fpond, fresh, l_mpond_fresh, &
           alvdf_ai, alidf_ai, alvdr_ai, alidr_ai, fhocn_ai, &
           fresh_ai, fsalt_ai, fsalt, &
           fswthru_ai, fhocn, fswthru, scale_factor, &
           swvdr, swidr, swvdf, swidf, Tf, Tair, Qa, strairxT, strairyt, &
           fsens, flat, fswabs, flwout, evap, Tref, Qref, Uref, faero_ocn, &
-          fsurfn_f, flatn_f, scale_fluxes, frzmlt_init, frzmlt, wind
+          fsurfn_f, flatn_f, scale_fluxes, frzmlt_init, frzmlt, wind, &
+          snowfrac
       use ice_grid, only: tmask
       use ice_ocean, only: oceanmixed_ice, ocean_mixed_layer
       use ice_shortwave, only: alvdfn, alidfn, alvdrn, alidrn, &
-                               albicen, albsnon, albpndn, apeffn
+                               albicen, albsnon, albpndn, apeffn, snowfracn
       use ice_state, only: aicen, aice, aice_init, nbtrcr
       use ice_therm_shared, only: calc_Tsfc
       use ice_timers, only: timer_couple, ice_timer_start, ice_timer_stop
@@ -307,8 +308,10 @@
          i,j         , & ! horizontal indices
          k               ! tracer index
 
-      real (kind=dbl_kind) :: cszn ! counter for history averaging
-
+      real (kind=dbl_kind) :: &
+         cszn        , & ! counter for history averaging
+         netsw           ! flag for shortwave radiation presence
+ 
       !-----------------------------------------------------------------
       ! Save current value of frzmlt for diagnostics.
       ! Update mixed layer with heat and radiation from ice.
@@ -340,10 +343,12 @@
             albsno(i,j,iblk) = c0
             albpnd(i,j,iblk) = c0
             apeff_ai(i,j,iblk) = c0
+            snowfrac(i,j,iblk) = c0
 
             ! for history averaging
             cszn = c0
-            if (coszen(i,j,iblk) > puny) cszn = c1
+            netsw = swvdr(i,j,iblk)+swidr(i,j,iblk)+swvdf(i,j,iblk)+swidf(i,j,iblk)
+            if (netsw > puny) cszn = c1
             do n = 1, nstreams
                albcnt(i,j,iblk,n) = albcnt(i,j,iblk,n) + cszn
             enddo
@@ -372,6 +377,8 @@
 
             apeff_ai(i,j,iblk) = apeff_ai(i,j,iblk) &       ! for history
                + apeffn(i,j,n,iblk)*aicen(i,j,n,iblk)
+            snowfrac(i,j,iblk) = snowfrac(i,j,iblk) &       ! for history
+               + snowfracn(i,j,n,iblk)*aicen(i,j,n,iblk)
          enddo
          enddo
          enddo
@@ -383,8 +390,10 @@
       ! reduce fresh by fpond for coupling
       !-----------------------------------------------------------------
 
-            fpond(i,j,iblk) = fpond(i,j,iblk) * rhofresh/dt
-            fresh(i,j,iblk) = fresh(i,j,iblk) - fpond(i,j,iblk)
+            if (l_mpond_fresh) then
+               fpond(i,j,iblk) = fpond(i,j,iblk) * rhofresh/dt
+               fresh(i,j,iblk) = fresh(i,j,iblk) - fpond(i,j,iblk)
+            endif
 
       !----------------------------------------------------------------
       ! Store grid box mean albedos and fluxes before scaling by aice

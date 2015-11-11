@@ -144,10 +144,10 @@
          ucstr = 'area: uarea'          , & ! vcellmeas for U cell quantities
          tstr2D  = 'TLON TLAT time'     , & ! vcoord for T cell quantities, 2D
          ustr2D  = 'ULON ULAT time'     , & ! vcoord for U cell quantities, 2D
-         tstr3Dz = 'TLON TLAT VGRD time', & ! vcoord for T cell quantities, 3D
-         ustr3Dz = 'ULON ULAT VGRD time', & ! vcoord for U cell quantities, 3D
-         tstr3Dc = 'TLON TLAT NCAT time', & ! vcoord for T cell quantities, 3D
-         ustr3Dc = 'ULON ULAT NCAT time', & ! vcoord for U cell quantities, 3D
+         tstr3Dz = 'TLON TLAT VGRDi time', & ! vcoord for T cell quantities, 3D
+         ustr3Dz = 'ULON ULAT VGRDi time', & ! vcoord for U cell quantities, 3D
+         tstr3Dc = 'TLON TLAT NCAT  time', & ! vcoord for T cell quantities, 3D
+         ustr3Dc = 'ULON ULAT NCAT  time', & ! vcoord for U cell quantities, 3D
          tstr3Db = 'TLON TLAT VGRDb time', & ! vcoord for T cell quantities, 3D
          ustr3Db = 'ULON ULAT VGRDb time', & ! vcoord for U cell quantities, 3D
 
@@ -184,10 +184,12 @@
       character (len=max_nstrm), public :: &
 !          f_example   = 'md', &
            f_hi        = 'm', f_hs         = 'm', &
+           f_snowfrac  = 'x', f_snowfracn  = 'x', &
            f_Tsfc      = 'm', f_aice       = 'm', &
            f_uvel      = 'm', f_vvel       = 'm', &
            f_uatm      = 'm', f_vatm       = 'm', &
            f_fswdn     = 'm', f_flwdn      = 'm', &
+           f_fswup     = 'm', &
            f_snow      = 'm', f_snow_ai    = 'm', &
            f_rain      = 'm', f_rain_ai    = 'm', &
            f_sst       = 'm', f_sss        = 'm', &
@@ -196,8 +198,10 @@
            f_fswfac    = 'm', f_fswint_ai  = 'x', &
            f_fswabs    = 'm', f_fswabs_ai  = 'm', &
            f_albsni    = 'm', &
-           f_alvdr     = 'm', f_alidr      = 'm', &
-           f_alvdf     = 'm', f_alidf      = 'm', &
+           f_alvdr     = 'x', f_alidr      = 'x', &
+           f_alvdf     = 'x', f_alidf      = 'x', &
+           f_alvdr_ai  = 'm', f_alidr_ai   = 'm', &
+           f_alvdf_ai  = 'm', f_alidf_ai   = 'm', &
            f_albice    = 'm', f_albsno     = 'm', &
            f_albpnd    = 'm', f_coszen     = 'm', &
            f_flat      = 'm', f_flat_ai    = 'm', &
@@ -229,25 +233,25 @@
            f_iage      = 'm', f_FY         = 'm', &
            f_hisnap    = 'm', f_aisnap     = 'm', &
            f_aicen     = 'x', f_vicen      = 'x', &
-           f_vsnon     = 'x',                     &
+           f_vsnon     = 'x', &
            f_trsig     = 'm', f_icepresent = 'm', &
            f_fsurf_ai  = 'm', f_fcondtop_ai= 'm', &
            f_fmeltt_ai = 'm',                     &
            f_fsurfn_ai = 'x' ,f_fcondtopn_ai='x', &
            f_fmelttn_ai= 'x', f_flatn_ai   = 'x', &
-           f_fsensn_ai = 'x',                     &
-!          f_field3dz  = 'x',                     &
+           f_fsensn_ai = 'x', &
+!          f_field3dz  = 'x', &
            f_keffn_top = 'x', &
            f_Tinz      = 'x', f_Sinz       = 'x', &
            f_Tsnz      = 'x', &
            f_a11       = 'x', f_a12        = 'x', & 
            f_e11       = 'x', f_e12        = 'x', & 
-           f_e22       = 'x',			  & 
+           f_e22       = 'x', &
            f_s11       = 'x', f_s12        = 'x', & 
-           f_s22       = 'x',		          & 
-           f_yieldstress11       = 'x', 	  & 
-           f_yieldstress12       = 'x',           & 
-           f_yieldstress22       = 'x'
+           f_s22       = 'x', &
+           f_yieldstress11  = 'x', &
+           f_yieldstress12  = 'x', &
+           f_yieldstress22  = 'x'
 
       !---------------------------------------------------------------
       ! namelist variables
@@ -265,10 +269,12 @@
            f_VGRDb    , &
 !          f_example  , &
            f_hi,        f_hs       , &
+           f_snowfrac,  f_snowfracn, &
            f_Tsfc,      f_aice     , &
            f_uvel,      f_vvel     , &
            f_uatm,      f_vatm     , &
            f_fswdn,     f_flwdn    , &
+           f_fswup,     &
            f_snow,      f_snow_ai  , &     
            f_rain,      f_rain_ai  , &
            f_sst,       f_sss      , &
@@ -276,16 +282,18 @@
            f_sice,      f_frzmlt   , &
            f_fswfac,    f_fswint_ai, &
            f_fswabs,    f_fswabs_ai, &
-           f_albsni                , &
+           f_albsni,    &
            f_alvdr,     f_alidr    , &
            f_alvdf,     f_alidf    , &
+           f_alvdr_ai,  f_alidr_ai , &
+           f_alvdf_ai,  f_alidf_ai , &
            f_albice,    f_albsno   , &
            f_albpnd,    f_coszen   , &
            f_flat,      f_flat_ai  , &
            f_fsens,     f_fsens_ai , &
            f_flwup,     f_flwup_ai , &
            f_evap,      f_evap_ai  , &
-           f_Tair                  , &
+           f_Tair,      &
            f_Tref,      f_Qref     , &
            f_congel,    f_frazil   , &
            f_snoice,    f_dsnow    , &
@@ -310,24 +318,24 @@
            f_iage,      f_FY       , &
            f_hisnap,    f_aisnap   , &
            f_aicen,     f_vicen    , &
-           f_vsnon,                  &
+           f_vsnon,     &
            f_trsig,     f_icepresent,&
            f_fsurf_ai,  f_fcondtop_ai,&
            f_fmeltt_ai, &
            f_fsurfn_ai,f_fcondtopn_ai,&
            f_fmelttn_ai,f_flatn_ai,  &
-           f_fsensn_ai,              &
+           f_fsensn_ai, &
 !          f_field3dz,  &
            f_keffn_top, &
            f_Tinz,      f_Sinz,      &
-           f_Tsnz,  &
-           f_a11, 	f_a12 	   , &
-           f_e11, 	f_e12	   , &
-           f_e22                   , &
-           f_s11, 	f_s12	   , &
-           f_s22                   , &
-           f_yieldstress11         , &	
-           f_yieldstress12	   , &
+           f_Tsnz,      &
+           f_a11,       f_a12,       &
+           f_e11,       f_e12,       &
+           f_e22,       &
+           f_s11,       f_s12,       &
+           f_s22,       &
+           f_yieldstress11, &	
+           f_yieldstress12, &
            f_yieldstress22
 
       !---------------------------------------------------------------
@@ -361,21 +369,25 @@
       integer (kind=int_kind), dimension(max_nstrm), public :: &
 !          n_example    , &
            n_hi         , n_hs         , &
+           n_snowfrac   , n_snowfracn  , &
            n_Tsfc       , n_aice       , &
            n_uvel       , n_vvel       , &
            n_uatm       , n_vatm       , &
            n_sice       , &
            n_fswdn      , n_flwdn      , &
+           n_fswup      , &
            n_snow       , n_snow_ai    , &
            n_rain       , n_rain_ai    , &
            n_sst        , n_sss        , &
            n_uocn       , n_vocn       , &
            n_frzmlt     , n_fswfac     , &
-           n_fswint_ai,                  &
+           n_fswint_ai  , &
            n_fswabs     , n_fswabs_ai  , &
            n_albsni     , &
            n_alvdr      , n_alidr      , &
            n_alvdf      , n_alidf      , &
+           n_alvdr_ai   , n_alidr_ai   , &
+           n_alvdf_ai   , n_alidf_ai   , &
            n_albice     , n_albsno     , &
            n_albpnd     , n_coszen     , &
            n_flat       , n_flat_ai    , &
@@ -390,7 +402,7 @@
            n_meltb      , n_meltl      , &
            n_fresh      , n_fresh_ai   , &
            n_fsalt      , n_fsalt_ai   , &
-           n_vsnon,                        &
+           n_vsnon      , &
            n_fhocn      , n_fhocn_ai   , &
            n_fswthru    , n_fswthru_ai , &
            n_strairx    , n_strairy    , &
@@ -419,13 +431,13 @@
 !          n_field3dz    , &
            n_keffn_top   , &
            n_Tinz        , n_Sinz      , &
-           n_Tsnz, &
-	   n_a11	 , n_a12	, &
-	   n_e11	 , n_e12 	, &
-	   n_e22	 , &
-	   n_s11	 , n_s12	, &
-	   n_s22	 , &
-	   n_yieldstress11, n_yieldstress12,  &
+           n_Tsnz        , &
+	   n_a11         , n_a12       , &
+	   n_e11         , n_e12       , &
+	   n_e22         , &
+	   n_s11         , n_s12       , &
+	   n_s22         , &
+	   n_yieldstress11, n_yieldstress12, &
 	   n_yieldstress22
 
       interface accum_hist_field ! generic interface
@@ -453,6 +465,7 @@
       integer (kind=int_kind), intent(in) :: ns
 
       integer (kind=int_kind) :: iyear, imonth, iday, isec
+      character (len=1) :: cstream
 
         iyear = nyr + year_init - 1 ! set year_init=1 in ice_in to get iyear=nyr
         imonth = month
@@ -484,28 +497,34 @@
           endif
          endif
 
+         cstream = ''
+!echmod ! this was implemented for CESM but it breaks post-processing software
+!echmod ! of other groups (including RASM which uses CCSMCOUPLED)
+!echmod         if (ns > 1) write(cstream,'(i1.1)') ns-1
+
          if (histfreq(ns) == '1') then ! instantaneous, write every dt
            write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
-            history_file(1:lenstr(history_file)),'_inst.', &
+            history_file(1:lenstr(history_file))//trim(cstream),'_inst.', &
              iyear,'-',imonth,'-',iday,'-',sec,'.',suffix
 
          elseif (hist_avg) then    ! write averaged data
 
           if (histfreq(ns) == 'd'.or.histfreq(ns) == 'D') then     ! daily
            write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,a)')  &
-            history_file(1:lenstr(history_file)), &
+            history_file(1:lenstr(history_file))//trim(cstream), &
              '.',iyear,'-',imonth,'-',iday,'.',suffix
           elseif (histfreq(ns) == 'h'.or.histfreq(ns) == 'H') then ! hourly
            write(ncfile,'(a,a,i2.2,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a,a)')  &
-            history_file(1:lenstr(history_file)),'_',histfreq_n(ns),'h.', &
-             iyear,'-',imonth,'-',iday,'-',sec,'.',suffix
+            history_file(1:lenstr(history_file))//trim(cstream),'_', &
+             histfreq_n(ns),'h.',iyear,'-',imonth,'-',iday,'-',sec,'.',suffix
           elseif (histfreq(ns) == 'm'.or.histfreq(ns) == 'M') then ! monthly
            write(ncfile,'(a,a,i4.4,a,i2.2,a,a)')  &
-            history_file(1:lenstr(history_file)),'.', &
+            history_file(1:lenstr(history_file))//trim(cstream),'.', &
              iyear,'-',imonth,'.',suffix
           elseif (histfreq(ns) == 'y'.or.histfreq(ns) == 'Y') then ! yearly
            write(ncfile,'(a,a,i4.4,a,a)') &
-            history_file(1:lenstr(history_file)),'.', iyear,'.',suffix
+            history_file(1:lenstr(history_file))//trim(cstream),'.', &
+             iyear,'.',suffix
           endif
 
          else                     ! instantaneous with histfreq > dt
@@ -576,7 +595,7 @@
                num_avail_hist_fields_2D  = num_avail_hist_fields_2D + 1
             elseif (vcoord(11:14) == 'NCAT' .and. vcoord(16:19) == 'time') then
                num_avail_hist_fields_3Dc = num_avail_hist_fields_3Dc + 1
-            elseif (vcoord(11:15) == 'VGRDi' .and. vcoord(17:20) == 'time') then
+            elseif (vcoord(11:14) == 'VGRDi' .and. vcoord(16:19) == 'time') then
                num_avail_hist_fields_3Dz = num_avail_hist_fields_3Dz + 1
             elseif (vcoord(11:15) == 'VGRDb' .and. vcoord(17:20) == 'time') then
                num_avail_hist_fields_3Db = num_avail_hist_fields_3Db + 1

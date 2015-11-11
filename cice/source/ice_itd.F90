@@ -151,7 +151,9 @@
             hin_max(0) = c0     ! minimum ice thickness, m
          else
             ! delta function itd category limits
+#ifndef CCSMCOUPLED
             hi_min = p1    ! minimum ice thickness allowed (m) for thermo
+#endif
             cc1 = max(1.1_dbl_kind/rncat,c1*hi_min)
             cc2 = c25*cc1
             cc3 = 2.25_dbl_kind
@@ -445,7 +447,7 @@
       call compute_tracers (nx_block,   ny_block,     &
                             icells, indxi,   indxj,   &
                             ntrcr,      trcr_depend,  &
-                            atrcr(:,:), aice(:,:),    &
+                            atrcr,      aice(:,:),    &
                             vice (:,:), vsno(:,:),    &
                             trcr(:,:,:))
 

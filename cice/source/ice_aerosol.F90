@@ -280,22 +280,17 @@
             ar = c1/aicen(i,j)
             hs = vsnon(i,j)*ar
             hi = vicen(i,j)*ar
-            dhs_melts  = -melts(i,j)*ar
-            dhi_snoice = snoice(i,j)*ar
-            dhs_snoice = dhi_snoice*rhoi/rhos
-            dhi_meltt  = -meltt(i,j)*ar
-            dhi_meltb  = -meltb(i,j)*ar
-            dhi_congel = congel(i,j)*ar
          else ! ice disappeared during time step
             hs = vsnon(i,j)/aice_old(i,j)
             hi = vicen(i,j)/aice_old(i,j)
-            dhs_melts  = -melts(i,j)/aice_old(i,j)
-            dhi_snoice = snoice(i,j)/aice_old(i,j)
-            dhs_snoice = dhi_snoice*rhoi/rhos
-            dhi_meltt  = -meltt(i,j)/aice_old(i,j)
-            dhi_meltb  = -meltb(i,j)/aice_old(i,j)
-            dhi_congel = congel(i,j)/aice_old(i,j)
          endif
+
+         dhs_melts  = -melts(i,j)
+         dhi_snoice = snoice(i,j)
+         dhs_snoice = dhi_snoice*rhoi/rhos
+         dhi_meltt  = -meltt(i,j)
+         dhi_meltb  = -meltb(i,j)
+         dhi_congel = congel(i,j)
 
          dhs_evap = hs - (hs_old + dhs_melts - dhs_snoice &
                                  + fsnow(i,j)/rhos*dt)

@@ -269,7 +269,7 @@
                             + alidr(i,j,iblk)*awtidr &
                             + alvdf(i,j,iblk)*awtvdf &
                             + alidf(i,j,iblk)*awtidf
-            if (coszen(i,j,iblk) > puny) then
+            if (work1(i,j,iblk) > puny) then
                work2(i,j,iblk) = tarean(i,j,iblk)
             else
                work2(i,j,iblk) = c0
@@ -294,7 +294,7 @@
       do iblk = 1, nblocks
          do j = 1, ny_block
          do i = 1, nx_block
-            if (coszen(i,j,iblk) > puny) then
+            if (work1(i,j,iblk) > puny) then
                work2(i,j,iblk) = tareas(i,j,iblk)
             else
                work2(i,j,iblk) = c0

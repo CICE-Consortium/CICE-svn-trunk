@@ -45,7 +45,7 @@ module ice_comp_mct
   use ice_constants,   only : c0, c1, spval_dbl, rad_to_deg, radius, secday
   use ice_communicate, only : my_task, master_task, MPI_COMM_ICE
   use ice_calendar,    only : istep, istep1, force_restart_now, write_ic,&
-                              idate, mday, time, month, daycal,          &
+                              idate, idate0, mday, time, month, daycal,  &
 		              sec, dt, dt_dyn, calendar,                 &
                               calendar_type, nextsw_cday, days_per_year, &
                               nyr, new_year, time2sec, year_init
@@ -291,7 +291,9 @@ contains
                trim(subname),' resetting idate to match sync clock'
        end if
 
-       idate = curr_ymd - (year_init*10000)      ! adjust for year_init
+       idate0 = curr_ymd
+       idate = curr_ymd
+
        if (idate < 0) then
           write(nu_diag,*) trim(subname),' ERROR curr_ymd,year_init =',curr_ymd,year_init
           write(nu_diag,*) trim(subname),' ERROR idate lt zero',idate
@@ -789,6 +791,7 @@ contains
     allocate(work_dom(lsize)) 
     work_dom(:) = 0.0_dbl_kind
 
+    data(:) = -9999.0_R8 
     n=0
     do iblk = 1, nblocks
        this_block = get_block(blocks_ice(iblk),iblk)         
@@ -806,6 +809,7 @@ contains
     enddo       !iblk
     call mct_gGrid_importRattr(dom_i,"lon",data,lsize) 
 
+    data(:) = -9999.0_R8 
     n=0
     do iblk = 1, nblocks
        this_block = get_block(blocks_ice(iblk),iblk)         
@@ -823,6 +827,7 @@ contains
     enddo      !iblk
     call mct_gGrid_importRattr(dom_i,"lat",data,lsize) 
 
+    data(:) = -9999.0_R8 
     n=0
     do iblk = 1, nblocks
        this_block = get_block(blocks_ice(iblk),iblk)         
@@ -840,6 +845,7 @@ contains
     enddo      !iblk
     call mct_gGrid_importRattr(dom_i,"area",data,lsize) 
 
+    data(:) = 0.0_R8
     n=0
     do iblk = 1, nblocks
        this_block = get_block(blocks_ice(iblk),iblk)         
@@ -857,6 +863,7 @@ contains
     enddo      !iblk
     call mct_gGrid_importRattr(dom_i,"mask",data,lsize) 
 
+    data(:) = 0.0_R8
     n=0
     do iblk = 1, nblocks
        this_block = get_block(blocks_ice(iblk),iblk)         

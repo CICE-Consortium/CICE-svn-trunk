@@ -1060,6 +1060,7 @@
          write(nu_diag,1020)'nt_qsno = ', nt_qsno
          write(nu_diag,*)' '
          write(nu_diag,1020)'nilyr', nilyr
+         write(nu_diag,1020)'nslyr', nslyr
          write(nu_diag,*)' '
 
  1000    format (a30,2x,f9.2)  ! a30 to align formatted, unformatted statements

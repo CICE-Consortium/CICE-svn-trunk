@@ -232,8 +232,10 @@
 
       idate = (nyr+year_init-1)*10000 + month*100 + mday ! date (yyyymmdd) 
 
+#ifndef CCSMCOUPLED
       if (istep >= npt+1)  stop_now = 1
       if (istep == npt .and. dump_last) write_restart = 1 ! last timestep
+#endif
       if (nyr   /= nyrp)   new_year = .true.
       if (month /= monthp) new_month = .true.
       if (mday  /= mdayp)  new_day = .true.

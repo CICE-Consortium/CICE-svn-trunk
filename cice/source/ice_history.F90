@@ -203,6 +203,8 @@
 !     call broadcast_scalar (f_example, master_task)
       call broadcast_scalar (f_hi, master_task)
       call broadcast_scalar (f_hs, master_task)
+      call broadcast_scalar (f_snowfrac, master_task)
+      call broadcast_scalar (f_snowfracn, master_task)
       call broadcast_scalar (f_Tsfc, master_task)
       call broadcast_scalar (f_aice, master_task)
       call broadcast_scalar (f_uvel, master_task)
@@ -211,6 +213,7 @@
       call broadcast_scalar (f_vatm, master_task)
       call broadcast_scalar (f_sice, master_task)
       call broadcast_scalar (f_fswdn, master_task)
+      call broadcast_scalar (f_fswup, master_task)
       call broadcast_scalar (f_flwdn, master_task)
       call broadcast_scalar (f_snow, master_task)
       call broadcast_scalar (f_snow_ai, master_task)
@@ -230,6 +233,10 @@
       call broadcast_scalar (f_alidr, master_task)
       call broadcast_scalar (f_alvdf, master_task)
       call broadcast_scalar (f_alidf, master_task)
+      call broadcast_scalar (f_alvdr_ai, master_task)
+      call broadcast_scalar (f_alidr_ai, master_task)
+      call broadcast_scalar (f_alvdf_ai, master_task)
+      call broadcast_scalar (f_alidf_ai, master_task)
       call broadcast_scalar (f_albice, master_task)
       call broadcast_scalar (f_albsno, master_task)
       call broadcast_scalar (f_albpnd, master_task)
@@ -342,6 +349,11 @@
              "snow volume per unit grid cell area", c1, c0,       &
              ns1, f_hs)
 
+         call define_hist_field(n_snowfrac,"snowfrac","1",tstr2D, tcstr, &
+             "grid cell mean snow fraction",                     &
+             "snow fraction per unit grid cell area", c1, c0,       &
+             ns1, f_snowfrac)
+
          call define_hist_field(n_Tsfc,"Tsfc","C",tstr2D, tcstr,    &
              "snow/ice surface temperature",                      &
              "averaged with Tf if no ice is present", c1, c0,     &
@@ -381,6 +393,11 @@
              "down solar flux",                                      &
              "positive downward", c1, c0,                            &
              ns1, f_fswdn)
+      
+         call define_hist_field(n_fswup,"fswup","W/m^2",tstr2D, tcstr, &
+             "upward solar flux",                                      &
+             "positive upward", c1, c0,                            &
+             ns1, f_fswup)
       
          call define_hist_field(n_flwdn,"flwdn","W/m^2",tstr2D, tcstr, &
              "down longwave flux",                                   &
@@ -452,11 +469,6 @@
              "weighted by ice area", c1, c0,                                 &
              ns1, f_fswabs_ai)
       
-!         call define_hist_field(n_albsni,"albsni","%",tstr2D, tcstr, &
-!             "snow/ice broad band albedo",                         &
-!             "scaled (divided) by aice", c100, c0,                 &
-!             ns1, f_albsni)
-      
          call define_hist_field(n_albsni,"albsni","%",tstr2D, tcstr, &
              "snow/ice broad band albedo",                         &
              "averaged for coszen>0, weighted by aice", c100, c0,  &
@@ -481,6 +493,26 @@
              "near IR diffuse albedo",                            &
              "scaled (divided) by aice", c100, c0,               &
              ns1, f_alidf)
+
+         call define_hist_field(n_alvdr_ai,"alvdr_ai","%",tstr2D, tcstr, &
+             "visible direct albedo",                            &
+             " ", c100, c0,               &
+             ns1, f_alvdr_ai)
+      
+         call define_hist_field(n_alidr_ai,"alidr_ai","%",tstr2D, tcstr, &
+             "near IR direct albedo",                            &
+             " ", c100, c0,               &
+             ns1, f_alidr_ai)
+
+         call define_hist_field(n_alvdf_ai,"alvdf_ai","%",tstr2D, tcstr, &
+             "visible diffuse albedo",                            &
+             " ", c100, c0,               &
+             ns1, f_alvdf_ai)
+      
+         call define_hist_field(n_alidf_ai,"alidf_ai","%",tstr2D, tcstr, &
+             "near IR diffuse albedo",                            &
+             " ", c100, c0,               &
+             ns1, f_alidf_ai)
 
          call define_hist_field(n_albice,"albice","%",tstr2D, tcstr, &
              "bare ice albedo",                                    &
@@ -892,6 +924,11 @@
               "snow depth on ice, categories","volume per unit area of snow", c1, c0, &           
               ns1, f_vsnon)
 
+           call define_hist_field(n_snowfracn,"snowfracn","1",tstr3Dc, tcstr, &
+             "category mean snow fraction",                     &
+             "snow fraction per unit grid cell area", c1, c0,       &
+              ns1, f_snowfracn)
+
            call define_hist_field(n_fsurfn_ai,"fsurfn_ai","W/m^2",tstr3Dc, tcstr, & 
               "net surface heat flux, categories","weighted by ice area", c1, c0, &            
               ns1, f_fsurfn_ai)
@@ -988,10 +1025,6 @@
        if (f_Tsnz   (1:1) /= 'x') then
             if (allocated(Tsnz4d)) deallocate(Tsnz4d)
             allocate(Tsnz4d(nx_block,ny_block,nzslyr,ncat_hist))
-       endif
-       if (f_Sinz   (1:1) /= 'x') then
-            if (allocated(Sinz4d)) deallocate(Sinz4d)
-            allocate(Sinz4d(nx_block,ny_block,nzilyr,ncat_hist))
        endif
 
       ! other 4D history variables
@@ -1116,8 +1149,9 @@
       subroutine accum_hist (dt)
 
       use ice_blocks, only: block, get_block, nx_block, ny_block
+      use ice_fileunits, only: nu_diag
       use ice_constants, only: c0, c1, p25, puny, secday, depressT, &
-          awtvdr, awtidr, awtvdf, awtidf, Lfresh, rhos, cp_ice, spval
+          awtvdr, awtidr, awtvdf, awtidf, Lfresh, rhos, cp_ice, spval, hs_min
       use ice_domain, only: blocks_ice, nblocks
       use ice_grid, only: tmask, lmask_n, lmask_s
       use ice_calendar, only: new_year, write_history, &
@@ -1139,8 +1173,10 @@
           stressp_2, stressm_2, stress12_2, &
           stressp_3, stressm_3, stress12_3, &
           stressp_4, stressm_4, stress12_4, sig1, sig2, &
-          mlt_onset, frz_onset, dagedtt, dagedtd, fswint_ai, keffn_top
+          mlt_onset, frz_onset, dagedtt, dagedtd, fswint_ai, keffn_top, &
+          snowfrac, alvdr_ai, alvdf_ai, alidr_ai, alidf_ai
       use ice_atmo, only: formdrag
+      use ice_meltpond_cesm, only: hs0
       use ice_history_shared ! almost everything
       use ice_history_write, only: ice_write_hist
       use ice_history_bgc, only: accum_hist_bgc
@@ -1148,6 +1184,7 @@
       use ice_history_pond, only: accum_hist_pond
       use ice_history_drag, only: accum_hist_drag
       use ice_state ! almost everything
+      use ice_shortwave, only: snowfracn
       use ice_therm_shared, only: calculate_Tin_from_qin, Tmlt, ktherm
       use ice_therm_mushy, only: temperature_mush, temperature_snow
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_readwrite
@@ -1170,6 +1207,7 @@
 
       real (kind=dbl_kind) :: & 
            qn                , & ! temporary variable for enthalpy
+           hs                , & ! temporary variable for snow depth
            Tmlts                 !  temporary variable for melting temperature
 
       real (kind=dbl_kind), dimension (nx_block,ny_block) :: &
@@ -1242,7 +1280,7 @@
       !---------------------------------------------------------------
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block, &
-      !$OMP                     k,n,qn,ns,worka,workb)
+      !$OMP             k,n,qn,ns,hs,worka,workb,Tinz4d,Sinz4d,Tsnz4d)
       do iblk = 1, nblocks
          this_block = get_block(blocks_ice(iblk),iblk)         
          ilo = this_block%ilo
@@ -1250,14 +1288,14 @@
          jlo = this_block%jlo
          jhi = this_block%jhi
 
-         workb(:,:) = aice_init(:,:,iblk)
-
 !        if (f_example(1:1) /= 'x') &
 !            call accum_hist_field(n_example,iblk, vice(:,:,iblk), a2D)
          if (f_hi     (1:1) /= 'x') &
              call accum_hist_field(n_hi,     iblk, vice(:,:,iblk), a2D)
          if (f_hs     (1:1) /= 'x') &
              call accum_hist_field(n_hs,     iblk, vsno(:,:,iblk), a2D)
+         if (f_snowfrac(1:1) /= 'x') &
+             call accum_hist_field(n_snowfrac, iblk, snowfrac(:,:,iblk), a2D)
          if (f_Tsfc   (1:1) /= 'x') &
              call accum_hist_field(n_Tsfc,   iblk, trcr(:,:,nt_Tsfc,iblk), a2D)
          if (f_aice   (1:1) /= 'x') &
@@ -1286,6 +1324,12 @@
 
          if (f_fswdn  (1:1) /= 'x') &
              call accum_hist_field(n_fswdn,  iblk, fsw(:,:,iblk), a2D)
+
+         workb(:,:) = aice_init(:,:,iblk)
+
+         if (f_fswup(1:1) /= 'x') &
+            call accum_hist_field(n_fswup, iblk, &
+                 (fsw(:,:,iblk)-fswabs(:,:,iblk)*workb(:,:)), a2D)
          if (f_flwdn  (1:1) /= 'x') &
              call accum_hist_field(n_flwdn,  iblk, flw(:,:,iblk), a2D)
          if (f_snow   (1:1) /= 'x') &
@@ -1324,11 +1368,7 @@
                                   (awtvdr*alvdr(:,:,iblk) &
                                  + awtidr*alidr(:,:,iblk) &
                                  + awtvdf*alvdf(:,:,iblk) &
-                                 + awtidf*alidf(:,:,iblk))*aice(:,:,iblk), a2D)
-!                                              awtvdr*alvdr(:,:,iblk) &
-!                                            + awtidr*alidr(:,:,iblk) &
-!                                            + awtvdf*alvdf(:,:,iblk) &
-!                                            + awtidf*alidf(:,:,iblk), a2D)
+                                 + awtidf*alidf(:,:,iblk))*workb(:,:), a2D)
          if (f_alvdr  (1:1) /= 'x') &
              call accum_hist_field(n_alvdr,  iblk, alvdr(:,:,iblk), a2D)
          if (f_alidr  (1:1) /= 'x') &
@@ -1337,6 +1377,14 @@
              call accum_hist_field(n_alvdf,  iblk, alvdf(:,:,iblk), a2D)
          if (f_alidf  (1:1) /= 'x') &
              call accum_hist_field(n_alidf,  iblk, alidf(:,:,iblk), a2D)
+         if (f_alvdr_ai  (1:1) /= 'x') &
+             call accum_hist_field(n_alvdr_ai,  iblk, alvdr_ai(:,:,iblk), a2D)
+         if (f_alidr_ai  (1:1) /= 'x') &
+             call accum_hist_field(n_alidr_ai,  iblk, alidr_ai(:,:,iblk), a2D)
+         if (f_alvdf_ai  (1:1) /= 'x') &
+             call accum_hist_field(n_alvdf_ai,  iblk, alvdf_ai(:,:,iblk), a2D)
+         if (f_alidf_ai  (1:1) /= 'x') &
+             call accum_hist_field(n_alidf_ai,  iblk, alidf_ai(:,:,iblk), a2D)
 
          if (f_albice (1:1) /= 'x') &
              call accum_hist_field(n_albice, iblk, albice(:,:,iblk), a2D)
@@ -1482,6 +1530,9 @@
          if (f_vsnon   (1:1) /= 'x') &
              call accum_hist_field(n_vsnon-n2D, iblk, ncat_hist, &
                                    vsnon(:,:,1:ncat_hist,iblk), a3Dc)
+         if (f_snowfracn(1:1) /= 'x') &
+             call accum_hist_field(n_snowfracn-n2D, iblk, ncat_hist, &
+                                   snowfracn(:,:,1:ncat_hist,iblk), a3Dc)
          if (f_keffn_top (1:1) /= 'x') &
              call accum_hist_field(n_keffn_top-n2D, iblk, ncat_hist, &
                                    keffn_top(:,:,1:ncat_hist,iblk), a3Dc)
@@ -1563,7 +1614,7 @@
                   do i = ilo, ihi
                      do k = 1, nzslyr
                         qn = trcrn(i,j,nt_qsno+k-1,n,iblk)
-                        Tsnz4d(i,j,k,n) = temperature_snow(trcrn(i,j,nt_qsno+k-1,n,iblk))
+                        Tsnz4d(i,j,k,n) = temperature_snow(qn)
                      enddo
                   enddo
                   enddo
@@ -1666,6 +1717,7 @@
               do i = ilo, ihi
                  if (tmask(i,j,iblk)) then 
                     ravgctz = c0
+                    write(nu_diag,*) 'albcnt',albcnt(i,j,iblk,ns)
                     if (albcnt(i,j,iblk,ns) > puny) &
                         ravgctz = c1/albcnt(i,j,iblk,ns)
                     if (f_albice (1:1) /= 'x' .and. n_albice(ns) /= 0) &
@@ -1691,6 +1743,29 @@
                     if (f_albsni (1:1) /= 'x' .and. n_albsni(ns) /= 0) &
                        a2D(i,j,n_albsni(ns),iblk) = &
                        a2D(i,j,n_albsni(ns),iblk)*avgct(ns)*ravgctz
+                 endif
+              enddo             ! i
+              enddo             ! j
+              endif
+              if (avail_hist_fields(n)%vname(1:8) == 'alvdr_ai') then
+              do j = jlo, jhi
+              do i = ilo, ihi
+                 if (tmask(i,j,iblk)) then 
+                    ravgctz = c0
+                    if (albcnt(i,j,iblk,ns) > puny) &
+                        ravgctz = c1/albcnt(i,j,iblk,ns)
+                    if (f_alvdr_ai (1:1) /= 'x' .and. n_alvdr_ai(ns) /= 0) &
+                       a2D(i,j,n_alvdr_ai(ns),iblk) = &
+                       a2D(i,j,n_alvdr_ai(ns),iblk)*avgct(ns)*ravgctz
+                    if (f_alvdf_ai (1:1) /= 'x' .and. n_alvdf_ai(ns) /= 0) &
+                       a2D(i,j,n_alvdf_ai(ns),iblk) = &
+                       a2D(i,j,n_alvdf_ai(ns),iblk)*avgct(ns)*ravgctz
+                    if (f_alidr_ai (1:1) /= 'x' .and. n_alidr_ai(ns) /= 0) &
+                       a2D(i,j,n_alidr_ai(ns),iblk) = &
+                       a2D(i,j,n_alidr_ai(ns),iblk)*avgct(ns)*ravgctz
+                    if (f_alidf_ai (1:1) /= 'x' .and. n_alidf_ai(ns) /= 0) &
+                       a2D(i,j,n_alidf_ai(ns),iblk) = &
+                       a2D(i,j,n_alidf_ai(ns),iblk)*avgct(ns)*ravgctz
                  endif
               enddo             ! i
               enddo             ! j

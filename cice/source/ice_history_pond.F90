@@ -136,7 +136,7 @@
          call define_hist_field(n_apond_ai,"apond_ai","1",tstr2D, tcstr, & 
              "melt pond fraction of grid cell",                    &
              "weighted by ice area", c1, c0,                       &
-             ns, f_apond)
+             ns, f_apond_ai)
 
       if (f_hpond(1:1) /= 'x') &
          call define_hist_field(n_hpond,"hpond","m",tstr2D, tcstr, &

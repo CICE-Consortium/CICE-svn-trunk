@@ -17,7 +17,6 @@
       use ice_constants
       use ice_fileunits, only: nu_diag
       use ice_therm_shared, only: conduct, calc_Tsfc, ferrmax, l_brine, hfrazilmin
-
       implicit none
       save
 
@@ -300,14 +299,20 @@
       !-----------------------------------------------------------------
 !mclaren: Should there be an if calc_Tsfc statement here then?? 
 
-      frac = 0.9
+#ifdef CCSMCOUPLED
+      frac = c1
+      dTemp = p01
+#else
+      frac = 0.9_dbl_kind
       dTemp = 0.02_dbl_kind
+#endif
       do k = 1, nilyr
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
 
             Iswabs_tmp = c0 ! all Iswabs is moved into fswsfc
+
             if (Tin_init(ij,k) <= Tmlts(ij,k) - dTemp) then
                if (l_brine) then
                   ci = cp_ice - Lfresh * Tmlts(ij,k) / (Tin_init(ij,k)**2)
@@ -330,6 +335,9 @@
          enddo
       enddo
 
+#ifdef CCSMCOUPLED
+      frac = 0.9_dbl_kind
+#endif
       do k = 1, nslyr
          do ij = 1, icells
             if (l_snow(ij)) then
