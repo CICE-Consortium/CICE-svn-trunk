@@ -485,6 +485,7 @@
       ! derived or computed fields
       !-----------------------------------------------------------------
 
+      coszen  (:,:,:) = c0            ! cosine of the zenith angle
       fsw     (:,:,:) = c0            ! shortwave radiation (W/m^2)
       scale_factor(:,:,:) = c1        ! shortwave scaling factor 
       wind    (:,:,:) = sqrt(uatm(:,:,:)**2 &

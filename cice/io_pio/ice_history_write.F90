@@ -718,11 +718,7 @@
         status =  &
              pio_put_att(File,pio_global,'conventions',trim(title))
 
-        if (my_task == master_task) then
-           call date_and_time(date=current_date, time=current_time)
-        endif
-        call broadcast_scalar(current_date, master_task)
-        call broadcast_scalar(current_time, master_task)
+        call date_and_time(date=current_date, time=current_time)
         write(start_time,1000) current_date(1:4), current_date(5:6), &
                                current_date(7:8), current_time(1:2), &
                                current_time(3:4)
@@ -894,7 +890,7 @@
             if (status /= pio_noerr) call abort_ice( &
                'ice: Error getting varid for '//avail_hist_fields(n)%vname)
             workr2(:,:,:) = a2D(:,:,n,1:nblocks)
-            call pio_setframe(File, varid, int(1,kind=PIO_OFFSET_KIND))
+            call pio_setframe(File, varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc2d,&
                                   workr2, status, fillval=spval_dbl)
          endif
@@ -915,7 +911,7 @@
                workr3(:,:,j,i) = a3Dc(:,:,i,nn,j)
             enddo
             enddo
-            call pio_setframe(File, varid, int(1,kind=PIO_OFFSET_KIND))
+            call pio_setframe(File, varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc3dc,&
                                   workr3, status, fillval=spval_dbl)
          endif
@@ -935,7 +931,7 @@
                workr3(:,:,j,i) = a3Dz(:,:,i,nn,j)
             enddo
             enddo
-            call pio_setframe(File, varid, int(1,kind=PIO_OFFSET_KIND))
+            call pio_setframe(File, varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc3di,&
                                   workr3, status, fillval=spval_dbl)
          endif
@@ -955,7 +951,7 @@
                workr3(:,:,j,i) = a3Db(:,:,i,nn,j)
             enddo
             enddo
-            call pio_setframe(File, varid, int(1,kind=PIO_OFFSET_KIND))
+            call pio_setframe(File, varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc3db,&
                                   workr3, status, fillval=spval_dbl)
          endif
@@ -977,7 +973,7 @@
             enddo ! k
             enddo ! i
             enddo ! j
-            call pio_setframe(File, varid, int(1,kind=PIO_OFFSET_KIND))
+            call pio_setframe(File, varid, int(1,kind=PIO_OFFSET))
             call pio_write_darray(File, varid, iodesc4di,&
                                   workr4, status, fillval=spval_dbl)
          endif

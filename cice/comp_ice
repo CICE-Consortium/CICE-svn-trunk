@@ -7,7 +7,7 @@ setenv SITE LANL.conejo   # also works for mustang
 #setenv SITE LANL.bigsuze
 
 ### SYSTEM_USERDIR is predefined on ORNL machines
-setenv SYSTEM_USERDIR /scratch/eclare/CICE.v5.1  # conejo
+setenv SYSTEM_USERDIR /net/scratch1/eclare/CICE.v5.1  # conejo
 #setenv SYSTEM_USERDIR /Users/akt/Work/MPAS-CICE/Column_Package/cice_package/run_dirs
 
 ### Grid resolution

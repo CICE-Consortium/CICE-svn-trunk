@@ -1139,6 +1139,7 @@ contains
        integer (int_kind) :: i
 
        found = .false.
+       res = -1
        i=1
        do while (i<=fac%numfact .and. (.not. found))
           if(fac%used(i) == 0) then

@@ -1151,7 +1151,7 @@
       use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_fileunits, only: nu_diag
       use ice_constants, only: c0, c1, p25, puny, secday, depressT, &
-          awtvdr, awtidr, awtvdf, awtidf, Lfresh, rhos, cp_ice, spval, hs_min
+          awtvdr, awtidr, awtvdf, awtidf, Lfresh, rhos, cp_ice, spval
       use ice_domain, only: blocks_ice, nblocks
       use ice_grid, only: tmask, lmask_n, lmask_s
       use ice_calendar, only: new_year, write_history, &
@@ -1176,7 +1176,6 @@
           mlt_onset, frz_onset, dagedtt, dagedtd, fswint_ai, keffn_top, &
           snowfrac, alvdr_ai, alvdf_ai, alidr_ai, alidf_ai
       use ice_atmo, only: formdrag
-      use ice_meltpond_cesm, only: hs0
       use ice_history_shared ! almost everything
       use ice_history_write, only: ice_write_hist
       use ice_history_bgc, only: accum_hist_bgc

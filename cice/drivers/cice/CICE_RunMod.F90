@@ -357,7 +357,7 @@
             alidr(i,j,iblk) = alidr(i,j,iblk) &
                + alidrn(i,j,n,iblk)*aicen(i,j,n,iblk)
 
-            if (coszen(i,j,iblk) > puny) then ! sun above horizon
+            if (coszen(i,j,iblk) >= puny) then ! sun above horizon
             albice(i,j,iblk) = albice(i,j,iblk) &
                + albicen(i,j,n,iblk)*aicen(i,j,n,iblk)
             albsno(i,j,iblk) = albsno(i,j,iblk) &

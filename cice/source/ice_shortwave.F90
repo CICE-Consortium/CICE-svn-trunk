@@ -142,7 +142,7 @@
       use ice_domain, only: nblocks, blocks_ice
       use ice_flux, only: alvdf, alidf, alvdr, alidr, &
                           alvdr_ai, alidr_ai, alvdf_ai, alidf_ai, &
-                          swvdr, swvdf, swidr, swidf, &
+                          swvdr, swvdf, swidr, swidf, scale_factor, &
                           albice, albsno, albpnd, albcnt, coszen, fsnow, &
                           apeff_ai, snowfrac
       use ice_orbital, only: init_orbit
@@ -150,6 +150,7 @@
       use ice_blocks, only: block, get_block
       use ice_grid, only: tmask, tlat, tlon
       use ice_meltpond_lvl, only: dhsn, ffracn
+      use ice_restart_shared, only: restart, runtype
 
       integer (kind=int_kind) :: &
          icells          ! number of cells with aicen > puny
@@ -344,6 +345,21 @@
             alidr_ai  (i,j,iblk) = alidr  (i,j,iblk)
          enddo
          enddo
+
+      !----------------------------------------------------------------
+      ! Save net shortwave for scaling factor in scale_factor
+      !----------------------------------------------------------------
+         if (runtype == 'initial' .and. .not. restart) then
+            do j = 1, ny_block
+            do i = 1, nx_block
+               scale_factor(i,j,iblk) = &
+	 	      swvdr(i,j,iblk)*(c1 - alvdr_ai(i,j,iblk)) &
+	 	    + swvdf(i,j,iblk)*(c1 - alvdf_ai(i,j,iblk)) &
+ 	            + swidr(i,j,iblk)*(c1 - alidr_ai(i,j,iblk)) &
+	 	    + swidf(i,j,iblk)*(c1 - alidf_ai(i,j,iblk))
+            enddo
+            enddo
+         endif
 
       enddo     ! nblocks
       !$OMP END PARALLEL DO
@@ -3265,8 +3281,8 @@
  
       real (kind=dbl_kind) :: &
          alpha    , & ! term in direct reflectivity and transmissivity
-         gamma    , & ! term in direct reflectivity and transmissivity
-         el       , & ! term in alpha,gamma,n,u
+         agamm    , & ! term in direct reflectivity and transmissivity
+         el       , & ! term in alpha,agamm,n,u
          taus     , & ! scaled extinction optical depth
          omgs     , & ! scaled single particle scattering albedo
          asys     , & ! scaled asymmetry parameter
@@ -3287,7 +3303,7 @@
  
       real (kind=dbl_kind) :: &
          alp      , & ! temporary for alpha
-         gam      , & ! temporary for gamma
+         gam      , & ! temporary for agamm
          ue       , & ! temporary for u
          extins   , & ! extinction
          amg      , & ! alp - gam
@@ -3322,7 +3338,7 @@
  
       ! Delta-Eddington solution expressions
       alpha(w,uu,gg,e) = p75*w*uu*((c1 + gg*(c1-w))/(c1 - e*e*uu*uu))
-      gamma(w,uu,gg,e) = p5*w*((c1 + c3*gg*(c1-w)*uu*uu) &
+      agamm(w,uu,gg,e) = p5*w*((c1 + c3*gg*(c1-w)*uu*uu) &
                         / (c1-e*e*uu*uu))
       n(uu,et)         = ((uu+c1)*(uu+c1)/et ) - ((uu-c1)*(uu-c1)*et)
       u(w,gg,e)        = c1p5*(c1 - w*gg)/e
@@ -3430,7 +3446,7 @@
            ! evaluate rdir,tdir for direct beam
            trnlay(k) = max(exp_min, exp(-ts/mu0n))
            alp = alpha(ws,mu0n,gs,lm)
-           gam = gamma(ws,mu0n,gs,lm)
+           gam = agamm(ws,mu0n,gs,lm)
            apg = alp + gam
            amg = alp - gam
            rdir(k) = apg*rdif_a(k) +  amg*(tdif_a(k)*trnlay(k) - c1)
@@ -3451,7 +3467,7 @@
              swt = swt + mu*gwt
              trn = max(exp_min, exp(-ts/mu))
              alp = alpha(ws,mu,gs,lm)
-             gam = gamma(ws,mu,gs,lm)
+             gam = agamm(ws,mu,gs,lm)
              apg = alp + gam
              amg = alp - gam
              rdr = apg*R1 + amg*T1*trn - amg
