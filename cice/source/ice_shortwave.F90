@@ -1345,9 +1345,12 @@
                      hpn(i,j) = hp * tmp
                      fpn(i,j) = fpn(i,j) * tmp
                   endif
-                  fsn(i,j) = min(fsn(i,j), c1-fpn(i,j))
 
                endif ! hp > puny
+
+               ! Zero out fraction of thin ponds for radiation only
+               if (hpn(i,j) < hpmin) fpn(i,j) = c0
+               fsn(i,j) = min(fsn(i,j), c1-fpn(i,j))
 
                ! endif    ! masking by lid ice
                apeffn(i,j,n) = fpn(i,j) ! for history
@@ -1762,7 +1765,7 @@
             coszen(i,j) = max(puny,coszen(i,j))
             hi(i,j)  = vice(i,j) / aice(i,j)
             ! if non-zero pond fraction and sufficient pond depth
-            if( fp(i,j) > puny .and. hp(i,j) > hpmin ) then
+            if (fp(i,j) > puny) then
                icells_DE = icells_DE + 1
                indxi_DE(icells_DE) = i
                indxj_DE(icells_DE) = j
