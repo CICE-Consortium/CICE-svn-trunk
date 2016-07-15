@@ -2201,8 +2201,10 @@
          ! interior
          do j = 1, ny_block
          do i = 1, nx_block
-            msg_buffer(i,j) = ARRAY_G(this_block%i_glob(i)+nghost,&
-                                      this_block%j_glob(j)+nghost)
+            if (this_block%j_glob(j) > 0) then
+               msg_buffer(i,j) = ARRAY_G(this_block%i_glob(i)+nghost,&
+                                         this_block%j_glob(j)+nghost)
+            endif
          end do
          end do
 
@@ -2312,8 +2314,10 @@
          ! interior
          do j = 1, ny_block
          do i = 1, nx_block
-            ARRAY(i,j,dst_block) = ARRAY_G(this_block%i_glob(i)+nghost,&
-                                           this_block%j_glob(j)+nghost)
+            if (this_block%j_glob(j) > 0) then
+               ARRAY(i,j,dst_block) = ARRAY_G(this_block%i_glob(i)+nghost,&
+                                              this_block%j_glob(j)+nghost)
+            endif
          end do
          end do
 
