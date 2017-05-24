@@ -1,29 +1,22 @@
 !  SVN:$Id$
 !=======================================================================
-! Copyright 2013, LANSLLC. All rights reserved.
-! Unless otherwise indicated, this information has been authored by an 
-! employee or employees of the Los Alamos National Security, LLC (LANS), 
-! operator of the Los Alamos National Laboratory under Contract No. 
-! DE-AC52-06NA25396 with the U.S. Department of Energy. The U.S. Government 
-! has rights to use, reproduce, and distribute this information. The public 
-! may copy and use this information without charge, provided that this 
-! Notice and any statement of authorship are reproduced on all copies. 
-! Neither the Government nor LANS makes any warranty, express or implied, 
-! or assumes any liability or responsibility for the use of this 
-! information.
+! Copyright (c) 2017, Los Alamos National Security, LLC
+! All rights reserved.
 !
-! CICE is developed and maintained by Elizabeth C. Hunke (eclare@lanl.gov)
-! Group T-3 (Fluid Dynamics and Solid Mechanics), Los Alamos National
-! Laboratory, with support from the Earth System Modeling and Regional and
-! Global Climate Modeling programs of the Office of Biological and
-! Environmental Research within the U.S. Department of Energy's Office of
-! Science.  Los Alamos National Laboratory is operated by the DOE National
-! Nuclear Security Administration under Contract DE-AC52-06NA25396.
-! 
-! Numerous researchers have contributed to this effort, especially members
-! of the CESM Polar Climate Working Group and the sea ice modeling team
-! at UK Met Office Hadley Centre -- thanks to all! 
-! 
+! Copyright 2017. Los Alamos National Security, LLC. This software was
+! produced under U.S. Government contract DE-AC52-06NA25396 for Los
+! Alamos National Laboratory (LANL), which is operated by Los Alamos
+! National Security, LLC for the U.S. Department of Energy. The U.S.
+! Government has rights to use, reproduce, and distribute this software.
+! NEITHER THE GOVERNMENT NOR LOS ALAMOS NATIONAL SECURITY, LLC MAKES ANY
+! WARRANTY, EXPRESS OR IMPLIED, OR ASSUMES ANY LIABILITY FOR THE USE OF
+! THIS SOFTWARE. If software is modified to produce derivative works,
+! such modified software should be clearly marked, so as not to confuse
+! it with the version available from LANL.
+!
+! The full license and distribution policy are available from
+! https://github.com/CICE-Consortium
+!
 !=======================================================================
 #ifndef popcice
 !
