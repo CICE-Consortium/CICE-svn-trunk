@@ -1,7 +1,7 @@
 ## Overview
 
 This repository contains the trunk from the previous subversion (svn) repository of the Los Alamos Sea Ice Model, CICE, including release tags through version 5.1.2. 
-More recent versions are found in the [CICE](https://github.com/CICE-Consortium/CICE) and [Icepack](https://github.com/CICE-Consortium/Icepack) repositories, which are now maintained by the CICE Consortium.  .
+More recent versions are found in the [CICE](https://github.com/CICE-Consortium/CICE) and [Icepack](https://github.com/CICE-Consortium/Icepack) repositories, which are now maintained by the CICE Consortium.  
 
 ## Obtaining an older CICE release
 
