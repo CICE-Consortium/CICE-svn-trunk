@@ -23,8 +23,8 @@ Previous CICE releases may be obtained in several different ways:
 Documentation is provided in https://github.com/CICE-Consortium/CICE-svn-trunk/cicedoc/cicedoc.pdf, including both a technical description and user guidance.
 Earlier versions of this documentation, for each release, is in the [doc/](https://github.com/CICE-Consortium/CICE-svn-trunk/cice/doc/) directory within the CICE code distribution of that release.
 
-The [wiki](https://github.com/CICE-Consortium/CICE-svn-trunk/wiki) pages for each repository contain links to additional information, e.g.    
-- more documentation 
+The [wiki](https://github.com/CICE-Consortium/CICE-svn-trunk/wiki) pages contain links to additional information, e.g.    
+- copyright 
 - larger files such as the gx1 grid, land mask, and forcing files
 
 The ["About-Us" repository](https://github.com/CICE-Consortium/About-Us) includes background and supporting information about the CICE Consortium, including how to interact with it.    
