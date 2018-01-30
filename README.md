@@ -12,18 +12,19 @@ Release tags from svn are available in this git repository and can be obtained t
 Download a tarball for a particular version. Tarballs with source code are available under [Releases](https://github.com/CICE-Consortium/CICE-svn-trunk/releases).
 
 ### Using git or svn
-Checkout at the command line using git commands. The pull-down list under "Branch: master" on the [CICE-svn-trunk github page](https://github.com/CICE-Consortium/CICE-svn-trunk) shows all of the available options.
+Checkout at the command line using git or svn commands. The pull-down list under "Branch: master" on the [CICE-svn-trunk github page](https://github.com/CICE-Consortium/CICE-svn-trunk) shows all of the available release versions.
 
 1. Git clone the branch with just the tag of interest to you:
 
    git clone -b svn/tags/release-5.1.2 https://github.com/CICE-Consortium/CICE-svn-trunk CICE_v5.1.2
 
-2. Git clone the entire repository using standard git commands, e.g.
+2. Git clone the entire repository using standard git commands:
 
-  git clone https://github.com/CICE-Consortium/CICE-svn-trunk
+   git clone https://github.com/CICE-Consortium/CICE-svn-trunk
 
 3. svn checkout the branch with just the tag of interest to you:
-  svn checkout https://github.com/CICE-Consortium/CICE-svn-trunk/branches/svn/tags/release-5.1.2 cice_v5.1.2   
+
+   svn checkout https://github.com/CICE-Consortium/CICE-svn-trunk/branches/svn/tags/release-5.1.2 cice_v5.1.2   
 
 ## More information
 
