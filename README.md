@@ -8,17 +8,21 @@ More recent versions are found in the [CICE](https://github.com/CICE-Consortium/
 If you expect to make any changes to the code, we recommend that you work in the CICE and Icepack repositories.  Changes made to code in this repository will not be accepted, other than critical bug fixes.
 
 Release tags from svn are available in this git repository and can be obtained two ways:
-# Tarball
+### Tarball
 Download a tarball for a particular version. Tarballs with source code are available under [Releases](https://github.com/CICE-Consortium/CICE-svn-trunk/releases).
 
-# Using Git
-The pull-down list under "Branch: master" on the [CICE-svn-trunk github page](https://github.com/CICE-Consortium/CICE-svn-trunk) shows all of the available options.
-1. Clone the branch with the tag of interest to you.
+### Using git or svn
+Checkout at the command line using git commands. The pull-down list under "Branch: master" on the [CICE-svn-trunk github page](https://github.com/CICE-Consortium/CICE-svn-trunk) shows all of the available options.
+
+1. Git clone the branch with just the tag of interest to you:
+
    git clone -b svn/tags/release-5.1.2 https://github.com/CICE-Consortium/CICE-svn-trunk CICE_v5.1.2
-2. Clone the entire repository using standard git commands, e.g.
+
+2. Git clone the entire repository using standard git commands, e.g.
+
   git clone https://github.com/CICE-Consortium/CICE-svn-trunk
 
-# Using svn    
+3. svn checkout the branch with just the tag of interest to you:
   svn checkout https://github.com/CICE-Consortium/CICE-svn-trunk/branches/svn/tags/release-5.1.2 cice_v5.1.2   
 
 ## More information
