@@ -8,12 +8,12 @@ If you expect to make any changes to the code, we recommend that you work in the
 ## Useful links
 * [Wiki](https://github.com/CICE-Consortium/CICE-svn-trunk/wiki): https://github.com/CICE-Consortium/CICE-svn-trunk/wiki
 
-   Information about the CICE model prior to version 6
+   Information about the CICE model prior to version 6 including how to obtain the code
 
 * [Version Index](https://github.com/CICE-Consortium/CICE-svn-trunk/wiki/CICE-Versions-Index-(pre-version-6)): https://github.com/CICE-Consortium/CICE-svn-trunk/wiki/CICE-Versions-Index-(pre-version-6)
 
    Numbered CICE releases prior to version 6. 
 
-* [Resources](https://github.com/CICE-Consortium/About-Us/wiki/Resource-Index): https://github.com/CICE-Consortium/About-Us/wiki/Resource-Index
+* [Resource Index](https://github.com/CICE-Consortium/About-Us/wiki/Resource-Index): https://github.com/CICE-Consortium/About-Us/wiki/Resource-Index
 
    List of resources for information about the Consortium and its repositories as well as model documentation, testing, and development.    
