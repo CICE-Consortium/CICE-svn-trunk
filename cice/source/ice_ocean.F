@@ -1,334 +1,136 @@
-! $Id: ice_ocean.F,v 1.9 2003/11/22 21:34:50 lipscomb Exp $
-!=======================================================================
-!BOP
-!
-! !MODULE: ice_ocean - ocean mixed layer internal to sea ice model
-!
-! !DESCRIPTION:
-!
-! Ocean mixed layer calculation (internal to sea ice model).
-! Allows heat storage in ocean for uncoupled runs.
-!
-! !REVISION HISTORY:
-!
-! authors:   John Weatherly, CRREL
-!            C.M. Bitz, UW
-!            Elizabeth C. Hunke, LANL
-!            Bruce P. Briegleb, NCAR
-!            William H. Lipscomb, LANL
-!
-! 2004: Block structure added by William Lipscomb
-! 2005: Ocean-to-atmosphere fluxes added as 3D arrays, William Lipscomb
-!
-! !INTERFACE:
-!
-      module ice_ocean
-!
-! !USES:
-!
-      use ice_kinds_mod
-      use ice_constants
-!
-!EOP
-!
-      implicit none
-      save
+c $Id: ice_ocean.F,v 1.2 2001/02/23 21:06:55 schramm Exp $
+c=======================================================================
+!---! ocean boundary interface (stability based flux calculations)
+!---! for uncoupled runs and for coupled runs
+!---!
+!---! author John Weatherly, C.M. Bitz,
+!---!        Elizabeth C. Hunke, Bruce P. Briegleb
+c=======================================================================
 
-      logical (kind=log_kind) ::
-     &   oceanmixed_ice           ! if true, use ocean mixed layer
+      module ice_ocean
+
+      use ice_flux
+      use ice_calendar
+      use ice_constants
+
+      implicit none
 
       real (kind=dbl_kind), parameter ::
-     &   hmix         = 20._dbl_kind ! ocean mixed layer depth (m)
-     &,  deep_ocn_flx =  0._dbl_kind ! heat flx, deep ocn to mixed lyr (W/m^2) 
-                                     ! (deep_ocn_flx <= 0; positive down)
+     &   hmix = 20._dbl_kind             ! ocean mixed layer depth (m)
      &,  cphm = cp_ocn*rhow*hmix
 
-!=======================================================================
+      real (kind=dbl_kind) ::
+     &   sst_mixedlayer(ilo:ihi,jlo:jhi) ! save value of sst
+
+c=======================================================================
 
       contains
 
-!=======================================================================
-!BOP
-!
-! !ROUTINE: ocean_mixed_layer - compute SST and freeze/melt potential
-!
-! !DESCRIPTION:
-!
-! Compute the mixed layer heat balance and update the SST.
-! Compute the energy available to freeze or melt ice.
-! NOTE: SST changes due to fluxes through the ice are computed in
-!       ice_therm_vertical.
-!
-! !REVISION HISTORY: same as module
-!
-! !INTERFACE:
-!
-      subroutine ocean_mixed_layer (dt)
-!
-! !USES:
-!
-      use ice_blocks
-      use ice_domain
-      use ice_state, only: aice
-      use ice_flux
-      use ice_grid, only: tmask
-      use ice_atmo, only: atmo_boundary_layer
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-      real (kind=dbl_kind), intent(in) ::
-     &   dt      ! time step
-!
-!EOP
-!
-      integer (kind=int_kind) ::
-     &   i, j              ! horizontal indices
-     &,  iblk              ! block index
-     &,  ilo,ihi,jlo,jhi   ! beginning and end of physical domain
+c=======================================================================
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block) ::
-     &   delt     ! potential temperature difference   (K)
-     &,  delq     ! specific humidity difference   (kg/kg)
-     &,  shcoef   ! transfer coefficient for sensible heat
-     &,  lhcoef   ! transfer coefficient for latent heat
+      subroutine mixed_layer(i,j)
 
-      integer (kind=int_kind) ::
-     &   ij       ! combined ij index
+      use ice_grid
+      use ice_atmo
 
-      integer (kind=int_kind), save ::
-     &   icells   ! number of ocean cells
-
-      integer (kind=int_kind), dimension(nx_block*ny_block), save ::
-     &   indxi, indxj    ! compressed indices for ocean cells
-
-      type (block) ::
-     &   this_block           ! block information for current block
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-      !-----------------------------------------------------------------
-      ! Identify ocean cells
-      !-----------------------------------------------------------------
-
-         icells = 0
-         do j = jlo, jhi
-         do i = ilo, ihi
-            if (tmask(i,j,iblk)) then
-               icells = icells + 1
-               indxi(icells) = i
-               indxj(icells) = j
-            endif
-         enddo                  ! i
-         enddo                  ! j
-
-      !-----------------------------------------------------------------
-      ! Compute boundary layer quantities
-      !-----------------------------------------------------------------
-         call atmo_boundary_layer (nx_block,  ny_block,
-     &                             'ocn',     icells,
-     &                             indxi,     indxj,
-     &                             sst        (:,:,iblk),    
-     &                             potT       (:,:,iblk),
-     &                             uatm       (:,:,iblk),   
-     &                             vatm       (:,:,iblk),   
-     &                             wind       (:,:,iblk),   
-     &                             zlvl       (:,:,iblk),   
-     &                             Qa         (:,:,iblk),     
-     &                             rhoa       (:,:,iblk),
-     &                             strairx_ocn(:,:,iblk), 
-     &                             strairy_ocn(:,:,iblk), 
-     &                             Tref_ocn   (:,:,iblk), 
-     &                             Qref_ocn   (:,:,iblk), 
-     &                             delt       (:,:),   
-     &                             delq       (:,:),
-     &                             lhcoef     (:,:),
-     &                             shcoef     (:,:) )
-
-      !-----------------------------------------------------------------
-      ! Ocean  albedo
-      ! For now, assume albedo = albocn in each spectral band.
-      !-----------------------------------------------------------------
-
-         alvdr_ocn(:,:,iblk) = albocn
-         alidr_ocn(:,:,iblk) = albocn
-         alvdf_ocn(:,:,iblk) = albocn
-         alidf_ocn(:,:,iblk) = albocn
-
-      !-----------------------------------------------------------------
-      ! Compute ocean fluxes and update SST
-      !-----------------------------------------------------------------
-
-         call ocean_energy_budget (nx_block, ny_block,
-     &                             dt,       icells,
-     &                             indxi,    indxj,
-     &                             delt      (:,:),   
-     &                             delq      (:,:),
-     &                             lhcoef    (:,:),
-     &                             shcoef    (:,:),
-     &                             aice      (:,:,iblk),
-     &                             Tf        (:,:,iblk),
-     &                             swvdr     (:,:,iblk),
-     &                             swidr     (:,:,iblk),
-     &                             swvdf     (:,:,iblk),
-     &                             swidf     (:,:,iblk),    
-     &                             alvdr_ocn (:,:,iblk),
-     &                             alidr_ocn (:,:,iblk),
-     &                             alvdf_ocn (:,:,iblk),
-     &                             alidf_ocn (:,:,iblk),
-     &                             flw       (:,:,iblk),
-     &                             flwout_ocn(:,:,iblk),
-     &                             fsens_ocn (:,:,iblk),
-     &                             flat_ocn  (:,:,iblk),
-     &                             evap_ocn  (:,:,iblk),
-     &                             sst       (:,:,iblk),
-     &                             frzmlt    (:,:,iblk))
-
-         evap_ocn(:,:,iblk) = flat_ocn(:,:,iblk) / Lvap
-
-      enddo                     ! iblk
-
-      end subroutine ocean_mixed_layer
-
-!=======================================================================
-!BOP
-!
-! !IROUTINE: ocean_energy_balance - sfc energy balance, sst change, frzmlt
-!
-! !INTERFACE:
-!
-      subroutine ocean_energy_budget (nx_block,  ny_block,
-     &                                dt,        icells,
-     &                                indxi,     indxj,
-     &                                delt,      delq,
-     &                                lhcoef,    shcoef,
-     &                                aice,      Tf,
-     &                                swvdr,     swidr,
-     &                                swvdf,     swidf,
-     &                                alvdr_ocn, alidr_ocn,
-     &                                alvdf_ocn, alidf_ocn,
-     &                                flw,       flwout_ocn,
-     &                                fsens_ocn, flat_ocn,
-     &                                evap_ocn,
-     &                                sst,       frzmlt)
-
-! !DESCRIPTION:
-!
-! Compute ocean energy budget and update SST accordingly.
-! Compute freeze-melt potential.
-! 
-! !REVISION HISTORY: same as module
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  icells              ! number of cells that require atmo fluxes
-
-      integer (kind=int_kind), dimension(nx_block*ny_block),
-     &   intent(in) ::
-     &   indxi, indxj    ! compressed i and j indices
-
-      real (kind=dbl_kind), intent(in) ::
-     &   dt              ! time step
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block),
-     &   intent(in) ::
-     &   delt            ! potential T difference   (K)
-     &,  delq            ! humidity difference      (kg/kg)
-     &,  shcoef          ! transfer coefficient for sensible heat
-     &,  lhcoef          ! transfer coefficient for latent heat
-     &,  aice            ! fractional ice area
-     &,  Tf              ! ocean freezing temperature (C)
-     &,  swvdr           ! incoming shortwave, visible direct (W/m^2)
-     &,  swidr           ! incoming shortwave, near IR direct (W/m^2)
-     &,  swvdf           ! incoming shortwave, visible diffuse (W/m^2)
-     &,  swidf           ! incoming shortwave, near IR diffuse (W/m^2)
-     &,  alvdr_ocn       ! visible albedo, direct   (fraction)
-     &,  alidr_ocn       ! near-ir albedo, direct   (fraction)
-     &,  alvdf_ocn       ! visible albedo, diffuse  (fraction)
-     &,  alidf_ocn       ! near-ir albedo, diffuse  (fraction)
-     &,  flw             ! incoming longwave (W/m^2)
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block),
-     &   intent(out) ::
-     &   fsens_ocn       ! sensible heat flux (W/m^2)
-     &,  flat_ocn        ! latent heat flux   (W/m^2)
-     &,  flwout_ocn      ! outgoing longwave  (W/m^2)
-     &,  frzmlt          ! freeze-melt potential (W/m^2)
-     &,  evap_ocn        ! evaporative vapor flux (kg/m^2/s)
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block),
-     &   intent(inout) ::
-     &   sst             ! sea surface temperature (C)
-!
-!EOP
-!
+      integer (kind=int_kind), intent(in) :: i,j
       real (kind=dbl_kind) ::
-     &   TsfK     ! surface temperature (K)
-     &,  swabs    ! surface absorbed shortwave heat flux (W/m^2)
-     &,  qdp      ! deep ocean heat flux
+     &   delt        ! potential T difference   (K)
+     &,  delq        ! humidity difference      (kg/kg)
+     &,  rdn_in      ! initial value for rdn in stability routine
+     &,  vmag        ! surface wind magnitude   (m/s)
+     &,  strx        ! dummy argument
+     &,  stry        ! dummy argument
+     &,  Trf         ! dummy argument
+     &,  dssqdt      ! dummy argument
 
       real (kind=dbl_kind), parameter ::
-     &   frzmlt_max = c1000   ! max magnitude of frzmlt (W/m^2)
+     &   umin =  c1  ! minimum wind speed (m/s)
 
-      integer (kind=int_kind) :: i, j, ij
+        if (istep.gt.1) sst(i,j) = sst_mixedlayer(i,j)
 
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
+        if (tmask(i,j)) then
 
-         ! specify deep ocean heat flux as constant for now
-         qdp = deep_ocn_flx     ! negative upward
+         vmag   = max(umin, wind(i,j))      ! CSM Ocean wind-speed formula 
+         rdn_in = sqrt(0.0027_dbl_kind/vmag 
+     &     + .000142_dbl_kind + .0000764_dbl_kind*vmag) ! for rdn_in
 
-         ! shortwave radiative flux
-         swabs = (c1-alvdr_ocn(i,j)) * swvdr(i,j)
-     &         + (c1-alidr_ocn(i,j)) * swidr(i,j)
-     &         + (c1-alvdf_ocn(i,j)) * swvdf(i,j)
-     &         + (c1-alidf_ocn(i,j)) * swidf(i,j)
+         call stability( i,j,1, sst(i,j), rdn_in,
+     $         strx   ,stry   ,Trf, dssqdt,  delt, delq)
 
-         ! ocean surface temperature in Kelvin
-         TsfK = sst(i,j) + Tffresh
+         call ocnheat(i,j, delt, delq)  ! update sst, determine frzmlt
 
-         ! longwave radiative flux
-         flwout_ocn(i,j) = -stefan_boltzmann * TsfK**4
+        endif
 
-         ! downward latent and sensible heat fluxes
-         fsens_ocn(i,j) =  shcoef(i,j) * delt(i,j)
-         flat_ocn (i,j) =  lhcoef(i,j) * delq(i,j)
-         evap_ocn (i,j) = -flat_ocn(i,j) / Lvap
+      end subroutine mixed_layer
 
-         ! first, compute sst change due to exchange with atm/ice above
-         sst(i,j) = sst(i,j) +
-     &        (fsens_ocn(i,j) + flat_ocn(i,j) + flwout_ocn(i,j) 
-     &       + flw(i,j) + swabs) * (c1-aice(i,j)) * dt / cphm
+c=======================================================================
 
-         ! computed T change due to exchange with deep layers:
-         sst(i,j) = sst(i,j) - qdp*dt/cphm
+      subroutine ocnheat(i,j, delt, delq)
 
-         ! compute potential to freeze or melt ice
-         frzmlt(i,j) = (Tf(i,j)-sst(i,j))*cphm/dt
-         frzmlt(i,j) = min(max(frzmlt(i,j),-frzmlt_max),frzmlt_max)
+!---!-------------------------------------------------------------------
+!---! update sst and freezing/melting potential (atm/ocn forcing)
+!---! sst changes due to ice fluxes are updated in ice_therm_driver.F
+!---!-------------------------------------------------------------------
 
-         ! if sst is below freezing, reset sst to Tf
-         if (sst(i,j) <= Tf(i,j)) sst(i,j) = Tf(i,j)
+      use ice_state
+      use ice_albedo
 
-      enddo                     ! ij
+      integer (kind=int_kind) :: i,j
 
+      real (kind=dbl_kind), intent(in) ::
+     &   delt   ! potential T difference   (K)
+     &,  delq   ! humidity difference      (kg/kg)
 
-      end subroutine ocean_energy_budget
+      real (kind=dbl_kind) ::
+     &   TsfK   ! surface temperature (K)
+     &,  fsh    ! sensible heat flux  (W/m^2)
+     &,  flh    ! latent heat flux    (W/m^2)
+     &,  fswabs ! srfc absrbd short-wave heat flux (W/m^2)
+     &,  flwup  ! long-wave upward heat flux  (W/m^2)
 
-!=======================================================================
+      real (kind=dbl_kind) ::
+     &   ft     ! fraction reduction of positive qdp
+     &,  qdp    ! deep ocean heat flux
+
+      ! specify as constant for now
+      qdp = -c2 ! negative upward
+
+      ! ocean surface temperature in Kelvin
+      TsfK = sst(i,j)+Tffresh
+
+      ! shortwave radiative flux
+      fswabs = (c1 - albocn) * (swvdr(i,j)
+     & + swvdf(i,j) + swidr(i,j) + swidf(i,j))
+
+      ! longwave radiative flux
+      flwup  = -emissivity*stefan_boltzmann * TsfK**4
+
+      ! downward latent and sensible heat fluxes
+      flh = lhcoef(i,j,1) * delq  ! using lhcoef(i,j,1), shcoef(i,j,1)
+      fsh = shcoef(i,j,1) * delt  ! as temporary arrays for ocean
+
+      ! first, compute sst change due to exchange with atm/ice above
+      sst(i,j) = sst(i,j) +((fsh + flh + flwup + Flw(i,j) + fswabs)
+     &            *(c1-aice(i,j)))*dt/cphm
+
+      ! computed T change due to exchange with deep layers:
+      sst(i,j) = sst(i,j) - qdp*dt/cphm
+
+      ! compute potential to freeze or melt ice
+      frzmlt(i,j) = (Tf(i,j)-sst(i,j))*cphm/dt          
+      frzmlt(i,j) = min(max(frzmlt(i,j),-c1000),c1000)
+
+      ! if sst is below freezing, reset sst to Tf
+      if(sst(i,j) .le. Tf(i,j)) sst(i,j) = Tf(i,j)
+
+      ! save mixed layer sst
+      sst_mixedlayer(i,j) = sst(i,j)
+
+      end subroutine ocnheat
+
+c=======================================================================
 
       end module ice_ocean
 
-!=======================================================================
+c=======================================================================

@@ -1,0 +1,204 @@
+  my_task,e,w,n,s  0,  1,  3,  4,  -1
+  my_task,e,w,n,s  1,  2,  0,  5,  -1
+  my_task,e,w,n,s  2,  3,  1,  6,  -1
+  my_task,e,w,n,s  3,  0,  2,  7,  -1
+  my_task,e,w,n,s  4,  5,  7,  -1,  0
+  my_task,e,w,n,s  5,  6,  4,  -1,  1
+  my_task,e,w,n,s  6,  7,  5,  -1,  2
+  my_task,e,w,n,s  7,  4,  6,  -1,  3
+ --------------------------------
+   CICE model diagnostic output  
+ --------------------------------
+  dt= 7200.0  ndte=120  npt=    24  year=    1997  istep0=       0
+  diagfreq= 12  histfreq= m  dumpfreq= m
+  kitd= 1  kdyn= 1  kstrength= 1
+  
+ Damping procedure NOT used in evp dynamics
+  
+  
+ Advection algorithm is remap                                                                           
+  
+ Diagnostic data for grid points specified
+ in ice_diagnostics.F will be printed
+  
+ Displaced pole grid
+ The grid file is global_192x128.grid                                                             
+ The land mask file is global_192x128.kmt                                                              
+ The dump file prefix is iced                                                                            
+ Starting from default initialization 
+ rather than restart file
+ The history file prefix is iceh                                                                            
+ History data will be averaged over 1 m
+  read_global  11,  1,  -1.3365434590096701,  1.5631168431475972
+  read_global  11,  2,  1.75593774208238074E-3,  6.2831742535850985
+  read_global  11,  3,  3159391.7616848201,  27218086.337572642
+  read_global  11,  4,  824487.0334490441,  26571415.514519062
+  read_global  11,  7,  -3.1415925492816648,  3.1046644282599036
+  read_global  12,  1,  0.E+0,  32.
+ min/max ULONG 1.75593774208238074E-3,  6.2831742535850985
+ min/max TLON_G -3.1402179144735949,  3.1404994434175233
+ min/max ULATG -1.3365434590096701,  1.5631168431475972
+ min/max TLAT_G -1.3410569644173154,  1.5651059890992263
+ the following variables will be written to the history tape: 
+  description                           units     netcdf variable
+ grid box mean ice thickness               m           hi        
+ grid box mean snow thickness              m           hs        
+ snow/ice surface temperature              C           Tsfc      
+ ice area  (aggregate)                                 aice      
+ ice velocity (x)                           m/s        uvel      
+ ice velocity (y)                           m/s        vvel      
+ down solar flux                           W/m^2       Fswdn     
+ down longwave flux                        W/m^2       Flwdn     
+ snow fall rate                            cm/day      snow      
+ rain fall rate                            cm/day      rain      
+ sea surface temperature                   C           sst       
+ sea surface salinity                      psu         sss       
+ ocean current (x)                         cm/s        uocn      
+ ocean current (y)                         cm/s        vocn      
+ freeze/melt potential                     W/m^2       Focnht    
+ absorbed solar flx                        W/m^2       Fswabs    
+ snw/ice broad band albedo                 %           albsni    
+ latent heat flux                          W/m^2       Flat      
+ sensible heat flux                        W/m^2       Fsens     
+ outgoing long wave flux                   W/m^2       Flwup     
+ evaporative water flux                    cm/day      evap      
+ air       temperature                     C           Tair      
+ congelation ice growth                    cm/day      congel    
+ frazil ice growth                         cm/day      frazil    
+ snow-ice formation                        cm/day      snoice    
+ basal ice melt                            cm/day      meltb     
+ top ice melt                              cm/day      meltt     
+ fresh wat flx ice to ocn                  cm/day      Ffrshw    
+ heat flux ice to ocean                    W/m^2       Fioht     
+ atm/ice stress (x)                        N/m^2       straix    
+ atm/ice stress (y)                        N/m^2       straiy    
+ tilt (x)                                  N/m^2       strtltx   
+ tilt (y)                                  N/m^2       strtlty   
+ coriolis stress (x)                       N/m^2       strcorx   
+ coriolis stress (y)                       N/m^2       strcory   
+ ocean/ice stress (x)                      N/m^2       stroix    
+ ocean/ice stress (y)                      N/m^2       stroiy    
+ internal ice stress (x)                   N/m^2       strintx   
+ internal ice stress (y)                   N/m^2       strinty   
+ compressive ice strength                  N/m         strength  
+ strain rate (divergence)                  %/day       divu      
+ strain rate (shear)                       %/day       shear     
+ norm. principal stress 1                              sig1      
+ norm. principal stress 2                              sig2      
+ volume tendency thermo                    cm/day      dvidtt    
+ volume tendency dynamics                  cm/day      dvidtd    
+ area tendency dynamics                    cm/day      daidtd    
+ salt flux to ocean                        kg/m^2 s    Fsalt     
+  
+ dt =  7200.   dte =  60.   tdamp =  2592.
+ 
+ hin_max(nc-1) < Cat nc < hin_max(nc)
+ 0.E+0  < Cat  1  <  0.6445072168194258
+ 0.6445072168194258  < Cat  2  <  1.3914334975763036
+ 1.3914334975763036  < Cat  3  <  2.4701793819598885
+ 2.4701793819598885  < Cat  4  <  4.5672879188504911
+ 4.5672879188504911  < Cat  5  <  9.3338418158681726
+  
+ istep1: 0  date:  19970101  sec:  0
+  initialize diagnostic prints 
+  find indices of points 
+ found point   1
+   lat     lon     TLAT    TLON    iindx jindx 
+   90.0     0.0    85.0     1.0      89   106
+ found point   2
+   lat     lon     TLAT    TLON    iindx jindx 
+  -70.0    40.0   -68.2    40.3      78    15
+  
+ Finished writing iceh.19970101.incond.nc
+  
+  
+ istep1: 12  date:  19970102  sec:  0
+                                             Arctic                 Antarctic
+max cH (m)             =        2.09328977618712075       1.88111774349958960
+total area (km^2)      =    3.87810848330835700E+07   6.98461184608970135E+07
+total ice volume (m^3) =    7.04349949710215000E+13   1.26080776090499563E+14
+total snw volume (m^3) =    0.00000000000000000E+00   0.00000000000000000E+00
+average albedo         =        0.47086570560862806       0.46975102784189077
+max u, v (m/s)         =        0.11901871588808435       0.11417539260975837
+                          
+       Lat, Long                     85.0    1.0          -68.2   40.3
+     my_task, i, j                   5.  42.  43.           1.  31.  16.
+ ----------atm----------
+air temperature (C)    =       -0.14999999999997726      -0.14999999999997726
+specific humidity      =        0.01400000000000000       0.01400000000000000
+snowfall (m)           =        0.00007200000000000       0.00007200000000000
+total snow to date (m) =        0.00086400000000000       0.00086400000000000
+rainfall (m)           =        0.00000000000000000       0.00000000000000000
+shortwave radiation sum=        0.00000000000000000       0.00000000000000000
+longwave radiation     =      280.00000000000000000     280.00000000000000000
+ ----------ice----------
+area fraction          =        0.96959507571027814       0.86870948319917796
+avg ice thickness (m)  =        1.80481466126930234       1.80472319187764740
+avg snow depth (m)     =        0.00000000000000000       0.00000000000000000
+surface temperature(C) =        0.00000000000000000       0.00000000000000000
+sensible heat flx      =       -2.17969904611112941      -2.17969904611112941
+latent heat flx        =      390.75003853895879000     390.75003853895879000
+subl/cond (m ice)      =       -0.00109638066099643      -0.00109636596085097
+top melt (m)           =        0.00898242491346302       0.00812181746809971
+bottom melt (m)        =        0.00030370655094302       0.00084184502593562
+new ice (m)            =        0.00000000000000000       0.00000000000000000
+congelation (m)        =        0.00000000000000000       0.00000000000000000
+snow-ice (m)           =        0.00000000000000000       0.00000000000000000
+effective dhi (m)      =       -0.00821099767617706      -0.02238447844213631
+effective dhs (m)      =        0.00000000000000000       0.00000000000000000
+intnl enrgy chng(W/m^2)=     -312.58390693460899000    -843.56747539607192700
+ ----------ocn----------
+sst (C)                =       -1.83597984731274444      -1.83566269664941006
+freezing temp (C)      =       -1.83600000000000008      -1.83600000000000008
+heat used (W/m^2)      =        8.69976976401818902      33.55175967039915720
+  
+ istep1: 24  date:  19970103  sec:  0
+                                             Arctic                 Antarctic
+max cH (m)             =        2.08109180281845152       1.89741730976319856
+total area (km^2)      =    3.73998832759149522E+07   6.75376830458730310E+07
+total ice volume (m^3) =    6.64621718441888906E+13   1.18834047575014125E+14
+total snw volume (m^3) =    0.00000000000000000E+00   0.00000000000000000E+00
+average albedo         =        0.46910850436537643       0.46720574723679908
+max u, v (m/s)         =        0.11988347484738505       0.11723792446452465
+                          
+       Lat, Long                     85.0    1.0          -68.2   40.3
+     my_task, i, j                   5.  42.  43.           1.  31.  16.
+ ----------atm----------
+air temperature (C)    =       -0.14999999999997726      -0.14999999999997726
+specific humidity      =        0.01400000000000000       0.01400000000000000
+snowfall (m)           =        0.00007200000000000       0.00007200000000000
+total snow to date (m) =        0.00172800000000000       0.00172800000000000
+rainfall (m)           =        0.00000000000000000       0.00000000000000000
+shortwave radiation sum=        0.00000000000000000       0.00000000000000000
+longwave radiation     =      280.00000000000000000     280.00000000000000000
+ ----------ice----------
+area fraction          =        0.93845152355836126       0.75060930212535071
+avg ice thickness (m)  =        1.75965150309564322       1.75333236894853206
+avg snow depth (m)     =        0.00000000000000000       0.00000000000000000
+surface temperature(C) =        0.00000000000000000       0.00000000000000000
+sensible heat flx      =       -2.17969904611112941      -2.17969904611112941
+latent heat flx        =      390.75003853895879000     390.75003853895884700
+subl/cond (m ice)      =       -0.00109732467469977      -0.00109730720038737
+top melt (m)           =        0.00877418489986664       0.00708382750578487
+bottom melt (m)        =        0.00048828795706843       0.00153185883215510
+new ice (m)            =        0.00000000000000000       0.00000000000000000
+congelation (m)        =        0.00000000000000000       0.00000000000000000
+snow-ice (m)           =        0.00000000000000000       0.00000000000000000
+effective dhi (m)      =       -0.00820561487646665      -0.01983054431778175
+effective dhs (m)      =        0.00000000000000000       0.00000000000000000
+intnl enrgy chng(W/m^2)=     -309.78298309758304200    -745.50943349080785100
+ ----------ocn----------
+sst (C)                =       -1.83591847527288965      -1.83451753961799757
+freezing temp (C)      =       -1.83600000000000008      -1.83600000000000008
+heat used (W/m^2)      =       16.63763184564303540      74.25441521317419810
+Timer number  0  Total    =    38.43 seconds  min/max =     38.36    38.43
+Timer number  1  TimeLoop =    35.75 seconds  min/max =     35.75    36.08
+Timer number  2  Dynamics =    17.34 seconds  min/max =     16.86    22.95
+Timer number  3  Advectn  =     4.84 seconds  min/max =      4.72     4.86
+Timer number  4  Column   =     9.87 seconds  min/max =      5.03    11.02
+Timer number  5  Thermo   =     7.89 seconds  min/max =      3.69     8.73
+Timer number  6  Ridging  =     1.19 seconds  min/max =      1.17     1.34
+Timer number  7  Cat Conv =     0.49 seconds  min/max =      0.24     0.55
+Timer number  8  Coupling =     0.00 seconds  min/max =      0.00     0.00
+Timer number  9  ReadWrit =     1.29 seconds  min/max =      1.14     1.29
+Timer number 10  Bound    =     2.79 seconds  min/max =      2.27    17.11

@@ -1,6 +1,7 @@
 c $Id: $
 c=======================================================================
-!---! Defines variable precision for all common data types
+!---! Defines the global domain size and number of categories
+!---! and layers
 !---!
 !---! author Elizabeth C. Hunke
 !---!        Fluid Dynamics Group, Los Alamos National Laboratory
@@ -17,21 +18,25 @@ c=======================================================================
 !---! warranty, express or implied, or assumes any liability or 
 !---! responsibility for the use of this software.
 !---!
-!---! code originally based on kinds_mod.F in POP
+!---! code originally based on model_size.F in POP
 c=======================================================================
 
-      module ice_kinds_mod
+      module ice_model_size
+
+      use ice_kinds_mod
 
       implicit none
       save
 
-      integer, parameter :: char_len  = 80,
-     &                      int_kind  = kind(1),
-     &                      log_kind  = kind(.true.),
-     &                      real_kind = selected_real_kind(6),
-     &                      dbl_kind  = selected_real_kind(13)
-
-      end module ice_kinds_mod
+      integer (kind=int_kind), parameter :: 
+     &  imt_global = 192,        ! i-axis size 
+     &  jmt_global = 128,        ! j-axis size
+     &  ncat       =   5,        ! number of categories
+     &  nilyr      =   4,        ! number of layers in a single category
+     &  ntilay     =  ncat*nilyr ! sum of number of layers in all cats
 
 c=======================================================================
 
+      end module ice_model_size
+
+c=======================================================================

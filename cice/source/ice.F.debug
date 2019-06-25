@@ -1,0 +1,256 @@
+c $Id: ice.F,v 1.3 2001/02/23 21:06:51 schramm Exp $
+c=======================================================================
+!---! this version of ice.F can be helpful for debugging
+c=======================================================================
+!---! main driving routine for CICE
+!---!
+!---! author Elizabeth C. Hunke
+!---!        Fluid Dynamics Group, Los Alamos National Laboratory
+!---!
+!---! Copyright, 2001.  The Regents of the University of California.
+!---! This software was produced under a U.S. Government contract 
+!---! (W-7405-ENG-36) by Los Alamos National Laboratory, which is operated
+!---! by the University of California for the U.S. Department of Energy.  
+!---! The U.S. Government is licensed to use, reproduce, and distribute this 
+!---! software.  Permission is granted to the public to copy and use this 
+!---! software without charge, provided that this Notice and any statement
+!---! of authorship are reproduced on all copies.  Neither the Government
+!---! nor the University makes any warranty, express or implied, or assumes
+!---! any liability or responsibility for the use of this software.
+!---!
+!---! CICE has been developed in close collaboration with the NCAR CCSM
+!---! climate modeling project and includes ideas and efforts from 
+!---! everyone on the CCSM polar climate working group.  CICE differs 
+!---! from CCSM2-SI primarily in the thermodynamics, transport and
+!---! mechanical redistribution components.
+!---! 
+c=======================================================================
+!---! 
+!---! The NCAR Community Climate System Model Version 2 - Sea Ice (CCSM2-SI)
+!---! is intended for use by the climate modeling community, and its
+!---! development has been a true community effort.  The list of physics to
+!---! be included in CCSM2-SI was developed by the CCSM Polar Climate
+!---! Working Group (PCWG) in a series of meetings during 1997-1999.  The
+!---! specific parameterizations and codes to be implemented were identified
+!---! and agreed upon at a meeting of ice model developers from the PCWG,
+!---! held at NCAR in September, 1999.
+!---! 
+!---! A brief description of the development of the CCSM2-SI code is as
+!---! follows:
+!---! 
+!---!   o The code originated from the LANL CICE model (version of
+!---!   September, 1999).  CCSM2-SI retains the following elements from this
+!---!   original code: Elastic-viscous-plastic dynamics (EVP), MPDATA
+!---!   transport scheme, and much of the original code structure.
+!---!   
+!---!   o Later in autumn of 1999, the code was changed as follows: (1) the
+!---!   MPI parallelization routines were updated; (2) a multi-category ice
+!---!   thickness distribution was added; (3) a new thermodynamic code
+!---!   with explicit treatment of brine pockets was added.
+!---!  
+!---!   o In late 1999/early 2000, changes were made to the history output.
+!---! 
+!---!   o During winter-spring 2000, the Active Ice Only (AIO) framework was
+!---!   developed, together with datasets to be used as forcing within
+!---!   this framework.  The model was tested within this AIO framework.
+!---! 
+!---!   o In the fall of 2000, the code was streamlined, checked, 
+!---!   standardized, and updated to Fortran 90. Documentation is currently 
+!---!   being written.
+!---! 
+!---! The development team for the model described above is:
+!---! 
+!---! Elizabeth Hunke, LANL
+!---! Cecilia Bitz, U. WA.
+!---! Bruce Briegleb, NCAR
+!---! Tony Craig, NCAR
+!---! Marika Holland, NCAR
+!---! Bill Lipscomb, LANL
+!---! Julie Schramm, NCAR
+!---!
+!---! Numerous others have contributed to this effort also--thanks to all! 
+c=======================================================================
+
+      program icemodel
+
+c=======================================================================
+
+      use ice_timers
+      use ice_mpi_internal
+      use ice_albedo
+      use ice_therm_cice
+      use ice_mechred_cice
+      use ice_scaling
+      use ice_diagnostics
+      use ice_history
+      use ice_coupling
+      use ice_grid
+      use ice_calendar
+      use ice_dyn_evp
+      use ice_itd
+      use ice_itd_linear
+      use ice_transport
+      use ice_therm_driver
+      use ice_init
+      use ice_flux_in
+      use ice_fileunits
+c      uxxxse shr_msg_mod          ! for coupled runs only
+
+      implicit none
+
+#if coupled
+      call shr_msg_stdio('ice')    ! change cwd, redirect stdin/stdout
+#endif
+
+      !-----------------------------------------------------------------
+      ! initializations
+      !-----------------------------------------------------------------
+
+      call setup_mpi           ! initial setup for message passing
+
+      ! timing devices
+      call ice_timer_clear(-1) ! initialize all timers
+      call ice_timer_start(0)  ! begin timing entire run
+
+      ! parameters, grid, parameterizations, etc
+      call init_constants      ! pi, etc
+      call input_data          ! namelist variables
+      call init_grid           ! grid variables
+      if (advection.eq.'remap') call init_remap ! more grid variables
+      call init_calendar       ! initialize some calendar stuff
+      call init_hist           ! initialize output history file
+      call init_evp            ! define evp dynamics parameters, variables
+      call init_flux           ! initialize coupler fluxes
+      call init_therm_cice     ! initialize vertical thermodynamics
+      call init_itd            ! initialize ice thickness distribution
+      call init_mechred        ! initialize ridging parameters
+      call init_state          ! initialize the ice state
+
+      if (restart) call restartfile       ! start from restart data
+
+      call albedos             ! albedo based on initial ice distribution
+      call calendar(time)      ! determine the initial date
+
+#if coupled
+      call init_cpl            ! initialize message passing 
+#endif
+      call init_diags          ! initialize diagnostic output
+
+      write_ic = .true.        ! write initial conditions
+      call ice_write_hist
+      write_ic = .false.
+
+      !-----------------------------------------------------------------
+      ! timestep loop 
+      !-----------------------------------------------------------------
+      call ice_timer_start(1)  ! begin timing entire timestepping loop
+
+      do while (stop_now .lt. 1)
+
+      istep  = istep  + 1      ! update time step counters
+      istep1 = istep1 + 1
+      time = time + dt         ! determine the time and date
+      call calendar(time)      !   at the end of the timestep
+
+#if coupled
+      call from_coupler        ! get updated info from flux coupler
+#else
+      call getflux
+#endif
+      if( stop_now .eq. 1 ) goto 200  ! coupler called it quits
+
+         if (istep1.ge.check_step)  call debug_ice ('pre thermo 1')
+      call init_mass_diags     ! diagnostics per timestep
+      call thermo_rates        ! thermodynamic growth rates and fluxes
+         if (istep1.ge.check_step)  call debug_ice ('post thermo 1')
+
+      call scale_fluxes        ! divide fluxes by ice area for coupler
+#if coupled
+      call to_coupler          ! collect/send data to flux coupler
+#endif
+
+      call thermo_itd          ! thermodynamics and associated itd changes
+         if (istep1.ge.check_step)  call debug_ice ('post thermo 2')
+      if (kdyn .eq. 1) call evp(kstrength) ! elastic-viscous-plastic dynamics 
+
+      if (advection .eq. 'remap') then     ! horizontal advection
+         call transport_remap  ! remapping
+      else
+         call transport_mpdata ! upwind or 2nd order mpdata      
+      endif
+         if (istep1.ge.check_step)  call debug_ice ('post transport')
+
+      call freeboard           ! adjust freeboard for snow loading
+         if (istep1.ge.check_step)  call debug_ice ('post freeboard')
+      call ridge_ice(Delta,divu) ! ridging
+         if (istep1.ge.check_step)  call debug_ice ('post mechred')
+      call distr_check         ! corrections to thickness distribution
+         if (istep1.ge.check_step)  call debug_ice ('post distr_check')
+      call aggregate           ! merge categories together
+         if (istep1.ge.check_step)  call debug_ice ('post aggregate')
+      call albedos             ! compute ice albedos
+
+      !-----------------------------------------------------------------
+      ! write data 
+      !-----------------------------------------------------------------
+      call ice_timer_start(9)  ! reading/writing
+      call scale_hist_fluxes   ! to match coupler fluxes
+      if (mod(istep,diagfreq).eq.0) call runtime_diags  ! log file
+      call ice_write_hist                               ! history file
+      if (write_restart .eq. 1) call dumpfile   ! dumps for restarting
+      call ice_timer_stop(9)   ! reading/writing
+
+      enddo ! while
+
+      !-----------------------------------------------------------------
+      ! end of timestep loop
+      ! print timing information and exit
+      !-----------------------------------------------------------------
+
+ 200  continue
+
+      call ice_timer_stop(1)       ! end timestepping loop timer
+      call ice_timer_stop(0)       ! end total time timer
+      call ice_timer_print(-1)     ! print all timing information
+      if (nu_diag.ne.6) close (nu_diag) ! diagnostic output
+
+#ifndef coupled
+      call end_run             ! quit MPI
+#else
+      call exit_coupler        ! disconnect cice from the coupled system  
+#endif
+
+      stop
+
+      end program icemodel
+
+c=======================================================================
+
+      subroutine debug_ice(plabeld)
+
+!---!-------------------------------------------------------------------
+!---! wrapper for the print_state debugging routine
+!---! useful for debugging in the main driver (see ice.F_debug)
+!---! ip, jp, mtask are set in ice_diagnostics.F
+!---!-------------------------------------------------------------------
+
+      use ice_kinds_mod
+      use ice_itd
+      use ice_diagnostics
+      use ice_mpi_internal
+      use ice_grid
+
+      integer (kind=int_kind) :: i,j 
+      character (char_len) :: plabeld
+
+      do j=jlo,jhi
+       do i=ilo,ihi
+         call to_column(i,j)
+         if (i.eq.ip.and.j.eq.jp.and.my_task.eq.mtask) 
+     &   call print_state(plabeld,i,j)
+       enddo
+      enddo
+
+      end subroutine debug_ice
+
+c=======================================================================
