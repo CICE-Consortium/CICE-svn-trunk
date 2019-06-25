@@ -1,0 +1,10 @@
+17 Sep 1998  
+ - fixed bug in flux coupler discovered by Lin Peters 
+   in index.H:  kFiod_q = 3
+   (was originally kFioo_q = 3, but was changed to kFiod_q = 1 after
+   inclusion of McPhee Fw scheme, which the coupler computes instead of
+   the ocean)  
+ - fixed rain -> snow conversion
+   precip rate arrives in kg/m^2 s; convert to g/cm^2 s by dividing by
+   10, then to snowfall rate (m/s) by dividing by rhos
+

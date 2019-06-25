@@ -1,0 +1,20 @@
+ $inp
+
+      year=0000,
+      dt=7200.,
+      ndte=100,
+      npt=12,
+      iplot=1,
+      kread=0,
+
+      cpct=0.9,
+      hice=200.,
+      hsnow=10.,
+      hzero=5.,
+      u0=0.,
+      v0=0.,
+
+      pst=2.75e5,
+      cst=20,
+      eyc=0.25
+/

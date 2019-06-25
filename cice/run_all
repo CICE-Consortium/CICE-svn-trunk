@@ -1,0 +1,81 @@
+#!/bin/csh
+#BSUB -q chammpq
+#BSUB -n 32
+#BSUB -W 12:00
+#BSUB -R "span[hosts=1]"
+#BSUB -N
+
+#
+#  Set up beginning and ending dates for this run.
+#
+
+setenv BDATE 0000
+setenv EDATE 0000
+echo "$BDATE"
+echo "$EDATE"
+
+#
+#  Define directories for various files
+#
+
+echo "Defining directories for various files"
+
+set usrdir = "eclare"
+setenv SCRATCH_DIR     /scratch/$usrdir
+setenv CPL_HOME        /home/ocean/eclare/release/cice
+
+#
+# Define all filenames needed
+#
+
+setenv OCN_GRID_FILE      grid_192.dat.m
+
+setenv ICE_LOG_FILE       ice.$EDATE.log
+setenv ICE_MASK_FILE      ice_mask.$EDATE.nc
+setenv ICE_COMPACT_FILE   ice_compact.$EDATE.nc
+setenv ICE_THICK_FILE     ice_thick.$EDATE.nc
+setenv ICE_VEL_FILE       ice_vel.$EDATE.nc
+setenv ICE_TEMPS_FILE     ice_temps.$EDATE.nc
+setenv ICE_FLUXES_FILE    ice_fluxes.$EDATE.nc
+setenv ICE_DUMP_FILE      ice_restart.$EDATE.d
+setenv ICE_RESTRT_FILE    ice_restart.$BDATE.d
+
+setenv DRV_LOG_FILE      drv.$EDATE.log
+
+#
+#  Start PVM daemon
+#
+
+/bin/rm /tmp/pvmd.284
+/bin/rm /tmp/pvmd.7098
+/bin/rm /tmp/pvmd.5135
+
+$PVM_ROOT/lib/pvmd &
+sleep 10
+
+#
+#  Start up component models using scripts
+#
+
+run_ice &
+run_drv 
+
+#
+#  All done - wait a little to make sure jobs
+#  have really stopped.  Then kill the PVM daemon.
+#
+
+echo "wait for jobs to stop"
+sleep 60
+
+echo "killing pvm daemon"
+ps -u $USER | awk '/pvmd3/{system("kill -15 " $1)}'
+echo "pvm daemon killed"
+
+#
+#  Exit
+#
+
+echo "exiting job"
+exit 0
+

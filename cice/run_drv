@@ -1,0 +1,33 @@
+#!/bin/csh
+########################################################################
+#
+# This is a script for running the flux coupler portion of the coupled
+# model.
+#
+########################################################################
+
+#
+# Set number of processors for parallel execution
+#
+
+setenv MP_SET_NUMTHREADS 1
+
+#
+# Directories and filenames are defined in the run_all script
+# from which this script must be called.
+#
+
+cd $CPL_HOME/drv
+
+#
+# Run the code
+#
+
+echo "running driver"
+drv.MCL1.0 < drv.parm >&! $DRV_LOG_FILE 
+
+#
+# Exit
+#
+
+exit 0

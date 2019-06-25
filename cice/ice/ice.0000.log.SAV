@@ -1,0 +1,73 @@
+  dt= 7200.0  ndte=100  npt=    12  iplot=  1
+  ktherm= 0  kstress= 0  kread= 0  year=       0
+  cpct=  0.9  hice=200.0  hsnow= 10.0  hzero=  5.0
+  u0=  0.0  v0=  0.0  cst=20.0  pst=2.75E+05  Eyc=2.50E-01
+ min(dx,dy) =  838735.53755300504
+XPVM not running, cannot trace
+  XPVM has been enabled for tracing
+ Joining group: LCM
+   
+ You are using Inter-processor Pipe Data-Channel
+   
+ (ice) Connected to coupler 
+ (ice) Allocated buffer space
+ (ice) Received message from coupler 
+  call mcl_pack(ibuff,nibuff,MCL_INT,msg_id,bufidi,ier)
+ call mcl_send(msgtype_i2di,msg_id,bufidi,ier)
+ (ice) Sent grid info
+  Creating file ice_mask.0000.nc                                                                
+  Creating file ice_compact.0000.nc                                                             
+  Creating file ice_thick.0000.nc                                                               
+  Creating file ice_vel.0000.nc                                                                 
+  Creating file ice_temps.0000.nc                                                               
+  Creating file ice_fluxes.0000.nc                                                              
+ 1
+ date:  101
+ max cH =  180.55971387649217
+ max u or v =  8.350451446018111
+ 2
+ date:  101
+ max cH =  180.90796659910731
+ max u or v =  9.749967214990571
+ 3
+ date:  101
+ max cH =  181.52338535917997
+ max u or v =  9.8321247268230856
+ 4
+ date:  101
+ max cH =  182.32226933175059
+ max u or v =  10.028335935477951
+ 5
+ date:  101
+ max cH =  183.17895736045986
+ max u or v =  9.8660098958110769
+ 6
+ date:  101
+ max cH =  184.03013657933906
+ max u or v =  10.318618072509141
+ 7
+ date:  101
+ max cH =  184.84722014074489
+ max u or v =  9.753777883363087
+ 8
+ date:  101
+ max cH =  185.61702276293133
+ max u or v =  10.11942485880528
+ 9
+ date:  101
+ max cH =  186.35981158084869
+ max u or v =  9.8819537937049162
+ 10
+ date:  101
+ max cH =  187.01037925802927
+ max u or v =  9.6233255409137097
+ 11
+ date:  101
+ max cH =  187.57010333461017
+ max u or v =  9.4799959441435995
+ 12
+ date:  102
+ max cH =  188.09492707324475
+ max u or v =  10.790272209079086
+ dt =  7200.   dte =  72.
+ (ice) received terminate signal

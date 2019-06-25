@@ -1,0 +1,128 @@
+_____________________________________________________________________
+
+		  CICE: the Los Alamos Sea Ice Model
+		      Software and Documentation
+			     Version 1.0
+			      LACC-98-16
+_____________________________________________________________________
+
+Copyright, 1998.  The Regents of the University of California.
+This software was produced under a U.S. Government contract 
+(W-7405-ENG-36) by Los Alamos National Laboratory, which is operated
+by the University of California for the U.S. Department of Energy.  
+The U.S. Government is licensed to use, reproduce, and distribute this 
+software.  Permission is granted to the public to copy and use this 
+software without charge, provided that this Notice and any statement
+of authorship are reproduced on all copies.  Neither the Government
+nor the University makes any warranty, express or implied, or assumes
+any liability or responsibility for the use of this software.
+_____________________________________________________________________
+
+Summary:
+
+This software release contains the sea ice component for global
+climate modeling developed at Los Alamos National Laboratory.  It was
+designed to be compatible with the Parallel Ocean Program (POP), an
+ocean circulation model developed at Los Alamos National Laboratory
+for use on massively parallel computers. CICE has three interacting
+components: a thermodynamic model that produces local growth rates of
+snow and ice due to vertical conductive fluxes, snowfall and local
+temperatures; a model of ice dynamics, which predicts the velocity
+field of the ice pack based on a model of the material strength of the
+ice; and a transport model which describes advection of the areal
+concentration, ice thicknesses and snow depths, and conversions among
+them. Additional routines prepare and execute data exchanges with a
+"flux coupler," which then passes the data to other climate model
+components such as POP.  The flux coupler is a reduced version of the
+Climate System Model flux coupler developed at the National Center for
+Atmospheric Research.
+_____________________________________________________________________
+
+Files:
+
+cice/
+   README           this file
+   run_all          primary run script 
+   run_drv          secondary run script controls the flux coupler 
+   run_ice          secondary run script controls the ice model 
+
+cice/doc/
+   evp.ps           Hunke and Dukowicz (1997) preprint
+   cicedoc.ps	    PostScript documentation 
+
+cice/drv/           the flux coupler
+   drv.parm         input parameters
+   drv.0000.log.SAV sample output file
+cice/drv/src/       the flux coupler source code
+   buffer.H         buffers for message passing
+   calendar.F       calendar and other time-keeping routines
+   dims.H           domain and buffer dimensions
+   driver.F         initialization, shut-down, and simple functions
+   driver.H         common blocks for coupling 
+   grids.H          lat/lon grid and land mask
+   index.H          indices for buffers
+   main.F           flux coupler main program
+   makefile         links and compiles the code   
+   mrgf_ice.F       gathers flux components on the ice grid
+   msg.MCL1.0.H     pointers and parameters for message passing
+   msg_drv.MCL1.0.F flux coupler message passing routines
+   msg_ice.MCL1.0.F sea ice model message passing routines
+   restart.F        initialization routine, in this case
+
+cice/ice/           CICE, the sea ice component
+   ice.inp          namelist input data (unit 20) 
+   grid_192.dat.m   nonuniform grid and land mask (unit 21) 
+   ice.0000.log.SAV sample output file
+cice/ice/src/       CICE source code
+   Makefile         links and compiles the code
+   ice_mp.F         main program 
+   icegrid.F        grid, boundary, and calendar routines 
+   iceinit.F        namelist and initializations 
+   flux_mp.F        data exchanges with the flux coupler via message passing 
+   therm.F          thermodynamics component 
+   transp.F         transport component 
+   dyn.F            elastic-viscous-plastic dynamics component 
+   iceout.F         netCDF output routines and restart read/write 
+   ice.h            common blocks and some parameters 
+   ice_mp.h         common blocks for message passing 
+   ncdf.h           common blocks for netCDF
+_____________________________________________________________________
+
+Included with this release is a minimal set of programs and files to
+initialize the sea ice and flux coupler codes, compile and run them.
+Three libraries will be necessary to use this code in its present
+implementation,
+netCDF: http://www.unidata.ucar.edu/packages/netcdf/
+MCL:    http://www.scd.ucar.edu/css/mcl/mcldoc-1.html
+PVM:    http://www.epm.ornl.gov/pvm/pvm_home.html
+
+In addition to documentation in the codes themselves, there are two
+PostScript files suitable for printing.  The file cicedoc.ps contains
+a description of the thermodynamics and transport components of CICE
+plus information about the software and how to use it; the EVP
+dynamics model is fully documented in evp.ps.  An index of symbols and
+parameter values is included in cicedoc.ps and a set of HTML
+documentation files:
+http://gnarly.lanl.gov/Pop/eclare/cicecode/html/ 
+
+CICE software and documentation may be downloaded from
+http://gnarly.lanl.gov/Pop/eclare/cicecode/
+
+The complete flux coupler is available from the National Center for
+Atmospheric Research:
+http://www.cgd.ucar.edu/csm/models/cpl/
+_____________________________________________________________________
+
+This software comes with no promise of support.
+Please send feedback to the author:
+
+    Elizabeth C. Hunke
+    Email: eclare@lanl.gov
+
+This code, particularly the coupling routines, is in a state of flux
+(to use a bad pun).  Therefore, I recommend that anyone using this
+code send me email to that effect, so that I can maintain a list of
+users.  I am also interested in knowing the projects for which it's
+being used.
+
+    May 4, 1998

@@ -1,0 +1,21 @@
+...... for my own sanity ........
+
+polynya.lanl.gov:    the documentation
+  ~/ice/doc
+  latex cicedoc.tex
+  dvips cicedoc.dvi
+  hyperlatex cicedoc.tex
+  tarup
+  scp cicedoc.ps bluemountain.acl.lanl.gov:/home/ocean/eclare/release/cice/doc
+  scp cicedoc.ps gnarly.lanl.gov:/usr/www/Pop/eclare/cicecode
+     etc
+
+bluemountain.lanl.gov:    the code and docs
+  cvs tag info in ~/misc/cvs.commands
+  /home/ocean/eclare/release
+  get new cicedoc.ps if needed (see above)
+  tar cvf cice.tar cice
+  scp cice.tar gnarly.lanl.gov:/usr/www/Pop/eclare/cicecode
+
+
+

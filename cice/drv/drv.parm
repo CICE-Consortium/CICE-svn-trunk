@@ -1,0 +1,13 @@
+&drv_parm 
+      rest_type   = 'initial',
+      stop_option = 'ndays',
+      stop_nday   = 1,
+      stop_date   = 00000101,
+      hist_tavg   = 1,
+      info_dbug   = 0,
+      info_time   = 0,
+      init_davg   = 0,
+      msg_method  = 'named-pipe',
+      msg_group   = 'LCM',
+      msg_maxt    = 600
+/

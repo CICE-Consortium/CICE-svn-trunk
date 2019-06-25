@@ -1,0 +1,44 @@
+#!/bin/csh
+
+#
+# Create the namelist input file
+# Filenames have been set in run_all script from which
+# this script is called.
+#
+
+echo "Creating namelist input file icefiles.inp"
+
+cd $CPL_HOME/ice
+
+/bin/rm icefiles.inp
+echo "&fileinp" > icefiles.inp
+echo "grid_file    = '$OCN_GRID_FILE'"    >> icefiles.inp
+echo "mask_file    = '$ICE_MASK_FILE'"    >> icefiles.inp
+echo "compact_file = '$ICE_COMPACT_FILE'" >> icefiles.inp
+echo "thick_file   = '$ICE_THICK_FILE'"   >> icefiles.inp
+echo "vel_file     = '$ICE_VEL_FILE'"     >> icefiles.inp
+echo "temps_file   = '$ICE_TEMPS_FILE'"   >> icefiles.inp
+echo "fluxes_file  = '$ICE_FLUXES_FILE'"  >> icefiles.inp
+echo "dump_file    = '$ICE_DUMP_FILE'"    >> icefiles.inp
+echo "restrt_file  = '$ICE_RESTRT_FILE'"  >> icefiles.inp
+
+echo "/" >> icefiles.inp
+
+#
+# Set number of processors for parallel execution
+#
+
+setenv MP_SET_NUMTHREADS 4
+
+#
+# Run the ice model
+#
+
+cice >&! $ICE_LOG_FILE
+
+#
+# Exit the script
+#
+
+exit 0
+
