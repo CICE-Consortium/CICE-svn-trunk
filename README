@@ -1,0 +1,115 @@
+_____________________________________________________________________
+
+		  CICE: the Los Alamos Sea Ice Model
+		      Software and Documentation
+			     Version 2.0
+			      LACC-98-16
+_____________________________________________________________________
+
+Copyright, 1999.  The Regents of the University of California.
+This software was produced under a U.S. Government contract 
+(W-7405-ENG-36) by Los Alamos National Laboratory, which is operated
+by the University of California for the U.S. Department of Energy.  
+The U.S. Government is licensed to use, reproduce, and distribute this 
+software.  Permission is granted to the public to copy and use this 
+software without charge, provided that this Notice and any statement
+of authorship are reproduced on all copies.  Neither the Government
+nor the University makes any warranty, express or implied, or assumes
+any liability or responsibility for the use of this software.
+_____________________________________________________________________
+
+Summary:
+
+This software release contains the sea ice component for global
+climate modeling developed at Los Alamos National Laboratory.  It was
+designed to be compatible with the Parallel Ocean Program (POP), an
+ocean circulation model developed at Los Alamos National Laboratory
+for use on massively parallel computers. CICE has three interacting
+components: a thermodynamic model that produces local growth rates of
+snow and ice due to vertical conductive fluxes, snowfall and local
+temperatures; a model of ice dynamics, which predicts the velocity
+field of the ice pack based on a model of the material strength of the
+ice; and a transport model which describes advection of the areal
+concentration, ice thicknesses and other state variables, and
+conversions among them. Additional routines prepare and execute data
+exchanges with a "flux coupler," which then passes the data to other
+climate model components such as POP.  The flux coupler can be
+obtained from the National Center for Atmospheric Research's Climate
+System Model: 
+http://goldhill.cgd.ucar.edu/csm/models/cpl/ .
+_____________________________________________________________________
+
+Files:
+
+cice/
+   README           this file
+
+cice/doc/
+   cicedoc.ps	    PostScript documentation 
+
+cice/ice/           CICE, the sea ice component
+   forcing.dat      a sample input file for forcing data file names
+   global_192x128.grid nonuniform grid (unit 11) 
+   global_192x128.kmt  land mask (unit 12) 
+   ice.inp          namelist input data (unit 20) 
+   ice.log.mpi_4x2  sample MPI output file (8 processors)
+   ice.log.omp_8    sample OPENMP output file (8 processors)
+   run_ice          run script that controls the ice model 
+cice/ice/src/       CICE source code
+   Makefile         links and compiles the code
+   ice.F            main program for stand-alone runs
+   ice_coupling.F   main program for coupled runs
+   icegrid.F        grid and calendar routines 
+   iceinit.F        namelist and initializations 
+   ice_misc.F       miscellaneous routines
+   coupling.F       data exchanges with the flux coupler via message passing 
+   flux.F           reads forcing data for stand-alone runs
+   thermw.F         thermodynamics component 
+   transp.F         transport component 
+   dyn.F            elastic-viscous-plastic dynamics component 
+   iceout.F         netCDF output routines and restart read/write 
+   timers.F         timing routines
+   ice.H            common blocks and some parameters 
+   thermw.H         common blocks and parameters for thermodynamics
+   ice_mpi.H        common blocks for MPI
+   coupling.H       common blocks for coupling
+   history.H        variables associated with writing the netCDF output
+   timers.H         common blocks for the timers
+_____________________________________________________________________
+
+Included with this release is a minimal set of programs and files to
+initialize the sea ice code, compile and run it in stand-alone mode.
+Libraries for MPI and netCDF will be necessary to use this code in its
+present implementation.
+netCDF: http://www.unidata.ucar.edu/packages/netcdf/
+
+In addition to documentation in the codes themselves, the PostScript
+file cicedoc.ps contains a description of the thermodynamics,
+transport and dynamics components of CICE plus information about the
+software and how to use it.  An index of symbols and parameter values
+is included in cicedoc.ps and a set of HTML documentation files:
+http://www.acl.lanl.gov/climate/eclare/cicecode/html/cicedoc.html
+
+CICE software and documentation may be downloaded from
+http://www.acl.lanl.gov/climate/eclare/cicecode/cice.html
+
+The complete flux coupler is available from the National Center for
+Atmospheric Research:
+http://www.cgd.ucar.edu/csm/models/cpl/
+_____________________________________________________________________
+
+This software comes with no promise of support.
+Please send feedback to 
+
+    Elizabeth C. Hunke
+    Email: eclare@lanl.gov
+
+This code, particularly the coupling routines, is in a state of flux
+(to use a bad pun).  Therefore, I recommend that anyone using this
+code send me email to that effect, so that I can maintain a list of
+users.  I am also interested in knowing the projects for which it's
+being used.
+
+    December 10, 1999  CICE version 2.0
+    January  14, 2000  CICE version 2.0.1
+
