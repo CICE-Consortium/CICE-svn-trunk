@@ -1,0 +1,17 @@
+#!/bin/tcsh
+#BSUB -n 8
+#BSUB -q fill
+#BSUB -W 0:10
+#BSUB -J cice
+#BSUB -N
+
+setenv DATA_DIR           .
+set  stamp   = `date -u '+%y%m%d%H%M%S'`
+setenv ICE_LOG_FILE       $DATA_DIR/ice.log.${stamp}
+
+#cice >&! $ICE_LOG_FILE
+mpirun -np 8 cice >&! $ICE_LOG_FILE
+
+##  Exit
+#rm core*
+exit 0

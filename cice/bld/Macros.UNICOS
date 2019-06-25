@@ -1,0 +1,31 @@
+#==============================================================================
+# Makefile macros for "phoenix", a Cray X1 at ORNL
+#
+# OPENMP is turned OFF
+#==============================================================================
+
+INCLDIR    := -I/apps/netcdf/prod/x1_r4/include -p/apps/netcdf/prod/x1_r4/include
+SLIBS      := -L/apps/netcdf/prod/x1_r4/lib -lnetcdf 
+ULIBS      := 
+CPP        := cpp
+CPPFLAGS   := 
+CPPDEFS    := -DUNICOSMP
+CFLAGS     := -c -h list=m
+FIXEDFLAGS := -f fixed
+FREEFLAGS  := -f free
+FC         := ftn
+FFLAGS     := -rm -N 132 -F -em -e0 -xomp
+MOD_SUFFIX := mod
+LD         := $(FC)
+LDFLAGS    := -em -e0 -xomp
+
+CPPDEFS :=  $(CPPDEFS) -DNPROC_X=$(NX) -DNPROC_Y=$(NY)
+#CPPDEFS :=  $(CPPDEFS) -Dfcd_coupled -Dcoupled
+
+ifeq ($(BINTYPE), MPI)
+   CPPDEFS :=  $(CPPDEFS) -D_MPI
+   SLIBS   :=  $(SLIBS) -lmpi
+endif
+
+
+

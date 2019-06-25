@@ -1,13 +1,11 @@
 #! /bin/csh -f
 
-#Change to your own paths!
-setenv SYSTEM_USERDIR /scratch/lipscomb
+#setenv SYSTEM_USERDIR /pvfs/lipscomb  # ORNL defines this automatically
 
-#setenv SRCDIR $HOME/cice.v4.0/cice
-setenv SRCDIR /net/bob4/lipscomb/cice.v4.0/cice
+setenv SRCDIR $HOME/cice.v3.1/cice
 
 setenv CBLD   $SRCDIR/bld
-setenv EXEDIR $SYSTEM_USERDIR/rundir.v4.0
+setenv EXEDIR $SYSTEM_USERDIR/rundir
 setenv OBJDIR $EXEDIR/compile
 
 cd $OBJDIR

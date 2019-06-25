@@ -1,0 +1,2 @@
+mpirun -v -machinefile NODES33-36 -nolocal -np 8 cice -Wl,-T
+

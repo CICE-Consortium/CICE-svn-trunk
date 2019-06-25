@@ -1,0 +1,17 @@
+#!/bin/tcsh 
+#PBS -N cice
+#PBS -j oe
+#PBS -q batch
+#PBS -l walltime=4:00:00,nodes=1:ppn=8
+#PBS -m e
+     
+set  stamp   = `date -u '+%y%m%d%H%M%S'`
+setenv ICE_LOG_FILE ice.log.${stamp}
+
+cd $SYSTEM_USERDIR/rundir
+mpirun -np 8 ./cice  >&! $ICE_LOG_FILE
+
+exit 0
+
+
+#### NOTE ####  To compile on ram.ccs.ornl.gov, first 'module load efc8034'.

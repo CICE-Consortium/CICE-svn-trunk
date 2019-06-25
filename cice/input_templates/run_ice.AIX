@@ -1,0 +1,31 @@
+#! /bin/csh -f
+
+# ------------ ORNL IBM SP: cheetah ------------
+#@ shell = /bin/csh
+#@ job_type = parallel
+#@ job_name = cice
+#@ network.MPI = csss,shared,US
+#@ environment  = MP_EUILIB=us; MP_EAGER_LIMIT=0
+#@ checkpoint = no
+#@ output = ice.log.$(jobid)
+#@ error = ice.log.$(jobid)
+#@ class = batch
+#@ wall_clock_limit = 2:00:00
+#@ task_geometry = {(0,1,2,3,4,5,6,7)}
+#@ queue
+
+poe cice
+
+
+
+####     to run interactively on cheetah     ####
+#### 
+#### see http://www.ccs.ornl.gov/Cheetah/interactive.html
+#### 
+#### In the execution directory:
+####    poe cice -rmpool 1 -procs 8 -euilib us
+#### 
+#### Totalview:
+#### kinit -f 
+#### <password>
+#### tv cice -rmpool 1 -procs 8 -euilib us

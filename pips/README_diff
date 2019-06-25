@@ -1,0 +1,90 @@
+There are a number of differences betweeen the PIPS default
+configuration and the default configuration in the CICE 3.1 
+repository.  So we have to be careful when updating files in
+this directory.  Most files can be substituted directly from 
+CICE 3.1, but six files cannot (as of May 2003):
+
+ice_diagnostics
+ice_flux_in
+ice_grid
+ice_init
+ice_model_size
+ice_therm_driver
+
+These files contain modifications denoted by 'cwm' or 'cwmwhl'.
+The modifications need to be duplicated in any files we bring
+in from the repository.
+
+Also look for Pam Posey's comments, denoted by 'cpp'.
+****************************************************************
+ice_diagnostics
+
+Change second diagnostic point to Chukchi Sea (70 N, 170 W) 
+instead of Weddell Sea.
+
+Print global diagnostics for Arctic only.
+
+****************************************************************
+
+ice_flux_in
+
+Set atm_data_dir and ocn_data_dir to appropriate paths in 
+subroutine init_getflux.
+
+Make sure sss_sst_restore is called in subroutine getflux.
+
+Change paths and filenames to correct values in subroutines 
+sss_sst_restore, sss_clim, sst_ic, NCAR_files, and (if used) 
+NCAR_files_avg.
+
+Change subroutine file_year if forcing files end in '.r'
+instead of '.dat'.
+
+Change subroutine NCAR_bulk_dat so that each file is read at
+the correct frequency (monthly for rain and rhoa, daily for
+fsw, flw, uwind, vwind, humid, and tair).
+
+Fix units of Qa if reading in dew point instead of specific
+humidity.
+
+Comment out cldf computations if longwave forcing is read in
+directly.
+
+Comment out corrections for NCEP biases if reading different
+data.
+
+ 
+****************************************************************
+ice_grid
+
+Insert option for calling subroutine pipsgrid.
+(Don't forget to set grid_type = 'pips' in ice_in)
+
+Insert subroutine pipsgrid.
+
+
+****************************************************************
+ice_init
+
+Change the criterion for placing ice at the beginning of the run.
+Put ice wherever SST < Tf + 0.5; eliminate latitude criterion.
+
+Insert diagnostic write statement for PIPS grid.
+
+****************************************************************
+ice_model_size
+
+Size should be 1280 x 720 for PIPS grid.
+
+
+****************************************************************
+ice_therm_driver
+
+
+CICE 3.1 uses all of Fgromlt to melt for standalone runs.
+PIPS does not.  (Maybe should change in CICE.)
+
+
+
+
+

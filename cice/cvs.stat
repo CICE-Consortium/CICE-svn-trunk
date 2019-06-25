@@ -1,0 +1,540 @@
+===================================================================
+File: no file README_v3.0		Status: Needs Checkout
+
+   Working revision:	1.1	Thu Feb 12 19:12:04 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/README_v3.0,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: README_v3.1      	Status: Locally Modified
+
+   Working revision:	1.4	Mon Feb  9 17:55:25 2004
+   Repository revision:	1.4	/home/climate/CVS-COSIM/cice/README_v3.1,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: clean_ice        	Status: Needs Merge
+
+   Working revision:	1.2	Mon Feb  9 17:55:25 2004
+   Repository revision:	1.3	/home/climate/CVS-COSIM/cice/clean_ice,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: comp_ice         	Status: Needs Merge
+
+   Working revision:	1.3	Mon Feb  9 17:55:25 2004
+   Repository revision:	1.4	/home/climate/CVS-COSIM/cice/comp_ice,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: no file ice.log_v3.1_10day		Status: Needs Checkout
+
+   Working revision:	1.24	Sat Nov 22 21:33:19 2003
+   Repository revision:	1.24	/home/climate/CVS-COSIM/cice/ice.log_v3.1_10day,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: Macros.AIX       	Status: Up-to-date
+
+   Working revision:	1.2	Mon Feb 23 23:15:16 2004
+   Repository revision:	1.2	/home/climate/CVS-COSIM/cice/bld/Macros.AIX,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: Macros.IRIX64    	Status: Up-to-date
+
+   Working revision:	1.4	Mon Feb 23 23:15:16 2004
+   Repository revision:	1.4	/home/climate/CVS-COSIM/cice/bld/Macros.IRIX64,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: Macros.Linux     	Status: Up-to-date
+
+   Working revision:	1.1	Mon Feb 23 23:15:16 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/bld/Macros.Linux,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: no file Macros.Linux.LANL		Status: Needs Checkout
+
+   Working revision:	1.1	Mon Feb  9 18:13:52 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/bld/Macros.Linux.LANL,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: Macros.UNICOS    	Status: Up-to-date
+
+   Working revision:	1.1	Mon Feb 23 23:15:16 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/bld/Macros.UNICOS,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: Makefile         	Status: Needs Merge
+
+   Working revision:	1.2	Mon Feb  9 17:55:37 2004
+   Repository revision:	1.3	/home/climate/CVS-COSIM/cice/bld/Makefile,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: Makefile.UNICOS  	Status: Up-to-date
+
+   Working revision:	1.1	Mon Feb 23 23:15:16 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/bld/Makefile.UNICOS,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: Makefile.std     	Status: Up-to-date
+
+   Working revision:	1.1	Mon Feb 23 23:15:16 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/bld/Makefile.std,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: makdep.c         	Status: Up-to-date
+
+   Working revision:	1.1	Mon Feb 23 23:15:16 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/bld/makdep.c,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: no file cicedoc.ps		Status: Needs Checkout
+
+   Working revision:	1.3	Mon Feb  9 18:19:51 2004
+   Repository revision:	1.3	/home/climate/CVS-COSIM/cice/doc/cicedoc.ps,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: global_100x116.grid	Status: Up-to-date
+
+   Working revision:	1.3	Mon Feb 23 23:15:19 2004
+   Repository revision:	1.3	/home/climate/CVS-COSIM/cice/input_templates/global_100x116.grid,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: global_100x116.kmt	Status: Up-to-date
+
+   Working revision:	1.3	Mon Feb 23 23:15:19 2004
+   Repository revision:	1.3	/home/climate/CVS-COSIM/cice/input_templates/global_100x116.kmt,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice.restart_file 	Status: Up-to-date
+
+   Working revision:	1.4	Mon Feb 23 23:15:19 2004
+   Repository revision:	1.4	/home/climate/CVS-COSIM/cice/input_templates/ice.restart_file,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: no file ice_in		Status: Needs Checkout
+
+   Working revision:	1.4	Mon Feb  9 18:06:58 2004
+   Repository revision:	1.4	/home/climate/CVS-COSIM/cice/input_templates/ice_in,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_in.AIX       	Status: Locally Modified
+
+   Working revision:	1.1	Mon Feb  9 18:06:58 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/input_templates/ice_in.AIX,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_in.Linux     	Status: Locally Modified
+
+   Working revision:	1.1	Mon Feb  9 18:06:58 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/input_templates/ice_in.Linux,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: no file ice_in.Linux.LANL		Status: Needs Checkout
+
+   Working revision:	1.1	Mon Feb  9 18:06:58 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/input_templates/ice_in.Linux.LANL,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_in.UNICOS    	Status: Needs Merge
+
+   Working revision:	1.1	Mon Feb  9 18:06:58 2004
+   Repository revision:	1.2	/home/climate/CVS-COSIM/cice/input_templates/ice_in.UNICOS,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: iced_gx3_v3.1    	Status: Up-to-date
+
+   Working revision:	1.1	Mon Feb 23 23:15:20 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/input_templates/iced_gx3_v3.1,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: run_ice.AIX      	Status: Up-to-date
+
+   Working revision:	1.1	Mon Feb 23 23:15:20 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/input_templates/run_ice.AIX,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: run_ice.IRIX64   	Status: Up-to-date
+
+   Working revision:	1.1	Mon Feb 23 23:15:20 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/input_templates/run_ice.IRIX64,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: run_ice.Linux    	Status: Needs Merge
+
+   Working revision:	1.1	Mon Feb  9 18:07:03 2004
+   Repository revision:	1.2	/home/climate/CVS-COSIM/cice/input_templates/run_ice.Linux,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: no file run_ice.Linux.LANL		Status: Needs Checkout
+
+   Working revision:	1.1	Mon Feb  9 18:07:03 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/input_templates/run_ice.Linux.LANL,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: run_ice.UNICOS   	Status: Up-to-date
+
+   Working revision:	1.1	Mon Feb 23 23:15:20 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/input_templates/run_ice.UNICOS,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: CICE.F           	Status: Locally Modified
+
+   Working revision:	1.1	Wed Feb 11 18:35:03 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/source/CICE.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: CICE.F_debug     	Status: Locally Modified
+
+   Working revision:	1.1	Wed Feb 11 18:35:03 2004
+   Repository revision:	1.1	/home/climate/CVS-COSIM/cice/source/CICE.F_debug,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_albedo.F     	Status: Up-to-date
+
+   Working revision:	1.8	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.8	/home/climate/CVS-COSIM/cice/source/ice_albedo.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_atmo.F       	Status: Up-to-date
+
+   Working revision:	1.10	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.10	/home/climate/CVS-COSIM/cice/source/ice_atmo.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_calendar.F   	Status: Up-to-date
+
+   Working revision:	1.5	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.5	/home/climate/CVS-COSIM/cice/source/ice_calendar.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_constants.F  	Status: Up-to-date
+
+   Working revision:	1.6	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.6	/home/climate/CVS-COSIM/cice/source/ice_constants.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_coupling.F   	Status: Locally Modified
+
+   Working revision:	1.12	Wed Feb 25 16:19:29 2004
+   Repository revision:	1.12	/home/climate/CVS-COSIM/cice/source/ice_coupling.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_diagnostics.F	Status: Locally Modified
+
+   Working revision:	1.14	Wed Feb 25 16:19:29 2004
+   Repository revision:	1.14	/home/climate/CVS-COSIM/cice/source/ice_diagnostics.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_domain.F     	Status: Up-to-date
+
+   Working revision:	1.3	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.3	/home/climate/CVS-COSIM/cice/source/ice_domain.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_dyn_evp.F    	Status: Locally Modified
+
+   Working revision:	1.14	Wed Feb 25 16:19:29 2004
+   Repository revision:	1.14	/home/climate/CVS-COSIM/cice/source/ice_dyn_evp.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_fileunits.F  	Status: Up-to-date
+
+   Working revision:	1.4	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.4	/home/climate/CVS-COSIM/cice/source/ice_fileunits.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_flux.F       	Status: Locally Modified
+
+   Working revision:	1.14	Thu Feb 12 19:17:34 2004
+   Repository revision:	1.14	/home/climate/CVS-COSIM/cice/source/ice_flux.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_flux_in.F    	Status: Locally Modified
+
+   Working revision:	1.12	Wed Feb 25 16:19:29 2004
+   Repository revision:	1.12	/home/climate/CVS-COSIM/cice/source/ice_flux_in.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_grid.F       	Status: Locally Modified
+
+   Working revision:	1.6	Wed Feb 25 16:19:29 2004
+   Repository revision:	1.6	/home/climate/CVS-COSIM/cice/source/ice_grid.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_history.F    	Status: Locally Modified
+
+   Working revision:	1.20	Wed Feb 25 16:19:29 2004
+   Repository revision:	1.20	/home/climate/CVS-COSIM/cice/source/ice_history.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_init.F       	Status: Locally Modified
+
+   Working revision:	1.9	Wed Feb 11 18:35:03 2004
+   Repository revision:	1.9	/home/climate/CVS-COSIM/cice/source/ice_init.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_itd.F        	Status: Locally Modified
+
+   Working revision:	1.14	Wed Feb 25 16:19:29 2004
+   Repository revision:	1.14	/home/climate/CVS-COSIM/cice/source/ice_itd.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_itd_linear.F 	Status: Up-to-date
+
+   Working revision:	1.8	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.8	/home/climate/CVS-COSIM/cice/source/ice_itd_linear.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_kinds_mod.F  	Status: Up-to-date
+
+   Working revision:	1.4	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.4	/home/climate/CVS-COSIM/cice/source/ice_kinds_mod.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_mechred_cice.F	Status: Locally Modified
+
+   Working revision:	1.15	Wed Feb 25 16:19:29 2004
+   Repository revision:	1.15	/home/climate/CVS-COSIM/cice/source/ice_mechred_cice.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_model_size.F 	Status: Up-to-date
+
+   Working revision:	1.3	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.3	/home/climate/CVS-COSIM/cice/source/ice_model_size.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_mpi_internal.F	Status: Locally Modified
+
+   Working revision:	1.6	Wed Feb 25 16:19:29 2004
+   Repository revision:	1.6	/home/climate/CVS-COSIM/cice/source/ice_mpi_internal.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_ocean.F      	Status: Up-to-date
+
+   Working revision:	1.9	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.9	/home/climate/CVS-COSIM/cice/source/ice_ocean.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_read_write.F 	Status: Locally Modified
+
+   Working revision:	1.5	Wed Feb 25 16:19:30 2004
+   Repository revision:	1.5	/home/climate/CVS-COSIM/cice/source/ice_read_write.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_scaling.F    	Status: Up-to-date
+
+   Working revision:	1.11	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.11	/home/climate/CVS-COSIM/cice/source/ice_scaling.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_state.F      	Status: Up-to-date
+
+   Working revision:	1.4	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.4	/home/climate/CVS-COSIM/cice/source/ice_state.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_therm_itd.F  	Status: Up-to-date
+
+   Working revision:	1.11	Mon Feb 23 23:15:21 2004
+   Repository revision:	1.11	/home/climate/CVS-COSIM/cice/source/ice_therm_itd.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_therm_vertical.F	Status: Locally Modified
+
+   Working revision:	1.14	Thu Feb 12 19:17:34 2004
+   Repository revision:	1.14	/home/climate/CVS-COSIM/cice/source/ice_therm_vertical.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_timers.F     	Status: Locally Modified
+
+   Working revision:	1.4	Wed Feb 11 18:35:03 2004
+   Repository revision:	1.4	/home/climate/CVS-COSIM/cice/source/ice_timers.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_transport_mpdata.F	Status: Locally Modified
+
+   Working revision:	1.10	Wed Feb 25 16:19:30 2004
+   Repository revision:	1.10	/home/climate/CVS-COSIM/cice/source/ice_transport_mpdata.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+
+===================================================================
+File: ice_transport_remap.F	Status: Locally Modified
+
+   Working revision:	1.17	Wed Feb 25 16:19:30 2004
+   Repository revision:	1.17	/home/climate/CVS-COSIM/cice/source/ice_transport_remap.F,v
+   Sticky Tag:		(none)
+   Sticky Date:		(none)
+   Sticky Options:	(none)
+

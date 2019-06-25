@@ -1,0 +1,51 @@
+#===============================================================================
+# CVS $Id: Macros.AIX,v 1.2 2004/02/09 17:55:37 lipscomb Exp $
+# CVS $Source: /home/climate/CVS-COSIM/cice/bld/Macros.AIX,v $
+# CVS $Name:  $
+#===============================================================================
+# Makefile macros for "cheetah" at ORNL
+#
+# Notes:  (see xlf user's guide for the details)
+#  -lmass          => IBM-tuned intrinsic lib
+#  -qsmp=noauto    => enable SMP directives, but don't add any
+#  -qstrict        => don't turn divides into multiplies, etc
+#  -qhot           => higher-order-transformations (eg. loop padding)
+#  -qalias=noaryoverlp => assume no array overlap wrt equivalance, etc
+#  -qmaxmem=-1     => memory available to compiler during optimization
+#  -qipa=level=2   => InterProcedure Analysis (eg. inlining) => slow compiles
+#  -p -pg          => enable profiling (use in both FFLAGS and LDFLAGS)
+#  -qreport        => for smp/omp only
+#  -bmaxdata:0x80000000 => use maximum allowed data segment size
+#  -g              => always leave it on because overhead is minimal (?)
+#  -qflttrap=...   => enable default sigtrap (core dump)
+#  -C              => runtime array bounds checking (runs slow)
+#  -qinitauto=...  => initializes automatic variables
+#===============================================================================
+
+INCLDIR    := -I. -I/usr/local/include -I/usr/include -I/usr/lpp/ppe.poe/include \
+              -I/apps/netcdf/prod/rs_aix51_32_r4/include \
+              -I/apps/netcdf/prod/rs_aix51_32_r4/include/mod32
+SLIBS      :=  -L /usr/local/lib \
+               -L /usr/local/lib32/r4i4 -l netcdf
+ULIBS      := 
+CPP        := /lib/cpp
+CPPFLAGS   := -P
+CPPDEFS    := -DAIX 
+#CFLAGS     := -c -O2 -DDISABLE_TIMERS
+CFLAGS     := -c -O2
+FIXEDFLAGS := -qsuffix=f=f   -qfixed=132
+FREEFLAGS  := -qsuffix=f=f90 -qfree=f90
+FC         := mpxlf90_r
+FFLAGS     := -O3 -qstrict -qrealsize=8 -qarch=pwr3 -qtune=auto 
+MOD_SUFFIX := mod
+LD         := $(FC)
+LDFLAGS    := -bmaxdata:0x80000000
+
+CPPDEFS :=  $(CPPDEFS) -DNPROC_X=$(NX) -DNPROC_Y=$(NY) 
+#CPPDEFS :=  $(CPPDEFS) -Dfcd_coupled -Dcoupled
+
+ifeq ($(BINTYPE), MPI)
+   CPPDEFS :=  $(CPPDEFS) -D_MPI
+   SLIBS   :=  $(SLIBS) -lmpi
+endif
+

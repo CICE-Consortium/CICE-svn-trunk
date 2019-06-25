@@ -1,34 +1,31 @@
 #==============================================================================
-# Makefile macros for "mauve," an SGI ALTIX system at LANL running Linux
+# Makefile macros for "ram," an SGI ALTIX system at ORNL running Linux
 #==============================================================================
-# For use with Intel Fortran compiler 8.* (module load...)
+# For use with Intel Fortran compiler efc8043 (module load...)
 #==============================================================================
 
-INCLDIR    := -I. -I/usr/projects/climate/maltrud/local/include
-SLIBS      := -L /usr/projects/climate/maltrud/local/lib8 -lnetcdf 
+INCLDIR    := -I. -I/usr/local/include -I/usr/include \
+              -I/opt/public/include 
+SLIBS      := -L /usr/local/lib \
+              -L /usr/local/lib32/r4i4 -L /opt/public/lib -lnetcdf 
 ULIBS      := 
 CPP        := /usr/bin/cpp
 CPPFLAGS   := -P -traditional
 CPPDEFS    := -DLINUX -DPAROPT
 CFLAGS     := -c -O2
-FIXEDFLAGS := 
+FIXEDFLAGS := -132
 FREEFLAGS  := 
 FC         := ifort
-#FFLAGS     := -O2 -align -w -ftz -assume byterecl -convert big_endian -CB -fpe0
-FFLAGS     := -O2 -align -w -ftz -assume byterecl -convert big_endian
+FFLAGS     := -r8 -i4 -O2 -align all -convert big_endian -assume byterecl
 MOD_SUFFIX := mod
 LD         := $(FC)
-LDFLAGS    := $(FFLAGS) -v 
+LDFLAGS    := $(FFLAGS) -v -mp1 -static-libcxa
 
+   CPPDEFS :=  $(CPPDEFS)  -DNPROC_X=$(NX) -DNPROC_Y=$(NY)
 #   CPPDEFS :=  $(CPPDEFS)  -Dfcd_coupled -Dcoupled
 
-ifeq ($(COMMDIR), mpi)
+ifeq ($(BINTYPE), MPI)
    CPPDEFS :=  $(CPPDEFS) -D_MPI
    SLIBS   :=  $(SLIBS) -lmpi
 endif
 
-ifeq ($(USE_ESMF), yes)
-   CPPDEFS :=  $(CPPDEFS) -Duse_esmf
-   INCLDIR :=  $(INCLDIR) -I /net/bob1/ESMF/esmf/mod/modO/Linux.intel.64.mauve
-   SLIBS   :=  $(SLIBS) -L /net/bob1/ESMF/esmf/lib/libO/Linux.intel.64.mauve -lesmf -lcprts -lrt -ldl
-endif

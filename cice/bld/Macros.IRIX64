@@ -1,0 +1,38 @@
+#==============================================================================
+# Makefile macros for "guyot," an SGI O3000 system at LANL
+#
+# Notes:   (for details, see man pages for f90, ld, & debug_group)
+#  -64            => 64 bit object code (memory addressing)
+#  -show          => prints name of linker being used
+#  -v             => prints name of linker, libs linked in, ...
+#  -extend_source => 132 char line length for fixed format lines
+#  -mp            => recognize multiprocessing directives
+#  -r8 -i4        => default is 8-bit reals, 4-bit integers
+#  -C             => array bounds checking (same as -DEBUG:subscript_check)
+#  -DEBUG:...     => activates various options, see man debug_group
+#==============================================================================
+
+INCLDIR    := -I ${MPT_SGI}/usr/include -I /usr/include -I /usr/local/include
+SLIBS      := -lfpe -lnetcdf 
+ULIBS      := 
+CPP        := /lib/cpp
+CPPFLAGS   := 
+CPPDEFS    := -DIRIX64 -DSGI
+CFLAGS     := -c -64
+FIXEDFLAGS := 
+FREEFLAGS  := 
+FC         := f90
+FFLAGS     := -64 -mips4 -O2 -r8 -i4 -show -extend_source
+MOD_SUFFIX := mod
+LD         := $(FC)
+LDFLAGS    := $(FFLAGS) -mp
+
+   CPPDEFS :=  $(CPPDEFS)  -DNPROC_X=$(NX) -DNPROC_Y=$(NY)
+#   CPPDEFS :=  $(CPPDEFS) -Dcoupled
+
+ifeq ($(BINTYPE), MPI)
+   CPPDEFS :=  $(CPPDEFS) -D_MPI
+   SLIBS   :=  $(SLIBS) -lmpi
+endif
+
+

@@ -1,0 +1,30 @@
+#==============================================================================
+# Makefile macros for "epiphany," a LANL cluster running Linux
+#==============================================================================
+
+INCLDIR    := -I. -I/usr/local/include -I/usr/include \
+              -I/usr/local/mpi/include
+SLIBS      := -L/usr/local/lib -L/usr/local/mpi/lib -lnetcdf \
+              -L/usr/local/lf9562/lib
+              
+ULIBS      := 
+CPP        := /usr/bin/cpp
+CPPFLAGS   := -P -traditional
+CPPDEFS    := -DLINUX 
+CFLAGS     := -c -O2
+FIXEDFLAGS := -extend
+FREEFLAGS  := 
+FC         := ifort
+FFLAGS     := -O -static -convert big_endian -assume byterecl
+MOD_SUFFIX := mod
+LD         := ifort 
+LDFLAGS    := -v -O -static -convert big_endian -assume byterecl
+
+   CPPDEFS :=  $(CPPDEFS)  -DNPROC_X=$(NX) -DNPROC_Y=$(NY)
+#   CPPDEFS :=  $(CPPDEFS)  -Dfcd_coupled -Dcoupled
+
+ifeq ($(BINTYPE), MPI)
+   CPPDEFS :=  $(CPPDEFS) -D_MPI
+   SLIBS   :=  $(SLIBS) -lmpich
+endif
+

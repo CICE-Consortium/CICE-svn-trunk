@@ -1,37 +1,32 @@
 #! /bin/csh -f
 
-#Change these to your own site and user directory! 
+#setenv SITE ORNL
 setenv SITE LANL
-setenv SYSTEM_USERDIR /scratch/lipscomb
+#setenv SYSTEM_USERDIR /pvfs/lipscomb  # ORNL defines this automatically
+setenv SYSTEM_USERDIR /scratch/eclare
 
 # MPI runs
-setenv COMMDIR mpi 
+setenv NX 4
+setenv NY 2
+setenv BINTYPE MPI
 
 # Single processor runs
-#setenv COMMDIR serial
-
-#ESMF runs
-#setenv USE_ESMF yes
-setenv USE_ESMF no
-
-#CAM runs
-#setenv CAM_ICE yes
-setenv CAM_ICE no
-
-#CSM shared code
-setenv SHRDIR csm_share
+#setenv NX 1
+#setenv NY 1
+#setenv BINTYPE single
 
 # Set SRCDIR and EXEDIR to your own paths!
-#setenv SRCDIR $HOME/cice.v4.0/cice
-setenv SRCDIR /net/bob4/lipscomb/cice_svn/cice
-setenv EXEDIR $SYSTEM_USERDIR/rundir.v4.0 ; if !(-d $EXEDIR) mkdir -p $EXEDIR
+setenv SRCDIR /net/bob4/eclare/CODE/CICE_release/CICE.v3.1/cice
+#setenv SRCDIR $HOME/cice.v3.1/cice
+#setenv EXEDIR $SRCDIR/rundir            ; if !(-d $EXEDIR) mkdir -p $EXEDIR
+setenv EXEDIR $SYSTEM_USERDIR/rundir_v3.1a    ; if !(-d $EXEDIR) mkdir -p $EXEDIR
 
 setenv CBLD   $SRCDIR/bld
 setenv OBJDIR $EXEDIR/compile           ; if !(-d $OBJDIR) mkdir -p $OBJDIR
 setenv RSTDIR $EXEDIR/restart           ; if !(-d $RSTDIR) mkdir -p $RSTDIR
 
 setenv ARCH `uname -s`
-#if ( $SITE == 'LANL') setenv ARCH $ARCH.LANL
+if ( $SITE == 'LANL') setenv ARCH $ARCH.LANL
 if ( $ARCH == 'UNICOS/mp') setenv ARCH UNICOS
 if ( $ARCH == 'UNICOS') then
    cp -f $CBLD/Makefile.$ARCH $CBLD/Makefile
@@ -56,12 +51,11 @@ cd $OBJDIR
 # Filepath: List of source code directories (in order of importance).
 cat >! Filepath << EOF
 $SRCDIR/source
-$SRCDIR/$COMMDIR
-$SRCDIR/$SHRDIR
 EOF
 
 cc -o makdep $CBLD/makdep.c                              || exit 2
-gmake VPFILE=Filepath EXEC=$EXEDIR/cice  \
+gmake VPFILE=Filepath EXEC=$EXEDIR/cice NX=$NX NY=$NY \
       -f  $CBLD/Makefile MACFILE=$CBLD/Macros.$ARCH || exit 2
 
 cd $SRCDIR
+
