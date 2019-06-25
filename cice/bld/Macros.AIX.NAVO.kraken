@@ -1,0 +1,48 @@
+#===============================================================================
+# CVS $Id: Macros.AIX.NAVO.kraken,v 1.1 2006/08/25 20:29:10 eclare Exp $
+# CVS $Source: /net/bob1/CVS-COSIM/cice/bld/Macros.AIX.NAVO.kraken,v $
+# CVS $Name:  $
+#===============================================================================
+# Makefile macros for "kraken-sp4" at NAVO
+#
+# Notes:  (see xlf user's guide for the details)
+#  -lmass          => IBM-tuned intrinsic lib
+#  -qsmp=noauto    => enable SMP directives, but don't add any
+#  -qstrict        => don't turn divides into multiplies, etc
+#  -qhot           => higher-order-transformations (eg. loop padding)
+#  -qalias=noaryoverlp => assume no array overlap wrt equivalance, etc
+#  -qmaxmem=-1     => memory available to compiler during optimization
+#  -qipa=level=2   => InterProcedure Analysis (eg. inlining) => slow compiles
+#  -p -pg          => enable profiling (use in both FFLAGS and LDFLAGS)
+#  -qreport        => for smp/omp only
+#  -bmaxdata:0x80000000 => use maximum allowed data segment size
+#  -g              => always leave it on because overhead is minimal (?)
+#  -qflttrap=...   => enable default sigtrap (core dump)
+#  -C              => runtime array bounds checking (runs slow)
+#  -qinitauto=...  => initializes automatic variables
+#===============================================================================
+
+INCLDIR    := -I. -I/site/netcdf350_64/include -I/usr/include -I/usr/lpp/ppe.poe/include
+SLIBS      := -L /site/netcdf350_64/lib  -l netcdf
+ULIBS      := 
+CPP        := /lib/cpp
+CPPFLAGS   := -P
+CPPDEFS    := -DAIX 
+#CFLAGS     := -c -O2 -DDISABLE_TIMERS
+CFLAGS     := -c -O2
+FIXEDFLAGS := -qsuffix=f=f   -qfixed=132
+FREEFLAGS  := -qsuffix=f=f90 -qfree=f90
+FC         := mpxlf90_r
+FFLAGS     := -O3 -q64 -qstrict -qrealsize=8 -qarch=pwr4 -qtune=pwr4
+MOD_SUFFIX := mod
+LD         := $(FC)
+LDFLAGS    := -q64
+
+CPPDEFS :=  $(CPPDEFS) -DNPROC_X=$(NX) -DNPROC_Y=$(NY) 
+#CPPDEFS :=  $(CPPDEFS) -Dfcd_coupled -Dcoupled
+
+ifeq ($(BINTYPE), MPI)
+   CPPDEFS :=  $(CPPDEFS) -D_MPI
+   SLIBS   :=  $(SLIBS) -lmpi
+endif
+

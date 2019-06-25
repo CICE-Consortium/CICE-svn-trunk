@@ -1,4 +1,4 @@
-! $Id: ice_atmo.F,v 1.10 2004/02/09 17:58:46 lipscomb Exp $
+c $Id: ice_atmo.F,v 1.12 2006/07/28 20:43:45 eclare Exp $
 !=======================================================================
 !BOP
 !
@@ -12,8 +12,7 @@
 !
 ! author: Elizabeth C. Hunke, LANL
 !
-! 2003: Vectorized by Clifford Chen (Fujitsu) and William Lipscomb
-! 2004: Block structure added by William Lipscomb
+! Vectorized by Clifford Chen (Fujitsu) and William H. Lipscomb (LANL)
 !
 ! !INTERFACE:
 !
@@ -21,87 +20,68 @@
 !
 ! !USES:
 !
-      use ice_kinds_mod
+      use ice_domain
       use ice_constants
+      use ice_flux
+      use ice_state
 !
 !EOP
 !
       implicit none
 
 !=======================================================================
-
+ 
       contains
 
 !=======================================================================
 !BOP
 !
-! !IROUTINE: atmo_boundary_layer - compute coefficients for atm-ice fluxes, 
-!                                  stress and Tref/Qref
+! !IROUTINE: atmo_boundary_layer - compute coefficients for atm-ice fluxes, stress and Tref
 !
 ! !INTERFACE:
 !
-      subroutine atmo_boundary_layer (nx_block, ny_block,
-     &                                sfctype,  icells,
-     &                                indxi,    indxj, 
-     &                                Tsf,      potT,
-     &                                uatm,     vatm,  
-     &                                wind,     zlvl,  
-     &                                Qa,       rhoa,
-     &                                strx,     stry,   
-     &                                Tref,     Qref,
-     &                                delt,     delq,
-     &                                lhcoef,   shcoef)
-
+      subroutine atmo_boundary_layer (n, sfctype, Tsf,
+     &                                strx, stry, Trf, Qrf, delt, delq)
+!
 ! !DESCRIPTION:
 !
-! Compute coefficients for atm/ice fluxes, stress, and reference
-! temperature and humidity. NOTE:
-! (1) all fluxes are positive downward,
-! (2) net heat flux = fswabs + flwup + (1-emissivity)flwdn + fsh + flh,
-! (3) here, tstar = (WT)/U*, and qstar = (WQ)/U*,
-! (4) wind speeds should all be above a minimum speed (eg. 1.0 m/s).
+! Compute coefficients for atm/ice fluxes, stress, and reference 
+! temperature. NOTE: \\
+! (1) all fluxes are positive downward, \\
+! (2) here, tstar = (WT)/U*, and qstar = (WQ)/U*, \\
+! (3) wind speeds should all be above a minimum speed (eg. 1.0 m/s). \\
 !
-! ASSUME:
-!  The saturation humidity of air at T(K): qsat(T)  (kg/m**3)
+! ASSUME: \\
+!  The saturation humidity of air at T(K): qsat(T)  (kg/m**3) \\
 !
-! Code originally based on CSM1
+! Code originally based on CSM1 \\
 !
-! !REVISION HISTORY: same as module
+! !REVISION HISTORY:
+!
+! author: Elizabeth C. Hunke, LANL
 !
 ! !USES:
 !
+      use ice_grid       ! for tmask
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  icells              ! number of cells that require atmo fluxes
-
-      integer (kind=int_kind), dimension(nx_block*ny_block),
-     &   intent(in) ::
-     &   indxi, indxj    ! compressed i and j indices
+      integer (kind=int_kind), intent(in) :: 
+     &   n        ! thickness category index
 
       character (len=3), intent(in) ::
-     &   sfctype     ! ice or ocean
+     &   sfctype  ! ice or ocean
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(in) ::
-     &   Tsf         ! surface temperature of ice or ocean
-     &,  potT        ! air potential temperature  (K)
-     &,  uatm        ! x-direction wind speed (m/s)
-     &,  vatm        ! y-direction wind speed (m/s)
-     &,  wind        ! wind speed (m/s)
-     &,  zlvl        ! atm level height (m)
-     &,  Qa          ! specific humidity (kg/kg)
-     &,  rhoa        ! air density (kg/m^3)
+      real (kind=dbl_kind), dimension (ilo:ihi,jlo:jhi), intent(in) ::
+     &   Tsf      ! surface temperature of ice or ocean
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), intent(out)::
-     &   strx        ! x surface stress (N)
-     &,  stry        ! y surface stress (N)
-     &,  Tref        ! reference height temperature  (K)
-     &,  Qref        ! reference height specific humidity (kg/kg)
-     &,  delt        ! potential T difference   (K)
-     &,  delq        ! humidity difference      (kg/kg)
-     &,  shcoef      ! transfer coefficient for sensible heat
-     &,  lhcoef      ! transfer coefficient for latent heat
+      real (kind=dbl_kind), dimension (ilo:ihi,jlo:jhi), intent(out) ::
+     &   strx     ! x surface stress (N)
+     &,  stry     ! y surface stress (N)
+     &,  Trf      ! reference height temperature  (K)
+     &,  Qrf      ! reference height specific humidity (kg/kg)
+     &,  delt     ! potential T difference   (K)
+     &,  delq     ! humidity difference      (kg/kg)
 !
 !EOP
 !
@@ -109,7 +89,7 @@
      &   k        ! iteration index
      &,  i, j     ! horizontal indices
 
-      real (kind=dbl_kind) ::
+      real (kind=dbl_kind) :: 
      &   TsfK     ! surface temperature in Kelvin (K)
      &,  xqq      ! temporary variable
      &,  psimh    ! stability function at zlvl   (momentum)
@@ -117,14 +97,14 @@
      &,  fac      ! interpolation factor
      &,  al2      ! ln(z10   /zTrf)
      &,  psix2    ! stability function at zTrf   (heat and water)
-     &,  psimhs   ! stable profile
+     &,  psimhs   ! stable profile 
      &,  ssq      ! sat surface humidity     (kg/kg)
-     &,  qqq      ! for qsat, dqsatdt
-     &,  TTT      ! for qsat, dqsatdt
+     &,  qqq      ! for qsat, dqsfcdt
+     &,  TTT      ! for qsat, dqsfcdt
      &,  qsat     ! the saturation humidity of air (kg/m^3)
      &,  Lheat    ! Lvap or Lsub, depending on surface type
 
-      real (kind=dbl_kind), dimension (icells) ::
+      real (kind=dbl_kind), dimension (1:(ihi-ilo+1)*(jhi-jlo+1)) ::
      &   ustar    ! ustar (m/s)
      &,  tstar    ! tstar
      &,  qstar    ! qstar
@@ -142,8 +122,13 @@
      &,  stable   ! stability factor
      &,  psixh    ! stability function at zlvl   (heat and water)
 
+      integer (kind=int_kind), dimension (1:(ihi-ilo+1)*(jhi-jlo+1)) ::
+     &   indxi    ! compressed index in i-direction
+     &,  indxj    ! compressed index in j-direction
+
       integer (kind=int_kind) ::
-     &   ij       ! combined ij index
+     &   icells   ! number of cells with aicen > puny or tmask true
+     &,  ij       ! combined ij index
 
       real (kind=dbl_kind), parameter ::
      &   cpvir = cp_wv/cp_air - c1 ! defined as cp_wv/cp_air - 1.
@@ -151,8 +136,8 @@
      &,  umin  = c1                ! minimum wind speed (m/s)
 
       ! local functions
-      real (kind=dbl_kind) ::
-     &   xd       ! dummy argument
+      real (kind=dbl_kind) :: 
+     &   xd       ! dummy argument  
      &,  psimhu   ! unstable part of psimh
      &,  psixhu   ! unstable part of psimx
 
@@ -172,26 +157,43 @@
       ! Initialize
       !------------------------------------------------------------
 
-      strx(:,:) = c0
-      stry(:,:) = c0
-      Tref(:,:) = c0
-      Qref(:,:) = c0
-      delt(:,:) = c0
-      delq(:,:) = c0
-      shcoef(:,:) = c0
-      lhcoef(:,:) = c0
+      do j = jlo,jhi
+      do i = ilo,ihi
+         lhcoef(i,j) = c0
+         shcoef(i,j) = c0
+         strx(i,j)   = c0
+         stry(i,j)   = c0
+         Trf(i,j)    = c0
+         Qrf(i,j)    = c0
+         delt(i,j)   = c0
+         delq(i,j)   = c0
+      enddo
+      enddo
 
       !------------------------------------------------------------
-      ! Compute turbulent flux coefficients, wind stress, and
+      ! Compute turbulent flux coefficients, wind stress, and 
       ! reference temperature and humidity.
       !------------------------------------------------------------
 
-      !------------------------------------------------------------
-      ! define variables that depend on surface type
-      !------------------------------------------------------------
+      if ( sfctype(1:3)=='ice' ) then
 
-      if (sfctype(1:3)=='ice') then
+      !------------------------------------------------------------
+      ! identify grid cells with ice
+      !------------------------------------------------------------
+         icells = 0
+         do j = jlo,jhi
+         do i = ilo,ihi
+            if ( aicen(i,j,n) > puny) then
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
+            endif
+         enddo
+         enddo
 
+      !------------------------------------------------------------
+      ! define some needed variables
+      !------------------------------------------------------------
          qqq  = qqqice          ! for qsat
          TTT  = TTTice          ! for qsat
          Lheat = Lsub           ! ice to vapor
@@ -202,11 +204,28 @@
             rdn(ij)  = vonkar/log(zref/iceruf) ! neutral coefficient
          enddo   ! ij
 
-      elseif (sfctype(1:3)=='ocn') then
+      elseif ( sfctype(1:3)=='ocn' ) then
 
+      !------------------------------------------------------------
+      ! identify ocean cells
+      !------------------------------------------------------------
+         icells = 0
+         do j = jlo,jhi
+         do i = ilo,ihi
+            if ( tmask(i,j) ) then
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
+            endif
+         enddo
+         enddo
+
+       !------------------------------------------------------------
+       ! define some needed variables
+       !------------------------------------------------------------
          qqq  = qqqocn
          TTT  = TTTocn
-         Lheat = Lvap           ! liquid to vapor
+         Lheat = Lvap       ! liquid to vapor
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
@@ -232,14 +251,14 @@
          thva(ij)   = potT(i,j) * (c1 + zvir * Qa(i,j)) ! virtual pot temp (K)
          delt(i,j)  = potT(i,j) - TsfK       ! pot temp diff (K)
          delq(i,j)  = Qa(i,j) - ssq          ! spec hum dif (kg/kg)
-         alz(ij)    = log(zlvl(i,j)/zref)
+         alz(ij)    = log(zlvl(i,j)/zref) 
          cp(ij)     = cp_air*(c1 + cpvir*ssq)
 
       !------------------------------------------------------------
       ! first estimate of Z/L and ustar, tstar and qstar
       !------------------------------------------------------------
 
-         ! neutral coefficients, z/L = 0.0
+         ! neutral coefficients, z/L = 0.0 
          rhn(ij) = rdn(ij)
          ren(ij) = rdn(ij)
 
@@ -254,14 +273,13 @@
       ! iterate to converge on Z/L, ustar, tstar and qstar
       !------------------------------------------------------------
 
-c         do k=1,2             !!! ech thinks this should be at least 5
       do k=1,5
 
          do ij = 1, icells
             i = indxi(ij)
             j = indxj(ij)
 
-        ! compute stability & evaluate all stability functions
+        ! compute stability & evaluate all stability functions 
             hol(ij) = vonkar * gravit * zlvl(i,j)
      &             * (tstar(ij)/thva(ij)
      &              + qstar(ij)/(c1/zvir+Qa(i,j)))
@@ -270,17 +288,14 @@ c         do k=1,2             !!! ech thinks this should be at least 5
             stable(ij) = p5 + sign(p5 , hol(ij))
             xqq    = max(sqrt(abs(c1 - c16*hol(ij))) , c1)
             xqq    = sqrt(xqq)
-!ccsm       psimh  = -c5*hol(ij)*stable(ij) + (c1-stable(ij))*psimhu(xqq)
-!ccsm       psixh(ij)  = -c5*hol(ij)*stable(ij) + (c1-stable(ij))*psixhu(xqq)
 
-            psimhs = -(0.7_dbl_kind*hol(ij)
+            ! Jordan et al 1999
+            psimhs = -(0.7_dbl_kind*hol(ij) 
      &             + 0.75_dbl_kind*(hol(ij)-14.3_dbl_kind)
-     &             * exp(-0.35_dbl_kind*hol(ij)) + 10.7_dbl_kind)
-                   ! Jordan et al 1999
-
-            psimh  = psimhs*stable(ij)
+     &             * exp(-0.35_dbl_kind*hol(ij)) + 10.7_dbl_kind) 
+            psimh  = psimhs*stable(ij) 
      &              + (c1 - stable(ij))*psimhu(xqq)
-            psixh(ij)  = psimhs*stable(ij)
+            psixh(ij)  = psimhs*stable(ij) 
      &              + (c1 - stable(ij))*psixhu(xqq)
 
         ! shift all coeffs to measurement height and stability
@@ -288,7 +303,7 @@ c         do k=1,2             !!! ech thinks this should be at least 5
             rh(ij) = rhn(ij) / (c1+rhn(ij)/vonkar*(alz(ij)-psixh(ij)))
             re(ij) = ren(ij) / (c1+ren(ij)/vonkar*(alz(ij)-psixh(ij)))
 
-        ! update ustar, tstar, qstar using updated, shifted coeffs
+        ! update ustar, tstar, qstar using updated, shifted coeffs 
             ustar(ij) = rd(ij) * vmag(ij)
             tstar(ij) = rh(ij) * delt(i,j)
             qstar(ij) = re(ij) * delq(i,j)
@@ -296,9 +311,7 @@ c         do k=1,2             !!! ech thinks this should be at least 5
          enddo                  ! ij
       enddo                     ! end iteration
 
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
+
       do ij = 1, icells
          i = indxi(ij)
          j = indxj(ij)
@@ -316,9 +329,9 @@ c         do k=1,2             !!! ech thinks this should be at least 5
       !------------------------------------------------------------
       ! momentum flux
       !------------------------------------------------------------
-      ! tau = rhoa(i,j) * ustar * ustar
-      ! strx = tau * uatm(i,j) / vmag
-      ! stry = tau * vatm(i,j) / vmag
+      ! tau = rhoa(i,j) * ustar * ustar 
+      ! strx = tau * uatm(i,j) / vmag 
+      ! stry = tau * vatm(i,j) / vmag 
       !------------------------------------------------------------
 
          tau = rhoa(i,j) * ustar(ij) * rd(ij) ! not the stress at zlvl(i,j)
@@ -328,17 +341,15 @@ c         do k=1,2             !!! ech thinks this should be at least 5
       !------------------------------------------------------------
       ! Compute diagnostics: 2m ref T & Q
       !------------------------------------------------------------
-         hol(ij)  = hol(ij)*zTrf/zlvl(i,j)
-         xqq      = max( c1, sqrt(abs(c1-c16*hol(ij))) )
-         xqq      = sqrt(xqq)
-         psix2    = -c5*hol(ij)*stable(ij) + (c1-stable(ij))*psixhu(xqq)
-         fac      = (rh(ij)/vonkar) 
-     &            * (alz(ij) + al2 - psixh(ij) + psix2)
-         Tref(i,j)= potT(i,j) - delt(i,j)*fac
-         Tref(i,j)= Tref(i,j) - 0.01*zTrf ! pot temp to temp correction
-         fac      = (re(ij)/vonkar)
-     &            * (alz(ij) + al2 - psixh(ij) + psix2)
-         Qref(i,j)= Qa(i,j) - delq(i,j)*fac
+         hol(ij) = hol(ij)*zTrf/zlvl(i,j)
+         xqq     = max( c1, sqrt(abs(c1-c16*hol(ij))) )
+         xqq     = sqrt(xqq)
+         psix2   = -c5*hol(ij)*stable(ij) + (c1-stable(ij))*psixhu(xqq)  
+         fac     = (rh(ij)/vonkar) * (alz(ij) + al2 - psixh(ij) + psix2)
+         Trf(i,j)= potT(i,j) - delt(i,j)*fac
+         Trf(i,j)= Trf(i,j) - p01*zTrf ! pot temp to temp correction
+         fac     = (re(ij)/vonkar) * (alz(ij) + al2 - psixh(ij) + psix2)
+         Qrf(i,j)= Qa(i,j) - delq(i,j)*fac
 
       enddo                     ! ij
 

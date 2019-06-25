@@ -1,0 +1,661 @@
+../cice/source/
+ice_albedo.F
+ice_atmo.F
+ice_calendar.F
+57,58c57
+<      &   dt                 ! thermo timestep (s)
+<      &,  dyn_dt             ! dynamic timestep
+---
+>      &   dt                 ! thermo/transport timestep (s)
+115d113
+<       dyn_dt = dt/real(ndyn_dt,kind=dbl_kind)
+ice_constants.F
+103d102
+<      &,  cp_sno   = 0.0_dbl_kind       ! specific heat of snow     (J/kg/K)
+123,136d121
+< #ifdef CCSMcoupled
+< !     These are needed for the prescribed ice module.
+<       real (kind=dbl_kind), parameter ::
+<      &   rLfi = Lfresh*rhoi ! latent heat of fusion ice               (J/m^3)
+<      &,  rLfs = Lfresh*rhos ! latent heat of fusion snow              (J/m^3)
+<      &,  rLvi = Lvap*rhoi   ! latent heat of vapor*rhoice             (J/m^3)
+<      &,  rLvs = Lvap*rhos   ! latent heat of vapor*rhosno             (J/m^3)
+<      &,  rcpi = cp_ice*rhoi ! heat capacity of fresh ice              (J/m^3)
+<      &,  rcps = cp_sno*rhos ! heat capacity of snow                   (J/m^3)
+<      &,  rcpidepressT = rcpi*depressT ! param for finding T(z) from q (J/m^3)
+<      &,  rLfidepressT = rLfi*depressT ! param for heat capacity   (J deg/m^3)
+<          ! heat capacity of sea ice, rhoi*C=rcpi+rLfidepressT*salinity/T^2
+< #endif
+< 
+240c225
+<       integer (kind=int_kind) :: i, j
+---
+>       integer (kind=int_kind) :: n, i, j
+ice_coupling.F
+1,3c1,3
+< ! CVS: $Id: ice_coupling.F 782 2006-04-25 22:42:24Z dbailey $
+< ! CVS: $Source$
+< ! CVS: $Name$
+---
+> ! CVS: $Id: ice_coupling.F,v 1.17 2006/06/08 22:16:07 eclare Exp $
+> ! CVS: $Source: /net/bob1/CVS-COSIM/cice/source/ice_coupling.F,v $
+> ! CVS: $Name:  $
+39d38
+<       use ice_history, only : runtype
+46a46,50
+>       implicit none
+>       save
+> 
+>       character (len=char_len) ::
+>      &   runtype           ! initial, continue, or branch
+51,52d54
+<       implicit none
+< 
+60,65c62,64
+<       integer (kind=int_kind), save ::
+<      &   nrecv, nsend
+< 
+<       real (kind=dbl_kind), allocatable ::
+<      &   buffs(:,:)
+<      &,  buffr(:,:)
+---
+>       real (kind=dbl_kind) ::
+>      &   buffs((jhi-jlo+1)*(ihi-ilo+1),cpl_fields_i2c_total)
+>      &,  buffr((jhi-jlo+1)*(ihi-ilo+1),cpl_fields_c2i_total)
+75,119d73
+<       integer(kind=int_kind), save :: index_i2c_Si_t        ! temperature
+<       integer(kind=int_kind), save :: index_i2c_Si_tref     ! 2m reference temperature
+<       integer(kind=int_kind), save :: index_i2c_Si_qref     ! 2m reference specific humidity
+<       integer(kind=int_kind), save :: index_i2c_Si_ifrac    ! fractional ice coverage
+<       integer(kind=int_kind), save :: index_i2c_Si_avsdr    ! albedo: visible, direct
+<       integer(kind=int_kind), save :: index_i2c_Si_anidr    ! albedo: near ir, direct
+<       integer(kind=int_kind), save :: index_i2c_Si_avsdf    ! albedo: visible, diffuse
+<       integer(kind=int_kind), save :: index_i2c_Si_anidf    ! albedo: near ir, diffuse
+<       integer(kind=int_kind), save :: index_i2c_index       ! global data compr index
+<       integer(kind=int_kind), save :: index_i2c_Faii_taux   ! wind stress, zonal
+<       integer(kind=int_kind), save :: index_i2c_Faii_tauy   ! wind stress, meridional
+<       integer(kind=int_kind), save :: index_i2c_Faii_lat    ! latent          heat flux
+<       integer(kind=int_kind), save :: index_i2c_Faii_sen    ! sensible        heat flux
+<       integer(kind=int_kind), save :: index_i2c_Faii_lwup   ! upward longwave heat flux
+<       integer(kind=int_kind), save :: index_i2c_Faii_evap   ! evaporation    water flux
+<       integer(kind=int_kind), save :: index_i2c_Faii_swnet  ! shortwave: net absorbed
+<       integer(kind=int_kind), save :: index_i2c_Fioi_swpen  ! net SW penetrating ice
+<       integer(kind=int_kind), save :: index_i2c_Fioi_melth  ! heat  flux from melting ice
+<       integer(kind=int_kind), save :: index_i2c_Fioi_meltw  ! water flux from melting ice
+<       integer(kind=int_kind), save :: index_i2c_Fioi_salt   ! salt  flux from melting ice
+<       integer(kind=int_kind), save :: index_i2c_Fioi_taux   ! ice/ocn stress, zonal
+<       integer(kind=int_kind), save :: index_i2c_Fioi_tauy   ! ice/ocn stress, meridional
+<       
+<       integer(kind=int_kind), save :: index_c2i_So_t        ! ocn temp
+<       integer(kind=int_kind), save :: index_c2i_So_s        ! ocn salinity
+<       integer(kind=int_kind), save :: index_c2i_So_u        ! ocn u velocity
+<       integer(kind=int_kind), save :: index_c2i_So_v        ! ocn v velocity
+<       integer(kind=int_kind), save :: index_c2i_So_dhdx     ! ocn surface slope, zonal
+<       integer(kind=int_kind), save :: index_c2i_So_dhdy     ! ocn surface slope, merid
+<       integer(kind=int_kind), save :: index_c2i_Sa_z        ! atm bottom layer height
+<       integer(kind=int_kind), save :: index_c2i_Sa_u        ! atm u velocity
+<       integer(kind=int_kind), save :: index_c2i_Sa_v        ! atm v velocity
+<       integer(kind=int_kind), save :: index_c2i_Sa_ptem     ! atm potential temp
+<       integer(kind=int_kind), save :: index_c2i_Sa_tbot     ! atm bottom temp
+<       integer(kind=int_kind), save :: index_c2i_Sa_shum     ! atm specfic humidity
+<       integer(kind=int_kind), save :: index_c2i_Sa_dens     ! atm air density
+<       integer(kind=int_kind), save :: index_c2i_Fioo_q      ! ocn freeze or melt heat
+<       integer(kind=int_kind), save :: index_c2i_Faxa_swndr  ! atm sw near-ir, direct
+<       integer(kind=int_kind), save :: index_c2i_Faxa_swvdr  ! atm sw visable, direct
+<       integer(kind=int_kind), save :: index_c2i_Faxa_swndf  ! atm sw near-ir, diffuse
+<       integer(kind=int_kind), save :: index_c2i_Faxa_swvdf  ! atm sw visable, diffuse
+<       integer(kind=int_kind), save :: index_c2i_Faxa_lwdn   ! long-wave down
+<       integer(kind=int_kind), save :: index_c2i_Faxc_rain   ! rain
+<       integer(kind=int_kind), save :: index_c2i_Faxc_snow   ! snow
+< 
+205c159
+<       sbuf = -888.0_dbl_kind
+---
+>       sbuf = -888.0
+230,292d183
+<       ! Allocate memory for send and receive buffers
+<       !-----------------------------------------------------------------
+< 
+<       nsend = cpl_interface_contractNumatt(contractS)
+<       allocate(buffs((jhi-jlo+1)*(ihi-ilo+1),nsend))
+< 
+<       nrecv = cpl_interface_contractNumatt(contractR)
+<       allocate(buffr((jhi-jlo+1)*(ihi-ilo+1),nrecv))
+< 
+<       !-----------------------------------------------------------------
+<       ! Determine send indices
+<       !-----------------------------------------------------------------
+< 
+<       index_i2c_index      = cpl_interface_contractIndex(contractS,'index')
+<       index_i2c_Si_ifrac   = cpl_interface_contractIndex(contractS,'Si_ifrac')
+<       index_i2c_Si_t       = cpl_interface_contractIndex(contractS,'Si_t')
+<       index_i2c_Si_avsdr   = cpl_interface_contractIndex(contractS,'Si_avsdr')
+<       index_i2c_Si_anidr   = cpl_interface_contractIndex(contractS,'Si_anidr')
+<       index_i2c_Si_avsdf   = cpl_interface_contractIndex(contractS,'Si_avsdf')
+<       index_i2c_Si_anidf   = cpl_interface_contractIndex(contractS,'Si_anidf')
+<       index_i2c_Si_tref    = cpl_interface_contractIndex(contractS,'Si_tref')
+<       index_i2c_Si_qref    = cpl_interface_contractIndex(contractS,'Si_qref')
+<       index_i2c_Faii_taux  = cpl_interface_contractIndex(contractS,'Faii_taux')
+<       index_i2c_Faii_tauy  = cpl_interface_contractIndex(contractS,'Faii_tauy')
+<       index_i2c_Faii_lat   = cpl_interface_contractIndex(contractS,'Faii_lat')
+<       index_i2c_Faii_sen   = cpl_interface_contractIndex(contractS,'Faii_sen')
+<       index_i2c_Faii_lwup  = cpl_interface_contractIndex(contractS,'Faii_lwup')
+<       index_i2c_Faii_evap  = cpl_interface_contractIndex(contractS,'Faii_evap')
+<       index_i2c_Faii_swnet = cpl_interface_contractIndex(contractS,'Faii_swnet')
+<       index_i2c_Fioi_swpen = cpl_interface_contractIndex(contractS,'Fioi_swpen')
+<       index_i2c_Fioi_melth = cpl_interface_contractIndex(contractS,'Fioi_melth')
+<       index_i2c_Fioi_meltw = cpl_interface_contractIndex(contractS,'Fioi_meltw')
+<       index_i2c_Fioi_salt  = cpl_interface_contractIndex(contractS,'Fioi_salt')
+<       index_i2c_Fioi_taux  = cpl_interface_contractIndex(contractS,'Fioi_taux')
+<       index_i2c_Fioi_tauy  = cpl_interface_contractIndex(contractS,'Fioi_tauy')
+< 
+<       !-----------------------------------------------------------------
+<       ! Determine receive indices
+<       !-----------------------------------------------------------------
+< 
+<       index_c2i_So_t       = cpl_interface_contractIndex(contractR,'So_t')
+<       index_c2i_So_s       = cpl_interface_contractIndex(contractR,'So_s')
+<       index_c2i_So_u       = cpl_interface_contractIndex(contractR,'So_u')
+<       index_c2i_So_v       = cpl_interface_contractIndex(contractR,'So_v')
+<       index_c2i_Sa_z       = cpl_interface_contractIndex(contractR,'Sa_z')
+<       index_c2i_Sa_u       = cpl_interface_contractIndex(contractR,'Sa_u')
+<       index_c2i_Sa_v       = cpl_interface_contractIndex(contractR,'Sa_v')
+<       index_c2i_Sa_ptem    = cpl_interface_contractIndex(contractR,'Sa_ptem')
+<       index_c2i_Sa_tbot    = cpl_interface_contractIndex(contractR,'Sa_tbot')
+<       index_c2i_Sa_shum    = cpl_interface_contractIndex(contractR,'Sa_shum')
+<       index_c2i_Sa_dens    = cpl_interface_contractIndex(contractR,'Sa_dens')
+<       index_c2i_So_dhdx    = cpl_interface_contractIndex(contractR,'So_dhdx')
+<       index_c2i_So_dhdy    = cpl_interface_contractIndex(contractR,'So_dhdy')
+<       index_c2i_Fioo_q     = cpl_interface_contractIndex(contractR,'Fioo_q')
+<       index_c2i_Faxa_swvdr = cpl_interface_contractIndex(contractR,'Faxa_swvdr')
+<       index_c2i_Faxa_swndr = cpl_interface_contractIndex(contractR,'Faxa_swndr')
+<       index_c2i_Faxa_swvdf = cpl_interface_contractIndex(contractR,'Faxa_swvdf')
+<       index_c2i_Faxa_swndf = cpl_interface_contractIndex(contractR,'Faxa_swndf')
+<       index_c2i_Faxa_lwdn  = cpl_interface_contractIndex(contractR,'Faxa_lwdn')
+<       index_c2i_Faxc_rain  = cpl_interface_contractIndex(contractR,'Faxc_rain')
+<       index_c2i_Faxc_snow  = cpl_interface_contractIndex(contractR,'Faxc_snow')
+< 
+<       !-----------------------------------------------------------------
+307c198
+<             iyear   = (idate/10000)               ! integer year of basedate
+---
+>             iyear = (idate/10000)                 ! integer year of basedate
+311c202
+<             call calendar(time)                 ! recompute calendar info
+---
+>             call calendar(time)                   ! recompute calendar info
+356d246
+<       integer (kind=int_kind) :: index      ! attribute vector property
+408,412c298,301
+< 
+<          sst(i,j)  = buffr(n,index_c2i_So_t)
+<          sss(i,j)  = buffr(n,index_c2i_So_s)
+<          uocn(i,j) = buffr(n,index_c2i_So_u)
+<          vocn(i,j) = buffr(n,index_c2i_So_v)
+---
+>          sst  (i,j) = buffr(n,cpl_fields_c2i_ot)
+>          sss  (i,j) = buffr(n,cpl_fields_c2i_os)
+>          uocn (i,j) = buffr(n,cpl_fields_c2i_ou)
+>          vocn (i,j) = buffr(n,cpl_fields_c2i_ov)
+415,422c304,310
+< 
+<          zlvl (i,j) = buffr(n,index_c2i_Sa_z)
+<          uatm (i,j) = buffr(n,index_c2i_Sa_u)
+<          vatm (i,j) = buffr(n,index_c2i_Sa_v)
+<          potT (i,j) = buffr(n,index_c2i_Sa_ptem)
+<          Tair (i,j) = buffr(n,index_c2i_Sa_tbot)
+<          Qa   (i,j) = buffr(n,index_c2i_Sa_shum)
+<          rhoa (i,j) = buffr(n,index_c2i_Sa_dens)
+---
+>          zlvl (i,j) = buffr(n,cpl_fields_c2i_z)
+>          uatm (i,j) = buffr(n,cpl_fields_c2i_u)
+>          vatm (i,j) = buffr(n,cpl_fields_c2i_v)
+>          potT (i,j) = buffr(n,cpl_fields_c2i_ptem)
+>          Tair (i,j) = buffr(n,cpl_fields_c2i_tbot)
+>          Qa   (i,j) = buffr(n,cpl_fields_c2i_shum)
+>          rhoa (i,j) = buffr(n,cpl_fields_c2i_dens)
+425,428c313,315
+< 
+<          ss_tltx(i,j) = buffr(n,index_c2i_So_dhdx)
+<          ss_tlty(i,j) = buffr(n,index_c2i_So_dhdy)
+<          frzmlt (i,j) = buffr(n,index_c2i_Fioo_q)
+---
+>          ss_tltx(i,j) = buffr(n,cpl_fields_c2i_dhdx)
+>          ss_tlty(i,j) = buffr(n,cpl_fields_c2i_dhdy)
+>          frzmlt (i,j) = buffr(n,cpl_fields_c2i_q)
+431,438c318,324
+< 
+<          swvdr(i,j) = buffr(n,index_c2i_Faxa_swvdr)
+<          swidr(i,j) = buffr(n,index_c2i_Faxa_swndr)
+<          swvdf(i,j) = buffr(n,index_c2i_Faxa_swvdf)
+<          swidf(i,j) = buffr(n,index_c2i_Faxa_swndf)
+<          flw  (i,j) = buffr(n,index_c2i_Faxa_lwdn)
+<          frain(i,j) = buffr(n,index_c2i_Faxc_rain)
+<          fsnow(i,j) = buffr(n,index_c2i_Faxc_snow)
+---
+>          swvdr(i,j) = buffr(n,cpl_fields_c2i_swvdr)
+>          swidr(i,j) = buffr(n,cpl_fields_c2i_swndr)
+>          swvdf(i,j) = buffr(n,cpl_fields_c2i_swvdf)
+>          swidf(i,j) = buffr(n,cpl_fields_c2i_swndf)
+>          flw  (i,j) = buffr(n,cpl_fields_c2i_lwdn)
+>          frain(i,j) = buffr(n,cpl_fields_c2i_rain)
+>          fsnow(i,j) = buffr(n,cpl_fields_c2i_snow)
+489c375
+<         do n=1,nrecv
+---
+>         do n=1,cpl_fields_c2i_total
+503c389
+<         enddo                   ! nrecv
+---
+>         enddo                   ! cpl_fields_c2i_total
+599d484
+<       integer(kind=int_kind) :: index        ! attribute vector property
+680c565
+<          buffs(n,index_i2c_Si_ifrac) = ailohi(i,j)     ! frac 
+---
+>          buffs(n,cpl_fields_i2c_ifrac) = ailohi(i,j)    ! frac 
+683,684c568
+<          buffs(n,index_i2c_index) = rndex_global(i,j)  ! global index
+< 
+---
+>          buffs(n,cpl_fields_i2c_index) = rndex_global(i,j)  ! global index
+686c570
+<             buffs(n,index_i2c_Si_t      ) = Tsrf(i,j)  ! temperature
+---
+>             buffs(n,cpl_fields_i2c_t    ) = Tsrf(i,j)  ! temperature
+688,708c572,592
+<             buffs(n,index_i2c_Si_avsdr  ) = alvdr(i,j) ! alb, visible/dir
+<             buffs(n,index_i2c_Si_anidr  ) = alidr(i,j) ! alb, near-ir/dir
+<             buffs(n,index_i2c_Si_avsdf  ) = alvdf(i,j) ! alb, visible/dif
+<             buffs(n,index_i2c_Si_anidf  ) = alidf(i,j) ! alb, near-ir/dif
+<             buffs(n,index_i2c_Si_tref   ) = Tref(i,j)  ! diagnostic: 2m ref temp
+<             buffs(n,index_i2c_Si_qref   ) = Qref(i,j)  ! diagnostic: 2m ref sp hum
+<             !--- a/i fluxes computed by ice
+<             buffs(n,index_i2c_Faii_taux ) = tauxa(i,j) ! stress: a/i zonal
+<             buffs(n,index_i2c_Faii_tauy ) = tauya(i,j) ! stress: a/i meridional
+<             buffs(n,index_i2c_Faii_lat  ) = flat(i,j)  ! latent heat flux
+<             buffs(n,index_i2c_Faii_sen  ) = fsens(i,j) ! sensible heat flux
+<             buffs(n,index_i2c_Faii_lwup ) = flwout(i,j)! upward longwave flux
+<             buffs(n,index_i2c_Faii_evap ) = evap(i,j)  ! evaporation h2o flux
+<             buffs(n,index_i2c_Faii_swnet) = fswabs(i,j)! sw net absorbed hf
+<             !--- i/o fluxes computed by ice
+<             buffs(n,index_i2c_Fioi_swpen) = fswthru(i,j) ! solar thru ice to ocn hf
+<             buffs(n,index_i2c_Fioi_melth) = fhnet(i,j) ! hf from melting
+<             buffs(n,index_i2c_Fioi_meltw) = fresh(i,j) ! h2o flux from melting
+<             buffs(n,index_i2c_Fioi_salt ) = fsalt(i,j) ! salt flux from melting
+<             buffs(n,index_i2c_Fioi_taux ) = tauxo(i,j) ! stress : i/o zonal
+<             buffs(n,index_i2c_Fioi_tauy ) = tauyo(i,j) ! stress : i/o meridional
+---
+>             buffs(n,cpl_fields_i2c_avsdr) = alvdr(i,j) ! alb, visible/dir
+>             buffs(n,cpl_fields_i2c_anidr) = alidr(i,j) ! alb, near-ir/dir
+>             buffs(n,cpl_fields_i2c_avsdf) = alvdf(i,j) ! alb, visible/dif
+>             buffs(n,cpl_fields_i2c_anidf) = alidf(i,j) ! alb, near-ir/dif
+>            !--- a/i fluxes computed by ice
+>             buffs(n,cpl_fields_i2c_taux ) = tauxa(i,j) ! stress: a/i zonal
+>             buffs(n,cpl_fields_i2c_tauy ) = tauya(i,j) ! stress: a/i meridional
+>             buffs(n,cpl_fields_i2c_lat  ) = flat(i,j)  ! latent heat flux
+>             buffs(n,cpl_fields_i2c_sen  ) = fsens(i,j) ! sensible heat flux
+>             buffs(n,cpl_fields_i2c_lwup ) = flwout(i,j)! upward longwave flux
+>             buffs(n,cpl_fields_i2c_evap ) = evap(i,j)  ! evaporation h2o flux
+>             buffs(n,cpl_fields_i2c_tref ) = Tref(i,j)  ! diagnostic: 2m ref temp
+>             buffs(n,cpl_fields_i2c_qref ) = Qref(i,j)  ! diagnostic: 2m ref sp hum
+>             buffs(n,cpl_fields_i2c_swnet) = fswabs(i,j)! sw net absorbed hf
+>            !--- i/o fluxes computed by ice
+>             buffs(n,cpl_fields_i2c_swpen) = fswthru(i,j) ! solar thru ice to ocn hf
+>             buffs(n,cpl_fields_i2c_melth) = fhnet(i,j) ! hf from melting
+>             buffs(n,cpl_fields_i2c_meltw) = fresh(i,j) ! h2o flux from melting
+>             buffs(n,cpl_fields_i2c_salt ) = fsalt(i,j) ! salt flux from melting
+>             buffs(n,cpl_fields_i2c_otaux) = tauxo(i,j) ! stress : i/o zonal
+>             buffs(n,cpl_fields_i2c_otauy) = tauyo(i,j) ! stress : i/o meridional
+732c616
+<          do n=1,nsend
+---
+>          do n=1,cpl_fields_i2c_total
+802c686
+< #endif
+---
+> #endif                          ! coupled
+ice_diagnostics.F
+72,73c72,73
+<       data latpnt /   90._dbl_kind,  -65._dbl_kind /
+<       data lonpnt /    0._dbl_kind,  -45._dbl_kind /
+---
+>       data latpnt /   90.,  -65. /
+>       data lonpnt /    0.,  -45. /
+116d115
+<       use ice_prescribed_mod, only : prescribed_ice
+473,483c472,477
+<        if (prescribed_ice) then
+<          write (nu_diag,*) '----------------------------'
+<          write (nu_diag,*)   'This is the prescribed ice option.'
+<          write (nu_diag,*)   'Heat and water will not be conserved.'   
+<        else
+<          write (nu_diag,*) '----------------------------'
+<          write (nu_diag,901) 'arwt rain h2o kg in dt = ',rnn,rns
+<          write (nu_diag,901) 'arwt snow h2o kg in dt = ',snn,sns
+<          write (nu_diag,901) 'arwt evap h2o kg in dt = ',evpn,evps
+<          write (nu_diag,901) 'arwt frzl h2o kg in dt = ',frzn,frzs
+<          write (nu_diag,901) 'arwt frsh h2o kg in dt = ',sfreshn,sfreshs
+---
+>        write (nu_diag,*) '----------------------------'
+>        write (nu_diag,901) 'arwt rain h2o kg in dt = ',rnn,rns
+>        write (nu_diag,901) 'arwt snow h2o kg in dt = ',snn,sns
+>        write (nu_diag,901) 'arwt evap h2o kg in dt = ',evpn,evps
+>        write (nu_diag,901) 'arwt frzl h2o kg in dt = ',frzn,frzs
+>        write (nu_diag,901) 'arwt frsh h2o kg in dt = ',sfreshn,sfreshs
+485,486c479,480
+<          write (nu_diag,901) 'arwt ice mass (kg)     = ',micen,mices
+<          write (nu_diag,901) 'arwt snw mass (kg)     = ',msnwn,msnws
+---
+>        write (nu_diag,901) 'arwt ice mass (kg)     = ',micen,mices
+>        write (nu_diag,901) 'arwt snw mass (kg)     = ',msnwn,msnws
+488,493c482,486
+<          write (nu_diag,901) 'arwt tot mass (kg)     = ',mtotn,mtots
+<          write (nu_diag,901) 'arwt tot mass chng(kg) = ',delmin,delmis
+<          write (nu_diag,901) 'arwt water flux        = ',fluxn,fluxs
+<          write (nu_diag,*) '(=rain+snow+evap+frzl-fresh)  '
+<          write (nu_diag,901) 'water flux error       = ',werrn,werrs
+<        endif
+---
+>        write (nu_diag,901) 'arwt tot mass (kg)     = ',mtotn,mtots
+>        write (nu_diag,901) 'arwt tot mass chng(kg) = ',delmin,delmis
+>        write (nu_diag,901) 'arwt water flux        = ',fluxn,fluxs
+>        write (nu_diag,*) '(=rain+snow+evap+frzl-fresh)  '
+>        write (nu_diag,901) 'water flux error       = ',werrn,werrs
+515,518d507
+< #ifdef CCSMcoupled
+<        call shr_sys_flush(nu_diag)
+< #endif
+< 
+720,721c709,710
+<          plat(:)  = -999._dbl_kind
+<          plon(:)  = -999._dbl_kind
+---
+>          plat(:)  = -999.
+>          plon(:)  = -999.
+ice_domain.F
+ice_dyn_evp.F
+57c57
+<      &,  ndte         ! number of subcycles:  ndte=dyn_dt/dte
+---
+>      &,  ndte         ! number of subcycles:  ndte=dt/dte
+201c201
+<       dte = dyn_dt/real(ndte,kind=dbl_kind)        ! s
+---
+>       dte = dt/real(ndte,kind=dbl_kind)        ! s
+203c203
+<       tdamp2 = c2*eyc*dyn_dt         ! s
+---
+>       tdamp2 = c2*eyc*dt         ! s
+205c205
+<          write(nu_diag,'(a8,f12.4)') 'dyn_dt = ', dyn_dt
+---
+>          write(nu_diag,'(a8,f12.4)') 'dt = ', dt
+217c217
+<       rcon(:,:) = 1230._dbl_kind*eyc*dyn_dt*dtei**2  ! kg/s  
+---
+>       rcon(:,:) = 1230._dbl_kind*eyc*dt*dtei**2  ! kg/s  
+ice_exit.F
+ice.F
+ice_fileunits.F
+ice_flux.F
+ice_flux_in.F
+1277c1277
+<      &                            + 4.0_dbl_kind*(sstk-ptem) )
+---
+>      &                            + 4.0*(sstk-ptem) )
+ice_grid.F
+85a86,87
+>      &,  pmask(imt_local,jmt_local) ! mask for data to send to coupler
+>          ! NOTE: pmask not used in CICE but defined for CCSM compatibility
+564a567
+>         pmask(i,j) = .true.
+683,686c686,689
+<          write(nu_diag,*) 'min/max ULON:', y1*rad_to_deg, y2*rad_to_deg
+<          write(nu_diag,*) 'min/max TLON:', x1*rad_to_deg, x2*rad_to_deg
+<          write(nu_diag,*) 'min/max ULAT:', y3*rad_to_deg, y4*rad_to_deg
+<          write(nu_diag,*) 'min/max TLAT:', x3*rad_to_deg, x4*rad_to_deg
+---
+>          write(nu_diag,*) 'min/max ULON:', y1, y2
+>          write(nu_diag,*) 'min/max TLON:', x1, x2
+>          write(nu_diag,*) 'min/max ULAT:', y3, y4
+>          write(nu_diag,*) 'min/max TLAT:', x3, x4
+ice_history.F
+ice_init.F
+66,70c66
+< #ifdef CCSMcoupled
+<       use ice_prescribed_mod, only: prescribed_ice, stream_info_file, 
+<      &                              stream_year_first,stream_year_last,
+<      &                              model_year_align, prescribed_ice_fill
+< #endif
+---
+>       use ice_ocean, only: oceanmixed_ice
+76a73
+>       use ice_coupling, only: runtype
+88c85
+< #ifdef CCSMcoupled
+---
+> #ifdef CCSM
+98c95,96
+<      &,  oceanmixed_ice             ! if true, use internal mixed-layer
+---
+>      &,  prescribed_ice ! if true, use prescribed ice
+>      &,  prescribed_ice_climatology ! if true, use climate-prescribed ice
+102a101,103
+>       character(len=char_len_long) :: 
+>      &   runid                 ! identifier for coupled run
+>      &,  prescribed_ice_file   ! netCDF file name for prescribed ice
+127c128
+< #ifdef CCSMcoupled
+---
+> #ifdef CCSM
+131,132c132
+<      &, prescribed_ice, stream_info_file, stream_year_first
+<      &, stream_year_last, model_year_align, prescribed_ice_fill
+---
+>      &, prescribed_ice,  prescribed_ice_file, prescribed_ice_climatology
+191c191
+< #ifdef CCSMcoupled
+---
+> #ifdef CCSM
+203,207c203,204
+<       stream_info_file  = 'csim_stream.txt'   ! file with prescribed ice stream info
+<       stream_year_first = 1                   ! first year in  pice stream to use
+<       stream_year_last  = 1                   ! last  year in  pice stream to use
+<       model_year_align  = 1                   ! align stream_year_first with this model year
+<       prescribed_ice_fill = .false.           ! true if pice data fill required
+---
+>       prescribed_ice_file = 'prescribed_ice.nc' ! local prescribed ice file name
+>       prescribed_ice_climatology = .true.       ! if true, use climatology
+242c239
+< #ifdef CCSMcoupled
+---
+> #ifdef CCSM
+300c297
+< #ifdef CCSMcoupled
+---
+> #ifdef CCSM
+310,314c307,308
+<       call ice_bcast_char(stream_info_file)
+<       call ice_bcast_iscalar(stream_year_first)
+<       call ice_bcast_iscalar(stream_year_last)
+<       call ice_bcast_iscalar(model_year_align)
+<       call ice_bcast_logical(prescribed_ice_fill)
+---
+>       call ice_bcast_char   (prescribed_ice_file)
+>       call ice_bcast_logical(prescribed_ice_climatology)
+334c328
+< #ifdef CCSMcoupled
+---
+> #ifdef CCSM
+428c422
+< #ifdef CCSMcoupled
+---
+> #ifdef coupled
+439c433
+< #ifdef CCSMcoupled
+---
+> #ifdef CCSM
+446,451c440,443
+<          write(nu_diag,*)    ' stream_info_file          = ', trim(adjustl(stream_info_file))
+<          write(nu_diag,*) ' stream_year_first         = ', stream_year_first
+<          write(nu_diag,*) ' stream_year_last          = ', stream_year_last
+<          write(nu_diag,*) ' model_year_align          = ', model_year_align
+<          write(nu_diag,*) ' prescribed_ice_fill       = ', prescribed_ice_fill
+< 
+---
+>             write(nu_diag,*)    ' prescribed_ice_file       = ',
+>      &                            trim(prescribed_ice_file)
+>             write(nu_diag,*) ' prescribed_ice_climatology= ',
+>      &                            prescribed_ice_climatology
+703,706c695,698
+<         swvdr (i,j) = c0              ! shortwave radiation (W/m^2)
+<         swvdf (i,j) = c0              ! shortwave radiation (W/m^2)
+<         swidr (i,j) = c0              ! shortwave radiation (W/m^2)
+<         swidf (i,j) = c0              ! shortwave radiation (W/m^2)
+---
+>         swvdr (i,j) = 0._dbl_kind     ! shortwave radiation (W/m^2)
+>         swvdf (i,j) = 0._dbl_kind     ! shortwave radiation (W/m^2)
+>         swidr (i,j) = 0._dbl_kind     ! shortwave radiation (W/m^2)
+>         swidf (i,j) = 0._dbl_kind     ! shortwave radiation (W/m^2)
+771c763
+< #ifdef CCSMcoupled
+---
+> #ifdef coupled
+ice_itd.F
+62,63d61
+<       character (len=35) :: c_hi_range(ncat)
+< 
+126,128d123
+<       character(len=8) :: c_hinmax1,c_hinmax2
+<       character(len=2) :: c_nc
+< 
+200,210d194
+< 
+<             ! Write integer n to character string
+<             write (c_nc, '(i2)') n    
+< 
+<             ! Write hin_max to character string
+<             write (c_hinmax1, '(f5.3)') hin_max(n-1)
+<             write (c_hinmax2, '(f5.3)') hin_max(n)
+< 
+<             ! Save character string to write to history file
+<             c_hi_range(n)=c_hinmax1//'m < hi Cat '//c_nc//' < '//
+<      &                    c_hinmax2//'m'
+213d196
+< 
+ice_itd_linear.F
+222d221
+<       Hbnew = c0
+653c652
+<      &                .and. HbR(i,j) - HbL(i,j) > puny) then
+---
+>      &                .and. hbR(i,j) - hbL(i,j) > puny) then
+ice_kinds_mod.F
+ice_mechred.F
+52c52
+<       use ice_calendar, only: istep1, dyn_dt
+---
+>       use ice_calendar, only: istep1, dt
+297c297
+<          divu_adv(i,j) = (c1-asum(i,j)) / dyn_dt
+---
+>          divu_adv(i,j) = (c1-asum(i,j)) / dt
+334c334
+<             w1 = apartic(i,j,0) * closing_gross(i,j) * dyn_dt
+---
+>             w1 = apartic(i,j,0) * closing_gross(i,j) * dt
+357c357
+<                w1 = apartic(i,j,n) * closing_gross(i,j) * dyn_dt
+---
+>                w1 = apartic(i,j,n) * closing_gross(i,j) * dt
+394c394
+<             divu_adv(i,j) = (c1 - asum(i,j)) / dyn_dt
+---
+>             divu_adv(i,j) = (c1 - asum(i,j)) / dt
+426c426
+<       dti = c1/dyn_dt
+---
+>       dti = c1/dt
+1029,1030c1029,1030
+<      &              - apartic(i,j,0)*closing_gross(i,j)*dyn_dt
+<      &              + opning(i,j)*dyn_dt
+---
+>      &              - apartic(i,j,0)*closing_gross(i,j)*dt
+>      &              + opning(i,j)*dt
+1102c1102
+<             ardg1(i,j) = apartic(i,j,n1)*closing_gross(i,j)*dyn_dt
+---
+>             ardg1(i,j) = apartic(i,j,n1)*closing_gross(i,j)*dt
+1134c1134
+<             opening(i,j)  = opening (i,j) + opning(i,j)*dyn_dt
+---
+>             opening(i,j)  = opening (i,j) + opning(i,j)*dt
+ice_model_size.F
+ice_mpi_internal.F
+59c59
+< #ifdef CCSMcoupled  
+---
+> #ifdef coupled  
+ice_ocean.F
+ice_read_write.F
+ice_scaling.F
+ice_state.F
+ice_therm_itd.F
+ice_therm_vertical.F
+958,959c958,959
+<                Tin(i,j,k) =  (-bb1 - sqrt(bb1*bb1 - c4*aa1*cc1)) / 
+<      &                       (c2*aa1)
+---
+>                Tin(i,j,k) =  (-bb1 - sqrt(bb1*bb1 - 4.*aa1*cc1)) / 
+>      &                       (2.*aa1)
+1748c1748
+<             if (ferr > 0.9_dbl_kind*ferrmax) then           ! condition (5)
+---
+>             if (ferr > 0.9*ferrmax) then               ! condition (5)
+1863,1864c1863,1864
+<      &   betak   = 0.13_dbl_kind ! constant in formula for k (W m-1 ppt-1)
+<      &,  kimin   = 0.10_dbl_kind ! min conductivity of saline ice (W m-1 deg-1)
+---
+>      &   betak   = 0.13  ! constant in formula for k (W m-1 ppt-1)
+>      &,  kimin   = 0.10  ! min conductivity of saline ice (W m-1 deg-1)
+1897c1897
+<             khi(i,j,1) = c2*khi(i,j,1)*khs(i,j) / 
+---
+>             khi(i,j,1) = 2.*khi(i,j,1)*khs(i,j) / 
+1972c1972
+<      &   i0vis   = 0.70_dbl_kind  ! fraction of penetrating solar rad (visible)
+---
+>      &   i0vis   = 0.70  ! fraction of penetrating solar rad (visible)
+ice_timers.F
+ice_transport_mpdata.F
+259c259
+<       upwind(y1,y2,a,h)=p5*dyn_dt*h*((a+abs(a))*y1+(a-abs(a))*y2)
+---
+>       upwind(y1,y2,a,h)=p5*dt*h*((a+abs(a))*y1+(a-abs(a))*y2)
+365c365
+<      1   /(phi(i+1,j,n)+phi(i,j,n)+eps) - dyn_dt*uee(i,j,n)*dive(i,j)
+---
+>      1   /(phi(i+1,j,n)+phi(i,j,n)+eps) - dt*uee(i,j,n)*dive(i,j)
+368c368
+<      1   /(phi(i,j+1,n)+phi(i,j,n)+eps) - dyn_dt*vnn(i,j,n)*divn(i,j)
+---
+>      1   /(phi(i,j+1,n)+phi(i,j,n)+eps) - dt*vnn(i,j,n)*divn(i,j)
+398c398
+<          elseif (phi(i,j,n) < c0) then
+---
+>          elseif (phi(i,j,n) < 0.) then
+ice_transport_remap.F
+856,857c856,857
+<          dpx(i,j) = -dyn_dt*uvel(i,j)
+<          dpy(i,j) = -dyn_dt*vvel(i,j)
+---
+>          dpx(i,j) = -dt*uvel(i,j)
+>          dpy(i,j) = -dt*vvel(i,j)
+1058,1059c1058,1059
+<          dpx(i,j) = -dyn_dt * ump
+<          dpy(i,j) = -dyn_dt * vmp
+---
+>          dpx(i,j) = -dt * ump
+>          dpy(i,j) = -dt * vmp
+ice_work.F

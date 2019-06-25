@@ -1,4 +1,4 @@
-c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
+c $Id: ice_itd.F,v 1.28 2006/09/12 21:45:58 eclare Exp $
 !=======================================================================
 !BOP
 !
@@ -6,27 +6,25 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !DESCRIPTION:
 !
-! Routines to initialize the ice thickness distribution and
-! utilities to redistribute ice among categories. These routines
-! are not specific to a particular numerical implementation.
+! Routines to initialize the ice thickness distribution and 
+! utilities to redistribute ice among categories. These routines 
+! are not specific to a particular numerical implementation. \\
 !
-! See Bitz, C.M., and W.H. Lipscomb, 1999:
+! See Bitz, C.M., and W.H. Lipscomb, 1999: 
 ! An energy-conserving thermodynamic model of sea ice,
-! J. Geophys. Res., 104, 15,669--15,677.
-!
-! See Bitz, C.M., M.M. Holland, A.J. Weaver, M. Eby, 2001:
+! J. Geophys. Res., 104, 15,669--15,677. \\
+!     
+! See Bitz, C.M., M.M. Holland, A.J. Weaver, M. Eby, 2001: 
 ! Simulating the ice-thickness distribution in a climate model,
-! J. Geophys. Res., 106, 2441--2464.
+! J. Geophys. Res., 106, 2441--2464. \\
 !
 ! !REVISION HISTORY:
 !
-! authors: C. M. Bitz, UW
-!          William H. Lipscomb and Elizabeth C. Hunke, LANL
+! author: C. M. Bitz, UW
+!         Elizabeth C. Hunke, LANL
+!         William H. Lipscomb, LANL
 !
-! 2003: Vectorized by Clifford Chen (Fujitsu) and William Lipscomb
-!
-! Revised 2004 by William Lipscomb: 
-!   Added multiple snow layers, block structure, cleanup_itd
+! Summer 2003: Vectorized by Clifford Chen (Fujitsu) and William Lipscomb (LANL)
 !
 ! !INTERFACE:
 !
@@ -35,9 +33,9 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_communicate, only: my_task, master_task
-      use ice_domain_size
+      use ice_model_size
       use ice_constants
+      use ice_state
       use ice_fileunits
       use ice_exit
 !
@@ -47,15 +45,14 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       save
 
       integer (kind=int_kind) ::
-     &   kitd          ! type of itd conversions
-                       !   0 = delta function
-                       !   1 = linear remap
-     &,  kcatbound     !   0 = old category boundary formula
-                       !   1 = new formula giving round numbers
-     &,  ilyr1 (ncat)  ! array position of top ice layer in each cat
-     &,  ilyrn (ncat)  ! array position of bottom ice layer in each cat
-     &,  slyr1 (ncat)  ! array position of top snow layer in each cat
-     &,  slyrn (ncat)  ! array position of bottom snow layer in each cat
+     &   kitd               ! type of itd conversions 
+                            !   0 = delta function
+                            !   1 = linear remap
+     &,  kcatbound          !   0 = old category boundary formula
+                            !   1 = new formula giving round numbers
+                            !   2 = WMO standard
+     &,  ilyr1 (ncat)       ! position of the top layer in each cat
+     &,  ilyrn (ncat)       ! position of the bottom layer in each cat
 
       real (kind=dbl_kind), parameter ::
      &   hi_min = p01       ! minimum ice thickness allowed (m)
@@ -68,7 +65,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 ! both represent a minimum ice thickness.  hin_max(0) is
 ! intended to be used for particular numerical implementations
 ! of category conversions in the ice thickness distribution.
-! hi_min is a more general purpose parameter, but is specifically
+! hi_min is a more general purpose parameter, but is specifically 
 ! for maintaining stability in the thermodynamics.  Currently,
 ! hi_min = 0.1 m
 ! hin_max(0) = 0.1 m for the delta function itd
@@ -76,7 +73,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! similarly, there are two values of minimum snow thickness
 ! (the other is defined in ice_vthermo.H since it is used only
-! for thermo.)
+! for thermo.) 
 !
 ! Also note that the upper limit on the thickest category
 ! is only used for the linear remapping scheme
@@ -102,8 +99,9 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !REVISION HISTORY:
 !
-! authors: William H. Lipscomb and Elizabeth C. Hunke, LANL
-!          C. M. Bitz, UW
+! authors: William H. Lipscomb, LANL
+!          Elizabeth C. Hunke LANL
+!          C. M. Bitz UW
 !
 ! !USES:
 !
@@ -117,7 +115,9 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       real (kind=dbl_kind) ::
      &     cc1, cc2, cc3               ! parameters for kcatbound = 0
      &,    x1
-     &,    rn        ! real(n)
+
+      real (kind=dbl_kind) ::
+     &     rn        ! real(n)
      &,    rncat     ! real(ncat)
      &,    d1                          ! parameters for kcatbound = 1 (m)
      &,    d2
@@ -133,7 +133,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       d2 = 0.5_dbl_kind / rncat
 
       !-----------------------------------------------------------------
-      ! Choose category boundaries based on one of two formulas.
+      ! Choose category boundaries based on one of three options.
       !
       ! The first formula (kcatbound = 0) was used in Lipscomb (2001) 
       !  and in CICE versions 3.0 and 3.1.
@@ -148,6 +148,14 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       !  close to the standard values given by the first formula.
       ! For ncat = 10, boundaries in cm are 30, 70, 120, 180, 250, 330,
       !  420, 520, 630.    
+      !
+      ! The third option provides support for World Meteorological
+      !  Organization classification based on thickness.  The full
+      !  WMO thickness distribution is used if ncat = 7;  if ncat=5 
+      !  or ncat = 6, some of the thinner categories are combined.
+      ! For ncat = 5,  boundaries are         30, 70, 120, 200, >200 cm.
+      ! For ncat = 6,  boundaries are     15, 30, 70, 120, 200, >200 cm.
+      ! For ncat = 7,  boundaries are 10, 15, 30, 70, 120, 200, >200 cm.
       !-----------------------------------------------------------------
 
       if (kcatbound == 0) then   ! original scheme
@@ -184,9 +192,45 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
             hin_max(n) = rn * (d1 + (rn-c1)*d2)
          enddo
 
-      endif
+      elseif (kcatbound == 2) then  ! WMO standard
+
+        if (ncat == 5) then
+         ! thinnest 3 categories combined
+         hin_max(0) = c0
+         hin_max(1) = 0.30_dbl_kind
+         hin_max(2) = 0.70_dbl_kind
+         hin_max(3) = 1.20_dbl_kind
+         hin_max(4) = 2.00_dbl_kind
+         hin_max(5) = 999._dbl_kind ! arbitrary big number
+       elseif (ncat == 6) then
+         ! thinnest 2 categories combined
+         hin_max(0) = c0
+         hin_max(1) = 0.15_dbl_kind
+         hin_max(2) = 0.30_dbl_kind
+         hin_max(3) = 0.70_dbl_kind
+         hin_max(4) = 1.20_dbl_kind
+         hin_max(5) = 2.00_dbl_kind
+         hin_max(6) = 999._dbl_kind ! arbitrary big number
+       elseif (ncat == 7) then
+         ! all thickness categories 
+         hin_max(0) = c0
+         hin_max(1) = 0.10_dbl_kind
+         hin_max(2) = 0.15_dbl_kind
+         hin_max(3) = 0.30_dbl_kind
+         hin_max(4) = 0.70_dbl_kind
+         hin_max(5) = 1.20_dbl_kind
+         hin_max(6) = 2.00_dbl_kind
+         hin_max(7) = 999._dbl_kind ! arbitrary big number
+       else
+         write (nu_diag,*) 'kcatbound=3 (WMO) must have ncat=5, 6 or 7'
+         stop
+       endif
+
+      endif ! kcatbound
 
       if (my_task == master_task) then
+         write (nu_diag,*) ' '
+         write (nu_diag,*) 'The thickness categories are:'
          write (nu_diag,*) ' '
          write (nu_diag,*) 'hin_max(n-1) < Cat n < hin_max(n)'
          do n = 1, ncat
@@ -200,16 +244,9 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       !-----------------------------------------------------------------
       ilyr1(1) = 1                       ! if nilyr  = 4
       ilyrn(1) = nilyr                   !   ilyr1 = { 1,5,9 }
-      do n = 2, ncat                     !   ilyrn = { 4,8,12} etc
+      do n = 2,ncat                      !   ilyrn = { 4,8,12} etc
          ilyr1(n) = ilyrn(n-1) + 1
          ilyrn(n) = ilyrn(n-1) + nilyr
-      enddo
-
-      slyr1(1) = 1
-      slyrn(1) = nslyr
-      do n = 2, ncat
-         slyr1(n) = slyrn(n-1) + 1
-         slyrn(n) = slyrn(n-1) + nslyr
       enddo
 
       end subroutine init_itd
@@ -221,15 +258,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !INTERFACE:
 !
-      subroutine aggregate (nx_block, ny_block,
-     &                      aicen,    trcrn,
-     &                      vicen,    vsnon,
-     &                      eicen,    esnon,
-     &                      aice,     trcr,
-     &                      vice,     vsno,
-     &                      eice,     esno,
-     &                      aice0,
-     &                      tmask,    trcr_depend)
+      subroutine aggregate
 !
 ! !DESCRIPTION:
 !
@@ -242,88 +271,51 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !USES:
 !
-! !INPUT/OUTPUT PARAMETERS:
+      use ice_domain
+      use ice_flux, only : Tf 
+      use ice_grid
 !
-      integer (kind=int_kind), intent(in) ::
-     &     nx_block, ny_block  ! block dimensions
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),
-     &   intent(in) ::
-     &   aicen     ! concentration of ice
-     &,  vicen     ! volume per unit area of ice          (m)
-     &,  vsnon     ! volume per unit area of snow         (m)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat),
-     &   intent(in) ::
-     &   trcrn     ! ice tracers
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr),
-     &   intent(in) ::
-     &   eicen     ! energy of melting for each ice layer  (J/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr),
-     &   intent(in) ::
-     &   esnon     ! energy of melting for each snow layer (J/m^2)
-
-      logical (kind=log_kind), dimension (nx_block,ny_block),
-     &   intent(in) ::
-     &   tmask     ! land/boundary mask, thickness (T-cell)
-
-      integer (kind=int_kind), dimension (ntrcr), intent(in) ::
-     &   trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block), 
-     &   intent(out) ::
-     &   aice      ! concentration of ice
-     &,  vice      ! volume per unit area of ice          (m)
-     &,  vsno      ! volume per unit area of snow         (m)
-     &,  eice      ! energy of melt. of ice           (J/m^2)
-     &,  esno      ! energy of melt. of snow layer    (J/m^2)
-     &,  aice0     ! concentration of open water
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr), 
-     &   intent(out) ::
-     &   trcr      ! ice tracers
+! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &  icells                ! number of ocean/ice cells
+      integer (kind=int_kind) :: i, j, k, n 
 
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
+      integer (kind=int_kind), dimension (1:(ihi-ilo+1)*(jhi-jlo+1)) ::
      &  indxi                 ! compressed indices in i/j directions
      &, indxj
 
       integer (kind=int_kind) ::
-     &  i, j, k, n, it
+     &  icells                ! number of ocean/ice cells
      &, ij                    ! combined i/j horizontal index
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr) ::
-     &  atrcr      ! sum of aicen*trcrn or vicen*trcrn or vsnon*trcrn
 
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
-      aice0(:,:) = c1
-      aice (:,:) = c0
-      vice (:,:) = c0
-      vsno (:,:) = c0
-      eice (:,:) = c0
-      esno (:,:) = c0
-      atrcr(:,:,:) = c0
+      do j=jlo,jhi
+      do i=ilo,ihi
+         aice0(i,j) = c1
+         aice(i,j) = c0
+         vice(i,j) = c0
+         vsno(i,j) = c0
+         eice(i,j) = c0
+         esno(i,j) = c0
+         Tsfc(i,j) = c0
+      enddo
+      enddo
 
       !-----------------------------------------------------------------
       ! Aggregate
       !-----------------------------------------------------------------
 
       icells = 0
-      do j = 1, ny_block
-      do i = 1, nx_block
-         if (tmask(i,j)) then
-            icells = icells + 1
-            indxi(icells) = i
-            indxj(icells) = j
-         endif                  ! tmask
+      do j = jlo, jhi
+      do i = ilo, ihi
+        if (tmask(i,j)) then
+          icells = icells + 1
+          indxi(icells) = i
+          indxj(icells) = j
+        endif   ! tmask
       enddo
       enddo
 
@@ -338,45 +330,9 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
             aice(i,j) = aice(i,j) + aicen(i,j,n)
             vice(i,j) = vice(i,j) + vicen(i,j,n)
             vsno(i,j) = vsno(i,j) + vsnon(i,j,n)
+            esno(i,j) = esno(i,j) + esnon(i,j,n)
+            Tsfc(i,j) = Tsfc(i,j) + Tsfcn(i,j,n)*aicen(i,j,n)
          enddo                  ! ij
-
-         do it = 1, ntrcr
-            if (trcr_depend(it) == 0) then  ! ice area tracer
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  atrcr(i,j,it) = atrcr(i,j,it) 
-     &                          + trcrn(i,j,it,n)*aicen(i,j,n)
-               enddo            ! ij
-
-            elseif (trcr_depend(it) == 1) then  ! ice volume tracer
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  atrcr(i,j,it) = atrcr(i,j,it) 
-     &                          + trcrn(i,j,it,n)*vicen(i,j,n)
-               enddo            ! ij
-
-            elseif (trcr_depend(it) ==2) then ! snow volume tracer
-
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  atrcr(i,j,it) = atrcr(i,j,it) 
-     &                          + trcrn(i,j,it,n)*vsnon(i,j,n)
-               enddo            ! ij
-
-            endif               ! trcr_depend
-         enddo                  ! ntrcr
 
          do k = 1, nilyr
 !DIR$ CONCURRENT !Cray
@@ -385,38 +341,25 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
             do ij = 1, icells
                i = indxi(ij)
                j = indxj(ij)
-               eice(i,j) = eice(i,j) + eicen(i,j,ilyr1(n)+k-1)
+               eice(i,j) = eice(i,j) + eicen(i,j,(n-1)*nilyr+k)
             enddo
-         enddo                  ! nilyr
+         enddo                  ! k
 
-         do k = 1, nslyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-               esno(i,j) = esno(i,j) + esnon(i,j,slyr1(n)+k-1)
-            enddo
-         enddo                  ! nslyr
+      enddo                     ! n
 
-      enddo                     ! ncat
-
-      ! Open water fraction
-
-      do ij = 1, icells
-         i = indxi(ij)
-         j = indxj(ij)
-         aice0(i,j) = max (c1 - aice(i,j), c0)
-      enddo                     ! ij
-
-      ! Tracers
-
-      call compute_tracers (nx_block,     ny_block,
-     &                      trcr_depend,
-     &                      atrcr(:,:,:), aice(:,:),
-     &                      vice (:,:),   vsno(:,:),
-     &                      trcr(:,:,:))
+      !-----------------------------------------------------------------
+      ! Temperature, open water fraction
+      !-----------------------------------------------------------------
+      do j=jlo,jhi
+      do i=ilo,ihi
+         if (aice(i,j) > c0)  then
+            aice0(i,j) = max (c1 - aice(i,j), c0)
+            Tsfc(i,j)  = Tsfc(i,j) / aice(i,j)
+         else
+            Tsfc(i,j)  = Tf(i,j)
+         endif
+      enddo                     ! i
+      enddo                     ! j
 
       end subroutine aggregate
 
@@ -427,14 +370,11 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !INTERFACE:
 !
-      subroutine aggregate_area (nx_block, ny_block,
-     &                           iblk,     aicen, 
-     &                           aice,     aice0)
+      subroutine aggregate_area
 !
 ! !DESCRIPTION:
 !
-! Aggregate ice area (but not other state variables) over thickness 
-! categories.
+! Aggregate ice area (but not other state variables) over thickness categories
 !
 ! !REVISION HISTORY:
 !
@@ -444,17 +384,6 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 ! !USES:
 !
 ! !INPUT/OUTPUT PARAMETERS:
-!
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  iblk                ! block index (diagnostic only)
-
-      real (kind=dbl_kind), dimension (:,:,:), intent(in) ::
-     &   aicen     ! concentration of ice
-
-      real (kind=dbl_kind), dimension (:,:), intent(inout) ::
-     &   aice      ! concentration of ice
-     &,  aice0     ! concentration of open water
 !
 !EOP
 !
@@ -466,14 +395,18 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       !-----------------------------------------------------------------
       ! Initialize
       !-----------------------------------------------------------------
-      aice(:,:) = c0
+      do j=jlo,jhi
+      do i=ilo,ihi
+         aice(i,j) = c0
+      enddo
+      enddo
 
       !-----------------------------------------------------------------
       ! Aggregate
       !-----------------------------------------------------------------
       do n = 1, ncat
-         do j = 1, ny_block
-         do i = 1, nx_block
+         do j=jlo,jhi
+         do i=ilo,ihi
             aice(i,j) = aice(i,j) + aicen(i,j,n)
          enddo                  ! i
          enddo                  ! j
@@ -481,31 +414,36 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 
       outbound = .false.
 
-      do j = 1, ny_block
-      do i = 1, nx_block
+      do j = jlo, jhi
+      do i = ilo, ihi
 
-         ! Bug check
-         if (aice(i,j) > c1+puny .or. aice(i,j) < -puny) then
+      !-----------------------------------------------------------------
+      ! Bug check
+      !-----------------------------------------------------------------
+         if (aice(i,j) > c1+puny .or.
+     &       aice(i,j) < -puny) then
             outbound = .true.
          endif
 
-         ! open water fraction
+      !-----------------------------------------------------------------
+      ! open water fraction
+      !-----------------------------------------------------------------
          aice0(i,j) = max (c1 - aice(i,j), c0)
 
       enddo                     ! i
       enddo                     ! j
 
       if ( outbound ) then      ! area out of bounds
-        do j = 1, ny_block
-        do i = 1, nx_block
+        do j = jlo, jhi
+        do i = ilo, ihi
 
          if (aice(i,j) > c1+puny .or.
      &       aice(i,j) < -puny) then
             write(nu_diag,*) ' '
             write(nu_diag,*) 'aggregate ice area out of bounds'
-            write(nu_diag,*) 'my_task, i, j, iblk, aice:',
-     &                        my_task, i, j, iblk, aice(i,j)
-!!            write(nu_diag,*) 'aicen =', aicen(i,j,:)
+            write(nu_diag,*) 'my_task, i, j, aice:', 
+     &                        my_task, i, j, aice(i,j)
+!!            write(nu_diag,*) 'aicen =', aicen(i,j,:) 
             call abort_ice('ice_itd: aggregate_area')
          endif
 
@@ -518,16 +456,180 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !=======================================================================
 !BOP
 !
+! !IROUTINE: bound_aggregate - bound calls for aggregate ice state
+!
+! !INTERFACE:
+!
+      subroutine bound_aggregate
+!
+! !DESCRIPTION:
+!
+! Get ghost cell values for aggregate ice state variables
+! NOTE: This subroutine is called only at initialization.  It could be
+!       eliminated if the aggregate variables were defined only in
+!       physical grid cells.
+!
+! !REVISION HISTORY:
+!
+! authors: William H. Lipscomb, LANL
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      use ice_grid
+
+      call bound (aice0)
+      call bound (aice)
+      call bound (vice)
+      call bound (vsno)
+      call bound (eice)
+      call bound (esno)
+      call bound (Tsfc)
+
+      end subroutine bound_aggregate
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: bound_state - bound calls for ice state variables
+!
+! !INTERFACE:
+!
+      subroutine bound_state
+!
+! !DESCRIPTION:
+!
+! Get ghost cell values for ice state variables in each thickness category
+!
+! !REVISION HISTORY:
+!
+! authors: William H. Lipscomb, LANL
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      use ice_grid
+
+      call bound_narr (ncat,aicen)
+      call bound_narr (ncat,vicen)
+      call bound_narr (ncat,vsnon)
+      call bound_narr (ntilay,eicen)
+      call bound_narr (ncat,esnon)
+      call bound_narr (ncat,Tsfcn)
+
+      end subroutine bound_state
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: check_state - require certain fields to be monotone
+!
+! !INTERFACE:
+!
+      subroutine check_state
+!
+! !DESCRIPTION:
+!
+!  Insist that certain fields are monotone.
+!  Should not be necessary if all is well, 
+!  but best to keep going. Model will not conserve
+!  energy and water if fields are zeroed here.
+!
+! !REVISION HISTORY:
+!
+! author: C. M. Bitz, UW
+!
+! !USES:
+!
+      use ice_flux
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) ::
+     &   i, j            ! horizontal indices
+     &,  n               ! thickness category index
+     &,  k               ! ice layer index
+
+      integer (kind=int_kind), dimension (ilo:ihi,jlo:jhi) ::
+     &   zerout    ! 0=false, 1=true
+
+      do n = 1, ncat
+
+         do j = jlo, jhi
+         do i = ilo, ihi
+            if (aicen(i,j,n) < puny .or. vicen(i,j,n) < puny) then
+               zerout(i,j) = 1
+            else
+               zerout(i,j) = 0
+            endif
+         enddo
+         enddo
+
+         do k = 1, nilyr
+            do j = jlo, jhi
+            do i = ilo, ihi
+               if (eicen(i,j,ilyr1(n)+k-1) > -puny) zerout(i,j) = 1
+            enddo               ! i
+            enddo               ! j
+         enddo                  ! k
+
+         do j = jlo, jhi
+         do i = ilo, ihi
+
+            if (zerout(i,j)==1) then
+               aice0(i,j) = aice0(i,j) + aicen(i,j,n) 
+               aicen(i,j,n) = c0
+               vicen(i,j,n) = c0
+               vsnon(i,j,n) = c0
+               esnon(i,j,n) = c0
+               Tsfcn(i,j,n) = Tf(i,j)
+            elseif (vsnon(i,j,n) <= puny) then
+               vsnon(i,j,n) = c0
+               esnon(i,j,n) = c0
+            endif
+
+            if (vsnon(i,j,n) > puny) then
+               if (-esnon(i,j,n)/vsnon(i,j,n)-Lfresh*rhos < eps04) 
+     &              esnon(i,j,n) = -vsnon(i,j,n)*(Lfresh*rhos + eps04)
+            endif
+
+         enddo                  ! i
+         enddo                  ! j
+
+         do k = 1, nilyr
+            do j = jlo, jhi
+            do i = ilo, ihi
+               if (zerout(i,j)==1) eicen(i,j,ilyr1(n)+k-1) = c0
+            enddo
+            enddo
+         enddo                  ! k
+
+      enddo                     ! n
+
+      do j=jlo,jhi
+      do i=ilo,ihi
+         if (aice0(i,j) < puny) aice0(i,j) = c0
+      enddo
+      enddo
+
+      end subroutine check_state
+
+!=======================================================================
+!BOP
+!
 ! !IROUTINE: rebin - rebins thicknesses into defined categories
 !
 ! !INTERFACE:
 !
-      subroutine rebin (nx_block, ny_block,
-     &                  nghost,   trcr_depend,
-     &                  aicen,    trcrn,
-     &                  vicen,    vsnon,
-     &                  eicen,    esnon,
-     &                  hicen)
+      subroutine rebin
 !
 ! !DESCRIPTION:
 !
@@ -535,59 +637,48 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !REVISION HISTORY:
 !
-! authors: William H. Lipscomb and Elizabeth C. Hunke, LANL
+! authors: William H. Lipscomb, LANL
+!          Elizabeth C. Hunke LANL 
 !
 ! !USES:
 !
-! !INPUT/OUTPUT PARAMETERS:
+      use ice_grid
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
-
-      integer (kind=int_kind), dimension (ntrcr), intent(in) ::
-     &   trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),
-     &   intent(inout) ::
-     &   aicen     ! concentration of ice
-     &,  vicen     ! volume per unit area of ice           (m)
-     &,  vsnon     ! volume per unit area of snow          (m)
-     &,  hicen     ! ice thickness for each cat            (m)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat),
-     &   intent(inout) ::
-     &   trcrn     ! ice tracers
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr),
-     &   intent(inout) ::
-     &   eicen     ! energy of melting for each ice layer  (J/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr),
-     &   intent(inout) ::
-     &   esnon     ! energy of melting for each snow layer (J/m^2)
+! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
 !
       integer (kind=int_kind) ::
-     &   i,j              ! horizontal indices
-     &,  n                ! category index
-     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
+     &   i,j                ! horizontal indices
+     &,  n                  ! category index
 
       logical (kind=log_kind) ::
      &   shiftflag          ! = .true. if ice must be shifted
 
-      integer (kind=int_kind), dimension (nx_block,ny_block,ncat) ::
+      real (kind=dbl_kind), dimension(ilo:ihi,jlo:jhi,ncat) ::
+     &   hicen              ! ice thickness for each cat        (m)
+
+      integer (kind=int_kind), dimension(ilo:ihi,jlo:jhi,ncat) ::
      &   donor              ! donor category index
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) ::
+      real (kind=dbl_kind), dimension(ilo:ihi,jlo:jhi,ncat) ::
      &   daice              ! ice area transferred
      &,  dvice              ! ice volume transferred
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
+      !-----------------------------------------------------------------
+      ! Compute ice thickness.
+      !-----------------------------------------------------------------
+      do n = 1, ncat
+         do j = jlo, jhi
+         do i = ilo, ihi
+            if (aicen(i,j,n) > puny) then
+               hicen(i,j,n) = vicen(i,j,n) / aicen(i,j,n)
+            else
+               hicen(i,j,n) = c0
+            endif
+         enddo                  ! i
+         enddo                  ! j
+      enddo                     ! n
 
       !-----------------------------------------------------------------
       ! make sure thickness of cat 1 is at least hin_max(0)
@@ -628,7 +719,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
          shiftflag = .false.
          do j = jlo, jhi
          do i = ilo, ihi
-            if (aicen(i,j,n) > puny .and.
+            if (aicen(i,j,n) > puny .and. 
      &          hicen(i,j,n) > hin_max(n)) then
                shiftflag = .true.
                donor(i,j,n) = n
@@ -643,21 +734,18 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       !-----------------------------------------------------------------
       ! shift ice between categories
       !-----------------------------------------------------------------
-            call shift_ice (nx_block, ny_block,
-     &                      nghost,   trcr_depend,
-     &                      aicen,    trcrn,
-     &                      vicen,    vsnon,
-     &                      eicen,    esnon,
-     &                      hicen,    donor,
-     &                      daice,    dvice)
-
+            call shift_ice (donor, daice, dvice, hicen)
+             
       !-----------------------------------------------------------------
       ! reset shift parameters
       !-----------------------------------------------------------------
-
-            donor(:,:,n) = 0
-            daice(:,:,n) = c0
-            dvice(:,:,n) = c0
+            do j = jlo, jhi
+            do i = ilo, ihi
+               donor(i,j,n) = 0
+               daice(i,j,n) = c0
+               dvice(i,j,n) = c0
+            enddo
+            enddo
 
          endif                  ! shiftflag
 
@@ -675,7 +763,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
          shiftflag = .false.
          do j = jlo, jhi
          do i = ilo, ihi
-            if (aicen(i,j,n+1) > puny .and.
+            if (aicen(i,j,n+1) > puny .and. 
      &          hicen(i,j,n+1) <= hin_max(n)) then
                shiftflag = .true.
                donor(i,j,n) = n+1
@@ -690,21 +778,18 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       !-----------------------------------------------------------------
       ! shift ice between categories
       !-----------------------------------------------------------------
-            call shift_ice (nx_block, ny_block,
-     &                      nghost,   trcr_depend,
-     &                      aicen,    trcrn,
-     &                      vicen,    vsnon,
-     &                      eicen,    esnon,
-     &                      hicen,    donor,
-     &                      daice,    dvice)
+            call shift_ice (donor, daice, dvice, hicen)
 
       !-----------------------------------------------------------------
       ! reset shift parameters
       !-----------------------------------------------------------------
-
-            donor(:,:,n) = 0
-            daice(:,:,n) = c0
-            dvice(:,:,n) = c0
+            do j = jlo, jhi
+            do i = ilo, ihi
+               donor(i,j,n) = 0
+               daice(i,j,n) = c0
+               dvice(i,j,n) = c0
+            enddo
+            enddo
 
          endif                  ! shiftflag
 
@@ -720,10 +805,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !INTERFACE:
 !
-      subroutine reduce_area (nx_block,  ny_block,
-     &                        nghost,    tmask,
-     &                        aicen,     vicen, 
-     &                        hicen_old, hicen)
+      subroutine reduce_area(hice1_old, hice1)
 !
 ! !DESCRIPTION:
 !
@@ -736,70 +818,53 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !REVISION HISTORY:
 !
-! authors: C. M. Bitz, UW
+! authors: C. M. Bitz, UW 
 ! modified by: Elizabeth C. Hunke, LANL
 !
 ! !USES:
 !
+      use ice_grid
+!
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,    nghost              ! number of ghost cells
+      real (kind=dbl_kind), dimension(ilo:ihi,jlo:jhi),
+     &     intent(in) ::
+     &   hice1_old   ! old ice thickness for category 1 (m)
 
-      logical (kind=log_kind), dimension (nx_block,ny_block),
-     &   intent(in) ::
-     &   tmask     ! land/boundary mask, thickness (T-cell)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),
-     &   intent(inout) ::
-     &   aicen     ! concentration of ice
-     &,  vicen     ! volume per unit area of ice          (m)
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
-     &   hicen_old   ! old ice thickness for category 1 (m)
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(out) ::
-     &   hicen       ! new ice thickness for category 1 (m)
+      real (kind=dbl_kind), dimension(ilo:ihi,jlo:jhi),
+     &     intent(inout) ::
+     &   hice1       ! new ice thickness for category 1 (m)
 !
 !EOP
 !
       integer (kind=int_kind) ::
      &   i, j        ! horizontal indices
-     &,  ilo,ihi,jlo,jhi   ! beginning and end of physical domain
 
       real (kind=dbl_kind) ::
      &   hi0         ! current hi for ice fraction adjustment
      &,  dai0        ! change in aice for ice fraction adjustment
      &,  dhi         ! hice1 - hice1_old
 
-      hicen(:,:) = c0
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
-      do j = jlo, jhi
-      do i = ilo, ihi
+      do j=jlo,jhi
+      do i=ilo,ihi
          if (tmask(i,j)) then
 
       !-----------------------------------------------------------------
       ! make sure thickness of cat 1 is at least hin_max(0)
       !-----------------------------------------------------------------
 
-            if (hicen(i,j) <= hin_max(0) .and. hin_max(0) > c0 ) then
+            if (hice1(i,j) <= hin_max(0) .and. hin_max(0) > c0 ) then
                aicen(i,j,1) = vicen(i,j,1) / hin_max(0)
-               hicen(i,j) = hin_max(0)
+               hice1(i,j) = hin_max(0)
             endif
 
             if (aicen(i,j,1) > c0) then
-               dhi = hicen(i,j) - hicen_old(i,j)
-               if (dhi < c0) then
+               dhi = hice1(i,j) - hice1_old(i,j)
+               if (dhi < c0) then  
                   hi0  = vicen(i,j,1) / aicen(i,j,1)
                   dai0 = vicen(i,j,1) / (hi0-p5*dhi)
      &                 - aicen(i,j,1)
-                  aicen(i,j,1) = aicen(i,j,1) + dai0
+                  aicen(i,j,1) = aicen(i,j,1) + dai0 
                endif
             endif
 
@@ -812,17 +877,11 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !=======================================================================
 !BOP
 !
-! !IROUTINE: shift_ice - shift ice across category boundaries
+! !IROUTINE: shift_ice - shift ice across category boundaries 
 !
 ! !INTERFACE:
 !
-      subroutine shift_ice (nx_block, ny_block,
-     &                      nghost,   trcr_depend,  
-     &                      aicen,    trcrn,
-     &                      vicen,    vsnon,
-     &                      eicen,    esnon,
-     &                      hicen,    donor,
-     &                      daice,    dvice)
+      subroutine shift_ice (donor, daice, dvice, hicen)
 !
 ! !DESCRIPTION:
 !
@@ -831,72 +890,50 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !REVISION HISTORY:
 !
-! authors: William H. Lipscomb and Elizabeth C. Hunke, LANL
+! authors: William H. Lipscomb, LANL
+!          Elizabeth C. Hunke, LANL
 !
 ! !USES:
 !
-      use ice_work, only: worka, workb
+      use ice_flux
+      use ice_work, only: worka
 !
 ! !INPUT/OUTPUT PARAMETERS:
-!
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
-
-      integer (kind=int_kind), dimension (ntrcr), intent(in) ::
-     &   trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat),
-     &   intent(inout) ::
-     &   aicen     ! concentration of ice
-     &,  vicen     ! volume per unit area of ice          (m)
-     &,  vsnon     ! volume per unit area of snow         (m)
-     &,  hicen     ! ice thickness for each cat        (m)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat),
-     &   intent(inout) ::
-     &   trcrn     ! ice tracers
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr),
-     &   intent(inout) ::
-     &   eicen     ! energy of melting for each ice layer (J/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr),
-     &   intent(inout) ::
-     &   esnon     ! energy of melting for each snow layer (J/m^2)
-
+! 
       ! NOTE: Third index of donor, daice, dvice should be ncat-1,
       !       except that compilers would have trouble when ncat = 1 
-      integer (kind=int_kind), dimension(nx_block,ny_block,ncat),
+      integer (kind=int_kind), dimension(ilo:ihi,jlo:jhi,ncat),
      &   intent(in) ::
      &   donor             ! donor category index
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat),
+      real (kind=dbl_kind), dimension(ilo:ihi,jlo:jhi,ncat),
      &     intent(inout) ::
      &   daice             ! ice area transferred across boundary
      &,  dvice             ! ice volume transferred across boundary
+
+      real (kind=dbl_kind), dimension(ilo:ihi,jlo:jhi,ncat),
+     &     intent(inout) ::
+     &   hicen             ! ice thickness for each cat        (m)
 !
 !EOP
 !
       integer (kind=int_kind) ::
      &   i, j              ! horizontal indices
      &,  n                 ! thickness category index
-     &,  nr                ! receiver category
-     &,  nd                ! donor category
+     &,  n2                ! receiver category
+     &,  n1                ! donor category
      &,  k                 ! ice layer index
-     &,  it                ! tracer index
-     &,  ilo,ihi,jlo,jhi   ! beginning and end of physical domain
 
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ntrcr,ncat) ::
-     &   atrcrn            ! aicen*trcrn
+      real (kind=dbl_kind), dimension(ilo:ihi,jlo:jhi,ncat) ::
+     &   aTsfn
 
       real (kind=dbl_kind) ::
      &   dvsnow            ! snow volume transferred
      &,  desnow            ! snow energy transferred
      &,  deice             ! ice energy transferred
-     &,  datrcr            ! aicen*train transferred
+     &,  daTsf             ! aicen*Tsfcn transferred
 
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
+      integer (kind=int_kind), dimension (1:(ihi-ilo+1)*(jhi-jlo+1)) ::
      &  indxi           ! compressed indices for i/j directions
      &, indxj
 
@@ -910,26 +947,16 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
      &, daice_greater_aicen  ! true if daice > aicen
      &, dvice_greater_vicen  ! true if dvice > vicen
 
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
       !-----------------------------------------------------------------
-      ! Define variables equal to aicen*trcrn, vicen*trcrn, vsnon*trcrn
+      ! Define a variable equal to aicen*Tsfcn
       !-----------------------------------------------------------------
-
       do n = 1, ncat
-         do it = 1, ntrcr
-            if (trcr_depend(it) == 0) then ! ice area tracer
-               atrcrn(:,:,it,n) = aicen(:,:,n)*trcrn(:,:,it,n)
-            elseif (trcr_depend(it) ==1) then  ! ice volume tracer
-               atrcrn(:,:,it,n) = vicen(:,:,n)*trcrn(:,:,it,n)
-            elseif (trcr_depend(it) ==2) then  ! snow volume tracer
-               atrcrn(:,:,it,n) = vsnon(:,:,n)*trcrn(:,:,it,n)
-            endif
-         enddo
-      enddo
+         do j = jlo,jhi
+         do i = ilo,ihi
+            aTsfn(i,j,n) = aicen(i,j,n)*Tsfcn(i,j,n)
+         enddo                  ! i
+         enddo                  ! j
+      enddo                     ! n
 
       !-----------------------------------------------------------------
       ! Check for daice or dvice out of range, allowing for roundoff error
@@ -942,14 +969,14 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
          daice_greater_aicen = .false.
          dvice_greater_vicen = .false.
 
-         do j = jlo, jhi
-         do i = ilo, ihi
+         do j = jlo,jhi
+         do i = ilo,ihi
 
-            if (donor(i,j,n) > 0) then
-               nd = donor(i,j,n)
+            if (donor(i,j,n) > 0) then 
+               n1 = donor(i,j,n)
 
                if (daice(i,j,n) < c0) then
-                  if (daice(i,j,n) > -puny*aicen(i,j,nd)) then
+                  if (daice(i,j,n) > -puny*aicen(i,j,n1)) then   
                      daice(i,j,n) = c0 ! shift no ice
                      dvice(i,j,n) = c0
                   else
@@ -958,7 +985,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
                endif
          
                if (dvice(i,j,n) < c0) then
-                  if (dvice(i,j,n) > -puny*vicen(i,j,nd)) then   
+                  if (dvice(i,j,n) > -puny*vicen(i,j,n1)) then   
                      daice(i,j,n) = c0 ! shift no ice
                      dvice(i,j,n) = c0
                   else
@@ -966,25 +993,25 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
                   endif
                endif
 
-               if (daice(i,j,n) > aicen(i,j,nd)*(c1-puny)) then
-                  if (daice(i,j,n) < aicen(i,j,nd)*(c1+puny)) then
-                     daice(i,j,n) = aicen(i,j,nd)
-                     dvice(i,j,n) = vicen(i,j,nd)
+               if (daice(i,j,n) > aicen(i,j,n1)*(c1-puny)) then
+                  if (daice(i,j,n) < aicen(i,j,n1)*(c1+puny)) then
+                     daice(i,j,n) = aicen(i,j,n1)
+                     dvice(i,j,n) = vicen(i,j,n1)
                   else
                      daice_greater_aicen = .true.
                   endif
                endif    
 
-               if (dvice(i,j,n) > vicen(i,j,nd)*(c1-puny)) then
-                  if (dvice(i,j,n) < vicen(i,j,nd)*(c1+puny)) then
-                     daice(i,j,n) = aicen(i,j,nd)
-                     dvice(i,j,n) = vicen(i,j,nd)
+               if (dvice(i,j,n) > vicen(i,j,n1)*(c1-puny)) then
+                  if (dvice(i,j,n) < vicen(i,j,n1)*(c1+puny)) then
+                     daice(i,j,n) = aicen(i,j,n1)
+                     dvice(i,j,n) = vicen(i,j,n1)
                   else
                      dvice_greater_vicen = .true.
                   endif
                endif
-
-            endif               ! donor > 0
+               
+            endif               ! donor > 0 
          enddo                  ! i
          enddo                  ! j
 
@@ -996,14 +1023,10 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
             do j = jlo,jhi
             do i = ilo,ihi
                if (donor(i,j,n) > 0 .and. 
-     &             daice(i,j,n) <= -puny*aicen(i,j,nd)) then
-                  write(nu_diag,*) ' '
-                  write(nu_diag,*) 'ITD negative daice'
-                  write(nu_diag,*) 'i, j:', i, j
-                  write(nu_diag,*) 'boundary, donor cat:', n, nd
-                  write(nu_diag,*) 'daice =', daice(i,j,n)
-                  write(nu_diag,*) 'dvice =', dvice(i,j,n)
-                  call abort_ice ('ITD negative daice')
+     &             daice(i,j,n) <= -puny*aicen(i,j,n1)) then
+                  write(nu_diag,*) my_task,':',i,j,
+     &                 'ITD Neg daice =',daice(i,j,n),' boundary',n
+                  call abort_ice ('ice: ITD Neg daice')
                endif
             enddo
             enddo
@@ -1013,14 +1036,10 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
             do j = jlo,jhi
             do i = ilo,ihi
                if (donor(i,j,n) > 0 .and. 
-     &             dvice(i,j,n) <= -puny*vicen(i,j,nd)) then
-                  write(nu_diag,*) ' '
-                  write(nu_diag,*) 'ITD negative dvice'
-                  write(nu_diag,*) 'i, j:', i, j
-                  write(nu_diag,*) 'boundary, donor cat:', n, nd
-                  write(nu_diag,*) 'daice =', daice(i,j,n)
-                  write(nu_diag,*) 'dvice =', dvice(i,j,n)
-                  call abort_ice ('ITD negative dvice')
+     &             dvice(i,j,n) <= -puny*vicen(i,j,n1)) then
+                  write(nu_diag,*) my_task,':',i,j,
+     &                 'ITD Neg dvice =',dvice(i,j,n),' boundary',n
+                  call abort_ice ('ice: ITD Neg dvice')
                endif
             enddo
             enddo
@@ -1030,15 +1049,14 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
             do j = jlo,jhi
             do i = ilo,ihi
                if (donor(i,j,n) > 0) then
-                  nd = donor(i,j,n)
-                  if (daice(i,j,n) >= aicen(i,j,nd)*(c1+puny)) then
-                     write(nu_diag,*) ' '
-                     write(nu_diag,*) 'ITD daice > aicen'
-                     write(nu_diag,*) 'i, j:', i, j
-                     write(nu_diag,*) 'boundary, donor cat:', n, nd
-                     write(nu_diag,*) 'daice =', daice(i,j,n)
-                     write(nu_diag,*) 'aicen =', aicen(i,j,nd)
-                     call abort_ice ('ITD daice > aicen')
+                  n1 = donor(i,j,n)
+                  if (daice(i,j,n) >= aicen(i,j,n1)*(c1+puny)) then
+                     write(nu_diag,*) my_task,':',i,j,
+     &                    'ITD daice > aicen, cat',n1
+                     write(nu_diag,*) my_task,':',i,j,
+     &                    'daice =', daice(i,j,n),
+     &                    'aicen =', aicen(i,j,n1)
+                     call abort_ice ('ice: ITD daice > aicen')
                   endif
                endif
             enddo
@@ -1049,21 +1067,19 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
             do j = jlo,jhi
             do i = ilo,ihi
                if (donor(i,j,n) > 0) then
-                  nd = donor(i,j,n)
-                  if (dvice(i,j,n) >= vicen(i,j,nd)*(c1+puny)) then
-                     write(nu_diag,*) ' '
-                     write(nu_diag,*) 'ITD dvice > vicen'
-                     write(nu_diag,*) 'i, j:', i, j
-                     write(nu_diag,*) 'boundary, donor cat:', n, nd
-                     write(nu_diag,*) 'dvice =', dvice(i,j,n)
-                     write(nu_diag,*) 'vicen =', vicen(i,j,nd)
-                     call abort_ice ('ITD dvice > vicen')
+                  n1 = donor(i,j,n)
+                  if (dvice(i,j,n) >= vicen(i,j,n1)*(c1+puny)) then
+                     write(nu_diag,*) my_task,':',i,j,
+     &                    'ITD dvice > vicen, cat',n1
+                     write(nu_diag,*) my_task,':',i,j,
+     &                    'dvice =', dvice(i,j,n),
+     &                    'vicen =', vicen(i,j,n1)
+                     call abort_ice ('ice: ITD dvice > vicen')
                   endif
                endif
             enddo
             enddo
          endif
-
 
       !-----------------------------------------------------------------
       ! transfer volume and energy between categories
@@ -1087,54 +1103,32 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
             i = indxi(ij)
             j = indxj(ij)
 
-            nd = donor(i,j,n)
-            worka(i,j) = dvice(i,j,n) / vicen(i,j,nd)
-            if (nd  ==  n) then
-               nr = nd+1
-            else                ! nd = n+1
-               nr = n
+            n1 = donor(i,j,n)
+            worka(i,j) = dvice(i,j,n) / vicen(i,j,n1)
+            if (n1  ==  n) then
+               n2 = n1+1
+            else                ! n1 = n+1
+               n2 = n
             endif
+            
+            aicen(i,j,n1) = aicen(i,j,n1) - daice(i,j,n)
+            aicen(i,j,n2) = aicen(i,j,n2) + daice(i,j,n)
+            vicen(i,j,n1) = vicen(i,j,n1) - dvice(i,j,n)
+            vicen(i,j,n2) = vicen(i,j,n2) + dvice(i,j,n)
+            
+            dvsnow = vsnon(i,j,n1) * worka(i,j)
+            vsnon(i,j,n1) = vsnon(i,j,n1) - dvsnow
+            vsnon(i,j,n2) = vsnon(i,j,n2) + dvsnow
+            
+            daTsf = daice(i,j,n)*Tsfcn(i,j,n1)
+            aTsfn(i,j,n1) = aTsfn(i,j,n1) - daTsf
+            aTsfn(i,j,n2) = aTsfn(i,j,n2) + daTsf 
 
-            aicen(i,j,nd) = aicen(i,j,nd) - daice(i,j,n)
-            aicen(i,j,nr) = aicen(i,j,nr) + daice(i,j,n)
-
-            vicen(i,j,nd) = vicen(i,j,nd) - dvice(i,j,n)
-            vicen(i,j,nr) = vicen(i,j,nr) + dvice(i,j,n)
-
-            dvsnow = vsnon(i,j,nd) * worka(i,j)
-            vsnon(i,j,nd) = vsnon(i,j,nd) - dvsnow
-            vsnon(i,j,nr) = vsnon(i,j,nr) + dvsnow
-            workb(i,j) = dvsnow
+            desnow = esnon(i,j,n1) * worka(i,j)
+            esnon(i,j,n1) = esnon(i,j,n1) - desnow
+            esnon(i,j,n2) = esnon(i,j,n2) + desnow
 
          enddo                  ! ij
-
-         do it = 1, ntrcr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-
-               nd = donor(i,j,n)
-               if (nd == n) then
-                  nr = nd+1
-               else             ! nd = n+1
-                  nr = n
-               endif
-
-               if (trcr_depend(it) == 0) then
-                  datrcr = daice(i,j,n)*trcrn(i,j,it,nd)
-               elseif (trcr_depend(it) == 1) then
-                  datrcr = dvice(i,j,n)*trcrn(i,j,it,nd)
-               elseif (trcr_depend(it) == 2) then
-                  datrcr = workb(i,j)  *trcrn(i,j,it,nd)
-               endif
-
-               atrcrn(i,j,it,nd) = atrcrn(i,j,it,nd) - datrcr
-               atrcrn(i,j,it,nr) = atrcrn(i,j,it,nr) + datrcr
-            enddo               ! ij
-         enddo                  ! ntrcr
 
          do k = 1, nilyr
 !DIR$ CONCURRENT !Cray
@@ -1144,69 +1138,40 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
                i = indxi(ij)
                j = indxj(ij)
 
-               nd = donor(i,j,n)
-               if (nd == n) then
-                  nr = nd+1
-               else             ! nd = n+1
-                  nr = n
+               n1 = donor(i,j,n)
+               if (n1  ==  n) then
+                  n2 = n1+1
+               else             ! n1 = n+1
+                  n2 = n
                endif
 
-               deice = eicen(i,j,ilyr1(nd)+k-1) * worka(i,j)
-               eicen(i,j,ilyr1(nd)+k-1) =
-     &              eicen(i,j,ilyr1(nd)+k-1) - deice
-               eicen(i,j,ilyr1(nr)+k-1) =
-     &              eicen(i,j,ilyr1(nr)+k-1) + deice
+               deice = eicen(i,j,ilyr1(n1)+k-1) * worka(i,j)
+               eicen(i,j,ilyr1(n1)+k-1) = 
+     &              eicen(i,j,ilyr1(n1)+k-1) - deice
+               eicen(i,j,ilyr1(n2)+k-1) = 
+     &              eicen(i,j,ilyr1(n2)+k-1) + deice
             enddo               ! ij
-         enddo                  ! nilyr
-
-         do k = 1, nslyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-
-               nd = donor(i,j,n)
-               if (nd == n) then
-                  nr = nd+1
-               else             ! nd = n+1
-                  nr = n
-               endif
-
-               desnow = esnon(i,j,slyr1(nd)+k-1) * worka(i,j)
-               esnon(i,j,slyr1(nd)+k-1) =
-     &              esnon(i,j,slyr1(nd)+k-1) - desnow
-               esnon(i,j,slyr1(nr)+k-1) =
-     &              esnon(i,j,slyr1(nr)+k-1) + desnow
-            enddo               ! ij
-         enddo                  ! nslyr
+         enddo                  ! k
 
       enddo                     ! boundaries, 1 to ncat-1
 
       !-----------------------------------------------------------------
-      ! Update ice thickness and tracers
+      ! Update ice thickness and temperature
       !-----------------------------------------------------------------
 
       do n = 1, ncat
-
-         do j = jlo, jhi
-         do i = ilo, ihi
+         do j = jlo,jhi
+         do i = ilo,ihi
             if (aicen(i,j,n) > puny) then
-               hicen(i,j,n)   = vicen (i,j,n)   / aicen(i,j,n)
+               hicen(i,j,n) = vicen(i,j,n) / aicen(i,j,n)
+               Tsfcn(i,j,n) = aTsfn(i,j,n) / aicen(i,j,n)
             else
-               hicen(i,j,n)   = c0
+               hicen(i,j,n) = c0
+               Tsfcn(i,j,n) = Tf(i,j)
             endif
-         enddo
-         enddo
-
-         call compute_tracers (nx_block,       ny_block,
-     &                         trcr_depend,
-     &                         atrcrn(:,:,:,n), aicen(:,:,  n),
-     &                         vicen (:,:,  n), vsnon(:,:,  n),
-     &                         trcrn(:,:,:,n))
-
-      enddo                     ! ncat
+         enddo                  ! i
+         enddo                  ! j
+      enddo                     ! n
 
       end subroutine shift_ice
 
@@ -1217,9 +1182,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !INTERFACE:
 !
-      subroutine column_sum (nx_block, ny_block,
-     &                       nghost,   nsum,
-     &                       xin,      xout)
+      subroutine column_sum (nsum, xin, xout)
 !
 ! !DESCRIPTION:
 !
@@ -1234,29 +1197,30 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 ! !INPUT/OUTPUT PARAMETERS:
 !
       integer (kind=int_kind), intent(in) ::
-     &     nx_block, ny_block  ! block dimensions
-     &,    nghost              ! number of ghost cells
-     &,    nsum                ! number of categories/layers
+     &     nsum                              ! number of categories/layers
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,nsum),
-     &     intent(in) ::
-     &     xin              ! input field
+      real (kind=dbl_kind), intent(in) ::
+     &     xin  (imt_local,jmt_local,nsum)   ! input field
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &     intent(out) ::
-     &     xout             ! output field
+
+      real (kind=dbl_kind), intent(out) ::
+     &     xout (imt_local,jmt_local)        ! output field
 !
 !EOP
 !
       integer (kind=int_kind) ::
-     &     i, j             ! horizontal indices
-     &,    n                ! category/layer index
+     &     i, j                 ! horizontal indices
+     &,    n                    ! category/layer index
 
-      xout(:,:) = c0
+      do j = 1, jmt_local
+      do i = 1, imt_local
+         xout(i,j) = c0
+      enddo
+      enddo
 
       do n = 1, nsum
-         do j = 1, ny_block
-         do i = 1, nx_block
+         do j = 1, jmt_local
+         do i = 1, imt_local
             xout(i,j) = xout(i,j) + xin(i,j,n)
          enddo                  ! i
          enddo                  ! j
@@ -1271,10 +1235,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !INTERFACE:
 !
-      subroutine column_conservation_check (nx_block, ny_block,
-     &                                      nghost,   fieldid,
-     &                                      x1,       x2, 
-     &                                      max_err,  error_flag)
+      subroutine column_conservation_check (x1, x2, max_err, fieldid)
 !
 ! !DESCRIPTION:
 !
@@ -1289,318 +1250,53 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      integer (kind=int_kind), intent(in) ::
-     &     nx_block, ny_block  ! block dimensions
-     &,    nghost              ! number of ghost cells
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block), intent(in) ::
-     &     x1                ! initial field
-     &,    x2                ! final field
+      real (kind=dbl_kind), intent(in) ::
+     &     x1 (imt_local,jmt_local)    ! initial field
 
       real (kind=dbl_kind), intent(in) ::
-     &     max_err           ! max allowed error
+     &     x2 (imt_local,jmt_local)    ! final field
+
+      real (kind=dbl_kind), intent(in) :: 
+     &     max_err                     ! max allowed error
 
       character (len=char_len), intent(in) ::
-     &     fieldid           ! field identifier
-
-      logical (kind=log_kind), intent(out) ::
-     &     error_flag        ! true if conservation is violated
+     &     fieldid                     ! field identifier
 !
 !EOP
 !
       integer (kind=int_kind) ::
-     &     i, j                        ! horizontal indices
+     &     i, j                        ! horizontal indices      
 
-      error_flag = .false.
+      logical (kind=log_kind) ::
+     &   conserv_err          ! = .true. if conservation check failed
 
-      do j = nghost+1, ny_block-nghost
-      do i = nghost+1, nx_block-nghost
-         if (abs (x2(i,j)-x1(i,j)) > max_err) then
-            error_flag = .true.
+      conserv_err = .false.
+
+      do j = jlo, jhi
+      do i = ilo, ihi
+         if (abs(x2(i,j) - x1(i,j)) > max_err) then
+            conserv_err = .true.
          endif
       enddo
       enddo
 
-      if (error_flag) then
-         do j = nghost+1, ny_block-nghost
-         do i = nghost+1, nx_block-nghost
-            if (abs (x2(i,j)-x1(i,j)) > max_err) then
-               write (nu_diag,*) ' '
-               write (nu_diag,*) 'Conservation error: ', fieldid
-               write (nu_diag,*) 'i, j =', i, j
-               write (nu_diag,*) 'Initial value =', x1(i,j)
-               write (nu_diag,*) 'Final value =',   x2(i,j)
-               write (nu_diag,*) 'Difference =', x2(i,j) - x1(i,j)
-            endif
-         enddo
-         enddo
+      if ( conserv_err ) then
+        do j = jlo, jhi
+        do i = ilo, ihi
+         if (abs(x2(i,j) - x1(i,j)) > max_err) then
+            write (nu_diag,*) ' '
+            write (nu_diag,*) 'Conservation error: ', fieldid
+            write (nu_diag,*)  my_task, ':', i, j
+            write (nu_diag,*) 'Initial value =', x1(i,j)
+            write (nu_diag,*) 'Final value =',   x2(i,j)
+            write (nu_diag,*) 'Difference =', x2(i,j) - x1(i,j)
+            call abort_ice ('ice: Conservation error')
+         endif
+        enddo
+        enddo
       endif
 
       end subroutine column_conservation_check
-
-!=======================================================================
-!BOP
-!
-! !IROUTINE: compute_tracers - compute tracer fields
-!
-! !INTERFACE:
-!
-      subroutine compute_tracers (nx_block, ny_block,
-     &                            trcr_depend,
-     &                            atrcrn,   aicen,
-     &                            vicen,    vsnon,
-     &                            trcrn)
-!
-! !DESCRIPTION:
-!
-! Compute tracer fields.
-! Given atrcrn = aicen*trcrn (or vicen*trcrn, vsnon*trcrn), compute trcrn.
-!
-! !REVISION HISTORY:
-!
-! author: William H. Lipscomb, LANL
-!          
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-
-      integer (kind=int_kind), dimension (ntrcr), intent(in) ::
-     &   trcr_depend ! = 0 for aicen tracers, 1 for vicen, 2 for vsnon
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr),
-     &   intent(in) ::
-     &   atrcrn    ! aicen*trcrn or vicen*trcrn or vsnon*trcrn
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(in) ::
-     &   aicen     ! concentration of ice
-     &,  vicen     ! volume per unit area of ice          (m)
-     &,  vsnon     ! volume per unit area of snow         (m)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr),
-     &   intent(out) ::
-     &   trcrn     ! ice tracers
-!
-!EOP
-!
-      integer (kind=int_kind) ::
-     &   i, j, it       ! counting indices
-
-      !-----------------------------------------------------------------
-      ! Compute new tracers
-      !-----------------------------------------------------------------
-
-      do it = 1, ntrcr
-         if (it == 1) then      ! surface temperature
-            do j = 1, ny_block
-            do i = 1, nx_block
-               if (aicen(i,j) > puny) then
-                  trcrn(i,j,it) = atrcrn(i,j,it) / aicen(i,j)
-               else
-                  trcrn(i,j,it) = Tocnfrz
-               endif
-            enddo
-            enddo
-
-         elseif (trcr_depend(it) == 0) then ! ice area tracers
-            do j = 1, ny_block
-            do i = 1, nx_block
-               if (aicen(i,j) > puny) then
-                  trcrn(i,j,it) = atrcrn(i,j,it) / aicen(i,j)
-               else
-                  trcrn(i,j,it) = c0
-               endif
-            enddo
-            enddo
-
-         elseif (trcr_depend(it) == 1) then ! ice volume tracers
-            do j = 1, ny_block
-            do i = 1, nx_block
-               if (vicen(i,j) > puny) then
-                  trcrn(i,j,it) = atrcrn(i,j,it) / vicen(i,j)
-               else
-                  trcrn(i,j,it) = c0
-               endif
-            enddo
-            enddo
-
-         elseif (trcr_depend(it) == 2) then ! snow volume tracers
-            do j = 1, ny_block
-            do i = 1, nx_block
-               if (vsnon(i,j) > puny) then
-                  trcrn(i,j,it) = atrcrn(i,j,it) / vsnon(i,j)
-               else
-                  trcrn(i,j,it) = c0
-               endif
-            enddo
-            enddo
-
-         endif                  ! trcr_depend
-      enddo                     ! ntrcr
-
-      end subroutine compute_tracers
-
-!=======================================================================
-!BOP
-!
-! !IROUTINE: cleanup_itd - rebin if needed, eliminate small ice areas,
-!                          and aggregate over categories
-!
-! !INTERFACE:
-!
-      subroutine cleanup_itd (nx_block,    ny_block,
-     &                        nghost,      dt, 
-     &                        aicen,       trcrn,
-     &                        vicen,       vsnon, 
-     &                        eicen,       esnon,
-     &                        aice0,
-     &                        trcr_depend, abort_flag,
-     &                        fresh,       fresh_hist,
-     &                        fsalt,       fsalt_hist,
-     &                        fhocn,       fhocn_hist)
-!
-! !DESCRIPTION:
-!
-! Cleanup subroutine that rebins thickness categories if necessary,
-!  eliminates very small ice areas while conserving mass and energy, 
-!  aggregates state variables, and does a boundary call.  
-! It is a good idea to call this subroutine after the thermodynamics
-!  (thermo_vertical/thermo_itd) and again after the dynamics 
-!  (evp/transport/ridging).
-!
-! !REVISION HISTORY:
-!
-! author: William H. Lipscomb, LANL
-!
-! !USES:
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-      integer (kind=int_kind), intent(in) :: 
-     &   nx_block, ny_block  ! block dimensions 
-     &,  nghost              ! number of ghost cells 
- 
-      real (kind=dbl_kind), intent(in) :: 
-     &   dt      ! time step 
- 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat), 
-     &   intent(inout) :: 
-     &   aicen     ! concentration of ice 
-     &,  vicen     ! volume per unit area of ice          (m) 
-     &,  vsnon     ! volume per unit area of snow         (m) 
- 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat), 
-     &   intent(inout) :: 
-     &   trcrn     ! ice tracers 
- 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr), 
-     &   intent(inout) :: 
-     &   eicen     ! energy of melting for each ice layer (J/m^2) 
- 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr), 
-     &   intent(inout) :: 
-     &   esnon     ! energy of melting for each snow layer (J/m^2) 
- 
-      real (kind=dbl_kind), dimension (nx_block,ny_block), 
-     &   intent(inout) :: 
-     &   aice0     ! concentration of open water 
- 
-      integer (kind=int_kind), dimension(ntrcr), intent(in) :: 
-     &   trcr_depend  ! tracer dependency information
-
-      logical (kind=log_kind), intent(out) ::
-     &   abort_flag   ! if true, abort on return
-
-      ! ice-ocean fluxes (required for strict conservation)
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(inout), optional ::
-     &   fresh        ! fresh water flux to ocean (kg/m^2/s)
-     &,  fresh_hist   ! fresh water flux to ocean (kg/m^2/s)
-     &,  fsalt        ! salt flux to ocean        (kg/m^2/s)
-     &,  fsalt_hist   ! salt flux to ocean        (kg/m^2/s)
-     &,  fhocn        ! net heat flux to ocean     (W/m^2)
-     &,  fhocn_hist   ! net heat flux to ocean     (W/m^2)
-!
-!EOP
-!
-      integer (kind=int_kind) ::
-     &   i, j                 ! horizontal indices
-     &,  n                    ! category index
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ncat) ::
-     &   hicen                ! ice thickness (m)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block) ::
-     &   dfresh       ! zapped fresh water flux (kg/m^2/s)
-     &,  dfsalt       ! zapped salt flux   (kg/m^2/s)
-     &,  dfhocn       ! zapped energy flux ( W/m^2)
-
-      logical (kind=log_kind) ::
-     &   zap_err      ! error flag for zap subroutine
-
-      abort_flag = .false.
-
-      !-----------------------------------------------------------------
-      ! Compute ice thickness.
-      !-----------------------------------------------------------------
-      do n = 1, ncat
-         do j = 1, ny_block
-            do i = 1, nx_block
-               if (aicen(i,j,n) > puny) then
-                  hicen(i,j,n) = vicen(i,j,n) / aicen(i,j,n)
-               else
-                  hicen(i,j,n) = c0
-               endif
-            enddo               ! i
-         enddo                  ! j
-      enddo                     ! n
-
-      !-----------------------------------------------------------------
-      ! Make sure ice in each category is within its thickness bounds.
-      ! NOTE: The rebin subroutine is needed only in the rare cases
-      !       when the linear_itd subroutine cannot transfer ice
-      !       correctly (e.g., very fast ice growth).
-      !-----------------------------------------------------------------
-
-      call rebin (nx_block,   ny_block,
-     &            nghost,     trcr_depend,
-     &            aicen,      trcrn,
-     &            vicen,      vsnon,
-     &            eicen,      esnon,
-     &            hicen)
-
-      !-----------------------------------------------------------------
-      ! Zero out ice categories with very small areas.
-      !-----------------------------------------------------------------
-
-      call zap_small_areas (nx_block, ny_block,
-     &                      nghost,
-     &                      dt,       aice0,
-     &                      aicen,    trcrn,
-     &                      vicen,    vsnon,
-     &                      eicen,    esnon,
-     &                      dfresh,   dfsalt,
-     &                      dfhocn,   zap_err)
-
-      if (zap_err) abort_flag = .true.
-
-      if (present(fresh))
-     &     fresh     (:,:) = fresh(:,:)      + dfresh(:,:) 
-      if (present(fresh_hist))
-     &     fresh_hist(:,:) = fresh_hist(:,:) + dfresh(:,:)
-      if (present(fsalt))
-     &     fsalt     (:,:) = fsalt(:,:)      + dfsalt(:,:)
-      if (present(fsalt_hist))
-     &     fsalt_hist(:,:) = fsalt_hist(:,:) + dfsalt(:,:)
-      if (present(fhocn))
-     &     fhocn     (:,:) = fhocn(:,:)      + dfhocn(:,:)
-      if (present(fhocn_hist))
-     &     fhocn_hist(:,:) = fhocn_hist(:,:) + dfhocn(:,:)
-
-      end subroutine cleanup_itd
 
 !=======================================================================
 !BOP
@@ -1609,14 +1305,7 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 !
 ! !INTERFACE:
 !
-      subroutine zap_small_areas (nx_block, ny_block,
-     &                            nghost,
-     &                            dt,       aice0,
-     &                            aicen,    trcrn,
-     &                            vicen,    vsnon,
-     &                            eicen,    esnon,
-     &                            dfresh,   dfsalt,
-     &                            dfhocn,   error_flag)
+      subroutine zap_small_areas
 !
 ! !DESCRIPTION:
 !
@@ -1626,93 +1315,48 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
 ! !REVISION HISTORY:
 !
 ! author: William H. Lipscomb, LANL
+! Nov 2003:  Modified by Julie Schramm to conserve volume and energy
+! Sept 2004: Modified by William Lipscomb; replaced normalize_state with
+!            additions to local freshwater, salt, and heat fluxes
+!            
 !
 ! !USES:
 !
-! !INPUT/OUTPUT PARAMETERS:
+      use ice_flux
+      use ice_calendar, only: dt
 !
-      integer (kind=int_kind), intent(in) ::
-     &   nx_block, ny_block  ! block dimensions
-     &,  nghost              ! number of ghost cells
-
-      real (kind=dbl_kind), intent(in) ::
-     &   dt                  ! time step
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(inout) ::
-     &   aice0        ! concentration of open water
-
-      real (kind=dbl_kind), dimension(nx_block,ny_block,ncat),
-     &   intent(inout) ::
-     &   aicen        ! concentration of ice
-     &,  vicen        ! volume per unit area of ice          (m)
-     &,  vsnon        ! volume per unit area of snow         (m)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntilyr),
-     &   intent(inout) ::
-     &   eicen        ! energy of melting for each ice layer  (J/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntslyr),
-     &   intent(inout) ::
-     &   esnon        ! energy of melting for each snow layer (J/m^2)
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block,ntrcr,ncat),
-     &   intent(inout) ::
-     &   trcrn        ! ice tracers
-
-      real (kind=dbl_kind), dimension (nx_block,ny_block),
-     &   intent(out) ::
-     &   dfresh       ! zapped fresh water flux (kg/m^2/s)
-     &,  dfsalt       ! zapped salt flux   (kg/m^2/s)
-     &,  dfhocn       ! zapped energy flux ( W/m^2)
-
-      logical (kind=log_kind), intent(out) ::
-     &   error_flag
+! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
 !
       integer (kind=int_kind) ::
-     &   i,j, n, k, it    ! counting indices
-     &,  ilo,ihi,jlo,jhi  ! beginning and end of physical domain
-     &,  icells           ! number of cells with ice to zap
-     &,  ij               ! combined i/j horizontal index
+     &     i,j       ! horizontal indices
+     &,    n         ! ice category index
+     &,    k         ! ice layer index
+     &,    icells    ! number of cells with ice to zap
+     &,    ij        ! combined i/j horizontal index
 
-      integer (kind=int_kind), dimension (nx_block*ny_block) ::
-     &  indxi           ! compressed indices for i/j directions
-     &, indxj
+      integer (kind=int_kind), dimension (1:(ihi-ilo+1)*(jhi-jlo+1)) ::
+     &     indxi     ! compressed indices for i/j directions
+     &,    indxj
 
       real (kind=dbl_kind) ::
-     &   xtmp      ! temporary variable
-
-      !-----------------------------------------------------------------
-      ! Initialize
-      !-----------------------------------------------------------------
-
-      error_flag = .false.
-
-      ilo = 1 + nghost
-      ihi = nx_block - nghost
-      jlo = 1 + nghost
-      jhi = ny_block - nghost
-
-      dfresh(:,:) = c0
-      dfsalt(:,:) = c0
-      dfhocn(:,:) = c0
+     &     xtmp      ! temporary variable
 
       do n = 1, ncat
 
       !-----------------------------------------------------------------
       ! Count categories to be zapped.
+      ! Abort model in case of negative area.
       !-----------------------------------------------------------------
 
          icells = 0
          do j = jlo, jhi
          do i = ilo, ihi
             if (aicen(i,j,n) < -puny) then
-               write (nu_diag,*) 'Zap ice: negative ice area'
-               write (nu_diag,*) 'i, j, n, aicen =',
-     &                            i, j, n, aicen(i,j,n)
-               error_flag = .true.
+               write (nu_diag,*) 'Negative ice area: i, j, n:', i, j, n
+               write (nu_diag,*) 'aicen =', aicen(i,j,n)
+               call abort_ice ('zap: negative ice area')
             elseif ((aicen(i,j,n) >= -puny .and. aicen(i,j,n) < c0)
      &                                   .or.
      &              (aicen(i,j,n) > c0 .and. aicen(i,j,n) <= puny)) then
@@ -1736,34 +1380,12 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
                j = indxj(ij)
 
                xtmp = eicen(i,j,ilyr1(n)+k-1) / dt ! < 0
-               dfhocn(i,j) = dfhocn(i,j) + xtmp
+               fhnet(i,j)      = fhnet(i,j)      + xtmp
+               fhnet_hist(i,j) = fhnet_hist(i,j) + xtmp
                eicen(i,j,ilyr1(n)+k-1) = c0
 
             enddo               ! ij
          enddo                  ! k
-
-      !-----------------------------------------------------------------
-      ! Zap snow energy and use ocean heat to melt snow
-      !-----------------------------------------------------------------
-
-         do k = 1, nslyr
-!DIR$ CONCURRENT !Cray
-!cdir nodep      !NEC
-!ocl novrec      !Fujitsu
-            do ij = 1, icells
-               i = indxi(ij)
-               j = indxj(ij)
-
-               xtmp = esnon(i,j,slyr1(n)+k-1) / dt ! < 0
-               dfhocn(i,j) = dfhocn(i,j) + xtmp
-               esnon(i,j,slyr1(n)+k-1) = c0
-
-            enddo               ! ij
-         enddo                  ! k
-
-      !-----------------------------------------------------------------
-      ! Zap ice and snow volume, add water and salt to ocean
-      !-----------------------------------------------------------------
 
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
@@ -1772,34 +1394,34 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
             i = indxi(ij)
             j = indxj(ij)
 
-            xtmp = (rhoi*vicen(i,j,n) + rhos*vsnon(i,j,n)) / dt
-            dfresh(i,j) = dfresh(i,j) + xtmp
+      !-----------------------------------------------------------------
+      ! Zap snow energy and use ocean heat to melt snow
+      !-----------------------------------------------------------------
 
-            xtmp = rhoi*vicen(i,j,n)*ice_ref_salinity*p001 / dt
-            dfsalt(i,j) = dfsalt(i,j) + xtmp
+            xtmp = esnon(i,j,n) / dt ! < 0
+            fhnet(i,j)      = fhnet(i,j)      + xtmp
+            fhnet_hist(i,j) = fhnet_hist(i,j) + xtmp
+            esnon(i,j,n) = c0
+
+      !-----------------------------------------------------------------
+      ! zap ice and snow volume, add water and salt to ocean
+      !-----------------------------------------------------------------
+
+            xtmp = (rhoi*vicen(i,j,n) + rhos*vsnon(i,j,n)) / dt
+            fresh(i,j)      = fresh(i,j)      + xtmp
+            fresh_hist(i,j) = fresh_hist(i,j) + xtmp
+
+            xtmp = rhoi*vicen(i,j,n)*ice_ref_salinity*p001/ dt
+            fsalt(i,j)      = fsalt(i,j)      + xtmp
+            fsalt_hist(i,j) = fsalt_hist(i,j) + xtmp
 
             aice0(i,j) = aice0(i,j) + aicen(i,j,n)
             aicen(i,j,n) = c0
             vicen(i,j,n) = c0
             vsnon(i,j,n) = c0
-            trcrn(i,j,1,n) = Tocnfrz
+            Tsfcn(i,j,n) = Tf(i,j)
 
          enddo                  ! ij
-
-      !-----------------------------------------------------------------
-      ! Zap tracers
-      !-----------------------------------------------------------------
-         
-         if (ntrcr >= 2) then
-            do it = 1, ntrcr
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  trcrn(i,j,it,n) = c0
-               enddo
-            enddo
-         endif
-
       enddo                     ! n
 
       end subroutine zap_small_areas
@@ -1809,12 +1431,3 @@ c $Id: ice_itd.F,v 1.13 2004/02/09 17:58:46 lipscomb Exp $
       end module ice_itd
 
 !=======================================================================
-
-
-
-
-
-
-
-
-

@@ -1,4 +1,4 @@
-c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
+c $Id: ice_grid.F,v 1.15 2006/07/28 20:48:51 eclare Exp $
 !=======================================================================
 !BOP
 !
@@ -10,12 +10,8 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !REVISION HISTORY:
 !
-! authors: Elizabeth C. Hunke and William H. Lipscomb, LANL
+! authors: Elizabeth C. Hunke, LANL
 !          Tony Craig, NCAR
-!
-! 2004: Block structure added by William Lipscomb
-!       init_grid split into two parts as in POP 2.0
-!       Boundary update routines replaced by POP versions
 !
 ! !INTERFACE:
 !
@@ -24,88 +20,75 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_communicate, only: my_task, master_task
       use ice_constants
-      use ice_blocks
-      use ice_domain_size
       use ice_domain
       use ice_fileunits
-      use ice_read_write
-      use ice_timers
+      use ice_mpi_internal
+      use ice_work, only: work_g1, work_l1, worka
 !
 !EOP
 !
       implicit none
       save
 
-      character (len=char_len) ::
+      character (len=char_len) :: 
      &   grid_file  !  input file for POP grid info
      &,  kmt_file   !  input file for POP grid info
-     &,  grid_type  !  rectangular (default) or displaced_pole
+     &,  grid_type  !  rectangular (default) or displaced_pole 
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
+      real (kind=dbl_kind), dimension (imt_local,jmt_local) ::
      &   dxt        ! width of T-cell through the middle (m)
      &,  dyt        ! height of T-cell through the middle (m)
      &,  dxu        ! width of U-cell through the middle (m)
      &,  dyu        ! height of U-cell through the middle (m)
      &,  HTE        ! length of eastern edge of T-cell (m)
      &,  HTN        ! length of northern edge of T-cell (m)
+     &,  HTS        ! length of southern edge of T-cell
+     &,  HTW        ! length of western edge of T-cell
      &,  tarea      ! area of T-cell (m^2)
      &,  uarea      ! area of U-cell (m^2)
-     &,  tarear     ! 1/tarea
-     &,  uarear     ! 1/uarea
-     &,  tinyarea   ! puny*tarea
-     &,  tarean     ! area of NH T-cells
-     &,  tareas     ! area of SH T-cells
      &,  ULON       ! longitude of velocity pts (radians)
      &,  ULAT       ! latitude of velocity pts (radians)
      &,  TLON       ! longitude of temp pts (radians)
      &,  TLAT       ! latitude of temp pts (radians)
-     &,  ANGLE      ! for conversions between POP grid and lat/lon
-     &,  ANGLET     ! ANGLE converted to T-cells
+     &,  dxhy       ! 0.5*(HTE - HTE)
+     &,  dyhx       ! 0.5*(HTN - HTN)
 
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
+      real (kind=dbl_kind), dimension (imt_local,jmt_local) ::
      &   cyp        ! 1.5*HTE - 0.5*HTE
      &,  cxp        ! 1.5*HTN - 0.5*HTN
      &,  cym        ! 0.5*HTE - 1.5*HTE
      &,  cxm        ! 0.5*HTN - 1.5*HTN
-     &,  dxhy       ! 0.5*(HTE - HTE)
-     &,  dyhx       ! 0.5*(HTN - HTN)
+     &,  tarear     ! 1/tarea
+     &,  tinyarea   ! puny*tarea
+     &,  dxt2       ! 0.5*dxt
+     &,  dyt2       ! 0.5*dyt
+     &,  dxt4       ! 0.25*dxt
+     &,  dyt4       ! 0.25*dyt
 
-      ! geometric quantities used for remapping transport
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
-     &   xav    ! mean T-cell value of x
-     &,  yav    ! mean T-cell value of y
-     &,  xxav   ! mean T-cell value of xx
-     &,  xyav   ! mean T-cell value of xy
-     &,  yyav   ! mean T-cell value of yy
-     &,  xxxav  ! mean T-cell value of xxx
-     &,  xxyav  ! mean T-cell value of xxy
-     &,  xyyav  ! mean T-cell value of xyy
-     &,  yyyav  ! mean T-cell value of yyy
+      real (kind=dbl_kind), dimension (ilo:ihi,jlo:jhi) ::
+     &   uarear     ! 1/uarea
+     &,  ANGLE      ! for conversions between POP grid and lat/lon
+     &,  ANGLET     ! ANGLE converted to T-cells
+     &,  tarean     ! area of NH T-cells
+     &,  tareas     ! area of SH T-cells
 
-      real (kind=dbl_kind),
-     &   dimension (2,2,nx_block,ny_block,max_blocks) ::
-     &   mne    ! matrices used for coordinate transformations in remapping
-     &,  mnw    ! ne = northeast corner, nw = northwest, etc.
-     &,  mse 
-     &,  msw
-
-      ! masks
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks)::
+      ! Masks
+      real (kind=dbl_kind), dimension (imt_local,jmt_local) ::
      &   hm         ! land/boundary mask, thickness (T-cell)
      &,  uvm        ! land/boundary mask, velocity (U-cell)
+     &,  mask_n     ! northern hemisphere
+     &,  mask_s     ! southern hemisphere
 
-      logical (kind=log_kind), 
-     &   dimension (nx_block,ny_block,max_blocks) ::
-     &   tmask      ! land/boundary mask, thickness (T-cell)
-     &,  umask      ! land/boundary mask, velocity (U-cell)
-     &,  lmask_n    ! northern hemisphere mask
-     &,  lmask_s    ! southern hemisphere mask
+      logical (kind=log_kind) ::
+     &   tmask(imt_local,jmt_local) ! land/boundary mask, thickness (T-cell)
+     &,  umask(imt_local,jmt_local) ! land/boundary mask, velocity (U-cell)
+     &,  icetmask(imt_local,jmt_local)  ! ice extent mask (T-cell)
+     &,  iceumask(ilo:ihi,jlo:jhi)  ! ice extent mask (U-cell)
 
-!lipscomb - not sure rndex_global is stil needed
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) ::
-     &   rndex_global           ! global index for local subdomain (dbl)
+      real (kind=dbl_kind) ::
+     &   shlat = -40.0_dbl_kind     ! artificial masking edge
+     &,  nhlat =  35.0_dbl_kind     ! artificial masking edge
 
 !=======================================================================
 
@@ -114,109 +97,19 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !=======================================================================
 !BOP
 !
-! !IROUTINE: init_grid1 - - distribute blocks across processors
+! !IROUTINE: init_grid - horizontal grid initialization
 !
 ! !INTERFACE:
 !
-      subroutine init_grid1 
+      subroutine init_grid
 !
 ! !DESCRIPTION:
 !
-! Distribute blocks across processors.  The distribution is optimized
-! based on latitude and topography, contained in the ULAT and KMT arrays. 
+! Horizontal grid initialization:  \\
 !
-! !REVISION HISTORY:
-!
-! authors: William Lipscomb and Phil Jones, LANL
-!
-! !USES:
-!
-      use ice_broadcast
-      use ice_work, only: work_g1, work_g2
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-
-      !-----------------------------------------------------------------
-      ! Get global ULAT and KMT arrays used for block decomposition.
-      !-----------------------------------------------------------------
-
-      allocate(work_g1(nx_global,ny_global))
-      allocate(work_g2(nx_global,ny_global))
-
-      if (trim(grid_type) == 'displaced_pole' .or.
-     &    trim(grid_type) == 'tripole'      ) then
-
-         call ice_open(nu_grid,grid_file,64) ! ULAT
-         call ice_open(nu_kmt, kmt_file, 32) ! KMT
-
-         call ice_read_global(nu_grid,1,work_g1,'rda8',.true.)  ! ULAT
-         call ice_read_global(nu_kmt, 1,work_g2,'ida4',.true.)  ! KMT
-
-         if (my_task == master_task) then
-            close (nu_grid)
-            close (nu_kmt)
-         endif
-
-      elseif (trim(grid_type) == 'panarctic') then
-
-         call ice_open(nu_grid,grid_file,64) ! ULAT, KMT
-
-         call ice_read_global(nu_grid,1,work_g2,'ida8',.true.)  ! KMT
-         call ice_read_global(nu_grid,2,work_g1,'rda8',.true.)  ! ULAT
-
-         if (my_task == master_task) close (nu_grid)
-
-      elseif (trim(grid_type) == 'column') then
-
-         work_g1(:,:) = 75./rad_to_deg  ! arbitrary polar latitude
-         work_g2(:,:) = c1
-
-      else   ! rectangular grid
-
-         work_g1(:,:) = 75./rad_to_deg  ! arbitrary polar latitude
-         work_g2(:,:) = c1
-
-      endif
-
-      call broadcast_array(work_g1, master_task)   ! ULAT
-      call broadcast_array(work_g2, master_task)   ! KMT
-
-      !-----------------------------------------------------------------
-      ! distribute blocks among processors
-      !-----------------------------------------------------------------
-
-      call init_domain_distribution(work_g2, work_g1)  ! KMT, ULAT
-
-      deallocate(work_g1)
-      deallocate(work_g2)
-
-      end subroutine init_grid1
-
-!=======================================================================
-!BOP
-!
-! !IROUTINE: init_grid2 - horizontal grid initialization
-!
-! !INTERFACE:
-!
-      subroutine init_grid2
-!
-! !DESCRIPTION:
-!
-! Horizontal grid initialization:
-!
-!     U{LAT,LONG} = true {latitude,longitude} of U points
-!     HT{N,E} = cell widths on {N,E} sides of T cell
-!     ANGLE = angle between local x direction and true east
-!     hm = land mask (c1 for ocean points, c0 for land points)
-!     D{X,Y}{T,U} = {x,y} spacing centered at {T,U} points
-!     T-grid and ghost cell values
-!     Various grid quantities needed for dynamics and transport
+!     HT{N,E} = cell widths on {N,E} sides of T cell; \\
+!     U{LAT,LONG} = true {latitude,longitude} of U points;  \\
+!     D{X,Y}{T,U} = {x,y} spacing centered at {T,U} points. \\ 
 !
 ! !REVISION HISTORY:
 !
@@ -224,162 +117,111 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !USES:
 !
-      use ice_gather_scatter
-      use ice_boundary
-      use ice_work, only: work_g1
       use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
+!
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: i, j
 
       real (kind=dbl_kind) ::
-     &   angle_0, angle_w, angle_s, angle_sw
+     &     angle_0, angle_w, angle_s, angle_sw
 
-      logical (kind=log_kind), dimension(nx_block,ny_block,max_blocks)::
-     &   out_of_range
+      logical (kind=log_kind), dimension(ilo:ihi,jlo:jhi):: out_of_range
 
-      type (block) ::
-     &   this_block           ! block information for current block
-      
       !-----------------------------------------------------------------
-      ! lat, lon, cell widths, angle, land mask
+      ! read (or compute) lat, lon, cell widths, angle, land mask
       !-----------------------------------------------------------------
 
-      if (trim(grid_type) == 'displaced_pole' .or.
-     &    trim(grid_type) == 'tripole'      ) then
-         call popgrid           ! read POP grid lengths directly
-      elseif (trim(grid_type) == 'panarctic') then
-         call panarctic_grid    ! pan-Arctic grid
-      elseif (trim(grid_type) == 'column') then
-         call columngrid        ! column model grid
+      if (grid_type == 'displaced_pole') then
+        call popgrid              ! read POP grid lengths directly
+      elseif (grid_type == 'column') then
+        call columngrid           ! column model grid
       else
-         call rectgrid          ! regular rectangular grid
+        call rectgrid             ! regular rectangular grid
       endif
 
-      call ice_timer_start(timer_bound)
-      call update_ghost_cells (HTN,                bndy_info,
-     &                         field_loc_Nface,    field_type_scalar)
-      call update_ghost_cells (HTE,                bndy_info,
-     &                         field_loc_Eface,    field_type_scalar)
-      call update_ghost_cells (ULAT,               bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
-      call update_ghost_cells (ULON,               bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
-      call update_ghost_cells (ANGLE,              bndy_info,
-     &                         field_loc_NEcorner, field_type_angle)
-      call ice_timer_stop(timer_bound)
+      call bound(HTN)
+      call bound(HTE)
+      call bound(ULAT)
+      call bound(ULON)
 
       !-----------------------------------------------------------------
-      ! T-grid cell and U-grid cell quantities
+      ! construct T-grid cell and U-grid cell widths
       !-----------------------------------------------------------------
 
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
+      do j=jlo,jhi
+       do i=ilo,ihi
 
-         do j = jlo, jhi
-         do i = ilo, ihi
+        dxt(i,j) = p5*(HTN(i,j) + HTN(i,j-1))
+        dyt(i,j) = p5*(HTE(i,j) + HTE(i-1,j))
 
-            dxt(i,j,iblk) = p5*(HTN(i,j,iblk) + HTN(i,j-1,iblk))
-            dyt(i,j,iblk) = p5*(HTE(i,j,iblk) + HTE(i-1,j,iblk))
-            
-            tarea(i,j,iblk) = dxt(i,j,iblk)*dyt(i,j,iblk)
+        tarea(i,j) = dxt(i,j)*dyt(i,j)
 
-            dxu(i,j,iblk) = p5*(HTN(i,j,iblk) + HTN(i+1,j,iblk))
-            dyu(i,j,iblk) = p5*(HTE(i,j,iblk) + HTE(i,j+1,iblk))
+        dxu(i,j) = p5*(HTN(i,j) + HTN(i+1,j))
+        dyu(i,j) = p5*(HTE(i,j) + HTE(i,j+1))
 
-         enddo
-         enddo
+        HTS(i,j) = HTN(i,j-1)
+        HTW(i,j) = HTE(i-1,j)
 
-      enddo                     ! iblk
+       enddo
+      enddo
 
-      call update_ghost_cells (dxt,                bndy_info,
-     &                         field_loc_center,   field_type_scalar)
-      call update_ghost_cells (dyt,                bndy_info,
-     &                         field_loc_center,   field_type_scalar)
-      call update_ghost_cells (dxu,                bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
-      call update_ghost_cells (dyu,                bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
-      call update_ghost_cells (tarea,              bndy_info,
-     &                         field_loc_center,   field_type_scalar)
+      call bound(dxt)
+      call bound(dyt)
+      call bound(dxu)
+      call bound(dyu)
+      call bound(tarea)
+      call bound(HTS)
+      call bound(HTW)
 
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
+      do j=jlo,jhi
+       do i=ilo,ihi
+        uarea(i,j) = p25*(tarea(i,j) + tarea(i+1,j)
+     &         + tarea(i,j+1) + tarea(i+1,j+1))        ! m^2
+       enddo
+      enddo
+      call bound(uarea)
 
-         do j = jlo, jhi
-         do i = ilo, ihi
-            uarea(i,j,iblk) = p25*
-     &                       (tarea(i,j,  iblk) + tarea(i+1,j,  iblk)
-     &                      + tarea(i,j+1,iblk) + tarea(i+1,j+1,iblk))
+      ! grid length combinations
+      do j=1,jmt_local
+       do i=1,imt_local
+        dxt2(i,j) = p5*dxt(i,j)
+        dyt2(i,j) = p5*dyt(i,j)
+        dxt4(i,j) = p25*dxt(i,j)
+        dyt4(i,j) = p25*dyt(i,j)
+        tarear(i,j) = c1/tarea(i,j)
+        tinyarea(i,j) = puny*tarea(i,j)
+!echmod        tinyarea(i,j) = 1.e-7*tarea(i,j) ! for automatic differentiation conv.
+       enddo
+      enddo
 
-            tarear(i,j,iblk) = c1/tarea(i,j,iblk)
-            uarear(i,j,iblk) = c1/uarea(i,j,iblk)
-            tinyarea(i,j,iblk) = puny*tarea(i,j,iblk)
+      ! grid length combinations
+      do j=jlo,jhi
+       do i=ilo,ihi
+        uarear(i,j) = c1/uarea(i,j)
+        dxhy(i,j) = p5*(HTE(i,j) - HTE(i-1,j))
+        dyhx(i,j) = p5*(HTN(i,j) - HTN(i,j-1))
+        cyp(i,j) =  c1p5*HTE(i,j) - p5*HTE(i-1,j)
+        cxp(i,j) =  c1p5*HTN(i,j) - p5*HTN(i,j-1)
+        cym(i,j) =  p5*HTE(i,j) - c1p5*HTE(i-1,j)
+        cxm(i,j) =  p5*HTN(i,j) - c1p5*HTN(i,j-1)
+       enddo
+      enddo
 
-            dxhy(i,j,iblk) = p5*(HTE(i,j,iblk) - HTE(i-1,j,iblk))
-            dyhx(i,j,iblk) = p5*(HTN(i,j,iblk) - HTN(i,j-1,iblk))
+      call bound(dxhy)
+      call bound(dyhx)
+      call bound(cyp)
+      call bound(cxp)
+      call bound(cym)
+      call bound(cxm)
 
-         enddo                  ! i
-         enddo                  ! j 
-
-         do j = jlo, jhi+1
-         do i = ilo, ihi+1
-            cyp(i,j,iblk) = (c1p5*HTE(i,j,iblk) - p5*HTE(i-1,j,iblk))
-            cxp(i,j,iblk) = (c1p5*HTN(i,j,iblk) - p5*HTN(i,j-1,iblk))
-            cym(i,j,iblk) = (p5*HTE(i,j,iblk) - c1p5*HTE(i-1,j,iblk))
-            cxm(i,j,iblk) = (p5*HTN(i,j,iblk) - c1p5*HTN(i,j-1,iblk))
-         enddo
-         enddo
-
-      enddo                     ! iblk
-
-      !-----------------------------------------------------------------
-      ! Ghost cell updates
-      ! On the tripole grid, one must be careful with updates of
-      !  quantities that involve a difference of cell lengths.
-      ! For example, dyhx and dxhy are cell-centered vector components.
-      ! Also note that on the tripole grid, cxp and cxm would swap places,
-      !  as would cyp and cym.  These quantities are computed only
-      !  in north and east ghost cells (above), not south and west.
-      !-----------------------------------------------------------------
-
-      call ice_timer_start(timer_bound)
-      call update_ghost_cells (uarea,            bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
-
-      call update_ghost_cells (uarear,           bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
-
-      call update_ghost_cells (tarear,           bndy_info,
-     &                         field_loc_center, field_type_scalar)
-
-      call update_ghost_cells (tinyarea,         bndy_info,
-     &                         field_loc_center, field_type_scalar)
-
-      call update_ghost_cells (dxhy,             bndy_info,
-     &                         field_loc_center, field_type_vector)
-
-      call update_ghost_cells (dyhx,             bndy_info,
-     &                         field_loc_center, field_type_vector)
-      call ice_timer_stop(timer_bound)
-
-      !-----------------------------------------------------------------
-      ! Calculate ANGLET to be compatible with POP ocean model
-      ! First, ensure that -pi <= ANGLE <= pi
-      !-----------------------------------------------------------------
+!-----------------------------------------------------------------
+! Calculate ANGLET to be compatible with POP ocean model
+! First, ensure that -pi <= ANGLE <= pi
+!-----------------------------------------------------------------
 
       out_of_range = .false.
       where (ANGLE < -pi .or. ANGLE > pi) out_of_range = .true.
@@ -387,77 +229,65 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
          call abort_ice ('init_grid: ANGLE out of expected range')
       endif
 
+!-----------------------------------------------------------------
+! Pad ANGLE so ghost cells can be used in averaging to get ANGLET
+!-----------------------------------------------------------------
+      work_l1(ilo:ihi,jlo:jhi) = ANGLE(ilo:ihi,jlo:jhi)
+      call bound (work_l1)
 
-      !-----------------------------------------------------------------
-      ! Compute ANGLE on T-grid
-      !-----------------------------------------------------------------
-      ANGLET = c0
+!-----------------------------------------------------------------
+! Compute ANGLE on T-grid
+!-----------------------------------------------------------------
+      do j=jlo,jhi
+        do i=ilo,ihi
 
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
+          angle_0  = work_l1(i  ,j  )     !   w----0
+          angle_w  = work_l1(i-1,j  )     !   |    |
+          angle_s  = work_l1(i,  j-1)     !   |    |
+          angle_sw = work_l1(i-1,j-1)     !   sw---s
 
-         do j = jlo, jhi
-         do i = ilo, ihi
-            angle_0  = ANGLE(i  ,j  ,iblk) !   w----0
-            angle_w  = ANGLE(i-1,j  ,iblk) !   |    |
-            angle_s  = ANGLE(i,  j-1,iblk) !   |    |
-            angle_sw = ANGLE(i-1,j-1,iblk) !   sw---s
+          if ( angle_0 < c0 ) then
+            if ( abs(angle_w - angle_0) > pi)
+     &        angle_w  = angle_w  - pi2
+            if ( abs(angle_s - angle_0) > pi)
+     &        angle_s  = angle_s  - pi2
+            if ( abs(angle_sw - angle_0) > pi)
+     &        angle_sw = angle_sw - pi2
+          endif
 
-            if ( angle_0 < c0 ) then
-               if ( abs(angle_w - angle_0) > pi)
-     &                  angle_w = angle_w  - pi2
-               if ( abs(angle_s - angle_0) > pi)
-     &                  angle_s = angle_s  - pi2
-               if ( abs(angle_sw - angle_0) > pi)
-     &                  angle_sw = angle_sw - pi2
-            endif
-
-            ANGLET(i,j,iblk) = angle_0 * p25 + angle_w * p25
-     &                       + angle_s * p25 + angle_sw* p25
-         enddo
-         enddo
+          ANGLET(i,j) = angle_0 * p25 + angle_w * p25
+     &                + angle_s * p25 + angle_sw* p25
+        enddo
       enddo
-      
-      call ice_timer_start(timer_bound)
-      call update_ghost_cells (ANGLET,             bndy_info,
-     &                         field_loc_NEcorner, field_type_angle)
-      call ice_timer_stop(timer_bound)
 
-      call makemask          ! velocity mask, hemisphere masks
       call Tlatlon           ! get lat, lon on the T grid
+      call makemask          ! velocity mask, hemisphere masks
 
       !-----------------------------------------------------------------
       ! Compute global index (used for unpacking messages from coupler)
       !-----------------------------------------------------------------
 
+      allocate(work_g1(imt_global,jmt_global))
+
       if (my_task==master_task) then
-         allocate(work_g1(nx_global,ny_global))
-         do j=1,ny_global
-         do i=1,nx_global
-            work_g1(i,j) = float((j-1)*nx_global + i)
+         do j=1,jmt_global
+         do i=1,imt_global
+            work_g1(i,j) = real((j-1)*imt_global + i,kind=dbl_kind)
          enddo
          enddo
-      else
-         allocate(work_g1(1,1)) ! to save memory
       endif
 
-      call scatter_global(rndex_global, work_g1, 
-     &                    master_task,  distrb_info,
-     &                    field_loc_center, field_type_scalar)
+      call global_scatter(work_g1,rndex_global)
+      index_global = nint(rndex_global)
 
       deallocate(work_g1)
 
-      end subroutine init_grid2
+      end subroutine init_grid
 
 !=======================================================================
 !BOP
 !
-! !IROUTINE: popgrid - read and set POP displaced pole (or tripole)
-!                      grid and land mask
+! !IROUTINE: popgrid - reads and sets pop displaced pole grid and land mask
 !
 ! !INTERFACE:
 !
@@ -465,12 +295,12 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !DESCRIPTION:
 !
-! POP displaced pole grid and land mask. \\
+! POP displaced pole grid and land mask. \\ 
 ! Grid record number, field and units are: \\
 ! (1) ULAT  (radians)    \\
 ! (2) ULON  (radians)    \\
-! (3) HTN   (cm)         \\
-! (4) HTE   (cm)         \\
+! (3) HTN   (cm)         \\   
+! (4) HTE   (cm)         \\ 
 ! (5) HUS   (cm)         \\
 ! (6) HUW   (cm)         \\
 ! (7) ANGLE (radians)    \\
@@ -483,167 +313,51 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !USES:
 !
-      use ice_work, only: work1
+      use ice_read_write
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
-
+      integer (kind=int_kind) :: i, j
       logical (kind=log_kind) :: diag
-
-      type (block) ::
-     &   this_block           ! block information for current block
 
       call ice_open(nu_grid,grid_file,64)
       call ice_open(nu_kmt,kmt_file,32)
 
       diag = .true.       ! write diagnostic info
 
-      ! lat, lon, cell dimensions, angles
-      call ice_read(nu_grid,1,ULAT, 'rda8',diag)
-      call ice_read(nu_grid,2,ULON, 'rda8',diag)
-      call ice_read(nu_grid,3,HTN,  'rda8',diag)
-      call ice_read(nu_grid,4,HTE,  'rda8',diag)
-      call ice_read(nu_grid,7,ANGLE,'rda8',diag)
-
-      ! fix units
-      HTN(:,:,:) = HTN(:,:,:) * cm_to_m
-      HTE(:,:,:) = HTE(:,:,:) * cm_to_m
-
-      ! topography
-      call ice_read(nu_kmt,1,work1,'ida4',diag)
+      call ice_read(nu_grid,1,worka,'rda8',diag)
+      ULAT(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_grid,2,worka,'rda8',diag)
+      ULON(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_grid,3,worka,'rda8',diag)
+      HTN(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)*cm_to_m
+      call ice_read(nu_grid,4,worka,'rda8',diag)
+      HTE(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)*cm_to_m
+      call ice_read(nu_grid,7,worka,'rda8',diag)
+      ANGLE(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_kmt,1,worka,'ida4',diag)
 
       if (my_task == master_task) then
-         close (nu_grid)
-         close (nu_kmt)
+         close (nu_grid) 
+         close (nu_kmt) 
       endif
 
-      hm(:,:,:) = c0
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo, jhi
-         do i = ilo, ihi
-            hm(i,j,iblk) = work1(i,j,iblk)
-            if (hm(i,j,iblk) >= c1) hm(i,j,iblk) = c1
+      do j=jlo,jhi
+       do i=ilo,ihi
+         hm(i,j) = worka(i,j)
+         if (hm(i,j) >= c1) hm(i,j) = c1 
 
          ! uncomment to mask out tropics
          ! Do this only if running uncoupled
-!!!             if (ULAT(i,j,iblk) > shlat/rad_to_deg .and.
-!!!     &           ULAT(i,j,iblk) < nhlat/rad_to_deg) 
-!!!     &           hm(i,j,iblk) = c0
-         enddo
-         enddo
+!!!          if (ULAT(i,j) > shlat/rad_to_deg .and.
+!!!     &        ULAT(i,j) < nhlat/rad_to_deg) hm(i,j) = c0
+       enddo
       enddo
 
       end subroutine popgrid
-
-!=======================================================================
-!BOP
-!
-! !IROUTINE: panarctic_grid - read and set Pan-Arctic grid and land mask
-!
-! !INTERFACE:
-!
-      subroutine panarctic_grid
-!
-! !DESCRIPTION:
-!
-! Pan-Arctic grid and mask developed by Wieslaw Maslowski
-!
-! !REVISION HISTORY:
-!
-! authors: Wieslaw Maslowki, Naval Postgraduate School (based on popgrid)
-!          William H. Lipscomb, LANL
-!
-! !USES:
-!
-      use ice_domain_size
-      use ice_gather_scatter
-      use ice_work, only: work1
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-!EOP
-!
-      !-----------------------------------------------------------------
-      ! 
-      ! PIPS rotated spherical grid and land mask
-      !      rec no.         field         units
-      !      -------         -----         -----
-      !   land mask
-      !         1             KMT         
-      !   grid
-      !         2            ULAT         radians
-      !         3            ULON         radians
-      !         4             HTN           cm
-      !         5             HTE           cm
-      !         6             HUS           cm
-      !         7             HUW           cm
-      !         8            ANGLE        radians
-      !
-      ! NOTE: There is no separate kmt file.  Land mask is part of grid file.
-      !-----------------------------------------------------------------
-
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
-
-      logical (kind=log_kind) :: diag
-
-      type (block) ::
-     &   this_block           ! block information for current block
-
-      call ice_open(nu_grid,grid_file,64)
-
-      diag = .true.       ! write diagnostic info
-
-      if (my_task == master_task)
-     &     write (nu_diag,*) '** Reading pan-Arctic grid **'
-
-      ! read topography
-      call ice_read(nu_grid,1,work1,'ida8',diag)
-
-      hm(:,:,:) = c0
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo, jhi
-         do i = ilo, ihi
-            hm(i,j,iblk) = work1(i,j,iblk)
-            if (hm(i,j,iblk) >= c1) hm(i,j,iblk) = c1
-         enddo
-         enddo
-      enddo                     ! iblk
-
-      ! read other grid quantities
-
-      call ice_read(nu_grid,2,ULAT, 'rda8',diag)
-      call ice_read(nu_grid,3,ULON, 'rda8',diag)
-      call ice_read(nu_grid,4,HTN,  'rda8',diag)
-      call ice_read(nu_grid,5,HTE,  'rda8',diag)
-      call ice_read(nu_grid,8,ANGLE,'rda8',diag)
-
-      ! fix units
-      HTN(:,:,:) = HTN(:,:,:)*cm_to_m
-      HTE(:,:,:) = HTE(:,:,:)*cm_to_m
-
-      if (my_task == master_task) close (nu_grid)
-
-      end subroutine panarctic_grid
 
 !=======================================================================
 !BOP
@@ -666,70 +380,66 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !USES:
 !
-      use ice_domain_size
-      use ice_gather_scatter
-      use ice_work, only: work_g1
-      use ice_exit      
+      use ice_model_size
+      use ice_exit
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
+      integer (kind=int_kind) :: i, j
 
       !-----------------------------------------------------------------
       ! Calculate various geometric 2d arrays
       !-----------------------------------------------------------------
 
-      do iblk = 1, nblocks
-         do j = 1, ny_block
-         do i = 1, nx_block
-
-            HTN  (i,j,iblk) = 1.6e4_dbl_kind
-            HTE  (i,j,iblk) = 1.6e4_dbl_kind
-
-            ! used to find hemisphere and init_state, need not be exact
-            ULAT (i,j,iblk) = 75.0_dbl_kind/rad_to_deg  
-            ULON (i,j,iblk) = 170.0_dbl_kind/rad_to_deg 
-
-            ANGLE(i,j,iblk) = c0               ! "square with the world"
-
-         enddo                  ! i
-         enddo                  ! j
-      enddo                     ! iblk
+      do j=jlo,jhi
+      do i=ilo,ihi
+         HTN  (i,j) = 1.6e4_dbl_kind   ! constant longitude spacing = 
+                                       ! meaningless
+         HTE  (i,j) = 1.6e4_dbl_kind   ! constant latitude  spacing = 
+                                       ! meaningless
+         ULAT (i,j) = 75.5/rad_to_deg  ! used to determine hemisphere and 
+         ULON (i,j) = 170.0/rad_to_deg ! init_state, need not be exact
+         ANGLE(i,j) = c0               ! "square with the world"
+      enddo
+      enddo
 
       !-----------------------------------------------------------------
-      ! Verify that nx_global and ny_global are 1
+      ! Verify that imt_global and jmt_global are 1
       !-----------------------------------------------------------------
 
-      if ((nx_global /= 1).or. (ny_global /= 1)) then
-         write(nu_diag,*)
+      if ((imt_global /= 1).or. (jmt_global /= 1)) then
+         write(nu_diag,*) 
      &        'Because you have selected the column model flag'
-         write(nu_diag,*) 'Please set nx_global=ny_global=1 in file'
-         write(nu_diag,*) 'ice_domain_size.F and recompile'
-         call abort_ice ('columngrid: check nx_global and ny_global')
+         write(nu_diag,*) 'Please set imt_global=jmt_global=1 in file'
+         write(nu_diag,*) 'ice_model_size.F and recompile'
+         call abort_ice ('columngrid: check imt_global and jmt_global')
       endif
 
       !-----------------------------------------------------------------
       ! Construct T-cell land mask
       !-----------------------------------------------------------------
 
+      allocate(work_g1(imt_global,jmt_global))
+
       if (my_task==master_task) then
-         allocate(work_g1(nx_global,ny_global))
-         do j = 1, ny_global
-         do i = 1, nx_global
+         do j=1,jmt_global
+         do i=1,imt_global
             work_g1(i,j) = c1
          enddo
          enddo
-      else
-         allocate(work_g1(1,1)) ! to save memory
       endif
 
-      call scatter_global(hm, work_g1, master_task, distrb_info,
-     &                    field_loc_center, field_type_scalar)
+      call global_scatter(work_g1,worka)
 
       deallocate(work_g1)
+
+      do j=jlo,jhi
+      do i=ilo,ihi
+         hm(i,j) = worka(i,j)
+      enddo
+      enddo
 
       end subroutine columngrid
 
@@ -752,68 +462,57 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !USES:
 !
-      use ice_domain_size
-      use ice_gather_scatter
-      use ice_work, only: work_g1
+      use ice_model_size
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
-
-      type (block) ::
-     &   this_block           ! block information for current block
+      integer (kind=int_kind) :: i, j
 
       !-----------------------------------------------------------------
       ! Calculate various geometric 2d arrays
       !-----------------------------------------------------------------
 
-      do iblk = 1, nblocks
-         do j = 1, ny_block
-         do i = 1, nx_block
-
-!!!         HTN  (i,j,iblk) = 3.1e4_dbl_kind  ! constant longitude spacing =
-                                              ! POP <4/3> min, m
-!!!         HTE  (i,j,iblk) = 3.1e4_dbl_kind  ! constant latitude  spacing =
-                                              ! POP <4/3> min, m
-            HTN  (i,j,iblk) = 1.6e4_dbl_kind  ! constant longitude spacing =
-                                              ! POP <2/3> min, m
-            HTE  (i,j,iblk) = 1.6e4_dbl_kind  ! constant latitude  spacing =
-                                              ! POP <2/3> min, m
-            ULAT (i,j,iblk) = c0              ! remember to set Coriolis !
-            ULON (i,j,iblk) = c0
-            ANGLE(i,j,iblk) = c0              ! "square with the world"
-
-         enddo
-         enddo
+      do j=jlo,jhi
+      do i=ilo,ihi
+         HTN  (i,j) = 1.6e4_dbl_kind   ! constant longitude spacing = 
+                                       ! POP <2/3> min, m
+         HTE  (i,j) = 1.6e4_dbl_kind   ! constant latitude  spacing = 
+                                       ! POP <2/3> min, m
+         ULAT (i,j) = c0               ! remember to set Coriolis !
+         ULON (i,j) = c0
+         ANGLE(i,j) = c0               ! "square with the world"
+      enddo
       enddo
 
       !-----------------------------------------------------------------
       ! Construct T-cell land mask
       !-----------------------------------------------------------------
 
-      if (my_task == master_task) then
-         allocate(work_g1(nx_global,ny_global))
-         work_g1(:,:) = c0      ! initialize hm as land
+      allocate(work_g1(imt_global,jmt_global))
 
-!!!      do j=1,ny_global        ! open
-!!!      do i=1,nx_global        ! open
-         do j=3,ny_global-2     ! closed: NOTE ny_global > 5
-            do i=3,nx_global-2  ! closed: NOTE nx_global > 5
-               work_g1(i,j) = c1
-            enddo
+      if (my_task == master_task) then
+         work_g1 = c0      ! initialize hm as land
+
+!!!         do j=1,jmt_global        ! open
+!!!         do i=1,imt_global        ! open
+         do j=3,jmt_global-2    ! closed: NOTE jmt_global > 5
+         do i=3,imt_global-2 ! closed: NOTE imt_global > 5
+            work_g1(i,j) = c1
          enddo
-      else
-         allocate(work_g1(1,1)) ! to save memory
+         enddo
       endif
 
-      call scatter_global(hm, work_g1, master_task, distrb_info,
-     &                    field_loc_center, field_type_scalar)
+      call global_scatter(work_g1,worka)
 
       deallocate(work_g1)
+
+      do j=jlo,jhi
+      do i=ilo,ihi
+         hm(i,j) = worka(i,j)
+      enddo
+      enddo
 
       end subroutine rectgrid
 
@@ -838,85 +537,53 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !USES:
 !
-      use ice_boundary
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: i, j
 
-      type (block) ::
-     &   this_block           ! block information for current block
-
-      call ice_timer_start(timer_bound)
-      call update_ghost_cells (hm,               bndy_info,
-     &                         field_loc_center, field_type_scalar)
-      call ice_timer_stop(timer_bound)
+      call bound(hm)  !!! use real arrays to get boundary conditions
 
       !-----------------------------------------------------------------
       ! construct T-cell and U-cell masks
       !-----------------------------------------------------------------
 
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo, jhi
-         do i = ilo, ihi
-            uvm(i,j,iblk) = min (hm(i,j,  iblk), hm(i+1,j,  iblk),
-     &                           hm(i,j+1,iblk), hm(i+1,j+1,iblk))
-         enddo
-         enddo
+      do j=jlo,jhi
+       do i=ilo,ihi
+        uvm(i,j) = min(hm(i,j),hm(i+1,j),hm(i,j+1),hm(i+1,j+1))
+       enddo
       enddo
+      call bound(uvm)  !!! use real arrays to get boundary conditions
 
-      call ice_timer_start(timer_bound)
-      call update_ghost_cells (uvm,                bndy_info,
-     &                         field_loc_NEcorner, field_type_scalar)
-      call ice_timer_stop(timer_bound)
-
-      do iblk = 1, nblocks
-         do j = 1, ny_block
-         do i = 1, nx_block
-            tmask(i,j,iblk) = .false.
-            umask(i,j,iblk) = .false.
-            if ( hm(i,j,iblk) > p5) tmask(i,j,iblk) = .true.
-            if (uvm(i,j,iblk) > p5) umask(i,j,iblk) = .true.
-         enddo
-         enddo
+      do j=1,jmt_local
+       do i=1,imt_local
+        tmask(i,j) = .false.
+        umask(i,j) = .false.
+        if ( hm(i,j) > p5) tmask(i,j) = .true. 
+        if (uvm(i,j) > p5) umask(i,j) = .true.
+       enddo
+      enddo
 
       !-----------------------------------------------------------------
       ! create hemisphere masks
       !-----------------------------------------------------------------
 
-         lmask_n(:,:,iblk) = .false.
-         lmask_s(:,:,iblk) = .false.
+      do j=1,jmt_local
+       do i=1,imt_local
+        mask_n(i,j) = c0
+        mask_s(i,j) = c0
+       enddo
+      enddo
+      do j=jlo,jhi
+       do i=ilo,ihi
+        if (ULAT(i,j) >= -puny) mask_n(i,j) = c1  ! northern hemisphere
+        if (ULAT(i,j) <  -puny) mask_s(i,j) = c1  ! southern hemisphere
 
-         tarean(:,:,iblk) = c0
-         tareas(:,:,iblk) = c0
-
-         do j = 1, ny_block
-         do i = 1, nx_block
-
-            if (ULAT(i,j,iblk) >= -puny) lmask_n(i,j,iblk) = .true. ! N. Hem.
-            if (ULAT(i,j,iblk) <  -puny) lmask_s(i,j,iblk) = .true. ! S. Hem.
-
-            ! N hemisphere area mask (m^2)
-            if (lmask_n(i,j,iblk)) tarean(i,j,iblk) = tarea(i,j,iblk)
-
-            ! S hemisphere area mask (m^2)
-            if (lmask_s(i,j,iblk)) tareas(i,j,iblk) = tarea(i,j,iblk)
-
-         enddo
-         enddo
-
-
-      enddo  ! iblk
+        tarean(i,j) = tarea(i,j)*mask_n(i,j)  ! N hemisphere area mask (m^2)
+        tareas(i,j) = tarea(i,j)*mask_s(i,j)  ! S hemisphere area mask (m^2)
+       enddo
+      enddo
 
       end subroutine makemask
 
@@ -935,64 +602,50 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !REVISION HISTORY:
 !
-! author: Elizabeth C. Hunke, LANL; code originally based on POP grid
+! author: Elizabeth C. Hunke, LANL; code originally based on POP grid 
 ! generation routine
 !
 ! !USES:
 !
-      use ice_domain_size
-      use ice_boundary
-      use ice_gather_scatter
-      use ice_global_reductions, only: global_minval, global_maxval
+      use ice_model_size
+!      use ice_read_write ! if reading ULAT, ULON directly from file
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
 !EOP
 !
       integer (kind=int_kind) ::
-     &     i, j, iblk           ! horizontal indices
-     &,    ig, jg               ! global horizontal indices
-     &,    im1                  ! ig - 1
-     &,    ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+     &   i, j                           ! horizontal indices
 
+      integer (kind=int_kind) :: im1
       real (kind=dbl_kind) ::
-     &     z1,x1,y1,z2,x2,y2,z3,x3,y3,z4,x4,y4,tx,ty,tz,da
+     &   z1,x1,y1,z2,x2,y2,z3,x3,y3,z4,x4,y4,tx,ty,tz,da
 
-      type (block) ::
-     &     this_block           ! block information for current block
+      TLAT(:,:) = c0
+      TLON(:,:) = c0
 
-      TLAT(:,:,:) = c0
-      TLON(:,:,:) = c0
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo, jhi
+      do j = jlo, jhi
          do i = ilo, ihi
 
-            z1 = cos(ULAT(i-1,j-1,iblk))
-            x1 = cos(ULON(i-1,j-1,iblk))*z1
-            y1 = sin(ULON(i-1,j-1,iblk))*z1
-            z1 = sin(ULAT(i-1,j-1,iblk))
+            z1 = cos(ULAT(i-1,j-1))
+            x1 = cos(ULON(i-1,j-1))*z1
+            y1 = sin(ULON(i-1,j-1))*z1
+            z1 = sin(ULAT(i-1,j-1))
 
-            z2 = cos(ULAT(i,j-1,iblk))
-            x2 = cos(ULON(i,j-1,iblk))*z2
-            y2 = sin(ULON(i,j-1,iblk))*z2
-            z2 = sin(ULAT(i,j-1,iblk))
+            z2 = cos(ULAT(i,j-1))
+            x2 = cos(ULON(i,j-1))*z2
+            y2 = sin(ULON(i,j-1))*z2
+            z2 = sin(ULAT(i,j-1))
 
-            z3 = cos(ULAT(i-1,j,iblk))
-            x3 = cos(ULON(i-1,j,iblk))*z3
-            y3 = sin(ULON(i-1,j,iblk))*z3
-            z3 = sin(ULAT(i-1,j,iblk))
+            z3 = cos(ULAT(i-1,j))
+            x3 = cos(ULON(i-1,j))*z3
+            y3 = sin(ULON(i-1,j))*z3
+            z3 = sin(ULAT(i-1,j))
 
-            z4 = cos(ULAT(i,j,iblk))
-            x4 = cos(ULON(i,j,iblk))*z4
-            y4 = sin(ULON(i,j,iblk))*z4
-            z4 = sin(ULAT(i,j,iblk))
+            z4 = cos(ULAT(i,j))
+            x4 = cos(ULON(i,j))*z4
+            y4 = sin(ULON(i,j))*z4
+            z4 = sin(ULAT(i,j))
 
             tx = (x1+x2+x3+x4)/c4
             ty = (y1+y2+y3+y4)/c4
@@ -1002,40 +655,35 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
             tz = tz/da
 
             ! TLON in radians East
-            TLON(i,j,iblk) = c0
+            TLON(i,j) = c0
             if (tx /= c0 .or. ty /= c0)
-     &           TLON(i,j,iblk) = atan2(ty,tx)
+     &           TLON(i,j) = atan2(ty,tx)
 
             ! TLAT in radians North
-            TLAT(i,j,iblk) = asin(tz)
+            TLAT(i,j) = asin(tz)
             
          enddo                  ! i
-         enddo                  ! j         
-      enddo                     ! iblk
+      enddo                     ! j         
 
-      call ice_timer_start(timer_bound)
-      call update_ghost_cells (TLON,             bndy_info,
-     &                         field_loc_center, field_type_scalar)
-      call update_ghost_cells (TLAT,             bndy_info,
-     &                         field_loc_center, field_type_scalar)
-      call ice_timer_stop(timer_bound)
+      call bound(TLON)
+      call bound(TLAT)
 
-      x1 = global_minval(TLON, distrb_info, field_loc_center, tmask)
-      x2 = global_maxval(TLON, distrb_info, field_loc_center, tmask)
-      x3 = global_minval(TLAT, distrb_info, field_loc_center, tmask)
-      x4 = global_maxval(TLAT, distrb_info, field_loc_center, tmask)
+      x1 = ice_global_real_minval(imt_local*jmt_local,TLON)
+      x2 = ice_global_real_maxval(imt_local*jmt_local,TLON)
+      x3 = ice_global_real_minval(imt_local*jmt_local,TLAT)
+      x4 = ice_global_real_maxval(imt_local*jmt_local,TLAT)
 
-      y1 = global_minval(ULON, distrb_info, field_loc_NEcorner, umask)
-      y2 = global_maxval(ULON, distrb_info, field_loc_NEcorner, umask)
-      y3 = global_minval(ULAT, distrb_info, field_loc_NEcorner, umask)
-      y4 = global_maxval(ULAT, distrb_info, field_loc_NEcorner, umask)
+      y1 = ice_global_real_minval(imt_local*jmt_local,ULON)
+      y2 = ice_global_real_maxval(imt_local*jmt_local,ULON)
+      y3 = ice_global_real_minval(imt_local*jmt_local,ULAT)
+      y4 = ice_global_real_maxval(imt_local*jmt_local,ULAT)
 
       if (my_task==master_task) then
-         write(nu_diag,*) ' '
-         write(nu_diag,*) 'min/max ULON:', y1, y2
-         write(nu_diag,*) 'min/max TLON:', x1, x2
-         write(nu_diag,*) 'min/max ULAT:', y3, y4
-         write(nu_diag,*) 'min/max TLAT:', x3, x4
+         write(nu_diag,*) ''
+         write(nu_diag,*) 'min/max ULON:', y1*rad_to_deg, y2*rad_to_deg
+         write(nu_diag,*) 'min/max TLON:', x1*rad_to_deg, x2*rad_to_deg
+         write(nu_diag,*) 'min/max ULAT:', y3*rad_to_deg, y4*rad_to_deg
+         write(nu_diag,*) 'min/max TLAT:', x3*rad_to_deg, x4*rad_to_deg
       endif                     ! my_task
 
       end subroutine Tlatlon
@@ -1043,15 +691,16 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !=======================================================================
 !BOP
 !
-! !IROUTINE: t2ugrid_vector - transfer vector from T-cells to U-cells
+! !IROUTINE: t2ugrid - transfer from T-cell centers to U-cell centers
 !
 ! !INTERFACE:
 !
-      subroutine t2ugrid_vector (work)
+      subroutine t2ugrid(work)
 !
 ! !DESCRIPTION:
 !
-! Transfer vector component from T-cell centers to U-cell centers.
+! Transfer from T-cell centers to U-cell centers. Writes work into another 
+! array that has ghost cells
 !
 ! !REVISION HISTORY:
 !
@@ -1059,27 +708,23 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !USES:
 !
-      use ice_boundary
-      use ice_work, only: work1
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks),
-     &     intent(inout) :: 
-     &     work
+      real (kind=dbl_kind) :: work (ilo:ihi,jlo:jhi)
 !
 !EOP
 !
-      work1(:,:,:) = work(:,:,:)
+      integer (kind=int_kind) :: i, j
 
-      call ice_timer_start(timer_bound)
-      call update_ghost_cells(work1,            bndy_info,
-     &                        field_loc_center, field_type_vector)
-      call ice_timer_stop(timer_bound)
+      do j=jlo,jhi
+       do i=ilo,ihi
+        work_l1(i,j) = work(i,j)
+       enddo
+      enddo
+      call bound(work_l1)
+      call to_ugrid(work_l1,work)
 
-      call to_ugrid(work1,work)
-
-      end subroutine t2ugrid_vector
+      end subroutine t2ugrid
 
 !=======================================================================
 !BOP
@@ -1092,10 +737,8 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !DESCRIPTION:
 !
-! Shifts quantities from the T-cell midpoint (work1) to the U-cell
+! Shifts quantities from the T-cell midpoint (work1) to the U-cell 
 ! midpoint (work2)
-! NOTE: Input array includes ghost cells that must be updated before
-!       calling this routine.
 !
 ! !REVISION HISTORY:
 !
@@ -1105,40 +748,20 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), intent(in) ::
-     &   work1(nx_block,ny_block,max_blocks)
-
-      real (kind=dbl_kind), intent(out) ::
-     &   work2(nx_block,ny_block,max_blocks)
-
-      type (block) ::
-     &   this_block           ! block information for current block
+      real (kind=dbl_kind) :: work1(imt_local,jmt_local)
+     &,                       work2(ilo:ihi,jlo:jhi)
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: i, j
 
-      work2(:,:,:) = c0
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo, jhi
-         do i = ilo, ihi
-            work2(i,j,iblk) = p25 *
-     &                        (work1(i,  j,  iblk)*tarea(i,  j,  iblk)
-     &                       + work1(i+1,j,  iblk)*tarea(i+1,j,  iblk)
-     &                       + work1(i,  j+1,iblk)*tarea(i,  j+1,iblk)
-     &                       + work1(i+1,j+1,iblk)*tarea(i+1,j+1,iblk))
-     &                       / uarea(i,  j,  iblk)
-         enddo
-         enddo
+      do j=jlo,jhi
+       do i=ilo,ihi
+       work2(i,j) = p25*(work1(i,j)*tarea(i,j) 
+     &                   + work1(i+1,j)*tarea(i+1,j)
+     &                   + work1(i,j+1)*tarea(i,j+1) 
+     &                   + work1(i+1,j+1)*tarea(i+1,j+1))/uarea(i,j)
+       enddo
       enddo
 
       end subroutine to_ugrid
@@ -1146,17 +769,16 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !=======================================================================
 !BOP
 !
-! !IROUTINE: u2tgrid_vector - transfer vector from U-cells to T-cells
+! !IROUTINE: u2tgrid - transfer from U-cell centers to T-cell centers
 !
 ! !INTERFACE:
 !
-      subroutine u2tgrid_vector (work)
+      subroutine u2tgrid(work)
 !
 ! !DESCRIPTION:
 !
-! Transfer from U-cell centers to T-cell centers. Writes work into
+! Transfer from U-cell centers to T-cell centers. Writes work into 
 ! another array that has ghost cells
-! NOTE: Input array is dimensioned only over physical cells.
 !
 ! !REVISION HISTORY:
 !
@@ -1164,27 +786,23 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !USES:
 !
-      use ice_boundary
-      use ice_work, only: work1
-!
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks),
-     &   intent(inout) ::
-     &   work
+      real (kind=dbl_kind) :: work (ilo:ihi,jlo:jhi)
 !
 !EOP
 !
-      work1(:,:,:) = work(:,:,:)
+      integer (kind=int_kind) :: i, j
 
-      call ice_timer_start(timer_bound)
-      call update_ghost_cells(work1,            bndy_info,
-     &                        field_loc_center, field_type_scalar)
-      call ice_timer_stop(timer_bound)
+      do j=jlo,jhi
+       do i=ilo,ihi
+        work_l1(i,j) = work(i,j)
+       enddo
+      enddo
+      call bound(work_l1)
+      call to_tgrid(work_l1,work)
 
-      call to_tgrid(work1,work)
-
-      end subroutine u2tgrid_vector
+      end subroutine u2tgrid
 
 !=======================================================================
 !BOP
@@ -1193,14 +811,12 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !INTERFACE:
 !
-      subroutine to_tgrid(work1, work2)
+      subroutine to_tgrid(work1,work2)
 !
 ! !DESCRIPTION:
 !
-! Shifts quantities from the U-cell midpoint (work1) to the T-cell
+! Shifts quantities from the U-cell midpoint (work1) to the T-cell 
 ! midpoint (work2)
-! NOTE: Input array includes ghost cells that must be updated before
-!       calling this routine.
 !
 ! !REVISION HISTORY:
 !
@@ -1210,38 +826,317 @@ c $Id: ice_grid.F,v 1.5 2003/11/21 02:29:09 lipscomb Exp $
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind) :: work1(nx_block,ny_block,max_blocks)
-     &,                       work2(nx_block,ny_block,max_blocks)
+      real (kind=dbl_kind) :: work1(imt_local,jmt_local)
+     &,                       work2(ilo:ihi,jlo:jhi)
 !
 !EOP
 !
-      integer (kind=int_kind) ::
-     &   i, j, iblk
-     &,  ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: i, j
 
-      type (block) ::
-     &   this_block           ! block information for current block
-      
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo, jhi
-         do i = ilo, ihi
-            work2(i,j,iblk) = p25 *
-     &                       (work1(i,  j  ,iblk) * uarea(i,  j,  iblk)
-     &                      + work1(i-1,j  ,iblk) * uarea(i-1,j,  iblk)
-     &                      + work1(i,  j-1,iblk) * uarea(i,  j-1,iblk)
-     &                      + work1(i-1,j-1,iblk) * uarea(i-1,j-1,iblk))
-     &                      / tarea(i,  j,  iblk)
-         enddo
-         enddo
+      do j=jlo,jhi
+       do i=ilo,ihi
+       work2(i,j) = p25*(work1(i,j)    * uarea(i,j) 
+     &                 + work1(i-1,j)  * uarea(i-1,j)
+     &                 + work1(i,j-1)  * uarea(i,j-1) 
+     &                 + work1(i-1,j-1)* uarea(i-1,j-1))/tarea(i,j)
+       enddo
       enddo
 
       end subroutine to_tgrid
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: bound - fills ghost cells with boundary information
+!
+! !INTERFACE:
+!
+      subroutine bound(work1)
+!
+! !DESCRIPTION:
+!
+! Fills ghost cells with boundary information
+!
+! !REVISION HISTORY:
+!
+! author: Tony Craig, NCAR
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      real (kind=dbl_kind) :: work1(1)
+!
+!EOP
+!
+      call bound_ijn(1,work1,.true.,.true.,.true.,.true.)
+
+      end subroutine bound
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: bound_sw - fills south and west ghost cells
+!
+! !INTERFACE:
+!
+      subroutine bound_sw(work1)
+!
+! !DESCRIPTION:
+!
+! Fills south and west ghost cells with boundary information
+!
+! !REVISION HISTORY:
+!
+! author: Tony Craig, NCAR
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      real (kind=dbl_kind) :: work1(1)
+!
+!EOP
+!
+      call bound_ijn(1,work1,.false.,.true.,.false.,.true.)
+
+      end subroutine bound_sw
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: bound_narr - fills neighboring ghost cells with boundary info
+!
+! !INTERFACE:
+!
+      subroutine bound_narr(narrays,work1)
+!
+! !DESCRIPTION:
+!
+! Fills neighboring ghost cells with boundary information; 
+! several arrays at once (for performance)
+!
+! !REVISION HISTORY:
+!
+! authors: Tony Craig, NCAR
+!          Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind) :: narrays
+      real (kind=dbl_kind) :: work1(1)
+!
+!EOP
+!
+      call bound_ijn(narrays,work1,.true.,.true.,.true.,.true.)
+
+      end subroutine bound_narr
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: bound_ijn - Periodic/Neumann boundary conditions
+!
+! !INTERFACE:
+!
+      subroutine bound_ijn(nd,work1,north,south,east,west)
+!
+! !DESCRIPTION:
+!
+! Periodic/Neumann conditions for global domain boundaries. \\
+! Assumptions:  a *single* row of ghost cells (num-ghost-cells=1); \\
+! work1 array has form (i-index,j-index,number-arrays)
+!
+! !REVISION HISTORY:
+!
+! authors: Tony Craig, NCAR
+!          Elizabeth Hunke, LANL
+!
+! !USES:
+!
+      use ice_timers
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      integer (kind=int_kind) :: nd
+      real (kind=dbl_kind) :: work1(imt_local,jmt_local,nd)
+      logical (kind=log_kind) :: north,south,east,west
+!
+!EOP
+!
+      integer (kind=int_kind) :: i, j, n
+
+#ifdef _MPI
+      integer (kind=int_kind) :: icnt,jcnt
+     &,   status(MPI_STATUS_SIZE),request(4)
+      real (kind=dbl_kind) :: workw(jlo:jhi,nd),worke(jlo:jhi,nd)
+     &,  workn(ilo-1:ihi+1,nd),works(ilo-1:ihi+1,nd)
+#endif
+
+      call ice_timer_start(10) ! bound
+
+#ifdef _MPI
+      jcnt=(jhi-jlo+1)*nd
+      icnt=(ihi-ilo+1+2*num_ghost_cells)*nd
+
+      !-----------------------------------------------------------------
+      ! west data to east data, west shift
+      !-----------------------------------------------------------------
+      if (east) then
+
+      do n=1,nd
+      do j=jlo,jhi
+      workw(j,n)=work1(ilo,j,n)
+      enddo
+      enddo
+
+      call MPI_SENDRECV(workw,jcnt,MPI_REAL8,nbr_west,my_task,
+     &                  worke,jcnt,MPI_REAL8,nbr_east,nbr_east,
+     &                  MPI_COMM_ICE,status,ierr)
+
+      do n=1,nd
+      do j=jlo,jhi
+      work1(ihi+1,j,n)=worke(j,n)
+      enddo
+      enddo
+
+      endif
+
+      !-----------------------------------------------------------------
+      ! east data to west data, east shift
+      !-----------------------------------------------------------------
+      if (west) then
+
+      do n=1,nd
+      do j=jlo,jhi
+      worke(j,n)=work1(ihi,j,n)
+      enddo
+      enddo
+
+      call MPI_SENDRECV(worke,jcnt,MPI_REAL8,nbr_east,my_task,
+     &                  workw,jcnt,MPI_REAL8,nbr_west,nbr_west,
+     &                  MPI_COMM_ICE,status,ierr)
+
+      do n=1,nd
+      do j=jlo,jhi
+      work1(ilo-1,j,n)=workw(j,n)
+      enddo
+      enddo
+
+      endif
+
+      !-----------------------------------------------------------------
+      ! north data to south data, north shift
+      !-----------------------------------------------------------------
+      if (south) then
+      if (nbr_south /= -1) then
+        call MPI_IRECV(works,
+     &                 icnt,MPI_REAL8,nbr_south,nbr_south,
+     &                 MPI_COMM_ICE,request(1),ierr)
+      else
+
+        do n=1,nd
+        do i=ilo-1,ihi+1
+        work1(i,jlo-1,n)=work1(i,jlo,n)
+        enddo
+        enddo
+
+      endif
+      if (nbr_north /= -1) then
+
+        do n=1,nd
+        do i=ilo-1,ihi+1
+        workn(i,n)=work1(i,jhi,n)
+        enddo
+        enddo
+
+        call MPI_ISEND (workn,
+     &                 icnt,MPI_REAL8,nbr_north,my_task,
+     &                 MPI_COMM_ICE,request(2),ierr)
+      endif
+      if (nbr_north /= -1) then
+        call MPI_WAIT(request(2), status, ierr)
+      endif
+      if (nbr_south /= -1) then
+        call MPI_WAIT(request(1), status, ierr)
+
+        do n=1,nd
+        do i=ilo-1,ihi+1
+        work1(i,jlo-1,n)=works(i,n)
+        enddo
+        enddo
+
+      endif
+      endif
+
+      !-----------------------------------------------------------------
+      ! south data to north data, south shift
+      !-----------------------------------------------------------------
+      if (north) then
+      if (nbr_north /= -1) then
+        call MPI_IRECV(workn,
+     &                 icnt,MPI_REAL8,nbr_north,nbr_north,
+     &                 MPI_COMM_ICE,request(3),ierr)
+      else
+
+        do n=1,nd
+        do i=ilo-1,ihi+1
+        work1(i,jhi+1,n)=work1(i,jhi,n)
+        enddo
+        enddo
+
+      endif
+      if (nbr_south /= -1) then
+
+        do n=1,nd
+        do i=ilo-1,ihi+1
+        works(i,n)=work1(i,jlo,n)
+        enddo
+        enddo
+
+        call MPI_ISEND (works,
+     &                 icnt,MPI_REAL8,nbr_south,my_task,
+     &                 MPI_COMM_ICE,request(4),ierr)
+      endif
+      if (nbr_south /= -1) then
+        call MPI_WAIT(request(4), status, ierr)
+      endif
+      if (nbr_north /= -1) then
+        call MPI_WAIT(request(3), status, ierr)
+
+        do n=1,nd
+        do i=ilo-1,ihi+1
+        work1(i,jhi+1,n)=workn(i,n)
+        enddo
+        enddo
+
+      endif
+      endif
+
+#else
+      !-----------------------------------------------------------------
+      ! single domain
+      !-----------------------------------------------------------------
+ 
+      do n=1,nd
+
+      ! Periodic conditions
+      do j=jlo,jhi
+       work1(ilo-1,j,n) = work1(ihi,j,n)
+       work1(ihi+1,j,n) = work1(ilo,j,n)
+      enddo
+
+      ! Neumann conditions (POP grid land points)
+      do i=ilo-1,ihi+1
+        work1(i,jlo-1,n) = work1(i,jlo,n)
+        work1(i,jhi+1,n) = work1(i,jhi,n)
+      enddo
+
+      enddo  ! n
+#endif
+      call ice_timer_stop(10)  ! bound
+
+      end subroutine bound_ijn
 
 !=======================================================================
 

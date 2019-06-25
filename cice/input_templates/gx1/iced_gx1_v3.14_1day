@@ -1,0 +1,351 @@
+  my_task,e,w,n,s            0           1           3           4          -1
+  
+  
+ --------------------------------
+   CICE model diagnostic output  
+ --------------------------------
+  
+  year_init                 =         1981
+  istep0                    =            0
+  dt                        =    3600.00000000000     
+  npt                       =         8760
+  diagfreq                  =           24
+  print_global              =  F
+  print_points              =  F
+  histfreq                  = m
+  hist_avg                  =  T
+  History data will be averaged over 1 m
+  history_dir               = ./hist/
+  history_file              = iceh
+  dumpfreq                  = m
+  dumpfreq_n                =            1
+  dump_file                 = iced
+  restart                   =  T
+  restart_dir               = ./restart/
+  pointer_file              = ./restart/ice.restart_file
+  ice_ic                    = 
+ default                                                                        
+  
+  grid_type                 = displaced_pole
+  grid_file                 = grid
+  kmt_file                  = kmt
+  kitd                      =            1
+  kcatbound                 =            0
+  kdyn                      =            1
+  ndyn_dt                   =            1
+  ndte                      =          120
+  evp_damping               =  F
+  kstrength                 =            1
+  krdg_partic               =            1
+  krdg_redist               =            1
+  advection                 = remap
+  albicev                   =   0.780000000000000     
+  albicei                   =   0.360000000000000     
+  albsnowv                  =   0.980000000000000     
+  albsnowi                  =   0.700000000000000     
+  fyear_init                =         1981
+  ycycle                    =           20
+  atm_data_type             = LYq
+  atm_data_dir              = /scratch/eclare/DATA/gx1v3/LargeYeager/
+  precip_units              = mm_per_sec
+  oceanmixed_ice            =  T
+  sss_data_type             = default
+  sst_data_type             = clim
+  ocn_data_dir              = /scratch/eclare/DATA/gx1v3/gx1v3/forcing/
+  
+  Grid and subdomain sizes:
+  ------------------------ 
+  
+ Global problem size:     320 x    384
+ Using      8 processors in a      4 x      2 Cartesian decomposition
+ Local array size is:      82 x    194
+ Physical domain is (approximately):      80 x    192
+ Local i,j start for each processor:       2       2
+ Local i,j end   for each processor:      81     193
+  Global i start for each processor:            1          81         161
+         241           1          81         161         241
+  Global j start for each processor:            1           1           1
+           1         193         193         193         193
+  
+  my_task,e,w,n,s            1           2           0           5          -1
+  
+  my_task,e,w,n,s            4           5           7          -1           0
+  
+  my_task,e,w,n,s            5           6           4          -1           1
+  
+  my_task,e,w,n,s            6           7           5          -1           2
+  
+  my_task,e,w,n,s            7           4           6          -1           3
+  
+  my_task,e,w,n,s            2           3           1           6          -1
+  
+  my_task,e,w,n,s            3           0           2           7          -1
+  
+  read_global           11           1  -1.37798797328583     
+   1.57040087157617     
+  read_global           11           2  1.268983659201695E-004
+   6.28311916519786     
+  read_global           11           3   496577.979066340     
+   12507466.1001563     
+  read_global           11           4   2860216.23110321     
+   7213601.29985443     
+  read_global           11           7  -3.12545128475275     
+   3.14159265358979     
+  read_global           12           1  0.000000000000000E+000
+   40.0000000000000     
+ 
+ min/max ULON:  7.270740794332469E-003   359.996210343598     
+ min/max TLON:  -179.996734557126        179.999246794392     
+ min/max ULAT:  -78.9528950890642        89.9773420849808     
+ min/max TLAT:  -78.9534143652830        89.7064096418759     
+  
+ The following variables will be written to the history tape: 
+  
+  description                         units       netcdf variable
+ grid cell mean ice thickness          m             hi          
+ grid cell mean snow thickness         m             hs          
+ snow/ice surface temperature          C             Tsfc        
+ ice area  (aggregate)                               aice        
+ ice velocity (x)                      m/s           uvel        
+ ice velocity (y)                      m/s           vvel        
+ down solar flux                       W/m^2         fswdn       
+ down longwave flux                    W/m^2         flwdn       
+ snowfall rate                         cm/day        snow_ai     
+ rainfall rate                         cm/day        rain_ai     
+ sea surface temperature               C             sst         
+ sea surface salinity                  psu           sss         
+ ocean current (x)                     m/s           uocn        
+ ocean current (y)                     m/s           vocn        
+ freeze/melt potential                 W/m^2         frzmlt      
+ snow/ice/ocn absorbed solar flux      W/m^2         fswabs_ai   
+ snw/ice broad band albedo             %             albsni      
+ latent heat flux                      W/m^2         flat_ai     
+ sensible heat flux                    W/m^2         fsens_ai    
+ upward longwave flux                  W/m^2         flwup_ai    
+ evaporative water flux                cm/day        evap_ai     
+ congelation ice growth                cm/day        congel      
+ frazil ice growth                     cm/day        frazil      
+ snow-ice formation                    cm/day        snoice      
+ top ice melt                          cm/day        meltt       
+ basal ice melt                        cm/day        meltb       
+ lateral ice melt                      cm/day        meltl       
+ freshwtr flx ice to ocn               cm/day        fresh_ai    
+ heat flux ice to ocean                W/m^2         fhnet_ai    
+ SW flux thru ice to ocean             W/m^2         fswthru_ai  
+ atm/ice stress (x)                    N/m^2         strairx     
+ atm/ice stress (y)                    N/m^2         strairy     
+ sea sfc tilt stress (x)               N/m^2         strtltx     
+ sea sfc tilt stress (y)               N/m^2         strtlty     
+ coriolis stress (x)                   N/m^2         strcorx     
+ coriolis stress (y)                   N/m^2         strcory     
+ ocean/ice stress (x)                  N/m^2         strocnx     
+ ocean/ice stress (y)                  N/m^2         strocny     
+ internal ice stress (x)               N/m^2         strintx     
+ internal ice stress (y)               N/m^2         strinty     
+ compressive ice strength              N/m           strength    
+ strain rate (divergence)              %/day         divu        
+ strain rate (shear)                   %/day         shear       
+ norm. principal stress 1                            sig1        
+ norm. principal stress 2                            sig2        
+ volume tendency thermo                cm/day        dvidtt      
+ volume tendency dynamics              cm/day        dvidtd      
+ area tendency thermo                  %/day         daidtt      
+ area tendency dynamics                %/day         daidtd      
+ melt onset date                       day of year   mlt_onset   
+ freeze onset date                     day of year   frz_onset   
+ air temperature                       C             Tair        
+  
+   dt =    3600.0000
+dyn_dt =   3600.0000
+  dte =      30.0000
+tdamp =    1296.0000
+  
+ The thickness categories are:
+  
+ hin_max(n-1) < Cat n < hin_max(n)
+  0.000000000000000E+000  < Cat            1  <   0.644507216819426     
+  0.644507216819426       < Cat            2  <    1.39143349757630     
+   1.39143349757630       < Cat            3  <    2.47017938195989     
+   2.47017938195989       < Cat            4  <    4.56728791885049     
+   4.56728791885049       < Cat            5  <    9.33384181586817     
+  
+  
+istep1:         0    idate:  19810101    sec:         0
+  Initial forcing data year =         1981
+  Final   forcing data year =         2000
+ 
+ Forcing data year =         1981
+ Atmospheric data files:
+ /scratch/eclare/DATA/gx1v3/LargeYeager/MONTHLY/cldf.omip.dat
+ /scratch/eclare/DATA/gx1v3/LargeYeager/MONTHLY/prec.nmyr.dat
+ /scratch/eclare/DATA/gx1v3/LargeYeager/4XDAILY/u_10.1981.dat
+ /scratch/eclare/DATA/gx1v3/LargeYeager/4XDAILY/v_10.1981.dat
+ /scratch/eclare/DATA/gx1v3/LargeYeager/4XDAILY/t_10.1981.dat
+ /scratch/eclare/DATA/gx1v3/LargeYeager/4XDAILY/q_10.1981.dat
+ read ./restart/ice.restart_file
+ dump read at istep=           0  0.000000000000000E+000  0.000000000000000E+000
+ restart file =./restart/iced_gx1_v3.14
+ cat            1  min/max area, vol ice, vol snow, Tsfc, esnon
+  read_global           50           0  0.000000000000000E+000
+  0.977769692472196     
+  read_global           50           0  0.000000000000000E+000
+  0.328676386376632     
+  read_global           50           0  0.000000000000000E+000
+  0.108562806409251     
+  read_global           50           0  -37.0043007103289     
+  0.000000000000000E+000
+  read_global           50           0  -12741786.8328591     
+  0.000000000000000E+000
+ cat            2  min/max area, vol ice, vol snow, Tsfc, esnon
+  read_global           50           0  0.000000000000000E+000
+  0.935130803182865     
+  read_global           50           0  0.000000000000000E+000
+  0.908392229883703     
+  read_global           50           0  0.000000000000000E+000
+  0.252177734646228     
+  read_global           50           0  -39.4648981169085     
+  0.000000000000000E+000
+  read_global           50           0  -31111814.7565807     
+  0.000000000000000E+000
+ cat            3  min/max area, vol ice, vol snow, Tsfc, esnon
+  read_global           50           0  0.000000000000000E+000
+  0.674317015944370     
+  read_global           50           0  0.000000000000000E+000
+   1.13176380722721     
+  read_global           50           0  0.000000000000000E+000
+  0.176034243064726     
+  read_global           50           0  -41.7700851257012     
+  0.000000000000000E+000
+  read_global           50           0  -21625220.1715837     
+  0.000000000000000E+000
+ cat            4  min/max area, vol ice, vol snow, Tsfc, esnon
+  read_global           50           0  0.000000000000000E+000
+  0.394073995809936     
+  read_global           50           0  0.000000000000000E+000
+   1.33623572866239     
+  read_global           50           0  0.000000000000000E+000
+  0.280600064569612     
+  read_global           50           0  -43.4230412457274     
+  0.000000000000000E+000
+  read_global           50           0  -35252737.1767143     
+  0.000000000000000E+000
+ cat            5  min/max area, vol ice, vol snow, Tsfc, esnon
+  read_global           50           0  0.000000000000000E+000
+  0.632084865311189     
+  read_global           50           0  0.000000000000000E+000
+   5.56408388070990     
+  read_global           50           0  0.000000000000000E+000
+  0.960346807787992     
+  read_global           50           0  -45.0893302212078     
+  0.000000000000000E+000
+  read_global           50           0  -120238724.934563     
+  0.000000000000000E+000
+ min/max eicen for each layer
+  read_global           50           0  -25772515.1499116     
+  0.000000000000000E+000
+  read_global           50           0  -24634925.7532653     
+  0.000000000000000E+000
+  read_global           50           0  -23913821.0609571     
+  0.000000000000000E+000
+  read_global           50           0  -23297870.1942199     
+  0.000000000000000E+000
+  read_global           50           0  -78073479.3206030     
+  0.000000000000000E+000
+  read_global           50           0  -75382560.4090643     
+  0.000000000000000E+000
+  read_global           50           0  -72562324.5007202     
+  0.000000000000000E+000
+  read_global           50           0  -68832810.8921992     
+  0.000000000000000E+000
+  read_global           50           0  -97982601.9220642     
+  0.000000000000000E+000
+  read_global           50           0  -95164483.3598224     
+  0.000000000000000E+000
+  read_global           50           0  -91394965.8850642     
+  0.000000000000000E+000
+  read_global           50           0  -86380808.7498272     
+  0.000000000000000E+000
+  read_global           50           0  -110458928.877443     
+  0.000000000000000E+000
+  read_global           50           0  -107168225.212776     
+  0.000000000000000E+000
+  read_global           50           0  -103675388.507372     
+  0.000000000000000E+000
+  read_global           50           0  -99010634.6388988     
+  0.000000000000000E+000
+  read_global           50           0  -472681465.350309     
+  0.000000000000000E+000
+  read_global           50           0  -445396687.869917     
+  0.000000000000000E+000
+  read_global           50           0  -425919617.559745     
+  0.000000000000000E+000
+  read_global           50           0  -409132889.373811     
+  0.000000000000000E+000
+ min/max velocity components
+  read_global           50           0 -0.291471485449594     
+  0.400114169234974     
+  read_global           50           0 -0.303116012865390     
+  0.247841345278860     
+ min/max fresh water and heat flux components
+  read_global           50           0  0.000000000000000E+000
+  7.684782374439536E-005
+  read_global           50           0 -2.114257816189068E-007
+  1.448702641854485E-007
+  read_global           50           0  -23.7995428603326     
+  0.000000000000000E+000
+ min/max ice strength
+  read_global           50           0  0.000000000000000E+000
+   153494.679694839     
+ min/max ocean stress components
+  read_global           50           0 -0.865569256368474     
+  0.479873736659424     
+  read_global           50           0 -0.322904787271450     
+  0.578398378325123     
+ min/max internal stress components (3 per triangle)
+  read_global           50           0  -271087.941368596     
+  0.000000000000000E+000
+  read_global           50           0  -45806.2201580947     
+   32790.4595174827     
+  read_global           50           0  -25066.6619923289     
+   31894.1834166385     
+  read_global           50           0  -272209.282918433     
+  0.000000000000000E+000
+  read_global           50           0  -45878.8156886401     
+   32649.8919849693     
+  read_global           50           0  -25405.1995128044     
+   34885.6015349229     
+  read_global           50           0  -287900.073280162     
+  0.000000000000000E+000
+  read_global           50           0  -45267.7597092344     
+   51273.4922518451     
+  read_global           50           0  -19095.7226943760     
+   35477.4075614153     
+  read_global           50           0  -268554.626758921     
+  0.000000000000000E+000
+  read_global           50           0  -55861.3437032593     
+   45637.2826002758     
+  read_global           50           0  -20141.1773803193     
+   30757.0545689713     
+ ice mask for dynamics
+  read_global           50           0  0.000000000000000E+000
+   1.00000000000000     
+ min/max sst, frzmlt
+  read_global           50           0  -1.83696883115113     
+   32.8259040987685     
+  read_global           50           0  -1000.00000000000     
+   240.262973127389     
+  Current forcing data year =         1981
+  
+ SST data interpolated to timestep:
+ /scratch/eclare/DATA/gx1v3/gx1v3/forcing/sst_clim_hurrell.dat
+ SST restoring timescale =           90  days
+  
+istep1:        24    idate:  19810102    sec:         0
+                                             Arctic                 Antarctic
+max cH (m)             =        6.47408919434729846       4.44454010566475866
+total area (km^2)      =    1.50228028479291964E+07   5.11763807338377833E+06
+total ice volume (m^3) =    1.65788082258300664E+13   6.97232337471469629E+12
+total snw volume (m^3) =    2.45084994987879297E+12   4.95142443104615356E+11
+average albedo         =        0.77876577578744488       0.53937583293829505
+max u, v (m/s)         =        0.38725749431495610       0.34914498604773930
+  

@@ -1,0 +1,32 @@
+#==============================================================================
+# Makefile macros for "jaguar," an ORNL Cray XT3 running Linux
+#==============================================================================
+
+#INCLDIR    := -I. -I/scratch/levesque/BM/ORNL/pop/netcdf-xt3-3.5.1/include 
+INCLDIR    := -I. -I/apps/netcdf/prod/jaguar/include 
+#SLIBS      := -L/scratch/levesque/BM/ORNL/pop/netcdf-xt3-3.5.1/lib -lnetcdf 
+SLIBS      := -L/apps/netcdf/prod/jaguar/lib -lnetcdf 
+ULIBS      := 
+CPP        := /usr/bin/cpp
+CPPFLAGS   := -P -traditional-cpp -DPOSIX
+CPPDEFS    := -DLINUX 
+CFLAGS     := -c -fastsse -tp k8-64
+FIXEDFLAGS := -Mfixed
+FREEFLAGS  := -Mfree
+FC         := ftn
+#FFLAGS     := $(INCLDIR) -O3 -byteswapio
+FFLAGS     := $(INCLDIR) -g -O3 -byteswapio -fastsse -tp k8-64 -Knoieee -Mextend -Mdaz 
+#FFLAGS     := $(INCLDIR) -O3 -byteswapio -Ktrap=inv,divz,ovf,unf
+#FFLAGS     := $(INCLDIR) -O3 -byteswapio -Mflushz
+MOD_SUFFIX := mod
+LD         := ftn
+LDFLAGS    := 
+
+   CPPDEFS :=  $(CPPDEFS)  -DNPROC_X=$(NX) -DNPROC_Y=$(NY)
+#   CPPDEFS :=  $(CPPDEFS)  -Dfcd_coupled -Dcoupled
+
+ifeq ($(BINTYPE), MPI)
+   CPPDEFS :=  $(CPPDEFS) -D_MPI
+#   SLIBS   :=  $(SLIBS) -lmpich
+endif
+

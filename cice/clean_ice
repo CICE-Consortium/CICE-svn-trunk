@@ -1,13 +1,15 @@
 #! /bin/csh -f
 
-#Change to your own paths!
-setenv SYSTEM_USERDIR /scratch/lipscomb
+# SYSTEM_USERDIR is predefined on ORNL machines
+setenv SYSTEM_USERDIR /scratch/eclare
+#setenv SYSTEM_USERDIR /scratch1/eclare  # epiphany
+#setenv SYSTEM_USERDIR /scr/eclare
 
-#setenv SRCDIR $HOME/cice.v4.0/cice
-setenv SRCDIR /net/bob4/lipscomb/cice.v4.0/cice
+setenv SRCDIR /net/bob4/eclare/CODE/CICE_release/CICE.v3.14/cice  # mauve
+#setenv SRCDIR $HOME/cice.v3.14/cice   
 
 setenv CBLD   $SRCDIR/bld
-setenv EXEDIR $SYSTEM_USERDIR/rundir.v4.0
+setenv EXEDIR $SYSTEM_USERDIR/rundir
 setenv OBJDIR $EXEDIR/compile
 
 cd $OBJDIR

@@ -1,9 +1,9 @@
-c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
+! CVS: $Id: ice_history.F,v 1.36 2006/09/12 21:48:02 eclare Exp $ 
 !=======================================================================
 !
 !BOP
 !
-! !MODULE: ice_history - ice model history files
+! !MODULE: ice_history - ice model history and restart files
 !
 ! !DESCRIPTION:
 !
@@ -11,11 +11,11 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
 !
 ! !REVISION HISTORY:
 !
-! authors Tony Craig and Bruce Briegleb, NCAR
-!         Elizabeth C. Hunke and William H. Lipscomb, LANL
+! authors Tony Craig, NCAR
+!         Elizabeth C. Hunke, LANL
 !         C. M. Bitz, UW
-!
-! 2004: Block structure added by William Lipscomb
+!         Bruce P. Briegleb, NCAR
+!         William H. Lipscomb, LANL
 !
 ! !INTERFACE:
 !
@@ -24,30 +24,31 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
 ! !USES:
 !
       use ice_kinds_mod
-      use ice_communicate, only: my_task, master_task
-      use ice_blocks
+      use ice_domain
       use ice_read_write
       use ice_fileunits
+      use ice_work, only: work_g1, work_gr, worka
 !
 !EOP
 !
       implicit none
       save
-      
+
       logical (kind=log_kind) ::
-     &   hist_avg  ! if true, write averaged data instead of snapshots
+     &   restart ! if true, initialize using restart file instead of defaults
+     &,  hist_avg  ! if true, write averaged data instead of snapshots
 
       character (len=char_len) ::
-     &   history_file      ! output file for history
-     &,  incond_file       ! output file for snapshot initial conditions
+     &   dump_file         ! output file for restart dump
+     &,  history_file      ! output file for history 
 
-      character (len=char_len_long) ::
-     &   history_dir       ! directory name for history file
-     &,  incond_dir        ! directory for snapshot initial conditions
+      character (len=char_len_long) :: 
+     &   restart_dir       ! directory name for restart dump
+     &,  history_dir       ! directory name for history file
 
-      character (len=char_len_long) ::
+      character (len=char_len_long) :: 
      &   pointer_file      ! input pointer file for restarts
-
+         
       !---------------------------------------------------------------
       ! Instructions for adding a field:
       !     Here:
@@ -65,7 +66,8 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       ! (11) Specify unit conversion factor if necessary
       ! (12) Increment the field in ice_write_hist
       !
-      ! Note: Ice area and volume fields defined for ncat <= 10
+      ! Note: Ice area and volume fields defined for all categories.
+      ! To change this behavior, alter ncat_hist below.
       !---------------------------------------------------------------
 
       !---------------------------------------------------------------
@@ -73,16 +75,14 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       !---------------------------------------------------------------
 
       integer (kind=int_kind), parameter ::
-     &   avgsiz = 94       ! number of fields that can be written
-
-      real (kind=dbl_kind), 
-     &   dimension (nx_block,ny_block,avgsiz,max_blocks) ::
-     &   aa                ! field accumulations and averages
+     &   ncat_hist = ncat           ! number of ice categories written <= ncat
+     &,  avgsiz = 75 + 2*ncat_hist  ! number of fields that can be written
 
       real (kind=dbl_kind) ::
-     &   avgct             ! average sample counter
-     &,  cona(avgsiz)      ! multiplicative conversion factor
-     &,  conb(avgsiz)      ! additive conversion factor
+     &   avgct                      ! average sample counter
+     &,  aa(ilo:ihi,jlo:jhi,avgsiz) ! field accumulations and averages
+     &,  cona(avgsiz)               ! multiplicative conversion factor
+     &,  conb(avgsiz)               ! additive conversion factor
 
       logical (kind=log_kind) ::
      &   iout(avgsiz)      ! true if field is written to output file
@@ -102,6 +102,7 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
 
       !---------------------------------------------------------------
       ! logical flags: write to output file if true
+      ! Set default values to true
       !---------------------------------------------------------------
 
       logical (kind=log_kind) ::
@@ -128,7 +129,7 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
      &,    f_meltb     = .true., f_meltl      = .true.
      &,    f_fresh     = .true., f_fresh_ai   = .true.
      &,    f_fsalt     = .true., f_fsalt_ai   = .true. 
-     &,    f_fhocn     = .true., f_fhocn_ai   = .true.
+     &,    f_fhnet     = .true., f_fhnet_ai   = .true.
      &,    f_fswthru   = .true., f_fswthru_ai = .true.
      &,    f_strairx   = .true., f_strairy    = .true.
      &,    f_strtltx   = .true., f_strtlty    = .true.
@@ -144,16 +145,8 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
      &,    f_dardg1dt  = .true., f_dardg2dt   = .true.
      &,    f_dvirdgdt  = .true. 
      &,    f_hisnap    = .true., f_aisnap     = .true.
-     &,    f_aice1     = .true., f_aice2      = .true.
-     &,    f_aice3     = .true., f_aice4      = .true.
-     &,    f_aice5     = .true., f_aice6      = .true.
-     &,    f_aice7     = .true., f_aice8      = .true.
-     &,    f_aice9     = .true., f_aice10     = .true.
-     &,    f_vice1     = .true., f_vice2      = .true.
-     &,    f_vice3     = .true., f_vice4      = .true.
-     &,    f_vice5     = .true., f_vice6      = .true.
-     &,    f_vice7     = .true., f_vice8      = .true.
-     &,    f_vice9     = .true., f_vice10     = .true.
+     &,    f_aicen     = .true., f_vicen      = .true.
+     &,    f_trsig     = .true.
 
       !---------------------------------------------------------------
       ! namelist variables (same as logical flags)
@@ -176,14 +169,14 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
      &,    f_fsens,     f_fsens_ai
      &,    f_flwup,     f_flwup_ai
      &,    f_evap,      f_evap_ai
-     &,    f_Tair
+     &,    f_Tair      
      &,    f_Tref,      f_Qref     
      &,    f_congel,    f_frazil
      &,    f_snoice,    f_meltt
      &,    f_meltb,     f_meltl
      &,    f_fresh,     f_fresh_ai  
      &,    f_fsalt,     f_fsalt_ai
-     &,    f_fhocn,     f_fhocn_ai
+     &,    f_fhnet,     f_fhnet_ai
      &,    f_fswthru,   f_fswthru_ai
      &,    f_strairx,   f_strairy
      &,    f_strtltx,   f_strtlty
@@ -199,16 +192,8 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
      &,    f_dardg1dt,  f_dardg2dt
      &,    f_dvirdgdt
      &,    f_hisnap,    f_aisnap
-     &,    f_aice1,     f_aice2
-     &,    f_aice3,     f_aice4
-     &,    f_aice5,     f_aice6
-     &,    f_aice7,     f_aice8
-     &,    f_aice9,     f_aice10
-     &,    f_vice1,     f_vice2
-     &,    f_vice3,     f_vice4
-     &,    f_vice5,     f_vice6
-     &,    f_vice7,     f_vice8
-     &,    f_vice9,     f_vice10
+     &,    f_aicen,     f_vicen
+     &,    f_trsig
 
       !---------------------------------------------------------------
       ! field indices
@@ -255,8 +240,8 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
      &,    n_fresh_ai   = 38
      &,    n_fsalt      = 39
      &,    n_fsalt_ai   = 40
-     &,    n_fhocn      = 41
-     &,    n_fhocn_ai   = 42
+     &,    n_fhnet      = 41
+     &,    n_fhnet_ai   = 42
      &,    n_fswthru    = 43
      &,    n_fswthru_ai = 44
      &,    n_strairx    = 45
@@ -281,34 +266,17 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
      &,    n_mlt_onset  = 64
      &,    n_frz_onset  = 65
      &,    n_opening    = 66
-     &,    n_aice1      = 67
-     &,    n_aice2      = 68
-     &,    n_aice3      = 69
-     &,    n_aice4      = 70
-     &,    n_aice5      = 71
-     &,    n_aice6      = 72
-     &,    n_aice7      = 73
-     &,    n_aice8      = 74
-     &,    n_aice9      = 75
-     &,    n_aice10     = 76
-     &,    n_vice1      = 77
-     &,    n_vice2      = 78
-     &,    n_vice3      = 79
-     &,    n_vice4      = 80
-     &,    n_vice5      = 81
-     &,    n_vice6      = 82
-     &,    n_vice7      = 83
-     &,    n_vice8      = 84
-     &,    n_vice9      = 85
-     &,    n_vice10     = 86
-     &,    n_alvdr      = 87
-     &,    n_alidr      = 88
-     &,    n_dardg1dt   = 89
-     &,    n_dardg2dt   = 90
-     &,    n_dvirdgdt   = 91
-     &,    n_hisnap     = 92
-     &,    n_aisnap     = 93
-     &,    n_Tair       = 94
+     &,    n_alvdr      = 67
+     &,    n_alidr      = 68
+     &,    n_dardg1dt   = 69
+     &,    n_dardg2dt   = 70
+     &,    n_dvirdgdt   = 71
+     &,    n_hisnap     = 72
+     &,    n_aisnap     = 73
+     &,    n_Tair       = 74
+     &,    n_trsig      = 75
+     &,    n_aicen      = 76 ! n_aicen, n_vicen must be last in this list
+     &,    n_vicen      = 77 + ncat_hist - 1
 
 !=======================================================================
 
@@ -322,7 +290,7 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
 !
 ! !INTERFACE:
 !
-      subroutine init_hist (dt)
+      subroutine init_hist
 !
 ! !DESCRIPTION:
 !
@@ -334,24 +302,27 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
 !         Elizabeth C. Hunke, LANL
 !         C.M. Bitz, UW
 !         Bruce P. Briegleb, NCAR
-!         William H. Lipscomb, LANL
 !
 ! !USES:
 !
       use ice_constants
-      use ice_calendar, only: yday
+      use ice_calendar
       use ice_flux, only: mlt_onset, frz_onset
-      use ice_restart, only: restart
+      use ice_exit
+#ifdef CCSMcoupled
+      use shr_sys_mod, only : shr_sys_flush
+#endif
+
 !
 ! !INPUT/OUTPUT PARAMETERS:
-!
-      real (kind=dbl_kind), intent(in) ::
-     &   dt      ! time step
 !
 !EOP
 !
       integer (kind=int_kind) :: n, k
       integer (kind=int_kind) :: nml_error ! namelist i/o error flag
+
+      character (len=3) :: nchar
+      character (len=30) :: tmp
 
       !---------------------------------------------------------------
       ! field names
@@ -400,8 +371,8 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vname(n_fresh_ai  ) = 'fresh_ai' 
       vname(n_fsalt     ) = 'fsalt'  
       vname(n_fsalt_ai  ) = 'fsalt_ai'  
-      vname(n_fhocn     ) = 'fhocn'  
-      vname(n_fhocn_ai  ) = 'fhocn_ai'
+      vname(n_fhnet     ) = 'fhnet'  
+      vname(n_fhnet_ai  ) = 'fhnet_ai'
       vname(n_fswthru   ) = 'fswthru ' 
       vname(n_fswthru_ai) = 'fswthru_ai'
       vname(n_strairx   ) = 'strairx'
@@ -431,26 +402,14 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vname(n_dvirdgdt  ) = 'dvirdgdt'
       vname(n_hisnap    ) = 'hisnap'
       vname(n_aisnap    ) = 'aisnap'
-      vname(n_aice1     ) = 'aice1'
-      vname(n_aice2     ) = 'aice2'
-      vname(n_aice3     ) = 'aice3'
-      vname(n_aice4     ) = 'aice4'
-      vname(n_aice5     ) = 'aice5'
-      vname(n_aice6     ) = 'aice6'
-      vname(n_aice7     ) = 'aice7'
-      vname(n_aice8     ) = 'aice8'
-      vname(n_aice9     ) = 'aice9'
-      vname(n_aice10    ) = 'aice10'
-      vname(n_vice1     ) = 'vice1'
-      vname(n_vice2     ) = 'vice2'
-      vname(n_vice3     ) = 'vice3'
-      vname(n_vice4     ) = 'vice4'
-      vname(n_vice5     ) = 'vice5'
-      vname(n_vice6     ) = 'vice6'
-      vname(n_vice7     ) = 'vice7'
-      vname(n_vice8     ) = 'vice8'
-      vname(n_vice9     ) = 'vice9'
-      vname(n_vice10    ) = 'vice10'
+      vname(n_trsig     ) = 'trsig'
+      do n = 1, ncat_hist
+        write(nchar,'(i3.3)') n
+        write(vname(n_aicen+n-1),'(a,a)') 'aice', trim(nchar) ! aicen
+        write(vname(n_vicen+n-1),'(a,a)') 'vice', trim(nchar) ! aicen
+        vname(n_aicen+n-1) = trim(vname(n_aicen+n-1))
+        vname(n_vicen+n-1) = trim(vname(n_vicen+n-1))
+      enddo
 
       !---------------------------------------------------------------
       ! field descriptions
@@ -499,8 +458,8 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vdesc(n_fresh_ai  ) = 'freshwtr flx ice to ocn'
       vdesc(n_fsalt     ) = 'salt flux ice to ocn (cpl)'  
       vdesc(n_fsalt_ai  ) = 'salt flux ice to ocean'   
-      vdesc(n_fhocn     ) = 'heat flux ice to ocn (cpl)'  
-      vdesc(n_fhocn_ai  ) = 'heat flux ice to ocean'        
+      vdesc(n_fhnet     ) = 'heat flux ice to ocn (cpl)'  
+      vdesc(n_fhnet_ai  ) = 'heat flux ice to ocean'        
       vdesc(n_fswthru   ) = 'SW thru ice to ocean (cpl)'  
       vdesc(n_fswthru_ai) = 'SW flux thru ice to ocean'
       vdesc(n_strairx   ) = 'atm/ice stress (x)'          
@@ -530,26 +489,18 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vdesc(n_dvirdgdt  ) = 'ice volume ridging rate'     
       vdesc(n_hisnap    ) = 'ice volume snapshot'         
       vdesc(n_aisnap    ) = 'ice area snapshot' 
-      vdesc(n_aice1     ) = 'ice area (category 1)'
-      vdesc(n_aice2     ) = 'ice area (category 2)'
-      vdesc(n_aice3     ) = 'ice area (category 3)'
-      vdesc(n_aice4     ) = 'ice area (category 4)'
-      vdesc(n_aice5     ) = 'ice area (category 5)'
-      vdesc(n_aice6     ) = 'ice area (category 6)'
-      vdesc(n_aice7     ) = 'ice area (category 7)'
-      vdesc(n_aice8     ) = 'ice area (category 8)'
-      vdesc(n_aice9     ) = 'ice area (category 9)'
-      vdesc(n_aice10    ) = 'ice area (category 10)'
-      vdesc(n_vice1     ) = 'ice volume (category 1)'
-      vdesc(n_vice2     ) = 'ice volume (category 2)'
-      vdesc(n_vice3     ) = 'ice volume (category 3)'
-      vdesc(n_vice4     ) = 'ice volume (category 4)'
-      vdesc(n_vice5     ) = 'ice volume (category 5)'
-      vdesc(n_vice6     ) = 'ice volume (category 6)'
-      vdesc(n_vice7     ) = 'ice volume (category 7)'
-      vdesc(n_vice8     ) = 'ice volume (category 8)'
-      vdesc(n_vice9     ) = 'ice volume (category 9)'
-      vdesc(n_vice10    ) = 'ice volume (category 10)'
+      vdesc(n_trsig     ) = 'internal stress tensor trace'
+      do n = 1, ncat_hist
+        write(nchar,'(i3)') n
+
+        tmp = 'ice area, category '   ! aicen
+        write(vdesc(n_aicen+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
+        vdesc(n_aicen+n-1) = trim(vdesc(n_aicen+n-1))
+
+        tmp = 'ice volume, category ' ! vicen
+        write(vdesc(n_vicen+n-1),'(a,2x,a)') trim(tmp), trim(nchar)
+        vdesc(n_vicen+n-1) = trim(vdesc(n_vicen+n-1))
+      enddo
 
       !---------------------------------------------------------------
       ! field units
@@ -561,9 +512,6 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vunit(n_aice      ) = ' '
       vunit(n_uvel      ) = 'm/s'
       vunit(n_vvel      ) = 'm/s'
-!csim      vunit(n_aice      ) = '%'
-!csim      vunit(n_uvel      ) = 'cm/s'
-!csim      vunit(n_vvel      ) = 'cm/s'
       vunit(n_fswdn     ) = 'W/m^2'
       vunit(n_flwdn     ) = 'W/m^2'
       vunit(n_snow      ) = 'cm/day'
@@ -574,8 +522,6 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vunit(n_sss       ) = 'psu'
       vunit(n_uocn      ) = 'm/s'
       vunit(n_vocn      ) = 'm/s'
-!csim      vunit(n_uocn      ) = 'cm/s'
-!csim      vunit(n_vocn      ) = 'cm/s'
       vunit(n_frzmlt    ) = 'W/m^2'
       vunit(n_fswabs    ) = 'W/m^2'
       vunit(n_fswabs_ai ) = 'W/m^2'
@@ -603,10 +549,8 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vunit(n_fresh_ai  ) = 'cm/day'
       vunit(n_fsalt     ) = 'kg/m^2 s'
       vunit(n_fsalt_ai  ) = 'kg/m^2 s'
-!csim      vunit(n_fsalt     ) = 'kg/m^2/day'
-!csim      vunit(n_fsalt_ai  ) = 'kg/m^2/day'
-      vunit(n_fhocn     ) = 'W/m^2'
-      vunit(n_fhocn_ai  ) = 'W/m^2'
+      vunit(n_fhnet     ) = 'W/m^2'
+      vunit(n_fhnet_ai  ) = 'W/m^2'
       vunit(n_fswthru   ) = 'W/m^2'
       vunit(n_fswthru_ai) = 'W/m^2'
       vunit(n_strairx   ) = 'N/m^2'
@@ -636,36 +580,25 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vunit(n_dvirdgdt  ) = 'cm/day'
       vunit(n_hisnap    ) = 'm'
       vunit(n_aisnap    ) = ' ' 
-      vunit(n_aice1     ) = ' '
-      vunit(n_aice2     ) = ' '
-      vunit(n_aice3     ) = ' '
-      vunit(n_aice4     ) = ' '
-      vunit(n_aice5     ) = ' '
-      vunit(n_aice6     ) = ' '
-      vunit(n_aice7     ) = ' '
-      vunit(n_aice8     ) = ' '
-      vunit(n_aice9     ) = ' '
-      vunit(n_aice10    ) = ' '
-!csim      vunit(n_aice1     ) = '%'
-!csim      vunit(n_aice2     ) = '%'
-!csim      vunit(n_aice3     ) = '%'
-!csim      vunit(n_aice4     ) = '%'
-!csim      vunit(n_aice5     ) = '%'
-!csim      vunit(n_aice6     ) = '%'
-!csim      vunit(n_aice7     ) = '%'
-!csim      vunit(n_aice8     ) = '%'
-!csim      vunit(n_aice9     ) = '%'
-!csim      vunit(n_aice10    ) = '%'
-      vunit(n_vice1     ) = 'm'
-      vunit(n_vice2     ) = 'm'
-      vunit(n_vice3     ) = 'm'
-      vunit(n_vice4     ) = 'm'
-      vunit(n_vice5     ) = 'm'
-      vunit(n_vice6     ) = 'm'
-      vunit(n_vice7     ) = 'm'
-      vunit(n_vice8     ) = 'm'
-      vunit(n_vice9     ) = 'm'
-      vunit(n_vice10    ) = 'm'
+      vunit(n_trsig     ) = 'N/m^2'
+      do n = 1, ncat_hist
+        vunit(n_aicen+n-1) = ' ' ! aicen
+        vunit(n_vicen+n-1) = 'm' ! vicen
+      enddo
+
+#ifdef CCSM
+      ! redefine for CCSM conventions
+      vunit(n_aice      ) = '%'
+      vunit(n_uvel      ) = 'cm/s'
+      vunit(n_vvel      ) = 'cm/s'
+      vunit(n_uocn      ) = 'cm/s'
+      vunit(n_vocn      ) = 'cm/s'
+      vunit(n_fsalt     ) = 'kg/m^2/day'
+      vunit(n_fsalt_ai  ) = 'kg/m^2/day'
+      do n = 1, ncat_hist
+        vunit(n_aicen+n-1) = '%' ! aicen
+      enddo
+#endif
 
       !---------------------------------------------------------------
       ! field comments
@@ -714,8 +647,8 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vcomment(n_fresh_ai  ) = 'weighted by ice area'
       vcomment(n_fsalt     ) = 'if positive, ocean gains salt'
       vcomment(n_fsalt_ai  ) = 'weighted by ice area'
-      vcomment(n_fhocn     ) = 'if positive, ocean gains heat'
-      vcomment(n_fhocn_ai  ) = 'weighted by ice area'
+      vcomment(n_fhnet     ) = 'if positive, ocean gains heat'
+      vcomment(n_fhnet_ai  ) = 'weighted by ice area'
       vcomment(n_fswthru   ) = 'if positive, ocean gains heat'
       vcomment(n_fswthru_ai) = 'weighted by ice area'
       vcomment(n_strairx   ) = 'positive is x direction on U grid'
@@ -745,132 +678,107 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       vcomment(n_dvirdgdt  ) = 'none'
       vcomment(n_hisnap    ) = 'none'
       vcomment(n_aisnap    ) = 'none' 
-      vcomment(n_aice1     ) = 'Ice range:'  ! These comments are generated
-      vcomment(n_aice2     ) = 'Ice range:'  ! below where the limits of the
-      vcomment(n_aice3     ) = 'Ice range:'  ! thickness category are appended.
-      vcomment(n_aice4     ) = 'Ice range:'
-      vcomment(n_aice5     ) = 'Ice range:'
-      vcomment(n_aice6     ) = 'Ice range:'
-      vcomment(n_aice7     ) = 'Ice range:'
-      vcomment(n_aice8     ) = 'Ice range:'
-      vcomment(n_aice9     ) = 'Ice range:'
-      vcomment(n_aice10    ) = 'Ice range:'
-      vcomment(n_vice1     ) = 'none'
-      vcomment(n_vice2     ) = 'none'
-      vcomment(n_vice3     ) = 'none'
-      vcomment(n_vice4     ) = 'none'
-      vcomment(n_vice5     ) = 'none'
-      vcomment(n_vice6     ) = 'none'
-      vcomment(n_vice7     ) = 'none'
-      vcomment(n_vice8     ) = 'none'
-      vcomment(n_vice9     ) = 'none'
-      vcomment(n_vice10    ) = 'none'
+      vcomment(n_trsig     ) = 'ice strength approximation' 
+      do n = 1, ncat_hist
+        vcomment(n_aicen+n-1) = 'Ice range:' ! aicen
+        vcomment(n_vicen+n-1) = 'none' ! vicen
+      enddo
 
       !-----------------------------------------------------------------
       ! read namelist
       !-----------------------------------------------------------------
-      nml_error = -1
-      open (nu_nml, file=nml_filename, status='old')
-   10 continue       !*** keep reading until right namelist is found
-      read(nu_nml, nml=icefields_nml,err=10,end=20)
-      close(nu_nml)
-      nml_error = 0
-   20 continue
+      if (my_task == master_task) then
+         nml_error = -1
+         open (nu_nml, file='ice_in', status='old')
+   10    continue       !*** keep reading until right namelist is found
+         read(nu_nml, nml=icefields_nml,err=10,end=20)
+         close(nu_nml)
+         nml_error = 0
+   20    continue
+      endif
 
-      call broadcast_scalar (f_hi, master_task)
-      call broadcast_scalar (f_hs, master_task)
-      call broadcast_scalar (f_Tsfc, master_task)
-      call broadcast_scalar (f_aice, master_task)
-      call broadcast_scalar (f_uvel, master_task)
-      call broadcast_scalar (f_vvel, master_task)
-      call broadcast_scalar (f_fswdn, master_task)
-      call broadcast_scalar (f_flwdn, master_task)
-      call broadcast_scalar (f_snow, master_task)
-      call broadcast_scalar (f_snow_ai, master_task)
-      call broadcast_scalar (f_rain, master_task)
-      call broadcast_scalar (f_rain_ai, master_task)
-      call broadcast_scalar (f_sst, master_task)
-      call broadcast_scalar (f_sss, master_task)
-      call broadcast_scalar (f_uocn, master_task)
-      call broadcast_scalar (f_vocn, master_task)
-      call broadcast_scalar (f_frzmlt, master_task)
-      call broadcast_scalar (f_fswabs, master_task)
-      call broadcast_scalar (f_fswabs_ai, master_task)
-      call broadcast_scalar (f_albsni, master_task)
-      call broadcast_scalar (f_alvdr, master_task)
-      call broadcast_scalar (f_alidr, master_task)
-      call broadcast_scalar (f_flat, master_task)
-      call broadcast_scalar (f_flat_ai, master_task)
-      call broadcast_scalar (f_fsens, master_task)
-      call broadcast_scalar (f_fsens_ai, master_task)
-      call broadcast_scalar (f_flwup, master_task)
-      call broadcast_scalar (f_flwup_ai, master_task)
-      call broadcast_scalar (f_evap, master_task)
-      call broadcast_scalar (f_evap_ai, master_task)
-      call broadcast_scalar (f_Tair, master_task)
-      call broadcast_scalar (f_Tref, master_task)
-      call broadcast_scalar (f_Qref, master_task)
-      call broadcast_scalar (f_congel, master_task)
-      call broadcast_scalar (f_frazil, master_task)
-      call broadcast_scalar (f_snoice, master_task)
-      call broadcast_scalar (f_meltt, master_task)
-      call broadcast_scalar (f_meltb, master_task)
-      call broadcast_scalar (f_meltl, master_task)
-      call broadcast_scalar (f_fresh, master_task)
-      call broadcast_scalar (f_fresh_ai, master_task)
-      call broadcast_scalar (f_fsalt, master_task)
-      call broadcast_scalar (f_fsalt_ai, master_task)
-      call broadcast_scalar (f_fhocn, master_task)
-      call broadcast_scalar (f_fhocn_ai, master_task)
-      call broadcast_scalar (f_fswthru, master_task)
-      call broadcast_scalar (f_fswthru_ai, master_task)
-      call broadcast_scalar (f_strairx, master_task)
-      call broadcast_scalar (f_strairy, master_task)
-      call broadcast_scalar (f_strtltx, master_task)
-      call broadcast_scalar (f_strtlty, master_task)
-      call broadcast_scalar (f_strcorx, master_task)
-      call broadcast_scalar (f_strcory, master_task)
-      call broadcast_scalar (f_strocnx, master_task)
-      call broadcast_scalar (f_strocny, master_task)
-      call broadcast_scalar (f_strintx, master_task)
-      call broadcast_scalar (f_strinty, master_task)
-      call broadcast_scalar (f_strength, master_task)
-      call broadcast_scalar (f_opening, master_task)
-      call broadcast_scalar (f_divu, master_task)
-      call broadcast_scalar (f_shear, master_task)
-      call broadcast_scalar (f_sig1, master_task)
-      call broadcast_scalar (f_sig2, master_task)
-      call broadcast_scalar (f_dvidtt, master_task)
-      call broadcast_scalar (f_dvidtd, master_task)
-      call broadcast_scalar (f_daidtt, master_task)
-      call broadcast_scalar (f_daidtd, master_task)
-      call broadcast_scalar (f_mlt_onset, master_task)
-      call broadcast_scalar (f_frz_onset, master_task)
-      call broadcast_scalar (f_dardg1dt, master_task)
-      call broadcast_scalar (f_dardg2dt, master_task)
-      call broadcast_scalar (f_dvirdgdt, master_task)
-      call broadcast_scalar (f_aisnap, master_task)
-      call broadcast_scalar (f_hisnap, master_task)
-      call broadcast_scalar (f_aice1, master_task)
-      call broadcast_scalar (f_aice2, master_task)
-      call broadcast_scalar (f_aice3, master_task)
-      call broadcast_scalar (f_aice4, master_task)
-      call broadcast_scalar (f_aice5, master_task)
-      call broadcast_scalar (f_aice6, master_task)
-      call broadcast_scalar (f_aice7, master_task)
-      call broadcast_scalar (f_aice8, master_task)
-      call broadcast_scalar (f_aice9, master_task)
-      call broadcast_scalar (f_aice10, master_task)
-      call broadcast_scalar (f_vice1, master_task)
-      call broadcast_scalar (f_vice2, master_task)
-      call broadcast_scalar (f_vice3, master_task)
-      call broadcast_scalar (f_vice4, master_task)
-      call broadcast_scalar (f_vice5, master_task)
-      call broadcast_scalar (f_vice6, master_task)
-      call broadcast_scalar (f_vice7, master_task)
-      call broadcast_scalar (f_vice8, master_task)
-      call broadcast_scalar (f_vice9, master_task)
-      call broadcast_scalar (f_vice10, master_task)
+      call ice_bcast_iscalar(nml_error)
+      if (nml_error /= 0) then
+        call abort_ice ('ice: Namelist read error in ice_history.F')
+      endif
+
+      call ice_bcast_logical (f_hi)
+      call ice_bcast_logical (f_hs)
+      call ice_bcast_logical (f_Tsfc)
+      call ice_bcast_logical (f_aice)
+      call ice_bcast_logical (f_uvel)
+      call ice_bcast_logical (f_vvel)
+      call ice_bcast_logical (f_fswdn)
+      call ice_bcast_logical (f_flwdn)
+      call ice_bcast_logical (f_snow)
+      call ice_bcast_logical (f_snow_ai)
+      call ice_bcast_logical (f_rain)
+      call ice_bcast_logical (f_rain_ai)
+      call ice_bcast_logical (f_sst)
+      call ice_bcast_logical (f_sss)
+      call ice_bcast_logical (f_uocn)
+      call ice_bcast_logical (f_vocn)
+      call ice_bcast_logical (f_frzmlt)
+      call ice_bcast_logical (f_fswabs)
+      call ice_bcast_logical (f_fswabs_ai)
+      call ice_bcast_logical (f_albsni)
+      call ice_bcast_logical (f_alvdr)
+      call ice_bcast_logical (f_alidr)
+      call ice_bcast_logical (f_flat)
+      call ice_bcast_logical (f_flat_ai)
+      call ice_bcast_logical (f_fsens)
+      call ice_bcast_logical (f_fsens_ai)
+      call ice_bcast_logical (f_flwup)
+      call ice_bcast_logical (f_flwup_ai)
+      call ice_bcast_logical (f_evap)
+      call ice_bcast_logical (f_evap_ai)
+      call ice_bcast_logical (f_Tair)
+      call ice_bcast_logical (f_Tref)
+      call ice_bcast_logical (f_Qref)
+      call ice_bcast_logical (f_congel)
+      call ice_bcast_logical (f_frazil)
+      call ice_bcast_logical (f_snoice)
+      call ice_bcast_logical (f_meltt)
+      call ice_bcast_logical (f_meltb)
+      call ice_bcast_logical (f_meltl)
+      call ice_bcast_logical (f_fresh)
+      call ice_bcast_logical (f_fresh_ai)
+      call ice_bcast_logical (f_fsalt)
+      call ice_bcast_logical (f_fsalt_ai)
+      call ice_bcast_logical (f_fhnet)
+      call ice_bcast_logical (f_fhnet_ai)
+      call ice_bcast_logical (f_fswthru)
+      call ice_bcast_logical (f_fswthru_ai)
+      call ice_bcast_logical (f_strairx)
+      call ice_bcast_logical (f_strairy)
+      call ice_bcast_logical (f_strtltx)
+      call ice_bcast_logical (f_strtlty)
+      call ice_bcast_logical (f_strcorx)
+      call ice_bcast_logical (f_strcory)
+      call ice_bcast_logical (f_strocnx)
+      call ice_bcast_logical (f_strocny)
+      call ice_bcast_logical (f_strintx)
+      call ice_bcast_logical (f_strinty)
+      call ice_bcast_logical (f_strength)
+      call ice_bcast_logical (f_opening)
+      call ice_bcast_logical (f_divu)
+      call ice_bcast_logical (f_shear)
+      call ice_bcast_logical (f_sig1)
+      call ice_bcast_logical (f_sig2)
+      call ice_bcast_logical (f_dvidtt)
+      call ice_bcast_logical (f_dvidtd)
+      call ice_bcast_logical (f_daidtt)
+      call ice_bcast_logical (f_daidtd)
+      call ice_bcast_logical (f_mlt_onset)
+      call ice_bcast_logical (f_frz_onset)
+      call ice_bcast_logical (f_dardg1dt)
+      call ice_bcast_logical (f_dardg2dt)
+      call ice_bcast_logical (f_dvirdgdt)
+      call ice_bcast_logical (f_aisnap)
+      call ice_bcast_logical (f_hisnap)
+      call ice_bcast_logical (f_aicen)
+      call ice_bcast_logical (f_vicen)
+      call ice_bcast_logical (f_trsig)
 
       !-----------------------------------------------------------------
       ! fill iout array with namelist values
@@ -921,8 +829,8 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       iout(n_fresh_ai  ) = f_fresh_ai 
       iout(n_fsalt     ) = f_fsalt  
       iout(n_fsalt_ai  ) = f_fsalt_ai  
-      iout(n_fhocn     ) = f_fhocn  
-      iout(n_fhocn_ai  ) = f_fhocn_ai  
+      iout(n_fhnet     ) = f_fhnet  
+      iout(n_fhnet_ai  ) = f_fhnet_ai  
       iout(n_fswthru   ) = f_fswthru  
       iout(n_fswthru_ai) = f_fswthru_ai  
       iout(n_strairx   ) = f_strairx  
@@ -952,47 +860,33 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       iout(n_dvirdgdt  ) = f_dvirdgdt 
       iout(n_hisnap    ) = f_hisnap
       iout(n_aisnap    ) = f_aisnap
-      iout(n_aice1     ) = f_aice1  
-      iout(n_aice2     ) = f_aice2  
-      iout(n_aice3     ) = f_aice3  
-      iout(n_aice4     ) = f_aice4  
-      iout(n_aice5     ) = f_aice5  
-      iout(n_aice6     ) = f_aice6  
-      iout(n_aice7     ) = f_aice7  
-      iout(n_aice8     ) = f_aice8  
-      iout(n_aice9     ) = f_aice9  
-      iout(n_aice10    ) = f_aice10  
-      iout(n_vice1     ) = f_vice1  
-      iout(n_vice2     ) = f_vice2  
-      iout(n_vice3     ) = f_vice3  
-      iout(n_vice4     ) = f_vice4  
-      iout(n_vice5     ) = f_vice5  
-      iout(n_vice6     ) = f_vice6  
-      iout(n_vice7     ) = f_vice7  
-      iout(n_vice8     ) = f_vice8  
-      iout(n_vice9     ) = f_vice9  
-      iout(n_vice10    ) = f_vice10
+      iout(n_trsig     ) = f_trsig
+      do n = 1, ncat_hist
+        iout(n_aicen+n-1) = f_aicen
+        iout(n_vicen+n-1) = f_vicen
+      enddo
 
       if (my_task == master_task) then
         write(nu_diag,*) ' '
         write(nu_diag,*) 'The following variables will be ',
      &                   'written to the history tape: '
-        write(nu_diag,*) ' description                           units',
-     &       '     netcdf variable'
-         do n=1,avgsiz
-            if (iout(n)) write(nu_diag,100) vdesc(n), vunit(n), vname(n)
-         enddo
-         write(nu_diag,*) ' '
+        write(nu_diag,*) ' '
+        write(nu_diag,*) ' description                         units',
+     &       '       netcdf variable'
+        do n=1,avgsiz
+           if (iout(n)) write(nu_diag,100) vdesc(n), vunit(n), vname(n)
+        enddo
+        write(nu_diag,*) ' '
 #ifdef CCSMcoupled
         call shr_sys_flush(nu_diag)
 #endif
       endif
-  100 format (1x,a40,2x,a10,2x,a10)
+  100 format (1x,a36,2x,a12,2x,a12)
 
       !-----------------------------------------------------------------
       ! initialize the history arrays
       !-----------------------------------------------------------------
-      aa(:,:,:,:) = c0
+      aa(:,:,:) = c0
       avgct = c0
 
       do k=1,avgsiz
@@ -1001,45 +895,26 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       enddo
 
       if (restart .and. yday >= c2) then
-         mlt_onset = 999. ! restarting midyear gives erroneous onset dates
-         frz_onset = 999. ! restarting midyear gives erroneous onset dates
+         mlt_onset = 999. ! midyear restart gives erroneous onset dates
+         frz_onset = 999. ! midyear restart gives erroneous onset dates
       else
          mlt_onset = c0
          frz_onset = c0
       endif
 
       !---------------------------------------------------------------
-      ! set conversion factors
+      ! set conversion factors   
       !---------------------------------------------------------------
-
-!csim      cona(n_aice  ) = c100                   ! aice  fraction to %
-!csim      cona(n_aice1 ) = c100                   ! aice1 fraction to %
-!csim      cona(n_aice2 ) = c100                   ! aice2 fraction to %
-!csim      cona(n_aice3 ) = c100                   ! aice3 fraction to %
-!csim      cona(n_aice4 ) = c100                   ! aice4 fraction to %
-!csim      cona(n_aice5 ) = c100                   ! aice5 fraction to %
-!csim      cona(n_aice6 ) = c100                   ! aice6 fraction to %
-!csim      cona(n_aice7 ) = c100                   ! aice7 fraction to %
-!csim      cona(n_aice8 ) = c100                   ! aice8 fraction to %
-!csim      cona(n_aice9 ) = c100                   ! aice9 fraction to %
-!csim      cona(n_aice10) = c100                   ! aice10 fraction to %
-!csim      cona(n_aisnap) = c100                   ! aisnap fraction to %
-!csim      cona(n_uvel  ) = m_to_cm                ! u m/s to cm/s
-!csim      cona(n_vvel  ) = m_to_cm                ! v m/s to cm/s
 
       cona(n_snow   ) = mps_to_cmpdy/rhofresh  ! snow kg/m2/s to cm/day
       cona(n_snow_ai) = mps_to_cmpdy/rhofresh  ! snow kg/m2/s to cm/day
       cona(n_rain   ) = mps_to_cmpdy/rhofresh  ! rain kg/m2/s to cm/day
       cona(n_rain_ai) = mps_to_cmpdy/rhofresh  ! rain kg/m2/s to cm/day
-
-!csim      cona(n_uocn    ) = m_to_cm                ! uocn m/s to cm/s
-!csim      cona(n_vocn    ) = m_to_cm                ! vocn m/s to cm/s
-
       cona(n_albsni ) = c100              ! avg of spectral albedos to %
       cona(n_alvdr  ) = c100              ! avg of visible albedo to %
       cona(n_alidr  ) = c100              ! avg of near IR albedo to %
-      cona(n_evap   ) = mps_to_cmpdy/rhofresh   ! evap kg/m2/s to cm/day
-      cona(n_evap_ai) = mps_to_cmpdy/rhofresh   ! evap kg/m2/s to cm/day
+      cona(n_evap   ) = mps_to_cmpdy/rhofresh   ! evap kg/m2/s to cm/day 
+      cona(n_evap_ai) = mps_to_cmpdy/rhofresh   ! evap kg/m2/s to cm/day 
       conb(n_Tref   ) = -tffresh                ! Tref K to C
       cona(n_Qref   ) = kg_to_g                 ! Qref kg/kg to g/kg
 
@@ -1049,10 +924,8 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       cona(n_meltt  ) = mps_to_cmpdy/dt  ! meltt  m per step to cm/day
       cona(n_meltb  ) = mps_to_cmpdy/dt  ! meltb  m per step to cm/day
       cona(n_meltl  ) = mps_to_cmpdy/dt  ! meltl  m per step to cm/day
-      cona(n_fresh  ) = mps_to_cmpdy/rhofresh ! frshwtr flx kg/m2/s to cm/day
-      cona(n_fresh_ai)= mps_to_cmpdy/rhofresh ! frshwtr flx kg/m2/s to cm/day
-!csim      cona(n_fsalt)    = secday         ! salt flux kg/m2/s to kg/m2/day 
-!csim      cona(n_fsalt_ai) = secday         ! salt flux kg/m2/s to kg/m2/day 
+      cona(n_fresh  ) = mps_to_cmpdy/rhofresh ! frshwtr flx kg/m2/s to cm/day 
+      cona(n_fresh_ai)= mps_to_cmpdy/rhofresh ! frshwtr flx kg/m2/s to cm/day 
 
       cona(n_divu  ) = secday*c100      ! divu from 1/s to %/day
       cona(n_shear ) = secday*c100      ! shear from 1/s to %/day
@@ -1066,6 +939,21 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       cona(n_dardg1dt) = secday*c100    ! dardg1dt frac/s to %/day
       cona(n_dardg2dt) = secday*c100    ! dardg2dt frac/s to %/day
       cona(n_dvirdgdt) = mps_to_cmpdy   ! dvirdgdt m/s to cm/day
+
+#ifdef CCSM
+      ! CCSM conventions
+      cona(n_aice  ) = c100             ! aice  fraction to %
+      do n = 1, ncat_hist
+        cona(n_aicen+n-1) = c100 ! aicen fraction to %
+      enddo
+      cona(n_aisnap) = c100             ! aisnap fraction to %
+      cona(n_uvel  ) = m_to_cm          ! u m/s to cm/s
+      cona(n_vvel  ) = m_to_cm          ! v m/s to cm/s
+      cona(n_uocn    ) = m_to_cm        ! uocn m/s to cm/s
+      cona(n_vocn    ) = m_to_cm        ! vocn m/s to cm/s
+      cona(n_fsalt)    = secday         ! salt flux kg/m2/s to kg/m2/day 
+      cona(n_fsalt_ai) = secday         ! salt flux kg/m2/s to kg/m2/day 
+#endif
 
 !-------------------------------------------------------------------
 ! Change coordinates of variables printed out on u grid
@@ -1103,7 +991,7 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
 !
 ! !INTERFACE:
 !
-      subroutine ice_write_hist (dt)
+      subroutine ice_write_hist
 !
 ! !DESCRIPTION:
 !
@@ -1112,52 +1000,34 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
 ! !REVISION HISTORY:
 !
 ! author:   Elizabeth C. Hunke, LANL
-!
+! 
 ! !USES:
 !
-      use ice_blocks
-      use ice_domain
-      use ice_grid, only: tmask, lmask_n, lmask_s
-      use ice_calendar, only: new_year, secday, yday, write_history,
-     &                        write_ic
-      use ice_state
-      use ice_constants
       use ice_flux
+      use ice_albedo
+      use ice_mechred
+      use ice_grid
+      use ice_calendar
+      use ice_state
       use ice_dyn_evp
+      use ice_constants
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
-      real (kind=dbl_kind), intent(in) ::
-     &   dt      ! time step
 !EOP
 !
-      integer (kind=int_kind) ::
-     &     i,j,k,n
-     &,    iblk                 ! block index
-     &,    ilo,ihi,jlo,jhi      ! beginning and end of physical domain
+      integer (kind=int_kind) :: i,j,k,n,nct
 
-      real (kind=dbl_kind) ::
+      real (kind=dbl_kind) :: 
      &     ravgct               ! 1/avgct
      &,    ai                   ! aice_init
 
-      type (block) ::
-     &   this_block           ! block information for current block
-
       ! ice vol. tendency for history, due to dynamics
-
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         do j = jlo,jhi
-         do i = ilo,ihi
-            dvidtd(i,j,iblk) = (vice(i,j,iblk) - dvidtd(i,j,iblk)) /dt
-            daidtd(i,j,iblk) = (aice(i,j,iblk) - daidtd(i,j,iblk)) /dt
-         enddo
-         enddo
+      do j=jlo,jhi
+        do i=ilo,ihi
+           dvidtd(i,j) = (vice(i,j)-dvidtd(i,j))/dt
+           daidtd(i,j) = (aice(i,j)-daidtd(i,j))/dt
+        enddo
       enddo
 
       !---------------------------------------------------------------
@@ -1165,166 +1035,131 @@ c $Id: ice_history.F,v 1.18 2003/11/21 02:29:10 lipscomb Exp $
       !---------------------------------------------------------------
 
       if (.not. hist_avg) then  ! write snapshots
-        aa(:,:,:,:) = c0
+        aa = c0
         avgct = c1
       else                      ! write averages over time histfreq
         avgct = avgct + c1
       endif
 
       !---------------------------------------------------------------
-      ! increment field
+      ! increment fields
       !---------------------------------------------------------------
 
-      do iblk = 1, nblocks
-       this_block = get_block(blocks(iblk),iblk)         
-       ilo = this_block%ilo
-       ihi = this_block%ihi
-       jlo = this_block%jlo
-       jhi = this_block%jhi
+      do j=jlo,jhi
+       do i=ilo,ihi
+        if (tmask(i,j)) then  
+         ai = aice_init(i,j)
 
-       do j = jlo, jhi
-       do i = ilo, ihi
-       if (tmask(i,j,iblk)) then
-        ai = aice_init(i,j,iblk)
+         aa(i,j,n_hi      ) = aa(i,j,n_hi      ) + vice(i,j)
+         aa(i,j,n_hs      ) = aa(i,j,n_hs      ) + vsno(i,j)
+         aa(i,j,n_Tsfc    ) = aa(i,j,n_Tsfc    ) + Tsfc(i,j)
+         aa(i,j,n_aice    ) = aa(i,j,n_aice    ) + aice(i,j)
 
-        aa(i,j,n_hi,    iblk)= aa(i,j,n_hi,    iblk) + vice (i,j,iblk) 
-        aa(i,j,n_hs,    iblk)= aa(i,j,n_hs,    iblk) + vsno (i,j,iblk) 
-        aa(i,j,n_Tsfc,  iblk)= aa(i,j,n_Tsfc,  iblk) +trcr(i,j,1,iblk)
-        aa(i,j,n_aice,  iblk)= aa(i,j,n_aice,  iblk) + aice (i,j,iblk)
-        aa(i,j,n_uvel,  iblk)= aa(i,j,n_uvel,  iblk) + uvel (i,j,iblk)
-        aa(i,j,n_vvel,  iblk)= aa(i,j,n_vvel,  iblk) + vvel (i,j,iblk)
+         aa(i,j,n_uvel    ) = aa(i,j,n_uvel    ) + uvel(i,j)
+         aa(i,j,n_vvel    ) = aa(i,j,n_vvel    ) + vvel(i,j)
+         
+         aa(i,j,n_fswdn   ) = aa(i,j,n_fswdn   ) + fsw(i,j)
+         aa(i,j,n_flwdn   ) = aa(i,j,n_flwdn   ) + flw(i,j)
+         aa(i,j,n_snow    ) = aa(i,j,n_snow    ) + fsnow(i,j)
+         aa(i,j,n_snow_ai ) = aa(i,j,n_snow_ai ) + fsnow(i,j)*ai
+         aa(i,j,n_rain    ) = aa(i,j,n_rain    ) + frain(i,j)
+         aa(i,j,n_rain_ai ) = aa(i,j,n_rain_ai ) + frain(i,j)*ai
+         aa(i,j,n_sst     ) = aa(i,j,n_sst     ) + sst(i,j)
+         aa(i,j,n_sss     ) = aa(i,j,n_sss     ) + sss(i,j)
+         aa(i,j,n_uocn    ) = aa(i,j,n_uocn    ) + uocn(i,j)
+         aa(i,j,n_vocn    ) = aa(i,j,n_vocn    ) + vocn(i,j)
+         aa(i,j,n_frzmlt  ) = aa(i,j,n_frzmlt  ) + frzmlt(i,j)
+         
+         aa(i,j,n_fswabs  ) = aa(i,j,n_fswabs  ) + fswabs(i,j)
+         aa(i,j,n_fswabs_ai)= aa(i,j,n_fswabs_ai)+ fswabs(i,j)*ai
+         aa(i,j,n_albsni  ) = aa(i,j,n_albsni  ) + alvdr(i,j)*awtvdr
+     &                                           + alidr(i,j)*awtidr
+     &                                           + alvdf(i,j)*awtvdf
+     &                                           + alidf(i,j)*awtidf
+         aa(i,j,n_alvdr   ) = aa(i,j,n_alvdr   ) + alvdr(i,j)
+         aa(i,j,n_alidr   ) = aa(i,j,n_alidr   ) + alidr(i,j)
+         aa(i,j,n_flat    ) = aa(i,j,n_flat    ) + flat(i,j)
+         aa(i,j,n_flat_ai ) = aa(i,j,n_flat_ai ) + flat(i,j)*ai
+         aa(i,j,n_fsens   ) = aa(i,j,n_fsens   ) + fsens(i,j)
+         aa(i,j,n_fsens_ai) = aa(i,j,n_fsens_ai) + fsens(i,j)*ai
+         aa(i,j,n_flwup   ) = aa(i,j,n_flwup   ) + flwout(i,j)
+         aa(i,j,n_flwup_ai) = aa(i,j,n_flwup_ai) + flwout(i,j)*ai
+         aa(i,j,n_evap    ) = aa(i,j,n_evap    ) + evap(i,j)
+         aa(i,j,n_evap_ai ) = aa(i,j,n_evap_ai ) + evap(i,j)*ai
+         aa(i,j,n_Tair    ) = aa(i,j,n_Tair    ) + Tair(i,j) 
+         aa(i,j,n_Tref    ) = aa(i,j,n_Tref    ) + Tref(i,j) 
+         aa(i,j,n_Qref    ) = aa(i,j,n_Qref    ) + Qref(i,j)
 
-        aa(i,j,n_fswdn, iblk)= aa(i,j,n_fswdn, iblk) + fsw  (i,j,iblk) 
-        aa(i,j,n_flwdn, iblk)= aa(i,j,n_flwdn, iblk) + flw  (i,j,iblk) 
-        aa(i,j,n_snow,  iblk)= aa(i,j,n_snow,  iblk) + fsnow(i,j,iblk) 
-        aa(i,j,n_snow_ai,iblk)  =aa(i,j,n_snow_ai,  iblk)
-     &                                            + ai*fsnow(i,j,iblk)
-        aa(i,j,n_rain,  iblk)= aa(i,j,n_rain,  iblk) + frain(i,j,iblk) 
-        aa(i,j,n_rain_ai,iblk) = aa(i,j,n_rain_ai,  iblk) 
-     &                                            + ai*frain(i,j,iblk)
-        aa(i,j,n_sst,   iblk)= aa(i,j,n_sst,   iblk) + sst  (i,j,iblk) 
-        aa(i,j,n_sss,   iblk)= aa(i,j,n_sss,   iblk) + sss  (i,j,iblk) 
-        aa(i,j,n_uocn,  iblk)= aa(i,j,n_uocn,  iblk) + uocn (i,j,iblk) 
-        aa(i,j,n_vocn,  iblk)= aa(i,j,n_vocn,  iblk) + vocn (i,j,iblk) 
-        aa(i,j,n_frzmlt,iblk)= aa(i,j,n_frzmlt,iblk) +frzmlt(i,j,iblk) 
+        endif   ! tmask(i,j)
+       enddo
+      enddo
 
-        aa(i,j,n_fswabs,iblk)= aa(i,j,n_fswabs,iblk) +fswabs(i,j,iblk)
-        aa(i,j,n_fswabs_ai,iblk)=aa(i,j,n_fswabs_ai,iblk)
-     &                                            +ai*fswabs(i,j,iblk)
+      do j=jlo,jhi
+       do i=ilo,ihi
+        if (tmask(i,j)) then  
+         ai = aice_init(i,j)
 
-        aa(i,j,n_albsni,iblk)= aa(i,j,n_albsni,iblk) 
-     &                                        + awtvdr*alvdr(i,j,iblk)
-     &                                        + awtidr*alidr(i,j,iblk)
-     &                                        + awtvdf*alvdf(i,j,iblk)
-     &                                        + awtidf*alidf(i,j,iblk)
-        aa(i,j,n_alvdr, iblk)= aa(i,j,n_alvdr, iblk) + alvdr(i,j,iblk)
-        aa(i,j,n_alidr, iblk)= aa(i,j,n_alidr, iblk) + alidr(i,j,iblk)
-        aa(i,j,n_flat,  iblk)= aa(i,j,n_flat,  iblk) + flat (i,j,iblk) 
-        aa(i,j,n_flat_ai,iblk)  =aa(i,j,n_flat_ai,  iblk) 
-     &                                            +  ai*flat(i,j,iblk)
-        aa(i,j,n_fsens, iblk)= aa(i,j,n_fsens, iblk) + fsens(i,j,iblk) 
-        aa(i,j,n_fsens_ai,iblk) =aa(i,j,n_fsens_ai, iblk) 
-     &                                            + ai*fsens(i,j,iblk)
-        aa(i,j,n_flwup, iblk)= aa(i,j,n_flwup, iblk) +flwout(i,j,iblk) 
-        aa(i,j,n_flwup_ai,iblk) =aa(i,j,n_flwup_ai, iblk) 
-     &                                            +ai*flwout(i,j,iblk)
-        aa(i,j,n_evap,  iblk)= aa(i,j,n_evap,  iblk) + evap (i,j,iblk) 
-        aa(i,j,n_evap_ai, iblk) = aa(i,j,n_evap_ai, iblk) 
-     &                                            +  ai*evap(i,j,iblk)
-        aa(i,j,n_Tair,  iblk)= aa(i,j,n_Tair,  iblk) + Tair (i,j,iblk) 
-        aa(i,j,n_Tref,  iblk)= aa(i,j,n_Tref,  iblk) + Tref (i,j,iblk) 
-        aa(i,j,n_Qref,  iblk)= aa(i,j,n_Qref,  iblk) + Qref (i,j,iblk) 
-        aa(i,j,n_congel,iblk)= aa(i,j,n_congel,iblk) +congel(i,j,iblk) 
-        aa(i,j,n_frazil,iblk)= aa(i,j,n_frazil,iblk) +frazil(i,j,iblk) 
-        aa(i,j,n_snoice,iblk)= aa(i,j,n_snoice,iblk) +snoice(i,j,iblk)
-        aa(i,j,n_meltt, iblk)= aa(i,j,n_meltt, iblk) + meltt(i,j,iblk)
-        aa(i,j,n_meltb, iblk)= aa(i,j,n_meltb, iblk) + meltb(i,j,iblk) 
-        aa(i,j,n_meltl, iblk)= aa(i,j,n_meltl, iblk) + meltl(i,j,iblk)
-        aa(i,j,n_fresh, iblk)= aa(i,j,n_fresh, iblk) 
-     &                                          + fresh_hist(i,j,iblk)
-        aa(i,j,n_fresh_ai,iblk) = aa(i,j,n_fresh_ai,iblk) 
-     &                                       + ai*fresh_hist(i,j,iblk)
-        aa(i,j,n_fsalt, iblk)   = aa(i,j,n_fsalt, iblk) 
-     &                                          + fsalt_hist(i,j,iblk)
-        aa(i,j,n_fsalt_ai,iblk) = aa(i,j,n_fsalt_ai,iblk) 
-     &                                       + ai*fsalt_hist(i,j,iblk)
-        aa(i,j,n_fhocn, iblk)   = aa(i,j,n_fhocn, iblk) 
-     &                                          + fhocn_hist(i,j,iblk)
-        aa(i,j,n_fhocn_ai,iblk) = aa(i,j,n_fhocn_ai,iblk) 
-     &                                       + ai*fhocn_hist(i,j,iblk)
-        aa(i,j,n_fswthru,iblk)  = aa(i,j,n_fswthru,iblk) 
-     &                                        + fswthru_hist(i,j,iblk)
-        aa(i,j,n_fswthru_ai,iblk)=aa(i,j,n_fswthru_ai,iblk)
-     &                                     + ai*fswthru_hist(i,j,iblk)
-               
-        aa(i,j,n_strairx,iblk) = aa(i,j,n_strairx,iblk)
-     &                                             + strairx(i,j,iblk)
-        aa(i,j,n_strairy,iblk) = aa(i,j,n_strairy,iblk) 
-     &                                             + strairy(i,j,iblk)
-        aa(i,j,n_strtltx,iblk) = aa(i,j,n_strtltx,iblk) 
-     &                                             + strtltx(i,j,iblk)
-        aa(i,j,n_strtlty,iblk) = aa(i,j,n_strtlty,iblk) 
-     &                                             + strtlty(i,j,iblk)
-        aa(i,j,n_strcorx,iblk) = aa(i,j,n_strcorx,iblk)     
-     &                                   + fm(i,j,iblk)*vvel(i,j,iblk)
-        aa(i,j,n_strcory,iblk) = aa(i,j,n_strcory,iblk) 
-     &                                   - fm(i,j,iblk)*uvel(i,j,iblk)
-        aa(i,j,n_strocnx,iblk) = aa(i,j,n_strocnx,iblk) 
-     &                                             + strocnx(i,j,iblk)
-        aa(i,j,n_strocny,iblk) = aa(i,j,n_strocny,iblk) 
-     &                                             + strocny(i,j,iblk)
-        aa(i,j,n_strintx,iblk) = aa(i,j,n_strintx,iblk) 
-     &                                             + strintx(i,j,iblk)
-        aa(i,j,n_strinty,iblk) = aa(i,j,n_strinty,iblk) 
-     &                                             + strinty(i,j,iblk)
-        aa(i,j,n_strength,iblk)= aa(i,j,n_strength,iblk) 
-     &                                            + strength(i,j,iblk)
+         aa(i,j,n_congel  ) = aa(i,j,n_congel  ) + congel(i,j)
+         aa(i,j,n_frazil  ) = aa(i,j,n_frazil  ) + frazil(i,j)
+         aa(i,j,n_snoice  ) = aa(i,j,n_snoice  ) + snoice(i,j)
+         aa(i,j,n_meltt   ) = aa(i,j,n_meltt   ) + meltt(i,j)
+         aa(i,j,n_meltb   ) = aa(i,j,n_meltb   ) + meltb(i,j)
+         aa(i,j,n_meltl   ) = aa(i,j,n_meltl   ) + meltl(i,j)
+         aa(i,j,n_fresh   ) = aa(i,j,n_fresh   ) + fresh_hist(i,j)
+         aa(i,j,n_fresh_ai) = aa(i,j,n_fresh_ai) + fresh_hist(i,j)*ai
+         aa(i,j,n_fsalt   ) = aa(i,j,n_fsalt   ) + fsalt_hist(i,j)
+         aa(i,j,n_fsalt_ai) = aa(i,j,n_fsalt_ai) + fsalt_hist(i,j)*ai
+         aa(i,j,n_fhnet   ) = aa(i,j,n_fhnet   ) + fhnet_hist(i,j)
+         aa(i,j,n_fhnet_ai) = aa(i,j,n_fhnet_ai) + fhnet_hist(i,j)*ai
+         aa(i,j,n_fswthru ) = aa(i,j,n_fswthru ) + fswthru_hist(i,j)
+         aa(i,j,n_fswthru_ai)=aa(i,j,n_fswthru_ai)+fswthru_hist(i,j)*ai
 
-! The following fields (divu, shear, sig1, and sig2) will be smeared
+         aa(i,j,n_strairx ) = aa(i,j,n_strairx ) + strairx(i,j)
+         aa(i,j,n_strairy ) = aa(i,j,n_strairy ) + strairy(i,j)
+         aa(i,j,n_strtltx ) = aa(i,j,n_strtltx ) + strtltx(i,j)
+         aa(i,j,n_strtlty ) = aa(i,j,n_strtlty ) + strtlty(i,j)
+         aa(i,j,n_strcorx ) = aa(i,j,n_strcorx ) + fm(i,j)*vvel(i,j)
+         aa(i,j,n_strcory ) = aa(i,j,n_strcory ) - fm(i,j)*uvel(i,j)
+         aa(i,j,n_strocnx ) = aa(i,j,n_strocnx ) + strocnx(i,j)
+         aa(i,j,n_strocny ) = aa(i,j,n_strocny ) + strocny(i,j)
+         aa(i,j,n_strintx ) = aa(i,j,n_strintx ) + strintx(i,j)
+         aa(i,j,n_strinty ) = aa(i,j,n_strinty ) + strinty(i,j)
+         aa(i,j,n_strength) = aa(i,j,n_strength) + strength(i,j)
+
+! The following fields (divu, shear, sig1, and sig2) will be smeared 
 !  if averaged over more than a few days.
 ! Snapshots may be more useful (see below).
 
-c         aa(i,j,n_divu    ) = aa(i,j,n_divu    ) + divu (i,j,iblk)
-c         aa(i,j,n_shear   ) = aa(i,j,n_shear   ) + shear(i,j,iblk)
-c         aa(i,j,n_sig1    ) = aa(i,j,n_sig1    ) + sig1 (i,j,iblk)
-c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
+!!         aa(i,j,n_divu    ) = aa(i,j,n_divu    ) + divu(i,j)
+!!         aa(i,j,n_shear   ) = aa(i,j,n_shear   ) + shear(i,j)
+!!         aa(i,j,n_sig1    ) = aa(i,j,n_sig1    ) + sig1(i,j)
+!!         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2(i,j)
 
-        aa(i,j,n_dvidtt ,iblk) = aa(i,j,n_dvidtt ,iblk) 
-     &                                             + dvidtt(i,j,iblk)
-        aa(i,j,n_dvidtd ,iblk) = aa(i,j,n_dvidtd ,iblk) 
-     &                                             + dvidtd(i,j,iblk)
-        aa(i,j,n_daidtt ,iblk) = aa(i,j,n_daidtt ,iblk) 
-     &                                             + daidtt(i,j,iblk)
-        aa(i,j,n_daidtd ,iblk) = aa(i,j,n_daidtd ,iblk) 
-     &                                             + daidtd(i,j,iblk)
-        aa(i,j,n_opening,iblk) = aa(i,j,n_opening,iblk) 
-     &                                            + opening(i,j,iblk)
-        aa(i,j,n_dardg1dt,iblk)= aa(i,j,n_dardg1dt,iblk) 
-     &                                           + dardg1dt(i,j,iblk)
-        aa(i,j,n_dardg2dt,iblk)= aa(i,j,n_dardg2dt,iblk) 
-     &                                           + dardg2dt(i,j,iblk)
-        aa(i,j,n_dvirdgdt,iblk)= aa(i,j,n_dvirdgdt,iblk) 
-     &                                           + dvirdgdt(i,j,iblk)
-               
-       endif                    ! tmask
-       enddo                    ! i
-       enddo                    ! j
+         aa(i,j,n_dvidtt  ) = aa(i,j,n_dvidtt  ) + dvidtt(i,j)
+         aa(i,j,n_dvidtd  ) = aa(i,j,n_dvidtd  ) + dvidtd(i,j)
+         aa(i,j,n_daidtt  ) = aa(i,j,n_daidtt  ) + daidtt(i,j)
+         aa(i,j,n_daidtd  ) = aa(i,j,n_daidtd  ) + daidtd(i,j)
+         aa(i,j,n_opening ) = aa(i,j,n_opening ) + opening(i,j)
+         aa(i,j,n_dardg1dt) = aa(i,j,n_dardg1dt) + dardg1dt(i,j)
+         aa(i,j,n_dardg2dt) = aa(i,j,n_dardg2dt) + dardg2dt(i,j)
+         aa(i,j,n_dvirdgdt) = aa(i,j,n_dvirdgdt) + dvirdgdt(i,j)
 
-       do n=1,ncat
-          do j=jlo,jhi
-          do i=ilo,ihi
-             if (tmask(i,j,iblk)) then
-                ! assume consecutive indices
-                aa(i,j,n_aice1+n-1,iblk) = aa(i,j,n_aice1+n-1,iblk) 
-     &                                          + aicen(i,j,n,iblk)
-                aa(i,j,n_vice1+n-1,iblk) = aa(i,j,n_vice1+n-1,iblk) 
-     &                                          + vicen(i,j,n,iblk)
-             endif              ! tmask
-          enddo                 ! i
-          enddo                 ! j
-       enddo                    ! n
+        endif   ! tmask(i,j)
+       enddo
+      enddo
 
-      enddo                     ! iblk
+      nct = min(ncat, ncat_hist)
+      do n=1,nct
+       do j=jlo,jhi
+        do i=ilo,ihi
+         if (tmask(i,j)) then
+            ! assume consecutive indices
+            aa(i,j,n_aicen+n-1) = aa(i,j,n_aicen+n-1) + aicen(i,j,n)
+            aa(i,j,n_vicen+n-1) = aa(i,j,n_vicen+n-1) + vicen(i,j,n)
+         endif
+        enddo
+       enddo
+      enddo
 
       !---------------------------------------------------------------
       ! Write output files at prescribed intervals
@@ -1332,120 +1167,73 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
       if (write_history .or. write_ic) then
 
-      !---------------------------------------------------------------
-      ! Mask out land points and convert units 
-      !---------------------------------------------------------------
-
         ravgct = c1/avgct
-        do iblk = 1, nblocks
-           this_block = get_block(blocks(iblk),iblk)         
-           ilo = this_block%ilo
-           ihi = this_block%ihi
-           jlo = this_block%jlo
-           jhi = this_block%jhi
+        do k=1,avgsiz
+         do j=jlo,jhi
+          do i=ilo,ihi
+             if (.not. tmask(i,j)) then ! mask out land points
+                aa(i,j,k) = spval
+             else                       ! convert units
+                aa(i,j,k) = cona(k)*aa(i,j,k)*ravgct + conb(k) 
+             endif
+          enddo
+         enddo  
+        enddo
 
-           do k = 1, avgsiz
-              do j = jlo, jhi
-              do i = ilo, ihi
-                 if (.not. tmask(i,j,iblk)) then ! mask out land points
-                    aa(i,j,k,iblk) = spval
-                 else                            ! convert units
-                    aa(i,j,k,iblk) = cona(k)*aa(i,j,k,iblk)*ravgct 
-     &                             + conb(k)
-                 endif
-              enddo             ! i
-              enddo             ! j
-           enddo                ! k
-
-      !---------------------------------------------------------------
       ! snapshots
-      !---------------------------------------------------------------
+        call principal_stress   ! to compute sig1 and sig2
+        do j=jlo,jhi
+         do i=ilo,ihi
+            if (.not. tmask(i,j)) then ! mask out land points
+               aa(i,j,n_divu )     = spval
+               aa(i,j,n_shear)     = spval
+               aa(i,j,n_sig1 )     = spval
+               aa(i,j,n_sig2 )     = spval
+               aa(i,j,n_mlt_onset) = spval
+               aa(i,j,n_frz_onset) = spval
+               aa(i,j,n_hisnap   ) = spval
+               aa(i,j,n_aisnap   ) = spval
+               aa(i,j,n_trsig    ) = spval
+            else
+               aa(i,j,n_divu)      = divu(i,j)*cona(n_divu)
+               aa(i,j,n_shear)     = shear(i,j)*cona(n_shear)
+               aa(i,j,n_sig1)      = sig1(i,j)*cona(n_sig1)  
+               aa(i,j,n_sig2)      = sig2(i,j)*cona(n_sig2) 
+               aa(i,j,n_mlt_onset) = mlt_onset(i,j)
+               aa(i,j,n_frz_onset) = frz_onset(i,j)
+               aa(i,j,n_hisnap   ) = vice(i,j)
+               aa(i,j,n_aisnap   ) = aice(i,j)
+               aa(i,j,n_trsig    ) = p25*(stressp_1(i,j)
+     &                                  + stressp_2(i,j)
+     &                                  + stressp_3(i,j)
+     &                                  + stressp_4(i,j))
+            endif
+         enddo
+        enddo
 
-          ! compute sig1 and sig2
-        
-           call principal_stress (nx_block,  ny_block,
-     &                            stressp_1 (:,:,iblk),
-     &                            stressm_1 (:,:,iblk),
-     &                            stress12_1(:,:,iblk),
-     &                            prs_sig   (:,:,iblk),
-     &                            sig1      (:,:,iblk),
-     &                            sig2      (:,:,iblk))
- 
-           do j = jlo, jhi
-           do i = ilo, ihi
-              if (.not. tmask(i,j,iblk)) then ! mask out land points
-                 aa(i,j,n_divu,iblk)      = spval
-                 aa(i,j,n_shear,iblk)     = spval
-                 aa(i,j,n_sig1,iblk )     = spval
-                 aa(i,j,n_sig2,iblk )     = spval
-                 aa(i,j,n_mlt_onset,iblk) = spval
-                 aa(i,j,n_frz_onset,iblk) = spval
-                 aa(i,j,n_hisnap,iblk)    = spval
-                 aa(i,j,n_aisnap,iblk)    = spval
-              else
-                 aa(i,j,n_divu,iblk)  = divu (i,j,iblk)*cona(n_divu)
-                 aa(i,j,n_shear,iblk) = shear(i,j,iblk)*cona(n_shear)
-                 aa(i,j,n_sig1,iblk)  = sig1 (i,j,iblk)*cona(n_sig1)
-                 aa(i,j,n_sig2,iblk)  = sig2 (i,j,iblk)*cona(n_sig2)
-                 aa(i,j,n_mlt_onset,iblk) = mlt_onset(i,j,iblk)
-                 aa(i,j,n_frz_onset,iblk) = frz_onset(i,j,iblk)
-                 aa(i,j,n_hisnap,iblk)    = vice(i,j,iblk)
-                 aa(i,j,n_aisnap,iblk)    = aice(i,j,iblk)
-              endif
-           enddo                ! i
-           enddo                ! j
-
-        enddo                   ! iblk
-
-      !---------------------------------------------------------------
-      ! write netCDF file
-      !---------------------------------------------------------------
-
-        call icecdf         
-
-      !---------------------------------------------------------------
-      ! reset to zero
-      !------------------------------------------------------------
-        aa(:,:,:,:) = c0
+        call icecdf
+        aa(:,:,:) = c0
         avgct = c0
 
       endif  ! write_history or write_ic
 
-      do iblk = 1, nblocks
-         this_block = get_block(blocks(iblk),iblk)         
-         ilo = this_block%ilo
-         ihi = this_block%ihi
-         jlo = this_block%jlo
-         jhi = this_block%jhi
-
-         if (new_year) then
-
-            do j=jlo,jhi
-            do i=ilo,ihi
-               ! reset NH Jan 1
-               if (lmask_n(i,j,iblk)) mlt_onset(i,j,iblk) = c0
-               ! reset SH Jan 1 
-               if (lmask_s(i,j,iblk)) frz_onset(i,j,iblk) = c0
-            enddo
-            enddo
-         endif                  ! new_year
-
-         if ((yday >= 181._dbl_kind) .and.
-     &       (yday <  181._dbl_kind+dt/secday)) then
-
-            do j=jlo,jhi
-            do i=ilo,ihi
-
-               ! reset SH Jul 1
-               if (lmask_s(i,j,iblk)) mlt_onset(i,j,iblk) = c0
-
-               ! reset NH Jul 1
-               if (lmask_n(i,j,iblk)) frz_onset(i,j,iblk) = c0
-            enddo
-            enddo
-
-         endif                  ! yday
-      enddo                     ! iblk
+      if (new_year) then
+        do j=jlo,jhi
+          do i=ilo,ihi
+            mlt_onset(i,j) = mlt_onset(i,j) * mask_s(i,j) ! reset NH Jan 1
+            frz_onset(i,j) = frz_onset(i,j) * mask_n(i,j) ! reset SH Jan 1
+          enddo
+        enddo
+      endif
+      if ((yday > 181._dbl_kind) .and.
+     &    (yday < 181._dbl_kind+dt/secday)) then
+        do j=jlo,jhi
+          do i=ilo,ihi
+            mlt_onset(i,j) = mlt_onset(i,j) * mask_n(i,j) ! reset SH Jul 1
+            frz_onset(i,j) = frz_onset(i,j) * mask_s(i,j) ! reset NH Jul 1
+          enddo
+        enddo
+      endif
 
       end subroutine ice_write_hist
 
@@ -1467,18 +1255,14 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 !
 ! authors:   E.C.Hunke, LANL
 !            Bruce P. Briegleb, NCAR
-!
+! 
 ! !USES:
 !
-      use ice_gather_scatter
-      use ice_domain_size
+      use ice_model_size
       use ice_constants
+      use ice_mpi_internal
       use ice_grid
-      use ice_calendar, only: time, sec, idate, nyr, month, daymo, 
-     &                        mday, write_ic, histfreq, year_init,
-     &                        new_year, new_month, new_day
-      use ice_work, only: work_g1, work_gr
-      use ice_restart, only: lenstr
+      use ice_calendar
 !
 ! !INPUT/OUTPUT PARAMETERS:
 !
@@ -1489,7 +1273,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       integer (kind=int_kind) :: i,j,n
      &,  ncid,status,imtid,jmtid,timid,varid
      &,  length
-      integer (kind=int_kind), dimension(3) :: dimid,start,count
+      integer (kind=int_kind), dimension(3) :: dimid
       real (kind=real_kind) :: ltime
       character (char_len) :: ncfile,title
 
@@ -1501,41 +1285,43 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
         ! construct filename
         if (write_ic) then
-           write(ncfile,'(a,a,i8.8,a)')
+           write(ncfile,'(a,a,i8.8,a)') 
      &      history_file(1:lenstr(history_file)),'.',idate,'.incond.nc'
         else
 
          iyear = nyr + year_init - 1
          imonth = month
          iday = mday
-         if (new_year) then
+         if (hist_avg) then
+          if (new_year) then
            iyear = iyear - 1
            imonth = 12
            iday = 31
-         elseif (new_month) then
+          elseif (new_month) then
            imonth = month - 1
            iday = daymo(imonth)
-         elseif (new_day) then
+          elseif (new_day) then
            iday = iday - 1
+          endif
          endif
 
          if (histfreq == '1') then ! instantaneous, write every dt
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)')
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
      &      history_file(1:lenstr(history_file)),'.',iyear,'-',
      &       imonth,'-',iday,'-',sec,'.nc'
 
          elseif (hist_avg) then    ! write averaged data
 
           if (histfreq == 'd'.or.histfreq == 'D') then     ! daily
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)')
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)') 
      &      history_file(1:lenstr(history_file)),'_davg.',iyear,'-',
      &       imonth,'-',iday,'.nc'
           elseif (histfreq == 'm'.or.histfreq == 'M') then ! monthly
-           write(ncfile,'(a,a,i4.4,a,i2.2,a)')
+           write(ncfile,'(a,a,i4.4,a,i2.2,a)') 
      &      history_file(1:lenstr(history_file)),'_mavg.',iyear,'-',
      &       imonth,'.nc'
           elseif (histfreq == 'w'.or.histfreq == 'W') then ! weekly
-           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)')
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a)') 
      &      history_file(1:lenstr(history_file)),'_wavg.',iyear,'-',
      &       imonth,'-',iday,'.nc'
           elseif (histfreq == 'y'.or.histfreq == 'Y') then ! yearly
@@ -1544,10 +1330,14 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
           endif
 
          else                      ! instantaneous, histfreq > dt
-           write(ncfile,'(a,a,i8.8,a)')
-     &      history_file(1:lenstr(history_file)),'.',idate,'.nc'
+           write(ncfile,'(a,a,i4.4,a,i2.2,a,i2.2,a,i5.5,a)') 
+     &      history_file(1:lenstr(history_file)),'.',iyear,'-',
+     &       imonth,'-',iday,'-',sec,'.nc'
          endif
         endif
+
+        ! add directory to filename
+        ncfile = trim(history_dir)//ncfile
 
         ! create file
         status = nf_create(ncfile, nf_clobber, ncid)
@@ -1556,8 +1346,8 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       ! define dimensions
       !-----------------------------------------------------------------
 
-        status = nf_def_dim(ncid,'lon',nx_global,imtid)
-        status = nf_def_dim(ncid,'lat',ny_global,jmtid)
+        status = nf_def_dim(ncid,'lon',imt_global,imtid)
+        status = nf_def_dim(ncid,'lat',jmt_global,jmtid)
         status = nf_def_dim(ncid,'time',nf_unlimited,timid)
 
       !-----------------------------------------------------------------
@@ -1603,7 +1393,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         dimid(2) = jmtid
         dimid(3) = timid
 
-        status = nf_def_var(ncid, 'hmask', nf_float,
+        status  = nf_def_var(ncid, 'hmask', nf_float, 
      $                       2, dimid, varid)
         status = nf_put_att_text(ncid,varid,
      $             'units',4,'flag')
@@ -1612,7 +1402,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         status = nf_put_att_text(ncid,varid,'coordinates',
      $                             5,'tlon tlat')
 
-        status = nf_def_var(ncid, 'tarea', nf_float,
+        status  = nf_def_var(ncid, 'tarea', nf_float, 
      $                       2, dimid, varid)
         status = nf_put_att_text(ncid,varid,
      $             'units',3,'m^2')
@@ -1621,7 +1411,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
         status = nf_put_att_text(ncid,varid,'coordinates',
      $                             5,'tlon tlat')
 
-        status = nf_def_var(ncid, 'rotang', nf_float,
+        status  = nf_def_var(ncid, 'rotang', nf_float, 
      $                       2, dimid, varid)
         status = nf_put_att_text(ncid,varid,
      $             'units',7,'radians')
@@ -1632,7 +1422,7 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
         do n=1,avgsiz
           if (iout(n)) then
-            status  = nf_def_var(ncid, vname(n), nf_float,
+            status  = nf_def_var(ncid, vname(n), nf_float, 
      $                         3, dimid, varid)
             length = lenstr(vunit(n))
             status = nf_put_att_text(ncid,varid,
@@ -1647,11 +1437,11 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
             status = nf_put_att_real(ncid,varid,'_fillvalue',
      $                             nf_float,1,spval)
-            if (histfreq == '1' .or. .not.hist_avg
-     &          .or. n==n_divu .or. n==n_shear     ! snapshots
-     &          .or. n==n_sig1 .or. n==n_sig2
-     &          .or. n==n_mlt_onset .or. n==n_frz_onset
-     &          .or. n==n_hisnap .or. n==n_aisnap) then
+            if (histfreq  ==  '1' .or. .not.hist_avg
+     &          .or. n == n_divu .or. n == n_shear     ! snapshots
+     &          .or. n == n_sig1 .or. n == n_sig2 
+     &          .or. n == n_mlt_onset .or. n == n_frz_onset
+     &          .or. n == n_hisnap .or. n == n_aisnap) then
             status = nf_put_att_text(ncid,varid,'time_rep',
      $                              13,'instantaneous')
             else
@@ -1667,18 +1457,18 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       !-----------------------------------------------------------------
       ! ... the user should change these to something useful ...
       !-----------------------------------------------------------------
-        title  = 'sea ice model output for cice'
+        title  = 'sea ice model output for CICE'
         length = lenstr(title)
         status = nf_put_att_text(ncid,nf_global,'title',length,title)
-        title  = 'sea ice model: LANL sea ice model (cice)'
+        title = 'sea ice model: LANL sea ice model (CICE)'
         length = lenstr(title)
         status = nf_put_att_text(ncid,nf_global,'source',length,title)
-        title  = 'log file ice.log.'                      ! for now
+        title = 'log file ice.log.'                      ! for now
         length = lenstr(title)
         status = nf_put_att_text(ncid,nf_global,'history',length,title)
-        title  = 'of LANL cice'
+        title = 'of LANL CICE'
         length = lenstr(title)
-        status =
+        status = 
      &       nf_put_att_text(ncid,nf_global,'conventions',length,title)
 
       !-----------------------------------------------------------------
@@ -1687,75 +1477,73 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
 
         status = nf_enddef(ncid)
 
-        status  = nf_inq_varid(ncid,'time',varid)
-        status  = nf_put_vara_real(ncid,varid,1,1,ltime)
+        status = nf_inq_varid(ncid,'time',varid)
+        status = nf_put_vara_real(ncid,varid,1,1,ltime)
 
-      endif                     ! master_task
+      endif          ! master_task
 
-      if (my_task==master_task) then
-         allocate(work_gr(nx_global,ny_global))
-         allocate(work_g1(nx_global,ny_global))
-      else
-         allocate(work_gr(1,1))   ! to save memory
-         allocate(work_g1(1,1))
-      endif
+      allocate (work_gr(imt_global,jmt_global))
+      allocate (work_g1(imt_global,jmt_global))
 
       !-----------------------------------------------------------------
       ! write latitude and longitude
       !-----------------------------------------------------------------
 
-      call gather_global(work_g1, TLON, master_task, distrb_info)
-      work_gr = work_g1*rad_to_deg   ! single precision
-      status  = nf_inq_varid(ncid,'tlon',varid)
-      status  = nf_put_var_real(ncid,varid,work_gr)
+      worka(:,:) = TLON(ilo:ihi,jlo:jhi)*rad_to_deg
+      call global_gather(work_g1,worka)
+      if (my_task == master_task) then
+        work_gr=work_g1
+        status = nf_inq_varid(ncid,'tlon',varid)
+        status = nf_put_var_real(ncid,varid,work_gr)
+      endif
 
-      call gather_global(work_g1, TLAT, master_task, distrb_info)
-      work_gr = work_g1*rad_to_deg
-      status  = nf_inq_varid(ncid,'tlat',varid)
-      status  = nf_put_var_real(ncid,varid,work_gr)
+      worka(:,:) = TLAT(ilo:ihi,jlo:jhi)*rad_to_deg
+      call global_gather(work_g1,worka)
+      if (my_task == master_task) then
+         work_gr=work_g1
+         status = nf_inq_varid(ncid,'tlat',varid)
+         status = nf_put_var_real(ncid,varid,work_gr)
+      endif
 
       !-----------------------------------------------------------------
       ! write grid mask, area and rotation angle
       !-----------------------------------------------------------------
 
-      call gather_global(work_g1, hm, master_task, distrb_info)
+      worka(:,:) = uvm(ilo:ihi,jlo:jhi)
+      call global_gather(work_g1,worka)
       if (my_task == master_task) then
-        work_gr = work_g1
-        status  = nf_inq_varid(ncid,'hmask',varid)
-        status  = nf_put_var_real(ncid,varid,work_gr)
+        work_gr=work_g1
+        status = nf_inq_varid(ncid,'hmask',varid)
+        status = nf_put_var_real(ncid,varid,work_gr)
       endif
 
-      call gather_global(work_g1, tarea, master_task, distrb_info)
+      worka(:,:) = tarea(ilo:ihi,jlo:jhi)
+      call global_gather(work_g1,worka)
       if (my_task == master_task) then
-        work_gr = work_g1
-        status  = nf_inq_varid(ncid,'tarea',varid)
-        status  = nf_put_var_real(ncid,varid,work_gr)
+        work_gr=work_g1
+        status = nf_inq_varid(ncid,'tarea',varid)
+        status = nf_put_var_real(ncid,varid,work_gr)
       endif
 
-      call gather_global(work_g1, angle, master_task, distrb_info)
+      call global_gather(work_g1,angle)
       if (my_task == master_task) then
-        work_gr = work_g1
-        status  = nf_inq_varid(ncid,'rotang',varid)
-        status  = nf_put_var_real(ncid,varid,work_gr)
+        work_gr=work_g1
+        status = nf_inq_varid(ncid,'rotang',varid)
+        status = nf_put_var_real(ncid,varid,work_gr)
       endif
 
       !-----------------------------------------------------------------
-      ! write variable data
+      ! write variable data 
       !-----------------------------------------------------------------
 
-      start=1
-      count(1)=nx_global
-      count(2)=ny_global
-      count(3)=1
       do n=1,avgsiz
         if (iout(n)) then
-          call gather_global(work_g1, aa(:,:,n,:),
-     &                       master_task, distrb_info)
+          worka=aa(:,:,n)
+          call global_gather(work_g1,worka)
           if (my_task == master_task) then
-            work_gr = work_g1
-            status  = nf_inq_varid(ncid,vname(n),varid)
-            status  = nf_put_vara_real(ncid,varid,start,count,work_gr)
-
+            work_gr=work_g1
+            status = nf_inq_varid(ncid,vname(n),varid)
+            status = nf_put_var_real(ncid,varid,work_gr)
           endif
         endif
       enddo
@@ -1763,7 +1551,6 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       !-----------------------------------------------------------------
       ! close output dataset
       !-----------------------------------------------------------------
-
       if (my_task == master_task) then
          status = nf_close(ncid)
          write(nu_diag,*) ' '
@@ -1775,6 +1562,442 @@ c         aa(i,j,n_sig2    ) = aa(i,j,n_sig2    ) + sig2 (i,j,iblk)
       deallocate(work_g1)
 
       end subroutine icecdf
+
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: integer function lenstr(label) - compute length string
+!
+! !INTERFACE:
+!
+      integer function lenstr(label)
+!
+! !DESCRIPTION:
+!
+! Compute length of string by finding first non-blank
+! character from the right.
+!
+! !REVISION HISTORY:
+!
+! author:   ?
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+      character*(*) label
+!
+!EOP
+!
+      integer (kind=int_kind) :: 
+     &   length  ! length of character string 
+     &,  n       ! loop index
+
+      length = len(label)
+      do n=length,1,-1
+        if( label(n:n) /= ' ' ) exit 
+      enddo
+      lenstr = n
+
+      end function lenstr
+
+!=======================================================================
+!---! these subroutines write/read Fortran unformatted data files ..
+!=======================================================================
+!
+!BOP
+!
+! !IROUTINE: dumpfile - dumps all fields required for restart
+!
+! !INTERFACE:
+!
+      subroutine dumpfile
+!
+! !DESCRIPTION:
+!
+! Dumps all values needed for a restart 
+!
+! !REVISION HISTORY:
+!
+! author Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+      use ice_model_size
+      use ice_flux
+      use ice_grid
+      use ice_calendar
+      use ice_state
+      use ice_dyn_evp
+      use ice_ocean, only: oceanmixed_ice
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) :: i, j, k, n, iyear, imonth, iday
+      character(len=char_len_long) :: filename
+      logical (kind=log_kind) :: gather
+
+         write(filename,'(a,a,i8.8)') 
+     &        dump_file(1:lenstr(dump_file)),'.',idate
+
+      if (my_task == master_task) then
+        open(nu_rst_pointer,file=pointer_file)
+        write(nu_rst_pointer,'(a)') filename
+        close(nu_rst_pointer)
+      endif
+
+      write(filename,'(a,a,a,i8.8)') 
+     &        restart_dir(1:lenstr(restart_dir)),
+     &        dump_file(1:lenstr(dump_file)),'.',idate
+      call ice_open(nu_dump,filename,0)
+      if (my_task == master_task) then
+        write (nu_dump) istep1,time,time_forc
+        write(nu_diag,*) 'Writing ',filename(1:lenstr(filename))
+        write(nu_diag,*) 'Restart written ',istep1,time,time_forc
+      endif
+
+      gather = .true.
+
+      !-----------------------------------------------------------------
+      ! state variables
+      !-----------------------------------------------------------------
+      do n=1,ncat
+        worka(ilo:ihi,jlo:jhi)=aicen(ilo:ihi,jlo:jhi,n)
+        call ice_write(nu_dump,0,worka,'ruf8',gather)
+        worka(ilo:ihi,jlo:jhi)=vicen(ilo:ihi,jlo:jhi,n)
+        call ice_write(nu_dump,0,worka,'ruf8',gather)
+        worka(ilo:ihi,jlo:jhi)=vsnon(ilo:ihi,jlo:jhi,n)
+        call ice_write(nu_dump,0,worka,'ruf8',gather)
+        worka(ilo:ihi,jlo:jhi)=Tsfcn(ilo:ihi,jlo:jhi,n)
+        call ice_write(nu_dump,0,worka,'ruf8',gather)
+        worka(ilo:ihi,jlo:jhi)=esnon(ilo:ihi,jlo:jhi,n)
+        call ice_write(nu_dump,0,worka,'ruf8',gather)
+      enddo
+
+      do k=1,ntilay
+        worka(ilo:ihi,jlo:jhi)=eicen(ilo:ihi,jlo:jhi,k)
+        call ice_write(nu_dump,0,worka,'ruf8',gather)
+      enddo
+
+      !-----------------------------------------------------------------
+      ! velocity
+      !-----------------------------------------------------------------
+      worka(ilo:ihi,jlo:jhi)=uvel(ilo:ihi,jlo:jhi)
+      call ice_write(nu_dump,0,worka,'ruf8',gather)
+      worka(ilo:ihi,jlo:jhi)=vvel(ilo:ihi,jlo:jhi)
+      call ice_write(nu_dump,0,worka,'ruf8',gather)
+
+      !-----------------------------------------------------------------
+      ! fresh water, salt, and heat flux
+      !-----------------------------------------------------------------
+      worka(ilo:ihi,jlo:jhi)=fresh(ilo:ihi,jlo:jhi)      
+      call ice_write(nu_dump,0,worka,'ruf8',gather)           
+      worka(ilo:ihi,jlo:jhi)=fsalt(ilo:ihi,jlo:jhi)      
+      call ice_write(nu_dump,0,worka,'ruf8',gather)          
+      worka(ilo:ihi,jlo:jhi)=fhnet(ilo:ihi,jlo:jhi)      
+      call ice_write(nu_dump,0,worka,'ruf8',gather)          
+
+      !-----------------------------------------------------------------
+      ! ice strength 
+      !-----------------------------------------------------------------
+      worka(ilo:ihi,jlo:jhi)=strength(ilo:ihi,jlo:jhi)   
+      call ice_write(nu_dump,0,worka,'ruf8',gather)           
+
+      !-----------------------------------------------------------------
+      ! ocean stress
+      !-----------------------------------------------------------------
+      worka(ilo:ihi,jlo:jhi)=strocnxT(ilo:ihi,jlo:jhi)
+      call ice_write(nu_dump,0,worka,'ruf8',gather)
+      worka(ilo:ihi,jlo:jhi)=strocnyT(ilo:ihi,jlo:jhi)
+      call ice_write(nu_dump,0,worka,'ruf8',gather)
+
+      !-----------------------------------------------------------------
+      ! internal stress
+      !-----------------------------------------------------------------
+         worka(ilo:ihi,jlo:jhi)=stressp_1(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+         worka(ilo:ihi,jlo:jhi)=stressm_1(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+         worka(ilo:ihi,jlo:jhi)=stress12_1(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+
+         worka(ilo:ihi,jlo:jhi)=stressp_2(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+         worka(ilo:ihi,jlo:jhi)=stressm_2(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+         worka(ilo:ihi,jlo:jhi)=stress12_2(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+
+         worka(ilo:ihi,jlo:jhi)=stressp_3(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+         worka(ilo:ihi,jlo:jhi)=stressm_3(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+         worka(ilo:ihi,jlo:jhi)=stress12_3(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+
+         worka(ilo:ihi,jlo:jhi)=stressp_4(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+         worka(ilo:ihi,jlo:jhi)=stressm_4(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+         worka(ilo:ihi,jlo:jhi)=stress12_4(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+
+      !-----------------------------------------------------------------
+      ! ice mask for dynamics
+      !-----------------------------------------------------------------
+      do j=jlo,jhi
+       do i=ilo,ihi
+        worka(i,j) = 0.
+        if (iceumask(i,j)) worka(i,j) = 1.
+       enddo
+      enddo
+      call ice_write(nu_dump,0,worka,'ruf8',gather)
+
+      ! for mixed layer model
+      if (oceanmixed_ice) then
+         worka(ilo:ihi,jlo:jhi)=sst(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+         worka(ilo:ihi,jlo:jhi)=frzmlt(ilo:ihi,jlo:jhi)
+         call ice_write(nu_dump,0,worka,'ruf8',gather)
+      endif
+
+      if (my_task == master_task) close(nu_dump)
+
+      end subroutine dumpfile
+
+!=======================================================================
+!BOP
+!
+! !IROUTINE: restartfile  - restarts from a dumpfile
+!
+! !INTERFACE:
+!
+      subroutine restartfile
+!
+! !DESCRIPTION:
+!
+! Restarts from a dump
+!
+! !REVISION HISTORY:
+!
+! author Elizabeth C. Hunke, LANL
+!
+! !USES:
+!
+      use ice_model_size
+      use ice_flux
+      use ice_mpi_internal
+      use ice_grid
+      use ice_calendar
+      use ice_state
+      use ice_dyn_evp
+      use ice_itd
+      use ice_ocean, only: oceanmixed_ice
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+!EOP
+!
+      integer (kind=int_kind) :: i, j, k, n
+      character(len=char_len_long) :: filename, filename0
+      logical (kind=log_kind) :: diag
+
+      if (my_task == master_task) then
+        open(nu_rst_pointer,file=pointer_file)
+        read(nu_rst_pointer,'(a)') filename0
+        write(filename,'(a,a)')
+     &          restart_dir(1:lenstr(restart_dir)),
+     &          filename0(1:lenstr(filename0))
+        close(nu_rst_pointer)
+      endif
+
+      call ice_open(nu_restart,filename,0)
+      if (my_task == master_task) then
+        read (nu_restart) istep0,time,time_forc
+        write(nu_diag,*) 'read ',pointer_file(1:lenstr(pointer_file))
+        write(nu_diag,*) 'dump read at istep=',istep0,time,time_forc
+        write(nu_diag,*) 'restart file =', trim(filename)
+      endif
+      call ice_bcast_iscalar(istep0)
+      istep1=istep0
+      call ice_bcast_rscalar(time)
+      call ice_bcast_rscalar(time_forc)
+
+      diag = .true.     ! write min/max diagnostics for field
+
+      !-----------------------------------------------------------------
+      ! state variables
+      !-----------------------------------------------------------------
+      do n=1,ncat
+        if (my_task == master_task) 
+     &   write(nu_diag,*) 'cat ',n,
+     &               ' min/max area, vol ice, vol snow, Tsfc, esnon'
+        call ice_read(nu_restart,0,worka,'ruf8',diag)
+        aicen(ilo:ihi,jlo:jhi,n)=worka(ilo:ihi,jlo:jhi)
+        call ice_read(nu_restart,0,worka,'ruf8',diag)
+        vicen(ilo:ihi,jlo:jhi,n)=worka(ilo:ihi,jlo:jhi)
+        call ice_read(nu_restart,0,worka,'ruf8',diag)
+        vsnon(ilo:ihi,jlo:jhi,n)=worka(ilo:ihi,jlo:jhi)
+        call ice_read(nu_restart,0,worka,'ruf8',diag)
+        Tsfcn(ilo:ihi,jlo:jhi,n)=worka(ilo:ihi,jlo:jhi)
+        call ice_read(nu_restart,0,worka,'ruf8',diag)
+        esnon(ilo:ihi,jlo:jhi,n)=worka(ilo:ihi,jlo:jhi)
+      enddo
+
+      if (my_task == master_task)
+     & write(nu_diag,*) 'min/max eicen for each layer'
+      do k=1,ntilay
+        call ice_read(nu_restart,0,worka,'ruf8',diag)
+        eicen(ilo:ihi,jlo:jhi,k)=worka(ilo:ihi,jlo:jhi)
+      enddo
+
+      !-----------------------------------------------------------------
+      ! velocity
+      !-----------------------------------------------------------------
+      if (my_task == master_task) 
+     & write(nu_diag,*) 'min/max velocity components'
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      uvel(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      vvel(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+
+      !-----------------------------------------------------------------
+      ! fresh water, salt, and heat flux       
+      !-----------------------------------------------------------------
+      if (my_task == master_task)
+     & write(nu_diag,*) 'min/max fresh water and heat flux components'
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      fresh(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      fsalt(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      fhnet(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+
+      !-----------------------------------------------------------------
+      ! ice strength 
+      !-----------------------------------------------------------------
+      if (my_task == master_task)
+     & write(nu_diag,*) 'min/max ice strength'
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      strength(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+
+      !-----------------------------------------------------------------
+      ! ocean stress
+      !-----------------------------------------------------------------
+      if (my_task == master_task) 
+     & write(nu_diag,*) 'min/max ocean stress components'
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      strocnxT(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      strocnyT(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+
+      !-----------------------------------------------------------------
+      ! internal stress
+      !-----------------------------------------------------------------
+      if (my_task == master_task) write(nu_diag,*) 
+     & 'min/max internal stress components (3 per triangle)'
+
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      stressp_1(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      stressm_1(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      stress12_1(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      stressp_2(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      stressm_2(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      stress12_2(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      stressp_3(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      stressm_3(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      stress12_3(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      stressp_4(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      stressm_4(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      stress12_4(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+
+      !-----------------------------------------------------------------
+      ! ice mask for dynamics
+      !-----------------------------------------------------------------
+      if (my_task == master_task) 
+     & write(nu_diag,*) 'ice mask for dynamics'
+      call ice_read(nu_restart,0,worka,'ruf8',diag)
+      do j=jlo,jhi
+       do i=ilo,ihi
+        iceumask(i,j) = .false.
+        if (worka(i,j) > p5) iceumask(i,j) = .true.
+       enddo
+      enddo
+
+      ! for mixed layer model
+
+      if (oceanmixed_ice) then
+         if (my_task == master_task) 
+     &    write(nu_diag,*) 'min/max sst, frzmlt'
+         call ice_read(nu_restart,0,worka,'ruf8',diag)
+         sst(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+         call ice_read(nu_restart,0,worka,'ruf8',diag)
+         frzmlt(ilo:ihi,jlo:jhi)=worka(ilo:ihi,jlo:jhi)
+      endif
+
+      if (my_task == master_task) close(nu_restart)
+
+      !-----------------------------------------------------------------
+      ! update boundary conditions
+      ! Note: EVP dynamics needs initial stresses in N and E ghost cells
+      !-----------------------------------------------------------------
+
+      call bound_state          ! aicen, vicen, etc.
+      call bound(uvel)      
+      call bound(vvel)      
+      call bound(stressp_1)
+      call bound(stressm_1)
+      call bound(stress12_1)
+      call bound(stressp_2)
+      call bound(stressm_2)
+      call bound(stress12_2)
+      call bound(stressp_3)
+      call bound(stressm_3)
+      call bound(stress12_3)
+      call bound(stressp_4)
+      call bound(stressm_4)
+      call bound(stress12_4)
+
+      !-----------------------------------------------------------------
+      ! ensure ice is binned in correct categories 
+      ! should not be necessary unless restarting from a run with
+      ! different category boundaries
+      !-----------------------------------------------------------------
+      ! These calls do not allow for exact restart capability, so they
+      ! have been commented out.  This may be a problem for a run that
+      ! uses different category boundaries.
+      !-----------------------------------------------------------------
+!!      call zap_small_areas
+!!      if (ncat > 1) call rebin
+
+      !-----------------------------------------------------------------
+      ! compute aggregate ice state and open water area
+      !-----------------------------------------------------------------
+      call aggregate
+      call bound_aggregate
+
+      do j = 1, jmt_local
+        do i = 1, imt_local
+          aice_init(i,j) = aice(i,j)
+        enddo
+      enddo
+
+      end subroutine restartfile
 
 !=======================================================================
 

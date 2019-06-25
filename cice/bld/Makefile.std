@@ -1,6 +1,6 @@
 #-------------------------------------------------------------------------------
 # CVS $Id: Makefile.std,v 1.1 2004/02/09 18:13:52 lipscomb Exp $
-# CVS $Source: /home/climate/CVS-COSIM/cice/bld/Makefile.std,v $
+# CVS $Source: /net/bob1/CVS-COSIM/cice/bld/Makefile.std,v $
 # CVS $Name:  $
 #-------------------------------------------------------------------------------
 # Common Makefile: a framework for building all CCSM components and more

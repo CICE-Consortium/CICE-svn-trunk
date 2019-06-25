@@ -1,0 +1,15 @@
+#!/bin/tcsh 
+#BSUB -q smallq
+#BSUB -W 1:00
+#BSUB -n 8
+#BSUB -J cice3.14
+     
+set  stamp   = `date -u '+%y%m%d%H%M%S'`
+setenv ICE_LOG_FILE ice.log.${stamp}
+
+cd /scratch/eclare/rundir
+setenv MPI_DSM_DISTRIBUTE
+mpirun -np 8 ./cice  >&! $ICE_LOG_FILE
+
+exit 0
+

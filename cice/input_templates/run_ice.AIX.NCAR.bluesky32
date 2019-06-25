@@ -1,0 +1,37 @@
+#! /bin/csh -f
+#===============================================================================
+#  This is a CICE Load Leveler batch job script for bluesky32
+#===============================================================================
+# @ shell = /usr/bin/csh
+# @ output = poe.stdout.$(jobid).$(stepid)
+# @ error  = poe.stderr.$(jobid).$(stepid)
+# @ network.MPI = csss,not_shared,us
+# @ environment = MP_EUILIB=us; MP_EAGER_LIMIT=0
+# @ node_usage = not_shared
+# @ checkpoint = no
+# @ ja_report = yes
+# @ class = csl_rg32
+# @ wall_clock_limit = 600
+# @ job_type = parallel
+# @ job_name = cice3.14
+# @ task_geometry = {(0,1,2,3,4,5,6,7)}
+# @ account_no = 93300065
+# @ queue
+
+setenv SRCDIR $HOME/cice.v3.14/cice
+setenv stamp "`date +%y%m%d-%H%M%S`"   
+setenv ICE_LOG_FILE ice.log.${stamp}
+
+cd /ptmp/eclare/rundir
+poe ./cice
+wait
+
+# Save model output 
+  cp -p poe.stdout.$(jobid).$(stepid) $ICE_LOG_FILE
+  cp -p $ICE_LOG_FILE $SRCDIR   || echo "Error in copy of logs " && exit -1
+
+
+
+
+
+

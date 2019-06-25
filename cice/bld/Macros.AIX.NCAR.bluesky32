@@ -1,0 +1,33 @@
+#==============================================================================
+# Makefile macros for "bluesky," an NCAR IBM
+#==============================================================================
+
+INCLDIR    := -I. -I/usr/local/include -I/usr/include \
+                  -I/usr/lpp/ppe.poe/include
+SLIBS      := -L /usr/local/lib32/r4i4 -l netcdf 
+ULIBS      := 
+CPP        := /lib/cpp
+CPPFLAGS   := -P 
+CPPDEFS    := -DAIX
+CFLAGS     := -c -O2
+FIXEDFLAGS := -qsuffix=f=f   -qfixed=132
+FREEFLAGS  := -qsuffix=f=f90 -qfree=f90
+
+ifeq ($(BINTYPE), MPI)
+  FC         := mpxlf90_r
+else
+  FC         := xlf90
+endif
+
+FFLAGS     := -c -O3 -qstrict -Q -qmaxmem=-1 -qrealsize=8  \
+              -qarch=auto -qtune=auto 
+MOD_SUFFIX := mod
+LD         := $(FC)
+LDFLAGS    := 
+
+   CPPDEFS :=  $(CPPDEFS)  -DNPROC_X=$(NX) -DNPROC_Y=$(NY)
+#   CPPDEFS :=  $(CPPDEFS)  -Dfcd_coupled -Dcoupled
+
+ifeq ($(BINTYPE), MPI)
+   CPPDEFS :=  $(CPPDEFS) -D_MPI
+endif

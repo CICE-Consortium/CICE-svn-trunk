@@ -1,0 +1,31 @@
+#==============================================================================
+# Makefile macros for "ram," an SGI ALTIX system at ORNL running Linux
+#==============================================================================
+# For use with Intel Fortran compiler efc8043 (module load...)
+#==============================================================================
+
+INCLDIR    := -I.  -I/usr/projects/climate/maltrud/local/include 
+SLIBS      := -L /usr/projects/climate/maltrud/local/lib -lnetcdf
+ULIBS      := 
+CPP        := /usr/bin/cpp
+CPPFLAGS   := -P -traditional
+CPPDEFS    := -DLINUX -DPAROPT
+CFLAGS     := -c -O2
+FIXEDFLAGS := 
+FREEFLAGS  := 
+FC         := ifort
+#FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -CB
+#FFLAGS     := -r8 -i4 -align all -w -ftz -convert big_endian -assume byterecl -fpe0 -g 
+FFLAGS     := -r8 -i4 -O2 -align all -w -ftz -convert big_endian -assume byterecl 
+MOD_SUFFIX := mod
+LD         := $(FC)
+LDFLAGS    := $(FFLAGS) -v
+
+   CPPDEFS :=  $(CPPDEFS)  -DNPROC_X=$(NX) -DNPROC_Y=$(NY)
+#   CPPDEFS :=  $(CPPDEFS)  -Dfcd_coupled -Dcoupled
+
+ifeq ($(BINTYPE), MPI)
+   CPPDEFS :=  $(CPPDEFS) -D_MPI
+   SLIBS   :=  $(SLIBS) -lmpi
+endif
+
