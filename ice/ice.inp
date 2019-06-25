@@ -1,0 +1,37 @@
+&inp
+year=1997,
+istep0=0,
+dt=7200.,
+ndte=120,
+npt=20,
+
+diagfreq=1,
+outfreq='m',
+dumpfreq='y',
+
+kdata=0,
+kread=0,
+
+c0(1)=0.2,
+hice0(1)=0.0,
+hsnow0(1)=0.0,
+hzero(1) = 0.1,
+
+c0(2)=0.8,
+hice0(2)=1.0,
+hsnow0(2)=0.01,
+
+u0=0.,
+v0=0.,
+
+pst=2.75e4,
+cst=20,
+eyc=0.36,
+
+grid_file    = 'global_192x128.grid',
+kmt_file     = 'global_192x128.kmt',
+dump_file    = 'iced.',
+restrt_file  = 'iced.19970105',
+history_file = 'iceh.'
+
+/

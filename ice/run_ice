@@ -1,0 +1,37 @@
+#!/bin/csh
+#BSUB -n 8
+##BSUB -q chammpq
+#BSUB -W 2:00
+#BSUB -R "span[hosts=1]"
+#BSUB -J cice
+#BSUB -N
+#BSUB -m n02
+
+# Set up multitasking parameters
+#
+
+setenv OMP_NUM_THREADS 8
+setenv OMP_SCHEDULE "dynamic,4"
+setenv _DSM_PLACEMENT ROUND_ROBIN
+
+set  stamp   = `date -u '+%y%m%d%H%M%S'`
+setenv DATA_DIR     .
+setenv ICE_LOG_FILE       $DATA_DIR/ice.log.${stamp}
+
+#
+# Run the ice model
+#
+
+echo "Running ice model"
+
+#cice >&! $ICE_LOG_FILE
+mpirun -np 8 cice >&! $ICE_LOG_FILE
+
+#
+#  Exit
+#
+rm core*
+
+echo "Exiting job"
+exit 0
+

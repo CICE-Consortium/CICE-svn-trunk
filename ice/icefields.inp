@@ -1,0 +1,30 @@
+&icefields
+
+ f_cmpct     = .true.,
+ f_c2        = .true.,
+ f_hi1       = .true.,
+ f_hi2       = .true.,
+ f_hs1       = .true.,
+ f_hs2       = .true.,
+ f_uice      = .true.,
+ f_vice      = .true.,
+ f_tsfc1     = .true.,
+ f_tsfc2     = .true.,
+ f_flat      = .true.,
+ f_fsen      = .true.,
+ f_flwo      = .false.,
+ f_fnet      = .true.,
+ f_salt      = .true.,
+ f_fresh     = .true.,
+
+ f_sig1      = .false.,
+ f_sig2      = .false.,
+ f_snow      = .false.,
+ f_fsw       = .false.,
+ f_flw       = .false.,
+ f_sst       = .false.,
+ f_sss       = .false.
+
+/
+
+
