@@ -1,0 +1,62 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Troubleshooting </TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<A HREF="cicedoc_9.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+  <A HREF="cicedoc.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_17.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go backward to </B><A HREF="cicedoc_9.html">Numerical implementation</A><BR><B>Go up to </B><A HREF="cicedoc.html">Top</A><BR><B>Go forward to </B><A HREF="cicedoc_17.html">Index of primary variables and parameters</A>
+  
+<HR>
+<H1>Troubleshooting </H1>
+
+<B>Debugging hints</B> <BR>Several utilities are available that can be helpful when debugging the
+code.  Not all of these will work everywhere in the code, due to
+possible conflicts in module dependencies.
+<DL><DT><B><I>debug_ice</I> (<B>ice.F</B>)</B>
+<DD> A wrapper for <I>print_state</I> that is easily called from numerous points during the
+timestepping loop (see <B>ice.F.debug</B>).  
+<DT><B><I>print_state</I> (<B>ice_diagnostics.F</B>)</B>
+<DD> Print the ice
+state and forcing fields for a given grid cell.
+<DT><B><I>ice_global_real_minmax</I> (<B>ice_mpi_internal.F</B>)</B>
+<DD>
+Compute and print the minimum and maximum values for a real array.
+A sister routine prints the global sum of all elements in a real array, 
+<I>ice_global_real_sum</I>.
+<DT><B><TT>diag = .true.</TT> (in calls to <I>ice_read</I>)</B>
+<DD>  Print global
+max and min values for the field being read.
+<DT><B><TT>print_points</TT> (<B>ice_in</B>)</B>
+<DD> If true, print numerous
+diagnostic quantities for two grid cells, one near the
+north pole and one in the Weddell Sea.  This utility also provides the local
+grid indices and processor number (<TT>ip, jp, my_task</TT>) for these
+points, which can be used in conjunction with <TT>check_step</TT>, to call
+<I>print_state</I>. These flags are set in <B>ice_diagnostics.F</B>.  This option can be fairly slow, due to gathering
+data from MPI subdomains.
+<DT><B><TT>OPTIMIZE = no</TT> (<B>GNUmakefile</B>)</B>
+<DD> Enable the debugging
+flag <TT>-g</TT> and create an executable with the suffix <TT>_db</TT>.
+</DL>
+
+<B>Known bugs</B> <BR><OL><LI>The ocean heat flux computed by the ice model may not use the
+turbulent formulation of <A HREF="cicedoc_19.html#30">[30]</A>, in favor of using the entire
+heat flux available from the ocean model.  See <I>init_frzmlt</I> in
+<B>ice_therm_driver.F</B>.
+<LI>Fluxes sent to the coupler may have incorrect values in grid
+cells that change from an ice-free state to having ice during the
+given time step, or vice versa, due to scaling by the ice
+area.  Authors of the flux coupler have not reached agreement
+on how these fluxes will be handled in the coupler, as of this writing.
+<LI>Timers are architecture dependent.
+<LI>Local domains are not padded for uneven division of the global domain.
+</OL>
+
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><A HREF="cicedoc_9.html"><IMG ALT="Prev" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+    <A HREF="cicedoc.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_17.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

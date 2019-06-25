@@ -1,0 +1,44 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Numerical implementation</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<A HREF="cicedoc_3.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+  <A HREF="cicedoc.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_16.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go backward to </B><A HREF="cicedoc_3.html">Model components</A><BR><B>Go up to </B><A HREF="cicedoc.html">Top</A><BR><B>Go forward to </B><A HREF="cicedoc_16.html">Troubleshooting </A>
+  
+<HR>
+<H1>Numerical implementation</H1>
+
+CICE is written in FORTRAN90 and runs on UNIX host platforms;
+it has been developed on an SGI Origin 2000 at Los Alamos National
+Laboratory.  The code is parallelized via grid decomposition with MPI;
+an effort is underway to develop an efficient hybrid parallelization
+that utilizes both OpenMP and MPI for better load balancing across
+processors.  
+
+<P>A second, "external" layer of parallelization involves message
+passing between CICE and the flux coupler, which may be running on
+different machines in a distributed system.  The parallelization
+scheme for CICE was designed so that MPI could be used for the
+coupling along with either OpenMP or MPI (or neither) internally.  The
+internal parallelization method is set at compile time with the <TT>BINTYPE</TT> definition in the make scripts.  Message passing between the
+ice model and the flux coupler is accomplished with MPI, regardless of
+the type of internal parallelization used for CICE.  OpenMP directives
+have been removed from this version of CICE while we develop a hybrid
+scheme. 
+<P><MENU>
+<LI><A HREF="cicedoc_10.html">Directory structure</A>
+<LI><A HREF="cicedoc_11.html">Grid, boundary conditions and masks</A>
+<LI><A HREF="cicedoc_12.html">Initialization and coupling</A>
+<LI><A HREF="cicedoc_13.html">Choosing appropriate parameters</A>
+<LI><A HREF="cicedoc_14.html">Model output</A>
+<LI><A HREF="cicedoc_15.html">Execution procedures</A>
+</MENU>
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><A HREF="cicedoc_3.html"><IMG ALT="Prev" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+    <A HREF="cicedoc.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_16.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

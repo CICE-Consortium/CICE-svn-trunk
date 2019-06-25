@@ -1,0 +1,95 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Choosing appropriate parameters</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<A HREF="cicedoc_12.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+  <A HREF="cicedoc_9.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_14.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go backward to </B><A HREF="cicedoc_12.html">Initialization and coupling</A><BR><B>Go up to </B><A HREF="cicedoc_9.html">Numerical implementation</A><BR><B>Go forward to </B><A HREF="cicedoc_14.html">Model output</A>
+  
+<HR>
+<H2>Choosing appropriate parameters</H2>
+
+The time step <TT>dt</TT>  is chosen based on
+stability of the transport component (both horizontal and in thickness
+space) and on resolution of the physical
+forcing.  A conservative estimate of the horizontal transport time
+step bound under remapping yields
+
+<TT>dt</TT>&lt;0.5*min(<TT>dx,dy</TT>)/max(<TT>uvel,vvel</TT>).
+Note that this is a factor of 2 larger than the MPDATA condition.
+Numerical values for this bound for two standard POP grids, assuming
+
+max(<TT>uvel,vvel</TT>)=0.5&#160;m/s,
+are as follows:
+<p>
+<center>
+<a name="table">
+<table border="3">
+<th> grid </th>
+<th> min(<TT>dx,dy</TT>) </th>
+<th> max <TT>dt</TT> </th>
+<tr>
+<td align=center> &lt;4/3<I><sup>o</sup></I>&gt; </td>
+<td align=center> <I>3.1&#215;10<sup>4</sup></I> m </td>
+<td align=center> 8.6 hr </td>
+<tr>
+<td align=center> &lt;2/3<I><sup>o</sup></I>&gt; </td>
+<td align=center> <I>1.6&#215;10<sup>4</sup></I> m </td>
+<td align=center> 4.4 hr </td>
+</table></a></center>
+<P>Transport in thickness space imposes a similar restraint on the time
+step, given by the ice growth/melt rate and the smallest range of
+thickness among the categories, 
+<TT>dt</TT> &lt; 0.5*min(dH)/max(<I>f</I>), where dH
+is the distance between category boundaries and <I>f</I>
+is the thermodynamic growth rate.  For the 5-category ice thickness
+distribution used as the default in this distribution, this is not a
+stringent limitation:  
+<TT>dt</TT> &lt; 19.4&#160;hr, assuming max <I>f</I> = 40&#160;cm/day. 
+<P>The dynamics component is subcycled <TT>ndte</TT>  times
+per time step so that the elastic waves essentially disappear
+before the next time step. The subcycling time step  is thus
+<BLOCKQUOTE><TT>dte = dt/ndte.</TT></BLOCKQUOTE>
+
+A second parameter, 
+<TT>eyc</TT>
+must be selected, which
+defines the elastic wave damping timescale 
+<I>T</I>
+as <TT>eyc*dt</TT>.
+The forcing terms are not updated during the subcycling.  
+Given the small step (<TT>dte</TT>) at which the EVP dynamics model is subcycled,
+the elastic parameter <I>E</I> is also limited by stability constraints, as
+discussed in <A HREF="cicedoc_19.html#16">[16]</A>.  Linear stability analysis for the dynamics
+component shows that the numerical method is stable as long as the subcycling
+time step 
+sufficiently resolves the damping timescale <I>T</I>.
+For the stability analysis
+we had to make several simplifications of the problem; hence the
+location of the boundary between stable and unstable regions is merely
+an estimate.  In practice, the ratio
+<TT>dte</TT> : <I>T</I> : <TT>dt</TT>
+&#160;=&#160;1&#160;:&#160;40&#160;:&#160;120 provides both stability and acceptable efficiency for
+time steps 
+(<TT>dt</TT>) 
+on the order of 2 hours.  This parameter space needs further
+exploration!  
+<P>Note that only <I>T</I> and
+<TT>dte</TT> 
+figure into the stability of the dynamics component;
+<TT>dt</TT> 
+does not.  The thermodynamics component is stable for any time step.  
+Although the time step may not be tightly limited by stability
+considerations, large time steps (<I>eg.,</I> 
+<TT>dt</TT>=1&#160;day, 
+given daily forcing) do not produce accurate results in the dynamics
+component.  The reasons for this error are discussed in <A HREF="cicedoc_19.html#16">[16]</A>;
+see <A HREF="cicedoc_19.html#23">[23]</A> for its practical effects.
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><A HREF="cicedoc_12.html"><IMG ALT="Prev" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+    <A HREF="cicedoc_9.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_14.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

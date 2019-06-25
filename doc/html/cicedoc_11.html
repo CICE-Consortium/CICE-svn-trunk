@@ -1,0 +1,94 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Grid, boundary conditions and masks</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<A HREF="cicedoc_10.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+  <A HREF="cicedoc_9.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_12.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go backward to </B><A HREF="cicedoc_10.html">Directory structure</A><BR><B>Go up to </B><A HREF="cicedoc_9.html">Numerical implementation</A><BR><B>Go forward to </B><A HREF="cicedoc_12.html">Initialization and coupling</A>
+  
+<HR>
+<H2>Grid, boundary conditions and masks</H2>
+
+The spatial discretization is specialized for a generalized orthogonal
+B-grid as in <A HREF="cicedoc_19.html#34">[34]</A> or <A HREF="cicedoc_19.html#35">[35]</A>.  The ice and snow
+area, volume and energy are given at the center of the cell, velocity
+is defined at the corners, and the internal ice stress tensor takes
+four different values within a grid cell; bilinear approximations are
+used for the stress tensor and the ice velocity across the cell, as
+described in <A HREF="cicedoc_19.html#18">[18]</A>. This tends to avoid the grid decoupling
+problems associated with the B-grid.
+<P>Since ice thickness and thermodynamic variables such as temperature
+are given in the center of each cell, the grid cells are referred to
+as "T cells."  We also occasionally refer to "U cells," which are
+centered on the northeast corner of the corresponding T cells and have
+velocity in the center of each. The velocity components are aligned
+along grid lines. 
+<P>In general, the global gridded domain is 
+<TT>imt_global&#160;x&#160;jmt_global</TT>, 
+while the subdomains used in the MPI grid decomposition are 
+<TT>imt_local&#160;x&#160;jmt_local</TT>.  
+The physical portion of a subdomain is indexed as [<TT>ilo:ihi,jlo:jhi</TT>], with <TT>num_ghost_cells</TT> "ghost" cells
+outside the domain, used for boundary conditions. These parameters are
+illustrated 
+below 
+in one dimension.  The routines <I>global_scatter</I> and <I>global_gather</I> distribute information from the global domain to the
+local domains and back, respectively.  If MPI is not being used for
+grid decomposition in the ice model, these routines simply adjust the
+indexing on the global domain to the single, local domain index
+coordinates.  We strongly suggest that the user choose the number of
+local domains so that the global domain is evenly divided.  If the
+global domain is not evenly divided by the number of processors, then
+the last subdomain will contain nonphysical points ("padding").
+Besides a loss of efficiency due to computing at these points, other
+problems may arise due to incompatible initializations and spurious
+data values.
+<P>The user has two choices of grid routines: <I>popgrid</I> reads grid
+lengths and other parameters for a nonuniform grid, and <I>rectgrid</I>
+creates a regular rectangular grid.
+The input files <B>global_192x128.grid</B> and <B>global_192x128.kmt</B> contain the  
+&lt;4/3<I><sup>o</sup></I>&gt; 
+<A HREF="http://gnarly.lanl.gov/Pop/Images/sample_grid.gif">POP grid</A>
+and land mask.  These are binary unformatted, direct access files
+produced on an SGI.  If you are using an incompatible architecture,
+choose <TT>rectangular</TT> instead of <TT>displaced_pole</TT> in <B>ice_in</B>.
+<P><IMG  SRC="grid.gif">
+
+<P><A NAME="1">&#160;</A> Grid parameters for a sample
+one-dimensional, 20-cell global domain decomposed into four local
+subdomains.  Each local domain has one ghost cell on each side, and
+the physical portion of the local domains are labeled <TT>ilo:ihi</TT>.
+The parameter <TT>imt_local</TT> is the total number of cells in the
+local domain, including ghost cells, and the same numbering system is
+applied to each of the four subdomains.<P>A land mask <TT>hm</TT> (<I>M<sub>h</sub></I>)  is specified in the cell
+centers, with 0 representing land and 1 representing ocean cells.  A
+corresponding mask <TT>uvm</TT> (<I>M<sub>u</sub></I>) for velocity and other corner
+quantities is given by
+<BLOCKQUOTE><I>M<sub>u</sub>(i,j)=min{M<sub>h</sub>(l),l=(i,j),(i+1,j),(i,j+1),(i+1,j+1)}.</I></BLOCKQUOTE>
+Along domain boundaries not masked by land, periodic conditions wrap
+the domain around the globe.  The original boundary routine is <I>bound</I>; the other boundary routines improve parallel performace by not
+filling all four boundaries when that is unnecessary, and by updating
+multiple spatial arrays at once.  The boundary routines also perform
+boundary communications between local domains when MPI is in use.
+Logical masks corresponding to the real masks <TT>hm</TT> and <TT>uvm</TT>,
+<TT>tmask</TT> and <TT>umask</TT> respectively, are useful in conditional
+statements.
+<P>In addition to the land masks, two other masks are implemented in <I>evp_prep</I> order to reduce the dynamics component's work on a global
+grid.  At each time step the logical masks <TT>ice_tmask</TT> and <TT>ice_umask</TT> are determined from the current ice extent, such that they
+have the value "true" wherever ice exists. They also include a
+border of cells around the ice pack for numerical purposes. These
+masks are used in the dynamics component to prevent unnecessary
+calculations on grid points where there is no ice.  They are not used
+in the thermodynamics component, so that ice may form in previously
+ice-free cells.  Like the land masks <TT>hm</TT> and <TT>uvm</TT>, the ice
+extent masks <TT>ice_tmask</TT> and <TT>ice_umask</TT> are for T cells and
+U cells, respectively.
+<P>Two additional masks are created for the user's convenience:  <TT>mask_n</TT> and <TT>mask_s</TT> can be used to compute or write data only
+for the northern or southern hemispheres, respectively.
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><A HREF="cicedoc_10.html"><IMG ALT="Prev" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+    <A HREF="cicedoc_9.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_12.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

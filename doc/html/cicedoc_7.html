@@ -1,0 +1,83 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Dynamics</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<A HREF="cicedoc_6.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+  <A HREF="cicedoc_3.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_8.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go backward to </B><A HREF="cicedoc_6.html">Mechanical redistribution</A><BR><B>Go up to </B><A HREF="cicedoc_3.html">Model components</A><BR><B>Go forward to </B><A HREF="cicedoc_8.html">Thermodynamics</A>
+  
+<HR>
+<H2>Dynamics</H2>
+
+The elastic-viscous-plastic (EVP) model represents a modification of the
+standard viscous-plastic (VP) model for sea ice dynamics
+<A HREF="cicedoc_19.html#22">[22]</A>. It reduces to the VP model at time scales associated
+with the wind forcing, while at shorter time scales the adjustment
+process takes place by a numerically more efficient elastic wave
+mechanism.  While retaining the essential physics, this elastic wave
+modification leads to a fully explicit numerical scheme which greatly
+improves the model's computational efficiency.
+<P>The EVP sea ice dynamics model is
+thoroughly documented in <A HREF="cicedoc_19.html#16">[16]</A>, <A HREF="cicedoc_19.html#17">[17]</A> and <A HREF="cicedoc_19.html#18">[18]</A>.
+Simulation results and performance of this model have been
+compared with the VP model in realistic simulations of the Arctic
+<A HREF="cicedoc_19.html#23">[23]</A>. 
+<P>Several changes have been made to the EVP model since the original
+release.  In the earlier version, the viscosities were held fixed
+while the stress and momentum equations were subcycled with the
+smaller time step <TT>dte</TT>.  The reason for implementing the EVP
+model in this way was to reproduce the results of the original VP
+model as closely as possible.  When solved with time steps of several
+hours or more, the VP model suffers a linearization error associated
+with the viscosities, which are lagged over the time step
+<A HREF="cicedoc_19.html#17">[17]</A>.  This led 
+to principal stress states that were widely scattered outside the
+elliptical yield curve in both models <A HREF="cicedoc_19.html#23">[23]</A>.  We have addressed
+this problem by updating the viscosities during the subcycling, so
+that the entire dynamics component is subcycled within the time step
+<TT>dt</TT>.  Taken alone, this change would require an increased number
+operations to compute the viscosities.  
+<P>However, the new dynamics component is roughly as efficient as the
+earlier version due to a change in the definition of the elastic
+parameter <I>E</I>.  <I>E</I> is now defined in terms of a
+damping timescale <I>T</I> for elastic 
+waves,
+where 
+<I>T=E<sub>o</sub> dt</I> and <I>E<sub>o</sub></I> 
+(<TT>eyc</TT>) is a tunable
+parameter less than one, as before.  
+
+All coefficients on the left-hand side 
+of the stress equation 
+are constant
+except for <I>P</I>, which changes only on the longer 
+time step <TT>dt</TT>.
+This modification compensates for the decreased efficiency
+of including the viscosity terms in the subcycling.  
+Choices of the parameters used to define <I>E</I>, <I>T</I> and
+the subcycling time step <TT>dte</TT>
+are discussed in
+<A HREF="cicedoc_13.html">the Numerical Implementation section</A>.
+<P>The dynamics component now employs a "replacement pressure"
+(see <A HREF="cicedoc_19.html#24">[24]</A>, for example), which serves to prevent residual ice
+motion due to spatial variations of <I>P</I> when the rates of strain are
+exactly zero.
+<P>Finally, a different discretization of the stress terms
+in the momentum equation is now
+used, which enabled the discrete equations to be derived from the
+continuous equations written in curvilinear coordinates.  In this
+manner, metric terms associated with the curvature of the grid were
+incorporated into the discretization explicitly.  We no longer use a
+"triangle discretization," in which the strain rates and stresses
+were constant over each of four subtriangles within each grid cell,
+and instead use a bilinear approximation for the velocities and
+stresses.  Details pertaining to this discretization are found in
+<A HREF="cicedoc_19.html#18">[18]</A>. 
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><A HREF="cicedoc_6.html"><IMG ALT="Prev" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+    <A HREF="cicedoc_3.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_8.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

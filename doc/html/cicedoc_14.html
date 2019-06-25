@@ -1,0 +1,114 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Model output</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<A HREF="cicedoc_13.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+  <A HREF="cicedoc_9.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_15.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go backward to </B><A HREF="cicedoc_13.html">Choosing appropriate parameters</A><BR><B>Go up to </B><A HREF="cicedoc_9.html">Numerical implementation</A><BR><B>Go forward to </B><A HREF="cicedoc_15.html">Execution procedures</A>
+  
+<HR>
+<H2>Model output</H2>
+
+Model output data is averaged over the period given by <TT>histfreq</TT>
+and written to netCDF files prepended by <TT>history_file</TT> in
+<B>ice_in</B>.  That is, if <TT>history_file='iceh'</TT> then the
+filenames will have the form <B>iceh_[timeID].nc</B>.  Additionally,
+a file containing a snapshot of the initial ice state,  <B>iceh_[timeID].incond.nc</B>, is written at the start of each run.  
+Header information for data contained in these files is 
+displayed with the command <TT>ncdump -h filename.nc</TT>.  With this
+release, standard ice data fields are output.  The user may add (or
+subtract) variables not already available in the namelist by doing the
+following in <B>ice_history.F</B>: 
+<BLOCKQUOTE>(1) Increase <TT>avgsiz</TT> and add the appropriate
+quantities to <TT>vname</TT>, <TT>vdesc</TT>, <TT>vunit</TT>, the logical
+declaration, the namelist, and the equivalence statements. <BR>(2) In <I>init_hist</I>, set unit conversions as desired. <BR>(3) In <I>ice_write_hist</I>, define <TT>iout</TT> for the new output
+variable. <BR>(4) Add the new logical variable to the icefields namelist in <B>ice_in</B>.
+</BLOCKQUOTE>
+
+The normalized principal components of internal ice stress are
+computed in <I>principal_stress</I> and written to the history file.
+This calculation is not necessary for the simulation; principal
+stresses are merely computed for diagnostic purposes and included here
+for the user's convenience.
+<P>A few thermodynamic variables have special <TT>_hist</TT> forms in
+addition to the standard quantity used in the code.  These are
+variables that are initialized in the middle of the time step (at the
+beginning of the second thermodynamics routine, <I>thermo_itd</I>),
+just after being sent to the coupler, although they may change in the
+beginning of the time step.  The "standard" variable initialized as
+such contains a full time step's worth of data when it is sent to the
+coupler; its history counterpart is initialized at the beginning of
+the time step and so also contains a full time step's worth of data,
+although its value may be slightly different from that sent to the
+coupler.  This code modification was made for coupled model load
+balancing.
+<P>Like <TT>histfreq</TT>, the parameter <TT>diagfreq</TT> can be used to
+regulate how often output is written.  In the present code, <TT>diagfreq</TT> is used to determine the frequency with which diagnostic
+data are written to the log file.   The log file unit to
+which diagnostic output is written is set in <B>ice_fileunits.F</B>.
+If <TT>nu_diag = 6</TT>, then it is written to standard out (or to <B>ice.log.[timestamp]</B> if you redirect standard out as in <B>run_ice</B>); otherwise it is written to the file given by <TT>diag_file</TT>.
+<P>A binary unformatted file is created that contains all of the data
+that CICE needs for a full restart. The filename begins with the
+character string <TT>dumpfile</TT>, and the restart dump frequency is
+given by <TT>dumpfreq</TT>.  The pointer to the filename from which the
+restart data is to be read is set in <TT>restrt_file</TT>.
+<P>Timing routines are included in <B>ice_timers.F</B>.  To use the timers,
+first initialize them with <I>ice_timer_clear</I>, then wrap the
+segment of code you would like to time with <I>ice_timer_start</I> and
+<I>ice_timer_stop</I>.  Finally, <I>ice_timer_print</I> writes the results to
+the log file.  Each of these routines takes
+a single argument, the 
+timer number.  Calling <I>ice_timer_clear</I> or <I>ice_timer_print</I> with
+an argument of -1 initializes all of the timers at once, or prints all
+of the timings, rather than having to call each individually.  
+Currently, the timers are set up as in 
+Table&#160;3.
+<BLOCKQUOTE><TABLE><TR><TD COLSPAN="1" ALIGN="CENTER">
+
+<B>Timer </B> </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+<B>Number</B> </TD><TD COLSPAN="1" ALIGN="LEFT"> <B>Label</B> </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+0 </TD><TD COLSPAN="1" ALIGN="LEFT"> Total </TD><TD COLSPAN="1" ALIGN="LEFT"> the entire run </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+1 </TD><TD COLSPAN="1" ALIGN="LEFT"> TimeLoop </TD><TD COLSPAN="1" ALIGN="LEFT"> Total minus initialization and exit </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+2 </TD><TD COLSPAN="1" ALIGN="LEFT"> Dynamics </TD><TD COLSPAN="1" ALIGN="LEFT"> EVP </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+3 </TD><TD COLSPAN="1" ALIGN="LEFT"> Advectn </TD><TD COLSPAN="1" ALIGN="LEFT"> horizontal transport </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+4 </TD><TD COLSPAN="1" ALIGN="LEFT"> Column  </TD><TD COLSPAN="1" ALIGN="LEFT"> all vertical (column) processes </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+5 </TD><TD COLSPAN="1" ALIGN="LEFT"> Thermo </TD><TD COLSPAN="1" ALIGN="LEFT"> vertical thermodynamics </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+6 </TD><TD COLSPAN="1" ALIGN="LEFT"> Ridging </TD><TD COLSPAN="1" ALIGN="LEFT"> mechanical redistribution </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+7 </TD><TD COLSPAN="1" ALIGN="LEFT"> Cat Conv </TD><TD COLSPAN="1" ALIGN="LEFT"> transport in thickness space </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+8 </TD><TD COLSPAN="1" ALIGN="LEFT"> Coupling </TD><TD COLSPAN="1" ALIGN="LEFT"> sending/receiving coupler messages </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+9 </TD><TD COLSPAN="1" ALIGN="LEFT"> ReadWrit </TD><TD COLSPAN="1" ALIGN="LEFT"> reading/writing files </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+10 </TD><TD COLSPAN="1" ALIGN="LEFT"> Bound </TD><TD COLSPAN="1" ALIGN="LEFT"> boundary conditions and subdomain communications</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="CENTER">
+</TD></TR></TABLE>
+
+Table 3.  CICE timers.
+</BLOCKQUOTE>
+
+The timings provided by these timers are not mutually exclusive.  For
+example, the column timer (4) includes the timings from 5, 6 and 7, and
+subroutine <I>bound</I> (timer 10) is called from many different places in the
+code, including the dynamics and advection routines.
+<P>The timers are architecture dependent; the system being used is
+determined at compile time (see <B>GNUmakefile</B>).  The timers have been
+tested on the SGI Origin 2000 and the IBM RS/6000 SP.  They may work on
+other machines, but don't count on it.
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><A HREF="cicedoc_13.html"><IMG ALT="Prev" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+    <A HREF="cicedoc_9.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_15.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

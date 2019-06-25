@@ -1,0 +1,91 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Horizontal transport</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif">
+  <A HREF="cicedoc_3.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_5.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go up to </B><A HREF="cicedoc_3.html">Model components</A><BR><B>Go forward to </B><A HREF="cicedoc_5.html">Transport in thickness space</A>
+  
+<HR>
+<H2>Horizontal transport</H2>
+
+The horizontal transport model consists of 46 continuity equations 
+for various ice and snow quantities such as area, volume, internal
+energy, and surface temperature.  For the
+transport component equations and additional details, see the
+<A HREF="../cicedoc.ps">PostScript documentation</A>. 
+<P>Two transport schemes are available, MPDATA <A HREF="cicedoc_19.html#20">[20]</A> and the
+incremental remapping scheme of <A HREF="cicedoc_19.html#11">[11]</A> (henceforth DB) as
+modified for sea ice by <A HREF="cicedoc_19.html#12">[12]</A>.  Because we now advect so many
+fields, time spent using MPDATA makes up the largest fraction of
+computer time for a run.  Although a first-order upwind scheme is
+available as an MPDATA option 
+(see Table&#160;2), 
+we recommend
+using the incremental remapping method instead.  This scheme has
+several desirable features:
+<UL><LI>It conserves the quantity being transported (area, volume, or energy).
+<LI>It is non-oscillatory; that is, it does not create spurious
+      ripples in the transported fields.
+<LI>It preserves tracer monotonicity.  That is, it does not create
+      new extrema in the thickness and enthalpy fields; the values 
+      at time&#160;<I>m+1</I> are bounded by the values at time&#160;<I>m</I>.
+<LI>It is second-order accurate in space and therefore is much 
+      less diffusive than first-order schemes.  
+      (The accuracy may be reduced locally
+      to first order to preserve monotonicity.)
+<LI>It is efficient for large numbers of categories or tracers.
+      Much of the work is geometrical and is performed
+      only once per grid cell instead of being repeated for each
+      quantity being transported.
+</UL>
+
+The time step is limited by the requirement that trajectories projected
+backward from grid cell corners are confined to the four surrounding
+cells.  (This is what is meant by incremental remapping as opposed to 
+general remapping.)
+This requirement leads to a 
+<A HREF="cicedoc_13.html">CFL-like condition.</A>
+For highly divergent velocity fields the maximum time step 
+is reduced by a factor of two to ensure that trajectories 
+do not cross.  However, ice velocity fields in climate models 
+usually have small divergences per time step relative to the 
+grid size.
+<P>The remapping scheme described by DB must be modified
+for sea ice transport.  For example, the original
+scheme has no analogue to the energy conservation 
+equations. 
+Energy is proportional to the product of two tracers, thickness
+and enthalpy, and DB did not consider tracer products.  Also, the 
+original scheme was designed for slowly varying curvilinear grids
+rather than the CICE grid, which is highly curved near the poles.  
+But with the appropriate changes, incremental 
+remapping gives excellent results, as described in <A HREF="cicedoc_19.html#12">[12]</A>.
+<P>The remapping algorithm can be summarized as follows:
+<OL><LI>Given ice velocities at grid cell corners, identify departure
+      regions for the fluxes across each cell face.  Divide these 
+      departure regions into triangles and compute the coordinates 
+      of the triangle vertices.
+<LI>Given values of the ice area and tracers at the cell centers,
+      construct linear approximations of the area and tracer fields in 
+      each grid cell.  Limit the field gradients to preserve 
+      monotonicity.
+<LI>Integrate these fields over the departure triangles to obtain
+      the area, volume, and energy fluxes across each cell face.
+<LI>Transfer the fluxes across cell faces and update the
+      state variables.
+</OL>
+
+Step (1) is done once per time step, whereas steps (2)-(4) are repeated 
+for each thickness category.  
+
+
+
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif">
+    <A HREF="cicedoc_3.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_5.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

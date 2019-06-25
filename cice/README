@@ -1,0 +1,121 @@
+
+CICE 3.0  beta release
+  July 19, 2001
+
+
+--- to compile and run the model ---
+
+1. alter IRIX64.defs as desired (or make an equivalent file for 
+                                 another architecture) 
+2. if you've changed the number of processors, alter run_ice to match
+3. alter run_ice for your system architecture
+4. % gmake
+5. % run_ice
+
+output files:
+ice.log*  diagnostic output normally written to the screen, if using
+          the run_ice script or one like it
+iced*     restart files written at the "dump" frequency in ice_in
+iceh*     output of numerous model variables as instructed by ice_in
+
+when restart files are written, the filename is written into the file
+          ice.restart_file
+
+the input file ice_in is described below
+
+
+--- directory structure and contents ---
+
+cice/
+
+GNUmakefile             makefile
+IRIX64.defs             macro definitions for SGI IRIX
+Makedepends.pl          perl script for determining dependencies
+
+global_100x116.grid     "gx3" 100x116 displaced pole grid  (N pole is
+global_100x116.kmt      "gx3" land mask                    in Greenland)
+ice.log                 sample diagnostic output for 1 month of run
+ice.restart_file        pointer with restart filename
+ice_in                  namelist input parameters, described below
+iced.restart            restart file (initial conditions)
+run_ice                 sample script for running on SGI nirvana at LANL
+
+cice/compile/           directory created when the code is compiled
+
+cice/data_in/           monthly mean forcing data
+
+sss.mm.100x116.da       slightly modified Levitus salinity data
+sst.mm.100x116.da       slightly modified Levitus sea surface temperature
+
+                        T62 NCEP reanalysis data, 1985-1988 average:
+cldf_gx3_85-88.dat      cloud fraction
+prec_gx3_85-88.dat      precipitation
+swdn_gx3_85-88.dat      downward shortwave
+u_10_gx3_85-88.dat      10 m u wind velocity component
+v_10_gx3_85-88.dat      10 m v wind velocity component
+t_10_gx3_85-88.dat      10 m air temperature
+q_10_gx3_85-88.dat      10 m specific humidity
+dn10_gx3_85-88.dat      10 m air density
+
+
+cice/source/
+
+ice.F                   main driver routine
+ice_albedo.F            albedo parameterization
+ice_atmo.F              transfer coefficients and atmo fluxes
+ice_calendar.F          keeps track of what day it is
+ice_constants.F         physical and other constants
+ice_coupling.F          routines for coupling with NCAR flux coupler
+ice_diagnostics.F       miscellaneous diagnostic and debugging routines
+ice_domain.F            sets up MPI subdomains
+ice_dyn_evp.F           EVP ice dynamics component
+ice_flux.F              fluxes needed/produced by the model
+ice_flux_in.F           routines to read input data
+ice_grid.F              reads model grid and sets up related info
+ice_history.F           writes output to history files
+ice_init.F              initializations
+ice_itd.F               routines for managing ice thickness distribution
+ice_itd_linear.F        linear remapping for advection in thickness space
+ice_kinds_mod.F         basic definitions of reals, integers, etc
+ice_mechred_cice.F      ridging routines
+ice_model_size.F        sizes and shapes
+ice_mpi_internal.F      routines for internal MPI parallelization
+ice_ocean.F             mixed layer routines
+ice_read_write.F        basic routines for reading and writing
+ice_scaling.F           scales output for NCAR coupler
+ice_state.F             essential arrays to describe the state of the ice
+ice_therm_cice.F        guts of the thermodynamics
+ice_therm_driver.F      controls thermo and miscellaneous related jobs
+ice_timers.F            timing routines
+ice_transport.F         horizontal advection
+
+
+--- the namelist parameters set in ice_in ---
+
+&ice_nml
+    year           the starting year, if not using restart
+  , istep0         the initial time step number
+  , dt             the time step length in seconds
+  , ndte           the number of EVP subcycles
+  , npt            the total number of time steps to take
+  , diagfreq       frequency of diagnostic output (in timesteps)
+  , histfreq       frequency of history output (1, d, w, m, y)
+  , dumpfreq       frequency of writing restarts (d, m, y)
+  , hist_avg       if true, accumulate averages; if false, write snapshots
+  , restart        if true, start from restart input file (usually iced.*)
+  , print_points   if true, print diagnostic data for 2 grid points
+  , kitd           0 = delta function itd, 1 = linear remapping itd
+  , kdyn           1 = elastic-viscous-plastic (EVP) dynamics
+  , kstrength      0 = empirical formula, 1 = Thorndike, Rothrock form
+  , evp_damping    if true, apply damping to elastic waves
+  , advection      type of horizontal advection scheme
+  , grid_type      type of grid
+  , grid_file      name of grid file to read
+  , kmt_file       name of land mask file to read
+  , dump_file      prefix for restart data files
+  , restrt_file    pointer for restart data file
+  , history_file   prefix for history (output data) file
+
+&icefields_nml
+    f_field        if true, write field to history file
+

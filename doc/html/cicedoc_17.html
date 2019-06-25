@@ -1,0 +1,572 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Index of primary variables and parameters</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<A HREF="cicedoc_16.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+  <A HREF="cicedoc.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_18.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go backward to </B><A HREF="cicedoc_16.html">Troubleshooting </A><BR><B>Go up to </B><A HREF="cicedoc.html">Top</A><BR><B>Go forward to </B><A HREF="cicedoc_18.html">Acknowledgments and Copyright</A>
+  
+<HR>
+<H1>Index of primary variables and parameters</H1>
+
+This index defines many of the symbols used frequently in the ice
+model code.  Values appearing in this list are fixed or recommended;
+most namelist parameters are indicated 
+with their default
+values. All quantities in the code are expressed in MKS units
+(temperatures may take either Celsius or Kelvin units).
+<BLOCKQUOTE><TABLE><TR><TD COLSPAN="1" ALIGN="LEFT">
+
+ advection </TD><TD COLSPAN="1" ALIGN="LEFT">  type of advection algorithm used</TD><TD COLSPAN="1" ALIGN="LEFT"> 'remap' </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+aice     </TD><TD COLSPAN="1" ALIGN="LEFT"> total concentration of ice in grid cell </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+aice_init </TD><TD COLSPAN="1" ALIGN="LEFT"> concentration of ice at beginning of dt (for diagnostics) </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ain_min    </TD><TD COLSPAN="1" ALIGN="LEFT"> minimum fractional ice area allowed in each cat </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+albocn  </TD><TD COLSPAN="1" ALIGN="LEFT"> ocean albedo </TD><TD COLSPAN="1" ALIGN="LEFT">  0.06  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+alidr   </TD><TD COLSPAN="1" ALIGN="LEFT"> weighting factor for near-ir, direct  albedo </TD><TD COLSPAN="1" ALIGN="LEFT"> 0.31 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+alidf   </TD><TD COLSPAN="1" ALIGN="LEFT"> weighting factor for near-ir, diffuse albedo </TD><TD COLSPAN="1" ALIGN="LEFT"> 0.16 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+alvdf   </TD><TD COLSPAN="1" ALIGN="LEFT"> weighting factor for visible, diffuse albedo </TD><TD COLSPAN="1" ALIGN="LEFT"> 0.24 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+alvdr   </TD><TD COLSPAN="1" ALIGN="LEFT"> weighting factor for visible, direct  albedo </TD><TD COLSPAN="1" ALIGN="LEFT"> 0.29 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ANGLE  </TD><TD COLSPAN="1" ALIGN="LEFT"> for conversions between the POP grid and latitude-longitude grids </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ANGLET   </TD><TD COLSPAN="1" ALIGN="LEFT"> ANGLE converted to T-cells </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+avgsiz  </TD><TD COLSPAN="1" ALIGN="LEFT"> number of fields that can be written to history file </TD><TD COLSPAN="1" ALIGN="LEFT"> 53
+ </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ Cf      </TD><TD COLSPAN="1" ALIGN="LEFT"> ratio of ridging work to PE change in ridging </TD><TD COLSPAN="1" ALIGN="LEFT"> 17. </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+char_len  </TD><TD COLSPAN="1" ALIGN="LEFT"> length of character variable strings </TD><TD COLSPAN="1" ALIGN="LEFT">  80 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+check_step </TD><TD COLSPAN="1" ALIGN="LEFT"> time step on which to begin writing debugging data </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+congel    </TD><TD COLSPAN="1" ALIGN="LEFT"> basal ice growth         </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+cosw </TD><TD COLSPAN="1" ALIGN="LEFT"> cosine of the turning angle in water  </TD><TD COLSPAN="1" ALIGN="LEFT"> 1. </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+cp_air             </TD><TD COLSPAN="1" ALIGN="LEFT"> specific heat of air </TD><TD COLSPAN="1" ALIGN="LEFT"> 1005.0 J/kg/K </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+cp_wv          </TD><TD COLSPAN="1" ALIGN="LEFT"> specific heat of water vapor </TD><TD COLSPAN="1" ALIGN="LEFT">  1.81e3 J/kg/K </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+cp_ice  </TD><TD COLSPAN="1" ALIGN="LEFT"> specific heat of fresh ice </TD><TD COLSPAN="1" ALIGN="LEFT">  2106 J/kg/K </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+cp_ocn   </TD><TD COLSPAN="1" ALIGN="LEFT"> specific heat of sea water  </TD><TD COLSPAN="1" ALIGN="LEFT"> 4218 J/kg/K </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+cm_to_m             </TD><TD COLSPAN="1" ALIGN="LEFT"> cm to meters conversion </TD><TD COLSPAN="1" ALIGN="LEFT"> 0.01  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ c&lt;<I>n</I>&gt; </TD><TD COLSPAN="1" ALIGN="LEFT"> real(<I>n</I>) </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Cs             </TD><TD COLSPAN="1" ALIGN="LEFT"> fraction of shear energy contributing to ridging </TD><TD COLSPAN="1" ALIGN="LEFT">
+ 0.5 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ daidtd    </TD><TD COLSPAN="1" ALIGN="LEFT"> ice area tendency due to advection </TD><TD COLSPAN="1" ALIGN="LEFT">1/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dbl_kind  </TD><TD COLSPAN="1" ALIGN="LEFT"> definition of double precision </TD><TD COLSPAN="1" ALIGN="LEFT"> selected_real_kind(
+13) </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Delta  </TD><TD COLSPAN="1" ALIGN="LEFT"> function of strain rates (see 
+<A HREF="cicedoc_7.html">the dynamics component</A>) </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+depressT  </TD><TD COLSPAN="1" ALIGN="LEFT"> ratio of freezing temperature to salinity of brine  </TD><TD COLSPAN="1" ALIGN="LEFT"> 0
+.054 deg/psu </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+diag_file </TD><TD COLSPAN="1" ALIGN="LEFT">  diagnostic output file (alternative to standard out) </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+diagfreq</TD><TD COLSPAN="1" ALIGN="LEFT">  how often diagnostic output is written (10 = once per 10 dt)   </TD><TD COLSPAN="1" ALIGN="LEFT"> 12</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+divu     </TD><TD COLSPAN="1" ALIGN="LEFT"> strain rate I component, velocity divergence  </TD><TD COLSPAN="1" ALIGN="LEFT">1/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+divu_adv  </TD><TD COLSPAN="1" ALIGN="LEFT"> divergence associated with advection </TD><TD COLSPAN="1" ALIGN="LEFT">1/s  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dt      </TD><TD COLSPAN="1" ALIGN="LEFT">  thermo/transport time step   </TD><TD COLSPAN="1" ALIGN="LEFT"> 7200. s</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dte     </TD><TD COLSPAN="1" ALIGN="LEFT"> subcycling time step for elastic dynamics  </TD><TD COLSPAN="1" ALIGN="LEFT"> s</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dtei       </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/dte, where dte is the EVP subcycling time step </TD><TD COLSPAN="1" ALIGN="LEFT">1/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dump_file  </TD><TD COLSPAN="1" ALIGN="LEFT">  output file for restart dump </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dumpfreq</TD><TD COLSPAN="1" ALIGN="LEFT">  dump frequency for restarts, <TT>y</TT>, <TT>m</TT> or <TT>d</TT> </TD><TD COLSPAN="1" ALIGN="LEFT"> 
+m</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dragw  </TD><TD COLSPAN="1" ALIGN="LEFT"> drag coefficient for water on ice*<I>rho<sub>w</sub></I> </TD><TD COLSPAN="1" ALIGN="LEFT"> 0.00536*rhow k
+g/m<I><sup>3</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dxt     </TD><TD COLSPAN="1" ALIGN="LEFT"> width of T cell  through the middle </TD><TD COLSPAN="1" ALIGN="LEFT"> m</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dxu     </TD><TD COLSPAN="1" ALIGN="LEFT"> width of U cell  through the middle </TD><TD COLSPAN="1" ALIGN="LEFT">m</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dyt     </TD><TD COLSPAN="1" ALIGN="LEFT"> height of T cell  through the middle </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dyu     </TD><TD COLSPAN="1" ALIGN="LEFT"> height of U cell  through the middle </TD><TD COLSPAN="1" ALIGN="LEFT">m</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dvidtd    </TD><TD COLSPAN="1" ALIGN="LEFT"> ice volume tendency due to advection </TD><TD COLSPAN="1" ALIGN="LEFT">m/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dvidtt    </TD><TD COLSPAN="1" ALIGN="LEFT"> ice volume tendency due to thermodynamics </TD><TD COLSPAN="1" ALIGN="LEFT">m/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+
+ eice     </TD><TD COLSPAN="1" ALIGN="LEFT"> energy of melting of ice per unit area           </TD><TD COLSPAN="1" ALIGN="LEFT">J/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+emissivity      </TD><TD COLSPAN="1" ALIGN="LEFT"> emissivity of snow and ice </TD><TD COLSPAN="1" ALIGN="LEFT">  0.95 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+eps04  </TD><TD COLSPAN="1" ALIGN="LEFT"> a small number </TD><TD COLSPAN="1" ALIGN="LEFT">  10<I><sup>-4</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+eps11  </TD><TD COLSPAN="1" ALIGN="LEFT"> a small number </TD><TD COLSPAN="1" ALIGN="LEFT">  10<I><sup>-11</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+eps12  </TD><TD COLSPAN="1" ALIGN="LEFT"> a small number </TD><TD COLSPAN="1" ALIGN="LEFT">  10<I><sup>-12</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+eps13  </TD><TD COLSPAN="1" ALIGN="LEFT"> a small number </TD><TD COLSPAN="1" ALIGN="LEFT">  10<I><sup>-13</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+eps15  </TD><TD COLSPAN="1" ALIGN="LEFT"> a small number </TD><TD COLSPAN="1" ALIGN="LEFT">  10<I><sup>-15</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+eps16  </TD><TD COLSPAN="1" ALIGN="LEFT"> a small number </TD><TD COLSPAN="1" ALIGN="LEFT">  10<I><sup>-16</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+esno     </TD><TD COLSPAN="1" ALIGN="LEFT"> energy of melting of snow per unit area  </TD><TD COLSPAN="1" ALIGN="LEFT">J/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+evap        </TD><TD COLSPAN="1" ALIGN="LEFT"> evaporative water flux </TD><TD COLSPAN="1" ALIGN="LEFT">m/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+evp_damping  </TD><TD COLSPAN="1" ALIGN="LEFT">  if true, use evp damping procedure <A HREF="cicedoc_19.html#17">[17]</A> </TD><TD COLSPAN="1" ALIGN="LEFT"> F </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+eyc     </TD><TD COLSPAN="1" ALIGN="LEFT"> coefficient for calculating the parameter E, 0<I>&lt;</I> eyc <I>&lt;</I>1  </TD><TD COLSPAN="1" ALIGN="LEFT"> 0.36</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ fcor         </TD><TD COLSPAN="1" ALIGN="LEFT"> Coriolis parameter </TD><TD COLSPAN="1" ALIGN="LEFT">1/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Fhnet       </TD><TD COLSPAN="1" ALIGN="LEFT"> net heat flux to ocean </TD><TD COLSPAN="1" ALIGN="LEFT">W/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Fhocn       </TD><TD COLSPAN="1" ALIGN="LEFT"> net ocean heat flux (for mixed layer model) </TD><TD COLSPAN="1" ALIGN="LEFT">W/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Flatent     </TD><TD COLSPAN="1" ALIGN="LEFT"> latent heat flux   </TD><TD COLSPAN="1" ALIGN="LEFT">W/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Flw     </TD><TD COLSPAN="1" ALIGN="LEFT"> incoming longwave radiation </TD><TD COLSPAN="1" ALIGN="LEFT">W/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Flwout      </TD><TD COLSPAN="1" ALIGN="LEFT"> outgoing longwave radiation </TD><TD COLSPAN="1" ALIGN="LEFT">W/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Foht_hist   </TD><TD COLSPAN="1" ALIGN="LEFT"> net heat flux to ocean (Fhnet) for history </TD><TD COLSPAN="1" ALIGN="LEFT">W/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Frain   </TD><TD COLSPAN="1" ALIGN="LEFT"> rainfall rate </TD><TD COLSPAN="1" ALIGN="LEFT">kg/m<I><sup>2</sup></I>/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+frazil    </TD><TD COLSPAN="1" ALIGN="LEFT"> frazil ice growth        </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Fresh       </TD><TD COLSPAN="1" ALIGN="LEFT"> fresh water flux </TD><TD COLSPAN="1" ALIGN="LEFT">kg/m<I><sup>2</sup></I>/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Frsh_hist   </TD><TD COLSPAN="1" ALIGN="LEFT"> fresh water flux (Fresh) for history </TD><TD COLSPAN="1" ALIGN="LEFT">kg/m<I><sup>2</sup></I>/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+frzmlt  </TD><TD COLSPAN="1" ALIGN="LEFT"> freezing/melting potential </TD><TD COLSPAN="1" ALIGN="LEFT">W/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Fsalt       </TD><TD COLSPAN="1" ALIGN="LEFT"> net salt flux to ocean </TD><TD COLSPAN="1" ALIGN="LEFT"> kg/m<I><sup>2</sup></I>/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Fsalt_hist  </TD><TD COLSPAN="1" ALIGN="LEFT"> salt flux to ocean (Fsalt) for history </TD><TD COLSPAN="1" ALIGN="LEFT"> kg/m<I><sup>2</sup></I>/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Fsensible   </TD><TD COLSPAN="1" ALIGN="LEFT"> sensible heat flux </TD><TD COLSPAN="1" ALIGN="LEFT">W/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Fsnow   </TD><TD COLSPAN="1" ALIGN="LEFT"> snowfall rate </TD><TD COLSPAN="1" ALIGN="LEFT">kg/m<I><sup>2</sup></I> s liquid </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+fsnowrdg  </TD><TD COLSPAN="1" ALIGN="LEFT"> snow fraction that survives in ridging</TD><TD COLSPAN="1" ALIGN="LEFT"> 0.5 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Fsw     </TD><TD COLSPAN="1" ALIGN="LEFT"> incoming shortwave radiation </TD><TD COLSPAN="1" ALIGN="LEFT">W/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Fswthru     </TD><TD COLSPAN="1" ALIGN="LEFT"> shortwave penetrating to ocean </TD><TD COLSPAN="1" ALIGN="LEFT"> W/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Fswthru_hist </TD><TD COLSPAN="1" ALIGN="LEFT"> shortwave penetrating to ocean (Fswthru) for history </TD><TD COLSPAN="1" ALIGN="LEFT">W/m<I><sup>2</sup></I></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ gravit        </TD><TD COLSPAN="1" ALIGN="LEFT"> gravitational acceleration </TD><TD COLSPAN="1" ALIGN="LEFT"> 9.80616 m/s<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+grid_file         </TD><TD COLSPAN="1" ALIGN="LEFT">  input file for grid info </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+grid_type         </TD><TD COLSPAN="1" ALIGN="LEFT">  'rectangular' or 'displaced_pole' </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Gstar </TD><TD COLSPAN="1" ALIGN="LEFT"> used to compute ridging participation function </TD><TD COLSPAN="1" ALIGN="LEFT"> 0.15 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ hi_min       </TD><TD COLSPAN="1" ALIGN="LEFT"> minimum ice thickness allowed for thermodynamics </TD><TD COLSPAN="1" ALIGN="LEFT"> 
+0.01 m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+hin_max   </TD><TD COLSPAN="1" ALIGN="LEFT"> category limits                </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+hist_avg  </TD><TD COLSPAN="1" ALIGN="LEFT">  if true, write averaged data instead of snapshots </TD><TD COLSPAN="1" ALIGN="LEFT"> T </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+histfreq </TD><TD COLSPAN="1" ALIGN="LEFT">  history output frequency: y, m, w, d or 1   </TD><TD COLSPAN="1" ALIGN="LEFT"> 
+m</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+history_file      </TD><TD COLSPAN="1" ALIGN="LEFT">  output file for history  </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+hm   </TD><TD COLSPAN="1" ALIGN="LEFT"> land/boundary mask, thickness (T-cell) </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+hmix   </TD><TD COLSPAN="1" ALIGN="LEFT"> ocean mixed layer depth </TD><TD COLSPAN="1" ALIGN="LEFT"> 20 m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+hs_min  </TD><TD COLSPAN="1" ALIGN="LEFT"> minimum snow thickness allowed </TD><TD COLSPAN="1" ALIGN="LEFT"> 1<I>&#215;</I>10<I><sup>-5</sup></I> m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ Hstar  </TD><TD COLSPAN="1" ALIGN="LEFT"> determines mean thickness of ridged ice </TD><TD COLSPAN="1" ALIGN="LEFT"> 25. m</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+HTE  </TD><TD COLSPAN="1" ALIGN="LEFT"> length of eastern edge (<I>Deltay</I>) of T-cell </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+HTN  </TD><TD COLSPAN="1" ALIGN="LEFT"> length of northern edge (<I>Deltax</I>) of T-cell </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+HTS  </TD><TD COLSPAN="1" ALIGN="LEFT"> length of southern edge (<I>Deltax</I>) of T-cell </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+HTW  </TD><TD COLSPAN="1" ALIGN="LEFT"> length of western edge of (<I>Deltay</I>) T-cell </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+
+ ice_ref_salinity  </TD><TD COLSPAN="1" ALIGN="LEFT"> reference salinity for ice-ocean exchanges </TD><TD COLSPAN="1" ALIGN="LEFT"> 
+4. psu </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+iceruf </TD><TD COLSPAN="1" ALIGN="LEFT"> ice surface roughness </TD><TD COLSPAN="1" ALIGN="LEFT"> 5<I>&#215;</I>10<I><sup>-4</sup></I> m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+icetmask  </TD><TD COLSPAN="1" ALIGN="LEFT"> ice extent mask (T-cell) </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+iceumask  </TD><TD COLSPAN="1" ALIGN="LEFT"> ice extent mask (U-cell) </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+idate   </TD><TD COLSPAN="1" ALIGN="LEFT"> the date  at the end of the current time step (yyyymmdd)</TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ierr                   </TD><TD COLSPAN="1" ALIGN="LEFT"> general-use error flag </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+i(j)hi  </TD><TD COLSPAN="1" ALIGN="LEFT"> last  i(j) index of physical domain (local) </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+i(j)lo  </TD><TD COLSPAN="1" ALIGN="LEFT"> first i(j) index of physical domain (local) </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ilyr1      </TD><TD COLSPAN="1" ALIGN="LEFT"> position of the top layer in each cat (for eicen) </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ilyrn      </TD><TD COLSPAN="1" ALIGN="LEFT"> position of the bottom layer in each cat (for eicen) </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+i(j)mt_global </TD><TD COLSPAN="1" ALIGN="LEFT"> number of physical gridpoints in x(y) direction, global domain </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+i(j)mt_local </TD><TD COLSPAN="1" ALIGN="LEFT"> total number of gridpoints in x(y) direction, local domain </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+int_kind  </TD><TD COLSPAN="1" ALIGN="LEFT"> definition of an integer </TD><TD COLSPAN="1" ALIGN="LEFT"> kind(1) </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ip, jp </TD><TD COLSPAN="1" ALIGN="LEFT"> local processor coordinates on which to write debugging data </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+istep   </TD><TD COLSPAN="1" ALIGN="LEFT"> local step counter for time loop </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+istep0  </TD><TD COLSPAN="1" ALIGN="LEFT">  number of steps taken in previous run   </TD><TD COLSPAN="1" ALIGN="LEFT"> 0 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+istep1  </TD><TD COLSPAN="1" ALIGN="LEFT"> total number of steps at current time step </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ kappav  </TD><TD COLSPAN="1" ALIGN="LEFT"> visible extinction coefficient in ice, wavelength<I>&lt;</I>700nm </TD><TD COLSPAN="1" ALIGN="LEFT"> 1.4/m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+kappan  </TD><TD COLSPAN="1" ALIGN="LEFT"> visible extinction coefficient in ice, wavelength<I>&gt;</I>700nm
+ </TD><TD COLSPAN="1" ALIGN="LEFT"> 17.6/m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+kdyn </TD><TD COLSPAN="1" ALIGN="LEFT">  type of dynamics (1 = EVP, 0 = off) </TD><TD COLSPAN="1" ALIGN="LEFT"> 1  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+kice      </TD><TD COLSPAN="1" ALIGN="LEFT"> thermal conductivity of fresh ice</TD><TD COLSPAN="1" ALIGN="LEFT"> 2.03 W/m/deg </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+kitd </TD><TD COLSPAN="1" ALIGN="LEFT">  type of itd conversions (0 = delta function, 1 = linear remap) </TD><TD COLSPAN="1" ALIGN="LEFT"> 1 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+kmt_file </TD><TD COLSPAN="1" ALIGN="LEFT">  input file for land mask info  </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ksno     </TD><TD COLSPAN="1" ALIGN="LEFT"> thermal conductivity of snow  </TD><TD COLSPAN="1" ALIGN="LEFT"> 0.30 W/m/deg </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+kstrength </TD><TD COLSPAN="1" ALIGN="LEFT">  pressure formulation (1= Rothrock 1975, 0= Hibler 1979) </TD><TD COLSPAN="1" ALIGN="LEFT"> 1 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ Lfresh   </TD><TD COLSPAN="1" ALIGN="LEFT"> latent heat of melting of fresh ice = Lsub - Lvap </TD><TD COLSPAN="1" ALIGN="LEFT"> J/kg </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+lhcoef  </TD><TD COLSPAN="1" ALIGN="LEFT"> transfer coefficient for latent heat </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+log_kind  </TD><TD COLSPAN="1" ALIGN="LEFT"> definition of a logical variable </TD><TD COLSPAN="1" ALIGN="LEFT"> kind(.true.) </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Lsub   </TD><TD COLSPAN="1" ALIGN="LEFT"> latent heat of sublimation for fresh water </TD><TD COLSPAN="1" ALIGN="LEFT"> 2.835<I>&#215;</I>
+10<I><sup>6</sup></I> J/kg </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Lvap   </TD><TD COLSPAN="1" ALIGN="LEFT"> latent heat of vaporization for fresh water </TD><TD COLSPAN="1" ALIGN="LEFT"> 2.501<I>&#215;</I>10<I><sup>6</sup></I> J/kg </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ m_to_cm            </TD><TD COLSPAN="1" ALIGN="LEFT"> meters to cm conversion </TD><TD COLSPAN="1" ALIGN="LEFT">  100.  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+m2_to_km2 </TD><TD COLSPAN="1" ALIGN="LEFT"> m<I><sup>2</sup></I> to km<I><sup>2</sup></I> conversion </TD><TD COLSPAN="1" ALIGN="LEFT">1<I>&#215;</I>10<I><sup>-6</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+mask_n(s) </TD><TD COLSPAN="1" ALIGN="LEFT"> northern (southern) hemisphere mask </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+master_task </TD><TD COLSPAN="1" ALIGN="LEFT"> task ID for the controlling processor </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+mday    </TD><TD COLSPAN="1" ALIGN="LEFT"> day of the month </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+meltt     </TD><TD COLSPAN="1" ALIGN="LEFT"> top ice melt             </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+meltb     </TD><TD COLSPAN="1" ALIGN="LEFT"> basal ice melt           </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+month   </TD><TD COLSPAN="1" ALIGN="LEFT"> the month number </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+MPI_COMM_ICE </TD><TD COLSPAN="1" ALIGN="LEFT"> communicator for ice model internal communications (MPI) </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+mps_to_cmpdy  </TD><TD COLSPAN="1" ALIGN="LEFT"> m per s to cm per day conversion </TD><TD COLSPAN="1" ALIGN="LEFT"> 8.64<I>&#215;</I>10
+<I><sup>6</sup></I>  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+mps_to_cmpyr   </TD><TD COLSPAN="1" ALIGN="LEFT"> m per s to cm per yr conversion </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+mtask </TD><TD COLSPAN="1" ALIGN="LEFT"> local processor number that writes debugging data </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+my_task </TD><TD COLSPAN="1" ALIGN="LEFT"> task ID for the current processor </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ nbr_&lt;<I>dir</I>&gt;  </TD><TD COLSPAN="1" ALIGN="LEFT"> processor numbers for the n, s, e, w neighbor processors </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ncat    </TD><TD COLSPAN="1" ALIGN="LEFT"> number of ice categories  </TD><TD COLSPAN="1" ALIGN="LEFT"> 5</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ndte  </TD><TD COLSPAN="1" ALIGN="LEFT"> number of subcycles </TD><TD COLSPAN="1" ALIGN="LEFT"> 120 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+
+new_year         </TD><TD COLSPAN="1" ALIGN="LEFT"> flag for beginning new year </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+new_month        </TD><TD COLSPAN="1" ALIGN="LEFT"> flag for beginning new month </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+new_week         </TD><TD COLSPAN="1" ALIGN="LEFT"> flag for beginning new week </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+new_day          </TD><TD COLSPAN="1" ALIGN="LEFT"> flag for beginning new day </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+nlyr    </TD><TD COLSPAN="1" ALIGN="LEFT"> number of ice layers  </TD><TD COLSPAN="1" ALIGN="LEFT"> 4</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+npt   </TD><TD COLSPAN="1" ALIGN="LEFT">  total number of time steps (dt)  </TD><TD COLSPAN="1" ALIGN="LEFT"> 24</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ntilay       </TD><TD COLSPAN="1" ALIGN="LEFT"> sum of number of layers in all categories </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+nu_diag          </TD><TD COLSPAN="1" ALIGN="LEFT"> unit number for diagnostics output file </TD><TD COLSPAN="1" ALIGN="LEFT"> 6 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+nu_dump          </TD><TD COLSPAN="1" ALIGN="LEFT"> unit number for dump file for restarting </TD><TD COLSPAN="1" ALIGN="LEFT"> 50 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+nu_grid          </TD><TD COLSPAN="1" ALIGN="LEFT"> unit number for grid file </TD><TD COLSPAN="1" ALIGN="LEFT"> 11 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+nu_kmt           </TD><TD COLSPAN="1" ALIGN="LEFT"> unit number for land mask file </TD><TD COLSPAN="1" ALIGN="LEFT"> 12 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+nu_nml           </TD><TD COLSPAN="1" ALIGN="LEFT"> unit number for namelist input file </TD><TD COLSPAN="1" ALIGN="LEFT"> 21 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+nu_restart       </TD><TD COLSPAN="1" ALIGN="LEFT"> unit number for restart input file </TD><TD COLSPAN="1" ALIGN="LEFT"> 50 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+nu_rst_pointer   </TD><TD COLSPAN="1" ALIGN="LEFT"> unit number for pointer to latest restart file 
+</TD><TD COLSPAN="1" ALIGN="LEFT"> 52 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+num_ghost_cells </TD><TD COLSPAN="1" ALIGN="LEFT"> number of rows of ghost cells surrounding each subdomain </TD><TD COLSPAN="1" ALIGN="LEFT"> 1 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+nyr     </TD><TD COLSPAN="1" ALIGN="LEFT"> year number </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ one                 </TD><TD COLSPAN="1" ALIGN="LEFT"> array of ones which is often useful </TD><TD COLSPAN="1" ALIGN="LEFT"> 1. </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ p001 </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/1000 </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p01  </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/100 </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p027 </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/36 </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p055 </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/18 </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p1   </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/10 </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p111 </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/9 </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p166 </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/6 </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p2   </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/5 </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p222 </TD><TD COLSPAN="1" ALIGN="LEFT"> 2/9 </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p25  </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/4 </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p333 </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/3 </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p4   </TD><TD COLSPAN="1" ALIGN="LEFT"> 2/5 </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p5   </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/2 </TD><TD COLSPAN="1" ALIGN="LEFT">  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p52083 </TD><TD COLSPAN="1" ALIGN="LEFT"> 25/48 </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p5625m </TD><TD COLSPAN="1" ALIGN="LEFT"> -9/16 </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p6   </TD><TD COLSPAN="1" ALIGN="LEFT"> 3/5 </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+p666 </TD><TD COLSPAN="1" ALIGN="LEFT"> 2/3 </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+pi </TD><TD COLSPAN="1" ALIGN="LEFT"> <I>pi</I> </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+pih </TD><TD COLSPAN="1" ALIGN="LEFT"> <I>pi/2</I> </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+pi2         </TD><TD COLSPAN="1" ALIGN="LEFT">  <I>2pi</I> </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+potT   </TD><TD COLSPAN="1" ALIGN="LEFT"> atmospheric potential temperature  </TD><TD COLSPAN="1" ALIGN="LEFT">K </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+print_points  </TD><TD COLSPAN="1" ALIGN="LEFT"> if true, print point data  </TD><TD COLSPAN="1" ALIGN="LEFT"> T</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+puny </TD><TD COLSPAN="1" ALIGN="LEFT"> a small positive number </TD><TD COLSPAN="1" ALIGN="LEFT">  1<I>&#215;</I>10<I><sup>-11</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Qa      </TD><TD COLSPAN="1" ALIGN="LEFT"> specific humidity at 10 m </TD><TD COLSPAN="1" ALIGN="LEFT"> kg/kg</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ rad_to_deg               </TD><TD COLSPAN="1" ALIGN="LEFT"> degree-radian conversion </TD><TD COLSPAN="1" ALIGN="LEFT"> <I>180/pi</I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+radius        </TD><TD COLSPAN="1" ALIGN="LEFT"> earth radius </TD><TD COLSPAN="1" ALIGN="LEFT"> 6.37<I>&#215;</I>10<I><sup>6</sup></I> m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+rcpi   </TD><TD COLSPAN="1" ALIGN="LEFT"> specific heat capacity of fresh ice     </TD><TD COLSPAN="1" ALIGN="LEFT">  J/m<I><sup>3</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+real_kind </TD><TD COLSPAN="1" ALIGN="LEFT"> definition of single precision real </TD><TD COLSPAN="1" ALIGN="LEFT"> selected_real_
+kind(6) </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+restart </TD><TD COLSPAN="1" ALIGN="LEFT"> if true, initialize using restart file instead of defaults </TD><TD COLSPAN="1" ALIGN="LEFT"> F </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+restrt_pnter      </TD><TD COLSPAN="1" ALIGN="LEFT"> input file for restarting </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+
+ rhoa   </TD><TD COLSPAN="1" ALIGN="LEFT"> air density </TD><TD COLSPAN="1" ALIGN="LEFT">kg/m<I><sup>3</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+rhofresh            </TD><TD COLSPAN="1" ALIGN="LEFT"> density of fresh water </TD><TD COLSPAN="1" ALIGN="LEFT"> 1000.0 kg/m<I><sup>3</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+rhoi    </TD><TD COLSPAN="1" ALIGN="LEFT"> density of ice  </TD><TD COLSPAN="1" ALIGN="LEFT"> 917. kg/m<I><sup>3</sup></I></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+rhos              </TD><TD COLSPAN="1" ALIGN="LEFT"> density of snow </TD><TD COLSPAN="1" ALIGN="LEFT"> 330.   kg/m<I><sup>3</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+rhow              </TD><TD COLSPAN="1" ALIGN="LEFT"> density of seawater </TD><TD COLSPAN="1" ALIGN="LEFT"> 1026.  kg/m<I><sup>3</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+rLfi  </TD><TD COLSPAN="1" ALIGN="LEFT"> latent heat of fusion for ice      </TD><TD COLSPAN="1" ALIGN="LEFT">  J/m<I><sup>3</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+rLfs  </TD><TD COLSPAN="1" ALIGN="LEFT"> specific latent heat of fusion for snow    </TD><TD COLSPAN="1" ALIGN="LEFT"> J/m<I><sup>3</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+rLvi     </TD><TD COLSPAN="1" ALIGN="LEFT"> specific latent heat of vapor*<I>rho<sub>i</sub></I>    </TD><TD COLSPAN="1" ALIGN="LEFT"> J/m<I><sup>3</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+rLvs     </TD><TD COLSPAN="1" ALIGN="LEFT"> specific latent heat of vapor*<I>rho<sub>s</sub></I>   </TD><TD COLSPAN="1" ALIGN="LEFT"> J/m<I><sup>3</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+rnlyr  </TD><TD COLSPAN="1" ALIGN="LEFT">  real(nlyr) </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Rvap </TD><TD COLSPAN="1" ALIGN="LEFT"> gas constant for water vapor </TD><TD COLSPAN="1" ALIGN="LEFT">  461. J/ kg/deg </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ sabs      </TD><TD COLSPAN="1" ALIGN="LEFT"> solar flux absorbed in ice </TD><TD COLSPAN="1" ALIGN="LEFT">W/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+salnew   </TD><TD COLSPAN="1" ALIGN="LEFT"> salinity of new ice </TD><TD COLSPAN="1" ALIGN="LEFT"> saltmax </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+saltmax   </TD><TD COLSPAN="1" ALIGN="LEFT"> max salinity, at ice base     </TD><TD COLSPAN="1" ALIGN="LEFT"> 3.2 ppm </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+sec     </TD><TD COLSPAN="1" ALIGN="LEFT"> seconds elasped into idate </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+secday  </TD><TD COLSPAN="1" ALIGN="LEFT"> number of seconds in a day </TD><TD COLSPAN="1" ALIGN="LEFT">  86400.   </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+shear    </TD><TD COLSPAN="1" ALIGN="LEFT"> strain rate II component  </TD><TD COLSPAN="1" ALIGN="LEFT">1/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+shcoef  </TD><TD COLSPAN="1" ALIGN="LEFT"> transfer coefficient for sensible heat </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+sig1(2) </TD><TD COLSPAN="1" ALIGN="LEFT"> principal stress components (diagnostic) </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+sinw    </TD><TD COLSPAN="1" ALIGN="LEFT"> sine of the turning angle in water  </TD><TD COLSPAN="1" ALIGN="LEFT"> 0. </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+snoice    </TD><TD COLSPAN="1" ALIGN="LEFT"> snow-ice formation       </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+snowpatch </TD><TD COLSPAN="1" ALIGN="LEFT"> length scale for parameterizing nonuniform snow coverage
+ </TD><TD COLSPAN="1" ALIGN="LEFT"> 0.001 m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+sss     </TD><TD COLSPAN="1" ALIGN="LEFT"> sea surface salinity </TD><TD COLSPAN="1" ALIGN="LEFT">psu </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+sst     </TD><TD COLSPAN="1" ALIGN="LEFT"> sea surface temperature </TD><TD COLSPAN="1" ALIGN="LEFT">C </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+stefan-boltzmann   </TD><TD COLSPAN="1" ALIGN="LEFT"> Stefan-Boltzmann constant   </TD><TD COLSPAN="1" ALIGN="LEFT"> 5.67<I>&#215;</I>10<I><sup>
+-8</sup></I> W/m<I><sup>2</sup></I>K<I><sup>4</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+stop_now         </TD><TD COLSPAN="1" ALIGN="LEFT"> if 1, end program execution </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+strairx(y)</TD><TD COLSPAN="1" ALIGN="LEFT">  stress on ice by air in the x(y)-direction (centered in U cell)
+                                          </TD><TD COLSPAN="1" ALIGN="LEFT"> kg/m s<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+strairx(y)T  </TD><TD COLSPAN="1" ALIGN="LEFT"> stress on ice by air, x(y)-direction (centered in T cell) </TD><TD COLSPAN="1" ALIGN="LEFT"> kg/m s<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+strength </TD><TD COLSPAN="1" ALIGN="LEFT"> ice strength (pressure)             </TD><TD COLSPAN="1" ALIGN="LEFT">N/m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+stressp      </TD><TD COLSPAN="1" ALIGN="LEFT"> internal ice stress, <I>sigma<sub>11</sub>+sigma<sub>22</sub></I>  </TD><TD COLSPAN="1" ALIGN="LEFT"> N/m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+stressm      </TD><TD COLSPAN="1" ALIGN="LEFT"> internal ice stress, <I>sigma<sub>11</sub>-sigma<sub>22</sub></I>  </TD><TD COLSPAN="1" ALIGN="LEFT"> N/m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+stress12     </TD><TD COLSPAN="1" ALIGN="LEFT"> internal ice stress, <I>sigma<sub>12</sub></I>  </TD><TD COLSPAN="1" ALIGN="LEFT"> N/m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+strintx(y)      </TD><TD COLSPAN="1" ALIGN="LEFT"> divergence of internal ice stress, x(y) </TD><TD COLSPAN="1" ALIGN="LEFT">N/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+strocnx(y)</TD><TD COLSPAN="1" ALIGN="LEFT"> ice-ocean stress in the x(y)-direction (U-cell) </TD><TD COLSPAN="1" ALIGN="LEFT"> kg/m s<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+strocnx(y)T  </TD><TD COLSPAN="1" ALIGN="LEFT"> ice-ocean stress, x(y)-dir. (T-cell) </TD><TD COLSPAN="1" ALIGN="LEFT"> kg/m s<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+strtltx(y)</TD><TD COLSPAN="1" ALIGN="LEFT"> sea surface slope in the x(y) direction </TD><TD COLSPAN="1" ALIGN="LEFT"> m/m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+sw*d*   </TD><TD COLSPAN="1" ALIGN="LEFT"> incoming shortwave radiation, visible/near IR, direct/diffuse </TD><TD COLSPAN="1" ALIGN="LEFT"> W/m<I><sup>2</sup></I></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Tair    </TD><TD COLSPAN="1" ALIGN="LEFT"> air temperature at 10 m </TD><TD COLSPAN="1" ALIGN="LEFT"> K</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+tarea</TD><TD COLSPAN="1" ALIGN="LEFT"> area of T-cell </TD><TD COLSPAN="1" ALIGN="LEFT"> m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+tarean      </TD><TD COLSPAN="1" ALIGN="LEFT"> area of NH T-cells </TD><TD COLSPAN="1" ALIGN="LEFT"> m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+tarear   </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/tarea </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+tareas      </TD><TD COLSPAN="1" ALIGN="LEFT"> area of SH T-cells</TD><TD COLSPAN="1" ALIGN="LEFT"> m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Tf      </TD><TD COLSPAN="1" ALIGN="LEFT"> freezing temperature </TD><TD COLSPAN="1" ALIGN="LEFT"> C</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Tffresh    </TD><TD COLSPAN="1" ALIGN="LEFT"> freezing temp of fresh ice </TD><TD COLSPAN="1" ALIGN="LEFT">  273.15 K </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+time       </TD><TD COLSPAN="1" ALIGN="LEFT"> total elapsed time </TD><TD COLSPAN="1" ALIGN="LEFT">s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+time_forc  </TD><TD COLSPAN="1" ALIGN="LEFT"> time of last forcing update </TD><TD COLSPAN="1" ALIGN="LEFT">s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Timelt  </TD><TD COLSPAN="1" ALIGN="LEFT"> melting temperature of ice top surface</TD><TD COLSPAN="1" ALIGN="LEFT"> 0. C </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+TLAT_G   </TD><TD COLSPAN="1" ALIGN="LEFT"> latitude  of cell center on global domain </TD><TD COLSPAN="1" ALIGN="LEFT"> radians </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+TLON_G   </TD><TD COLSPAN="1" ALIGN="LEFT"> longitude of cell center on global domain </TD><TD COLSPAN="1" ALIGN="LEFT"> radians </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+
+ tmask </TD><TD COLSPAN="1" ALIGN="LEFT"> land/boundary mask, thickness (T-cell)</TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+tmass    </TD><TD COLSPAN="1" ALIGN="LEFT"> total mass of ice and snow </TD><TD COLSPAN="1" ALIGN="LEFT"> kg/m<I><sup>2</sup></I>  </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Tref   </TD><TD COLSPAN="1" ALIGN="LEFT"> 2m atm reference temperature (computed but not used) </TD><TD COLSPAN="1" ALIGN="LEFT">K </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Tsfc     </TD><TD COLSPAN="1" ALIGN="LEFT"> temperature of ice/snow top surface  </TD><TD COLSPAN="1" ALIGN="LEFT">C </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Tsmelt </TD><TD COLSPAN="1" ALIGN="LEFT"> melting temperature of snow top surface </TD><TD COLSPAN="1" ALIGN="LEFT">0. C </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ u(v)            </TD><TD COLSPAN="1" ALIGN="LEFT"> x(y)-component of velocity </TD><TD COLSPAN="1" ALIGN="LEFT">m/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+uarea</TD><TD COLSPAN="1" ALIGN="LEFT"> area of U-cell </TD><TD COLSPAN="1" ALIGN="LEFT">m<I><sup>2</sup></I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+uarear   </TD><TD COLSPAN="1" ALIGN="LEFT"> 1/uarea</TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+u(v)atm   </TD><TD COLSPAN="1" ALIGN="LEFT"> wind velocity, x(y)    </TD><TD COLSPAN="1" ALIGN="LEFT">m/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ULON </TD><TD COLSPAN="1" ALIGN="LEFT"> longitude of U-cell centers </TD><TD COLSPAN="1" ALIGN="LEFT">radians </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ULAT </TD><TD COLSPAN="1" ALIGN="LEFT"> latitude of U-cell centers </TD><TD COLSPAN="1" ALIGN="LEFT">radians </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+umask </TD><TD COLSPAN="1" ALIGN="LEFT"> land/boundary mask, velocity (U-cell)</TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+u(v)ocn     </TD><TD COLSPAN="1" ALIGN="LEFT"> ocean current, x(y)-direction </TD><TD COLSPAN="1" ALIGN="LEFT">m/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+uvm  </TD><TD COLSPAN="1" ALIGN="LEFT"> land/boundary mask, velocity (U-cell)</TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ vice     </TD><TD COLSPAN="1" ALIGN="LEFT"> volume per unit area of ice          </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+vonkar             </TD><TD COLSPAN="1" ALIGN="LEFT"> von Karman constant </TD><TD COLSPAN="1" ALIGN="LEFT">  0.4   </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+vsno     </TD><TD COLSPAN="1" ALIGN="LEFT"> volume per unit area of snow         </TD><TD COLSPAN="1" ALIGN="LEFT">m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ wind    </TD><TD COLSPAN="1" ALIGN="LEFT"> wind speed </TD><TD COLSPAN="1" ALIGN="LEFT">m/s </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+write_history    </TD><TD COLSPAN="1" ALIGN="LEFT"> if true, write history now </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+write_restart    </TD><TD COLSPAN="1" ALIGN="LEFT"> if 1, write restart now </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+yday    </TD><TD COLSPAN="1" ALIGN="LEFT"> day of the year </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+year    </TD><TD COLSPAN="1" ALIGN="LEFT"> the initial year   </TD><TD COLSPAN="1" ALIGN="LEFT"> 1997 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+zlvl    </TD><TD COLSPAN="1" ALIGN="LEFT"> atmospheric level height </TD><TD COLSPAN="1" ALIGN="LEFT"> m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+zref    </TD><TD COLSPAN="1" ALIGN="LEFT"> reference height for stability </TD><TD COLSPAN="1" ALIGN="LEFT"> 10. m </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD></TR></TABLE>
+
+</BLOCKQUOTE>
+
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><A HREF="cicedoc_16.html"><IMG ALT="Prev" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+    <A HREF="cicedoc.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_18.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

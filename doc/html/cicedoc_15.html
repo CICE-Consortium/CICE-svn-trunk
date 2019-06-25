@@ -1,0 +1,496 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Execution procedures</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<A HREF="cicedoc_14.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+  <A HREF="cicedoc_9.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"><BR><B>Go backward to </B><A HREF="cicedoc_14.html">Model output</A><BR><B>Go up to </B><A HREF="cicedoc_9.html">Numerical implementation</A><BR>
+  
+<HR>
+<H2>Execution procedures</H2>
+
+Several precompiler options are available for configuring the run:
+<BLOCKQUOTE><TABLE><TR><TD COLSPAN="1" ALIGN="LEFT">
+
+location </TD><TD COLSPAN="1" ALIGN="LEFT"> variable </TD><TD COLSPAN="1" ALIGN="LEFT"> options </TD><TD COLSPAN="1" ALIGN="LEFT"> description </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+<B>GNUmakefile</B> </TD><TD COLSPAN="1" ALIGN="LEFT"> OPTIMIZE </TD><TD COLSPAN="1" ALIGN="LEFT"> yes </TD><TD COLSPAN="1" ALIGN="LEFT"> -O2 optimization </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT">          </TD><TD COLSPAN="1" ALIGN="LEFT"> no  </TD><TD COLSPAN="1" ALIGN="LEFT"> -g, appends "_db" to executable name </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+<B>IRIX64.defs</B> </TD><TD COLSPAN="1" ALIGN="LEFT"> GDEFS </TD><TD COLSPAN="1" ALIGN="LEFT"> coupled    </TD><TD COLSPAN="1" ALIGN="LEFT"> run with flux coupler (otherwise stand-alone)</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT">       </TD><TD COLSPAN="1" ALIGN="LEFT"> oceanmixed </TD><TD COLSPAN="1" ALIGN="LEFT"> enable mixed layer parameterization </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> BINTYPE </TD><TD COLSPAN="1" ALIGN="LEFT"> MPI </TD><TD COLSPAN="1" ALIGN="LEFT"> use MPI for internal parallelization </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> NX, NY  </TD><TD COLSPAN="1" ALIGN="LEFT"> (integers) </TD><TD COLSPAN="1" ALIGN="LEFT">   number of MPI
+                                        processors assigned to each </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT">         </TD><TD COLSPAN="1" ALIGN="LEFT">            </TD><TD COLSPAN="1" ALIGN="LEFT"> coordinate direction (NY<I>&lt;=</I>2) </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD></TR></TABLE>
+
+Table 4. Precompiler Options
+</BLOCKQUOTE>
+
+To compile and execute the code, 
+edit the grid size and other parameters in <B>source/ice_model_size.F</B> as desired.  Set the internal parallelization
+method and number of processors (<TT>BINTYPE, NX, NY</TT>)
+in <B>IRIX64.defs</B> (or make an equivalent file for another
+architecture), and modify the <TT>INCLUDE</TT> directory path and other
+settings for your system.  <TT>NX</TT> and <TT>NY</TT> should evenly divide
+the respective number of grid points in each direction. We suggest
+that <TT>NY</TT><I>&lt;=</I>2 for load balancing;  otherwise processors assigned
+subdomains near the equator have little work to do (we hope).
+<P>For stand-alone runs, check that <TT>-Dcoupled</TT> is <I>not</I> set in
+the <B>IRIX64.defs</B> <TT>GDEFS</TT>.  Then type <TT>gmake</TT> to compile
+(<TT>gmake clean</TT> will remove much of what's been created to this point).
+Alter directory paths, file names and the execution command as desired
+in <B>run_ice</B>, and finally type <TT>run_ice</TT> to execute.  (There
+may be an additional operating system command.  For example, on the LANL
+SGIs one types <TT>bsub <I>&lt;</I> run_ice</TT> to submit the job to the batch queue.)
+<P>For coupled runs, check that <TT>-Doceanmixed</TT> is <I>not</I> set in
+the <B>IRIX64.defs</B> <TT>GDEFS</TT>, and that <TT>-Dcoupled</TT> is.  You may compile the model as above or use NCAR scripts
+that set up and compile all of the CCSM coupled model components at
+once (not available in this distribution).
+<P>This procedure creates the output log file
+<B>ice.log.[timestamp]</B>, and if <TT>npt</TT> is long enough compared
+with <TT>dumpfreq</TT> and <TT>histfreq</TT>, 
+dump files <B>iced.[timeID]</B> and
+netCDF history output files <B>iceh_[timeID].nc</B>.  Using the
+&lt;4/3<I><sup>o</sup></I>&gt;
+grid, the log file should be similar to 
+<B>ice.log.mpi_4x2</B>, provided for the
+user's convenience.  <B>ice.log.mpi_4x2</B> is the log file from an
+MPI run on 8 processors (<TT>NX=4</TT> and <TT>NY=2</TT>), on the 
+&lt;4/3<I><sup>o</sup></I>&gt;
+grid.
+<P>CICE namelist variables available for changes after compile time
+appear in <B>ice.log.*</B> with values read from the file 
+<B>ice_in</B>; their definitions are given in 
+<A HREF="cicedoc_17.html">the index</A>.
+For example, to run for a different length of time, say three days,
+set <TT>npt=36</TT> in <B>ice_in</B>.
+At present, the user supplies the time step <TT>dt</TT> and the number of
+subcycles <TT>ndte</TT>, and <TT>dte</TT> is then calculated in subroutine
+<I>init_evp</I>.  The primary reason for doing it this way is to ensure
+that <TT>ndte</TT> is an integer.
+<P>To restart from a previous run, set the filename in <B>ice.restart_file</B> (created by the previous run) to the desired data
+file (<B>iced.[timeID]</B>), then set <TT>restart=.true.</TT>  in
+<B>ice_in</B>.  Restarts are exact for MPI or single processor runs.
+<P>The structure and flow of the sea ice code, described below, is fairly
+well outlined in the main driver routine <B>ice.F</B>.  Note that the
+thermodynamics routine is broken into two pieces, so that fluxes can be
+returned to the coupler as quickly as possible.  This enables the
+flux coupler to deliver the thermodynamic fluxes to other component
+models while the ice model continues running.  (Subroutines listed
+here may be called from numerous other places during a run.)
+<UL><LI>Initialization 
+  <DL><DT><B><I>shr_msg_stdio</I></B>
+<DD> Change the current working directory and
+  redirect I/O as specified in the NCAR coupled model scripts.  This
+  routine is not part of the ice model and is used only for 
+  coupled model runs in the NCAR CCSM setup.
+  <DT><B><I>setup_mpi</I> (<B>ice_init.F</B>)</B>
+<DD>  Initialize MPI.
+      <DL><DT><B><I>mpi_coupled</I> (<B>ice_coupling.F</B>)</B>
+<DD> Initialize
+        specific MPI quantities needed for coupling.
+      </DL>
+
+  <DT><B><I>init_constants</I> (<B>ice_constants.F</B>)</B>
+<DD> Define a few
+  constants best defined at runtime.
+  <DT><B><I>input_data</I> (<B>ice_init.F</B>)</B>
+<DD>   Set default values for
+  the namelist parameters; read changes   from the file <B>ice_in</B>. 
+  <DT><B><I>init_grid</I> (<B>ice_grid.F</B>)</B>
+<DD> Set up the grid and the T cell
+  land mask,   calculate various grid lengths.
+      <DL><DT><B><I>popgrid</I> (<B>ice_grid.F</B>)</B>
+<DD> Read the POP grid and T
+        cell land mask. 
+        <DT><B><I>rectgrid</I> (<B>ice_grid.F</B>)</B>
+<DD> Create a rectangular,
+        latitude-longitude grid. 
+        <DT><B><I>Tlatlon</I> (<B>ice_grid.F</B>)</B>
+<DD> Compute latitude,
+        longitude on the T grid.
+        <DT><B><I>makemask</I> (<B>ice_grid.F</B>)</B>
+<DD> Create U cell mask
+        from the T cell mask, and create hemisphere masks. 
+      </DL>
+
+  <DT><B><I>init_remap</I> (<B>ice_grid.F</B>)</B>
+<DD>  Compute grid quantities for
+  the remapping transport scheme.
+  <DT><B><I>init_calendar</I> (<B>ice_calendar.F</B>)</B>
+<DD>  Initialize
+  time counters.
+  <DT><B><I>init_hist</I> (<B>ice_history.F</B>)</B>
+<DD> Read variables to be
+  written to history from namelist in <B>ice_in</B>; initialize
+  history arrays,   including unit conversions.
+  <DT><B><I>init_evp</I> (<B>ice_dyn_evp.F</B>)</B>
+<DD>  Initialize
+  constants and arrays used for EVP ice dynamics.
+  <DT><B><I>init_flux</I> (<B>ice_init.F</B>)</B>
+<DD> Initialize all fluxes
+  exchanged with the coupler and some data derived fields.
+  <DT><B><I>init_therm_cice</I> (<B>ice_therm_cice.F</B>)</B>
+<DD> Set up
+  vertical layers, salinity and melting temperature profiles.
+  <DT><B><I>init_itd</I> (<B>ice_itd.F</B>)</B>
+<DD>  Set minimum area fraction and
+  thickness boundaries for the ice thickness distribution.
+  <DT><B><I>init_mechred</I> (<B>ice_mechred_cice.F</B>)</B>
+<DD> Initialize
+  a bookkeeping array.
+  <DT><B><I>init_state</I> (<B>ice_init.F</B>)</B>
+<DD> Initialize ice state
+  variables. 
+  <DT><B><I>restartfile</I> (<B>ice_history.F</B>)</B>
+<DD> Read data necessary to
+  restart the ice model. 
+      <DL><DT><B><I>ice_open</I> (<B>ice_read_write.F</B>)</B>
+<DD>  Open a file for
+        reading or writing. 
+        <DT><B><I>ice_read</I> (<B>ice_read_write.F</B>)</B>
+<DD> Read
+          unformatted data. 
+            <DL><DT><B><I>global_scatter</I> (<B>ice_grid.F</B>)</B>
+<DD> Scatter global
+            data to subdomains.  
+            </DL>
+
+        <DT><B><I>ice_bcast_rscalar</I> (<B>ice_misc.F</B>)</B>
+<DD> Broadcast
+        a real scalar value to the subdomains. 
+        <DT><B><I>ice_bcast_iscalar</I> (<B>ice_misc.F</B>)</B>
+<DD> Broadcast
+        an integer scalar value to the subdomains. 
+        <DT><B><I>aggregate</I> (<B>ice_itd.F</B>)</B>
+<DD> Merge thickness
+        category information into an ice state for the grid cell.
+      </DL>
+
+  <DT><B><I>albedos</I> (<B>ice_albedo.F</B>)</B>
+<DD> Determine ice albedo
+  for the initial ice state.
+  <DT><B><I>calendar</I> (<B>ice_calendar.F</B>)</B>
+<DD> Determine initial date.
+  <DT><B><I>init_cpl</I> (<B>ice_coupling.F</B>)</B>
+<DD> Connect the ice model to
+  the flux coupler, 
+  allocate buffer space, and initiate message passing. 
+  <DT><B><I>init_diags</I> (<B>ice_diagnostics.F</B>)</B>
+<DD> Initialize
+  parameters for some diagnostic output.
+  <DT><B><I>ice_write_hist</I> (<B>ice_history.F</B>)</B>
+<DD> Write initial
+  condition to <B>iceh_[timeID].incond.nc</B>.
+  </DL>
+
+<LI>Timestepping Loop
+  <DL><DT><B><I>calendar</I> (<B>ice_calendar .F</B>)</B>
+<DD> Compute the current date and
+  other timely information.   
+  <DT><B><I>from_coupler</I> (<B>ice_coupling.F</B>)</B>
+<DD> Retrieve and unpack
+  data messages   from the flux coupler.
+  <DT><B><I>getflux</I> (<B>ice_flux_in.F</B>)</B>
+<DD> Read and interpolate
+  data from files, when not running coupled (stand-alone).
+      <DL><DT><B><I>monthly_dat</I> (<B>ice_flux_in.F</B>)</B>
+<DD>
+        Control interpolation of monthly data to 1x daily.  This general
+        routine is a template for reading/interpolating specific data sets,
+        as seen in the other routines in <B>ice_flux_in.F</B> that
+        are  not described here.
+           <DL><DT><B><I>interpolate</I> (<B>ice_flux_in.F</B>)</B>
+<DD>
+           Determine coefficients for cubic interpolation of monthly
+           data.
+           <DT><B><I>intp_data</I> (<B>ice_flux_in.F</B>)</B>
+<DD> Read
+           monthly data and performs the interpolation.
+           <DT><B><I>complete_getflux_ocean</I> (<B>ice_flux_in.F</B>)</B>
+<DD>  Compute freezing temperature and other needed
+           quantities from interpolated data.
+           </DL>
+
+      </DL>
+
+  <DT><B><I>init_mass_diags</I> (<B>ice_diagnostics.F</B>)</B>
+<DD>
+  Initialize conservation of mass diagnostics for this time step.
+  <DT><B><I>thermo_rates</I> (<B>ice_thermo_driver.F</B>)</B>
+<DD>  Compute
+  atmospheric fluxes and ice growth rates.
+  <DL><DT><B><I>init_flux_atm</I> (<B>ice_flux.F</B>)</B>
+<DD> Initialize
+      atmospheric fluxes for coupling.
+      <DT><B><I>init_column_diags</I> (<B>ice_therm_driver.F</B>)</B>
+<DD>
+      Initialize diagnostics quantities only affected by vertical processes.
+      <DT><B><I>mixed_layer</I> (<B>ice_ocean.F</B>)</B>
+<DD>  Driver
+      for ocean mixed layer model.
+      <DL><DT><B><I>ocn_heat</I> (<B>ice_ocean.F</B>)</B>
+<DD>  Update SST and
+         freezing/melting potential for stand-alone runs.
+      </DL>
+
+      <DT><B><I>init_frzmlt</I> (<B>ice_therm_driver.F</B>)</B>
+<DD>
+      Determine ocean heat flux available to melt ice.
+      <DT><B><I>thermo_cice</I> (<B>ice_therm_driver.F</B>)</B>
+<DD>
+      Vertical thermodynamics.
+      <DL><DT><B><I>stability</I> (<B>ice_atmo.F</B>)</B>
+<DD> Turbulent transfer
+           coefficients and   wind stress.
+           <DT><B><I>new_temps</I> (<B>ice_therm_cice.F</B>)</B>
+<DD>
+             Changes in ice and snow temperatures.
+             <DL><DT><B><I>ice_sfc_flux</I> (<B>ice_atmo.F</B>)</B>
+<DD>
+             Ice/atmosphere longwave and turbulent fluxes.
+             <DT><B><I>tridiag</I> (<B>ice_therm_cice.F</B>)</B>
+<DD>
+             Tridiagonal matrix solver.
+             </DL>
+
+           <DT><B><I>new_thickness</I> (<B>ice_therm_cice.F</B>)</B>
+<DD>
+           Growth/melt at top and bottom surfaces.
+             <DL><DT><B><I>new_layers</I> (<B>ice_therm_cice.F</B>)</B>
+<DD>
+             Impose uniform thickness on existing ice layers.
+             </DL>
+
+           <DT><B><I>print_state</I> (<B>ice_diagnostics.F</B>)</B>
+<DD>
+           Debugging tool that prints the ice state and surface forcing.
+           <DT><B><I>merge_fluxes</I> (<B>ice_flux.F</B>)</B>
+<DD> Aggregate
+           flux information from all ice thickness categories. 
+      </DL>
+
+  </DL>
+
+  <DT><B><I>scale_fluxes</I> (<B>ice_scaling.F</B>)</B>
+<DD>  Convert fluxes
+  from "per grid cell area" to "per ice area in grid cell," for
+  coupling. 
+  <DT><B><I>to_coupler</I> (<B>ice_coupling.F</B>)</B>
+<DD>  Merge ice
+  characteristics into a   single value for each cell, pack data and
+  send the   message to the flux coupler.
+  <DT><B><I>thermo_itd</I> (<B>ice_thermo_driver.F</B>)</B>
+<DD> Initialize
+  ocean fluxes, update ice
+  thickness distribution due to thermodynamic changes and growth of
+  new ice. 
+  <DL><DT><B><I>init_flux_ocean</I> (<B>ice_flux.F</B>)</B>
+<DD> Initialize
+      ocean fluxes for coupling.
+      <DT><B><I>to_column</I> (<B>ice_itd.F</B>)</B>
+<DD> Define state
+      variables for a given point (column).
+      <DT><B><I>zerocat</I> (<B>ice_itd.F</B>)</B>
+<DD> Reset category
+      variables where there is no ice.
+      <DT><B><I>linear_itd</I> (<B>ice_itd_linear.F</B>)</B>
+<DD> Linear
+      remapping scheme for thermodynamic adjustments to ice thickness
+      distribution. 
+         <DL><DT><B><I>fit_line</I> (<B>ice_itd_linear.F</B>)</B>
+<DD>
+         Approximate ice thickness distribution.
+         <DT><B><I>shift_ice</I> (<B>ice_itd.F</B>)</B>
+<DD> Shift ice across
+         thickness category boundaries.
+         </DL>
+
+      <DT><B><I>add_new_ice</I> (<B>ice_therm_driver.F</B>)</B>
+<DD>  Given
+      the volume of new ice grown in open water, compute its area 
+      and thickness and add it to the appropriate category or categories.
+      <DT><B><I>reduce_area</I> (<B>ice_therm_driver.F</B>)</B>
+<DD> Reduce
+      area when ice melts for special case of ncat=1.
+      <DT><B><I>rebin</I> (<B>ice_itd.F</B>)</B>
+<DD>  Rebin ice volumes into
+      proper thickness categories.
+      <DT><B><I>aggregate_pt</I> (<B>ice_itd.F</B>)</B>
+<DD>  Aggregate
+      over thickness categories for column variables.
+      <DT><B><I>from_column</I> (<B>ice_itd.F</B>)</B>
+<DD> Read
+      column values into grid array.
+      <DT><B><I>check_state</I> (<B>ice_itd.F</B>)</B>
+<DD>  Insist that certain
+      ice state fields are positive or negative definite.
+  </DL>
+
+  <DT><B><I>evp</I> (<B>ice_dyn_evp.F</B>)</B>
+<DD> Elastic-viscous-plastic
+  ice dynamics. 
+  <DL><DT><B><I>evp_prep</I> (<B>ice_dyn_evp.F</B>)</B>
+<DD> Compute
+      quantities needed for the dynamics that change on each time step but
+      do not change during the subcycling.
+      <DL><DT><B><I>t2ugrid</I> (<B>ice_grid.F</B>)</B>
+<DD> Create a work array with
+        ghost cells, then interpolate from T cell centers to U cell centers.
+        <DT><B><I>to_ugrid</I> (<B>ice_grid.F</B>)</B>
+<DD> Interpolate from T 
+        cell centers to  U cell centers. 
+        <DT><B><I>ice_strength</I> (<B>ice_mechred_cice.F</B>)</B>
+<DD>
+        Compute strength (pressure) of the ice based on ridging quantities.
+      </DL>
+
+      <DT><B></B>
+<DD> Subcycling Loop
+      <DT><B><I>stress</I> (<B>ice_dyn_evp.F</B>)</B>
+<DD> Update rates of
+      strain and the       components of the   internal stress tensor.
+      <DT><B><I>stepu</I> (<B>ice_dyn_evp.F</B>)</B>
+<DD> Update surface
+      stress due to the ocean currents and   calculate the new
+      velocity components. 
+      <DL><DT><B><I>bound_narr_ne</I> (<B>ice_grid.F</B>)</B>
+<DD> Update
+        boundaries on the north and east sides of grid cell, for several
+       (narr) arrays at once.
+      </DL>
+
+      <DT><B><I>bound_sw</I> (<B>ice_grid.F</B>)</B>
+<DD> Update boundary
+      conditions for the south and west sides of the grid cell. 
+      <DT><B><I>evp_finish</I> (<B>ice_dyn_evp.F</B>)</B>
+<DD> Compute
+      ice-ocean stress.
+      <DL><DT><B><I>u2tgrid</I> (<B>ice_grid.F</B>)</B>
+<DD> Create a work array with
+        ghost cells then interpolate from U cell centers to T cell centers.
+        <DL><DT><B><I>to_tgrid</I> (<B>ice_grid.F</B>)</B>
+<DD> Interpolate from U cell 
+           centers to T cell centers. 
+        </DL>
+
+      </DL>
+
+  </DL>
+
+  <DT><B><I>transport_remap</I> (<B>ice_transport.F</B>)</B>
+<DD> Horizontal
+  transport via remapping. 
+  <DL><DT><B><I>triangle_coordinates</I> (<B>ice_transport.F</B>)</B>
+<DD>
+      Find coordinates needed for integrations over area.
+      <DT><B><I>area_flux</I> (<B>ice_transport.F</B>)</B>
+<DD>  Compute
+      fluxes of total area.
+      <DT><B><I>bound</I> (<B>ice_grid.F</B>)</B>
+<DD> Update lateral boundaries for
+      one array.
+      <DT><B><I>limited_gradient</I> (<B>ice_transport.F</B>)</B>
+<DD> Limit
+      the gradients of a scalar field.
+      <DT><B><I>sum_fluxes</I> (<B>ice_transport.F</B>)</B>
+<DD>  Compute
+      fluxes across each cell face.
+  </DL>
+
+  <DT><B><I>transport_mpdata</I> (<B>ice_transport.F</B>)</B>
+<DD> Horizontal
+  transport via upwind or mpdata.  
+  <DL><DT><B><I>bound_narr</I> (<B>ice_grid.F</B>)</B>
+<DD> Update boundary
+      conditions for several (narr) arrays at once.
+      <DT><B><I>mpdata</I> (<B>ice_transport.F</B>)</B>
+<DD> Multidimensional positive
+      definite advection transport algorithm<A HREF="cicedoc_19.html#20">[20]</A>.
+  </DL>
+
+  <DT><B><I>freeboard</I> (<B>ice_itd.F</B>)</B>
+<DD> Adjust freeboard for snow
+  loading.
+  <DT><B><I>ridge_ice</I> (<B>ice_mechred_cice.F</B>)</B>
+<DD>  Mechanical
+  redistribtuion of ice by divergence and shear.
+  <DL><DT><B><I>ridge_prep</I> (<B>ice_mechred_cice.F</B>)</B>
+<DD>  Compute
+  participation function for ice ridging, used for both <I>ridge_ice and ice_strength</I>.
+  </DL>
+
+  <DT><B><I>distr_check</I> (<B>ice_itd.F</B>)</B>
+<DD>  Remove small amounts
+  of ice or open water, and ensure that ice thicknesses lie between
+  their category bounds.
+  <DT><B><I>aggregate</I> (<B>ice_itd.F</B>)</B>
+<DD> Merge thickness
+  category information into an ice state for the grid cell.
+  <DT><B><I>albedos</I> (<B>ice_albedo.F</B>)</B>
+<DD> Determine ice albedo.
+  <DT><B><I>scale_hist_fluxes</I> (<B>ice_scaling.F</B>)</B>
+<DD>    Convert
+  history fluxes from "per grid cell area" to "per ice area in grid
+  cell," to be consistent with coupling fluxes. 
+  </DL>
+
+<LI>Write results
+  <DL><DT><B><I>runtime_diags</I> (<B>ice_diagnostics.F</B>)</B>
+<DD> Write diagnostic
+  information to <B>ice_diag.[timeID]</B>, for monitoring the run.
+      <DL><DT><B><I>get_sum</I> (<B>ice_mpi_internal.F</B>)</B>
+<DD>  Compute
+        weighted sum over grid cell.
+        <DT><B><I>global_gather</I> (<B>ice_mpi_internal.F</B>)</B>
+<DD>
+        Gather data from subdomains onto      the    global domain. 
+      </DL>
+
+  <DT><B><I>ice_write_hist</I> (<B>ice_history.F</B>)</B>
+<DD> Time
+  averaging of output data to be written to <B>iceh_[timeID].nc</B>.
+      <DL><DT><B><I>principal_stress</I> (<B>ice_dyn_evp.F</B>)</B>
+<DD> Compute
+      snapshots of principal stress components.
+      <DT><B><I>icecdf</I> (<B>ice_history.F</B>)</B>
+<DD> Write output data in 
+      netCDF format to <B>iceh_[timeID].nc</B>.
+      </DL>
+
+  <DT><B><I>dumpfile</I> (<B>ice_history.F</B>)</B>
+<DD>  Write data needed
+  for restarting the model, to be read by <I>restartfile</I>.
+      <DL><DT><B><I>ice_write</I> (<B>ice_read_write.F</B>)</B>
+<DD> Write
+          unformatted data. 
+      </DL>
+
+  </DL>
+
+<LI>Finish
+  <DL><DT><B><I>exit_coupler</I> (<B>ice_coupling.F</B>)</B>
+<DD> Send final message to
+  flux coupler and quit MPI.
+  <DT><B><I>end_run</I> (<B>ice_mpi_internal.F</B>)</B>
+<DD> Quit MPI.
+  </DL>
+
+</UL>
+
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><A HREF="cicedoc_14.html"><IMG ALT="Prev" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+    <A HREF="cicedoc_9.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif">
+</BODY></HTML>
+

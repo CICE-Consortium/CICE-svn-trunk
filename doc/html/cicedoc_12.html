@@ -1,0 +1,132 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Initialization and coupling</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<A HREF="cicedoc_11.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+  <A HREF="cicedoc_9.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_13.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go backward to </B><A HREF="cicedoc_11.html">Grid, boundary conditions and masks</A><BR><B>Go up to </B><A HREF="cicedoc_9.html">Numerical implementation</A><BR><B>Go forward to </B><A HREF="cicedoc_13.html">Choosing appropriate parameters</A>
+  
+<HR>
+<H2>Initialization and coupling</H2>
+
+The ice model's parameters and variables are initialized in several
+steps. Many constants and physical parameters are set in <B>ice_constants.F</B>.  Namelist variables 
+(Table&#160;2),
+whose values can be
+altered at run time, are handled in <I>input_data</I>. These variables
+are given default values in the code, which may then be changed when
+the input file <B>ice_in</B> is read.  Physical constants, numerical
+parameters, and variables are first set in initialization routines for
+each ice model component or module.  Then, if the ice model is being
+restarted from a previous run, some variables are read and
+reinitialized in <I>restartfile</I>. Finally, albedo is initialized
+based on the initial ice state.  Some of these parameters will be
+described in more detail below; here we give an overview of the
+namelist variables.
+<BLOCKQUOTE><TABLE><TR><TD COLSPAN="1" ALIGN="LEFT">
+
+variable </TD><TD COLSPAN="1" ALIGN="LEFT"> options/format </TD><TD COLSPAN="1" ALIGN="LEFT"> description </TD><TD COLSPAN="1" ALIGN="LEFT"> recommended value</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ --------- </TD><TD COLSPAN="1" ALIGN="LEFT"> ------------- </TD><TD COLSPAN="1" ALIGN="LEFT"> -------------------- </TD><TD COLSPAN="1" ALIGN="LEFT"> --------------- </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+advection </TD><TD COLSPAN="1" ALIGN="LEFT"> remap   </TD><TD COLSPAN="1" ALIGN="LEFT"> linear remapping advection </TD><TD COLSPAN="1" ALIGN="LEFT"> 'remap'</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> mpdata2 </TD><TD COLSPAN="1" ALIGN="LEFT"> 2nd order MPDATA </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> upwind  </TD><TD COLSPAN="1" ALIGN="LEFT"> 1st order MPDATA </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+diag_file </TD><TD COLSPAN="1" ALIGN="LEFT"> filename </TD><TD COLSPAN="1" ALIGN="LEFT"> diagnostic output file </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+diagfreq </TD><TD COLSPAN="1" ALIGN="LEFT"> integer </TD><TD COLSPAN="1" ALIGN="LEFT"> frequency of diagnostic output in dt </TD><TD COLSPAN="1" ALIGN="LEFT"> 12 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> <I>eg.</I>, 10    </TD><TD COLSPAN="1" ALIGN="LEFT"> once every 10 time steps </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dt   </TD><TD COLSPAN="1" ALIGN="LEFT"> seconds  </TD><TD COLSPAN="1" ALIGN="LEFT">  thermo/transport time step length </TD><TD COLSPAN="1" ALIGN="LEFT"> 7200.</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dump_file  </TD><TD COLSPAN="1" ALIGN="LEFT"> filename prefix </TD><TD COLSPAN="1" ALIGN="LEFT">  output file for restart dump </TD><TD COLSPAN="1" ALIGN="LEFT"> 'iced'</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+dumpfreq </TD><TD COLSPAN="1" ALIGN="LEFT"> y </TD><TD COLSPAN="1" ALIGN="LEFT"> write data for restarting once a year </TD><TD COLSPAN="1" ALIGN="LEFT"> 'm'</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> m </TD><TD COLSPAN="1" ALIGN="LEFT"> write data for restarting once a month </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> d </TD><TD COLSPAN="1" ALIGN="LEFT"> write data for restarting once a day </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+evp_damping </TD><TD COLSPAN="1" ALIGN="LEFT"> true/false </TD><TD COLSPAN="1" ALIGN="LEFT">  if true, damp elastic waves <A HREF="cicedoc_19.html#17">[17]</A> </TD><TD COLSPAN="1" ALIGN="LEFT"> .false.</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+grid_file </TD><TD COLSPAN="1" ALIGN="LEFT"> filename     </TD><TD COLSPAN="1" ALIGN="LEFT">  name of grid file to be read </TD><TD COLSPAN="1" ALIGN="LEFT"> 'global_192x128.grid'</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+grid_type </TD><TD COLSPAN="1" ALIGN="LEFT"> rectangular  </TD><TD COLSPAN="1" ALIGN="LEFT">  defined in <I>rectgrid</I> </TD><TD COLSPAN="1" ALIGN="LEFT"> 'displaced_pole'</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> displaced_pole </TD><TD COLSPAN="1" ALIGN="LEFT"> read from file in <I>popgrid</I> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+hist_avg  </TD><TD COLSPAN="1" ALIGN="LEFT"> true  </TD><TD COLSPAN="1" ALIGN="LEFT"> write time-averaged data </TD><TD COLSPAN="1" ALIGN="LEFT"> .true. </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> false </TD><TD COLSPAN="1" ALIGN="LEFT"> write snapshots of data </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+histfreq </TD><TD COLSPAN="1" ALIGN="LEFT"> y </TD><TD COLSPAN="1" ALIGN="LEFT"> write history output once a year </TD><TD COLSPAN="1" ALIGN="LEFT"> 'm'</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> m </TD><TD COLSPAN="1" ALIGN="LEFT"> write history output once a month </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> w </TD><TD COLSPAN="1" ALIGN="LEFT"> write history output once a week </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> d </TD><TD COLSPAN="1" ALIGN="LEFT"> write history output once a day </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> 1  </TD><TD COLSPAN="1" ALIGN="LEFT"> write history output every time step </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+history_file </TD><TD COLSPAN="1" ALIGN="LEFT"> filename prefix </TD><TD COLSPAN="1" ALIGN="LEFT">  output file for history </TD><TD COLSPAN="1" ALIGN="LEFT"> 'iceh' </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+istep0  </TD><TD COLSPAN="1" ALIGN="LEFT"> integer </TD><TD COLSPAN="1" ALIGN="LEFT">  initial time step number </TD><TD COLSPAN="1" ALIGN="LEFT"> 0 </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+kdyn </TD><TD COLSPAN="1" ALIGN="LEFT"> 0 </TD><TD COLSPAN="1" ALIGN="LEFT">  dynamics OFF </TD><TD COLSPAN="1" ALIGN="LEFT"> 1</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> 1 </TD><TD COLSPAN="1" ALIGN="LEFT"> EVP dynamics </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+kitd </TD><TD COLSPAN="1" ALIGN="LEFT"> 0 </TD><TD COLSPAN="1" ALIGN="LEFT"> delta function ITD approximation </TD><TD COLSPAN="1" ALIGN="LEFT"> 1</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> 1 </TD><TD COLSPAN="1" ALIGN="LEFT"> linear remapping ITD approximation </TD><TD COLSPAN="1" ALIGN="LEFT"></TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+kmt_file </TD><TD COLSPAN="1" ALIGN="LEFT"> filename </TD><TD COLSPAN="1" ALIGN="LEFT"> name of land mask file to be read </TD><TD COLSPAN="1" ALIGN="LEFT"> 'global_192x128.kmt'</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+kstrength </TD><TD COLSPAN="1" ALIGN="LEFT"> 0 </TD><TD COLSPAN="1" ALIGN="LEFT"> pressure formulation <A HREF="cicedoc_19.html#22">[22]</A>  </TD><TD COLSPAN="1" ALIGN="LEFT"> 1</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD><TD COLSPAN="1" ALIGN="LEFT"> 1 </TD><TD COLSPAN="1" ALIGN="LEFT"> pressure formulation <A HREF="cicedoc_19.html#13">[13]</A> </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+ndte  </TD><TD COLSPAN="1" ALIGN="LEFT"> integer </TD><TD COLSPAN="1" ALIGN="LEFT"> number of EVP subcycles </TD><TD COLSPAN="1" ALIGN="LEFT"> 120</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+npt   </TD><TD COLSPAN="1" ALIGN="LEFT"> integer </TD><TD COLSPAN="1" ALIGN="LEFT"> total number of time steps to take </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+print_points  </TD><TD COLSPAN="1" ALIGN="LEFT"> true/false </TD><TD COLSPAN="1" ALIGN="LEFT"> print diagnostic data for two grid points </TD><TD COLSPAN="1" ALIGN="LEFT"> .false.</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+restart </TD><TD COLSPAN="1" ALIGN="LEFT"> true/false </TD><TD COLSPAN="1" ALIGN="LEFT"> initialize using restart file </TD><TD COLSPAN="1" ALIGN="LEFT"> .true.</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+restrt_pnter  </TD><TD COLSPAN="1" ALIGN="LEFT"> pointer filename </TD><TD COLSPAN="1" ALIGN="LEFT"> contains restart filename </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+year  </TD><TD COLSPAN="1" ALIGN="LEFT"> yyyy  </TD><TD COLSPAN="1" ALIGN="LEFT"> the initial year, if not using restart </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+f_<I>&lt;var&gt;</I> </TD><TD COLSPAN="1" ALIGN="LEFT"> true/false </TD><TD COLSPAN="1" ALIGN="LEFT"> write <I>&lt;var&gt;</I> to history </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD></TR></TABLE>
+
+Table&#160;2.  Namelist options.
+</BLOCKQUOTE>
+
+The ice component communicates with the flux coupler by passing
+messages using MPI, which is initialized in <I>setup_mpi</I> for both
+coupled and stand-alone MPI runs.  Further initialization for coupling
+occurs in <I>init_cpl</I>.  The routines <I>from_coupler</I> and <I>to_coupler</I> respectively unpack and pack the data being passed
+between the ice component and the flux coupler, and perform necessary
+averages and unit conversions.  
+<P>For stand-alone runs, routines in <B>ice_flux_in.F</B> read and
+interpolate data from files, and are intended merely to provide
+guidance for the user to write his or her own routines.  No data files
+are provided with this release.
+Whether the code is to be run in stand-alone or coupled mode is
+determined at compile time, as described below. 
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><A HREF="cicedoc_11.html"><IMG ALT="Prev" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+    <A HREF="cicedoc_9.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_13.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

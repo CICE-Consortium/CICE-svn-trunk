@@ -1,0 +1,114 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Model components</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<A HREF="cicedoc_2.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+  <A HREF="cicedoc.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_9.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go backward to </B><A HREF="cicedoc_2.html">Coupling with other climate model components</A><BR><B>Go up to </B><A HREF="cicedoc.html">Top</A><BR><B>Go forward to </B><A HREF="cicedoc_9.html">Numerical implementation</A>
+  
+<HR>
+<H1>Model components</H1>
+
+The Arctic and Antarctic sea ice packs are mixtures of open water, thin 
+first-year ice, thicker multiyear ice, and thick pressure ridges.
+The thermodynamic and dynamic properties of the ice pack depend on 
+how much ice lies in each thickness range.  Thus the basic problem in sea
+ice modeling is to describe the evolution of the ice thickness
+distribution (ITD) in time and space.
+<P>A fundamental transport equation describes the ITD evolution, which
+is solved by partitioning the ice 
+pack at each grid point into discrete thickness categories.  
+The number of categories can be set by the user, with a default 
+value <I>N<sub>C</sub> = 5</I>.  
+(Five categories, plus open water, are sufficient to simulate 
+the annual cycles of ice thickness, ice strength, and surface fluxes
+<A HREF="WARNING: Unknown label BHWE:01,Lipscomb:01 "></A>.) 
+Each category <I>n</I> has lower thickness bound 
+<I>H<sub>n-1</sub></I> and upper bound <I>H<sub>n</sub></I>.  
+The lower bound of the thinnest ice category, <I>H<sub>0</sub></I>, is set to zero.
+The other boundaries are chosen with greater resolution 
+for small <I>h</I>, since the properties of the ice pack are especially 
+sensitive to the amount of thin ice <A HREF="cicedoc_19.html#10">[10]</A>.
+The continuous 
+ice thickness distribution
+is replaced by
+the discrete variable <I>a<sub>in</sub></I>, defined as the fractional area 
+covered by ice in the thickness range (<I>H<sub>n-1</sub>, H<sub>n</sub></I>).  
+We denote the fractional area of open water by 
+<I>a<sub>i0</sub></I>.
+<P>In addition to the fractional ice area, <I>a<sub>in</sub></I>, we define the 
+following state variables for each category <I>n</I>:
+<UL><LI><I>v<sub>in</sub></I>, the ice volume, equal to the product of
+      <I>a<sub>in</sub></I> and the ice thickness <I>h<sub>in</sub></I>.
+<LI><I>v<sub>sn</sub></I>, the snow volume, equal to the product of
+      <I>a<sub>in</sub></I> and the snow thickness <I>h<sub>sn</sub></I>.
+<LI><I>e<sub>ink</sub></I>, the ice energy in layer <I>k</I>, equal 
+      to the product of the ice layer volume, <I>v<sub>in</sub>/N<sub>i</sub></I>, and the 
+      ice layer enthalpy, <I>q<sub>ink</sub></I>.  Here <I>N<sub>i</sub></I> is the total number
+      of ice layers, with a default value <I>N<sub>i</sub> = 4</I>, and
+      <I>q<sub>ink</sub></I> is the energy needed to melt a unit volume of 
+      ice and raise its temperature to 
+0 C;
+      it is discussed in 
+<A HREF="cicedoc_8.html">the Thermodynamics section</A>.
+       
+<LI><I>e<sub>sn</sub></I>, the snow energy, equal
+      to the product of <I>v<sub>sn</sub></I> and the snow enthalpy, <I>q<sub>sn</sub></I>.
+      Currently there is just one snow layer, but future versions
+      of CICE will allow multiple snow layers.  
+<LI><I>T<sub>sfn</sub></I>, the surface temperature.
+</UL>
+
+Since the fractional area is unitless, the volume variables have units
+of meters (i.e., m<I><sup>3</sup></I> of ice or snow per  m<I><sup>2</sup></I> of grid cell area), 
+and the energy variables have units of J/m<I><sup>2</sup></I>.
+<P>Three terms on the right-hand side of the ITD equation
+describe three kinds of sea ice transport:  
+(1) horizontal transport in <I>(x,y)</I> space;
+(2) transport in thickness space <I>h</I> due to thermodynamic growth 
+and melting; and 
+(3) transport in thickness space <I>h</I> due to ridging and other 
+mechanical processes.
+We solve the equation by operator splitting in
+three stages, with two of the three terms on the right set to zero
+in each stage. 
+We compute horizontal transport using the incremental
+remapping scheme of <A HREF="cicedoc_19.html#11">[11]</A> as adapted for sea ice by 
+<A HREF="cicedoc_19.html#12">[12]</A>; this scheme is discussed in 
+<A HREF="cicedoc_4.html">the Horizontal transport section</A>.
+Ice is transported in thickness space using the remapping scheme of
+<A HREF="cicedoc_19.html#9">[9]</A>, as described in 
+<A HREF="cicedoc_5.html">the Transport in thickness space section</A>.
+The mechanical redistribution scheme, based on 
+<A HREF="cicedoc_19.html#7">[7]</A>, <A HREF="cicedoc_19.html#13">[13]</A>, <A HREF="cicedoc_19.html#14">[14]</A>, and <A HREF="cicedoc_19.html#15">[15]</A>,
+is outlined in 
+<A HREF="cicedoc_6.html">the Mechanical redistribution section</A>.  
+To solve the horizontal transport and ridging equations, we
+need the ice 
+velocity,
+and to compute transport in
+thickness space, we must know the the ice growth rate <I>f</I>
+in each thickness category.
+We use the elastic-viscous-plastic (EVP) ice 
+dynamics scheme of <A HREF="cicedoc_19.html#16">[16]</A>, as modified by <A HREF="cicedoc_19.html#17">[17]</A>
+and <A HREF="cicedoc_19.html#18">[18]</A>, to find the velocity, as    described in 
+<A HREF="cicedoc_7.html">the Dynamics  section</A>
+Finally, we use the thermodynamic model of <A HREF="cicedoc_19.html#19">[19]</A>, 
+discussed in
+<A HREF="cicedoc_8.html">the Thermodynamics section</A>,
+to compute <I>f</I>.
+<P><MENU>
+<LI><A HREF="cicedoc_4.html">Horizontal transport</A>
+<LI><A HREF="cicedoc_5.html">Transport in thickness space</A>
+<LI><A HREF="cicedoc_6.html">Mechanical redistribution</A>
+<LI><A HREF="cicedoc_7.html">Dynamics</A>
+<LI><A HREF="cicedoc_8.html">Thermodynamics</A>
+</MENU>
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><A HREF="cicedoc_2.html"><IMG ALT="Prev" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+    <A HREF="cicedoc.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_9.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

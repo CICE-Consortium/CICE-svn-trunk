@@ -1,0 +1,81 @@
+&ice_nml
+    year         = 0001
+  , istep0       = 0
+  , dt           = 7200.0
+  , ndte         = 120
+  , npt          = 4380
+  , diagfreq     = 12
+  , histfreq     = 'm'
+  , dumpfreq     = 'y'
+  , hist_avg     = .true.
+  , restart      = .true.
+  , print_points = .true.
+  , kitd         = 1
+  , kdyn         = 1
+  , kstrength    = 1
+  , evp_damping  = .false.
+  , advection    = 'mpdata2'
+  , grid_type    = 'displaced_pole'
+  , grid_file    = 'global_100x116.grid'
+  , kmt_file     = 'global_100x116.kmt'
+  , dump_file    = 'iced'
+  , restrt_file  = 'ice.restart_file'
+  , history_file = 'iceh'
+/
+
+&icefields_nml
+    f_hi        = .true. 
+  , f_hs        = .true. 
+  , f_Tsfc      = .true. 
+  , f_aice      = .true. 
+  , f_aice1     = .false.
+  , f_aice2     = .false.
+  , f_aice3     = .false.
+  , f_aice4     = .false.
+  , f_aice5     = .false.
+  , f_uvel      = .true. 
+  , f_vvel      = .true. 
+  , f_Fswdn     = .true. 
+  , f_Flwdn     = .true.
+  , f_snow      = .true. 
+  , f_rain      = .false. 
+  , f_sst       = .true. 
+  , f_sss       = .true. 
+  , f_uocn      = .false. 
+  , f_vocn      = .false. 
+  , f_Focnht    = .true.
+  , f_Fswabs    = .true. 
+  , f_albsni    = .true. 
+  , f_Flat      = .true. 
+  , f_Fsens     = .true. 
+  , f_Flwup     = .true. 
+  , f_evap      = .false. 
+  , f_Tair      = .true. 
+  , f_congel    = .true. 
+  , f_frazil    = .true. 
+  , f_snoice    = .true. 
+  , f_meltb     = .true. 
+  , f_meltt     = .true. 
+  , f_Ffrshw    = .false. 
+  , f_Fioht     = .true. 
+  , f_straix    = .true. 
+  , f_straiy    = .true. 
+  , f_strtltx   = .false. 
+  , f_strtlty   = .false. 
+  , f_strcorx   = .false. 
+  , f_strcory   = .false. 
+  , f_stroix    = .false. 
+  , f_stroiy    = .false. 
+  , f_strintx   = .false. 
+  , f_strinty   = .false.
+  , f_strength  = .true.
+  , f_divu      = .true.
+  , f_shear     = .true.
+  , f_sig1      = .true. 
+  , f_sig2      = .true. 
+  , f_dvidtt    = .false. 
+  , f_dvidtd    = .false. 
+  , f_daidtd    = .false. 
+/
+
+

@@ -1,0 +1,85 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Introduction</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif">
+  <A HREF="cicedoc.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_2.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go up to </B><A HREF="cicedoc.html">Top</A><BR><B>Go forward to </B><A HREF="cicedoc_2.html">Coupling with other climate model components</A>
+  
+<HR>
+<H1>Introduction</H1>
+The Los Alamos sea ice model (CICE) is the result of an effort to
+develop a computationally efficient sea ice component for a fully
+coupled atmosphere-ice-ocean-land global climate model. It was
+designed to be compatible with the Parallel Ocean Program (POP), an
+ocean circulation model developed at Los Alamos National Laboratory
+for use on massively parallel computers
+<A HREF="WARNING: Unknown label SDM:92, DSM:93, DSM:94 "></A>.  The current version of the
+model has been enhanced greatly through collaborations with members of
+the Community Climate System Model (CCSM) Polar Climate Working Group,
+based at the National Center for Atmospheric Research (NCAR).
+<P>CICE has several interacting components: a thermodynamic model that
+computes local growth rates of snow and ice due to vertical conductive
+fluxes, snowfall and local temperatures; a model of ice dynamics,
+which predicts the velocity field of the ice pack based on a model of
+the material strength of the ice; a transport model that describes
+advection of the areal concentration, ice volumes and other state
+variables; and a ridging parameterization that transfers ice among
+thickness categories based on energetic balances and rates of strain.
+Additional routines prepare and execute data exchanges with an
+external "flux coupler," which then passes the data to other climate
+model components such as POP.
+<P><A HREF="cicedoc_2.html">The Coupling section</A>
+discusses the sea ice model's role in the global coupled model system,
+including the atmosphere-ice boundary layer.
+<A HREF="cicedoc_3.html">The Model Components section</A>
+describes each of the major physical components of the sea ice
+model:  
+transport (both
+<A HREF="cicedoc_4.html">horizontally</A>
+and 
+<A HREF="cicedoc_5.html">in thickness space</A>),
+<A HREF="cicedoc_7.html">dynamics,</A>
+<A HREF="cicedoc_6.html">ridging</A>
+and
+<A HREF="cicedoc_8.html">thermodynamics.</A>
+<A HREF="cicedoc_9.html">The Numerical Implementation section</A>
+discusses
+<A HREF="cicedoc_10.html">the directory structure,</A>
+<A HREF="cicedoc_11.html">grid,</A>
+<A HREF="cicedoc_12.html">initialization and coupling,</A>
+<A HREF="cicedoc_13.html">numerical parameters,</A>
+<A HREF="cicedoc_14.html">model output</A>
+and
+<A HREF="cicedoc_15.html">execution procedures,</A>
+and
+<A HREF="cicedoc_16.html">The Troubleshooting section</A>
+contains some pointers for debugging.
+<P>Generally speaking, subroutine names are given in <I>italic</I> and
+file names are <B>boldface</B> in this document.  Symbols used in the
+code are <TT>typewritten</TT>, while corresponding symbols in
+the PostScript version of 
+this document are in the <I>math</I> font which, granted,
+looks a lot like italic.  A 
+<A HREF="cicedoc_17.html">glossary of symbols is provided</A>,
+along with many of their values. 
+The organization of this software distribution is described in
+<A HREF="cicedoc_10.html">the Directory Structure section</A>; 
+most files and subroutines referred to in this documentation are
+part of the CICE code found in <B>cice/source/</B>, unless otherwise noted.
+<P>For those who wonder what "CICE" stands for, it is not an
+acronym... a little rebellion on my part here at this totally
+acronym-oriented government lab.  It is shorthand for "sea ice," an
+amused nod to people outside the field who when told that I study sea
+ice, think I'm saying "C" ice and have no idea what the letter C has
+to do with ice.  There is a small grass-roots movement underway to alter the
+model name's pronunciation from "sea ice" to what an Italian might
+say, "chee chay."  Arguments on either side of this issue are welcome.
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif">
+    <A HREF="cicedoc.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_2.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

@@ -1,0 +1,216 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Coupling with other climate model components</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<A HREF="cicedoc_1.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+  <A HREF="cicedoc.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_3.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go backward to </B><A HREF="cicedoc_1.html">Introduction</A><BR><B>Go up to </B><A HREF="cicedoc.html">Top</A><BR><B>Go forward to </B><A HREF="cicedoc_3.html">Model components</A>
+  
+<HR>
+<H1>Coupling with other climate model components</H1>
+
+The sea ice model exchanges information with the other model components via a
+flux coupler. We use a recent version of the 
+<A HREF="http://www.cgd.ucar.edu/csm/models/cpl/">CCSM Flux Coupler</A> 
+<A HREF="cicedoc_19.html#4">[4]</A>
+from the 
+<A HREF="http://www.ncar.ucar.edu">National Center for Atmospheric Research.</A> 
+The flux coupler was
+originally intended to gather state variables from the component
+models, compute fluxes at the model interfaces, and return these
+fluxes to the component models for use in the next integration period,
+maintaining conservation of momentum, heat and fresh water.  However,
+several of these fluxes are now computed in the ice model itself and
+provided to the flux coupler for distribution to the other components,
+for two reasons.  First, some of the fluxes depend strongly on the
+state of the ice, and vice versa, implying that an implicit,
+simultaneous determination of the ice state and the surface fluxes is
+necessary for consistency and stability.  Second, given the
+various ice types in a single grid cell, it is more feasible for the
+ice model to determine the net ice characteristics of the grid cell
+and provide the resulting fluxes, rather than passing several values
+of the state variables for each cell.  These considerations are
+explained in more detail below.
+<P>The fluxes and state variables passed between the sea ice model and the flux
+coupler are listed 
+below.
+By convention, directional fluxes are positive downward.
+<BLOCKQUOTE><TABLE><TR><TD COLSPAN="1" ALIGN="LEFT">
+
+<B>Atmosphere</B> </TD><TD COLSPAN="1" ALIGN="LEFT"> <B>Ocean</B> </TD></TR>
+<TR><TD COLSPAN="2" ALIGN="CENTER">
+<I>Provided by the flux coupler to the sea ice model</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Atmosphere level height  </TD><TD COLSPAN="1" ALIGN="LEFT"> Freezing/meltingpotential </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Wind velocity            </TD><TD COLSPAN="1" ALIGN="LEFT"> Sea surface temperature </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Specific humidity        </TD><TD COLSPAN="1" ALIGN="LEFT"> Sea surface salinity </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Air density              </TD><TD COLSPAN="1" ALIGN="LEFT"> Sea surface slope</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Air potential temperature</TD><TD COLSPAN="1" ALIGN="LEFT"> Surface ocean currents</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Air temperature          </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Shortwave radiation      </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Incoming longwave radiation       </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Rainfall rate            </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Snowfall rate            </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="2" ALIGN="CENTER">
+<I>Provided by the sea ice model to the flux coupler</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Wind stress              </TD><TD COLSPAN="1" ALIGN="LEFT"> Penetrating shortwave </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Sensible heat flux       </TD><TD COLSPAN="1" ALIGN="LEFT"> Fresh water flux</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Latent heat flux         </TD><TD COLSPAN="1" ALIGN="LEFT"> Net heat flux </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Outgoing longwave        </TD><TD COLSPAN="1" ALIGN="LEFT"> Salt flux </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Evaporated water         </TD><TD COLSPAN="1" ALIGN="LEFT"> Ice-ocean stress </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Surface albedo           </TD><TD COLSPAN="1" ALIGN="LEFT"> </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+Surface temperature      </TD><TD COLSPAN="1" ALIGN="LEFT"> Absorbed Shortwave (diagnostic)</TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+2m reference temperature </TD><TD COLSPAN="1" ALIGN="LEFT"> Ice fraction </TD></TR>
+<TR><TD COLSPAN="1" ALIGN="LEFT">
+</TD></TR></TABLE>
+</I></I>
+</BLOCKQUOTE>
+
+<BLOCKQUOTE></BLOCKQUOTE>
+
+The ice fraction 
+
+is the total fractional ice coverage of a grid cell.  That is, in each cell,
+ 
+the ice fraction is 0 if there is no ice, 1 if there is no
+open water, and <I>a<sub>i</sub></I> if there is both ice and open water, 
+where <I>a<sub>i</sub></I> is the sum of fractional ice areas for each category of ice.
+The ice fraction is used by the flux coupler to merge fluxes from the ice
+model with fluxes from the other components.  For example, the
+penetrating shortwave radiation flux, weighted by 
+the ice fraction, 
+is combined with the net shortwave radiation flux through ice-free
+leads, weighted by 
+one minus the ice fraction, 
+to obtain the net shortwave flux into the ocean over the entire grid
+cell.
+<P>
+The wind velocity, specific humidity, air density and potential temperature
+at the given level height 
+<I>z<sub>o</sub></I>
+are used to compute transfer coefficients
+used in formulas for the surface wind stress and
+turbulent heat fluxes
+as described 
+<A HREF="../cicedoc.ps">in the PostScript documentation.</A>
+Wind stress 
+is arguably the primary forcing mechanism for the ice motion,
+although the ice-ocean stress, Coriolis force, and slope of the
+ocean surface are also important <A HREF="cicedoc_19.html#5">[5]</A>.
+The sensible and latent heat fluxes, 
+along with shortwave and longwave radiation, 
+are included in the flux balance that determines the ice or snow surface
+temperature. 
+These
+fluxes depend nonlinearly on the ice surface 
+temperature;
+the balance equation is iterated until convergence, and the resulting
+fluxes and  
+surface temperature
+are then passed to the flux coupler.
+The flux of water evaporated to the atmosphere is given in terms
+of the latent 
+heat.
+
+<P>The snowfall precipitation rate (provided as liquid water equivalent
+and converted by the ice model to snow depth) also
+contributes to the heat and water mass budgets of the ice layer.
+Although melt ponds generally form on the ice surface in the Arctic
+and refreeze later in the fall, reducing the total amount of fresh
+water that reaches the ocean and altering the heat budget of the ice,
+we currently have no melt pond parameterization; rain and all melted snow end
+up in the ocean. 
+<P>
+The atmospheric reference temperature <I>T<sub>a</sub><sup>ref</sup></I> is computed from
+<I>T<sub>a</sub></I> and 
+<I>T<sub>sfc</sub></I>
+using the coefficients 
+determined in the atmosphere-ice boundary layer calculation.
+Although the sea ice model does not use this quantity,
+it is most convenient for the ice model to perform this calculation.
+The atmospheric reference temperature is returned
+to the flux coupler as a climate diagnostic.
+<P> 
+New sea ice forms when the ocean temperature drops below its freezing
+temperature, <I>T<sub>f</sub>=-&#181;S</I>, where <I>S</I> is the seawater salinity and
+<I>&#181;=0.054</I> is the ratio of the freezing temperature of
+brine to its salinity.  The ocean model performs this calculation; if
+the freezing/melting potential 
+is positive, its value represents a certain amount of frazil ice that
+has formed in one or more layers of the ocean and floated to the
+surface.  (The ocean model assumes that the amount of new ice implied
+by the freezing potential actually forms.)  In general, this ice is
+added to the thinnest ice category.  The new ice is grown in the
+open water area of the grid cell to a specified minimum thickness; if
+the open water area is nearly zero or if there is more new ice than
+will fit into the two thinnest ice categories, then the new ice is
+spread uniformly over the entire cell.
+<P>If
+the freezing/melting potential
+is negative, it is used to heat already existing ice from
+below.  In particular, the sea surface temperature and salinity are
+used to compute an oceanic heat flux <I>F<sub>w</sub></I>
+which is applied at the bottom of the ice.  The portion of the melting
+potential actually used to melt ice is returned to the coupler in 
+<I>F<sub>hnet</sub></I>.
+The ocean model adjusts its own heat budget with this
+quantity, assuming that the rest of the flux remained in the
+ocean.
+<P>In addition to runoff from rain and melted snow, the fresh
+water flux 
+includes ice meltwater from the top
+surface and water melted or frozen (a negative flux) at the bottom
+surface of the ice.  This flux is computed as the net change of fresh
+water in the ice and snow volume over the coupling time
+step, excluding frazil ice formation and newly accumulated snow. 
+<P>There is a flux of salt into the ocean under melting conditions, and a
+(negative) flux when sea water is freezing.  However, melting sea ice
+ultimately freshens the top ocean layer, since the ocean is much more
+saline than the ice.  The ice model passes the net flux of salt
+to the flux coupler, based on the net change in salt
+for ice in all categories.  In the present configuration, <TT>ice_ref_salinity</TT> is used for computing the salt flux, although the
+ice salinity used in the thermodynamic calculation has differing
+values in the ice layers.
+<P>A fraction of the incoming shortwave 
+penetrates the snow and ice layers and passes into
+the 
+ocean.
+<P>Many ice models compute the sea surface slope
+from geostrophic
+ocean currents provided by an ocean model or other data source.  In
+our case, the sea surface height 
+is a prognostic variable in
+POP--the flux coupler can provide the surface slope directly, rather
+than inferring it from the currents. (The option of computing
+it from the currents is provided in subroutine <I>evp_prep</I>.) The
+sea ice model uses the surface layer currents 
+to determine the stress
+between the ocean and the ice, and subsequently the ice
+motion.
+This stress  is then passed to the flux coupler (relative to the ocean) for use
+by the ocean model.  
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><A HREF="cicedoc_1.html"><IMG ALT="Prev" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+    <A HREF="cicedoc.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_3.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

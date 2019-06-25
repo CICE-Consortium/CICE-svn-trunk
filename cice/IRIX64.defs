@@ -1,0 +1,98 @@
+#-----------------------------------------------------------------------
+#
+# This file contains definitions for compiling on SGI
+# Origin and perhaps other IRIX machines.
+#
+#-----------------------------------------------------------------------
+
+#-----------------------------------------------------------------------
+# Define directory for source files, working directory for 
+# compilation and any local  include directories that are not in 
+# the default include path.
+#-----------------------------------------------------------------------
+
+SRCDIR = ./source
+COMPDIR = ./compile
+INCLUDE = -I/usr/local/include -I$(COMPDIR)
+
+#-----------------------------------------------------------------------
+# Preprocessor options
+#-----------------------------------------------------------------------
+
+### Set the first definition to "coupled" to compile the code for coupling.
+### For stand-alone runs, it can be anything else (eg., "uncoupled").
+### The second definition determines whether the thermodynamics mixed
+### layer model is used to update the SST
+### The third definition is the type of operating system determined above.
+GDEFS = -Duncoupled -Doceanmixed -D$(SYSTEM)
+#GDEFS = -Dcoupled -D$(SYSTEM)
+
+### Set BINTYPE to be MPI or OPENMP for parallel.  Set it to anything else 
+### (eg., "single") for single processor, nonparallel runs.
+BINTYPE = MPI
+#BINTYPE = single
+
+### Set the number of processors desired for each grid direction (x, y).
+### This is only used for MPI grid decomposition.  NX and NY are ignored
+### for OPENMP and single processor runs.
+NX=4
+NY=2
+
+DEFS = $(GDEFS) -DNPROC_X=1 -DNPROC_Y=1
+ifeq ($(BINTYPE),MPI)
+  DEFS = $(GDEFS) -DNPROC_X=$(NX) -DNPROC_Y=$(NY) -D_MPI
+endif
+
+CPPOPTS = -P $(INCLUDE) \
+      $(DEFS) 
+
+#-----------------------------------------------------------------------
+# Compiling and loading
+# Define compiler commands and flags, loader commands and flags
+# and the suffix the compiler uses for f90 module files.
+#-----------------------------------------------------------------------
+
+FC = f90
+LD = f90
+CPP = /lib/cpp
+FREEFLAGS = 
+FIXEDFLAGS =
+FBASE  = -r8 -64 -mips4 -r10000 $(INCLUDE) 
+CBASE  = -r8 -64 -mips4 -r10000 $(INCLUDE) 
+LFLAGS = -r8 -64 -mips4 -r10000
+LDLIBS = -lnetcdf -lmpi
+#LDLIBS = -lnetcdf -lmpi -L /usr/local/lib64/r4i4
+MOD_SUFFIX = mod
+
+ifeq ($(BINTYPE),OPENMP)
+  FBASE  = -mp -r10000 -64 -r8
+  LFLAGS = -mp -r10000 -64 -r8
+endif
+
+# Sometimes need this if you want unsupported on-line vis stuff
+#LDLIBS := $(LDLIBS) -lX11
+
+# Add either optimization flags or debug flags to base compiler flags
+
+ifeq ($(OPTIMIZE),yes)
+  FFLAGS = $(FBASE) -O2
+  CFLAGS = $(CBASE) -O
+else
+  FFLAGS = $(FBASE) -g 
+# FFLAGS = $(FBASE) -g -ansi -fullwarn -check_bounds -DEBUG:div_check=3:subscript_check=ON:trap_uninitialized=ON:verbose_runtime=ON
+  CFLAGS = $(CBASE) -g
+  LDLIBS := $(LDLIBS) -lfpe
+endif
+
+#-----------------------------------------------------------------------
+# Where to find various un-aliased utilities
+#-----------------------------------------------------------------------
+
+CP = /usr/bin/cp
+RM = /usr/bin/rm
+MV = /usr/bin/mv
+PERL = /usr/local/gnu/bin/perl
+AWK = /usr/bin/awk
+MAKE = gmake
+ 
+#-----------------------------------------------------------------------

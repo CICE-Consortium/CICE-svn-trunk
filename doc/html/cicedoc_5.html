@@ -1,0 +1,35 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Transport in thickness space</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<A HREF="cicedoc_4.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+  <A HREF="cicedoc_3.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_6.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go backward to </B><A HREF="cicedoc_4.html">Horizontal transport</A><BR><B>Go up to </B><A HREF="cicedoc_3.html">Model components</A><BR><B>Go forward to </B><A HREF="cicedoc_6.html">Mechanical redistribution</A>
+  
+<HR>
+<H2>Transport in thickness space</H2>
+
+Next we solve the equation for ice transport in thickness space due to
+thermodynamic growth and 
+melt.
+
+We use the remapping method of <A HREF="cicedoc_19.html#9">[9]</A>.
+In this scheme, thickness categories are represented as Lagrangian grid 
+cells whose boundaries are projected forward in time.  
+The thickness distribution function <I>g</I> 
+is approximated as a linear function of <I>h</I> in each displaced
+category and is then remapped onto the original thickness categories.
+This method is numerically smooth (unlike schemes that treat
+<I>g(h)</I> as a set of delta functions) and is not too diffusive. 
+It can be viewed as a one-dimensional version of the two-dimensional
+incremental remapping scheme described above.
+For details, see the
+<A HREF="../cicedoc.ps">PostScript documentation</A>. 
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><A HREF="cicedoc_4.html"><IMG ALT="Prev" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif"></A>
+    <A HREF="cicedoc_3.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_6.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+

@@ -1,0 +1,128 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<HTML>
+<!-- HTML file produced from file: cicedoc.tex --
+ -- using Hyperlatex v 1.4 (c) Otfried Schwarzkopf -->
+<HEAD>
+<TITLE>CICE: the Los Alamos Sea Ice Model -- Directory structure</TITLE>
+</HEAD><BODY BGCOLOR="#ffffe6">
+<IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif">
+  <A HREF="cicedoc_9.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+  <A HREF="cicedoc_11.html"><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A><BR><B>Go up to </B><A HREF="cicedoc_9.html">Numerical implementation</A><BR><B>Go forward to </B><A HREF="cicedoc_11.html">Grid, boundary conditions and masks</A>
+  
+<HR>
+<H2>Directory structure</H2>
+
+The present code distribution includes a run script and some input
+files.  The user may wish to alter paths in the run script; other
+parameters that may be changed at run time are found in 
+<B>ice_in</B>.
+<DL><DT><B><B>GNUmakefile</B></B>
+<DD> primary makefile
+<DT><B><B>IRIX64.defs</B></B>
+<DD> macro definitions for SGI IRIX,
+used by <B>GNUmakefile</B>
+<DT><B><B>Makedepends.pl</B></B>
+<DD> perl script that determines module dependencies
+<DT><B><B>README</B></B>
+<DD>     basic information
+<DT><B><B>global_192x128.grid</B></B>
+<DD> &lt;4/3<I><sup>o</sup></I>&gt;
+displaced pole grid 
+<DT><B><B>global_192x128.kmt</B></B>
+<DD> &lt;4/3<I><sup>o</sup></I>&gt;
+land mask
+<DT><B><B>ice.log</B></B>
+<DD> sample output file 
+<DT><B><B>ice.restart_file</B></B>
+<DD> pointer for restart file name
+<DT><B><B>ice_in</B></B>
+<DD>          namelist input data
+<DT><B><B>run_ice</B></B>
+<DD>  sample script for running on SGI nirvana at LANL
+<DT><B><B>compile/</B></B>
+<DD>  directory created when the code is compiled
+<DT><B><B>doc/</B></B>
+<DD>       documentation
+<DL><DT><B><B>cicedoc.ps</B></B>
+<DD> 
+  PostScript documentation 
+</DL>
+
+<DT><B><B>source/</B></B>
+<DD> CICE source code
+<DL><DT><B><B>ice.F</B></B>
+<DD>  main program
+<DT><B><B>ice.F.debug</B></B>
+<DD>   debugging version of <B>ice.F</B>
+<DT><B><B>ice_albedo.F</B></B>
+<DD>  albedo parameterization
+<DT><B><B>ice_atmo.F</B></B>
+<DD>  stability-based parameterization for
+calculation of turbulent ice-atmosphere fluxes
+<DT><B><B>ice_calendar.F</B></B>
+<DD>  keeps track of what day it is
+<DT><B><B>ice_constants.F</B></B>
+<DD>  physical and numerical constants and parameters
+<DT><B><B>ice_coupling.F</B></B>
+<DD>  interface with the flux coupler
+<DT><B><B>ice_diagnostics.F</B></B>
+<DD>  miscellaneous diagnostic and debugging routines
+<DT><B><B>ice_domain.F</B></B>
+<DD>  MPI subdomain sizes and related parallel
+processing info
+<DT><B><B>ice_dyn_evp.F</B></B>
+<DD>    elastic-viscous-plastic dynamics component 
+<DT><B><B>ice_fileunits.F</B></B>
+<DD>  unit numbers for I/O
+<DT><B><B>ice_flux.F</B></B>
+<DD>  fluxes needed/produced by the model
+<DT><B><B>ice_flux_in.F</B></B>
+<DD> routines to read and interpolate forcing data
+for stand-alone ice model runs
+<DT><B><B>ice_grid.F</B></B>
+<DD> grid and land masks
+<DT><B><B>ice_history.F</B></B>
+<DD>  netCDF output routines and restart read/write 
+<DT><B><B>ice_init.F</B></B>
+<DD> namelist and initializations 
+<DT><B><B>ice_itd.F</B></B>
+<DD>  utilities for managing ice thickness distribution 
+<DT><B><B>ice_itd_linear.F</B></B>
+<DD>  linear remapping for transport in
+thickness space
+<DT><B><B>ice_kinds_mod.F</B></B>
+<DD> basic definitions of reals, integers, etc.
+<DT><B><B>ice_mechred_cice.F</B></B>
+<DD>  mechanical redistribution
+component (ridging)
+<DT><B><B>ice_model_size.F</B></B>
+<DD>   grid size and number of thickness
+categories and vertical layers
+<DT><B><B>ice_mpi_internal.F</B></B>
+<DD>  utilities for internal MPI parallelization
+<DT><B><B>ice_ocean.F</B></B>
+<DD>  mixed layer ocean model
+<DT><B><B>ice_read_write.F</B></B>
+<DD>  utilities for reading and writing files
+<DT><B><B>ice_scaling.F</B></B>
+<DD>  ice-area scaling of variables for the coupler 
+<DT><B><B>ice_state.F</B></B>
+<DD>  essential arrays to describe the state of the ice
+<DT><B><B>ice_therm_cice.F</B></B>
+<DD>  vertical thermodynamics component 
+<DT><B><B>ice_therm_driver.F</B></B>
+<DD> controls thermodynamics and
+miscellaneous related jobs
+<DT><B><B>ice_timers.F</B></B>
+<DD>   timing routines
+<DT><B><B>ice_transport.F</B></B>
+<DD>  horizontal advection
+</DL>
+
+</DL>
+
+<HR><ADDRESS>eclare@lanl.gov <BR><A HREF="../../work.html">Elizabeth C. Hunke</A> and William H. Lipscomb<BR><A HREF="http://gnarly.lanl.gov/">T-3 Fluid Dynamics Group</A> <BR><A HREF="http://www.lanl.gov/external">Los Alamos National Laboratory</A> <BR>Los Alamos NM 87545</ADDRESS><BR><IMG ALT="" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/previous.gif">
+    <A HREF="cicedoc_9.html"><IMG ALT="Up" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/up.gif"></A>
+    <A HREF="cicedoc_11.html"><IMG ALT="Next" SRC="http://www.acl.lanl.gov/climate/eclare/Icons/next.gif"></A>
+</BODY></HTML>
+
