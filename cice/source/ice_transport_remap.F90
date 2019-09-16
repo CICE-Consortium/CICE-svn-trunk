@@ -1,4 +1,4 @@
-!  SVN:$Id$
+!  SVN:$Id: ice_transport_remap.F90 757 2013-10-10 20:38:41Z eclare $
 !=======================================================================
 !
 ! Transports quantities using the second-order conservative remapping
@@ -320,7 +320,9 @@
       use ice_constants, only: c0, p5, &
           field_loc_center, field_type_scalar, &
           field_loc_NEcorner, field_type_vector
-      use ice_domain, only: nblocks, blocks_ice, halo_info, maskhalo_remap
+      use ice_domain, only: nblocks, blocks_ice, halo_info, maskhalo_remap, &
+          distrb_info, ew_boundary_type, ns_boundary_type
+      use ice_extrapolate, only: ice_HaloNeumann
       use ice_blocks, only: block, get_block, nghost, nx_block, ny_block
       use ice_grid, only: HTE, HTN, dxu, dyu,       &
                           tarea, tarear, hm,                  &
@@ -328,6 +330,7 @@
 !                          xyav, xxxav, xxyav, xyyav, yyyav
       use ice_exit, only: abort_ice
       use ice_calendar, only: istep1
+      use ice_state, only: restore_ice
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bound
 
       real (kind=dbl_kind), intent(in) ::     &
@@ -628,6 +631,25 @@
                                  field_loc_center, field_type_vector)
             call ice_HaloUpdate (ty,               halo_info, &
                                  field_loc_center, field_type_vector)
+         endif
+
+         if (restore_ice) then
+         call ice_HaloNeumann(dpx, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloNeumann(dpy, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloNeumann(mc, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloNeumann(mx, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloNeumann(my, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloNeumann(tc, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloNeumann(tx, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloNeumann(ty, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
          endif
          call ice_timer_stop(timer_bound)
 

@@ -1,4 +1,4 @@
-!  SVN:$Id$
+!  SVN:$Id: ice_flux.F90 768 2013-11-04 19:45:20Z eclare $
 !=======================================================================
 
 ! Flux variable declarations; these include fields sent from the coupler
@@ -345,9 +345,9 @@
       !-----------------------------------------------------------------
       zlvl  (:,:,:) = c10             ! atm level height (m)
       rhoa  (:,:,:) = 1.3_dbl_kind    ! air density (kg/m^3)
-      uatm  (:,:,:) = c5              ! wind velocity    (m/s)
-      vatm  (:,:,:) = c5
-      strax (:,:,:) = 0.05_dbl_kind
+      uatm  (:,:,:) = c0              ! wind velocity    (m/s)
+      vatm  (:,:,:) = -c10
+      strax (:,:,:) = c0
       stray (:,:,:) = 0.05_dbl_kind
       fsnow (:,:,:) = c0              ! snowfall rate (kg/m2/s)
                                       ! fsnow must be 0 for exact restarts

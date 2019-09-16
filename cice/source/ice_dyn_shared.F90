@@ -1,4 +1,4 @@
-!  SVN:$Id$
+!  SVN:$Id: ice_dyn_shared.F90 757 2013-10-10 20:38:41Z eclare $
 !=======================================================================
 
 ! Elastic-viscous-plastic sea ice dynamics model code shared with other
@@ -122,6 +122,7 @@
          ! Coriolis parameter
 !!         fcor_blk(i,j,iblk) = 1.46e-4_dbl_kind ! Hibler 1979, N. Hem; 1/s
          fcor_blk(i,j,iblk) = c2*omega*sin(ULAT(i,j,iblk)) ! 1/s
+!echmod         fcor_blk(i,j,iblk) = c0
 
          ! stress tensor,  kg/s^2
          stressp_1 (i,j,iblk) = c0

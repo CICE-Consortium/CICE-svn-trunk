@@ -1,4 +1,4 @@
-!  SVN:$Id$
+!  SVN:$Id: ice_transport_driver.F90 768 2013-11-04 19:45:20Z eclare $
 !=======================================================================
 !
 ! Drivers for remapping and upwind ice transport
@@ -203,11 +203,14 @@
           field_loc_center, field_loc_NEcorner, &
           field_type_scalar, field_type_vector
       use ice_global_reductions, only: global_sum, global_sum_prod
-      use ice_domain, only: nblocks, distrb_info, blocks_ice, halo_info
+      use ice_domain, only: nblocks, distrb_info, blocks_ice, halo_info, &
+          ew_boundary_type, ns_boundary_type
       use ice_domain_size, only: ncat, max_blocks
+      use ice_extrapolate, only: ice_HaloNeumann
       use ice_blocks, only: nx_block, ny_block, block, get_block, nghost
+      use ice_restoring, only: ice_HaloRestore
       use ice_state, only: aice0, aicen, vicen, vsnon, trcrn, ntrcr, &
-          uvel, vvel, bound_state
+          uvel, vvel, bound_state, restore_ice
       use ice_grid, only: tarea, HTE, HTN
       use ice_exit, only: abort_ice
       use ice_calendar, only: istep1
@@ -445,6 +448,12 @@
                               field_loc_center, field_type_scalar)
          call ice_HaloUpdate (tmax,             halo_info,     &
                               field_loc_center, field_type_scalar)
+         if (restore_ice) then
+         call ice_HaloNeumann(tmin, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloNeumann(tmax, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         endif
          call ice_timer_stop(timer_bound)
 
          !$OMP PARALLEL DO PRIVATE(iblk,ilo,ihi,jlo,jhi,this_block,n)
@@ -503,6 +512,7 @@
 
       call bound_state (aicen, trcrn,     &
                         vicen, vsnon)
+      if (restore_ice) call ice_HaloRestore
 
       call ice_timer_stop(timer_bound)
 
@@ -631,10 +641,13 @@
       use ice_blocks, only: nx_block, ny_block, block, get_block, nx_block, ny_block
       use ice_constants, only: p5, &
           field_loc_Nface, field_loc_Eface, field_type_vector
-      use ice_domain, only: blocks_ice, halo_info, nblocks
+      use ice_domain, only: blocks_ice, halo_info, nblocks, distrb_info, &
+          ew_boundary_type, ns_boundary_type
       use ice_domain_size, only: ncat, max_blocks
+      use ice_extrapolate, only: ice_HaloNeumann
+      use ice_restoring, only: ice_HaloRestore
       use ice_state, only: aice0, aicen, vicen, vsnon, trcrn, ntrcr, &
-          uvel, vvel, trcr_depend, bound_state
+          uvel, vvel, trcr_depend, bound_state, restore_ice
       use ice_grid, only: HTE, HTN, tarea
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_bound, timer_advect
@@ -700,6 +713,12 @@
                            field_loc_Eface, field_type_vector)
       call ice_HaloUpdate (vnn,             halo_info,     &
                            field_loc_Nface, field_type_vector)
+      if (restore_ice) then
+      call ice_HaloNeumann(uee, distrb_info, &
+                           ew_boundary_type, ns_boundary_type)
+      call ice_HaloNeumann(vnn, distrb_info, &
+                           ew_boundary_type, ns_boundary_type)
+      endif
       call ice_timer_stop(timer_bound)
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
@@ -758,6 +777,7 @@
 
       call bound_state (aicen, trcrn,     &
                         vicen, vsnon)
+      if (restore_ice) call ice_HaloRestore
 
       call ice_timer_stop(timer_bound)
 

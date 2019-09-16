@@ -1,4 +1,4 @@
-!  SVN:$Id$
+!  SVN:$Id: ice_state.F90 768 2013-11-04 19:45:20Z eclare $
 !=======================================================================
 !
 ! Primary state variables in various configurations
@@ -158,6 +158,13 @@
          dimension(nx_block,ny_block,ncat,max_blocks), public :: &
          aicen_init  , & ! initial ice concentration, for linear ITD
          vicen_init      ! initial ice volume (m), for linear ITD
+
+      !-----------------------------------------------------------------
+      ! restore ice state along open boundaries
+      !-----------------------------------------------------------------
+
+      logical (kind=log_kind), public :: &
+         restore_ice
 
 !=======================================================================
 

@@ -1,4 +1,4 @@
-!  SVN:$Id$
+!  SVN:$Id: ice_init.F90 768 2013-11-04 19:45:20Z eclare $
 !=======================================================================
 
 ! parameter and variable initializations
@@ -78,7 +78,7 @@
                            tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_aero, &
                            nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_iage, nt_FY, &
                            nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd, nt_aero, &
-                           ntrcr
+                           ntrcr, restore_ice
       use ice_meltpond_cesm, only: restart_pond_cesm, hs0
       use ice_meltpond_topo, only: hp1, restart_pond_topo
       use ice_meltpond_lvl, only: restart_pond_lvl, dpscale, frzpnd, snowinfil, &
@@ -89,7 +89,6 @@
       use ice_therm_mushy, only: a_rapid_mode, Rac_rapid_mode, aspect_rapid_mode, &
                                  dSdt_slow_mode, phi_c_slow_mode, &
                                  phi_i_mushy
-      use ice_restoring, only: restore_ice
 
       ! local variables
 
@@ -966,6 +965,7 @@
              grid_type  /=  'column'         .and. &
              grid_type  /=  'rectangular'    .and. &
              grid_type  /=  'cpom_grid'      .and. &
+             grid_type  /=  'nares'          .and. &
              grid_type  /=  'latlon' ) then 
             call abort_ice('ice_init: unknown grid_type')
          endif

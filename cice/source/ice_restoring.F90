@@ -1,4 +1,4 @@
-!  SVN:$Id$
+!  SVN:$Id: ice_restoring.F90 758 2013-10-11 02:21:41Z eclare $
 !=======================================================================
 !
 ! Reads and interpolates forcing data for atmosphere and ocean quantities.
@@ -10,18 +10,16 @@
       use ice_kinds_mod
       use ice_blocks, only: nx_block, ny_block
       use ice_domain_size, only: ncat, max_blocks, max_ntrcr
-      use ice_forcing, only: trestore, trest
-      use ice_state, only: aicen, vicen, vsnon, trcrn, ntrcr, bound_state, &
-                           aice_init, aice0, aice, vice, vsno, trcr, trcr_depend
+!      use ice_forcing, only: trestore, trest
+      use ice_state, only: aicen, vicen, vsnon, trcrn, ntrcr, &
+                           aice_init, aice0, aice, vice, vsno, trcr, &
+                           trcr_depend, restore_ice
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bound
 
       implicit none
       private
       public :: ice_HaloRestore_init, ice_HaloRestore
       save
-
-      logical (kind=log_kind), public :: &
-         restore_ice                 ! restore ice state if true
 
       !-----------------------------------------------------------------
       ! state of the ice for each category
@@ -44,14 +42,13 @@
 !  Allocates and initializes arrays needed for restoring the ice state 
 !  in cells surrounding the grid.
 
-
  subroutine ice_HaloRestore_init
 
       use ice_blocks, only: block, get_block, nblocks_x, nblocks_y
       use ice_communicate, only: my_task, master_task
-      use ice_constants, only: c0
+      use ice_constants, only: c0, c1, p1
       use ice_domain, only: ew_boundary_type, ns_boundary_type, &
-          nblocks, blocks_ice
+          nblocks, blocks_ice, distrb_info
       use ice_fileunits, only: nu_diag
       use ice_grid, only: tmask
       use ice_flux, only: sst, Tf, Tair, salinz, Tmltz
@@ -68,8 +65,8 @@
      npad                 ! padding column/row counter
 
    character (len=7), parameter :: &
-!     restore_ic = 'defined' ! otherwise restore to initial ice state
-     restore_ic = 'initial' ! restore to initial ice state
+     restore_ic = 'defined' ! otherwise restore to initial ice state
+!     restore_ic = 'initial' ! restore to initial ice state
 
    type (block) :: &
      this_block  ! block info for current block
@@ -120,11 +117,35 @@
                                trcrn_rest(:,:,:,:,iblk), ntrcr,         &
                                vicen_rest(:,:,  :,iblk), &
                                vsnon_rest(:,:,  :,iblk))
+
+         ! initialize variables to match defined restoring fields
+         aicen(:,:,:,iblk) = aicen_rest(:,:,:,iblk)
+         vicen(:,:,:,iblk) = vicen_rest(:,:,:,iblk)
+         vsnon(:,:,:,iblk) = vsnon_rest(:,:,:,iblk)
+         trcrn(:,:,1:ntrcr,:,iblk) = trcrn_rest(:,:,:,:,iblk)
+
+         call aggregate (nx_block, ny_block, &
+                         aicen(:,:,:,iblk),  &
+                         trcrn(:,:,:,:,iblk),&
+                         vicen(:,:,:,iblk),  &
+                         vsnon(:,:,:,iblk),  &
+                         aice (:,:,  iblk),  &
+                         trcr (:,:,:,iblk),  &
+                         vice (:,:,  iblk),  &
+                         vsno (:,:,  iblk),  &
+                         aice0(:,:,  iblk),  &
+                         tmask(:,:,  iblk),  &
+                         max_ntrcr,          &
+                         trcr_depend)
+
+         aice_init(:,:,iblk) = aice(:,:,iblk)
       enddo ! iblk
 
    else  ! restore_ic
 
    ! restore to initial ice state
+   ! NOTE:  ghost cell values may be zero along open boundaries unless
+   ! they are set explicitly in subroutine set_state_var
 
 ! the easy way
 !   aicen_rest(:,:,:,:) = aicen(:,:,:,:)
@@ -147,11 +168,11 @@
             do n = 1, ncat
             do j = 1, ny_block
             do i = 1, ilo
-               aicen_rest(i,j,n,iblk) = aicen(ilo,j,n,iblk)
-               vicen_rest(i,j,n,iblk) = vicen(ilo,j,n,iblk)
-               vsnon_rest(i,j,n,iblk) = vsnon(ilo,j,n,iblk)
+               aicen_rest(i,j,n,iblk) = aicen(i,j,n,iblk)
+               vicen_rest(i,j,n,iblk) = vicen(i,j,n,iblk)
+               vsnon_rest(i,j,n,iblk) = vsnon(i,j,n,iblk)
                do nt = 1, ntrcr
-                  trcrn_rest(i,j,nt,n,iblk) = trcrn(ilo,j,nt,n,iblk)
+                  trcrn_rest(i,j,nt,n,iblk) = trcrn(i,j,nt,n,iblk)
                enddo
             enddo
             enddo
@@ -176,11 +197,11 @@
             do n = 1, ncat
             do j = 1, ny_block
             do i = ihi, ibc
-               aicen_rest(i,j,n,iblk) = aicen(ihi,j,n,iblk)
-               vicen_rest(i,j,n,iblk) = vicen(ihi,j,n,iblk)
-               vsnon_rest(i,j,n,iblk) = vsnon(ihi,j,n,iblk)
+               aicen_rest(i,j,n,iblk) = aicen(i,j,n,iblk)
+               vicen_rest(i,j,n,iblk) = vicen(i,j,n,iblk)
+               vsnon_rest(i,j,n,iblk) = vsnon(i,j,n,iblk)
                do nt = 1, ntrcr
-                  trcrn_rest(i,j,nt,n,iblk) = trcrn(ihi,j,nt,n,iblk)
+                  trcrn_rest(i,j,nt,n,iblk) = trcrn(i,j,nt,n,iblk)
                enddo
             enddo
             enddo
@@ -193,11 +214,11 @@
             do n = 1, ncat
             do j = 1, jlo
             do i = 1, nx_block
-               aicen_rest(i,j,n,iblk) = aicen(i,jlo,n,iblk)
-               vicen_rest(i,j,n,iblk) = vicen(i,jlo,n,iblk)
-               vsnon_rest(i,j,n,iblk) = vsnon(i,jlo,n,iblk)
+               aicen_rest(i,j,n,iblk) = aicen(i,j,n,iblk)
+               vicen_rest(i,j,n,iblk) = vicen(i,j,n,iblk)
+               vsnon_rest(i,j,n,iblk) = vsnon(i,j,n,iblk)
                do nt = 1, ntrcr
-                  trcrn_rest(i,j,nt,n,iblk) = trcrn(ilo,j,nt,n,iblk)
+                  trcrn_rest(i,j,nt,n,iblk) = trcrn(i,j,nt,n,iblk)
                enddo
             enddo
             enddo
@@ -224,11 +245,11 @@
             do n = 1, ncat
             do j = jhi, ibc
             do i = 1, nx_block
-               aicen_rest(i,j,n,iblk) = aicen(i,jhi,n,iblk)
-               vicen_rest(i,j,n,iblk) = vicen(i,jhi,n,iblk)
-               vsnon_rest(i,j,n,iblk) = vsnon(i,jhi,n,iblk)
+               aicen_rest(i,j,n,iblk) = aicen(i,j,n,iblk)
+               vicen_rest(i,j,n,iblk) = vicen(i,j,n,iblk)
+               vsnon_rest(i,j,n,iblk) = vsnon(i,j,n,iblk)
                do nt = 1, ntrcr
-                  trcrn_rest(i,j,nt,n,iblk) = trcrn(ihi,j,nt,n,iblk)
+                  trcrn_rest(i,j,nt,n,iblk) = trcrn(i,j,nt,n,iblk)
                enddo
             enddo
             enddo
@@ -241,8 +262,8 @@
 
    endif ! restore_ic
 
-   if (my_task == master_task) &
-      write (nu_diag,*) 'ice restoring timescale = ',trestore,' days' 
+!   if (my_task == master_task) &
+!      write (nu_diag,*) 'ice restoring timescale = ',trestore,' days' 
 
  end subroutine ice_HaloRestore_init
 
@@ -265,8 +286,8 @@
 ! authors: E. C. Hunke, LANL
 
       use ice_blocks, only: nblocks_x, nblocks_y
-      use ice_constants, only: c0, c1, c2, p2, p5, rhoi, rhos, Lfresh, &
-           cp_ice, cp_ocn, Tsmelt, Tffresh
+      use ice_constants, only: c0, c1, c2, c3, p2, p5, rhoi, rhos, Lfresh, &
+           cp_ice, cp_ocn, Tsmelt, Tffresh, puny
       use ice_domain_size, only: nilyr, nslyr, ncat
       use ice_state, only: nt_Tsfc, nt_qice, nt_qsno, nt_sice, nt_fbri, tr_brine
       use ice_itd, only: hin_max
@@ -334,6 +355,7 @@
 
       !-----------------------------------------------------------------
       ! Initialize restoring variables everywhere on grid
+      ! The initial ice state can then be set to these values
       !-----------------------------------------------------------------
 
       do n = 1, ncat
@@ -342,30 +364,147 @@
             aicen(i,j,n) = c0
             vicen(i,j,n) = c0
             vsnon(i,j,n) = c0
-            trcrn(i,j,nt_Tsfc,n) = Tf(i,j)  ! surface temperature 
+            trcrn(i,j,nt_Tsfc,n) = c0
+         enddo
+         enddo
+      enddo
+
+      hbar = c1  ! initial ice thickness
+!      hbar = c2  ! initial ice thickness
+      hsno_init = 0.0_dbl_kind ! initial snow thickness (m)
+      do n = 1, ncat
+         hinit(n) = c0
+         ainit(n) = c0
+         if (hbar > hin_max(n-1) .and. hbar < hin_max(n)) then
+            hinit(n) = hbar
+            ainit(n) = 0.5_dbl_kind ! initial ice concentration
+         endif
+      enddo
+
+      do n = 1, ncat
+         do j = 1, ny_block
+         do i = 1, nx_block
+            aicen(i,j,n) = ainit(n)
+            vicen(i,j,n) = hinit(n) * ainit(n) ! m
+            vsnon(i,j,n) = min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
+            trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) !deg C
             if (ntrcr >= 2) then
                do it = 2, ntrcr
                   trcrn(i,j,it,n) = c0
                enddo
             endif
             if (tr_brine) trcrn(i,j,nt_fbri,n) = c1
-         enddo
-         enddo
-      enddo
+
+            ! ice enthalpy, salinity 
+            do k = 1, nilyr
+               ! assume linear temp profile and compute enthalpy
+               slope = Tf(i,j) - trcrn(i,j,nt_Tsfc,n)
+               Ti = trcrn(i,j,nt_Tsfc,n) &
+                  + slope*(real(k,kind=dbl_kind)-p5) &
+                          /real(nilyr,kind=dbl_kind)
+
+               if (ktherm == 2) then
+                  ! enthalpy
+                  trcrn(i,j,nt_qice+k-1,n) = &
+                       enthalpy_mush(Ti, salinz(i,j,k))
+               else
+                  trcrn(i,j,nt_qice+k-1,n) = &
+                      -(rhoi * (cp_ice*(Tmltz(i,j,k)-Ti) &
+                      + Lfresh*(c1-Tmltz(i,j,k)/Ti) - cp_ocn*Tmltz(i,j,k)))
+               endif
+
+               ! salinity
+               trcrn(i,j,nt_sice+k-1,n) = salinz(i,j,k)
+            enddo               ! nilyr
+
+            ! snow enthalpy
+            do k = 1, nslyr
+               Ti = min(c0, trcrn(i,j,nt_Tsfc,n))
+               trcrn(i,j,nt_qsno+k-1,n) = -rhos*(Lfresh - cp_ice*Ti)
+            enddo               ! nslyr
+         enddo                  ! j
+         enddo                  ! i
+      enddo                     ! ncat
 
       !-----------------------------------------------------------------
       ! initial area and thickness in ice-occupied restoring cells
       !-----------------------------------------------------------------
 
+      !-----------------------------------------------------------------
+      ! primary value
+      !-----------------------------------------------------------------
+
       hbar = c2  ! initial ice thickness
-      hsno_init = 0.20_dbl_kind ! initial snow thickness (m)
+      hsno_init = 0.0_dbl_kind ! initial snow thickness (m)
       do n = 1, ncat
          hinit(n) = c0
          ainit(n) = c0
          if (hbar > hin_max(n-1) .and. hbar < hin_max(n)) then
             hinit(n) = hbar
-            ainit(n) = 0.95_dbl_kind ! initial ice concentration
+            ainit(n) = 0.5_dbl_kind ! initial ice concentration
          endif
+      enddo
+
+      !-----------------------------------------------------------------
+      ! Define cells where ice is placed (or other values are used)
+      !-----------------------------------------------------------------
+
+      icells = 0
+      if (jblock == nblocks_y) then      ! north edge
+            ! locate ghost cell row (avoid padding)
+            ibc = ny_block
+            do j = ny_block, 1, -1
+               npad = 0
+               if (jglob(j) == 0) then
+                  do i = 1, nx_block
+                     npad = npad + iglob(i)
+                  enddo
+               endif
+               if (npad /= 0) ibc = ibc - 1
+            enddo
+
+            do j = jhi, ibc
+            do i = 1, nx_block
+               if (tmask(i,j)) then
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
+               endif
+            enddo
+            enddo
+      endif
+
+      !-----------------------------------------------------------------
+      ! Set restoring variables (primary)
+      !-----------------------------------------------------------------
+
+      if (icells > 0) then
+         do n = 1, ncat
+            ! ice volume, snow volume
+            ! other variables are set as initial values above
+!DIR$ CONCURRENT !Cray
+!cdir nodep      !NEC
+!ocl novrec      !Fujitsu
+            do ij = 1, icells
+               i = indxi(ij)
+               j = indxj(ij)
+
+               aicen(i,j,n) = ainit(n)
+               vicen(i,j,n) = hinit(n) * ainit(n) ! m
+               vsnon(i,j,n) = min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
+            enddo               ! ij
+         enddo                  ! ncat
+      endif
+
+      !-----------------------------------------------------------------
+      ! secondary value
+      !-----------------------------------------------------------------
+
+      hbar = c0  ! initial ice thickness
+      hsno_init = 0.0_dbl_kind ! initial snow thickness (m)
+      do n = 1, ncat
+         hinit(n) = c0
+         ainit(n) = c0
       enddo
 
       !-----------------------------------------------------------------
@@ -378,9 +517,9 @@
             do j = 1, ny_block
             do i = 1, ilo
                if (tmask(i,j)) then
-!               icells = icells + 1
-!               indxi(icells) = i
-!               indxj(icells) = j
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
                endif
             enddo
             enddo
@@ -414,45 +553,22 @@
             do j = 1, jlo
             do i = 1, nx_block
                if (tmask(i,j)) then
-!               icells = icells + 1
-!               indxi(icells) = i
-!               indxj(icells) = j
-               endif
-            enddo
-            enddo
-      endif
-
-      if (jblock == nblocks_y) then      ! north edge
-            ! locate ghost cell row (avoid padding)
-            ibc = ny_block
-            do j = ny_block, 1, -1
-               npad = 0
-               if (jglob(j) == 0) then
-                  do i = 1, nx_block
-                     npad = npad + iglob(i)
-                  enddo
-               endif
-               if (npad /= 0) ibc = ibc - 1
-            enddo
-
-            do j = jhi, ibc
-            do i = 1, nx_block
-               if (tmask(i,j)) then
-!               icells = icells + 1
-!               indxi(icells) = i
-!               indxj(icells) = j
+               icells = icells + 1
+               indxi(icells) = i
+               indxj(icells) = j
                endif
             enddo
             enddo
       endif
 
       !-----------------------------------------------------------------
-      ! Set restoring variables
+      ! Set restoring variables (secondary)
       !-----------------------------------------------------------------
 
+      if (icells > 0) then
          do n = 1, ncat
-
             ! ice volume, snow volume
+            ! other variables are set as initial values above
 !DIR$ CONCURRENT !Cray
 !cdir nodep      !NEC
 !ocl novrec      !Fujitsu
@@ -464,53 +580,8 @@
                vicen(i,j,n) = hinit(n) * ainit(n) ! m
                vsnon(i,j,n) = min(aicen(i,j,n)*hsno_init,p2*vicen(i,j,n))
             enddo               ! ij
-
-               ! surface temperature
-               do ij = 1, icells
-                  i = indxi(ij)
-                  j = indxj(ij)
-                  trcrn(i,j,nt_Tsfc,n) = min(Tsmelt, Tair(i,j) - Tffresh) !deg C
-               enddo
-
-               ! ice enthalpy, salinity 
-               do k = 1, nilyr
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
-
-                     ! assume linear temp profile and compute enthalpy
-                     slope = Tf(i,j) - trcrn(i,j,nt_Tsfc,n)
-                     Ti = trcrn(i,j,nt_Tsfc,n) &
-                        + slope*(real(k,kind=dbl_kind)-p5) &
-                                /real(nilyr,kind=dbl_kind)
-
-                     if (ktherm == 2) then
-                        ! enthalpy
-                        trcrn(i,j,nt_qice+k-1,n) = &
-                             enthalpy_mush(Ti, salinz(i,j,k))
-                     else
-                        trcrn(i,j,nt_qice+k-1,n) = &
-                            -(rhoi * (cp_ice*(Tmltz(i,j,k)-Ti) &
-                            + Lfresh*(c1-Tmltz(i,j,k)/Ti) - cp_ocn*Tmltz(i,j,k)))
-                     endif
-
-                     ! salinity
-                     trcrn(i,j,nt_sice+k-1,n) = salinz(i,j,k)
-                  enddo            ! ij
-               enddo               ! nilyr
-
-               ! snow enthalpy
-               do k = 1, nslyr
-                  do ij = 1, icells
-                     i = indxi(ij)
-                     j = indxj(ij)
-                     Ti = min(c0, trcrn(i,j,nt_Tsfc,n))
-                     trcrn(i,j,nt_qsno+k-1,n) = -rhos*(Lfresh - cp_ice*Ti)
-                     
-                  enddo            ! ij
-               enddo               ! nslyr
-
          enddo                  ! ncat
+      endif
 
    end subroutine set_restore_var
 
@@ -524,8 +595,8 @@
  subroutine ice_HaloRestore
 
       use ice_blocks, only: block, get_block, nblocks_x, nblocks_y
-      use ice_calendar, only: dt
-      use ice_constants, only: secday
+!      use ice_calendar, only: dt
+      use ice_constants, only: secday, c1
       use ice_domain, only: ew_boundary_type, ns_boundary_type, &
           nblocks, blocks_ice
 
@@ -555,13 +626,16 @@
 !
 !-----------------------------------------------------------------------
 
-      ! for now, use same restoring constant as for SST
-      if (trestore == 0) then
-         trest = dt          ! use data instantaneously
-      else
-         trest = real(trestore,kind=dbl_kind) * secday ! seconds
-      endif
-      ctime = dt/trest
+!      ! for now, use same restoring constant as for SST
+!      if (trestore == 0) then
+!         trest = dt          ! use data instantaneously
+!      else
+!         trest = real(trestore,kind=dbl_kind) * secday ! seconds
+!      endif
+!      ctime = dt/trest
+
+      ! require boundary restoring to be instantaneous
+      ctime = c1
 
 !-----------------------------------------------------------------------
 !

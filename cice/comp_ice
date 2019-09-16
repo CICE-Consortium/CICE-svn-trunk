@@ -12,9 +12,10 @@ setenv SYSTEM_USERDIR /scratch/eclare/CICE.v5.0  # conejo
 
 ### Grid resolution
 #setenv RES col ; setenv GRID 5x5
-setenv RES gx3 ; setenv GRID 100x116
+#setenv RES gx3 ; setenv GRID 100x116
 #setenv RES gx1 ; setenv GRID 320x384
 #setenv RES tx1 ; setenv GRID 360x240
+setenv RES UDel ; setenv GRID 100x150
 
 set NXGLOB = `echo $GRID | sed s/x.\*//`
 set NYGLOB = `echo $GRID | sed s/.\*x//`
@@ -35,8 +36,8 @@ if ($RES == 'col') then   # for column configuration:
    setenv NICECAT    5       # number of ice thickness categories
 else                      # test problem: gx3
    setenv NTASK      4       # total number of processors
-   setenv BLCKX     25       # x-dimension of blocks ( not including )
-   setenv BLCKY     29       # y-dimension of blocks (  ghost cells  )
+   setenv BLCKX     50       # x-dimension of blocks ( not including )
+   setenv BLCKY     75       # y-dimension of blocks (  ghost cells  )
    setenv NICELYR    7       # number of vertical layers in the ice
    setenv NSNWLYR    1       # number of vertical layers in the snow
    setenv NICECAT    5       # number of ice thickness categories
@@ -75,10 +76,10 @@ setenv NUMIN 11           # minimum file unit number
 setenv NUMAX 99           # maximum file unit number
 
 ### Set SRCDIR and EXEDIR to your own paths!
-setenv SRCDIR /usr/projects/climate/eclare/CICE.v5.0/cice  # conejo
+setenv SRCDIR /usr/projects/climate/eclare/CICE.v5.0/regional  # conejo
 #setenv SRCDIR /Users/akt/Work/MPAS-CICE/Column_Package/cice_package/cice
 
-setenv EXEDIR $SYSTEM_USERDIR/rundir
+setenv EXEDIR $SYSTEM_USERDIR/rundir.UDel
                                           if !(-d $EXEDIR) mkdir -p $EXEDIR
 setenv CBLD   $SRCDIR/bld
 setenv OBJDIR $EXEDIR/compile           ; if !(-d $OBJDIR) mkdir -p $OBJDIR
@@ -101,8 +102,10 @@ cd $SRCDIR/source
 cd $EXEDIR
 
 if !($RES == 'col') then
-if !(-e grid)    cp $SRCDIR/input_templates/$RES/global_$RES.grid grid
-if !(-e kmt)     cp $SRCDIR/input_templates/$RES/global_$RES.kmt kmt
+#if !(-e grid)    cp $SRCDIR/input_templates/$RES/global_$RES.grid grid
+#if !(-e kmt)     cp $SRCDIR/input_templates/$RES/global_$RES.kmt kmt
+if !(-e grid)    cp $SRCDIR/input_templates/$RES/nares.grid.nc grid.nc
+if !(-e kmt)     cp $SRCDIR/input_templates/$RES/nares.kmt.nc kmt.nc
 endif
 if !(-e ice_in)  cp $SRCDIR/input_templates/$RES/ice_in .
 if !(-e run_ice) cp $SRCDIR/input_templates/run_ice.$ARCH run_ice

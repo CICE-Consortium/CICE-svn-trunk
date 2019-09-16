@@ -1,4 +1,4 @@
-!  SVN:$Id$
+!  SVN:$Id: ice_step_mod.F90 768 2013-11-04 19:45:20Z eclare $
 !=======================================================================
 !
 !  Contains CICE component driver routines common to all drivers.
@@ -277,6 +277,10 @@
          enddo
          enddo
          enddo
+
+!echmod 
+!   return
+!echmod
 
 #ifdef CICE_IN_NEMO
        !---------------------------------------------------------------
@@ -972,9 +976,10 @@
       use ice_flux, only: daidtt, dvidtt
       use ice_grid, only: tmask
       use ice_itd, only: aggregate
+      use ice_restoring, only: ice_HaloRestore
       use ice_state, only: aicen, trcrn, vicen, vsnon, ntrcr, &
                            aice,  trcr,  vice,  vsno, aice0, trcr_depend, &
-                           bound_state
+                           bound_state, restore_ice
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_bound
 
       real (kind=dbl_kind), intent(in) :: &
@@ -991,6 +996,7 @@
       call ice_timer_start(timer_bound)
       call bound_state (aicen, trcrn, &
                         vicen, vsnon)
+      if (restore_ice) call ice_HaloRestore
       call ice_timer_stop(timer_bound)
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j)
@@ -1049,8 +1055,9 @@
       use ice_flux, only: daidtd, dvidtd, init_history_dyn
       use ice_grid, only: tmask
       use ice_itd, only: aggregate
+      use ice_restoring, only: ice_HaloRestore
       use ice_state, only: nt_qsno, trcrn, vsnon, aicen, vicen, ntrcr, &
-          aice, trcr, vice, vsno, aice0, trcr_depend, bound_state
+          aice, trcr, vice, vsno, aice0, trcr_depend, bound_state, restore_ice
       use ice_timers, only: ice_timer_start, ice_timer_stop, timer_column, &
           timer_ridge, timer_bound
       use ice_transport_driver, only: advection, transport_upwind, transport_remap
@@ -1112,6 +1119,7 @@
       call ice_timer_start(timer_bound)
       call bound_state (aicen, trcrn, &
                         vicen, vsnon)
+      if (restore_ice) call ice_HaloRestore
       call ice_timer_stop(timer_bound)
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)

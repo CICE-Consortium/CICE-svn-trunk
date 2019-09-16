@@ -1,4 +1,4 @@
-!  SVN:$Id$
+!  SVN:$Id: CICE_RunMod.F90 768 2013-11-04 19:45:20Z eclare $
 !=======================================================================
 !
 !  Main driver for time stepping of CICE.
@@ -120,7 +120,7 @@
       use ice_meltpond_cesm, only: write_restart_pond_cesm
       use ice_meltpond_lvl, only: write_restart_pond_lvl
       use ice_meltpond_topo, only: write_restart_pond_topo
-      use ice_restoring, only: restore_ice, ice_HaloRestore
+!      use ice_restoring, only: restore_ice, ice_HaloRestore
       use ice_state, only: nt_qsno, trcrn, tr_iage, tr_FY, tr_lvl, &
           tr_pond_cesm, tr_pond_lvl, tr_pond_topo, tr_brine, tr_aero
       use ice_step_mod, only: prep_radiation, step_therm1, step_therm2, &
@@ -141,7 +141,7 @@
       ! restoring on grid boundaries
       !-----------------------------------------------------------------
 
-         if (restore_ice) call ice_HaloRestore
+!         if (restore_ice) call ice_HaloRestore
 
       !-----------------------------------------------------------------
       ! initialize diagnostics
@@ -168,11 +168,11 @@
       !-----------------------------------------------------------------
       ! thermodynamics
       !-----------------------------------------------------------------
-            
             call step_therm1     (dt, iblk) ! vertical thermodynamics
+!goto 999            
             call biogeochemistry (dt, iblk) ! biogeochemistry
             call step_therm2     (dt, iblk) ! ice thickness distribution thermo
-
+!999 continue
          enddo ! iblk
          !$OMP END PARALLEL DO
 

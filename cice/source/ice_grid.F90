@@ -1,4 +1,4 @@
-!  SVN:$Id$
+!  SVN:$Id: ice_grid.F90 757 2013-10-10 20:38:41Z eclare $
 !=======================================================================
 
 ! Spatial grids, masks, and boundary conditions
@@ -16,12 +16,13 @@
       module ice_grid
 
       use ice_kinds_mod
-      use ice_boundary, only: ice_HaloUpdate, ice_HaloExtrapolate
+      use ice_boundary, only: ice_HaloUpdate
       use ice_communicate, only: my_task, master_task
       use ice_blocks, only: block, get_block, nx_block, ny_block, nghost
       use ice_domain_size, only: nx_global, ny_global, max_blocks
       use ice_domain, only: blocks_ice, nblocks, halo_info, distrb_info, &
           ew_boundary_type, ns_boundary_type, init_domain_distribution
+      use ice_extrapolate, only: ice_HaloExtrapolate, ice_HaloNeumann
       use ice_fileunits, only: nu_diag, nu_grid, nu_kmt
       use ice_gather_scatter, only: gather_global, scatter_global
       use ice_read_write, only: ice_read, ice_read_nc, ice_read_global, &
@@ -153,7 +154,8 @@
       allocate(work_g2(nx_global,ny_global))
 
       if (trim(grid_type) == 'displaced_pole' .or. &
-          trim(grid_type) == 'tripole'      ) then
+          trim(grid_type) == 'tripole'  .or.&
+          trim(grid_type) == 'nares'    ) then
 
          if (trim(grid_format) == 'nc') then
 
@@ -237,6 +239,7 @@
           field_type_scalar, field_type_vector, field_type_angle
       use ice_domain_size, only: max_blocks
       use ice_exit, only: abort_ice
+      use ice_state, only: restore_ice
 
       integer (kind=int_kind) :: &
          i, j, iblk, &
@@ -267,6 +270,8 @@
          endif 
       elseif (trim(grid_type) == 'cpom_grid') then
          call cpomgrid          ! cpom model orca1 type grid
+      elseif (trim(grid_type) == 'nares') then
+         call naresgrid         ! read Nares Grid from nc file   
       else
          call rectgrid          ! regular rectangular grid
       endif
@@ -349,6 +354,23 @@
       call ice_HaloUpdate (dyhx,               halo_info, &
                            field_loc_center,   field_type_vector, &
                            fillValue=c1)
+
+      if (restore_ice) then
+         call ice_HaloExtrapolate(tarea, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloExtrapolate(uarea, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloExtrapolate(tarear, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloExtrapolate(uarear, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloExtrapolate(tinyarea, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloExtrapolate(dxhy, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+         call ice_HaloExtrapolate(dyhx, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
+      endif
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -955,6 +977,86 @@
 
 !=======================================================================
 
+! Nares Strait Grid
+
+      subroutine naresgrid
+
+      use ice_blocks, only: nx_block, ny_block
+      use ice_constants, only: c0, c1, rad_to_deg, c2, radius, cm_to_m, &
+          field_loc_center, field_loc_NEcorner, field_type_scalar
+      use ice_domain_size, only: max_blocks
+      use ice_exit, only: abort_ice
+
+      integer (kind=int_kind) :: &
+         i, j, iblk, &
+         ilo,ihi,jlo,jhi, &     ! beginning and end of physical domain
+         fid_grid, &            ! file id for netCDF grid file
+         fid_kmt,&              ! file id for netCDF kmt file
+         imid, jmid
+
+      character (char_len) :: &
+         fieldname              ! field name in netCDF file
+         
+      logical (kind=log_kind) :: diag
+
+      real (kind=dbl_kind) :: length
+
+      real (kind=dbl_kind), dimension(:,:), allocatable :: &
+         work_g1
+         
+      real (kind=dbl_kind), dimension (nx_block,ny_block,max_blocks) :: &
+         work1
+
+      type (block) :: &
+         this_block           ! block information for current block
+      
+      call ice_open_nc(grid_file,fid_grid)
+      call ice_open_nc(kmt_file,fid_kmt)
+
+      diag = .true.
+
+      allocate(work_g1(nx_global,ny_global))
+
+      fieldname='ulon'
+      call ice_read_global_nc(fid_grid,2,fieldname,work_g1,diag)
+      call gridbox_verts(work_g1,lont_bounds)
+      call scatter_global(ULON, work_g1, master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+      call ice_HaloExtrapolate(ULON, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
+
+      fieldname='ulat'
+      call ice_read_global_nc(fid_grid,1,fieldname,work_g1,diag) ! ULAT
+      call gridbox_verts(work_g1,latt_bounds) 
+      call scatter_global(ULAT, work_g1, master_task, distrb_info, &
+                          field_loc_NEcorner, field_type_scalar)
+      call ice_HaloExtrapolate(ULAT, distrb_info, &
+                               ew_boundary_type, ns_boundary_type)
+
+      fieldname='htn'
+      call ice_read_global_nc(fid_grid,3,fieldname,work_g1,diag) ! HTN
+      call primary_grid_lengths_HTN(work_g1)  ! dxu, dxt
+
+      fieldname='hte'
+      call ice_read_global_nc(fid_grid,4,fieldname,work_g1,diag) ! HTE
+      call primary_grid_lengths_HTE(work_g1)  ! dyu, dyt
+
+      fieldname='kmt'
+      call ice_read_global_nc(fid_kmt,1,fieldname,work_g1,diag)  ! KMT
+      call scatter_global(hm, work_g1, master_task, distrb_info, &
+                          field_loc_center, field_type_scalar)
+
+      deallocate(work_g1)
+
+      if (my_task == master_task) then
+         call ice_close_nc(fid_grid)
+         call ice_close_nc(fid_kmt)
+      endif
+
+      end subroutine naresgrid
+
+!=======================================================================
+
 ! Calculate dxu and dxt from HTN on the global grid, to preserve
 ! ghost cell and/or land values that might otherwise be lost. Scatter
 ! dxu, dxt and HTN to all processors.
@@ -1107,6 +1209,7 @@
 
       use ice_constants, only: c0, puny, p5, &
           field_loc_center, field_loc_NEcorner, field_type_scalar
+      use ice_state, only: restore_ice
 
       integer (kind=int_kind) :: &
          i, j, iblk, &
@@ -1118,6 +1221,8 @@
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (hm,               halo_info, &
                            field_loc_center, field_type_scalar)
+      if (restore_ice) call ice_HaloNeumann(hm, distrb_info, &
+                                ew_boundary_type, ns_boundary_type)
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -1144,6 +1249,8 @@
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (uvm,                halo_info, &
                            field_loc_NEcorner, field_type_scalar)
+      if (restore_ice) call ice_HaloNeumann(uvm, distrb_info, &
+                                ew_boundary_type, ns_boundary_type)
       call ice_timer_stop(timer_bound)
 
       !$OMP PARALLEL DO PRIVATE(iblk,i,j,ilo,ihi,jlo,jhi,this_block)
@@ -1314,6 +1421,7 @@
       use ice_blocks, only: nx_block, ny_block
       use ice_constants, only: field_loc_center, field_type_vector
       use ice_domain_size, only: max_blocks
+      use ice_state, only: restore_ice
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_blocks), &
            intent(inout) :: & 
@@ -1329,6 +1437,9 @@
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (work1,            halo_info, &
                            field_loc_center, field_type_vector)
+      if (restore_ice) &
+         call ice_HaloNeumann(work1, distrb_info, &
+                              ew_boundary_type, ns_boundary_type)
       call ice_timer_stop(timer_bound)
 
       call to_ugrid(work1,work)

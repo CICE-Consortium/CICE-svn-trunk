@@ -1,4 +1,4 @@
-!  SVN:$Id$
+!  SVN:$Id: ice_dyn_evp.F90 759 2013-10-11 18:01:58Z eclare $
 !=======================================================================
 !
 ! Elastic-viscous-plastic sea ice dynamics model
@@ -68,8 +68,10 @@
       use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_constants, only: field_loc_center, field_loc_NEcorner, &
           field_type_scalar, field_type_vector, c0
-      use ice_domain, only: nblocks, blocks_ice, halo_info, maskhalo_dyn
+      use ice_domain, only: nblocks, blocks_ice, halo_info, maskhalo_dyn, &
+          distrb_info, ew_boundary_type, ns_boundary_type
       use ice_domain_size, only: max_blocks
+      use ice_extrapolate, only: ice_HaloNeumann
       use ice_flux, only: rdg_conv, rdg_shear, prs_sig, strairxT, strairyT, &
           strairx, strairy, uocn, vocn, ss_tltx, ss_tlty, iceumask, fm, &
           strtltx, strtlty, strocnx, strocny, strintx, strinty, &
@@ -81,7 +83,7 @@
           tarear, uarear, tinyarea, to_ugrid, t2ugrid_vector, u2tgrid_vector
       use ice_mechred, only: ice_strength
       use ice_state, only: aice, vice, vsno, uvel, vvel, divu, shear, &
-          aice_init, aice0, aicen, vicen, strength
+          aice_init, aice0, aicen, vicen, strength, restore_ice
       use ice_timers, only: timer_dynamics, timer_bound, &
           ice_timer_start, ice_timer_stop
 #ifdef CICE_IN_NEMO
@@ -196,6 +198,10 @@
       call ice_timer_start(timer_bound)
       call ice_HaloUpdate (icetmask,          halo_info, &
                            field_loc_center,  field_type_scalar)
+      if (restore_ice) then
+         call ice_HaloNeumann(icetmask, distrb_info, &
+                           ew_boundary_type, ns_boundary_type)
+      endif
       call ice_timer_stop(timer_bound)
 
       !-----------------------------------------------------------------
@@ -299,6 +305,15 @@
       enddo
       !$OMP END PARALLEL DO
 
+      if (restore_ice) then
+         call ice_HaloNeumann(strength, distrb_info, &
+                                  ew_boundary_type, ns_boundary_type)
+         call ice_HaloNeumann(uvel, distrb_info, &
+                                  ew_boundary_type, ns_boundary_type)
+         call ice_HaloNeumann(vvel, distrb_info, &
+                                  ew_boundary_type, ns_boundary_type)
+      endif
+
       if (maskhalo_dyn) &
          call ice_HaloMask(halo_info_mask, halo_info, icetmask)
       call ice_timer_stop(timer_bound)
@@ -375,6 +390,13 @@
             vvel(:,:,iblk) = fld2(:,:,2,iblk)
          enddo
          !$OMP END PARALLEL DO
+
+         if (restore_ice) then
+            call ice_HaloNeumann(uvel, distrb_info, &
+                                     ew_boundary_type, ns_boundary_type)
+            call ice_HaloNeumann(vvel, distrb_info, &
+                                     ew_boundary_type, ns_boundary_type)
+         endif
          call ice_timer_stop(timer_bound)
 
       enddo                     ! subcycling
