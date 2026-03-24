@@ -23,7 +23,7 @@ If you expect to make any changes to the code, we recommend that you work in the
    DOI reference:
   
    Hunke, E., Lipscomb, W., Turner, A., Jeffery, N., & Elliott, S. (2015).
-   CICE: the Los Alamos Sea Ice Model Documentation and Software User's Manual Version 5.1 (5.1).
+   CICE: the Los Alamos Sea Ice Model Documentation and Software User's Manual Version 5.1.
    Los Alamos National Laboratory.
    https://doi.org/10.5281/zenodo.19207490
   
