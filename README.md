@@ -17,3 +17,8 @@ If you expect to make any changes to the code, we recommend that you work in the
 * **Resource Index**: https://github.com/CICE-Consortium/About-Us/wiki/Resource-Index
 
    List of resources for information about the Consortium and its repositories as well as model documentation, testing, and development.    
+
+* **Documentation**: https://zenodo.org/records/19207490
+
+   DOI reference
+  
